@@ -1,0 +1,15 @@
+{
+  "fontSize": 99,
+  "cursorStyle": "triangle",
+  "historyDays": 12,
+  "quake": true,
+  "quakeHeight": 42,
+  "changeSource": "magic",
+  "aiProvider": "openai",
+  "aiEndpoint": "file:///c:/x",
+  "checkinPort": 80,
+  "windowColors": { "background": "black", "frame": "#262626", "text": "#E6E6E6", "accent": "#8B7BFF", "light": false },
+  "oldSettingNobodyRemembers": true,
+  "sidebarWidth": 300,
+  "experimentalThing": { "nested": [ 1, 2, 3 ] }
+}

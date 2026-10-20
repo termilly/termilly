@@ -1,0 +1,5 @@
+# Shell scripts and server configs run on Linux: always LF.
+*.sh   text eol=lf
+*.conf text eol=lf
+# Batch files need CRLF: cmd.exe misreads some lines with LF only.
+*.cmd  text eol=crlf

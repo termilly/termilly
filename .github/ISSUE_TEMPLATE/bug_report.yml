@@ -1,0 +1,39 @@
+name: Bug report
+description: Something in Termilly doesn't work as it should.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How to reproduce it
+      placeholder: |
+        1. Open a PowerShell terminal
+        2. Run ...
+        3. See ...
+  - type: input
+    id: version
+    attributes:
+      label: Termilly version
+      description: Settings › About.
+      placeholder: "1.0.0"
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: System
+      placeholder: Windows 11 24H2, or Ubuntu 24.04
+    validations:
+      required: true
+  - type: textarea
+    id: crash
+    attributes:
+      label: Crash log or screenshots
+      description: If Termilly crashed, Settings › About lists its crash log. Check it for anything private before you paste it.

@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Tests for the parts that run on Windows and Linux alike; this project builds and runs on both. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Termilly.Pty\Termilly.Pty.csproj" />
+    <ProjectReference Include="..\..\src\Termilly.Linux\Termilly.Linux.csproj" />
+    <!-- Aliased: the agent helper compiles src/Shared too, and its copies mustn't clash with the app's. -->
+    <ProjectReference Include="..\..\src\Termilly.Agent\Termilly.Agent.csproj" Aliases="agent" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>

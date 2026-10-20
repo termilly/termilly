@@ -1,0 +1,247 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Termilly</title>
+  <link rel="stylesheet" href="lib/xterm.css">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body data-sidebar="open">
+  <!-- Start-up loader, for Linux: types "Loading..." until the first terminal is ready, like the one the Windows
+       window draws over the page (js/loader.js). Drag it to move the window. -->
+  <div id="loader" hidden>
+    <img width="48" height="48" alt="">
+    <div class="loader-line"><span class="loader-size" aria-hidden="true">Loading...<span class="loader-caret"></span></span><span class="loader-typed"><span class="loader-text"></span><span class="loader-caret"></span></span></div>
+  </div>
+  <script src="js/loader.js"></script>
+  <header id="titlebar">
+    <!-- Three columns: the outer two share the leftover width equally, so search sits at the window's centre. -->
+    <div class="tb-side tb-left">
+    <div class="brand">
+      <img class="logo" src="assets/mark-20.png" srcset="assets/mark-20.png 1x, assets/mark-30.png 1.5x, assets/mark-40.png 2x" width="20" height="20" alt="">
+      <span>Termilly</span>
+    </div>
+    <!-- Which workspace is on screen; shown while the sidebar is closed. -->
+    <span class="broadcast-bar" id="broadcast-bar" hidden>
+      <svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="1.5"/><path d="M5 5a4.2 4.2 0 0 0 0 6M11 5a4.2 4.2 0 0 1 0 6"/></svg>
+      <span class="bc-text"></span>
+      <button data-bc="compose">Compose</button>
+      <button data-bc="stop">Stop</button>
+    </span>
+    <span class="crumb" id="crumb"><span class="crumb-dot"></span><span class="crumb-name"></span><span class="crumb-count"></span></span>
+    </div>
+
+    <button class="searchbox" id="search-button" title="Search terminals, closed sessions and output (Ctrl+Shift+F)">
+      <svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5l3 3"/></svg>
+      <span>Search terminals, history and output</span>
+      <span class="keys"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>F</kbd></span>
+    </button>
+
+    <div class="tb-side tb-right">
+    <div class="toolbar">
+      <button class="tool" id="new-button" title="New terminal">
+        <svg viewBox="0 0 16 16"><path d="M8.5 4v9M4 8.5h9"/></svg>
+      </button>
+      <button class="tool" data-command="splitRight" title="Split right (Alt+Shift+=)">
+        <svg viewBox="0 0 16 16"><rect x="1.5" y="2.5" width="12" height="11" rx="2"/><path d="M7.5 2.5v11"/></svg>
+      </button>
+      <button class="tool" data-command="splitDown" title="Split down (Alt+Shift+-)">
+        <svg viewBox="0 0 16 16"><rect x="1.5" y="2.5" width="13" height="10" rx="2"/><path d="M1.5 7.5h13"/></svg>
+      </button>
+      <button class="tool inbox-button" id="inbox-button" title="Notification center: 0 notifications (Ctrl+Shift+A)">
+        <svg viewBox="0 0 16 16"><path d="M2.5 9.5l1.6-5.2A1.5 1.5 0 0 1 5.5 3.2h5a1.5 1.5 0 0 1 1.4 1.1l1.6 5.2v2.8a1.5 1.5 0 0 1-1.5 1.5h-8a1.5 1.5 0 0 1-1.5-1.5z"/><path d="M2.5 9.5h3l1 1.5h3l1-1.5h3"/></svg>
+        <span class="tool-count" hidden></span>
+      </button>
+      <button class="tool" id="snippets-button" title="Snippets">
+        <svg viewBox="0 0 16 16"><rect x="2.5" y="4.5" width="9" height="9" rx="1.5"/><path d="M4.5 2.5h8a1 1 0 0 1 1 1v8M5 7.5l2 1.5-2 1.5M8.5 10.5h1.5"/></svg>
+      </button>
+      <button class="tool" id="settings-button" title="Settings (Ctrl+,)">
+        <svg viewBox="0 0 16 16"><path d="M2.5 4.5h4M10.5 4.5h3M2.5 11.5h2M8.5 11.5h5"/><circle cx="8.5" cy="4.5" r="1.8"/><circle cx="6.5" cy="11.5" r="1.8"/></svg>
+      </button>
+    </div>
+
+    <div class="separator"></div>
+
+    <div class="window-controls">
+      <button data-window="minimize" title="Minimize">
+        <svg viewBox="0 0 12 12"><path d="M2.5 6.5h7"/></svg>
+      </button>
+      <button data-window="maximize" title="Maximize">
+        <svg class="icon-maximize" viewBox="0 0 12 12"><rect x="2.5" y="2.5" width="7" height="7" rx="1.5"/></svg>
+        <svg class="icon-restore" viewBox="0 0 12 12"><rect x="1.5" y="4.5" width="6" height="6" rx="1.3"/><path d="M4.5 2.5h3.7A1.3 1.3 0 0 1 9.5 3.8v3.7"/></svg>
+      </button>
+      <button data-window="close" class="close" title="Close">
+        <svg viewBox="0 0 12 12"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7"/></svg>
+      </button>
+    </div>
+    </div>
+  </header>
+
+  <div id="app-body">
+    <aside id="sidebar" aria-label="Workspaces">
+      <div class="side-open">
+        <div class="side-head">
+          <span>Workspaces</span>
+          <div class="side-actions">
+            <button class="side-btn sidebar-toggle" aria-pressed="true" title="Hide workspaces (Ctrl+Shift+B)">
+              <svg viewBox="0 0 14 14"><rect x="1.5" y="2.5" width="11" height="9" rx="1.5"/><path d="M5.5 2.5v9"/></svg>
+            </button>
+            <button class="side-btn" id="ws-add" title="New workspace (Ctrl+Shift+N)">
+              <svg viewBox="0 0 14 14"><path d="M7.5 3v9M3 7.5h9"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="side-list" id="ws-list"></div>
+        <section class="remote" id="remote" aria-label="Remote" hidden>
+          <div class="rm-head">
+            <button class="rm-fold" data-rm-fold title="Show or hide the remote places">
+              <svg class="rm-chev" viewBox="0 0 12 12"><path d="M4.5 3L7.5 6 4.5 9"/></svg><span>Remote</span><span class="rm-count"></span>
+            </button>
+            <button class="side-btn" data-rm-filter title="Find a host, distro, container or port">
+              <svg viewBox="0 0 14 14"><circle cx="6" cy="6" r="3.5"/><path d="M8.5 8.5l3 3"/></svg>
+            </button>
+          </div>
+          <input class="field rm-filter" placeholder="Find a host, container or pod" spellcheck="false" aria-label="Find a remote place" hidden>
+          <div class="rm-body"></div>
+        </section>
+        <button class="side-foot" data-open-captures hidden>
+          <svg viewBox="0 0 16 16"><path d="M3 3.5h10M3 6.5h10M3 9.5h6M3 12.5h4"/></svg>
+          Captured lines <span class="cap-count"></span>
+        </button>
+        <button class="side-foot" data-open-history>
+          <svg viewBox="0 0 16 16"><path d="M2.5 8a5.5 5.5 0 1 0 1.6-3.9M2.5 3v2.5H5"/><path d="M8 5.5V8l2 1.5"/></svg>
+          Recently closed
+        </button>
+      </div>
+      <div class="side-rail">
+        <button class="side-btn sidebar-toggle rail-toggle" aria-pressed="false" title="Show workspaces (Ctrl+Shift+B)">
+          <svg viewBox="0 0 14 14"><rect x="1.5" y="2.5" width="11" height="9" rx="1.5"/><path d="M5.5 2.5v9"/></svg>
+        </button>
+        <div class="rail-list" id="ws-rail"></div>
+        <button class="rail-foot rail-captures" data-open-captures title="Captured lines" hidden>
+          <svg viewBox="0 0 16 16"><path d="M3 3.5h10M3 6.5h10M3 9.5h6M3 12.5h4"/></svg><span class="cap-count"></span>
+        </button>
+        <button class="rail-foot" data-open-history title="Recently closed">
+          <svg viewBox="0 0 16 16"><path d="M2.5 8a5.5 5.5 0 1 0 1.6-3.9M2.5 3v2.5H5"/><path d="M8 5.5V8l2 1.5"/></svg>
+        </button>
+      </div>
+    </aside>
+    <!-- Drag to change the sidebar width; double-click to reset. -->
+    <div id="sidebar-resizer" role="separator" aria-orientation="vertical" title="Drag to resize · double-click to reset"></div>
+    <main id="workspace">
+      <!-- Shown when every workspace has been closed. -->
+      <div class="no-workspaces" id="no-workspaces">
+        <p class="nw-title">No workspaces</p>
+        <p class="nw-sub">Group the terminals for a project in a workspace.</p>
+        <div class="nw-actions">
+          <button class="btn primary" data-command="newWorkspace">New workspace <kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>N</kbd></button>
+          <button class="btn" data-command="newTerminal">New terminal <kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>T</kbd></button>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div class="ws-flyout" id="ws-flyout"></div>
+
+  <!-- Lines triggers captured (js/triggers.js). -->
+  <section id="captures" class="popover inbox" aria-label="Captured lines" hidden>
+    <div class="inbox-head"><span class="section-head">Captured lines</span><button class="btn small" id="captures-clear">Clear</button></div>
+    <div class="inbox-list" id="captures-list"></div>
+  </section>
+
+  <!-- The notification center (js/inbox.js). -->
+  <section id="inbox" class="popover inbox" aria-label="Notification center" hidden>
+    <div class="inbox-head">
+      <span class="inbox-heading"><span class="section-head">Notification center</span><span class="inbox-total" id="inbox-total"></span></span>
+      <div class="seg" id="inbox-filters"></div>
+    </div>
+    <div class="inbox-list" id="inbox-list"></div>
+    <div class="inbox-foot"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>J</kbd> next one</div>
+  </section>
+
+  <section id="profile-menu" class="popover menu" role="menu" hidden>
+    <div class="section-head"><span>New terminal</span></div>
+    <div id="profile-items"></div>
+  </section>
+
+  <!-- Settings page (Ctrl+,). Sections are built by js/settings.js. -->
+  <div class="modal-layer settings-layer" id="settings-layer" hidden>
+    <div class="settings" role="dialog" aria-modal="true" aria-labelledby="set-title">
+      <nav class="set-nav" id="set-nav"></nav>
+      <div class="set-main">
+        <div class="set-head">
+          <h2 id="set-title"></h2>
+          <button class="set-close" id="set-close" title="Close (Esc)"><svg viewBox="0 0 12 12"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7"/></svg></button>
+        </div>
+        <div class="set-body" id="set-body"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-layer palette-layer" id="palette-layer" hidden>
+    <div class="palette" role="dialog" aria-label="Search">
+      <div class="pal-input">
+        <svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5l3 3"/></svg>
+        <input id="pal-input" placeholder="Search terminals, closed sessions, output and commands" spellcheck="false" autocomplete="off">
+      </div>
+      <div class="pal-filters" id="pal-filters"></div>
+      <div class="pal-main">
+        <div class="pal-results" id="pal-results" role="listbox"></div>
+        <div class="pal-preview" id="pal-preview"></div>
+      </div>
+      <div class="pal-foot">
+        <span><kbd>↑</kbd><kbd>↓</kbd> move</span>
+        <span><kbd>Enter</kbd> open / reopen</span>
+        <span><kbd>Tab</kbd> filters</span>
+        <span><code>tag:</code> <code>ws:</code> <code>shell:</code> narrow</span>
+        <span class="right"><kbd>Esc</kbd> close</span>
+      </div>
+    </div>
+  </div>
+
+  <template id="empty-state">
+    <div class="empty">
+      <p>No terminals in this workspace</p>
+      <button data-command="newTerminal">New terminal</button>
+      <span class="empty-keys"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>T</kbd></span>
+    </div>
+  </template>
+
+  <template id="dock-guide">
+    <div class="dock-guide">
+      <div class="dock-cell" data-zone="top"></div>
+      <div class="dock-cell" data-zone="left"></div>
+      <div class="dock-cell" data-zone="center"></div>
+      <div class="dock-cell" data-zone="right"></div>
+      <div class="dock-cell" data-zone="bottom"></div>
+    </div>
+  </template>
+
+  <div id="drop-preview"><span></span></div>
+  <div id="drag-ghost">
+    <svg viewBox="0 0 16 16"><rect x="1.5" y="2.5" width="13" height="11" rx="2"/><path d="M4.5 6.5l2 1.5-2 1.5M8 10h3"/></svg>
+    <span>Terminal</span>
+  </div>
+
+  <div class="edge n" data-edge="n"></div>
+  <div class="edge s" data-edge="s"></div>
+  <div class="edge w" data-edge="w"></div>
+  <div class="edge e" data-edge="e"></div>
+  <div class="edge nw" data-edge="nw"></div>
+  <div class="edge ne" data-edge="ne"></div>
+  <div class="edge sw" data-edge="sw"></div>
+  <div class="edge se" data-edge="se"></div>
+
+  <script src="lib/xterm.js"></script>
+  <script src="lib/addon-fit.js"></script>
+  <!-- @xterm/addon-image 0.9.0 (MIT): Sixel and iTerm2 inline images. -->
+  <script src="lib/addon-image.js"></script>
+  <!-- @xterm/addon-unicode11 0.8.0 (MIT): Unicode 11 character widths, so emoji take two cells. -->
+  <script src="lib/addon-unicode11.js"></script>
+  <script src="lib/qrcode.js"></script>
+  <!-- highlight.js 11.10.0 (BSD-3-Clause, lib/LICENSE-highlightjs): the common languages plus PowerShell,
+       Dockerfile and batch files, for the change preview (js/highlight.js). -->
+  <script src="lib/highlight.min.js"></script>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

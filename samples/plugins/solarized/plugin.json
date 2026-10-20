@@ -1,0 +1,34 @@
+{
+  "apiVersion": 1,
+  "id": "termilly.solarized",
+  "name": "Solarized",
+  "version": "1.0.0",
+  "description": "Ethan Schoonover's Solarized colours, dark and light.",
+  "themes": [
+    {
+      "id": "dark",
+      "name": "Solarized Dark",
+      "colors": {
+        "background": "#002b36", "foreground": "#839496", "cursor": "#93a1a1", "cursorAccent": "#002b36",
+        "selectionBackground": "rgba(147, 161, 161, 0.25)",
+        "black": "#073642", "red": "#dc322f", "green": "#859900", "yellow": "#b58900",
+        "blue": "#268bd2", "magenta": "#d33682", "cyan": "#2aa198", "white": "#eee8d5",
+        "brightBlack": "#586e75", "brightRed": "#cb4b16", "brightGreen": "#586e75", "brightYellow": "#657b83",
+        "brightBlue": "#839496", "brightMagenta": "#6c71c4", "brightCyan": "#93a1a1", "brightWhite": "#fdf6e3"
+      }
+    },
+    {
+      "id": "light",
+      "name": "Solarized Light",
+      "light": true,
+      "colors": {
+        "background": "#fdf6e3", "foreground": "#657b83", "cursor": "#586e75", "cursorAccent": "#fdf6e3",
+        "selectionBackground": "rgba(88, 110, 117, 0.2)",
+        "black": "#073642", "red": "#dc322f", "green": "#859900", "yellow": "#b58900",
+        "blue": "#268bd2", "magenta": "#d33682", "cyan": "#2aa198", "white": "#93a1a1",
+        "brightBlack": "#586e75", "brightRed": "#cb4b16", "brightGreen": "#586e75", "brightYellow": "#657b83",
+        "brightBlue": "#839496", "brightMagenta": "#6c71c4", "brightCyan": "#93a1a1", "brightWhite": "#002b36"
+      }
+    }
+  ]
+}

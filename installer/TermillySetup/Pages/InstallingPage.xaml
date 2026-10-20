@@ -1,0 +1,19 @@
+<UserControl x:Class="Termilly.Setup.Pages.InstallingPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <DockPanel Margin="28,24,28,18">
+        <StackPanel DockPanel.Dock="Top">
+            <TextBlock x:Name="Heading" Style="{StaticResource H1}" Text="Installing Termilly" />
+            <TextBlock x:Name="Now" Style="{StaticResource Lead}" Text="Starting…" />
+            <ProgressBar x:Name="Bar" Style="{StaticResource Bar}" Minimum="0" Maximum="1" />
+            <StackPanel x:Name="Tasks" Margin="0,18,0,14" />
+        </StackPanel>
+        <Expander x:Name="Details" Header="Details" Foreground="{DynamicResource Muted}">
+            <Border Style="{StaticResource Panel}" Margin="0,8,0,0">
+                <TextBox x:Name="LogText" IsReadOnly="True" BorderThickness="0" Background="Transparent" Foreground="{DynamicResource TermText}"
+                         FontFamily="{StaticResource MonoFont}" FontSize="11" Padding="12,10" TextWrapping="Wrap"
+                         VerticalScrollBarVisibility="Auto" Height="140" />
+            </Border>
+        </Expander>
+    </DockPanel>
+</UserControl>

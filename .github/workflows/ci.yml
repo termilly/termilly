@@ -1,0 +1,54 @@
+# Checks every push to main and every pull request: the build and tests on Windows and Linux (the analyzers and code
+# style fail the build), and the page's JavaScript (lint, type check, tests, magic values, copies, import cycles).
+# Read-only: no secrets, nothing published. Releases are built by release.yml, which only runs by hand.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+      - name: Test
+        run: dotnet test Termilly.slnx -c Release
+      - name: Build the setup program
+        run: dotnet build installer/TermillySetup/TermillySetup.csproj -c Release
+
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+      - name: Test
+        run: dotnet test tests/Termilly.Core.Tests -c Release
+
+  javascript:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run check

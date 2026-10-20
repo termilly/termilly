@@ -1,0 +1,174 @@
+# Builds Termilly's installers on clean machines: the Windows setup (installer/build.ps1) and the Debian/Ubuntu
+# package (installer/linux/build-deb.sh), after the tests pass on each system.
+#
+# Run it from Actions -> Release -> Run workflow. Without "publish" it's a test build: the installers are only
+# downloadable from the run for a day. With "publish" it also creates the GitHub Release v<version> and uploads the
+# installers to the download server, into <version>/, and the same files under fixed names into latest/ (what the
+# site's download buttons link to). The version is <Version> in Directory.Build.props; bump it first.
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Create the GitHub Release and upload the installers to the download server
+        type: boolean
+        default: false
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  version:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.read.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: read
+        name: Read the version
+        run: |
+          version=$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' Directory.Build.props)
+          echo "Termilly $version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Check the version isn't released yet
+        if: inputs.publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "v${{ steps.read.outputs.version }}" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::v${{ steps.read.outputs.version }} is already released; bump <Version> in Directory.Build.props first"
+            exit 1
+          fi
+
+  windows:
+    needs: version
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+      - name: Test
+        run: dotnet test Termilly.slnx -c Release
+      # The .NET Desktop Runtime and WebView2 installers that go inside the setup (~240 MB). Kept for a month, then
+      # downloaded afresh, so a release picks up Microsoft's newer runtimes; build.ps1 checks they're signed.
+      - id: month
+        run: '"month=$(Get-Date -Format yyyy-MM)" >> $env:GITHUB_OUTPUT'
+      - uses: actions/cache@v6
+        with:
+          path: installer/.cache
+          key: prereqs-${{ steps.month.outputs.month }}
+      - name: Build the setup
+        # build.ps1 throws on failure; robocopy leaves a non-zero exit code even when it succeeds.
+        run: |
+          ./installer/build.ps1
+          ./installer/build.ps1 -NoPrereqs
+          exit 0
+      - uses: actions/upload-artifact@v7
+        with:
+          name: windows
+          path: dist/*.exe
+          retention-days: 1
+          compression-level: 0
+
+  linux:
+    needs: version
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+      - name: Test
+        run: dotnet test tests/Termilly.Core.Tests -c Release
+      - name: Build the package
+        run: sh installer/linux/build-deb.sh
+      - uses: actions/upload-artifact@v7
+        with:
+          name: linux
+          path: dist/*.deb
+          retention-days: 1
+
+  publish:
+    if: inputs.publish
+    needs: [version, windows, linux]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksums
+        working-directory: dist
+        run: |
+          sha256sum * > SHA256SUMS
+          cat SHA256SUMS
+      # The same files under names without a version, for links that always get the newest release: the site's
+      # download buttons (termilly.com/downloads/latest/...) and GitHub's releases/latest/download/... links.
+      - name: Fixed names for the newest release
+        run: |
+          mkdir latest
+          cp "dist/TermillySetup-$VERSION.exe" latest/TermillySetup.exe
+          cp "dist/TermillySetup-$VERSION-online.exe" latest/TermillySetup-online.exe
+          cp "dist/termilly_${VERSION}_amd64.deb" latest/termilly_amd64.deb
+          (cd latest && sha256sum * > SHA256SUMS && cat SHA256SUMS)
+      - name: GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v$VERSION" dist/* latest/TermillySetup.exe latest/TermillySetup-online.exe latest/termilly_amd64.deb \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "Termilly $VERSION" --notes "Built from ${GITHUB_REF_NAME} at ${GITHUB_SHA::7}."
+      # The server's termilly-release key can only write under the download folder (rrsync), nothing else.
+      - name: Upload to the download server
+        env:
+          SSH_KEY: ${{ secrets.RELEASE_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.RELEASE_SSH_KNOWN_HOSTS }}
+          HOST: ${{ secrets.RELEASE_HOST }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/release && chmod 600 ~/.ssh/release
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          rsync -rt --chmod=D755,F644 -e "ssh -i $HOME/.ssh/release -o IdentitiesOnly=yes" dist/ "$HOST:$VERSION/"
+          # After the versioned folder, so latest/ never holds files the release doesn't have.
+          rsync -rt --chmod=D755,F644 -e "ssh -i $HOME/.ssh/release -o IdentitiesOnly=yes" latest/ "$HOST:latest/"
+          rm -f ~/.ssh/release
+      # latest.json tells running Termillys a newer version is out (UpdateCheck.cs). It's signed with the release
+      # signing key (Ed25519, the RELEASE_SIGNING_KEY secret, PEM); the app ignores a manifest that doesn't verify.
+      # Uploaded last, so it never announces installers that aren't on the server yet.
+      - name: Announce the version (latest.json)
+        env:
+          SSH_KEY: ${{ secrets.RELEASE_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.RELEASE_SSH_KNOWN_HOSTS }}
+          HOST: ${{ secrets.RELEASE_HOST }}
+          SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: |
+          base="https://termilly.com/downloads/$VERSION"
+          sum() { grep " $1\$" dist/SHA256SUMS | cut -d' ' -f1; }
+          mkdir meta
+          jq -cn --arg v "$VERSION" --arg date "$(date -u +%F)" --arg base "$base" \
+            --arg online "TermillySetup-$VERSION-online.exe" --arg full "TermillySetup-$VERSION.exe" \
+            --arg deb "termilly_${VERSION}_amd64.deb" \
+            --arg wsum "$(sum "TermillySetup-$VERSION-online.exe")" --arg fsum "$(sum "TermillySetup-$VERSION.exe")" \
+            --arg dsum "$(sum "termilly_${VERSION}_amd64.deb")" \
+            '{version: $v, date: $date, notes: "https://termilly.com/downloads/",
+              windows: {online: "\($base)/\($online)", full: "\($base)/\($full)", sha256: $wsum, fullSha256: $fsum},
+              linux: {deb: "\($base)/\($deb)", sha256: $dsum}}' > meta/latest.json
+          cat meta/latest.json
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$SIGNING_KEY" > ~/.ssh/signing.pem && chmod 600 ~/.ssh/signing.pem
+          openssl pkeyutl -sign -inkey ~/.ssh/signing.pem -rawin -in meta/latest.json | base64 -w0 > meta/latest.json.sig
+          rm -f ~/.ssh/signing.pem
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/release && chmod 600 ~/.ssh/release
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          rsync -t --chmod=F644 -e "ssh -i $HOME/.ssh/release -o IdentitiesOnly=yes" meta/latest.json meta/latest.json.sig "$HOST:"
+          rm -f ~/.ssh/release

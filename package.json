@@ -1,0 +1,26 @@
+{
+  "name": "termilly-tooling",
+  "private": true,
+  "description": "Checks for Termilly's web UI and scripts: lint, type check, JS tests, magic values, copies and import cycles.",
+  "type": "module",
+  "scripts": {
+    "lint": "eslint .",
+    "types": "tsc -p jsconfig.json",
+    "test": "node --test \"tests/js/*.test.mjs\"",
+    "literals": "node scripts/check-literals.mjs",
+    "copies": "jscpd",
+    "cycles": "node scripts/check-cycles.mjs",
+    "anonymous": "node scripts/check-anonymous.mjs",
+    "check": "npm run lint && npm run types && npm run test && npm run protocol && npm run constants && npm run cycles && npm run anonymous && npm run literals && npm run size && npm run copies",
+    "protocol": "node scripts/protocol.mjs --check",
+    "size": "node scripts/check-size.mjs",
+    "constants": "node scripts/constants.mjs --check"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "eslint": "10.13.0",
+    "globals": "17.13.0",
+    "jscpd": "5.4.1",
+    "typescript": "7.0.2"
+  }
+}

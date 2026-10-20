@@ -1,0 +1,66 @@
+<Window x:Class="Termilly.Setup.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Termilly Setup" Width="760" Height="500"
+        WindowStartupLocation="CenterScreen" ResizeMode="CanMinimize" WindowStyle="None"
+        Background="{DynamicResource Surface}" Foreground="{DynamicResource Text}"
+        FontFamily="{StaticResource UiFont}" FontSize="12.5"
+        TextOptions.TextFormattingMode="Display" UseLayoutRounding="True" SnapsToDevicePixels="True">
+    <WindowChrome.WindowChrome>
+        <!-- Our own title bar; the thin glass frame keeps Windows' shadow and (on Windows 11) rounded corners. -->
+        <WindowChrome CaptionHeight="36" ResizeBorderThickness="0" GlassFrameThickness="0,0,0,1" CornerRadius="0" UseAeroCaptionButtons="False" />
+    </WindowChrome.WindowChrome>
+
+    <Border BorderThickness="1" BorderBrush="{DynamicResource BorderStrong}">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="36" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <!-- Title bar -->
+            <Border Grid.Row="0" Background="{DynamicResource Header}" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource Border}">
+                <DockPanel>
+                    <Image Source="{StaticResource Mark}" Width="18" Height="18" Margin="12,0,9,0" DockPanel.Dock="Left" VerticalAlignment="Center" />
+                    <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                        <Button x:Name="MinimizeButton" Style="{StaticResource Chrome}" WindowChrome.IsHitTestVisibleInChrome="True" ToolTip="Minimize" Click="OnMinimize">
+                            <Path Data="M2.5,6.5 H9.5" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" StrokeThickness="1.3" Width="12" Height="12" />
+                        </Button>
+                        <Button x:Name="CloseButton" Style="{StaticResource ChromeClose}" WindowChrome.IsHitTestVisibleInChrome="True" ToolTip="Close" Click="OnClose">
+                            <Path Data="M2.5,2.5 L9.5,9.5 M9.5,2.5 L2.5,9.5" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" StrokeThickness="1.3"
+                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round" Width="12" Height="12" />
+                        </Button>
+                    </StackPanel>
+                    <TextBlock x:Name="TitleText" Text="Termilly Setup" Foreground="{DynamicResource Muted}" FontWeight="Medium" VerticalAlignment="Center" />
+                </DockPanel>
+            </Border>
+
+            <!-- Steps and page -->
+            <Grid Grid.Row="1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition x:Name="RailColumn" Width="188" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Border x:Name="Rail" Grid.Column="0" Background="{DynamicResource Header}" BorderThickness="0,0,1,0" BorderBrush="{DynamicResource Border}" Padding="10,18">
+                    <DockPanel>
+                        <TextBlock x:Name="VersionText" DockPanel.Dock="Bottom" Margin="8,0" Foreground="{DynamicResource Faint}" FontSize="11" />
+                        <StackPanel>
+                            <TextBlock x:Name="RailTitle" Text="SETUP" Margin="8,0,0,10" Foreground="{DynamicResource Faint}" FontSize="10.5" FontWeight="SemiBold" />
+                            <StackPanel x:Name="Steps" />
+                        </StackPanel>
+                    </DockPanel>
+                </Border>
+                <ContentControl x:Name="Page" Grid.Column="1" Focusable="False" />
+            </Grid>
+
+            <!-- Buttons -->
+            <Border Grid.Row="2" Background="{DynamicResource Header}" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource Border}" Padding="16,12">
+                <DockPanel>
+                    <StackPanel x:Name="FooterButtons" Orientation="Horizontal" DockPanel.Dock="Right" />
+                    <ContentControl x:Name="FooterLeft" VerticalAlignment="Center" Focusable="False" />
+                </DockPanel>
+            </Border>
+        </Grid>
+    </Border>
+</Window>

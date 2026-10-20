@@ -1,0 +1,26 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <!--
+    A current ConPTY (conpty.dll + OpenConsole.exe, the same one Windows Terminal ships) instead of the console host
+    built into Windows. Windows 10's is years older and gets VT details wrong; e.g. it counts the SI control (0x0F)
+    as a printed cell, so Claude Code's input line ends up a column out and can't be fully deleted.
+    The package's own build targets only copy OpenConsole.exe for platform-specific builds, so the files are copied
+    here instead, into conpty\ next to the app: conpty.dll looks for <its folder>\<machine>\OpenConsole.exe.
+  -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Windows.Console.ConPTY" Version="1.25.260930003" GeneratePathProperty="true" ExcludeAssets="all" />
+  </ItemGroup>
+  <!-- Windows builds only: a build for Linux (on Linux, or for a linux-* runtime) has no use for them. -->
+  <ItemGroup Condition="$(RuntimeIdentifier.StartsWith('win')) Or ('$(RuntimeIdentifier)' == '' And '$(OS)' == 'Windows_NT')">
+    <None Include="$(PkgMicrosoft_Windows_Console_ConPTY)\runtimes\win-x64\native\conpty.dll" Link="conpty\conpty.dll" CopyToOutputDirectory="PreserveNewest" Visible="false" />
+    <None Include="$(PkgMicrosoft_Windows_Console_ConPTY)\build\native\runtimes\x64\OpenConsole.exe" Link="conpty\x64\OpenConsole.exe" CopyToOutputDirectory="PreserveNewest" Visible="false" />
+    <!-- x64 only for now: on other machines (an ARM64 process can't load this DLL) Native falls back to Windows' own. -->
+  </ItemGroup>
+
+</Project>

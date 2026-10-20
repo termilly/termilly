@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Termilly
+GenericName=Terminal
+Comment=Terminals, workspaces and coding agents in one window
+Exec=/opt/termilly/termilly %f
+Icon=termilly
+Terminal=false
+Categories=System;TerminalEmulator;
+Keywords=terminal;shell;console;ssh;claude;
+StartupNotify=true
+StartupWMClass=termilly
+MimeType=inode/directory;

@@ -1,0 +1,42 @@
+{
+  "groups": [
+    {
+      "reason": "Names the platform defines, not Termilly: .NET's name for Linux ([SupportedOSPlatform]), DOM event names, keyboard key names, element tags and typeof results. They mean the same everywhere and a constant would only rename them.",
+      "strings": [
+        "linux",
+        "click", "dblclick", "contextmenu", "input", "change", "keydown", "keyup", "focus", "blur",
+        "focusin", "focusout", "mousedown", "mouseup", "mousemove", "mouseenter", "mouseleave",
+        "pointerdown", "pointermove", "pointerup", "pointercancel", "wheel", "scroll", "resize",
+        "dragstart", "dragover", "dragleave", "dragend", "drop", "paste", "copy", "load",
+        "message", "submit", "transitionend", "animationend", "visibilitychange",
+        "Enter", "Escape", "Tab", "Backspace", "Delete", "ArrowUp", "ArrowDown", "ArrowLeft",
+        "ArrowRight", "Home", "End", "PageUp", "PageDown",
+        "div", "span", "button", "a", "li", "ul", "label", "canvas", "img", "iframe", "section", "mark", "select", "option",
+        "aside", "textarea", "optgroup",
+        "string", "number", "boolean", "object", "function", "undefined",
+        "utf-8", "utf8"
+      ]
+    },
+    {
+      "reason": "Values DOM APIs take: where scrollIntoView puts an element and insertAdjacentHTML puts markup, Intl's date and time styles, HTML and ARIA attribute names and values, input types, CSS keywords, and the types a drag or the clipboard carries. The browser defines them; a constant would only rename them.",
+      "strings": [
+        "nearest", "center", "start", "end",
+        "beforebegin", "afterbegin", "beforeend", "afterend",
+        "2-digit", "numeric", "short", "long", "medium",
+        "role", "title", "hidden", "disabled", "checked", "tabindex", "href", "src", "type", "value", "placeholder",
+        "aria-label", "aria-checked", "aria-selected", "aria-expanded", "aria-hidden", "aria-pressed", "menu",
+        "text", "password", "checkbox", "color", "range", "search", "smooth", "auto",
+        "Files", "text/plain"
+      ]
+    },
+    {
+      "reason": "State classes app.css styles across the page (an open popover's anchor, a selected row, a field with a mistake). They're the stylesheet's vocabulary, shared by every component, not values of one module.",
+      "strings": ["open", "on", "selected", "active", "invalid", "focused", "empty", "dragging", "sel"]
+    },
+    {
+      "reason": "Values xterm.js defines: its buffer types (normal, or the alternate screen full-screen programs use) and its decoration layers and positions.",
+      "strings": ["normal", "alternate", "top", "bottom", "full"]
+    }
+  ],
+  "numbers": []
+}

@@ -1,0 +1,107 @@
+# Termilly's code style. The build enforces the rules marked "warning" (Directory.Build.props sets
+# EnforceCodeStyleInBuild and TreatWarningsAsErrors); "suggestion" ones show in the editor only.
+root = true
+
+[*]
+charset = utf-8
+indent_style = space
+indent_size = 4
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{js,mjs,json,css,html,yml,yaml}]
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false
+
+[*.{csproj,props,targets,slnx,xml,xaml,manifest}]
+indent_size = 2
+
+[*.sh]
+end_of_line = lf
+
+[*.cs]
+# Layout: file-scoped namespaces, usings outside them, System first, braces on every block.
+csharp_style_namespace_declarations = file_scoped:warning
+csharp_using_directive_placement = outside_namespace:warning
+dotnet_sort_system_directives_first = true
+dotnet_separate_import_directive_groups = false
+csharp_prefer_braces = true:warning
+csharp_new_line_before_open_brace = all
+csharp_new_line_before_else = true
+csharp_new_line_before_catch = true
+csharp_new_line_before_finally = true
+
+# Modifiers: always written, in the usual order; fields that are never reassigned are readonly.
+dotnet_style_require_accessibility_modifiers = for_non_interface_members:warning
+csharp_preferred_modifier_order = public,private,protected,internal,file,static,extern,new,virtual,abstract,sealed,override,readonly,unsafe,required,volatile,async:warning
+dotnet_style_readonly_field = true:warning
+
+# var where the type is plain to see or doesn't matter; language keywords for built-in types.
+csharp_style_var_for_built_in_types = true:suggestion
+csharp_style_var_when_type_is_apparent = true:suggestion
+csharp_style_var_elsewhere = true:suggestion
+dotnet_style_predefined_type_for_locals_parameters_members = true:warning
+dotnet_style_predefined_type_for_member_access = true:warning
+
+# No this. qualification.
+dotnet_style_qualification_for_field = false:warning
+dotnet_style_qualification_for_property = false:warning
+dotnet_style_qualification_for_method = false:warning
+dotnet_style_qualification_for_event = false:warning
+
+# Modern C#.
+csharp_style_expression_bodied_methods = when_on_single_line:suggestion
+csharp_style_expression_bodied_properties = true:suggestion
+csharp_style_pattern_matching_over_is_with_cast_check = true:suggestion
+csharp_style_prefer_switch_expression = true:suggestion
+dotnet_style_collection_initializer = true:suggestion
+dotnet_style_prefer_collection_expression = when_types_loosely_match:suggestion
+dotnet_style_coalesce_expression = true:suggestion
+dotnet_style_null_propagation = true:suggestion
+csharp_style_prefer_primary_constructors = true:suggestion
+
+# Naming: PascalCase for types, members and constants; _camelCase for private fields; I for interfaces.
+dotnet_naming_rule.interfaces.symbols = interfaces
+dotnet_naming_rule.interfaces.style = prefix_i
+dotnet_naming_rule.interfaces.severity = warning
+dotnet_naming_symbols.interfaces.applicable_kinds = interface
+dotnet_naming_style.prefix_i.required_prefix = I
+dotnet_naming_style.prefix_i.capitalization = pascal_case
+
+dotnet_naming_rule.types_and_members.symbols = types_and_members
+dotnet_naming_rule.types_and_members.style = pascal
+dotnet_naming_rule.types_and_members.severity = warning
+dotnet_naming_symbols.types_and_members.applicable_kinds = class, struct, enum, delegate, method, property, event
+dotnet_naming_style.pascal.capitalization = pascal_case
+
+dotnet_naming_rule.private_fields.symbols = private_fields
+dotnet_naming_rule.private_fields.style = underscore_camel
+dotnet_naming_rule.private_fields.severity = warning
+dotnet_naming_symbols.private_fields.applicable_kinds = field
+dotnet_naming_symbols.private_fields.applicable_accessibilities = private
+dotnet_naming_symbols.private_fields.required_modifiers =
+dotnet_naming_style.underscore_camel.required_prefix = _
+dotnet_naming_style.underscore_camel.capitalization = camel_case
+
+# Static and const fields read like members (Timeout, MaxLine), whatever their visibility.
+dotnet_naming_rule.static_fields.symbols = static_fields
+dotnet_naming_rule.static_fields.style = pascal
+dotnet_naming_rule.static_fields.severity = warning
+dotnet_naming_symbols.static_fields.applicable_kinds = field
+dotnet_naming_symbols.static_fields.required_modifiers = static
+dotnet_naming_rule.const_fields.symbols = const_fields
+dotnet_naming_rule.const_fields.style = pascal
+dotnet_naming_rule.const_fields.severity = warning
+dotnet_naming_symbols.const_fields.applicable_kinds = field
+dotnet_naming_symbols.const_fields.required_modifiers = const
+
+[tests/**.cs]
+# Test names are sentences (A_deleted_folder_gives_way_to_the_next_then_home).
+dotnet_diagnostic.CA1707.severity = none
+
+[{src/Termilly.Pty/Unix/Native.cs,src/Termilly.Linux/GtkWindow.cs,src/Termilly.Desktop/LibSecret.cs}]
+# CA2101 wants Windows' UTF-16 marshalling for P/Invoke strings. The Linux calls here (libc, GTK, libsecret) take UTF-8
+# and say so with [MarshalAs(UnmanagedType.LPUTF8Str)], which the rule does not know about.
+dotnet_diagnostic.CA2101.severity = none

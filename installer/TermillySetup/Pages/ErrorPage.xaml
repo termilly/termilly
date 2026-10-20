@@ -1,0 +1,28 @@
+<UserControl x:Class="Termilly.Setup.Pages.ErrorPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <DockPanel Margin="28,24,28,18">
+        <StackPanel DockPanel.Dock="Top">
+            <Grid Width="52" Height="52" HorizontalAlignment="Left" Margin="0,0,0,14">
+                <Ellipse Fill="{DynamicResource DangerFill}" />
+                <Path Data="M13,7 V15 M13,19 V19.01" Stroke="{DynamicResource DangerText}" StrokeThickness="2.2" Width="26" Height="26"
+                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+            </Grid>
+            <TextBlock Style="{StaticResource H1}" Text="Something went wrong" />
+            <TextBlock x:Name="Lead" Style="{StaticResource Lead}" />
+            <Border CornerRadius="8" BorderThickness="1" Padding="14,12" Background="{DynamicResource DangerFill}" BorderBrush="{DynamicResource Danger}">
+                <StackPanel>
+                    <TextBlock x:Name="Message" Foreground="{DynamicResource DangerText}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                    <TextBlock x:Name="Detail" Style="{StaticResource Desc}" Margin="0,4,0,0" />
+                </StackPanel>
+            </Border>
+        </StackPanel>
+        <Expander Header="Details" Foreground="{DynamicResource Muted}" Margin="0,14,0,0">
+            <Border Style="{StaticResource Panel}" Margin="0,8,0,0">
+                <TextBox x:Name="LogText" IsReadOnly="True" BorderThickness="0" Background="Transparent" Foreground="{DynamicResource TermText}"
+                         FontFamily="{StaticResource MonoFont}" FontSize="11" Padding="12,10" TextWrapping="Wrap"
+                         VerticalScrollBarVisibility="Auto" Height="130" />
+            </Border>
+        </Expander>
+    </DockPanel>
+</UserControl>

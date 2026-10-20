@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Termilly.Agent/Termilly.Agent.csproj" />
+    <Project Path="src/Termilly.Desktop/Termilly.Desktop.csproj" />
+    <Project Path="src/Termilly.Host/Termilly.Host.csproj" />
+    <Project Path="src/Termilly.Pty/Termilly.Pty.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Termilly.Core.Tests/Termilly.Core.Tests.csproj" />
+    <Project Path="tests/Termilly.Desktop.Tests/Termilly.Desktop.Tests.csproj" />
+    <Project Path="tests/TermillySetup.Tests/TermillySetup.Tests.csproj" />
+  </Folder>
+</Solution>

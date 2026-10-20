@@ -1,0 +1,10 @@
+<UserControl x:Class="Termilly.Setup.Pages.WelcomePage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <StackPanel Margin="28,24,28,18" VerticalAlignment="Center">
+        <Image Source="{StaticResource Mark}" Width="64" Height="64" HorizontalAlignment="Left" Margin="0,0,0,14" />
+        <TextBlock x:Name="Heading" Style="{StaticResource H1}" FontSize="26" />
+        <TextBlock Style="{StaticResource Lead}" MaxWidth="420" HorizontalAlignment="Left"
+                   Text="Every shell, SSH host and AI agent in one Windows terminal, organised in workspaces." />
+    </StackPanel>
+</UserControl>

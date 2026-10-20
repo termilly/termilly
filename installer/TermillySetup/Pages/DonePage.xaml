@@ -1,0 +1,15 @@
+<UserControl x:Class="Termilly.Setup.Pages.DonePage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <StackPanel Margin="28,24,28,18" VerticalAlignment="Center">
+        <Grid Width="52" Height="52" HorizontalAlignment="Left" Margin="0,0,0,14">
+            <Ellipse Fill="{DynamicResource OkFill}" />
+            <Path Data="M6,13.5 L10.5,18 L20,8" Stroke="{DynamicResource Ok}" StrokeThickness="2" Width="26" Height="26"
+                  StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" />
+        </Grid>
+        <TextBlock Style="{StaticResource H1}" Text="Termilly is installed" />
+        <TextBlock x:Name="Where" Style="{StaticResource Lead}" />
+        <CheckBox x:Name="Launch" Style="{StaticResource Check}" Content="Launch Termilly" Margin="0,0,0,10" />
+        <CheckBox x:Name="Tour" Style="{StaticResource Check}" Content="Show me around" />
+    </StackPanel>
+</UserControl>

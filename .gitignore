@@ -1,0 +1,33 @@
+# Build output
+bin/
+obj/
+
+# Installer: downloaded Microsoft installers and the built setup (installer/build.ps1)
+installer/.cache/
+dist/
+
+# IDE
+.vs/
+*.user
+*.suo
+.idea/
+.vscode/
+
+# Generated icon PNGs (rebuild with branding/make-icon.ps1)
+branding/png/
+branding/termilly.ico
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# JS tooling (npm run check)
+node_modules/
+
+# Notes, captures and local agent files kept next to the code
+.claude/
+Capture.JPG
+mockups/
+reports/
+research_notes/

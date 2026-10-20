@@ -1,0 +1,39 @@
+<UserControl x:Class="Termilly.Setup.Pages.UninstallPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid>
+        <!-- Asking -->
+        <ScrollViewer x:Name="Ask" VerticalScrollBarVisibility="Auto" Focusable="False">
+        <StackPanel Margin="28,24,24,18">
+            <TextBlock Style="{StaticResource H1}" Text="Uninstall Termilly" />
+            <TextBlock Style="{StaticResource Lead}" Text="Termilly will be closed and removed." />
+            <Border Style="{StaticResource Row}" BorderThickness="0">
+                <DockPanel>
+                    <CheckBox x:Name="Keep" DockPanel.Dock="Right" Style="{StaticResource Switch}" Margin="20,0,0,0" IsChecked="True" AutomationProperties.Name="Keep settings and history" />
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource Name}" Text="Keep my settings, workspaces and history" />
+                    </StackPanel>
+                </DockPanel>
+            </Border>
+        </StackPanel>
+        </ScrollViewer>
+
+        <!-- Working -->
+        <StackPanel x:Name="Working" Visibility="Collapsed" Margin="28,24,28,18">
+            <TextBlock Style="{StaticResource H1}" Text="Removing Termilly…" />
+            <TextBlock x:Name="Now" Style="{StaticResource Lead}" Text="Closing Termilly…" />
+            <ProgressBar x:Name="Bar" Style="{StaticResource Bar}" Minimum="0" Maximum="1" />
+        </StackPanel>
+
+        <!-- Done -->
+        <StackPanel x:Name="Finished" Visibility="Collapsed" VerticalAlignment="Center" Margin="28,24,28,18">
+            <Grid Width="52" Height="52" HorizontalAlignment="Left" Margin="0,0,0,14">
+                <Ellipse Fill="{DynamicResource OkFill}" />
+                <Path Data="M6,13.5 L10.5,18 L20,8" Stroke="{DynamicResource Ok}" StrokeThickness="2" Width="26" Height="26"
+                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" />
+            </Grid>
+            <TextBlock Style="{StaticResource H1}" Text="Termilly is uninstalled" />
+            <TextBlock x:Name="DoneText" Style="{StaticResource Lead}" />
+        </StackPanel>
+    </Grid>
+</UserControl>

@@ -1,0 +1,53 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Termilly Setup. .NET Framework 4.8 is part of every supported Windows 10 and 11, so setup runs with nothing
+       installed first. Termilly, the .NET 10 Desktop Runtime and WebView2 installers are appended to the built exe by
+       installer/build.ps1 (Payload.cs reads them back); this project builds only the program. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>TermillySetup</AssemblyName>
+    <RootNamespace>Termilly.Setup</RootNamespace>
+    <ApplicationIcon>..\..\src\Termilly.Desktop\Assets\termilly.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <Prefer32Bit>false</Prefer32Bit>
+    <!-- Implicit usings would pull in namespaces .NET Framework doesn't reference by default. -->
+    <ImplicitUsings>disable</ImplicitUsings>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Builds against .NET Framework 4.8 without its developer pack installed. -->
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.IO.Compression.FileSystem" />
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.Web" />
+    <Reference Include="System.Web.Extensions" />
+    <Reference Include="Microsoft.CSharp" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="..\..\src\Termilly.Desktop\Assets\termilly.ico" Link="termilly.ico" />
+    <!-- The license page shows the repository's own NOTICE and LICENSE. -->
+    <EmbeddedResource Include="..\..\NOTICE" LogicalName="NOTICE" />
+    <EmbeddedResource Include="..\..\LICENSE" LogicalName="LICENSE" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Termilly's name, from the constants the app's projects share (src/Shared); only this file of them, which
+         .NET Framework compiles as it is. -->
+    <Compile Include="..\..\src\Shared\Product.cs" Link="Shared\Product.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="TermillySetup.Tests" />
+  </ItemGroup>
+
+</Project>

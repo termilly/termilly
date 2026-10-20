@@ -1,0 +1,12 @@
+{
+  "path": ["src", "installer"],
+  "format": ["csharp", "javascript"],
+  "ignore": ["**/bin/**", "**/obj/**", "**/wwwroot/lib/**", "**/phone/lib/**", "**/*.d.ts"],
+  "threshold": 0,
+  "minTokens": 60,
+  "minLines": 6,
+  "reporters": ["console"],
+  "silent": true,
+  "gitignore": true,
+  "absolute": false
+}

@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The small helper coding agents talk to Termilly through. Copied into agent\ next to the app twice: as
+    termilly-hook.exe (what Claude Code's hooks run) and as claude.exe (the shim terminals find first on PATH,
+    which starts the real Claude Code with Termilly's hooks added). See Program.cs.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>termilly-hook</AssemblyName>
+    <RootNamespace>Termilly.Agent</RootNamespace>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <UseSystemResourceKeys>true</UseSystemResourceKeys>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+  <!-- The Linux keyring, shared with the app: askpass reads saved passwords from it there. -->
+  <ItemGroup>
+    <Compile Include="..\Termilly.Desktop\LibSecret.cs" Link="LibSecret.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Termilly.Desktop.Tests" />
+    <InternalsVisibleTo Include="Termilly.Core.Tests" />
+  </ItemGroup>
+
+  <!-- Names on the wire and in the environment shared with the app (src/Shared): one place for each. -->
+  <ItemGroup>
+    <Compile Include="..\Shared\*.cs" LinkBase="Shared" />
+    <Using Include="Termilly.Shared" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Termilly's background host (termilly-host): owns the pseudo terminals when "Keep shells running when Termilly
+    closes" is on, so closing or updating the window doesn't end the shells. No window of its own (WinExe; a plain
+    program on Linux). Copied into host/ next to the app, on Windows with the bundled ConPTY.
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>termilly-host</AssemblyName>
+    <RootNamespace>Termilly.Host</RootNamespace>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Termilly.Pty\Termilly.Pty.csproj" />
+    <InternalsVisibleTo Include="Termilly.Desktop.Tests" />
+  </ItemGroup>
+
+  <!-- The crash log, data folder and version it shares with the app (src/Shared). -->
+  <ItemGroup>
+    <Compile Include="..\Shared\*.cs" LinkBase="Shared" />
+    <Using Include="Termilly.Shared" />
+  </ItemGroup>
+
+</Project>
