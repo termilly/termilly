@@ -10,8 +10,8 @@ const kinds = lines => {
 };
 
 test('gh pr create and gh issue create print the new URL', () => {
-  assert.deepEqual(kinds(['https://github.com/alexunder18/termilly/pull/42']),
-    [['pr', 'https://github.com/alexunder18/termilly/pull/42', 'PR #42 · alexunder18/termilly']]);
+  assert.deepEqual(kinds(['https://github.com/termilly/termilly/pull/42']),
+    [['pr', 'https://github.com/termilly/termilly/pull/42', 'PR #42 · termilly/termilly']]);
   assert.deepEqual(kinds(['Created issue https://github.com/o/r/issues/7.']),
     [['issue', 'https://github.com/o/r/issues/7', 'Issue #7 · o/r']]);
 });
@@ -35,10 +35,10 @@ test('git commit and git push', () => {
     [['commit', null, '1a2b3c4 Fix the login redirect']]);
   const push = kinds([
     'Enumerating objects: 5, done.',
-    'To github.com:alexunder18/termilly.git',
+    'To github.com:termilly/termilly.git',
     '   1a2b3c4..5d6e7f8  issue/33-results -> issue/33-results',
   ]);
-  assert.deepEqual(push, [['push', 'https://github.com/alexunder18/termilly/tree/issue/33-results', 'Pushed issue/33-results → alexunder18/termilly']]);
+  assert.deepEqual(push, [['push', 'https://github.com/termilly/termilly/tree/issue/33-results', 'Pushed issue/33-results → termilly/termilly']]);
   assert.equal(kinds(['To https://gitlab.com/g/p.git', ' * [new branch]      feat -> feat'])[0][1], 'https://gitlab.com/g/p/-/tree/feat');
 });
 

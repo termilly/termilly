@@ -96,7 +96,7 @@ public sealed class SecretRedactorTests
     [InlineData("5836e24 Centre the search bar, resizable sidebar")]
     [InlineData("Id: 3f2504e0-4f89-11d3-9a0c-0305e82c3301")]
     [InlineData("Compiled 214 files in 3.2s, 0 warnings")]
-    [InlineData("https://github.com/alexunder18/termilly")]
+    [InlineData("https://github.com/termilly/termilly")]
     [InlineData("for /f \"tokens=1,2\" %a in (file.txt) do echo %a")]
     public void Ordinary_output_is_left_alone(string line) => Assert.Equal(line, SecretRedactor.Redact(line));
 }
