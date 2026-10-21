@@ -22,6 +22,7 @@ import { noteRemotePrompt, noteRemoteCwd, leftRemote } from './remotecwd.js';
 import { AGENT_STATE, AGENT_SOURCE } from './constants.js';
 import { find, field } from './dom.js';
 import { continuesOnNextRow } from './buffer.js';
+import { clipboardKey, wireClipboard, PASTE_LABEL } from './termclipboard.js';
 
 /**
  * A theme plugin's terminal colours (state.pluginThemes).
@@ -228,7 +229,7 @@ function createTerminal(tab) {
   // (Unicode 6) gives them one, which shifts TUI borders and columns.
   term.loadAddon(new Unicode11Addon.Unicode11Addon());
   term.unicode.activeVersion = '11';
-  wireDropAndPaste(tab);
+  wireDropAndPaste(tab, term);
   /** @type {TabView} */ (tab.view).term = term;
   /** @type {TabView} */ (tab.view).fit = fit;
   // No scrollbar while everything fits on screen (a new terminal): xterm would show a full-height slider.
@@ -275,7 +276,7 @@ function wireInput(tab, term) {
     quiet(tab);
     send(PAGE.resize, { id: tab.id, cols, rows });
   });
-  term.attachCustomKeyEventHandler(keyHandler);
+  term.attachCustomKeyEventHandler((/** @type {KeyboardEvent} */ e) => clipboardKey(term, e) && keyHandler(e));
 }
 
 /**
@@ -752,8 +753,9 @@ function shellMark(tab, data) {
  * Files dropped on a terminal are typed as their paths, quoted the way its shell reads them. The page only gets
  * file names, so the files go to the host, which knows their paths (files:dropped).
  * @param {Tab} tab
+ * @param {any} term xterm
  */
-function wireDropAndPaste(tab) {
+function wireDropAndPaste(tab, term) {
   const { body } = /** @type {TabView} */ (tab.view);
   body.addEventListener('dragover', e => {
     if (!e.dataTransfer?.types.includes('Files')) return;
@@ -774,24 +776,34 @@ function wireDropAndPaste(tab) {
       if (paths.length) send(PAGE.filesDrop, { id: tab.id, paths });
     }
   });
-  // Several lines pasted at a prompt run one after another: check first (Settings › Terminal).
   body.addEventListener('paste', e => {
-    const text = e.clipboardData?.getData('text/plain') ?? '';
-    // On production, ask first (Settings › Terminal › Production); that question covers the multi-line one too.
-    if (text && pasteNeedsConfirm(tab, text)) {
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      confirmProduction([tab], 'Paste', text).then(ok => {
-        if (ok) /** @type {TabView} */ (tab.view).term.paste(text);
-        /** @type {TabView} */ (tab.view).term.focus();
-      });
-      return;
-    }
-    if (!state.settings.safety.pasteWarning || !/\r?\n./.test(text.trimEnd()) || (state.settings.safety.pasteWarningOff ?? []).includes(tab.profile)) return;
+    if (!checkPaste(tab, e.clipboardData?.getData('text/plain') ?? '')) return;
     e.preventDefault();
     e.stopImmediatePropagation();
-    confirmPaste(tab, text);
   }, true);
+  // The right-click menu's Paste has no paste event: the same checks, then xterm types it.
+  wireClipboard(term, body, text => { if (!checkPaste(tab, text)) term.paste(text); });
+}
+
+/**
+ * Asks before a paste that needs it, and pastes once confirmed. Returns true when it asked (the paste waits for the
+ * answer), false when the text can be pasted straight away.
+ * @param {Tab} tab
+ * @param {string} text
+ */
+function checkPaste(tab, text) {
+  // On production, ask first (Settings › Terminal › Production); that question covers the multi-line one too.
+  if (text && pasteNeedsConfirm(tab, text)) {
+    confirmProduction([tab], PASTE_LABEL, text).then(ok => {
+      if (ok) /** @type {TabView} */ (tab.view).term.paste(text);
+      /** @type {TabView} */ (tab.view).term.focus();
+    });
+    return true;
+  }
+  // Several lines pasted at a prompt run one after another: check first (Settings › Terminal).
+  if (!state.settings.safety.pasteWarning || !/\r?\n./.test(text.trimEnd()) || (state.settings.safety.pasteWarningOff ?? []).includes(tab.profile)) return false;
+  confirmPaste(tab, text);
+  return true;
 }
 
 onHost(HOST.filesDropped, async m => {

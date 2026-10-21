@@ -29,6 +29,8 @@ internal sealed record TerminalSettings
     public bool InlineImages { get; init; } = true;
     /// <summary>Programs may set the clipboard (OSC 52).</summary>
     public bool ProgramClipboard { get; init; } = true;
+    /// <summary>Selecting text in a terminal copies it.</summary>
+    public bool CopyOnSelect { get; init; }
     /// <summary>The terminal colour scheme's id (js/themes.js); null: the theme's own.</summary>
     public string? Colors { get; init; }
     /// <summary>A terminal's row shows the ports its programs listen on.</summary>
