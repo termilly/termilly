@@ -201,6 +201,11 @@ internal static partial class Protocol
         {
             AddFiles(message, payload, tool);
         }
+        // Where `claude --resume` has to run again after a restart: the shell may have moved on (`cd x && claude`).
+        if (hookEvent == HookEvents.SessionStart)
+        {
+            message[HookMessage.Fields.Folder] = Text(payload, Payload.Cwd, MaxPath, cut: false);
+        }
         return message.ToJsonString();
     }
 

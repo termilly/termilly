@@ -8,7 +8,8 @@ namespace Termilly.Desktop;
 /// What the open terminals showed, so a restart (or a crash) can bring it back: per terminal its last lines and the
 /// agent session it ran. Written every half minute while terminals are open and once more on exit, encrypted like
 /// the workspaces (session.tms), with secrets redacted when Settings asks. The page owns the shape:
-/// { savedAt, tabs: { id: { lines, agentSession, hibernated } } }.
+/// { savedAt, tabs: { id: { lines, scroll, agentSession, agentFolder, hibernated } } }, scroll being how far back it
+/// was scrolled and agentFolder the folder the agent session resumes in.
 /// </summary>
 internal sealed class SessionSnapshot(Vault vault)
 {

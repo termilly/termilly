@@ -134,6 +134,29 @@ public sealed class GitViewTests : IDisposable
         var view = GitView.Diff(repo, new GitDiffTarget("logo.bin", null, "untracked", null), Max, TestServices.GitRunner);
         Assert.Null(view.After);
         Assert.Contains("binary", view.Note);
+        Assert.Null(view.AfterImage);
+    }
+
+    [Fact]
+    public void Images_come_as_pictures_beside_the_diff()
+    {
+        if (!HasGit())
+        {
+            return;
+        }
+        var repo = Repo();
+        byte[] png = [0x89, 0x50, 0x4E, 0x47, 0x00, 0x01, 0x02];
+        File.WriteAllBytes(Path.Combine(repo, "logo.png"), png);
+        var view = GitView.Diff(repo, new GitDiffTarget("logo.png", null, "untracked", null), Max, TestServices.GitRunner);
+        Assert.Equal($"data:image/png;base64,{Convert.ToBase64String(png)}", view.AfterImage);
+        Assert.Null(view.BeforeImage);
+        Assert.Null(view.Note); // the picture says more than "binary"
+
+        // An SVG is text too: its picture and its lines.
+        File.WriteAllText(Path.Combine(repo, "icon.svg"), "<svg xmlns=\"http://www.w3.org/2000/svg\"/>\n");
+        var svg = GitView.Diff(repo, new GitDiffTarget("icon.svg", null, "untracked", null), Max, TestServices.GitRunner);
+        Assert.StartsWith("data:image/svg+xml;base64,", svg.AfterImage);
+        Assert.NotNull(svg.After);
     }
 
     [Fact]

@@ -25,6 +25,7 @@ internal static class Composition
         .AddSingleton<CheckinDevices>()
         // Programs Termilly runs, and what it reads with them.
         .AddSingleton<IProcessRunner, ProcessRunner>()
+        .AddSingleton(_ => UpdateDownload.Create())
         .AddSingleton<LocalGit>()
         .AddSingleton<LocalGitRunner>()
         .AddSingleton<GitStatus>()

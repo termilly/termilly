@@ -38,6 +38,7 @@ internal sealed class ChangesHandler : IMessageHandler
         router.On<FromPage.ChangesClear>(m => _changes.Clear(m.Id, m.Path));
         router.On<FromPage.ChangesGet>(m => Task.Run(() => Get(m.Id, m.RequestId, m.Path, m.Compare)));
         router.On<FromPage.ChangesResolve>(m => Task.Run(() => Resolve(m)));
+        router.On<FromPage.ChangesSearch>(m => Task.Run(() => Search(m)));
     }
 
     private void PostList(string id) => _page.Post(new ToPage.ChangesList(id, _preview.List(id)));
@@ -67,6 +68,22 @@ internal sealed class ChangesHandler : IMessageHandler
             ? ResolvedPath.NotAPath
             : _preview.Resolve(m.Id, m.Text, m.Remote, m.Cwd, m.WsCwd);
         _page.Post(new ToPage.ChangeResolved(m.RequestId, path, line, error));
+    }
+
+    /// <summary>The terminal's changed files with the text in their path or lines (disk work, so off the UI thread).</summary>
+    private void Search(FromPage.ChangesSearch m)
+    {
+        IReadOnlyList<ChangeHit> hits = [];
+        string? error = null;
+        try
+        {
+            hits = _preview.Search(m.Id, m.Query ?? "", _settings.Current);
+        }
+        catch (Exception e) when (Storage.IsFileError(e))
+        {
+            error = e.Message;
+        }
+        _page.Post(new ToPage.ChangesFound(m.RequestId, hits, error));
     }
 }
 

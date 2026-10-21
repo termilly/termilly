@@ -6,7 +6,7 @@
 import { send } from './host.js';
 import { PAGE } from './protocol.js';
 import { focusedTab } from './panes.js';
-import { find } from './dom.js';
+import { find, XTERM_SCREEN } from './dom.js';
 
 /**
  * A link, path or hash on the screen: what it is, and the row and column it starts at.
@@ -84,7 +84,7 @@ export function toggleHints() {
   const found = findHints(rows);
   if (!found.length) return;
 
-  const screen = find(/** @type {TabView} */ (tab.view).body, '.xterm-screen');
+  const screen = find(/** @type {TabView} */ (tab.view).body, XTERM_SCREEN);
   const box = screen.getBoundingClientRect();
   const cellW = box.width / term.cols;
   const cellH = box.height / term.rows;

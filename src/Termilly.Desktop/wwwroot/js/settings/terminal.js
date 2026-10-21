@@ -41,6 +41,7 @@ const TERMINAL = {
       seg('terminal.scrollback', [['1000', '1,000'], ['5000', '5,000'], ['10000', '10,000'], ['50000', '50,000']]))
     + row('Check before pasting several lines', 'Pasting more than one line at a prompt runs them one by one; ask first, with a preview.', toggle('safety.pasteWarning'))
     + row('Inline images', 'Pictures programs print with Sixel or the iTerm2 image protocol (img2sixel, chafa, imgcat). Applies to terminals opened after the change.', toggle('terminal.inlineImages'))
+    + row('Copy on select', 'Selecting text copies it, without Ctrl+C. Ctrl+C copies a selection either way, and stops the running command when nothing is selected.', toggle('terminal.copyOnSelect'), { keywords: 'clipboard copy paste select mouse' })
     + row('Let programs copy to the clipboard', 'Programs can put text on your clipboard with the OSC 52 sequence (neovim, tmux, helix), also from a server over ssh. They can never read it.', toggle('terminal.programClipboard'))
     + row('Scrollback out of sight', 'Terminals in workspaces you’re not looking at keep fewer lines, to save memory with many terminals open. Their oldest lines are dropped.',
       seg('session.hiddenScrollback', choices(hiddenScrollback.all, lines => (lines ? lines.toLocaleString('en-US') : 'Same'))))

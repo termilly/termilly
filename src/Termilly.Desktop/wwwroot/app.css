@@ -2053,8 +2053,8 @@ textarea.field { height: auto; padding: 7px 10px; line-height: 1.5; resize: vert
 .pv-half.add { background: color-mix(in srgb, var(--ok) 13%, transparent); }
 .pv-half.del { background: color-mix(in srgb, var(--danger) 14%, transparent); }
 .pv-half.empty { background: var(--hover); }
-.preview-pane.wrap .pv-row { white-space: pre-wrap; word-break: break-all; }
-.preview-pane.wrap .pv-spacer, .preview-pane.wrap .pv-rows { min-width: 0; }
+.preview-pane.wrap .pv-row, .gw-diff.wrap .pv-row { white-space: pre-wrap; word-break: break-all; }
+.preview-pane.wrap .pv-spacer, .preview-pane.wrap .pv-rows, .gw-diff.wrap .pv-rows { min-width: 0; }
 
 .preview-panel {
   position: absolute;
@@ -2102,6 +2102,9 @@ textarea.field { height: auto; padding: 7px 10px; line-height: 1.5; resize: vert
 .changes-btn:hover, .changes-btn.open { background: color-mix(in srgb, var(--accent) 24%, transparent); color: var(--text); }
 .changes-btn.empty { border-color: var(--border-strong); background: none; color: var(--muted); font-weight: 500; }
 .changes-pop { width: 400px; padding: 0; }
+.changes-pop .inbox-head { justify-content: flex-start; gap: 6px; }
+.changes-pop .inbox-head .section-head { margin-right: auto; }
+.changes-pop .inbox-head .btn[hidden] { display: none; }
 .changes-pop .inbox-list { max-height: min(420px, 60vh); }
 .change-row {
   display: grid; grid-template-columns: minmax(0, 1fr) auto auto 20px; align-items: center; gap: 8px;
@@ -2142,30 +2145,23 @@ textarea.field { height: auto; padding: 7px 10px; line-height: 1.5; resize: vert
 }
 .change-row.change-all:hover, .change-row.change-all:focus { background: color-mix(in srgb, var(--accent) 12%, var(--raised)); }
 
-/* ---- All the files Claude changed, as a tree, with the preview beside it (js/changeswindow.js) ---- */
+/* ---- Big windows with a list and a side beside it: the Git window (its Agent changes are a tree), snippets ---- */
 
 .settings.changes-win { flex-direction: column; width: min(1400px, calc(100vw - 48px)); height: min(900px, calc(100vh - 60px)); }
 .changes-win .set-head { flex: none; gap: 10px; }
 .changes-win .set-close { margin-left: 0; }
 .cw-sub { overflow: hidden; color: var(--muted); font-size: 12.5px; text-overflow: ellipsis; white-space: nowrap; }
-.cw-stats { margin-left: auto; font: 12px var(--mono); white-space: nowrap; }
-.changes-win .btn[hidden] { display: none; }
 .cw-main { display: flex; flex: 1; min-height: 0; }
 .cw-side { display: flex; flex: none; flex-direction: column; width: 320px; min-width: 200px; background: var(--surface); }
 .cw-filter { display: flex; align-items: center; gap: 4px; padding: 10px; border-bottom: 1px solid var(--border); }
 .cw-filter .field { flex: 1; min-width: 0; }
-.cw-filter .pane-btn { flex: none; width: 26px; height: 26px; opacity: 1; }
-.cw-filter .pane-btn svg { width: 14px; height: 14px; stroke-width: 1.4; }
-.cw-tree { flex: 1; min-height: 0; padding: 4px; overflow: auto; outline: none; }
-.cw-tree::-webkit-scrollbar { width: 8px; }
-.cw-tree::-webkit-scrollbar-thumb { border: 2px solid var(--surface); border-radius: 4px; background: var(--scroll-thumb); }
 .cw-grip { flex: none; width: 5px; margin-left: -2px; border-left: 1px solid var(--border); cursor: ew-resize; }
 .cw-grip:hover { border-left-color: var(--accent); }
-.cw-preview { display: flex; flex: 1; min-width: 0; }
+.gw-preview { display: flex; flex: 1; min-width: 0; }
+.gw-preview[hidden], .gw-right[hidden] { display: none; }
 .cw-row { display: flex; align-items: center; gap: 6px; height: 26px; padding-right: 8px; border-radius: 6px; color: var(--text); font-size: 12.5px; cursor: pointer; white-space: nowrap; }
 .cw-row:hover { background: var(--hover); }
 .cw-row.selected { background: var(--accent-fill); color: var(--text-strong); }
-.cw-tree:focus-visible .cw-row.cursor, .cw-tree:focus .cw-row.cursor { box-shadow: inset 0 0 0 1px var(--accent); }
 .cw-chev { display: grid; flex: none; place-items: center; width: 12px; color: var(--faint); }
 .cw-chev svg { width: 10px; height: 10px; stroke-width: 1.5; transition: transform 0.1s; }
 .cw-folder.open .cw-chev svg { transform: rotate(90deg); }
@@ -2188,6 +2184,7 @@ textarea.field { height: auto; padding: 7px 10px; line-height: 1.5; resize: vert
 .gw-ab { flex: none; color: var(--attention); font: 11px var(--mono); }
 .gw-tabs { margin-left: auto; padding: 2px; }
 .gw-tabs button { padding: 2px 12px; font-size: 12px; }
+.gw-tabs button[hidden] { display: none; }
 .gw-refresh { width: 28px; height: 28px; opacity: 1; }
 .gw-side { width: 380px; }
 .gw-list { flex: 1; min-height: 0; padding: 4px; overflow: auto; outline: none; }
@@ -2242,6 +2239,15 @@ textarea.field { height: auto; padding: 7px 10px; line-height: 1.5; resize: vert
 .gw-diff-path { flex: 1; min-width: 0; overflow: hidden; color: var(--text); font: 12px var(--mono); text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
 .gw-diff-head .pv-badge { flex: none; margin: 0; }
 .gw-diff { flex: 1; }
+/* An image's versions (js/gitwindow.js imagesHtml): side by side, fitted, on a checkerboard so transparency shows. */
+.gw-images { display: flex; flex-wrap: wrap; gap: 16px; padding: 16px; border-bottom: 1px solid var(--border); }
+.gw-images:last-child { border-bottom: 0; }
+.gw-image { display: flex; flex: 1 1 240px; flex-direction: column; align-items: center; gap: 8px; min-width: 0; margin: 0; }
+.gw-image-box { display: flex; align-items: center; justify-content: center; max-width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 6px;
+  background: repeating-conic-gradient(var(--hover) 0 25%, var(--surface) 0 50%) 0 0 / 16px 16px; }
+.gw-image-box img { display: block; max-width: 100%; max-height: 60vh; object-fit: contain; image-rendering: auto; }
+.gw-image figcaption { color: var(--muted); font-size: 12px; text-align: center; }
+.gw-image figcaption b { color: var(--text); font-weight: 600; }
 .gw-commit-info { flex: none; padding: 12px 14px 10px; border-bottom: 1px solid var(--border); }
 .gw-commit-subject { color: var(--text-strong); font-size: 14px; font-weight: 600; line-height: 1.4; }
 .gw-commit-body { max-height: 140px; margin: 8px 0 0; overflow: auto; color: var(--text); font: 12px/1.5 var(--mono); white-space: pre-wrap; }
@@ -2335,9 +2341,11 @@ mark.set-hit { border-radius: 2px; background: var(--accent-soft); color: inheri
 /* Update notice in the title bar (js/update.js). */
 .update-chip { display: inline-flex; align-items: center; gap: 6px; height: 24px; margin-right: 6px; padding: 0 10px; border: 1px solid var(--accent-soft); border-radius: 12px; background: var(--accent-fill); color: var(--text-strong); font-size: 12px; white-space: nowrap; }
 .update-chip[hidden] { display: none; }
-.update-chip:hover, .update-chip.open { border-color: var(--accent); }
+.update-chip:hover:not(:disabled), .update-chip.open { border-color: var(--accent); }
+.update-chip:disabled { cursor: default; opacity: 0.7; }
 .update-chip svg { width: 13px; height: 13px; color: var(--accent); stroke-width: 1.6; }
 .update-about { display: block; }
+.update-command { margin: 4px 0 14px; padding: 8px 10px; overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; background: var(--term-bg); color: var(--term-text); font: 12px/1.5 var(--mono); white-space: pre; user-select: text; }
 @media (max-width: 900px) { .update-chip span { display: none; } }
 
 /* Notes (js/notes.js): the mark on sidebar rows, the pinned line in a terminal's header, the editor. */
@@ -2394,6 +2402,16 @@ mark.set-hit { border-radius: 2px; background: var(--accent-soft); color: inheri
 .snippet-empty { padding: 18px 4px; }
 .dialog.snippet-edit, .dialog.snippet-run { width: 520px; }
 .snippet-command { width: 100%; resize: vertical; font: 12.5px/1.5 var(--term-font); }
+/* `snippet:` at a prompt (js/snippetprompt.js): the held text over the prompt, and the list of matches under it. */
+.snippet-typed { position: fixed; z-index: 1700; padding-right: 1px; background: var(--term-surface, var(--surface)); white-space: pre; pointer-events: none; }
+.snippet-typed[hidden] { display: none; }
+.popover.snippet-suggest { width: 380px; animation: none; }
+.snippet-suggest .snippet-item { cursor: pointer; }
+.snippet-vars { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+.snippet-var { padding: 1px 6px; border: 1px solid var(--border); border-radius: 5px; color: var(--muted); font: 11px var(--term-font); }
+.snippet-suggest-foot { margin: 4px 4px 2px; padding-top: 6px; border-top: 1px solid var(--border); color: var(--faint); font-size: 11.5px; }
+.snippet-suggest-foot kbd { margin-right: 2px; }
+.snippet-suggest .snippet-empty { margin: 6px 8px; }
 .snippet-preview { margin: 6px 0 12px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); font: 12.5px/1.5 var(--term-font); white-space: pre-wrap; word-break: break-all; }
 .snippet-list .dialog-actions .spacer, .snippet-edit .dialog-actions .spacer { flex: 1; }
 /* The same space under the title as a dialog's first field (.dialog-field). */
@@ -2466,7 +2484,6 @@ mark.set-hit { border-radius: 2px; background: var(--accent-soft); color: inheri
 .sub-tool { flex: none; padding: 0 5px; border-radius: 4px; background: var(--accent-fill); color: var(--text); font-size: 10.5px; }
 .sub-tool.needs, .sub-row.needs .sub-icon { background: color-mix(in srgb, var(--attention) 22%, transparent); color: var(--attention); }
 .sub-time { flex: none; font-variant-numeric: tabular-nums; font-size: 10.5px; }
-.sub-fold { padding-left: 20px; font-style: italic; }
 .sub-badge { padding: 0 5px; border-radius: 8px; background: var(--accent-fill); color: var(--accent); font-size: 10px; font-weight: 600; line-height: 15px; white-space: nowrap; }
 
 /* Agent cost (js/cost.js). */

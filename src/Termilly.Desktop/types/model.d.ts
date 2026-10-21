@@ -78,6 +78,8 @@ interface AgentInfo {
   line?: string | null;
   /** The session has had a turn, so there's a conversation to resume (js/hibernate.js). */
   hadTurn?: boolean;
+  /** The folder its session belongs to (SessionStart), where it resumes after a restart (js/snapshot.js). */
+  folder?: string | null;
   /** Its news arrived out of sight and hasn't been looked at (store.js agentChanged). */
   unread?: boolean;
 }
@@ -154,7 +156,7 @@ interface Tab {
   /** An agent has run in it. */
   agentSeen?: boolean;
   /** Its agent was ended, to resume (js/hibernate.js). */
-  hibernated?: { session: string; at: number } | null;
+  hibernated?: { session: string; at: number; folder?: string | null } | null;
   /** A tmux pane rather than a shell of its own (js/tmux.js). */
   virtual?: { kind: 'tmux'; client: string; pane: string; cols: number; rows: number } | null;
   /** An SSH connection that dropped, reconnecting (js/reconnect.js). */

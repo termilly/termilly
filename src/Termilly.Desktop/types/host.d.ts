@@ -56,6 +56,8 @@ interface TerminalSettings {
   inlineImages: boolean;
   /** Programs may set the clipboard (OSC 52). */
   programClipboard: boolean;
+  /** Selecting text in a terminal copies it. */
+  copyOnSelect: boolean;
   /** The terminal colour scheme's id (js/themes.js); null: the theme's own. */
   colors: string | null;
   /** A terminal's row shows the ports its programs listen on. */

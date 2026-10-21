@@ -96,7 +96,11 @@ internal static partial class FromPage
 
 internal static partial class ToPage
 {
-    internal sealed record WindowState(bool Maximized) : IHostMessage
+    /// <summary>
+    /// The window's state: maximized (the title bar's button), minimized, and whether it's the active window. A
+    /// minimized WebView can still report document.hasFocus(), so notifications go by this instead (js/store.js isInView).
+    /// </summary>
+    internal sealed record WindowState(bool Maximized, bool Minimized, bool Active) : IHostMessage
     {
         public static string Type => "windowState";
     }

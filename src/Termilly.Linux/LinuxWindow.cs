@@ -33,6 +33,9 @@ internal sealed class LinuxWindow
     // As on Windows, messages before the window (and its page) exist are dropped.
     private volatile bool _created;
     private volatile bool _closing;
+    // The window's state the page last heard (see PostState): it starts in front.
+    private volatile bool _minimized;
+    private volatile bool _active = true;
 
     public LinuxWindow() => new Thread(SendLoop) { IsBackground = true, Name = "page-outbox" }.Start();
 
@@ -97,8 +100,11 @@ internal sealed class LinuxWindow
                 using var doc = JsonDocument.Parse(message);
                 host.OnMessage(doc.RootElement);
             })
-            .RegisterMaximizedHandler((_, _) => channel.Post(new ToPage.WindowState(true)))
-            .RegisterRestoredHandler((_, _) => channel.Post(new ToPage.WindowState(window!.Maximized)))
+            .RegisterMaximizedHandler((_, _) => PostState(channel, window!, minimized: false))
+            .RegisterRestoredHandler((_, _) => PostState(channel, window!, minimized: false))
+            .RegisterMinimizedHandler((_, _) => PostState(channel, window!, minimized: true))
+            .RegisterFocusInHandler((_, _) => PostState(channel, window!, active: true))
+            .RegisterFocusOutHandler((_, _) => PostState(channel, window!, active: false))
             .RegisterWindowClosingHandler((_, _) =>
             {
                 // As on Windows: with terminals to keep, the page first sends a last snapshot, then the window closes.
@@ -112,6 +118,14 @@ internal sealed class LinuxWindow
                 return false;
             });
         return window;
+    }
+
+    /// <summary>Tells the page the window's state after a change to one part of it (the others stay as they were).</summary>
+    private void PostState(PageChannel channel, PhotinoWindow window, bool? minimized = null, bool? active = null)
+    {
+        _minimized = minimized ?? _minimized;
+        _active = active ?? _active;
+        channel.Post(new ToPage.WindowState(window.Maximized, _minimized, _active && !_minimized));
     }
 
     /// <summary>What the page asks of the window: close, come to the front, and the title bar's buttons and edges.</summary>

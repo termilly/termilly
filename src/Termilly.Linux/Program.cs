@@ -39,6 +39,7 @@ internal static class Program
             .AddPlatform(platform)
             .AddSingleton<ICredentialStore, LinuxKeyringStore>()
             .AddSingleton<IFontCatalog, LinuxFonts>()
+            .AddSingleton<IUpdateInstaller, LinuxUpdateInstaller>()
             .BuildServiceProvider();
         window.Run(platform, services.GetRequiredService<WindowTheme>(), services.GetRequiredService<PageChannel>(), services.GetRequiredService<PageHost>());
         return 0;

@@ -212,6 +212,14 @@ public sealed class AgentHooksTests : IDisposable
         Assert.Null(AgentHooks.Parse(Protocol.Message("pane-1", "PermissionRequest", edit))!.File);
     }
 
+    [Fact]
+    public void Session_start_names_the_folder_the_session_resumes_in()
+    {
+        var payload = """{"session_id":"abc","cwd":"D:/Development/termilly","source":"startup"}""";
+        Assert.Equal("D:/Development/termilly", AgentHooks.Parse(Protocol.Message("pane-1", "SessionStart", payload))!.Folder);
+        Assert.Null(AgentHooks.Parse(Protocol.Message("pane-1", "Stop", payload))!.Folder);
+    }
+
     [Theory]
     [InlineData("Bash")]
     [InlineData("PowerShell")]

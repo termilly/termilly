@@ -54,6 +54,15 @@ internal static partial class GitView
     /// <summary>git's message for a log of a repository without commits: an empty history.</summary>
     private const string NoCommits = "does not have any commits";
     private const long BytesPerKb = 1024;
+
+    /// <summary>Images the Git window shows as pictures, by extension: what they're sent as.</summary>
+    private static readonly Dictionary<string, string> ImageTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        [".png"] = "image/png", [".jpg"] = "image/jpeg", [".jpeg"] = "image/jpeg", [".gif"] = "image/gif",
+        [".webp"] = "image/webp", [".bmp"] = "image/bmp", [".ico"] = "image/x-icon", [".avif"] = "image/avif",
+        [".svg"] = "image/svg+xml",
+    };
+
     /// <summary>A log's branch and tag names in full (GitOutput.ShortRef shortens them).</summary>
     internal const string FullDecorations = "--decorate=full";
 
@@ -92,35 +101,51 @@ internal static partial class GitView
         var path = git.CheckPath(root, target.Path);
         var from = target.OldPath is null ? path : git.CheckPath(root, target.OldPath);
         var hash = target.Hash;
+        var image = ImageTypes.GetValueOrDefault(Path.GetExtension(path));
+        var keep = image is not null; // an image's bytes, to show it
         Blob before, after;
         switch (target.Side)
         {
             case DiffSides.Staged:
-                before = Object(git, root, GitCommands.Object(GitCommands.Head, from), maxBytes);
-                after = Object(git, root, GitCommands.Object(Index, path), maxBytes);
+                before = Object(git, root, GitCommands.Object(GitCommands.Head, from), maxBytes, keep);
+                after = Object(git, root, GitCommands.Object(Index, path), maxBytes, keep);
                 break;
             case DiffSides.Unstaged:
-                before = Object(git, root, GitCommands.Object(Index, path), maxBytes);
+                before = Object(git, root, GitCommands.Object(Index, path), maxBytes, keep);
                 if (!before.Exists)
                 {
-                    before = Object(git, root, GitCommands.Object(GitCommands.Head, path), maxBytes);
+                    before = Object(git, root, GitCommands.Object(GitCommands.Head, path), maxBytes, keep);
                 }
-                after = git.ReadFile(root, path, maxBytes);
+                after = git.ReadFile(root, path, maxBytes, keep);
                 break;
             case DiffSides.Untracked:
                 before = Blob.Missing;
-                after = git.ReadFile(root, path, maxBytes);
+                after = git.ReadFile(root, path, maxBytes, keep);
                 break;
             case DiffSides.Commit:
                 hash = CheckHash(hash);
                 var parent = Parents(git, root, hash).FirstOrDefault();
-                before = parent is null ? Blob.Missing : Object(git, root, GitCommands.Object(parent, from), maxBytes);
-                after = Object(git, root, GitCommands.Object(hash, path), maxBytes);
+                before = parent is null ? Blob.Missing : Object(git, root, GitCommands.Object(parent, from), maxBytes, keep);
+                after = Object(git, root, GitCommands.Object(hash, path), maxBytes, keep);
                 break;
             default:
                 throw new ArgumentException("Unknown kind of change.");
         }
-        return View(path, target.OldPath is null ? path : $"{from} → {path}", before, after);
+        var view = View(path, target.OldPath is null ? path : $"{from} → {path}", before, after);
+        return image is null ? view : WithImages(view, image, before, after);
+    }
+
+    /// <summary>
+    /// An image's two versions as pictures (data: URLs) beside its diff: a binary one has no lines to compare, so the
+    /// note saying so goes; an SVG keeps its text diff too. One over the size limit keeps its note.
+    /// </summary>
+    private static ChangeView WithImages(ChangeView view, string type, Blob before, Blob after)
+    {
+        static string? Picture(Blob blob, string type) => blob.Raw is { } raw ? $"data:{type};base64,{Convert.ToBase64String(raw)}" : null;
+        var beforeImage = Picture(before, type);
+        var afterImage = Picture(after, type);
+        var shown = (beforeImage ?? afterImage) is not null && !before.TooLarge && !after.TooLarge;
+        return view with { BeforeImage = beforeImage, AfterImage = afterImage, Note = shown && (before.Binary || after.Binary) ? null : view.Note };
     }
 
     /// <summary>The index, as a revision in a blob's name (":path").</summary>
@@ -152,7 +177,7 @@ internal static partial class GitView
     }
 
     /// <summary>A blob by git's rev:path name, size checked first so a huge file isn't read; missing when it isn't there.</summary>
-    private static Blob Object(GitRunner git, string root, string name, long maxBytes)
+    private static Blob Object(GitRunner git, string root, string name, long maxBytes, bool keepBytes = false)
     {
         long size;
         try
@@ -167,7 +192,7 @@ internal static partial class GitView
         {
             return new Blob(true, null, false, true, size);
         }
-        return Blob.From(git.Run(root, [GitCommands.CatFile, "blob", name]), maxBytes);
+        return Blob.From(git.Run(root, [GitCommands.CatFile, "blob", name]), maxBytes, keepBytes);
     }
 
     private static string[] Parents(GitRunner git, string root, string hash)

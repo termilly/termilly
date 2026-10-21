@@ -159,6 +159,15 @@ export const WINDOW_ACTION = Object.freeze({
   resize: 'resize',
 });
 
+/** C#: UpdateStates (UpdateInstall.cs). */
+export const UPDATE_STATE = Object.freeze({
+  downloading: 'downloading',
+  ready: 'ready',
+  installing: 'installing',
+  failed: 'failed',
+  byHand: 'byHand',
+});
+
 /** C#: SettingValues (Settings/SettingValues.cs). */
 export const SETTING_VALUES = Object.freeze({
   theme: Object.freeze({

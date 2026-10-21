@@ -10,9 +10,10 @@ namespace Termilly.Setup.Engine;
 /// Install or uninstall without the wizard, for scripts and IT tools:
 /// <code>
 /// TermillySetup.exe --quiet [--all-users] [--dir PATH] [--desktop] [--no-path] [--sign-in] [--offline]
-///                   [--no-start-menu] [--no-explorer] [--no-agent]
+///                   [--no-start-menu] [--no-explorer] [--no-agent] [--start]
 /// TermillySetup.exe --uninstall --quiet [--remove-data]
 /// </code>
+/// <c>--start</c> starts Termilly once it's installed (an update from inside Termilly uses it).
 /// Exit codes: 0 done, 1 failed (see the log in %TEMP%\TermillySetup-*), 740 needs to run as administrator.
 /// </summary>
 internal static class Quiet
@@ -72,7 +73,19 @@ internal static class Quiet
         {
             return WindowsCodes.ElevationRequired;
         }
-        new Installation(payload, options).InstallAsync(p => Log.Write($"{p.Step}: {p.Text}"), CancellationToken.None).GetAwaiter().GetResult();
+        try
+        {
+            new Installation(payload, options).InstallAsync(p => Log.Write($"{p.Step}: {p.Text}"), CancellationToken.None).GetAwaiter().GetResult();
+        }
+        finally
+        {
+            // An update from inside Termilly closed it to run this: it opens again either way, the new version or,
+            // if installing failed, whatever is there, rather than leaving the user without it.
+            if (args.Has(Flags.Start))
+            {
+                Processes.StartTermilly(options.InstallDir);
+            }
+        }
         return ExitCodes.Done;
     }
 

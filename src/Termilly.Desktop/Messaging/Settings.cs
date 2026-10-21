@@ -43,6 +43,23 @@ internal static partial class FromPage
         public static string Type => "update:status";
     }
 
+    /// <summary>The user chose "Download and install": download the newer version's installer.</summary>
+    internal sealed record DownloadUpdate : IPageMessage
+    {
+        public static string Type => "update:download";
+    }
+
+    internal sealed record CancelUpdate : IPageMessage
+    {
+        public static string Type => "update:cancel";
+    }
+
+    /// <summary>The user chose "Restart to update": run the downloaded installer, and close.</summary>
+    internal sealed record InstallUpdate : IPageMessage
+    {
+        public static string Type => "update:install";
+    }
+
     /// <summary>The workspaces, as js/store.js serializes them.</summary>
     internal sealed record StateSave(JsonElement State = default) : IPageMessage
     {
@@ -134,13 +151,21 @@ internal static partial class ToPage
     }
 
     /// <param name="CheckedAt">When it last looked, in ms since 1970; null before the first check.</param>
-    internal sealed record UpdateStatus(string Current, long? CheckedAt, bool Failed, UpdateAvailable? Available) : IHostMessage
+    /// <param name="Progress">The update the user asked for: downloading, ready to install, installing or failed; null before.</param>
+    internal sealed record UpdateStatus(string Current, long? CheckedAt, bool Failed, UpdateAvailable? Available, UpdateProgress? Progress) : IHostMessage
     {
         public static string Type => "update:status";
     }
 
-    /// <param name="Download">Linux gets the .deb; Windows the small online setup, which fetches what it needs.</param>
-    internal sealed record UpdateAvailable(string Version, string? Date, string? Notes, string? Download, bool Linux);
+    /// <param name="Installable">Whether this system's installer is in the manifest with its SHA-256, so it can be downloaded and installed.</param>
+    /// <param name="EndsShells">Whether restarting to update ends the terminals' shells (they start again after).</param>
+    internal sealed record UpdateAvailable(string Version, string? Date, string? Notes, bool Installable, bool EndsShells, bool Linux);
+
+    /// <param name="State">One of <see cref="UpdateStates"/>.</param>
+    /// <param name="Percent">How much is downloaded, 0 to 100.</param>
+    /// <param name="Message">Why it failed, for the user.</param>
+    /// <param name="Command">What to run to install it by hand (Linux without a password prompt).</param>
+    internal sealed record UpdateProgress(string State, int Percent, string? Message, string? Command);
 
     internal sealed record History(object Entries) : IHostMessage
     {

@@ -6,6 +6,7 @@ import { send, onHost } from './host.js';
 import {
   state, restore, newId, emit, saveNow, WORKSPACE_COLORS, PROFILE_SOURCES, agentChanged, markSeen, GROUPS, EVENTS, sourceOf, SPLIT,
 } from './store.js';
+import { setWindowState } from './windowshown.js';
 import { setFocusRestorer, openPopover, closePopover } from './popups.js';
 import { setKeyHandler, scheduleFit, clearActivity, keptRunning } from './terminals.js';
 import { consoleDefaults } from './consolecolors.js';
@@ -21,12 +22,11 @@ import { applySnapshot } from './snapshot.js';
 import { toggleCaptures } from './triggers.js';
 import { toggleHints } from './hints.js';
 import { toggleScratch } from './scratch.js';
-import { openGitWindow, gitFolderOf, onServer, openRemoteGitNotice } from './gitwindow.js';
+import { openGitWindow, openAgentChanges, gitFolderOf, onServer, openRemoteGitNotice } from './gitwindow.js';
 import { toggleSftp } from './sftp.js';
 import { openNewWorktree } from './worktree.js';
 import { toggleAi } from './ai.js';
-import { openLastChange, openChangedFiles } from './changes.js';
-import { openAllChanges } from './changeswindow.js';
+import { openChangedFiles } from './changes.js';
 import { openSnippetsWindow } from './snippetswindow.js';
 import { THEMES } from './themes.js';
 import { isPreviewOpen, closePreview } from './preview.js';
@@ -43,6 +43,8 @@ const QUAKE_WORKSPACE = 'Drop-down';
 import { openSnippets, snippetCommands } from './snippets.js';
 import { activityLine, stopAllAgents } from './agentline.js';
 import './subagents.js';
+import './notify.js';
+import './snippetprompt.js';
 import './cost.js';
 import { openAllResults } from './results.js';
 import './gitstatus.js';
@@ -180,9 +182,8 @@ setCommands(() => [
   { label: 'Take the tour', keywords: 'tour help guide introduction tutorial walkthrough start learn', run: () => setTimeout(startTour) },
   { label: 'Ask AI about this terminal', keywords: 'ai assistant claude llm explain error chat', hint: keysHtml('Ctrl Shift K'), run: () => setTimeout(() => toggleAi()) },
   ...(changeShortcutOn() ? [
-    { label: 'Show the last file Claude changed here', keywords: 'change preview diff edit claude file', hint: keysHtml('Ctrl Shift D'), run: () => setTimeout(() => openLastChange()) },
+    { label: 'Show the files Claude changed here, in the Git window', keywords: 'change preview diff edits claude files last all tree folders agent changes search', hint: keysHtml('Ctrl Shift D'), run: () => setTimeout(() => openAgentChanges(focusedTab())) },
     { label: 'Show files Claude changed', keywords: 'change preview diff edits claude files list', run: () => setTimeout(() => openChangedFiles()) },
-    { label: 'Show all files Claude changed, as a tree', keywords: 'change preview diff edits claude files all tree folders window', run: () => setTimeout(() => openAllChanges()) },
   ] : []),
   { label: 'New agent in worktree', keywords: 'git branch worktree agent claude isolate', run: () => setTimeout(openNewWorktree) },
   { label: 'Show captured lines', keywords: 'triggers errors matches alerts', run: () => setTimeout(() => toggleCaptures()) },
@@ -285,9 +286,9 @@ function openGitHere() {
   const tab = focusedTab();
   // Git on the server, over ssh (a remote repository means a terminal).
   const git = remoteGit(tab);
-  if (git) openGitWindow(git.root, { remote: /** @type {Tab} */ (tab).id });
+  if (git) openGitWindow(git.root, { remote: /** @type {Tab} */ (tab).id, agent: tab });
   else if (onServer(tab)) openRemoteGitNotice();
-  else openGitWindow(gitFolderOf(tab, ws));
+  else openGitWindow(gitFolderOf(tab, ws), { agent: tab });
 }
 
 /**
@@ -323,7 +324,7 @@ function runShortcut(e) {
   else if (ctrlShift && e.code === 'KeyA') commands.inbox();
   else if (ctrlShift && e.code === 'KeyI') commands.broadcastWorkspace();
   else if (ctrlShift && e.code === 'KeyD' && changeShortcutOn()) {
-    if (isPreviewOpen()) closePreview(); else openLastChange();
+    if (isPreviewOpen()) closePreview(); else openAgentChanges(focusedTab());
   }
   // The digit is text; subtracting makes it a number.
   else if (ctrlShift && /^Digit[1-9]$/.test(e.code) && state.profiles[/** @type {any} */ (e.code.slice(DIGIT_CODE.length)) - 1]) {
@@ -399,6 +400,8 @@ byId('search-button').addEventListener('click', () => openPalette());
 onHost(HOST.windowState, m => {
   document.body.classList.toggle('maximized', m.maximized);
   find(document, '[data-window="maximize"]').title = m.maximized ? RESTORE_LABEL : 'Maximize';
+  // Back from minimized: the page may never have lost focus, so the window's focus event below doesn't come.
+  if (setWindowState(m)) seeFocused();
 });
 
 // ---- Terminal output ----
@@ -443,10 +446,11 @@ onHost(HOST.quake, m => {
 });
 
 // Coming back to the window means seeing the terminal that has focus.
-window.addEventListener('focus', () => {
+function seeFocused() {
   const tab = focusedTab();
   if (tab) markSeen(tab);
-});
+}
+window.addEventListener('focus', seeFocused);
 
 // An agent reported in: Claude Code's hooks through Termilly's claude shim (source "hooks", see AgentHooks.cs), or
 // `claude agents --json` for a Claude Code the hooks don't reach (source "poll", see ClaudeAgentsPoller.cs).
@@ -465,6 +469,8 @@ onHost(HOST.agent, m => {
       line: activityLine(m) ?? tab.agent?.line ?? null,
       // Whether this session has had a turn: only then is there a conversation to resume (hibernate.js).
       hadTurn: (tab.agent?.hadTurn && (m.session ?? tab.agent?.session) === tab.agent?.session) || /** @type {string[]} */ ([AGENT_STATE.working, AGENT_STATE.needsInput, AGENT_STATE.done, AGENT_STATE.error]).includes(m.state),
+      // Where it resumes after a restart (snapshot.js): SessionStart says, the events after it don't.
+      folder: /** @type {Partial<Host_agent_1>} */ (m).folder ?? tab.agent?.folder ?? null,
     };
   agentChanged(tab);
 });

@@ -60,6 +60,7 @@ public partial class MainWindow : Window
             .AddPlatform(new WindowsPlatform(this))
             .AddSingleton<ICredentialStore, WindowsCredentialStore>()
             .AddSingleton<IFontCatalog, WindowsFonts>()
+            .AddSingleton<IUpdateInstaller, WindowsUpdateInstaller>()
             .BuildServiceProvider();
         _settings = _services.GetRequiredService<ISettingsStore>();
         _channel = _services.GetRequiredService<PageChannel>();
@@ -186,8 +187,22 @@ public partial class MainWindow : Window
         core.SetVirtualHostNameToFolderMapping(
             HostName, AppPaths.WebRoot, CoreWebView2HostResourceAccessKind.Deny);
         core.WebMessageReceived += OnWebMessage;
+        core.PermissionRequested += OnPermissionRequested;
         core.NavigationCompleted += (_, _) => PostWindowState();
         core.Navigate($"https://{HostName}/index.html");
+    }
+
+    /// <summary>
+    /// The terminal's right-click Paste reads the clipboard, which WebView2 would otherwise ask about each time. Only
+    /// Termilly's own page gets it (a plugin's sandboxed frame has an opaque origin of its own).
+    /// </summary>
+    private static void OnPermissionRequested(object? sender, CoreWebView2PermissionRequestedEventArgs e)
+    {
+        if (e.PermissionKind == CoreWebView2PermissionKind.ClipboardRead
+            && e.Uri.StartsWith($"https://{HostName}/", StringComparison.OrdinalIgnoreCase))
+        {
+            e.State = CoreWebView2PermissionState.Allow;
+        }
     }
 
     private void OnWebMessage(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
@@ -245,8 +260,20 @@ public partial class MainWindow : Window
         PostWindowState();
     }
 
-    private void PostWindowState() =>
-        _channel.Post(new ToPage.WindowState(WindowState == WindowState.Maximized));
+    protected override void OnActivated(EventArgs e)
+    {
+        base.OnActivated(e);
+        PostWindowState();
+    }
+
+    protected override void OnDeactivated(EventArgs e)
+    {
+        base.OnDeactivated(e);
+        PostWindowState();
+    }
+
+    private void PostWindowState() => _channel.Post(new ToPage.WindowState(
+        WindowState == WindowState.Maximized, WindowState == WindowState.Minimized, IsActive && WindowState != WindowState.Minimized));
 
     /// <summary>
     /// Registers or drops the system-wide "next terminal that needs me" shortcut. It brings Termilly forward and

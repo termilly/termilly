@@ -59,6 +59,9 @@ if event == "PreToolUse":
         target = text(inp, "subagent_type", 60)
     if target:
         m["target"] = target
+if event == "SessionStart":
+    # The folder the session belongs to: where `claude --resume` runs again after Termilly restarts.
+    m["folder"] = text(p, "cwd", 1000, False)
 print(json.dumps({k: v for k, v in m.items() if v is not None}, separators=(",", ":")))
 ' "$event" 2>/dev/null)
 fi

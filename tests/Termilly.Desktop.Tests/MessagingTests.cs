@@ -81,7 +81,7 @@ public sealed class MessagingTests
     [Fact]
     public void Variants_of_one_message_write_what_the_page_tells_them_apart_by()
     {
-        var hooked = Written(new ToPage.HookedAgent("t1", "working", "PreToolUse", "Bash", null, null, "s1", "ls"));
+        var hooked = Written(new ToPage.HookedAgent("t1", "working", "PreToolUse", "Bash", null, null, "s1", "ls", null));
         Assert.Equal(("agent", "hooks", "PreToolUse"), (hooked["type"]!.ToString(), hooked["source"]!.ToString(), hooked["event"]!.ToString()));
         Assert.Equal("poll", Written(new ToPage.PolledAgent("t1", "idle", null, null))["source"]!.ToString());
 

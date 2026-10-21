@@ -73,6 +73,7 @@ export function promptStarted(tab) {
   commands.prompts.push(marker);
   if (commands.prompts.length > MAX_PROMPTS) commands.prompts.shift().dispose();
   commands.promptMarker = marker;
+  emit(EVENTS.prompt, tab); // a fresh prompt with nothing typed yet (snippetprompt.js)
 }
 
 /**
@@ -82,6 +83,18 @@ export function promptStarted(tab) {
 export function inputStarted(tab) {
   const { term } = /** @type {TabView} */ (tab.view);
   commandsOf(tab).input = { marker: term.registerMarker(0), x: term.buffer.active.cursorX };
+}
+
+/**
+ * Whether the line after the prompt is empty, with the cursor where input starts: nothing typed, or all of it
+ * deleted again. False while a command runs (its output has moved the cursor on).
+ * @param {Tab} tab
+ */
+export function inputEmpty(tab) {
+  const input = tab.commands?.input;
+  if (tab.running || !input?.marker || input.marker.isDisposed) return false;
+  const buffer = /** @type {TabView} */ (tab.view).term.buffer.active;
+  return buffer.baseY + buffer.cursorY === input.marker.line && buffer.cursorX === input.x && !typedSince(buffer, input);
 }
 
 /**

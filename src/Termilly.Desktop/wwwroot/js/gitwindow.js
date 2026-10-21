@@ -1,13 +1,16 @@
 // @ts-check
 // The Git window: a repository's working tree (staged, changed, untracked and conflicted files), any file's diff,
-// its history and its branches, read only. The host runs git (GitView.cs); this draws it, with the change
-// preview's diff rows (js/diffrows.js). It opens from a branch chip in the sidebar, the workspace and terminal
-// menus, the palette and Ctrl+Shift+G, and follows the repository while it's open: after a command ends, when the
-// window gets focus, and on Refresh.
+// its history and its branches, read only, and the files Claude changed in the terminal it was opened from (Agent
+// changes, js/gitagent.js). The host runs git (GitView.cs); this draws it, with the change preview's diff rows
+// (js/diffrows.js). It opens from a branch chip in the sidebar, the workspace and terminal menus, the palette,
+// Ctrl+Shift+G, and a terminal's changed files (Ctrl+Shift+D, "Show all", the preview's Git button), and follows the
+// repository while it's open: after a command ends, when the window gets focus, and on Refresh. Outside a
+// repository it shows only a terminal's Agent changes.
 
 import { PAGE } from './protocol.js';
 import { request } from './host.js';
-import { state, on, emit, isSsh, EVENTS } from './store.js';
+import { state, on, emit, isSsh, wsById, tabTitle, EVENTS } from './store.js';
+import { toggleWrap, fileSize } from './preview.js';
 import { debounce } from './util.js';
 import { restoreFocus } from './panes.js';
 import { closeAll, showMenu, SEPARATOR } from './popups.js';
@@ -21,6 +24,11 @@ import {
   ITEM, CONFLICT, found, searching, clearSearch, runSearch, searchCode, searchItems, searchEmptyText, searchRowHtml,
   filtersHtml, stepView, setView, hitKey, markInDiff, ago,
 } from './gitsearch.js';
+import {
+  AGENT_ITEM, agent, startAgent, agentItems, agentRowHtml, agentEmptyText, agentCount, remoteAgent, toggleFolder,
+  hostPreview, showAgentFile, showFirstAgentFile, keepAgentFile, forgetAgentFile,
+} from './gitagent.js';
+import { samePath } from './changetree.js';
 
 /** The choices of the settings used here (C#'s SettingValues). */
 const { changeLayout, changeNewFile, changeView } = SETTING_VALUES;
@@ -57,7 +65,7 @@ const { changeLayout, changeNewFile, changeView } = SETTING_VALUES;
  * A row of the side list: a section's head, a file, a commit, a branch, "Load more commits", or the search's.
  * @typedef {{ kind: 'section', key: string, label: string, count: number, fixed?: boolean } | FileItem
  *   | { kind: 'commit', commit: Commit } | { kind: 'branch', branch: Branch } | { kind: 'more' }
- *   | import('./gitsearch.js').SearchItem} ListItem
+ *   | import('./gitsearch.js').SearchItem | import('./gitagent.js').AgentItem} ListItem
  */
 /**
  * A file whose diff can be shown: a changed file's row, or a file in a commit.
@@ -69,9 +77,11 @@ const { changeLayout, changeNewFile, changeView } = SETTING_VALUES;
  * @typedef {{ kind: string, side?: string, path?: string, hash?: string, ref?: string, hit?: string | null }} Selection
  */
 /**
- * A diff as GitView.cs sends it: the change preview's data, and what's said about it.
+ * A diff as GitView.cs sends it: the change preview's data, and what's said about it. An image comes as pictures
+ * too (data: URLs).
  * @typedef {import('./diffrows.js').DiffData & { display?: string | null, error?: string | null,
- *   note?: string | null, added?: number, removed?: number, eolOnly?: boolean }} GitDiff
+ *   note?: string | null, added?: number, removed?: number, eolOnly?: boolean, beforeSize?: number,
+ *   afterSize?: number, beforeImage?: string | null, afterImage?: string | null }} GitDiff
  */
 /**
  * The diff shown: what was asked, the answer, the folds opened, and where it's drawn; for a search's hit, the whole
@@ -99,7 +109,7 @@ const BRANCH_LOG_COMMITS = 50;
 const COPIED_MS = 1200;
 
 /** The window's tabs (data-gw-tab), and what the side list shows. */
-const GIT_TAB = Object.freeze({ changes: 'changes', history: 'history', branches: 'branches' });
+const GIT_TAB = Object.freeze({ agent: 'agent', changes: 'changes', history: 'history', branches: 'branches' });
 /** The buttons in the window's head (data-gw). */
 const HEAD_BUTTON = Object.freeze({ close: 'close', refresh: 'refresh' });
 /**
@@ -127,7 +137,12 @@ const SIDE_MAX_PX = 720;
 const SEARCH_DELAY = 300;
 /** Rows a search's arrow keys show as they reach them (the rest, like "Show all", wait for Enter). */
 /** @type {Set<string>} */
-const PREVIEWED = new Set([ITEM.file, ITEM.commit, ITEM.branch, ITEM.fileHit, ITEM.commitHit, ITEM.tag]);
+const PREVIEWED = new Set([ITEM.file, ITEM.commit, ITEM.branch, ITEM.fileHit, ITEM.commitHit, ITEM.tag, ITEM.agentHit, AGENT_ITEM.file]);
+/** The window's title with Agent changes alone (outside a repository). */
+const AGENT_TITLE = 'Agent changes';
+/** What the search box says it looks through: a repository, or (outside one) only Claude's changes. */
+const SEARCH_REPO = 'Search changes, commits, code, branches and tags';
+const SEARCH_AGENT = 'Search the files Claude changed';
 
 const layer = document.createElement('div');
 layer.className = 'modal-layer settings-layer changes-layer git-layer';
@@ -139,6 +154,7 @@ layer.innerHTML = `
       <h2 id="gw-title"></h2>
       <span class="gw-branch"></span>
       <span class="seg gw-tabs" role="tablist">
+        <button data-gw-tab="${GIT_TAB.agent}" role="tab" title="The files Claude changed in this terminal" hidden>${AGENT_TITLE}</button>
         <button data-gw-tab="${GIT_TAB.changes}" role="tab">Changes</button>
         <button data-gw-tab="${GIT_TAB.history}" role="tab">History</button>
         <button data-gw-tab="${GIT_TAB.branches}" role="tab">Branches</button>
@@ -149,8 +165,8 @@ layer.innerHTML = `
     <div class="cw-main">
       <div class="cw-side gw-side">
         <div class="cw-filter gw-search">
-          <input class="field" placeholder="Search changes, commits, code, branches and tags" aria-label="Search the repository"
-            title="Finds text in changed files, commit messages, hashes and authors, the lines commits changed, and branch and tag names (Ctrl+F)"
+          <input class="field" placeholder="${SEARCH_REPO}" aria-label="Search the repository"
+            title="Finds text in the files Claude changed here, changed files, commit messages, hashes and authors, the lines commits changed, and branch and tag names (Ctrl+F)"
             spellcheck="false" autocomplete="off">
         </div>
         <div class="pal-filters gw-filters" hidden></div>
@@ -158,11 +174,13 @@ layer.innerHTML = `
       </div>
       <div class="cw-grip" title="Drag to resize"></div>
       <div class="gw-right" tabindex="-1"></div>
+      <div class="gw-preview" hidden></div>
     </div>
   </div>`;
 document.body.append(layer);
 
 const titleEl = find(layer, '#gw-title');
+const previewEl = find(layer, '.gw-preview');
 const branchEl = find(layer, '.gw-branch');
 const searchEl = field(layer, '.gw-search input');
 const filtersEl = find(layer, '.gw-filters');
@@ -216,16 +234,19 @@ let diffState = null; // { request, data, expanded }
 
 /**
  * Opens the window on the repository a folder is in; with `remote` (an SSH terminal's id), on the server that
- * terminal is connected to, where git runs over ssh.
+ * terminal is connected to, where git runs over ssh. With `agent` (a terminal), its Agent changes are a tab too, and
+ * the whole window without a folder or a repository; `path` is the changed file to show first.
  * @param {string | null | undefined} forFolder
- * @param {{ show?: string, remote?: string | null }} [options]
+ * @param {{ show?: string, remote?: string | null, agent?: Tab | null, path?: string | null }} [options]
  */
-export async function openGitWindow(forFolder, { show = GIT_TAB.changes, remote = null } = {}) {
-  if (!forFolder) return;
+export async function openGitWindow(forFolder, { show = GIT_TAB.changes, remote = null, agent: forAgent = null, path = null } = {}) {
+  if (!forFolder && !forAgent) return;
   closeAll();
-  folder = forFolder;
+  folder = forFolder ?? null;
   server = remote || null;
-  tab = show;
+  tab = forAgent || show !== GIT_TAB.agent ? show : GIT_TAB.changes;
+  startAgent(forAgent);
+  agent.selected = path;
   repo = null;
   clearSearch();
   searchEl.value = '';
@@ -269,21 +290,40 @@ export function openRemoteGitNotice() {
 export function closeGitWindow() {
   if (layer.hidden) return;
   layer.hidden = true;
+  useRight(false);
+  startAgent(null);
   listEl.innerHTML = '';
   rightEl.innerHTML = '';
   repo = null;
   restoreFocus();
 }
 
-on(EVENTS.openGit, ({ folder: f, show, remote } = {}) => openGitWindow(f, { show, remote }));
+on(EVENTS.openGit, ({ folder: f, show, remote, agent: forAgent } = {}) => openGitWindow(f, { show, remote, agent: forAgent }));
+
+/**
+ * The window on a terminal's Agent changes, at a file (or the newest): in the repository the terminal works in, on
+ * this PC or its server, else alone.
+ * @param {Tab | null | undefined} forTab
+ * @param {string | null} [path]
+ */
+export function openAgentChanges(forTab, path = null) {
+  if (!forTab) return;
+  const git = remoteGit(forTab);
+  const where = git ? git.root : gitFolderOf(forTab, wsById(forTab.wsId));
+  openGitWindow(where, { show: GIT_TAB.agent, remote: git ? forTab.id : null, agent: forTab, path: path ?? forTab.changes?.[0]?.path ?? null });
+}
+
+on(EVENTS.openAgentChanges, ({ tab: t, path } = {}) => openAgentChanges(t, path));
 
 /** Looks at the repository again: its status, and whatever the open tab shows. */
 async function refresh() {
-  if (!isOpen() || !folder) return;
+  if (!isOpen()) return;
+  if (!folder) return showAgentOnly();
   try {
     repo = await ask(PAGE.gitviewStatus, { folder });
   } catch (e) {
     repo = null;
+    if (agent.tab) return showAgentOnly(); // a terminal's changes, outside a repository
     titleEl.textContent = GIT_TITLE;
     branchEl.innerHTML = '';
     listEl.innerHTML = `<div class="gw-empty">${escapeHtml(/** @type {Error} */ (e).message)}</div>`;
@@ -293,8 +333,11 @@ async function refresh() {
     return;
   }
   renderHead();
+  renderTabs();
   if (searching()) {
-    runSearch(found.text, /** @type {RepoStatus} */ (repo).root, ask, searchChanged);
+    runSearch(found.text, searchScope(), ask, searchChanged);
+  } else if (tab === GIT_TAB.agent) {
+    showAgentTab();
   } else if (tab === GIT_TAB.changes) {
     renderList();
     // The file shown may have changed on disk, or left the list.
@@ -339,14 +382,73 @@ function renderTabs() {
   for (const b of /** @type {NodeListOf<HTMLElement>} */ (layer.querySelectorAll('[data-gw-tab]'))) {
     b.classList.toggle('on', b.dataset.gwTab === tab && !searching());
     b.setAttribute('aria-selected', String(b.dataset.gwTab === tab && !searching()));
+    // Agent changes with a terminal (in a repository, once Claude changed something or when asked for); the rest
+    // with a repository.
+    b.hidden = b.dataset.gwTab === GIT_TAB.agent
+      ? !agent.tab || (!!repo && !agentCount() && tab !== GIT_TAB.agent)
+      : !repo && !!agent.tab;
   }
-  listEl.setAttribute('aria-label',
-    /** @type {Record<string, string>} */ ({ changes: 'Changed files', history: 'Commits', branches: 'Branches' })[tab]);
+  const n = agentCount();
+  find(layer, `[data-gw-tab="${GIT_TAB.agent}"]`).textContent = n ? `${AGENT_TITLE} ${n}` : AGENT_TITLE;
+  searchEl.placeholder = repo || !agent.tab ? SEARCH_REPO : SEARCH_AGENT;
+  listEl.setAttribute('aria-label', /** @type {Record<string, string>} */ (
+    { agent: 'Files Claude changed', changes: 'Changed files', history: 'Commits', branches: 'Branches' })[tab]);
 }
+
+/**
+ * Outside a repository (or without a folder): the terminal's Agent changes are all the window shows.
+ */
+function showAgentOnly() {
+  repo = null;
+  tab = GIT_TAB.agent;
+  titleEl.textContent = AGENT_TITLE;
+  titleEl.title = '';
+  branchEl.textContent = agent.tab ? tabTitle(agent.tab) : '';
+  branchEl.title = '';
+  renderTabs();
+  if (searching()) runSearch(found.text, searchScope(), ask, searchChanged);
+  else showAgentTab();
+}
+
+/** The Agent changes tab: the tree on the left, the file selected (or the first) in the preview on the right. */
+function showAgentTab() {
+  useRight(true);
+  if (agent.selected) showAgentFile(agent.selected); else showFirstAgentFile();
+  renderList();
+  cursorOnAgentFile();
+}
+
+/** The keyboard on the selected file's row. */
+function cursorOnAgentFile() {
+  const at = items.findIndex(i => i.kind === AGENT_ITEM.file && samePath(i.file.path, agent.selected));
+  if (at >= 0) {
+    cursor = at;
+    markCursor();
+  }
+}
+
+/**
+ * Which right side shows: the change preview (Agent changes and their search hits), or the window's own.
+ * @param {boolean} preview
+ */
+function useRight(preview) {
+  rightEl.hidden = preview;
+  previewEl.hidden = !preview;
+  hostPreview(preview ? previewEl : null);
+}
+
+/** There's something to search: a repository, or a terminal's changes. */
+const canSearch = () => !!repo || !!agent.tab;
+
+/** Where the search looks: the repository, and the terminal's changes when they're on this PC. */
+const searchScope = () => ({
+  root: repo?.root ?? null,
+  agentId: agent.tab && !remoteAgent(agent.tab) ? agent.tab.id : null,
+});
 
 /** @param {string} next */
 async function switchTab(next) {
-  if ((next === tab && !searching()) || !repo) return;
+  if ((next === tab && !searching()) || (!repo && next !== GIT_TAB.agent)) return;
   if (searching()) endSearch();
   tab = next;
   selection = null;
@@ -354,7 +456,9 @@ async function switchTab(next) {
   cursor = -1;
   renderTabs();
   showNothing();
-  if (tab === GIT_TAB.changes) {
+  if (tab === GIT_TAB.agent) {
+    showAgentTab();
+  } else if (tab === GIT_TAB.changes) {
     renderList();
     selectFirst();
   } else if (tab === GIT_TAB.history) {
@@ -400,6 +504,12 @@ function renderList() {
       listEl.innerHTML = `<div class="gw-empty">${searchEmptyText()}</div>`;
       return;
     }
+  } else if (tab === GIT_TAB.agent) {
+    items = /** @type {ListItem[]} */ (agentItems());
+    if (!items.length) {
+      listEl.innerHTML = `<div class="gw-empty">${escapeHtml(agentEmptyText())}</div>`;
+      return;
+    }
   } else if (tab === GIT_TAB.changes) {
     items = changeItems();
     if (!items.length) {
@@ -439,7 +549,8 @@ const STATUS_TITLE = { M: 'Modified', A: 'Added', D: 'Deleted', R: 'Renamed', C:
  * @param {number} i
  */
 function rowHtml(item, i) {
-  const hit = searchRowHtml(item, i, !!selection?.hit && selection.hit === hitKey(/** @type {any} */ (item)));
+  const hit = searchRowHtml(item, i, !!selection?.hit && selection.hit === hitKey(/** @type {any} */ (item)))
+    ?? agentRowHtml(item, i);
   if (hit !== null) return hit;
   if (item.kind === ITEM.section) {
     const open = item.fixed || !collapsedSections.has(item.key);
@@ -522,6 +633,14 @@ function openItem(i) {
   }
   if (item.kind === ITEM.moreCode) return searchCode(/** @type {RepoStatus} */ (repo).root, ask, searchChanged);
   if (item.kind === ITEM.status) return markCursor();
+  if (item.kind === AGENT_ITEM.folder) {
+    toggleFolder(item.folder);
+    return renderList();
+  }
+  if (item.kind === AGENT_ITEM.file) {
+    showAgentFile(item.file.path);
+    return renderList();
+  }
   if (item.kind === ITEM.file) showFile(item);
   else if (item.kind === ITEM.commit) showCommit(item.commit.hash);
   else if (item.kind === ITEM.branch) showBranch(item.branch);
@@ -536,7 +655,11 @@ function openItem(i) {
  * @param {ListItem} item
  */
 function openHit(item) {
-  if (item.kind === ITEM.fileHit) {
+  if (item.kind === ITEM.agentHit) {
+    selection = { kind: ITEM.agentHit };
+    useRight(true);
+    showAgentFile(item.hit.path, { line: item.hit.line || null });
+  } else if (item.kind === ITEM.fileHit) {
     const { path, side, conflict, line } = item.hit;
     showFile({ path, side, conflict }, { find: { line, wholeFile: line > 0 } });
   } else if (item.kind === ITEM.commitHit) {
@@ -557,14 +680,14 @@ function searchChanged() {
 
 /** Searches a moment after the last key; an empty box ends the search at once. */
 const searchLater = debounce(() => {
-  if (!isOpen() || !repo) return;
+  if (!isOpen() || !canSearch()) return;
   cursor = -1;
   if (!searching()) {
     // What the tab showed has nothing to do with the search.
     selection = null;
     showNothing();
   }
-  runSearch(searchEl.value.trim(), repo.root, ask, searchChanged);
+  runSearch(searchEl.value.trim(), searchScope(), ask, searchChanged);
 }, SEARCH_DELAY);
 
 searchEl.addEventListener('input', () => {
@@ -590,7 +713,9 @@ function endSearch() {
 /** The open tab's list again, after a search. */
 function showTab() {
   showNothing();
-  if (tab === GIT_TAB.changes) {
+  if (tab === GIT_TAB.agent) {
+    showAgentTab();
+  } else if (tab === GIT_TAB.changes) {
     renderList();
     selectFirst();
   } else if (tab === GIT_TAB.history && commits.length) {
@@ -620,10 +745,10 @@ searchEl.addEventListener('keydown', e => {
   if (e.key === 'ArrowDown' || e.key === 'Enter') {
     e.preventDefault();
     listEl.focus();
-    if (searchEl.value.trim() && searchEl.value.trim() !== found.text && repo) {
+    if (searchEl.value.trim() && searchEl.value.trim() !== found.text && canSearch()) {
       // Enter before the search started: it starts now (its rows open as usual once they're in).
       searchLater.cancel();
-      runSearch(searchEl.value.trim(), repo.root, ask, searchChanged);
+      runSearch(searchEl.value.trim(), searchScope(), ask, searchChanged);
       return;
     }
     const first = items.findIndex(i => PREVIEWED.has(i.kind));
@@ -680,6 +805,7 @@ let loadingMore = false;
 // ---- The right side ----
 
 function showNothing() {
+  useRight(false);
   rightEl.innerHTML = '';
 }
 
@@ -689,6 +815,7 @@ function showNothing() {
  * @param {{ keepScroll?: boolean, inCommit?: string | null, find?: Find | null }} [options]
  */
 async function showFile(item, { keepScroll = false, inCommit = null, find: hit = null } = {}) {
+  if (!inCommit) useRight(false);
   selection = inCommit ? selection : { kind: ITEM.file, side: item.side, path: item.path };
   const request = { root: /** @type {RepoStatus} */ (repo).root, path: item.path, oldPath: item.oldPath ?? null, side: inCommit ? SIDE.commit : item.side, hash: inCommit };
   const scroll = keepScroll ? rightEl.querySelector(DIFF_SCROLL)?.scrollTop ?? 0 : 0;
@@ -723,6 +850,8 @@ function drawDiff() {
   const { data, expanded, target, label, find: hit } = /** @type {DiffState} */ (diffState);
   const wholeFile = !!hit?.wholeFile;
   const sideBySide = state.settings.changes.layout === changeLayout.sideBySide && !wholeFile;
+  // The change preview's setting: one choice for both (its Wrap button and this one flip it).
+  const wrap = !!state.settings.changes.wrap;
   // A file whose lines didn't change (a rename, a mode change) is shown as it is rather than folded away whole.
   const unchanged = data.kind === CHANGE_KIND.modified && data.ops?.length === 1 && data.ops[0][0] === 0;
   const whole = unchanged || ((data.kind === CHANGE_KIND.created || data.kind === CHANGE_KIND.deleted) && state.settings.changes.newFile !== changeNewFile.diff);
@@ -731,9 +860,17 @@ function drawDiff() {
   const head = `<div class="gw-diff-head">${label ? `<span class="gw-side-label">${escapeHtml(label)}</span>` : ''}`
     + `<span class="gw-diff-path" title="${escapeHtml(data.path)}">${escapeHtml(data.display ?? data.path)}</span>`
     + `${data.kind !== CHANGE_KIND.modified ? `<span class="pv-badge" data-kind="${data.kind}">${data.kind === CHANGE_KIND.created ? 'new' : data.kind}</span>` : ''}`
-    + `<span class="pv-stats">${data.added || data.removed ? `<span class="pv-plus">+${data.added}</span> <span class="pv-minus">−${data.removed}</span>` : ''}</span></div>`;
+    + `<span class="pv-stats">${data.added || data.removed ? `<span class="pv-plus">+${data.added}</span> <span class="pv-minus">−${data.removed}</span>` : ''}</span>`;
+  const wrapButton = `<span class="seg pv-seg"><button class="${wrap ? 'on' : ''}" data-gw-wrap title="Wrap long lines">Wrap</button></span>`;
+  const pictures = imagesHtml(data);
+  // A binary image is only its pictures (no lines to wrap); an SVG's text diff follows them.
+  if (pictures && data.before == null && data.after == null) {
+    target.innerHTML = `${head}</div><div class="pv-scroll gw-diff">${pictures}</div>`;
+    measureImages(target);
+    return null;
+  }
   if (message) {
-    target.innerHTML = `${head}<div class="gw-message">${escapeHtml(message)}</div>`;
+    target.innerHTML = `${head}${wrapButton}</div><div class="gw-message">${escapeHtml(message)}</div>`;
     return null;
   }
   let rows = buildDiffRows(data, { mode: wholeFile ? changeView.file : changeView.diff, expanded, whole });
@@ -746,13 +883,54 @@ function drawDiff() {
     notes.push(`Showing the first ${MAX_ROWS.toLocaleString()} of ${rows.length.toLocaleString()} lines.`);
     rows = rows.slice(0, MAX_ROWS);
   }
-  target.innerHTML = `${head}${notes.length ? `<div class="pv-note">${escapeHtml(notes.join(' '))}</div>` : ''}`
-    + `<div class="pv-scroll gw-diff${sideBySide && !whole ? ' sbs' : ''}"><div class="pv-rows">${rows.map(diffRowHtml).join('')}</div></div>`;
+  target.innerHTML = `${head}${wrapButton}</div>${notes.length ? `<div class="pv-note">${escapeHtml(notes.join(' '))}</div>` : ''}`
+    + `<div class="pv-scroll gw-diff${sideBySide && !whole ? ' sbs' : ''}${wrap ? ' wrap' : ''}">${pictures}<div class="pv-rows">${rows.map(diffRowHtml).join('')}</div></div>`;
+  if (pictures) measureImages(target);
   return hit && searching() ? markInDiff(target, hit.line) : null;
+}
+
+/**
+ * An image's versions side by side (one for a new or deleted file), on a checkerboard so transparency shows, each
+ * with its size; '' for a file that isn't an image.
+ * @param {GitDiff} data
+ */
+function imagesHtml(data) {
+  const both = !!data.beforeImage && !!data.afterImage;
+  /**
+   * @param {string | null | undefined} src
+   * @param {string} label
+   * @param {number | undefined} bytes
+   */
+  const picture = (src, label, bytes) => src ? `<figure class="gw-image">
+      <div class="gw-image-box"><img src="${escapeHtml(src)}" alt="${escapeHtml(label)}"></div>
+      <figcaption>${both ? `<b>${escapeHtml(label)}</b> · ` : ''}<span data-image-size></span>${fileSize(bytes ?? 0)}</figcaption>
+    </figure>` : '';
+  const shown = picture(data.beforeImage, 'Before', data.beforeSize) + picture(data.afterImage, 'After', data.afterSize);
+  return shown ? `<div class="gw-images">${shown}</div>` : '';
+}
+
+/**
+ * Adds each picture's width and height to its caption once it has loaded.
+ * @param {Element} target
+ */
+function measureImages(target) {
+  for (const img of target.querySelectorAll('.gw-image img')) {
+    const image = /** @type {HTMLImageElement} */ (img);
+    const show = () => {
+      const size = image.closest('.gw-image')?.querySelector('[data-image-size]');
+      if (size && image.naturalWidth) size.textContent = `${image.naturalWidth} × ${image.naturalHeight} px · `;
+    };
+    if (image.complete) show();
+    else image.addEventListener('load', show, { once: true });
+  }
 }
 
 // A folded run of unchanged lines opens on a click.
 rightEl.addEventListener('click', e => {
+  if (targetOf(e).closest('[data-gw-wrap]')) {
+    toggleWrap(); // the diff redraws on the change (below)
+    return;
+  }
   const fold = /** @type {HTMLElement | null} */ (targetOf(e).closest('.pv-fold, .pv-delmark'));
   if (fold && diffState && diffState.target.contains(fold)) {
     diffState.expanded.add(/** @type {string} */ (fold.dataset.key));
@@ -793,6 +971,7 @@ let currentCommit = null;
  * @param {{ path?: string | null }} [options]
  */
 async function showCommit(hash, { path = null } = {}) {
+  useRight(false);
   selection = { kind: ITEM.commit, hash };
   rightEl.innerHTML = '<div class="gw-message">Loading</div>';
   /** @type {CommitDetail} */
@@ -840,6 +1019,7 @@ async function showCommit(hash, { path = null } = {}) {
  * @param {Branch} b
  */
 async function showBranch(b) {
+  useRight(false);
   selection = { kind: ITEM.branch, ref: b.ref };
   rightEl.innerHTML = '<div class="gw-message">Loading</div>';
   /** @type {Commit[]} */
@@ -996,11 +1176,47 @@ listEl.addEventListener('keydown', e => {
   } else if (e.key === 'Tab' && searching()) {
     e.preventDefault();
     stepSearchView(e.shiftKey ? -1 : 1);
+  } else if (agentTreeKey(e)) {
+    e.preventDefault();
   } else if (e.key.length === 1 && e.key !== ' ' && !e.ctrlKey && !e.altKey && !e.metaKey) {
     // Typing goes to the search box (the key lands there).
     searchEl.focus();
   }
 });
+
+/**
+ * Agent changes' own keys: Right opens a folder, Left closes it (or goes to the folder a file is in), Delete takes
+ * a file off the terminal's list. True when it was one.
+ * @param {KeyboardEvent} e
+ */
+function agentTreeKey(e) {
+  const item = items[cursor];
+  if (!item || (item.kind !== AGENT_ITEM.folder && item.kind !== AGENT_ITEM.file)) return false;
+  if ((e.key === 'Delete' || e.key === 'Backspace') && item.kind === AGENT_ITEM.file) {
+    forgetAgentFile(item.file.path);
+  } else if (e.key === 'ArrowRight' && item.kind === AGENT_ITEM.folder) {
+    toggleFolder(item.folder, true);
+    renderList();
+  } else if (e.key === 'ArrowLeft') {
+    if (item.kind === AGENT_ITEM.folder && !agent.collapsed.has(item.folder.key)) {
+      toggleFolder(item.folder, false);
+      renderList();
+    } else {
+      // To the folder it's in.
+      for (let i = cursor - 1; i >= 0; i--) {
+        const up = items[i];
+        if (up.kind === AGENT_ITEM.folder && up.depth < item.depth) {
+          cursor = i;
+          markCursor();
+          break;
+        }
+      }
+    }
+  } else {
+    return false;
+  }
+  return true;
+}
 
 layer.addEventListener('click', e => {
   const t = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-gw-tab]'));
@@ -1044,7 +1260,42 @@ const refreshSoon = () => {
 // A command ended (a commit, a checkout, an edit) or the window came back: the working tree may have moved on.
 on(EVENTS.commandEnding, refreshSoon);
 addEventListener('focus', refreshSoon);
-on(EVENTS.settings, () => { if (isOpen() && diffState) drawDiff(); });
+// A setting the diff follows (its layout, Wrap): drawn again where it was.
+on(EVENTS.settings, () => {
+  if (!isOpen() || !diffState || rightEl.hidden) return;
+  const scroll = diffState.target.querySelector(DIFF_SCROLL)?.scrollTop ?? 0;
+  drawDiff();
+  const scroller = diffState.target.querySelector(DIFF_SCROLL);
+  if (scroller) scroller.scrollTop = scroll;
+});
+
+// Claude changed a file (or one was taken off the list, or Clear): Agent changes follow.
+on(EVENTS.changes, t => {
+  if (!isOpen() || t !== agent.tab) return;
+  renderTabs();
+  if (tab !== GIT_TAB.agent || searching()) return;
+  const keep = listEl.scrollTop;
+  keepAgentFile();
+  renderList();
+  cursorOnAgentFile();
+  listEl.scrollTop = keep;
+});
+
+// The preview moved to another file (N, P): the tree follows.
+on(EVENTS.previewShown, ({ tab: t, path }) => {
+  if (!isOpen() || t !== agent.tab || tab !== GIT_TAB.agent || searching() || samePath(path, agent.selected)) return;
+  agent.selected = path;
+  renderList();
+  cursorOnAgentFile();
+});
+
+// The terminal closed: its changes go, and so does the window when they were all it showed.
+on(EVENTS.workspaces, () => {
+  if (!isOpen() || !agent.tab || state.tabs.has(agent.tab.id)) return;
+  if (!repo) return closeGitWindow();
+  startAgent(null);
+  if (tab === GIT_TAB.agent) switchTab(GIT_TAB.changes); else renderTabs();
+});
 
 /**
  * A terminal whose shell runs on a server: its folders aren't this PC's.

@@ -41,9 +41,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Termilly's name, from the constants the app's projects share (src/Shared); only this file of them, which
-         .NET Framework compiles as it is. -->
+    <!-- Termilly's name and the flags an update runs setup with, from the constants the app's projects share
+         (src/Shared); only these files of them, which .NET Framework compiles as they are. -->
     <Compile Include="..\..\src\Shared\Product.cs" Link="Shared\Product.cs" />
+    <Compile Include="..\..\src\Shared\SetupFlags.cs" Link="Shared\SetupFlags.cs" />
   </ItemGroup>
 
   <ItemGroup>

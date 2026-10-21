@@ -20,7 +20,7 @@ import { openPalette, PALETTE_VIEW } from './palette.js';
 import { editNote, notesFor, noteTitle, firstLine, NOTE_KIND } from './notes.js';
 import { environmentOf } from './environments.js';
 import { showsLine, isAgentWorking, stopAgent, stopAllAgents } from './agentline.js';
-import { subagentRowsHtml, runningSubagents, toggleFold } from './subagents.js';
+import { subagentRowsHtml, runningSubagents } from './subagents.js';
 import { costOf, costText, costTitle, workspaceCost, dollars, costMode } from './cost.js';
 import { tabProjectHtml, openPort, repoOf } from './gitstatus.js';
 import { remoteRailHtml, openRemoteMenu } from './remote.js';
@@ -372,11 +372,6 @@ function onTabClick(e) {
   const port = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-port]'));
   if (port) {
     openPort(/** @type {string} */ (port.dataset.port));
-    return true;
-  }
-  const fold = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-sub-fold]'));
-  if (fold) {
-    toggleFold(/** @type {Tab} */ (state.tabs.get(/** @type {string} */ (fold.dataset.subFold))));
     return true;
   }
   const stop = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-stop]'));

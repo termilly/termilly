@@ -11,6 +11,7 @@ import { PAGE } from './protocol.js';
 import { send, platform, PLATFORM } from './host.js';
 import { PROFILE_SOURCE, AGENT_STATE, PROFILE_ICON, AGENT_SOURCE, CLAUDE_TOOL } from './constants.js';
 import { debounce } from './util.js';
+import { windowInFront } from './windowshown.js';
 
 /** The kinds of node in a workspace's layout tree (see the top of this file). */
 export const NODE = Object.freeze({ leaf: 'leaf', split: 'split', tabs: 'tabs', preview: 'preview' });
@@ -138,7 +139,7 @@ export const EVENTS = Object.freeze({
   focus: 'focus',
   gitChanged: 'gitChanged',
   history: 'history',
-  openAllChanges: 'openAllChanges',
+  openAgentChanges: 'openAgentChanges',
   openChangedFiles: 'openChangedFiles',
   openGit: 'openGit',
   openSettings: 'openSettings',
@@ -148,6 +149,7 @@ export const EVENTS = Object.freeze({
   plugins: 'plugins',
   previewDropped: 'previewDropped',
   previewShown: 'previewShown',
+  prompt: 'prompt',
   remoteCwd: 'remoteCwd',
   profiles: 'profiles',
   results: 'results',
@@ -299,7 +301,9 @@ export function activityOf(tab) {
   if (tab.hibernated) return { kind: ACTIVITY.hibernated, title: 'Hibernated: Claude Code resumes this conversation when you open it' };
   const agent = agentActivity(tab);
   if (agent) return agent;
-  if (state.settings.interface.showActivity === false) return null;
+  // Claude Code reporting in (hooks, poll) says when it works. Idle, it waits for the user: the command it runs in
+  // isn't busy, though over ssh nothing else says so (the host sees only ssh, see commandRunning).
+  if (runsClaude(tab) || state.settings.interface.showActivity === false) return null;
   const p = tab.progress;
   if (p) {
     const at = p.percent ? ` at ${p.percent}%` : '';
@@ -323,18 +327,25 @@ export const COMMAND_DELAY = 500;
 function commandRunning(tab) {
   const c = tab.command;
   return !!c && !tab.interactive && Date.now() - c.startedAt >= COMMAND_DELAY
-    && tab.view?.term?.buffer.active.type !== 'alternate';
+    && tab.view?.term?.buffer.active.type !== 'alternate' && !STARTS_CLAUDE.test(tab.running?.command ?? '');
 }
+
+/**
+ * A command line that starts Claude Code (`claude`, `cd x && claude`, a restored `cd …; claude --resume …`): it waits
+ * for the user (a folder to trust, a prompt) until its hooks say otherwise, which over ssh nothing else can tell.
+ */
+const STARTS_CLAUDE = /(?:^|[;&|(]\s*)claude(?:\s|$)/;
 
 /** States that tell the user something happened; arriving out of sight, they stay unread until looked at. */
 /** @type {Set<string>} */
 const NEWS = new Set([AGENT_STATE.done, AGENT_STATE.error, AGENT_STATE.attention]);
 
 /**
- * Whether the user can see a terminal now: its workspace is showing and the window is active.
+ * Whether the user can see a terminal now: its workspace is showing and the window is in front (the host's word,
+ * js/windowshown.js, as well as the page's focus).
  * @param {Tab} tab
  */
-export const isInView = tab => tab.wsId === state.activeId && document.hasFocus();
+export const isInView = tab => tab.wsId === state.activeId && windowInFront() && document.hasFocus();
 
 /**
  * Whether Claude Code runs in this terminal now: its hooks or the `claude agents` poll reported it, and it hasn't
@@ -344,11 +355,19 @@ export const isInView = tab => tab.wsId === state.activeId && document.hasFocus(
 export const runsClaude = tab => tab?.agent?.source === AGENT_SOURCE.hooks || tab?.agent?.source === AGENT_SOURCE.poll;
 
 /**
+ * An agent's states that end its turn (Stop, StopFailure).
+ * @type {Set<string>}
+ */
+export const TURN_ENDS = new Set([AGENT_STATE.done, AGENT_STATE.error]);
+
+/**
  * Call after changing tab.agent: news that arrives out of sight is marked unread (bold in the sidebar, a badge on
- * the rail) until the terminal is focused. See markSeen.
+ * the rail) until the terminal is focused. See markSeen. A turn that ended, or an agent that's gone, takes the
+ * progress it reported (OSC 9;4) with it: left uncleared, it would spin on once "done" has been seen.
  * @param {Tab} tab
  */
 export function agentChanged(tab) {
+  if (!tab.agent || TURN_ENDS.has(tab.agent.state)) tab.progress = null;
   if (tab.agent) tab.agent.unread = NEWS.has(tab.agent.state) && !isInView(tab);
   // An agent has worked here: the changed-files list on the header stays, even after it exits (js/header.js).
   if (tab.agent) tab.agentSeen = true;

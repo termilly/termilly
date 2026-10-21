@@ -22,6 +22,7 @@ import { noteRemotePrompt, noteRemoteCwd, leftRemote } from './remotecwd.js';
 import { AGENT_STATE, AGENT_SOURCE } from './constants.js';
 import { find, field } from './dom.js';
 import { continuesOnNextRow } from './buffer.js';
+import { clipboardKey, wireClipboard, PASTE_LABEL } from './termclipboard.js';
 
 /**
  * A theme plugin's terminal colours (state.pluginThemes).
@@ -118,8 +119,22 @@ const ERASE_SCROLLBACK = 3;
 /** xterm answering the pseudo console: cursor position, device attributes, focus in or out. */
 const TERMINAL_REPLY = /^\x1b\[(\d+;\d+R|\?[\d;]*c|>[\d;]*c|[IO])$/;
 
+/**
+ * Whether `data` from xterm is its answer to the console (cursor position, attributes, focus), not the user typing.
+ * @param {string} data
+ */
+export const isTerminalReply = data => TERMINAL_REPLY.test(data);
+
 /** @type {(e: KeyboardEvent) => boolean} */
 let keyHandler = () => true;
+
+/**
+ * Keys a feature takes before the shell sees them (`snippet:` at a prompt, snippetprompt.js); false keeps a key.
+ * @type {(tab: Tab, term: any, e: KeyboardEvent) => boolean}
+ */
+let inputHook = () => true;
+/** @param {(tab: Tab, term: any, e: KeyboardEvent) => boolean} fn */
+export const setInputHook = fn => { inputHook = fn; };
 
 /**
  * Where typing in a terminal without its own shell goes (a tmux pane: tmux.js).
@@ -159,8 +174,7 @@ const OSC = Object.freeze({
 
 /** How much image data a terminal keeps for its inline images, in MB. */
 const IMAGE_STORAGE_MB = 64;
-/** A restored terminal scrolls back this share of its height, once the new shell has cleared its screen. */
-const RESTORED_SCROLL = 0.6;
+/** When a restored terminal scrolls to where it was: once the new shell has cleared its screen. */
 const RESTORED_SCROLL_AFTER_MS = 1500;
 
 /** The width of a terminal's overview ruler (the marks beside its scrollbar). */
@@ -196,15 +210,22 @@ export function openTerminal(tab) {
   wireProgramRequests(tab, term);
   wireOutputWatch(tab, term);
 
-  const restored = !!tab.start?.output;
-  if (restored) writeRestoredOutput(tab);
+  const view = tab.start?.output ? writeRestoredOutput(tab) : null;
   scanFrom(tab, term.buffer.normal.baseY + term.buffer.normal.cursorY); // old output isn't news for triggers
   startShell(tab);
-  if (restored) {
-    // The new shell clears its screen on start; once it has, scroll up so the restored output shows
-    // above the new prompt. Typing snaps back to the prompt.
-    setTimeout(() => term.scrollLines(-Math.floor(term.rows * RESTORED_SCROLL)), RESTORED_SCROLL_AFTER_MS);
-  }
+  // The new shell clears its screen on start; once it has, scroll to where the terminal was.
+  if (view) setTimeout(() => view.then(top => scrollRestored(term, top)), RESTORED_SCROLL_AFTER_MS);
+}
+
+/**
+ * Scrolls a restored terminal to the buffer row that was at the top of its view, or to the bottom (the new prompt)
+ * when it was at the bottom or that isn't known (a closed terminal reopened).
+ * @param {any} term xterm
+ * @param {number | null} top
+ */
+function scrollRestored(term, top) {
+  if (top === null) term.scrollToBottom();
+  else term.scrollToLine(top);
 }
 
 /**
@@ -228,7 +249,7 @@ function createTerminal(tab) {
   // (Unicode 6) gives them one, which shifts TUI borders and columns.
   term.loadAddon(new Unicode11Addon.Unicode11Addon());
   term.unicode.activeVersion = '11';
-  wireDropAndPaste(tab);
+  wireDropAndPaste(tab, term);
   /** @type {TabView} */ (tab.view).term = term;
   /** @type {TabView} */ (tab.view).fit = fit;
   // No scrollbar while everything fits on screen (a new terminal): xterm would show a full-height slider.
@@ -259,7 +280,7 @@ function wireInput(tab, term) {
     }
     // Broadcasting (broadcast.js) sends it to every terminal in the broadcast; otherwise just here.
     // xterm's answers to the console's queries go to this terminal only, and aren't the user typing.
-    if (TERMINAL_REPLY.test(data)) {
+    if (isTerminalReply(data)) {
       send(PAGE.input, { id: tab.id, data });
       return;
     }
@@ -275,7 +296,7 @@ function wireInput(tab, term) {
     quiet(tab);
     send(PAGE.resize, { id: tab.id, cols, rows });
   });
-  term.attachCustomKeyEventHandler(keyHandler);
+  term.attachCustomKeyEventHandler((/** @type {KeyboardEvent} */ e) => inputHook(tab, term, e) && clipboardKey(term, e) && keyHandler(e));
 }
 
 /**
@@ -490,8 +511,8 @@ onHost(HOST.startFolder, m => {
 
 /**
  * What a terminal does as its shell starts (tab.start); see startOf.
- * @typedef {{ output: { lines: string[], closedAt: number, resurrected?: boolean } | null, command: string | null,
- *   resumeSession: string | null, done: boolean }} ShellStart
+ * @typedef {{ output: { lines: string[], closedAt: number, resurrected?: boolean, scroll?: number | null } | null,
+ *   command: string | null, resumeSession: string | null, done: boolean }} ShellStart
  */
 
 /**
@@ -752,8 +773,9 @@ function shellMark(tab, data) {
  * Files dropped on a terminal are typed as their paths, quoted the way its shell reads them. The page only gets
  * file names, so the files go to the host, which knows their paths (files:dropped).
  * @param {Tab} tab
+ * @param {any} term xterm
  */
-function wireDropAndPaste(tab) {
+function wireDropAndPaste(tab, term) {
   const { body } = /** @type {TabView} */ (tab.view);
   body.addEventListener('dragover', e => {
     if (!e.dataTransfer?.types.includes('Files')) return;
@@ -774,24 +796,34 @@ function wireDropAndPaste(tab) {
       if (paths.length) send(PAGE.filesDrop, { id: tab.id, paths });
     }
   });
-  // Several lines pasted at a prompt run one after another: check first (Settings › Terminal).
   body.addEventListener('paste', e => {
-    const text = e.clipboardData?.getData('text/plain') ?? '';
-    // On production, ask first (Settings › Terminal › Production); that question covers the multi-line one too.
-    if (text && pasteNeedsConfirm(tab, text)) {
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      confirmProduction([tab], 'Paste', text).then(ok => {
-        if (ok) /** @type {TabView} */ (tab.view).term.paste(text);
-        /** @type {TabView} */ (tab.view).term.focus();
-      });
-      return;
-    }
-    if (!state.settings.safety.pasteWarning || !/\r?\n./.test(text.trimEnd()) || (state.settings.safety.pasteWarningOff ?? []).includes(tab.profile)) return;
+    if (!checkPaste(tab, e.clipboardData?.getData('text/plain') ?? '')) return;
     e.preventDefault();
     e.stopImmediatePropagation();
-    confirmPaste(tab, text);
   }, true);
+  // The right-click menu's Paste has no paste event: the same checks, then xterm types it.
+  wireClipboard(term, body, text => { if (!checkPaste(tab, text)) term.paste(text); });
+}
+
+/**
+ * Asks before a paste that needs it, and pastes once confirmed. Returns true when it asked (the paste waits for the
+ * answer), false when the text can be pasted straight away.
+ * @param {Tab} tab
+ * @param {string} text
+ */
+function checkPaste(tab, text) {
+  // On production, ask first (Settings › Terminal › Production); that question covers the multi-line one too.
+  if (text && pasteNeedsConfirm(tab, text)) {
+    confirmProduction([tab], PASTE_LABEL, text).then(ok => {
+      if (ok) /** @type {TabView} */ (tab.view).term.paste(text);
+      /** @type {TabView} */ (tab.view).term.focus();
+    });
+    return true;
+  }
+  // Several lines pasted at a prompt run one after another: check first (Settings › Terminal).
+  if (!state.settings.safety.pasteWarning || !/\r?\n./.test(text.trimEnd()) || (state.settings.safety.pasteWarningOff ?? []).includes(tab.profile)) return false;
+  confirmPaste(tab, text);
+  return true;
 }
 
 onHost(HOST.filesDropped, async m => {
@@ -856,14 +888,21 @@ export function disposeTerminal(tab) {
  * Shows a reopened session's saved output, dimmed, then scrolls it up out of the viewport so the new
  * shell starts on a clean screen with the old output in the scrollback above it. After a restart that's all: the
  * terminals coming back is what Termilly does, so nothing announces it. A closed terminal reopened says when it closed.
+ * Resolves, once written, to the buffer row that was at the top of the view (null: the bottom, or not known).
  * @param {Tab} tab
+ * @returns {Promise<number | null>}
  */
 function writeRestoredOutput(tab) {
   const { term } = /** @type {TabView} */ (tab.view);
   const start = startOf(tab);
   // Called only when there's output to bring back.
-  const { lines, closedAt, resurrected } = /** @type {NonNullable<ShellStart['output']>} */ (start.output);
-  term.write(`\x1b[2m${lines.join('\r\n')}\x1b[0m\r\n`);
+  const { lines, closedAt, resurrected, scroll } = /** @type {NonNullable<ShellStart['output']>} */ (start.output);
+  /** @type {Promise<number | null>} */
+  const top = new Promise(resolve => {
+    term.write(`\x1b[2m${lines.join('\r\n')}\x1b[0m\r\n`, () => {
+      resolve(scroll ? rowOfLine(term.buffer.normal, Math.max(0, lines.length - scroll)) : null);
+    });
+  });
   if (!resurrected) {
     const when = new Date(closedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
     const color = `\x1b[${isLight() ? '38;2;109;92;240' : '38;2;139;123;255'}m`;
@@ -873,6 +912,35 @@ function writeRestoredOutput(tab) {
   // cursor is too: otherwise programs that place the cursor (PSReadLine) draw on the wrong row, or crash.
   term.write(`${'\r\n'.repeat(term.rows)}\x1b[H`);
   start.output = null;
+  return top;
+}
+
+/**
+ * The buffer row line `n` starts on (rows the terminal wrapped belong to the line before), counting from row 0.
+ * @param {any} buffer xterm's buffer
+ * @param {number} n
+ */
+function rowOfLine(buffer, n) {
+  let line = -1;
+  for (let y = 0; y < buffer.length; y++) {
+    if (!buffer.getLine(y)?.isWrapped) line++;
+    if (line === n) return y;
+  }
+  return buffer.length - 1;
+}
+
+/**
+ * How far back the terminal is scrolled, for bringing it back after a restart: how many of `lines` (bufferLines),
+ * counted from the end, the line at the top of the view is. Null when it's at the bottom.
+ * @param {Tab} tab
+ * @param {BufferLines} lines
+ */
+export function scrolledBack(tab, lines) {
+  const buffer = tab.view?.term?.buffer.active;
+  if (!buffer || buffer.viewportY >= buffer.baseY || !lines.rows?.length) return null;
+  let i = lines.rows.length - 1;
+  while (i > 0 && lines.rows[i] > buffer.viewportY) i--;
+  return lines.length - i;
 }
 
 /**

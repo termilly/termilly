@@ -201,16 +201,7 @@ public partial class MainWindow : Window
         page.Apply(_options);
         if (_options.Launch)
         {
-            var exe = Path.Combine(_options.InstallDir, InstalledFiles.App);
-            try
-            {
-                // Through Explorer, so Termilly runs as the user even when setup is elevated.
-                Process.Start(new ProcessStartInfo("explorer.exe", Elevation.Quote(exe)) { UseShellExecute = false });
-            }
-            catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException)
-            {
-                Log.Write($"couldn't start Termilly: {e.Message}");
-            }
+            Processes.StartTermilly(_options.InstallDir);
         }
         Close();
     }

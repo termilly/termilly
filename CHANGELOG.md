@@ -2,6 +2,18 @@
 
 What changed in each release. Termilly says in its title bar when a newer one is out.
 
+## 1.1.0 (2026-10-21)
+
+- **Updates from inside Termilly:** Download and install, then Restart to update. The installer is checked against the signed release before it runs, and nothing happens until you choose it. Updating from 1.0.0 still goes through the browser once.
+- **Copy and paste in terminals:** Ctrl+C copies a selection (without one it stops the command), Ctrl+Shift+C and Ctrl+Insert copy, Ctrl+V, Ctrl+Shift+V and Shift+Insert paste, a right-click menu, and Copy on select in Settings › Terminal.
+- **Snippets at the prompt:** type `snippet:` to pick a snippet from a list at the cursor, with each one's command and the values it asks for.
+- **One window for changes:** the changed-files window is now the Git window's Agent changes, and search finds text in the files Claude changed. A Wrap button in the change preview and the Git window's diffs.
+- **Images in the Git window:** a changed PNG, JPEG, GIF, WebP, BMP, ICO, AVIF or SVG shows as a picture, before and after side by side, with its size.
+- **After a restart** terminals come back scrolled where they were, and a Claude Code session resumes in its own folder, also over SSH.
+- **Notifications** now appear when an agent finishes, needs you or fails while Termilly is minimized, behind another window or on another workspace. They didn't appear at all before.
+- **Subagents** leave the sidebar a few seconds after they finish.
+- **Agents over SSH:** no spinner while Claude waits for you, and hooks get through inside tmux. Hosts set up with 1.0.0 are offered an update of Termilly's scripts.
+
 ## 1.0.0 (2026-10-20)
 
 The first public release, for Windows 10 and 11 and for Debian and Ubuntu.

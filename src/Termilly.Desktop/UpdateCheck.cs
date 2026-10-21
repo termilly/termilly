@@ -3,25 +3,46 @@ using System.Text.Json;
 
 namespace Termilly.Desktop;
 
-/// <summary>What latest.json announces: the newest version and where to get it.</summary>
+/// <summary>What latest.json announces: the newest version, where to get it and each installer's SHA-256.</summary>
 internal sealed record UpdateManifest(
     string Version,
     string? Date,
     string? Notes,
     string? WindowsOnline,
     string? WindowsFull,
-    string? LinuxDeb);
+    string? LinuxDeb)
+{
+    public string? WindowsOnlineSha256 { get; init; }
+    public string? WindowsFullSha256 { get; init; }
+    public string? LinuxDebSha256 { get; init; }
+}
+
+/// <summary>The installer an update downloads, and the SHA-256 (hex) it must have before it's run.</summary>
+internal sealed record UpdatePackage(Uri Url, string Sha256)
+{
+    /// <summary>The file's name: the last part of its address.</summary>
+    public string FileName => System.IO.Path.GetFileName(Url.AbsolutePath);
+}
 
 /// <summary>
 /// Finds out whether a newer Termilly is out. The Release workflow publishes latest.json and its Ed25519 signature
 /// (latest.json.sig, base64) next to the installers; a manifest whose signature doesn't verify against the key
-/// below is ignored, so a compromised download server can't announce a fake version. Nothing is downloaded or run:
-/// the page shows a notice, and the user's browser fetches the installer if they choose to.
+/// below is ignored, so a compromised download server can't announce a fake version. The check only finds out: the
+/// installer is downloaded when the user asks (UpdateDownload), and run only once its SHA-256 matches this manifest's.
 /// </summary>
 internal static class UpdateCheck
 {
     /// <summary>The release signing key's public half (the private half is the RELEASE_SIGNING_KEY secret).</summary>
     public const string PublicKey = "NYuUvEzE+7Du7FfAg79t1plCM5UEvECXehb+7+j01C0=";
+
+#if DEBUG
+    /// <summary>A Debug build may check a test manifest signed with a throwaway key (never the release key's half).</summary>
+    private const string TestKeyVariable = "TERMILLY_UPDATE_KEY";
+
+    private static string ManifestKey => Environment.GetEnvironmentVariable(TestKeyVariable) is { Length: > 0 } key ? key : PublicKey;
+#else
+    private static string ManifestKey => PublicKey;
+#endif
 
     /// <summary>Where the manifest lives; TERMILLY_UPDATE_URL points elsewhere (tests, a beta channel).</summary>
     public static Uri ManifestUri =>
@@ -41,6 +62,9 @@ internal static class UpdateCheck
         public const string Online = "online";
         public const string Full = "full";
         public const string Deb = "deb";
+        /// <summary>The SHA-256 of the online installer (Windows) or the package (Linux), and of the full installer.</summary>
+        public const string Sha256 = "sha256";
+        public const string FullSha256 = "fullSha256";
     }
 
     /// <summary>The manifest, if its signature verifies and it parses; null otherwise.</summary>
@@ -72,13 +96,50 @@ internal static class UpdateCheck
             var windows = root.TryGetProperty(Fields.Windows, out var w) ? w : default;
             var linux = root.TryGetProperty(Fields.Linux, out var l) ? l : default;
             return new UpdateManifest(version, Text(root, Fields.Date), Text(root, Fields.Notes),
-                Text(windows, Fields.Online), Text(windows, Fields.Full), Text(linux, Fields.Deb));
+                Text(windows, Fields.Online), Text(windows, Fields.Full), Text(linux, Fields.Deb))
+            {
+                WindowsOnlineSha256 = Text(windows, Fields.Sha256),
+                WindowsFullSha256 = Text(windows, Fields.FullSha256),
+                LinuxDebSha256 = Text(linux, Fields.Sha256),
+            };
         }
         catch (JsonException)
         {
             return null;
         }
     }
+
+    /// <summary>
+    /// The installer an update on this system downloads: the .deb on Linux; on Windows the small online setup (it
+    /// fetches .NET and WebView2 only if they're missing), or the full one when there's no online one. Null when the
+    /// manifest has no such installer, no valid SHA-256 for it, or an address that isn't HTTPS: nothing unchecked runs.
+    /// </summary>
+    public static UpdatePackage? Package(UpdateManifest manifest, bool linux)
+    {
+        var (url, sha256) = linux
+            ? (manifest.LinuxDeb, manifest.LinuxDebSha256)
+            : manifest.WindowsOnline is not null ? (manifest.WindowsOnline, manifest.WindowsOnlineSha256) : (manifest.WindowsFull, manifest.WindowsFullSha256);
+        return Uri.TryCreate(url, UriKind.Absolute, out var uri) && IsAllowed(uri) && sha256 is not null && IsSha256(sha256)
+            ? new UpdatePackage(uri, sha256.ToLowerInvariant())
+            : null;
+    }
+
+    /// <summary>Installers come over HTTPS; a Debug build also takes this computer's own test server.</summary>
+    public static bool IsAllowed(Uri url)
+    {
+#if DEBUG
+        if (url.Scheme == Uri.UriSchemeHttp && url.IsLoopback)
+        {
+            return true;
+        }
+#endif
+        return url.Scheme == Uri.UriSchemeHttps;
+    }
+
+    /// <summary>A SHA-256 written as 64 hex digits.</summary>
+    public static bool IsSha256(string text) => text.Length == Sha256HexLength && text.All(Uri.IsHexDigit);
+
+    private const int Sha256HexLength = 64;
 
     /// <summary>Whether <paramref name="candidate"/> is a later version than <paramref name="current"/> (major.minor.patch).</summary>
     public static bool IsNewer(string candidate, string current) =>
@@ -92,7 +153,7 @@ internal static class UpdateCheck
             var uri = ManifestUri;
             var json = await Http.GetByteArrayAsync(uri, cancel).ConfigureAwait(false);
             var signature = await Http.GetStringAsync(new Uri(uri + ".sig"), cancel).ConfigureAwait(false);
-            return Read(json, signature);
+            return Read(json, signature, ManifestKey);
         }
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException or UriFormatException)
         {

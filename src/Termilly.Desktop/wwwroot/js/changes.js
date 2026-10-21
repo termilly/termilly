@@ -1,8 +1,8 @@
 // @ts-check
 // The ways into the change preview (js/preview.js), each one switchable in Settings › Change preview:
 //   - Ctrl+click on a file path in a terminal (Claude's Update(…) and Write(…) lines, or any path),
-//   - the "N changed" list on a terminal's header, which you clear yourself,
-//   - Ctrl+Shift+D and the palette, for the last change.
+//   - the "N changed" list on a terminal's header, which you clear yourself, and whose "Show all" opens them all in
+//     the Git window's Agent changes (as Ctrl+Shift+D and the palette do).
 // The host tells each terminal which files Claude changed there (changes:list, from Changes.cs).
 
 import { PAGE, HOST } from './protocol.js';
@@ -51,17 +51,6 @@ export function openChange(tab, text) {
   });
 }
 
-/**
- * The file Claude changed last in a terminal (Ctrl+Shift+D).
- * @param {Tab | null} [tab]
- */
-export function openLastChange(tab = focusedTab()) {
-  if (!tab) return;
-  const last = tab.changes?.[0]; // the host lists the most recent first
-  if (last) showChange(tab, last.path);
-  else showMessage(tab, 'Claude hasn’t changed any files in this terminal yet. When it does, they’re listed here.');
-}
-
 /** How a change from under a minute ago is dated. */
 const NOW_LABEL = 'now';
 
@@ -80,14 +69,14 @@ list.className = 'popover inbox changes-pop';
 list.setAttribute('aria-label', 'Files Claude changed');
 list.hidden = true;
 list.innerHTML = `
-  <div class="inbox-head"><span class="section-head">Changed files</span><button class="btn small" data-clear>Clear</button></div>
+  <div class="inbox-head"><span class="section-head">Changed files</span><button class="btn small" data-git title="All of them, with search, in the Git window">Open in Git window</button><button class="btn small" data-clear>Clear</button></div>
   <div class="inbox-list" role="listbox"></div>
   <div class="inbox-foot">Click a file to see the change · Delete removes it from the list</div>`;
 const rowsEl = find(list, '.inbox-list');
 /** @type {Tab | null} */
 let listTab = null;
 
-/** The list shows the newest files; more than this and its last row opens them all in a window (js/changeswindow.js). */
+/** The list shows the newest files; more than this and its last row opens them all in the Git window's Agent changes. */
 const LIST_LIMIT = 10;
 /** A file's row in the list, and the attribute of its last row, which opens them all. */
 const ROW = '.change-row';
@@ -105,6 +94,7 @@ function renderList() {
   /** @type {ChangedFile[]} */
   const files = listTab?.changes ?? [];
   find(list, '[data-clear]').hidden = !files.length;
+  find(list, '[data-git]').hidden = !files.length;
   const more = files.length > LIST_LIMIT
     ? `<div class="change-row change-all" role="option" tabindex="-1" data-all>Show all ${files.length} files</div>` : '';
   rowsEl.innerHTML = files.length ? files.slice(0, LIST_LIMIT).map((f, i) => {
@@ -151,6 +141,11 @@ function removeFile(i) {
 list.addEventListener('click', e => {
   if (!listTab) return;
   if (targetOf(e).closest('[data-clear]')) return send(PAGE.changesClear, { id: listTab.id });
+  if (targetOf(e).closest('[data-git]')) {
+    const tab = listTab;
+    closePopover(list);
+    return emit(EVENTS.openAgentChanges, { tab });
+  }
   const remove = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-remove]'));
   if (remove) return removeFile(Number(remove.dataset.remove));
   const row = /** @type {HTMLElement | null} */ (targetOf(e).closest(ROW));
@@ -158,7 +153,7 @@ list.addEventListener('click', e => {
   const tab = listTab;
   const file = rowFiles()[Number(row.dataset.i)];
   closePopover(list);
-  if (row.hasAttribute(ALL_ATTR)) emit(EVENTS.openAllChanges, tab);
+  if (row.hasAttribute(ALL_ATTR)) emit(EVENTS.openAgentChanges, { tab });
   else if (file) showChange(tab, file.path);
 });
 

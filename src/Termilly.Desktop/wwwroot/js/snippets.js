@@ -107,12 +107,16 @@ export async function sendSnippet(snippet, values, targets) {
   const live = targets.filter(t => !t.exited);
   if (!live.length) return null;
   if (!(await confirmProduction(live, 'Run the snippet', text))) return null;
-  for (const tab of live) send(PAGE.input, { id: tab.id, data: `${text}${snippet.enter === false ? '' : '\r'}` });
+  // Each line ends with Enter, as typed: a bare \n is Ctrl+Enter to PSReadLine, which opens a line above, so the
+  // lines would run in reverse.
+  const data = `${text.replace(/\r?\n/g, '\r')}${snippet.enter === false ? '' : '\r'}`;
+  for (const tab of live) send(PAGE.input, { id: tab.id, data });
   return live;
 }
 
 /**
  * Runs a snippet from the UI: asks for its placeholders and where it goes (when there's a choice), then sends.
+ * Returns the terminals it went to, or null when it was cancelled.
  * @param {Snippet} snippet
  * @param {{ tab?: Tab | null, where?: string }} [options]
  */
@@ -123,13 +127,27 @@ export async function runSnippet(snippet, { tab = focusedTab(), where } = {}) {
   let values = {};
   if (names.length || (!where && options.length > 1)) {
     const answer = await askValues(snippet, names, options);
-    if (!answer) return;
+    if (!answer) return null;
     values = answer.values;
     where = answer.where;
   }
   const sent = await sendSnippet(snippet, values, targetsFor(where ?? TARGET.focused, tab));
   if (sent?.length === 1) sent[0].view?.term.focus();
+  return sent;
 }
+
+/**
+ * Runs a snippet in one terminal (`snippet:name` at its prompt, snippetprompt.js), asking for its placeholders first.
+ * @param {Snippet} snippet
+ * @param {Tab} tab
+ */
+export const runSnippetIn = (snippet, tab) => runSnippet(snippet, { tab, where: TARGET.focused });
+
+/**
+ * Where a snippet is kept, as the lists say it.
+ * @param {Snippet} snippet
+ */
+export const scopeLabel = snippet => (snippet.scope === SNIPPET_SCOPE.global ? 'all workspaces' : 'this workspace');
 
 /**
  * The run form: a field per placeholder (last values remembered) and where it goes.
@@ -296,7 +314,7 @@ export function openSnippets() {
       selected = Math.min(selected, Math.max(0, shown.length - 1));
       find(dialog, '[data-items]').innerHTML = shown.length ? shown.map((s, i) => `
         <div class="snippet-item${i === selected ? ' on' : ''}" data-i="${i}">
-          <div class="snippet-text"><div class="snippet-name">${escapeHtml(s.name)}<span class="snippet-scope">${s.scope === SNIPPET_SCOPE.global ? 'all workspaces' : 'this workspace'}</span></div>
+          <div class="snippet-text"><div class="snippet-name">${escapeHtml(s.name)}<span class="snippet-scope">${scopeLabel(s)}</span></div>
             <code class="snippet-cmd">${escapeHtml(s.command)}</code>${s.description ? `<div class="set-desc">${escapeHtml(s.description)}</div>` : ''}</div>
           <button class="btn small" data-edit="${i}">Edit</button>
           <button class="btn small primary" data-run="${i}">Run</button>
