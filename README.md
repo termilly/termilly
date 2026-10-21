@@ -7,6 +7,13 @@ Termilly groups your terminals into workspaces, brings them back after a restart
 
 <p align="center"><a href="https://termilly.com">termilly.com</a> · <a href="https://termilly.com/downloads/">Download</a> · <a href="https://termilly.com/docs/">Docs</a></p>
 
+<p align="center">
+  <a href="https://github.com/termilly/termilly/releases/latest"><img src="https://img.shields.io/github/v/release/termilly/termilly?label=release" alt="Latest release"></a>
+  <a href="https://termilly.com/downloads/"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Ftermilly.com%2Fdownloads%2Fstats%2Fdownloads-badge.json" alt="Downloads"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/termilly/termilly" alt="License: Apache 2.0"></a>
+  <a href="https://github.com/termilly/termilly/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/termilly/termilly/ci.yml?branch=main&label=CI" alt="CI"></a>
+</p>
+
 ![Termilly with a workspace of four terminals: a dev server, tests, git and a production database](docs/images/workspace.png)
 
 ## What it does
