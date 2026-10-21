@@ -60,6 +60,7 @@ public partial class MainWindow : Window
             .AddPlatform(new WindowsPlatform(this))
             .AddSingleton<ICredentialStore, WindowsCredentialStore>()
             .AddSingleton<IFontCatalog, WindowsFonts>()
+            .AddSingleton<IUpdateInstaller, WindowsUpdateInstaller>()
             .BuildServiceProvider();
         _settings = _services.GetRequiredService<ISettingsStore>();
         _channel = _services.GetRequiredService<PageChannel>();

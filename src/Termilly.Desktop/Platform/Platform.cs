@@ -24,7 +24,10 @@ internal interface IAppWindow
     /// <summary>The page's title bar: minimize, maximize, close, drag, resize.</summary>
     void Act(FromPage.Window action);
 
-    /// <summary>The page's last snapshot is in: now really close.</summary>
+    /// <summary>
+    /// Closes the window, from any thread: when the page's last snapshot is in, or for an update. A close that hasn't
+    /// asked for the snapshot yet still asks for it first.
+    /// </summary>
     void CloseNow();
 
     /// <summary>How many terminals need the user, for the taskbar or dock (0: none).</summary>
