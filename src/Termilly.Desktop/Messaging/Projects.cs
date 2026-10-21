@@ -41,6 +41,12 @@ internal static partial class FromPage
         public static string Type => "changes:get";
     }
 
+    /// <summary>The Git window's search in a terminal's changed files: their paths and what's in them now.</summary>
+    internal sealed record ChangesSearch(string Id = "", string? RequestId = null, string? Query = null) : IPageMessage
+    {
+        public static string Type => "changes:search";
+    }
+
     /// <summary>Which file a path Ctrl+clicked in a terminal means.</summary>
     /// <param name="Remote">The terminal's files aren't on this machine (SSH, WSL, containers).</param>
     internal sealed record ChangesResolve(string Id = "", string? RequestId = null, string? Text = null, bool Remote = false,
@@ -167,6 +173,11 @@ internal static partial class ToPage
     internal sealed record ChangeResolved(string? RequestId, string? Path, int? Line, string? Error) : IHostMessage
     {
         public static string Type => "changes:resolved";
+    }
+
+    internal sealed record ChangesFound(string? RequestId, IReadOnlyList<ChangeHit> Hits, string? Error) : IHostMessage
+    {
+        public static string Type => "changes:found";
     }
 
     internal sealed record GitStates(IReadOnlyList<GitFolderState> States) : IHostMessage

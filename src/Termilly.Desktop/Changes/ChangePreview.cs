@@ -29,6 +29,10 @@ internal sealed class ChangePreview(ChangeStore store, LocalGit git)
         return files.Select(f => Item(f.File, f.First, f.After, f.Counts, cwd)).OrderByDescending(i => i.At).ToList();
     }
 
+    /// <summary>The pane's changed files whose path or text has <paramref name="query"/>, for the Git window's search.</summary>
+    public IReadOnlyList<ChangeHit> Search(string paneId, string query, AppSettings settings) =>
+        ChangeSearch.Search(List(paneId), query, ChangeStore.MaxBytes(settings));
+
     private ChangeItem Item(FileChange file, Blob? first, Blob? after, LineDiff.Result? counts, string? cwd)
     {
         // With no copy from before (a shell command changed a file deep in a project), the last commit stands in: the

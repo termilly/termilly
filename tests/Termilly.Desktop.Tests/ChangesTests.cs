@@ -604,6 +604,42 @@ public sealed class ChangesTests : IDisposable
         Assert.Equal("File not found.", view.Error);
     }
 
+    // ---- Searching the changed files (the Git window) ----
+
+    [Fact]
+    public void The_search_finds_changed_files_by_path_and_by_their_lines_now()
+    {
+        var (store, preview) = TestServices.Changes();
+        var api = Write("src/api.ts", "start\n");
+        var readme = Write("readme.md", "start\n");
+        Edit(store, api, "const token = 1;\nfetch(token);\nend\r\n");
+        Edit(store, readme, "about the API\n");
+
+        var hits = preview.Search("pane", "TOKEN", _settings);
+        Assert.Equal([(api, 1, "const token = 1;"), (api, 2, "fetch(token);")], hits.Select(h => (h.Path, h.Line, h.Text)));
+
+        var byPath = preview.Search("pane", "api", _settings);
+        Assert.Contains(byPath, h => h.Path == api && h.Line == 0 && h.Display == @"src\api.ts");
+        Assert.Contains(byPath, h => h.Path == readme && h.Line == 1);
+        Assert.Empty(preview.Search("pane", " ", _settings));
+        Assert.Empty(preview.Search("other-pane", "api", _settings));
+    }
+
+    [Fact]
+    public void The_search_takes_a_few_lines_of_each_file_and_cuts_long_ones()
+    {
+        var item = new ChangeItem("f", "f", false, "Edit", DateTime.UtcNow, 1, "modified", 0, 0);
+        var text = string.Join('\n', Enumerable.Repeat("hit", ChangeSearch.LinesPerFile + 3)) + "\n" + new string('x', 400) + "hit";
+        Blob Read(string path, long max) => Blob.From(Encoding.UTF8.GetBytes(text), max);
+
+        var hits = ChangeSearch.Search([item], "HIT", 1 << 20, Read);
+        Assert.Equal(ChangeSearch.LinesPerFile, hits.Count);
+
+        var only = ChangeSearch.Search([item], "xhit", 1 << 20, Read).Single();
+        Assert.Equal(ChangeSearch.MaxLineChars, only.Text!.Length);
+        Assert.Equal(ChangeSearch.LinesPerFile + 4, only.Line);
+    }
+
     // ---- Settings ----
 
     [Fact]
