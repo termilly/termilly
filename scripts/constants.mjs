@@ -30,6 +30,7 @@ const SOURCES = [
   { file: 'GitSearch.cs', cls: 'GitSearchMatches', js: 'GIT_MATCH' },
   { file: 'Messaging/Connections.cs', cls: 'ForwardStates', js: 'FORWARD_STATE' },
   { file: 'Messaging/Window.cs', cls: 'WindowActions', js: 'WINDOW_ACTION' },
+  { file: 'UpdateInstall.cs', cls: 'UpdateStates', js: 'UPDATE_STATE' },
   { file: 'Settings/SettingValues.cs', cls: 'SettingValues', js: 'SETTING_VALUES' },
   { file: 'Settings/SettingGroups.cs', cls: 'TerminalSettings', js: 'TERMINAL_SETTINGS' },
 ];

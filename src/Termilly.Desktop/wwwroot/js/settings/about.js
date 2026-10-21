@@ -32,7 +32,7 @@ const ABOUT = {
   html: () => `
     <div class="about-head"><img src="assets/mark-40.png" srcset="assets/mark-40.png 1x" width="40" height="40" alt="">
       <div><div class="about-name">Termilly</div><div class="set-desc">Version ${escapeHtml(about.version ?? '')}</div></div></div>`
-    + group('Updates', row('Check for updates', 'At start and twice a day, Termilly looks at termilly.com for a newer version and says so in the title bar. It never downloads or installs anything by itself.', toggle('interface.checkForUpdates'), { keywords: 'update version new release download' })
+    + group('Updates', row('Check for updates', 'At start and twice a day, Termilly looks at termilly.com for a newer version and says so in the title bar. Nothing is downloaded or installed until you choose Download and install there, and then Restart to update.', toggle('interface.checkForUpdates'), { keywords: 'update version new release download' })
       + row('Check now', updateAboutHtml(), '<button class="btn small" data-action="checkUpdates">Check now</button>', { keywords: 'update version' }))
     + group('', row('Guided tour', 'A short walk past the things you’ll use every day.', '<button class="btn small" data-action="startTour">Take the tour</button>'))
     + group('', row('Data folder', `<code class="path">${escapeHtml(about.dataDir ?? '')}</code>`,

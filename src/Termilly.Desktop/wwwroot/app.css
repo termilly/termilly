@@ -2332,9 +2332,11 @@ mark.set-hit { border-radius: 2px; background: var(--accent-soft); color: inheri
 /* Update notice in the title bar (js/update.js). */
 .update-chip { display: inline-flex; align-items: center; gap: 6px; height: 24px; margin-right: 6px; padding: 0 10px; border: 1px solid var(--accent-soft); border-radius: 12px; background: var(--accent-fill); color: var(--text-strong); font-size: 12px; white-space: nowrap; }
 .update-chip[hidden] { display: none; }
-.update-chip:hover, .update-chip.open { border-color: var(--accent); }
+.update-chip:hover:not(:disabled), .update-chip.open { border-color: var(--accent); }
+.update-chip:disabled { cursor: default; opacity: 0.7; }
 .update-chip svg { width: 13px; height: 13px; color: var(--accent); stroke-width: 1.6; }
 .update-about { display: block; }
+.update-command { margin: 4px 0 14px; padding: 8px 10px; overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; background: var(--term-bg); color: var(--term-text); font: 12px/1.5 var(--mono); white-space: pre; user-select: text; }
 @media (max-width: 900px) { .update-chip span { display: none; } }
 
 /* Notes (js/notes.js): the mark on sidebar rows, the pinned line in a terminal's header, the editor. */
