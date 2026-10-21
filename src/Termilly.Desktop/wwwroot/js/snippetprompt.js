@@ -4,8 +4,8 @@
 // that doesn't fit sends them on, in order, so "ssh" or "set" types as usual. Once `snippet:` is there, a list at the
 // cursor shows the matching snippets with their commands and the values they ask for: Up and Down pick, Tab or Enter
 // runs it (the run form asks for its values first), Esc types what was held at the prompt after all.
-// Only at a prompt the shell marked (shell integration) with nothing typed since, on the normal screen (not vim's),
-// in a terminal with its own shell (not a tmux pane).
+// Only at a prompt the shell marked (shell integration) with nothing typed since (or all of it deleted again), on
+// the normal screen (not vim's), in a terminal with its own shell (not a tmux pane).
 
 import { on, wsById, EVENTS } from './store.js';
 import { setInputHook, isTerminalReply } from './terminals.js';
@@ -13,6 +13,7 @@ import { allSnippets, placeholders, runSnippetIn, scopeLabel } from './snippets.
 import { escapeHtml } from './ui.js';
 import { find, XTERM_SCREEN } from './dom.js';
 import { SNIPPET_PREFIX, startsPrefix, hasPrefix, matchSnippets } from './snippetmatch.js';
+import { inputEmpty } from './commands.js';
 
 /** How many matches the list shows. */
 const MAX_SHOWN = 8;
@@ -55,7 +56,7 @@ const charOf = e => (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey
  * @param {Tab} tab
  * @param {any} term
  */
-const canStart = (tab, term) => untouched.has(tab) && !!tab.shellMarks && !tab.virtual && !tab.exited
+const canStart = (tab, term) => (untouched.has(tab) || inputEmpty(tab)) && !!tab.shellMarks && !tab.virtual && !tab.exited
   && term.buffer.active.type === NORMAL_BUFFER;
 
 /** The snippets that match what's typed after `snippet:`. */

@@ -86,6 +86,18 @@ export function inputStarted(tab) {
 }
 
 /**
+ * Whether the line after the prompt is empty, with the cursor where input starts: nothing typed, or all of it
+ * deleted again. False while a command runs (its output has moved the cursor on).
+ * @param {Tab} tab
+ */
+export function inputEmpty(tab) {
+  const input = tab.commands?.input;
+  if (tab.running || !input?.marker || input.marker.isDisposed) return false;
+  const buffer = /** @type {TabView} */ (tab.view).term.buffer.active;
+  return buffer.baseY + buffer.cursorY === input.marker.line && buffer.cursorX === input.x && !typedSince(buffer, input);
+}
+
+/**
  * The command started running (C): read what was typed, from the input start to the cursor.
  * @param {Tab} tab
  */
