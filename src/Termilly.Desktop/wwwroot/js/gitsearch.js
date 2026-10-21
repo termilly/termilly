@@ -348,14 +348,16 @@ function fileHitHtml(hit, i, sel, needle) {
 }
 
 /**
- * A file Claude changed, found by its path or a line in it: shown by its path relative to Claude's folder.
+ * A file Claude changed, found by its path or a line in it: shown by its path relative to Claude's folder, with
+ * forward slashes like the git results next to it.
  * @param {AgentHit} hit
  * @param {number} i
  * @param {string} sel
  * @param {string} needle
  */
 function agentHitHtml(hit, i, sel, needle) {
-  return pathHitHtml({ shown: hit.outside ? hit.path : hit.display, title: hit.path, status: '', line: hit.line, text: hit.text }, i, sel, needle);
+  const shown = hit.outside ? hit.path : hit.display.replace(/\\/g, '/');
+  return pathHitHtml({ shown, title: hit.path, status: '', line: hit.line, text: hit.text }, i, sel, needle);
 }
 
 /**
