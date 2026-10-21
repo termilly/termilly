@@ -392,7 +392,7 @@ export const HOST = Object.freeze({
 /** @typedef {{ checking: boolean }} Host_updateStatus_0 */
 /** @typedef {{ current: string, checkedAt: number|null, failed: boolean, available: UpdateAvailable|null }} Host_updateStatus_1 */
 /** @typedef {Host_updateStatus_0|Host_updateStatus_1} Host_updateStatus */
-/** @typedef {{ maximized: boolean }} Host_windowState */
+/** @typedef {{ maximized: boolean, minimized: boolean, active: boolean }} Host_windowState */
 /** @typedef {{ requestId: string|null, repo: string, path: string, branch: string, copied: any, ok: boolean }} Host_worktreeReply_0 */
 /** @typedef {{ requestId: string|null, status: any, ok: boolean }} Host_worktreeReply_1 */
 /** @typedef {{ requestId: string|null, ok: boolean }} Host_worktreeReply_2 */

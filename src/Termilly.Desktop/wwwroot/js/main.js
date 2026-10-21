@@ -6,6 +6,7 @@ import { send, onHost } from './host.js';
 import {
   state, restore, newId, emit, saveNow, WORKSPACE_COLORS, PROFILE_SOURCES, agentChanged, markSeen, GROUPS, EVENTS, sourceOf, SPLIT,
 } from './store.js';
+import { setWindowState } from './windowshown.js';
 import { setFocusRestorer, openPopover, closePopover } from './popups.js';
 import { setKeyHandler, scheduleFit, clearActivity, keptRunning } from './terminals.js';
 import { consoleDefaults } from './consolecolors.js';
@@ -43,6 +44,7 @@ const QUAKE_WORKSPACE = 'Drop-down';
 import { openSnippets, snippetCommands } from './snippets.js';
 import { activityLine, stopAllAgents } from './agentline.js';
 import './subagents.js';
+import './notify.js';
 import './cost.js';
 import { openAllResults } from './results.js';
 import './gitstatus.js';
@@ -399,6 +401,8 @@ byId('search-button').addEventListener('click', () => openPalette());
 onHost(HOST.windowState, m => {
   document.body.classList.toggle('maximized', m.maximized);
   find(document, '[data-window="maximize"]').title = m.maximized ? RESTORE_LABEL : 'Maximize';
+  // Back from minimized: the page may never have lost focus, so the window's focus event below doesn't come.
+  if (setWindowState(m)) seeFocused();
 });
 
 // ---- Terminal output ----
@@ -443,10 +447,11 @@ onHost(HOST.quake, m => {
 });
 
 // Coming back to the window means seeing the terminal that has focus.
-window.addEventListener('focus', () => {
+function seeFocused() {
   const tab = focusedTab();
   if (tab) markSeen(tab);
-});
+}
+window.addEventListener('focus', seeFocused);
 
 // An agent reported in: Claude Code's hooks through Termilly's claude shim (source "hooks", see AgentHooks.cs), or
 // `claude agents --json` for a Claude Code the hooks don't reach (source "poll", see ClaudeAgentsPoller.cs).

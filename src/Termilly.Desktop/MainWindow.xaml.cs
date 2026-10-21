@@ -245,8 +245,20 @@ public partial class MainWindow : Window
         PostWindowState();
     }
 
-    private void PostWindowState() =>
-        _channel.Post(new ToPage.WindowState(WindowState == WindowState.Maximized));
+    protected override void OnActivated(EventArgs e)
+    {
+        base.OnActivated(e);
+        PostWindowState();
+    }
+
+    protected override void OnDeactivated(EventArgs e)
+    {
+        base.OnDeactivated(e);
+        PostWindowState();
+    }
+
+    private void PostWindowState() => _channel.Post(new ToPage.WindowState(
+        WindowState == WindowState.Maximized, WindowState == WindowState.Minimized, IsActive && WindowState != WindowState.Minimized));
 
     /// <summary>
     /// Registers or drops the system-wide "next terminal that needs me" shortcut. It brings Termilly forward and

@@ -11,6 +11,7 @@ import { PAGE } from './protocol.js';
 import { send, platform, PLATFORM } from './host.js';
 import { PROFILE_SOURCE, AGENT_STATE, PROFILE_ICON, AGENT_SOURCE, CLAUDE_TOOL } from './constants.js';
 import { debounce } from './util.js';
+import { windowInFront } from './windowshown.js';
 
 /** The kinds of node in a workspace's layout tree (see the top of this file). */
 export const NODE = Object.freeze({ leaf: 'leaf', split: 'split', tabs: 'tabs', preview: 'preview' });
@@ -331,10 +332,11 @@ function commandRunning(tab) {
 const NEWS = new Set([AGENT_STATE.done, AGENT_STATE.error, AGENT_STATE.attention]);
 
 /**
- * Whether the user can see a terminal now: its workspace is showing and the window is active.
+ * Whether the user can see a terminal now: its workspace is showing and the window is in front (the host's word,
+ * js/windowshown.js, as well as the page's focus).
  * @param {Tab} tab
  */
-export const isInView = tab => tab.wsId === state.activeId && document.hasFocus();
+export const isInView = tab => tab.wsId === state.activeId && windowInFront() && document.hasFocus();
 
 /**
  * Whether Claude Code runs in this terminal now: its hooks or the `claude agents` poll reported it, and it hasn't
