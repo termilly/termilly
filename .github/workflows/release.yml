@@ -103,6 +103,11 @@ jobs:
     env:
       VERSION: ${{ needs.version.outputs.version }}
     steps:
+      # Only CHANGELOG.md, for the release notes.
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: CHANGELOG.md
+          sparse-checkout-cone-mode: false
       - uses: actions/download-artifact@v8
         with:
           path: dist
