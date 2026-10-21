@@ -327,8 +327,14 @@ export const COMMAND_DELAY = 500;
 function commandRunning(tab) {
   const c = tab.command;
   return !!c && !tab.interactive && Date.now() - c.startedAt >= COMMAND_DELAY
-    && tab.view?.term?.buffer.active.type !== 'alternate';
+    && tab.view?.term?.buffer.active.type !== 'alternate' && !STARTS_CLAUDE.test(tab.running?.command ?? '');
 }
+
+/**
+ * A command line that starts Claude Code (`claude`, `cd x && claude`, a restored `cd …; claude --resume …`): it waits
+ * for the user (a folder to trust, a prompt) until its hooks say otherwise, which over ssh nothing else can tell.
+ */
+const STARTS_CLAUDE = /(?:^|[;&|(]\s*)claude(?:\s|$)/;
 
 /** States that tell the user something happened; arriving out of sight, they stay unread until looked at. */
 /** @type {Set<string>} */
