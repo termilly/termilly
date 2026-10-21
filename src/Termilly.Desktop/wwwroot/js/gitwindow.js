@@ -860,17 +860,17 @@ function drawDiff() {
   const head = `<div class="gw-diff-head">${label ? `<span class="gw-side-label">${escapeHtml(label)}</span>` : ''}`
     + `<span class="gw-diff-path" title="${escapeHtml(data.path)}">${escapeHtml(data.display ?? data.path)}</span>`
     + `${data.kind !== CHANGE_KIND.modified ? `<span class="pv-badge" data-kind="${data.kind}">${data.kind === CHANGE_KIND.created ? 'new' : data.kind}</span>` : ''}`
-    + `<span class="pv-stats">${data.added || data.removed ? `<span class="pv-plus">+${data.added}</span> <span class="pv-minus">−${data.removed}</span>` : ''}</span>`
-    + `<span class="seg pv-seg"><button class="${wrap ? 'on' : ''}" data-gw-wrap title="Wrap long lines">Wrap</button></span></div>`;
+    + `<span class="pv-stats">${data.added || data.removed ? `<span class="pv-plus">+${data.added}</span> <span class="pv-minus">−${data.removed}</span>` : ''}</span>`;
+  const wrapButton = `<span class="seg pv-seg"><button class="${wrap ? 'on' : ''}" data-gw-wrap title="Wrap long lines">Wrap</button></span>`;
   const pictures = imagesHtml(data);
-  // A binary image is only its pictures; an SVG's text diff follows them.
+  // A binary image is only its pictures (no lines to wrap); an SVG's text diff follows them.
   if (pictures && data.before == null && data.after == null) {
-    target.innerHTML = `${head}<div class="pv-scroll gw-diff">${pictures}</div>`;
+    target.innerHTML = `${head}</div><div class="pv-scroll gw-diff">${pictures}</div>`;
     measureImages(target);
     return null;
   }
   if (message) {
-    target.innerHTML = `${head}<div class="gw-message">${escapeHtml(message)}</div>`;
+    target.innerHTML = `${head}${wrapButton}</div><div class="gw-message">${escapeHtml(message)}</div>`;
     return null;
   }
   let rows = buildDiffRows(data, { mode: wholeFile ? changeView.file : changeView.diff, expanded, whole });
@@ -883,7 +883,7 @@ function drawDiff() {
     notes.push(`Showing the first ${MAX_ROWS.toLocaleString()} of ${rows.length.toLocaleString()} lines.`);
     rows = rows.slice(0, MAX_ROWS);
   }
-  target.innerHTML = `${head}${notes.length ? `<div class="pv-note">${escapeHtml(notes.join(' '))}</div>` : ''}`
+  target.innerHTML = `${head}${wrapButton}</div>${notes.length ? `<div class="pv-note">${escapeHtml(notes.join(' '))}</div>` : ''}`
     + `<div class="pv-scroll gw-diff${sideBySide && !whole ? ' sbs' : ''}${wrap ? ' wrap' : ''}">${pictures}<div class="pv-rows">${rows.map(diffRowHtml).join('')}</div></div>`;
   if (pictures) measureImages(target);
   return hit && searching() ? markInDiff(target, hit.line) : null;
