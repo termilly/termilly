@@ -2394,6 +2394,16 @@ mark.set-hit { border-radius: 2px; background: var(--accent-soft); color: inheri
 .snippet-empty { padding: 18px 4px; }
 .dialog.snippet-edit, .dialog.snippet-run { width: 520px; }
 .snippet-command { width: 100%; resize: vertical; font: 12.5px/1.5 var(--term-font); }
+/* `snippet:` at a prompt (js/snippetprompt.js): the held text over the prompt, and the list of matches under it. */
+.snippet-typed { position: fixed; z-index: 1700; padding-right: 1px; background: var(--term-surface, var(--surface)); white-space: pre; pointer-events: none; }
+.snippet-typed[hidden] { display: none; }
+.popover.snippet-suggest { width: 380px; animation: none; }
+.snippet-suggest .snippet-item { cursor: pointer; }
+.snippet-vars { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+.snippet-var { padding: 1px 6px; border: 1px solid var(--border); border-radius: 5px; color: var(--muted); font: 11px var(--term-font); }
+.snippet-suggest-foot { margin: 4px 4px 2px; padding-top: 6px; border-top: 1px solid var(--border); color: var(--faint); font-size: 11.5px; }
+.snippet-suggest-foot kbd { margin-right: 2px; }
+.snippet-suggest .snippet-empty { margin: 6px 8px; }
 .snippet-preview { margin: 6px 0 12px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); font: 12.5px/1.5 var(--term-font); white-space: pre-wrap; word-break: break-all; }
 .snippet-list .dialog-actions .spacer, .snippet-edit .dialog-actions .spacer { flex: 1; }
 /* The same space under the title as a dialog's first field (.dialog-field). */

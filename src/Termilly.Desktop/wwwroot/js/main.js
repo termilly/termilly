@@ -45,6 +45,7 @@ import { openSnippets, snippetCommands } from './snippets.js';
 import { activityLine, stopAllAgents } from './agentline.js';
 import './subagents.js';
 import './notify.js';
+import './snippetprompt.js';
 import './cost.js';
 import { openAllResults } from './results.js';
 import './gitstatus.js';

@@ -73,6 +73,7 @@ export function promptStarted(tab) {
   commands.prompts.push(marker);
   if (commands.prompts.length > MAX_PROMPTS) commands.prompts.shift().dispose();
   commands.promptMarker = marker;
+  emit(EVENTS.prompt, tab); // a fresh prompt with nothing typed yet (snippetprompt.js)
 }
 
 /**

@@ -132,6 +132,19 @@ export async function runSnippet(snippet, { tab = focusedTab(), where } = {}) {
 }
 
 /**
+ * Runs a snippet in one terminal (`snippet:name` at its prompt, snippetprompt.js), asking for its placeholders first.
+ * @param {Snippet} snippet
+ * @param {Tab} tab
+ */
+export const runSnippetIn = (snippet, tab) => runSnippet(snippet, { tab, where: TARGET.focused });
+
+/**
+ * Where a snippet is kept, as the lists say it.
+ * @param {Snippet} snippet
+ */
+export const scopeLabel = snippet => (snippet.scope === SNIPPET_SCOPE.global ? 'all workspaces' : 'this workspace');
+
+/**
  * The run form: a field per placeholder (last values remembered) and where it goes.
  * @param {Snippet} snippet
  * @param {Placeholder[]} names
@@ -296,7 +309,7 @@ export function openSnippets() {
       selected = Math.min(selected, Math.max(0, shown.length - 1));
       find(dialog, '[data-items]').innerHTML = shown.length ? shown.map((s, i) => `
         <div class="snippet-item${i === selected ? ' on' : ''}" data-i="${i}">
-          <div class="snippet-text"><div class="snippet-name">${escapeHtml(s.name)}<span class="snippet-scope">${s.scope === SNIPPET_SCOPE.global ? 'all workspaces' : 'this workspace'}</span></div>
+          <div class="snippet-text"><div class="snippet-name">${escapeHtml(s.name)}<span class="snippet-scope">${scopeLabel(s)}</span></div>
             <code class="snippet-cmd">${escapeHtml(s.command)}</code>${s.description ? `<div class="set-desc">${escapeHtml(s.description)}</div>` : ''}</div>
           <button class="btn small" data-edit="${i}">Edit</button>
           <button class="btn small primary" data-run="${i}">Run</button>

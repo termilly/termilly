@@ -149,6 +149,7 @@ export const EVENTS = Object.freeze({
   plugins: 'plugins',
   previewDropped: 'previewDropped',
   previewShown: 'previewShown',
+  prompt: 'prompt',
   remoteCwd: 'remoteCwd',
   profiles: 'profiles',
   results: 'results',

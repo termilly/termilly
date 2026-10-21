@@ -5,6 +5,8 @@
 
 /** The id of index.html's element the workspace's panes are in. */
 export const WORKSPACE_ID = 'workspace';
+/** xterm's element the cells are drawn in: its size over the terminal's columns and rows is a cell's. */
+export const XTERM_SCREEN = '.xterm-screen';
 
 /**
  * An element of index.html, by its id.

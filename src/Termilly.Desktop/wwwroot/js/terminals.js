@@ -119,8 +119,22 @@ const ERASE_SCROLLBACK = 3;
 /** xterm answering the pseudo console: cursor position, device attributes, focus in or out. */
 const TERMINAL_REPLY = /^\x1b\[(\d+;\d+R|\?[\d;]*c|>[\d;]*c|[IO])$/;
 
+/**
+ * Whether `data` from xterm is its answer to the console (cursor position, attributes, focus), not the user typing.
+ * @param {string} data
+ */
+export const isTerminalReply = data => TERMINAL_REPLY.test(data);
+
 /** @type {(e: KeyboardEvent) => boolean} */
 let keyHandler = () => true;
+
+/**
+ * Keys a feature takes before the shell sees them (`snippet:` at a prompt, snippetprompt.js); false keeps a key.
+ * @type {(tab: Tab, term: any, e: KeyboardEvent) => boolean}
+ */
+let inputHook = () => true;
+/** @param {(tab: Tab, term: any, e: KeyboardEvent) => boolean} fn */
+export const setInputHook = fn => { inputHook = fn; };
 
 /**
  * Where typing in a terminal without its own shell goes (a tmux pane: tmux.js).
@@ -260,7 +274,7 @@ function wireInput(tab, term) {
     }
     // Broadcasting (broadcast.js) sends it to every terminal in the broadcast; otherwise just here.
     // xterm's answers to the console's queries go to this terminal only, and aren't the user typing.
-    if (TERMINAL_REPLY.test(data)) {
+    if (isTerminalReply(data)) {
       send(PAGE.input, { id: tab.id, data });
       return;
     }
@@ -276,7 +290,7 @@ function wireInput(tab, term) {
     quiet(tab);
     send(PAGE.resize, { id: tab.id, cols, rows });
   });
-  term.attachCustomKeyEventHandler((/** @type {KeyboardEvent} */ e) => clipboardKey(term, e) && keyHandler(e));
+  term.attachCustomKeyEventHandler((/** @type {KeyboardEvent} */ e) => inputHook(tab, term, e) && clipboardKey(term, e) && keyHandler(e));
 }
 
 /**
