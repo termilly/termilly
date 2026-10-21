@@ -1,13 +1,19 @@
+using Termilly.Shared;
+
 namespace Termilly.Setup.Engine;
 
-/// <summary>Setup's command line: Quiet.cs documents the ones for scripts; the others are setup's own restarts.</summary>
+/// <summary>
+/// Setup's command line: Quiet.cs documents the ones for scripts; the others are setup's own restarts. The ones
+/// Termilly's update runs setup with are shared with it (src/Shared/SetupFlags.cs).
+/// </summary>
 internal static class Flags
 {
-    public const string Quiet = "--quiet";
+    public const string Quiet = SetupFlags.Quiet;
+    public const string Start = SetupFlags.Start;
     public const string Uninstall = "--uninstall";
     public const string RemoveData = "--remove-data";
-    public const string AllUsers = "--all-users";
-    public const string Dir = "--dir";
+    public const string AllUsers = SetupFlags.AllUsers;
+    public const string Dir = SetupFlags.Dir;
     public const string Desktop = "--desktop";
     public const string Path = "--path";
     public const string NoPath = "--no-path";

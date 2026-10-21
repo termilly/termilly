@@ -37,6 +37,30 @@ internal static class Processes
         return found;
     }
 
+    /// <summary>
+    /// Starts the installed Termilly in <paramref name="dir"/> through Explorer, so it runs as the signed-in user even
+    /// when setup runs as administrator. False (and logged) when it couldn't.
+    /// </summary>
+    public static bool StartTermilly(string dir)
+    {
+        var exe = Path.Combine(dir, InstalledFiles.App);
+        if (!File.Exists(exe))
+        {
+            Log.Write($"couldn't start Termilly: {exe} isn't there");
+            return false;
+        }
+        try
+        {
+            Process.Start(new ProcessStartInfo("explorer.exe", Elevation.Quote(exe)) { UseShellExecute = false })?.Dispose();
+            return true;
+        }
+        catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            Log.Write($"couldn't start Termilly: {e.Message}");
+            return false;
+        }
+    }
+
     /// <summary>Asks Termilly's windows to close (they save their session), then ends whatever is still running there.</summary>
     public static void CloseAll(string dir)
     {

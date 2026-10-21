@@ -70,8 +70,9 @@ only the maintainers can publish; a fork's run can still make a test build.
 
 ```
 TermillySetup.exe --quiet [--all-users] [--dir PATH] [--desktop] [--no-path] [--sign-in] [--offline]
-                          [--no-start-menu] [--no-explorer] [--no-agent]
+                          [--no-start-menu] [--no-explorer] [--no-agent] [--start]
 TermillySetup.exe --uninstall --quiet [--remove-data]
 ```
 
-Exit codes: 0 done, 1 failed (see the log), 740 run it as administrator (for all users).
+Exit codes: 0 done, 1 failed (see the log), 740 run it as administrator (for all users). `--start` starts
+Termilly when it's done, installed or not: an update from inside Termilly runs setup this way, after closing it.

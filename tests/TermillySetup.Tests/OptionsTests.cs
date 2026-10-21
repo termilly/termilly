@@ -85,6 +85,21 @@ public class OptionsTests
     }
 
     [Fact]
+    public void An_update_installs_into_the_same_folder_and_starts_termilly_again()
+    {
+        // What Termilly runs for an update of an install for all users (UpdateInstall.cs), as Windows splits it.
+        var args = Args(Flags.Quiet, Flags.Start, Flags.AllUsers, Flags.Dir, @"C:\Program Files\Termilly");
+        var installed = new SetupOptions { AllUsers = true, InstallDir = @"C:\Program Files\Termilly", Desktop = true };
+
+        var options = Quiet.Apply(installed, args);
+
+        Assert.True(args.Has(Flags.Start));
+        Assert.True(options.AllUsers);
+        Assert.Equal(@"C:\Program Files\Termilly", options.InstallDir);
+        Assert.True(options.Desktop); // the rest stays as it was installed
+    }
+
+    [Fact]
     public void Arguments_match_without_regard_to_case_and_read_the_value_after_a_flag()
     {
         var args = Args("--Quiet", "--dir", "C:\\x");
