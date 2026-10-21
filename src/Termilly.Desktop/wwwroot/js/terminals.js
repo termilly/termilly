@@ -174,8 +174,7 @@ const OSC = Object.freeze({
 
 /** How much image data a terminal keeps for its inline images, in MB. */
 const IMAGE_STORAGE_MB = 64;
-/** A restored terminal scrolls back this share of its height, once the new shell has cleared its screen. */
-const RESTORED_SCROLL = 0.6;
+/** When a restored terminal scrolls to where it was: once the new shell has cleared its screen. */
 const RESTORED_SCROLL_AFTER_MS = 1500;
 
 /** The width of a terminal's overview ruler (the marks beside its scrollbar). */
@@ -219,15 +218,13 @@ export function openTerminal(tab) {
 }
 
 /**
- * Scrolls a restored terminal: to the buffer row that was at the top of its view, to the bottom (the new prompt)
- * when it was at the bottom, or, when that isn't known (a closed terminal reopened), up so the restored output
- * shows above the new prompt. Typing snaps back to the prompt.
+ * Scrolls a restored terminal to the buffer row that was at the top of its view, or to the bottom (the new prompt)
+ * when it was at the bottom or that isn't known (a closed terminal reopened).
  * @param {any} term xterm
- * @param {number | null | undefined} top
+ * @param {number | null} top
  */
 function scrollRestored(term, top) {
-  if (top === undefined) term.scrollLines(-Math.floor(term.rows * RESTORED_SCROLL));
-  else if (top === null) term.scrollToBottom();
+  if (top === null) term.scrollToBottom();
   else term.scrollToLine(top);
 }
 
@@ -891,20 +888,19 @@ export function disposeTerminal(tab) {
  * Shows a reopened session's saved output, dimmed, then scrolls it up out of the viewport so the new
  * shell starts on a clean screen with the old output in the scrollback above it. After a restart that's all: the
  * terminals coming back is what Termilly does, so nothing announces it. A closed terminal reopened says when it closed.
- * Resolves, once written, to the buffer row that was at the top of the view (null: it was at the bottom; undefined:
- * not known).
+ * Resolves, once written, to the buffer row that was at the top of the view (null: the bottom, or not known).
  * @param {Tab} tab
- * @returns {Promise<number | null | undefined>}
+ * @returns {Promise<number | null>}
  */
 function writeRestoredOutput(tab) {
   const { term } = /** @type {TabView} */ (tab.view);
   const start = startOf(tab);
   // Called only when there's output to bring back.
   const { lines, closedAt, resurrected, scroll } = /** @type {NonNullable<ShellStart['output']>} */ (start.output);
-  /** @type {Promise<number | null | undefined>} */
+  /** @type {Promise<number | null>} */
   const top = new Promise(resolve => {
     term.write(`\x1b[2m${lines.join('\r\n')}\x1b[0m\r\n`, () => {
-      resolve(typeof scroll === 'number' ? rowOfLine(term.buffer.normal, Math.max(0, lines.length - scroll)) : scroll);
+      resolve(scroll ? rowOfLine(term.buffer.normal, Math.max(0, lines.length - scroll)) : null);
     });
   });
   if (!resurrected) {

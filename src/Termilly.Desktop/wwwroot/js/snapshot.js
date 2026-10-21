@@ -20,14 +20,11 @@ const LINES = 500;
 const SESSION_ID = /^[0-9a-f][0-9a-f-]{7,63}$/i;
 
 /**
- * Where a saved terminal was scrolled to: lines back from the end, null at the bottom, undefined when the snapshot
- * doesn't say (one from before 1.1.0).
+ * Where a saved terminal was scrolled to: lines back from the end, or null for the bottom (also when the snapshot
+ * doesn't say, one from before 1.1.0).
  * @param {any} s
  */
-const scrollOf = s => {
-  if (Number.isInteger(s.scroll) && s.scroll > 0) return s.scroll;
-  return s.scroll === null ? null : undefined;
-};
+const scrollOf = s => (Number.isInteger(s.scroll) && s.scroll > 0 ? s.scroll : null);
 
 /** What each open terminal shows now, in SessionSnapshot's shape. */
 function snapshot() {
