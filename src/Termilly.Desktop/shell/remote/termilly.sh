@@ -7,7 +7,7 @@
 # It does nothing outside Termilly: only a terminal Termilly opened sets LC_TERMILLY, and ssh passes LC_* on.
 # A shell Termilly started on this machine (TERM_PROGRAM, which ssh doesn't pass) has its own integration.
 
-TERMILLY_REMOTE_VERSION=4
+TERMILLY_REMOTE_VERSION=5
 
 [ "${LC_TERMILLY-}" = 1 ] || return 0
 [ "${TERM_PROGRAM-}" != Termilly ] || return 0
@@ -110,6 +110,10 @@ function claude {
   if [ -n "${TMUX-}" ]; then
     tmux set-option -p allow-passthrough on >/dev/null 2>&1
   fi
+  # The folder and its repository, as a prompt would say them: `cd project && claude` (or a restored session's
+  # `cd …; claude --resume …`) starts Claude without a prompt in between, and the workspace would show neither.
+  __termilly_osc "7;file://${HOSTNAME:-${HOST-}}$PWD"
+  __termilly_git
   if [ -f "$HOME/.termilly/claude-settings.json" ]; then
     TERMILLY_TTY=$tty command claude --settings "$HOME/.termilly/claude-settings.json" "$@"
   else
