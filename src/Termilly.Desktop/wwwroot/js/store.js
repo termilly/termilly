@@ -301,7 +301,9 @@ export function activityOf(tab) {
   if (tab.hibernated) return { kind: ACTIVITY.hibernated, title: 'Hibernated: Claude Code resumes this conversation when you open it' };
   const agent = agentActivity(tab);
   if (agent) return agent;
-  if (state.settings.interface.showActivity === false) return null;
+  // Claude Code reporting in (hooks, poll) says when it works. Idle, it waits for the user: the command it runs in
+  // isn't busy, though over ssh nothing else says so (the host sees only ssh, see commandRunning).
+  if (runsClaude(tab) || state.settings.interface.showActivity === false) return null;
   const p = tab.progress;
   if (p) {
     const at = p.percent ? ` at ${p.percent}%` : '';
