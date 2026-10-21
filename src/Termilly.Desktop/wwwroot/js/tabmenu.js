@@ -171,8 +171,8 @@ function toolItems(tab) {
 function gitItems(tab) {
   const git = { label: GIT_LABEL, icon: ICONS.git, hint: keysHtml('Ctrl Shift G') };
   const remote = remoteGit(tab);
-  if (remote) return [{ ...git, action: () => emit(EVENTS.openGit, { folder: remote.root, remote: tab.id }) }];
-  if (repoOf(tab.cwd)) return [{ ...git, action: () => emit(EVENTS.openGit, { folder: tab.cwd }) }];
+  if (remote) return [{ ...git, action: () => emit(EVENTS.openGit, { folder: remote.root, remote: tab.id, agent: tab }) }];
+  if (repoOf(tab.cwd)) return [{ ...git, action: () => emit(EVENTS.openGit, { folder: tab.cwd, agent: tab }) }];
   return [];
 }
 

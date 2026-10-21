@@ -139,7 +139,7 @@ export const EVENTS = Object.freeze({
   focus: 'focus',
   gitChanged: 'gitChanged',
   history: 'history',
-  openAllChanges: 'openAllChanges',
+  openAgentChanges: 'openAgentChanges',
   openChangedFiles: 'openChangedFiles',
   openGit: 'openGit',
   openSettings: 'openSettings',

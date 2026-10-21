@@ -22,12 +22,11 @@ import { applySnapshot } from './snapshot.js';
 import { toggleCaptures } from './triggers.js';
 import { toggleHints } from './hints.js';
 import { toggleScratch } from './scratch.js';
-import { openGitWindow, gitFolderOf, onServer, openRemoteGitNotice } from './gitwindow.js';
+import { openGitWindow, openAgentChanges, gitFolderOf, onServer, openRemoteGitNotice } from './gitwindow.js';
 import { toggleSftp } from './sftp.js';
 import { openNewWorktree } from './worktree.js';
 import { toggleAi } from './ai.js';
-import { openLastChange, openChangedFiles } from './changes.js';
-import { openAllChanges } from './changeswindow.js';
+import { openChangedFiles } from './changes.js';
 import { openSnippetsWindow } from './snippetswindow.js';
 import { THEMES } from './themes.js';
 import { isPreviewOpen, closePreview } from './preview.js';
@@ -183,9 +182,8 @@ setCommands(() => [
   { label: 'Take the tour', keywords: 'tour help guide introduction tutorial walkthrough start learn', run: () => setTimeout(startTour) },
   { label: 'Ask AI about this terminal', keywords: 'ai assistant claude llm explain error chat', hint: keysHtml('Ctrl Shift K'), run: () => setTimeout(() => toggleAi()) },
   ...(changeShortcutOn() ? [
-    { label: 'Show the last file Claude changed here', keywords: 'change preview diff edit claude file', hint: keysHtml('Ctrl Shift D'), run: () => setTimeout(() => openLastChange()) },
+    { label: 'Show the files Claude changed here, in the Git window', keywords: 'change preview diff edits claude files last all tree folders agent changes search', hint: keysHtml('Ctrl Shift D'), run: () => setTimeout(() => openAgentChanges(focusedTab())) },
     { label: 'Show files Claude changed', keywords: 'change preview diff edits claude files list', run: () => setTimeout(() => openChangedFiles()) },
-    { label: 'Show all files Claude changed, as a tree', keywords: 'change preview diff edits claude files all tree folders window', run: () => setTimeout(() => openAllChanges()) },
   ] : []),
   { label: 'New agent in worktree', keywords: 'git branch worktree agent claude isolate', run: () => setTimeout(openNewWorktree) },
   { label: 'Show captured lines', keywords: 'triggers errors matches alerts', run: () => setTimeout(() => toggleCaptures()) },
@@ -288,9 +286,9 @@ function openGitHere() {
   const tab = focusedTab();
   // Git on the server, over ssh (a remote repository means a terminal).
   const git = remoteGit(tab);
-  if (git) openGitWindow(git.root, { remote: /** @type {Tab} */ (tab).id });
+  if (git) openGitWindow(git.root, { remote: /** @type {Tab} */ (tab).id, agent: tab });
   else if (onServer(tab)) openRemoteGitNotice();
-  else openGitWindow(gitFolderOf(tab, ws));
+  else openGitWindow(gitFolderOf(tab, ws), { agent: tab });
 }
 
 /**
@@ -326,7 +324,7 @@ function runShortcut(e) {
   else if (ctrlShift && e.code === 'KeyA') commands.inbox();
   else if (ctrlShift && e.code === 'KeyI') commands.broadcastWorkspace();
   else if (ctrlShift && e.code === 'KeyD' && changeShortcutOn()) {
-    if (isPreviewOpen()) closePreview(); else openLastChange();
+    if (isPreviewOpen()) closePreview(); else openAgentChanges(focusedTab());
   }
   // The digit is text; subtracting makes it a number.
   else if (ctrlShift && /^Digit[1-9]$/.test(e.code) && state.profiles[/** @type {any} */ (e.code.slice(DIGIT_CODE.length)) - 1]) {

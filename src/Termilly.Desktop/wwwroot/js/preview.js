@@ -7,12 +7,13 @@
 
 import { PAGE } from './protocol.js';
 import { send, request, platform, PLATFORM } from './host.js';
-import { state, on, emit, wsById, findPreview, EVENTS } from './store.js';
+import { state, on, emit, wsById, findPreview, EVENTS, GROUPS } from './store.js';
 import { focusTab, restoreFocus, setPreviewRenderer, insertPreview, removePreview } from './panes.js';
 import { scheduleFit } from './terminals.js';
 import { ICONS, ltrPath } from './ui.js';
 import { buildDiffRows, diffRowHtml, DIFF_ROW, DIFF_SCROLL, DIFF_LINE, DIFF_TARGET } from './diffrows.js';
 import { debounce } from './util.js';
+import { updateSettings } from './preferences.js';
 import { SETTING_VALUES, CHANGE_SOURCE, CHANGE_KIND } from './constants.js';
 import { byId, find, targetOf, WORKSPACE_ID, dragPointer, dragFloating } from './dom.js';
 
@@ -43,7 +44,7 @@ const { changeView, changeCompare, changeNewFile, changeFollow, changeLayout, ch
 
 /**
  * Where the preview is: Settings' places for it (a split beside the terminal, a side panel, a floating window), or
- * the all-changes window's right column.
+ * the Git window's right column (its Agent changes).
  */
 const PLACEMENT = Object.freeze({
   split: changePlacement.split, panel: changePlacement.panel, float: changePlacement.float, window: 'window',
@@ -51,8 +52,9 @@ const PLACEMENT = Object.freeze({
 /** The head's controls (data-pv): the mode and compare choices, and the buttons. */
 const CONTROL = Object.freeze({
   mode: 'mode', compare: 'compare', prev: 'prev', next: 'next', reveal: 'reveal', close: 'close', newer: 'newer',
+  wrap: 'wrap', git: 'git',
 });
-/** The preview's classes (app.css) while it's in the all-changes window, and while its long lines wrap. */
+/** The preview's classes (app.css) while it's in the Git window, and while its long lines wrap. */
 const IN_WINDOW = 'in-window';
 const WRAP = 'wrap';
 /** The side panel's narrowest, and the room it always leaves the workspace beside it, in pixels. */
@@ -80,6 +82,8 @@ el.innerHTML = `
     <span class="pane-actions">
       <span class="seg pv-seg" data-pv="mode"><button data-value="diff">Diff</button><button data-value="file">File</button></span>
       <span class="seg pv-seg" data-pv="compare"><button data-value="session" title="Everything Claude changed in this file">All edits</button><button data-value="last" title="Only Claude's last edit">Last edit</button></span>
+      <span class="seg pv-seg"><button data-pv="${CONTROL.wrap}" title="Wrap long lines">Wrap</button></span>
+      <button class="pane-btn pv-btn" data-pv="${CONTROL.git}" title="Open in the Git window">${ICONS.git}</button>
       <button class="pane-btn pv-btn" data-pv="prev" title="Previous changed file (P)">${ICONS.chevronLeft}</button>
       <button class="pane-btn pv-btn" data-pv="next" title="Next changed file (N)">${ICONS.chevronRight}</button>
       <button class="pane-btn pv-btn" data-pv="reveal" title="Show in ${platform === PLATFORM.windows ? 'Explorer' : 'the file manager'}">${ICONS.folder}</button>
@@ -125,16 +129,19 @@ let placement = null; // where the element is now: 'split' (with the workspace i
 let splitWs = null;
 
 /**
- * The all-changes window (js/changeswindow.js) borrows the preview: while it's open, the preview lives in its right
+ * The Git window's Agent changes (js/gitagent.js) borrow the preview: while it's open, the preview lives in its right
  * column, whatever Settings says, and moves through the files in the window's order.
  * @type {{ container: HTMLElement, order: (() => string[]) | null } | null}
  */
 let windowHost = null; // { container, order: () => paths }
 
 export const isPreviewOpen = () => !!view;
+
+/** Long lines wrap, or not: Settings › Change preview › Wrap long lines, which the Git window's diffs follow too. */
+export const toggleWrap = () => updateSettings(GROUPS.changes, { wrap: !settings().changes.wrap });
 export const previewTab = () => view?.tab ?? null;
 
-/** Puts the preview in the all-changes window (container), or, with null, closes it there when the window closes.
+/** Puts the preview in the Git window (container), or, with null, closes it there when the window closes.
  * @param {HTMLElement | null} container
  * @param {{ order?: (() => string[]) | null }} [options]
  */
@@ -223,19 +230,20 @@ const fetchChange = (tab, path, compare) => request(PAGE.changesGet, { id: tab.i
 
 /**
  * Opens the preview on a file's change in a terminal. line: a line to scroll to (a clicked path:line). Asking for
- * the file already shown, in the same terminal, just brings it forward.
+ * the file already shown, in the same terminal, just brings it forward. wholeFile: shown as the file rather than a
+ * diff (the Git window's search, so a line that didn't change shows too).
  * @param {Tab} tab
  * @param {string} path
- * @param {{ line?: number | null, focus?: boolean }} [options]
+ * @param {{ line?: number | null, focus?: boolean, wholeFile?: boolean }} [options]
  */
-export async function showChange(tab, path, { line = null, focus = true } = {}) {
+export async function showChange(tab, path, { line = null, focus = true, wholeFile = false } = {}) {
   const sameFile = view?.tab === tab && samePath(view.path, path);
   const s = settings();
   // sameFile (and so chosen) is only true while a view is open.
   const chosen = sameFile && /** @type {PreviewView} */ (view).compareChosen;
   view = {
     tab, path, line,
-    mode: sameFile
+    mode: wholeFile ? changeView.file : sameFile
       ? /** @type {PreviewView} */ (view).mode
       : (s.changes.view === changeView.file ? changeView.file : changeView.diff),
     compare: chosen ? /** @type {PreviewView} */ (view).compare : compareFor(tab, path),
@@ -293,12 +301,13 @@ const showsWhole = data => asWholeFile(data) || nothingToCompare(data);
  * Opens the preview with only a message (no file): there's nothing to show yet.
  * @param {Tab} tab
  * @param {string} text
+ * @param {{ focus?: boolean }} [options]
  */
-export function showMessage(tab, text) {
+export function showMessage(tab, text, { focus = true } = {}) {
   view = { tab, path: null, mode: changeView.diff, compare: changeCompare.session, expanded: new Set(), data: null, message: text };
   mount(tab);
   render();
-  el.focus({ preventScroll: true });
+  if (focus) el.focus({ preventScroll: true });
 }
 
 async function load() {
@@ -321,7 +330,7 @@ on(EVENTS.changes, tab => {
   if (!view?.path || view.tab !== tab) return;
   const files = /** @type {ChangedFile[]} */ (tab.changes ?? []);
   const newest = files[0]; // the host lists the most recent first
-  // The all-changes window lists new files itself, so there's nothing to offer there.
+  // The Git window lists new files itself, so there's nothing to offer there.
   if (newest && placement !== PLACEMENT.window && !samePath(newest.path, view.path) && time(newest.at) > time(view.offeredAt)) {
     view.offeredAt = newest.at;
     if (settings().changes.follow === changeFollow.follow) {
@@ -448,7 +457,12 @@ function renderToggles(data) {
   const files = fileOrder();
   for (const name of [CONTROL.prev, CONTROL.next]) find(el, `[data-pv="${name}"]`).hidden = files.length < 2;
   find(el, '[data-pv="reveal"]').hidden = !(/** @type {PreviewView} */ (view).path);
-  find(el, `[data-pv="${CONTROL.close}"]`).hidden = placement === PLACEMENT.window; // the window has its own
+  const wrap = find(el, `[data-pv="${CONTROL.wrap}"]`);
+  wrap.classList.toggle('on', !!settings().changes.wrap);
+  /** @type {HTMLElement} */ (wrap.parentElement).hidden = !(/** @type {PreviewView} */ (view).path);
+  // In the Git window already, which has its own close.
+  find(el, `[data-pv="${CONTROL.git}"]`).hidden = placement === PLACEMENT.window || !(/** @type {PreviewView} */ (view).path);
+  find(el, `[data-pv="${CONTROL.close}"]`).hidden = placement === PLACEMENT.window;
 }
 
 /** @param {ChangeData | null} data */
@@ -562,6 +576,16 @@ function scrollToFirst() {
 const fileOrder = () => (placement === PLACEMENT.window && windowHost?.order ? windowHost.order() : (view?.tab.changes ?? []).map(f => f.path));
 
 /**
+ * The Git window on this terminal's Agent changes, at the file shown (js/gitwindow.js, through an event: it imports
+ * this module). The preview moves there, so it closes here.
+ */
+function openInGitWindow() {
+  const { tab, path } = /** @type {PreviewView} */ (view);
+  closePreview();
+  emit(EVENTS.openAgentChanges, { tab, path });
+}
+
+/**
  * The next (1) or previous (-1) changed file. Runs only while the preview is open (its keys and buttons).
  * @param {number} step
  */
@@ -596,6 +620,9 @@ el.addEventListener('click', e => {
   if (action === CONTROL.prev) return moveFile(-1);
   if (action === CONTROL.next) return moveFile(1);
   if (action === CONTROL.reveal) return send(PAGE.openPath, { path: view.path });
+  // The setting itself, so the choice stays and the Git window's diffs agree (they redraw on the change).
+  if (action === CONTROL.wrap) return toggleWrap();
+  if (action === CONTROL.git) return openInGitWindow();
   const fold = /** @type {HTMLElement | null} */ (targetOf(e).closest('.pv-fold, .pv-delmark'));
   if (fold) {
     view.expanded.add(/** @type {string} */ (fold.dataset.key));
