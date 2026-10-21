@@ -124,10 +124,13 @@ jobs:
       - name: GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
+        # Its notes are the version's section of CHANGELOG.md: Termilly's "What's new" opens this release's page.
         run: |
+          awk -v v="$VERSION" '/^## /{p = index($0, "## " v " ") == 1; next} p' CHANGELOG.md > notes.md
+          [ -s notes.md ] || echo "Built from ${GITHUB_REF_NAME} at ${GITHUB_SHA::7}." > notes.md
           gh release create "v$VERSION" dist/* latest/TermillySetup.exe latest/TermillySetup-online.exe latest/termilly_amd64.deb \
             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-            --title "Termilly $VERSION" --notes "Built from ${GITHUB_REF_NAME} at ${GITHUB_SHA::7}."
+            --title "Termilly $VERSION" --notes-file notes.md
       # The server's termilly-release key can only write under the download folder (rrsync), nothing else.
       - name: Upload to the download server
         env:
@@ -155,12 +158,12 @@ jobs:
           base="https://termilly.com/downloads/$VERSION"
           sum() { grep " $1\$" dist/SHA256SUMS | cut -d' ' -f1; }
           mkdir meta
-          jq -cn --arg v "$VERSION" --arg date "$(date -u +%F)" --arg base "$base" \
+          jq -cn --arg v "$VERSION" --arg date "$(date -u +%F)" --arg base "$base" --arg repo "$GITHUB_REPOSITORY" \
             --arg online "TermillySetup-$VERSION-online.exe" --arg full "TermillySetup-$VERSION.exe" \
             --arg deb "termilly_${VERSION}_amd64.deb" \
             --arg wsum "$(sum "TermillySetup-$VERSION-online.exe")" --arg fsum "$(sum "TermillySetup-$VERSION.exe")" \
             --arg dsum "$(sum "termilly_${VERSION}_amd64.deb")" \
-            '{version: $v, date: $date, notes: "https://termilly.com/downloads/",
+            '{version: $v, date: $date, notes: "https://github.com/\($repo)/releases/tag/v\($v)",
               windows: {online: "\($base)/\($online)", full: "\($base)/\($full)", sha256: $wsum, fullSha256: $fsum},
               linux: {deb: "\($base)/\($deb)", sha256: $dsum}}' > meta/latest.json
           cat meta/latest.json
