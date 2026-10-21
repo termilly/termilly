@@ -7,7 +7,7 @@
 # It does nothing outside Termilly: only a terminal Termilly opened sets LC_TERMILLY, and ssh passes LC_* on.
 # A shell Termilly started on this machine (TERM_PROGRAM, which ssh doesn't pass) has its own integration.
 
-TERMILLY_REMOTE_VERSION=2
+TERMILLY_REMOTE_VERSION=3
 
 [ "${LC_TERMILLY-}" = 1 ] || return 0
 [ "${TERM_PROGRAM-}" != Termilly ] || return 0
@@ -104,6 +104,12 @@ function claude {
   # is all tty would name.
   tty=$(ps -o tty= -p $$ 2>/dev/null | tr -d ' ')
   case $tty in ''|'?'*) tty= ;; *) tty=/dev/$tty ;; esac
+  # Inside tmux the hooks' reports go out as passthrough, which tmux drops unless the pane allows it (off by
+  # default since tmux 3.3): every event would be lost, and Claude would look idle or stuck. Only this pane, and
+  # only once claude runs in it. Older tmux has no such option and passes them on anyway.
+  if [ -n "${TMUX-}" ]; then
+    tmux set-option -p allow-passthrough on >/dev/null 2>&1
+  fi
   if [ -f "$HOME/.termilly/claude-settings.json" ]; then
     TERMILLY_TTY=$tty command claude --settings "$HOME/.termilly/claude-settings.json" "$@"
   else

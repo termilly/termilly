@@ -2466,7 +2466,6 @@ mark.set-hit { border-radius: 2px; background: var(--accent-soft); color: inheri
 .sub-tool { flex: none; padding: 0 5px; border-radius: 4px; background: var(--accent-fill); color: var(--text); font-size: 10.5px; }
 .sub-tool.needs, .sub-row.needs .sub-icon { background: color-mix(in srgb, var(--attention) 22%, transparent); color: var(--attention); }
 .sub-time { flex: none; font-variant-numeric: tabular-nums; font-size: 10.5px; }
-.sub-fold { padding-left: 20px; font-style: italic; }
 .sub-badge { padding: 0 5px; border-radius: 8px; background: var(--accent-fill); color: var(--accent); font-size: 10px; font-weight: 600; line-height: 15px; white-space: nowrap; }
 
 /* Agent cost (js/cost.js). */

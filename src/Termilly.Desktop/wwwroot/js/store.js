@@ -346,11 +346,19 @@ export const isInView = tab => tab.wsId === state.activeId && windowInFront() &&
 export const runsClaude = tab => tab?.agent?.source === AGENT_SOURCE.hooks || tab?.agent?.source === AGENT_SOURCE.poll;
 
 /**
+ * An agent's states that end its turn (Stop, StopFailure).
+ * @type {Set<string>}
+ */
+export const TURN_ENDS = new Set([AGENT_STATE.done, AGENT_STATE.error]);
+
+/**
  * Call after changing tab.agent: news that arrives out of sight is marked unread (bold in the sidebar, a badge on
- * the rail) until the terminal is focused. See markSeen.
+ * the rail) until the terminal is focused. See markSeen. A turn that ended, or an agent that's gone, takes the
+ * progress it reported (OSC 9;4) with it: left uncleared, it would spin on once "done" has been seen.
  * @param {Tab} tab
  */
 export function agentChanged(tab) {
+  if (!tab.agent || TURN_ENDS.has(tab.agent.state)) tab.progress = null;
   if (tab.agent) tab.agent.unread = NEWS.has(tab.agent.state) && !isInView(tab);
   // An agent has worked here: the changed-files list on the header stays, even after it exits (js/header.js).
   if (tab.agent) tab.agentSeen = true;

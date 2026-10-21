@@ -239,13 +239,19 @@ internal sealed class AgentMonitor : IStartable, IDisposable
 /// <summary>Termilly's shell integration on servers (shell/remote): installing and removing it, and what its hooks report.</summary>
 internal sealed class RemoteHandler(PageChannel page, AgentMonitor agents) : IMessageHandler
 {
+    /// <summary>
+    /// A server's hook reports, handled in the order the terminal printed them. Handled side by side, a turn's last
+    /// PostToolUse ("working") could reach the page after its Stop ("done") and leave the terminal spinning.
+    /// </summary>
+    private readonly InOrder<AgentEvent> _remoteEvents = new(agents.OnRemoteEvent);
+
     public void Register(MessageRouter router)
     {
         router.On<FromPage.RemoteHook>(m =>
         {
             if (AgentHooks.ParseRemote(m.Id, m.Event, m.Payload) is { } remoteEvent)
             {
-                _ = Task.Run(() => agents.OnRemoteEvent(remoteEvent));
+                _ = _remoteEvents.Add(remoteEvent);
             }
         });
         router.On<FromPage.RemoteInstall>(m => Task.Run(() => PostInstall(m.Id)));

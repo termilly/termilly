@@ -28,6 +28,22 @@ public sealed class RemoteIntegrationTests
     }
 
     [Fact]
+    public void A_remote_subagent_stop_names_its_subagent_when_the_hook_sent_one()
+    {
+        var withId = AgentHooks.ParseRemote("tab-1", "SubagentStop", Base64("""{"session":"s1","agentId":"a1","agentType":"Explore","message":"Found it"}"""))!;
+        Assert.Equal("a1", withId.Subagent?.AgentId);
+        Assert.Equal("Explore", withId.Subagent?.AgentType);
+        Assert.Null(withId.Subagent?.Transcript); // a server's path means nothing here
+        Assert.Null(AgentHooks.StateFor(withId)); // a subagent stopping doesn't end the terminal's turn
+
+        // Older Claude Code without agent_id: still the event, with no subagent (the page then finishes its rows when
+        // the turn ends, js/subagents.js).
+        var without = AgentHooks.ParseRemote("tab-1", "SubagentStop", Base64("""{"session":"s1"}"""))!;
+        Assert.Equal("SubagentStop", without.Event);
+        Assert.Null(without.Subagent?.AgentId);
+    }
+
+    [Fact]
     public void Odd_remote_hooks_are_dropped()
     {
         Assert.Null(AgentHooks.ParseRemote("t", "", ""));

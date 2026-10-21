@@ -1,12 +1,12 @@
 // @ts-check
-// Claude Code's subagents as rows under their terminal in the sidebar: what each is, what it's doing, how long it's
-// been running, and whether it's done. From the hooks (PageHost posts "subagent"): an Agent call says what it starts
-// and, once it has, the subagent's id; SubagentStart and SubagentStop bracket it (SubagentStart doesn't always come);
-// its own tool events carry its id. See research_notes/claude-subagent-hooks.md.
+// Claude Code's subagents as rows under their terminal in the sidebar: what each is, what it's doing and how long it's
+// been running. From the hooks (PageHost posts "subagent"): an Agent call says what it starts and, once it has, the
+// subagent's id; SubagentStart and SubagentStop bracket it (SubagentStart doesn't always come); its own tool events
+// carry its id. A finished one shows its ✓ for a moment, then leaves the list. See research_notes/claude-subagent-hooks.md.
 
 import { HOST } from './protocol.js';
 import { onHost } from './host.js';
-import { state, on, activityChanged, EVENTS } from './store.js';
+import { state, on, activityChanged, EVENTS, TURN_ENDS } from './store.js';
 import { escapeHtml } from './ui.js';
 import { activityLine } from './agentline.js';
 import { dollars, costMode } from './cost.js';
@@ -28,29 +28,27 @@ const { costDisplay } = SETTING_VALUES;
  * @typedef {{ description: string | null, type: string | null, background: boolean }} Launch
  */
 
-/** How long a finished subagent keeps its own row before folding into "N done". */
-const SHOW_DONE_MS = 30_000;
-/** How long after that the sidebar redraws to fold it, so it's old by then. */
-const FOLD_AFTER_MS = 100;
+/** How long a finished subagent's row stays, with its ✓, before it leaves the list. */
+export const SHOW_DONE_MS = 4 * SECOND_MS;
 /** How often the running times tick. */
 const TICK_MS = SECOND_MS;
 
 /** A subagent row's state (also its class): running, done, or not known to have finished (the session ended). */
-const ROW_STATE = Object.freeze({ running: 'running', done: 'done', unknown: 'unknown' });
+export const ROW_STATE = Object.freeze({ running: 'running', done: 'done', unknown: 'unknown' });
 
 /**
- * A terminal's subagents (tab.subagents): the rows by agent id, the Agent calls waiting for their ids, and whether the
- * finished ones are unfolded.
- * @typedef {{ rows: Map<string, SubagentRow>, launches: Map<string, Launch>, open: boolean }} Subagents
+ * A terminal's subagents (tab.subagents): the rows by agent id, the Agent calls waiting for their ids, and the ids
+ * that have finished (a late event for one doesn't bring its row back).
+ * @typedef {{ rows: Map<string, SubagentRow>, launches: Map<string, Launch>, finished: Set<string> }} Subagents
  */
 
 /**
  * A terminal's subagents, kept here: the rows by agent id (oldest first), the Agent calls waiting for their
- * subagent's id (by tool use id: { description, type, background }), and whether the finished ones are unfolded.
+ * subagent's id (by tool use id: { description, type, background }), and the ids that have finished.
  * @param {Tab} tab
- * @returns {{ rows: Map<string, SubagentRow>, launches: Map<string, Launch>, open: boolean }}
+ * @returns {Subagents}
  */
-const subagentsOf = tab => (tab.subagents ??= { rows: new Map(), launches: new Map(), open: false });
+const subagentsOf = tab => (tab.subagents ??= { rows: new Map(), launches: new Map(), finished: new Set() });
 /** @param {Tab} tab */
 const listOf = tab => subagentsOf(tab).rows;
 /** @param {Tab} tab */
@@ -60,8 +58,10 @@ const launchesOf = tab => subagentsOf(tab).launches;
  * @param {Tab} tab
  * @param {string} agentId
  * @param {Partial<SubagentRow>} fields
+ * @returns {SubagentRow | null} null for a subagent that has already finished
  */
 function upsert(tab, agentId, fields) {
+  if (subagentsOf(tab).finished.has(agentId)) return null;
   const list = listOf(tab);
   const row = list.get(agentId) ?? { id: agentId, state: ROW_STATE.running, startedAt: Date.now() };
   Object.assign(row, Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined && v !== null)));
@@ -69,10 +69,31 @@ function upsert(tab, agentId, fields) {
   return row;
 }
 
+/**
+ * A subagent has finished (or, `how` unknown, isn't known to have): its row shows that for a moment, then goes.
+ * @param {Tab} tab
+ * @param {SubagentRow} row
+ * @param {string} how ROW_STATE.done or ROW_STATE.unknown
+ * @param {Partial<SubagentRow>} [fields]
+ */
+function finish(tab, row, how, fields = {}) {
+  Object.assign(row, fields, { state: how, endedAt: Date.now(), tool: null, line: null, needsYou: false });
+  subagentsOf(tab).finished.add(row.id);
+  setTimeout(() => {
+    if (listOf(tab).get(row.id) !== row) return;
+    listOf(tab).delete(row.id);
+    activityChanged(tab, true);
+  }, SHOW_DONE_MS);
+}
+
 onHost(HOST.subagent, m => {
   const tab = state.tabs.get(m.id);
   if (!tab) return;
-  if (m.event === HOOK_EVENT.preToolUse && !m.agentId && m.toolUseId) {
+  if (m.event === HOOK_EVENT.subagentStop && m.agentId) {
+    const row = upsert(tab, m.agentId, { type: m.agentType });
+    if (!row) return;
+    finish(tab, row, ROW_STATE.done, { result: m.message?.split(/\r?\n/).find(l => l.trim()) });
+  } else if (m.event === HOOK_EVENT.preToolUse && !m.agentId && m.toolUseId) {
     // The main conversation starts one: what it is, until the call says which id it got.
     launchesOf(tab).set(m.toolUseId, { description: m.description, type: m.subagentType, background: m.background });
   } else if (m.event === HOOK_EVENT.postToolUse && !m.agentId && m.toolUseId && m.launchedId) {
@@ -81,12 +102,10 @@ onHost(HOST.subagent, m => {
     upsert(tab, m.launchedId, { description: launch.description ?? m.description, type: launch.type ?? m.subagentType, background: launch.background ?? m.background });
   } else if (m.event === HOOK_EVENT.subagentStart && m.agentId) {
     upsert(tab, m.agentId, { type: m.agentType });
-  } else if (m.event === HOOK_EVENT.subagentStop && m.agentId) {
-    upsert(tab, m.agentId, { type: m.agentType, state: ROW_STATE.done, endedAt: Date.now(), tool: null, line: null, result: m.message?.split(/\r?\n/).find(l => l.trim()) });
-    setTimeout(() => activityChanged(tab, true), SHOW_DONE_MS + FOLD_AFTER_MS); // folds into "N done"
   } else if (m.agentId && (m.event === HOOK_EVENT.preToolUse || m.event === HOOK_EVENT.postToolUse)) {
     // The subagent's own tools: the one it's using now, as the activity line says it.
     const row = upsert(tab, m.agentId, { type: m.agentType });
+    if (!row) return;
     if (row.state === ROW_STATE.running) {
       row.tool = m.event === HOOK_EVENT.preToolUse ? m.tool : row.tool;
       row.line = m.event === HOOK_EVENT.preToolUse ? activityLine({ event: HOOK_EVENT.preToolUse, tool: m.tool, target: m.target }) : row.line;
@@ -101,19 +120,22 @@ onHost(HOST.subagent, m => {
   activityChanged(tab, true);
 });
 
-// The session ended: subagents still listed never said they finished.
+// The main conversation's turn ended (Stop, StopFailure) or a new one began: a foreground subagent still listed as
+// running missed its SubagentStop, so it's done. Background ones may still be at work. The session ended: none of
+// those still listed said they finished.
 onHost(HOST.agent, m => {
-  if (m.state !== AGENT_STATE.exited) return;
   const tab = state.tabs.get(m.id);
   if (!tab?.subagents?.rows.size) return;
-  for (const row of tab.subagents.rows.values()) if (row.state === ROW_STATE.running) Object.assign(row, { state: ROW_STATE.unknown, endedAt: Date.now() });
-  tab.subagents.launches.clear();
-  // The list clears a little later, so the end can still be seen.
-  setTimeout(() => {
-    if (tab.agent) return; // a new session started meanwhile
-    subagentsOf(tab).rows.clear();
-    activityChanged(tab, true);
-  }, SHOW_DONE_MS);
+  const exited = m.state === AGENT_STATE.exited;
+  const turnOver = TURN_ENDS.has(m.state) || /** @type {{ event?: string }} */ (m).event === HOOK_EVENT.userPromptSubmit;
+  if (!exited && !turnOver) return;
+  for (const row of tab.subagents.rows.values()) {
+    if (row.state !== ROW_STATE.running) continue;
+    if (exited) finish(tab, row, ROW_STATE.unknown);
+    else if (!row.background) finish(tab, row, ROW_STATE.done);
+  }
+  if (exited) tab.subagents.launches.clear();
+  activityChanged(tab, true);
 });
 
 /**
@@ -139,18 +161,13 @@ export const runningSubagents = tab =>
   [.../** @type {Iterable<SubagentRow>} */ (tab.subagents?.rows.values() ?? [])].filter(r => r.state === ROW_STATE.running).length;
 
 /**
- * The rows under a terminal in the sidebar: running and just-finished ones, then "N done" (it expands).
+ * The rows under a terminal in the sidebar: running ones, and those that have just finished.
  * @param {Tab} tab
  */
 export function subagentRowsHtml(tab) {
   const rows = [.../** @type {Iterable<SubagentRow>} */ (tab.subagents?.rows.values() ?? [])];
   if (!rows.length) return '';
   const now = Date.now();
-  /** @param {SubagentRow} r */
-  const isOld = r => r.state !== ROW_STATE.running && now - (r.endedAt ?? now) >= SHOW_DONE_MS;
-  const old = rows.filter(isOld).length;
-  const { open } = subagentsOf(tab);
-  const shown = open ? rows : rows.filter(r => !isOld(r));
   /** @param {SubagentRow} r */
   const row = r => {
     const title = [r.type, r.description, r.state === ROW_STATE.done && r.result ? `→ ${r.result}` : '', r.state === ROW_STATE.unknown ? 'not known to have finished' : '']
@@ -163,17 +180,7 @@ export function subagentRowsHtml(tab) {
       <span class="sub-time" data-since="${r.state === ROW_STATE.running ? r.startedAt : ''}">${clock((r.endedAt ?? now) - r.startedAt)}</span>
     </div>`;
   };
-  const fold = old ? `<div class="sub-row sub-fold" data-sub-fold="${tab.id}">${open ? 'Hide' : ''} ${old} done</div>` : '';
-  return `<div class="sub-rows">${shown.map(row).join('')}${fold}</div>`;
-}
-
-/**
- * "N done" expands (and folds back).
- * @param {Tab} tab
- */
-export function toggleFold(tab) {
-  subagentsOf(tab).open = !subagentsOf(tab).open;
-  activityChanged(tab, true);
+  return `<div class="sub-rows">${rows.map(row).join('')}</div>`;
 }
 
 // Running times tick without redrawing the sidebar.
@@ -185,6 +192,10 @@ setInterval(() => {
 }, TICK_MS);
 
 on(EVENTS.tabClosed, tab => tab?.subagents?.rows.clear());
+// A new session: its subagents' ids are new too.
+onHost(HOST.agent, m => {
+  if (/** @type {{ event?: string }} */ (m).event === HOOK_EVENT.sessionStart) state.tabs.get(m.id)?.subagents?.finished.clear();
+});
 
 // What a subagent has cost, from its own transcript.
 onHost(HOST.subagentCost, m => {
