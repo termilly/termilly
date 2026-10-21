@@ -33,8 +33,11 @@ internal abstract class GitRunner(IProcessRunner runner)
     /// <summary>git's output for <paramref name="args"/> in <paramref name="root"/>; IOException with git's message when it fails.</summary>
     public abstract byte[] Run(string root, IReadOnlyList<string> args);
 
-    /// <summary>A file in the working tree, at most <paramref name="maxBytes"/>; missing when it isn't there.</summary>
-    public abstract Blob ReadFile(string root, string path, long maxBytes);
+    /// <summary>
+    /// A file in the working tree, at most <paramref name="maxBytes"/>; missing when it isn't there. With
+    /// <paramref name="keepBytes"/>, its bytes are kept even when it's binary (<see cref="Blob.Raw"/>).
+    /// </summary>
+    public abstract Blob ReadFile(string root, string path, long maxBytes, bool keepBytes = false);
 
     /// <summary>Adds a line at the end of a file in the working tree (made if missing), on a line of its own.</summary>
     public abstract void AppendLine(string root, string path, string line);
@@ -91,7 +94,8 @@ internal sealed class LocalGitRunner(IProcessRunner runner) : GitRunner(runner)
     public override byte[] Run(string root, IReadOnlyList<string> args) =>
         Collect(new ProcessRequest(GitCommands.Program, [.. Options, .. args]) { WorkingDirectory = root, Environment = Environment }, GitCommands.Program);
 
-    public override Blob ReadFile(string root, string path, long maxBytes) => Blob.Read(Path.Combine(root, path), maxBytes);
+    public override Blob ReadFile(string root, string path, long maxBytes, bool keepBytes = false) =>
+        Blob.Read(Path.Combine(root, path), maxBytes, keepBytes);
 
     public override void AppendLine(string root, string path, string line)
     {
@@ -195,7 +199,7 @@ internal sealed class SshGitRunner(IProcessRunner runner, string sshArguments, I
 
     public override byte[] Run(string root, IReadOnlyList<string> args) => Remote(GitCommand(root, args));
 
-    public override Blob ReadFile(string root, string path, long maxBytes)
+    public override Blob ReadFile(string root, string path, long maxBytes, bool keepBytes = false)
     {
         var file = Quote($"{root.TrimEnd('/')}/{path}");
         byte[] bytes;
@@ -208,7 +212,7 @@ internal sealed class SshGitRunner(IProcessRunner runner, string sshArguments, I
         {
             return Blob.Missing;
         }
-        return bytes.Length > maxBytes ? new Blob(true, null, false, true, bytes.Length) : Blob.From(bytes, maxBytes);
+        return bytes.Length > maxBytes ? new Blob(true, null, false, true, bytes.Length) : Blob.From(bytes, maxBytes, keepBytes);
     }
 
     public override void AppendLine(string root, string path, string line)

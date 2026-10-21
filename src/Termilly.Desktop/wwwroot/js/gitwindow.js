@@ -10,7 +10,7 @@
 import { PAGE } from './protocol.js';
 import { request } from './host.js';
 import { state, on, emit, isSsh, wsById, tabTitle, EVENTS } from './store.js';
-import { toggleWrap } from './preview.js';
+import { toggleWrap, fileSize } from './preview.js';
 import { debounce } from './util.js';
 import { restoreFocus } from './panes.js';
 import { closeAll, showMenu, SEPARATOR } from './popups.js';
@@ -77,9 +77,11 @@ const { changeLayout, changeNewFile, changeView } = SETTING_VALUES;
  * @typedef {{ kind: string, side?: string, path?: string, hash?: string, ref?: string, hit?: string | null }} Selection
  */
 /**
- * A diff as GitView.cs sends it: the change preview's data, and what's said about it.
+ * A diff as GitView.cs sends it: the change preview's data, and what's said about it. An image comes as pictures
+ * too (data: URLs).
  * @typedef {import('./diffrows.js').DiffData & { display?: string | null, error?: string | null,
- *   note?: string | null, added?: number, removed?: number, eolOnly?: boolean }} GitDiff
+ *   note?: string | null, added?: number, removed?: number, eolOnly?: boolean, beforeSize?: number,
+ *   afterSize?: number, beforeImage?: string | null, afterImage?: string | null }} GitDiff
  */
 /**
  * The diff shown: what was asked, the answer, the folds opened, and where it's drawn; for a search's hit, the whole
@@ -860,6 +862,13 @@ function drawDiff() {
     + `${data.kind !== CHANGE_KIND.modified ? `<span class="pv-badge" data-kind="${data.kind}">${data.kind === CHANGE_KIND.created ? 'new' : data.kind}</span>` : ''}`
     + `<span class="pv-stats">${data.added || data.removed ? `<span class="pv-plus">+${data.added}</span> <span class="pv-minus">−${data.removed}</span>` : ''}</span>`
     + `<span class="seg pv-seg"><button class="${wrap ? 'on' : ''}" data-gw-wrap title="Wrap long lines">Wrap</button></span></div>`;
+  const pictures = imagesHtml(data);
+  // A binary image is only its pictures; an SVG's text diff follows them.
+  if (pictures && data.before == null && data.after == null) {
+    target.innerHTML = `${head}<div class="pv-scroll gw-diff">${pictures}</div>`;
+    measureImages(target);
+    return null;
+  }
   if (message) {
     target.innerHTML = `${head}<div class="gw-message">${escapeHtml(message)}</div>`;
     return null;
@@ -875,8 +884,45 @@ function drawDiff() {
     rows = rows.slice(0, MAX_ROWS);
   }
   target.innerHTML = `${head}${notes.length ? `<div class="pv-note">${escapeHtml(notes.join(' '))}</div>` : ''}`
-    + `<div class="pv-scroll gw-diff${sideBySide && !whole ? ' sbs' : ''}${wrap ? ' wrap' : ''}"><div class="pv-rows">${rows.map(diffRowHtml).join('')}</div></div>`;
+    + `<div class="pv-scroll gw-diff${sideBySide && !whole ? ' sbs' : ''}${wrap ? ' wrap' : ''}">${pictures}<div class="pv-rows">${rows.map(diffRowHtml).join('')}</div></div>`;
+  if (pictures) measureImages(target);
   return hit && searching() ? markInDiff(target, hit.line) : null;
+}
+
+/**
+ * An image's versions side by side (one for a new or deleted file), on a checkerboard so transparency shows, each
+ * with its size; '' for a file that isn't an image.
+ * @param {GitDiff} data
+ */
+function imagesHtml(data) {
+  const both = !!data.beforeImage && !!data.afterImage;
+  /**
+   * @param {string | null | undefined} src
+   * @param {string} label
+   * @param {number | undefined} bytes
+   */
+  const picture = (src, label, bytes) => src ? `<figure class="gw-image">
+      <div class="gw-image-box"><img src="${escapeHtml(src)}" alt="${escapeHtml(label)}"></div>
+      <figcaption>${both ? `<b>${escapeHtml(label)}</b> · ` : ''}<span data-image-size></span>${fileSize(bytes ?? 0)}</figcaption>
+    </figure>` : '';
+  const shown = picture(data.beforeImage, 'Before', data.beforeSize) + picture(data.afterImage, 'After', data.afterSize);
+  return shown ? `<div class="gw-images">${shown}</div>` : '';
+}
+
+/**
+ * Adds each picture's width and height to its caption once it has loaded.
+ * @param {Element} target
+ */
+function measureImages(target) {
+  for (const img of target.querySelectorAll('.gw-image img')) {
+    const image = /** @type {HTMLImageElement} */ (img);
+    const show = () => {
+      const size = image.closest('.gw-image')?.querySelector('[data-image-size]');
+      if (size && image.naturalWidth) size.textContent = `${image.naturalWidth} × ${image.naturalHeight} px · `;
+    };
+    if (image.complete) show();
+    else image.addEventListener('load', show, { once: true });
+  }
 }
 
 // A folded run of unchanged lines opens on a click.

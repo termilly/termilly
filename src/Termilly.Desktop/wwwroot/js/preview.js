@@ -513,7 +513,7 @@ function renderRows(data) {
 function messageFor(data) {
   if (!data) return 'Nothing to show.';
   if (data.error) return data.error;
-  if (data.kind === CHANGE_KIND.binary) return `Binary file: ${size(/** @type {number} */ (data.beforeSize))} → ${size(/** @type {number} */ (data.afterSize))}. Show it in ${platform === PLATFORM.windows ? 'Explorer' : 'the file manager'} to open it.`;
+  if (data.kind === CHANGE_KIND.binary) return `Binary file: ${fileSize(/** @type {number} */ (data.beforeSize))} → ${fileSize(/** @type {number} */ (data.afterSize))}. Show it in ${platform === PLATFORM.windows ? 'Explorer' : 'the file manager'} to open it.`;
   if (data.kind === CHANGE_KIND.large) return data.note ?? 'Too large to preview.';
   if (!data.ops?.length) return data.after === '' || data.before === '' ? 'The file is empty.' : null;
   return null;
@@ -523,8 +523,8 @@ function messageFor(data) {
 const KB_BYTES = 1024;
 const MB_BYTES = 1 << 20;
 
-/** @param {number} bytes */
-const size = bytes => (bytes >= MB_BYTES ? `${(bytes / MB_BYTES).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / KB_BYTES))} KB`);
+/** A file size as people read it: KB, or MB from a megabyte. @param {number} bytes */
+export const fileSize = bytes => (bytes >= MB_BYTES ? `${(bytes / MB_BYTES).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / KB_BYTES))} KB`);
 
 function drawVisible() {
   if (!virtual || !rows.length) return;

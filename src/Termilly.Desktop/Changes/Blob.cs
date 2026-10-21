@@ -21,8 +21,14 @@ internal sealed record Blob(bool Exists, byte[]? Bytes, bool Binary, bool TooLar
 
     public bool IsText => Exists && Bytes is not null;
 
+    /// <summary>
+    /// The file's bytes, text or binary, when they were asked for (an image the Git window shows); null otherwise, so
+    /// the change preview's copies keep only text.
+    /// </summary>
+    public byte[]? Raw { get; init; }
+
     /// <summary>Reads a file without getting in the way of whoever is writing it.</summary>
-    public static Blob Read(string path, long maxBytes)
+    public static Blob Read(string path, long maxBytes, bool keepBytes = false)
     {
         try
         {
@@ -38,7 +44,7 @@ internal sealed record Blob(bool Exists, byte[]? Bytes, bool Binary, bool TooLar
             using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
             using var copy = new MemoryStream((int)Math.Min(info.Length, maxBytes));
             stream.CopyTo(copy);
-            return From(copy.ToArray(), maxBytes);
+            return From(copy.ToArray(), maxBytes, keepBytes);
         }
         catch (Exception e) when (Storage.IsFileError(e) || e is ArgumentException or NotSupportedException)
         {
@@ -46,7 +52,7 @@ internal sealed record Blob(bool Exists, byte[]? Bytes, bool Binary, bool TooLar
         }
     }
 
-    public static Blob From(byte[] bytes, long maxBytes)
+    public static Blob From(byte[] bytes, long maxBytes, bool keepBytes = false)
     {
         if (bytes.Length > maxBytes)
         {
@@ -55,9 +61,10 @@ internal sealed record Blob(bool Exists, byte[]? Bytes, bool Binary, bool TooLar
         var head = bytes.AsSpan(0, Math.Min(bytes.Length, SniffBytes));
         // UTF-16 text has NULs too; its byte order mark says it is text.
         var utf16 = head.StartsWith(Utf16LittleEndianMark) || head.StartsWith(Utf16BigEndianMark);
-        return !utf16 && head.Contains((byte)0)
+        var blob = !utf16 && head.Contains((byte)0)
             ? new Blob(true, null, true, false, bytes.Length)
             : new Blob(true, bytes, false, false, bytes.Length);
+        return keepBytes ? blob with { Raw = bytes } : blob;
     }
 
     public static Blob FromText(string text, long maxBytes) => From(Encoding.UTF8.GetBytes(text), maxBytes);

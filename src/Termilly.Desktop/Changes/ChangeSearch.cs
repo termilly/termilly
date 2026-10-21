@@ -22,7 +22,7 @@ internal static class ChangeSearch
     /// </summary>
     public static IReadOnlyList<ChangeHit> Search(IEnumerable<ChangeItem> files, string query, long maxBytes, Func<string, long, Blob>? read = null)
     {
-        read ??= Blob.Read;
+        read ??= (path, max) => Blob.Read(path, max);
         var hits = new List<ChangeHit>();
         if (string.IsNullOrWhiteSpace(query))
         {

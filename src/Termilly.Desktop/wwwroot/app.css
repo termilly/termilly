@@ -2239,6 +2239,14 @@ textarea.field { height: auto; padding: 7px 10px; line-height: 1.5; resize: vert
 .gw-diff-path { flex: 1; min-width: 0; overflow: hidden; color: var(--text); font: 12px var(--mono); text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
 .gw-diff-head .pv-badge { flex: none; margin: 0; }
 .gw-diff { flex: 1; }
+/* An image's versions (js/gitwindow.js imagesHtml): side by side, fitted, on a checkerboard so transparency shows. */
+.gw-images { display: flex; flex-wrap: wrap; gap: 16px; padding: 16px; border-bottom: 1px solid var(--border); }
+.gw-image { display: flex; flex: 1 1 240px; flex-direction: column; align-items: center; gap: 8px; min-width: 0; margin: 0; }
+.gw-image-box { display: flex; align-items: center; justify-content: center; max-width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 6px;
+  background: repeating-conic-gradient(var(--hover) 0 25%, var(--surface) 0 50%) 0 0 / 16px 16px; }
+.gw-image-box img { display: block; max-width: 100%; max-height: 60vh; object-fit: contain; image-rendering: auto; }
+.gw-image figcaption { color: var(--muted); font-size: 12px; text-align: center; }
+.gw-image figcaption b { color: var(--text); font-weight: 600; }
 .gw-commit-info { flex: none; padding: 12px 14px 10px; border-bottom: 1px solid var(--border); }
 .gw-commit-subject { color: var(--text-strong); font-size: 14px; font-weight: 600; line-height: 1.4; }
 .gw-commit-body { max-height: 140px; margin: 8px 0 0; overflow: auto; color: var(--text); font: 12px/1.5 var(--mono); white-space: pre-wrap; }

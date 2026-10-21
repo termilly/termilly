@@ -82,10 +82,14 @@ internal sealed class FileChange(string path, string tool)
     }
 }
 
-/// <summary>What the preview shows for one file: both texts, the diff between them, and why it may be partial.</summary>
+/// <summary>
+/// What the preview shows for one file: both texts, the diff between them, and why it may be partial. The Git window
+/// adds an image's two versions as pictures (data: URLs; null where there's none).
+/// </summary>
 internal sealed record ChangeView(
     string Path, string Display, string Kind, string? Before, string? After, IReadOnlyList<int[]> Ops, int Added,
-    int Removed, bool EolOnly, long BeforeSize, long AfterSize, int Edits, string Source, string? Note, string? Error);
+    int Removed, bool EolOnly, long BeforeSize, long AfterSize, int Edits, string Source, string? Note, string? Error,
+    string? BeforeImage = null, string? AfterImage = null);
 
 /// <summary>A file in a pane's list of changed files.</summary>
 internal sealed record ChangeItem(
