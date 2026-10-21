@@ -7,7 +7,7 @@
 # It does nothing outside Termilly: only a terminal Termilly opened sets LC_TERMILLY, and ssh passes LC_* on.
 # A shell Termilly started on this machine (TERM_PROGRAM, which ssh doesn't pass) has its own integration.
 
-TERMILLY_REMOTE_VERSION=3
+TERMILLY_REMOTE_VERSION=4
 
 [ "${LC_TERMILLY-}" = 1 ] || return 0
 [ "${TERM_PROGRAM-}" != Termilly ] || return 0

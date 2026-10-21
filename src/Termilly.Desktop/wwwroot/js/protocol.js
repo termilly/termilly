@@ -306,7 +306,7 @@ export const HOST = Object.freeze({
 /** @typedef {{ requestId?: string|null, repo?: string|null, path?: string|null, branch?: string|null }} Page_worktreeStatus */
 
 /** @typedef {{ id: string, state: string, message: string|null, session: string|null, source: string }} Host_agent_0 */
-/** @typedef {{ id: string, state: string, event: string, tool: string|null, message: string|null, reason: string|null, session: string|null, target: string|null, source: string }} Host_agent_1 */
+/** @typedef {{ id: string, state: string, event: string, tool: string|null, message: string|null, reason: string|null, session: string|null, target: string|null, folder: string|null, source: string }} Host_agent_1 */
 /** @typedef {Host_agent_0|Host_agent_1} Host_agent */
 /** @typedef {{  }} Host_agentsNext */
 /** @typedef {{ message: string }} Host_aiError */

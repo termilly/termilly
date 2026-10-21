@@ -29,6 +29,8 @@ internal static class HookMessage
         public const string File = "file";
         public const string Cwd = "cwd";
         public const string Dirs = "dirs";
+        // SessionStart: the folder the session belongs to, as its shell sees it (also on a server), for resuming it.
+        public const string Folder = "folder";
 
         // A subagent's events, and an Agent call.
         public const string AgentId = "agentId";

@@ -149,7 +149,7 @@ internal sealed class AgentMonitor : IStartable, IDisposable
             {
                 RefreshPlan(); // the plan's name shows before the first limits do
             }
-            _page.Post(new ToPage.HookedAgent(e.Pane, state, e.Event, e.Tool, e.Message, e.Reason, e.Session, e.Target ?? e.File));
+            _page.Post(new ToPage.HookedAgent(e.Pane, state, e.Event, e.Tool, e.Message, e.Reason, e.Session, e.Target ?? e.File, e.Folder));
         }
         if (e.Status?.Limits is { } limits && limitsShown)
         {

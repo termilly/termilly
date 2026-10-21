@@ -52,9 +52,13 @@ internal static partial class ToPage
         public string Source { get; } = AgentSources.Poll;
     }
 
-    /// <summary>An agent's state from one of its hooks; <see cref="Target"/> is the file or command it works on.</summary>
+    /// <summary>
+    /// An agent's state from one of its hooks; <see cref="Target"/> is the file or command it works on, and
+    /// <see cref="Folder"/> (SessionStart) the folder its session belongs to, where it resumes.
+    /// </summary>
     internal sealed record HookedAgent(
-        string Id, string State, string Event, string? Tool, string? Message, string? Reason, string? Session, string? Target) : IHostMessage
+        string Id, string State, string Event, string? Tool, string? Message, string? Reason, string? Session, string? Target,
+        string? Folder) : IHostMessage
     {
         public static string Type => "agent";
 

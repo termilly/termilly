@@ -28,6 +28,14 @@ public sealed class RemoteIntegrationTests
     }
 
     [Fact]
+    public void A_remote_session_start_keeps_the_servers_folder_for_resuming()
+    {
+        var e = AgentHooks.ParseRemote("tab-1", "SessionStart", Base64("""{"session":"s1","folder":"/home/me/project"}"""))!;
+        Assert.Equal("/home/me/project", e.Folder); // typed back at the server's prompt after a restart (js/resume.js)
+        Assert.Null(e.Cwd);
+    }
+
+    [Fact]
     public void A_remote_subagent_stop_names_its_subagent_when_the_hook_sent_one()
     {
         var withId = AgentHooks.ParseRemote("tab-1", "SubagentStop", Base64("""{"session":"s1","agentId":"a1","agentType":"Explore","message":"Found it"}"""))!;

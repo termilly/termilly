@@ -469,6 +469,8 @@ onHost(HOST.agent, m => {
       line: activityLine(m) ?? tab.agent?.line ?? null,
       // Whether this session has had a turn: only then is there a conversation to resume (hibernate.js).
       hadTurn: (tab.agent?.hadTurn && (m.session ?? tab.agent?.session) === tab.agent?.session) || /** @type {string[]} */ ([AGENT_STATE.working, AGENT_STATE.needsInput, AGENT_STATE.done, AGENT_STATE.error]).includes(m.state),
+      // Where it resumes after a restart (snapshot.js): SessionStart says, the events after it don't.
+      folder: /** @type {Partial<Host_agent_1>} */ (m).folder ?? tab.agent?.folder ?? null,
     };
   agentChanged(tab);
 });

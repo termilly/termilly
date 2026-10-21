@@ -64,14 +64,16 @@ export function enforceLimit() {
  * @param {Tab} tab
  * @param {string} session
  * @param {number} [at]
+ * @param {string | null} [folder] the folder the session belongs to
  */
-export function markHibernated(tab, session, at = Date.now()) {
-  tab.hibernated = { session, at };
+export function markHibernated(tab, session, at = Date.now(), folder = null) {
+  tab.hibernated = { session, at, folder };
 }
 
 /** @param {Tab} tab A live terminal (see live): its agent has a session id. */
 function hibernate(tab) {
-  markHibernated(tab, /** @type {string} */ (/** @type {AgentInfo} */ (tab.agent).session));
+  const agent = /** @type {AgentInfo} */ (tab.agent);
+  markHibernated(tab, /** @type {string} */ (agent.session), Date.now(), agent.folder);
   // Esc clears anything half-typed at Claude Code's prompt; /exit ends the session (SessionEnd clears tab.agent).
   send(PAGE.input, { id: tab.id, data: '\x1b' });
   setTimeout(() => send(PAGE.input, { id: tab.id, data: '/exit\r' }), EXIT_DELAY_MS);

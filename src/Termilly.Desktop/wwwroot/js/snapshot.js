@@ -26,6 +26,12 @@ const SESSION_ID = /^[0-9a-f][0-9a-f-]{7,63}$/i;
  */
 const scrollOf = s => (Number.isInteger(s.scroll) && s.scroll > 0 ? s.scroll : null);
 
+/**
+ * The folder a saved terminal's Claude Code session belongs to, or null: a path without control characters.
+ * @param {any} s
+ */
+const folderOf = s => (typeof s.agentFolder === 'string' && s.agentFolder && !/[\x00-\x1f\x7f]/.test(s.agentFolder) ? s.agentFolder : null);
+
 /** What each open terminal shows now, in SessionSnapshot's shape. */
 function snapshot() {
   /** @type {Record<string, object>} */
@@ -39,6 +45,7 @@ function snapshot() {
       lines,
       scroll: scrolledBack(tab, lines), // null at the bottom
       agentSession: session && SESSION_ID.test(session) ? session : null,
+      agentFolder: tab.agent?.folder ?? tab.hibernated?.folder ?? null,
       hibernated: !tab.agent?.session && !!tab.hibernated,
     };
   }
@@ -67,8 +74,12 @@ export function applySnapshot(saved) {
     if (!s) continue;
     if (Array.isArray(s.lines) && s.lines.length) prepareStart(tab, { output: { lines: s.lines, closedAt: saved.savedAt, resurrected: true, scroll: scrollOf(s) } });
     const session = s.agentSession && SESSION_ID.test(s.agentSession) ? s.agentSession : null;
+    const folder = session ? folderOf(s) : null;
+    // The session resumes in its own folder: the shell may have moved on from it (`cd x && claude`) before the
+    // prompt that would have said so. Over SSH that folder is typed (resume.js), so it's checked here.
+    if (folder) tab.lastCwd = folder;
     if (session && s.hibernated) {
-      markHibernated(tab, session, saved.savedAt);
+      markHibernated(tab, session, saved.savedAt, folder);
     } else if (session) {
       prepareStart(tab, { resumeSession: session, command: `claude --resume ${session}` });
     }
