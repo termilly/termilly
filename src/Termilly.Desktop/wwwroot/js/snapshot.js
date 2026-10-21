@@ -8,7 +8,7 @@
 import { PAGE, HOST } from './protocol.js';
 import { send, onHost } from './host.js';
 import { state } from './store.js';
-import { bufferLines, prepareStart } from './terminals.js';
+import { bufferLines, scrolledBack, prepareStart } from './terminals.js';
 import { markHibernated } from './hibernate.js';
 import { SETTING_VALUES } from './constants.js';
 
@@ -19,6 +19,16 @@ const EVERY = 30000;
 const LINES = 500;
 const SESSION_ID = /^[0-9a-f][0-9a-f-]{7,63}$/i;
 
+/**
+ * Where a saved terminal was scrolled to: lines back from the end, null at the bottom, undefined when the snapshot
+ * doesn't say (one from before 1.1.0).
+ * @param {any} s
+ */
+const scrollOf = s => {
+  if (Number.isInteger(s.scroll) && s.scroll > 0) return s.scroll;
+  return s.scroll === null ? null : undefined;
+};
+
 /** What each open terminal shows now, in SessionSnapshot's shape. */
 function snapshot() {
   /** @type {Record<string, object>} */
@@ -27,8 +37,10 @@ function snapshot() {
     if (!tab.view?.term || tab.noHistory) continue;
     // A session still waiting to resume (its shell hasn't shown a prompt yet) is kept for the next start too.
     const session = tab.agent?.session ?? tab.hibernated?.session ?? tab.start?.resumeSession;
+    const lines = bufferLines(tab, LINES);
     tabs[tab.id] = {
-      lines: bufferLines(tab, LINES),
+      lines,
+      scroll: scrolledBack(tab, lines), // null at the bottom
       agentSession: session && SESSION_ID.test(session) ? session : null,
       hibernated: !tab.agent?.session && !!tab.hibernated,
     };
@@ -56,7 +68,7 @@ export function applySnapshot(saved) {
   for (const tab of state.tabs.values()) {
     const s = saved.tabs[tab.id];
     if (!s) continue;
-    if (Array.isArray(s.lines) && s.lines.length) prepareStart(tab, { output: { lines: s.lines, closedAt: saved.savedAt, resurrected: true } });
+    if (Array.isArray(s.lines) && s.lines.length) prepareStart(tab, { output: { lines: s.lines, closedAt: saved.savedAt, resurrected: true, scroll: scrollOf(s) } });
     const session = s.agentSession && SESSION_ID.test(s.agentSession) ? s.agentSession : null;
     if (session && s.hibernated) {
       markHibernated(tab, session, saved.savedAt);

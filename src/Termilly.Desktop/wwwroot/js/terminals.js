@@ -211,15 +211,24 @@ export function openTerminal(tab) {
   wireProgramRequests(tab, term);
   wireOutputWatch(tab, term);
 
-  const restored = !!tab.start?.output;
-  if (restored) writeRestoredOutput(tab);
+  const view = tab.start?.output ? writeRestoredOutput(tab) : null;
   scanFrom(tab, term.buffer.normal.baseY + term.buffer.normal.cursorY); // old output isn't news for triggers
   startShell(tab);
-  if (restored) {
-    // The new shell clears its screen on start; once it has, scroll up so the restored output shows
-    // above the new prompt. Typing snaps back to the prompt.
-    setTimeout(() => term.scrollLines(-Math.floor(term.rows * RESTORED_SCROLL)), RESTORED_SCROLL_AFTER_MS);
-  }
+  // The new shell clears its screen on start; once it has, scroll to where the terminal was.
+  if (view) setTimeout(() => view.then(top => scrollRestored(term, top)), RESTORED_SCROLL_AFTER_MS);
+}
+
+/**
+ * Scrolls a restored terminal: to the buffer row that was at the top of its view, to the bottom (the new prompt)
+ * when it was at the bottom, or, when that isn't known (a closed terminal reopened), up so the restored output
+ * shows above the new prompt. Typing snaps back to the prompt.
+ * @param {any} term xterm
+ * @param {number | null | undefined} top
+ */
+function scrollRestored(term, top) {
+  if (top === undefined) term.scrollLines(-Math.floor(term.rows * RESTORED_SCROLL));
+  else if (top === null) term.scrollToBottom();
+  else term.scrollToLine(top);
 }
 
 /**
@@ -505,8 +514,8 @@ onHost(HOST.startFolder, m => {
 
 /**
  * What a terminal does as its shell starts (tab.start); see startOf.
- * @typedef {{ output: { lines: string[], closedAt: number, resurrected?: boolean } | null, command: string | null,
- *   resumeSession: string | null, done: boolean }} ShellStart
+ * @typedef {{ output: { lines: string[], closedAt: number, resurrected?: boolean, scroll?: number | null } | null,
+ *   command: string | null, resumeSession: string | null, done: boolean }} ShellStart
  */
 
 /**
@@ -882,14 +891,22 @@ export function disposeTerminal(tab) {
  * Shows a reopened session's saved output, dimmed, then scrolls it up out of the viewport so the new
  * shell starts on a clean screen with the old output in the scrollback above it. After a restart that's all: the
  * terminals coming back is what Termilly does, so nothing announces it. A closed terminal reopened says when it closed.
+ * Resolves, once written, to the buffer row that was at the top of the view (null: it was at the bottom; undefined:
+ * not known).
  * @param {Tab} tab
+ * @returns {Promise<number | null | undefined>}
  */
 function writeRestoredOutput(tab) {
   const { term } = /** @type {TabView} */ (tab.view);
   const start = startOf(tab);
   // Called only when there's output to bring back.
-  const { lines, closedAt, resurrected } = /** @type {NonNullable<ShellStart['output']>} */ (start.output);
-  term.write(`\x1b[2m${lines.join('\r\n')}\x1b[0m\r\n`);
+  const { lines, closedAt, resurrected, scroll } = /** @type {NonNullable<ShellStart['output']>} */ (start.output);
+  /** @type {Promise<number | null | undefined>} */
+  const top = new Promise(resolve => {
+    term.write(`\x1b[2m${lines.join('\r\n')}\x1b[0m\r\n`, () => {
+      resolve(typeof scroll === 'number' ? rowOfLine(term.buffer.normal, Math.max(0, lines.length - scroll)) : scroll);
+    });
+  });
   if (!resurrected) {
     const when = new Date(closedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
     const color = `\x1b[${isLight() ? '38;2;109;92;240' : '38;2;139;123;255'}m`;
@@ -899,6 +916,35 @@ function writeRestoredOutput(tab) {
   // cursor is too: otherwise programs that place the cursor (PSReadLine) draw on the wrong row, or crash.
   term.write(`${'\r\n'.repeat(term.rows)}\x1b[H`);
   start.output = null;
+  return top;
+}
+
+/**
+ * The buffer row line `n` starts on (rows the terminal wrapped belong to the line before), counting from row 0.
+ * @param {any} buffer xterm's buffer
+ * @param {number} n
+ */
+function rowOfLine(buffer, n) {
+  let line = -1;
+  for (let y = 0; y < buffer.length; y++) {
+    if (!buffer.getLine(y)?.isWrapped) line++;
+    if (line === n) return y;
+  }
+  return buffer.length - 1;
+}
+
+/**
+ * How far back the terminal is scrolled, for bringing it back after a restart: how many of `lines` (bufferLines),
+ * counted from the end, the line at the top of the view is. Null when it's at the bottom.
+ * @param {Tab} tab
+ * @param {BufferLines} lines
+ */
+export function scrolledBack(tab, lines) {
+  const buffer = tab.view?.term?.buffer.active;
+  if (!buffer || buffer.viewportY >= buffer.baseY || !lines.rows?.length) return null;
+  let i = lines.rows.length - 1;
+  while (i > 0 && lines.rows[i] > buffer.viewportY) i--;
+  return lines.length - i;
 }
 
 /**
