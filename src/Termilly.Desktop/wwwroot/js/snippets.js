@@ -107,12 +107,16 @@ export async function sendSnippet(snippet, values, targets) {
   const live = targets.filter(t => !t.exited);
   if (!live.length) return null;
   if (!(await confirmProduction(live, 'Run the snippet', text))) return null;
-  for (const tab of live) send(PAGE.input, { id: tab.id, data: `${text}${snippet.enter === false ? '' : '\r'}` });
+  // Each line ends with Enter, as typed: a bare \n is Ctrl+Enter to PSReadLine, which opens a line above, so the
+  // lines would run in reverse.
+  const data = `${text.replace(/\r?\n/g, '\r')}${snippet.enter === false ? '' : '\r'}`;
+  for (const tab of live) send(PAGE.input, { id: tab.id, data });
   return live;
 }
 
 /**
  * Runs a snippet from the UI: asks for its placeholders and where it goes (when there's a choice), then sends.
+ * Returns the terminals it went to, or null when it was cancelled.
  * @param {Snippet} snippet
  * @param {{ tab?: Tab | null, where?: string }} [options]
  */
@@ -123,12 +127,13 @@ export async function runSnippet(snippet, { tab = focusedTab(), where } = {}) {
   let values = {};
   if (names.length || (!where && options.length > 1)) {
     const answer = await askValues(snippet, names, options);
-    if (!answer) return;
+    if (!answer) return null;
     values = answer.values;
     where = answer.where;
   }
   const sent = await sendSnippet(snippet, values, targetsFor(where ?? TARGET.focused, tab));
   if (sent?.length === 1) sent[0].view?.term.focus();
+  return sent;
 }
 
 /**

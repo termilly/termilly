@@ -80,8 +80,9 @@ function take() {
   if (!snippet) return;
   const tab = /** @type {Tab} */ (held.tab);
   clear();
-  untouched.delete(tab); // a snippet that doesn't press Enter leaves its text at the prompt
-  runSnippetIn(snippet, tab);
+  // A snippet that doesn't press Enter leaves its text at the prompt. Cancelled, the prompt is still empty and
+  // `snippet:` works there again.
+  runSnippetIn(snippet, tab).then(sent => { if (sent) untouched.delete(tab); });
 }
 
 setInputHook((tab, term, e) => {
