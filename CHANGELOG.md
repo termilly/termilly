@@ -2,7 +2,7 @@
 
 What changed in each release. Termilly says in its title bar when a newer one is out.
 
-## 1.1.0 (unreleased)
+## 1.1.0 (2026-10-21)
 
 - **Updates from inside Termilly:** Download and install, then Restart to update. The installer is checked against the signed release before it runs, and nothing happens until you choose it. Updating from 1.0.0 still goes through the browser once.
 - **Copy and paste in terminals:** Ctrl+C copies a selection (without one it stops the command), Ctrl+Shift+C and Ctrl+Insert copy, Ctrl+V, Ctrl+Shift+V and Shift+Insert paste, a right-click menu, and Copy on select in Settings › Terminal.
