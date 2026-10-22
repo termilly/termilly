@@ -322,10 +322,28 @@ public sealed class SessionProfileTests : IDisposable
     public void Cmd_marks_its_prompt_around_the_one_it_shows()
     {
         var cmd = new SessionProfile("cmd", "Command Prompt", "", "cmd", "cmd.exe", ProfileSources.Local);
-        var (commandLine, vars) = SessionLaunch.WithShellIntegration(cmd, new Dictionary<string, string> { ["PROMPT"] = "$T $P$G" });
+        var noScript = Path.Combine(_dir, "missing.ps1");
+        var (commandLine, vars) = SessionLaunch.WithShellIntegration(cmd, new Dictionary<string, string> { ["PROMPT"] = "$T $P$G" }, noScript);
         Assert.Equal("cmd.exe", commandLine);
         Assert.Equal(@"$e]133;A$e\$T $P$G$e]133;B$e\", vars["PROMPT"]);
         Assert.Equal(@"$e]133;A$e\$P$G$e]133;B$e\", SessionLaunch.CmdPrompt(null));
+    }
+
+    [Fact]
+    public void PowerShell_typed_at_cmds_prompt_loads_the_integration_script()
+    {
+        var script = Path.Combine(_dir, "it's", "termilly.ps1");
+        Directory.CreateDirectory(Path.GetDirectoryName(script)!);
+        File.WriteAllText(script, "");
+        var cmd = new SessionProfile("cmd", "Command Prompt", "", "cmd", "cmd.exe", ProfileSources.Local);
+
+        var (commandLine, vars) = SessionLaunch.WithShellIntegration(cmd, new Dictionary<string, string>(), script);
+
+        var load = SessionLaunch.PowerShellIntegrationCommand(script);
+        Assert.Equal(
+            $"cmd.exe /k \"doskey powershell=if [$1]==[] (powershell -NoExit -Command \"{load}\") else powershell $*"
+            + $" & doskey pwsh=if [$1]==[] (pwsh -NoExit -Command \"{load}\") else pwsh $*\"", commandLine);
+        Assert.Equal("1", vars["TERMILLY_SHELL_INTEGRATION"]);
     }
 
     [Fact]

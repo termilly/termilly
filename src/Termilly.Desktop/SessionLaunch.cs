@@ -16,6 +16,8 @@ internal static class SessionLaunch
         public const string WslEnv = "WSLENV";
         /// <summary>Off Windows, the agent folder, which bash's prompt puts back first on PATH.</summary>
         public const string AgentDir = "TERMILLY_AGENT_DIR";
+        /// <summary>Tells shell\termilly.ps1 to load: without it the script does nothing.</summary>
+        public const string ShellIntegration = "TERMILLY_SHELL_INTEGRATION";
     }
 
     /// <summary>The variables bash reads its prompt marks from (<see cref="AddBashMarks"/>).</summary>
@@ -36,6 +38,8 @@ internal static class SessionLaunch
     {
         public const string Prompt = "PROMPT";
         public const string Default = "$P$G";
+        /// <summary>The PowerShells that, typed at cmd's prompt, start with Termilly's integration (<see cref="CmdWithPowerShell"/>).</summary>
+        public static readonly string[] PowerShells = ["powershell", "pwsh"];
     }
 
     /// <summary>WSLENV's flag for a variable that goes from Windows into WSL only, as it is.</summary>
@@ -132,8 +136,9 @@ internal static class SessionLaunch
     /// Termilly sees a command running even when it starts no process. PowerShell dot-sources shell\termilly.ps1
     /// after the user's profile; bash (Git Bash, and WSL through WSLENV) reads PS0 and PROMPT_COMMAND from the
     /// environment, unless the user's own startup files set them. cmd has no hooks, but its PROMPT can print the
-    /// marks around the prompt it shows (<see cref="CmdPrompt"/>). Custom profiles and SSH hosts run whatever they
-    /// run, so they're left as they are.
+    /// marks around the prompt it shows (<see cref="CmdPrompt"/>), and a PowerShell started from it loads the script
+    /// too (<see cref="CmdWithPowerShell"/>). Custom profiles and SSH hosts run whatever they run, so they're left as
+    /// they are.
     /// </summary>
     public static (string CommandLine, IReadOnlyDictionary<string, string> Environment) WithShellIntegration(
         SessionProfile profile, IReadOnlyDictionary<string, string> vars, string? script = null)
@@ -143,7 +148,7 @@ internal static class SessionLaunch
         switch (profile.Source, profile.Icon)
         {
             case (ProfileSources.Local, ProfileIcons.PowerShell) when File.Exists(script):
-                withMarks["TERMILLY_SHELL_INTEGRATION"] = "1";
+                withMarks[Variables.ShellIntegration] = "1";
                 // The script's text runs as a script block rather than as a file: execution policy covers only
                 // script files, so this works on a clean Windows (Restricted) without loosening the user's policy.
                 return ($"{profile.CommandLine} -NoExit -Command \"{PowerShellIntegrationCommand(script)}\"", withMarks);
@@ -166,7 +171,12 @@ internal static class SessionLaunch
                 return (profile.CommandLine, withMarks);
             case (ProfileSources.Local, ProfileIcons.Cmd):
                 withMarks[CmdMarks.Prompt] = CmdPrompt(vars.TryGetValue(CmdMarks.Prompt, out var prompt) ? prompt : System.Environment.GetEnvironmentVariable(CmdMarks.Prompt));
-                return (profile.CommandLine, withMarks);
+                if (!File.Exists(script))
+                {
+                    return (profile.CommandLine, withMarks);
+                }
+                withMarks[Variables.ShellIntegration] = "1";
+                return (CmdWithPowerShell(profile.CommandLine, script), withMarks);
             default:
                 return (profile.CommandLine, vars);
         }
@@ -217,6 +227,16 @@ internal static class SessionLaunch
     /// </summary>
     internal static string CmdPrompt(string? own) =>
         $@"$e]133;A$e\{(string.IsNullOrEmpty(own) ? CmdMarks.Default : own)}$e]133;B$e\";
+
+    /// <summary>
+    /// cmd's command line with a doskey macro for each of <see cref="CmdMarks.PowerShells"/>: typed on its own at the
+    /// prompt, it starts with <paramref name="script"/> loaded, as a PowerShell terminal does, so its prompts are
+    /// marked too (`snippet:` works there). With arguments (`powershell -c …`, a script) it runs as typed. In doskey
+    /// $1 is the first argument and $* all of them; the brackets keep a quoted first argument from breaking the `if`.
+    /// </summary>
+    internal static string CmdWithPowerShell(string commandLine, string script) =>
+        $"{commandLine} /k \"{string.Join(" & ", CmdMarks.PowerShells.Select(exe =>
+            $"doskey {exe}=if [$1]==[] ({exe} -NoExit -Command \"{PowerShellIntegrationCommand(script)}\") else {exe} $*"))}\"";
 
     /// <summary>
     /// An ssh command line with server keepalives, so a dead connection is noticed in under a minute (and the
