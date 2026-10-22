@@ -362,10 +362,25 @@ public partial class MainWindow : Window
     /// <summary>Shows the window on top, restoring it from the taskbar or the tray if needed.</summary>
     internal void BringToFront()
     {
+        var fromTray = !IsVisible;
         Show();
         WindowInterop.Restore(this);
+        if (fromTray)
+        {
+            RepaintPage();
+        }
         Activate();
         Web.Focus();
+    }
+
+    /// <summary>
+    /// WebView2 shown again after the window was hidden (in the tray) keeps a blank page until its size changes: so it
+    /// changes, by a pixel and back.
+    /// </summary>
+    private void RepaintPage()
+    {
+        Web.Width = Math.Max(0, Stage.ActualWidth - 1);
+        Dispatcher.BeginInvoke(DispatcherPriority.Background, FitPageToWindow);
     }
 
     /// <summary>Closes unless already closing (the page's last snapshot and the time limit can both ask).</summary>
