@@ -257,7 +257,7 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
 .crumb-dot { width: 9px; height: 9px; border-radius: 3px; }
 .crumb-count { color: var(--faint); font-size: 11.5px; }
 /* The running version beside the name in the title bar (js/update.js). */
-.brand-version { margin-left: -3px; color: var(--faint); font-size: 11.5px; font-weight: 500; }
+.brand-version { color: var(--faint); }
 
 .searchbox {
   display: flex;
