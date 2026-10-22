@@ -15,8 +15,6 @@ interface AppSettings {
   commands: CommandSettings;
   /** When a terminal's agent tells the user. */
   notifications: NotificationSettings;
-  /** The drop-down window. */
-  quake: QuakeSettings;
   /** What's kept between runs. */
   session: SessionSettings;
   /** Production safety and the paste warning. */
@@ -99,16 +97,6 @@ interface NotificationSettings {
   error: boolean;
   done: boolean;
   jumpHotkey: boolean;
-}
-
-/** The drop-down window (QuakeMode.cs): on or off, its shortcut, height, hiding and workspace. */
-interface QuakeSettings {
-  enabled: boolean;
-  chord: string;
-  /** Its height, in percent of the screen. */
-  height: number;
-  autoHide: boolean;
-  workspace: string;
 }
 
 /** What's kept between runs: the restore at start, history, hidden terminals' scrollback, background shells. */

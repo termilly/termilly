@@ -36,8 +36,6 @@ internal interface IAppWindow
     /// <summary>The page reported in (its first terminal is on screen).</summary>
     void PageReady();
 
-    /// <summary>Messages only this window understands (quake mode…): it registers what they do.</summary>
-    void RegisterMessages(MessageRouter router);
 }
 
 /// <summary>The system's file dialogs. Each answers null (or nothing) when cancelled.</summary>

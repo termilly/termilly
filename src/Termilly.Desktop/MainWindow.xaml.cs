@@ -18,7 +18,7 @@ namespace Termilly.Desktop;
 /// <summary>
 /// Termilly's window on Windows: WebView2 showing the page, with its own title bar and the start-up loader. What the
 /// page asks for is answered by <see cref="PageHost"/> (shared with Linux), with what Windows does its own way in
-/// <see cref="WindowsPlatform"/>; this window adds the taskbar badge, global hotkeys and quake mode. It is the
+/// <see cref="WindowsPlatform"/>; this window adds the taskbar badge and global hotkeys. It is the
 /// composition root on Windows: it builds the services once it exists.
 /// </summary>
 [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA1001", Justification = "WPF never disposes a window: OnClosing disposes what it owns.")]
@@ -34,9 +34,6 @@ public partial class MainWindow : Window
     private GlobalHotkeys? _hotkeys;
     private int _badgeCount;
     private int? _jumpHotkey;
-    private int? _quakeHotkey;
-    private string? _quakeChord;
-    private QuakeMode? _quake;
 
     /// <summary>The system-wide chord for "next terminal that needs me" (Settings › Terminal).</summary>
     public const string JumpChord = "Ctrl+Alt+J";
@@ -46,8 +43,6 @@ public partial class MainWindow : Window
     /// <summary>How long a closing window waits for the page's last snapshot.</summary>
     private static readonly TimeSpan SnapshotWait = TimeSpan.FromSeconds(1.5);
     private const string WebViewFolder = "WebView2";
-    /// <summary>Settings keep the drop-down window's height in percent.</summary>
-    private const double Percent = 100.0;
     private readonly StartupLoader _loader;
     private WindowPlacement.Target? _target;
     private readonly DispatcherTimer _revealFallback;
@@ -94,7 +89,6 @@ public partial class MainWindow : Window
         {
             _hotkeys = new GlobalHotkeys(this);
             _page.Start();
-            _quake = new QuakeMode(this, down => _channel.Post(new ToPage.Quake(down)));
             UpdateGlobalHotkeys();
             await InitializeWebViewAsync();
         };
@@ -303,31 +297,6 @@ public partial class MainWindow : Window
             _jumpHotkey = null;
         }
 
-        // The drop-down window's shortcut (Settings › Window); a new chord replaces the old one.
-        var quakeChord = Settings.Quake.Enabled ? Settings.Quake.Chord : null;
-        if (quakeChord != _quakeChord)
-        {
-            _hotkeys.Unregister(_quakeHotkey);
-            _quakeHotkey = null;
-            _quakeChord = quakeChord;
-            if (quakeChord is not null)
-            {
-                _quakeHotkey = _hotkeys.Register(quakeChord, () => _quake?.Toggle());
-                if (_quakeHotkey is null)
-                {
-                    _channel.Post(new ToPage.HotkeyTaken(quakeChord));
-                }
-            }
-        }
-        if (_quake is not null)
-        {
-            _quake.Height = Settings.Quake.Height / Percent;
-            _quake.AutoHide = Settings.Quake.AutoHide;
-            if (!Settings.Quake.Enabled)
-            {
-                _quake.Leave();
-            }
-        }
     }
 
     /// <summary>The taskbar button's overlay (TaskbarBadge): how many terminals need the user, none when nothing does.</summary>
@@ -389,16 +358,10 @@ public partial class MainWindow : Window
             return;
         }
         _closing = true;
-        // The drop-down terminal's place is the quake mode's, not the window's: keep the last normal one.
-        if (_quake?.Active != true)
-        {
-            WindowPlacement.Save(this);
-        }
+        WindowPlacement.Save(this);
         _hotkeys?.Dispose();
         _services.Dispose(); // the page's host goes; shells the background host runs keep running
         base.OnClosing(e);
     }
 
-    /// <summary>"Leave drop-down mode": back to a normal window.</summary>
-    internal void LeaveQuake() => _quake?.Leave();
 }

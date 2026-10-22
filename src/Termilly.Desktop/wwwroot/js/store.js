@@ -49,7 +49,6 @@ export const GROUPS = Object.freeze({
   shells: 'shells',
   commands: 'commands',
   notifications: 'notifications',
-  quake: 'quake',
   session: 'session',
   safety: 'safety',
   logging: 'logging',

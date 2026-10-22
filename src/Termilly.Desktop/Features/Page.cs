@@ -270,7 +270,6 @@ internal sealed class WindowHandler : IMessageHandler
         router.On<FromPage.OpenPath>(m => _desktop.ShowPath(m.Path));
         router.On<FromPage.DataDirOpen>(_ => _desktop.OpenFolder(AppPaths.DataDirectory));
         router.On<FromPage.PickFolder>(m => PickFolderAsync(m.RequestId, m.Initial));
-        _window.RegisterMessages(router);
     }
 
     /// <summary>The page reported in: tmux clients a reloaded page had are gone, and folders handed over meanwhile open.</summary>

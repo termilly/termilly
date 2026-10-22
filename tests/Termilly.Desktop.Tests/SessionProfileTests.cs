@@ -335,13 +335,6 @@ public sealed class SessionProfileTests : IDisposable
         }
     }
 
-    [Fact]
-    public void Drop_down_settings_fall_back_to_offered_values()
-    {
-        var odd = new AppSettings { Quake = new() { Chord = "J", Height = 42, Workspace = "other" } }.Normalize();
-        Assert.Equal(("Win+`", 50, "last"), (odd.Quake.Chord, odd.Quake.Height, odd.Quake.Workspace));
-        Assert.All(SettingValues.Quake.Chords, chord => Assert.True(GlobalHotkeys.TryParse(chord, out _, out _), chord));
-    }
 
     [Theory]
     [InlineData(0, 0)]

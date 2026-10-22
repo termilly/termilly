@@ -44,8 +44,6 @@ internal sealed class WindowsPlatform(MainWindow window) :
 
     public void PageReady() => window.RevealPage();
 
-    public void RegisterMessages(MessageRouter router) => router.On<FromPage.QuakeLeave>(_ => window.LeaveQuake());
-
     // ---- Dialogs: the page's messages arrive on the window's thread, so they open there and answer at once ----
 
     public Task<string?> PickFolderAsync(string title, string initial)

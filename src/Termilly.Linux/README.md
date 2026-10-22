@@ -56,6 +56,6 @@ does what DPAPI does on Windows. `TERMILLY_DEVTOOLS=1` turns on WebKit's inspect
 ## Not yet
 
 - Clicking a notification to open its terminal, and the dock badge.
-- Quake mode and global hotkeys.
+- Global hotkeys.
 - Shell integration for zsh and fish (bash and PowerShell have it).
 - An AppImage (for distributions without a .deb).

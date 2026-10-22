@@ -34,10 +34,8 @@ import { startTour, offerTourOnce } from './tour.js';
 import './api.js';
 import { exportLayout, importLayout } from './layouts.js';
 import { isBroadcasting, startBroadcast, stopBroadcast, openCompose, BROADCAST_SCOPE } from './broadcast.js';
-import { cycleWorkspace, createWorkspace } from './workspaces.js';
+import { cycleWorkspace } from './workspaces.js';
 
-/** The workspace the drop-down window shows when Settings › Workspaces asks for its own. */
-const QUAKE_WORKSPACE = 'Drop-down';
 import { openSnippets, snippetCommands } from './snippets.js';
 import { activityLine, stopAllAgents } from './agentline.js';
 import './subagents.js';
@@ -65,7 +63,7 @@ import { byId, find, targetOf, WORKSPACE_ID } from './dom.js';
 /** @typedef {import('./protocol.js').Host_agent_1} Host_agent_1 */
 
 /** The choices of the settings used here (C#'s SettingValues). */
-const { quakeWorkspace, restoreSession, theme } = SETTING_VALUES;
+const { restoreSession, theme } = SETTING_VALUES;
 
 /** The name of the first workspace, made when there is nothing to restore. */
 const FIRST_WORKSPACE_NAME = 'workspace';
@@ -157,7 +155,6 @@ setCommands(() => [
   { label: 'Broadcast input to this workspace (on / off)', keywords: 'multiple terminals send all sync', hint: keysHtml('Ctrl Shift I'), run: () => setTimeout(commands.broadcastWorkspace) },
   { label: 'Broadcast: compose and send', keywords: 'multiple terminals send all multi-line', run: () => setTimeout(openCompose) },
   { label: 'Go to workspace, folder or host', keywords: 'open project switch recent directory ssh fuzzy', hint: keysHtml('Ctrl Shift O'), run: () => setTimeout(commands.goTo) },
-  { label: 'Leave drop-down mode (normal window)', keywords: 'quake window restore', run: () => send(PAGE.quakeLeave) },
   { label: 'Command history', keywords: 'commands ran failed exit code search', hint: keysHtml('Ctrl Shift H'), run: () => setTimeout(commands.commandHistory) },
   { label: 'Copy the last command’s output', keywords: 'clipboard result', run: commands.copyLastOutput },
   { label: 'Stop all agents in this workspace', keywords: 'interrupt escape claude codex halt', run: () => setTimeout(() => stopAllAgents()) },
@@ -429,16 +426,6 @@ function signalReady() {
 // The page is laid out while the host keeps it hidden; refit once it can actually be seen.
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') scheduleFit();
-});
-
-// The drop-down window came down: show the "Drop-down" workspace if Settings asks for one, and focus a terminal.
-onHost(HOST.quake, m => {
-  if (!m.down) return;
-  if (state.settings.quake.workspace === quakeWorkspace.quake) {
-    const ws = state.workspaces.find(w => w.name === QUAKE_WORKSPACE) ?? createWorkspace({ name: QUAKE_WORKSPACE });
-    if (ws.id !== state.activeId) switchWorkspace(ws.id);
-  }
-  restoreFocus();
 });
 
 // Coming back to the window means seeing the terminal that has focus.

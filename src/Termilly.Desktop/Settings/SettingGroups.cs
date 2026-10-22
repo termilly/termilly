@@ -175,26 +175,6 @@ internal sealed record NotificationSettings
     public NotificationSettings Normalize() => this;
 }
 
-/// <summary>The drop-down window (QuakeMode.cs): on or off, its shortcut, height, hiding and workspace.</summary>
-internal sealed record QuakeSettings
-{
-    public const string DefaultChord = "Win+`";
-
-    public bool Enabled { get; init; }
-    public string Chord { get; init; } = DefaultChord;
-    /// <summary>Its height, in percent of the screen.</summary>
-    public int Height { get; init; } = SettingValues.Quake.DefaultHeight;
-    public bool AutoHide { get; init; } = true;
-    public string Workspace { get; init; } = SettingValues.QuakeWorkspace.Default;
-
-    public QuakeSettings Normalize() => this with
-    {
-        Chord = SettingChecks.OneOf(Chord, SettingValues.Quake.Chords, DefaultChord),
-        Height = SettingChecks.OneOf(Height, SettingValues.Quake.Heights, SettingValues.Quake.DefaultHeight),
-        Workspace = SettingChecks.OneOf(Workspace, SettingValues.QuakeWorkspace.All, SettingValues.QuakeWorkspace.Default),
-    };
-}
-
 /// <summary>What's kept between runs: the restore at start, history, hidden terminals' scrollback, background shells.</summary>
 internal sealed record SessionSettings
 {

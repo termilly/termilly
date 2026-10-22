@@ -45,25 +45,6 @@ internal static class SettingValues
         public static readonly IReadOnlyList<int> All = [7, Default, 90, 365];
     }
 
-    /// <summary>The drop-down window (QuakeMode.cs).</summary>
-    public static class Quake
-    {
-        /// <summary>Shortcuts offered: Windows Terminal's, and two for when it has that one.</summary>
-        public static readonly IReadOnlyList<string> Chords = ["Win+`", "Ctrl+Alt+`", "Alt+F12"];
-        /// <summary>Its height, in percent of the screen.</summary>
-        public const int DefaultHeight = 50;
-        public static readonly IReadOnlyList<int> Heights = [30, DefaultHeight, 70, 100];
-    }
-
-    /// <summary>Which workspace the drop-down window shows: the last one used, or its own.</summary>
-    public static class QuakeWorkspace
-    {
-        public const string Last = "last";
-        public const string Quake = "quake";
-        public const string Default = Last;
-        public static readonly IReadOnlyList<string> All = [Last, Quake];
-    }
-
     /// <summary>Scrollback for terminals in workspaces out of sight: 0 keeps the normal amount.</summary>
     public static class HiddenScrollback
     {

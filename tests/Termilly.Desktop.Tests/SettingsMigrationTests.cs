@@ -38,9 +38,10 @@ public sealed class SettingsMigrationTests : IDisposable
         var v1 = (JsonObject)JsonNode.Parse(File.ReadAllText(Fixture("v1-default.json")))!;
         var moved = SettingsMigration.ToVersion2(v1);
 
-        // The AI assistant's settings (aiProvider…) and phone check-in's (checkinPort…) are left behind: both were
-        // removed after 1.1.0.
-        var retired = v1.Count(s => s.Key.StartsWith("ai", StringComparison.Ordinal) || s.Key.StartsWith("checkin", StringComparison.Ordinal));
+        // The AI assistant's settings (aiProvider…), phone check-in's (checkinPort…) and the drop-down window's
+        // (quakeChord…) are left behind: all three were removed after 1.1.0.
+        string[] gone = ["ai", "checkin", "quake"];
+        var retired = v1.Count(s => gone.Any(prefix => s.Key.StartsWith(prefix, StringComparison.Ordinal)));
         var count = moved.Where(g => g.Value is JsonObject).Sum(g => ((JsonObject)g.Value!).Count);
         Assert.Equal(v1.Count - retired, count);
     }
@@ -58,7 +59,6 @@ public sealed class SettingsMigrationTests : IDisposable
         Assert.Equal(("COM5", "n1"), (s.Shells.SerialPorts![0].Port, s.Shells.NetworkConsoles![0].Id));
         Assert.Equal(("Deploy", "notify"), (s.Commands.Snippets![0].Name, s.Commands.Triggers![0].Action));
         Assert.Equal((false, false, false, true), (s.Notifications.NeedsInput, s.Notifications.Error, s.Notifications.Done, s.Notifications.JumpHotkey));
-        Assert.Equal((true, "Alt+F12", 70, false, "quake"), (s.Quake.Enabled, s.Quake.Chord, s.Quake.Height, s.Quake.AutoHide, s.Quake.Workspace));
         Assert.Equal(("layout", 90, 5000, false, true, true, true), (s.Session.Restore, s.Session.HistoryDays, s.Session.HiddenScrollback, s.Session.SaveOutput, s.Session.RedactSecrets, s.Session.BackgroundShells, s.Session.BackgroundAtSignIn));
         Assert.Equal(("prod", "never", true, false, "ssh-db"), (s.Safety.Environments![0].Id, s.Safety.ProdPaste, s.Safety.ProdTint, s.Safety.PasteWarning, s.Safety.PasteWarningOff![0]));
         Assert.Equal((@"D:\logs", "raw", true, false, 30, "prod", "ssh-db"), (s.Logging.Folder, s.Logging.Format, s.Logging.Timestamps, s.Logging.Redact, s.Logging.KeepDays, s.Logging.Tags![0], s.Logging.Profiles![0]));
@@ -79,24 +79,25 @@ public sealed class SettingsMigrationTests : IDisposable
         var s = SettingsFile.Load(path);
 
         Assert.Equal((TerminalSettings.MaxFontSize, "bar", 30), (s.Terminal.FontSize, s.Terminal.CursorStyle, s.Session.HistoryDays));
-        Assert.Equal((true, 50, "path"), (s.Quake.Enabled, s.Quake.Height, s.Changes.Source));
+        Assert.Equal("path", s.Changes.Source);
         Assert.Null(s.UiState.WindowColors);
         var written = File.ReadAllText(path);
         Assert.DoesNotContain("oldSettingNobodyRemembers", written);
         Assert.DoesNotContain("experimentalThing", written);
         Assert.DoesNotContain("aiProvider", written);
         Assert.DoesNotContain("checkin", written);
+        Assert.DoesNotContain("quake", written);
     }
 
     [Fact]
     public void The_retired_AI_assistant_is_dropped_and_its_key_found_only_when_it_was_Anthropic()
     {
         var path = Path.Combine(_dir, "settings.json");
-        File.WriteAllText(path, """{ "version": 2, "ai": { "provider": "anthropic", "model": "x" }, "quake": { "enabled": true } }""");
+        File.WriteAllText(path, """{ "version": 2, "ai": { "provider": "anthropic", "model": "x" }, "changes": { "source": "git" } }""");
 
         Assert.True(SettingsFile.NamesAnthropicAssistant(path));
         var s = SettingsFile.Load(path);
-        Assert.True(s.Quake.Enabled);
+        Assert.Equal("git", s.Changes.Source);
         SettingsFile.Save(s, path);
         Assert.Null(JsonNode.Parse(File.ReadAllText(path))!["ai"]);
         Assert.False(SettingsFile.NamesAnthropicAssistant(path));
@@ -138,13 +139,13 @@ public sealed class SettingsMigrationTests : IDisposable
     [Fact]
     public void A_group_from_the_page_replaces_that_group_and_is_checked()
     {
-        var before = new AppSettings { Quake = new() { Enabled = true } };
+        var before = new AppSettings { Notifications = new() { JumpHotkey = true } };
         var values = JsonDocument.Parse("""{ "source": "git", "context": 7 }""").RootElement;
 
         var after = before.WithGroup("changes", values);
 
         Assert.Equal(("git", SettingValues.ChangeContext.Default), (after.Changes.Source, after.Changes.Context));
-        Assert.True(after.Quake.Enabled);
+        Assert.True(after.Notifications.JumpHotkey);
         Assert.Same(before, before.WithGroup("nothing", values));
     }
 }

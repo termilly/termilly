@@ -1,23 +1,19 @@
 // @ts-check
-// Settings › Workspaces: the sidebar, background shells, what comes back at start, project status and the drop-down
-// window.
+// Settings › Workspaces: the sidebar, background shells, what comes back at start and project status.
 
 import { PAGE } from '../protocol.js';
-import { send, sys, SYSTEM_NAME } from '../host.js';
+import { send, sys } from '../host.js';
 import { state } from '../store.js';
-import { escapeHtml, ICONS, keysHtml } from '../ui.js';
+import { ICONS, keysHtml } from '../ui.js';
 import { confirmDialog } from '../dialogs.js';
 import { setClosedStyle, resetSidebarWidth } from '../sidebar.js';
-import { row, seg, toggle, group, choices } from './controls.js';
-import { SECTION, body, takenChords } from './page.js';
+import { row, seg, toggle, group } from './controls.js';
+import { SECTION, body } from './page.js';
 import { SETTING_VALUES } from '../constants.js';
 import { targetOf } from '../dom.js';
 
 /** The choices of the settings used here (C#'s SettingValues). */
-const { restoreSession, quake, quakeWorkspace } = SETTING_VALUES;
-
-/** The drop-down window's height that fills the screen, in percent. */
-const FULL_HEIGHT = 100;
+const { restoreSession } = SETTING_VALUES;
 
 /**
  * The closed sidebar's choice, which is the sidebar's own state rather than a setting.
@@ -43,17 +39,7 @@ const WORKSPACES = {
     + row('Confirm before closing a workspace', 'Only asked when the workspace still has terminals.', toggle('interface.confirmCloseWorkspace')))
     + group('Project status', row('Git branch', 'The branch of each workspace’s folder on its row, a dot when there are uncommitted changes, and ↑↓ against its upstream; on a terminal’s row when it works in another repository or worktree. Read with git every few seconds at most, only for what’s on screen, never for network shares.',
         toggle('interface.gitStatus'), { keywords: 'git branch dirty changes ahead behind upstream repository worktree' })
-      + row('Listening ports', 'The ports a terminal’s programs listen on (:3000) on its row; click one to open it in the browser.', toggle('terminal.ports'), { keywords: 'port server localhost dev listening url' }))
-    // Not on Linux yet (Termilly.Linux/README.md).
-    + (sys.name === SYSTEM_NAME.linux ? '' : group('Drop-down window', row('Drop-down from the top', 'A shortcut that works in any app slides Termilly down from the top of the screen the mouse is on, and away again.', toggle('quake.enabled'))
-      + row('Shortcut', takenChords.has(state.settings.quake.chord)
-        ? `<span class="warn">Another app already uses ${escapeHtml(state.settings.quake.chord)}. Pick another one.</span>`
-        : 'Windows Terminal uses Win ` too; if it’s installed, pick another.',
-        seg('quake.chord', choices(quake.chords, chord => chord.replaceAll('+', ' '))))
-      + row('Height', 'Of the screen.', seg('quake.height', choices(quake.heights, height => (height === FULL_HEIGHT ? 'Full' : `${height}%`))))
-      + row('Hide when it loses focus', '', toggle('quake.autoHide'))
-      + row('Shows', '', seg('quake.workspace', [[quakeWorkspace.last, 'The last workspace'], [quakeWorkspace.quake, 'A “Drop-down” workspace']]))
-      + row('Back to a normal window', '', '<button class="btn small" data-action="leaveQuake">Leave drop-down</button>'))),
+      + row('Listening ports', 'The ports a terminal’s programs listen on (:3000) on its row; click one to open it in the browser.', toggle('terminal.ports'), { keywords: 'port server localhost dev listening url' })),
   sync: syncSidebarStyle,
   actions: {
     stopHost: async () => {
@@ -62,7 +48,6 @@ const WORKSPACES = {
       }
     },
     resetWidth: resetSidebarWidth,
-    leaveQuake: () => send(PAGE.quakeLeave),
   },
   click(e) {
     const sidebarStyle = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-sidebar-style] [data-value]'));

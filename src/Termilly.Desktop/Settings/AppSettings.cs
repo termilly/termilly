@@ -26,8 +26,6 @@ internal sealed record AppSettings
     public CommandSettings Commands { get; init; } = new();
     /// <summary>When a terminal's agent tells the user.</summary>
     public NotificationSettings Notifications { get; init; } = new();
-    /// <summary>The drop-down window.</summary>
-    public QuakeSettings Quake { get; init; } = new();
     /// <summary>What's kept between runs.</summary>
     public SessionSettings Session { get; init; } = new();
     /// <summary>Production safety and the paste warning.</summary>
@@ -58,7 +56,6 @@ internal sealed record AppSettings
         Shells = (Shells ?? new()).Normalize(),
         Commands = (Commands ?? new()).Normalize(),
         Notifications = (Notifications ?? new()).Normalize(),
-        Quake = (Quake ?? new()).Normalize(),
         Session = (Session ?? new()).Normalize(),
         Safety = (Safety ?? new()).Normalize(),
         Logging = (Logging ?? new()).Normalize(),
@@ -88,7 +85,6 @@ internal sealed record AppSettings
         [GroupName(nameof(Shells))] = (s, v) => s with { Shells = Read<ShellSettings>(v) },
         [GroupName(nameof(Commands))] = (s, v) => s with { Commands = Read<CommandSettings>(v) },
         [GroupName(nameof(Notifications))] = (s, v) => s with { Notifications = Read<NotificationSettings>(v) },
-        [GroupName(nameof(Quake))] = (s, v) => s with { Quake = Read<QuakeSettings>(v) },
         [GroupName(nameof(Session))] = (s, v) => s with { Session = Read<SessionSettings>(v) },
         [GroupName(nameof(Safety))] = (s, v) => s with { Safety = Read<SafetySettings>(v) },
         [GroupName(nameof(Logging))] = (s, v) => s with { Logging = Read<LoggingSettings>(v) },

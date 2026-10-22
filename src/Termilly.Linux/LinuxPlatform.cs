@@ -88,10 +88,6 @@ internal sealed class LinuxPlatform(Action<string> send, string? startFolder) :
     {
     }
 
-    public void RegisterMessages(MessageRouter router)
-    {
-    }
-
     // ---- GTK's own dialogs, through Photino: they open on the window's thread; the answer comes back here ----
 
     private static string Home => Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);

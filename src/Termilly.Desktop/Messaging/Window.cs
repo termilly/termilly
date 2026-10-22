@@ -46,11 +46,6 @@ internal static partial class FromPage
         public static string Type => "page:error";
     }
 
-    internal sealed record QuakeLeave : IPageMessage
-    {
-        public static string Type => "quake:leave";
-    }
-
     internal sealed record Notify(string Id = "", string? Title = null, string? Body = null) : IPageMessage
     {
         public static string Type => "notify";
@@ -109,12 +104,6 @@ internal static partial class ToPage
     internal sealed record FocusTerminal(string Id) : IHostMessage
     {
         public static string Type => "focusTerminal";
-    }
-
-    /// <summary>The drop-down window came down or went up.</summary>
-    internal sealed record Quake(bool Down) : IHostMessage
-    {
-        public static string Type => "quake";
     }
 
     /// <summary>The jump hotkey: the next terminal that needs the user.</summary>

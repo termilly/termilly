@@ -193,17 +193,6 @@ export const SETTING_VALUES = Object.freeze({
     default: 30,
     all: Object.freeze([7, 30, 90, 365]),
   }),
-  quake: Object.freeze({
-    chords: Object.freeze(['Win+`', 'Ctrl+Alt+`', 'Alt+F12']),
-    defaultHeight: 50,
-    heights: Object.freeze([30, 50, 70, 100]),
-  }),
-  quakeWorkspace: Object.freeze({
-    last: 'last',
-    quake: 'quake',
-    default: 'last',
-    all: Object.freeze(['last', 'quake']),
-  }),
   hiddenScrollback: Object.freeze({
     default: 0,
     all: Object.freeze([0, 5000, 1000]),
