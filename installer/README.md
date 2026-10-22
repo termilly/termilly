@@ -27,18 +27,17 @@ The script:
 Start it from **Actions › Release › Run workflow** (or `gh workflow run release.yml --ref <branch>`).
 
 - **Without "publish"**: a test build. The installers can be downloaded from the run's page for one day.
-- **With "publish"**: also creates the GitHub Release `v<version>` and uploads the installers and `SHA256SUMS`
-  to termilly.com, under `/downloads/<version>/`.
-  It stops early if `v<version>` is already released, so bump `<Version>` in `Directory.Build.props` first.
-- **The newest release under fixed names**: a published run also copies the files to `latest/` as
-  `TermillySetup.exe`, `TermillySetup-online.exe` and `termilly_amd64.deb` (with their own `SHA256SUMS`), and adds
-  the same names to the GitHub Release. The site's download buttons link to `termilly.com/downloads/latest/...` and
-  read the version from `latest.json`, so a release needs no site change. `latest.json` is uploaded last, signed
-with the release signing key; the app checks that signature before it says an update is out.
+- **With "publish"**: also creates the GitHub Release `v<version>` with the installers and `SHA256SUMS`, and the
+  same installers under fixed names (`TermillySetup.exe`, `TermillySetup-online.exe`, `termilly_amd64.deb`). Its notes
+  are the version's section of `CHANGELOG.md`. It stops early if `v<version>` is already released, so bump
+  `<Version>` in `Directory.Build.props` first. Every version stays downloadable there.
 
-The upload uses a key that can only write into the downloads folder: no shell, no reading. It and the signing key
-are repository secrets (`RELEASE_SSH_KEY`, `RELEASE_SSH_KNOWN_HOSTS`, `RELEASE_HOST`, `RELEASE_SIGNING_KEY`), so
-only the maintainers can publish; a fork's run can still make a test build.
+**termilly.com/downloads** is filled by hand: the server only lets the maintainer in, so the workflow can't reach
+it. After a release, run `deploy/publish-release.sh` from the termilly-site repo (`--dry-run` first). It downloads the
+release from GitHub and checks it, uploads it to `/downloads/<version>/` and, under the fixed names, `/downloads/latest/`
+(what the site's download buttons link to), then writes `latest.json`, signed with the release signing key, which tells
+running Termillys an update is out (the app checks the signature first). Last, it removes every older version from
+the server, so it holds only the newest one; `--prune` does just that step.
 
 ## What it does
 

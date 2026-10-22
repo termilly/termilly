@@ -2,16 +2,19 @@
 # package (installer/linux/build-deb.sh), after the tests pass on each system.
 #
 # Run it from Actions -> Release -> Run workflow. Without "publish" it's a test build: the installers are only
-# downloadable from the run for a day. With "publish" it also creates the GitHub Release v<version> and uploads the
-# installers to the download server, into <version>/, and the same files under fixed names into latest/ (what the
-# site's download buttons link to). The version is <Version> in Directory.Build.props; bump it first.
+# downloadable from the run for a day. With "publish" it also creates the GitHub Release v<version> with the installers,
+# also under fixed names. The version is <Version> in Directory.Build.props; bump it first.
+#
+# It doesn't upload to termilly.com: the server only lets the maintainer in. After a release, run
+# deploy/publish-release.sh from termilly-site: it copies the release to termilly.com/downloads/, announces it to
+# running Termillys (a signed latest.json) and removes the version before it from the server.
 name: Release
 
 on:
   workflow_dispatch:
     inputs:
       publish:
-        description: Create the GitHub Release and upload the installers to the download server
+        description: Create the GitHub Release with the installers
         type: boolean
         default: false
 
@@ -136,47 +139,3 @@ jobs:
           gh release create "v$VERSION" dist/* latest/TermillySetup.exe latest/TermillySetup-online.exe latest/termilly_amd64.deb \
             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
             --title "Termilly $VERSION" --notes-file notes.md
-      # The server's termilly-release key can only write under the download folder (rrsync), nothing else.
-      - name: Upload to the download server
-        env:
-          SSH_KEY: ${{ secrets.RELEASE_SSH_KEY }}
-          KNOWN_HOSTS: ${{ secrets.RELEASE_SSH_KNOWN_HOSTS }}
-          HOST: ${{ secrets.RELEASE_HOST }}
-        run: |
-          install -d -m 700 ~/.ssh
-          printf '%s\n' "$SSH_KEY" > ~/.ssh/release && chmod 600 ~/.ssh/release
-          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
-          rsync -rt --chmod=D755,F644 -e "ssh -i $HOME/.ssh/release -o IdentitiesOnly=yes" dist/ "$HOST:$VERSION/"
-          # After the versioned folder, so latest/ never holds files the release doesn't have.
-          rsync -rt --chmod=D755,F644 -e "ssh -i $HOME/.ssh/release -o IdentitiesOnly=yes" latest/ "$HOST:latest/"
-          rm -f ~/.ssh/release
-      # latest.json tells running Termillys a newer version is out (UpdateCheck.cs). It's signed with the release
-      # signing key (Ed25519, the RELEASE_SIGNING_KEY secret, PEM); the app ignores a manifest that doesn't verify.
-      # Uploaded last, so it never announces installers that aren't on the server yet.
-      - name: Announce the version (latest.json)
-        env:
-          SSH_KEY: ${{ secrets.RELEASE_SSH_KEY }}
-          KNOWN_HOSTS: ${{ secrets.RELEASE_SSH_KNOWN_HOSTS }}
-          HOST: ${{ secrets.RELEASE_HOST }}
-          SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
-        run: |
-          base="https://termilly.com/downloads/$VERSION"
-          sum() { grep " $1\$" dist/SHA256SUMS | cut -d' ' -f1; }
-          mkdir meta
-          jq -cn --arg v "$VERSION" --arg date "$(date -u +%F)" --arg base "$base" --arg repo "$GITHUB_REPOSITORY" \
-            --arg online "TermillySetup-$VERSION-online.exe" --arg full "TermillySetup-$VERSION.exe" \
-            --arg deb "termilly_${VERSION}_amd64.deb" \
-            --arg wsum "$(sum "TermillySetup-$VERSION-online.exe")" --arg fsum "$(sum "TermillySetup-$VERSION.exe")" \
-            --arg dsum "$(sum "termilly_${VERSION}_amd64.deb")" \
-            '{version: $v, date: $date, notes: "https://github.com/\($repo)/releases/tag/v\($v)",
-              windows: {online: "\($base)/\($online)", full: "\($base)/\($full)", sha256: $wsum, fullSha256: $fsum},
-              linux: {deb: "\($base)/\($deb)", sha256: $dsum}}' > meta/latest.json
-          cat meta/latest.json
-          install -d -m 700 ~/.ssh
-          printf '%s\n' "$SIGNING_KEY" > ~/.ssh/signing.pem && chmod 600 ~/.ssh/signing.pem
-          openssl pkeyutl -sign -inkey ~/.ssh/signing.pem -rawin -in meta/latest.json | base64 -w0 > meta/latest.json.sig
-          rm -f ~/.ssh/signing.pem
-          printf '%s\n' "$SSH_KEY" > ~/.ssh/release && chmod 600 ~/.ssh/release
-          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
-          rsync -t --chmod=F644 -e "ssh -i $HOME/.ssh/release -o IdentitiesOnly=yes" meta/latest.json meta/latest.json.sig "$HOST:"
-          rm -f ~/.ssh/release
