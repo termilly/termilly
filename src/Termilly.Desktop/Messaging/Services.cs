@@ -1,6 +1,6 @@
 namespace Termilly.Desktop.Messaging;
 
-// Recordings and session logs, phone check-in, the AI assistant, history sync between PCs, and the vault's
+// Recordings and session logs, phone check-in, history sync between PCs, and the vault's
 // recovery code.
 
 internal static partial class FromPage
@@ -76,26 +76,6 @@ internal static partial class FromPage
     internal sealed record CheckinRemove(string? Device = null) : IPageMessage
     {
         public static string Type => "checkin:remove";
-    }
-
-    internal sealed record AiStatus : IPageMessage
-    {
-        public static string Type => "ai:status";
-    }
-
-    /// <summary>The Anthropic API key to keep; empty removes it.</summary>
-    internal sealed record AiKey(string? Key = null) : IPageMessage
-    {
-        public static string Type => "ai:key";
-    }
-
-    internal sealed record AiTurn(string? Role = null, string? Content = null);
-
-    /// <summary>A question from the assistant panel, with the terminal's output and command history when shared.</summary>
-    internal sealed record AiAsk(string? RequestId = null, IReadOnlyList<AiTurn>? Messages = null, string? Output = null,
-        string? OutputName = null, bool History = false) : IPageMessage
-    {
-        public static string Type => "ai:ask";
     }
 
     internal sealed record SyncStatus : IPageMessage
@@ -236,32 +216,6 @@ internal static partial class ToPage
     internal sealed record CheckinPairing(string Url) : IHostMessage
     {
         public static string Type => "checkin:pairing";
-    }
-
-    internal sealed record AiStatus(bool HasKey, string? KeyStore) : IHostMessage
-    {
-        public static string Type => "ai:status";
-    }
-
-    /// <summary>The credential store refused the key.</summary>
-    internal sealed record AiError(string Message) : IHostMessage
-    {
-        public static string Type => "ai:error";
-    }
-
-    /// <param name="Sent">What was sent, scrubbed of secrets, so it can be checked.</param>
-    internal sealed record AiReply(string? RequestId, string Text, object Sent, string Model) : IHostMessage
-    {
-        public static string Type => "ai:reply";
-
-        public bool Ok { get; } = true;
-    }
-
-    internal sealed record AiFailed(string? RequestId, string Message) : IHostMessage
-    {
-        public static string Type => "ai:reply";
-
-        public bool Ok { get; }
     }
 
     /// <param name="Code">The sync code, when one is to be shown.</param>

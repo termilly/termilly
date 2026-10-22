@@ -13,7 +13,6 @@ import terminal from './terminal.js';
 import workspaces from './workspaces.js';
 import changes from './changes.js';
 import privacy from './privacy.js';
-import ai from './ai.js';
 import plugins from './plugins.js';
 import keyboard from './keyboard.js';
 import about from './about.js';
@@ -48,4 +47,4 @@ setCheckinRerender(() => redrawIfShowing(SECTION.phone));
 
 /** @type {Record<string, import('./page.js').Section>} by id, in the nav's order */
 export const SECTIONS = Object.fromEntries(
-  [appearance, terminal, ssh, serial, workspaces, changes, privacy, ai, phone, plugins, keyboard, about].map(s => [s.id, s]));
+  [appearance, terminal, ssh, serial, workspaces, changes, privacy, phone, plugins, keyboard, about].map(s => [s.id, s]));

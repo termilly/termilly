@@ -11,7 +11,6 @@ import { setAlert, ALERT } from './triggers.js';
 import { serialMenuItems } from './serial.js';
 import { toggleSftp } from './sftp.js';
 import { openCleanup } from './worktree.js';
-import { toggleAi } from './ai.js';
 import { editNote, profileNote, NOTE_KIND } from './notes.js';
 import { isLogging, toggleLog, toggleProfileLogging } from './logging.js';
 import { openSnippets, saveAsSnippet } from './snippets.js';
@@ -24,11 +23,6 @@ import { remoteMenuItems, remoteGit } from './remotehost.js';
 import { openNewWorkspace } from './newworkspace.js';
 import { beginRename } from './rename.js';
 import { openTagPicker } from './tagpicker.js';
-import { SETTING_VALUES } from './constants.js';
-
-/** The choices of the settings used here (C#'s SettingValues). */
-const { aiProvider } = SETTING_VALUES;
-
 /** How many of the last commands "Open output in viewer" lists, and how much of each it shows. */
 const RECENT_COMMANDS = 12;
 const COMMAND_LABEL = 60;
@@ -153,7 +147,6 @@ function toolItems(tab) {
   const ssh = isSsh(tab);
   return [
     ...(tab.worktree ? [{ label: 'Clean up worktree', action: () => openCleanup(tab) }] : []),
-    ...(state.settings.ai.provider !== aiProvider.off ? [{ label: 'Ask AI', hint: keysHtml('Ctrl Shift K'), action: () => toggleAi(tab) }] : []),
     ...(ssh ? [{ label: 'After reconnecting', action: () => editAttach(tab) }] : []),
     ...remoteMenuItems(tab),
     ...(ssh ? [{ label: 'Files (SFTP)', hint: keysHtml('Ctrl Shift L'), action: () => toggleSftp(tab) }] : []),

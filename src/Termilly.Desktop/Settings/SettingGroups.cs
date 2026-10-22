@@ -338,33 +338,6 @@ internal sealed record ChangeSettings
     };
 }
 
-/// <summary>The AI assistant (Assistant.cs): its provider, model and server, and what it may read and run.</summary>
-internal sealed record AiSettings
-{
-    /// <summary>A local OpenAI-compatible server's address, as Ollama serves it.</summary>
-    public const string DefaultEndpoint = "http://localhost:11434/v1";
-    private static readonly string[] EndpointSchemes = [Uri.UriSchemeHttp, Uri.UriSchemeHttps];
-
-    public string Provider { get; init; } = SettingValues.AiProvider.Default;
-    /// <summary>Null: the provider's default model.</summary>
-    public string? Model { get; init; }
-    public string Endpoint { get; init; } = DefaultEndpoint;
-    public string ReadOutput { get; init; } = SettingValues.AiPermission.Default;
-    public string ReadHistory { get; init; } = SettingValues.AiPermission.Default;
-    public string RunCommands { get; init; } = SettingValues.AiPermission.Default;
-
-    public AiSettings Normalize() => this with
-    {
-        Provider = SettingChecks.OneOf(Provider, SettingValues.AiProvider.All, SettingValues.AiProvider.Default),
-        Model = SettingChecks.Trimmed(Model),
-        Endpoint = Uri.TryCreate(Endpoint?.Trim(), UriKind.Absolute, out var endpoint) && EndpointSchemes.Contains(endpoint.Scheme)
-            ? Endpoint!.Trim().TrimEnd('/') : DefaultEndpoint,
-        ReadOutput = SettingChecks.OneOf(ReadOutput, SettingValues.AiPermission.All, SettingValues.AiPermission.Default),
-        ReadHistory = SettingChecks.OneOf(ReadHistory, SettingValues.AiPermission.All, SettingValues.AiPermission.Default),
-        RunCommands = SettingChecks.OneOf(RunCommands, SettingValues.AiPermission.All, SettingValues.AiPermission.Default),
-    };
-}
-
 /// <summary>Phone check-in (CheckinServer.cs): on or off, whether a phone may answer prompts, and its port.</summary>
 internal sealed record CheckinSettings
 {

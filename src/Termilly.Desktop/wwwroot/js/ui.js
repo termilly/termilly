@@ -155,7 +155,6 @@ export const ICONS = {
   hash: '<svg viewBox="0 0 16 16"><path d="M6.5 3v10M10.5 3v10M3 6.5h10M3 10.5h10"/></svg>',
   puzzle: '<svg viewBox="0 0 16 16"><path d="M6.5 3a1.5 1.5 0 0 1 3 0v1.5h3v3H11a1.5 1.5 0 0 0 0 3h1.5v3h-3V12a1.5 1.5 0 0 0-3 0v1.5h-4v-3H4a1.5 1.5 0 0 0 0-3H2.5v-3h4z"/></svg>',
   phone: '<svg viewBox="0 0 16 16"><rect x="4.5" y="1.5" width="7" height="13" rx="1.5"/><path d="M7 12.5h2"/></svg>',
-  spark: '<svg viewBox="0 0 16 16"><path d="M8 2l1.4 4.6L14 8l-4.6 1.4L8 14l-1.4-4.6L2 8l4.6-1.4z"/></svg>',
   ssh: '<svg viewBox="0 0 16 16"><circle cx="5.5" cy="10.5" r="3"/><path d="M7.6 8.4L13 3M11 5l1.5 1.5M9.5 6.5L11 8"/></svg>',
   serial: '<svg viewBox="0 0 16 16"><rect x="2.5" y="5.5" width="11" height="5" rx="1.5"/><rect x="4" y="7" width="2" height="2" fill="currentColor" stroke="none"/><rect x="7" y="7" width="2" height="2" fill="currentColor" stroke="none"/><rect x="10" y="7" width="2" height="2" fill="currentColor" stroke="none"/></svg>',
   diff: '<svg viewBox="0 0 16 16"><path d="M4.5 2.5v6M1.5 5.5h6M8.5 11.5h6"/><path d="M10 2.5l-4 11"/></svg>',

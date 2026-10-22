@@ -5,7 +5,7 @@ namespace Termilly.Desktop;
 
 /// <summary>
 /// The Linux keyring (the freedesktop Secret Service: GNOME Keyring, KWallet…) through libsecret: where Termilly
-/// keeps an SSH connection's password and the AI assistant's API key on Linux, as Windows Credential Manager does on
+/// keeps an SSH connection's password on Linux, as Windows Credential Manager does on
 /// Windows. Items are found by their target ("Termilly/ssh/&lt;id&gt;"), under the schema dev.termilly.Credential.
 /// Compiled into the app and into the askpass helper (Termilly.Agent), which reads passwords when ssh asks. Calls
 /// throw <see cref="InvalidOperationException"/> with the keyring's message when it says no.

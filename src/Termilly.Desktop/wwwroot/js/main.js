@@ -25,7 +25,6 @@ import { toggleScratch } from './scratch.js';
 import { openGitWindow, openAgentChanges, gitFolderOf, onServer, openRemoteGitNotice } from './gitwindow.js';
 import { toggleSftp } from './sftp.js';
 import { openNewWorktree } from './worktree.js';
-import { toggleAi } from './ai.js';
 import { openChangedFiles } from './changes.js';
 import { openSnippetsWindow } from './snippetswindow.js';
 import { THEMES } from './themes.js';
@@ -180,7 +179,6 @@ setCommands(() => [
   { label: 'Move this workspace’s terminals to tabs', keywords: 'tabs group stack stacked accordion collapse panes too many', run: () => moveAllToTabs(state.workspaces.find(w => w.id === state.activeId)) },
   { label: 'SFTP files of this SSH terminal (on / off)', keywords: 'sftp files upload download remote scp', hint: keysHtml('Ctrl Shift L'), run: () => setTimeout(() => toggleSftp()) },
   { label: 'Take the tour', keywords: 'tour help guide introduction tutorial walkthrough start learn', run: () => setTimeout(startTour) },
-  { label: 'Ask AI about this terminal', keywords: 'ai assistant claude llm explain error chat', hint: keysHtml('Ctrl Shift K'), run: () => setTimeout(() => toggleAi()) },
   ...(changeShortcutOn() ? [
     { label: 'Show the files Claude changed here, in the Git window', keywords: 'change preview diff edits claude files last all tree folders agent changes search', hint: keysHtml('Ctrl Shift D'), run: () => setTimeout(() => openAgentChanges(focusedTab())) },
     { label: 'Show files Claude changed', keywords: 'change preview diff edits claude files list', run: () => setTimeout(() => openChangedFiles()) },
@@ -312,7 +310,6 @@ function runShortcut(e) {
   else if (ctrlShift && e.code === 'KeyO') commands.goTo();
   else if (ctrlShift && e.code === 'KeyE') toggleHints();
   else if (ctrlShift && e.code === 'KeyL') toggleSftp();
-  else if (ctrlShift && e.code === 'KeyK') toggleAi();
   else if (ctrlShift && e.code === 'Backquote') toggleScratch();
   else if (ctrlShift && e.code === 'KeyH') commands.commandHistory();
   else if (ctrlShift && e.code === 'KeyG') openGitHere();

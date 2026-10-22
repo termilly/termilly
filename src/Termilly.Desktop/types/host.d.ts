@@ -31,8 +31,6 @@ interface AppSettings {
   agents: AgentSettings;
   /** The change preview. */
   changes: ChangeSettings;
-  /** The AI assistant. */
-  ai: AiSettings;
   /** Phone check-in. */
   checkin: CheckinSettings;
   /** Termilly on servers. */
@@ -209,17 +207,6 @@ interface ChangeSettings {
   newFile: string;
   /** Files a shell command made or changed are listed too. */
   shellFiles: boolean;
-}
-
-/** The AI assistant (Assistant.cs): its provider, model and server, and what it may read and run. */
-interface AiSettings {
-  provider: string;
-  /** Null: the provider's default model. */
-  model: string | null;
-  endpoint: string;
-  readOutput: string;
-  readHistory: string;
-  runCommands: string;
 }
 
 /** Phone check-in (CheckinServer.cs): on or off, whether a phone may answer prompts, and its port. */

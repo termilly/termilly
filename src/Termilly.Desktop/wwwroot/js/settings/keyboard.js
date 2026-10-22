@@ -39,7 +39,6 @@ const SHORTCUTS = [
     ['Hints: open a link, copy a path or hash (Shift: copy link, show path)', 'Ctrl Shift E'],
     ['Floating scratch terminal', 'Ctrl Shift `'],
     ['SFTP files of an SSH terminal', 'Ctrl Shift L'],
-    ['Ask AI about the terminal', 'Ctrl Shift K'],
     ['Go to a workspace, folder, closed terminal or SSH host', 'Ctrl Shift O'],
     ['Settings', 'Ctrl ,'],
     ['Bigger / smaller text', 'Ctrl + / Ctrl -'],

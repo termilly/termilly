@@ -47,6 +47,33 @@ internal static class SettingsFile
         }
     }
 
+    /// <summary>
+    /// Whether the file still names Anthropic as the provider of the AI assistant, which Termilly had until 1.1.0:
+    /// the assistant's API key may then still be kept (RetiredAssistantKey removes it).
+    /// </summary>
+    public static bool NamesAnthropicAssistant(string? path = null)
+    {
+        path ??= DefaultPath;
+        try
+        {
+            return File.Exists(path) && JsonNode.Parse(File.ReadAllText(path)) is JsonObject file
+                && file[RetiredAssistant.Group]?[RetiredAssistant.Provider] is JsonValue provider
+                && provider.TryGetValue<string>(out var name) && name == RetiredAssistant.Anthropic;
+        }
+        catch (Exception e) when (Storage.IsFileError(e) || e is JsonException or InvalidOperationException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>The AI assistant's group in files from 1.1.0 and before.</summary>
+    private static class RetiredAssistant
+    {
+        public const string Group = "ai";
+        public const string Provider = "provider";
+        public const string Anthropic = "anthropic";
+    }
+
     public static void Save(AppSettings settings, string? path = null)
     {
         path ??= DefaultPath;

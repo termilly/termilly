@@ -2,6 +2,10 @@
 
 What changed in each release. Termilly says in its title bar when a newer one is out.
 
+## Unreleased
+
+- **The AI assistant is gone** (Settings › AI, Ctrl+Shift+K). Coding agents in a terminal do the same job better. If you saved an Anthropic API key for it, Termilly deletes it from Windows Credential Manager or the Linux keyring the first time it starts.
+
 ## 1.1.0 (2026-10-21)
 
 - **Updates from inside Termilly:** Download and install, then Restart to update. The installer is checked against the signed release before it runs, and nothing happens until you choose it. Updating from 1.0.0 still goes through the browser once.

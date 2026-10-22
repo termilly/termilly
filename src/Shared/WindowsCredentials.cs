@@ -6,9 +6,8 @@ namespace Termilly.Shared;
 
 /// <summary>
 /// Windows Credential Manager (generic credentials, for the current user): where an SSH connection's password can
-/// be kept, under "Termilly/ssh/&lt;id&gt;", and the AI assistant's API key ("Termilly/ai/anthropic"). ssh passwords are
-/// read by the askpass helper when ssh asks (Termilly.Agent/Askpass.cs); the app reads them only to keep them out of
-/// what the AI assistant sends (Assistant.cs). Shared, so the app and the helper read the same way.
+/// be kept, under "Termilly/ssh/&lt;id&gt;". Only the askpass helper reads them, when ssh asks (Termilly.Agent/Askpass.cs);
+/// the app saves and deletes them. Shared, so the app and the helper read the same way.
 /// </summary>
 internal static class WindowsCredentials
 {

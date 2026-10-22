@@ -133,12 +133,12 @@ const STEPS = [
   {
     target: '#settings-button', side: SIDE.below, pad: 4,
     title: 'Settings',
-    text: 'Fonts and theme, SSH connections and port forwards, triggers, the drop-down window, keeping shells running after you close Termilly, history sync, plugins - and the optional AI assistant and phone check-in, both off until you turn them on.',
+    text: 'Fonts and theme, SSH connections and port forwards, triggers, the drop-down window, keeping shells running after you close Termilly, history sync, plugins - and phone check-in, off until you turn it on.',
     hint: `${keysHtml('Ctrl ,')} · every shortcut is in Settings › Keyboard`,
   },
   {
     title: 'You’re set',
-    text: `That’s the tour. A few more to remember: ${keysHtml('Ctrl Shift `')} a floating scratch terminal, ${keysHtml('Ctrl Shift I')} type into every terminal of the workspace, ${keysHtml('Ctrl Shift K')} ask AI (once set up). Run the tour again from the palette: “Take the tour”.`,
+    text: `That’s the tour. A few more to remember: ${keysHtml('Ctrl Shift `')} a floating scratch terminal and ${keysHtml('Ctrl Shift I')} type into every terminal of the workspace. Run the tour again from the palette: “Take the tour”.`,
   },
 ];
 

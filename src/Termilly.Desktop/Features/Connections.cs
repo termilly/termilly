@@ -42,6 +42,27 @@ internal sealed class Credentials(ICredentialStore store)
     public bool Has(string target) => store.IsAvailable && Read(() => store.Exists(target));
 }
 
+/// <summary>
+/// The AI assistant (in Termilly until 1.1.0) kept the user's Anthropic API key in the credential store. Now that it's
+/// gone, the key is removed at start so none is left behind. Only when settings.json still names Anthropic as its
+/// provider: looking in the Linux keyring can ask to unlock it, which no one should see for a key they never saved.
+/// </summary>
+internal sealed class RetiredAssistantKey(Credentials credentials) : IStartable
+{
+    private const string Target = "Termilly/ai/anthropic";
+
+    /// <summary>Read when the window is made, before anything saves settings.json without the assistant's group.</summary>
+    private readonly bool _wasUsed = SettingsFile.NamesAnthropicAssistant();
+
+    public void Start()
+    {
+        if (_wasUsed)
+        {
+            Task.Run(() => credentials.Change(() => credentials.Store.Delete(Target), _ => { }));
+        }
+    }
+}
+
 /// <summary>Settings › SSH: importing hosts from other clients, saved passwords, and port forwards.</summary>
 internal sealed class SshHandler : IMessageHandler, IStartable, IDisposable
 {

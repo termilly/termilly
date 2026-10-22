@@ -46,6 +46,7 @@ internal static class Composition
         .AddStartable<ProfileCatalog>()
         .AddStartable<ActivityWatcher>()
         .AddStartable<AgentMonitor>()
+        .AddStartable<RetiredAssistantKey>()
         // Each feature's messages.
         .AddHandler<WindowHandler>()
         .AddHandler<PageApi>()
@@ -64,7 +65,6 @@ internal static class Composition
         .AddHandler<RecordingHandler>()
         .AddHandler<LogHandler>()
         .AddHandler<CheckinHandler>()
-        .AddHandler<AiHandler>()
         .AddHandler<SyncHandler>()
         .AddHandler<UpdateHandler>()
         .AddSingleton<PageHost>();

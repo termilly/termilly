@@ -88,26 +88,6 @@ internal static class SettingValues
         public static readonly IReadOnlyList<int> All = [0, 4, 8, Default];
     }
 
-    /// <summary>The AI assistant (Assistant.cs): off, Anthropic with your own key, or a local OpenAI-compatible server.</summary>
-    public static class AiProvider
-    {
-        public const string Off = "off";
-        public const string Anthropic = "anthropic";
-        public const string Local = "local";
-        public const string Default = Off;
-        public static readonly IReadOnlyList<string> All = [Off, Anthropic, Local];
-    }
-
-    /// <summary>What the assistant may do: read a terminal's output, the history, run commands.</summary>
-    public static class AiPermission
-    {
-        public const string Never = "never";
-        public const string Ask = "ask";
-        public const string Always = "always";
-        public const string Default = Ask;
-        public static readonly IReadOnlyList<string> All = [Never, Ask, Always];
-    }
-
     /// <summary>Terminal logs: plain text (escape codes stripped, commands marked) or raw.</summary>
     public static class LogFormat
     {

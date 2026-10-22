@@ -42,8 +42,8 @@ does what DPAPI does on Windows. `TERMILLY_DEVTOOLS=1` turns on WebKit's inspect
   files dropped on a terminal, each terminal's folder (bash and PowerShell report it).
 - Everything else the page does, from the same code as on Windows: SFTP panel (uploads by drop or the Upload
   button's GTK dialog), port forwards, SSH import, layouts (export, import, .termilly.yml), the change preview,
-  history sync, agent worktrees, phone check-in, plugins, the AI assistant, recovery code flows.
-- Saved SSH passwords and the AI assistant's API key in the system keyring (GNOME Keyring, KWallet: libsecret);
+  history sync, agent worktrees, phone check-in, plugins, recovery code flows.
+- Saved SSH passwords in the system keyring (GNOME Keyring, KWallet: libsecret);
   ssh reads a saved password through Termilly's askpass helper.
 - Background shells (Settings › Workspaces › Keep shells running): the host process (host/termilly-host, in a
   session of its own) runs the terminals, so closing or crashing the window doesn't end them, and the next window

@@ -3,7 +3,7 @@ using System.Runtime.Versioning;
 namespace Termilly.Desktop;
 
 /// <summary>
-/// Where Termilly keeps an SSH connection's password and the AI assistant's API key, outside its own files: the
+/// Where Termilly keeps an SSH connection's password, outside its own files: the
 /// system's credential store, for the current user. Calls throw when the store says no.
 /// </summary>
 internal interface ICredentialStore

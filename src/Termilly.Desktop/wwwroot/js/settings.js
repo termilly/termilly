@@ -111,7 +111,6 @@ const SYNONYMS = {
   size: ['font', 'zoom'],
   agent: ['claude', 'codex', 'hook', 'mcp'],
   claude: ['agent', 'hook'],
-  ai: ['claude', 'model', 'provider'],
   proxy: ['jump', 'bastion', 'forward'],
   jump: ['proxy', 'bastion'],
   colour: ['color', 'theme'],

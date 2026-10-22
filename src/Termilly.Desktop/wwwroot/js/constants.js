@@ -219,20 +219,6 @@ export const SETTING_VALUES = Object.freeze({
     default: 12,
     all: Object.freeze([0, 4, 8, 12]),
   }),
-  aiProvider: Object.freeze({
-    off: 'off',
-    anthropic: 'anthropic',
-    local: 'local',
-    default: 'off',
-    all: Object.freeze(['off', 'anthropic', 'local']),
-  }),
-  aiPermission: Object.freeze({
-    never: 'never',
-    ask: 'ask',
-    always: 'always',
-    default: 'ask',
-    all: Object.freeze(['never', 'ask', 'always']),
-  }),
   logFormat: Object.freeze({
     plain: 'plain',
     raw: 'raw',
