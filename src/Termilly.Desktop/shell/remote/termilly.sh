@@ -7,7 +7,7 @@
 # It does nothing outside Termilly: only a terminal Termilly opened sets LC_TERMILLY, and ssh passes LC_* on.
 # A shell Termilly started on this machine (TERM_PROGRAM, which ssh doesn't pass) has its own integration.
 
-TERMILLY_REMOTE_VERSION=5
+TERMILLY_REMOTE_VERSION=6
 
 [ "${LC_TERMILLY-}" = 1 ] || return 0
 [ "${TERM_PROGRAM-}" != Termilly ] || return 0
@@ -114,9 +114,11 @@ function claude {
   # `cd …; claude --resume …`) starts Claude without a prompt in between, and the workspace would show neither.
   __termilly_osc "7;file://${HOSTNAME:-${HOST-}}$PWD"
   __termilly_git
+  # ConEmuANSI, as Termilly sets it for local shells (ssh doesn't pass it on): Claude Code then reports its progress
+  # (OSC 9;4) and clears it whenever it stops, also when Esc or Ctrl+C interrupts a turn, which no hook reports.
   if [ -f "$HOME/.termilly/claude-settings.json" ]; then
-    TERMILLY_TTY=$tty command claude --settings "$HOME/.termilly/claude-settings.json" "$@"
+    ConEmuANSI=ON TERMILLY_TTY=$tty command claude --settings "$HOME/.termilly/claude-settings.json" "$@"
   else
-    command claude "$@" # removed from this host while the shell was open
+    ConEmuANSI=ON command claude "$@" # removed from this host while the shell was open
   fi
 }
