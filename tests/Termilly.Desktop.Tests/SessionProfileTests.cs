@@ -319,12 +319,21 @@ public sealed class SessionProfileTests : IDisposable
         Assert.Equal(expected, SessionLaunch.WithWslVariables(inherited, "LC_TERMILLY/u"));
 
     [Fact]
-    public void Cmd_custom_profiles_and_ssh_hosts_are_left_alone()
+    public void Cmd_marks_its_prompt_around_the_one_it_shows()
+    {
+        var cmd = new SessionProfile("cmd", "Command Prompt", "", "cmd", "cmd.exe", ProfileSources.Local);
+        var (commandLine, vars) = SessionLaunch.WithShellIntegration(cmd, new Dictionary<string, string> { ["PROMPT"] = "$T $P$G" });
+        Assert.Equal("cmd.exe", commandLine);
+        Assert.Equal(@"$e]133;A$e\$T $P$G$e]133;B$e\", vars["PROMPT"]);
+        Assert.Equal(@"$e]133;A$e\$P$G$e]133;B$e\", SessionLaunch.CmdPrompt(null));
+    }
+
+    [Fact]
+    public void Custom_profiles_and_ssh_hosts_are_left_alone()
     {
         var vars = new Dictionary<string, string> { ["A"] = "1" };
         foreach (var profile in new[]
         {
-            new SessionProfile("cmd", "Command Prompt", "", "cmd", "cmd.exe", ProfileSources.Local),
             new SessionProfile("custom-1", "Mine", "", "powershell", "powershell.exe -File x.ps1", ProfileSources.Custom),
             new SessionProfile("ssh-a", "a", "", "ssh", "ssh.exe a", ProfileSources.Ssh),
         })

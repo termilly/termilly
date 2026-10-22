@@ -31,6 +31,13 @@ internal static class SessionLaunch
         public const string Unless = """[ -n "$__termilly_loaded" ] ||""";
     }
 
+    /// <summary>cmd's prompt variable and what it shows when nobody set it (<see cref="CmdPrompt"/>).</summary>
+    private static class CmdMarks
+    {
+        public const string Prompt = "PROMPT";
+        public const string Default = "$P$G";
+    }
+
     /// <summary>WSLENV's flag for a variable that goes from Windows into WSL only, as it is.</summary>
     private const string WslToLinux = "/u";
 
@@ -124,8 +131,9 @@ internal static class SessionLaunch
     /// The command line and variables that make a detected shell mark its prompts and commands (OSC 133), so
     /// Termilly sees a command running even when it starts no process. PowerShell dot-sources shell\termilly.ps1
     /// after the user's profile; bash (Git Bash, and WSL through WSLENV) reads PS0 and PROMPT_COMMAND from the
-    /// environment, unless the user's own startup files set them. cmd has no hooks, and custom profiles and SSH
-    /// hosts run whatever they run, so they're left as they are.
+    /// environment, unless the user's own startup files set them. cmd has no hooks, but its PROMPT can print the
+    /// marks around the prompt it shows (<see cref="CmdPrompt"/>). Custom profiles and SSH hosts run whatever they
+    /// run, so they're left as they are.
     /// </summary>
     public static (string CommandLine, IReadOnlyDictionary<string, string> Environment) WithShellIntegration(
         SessionProfile profile, IReadOnlyDictionary<string, string> vars, string? script = null)
@@ -155,6 +163,9 @@ internal static class SessionLaunch
                 AddBashMarks(withMarks);
                 var inherited = vars.TryGetValue(Variables.WslEnv, out var own) ? own : System.Environment.GetEnvironmentVariable(Variables.WslEnv);
                 withMarks[Variables.WslEnv] = WithWslVariables(inherited, $"{BashMarks.Ps0}{WslToLinux}", $"{BashMarks.PromptCommand}{WslToLinux}");
+                return (profile.CommandLine, withMarks);
+            case (ProfileSources.Local, ProfileIcons.Cmd):
+                withMarks[CmdMarks.Prompt] = CmdPrompt(vars.TryGetValue(CmdMarks.Prompt, out var prompt) ? prompt : System.Environment.GetEnvironmentVariable(CmdMarks.Prompt));
                 return (profile.CommandLine, withMarks);
             default:
                 return (profile.CommandLine, vars);
@@ -198,6 +209,14 @@ internal static class SessionLaunch
                                  (OperatingSystem.IsWindows() ? "" : @"printf '\033]7;file://%s%s\007' ""$HOSTNAME"" ""$PWD""; ") +
                                  @"printf '\033]133;D;%s\007\033]133;A\007' ""$__termilly_status""; }";
     }
+
+    /// <summary>
+    /// cmd's PROMPT with the marks around <paramref name="own"/> (the user's PROMPT, or cmd's default): a prompt
+    /// starts (A), and input starts (B). $e is Esc and $e\ ends each sequence. cmd can't run anything before a
+    /// command or say how the last one ended, so there's no C or D: the host still sees its commands run.
+    /// </summary>
+    internal static string CmdPrompt(string? own) =>
+        $@"$e]133;A$e\{(string.IsNullOrEmpty(own) ? CmdMarks.Default : own)}$e]133;B$e\";
 
     /// <summary>
     /// An ssh command line with server keepalives, so a dead connection is noticed in under a minute (and the
