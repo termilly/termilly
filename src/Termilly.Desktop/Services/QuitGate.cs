@@ -11,7 +11,7 @@ namespace Termilly.Desktop.Services;
 internal sealed class QuitGate : IDisposable
 {
     /// <summary>How long a quit waits for the page to answer before it goes ahead.</summary>
-    private static readonly TimeSpan DefaultAnswerWait = TimeSpan.FromSeconds(3);
+    private static readonly TimeSpan DefaultAnswerWait = TimeSpan.FromSeconds(30);
 
     private readonly PageChannel _page;
     private readonly TimeSpan _answerWait;
