@@ -10,6 +10,7 @@ import { state, GROUPS } from './store.js';
 import { showMenu, SEPARATOR } from './popups.js';
 import { confirmDialog, modal, CONFIRM_DIALOG } from './dialogs.js';
 import { escapeHtml, formatWhen } from './ui.js';
+import { byId } from './dom.js';
 import { updateSettings } from './preferences.js';
 
 /**
@@ -33,6 +34,9 @@ export const onUpdateStatus = fn => listeners.add(fn);
 const CHIP = 'update-chip';
 /** The class of the notice's menus. */
 const MENU = 'update-menu';
+
+/** The version beside the name in the title bar. */
+const version = byId('app-version');
 
 const chip = document.createElement('button');
 chip.className = CHIP;
@@ -67,6 +71,8 @@ function chipText() {
 }
 
 function render() {
+  // The running version, next to the name in the title bar.
+  version.textContent = updateStatus.current;
   const available = updateStatus.available;
   // A version the user skipped stays out of sight, unless they asked for it before skipping.
   const show = !!available && (state.settings.uiState.skippedVersion !== available.version || !!progressOf());

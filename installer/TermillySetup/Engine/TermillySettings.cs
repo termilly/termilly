@@ -19,8 +19,8 @@ internal static class TermillySettings
     private delegate void Setter(string group, string key, string flatKey, bool value);
 
     /// <summary>
-    /// Agent integration, background shells at sign-in and the tour. Termilly writes the sign-in entry itself when it
-    /// starts.
+    /// Agent integration and background shells at sign-in. Termilly writes the sign-in entry itself when it starts. The
+    /// tour isn't setup's to decide: Termilly offers it once, on its very first start, and never after an upgrade.
     /// </summary>
     public static void Write(SetupOptions options)
     {
@@ -36,17 +36,9 @@ internal static class TermillySettings
             {
                 set(SettingsFile.Session, SettingsFile.BackgroundAtSignIn, SettingsFile.BackgroundAtSignIn, false);
             }
-            if (fresh || !options.Tour)
-            {
-                set(SettingsFile.UiState, SettingsFile.TourSeen, SettingsFile.TourSeen, !options.Tour);
-            }
         });
         Log.Write($"Termilly settings: agent integration {(options.AgentIntegration ? "on" : "off")}, sign-in shells {(options.BackgroundAtSignIn ? "on" : "unchanged")}");
     }
-
-    /// <summary>Whether Termilly offers its tour at first start (the Done page's box, changed after installing).</summary>
-    public static void SetTourSeen(bool seen) =>
-        Edit(create: false, (set, _) => set(SettingsFile.UiState, SettingsFile.TourSeen, SettingsFile.TourSeen, seen));
 
     /// <summary>
     /// Reads settings.json, lets <paramref name="change"/> set what it needs (with whether the file is new), and writes
@@ -109,8 +101,6 @@ internal static class TermillySettings
         public const string Session = "session";
         public const string BackgroundShells = "backgroundShells";
         public const string BackgroundAtSignIn = "backgroundAtSignIn";
-        public const string UiState = "uiState";
-        public const string TourSeen = "tourSeen";
         /// <summary>Agent integration's name in a file from before groups.</summary>
         public const string FlatAgentIntegration = "agentIntegration";
     }

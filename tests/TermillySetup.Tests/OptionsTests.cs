@@ -12,7 +12,7 @@ public class OptionsTests
         var options = new SetupOptions
         {
             AllUsers = true, InstallDir = @"D:\Apps\Termilly", StartMenu = false, Desktop = true, ExplorerMenu = false,
-            PathCommand = false, AgentIntegration = false, BackgroundAtSignIn = true, PreferIncluded = true, Launch = false, Tour = false,
+            PathCommand = false, AgentIntegration = false, BackgroundAtSignIn = true, PreferIncluded = true, Launch = false,
         };
 
         var back = SetupOptions.FromArgument(options.ToArgument());
@@ -35,7 +35,7 @@ public class OptionsTests
         Assert.Equal(SetupOptions.DefaultDir(false), read.InstallDir);
         Assert.Equal(defaults.Desktop, read.Desktop);
         Assert.Equal(defaults.StartMenu, read.StartMenu);
-        Assert.Equal(defaults.Tour, read.Tour);
+        Assert.Equal(defaults.Launch, read.Launch);
     }
 
     [Fact]

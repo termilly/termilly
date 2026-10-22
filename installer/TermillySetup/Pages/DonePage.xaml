@@ -9,7 +9,6 @@
         </Grid>
         <TextBlock Style="{StaticResource H1}" Text="Termilly is installed" />
         <TextBlock x:Name="Where" Style="{StaticResource Lead}" />
-        <CheckBox x:Name="Launch" Style="{StaticResource Check}" Content="Launch Termilly" Margin="0,0,0,10" />
-        <CheckBox x:Name="Tour" Style="{StaticResource Check}" Content="Show me around" />
+        <CheckBox x:Name="Launch" Style="{StaticResource Check}" Content="Launch Termilly" />
     </StackPanel>
 </UserControl>

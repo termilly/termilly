@@ -20,9 +20,8 @@ internal sealed class SetupOptions
     public bool BackgroundAtSignIn { get; set; }
     /// <summary>Use setup's own copies of .NET and WebView2 without trying to download them.</summary>
     public bool PreferIncluded { get; set; }
-    /// <summary>Done page: start Termilly, and offer its tour on first start.</summary>
+    /// <summary>Done page: start Termilly. (Its tour is Termilly's own: offered once, on its very first start.)</summary>
     public bool Launch { get; set; } = true;
-    public bool Tour { get; set; } = true;
 
     /// <summary>The per-user programs folder under Local AppData.</summary>
     private const string UserPrograms = "Programs";
@@ -46,7 +45,6 @@ internal sealed class SetupOptions
         public const string SignIn = "signIn";
         public const string Included = "included";
         public const string Launch = "launch";
-        public const string Tour = "tour";
     }
 
     private const char Separator = ';';
@@ -56,7 +54,7 @@ internal sealed class SetupOptions
     {
         $"{Keys.AllUsers}={AllUsers}", $"{Keys.Dir}={InstallDir}", $"{Keys.StartMenu}={StartMenu}", $"{Keys.Desktop}={Desktop}",
         $"{Keys.Explorer}={ExplorerMenu}", $"{Keys.Path}={PathCommand}", $"{Keys.Agent}={AgentIntegration}",
-        $"{Keys.SignIn}={BackgroundAtSignIn}", $"{Keys.Included}={PreferIncluded}", $"{Keys.Launch}={Launch}", $"{Keys.Tour}={Tour}",
+        $"{Keys.SignIn}={BackgroundAtSignIn}", $"{Keys.Included}={PreferIncluded}", $"{Keys.Launch}={Launch}",
     });
 
     /// <summary>Options from <see cref="ToArgument"/>'s text; a missing or unreadable one keeps its default.</summary>
@@ -75,7 +73,6 @@ internal sealed class SetupOptions
         options.BackgroundAtSignIn = Flag(Keys.SignIn, options.BackgroundAtSignIn);
         options.PreferIncluded = Flag(Keys.Included, options.PreferIncluded);
         options.Launch = Flag(Keys.Launch, options.Launch);
-        options.Tour = Flag(Keys.Tour, options.Tour);
         return options;
     }
 }
