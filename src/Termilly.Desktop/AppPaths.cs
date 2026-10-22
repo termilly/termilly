@@ -30,6 +30,9 @@ internal static class AppPaths
     /// <summary>The window's and notifications' images, next to the app.</summary>
     public static string Assets { get; } = Path.Combine(AppContext.BaseDirectory, "Assets");
 
+    /// <summary>Termilly's icon on Windows, every size it's shown at (the window, the tray), each drawn on whole pixels.</summary>
+    public static string IconFile { get; } = Path.Combine(Assets, "termilly.ico");
+
     /// <summary>Shell integration's scripts (PowerShell's, and those for servers), next to the app.</summary>
     public static string ShellScripts { get; } = Path.Combine(AppContext.BaseDirectory, "shell");
 

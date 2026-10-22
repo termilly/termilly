@@ -63,10 +63,18 @@ internal sealed record InterfaceSettings
     public bool GitStatus { get; init; } = true;
     public bool CheckForUpdates { get; init; } = true;
     public IReadOnlyList<string>? DisabledPlugins { get; init; }
+    /// <summary>The window's Minimize: to the taskbar, or the tray (Windows).</summary>
+    public string MinimizeTo { get; init; } = SettingValues.MinimizeTo.Default;
+    /// <summary>The window's Close: quit, or keep running in the tray (Windows).</summary>
+    public string CloseAction { get; init; } = SettingValues.CloseAction.Default;
+    /// <summary>Quitting asks first while a command or an agent is still running (unless shells are kept running).</summary>
+    public bool ConfirmQuit { get; init; } = true;
 
     public InterfaceSettings Normalize() => this with
     {
         Theme = IsThemeId(Theme) ? Theme : SettingValues.Theme.Default,
+        MinimizeTo = SettingChecks.OneOf(MinimizeTo, SettingValues.MinimizeTo.All, SettingValues.MinimizeTo.Default),
+        CloseAction = SettingChecks.OneOf(CloseAction, SettingValues.CloseAction.All, SettingValues.CloseAction.Default),
         Font = SettingChecks.Trimmed(Font),
         DisabledPlugins = (DisabledPlugins ?? []).Where(id => !string.IsNullOrWhiteSpace(id)).Distinct().Take(MaxDisabledPlugins).ToList(),
     };

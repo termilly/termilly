@@ -1,8 +1,9 @@
 // @ts-check
-// Settings › Workspaces: the sidebar, background shells, what comes back at start and project status.
+// Settings › Workspaces: the sidebar, background shells, what comes back at start, what Minimize and Close do, and
+// project status.
 
 import { PAGE } from '../protocol.js';
-import { send, sys } from '../host.js';
+import { send, sys, SYSTEM_NAME } from '../host.js';
 import { state } from '../store.js';
 import { ICONS, keysHtml } from '../ui.js';
 import { confirmDialog } from '../dialogs.js';
@@ -13,7 +14,7 @@ import { SETTING_VALUES } from '../constants.js';
 import { targetOf } from '../dom.js';
 
 /** The choices of the settings used here (C#'s SettingValues). */
-const { restoreSession } = SETTING_VALUES;
+const { restoreSession, minimizeTo, closeAction } = SETTING_VALUES;
 
 /**
  * The closed sidebar's choice, which is the sidebar's own state rather than a setting.
@@ -37,6 +38,14 @@ const WORKSPACES = {
     + row('When Termilly starts', 'Bring back the terminals in the folders they were in, with their last output (encrypted, saved every half minute and on exit). A Claude Code session that was running picks up again by itself. Or only the layout, or a fresh workspace.',
       seg('session.restore', [[restoreSession.scrollback, 'Terminals and output'], [restoreSession.layout, 'Layout only'], [restoreSession.off, 'Fresh']]))
     + row('Confirm before closing a workspace', 'Only asked when the workspace still has terminals.', toggle('interface.confirmCloseWorkspace')))
+    + group('Minimize and Close',
+      // No tray on Linux: GNOME has none without an extension.
+      (sys.name === SYSTEM_NAME.linux ? '' : row('Minimize', 'The tray keeps Termilly off the taskbar until you click its icon.',
+        seg('interface.minimizeTo', [[minimizeTo.taskbar, 'Taskbar'], [minimizeTo.tray, 'Tray']]))
+        + row('Close', 'Keep running in the tray, and agents can still notify you. Quit from the tray icon’s menu or the palette.',
+          seg('interface.closeAction', [[closeAction.quit, 'Quit Termilly'], [closeAction.tray, 'Keep running in the tray']])))
+      + row('Ask before quitting', 'When a command is still running, or an agent is working or waiting for you. Not asked while Keep shells running is on: they go on without the window.',
+        toggle('interface.confirmQuit')))
     + group('Project status', row('Git branch', 'The branch of each workspace’s folder on its row, a dot when there are uncommitted changes, and ↑↓ against its upstream; on a terminal’s row when it works in another repository or worktree. Read with git every few seconds at most, only for what’s on screen, never for network shares.',
         toggle('interface.gitStatus'), { keywords: 'git branch dirty changes ahead behind upstream repository worktree' })
       + row('Listening ports', 'The ports a terminal’s programs listen on (:3000) on its row; click one to open it in the browser.', toggle('terminal.ports'), { keywords: 'port server localhost dev listening url' })),

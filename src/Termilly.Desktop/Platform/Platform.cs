@@ -30,6 +30,9 @@ internal interface IAppWindow
     /// </summary>
     void CloseNow();
 
+    /// <summary>The user wants to quit, whatever Close does: asks first when something is running (QuitGate).</summary>
+    void Quit();
+
     /// <summary>How many terminals need the user, for the taskbar or dock (0: none).</summary>
     void ShowBadge(int count);
 

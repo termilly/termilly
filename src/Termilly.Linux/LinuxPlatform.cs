@@ -53,8 +53,11 @@ internal sealed class LinuxPlatform(Action<string> send, string? startFolder) :
     /// <summary>Termilly was started again while this one runs: the window should come to the front.</summary>
     public event Action? Activate;
 
-    /// <summary>The page's last snapshot is in: the window can close now.</summary>
+    /// <summary>The window closes now, without asking: the page's last snapshot is in, or an update restarts Termilly.</summary>
     public event Action? CloseRequested;
+
+    /// <summary>The user wants to quit: asks first when something is running (QuitGate).</summary>
+    public event Action? QuitRequested;
 
     /// <summary>notify-send's notifications can't be clicked through to a terminal, so this never fires.</summary>
     public event Action<string>? Clicked
@@ -77,6 +80,8 @@ internal sealed class LinuxPlatform(Action<string> send, string? startFolder) :
     public void Act(FromPage.Window action) => WindowActionRequested?.Invoke(action);
 
     public void CloseNow() => CloseRequested?.Invoke();
+
+    public void Quit() => QuitRequested?.Invoke();
 
     /// <summary>No dock badge on Linux yet (src/Termilly.Linux/README.md, "Not yet").</summary>
     public void ShowBadge(int count)

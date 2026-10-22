@@ -53,15 +53,15 @@ internal sealed class LinuxWindow
     }
 
     /// <summary>Shows the window and returns when it has closed.</summary>
-    public void Run(LinuxPlatform platform, WindowTheme theme, PageChannel channel, PageHost host)
+    public void Run(LinuxPlatform platform, WindowTheme theme, PageChannel channel, PageHost host, QuitGate quit)
     {
-        var window = _window = Create(theme, channel, host);
+        var window = _window = Create(theme, channel, host, quit);
         var icon = Path.Combine(AppContext.BaseDirectory, "icons", "hicolor", "256x256", "apps", "termilly.png");
         if (File.Exists(icon))
         {
             window.SetIconFile(icon);
         }
-        Follow(platform, window);
+        Follow(platform, window, quit);
         host.Start();
         window.Load(StartPage);
         window.WaitForClose();
@@ -79,7 +79,7 @@ internal sealed class LinuxWindow
         }
     }
 
-    private PhotinoWindow Create(WindowTheme theme, PageChannel channel, PageHost host)
+    private PhotinoWindow Create(WindowTheme theme, PageChannel channel, PageHost host, QuitGate quit)
     {
         PhotinoWindow? window = null;
         // LogVerbosity 0: Photino otherwise prints every message to and from the page, settings and scrollback included.
@@ -107,7 +107,13 @@ internal sealed class LinuxWindow
             .RegisterFocusOutHandler((_, _) => PostState(channel, window!, active: false))
             .RegisterWindowClosingHandler((_, _) =>
             {
-                // As on Windows: with terminals to keep, the page first sends a last snapshot, then the window closes.
+                // As on Windows: Close asks before quitting while something runs (QuitGate)…
+                if (!quit.Quitting)
+                {
+                    quit.Ask(() => window!.Invoke(() => window.Close()));
+                    return true; // keep the window open for now
+                }
+                // …and with terminals to keep, the page first sends a last snapshot, then the window closes.
                 if (host.WantsLastSnapshot)
                 {
                     host.RequestSnapshot();
@@ -129,10 +135,15 @@ internal sealed class LinuxWindow
     }
 
     /// <summary>What the page asks of the window: close, come to the front, and the title bar's buttons and edges.</summary>
-    private static void Follow(LinuxPlatform platform, PhotinoWindow window)
+    private static void Follow(LinuxPlatform platform, PhotinoWindow window, QuitGate quit)
     {
         platform.Attach(window);
-        platform.CloseRequested += () => window.Invoke(() => window.Close());
+        platform.CloseRequested += () =>
+        {
+            quit.Allow();
+            window.Invoke(() => window.Close());
+        };
+        platform.QuitRequested += () => window.Invoke(() => window.Close()); // asks first (the closing handler)
         // Photino has no "focus": un-minimise, and briefly keep it on top so it shows above other windows. Wayland
         // may still leave the focus where it is.
         platform.Activate += () => window.Invoke(() =>
@@ -152,7 +163,8 @@ internal sealed class LinuxWindow
                     window.SetMaximized(!window.Maximized);
                     break;
                 case WindowActions.Close:
-                    window.Close();
+                case WindowActions.Quit:
+                    window.Close(); // asks first when something is running (the closing handler)
                     break;
                 case WindowActions.Drag:
                     GtkWindow.BeginMove();

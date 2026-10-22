@@ -68,7 +68,7 @@ internal static class WindowInterop
     /// </summary>
     private static void SetSharpIcons(IntPtr hwnd)
     {
-        var path = Path.Combine(AppPaths.Assets, "termilly.ico");
+        var path = AppPaths.IconFile;
         var dpi = GetDpiForWindow(hwnd);
         var big = LoadImage(IntPtr.Zero, path, IMAGE_ICON, Scale(BigIconSize, dpi), Scale(BigIconSize, dpi), LR_LOADFROMFILE);
         var small = LoadImage(IntPtr.Zero, path, IMAGE_ICON, Scale(SmallIconSize, dpi), Scale(SmallIconSize, dpi), LR_LOADFROMFILE);
@@ -174,6 +174,27 @@ internal static class WindowInterop
         public RECT rcWork;
         public int dwFlags;
     }
+
+    /// <summary>
+    /// Un-minimizes the window, back to maximized if it was. Done by Windows rather than WindowState: a window minimized
+    /// to the tray was hidden while minimized, and setting WindowState then doesn't reach Windows.
+    /// </summary>
+    public static void Restore(Window window)
+    {
+        var hwnd = new WindowInteropHelper(window).Handle;
+        if (IsIconic(hwnd))
+        {
+            ShowWindow(hwnd, SW_RESTORE);
+        }
+    }
+
+    private const int SW_RESTORE = 9;
+
+    [DllImport("user32.dll")]
+    private static extern bool IsIconic(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern bool ShowWindow(IntPtr hWnd, int command);
 
     [DllImport("user32.dll")]
     private static extern bool ReleaseCapture();

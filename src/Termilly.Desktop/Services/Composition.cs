@@ -36,6 +36,7 @@ internal static class Composition
         .AddSingleton<ChangePreview>()
         // The page, and what the features share.
         .AddSingleton<PageChannel>()
+        .AddSingleton<QuitGate>()
         .AddSingleton<Credentials>()
         .AddSingleton<TerminalSessions>()
         .AddSingleton<BackgroundHost>()

@@ -27,7 +27,10 @@ public partial class App : Application
             return;
         }
         StartFolder = folder;
-        MainWindow = new MainWindow();
-        MainWindow.Show();
+        var window = new MainWindow();
+        MainWindow = window;
+        // Signing out or shutting down never waits on a question or hides in the tray.
+        SessionEnding += (_, _) => window.AllowQuit();
+        window.Show();
     }
 }

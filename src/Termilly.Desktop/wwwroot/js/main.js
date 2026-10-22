@@ -42,6 +42,7 @@ import './subagents.js';
 import './notify.js';
 import './snippetprompt.js';
 import './cost.js';
+import './quit.js';
 import { openAllResults } from './results.js';
 import './gitstatus.js';
 import { openViewer } from './viewer.js';
@@ -175,6 +176,7 @@ setCommands(() => [
   { label: 'Move this workspace’s terminals to tabs', keywords: 'tabs group stack stacked accordion collapse panes too many', run: () => moveAllToTabs(state.workspaces.find(w => w.id === state.activeId)) },
   { label: 'SFTP files of this SSH terminal (on / off)', keywords: 'sftp files upload download remote scp', hint: keysHtml('Ctrl Shift L'), run: () => setTimeout(() => toggleSftp()) },
   { label: 'Take the tour', keywords: 'tour help guide introduction tutorial walkthrough start learn', run: () => setTimeout(startTour) },
+  { label: 'Quit Termilly', keywords: 'exit close quit stop tray', run: () => send(PAGE.window, { action: WINDOW_ACTION.quit }) },
   ...(changeShortcutOn() ? [
     { label: 'Show the files Claude changed here, in the Git window', keywords: 'change preview diff edits claude files last all tree folders agent changes search', hint: keysHtml('Ctrl Shift D'), run: () => setTimeout(() => openAgentChanges(focusedTab())) },
     { label: 'Show files Claude changed', keywords: 'change preview diff edits claude files list', run: () => setTimeout(() => openChangedFiles()) },

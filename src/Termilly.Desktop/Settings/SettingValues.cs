@@ -45,6 +45,24 @@ internal static class SettingValues
         public static readonly IReadOnlyList<int> All = [7, Default, 90, 365];
     }
 
+    /// <summary>What the window's Minimize does: the taskbar, or the tray (Windows, TrayIcon.cs).</summary>
+    public static class MinimizeTo
+    {
+        public const string Taskbar = "taskbar";
+        public const string Tray = "tray";
+        public const string Default = Taskbar;
+        public static readonly IReadOnlyList<string> All = [Taskbar, Tray];
+    }
+
+    /// <summary>What the window's Close does: quit Termilly, or keep it running in the tray (Windows, TrayIcon.cs).</summary>
+    public static class CloseAction
+    {
+        public const string Quit = "quit";
+        public const string Tray = "tray";
+        public const string Default = Quit;
+        public static readonly IReadOnlyList<string> All = [Quit, Tray];
+    }
+
     /// <summary>Scrollback for terminals in workspaces out of sight: 0 keeps the normal amount.</summary>
     public static class HiddenScrollback
     {

@@ -41,7 +41,8 @@ internal static class Program
             .AddSingleton<IFontCatalog, LinuxFonts>()
             .AddSingleton<IUpdateInstaller, LinuxUpdateInstaller>()
             .BuildServiceProvider();
-        window.Run(platform, services.GetRequiredService<WindowTheme>(), services.GetRequiredService<PageChannel>(), services.GetRequiredService<PageHost>());
+        window.Run(platform, services.GetRequiredService<WindowTheme>(), services.GetRequiredService<PageChannel>(), services.GetRequiredService<PageHost>(),
+            services.GetRequiredService<QuitGate>());
         return 0;
     }
 }

@@ -2,6 +2,11 @@
 
 What changed in each release. Termilly says in its title bar when a newer one is out.
 
+## Unreleased
+
+- **Ask before quitting:** when a command is still running, or an agent is working or waiting for you, quitting names them and asks first. Not asked while Keep shells running is on, since they go on without the window. Turn it off in Settings › Workspaces.
+- **Minimize and Close to the tray (Windows):** in Settings › Workspaces, Minimize can hide Termilly in the tray instead of the taskbar, and Close can keep it running there, so agents can still notify you. Click the tray icon to bring it back; its menu and the palette's Quit Termilly quit.
+
 ## 1.1.0 (2026-10-21)
 
 - **Updates from inside Termilly:** Download and install, then Restart to update. The installer is checked against the signed release before it runs, and nothing happens until you choose it. Updating from 1.0.0 still goes through the browser once.

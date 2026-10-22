@@ -155,8 +155,16 @@ export const WINDOW_ACTION = Object.freeze({
   minimize: 'minimize',
   maximize: 'maximize',
   close: 'close',
+  quit: 'quit',
   drag: 'drag',
   resize: 'resize',
+});
+
+/** C#: QuitAnswers (Messaging/Window.cs). */
+export const QUIT_ANSWER = Object.freeze({
+  quit: 'quit',
+  stay: 'stay',
+  asking: 'asking',
 });
 
 /** C#: UpdateStates (UpdateInstall.cs). */
@@ -192,6 +200,18 @@ export const SETTING_VALUES = Object.freeze({
   historyDays: Object.freeze({
     default: 30,
     all: Object.freeze([7, 30, 90, 365]),
+  }),
+  minimizeTo: Object.freeze({
+    taskbar: 'taskbar',
+    tray: 'tray',
+    default: 'taskbar',
+    all: Object.freeze(['taskbar', 'tray']),
+  }),
+  closeAction: Object.freeze({
+    quit: 'quit',
+    tray: 'tray',
+    default: 'quit',
+    all: Object.freeze(['quit', 'tray']),
   }),
   hiddenScrollback: Object.freeze({
     default: 0,

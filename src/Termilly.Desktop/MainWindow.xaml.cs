@@ -18,7 +18,7 @@ namespace Termilly.Desktop;
 /// <summary>
 /// Termilly's window on Windows: WebView2 showing the page, with its own title bar and the start-up loader. What the
 /// page asks for is answered by <see cref="PageHost"/> (shared with Linux), with what Windows does its own way in
-/// <see cref="WindowsPlatform"/>; this window adds the taskbar badge and global hotkeys. It is the
+/// <see cref="WindowsPlatform"/>; this window adds the taskbar badge, the tray icon and global hotkeys. It is the
 /// composition root on Windows: it builds the services once it exists.
 /// </summary>
 [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA1001", Justification = "WPF never disposes a window: OnClosing disposes what it owns.")]
@@ -31,7 +31,9 @@ public partial class MainWindow : Window
     private readonly PageChannel _channel;
     private readonly PageHost _page;
     private readonly WindowTheme _theme;
+    private readonly QuitGate _quit;
     private GlobalHotkeys? _hotkeys;
+    private TrayIcon? _tray;
     private int _badgeCount;
     private int? _jumpHotkey;
 
@@ -61,6 +63,7 @@ public partial class MainWindow : Window
         _channel = _services.GetRequiredService<PageChannel>();
         _page = _services.GetRequiredService<PageHost>();
         _theme = _services.GetRequiredService<WindowTheme>();
+        _quit = _services.GetRequiredService<QuitGate>();
         _settings.Saved += _ =>
         {
             ApplyTheme();
@@ -88,6 +91,7 @@ public partial class MainWindow : Window
         Loaded += async (_, _) =>
         {
             _hotkeys = new GlobalHotkeys(this);
+            _tray = CreateTray();
             _page.Start();
             UpdateGlobalHotkeys();
             await InitializeWebViewAsync();
@@ -226,13 +230,16 @@ public partial class MainWindow : Window
         switch (msg.Action)
         {
             case WindowActions.Minimize:
-                WindowState = WindowState.Minimized;
+                WindowState = WindowState.Minimized; // to the tray instead, if Settings say so (OnStateChanged)
                 break;
             case WindowActions.Maximize:
                 WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
                 break;
             case WindowActions.Close:
-                Close();
+                Close(); // quits or goes to the tray, as Settings say (OnClosing)
+                break;
+            case WindowActions.Quit:
+                RequestQuit();
                 break;
             case WindowActions.Drag:
                 WindowInterop.BeginNonClientDrag(this, WindowInterop.HTCAPTION);
@@ -252,6 +259,11 @@ public partial class MainWindow : Window
         base.OnStateChanged(e);
         Frame.BorderThickness = new Thickness(WindowState == WindowState.Maximized ? 0 : 1);
         PostWindowState();
+        // Minimized from the title bar, the taskbar or Win+Down: to the tray instead, if Settings say so.
+        if (WindowState == WindowState.Minimized && Settings.Interface.MinimizeTo == SettingValues.MinimizeTo.Tray)
+        {
+            HideToTray();
+        }
     }
 
     protected override void OnActivated(EventArgs e)
@@ -308,25 +320,50 @@ public partial class MainWindow : Window
         }
         _badgeCount = count;
         TaskbarItemInfo ??= new System.Windows.Shell.TaskbarItemInfo();
-        if (count <= 0)
-        {
-            TaskbarItemInfo.Overlay = null;
-            TaskbarItemInfo.Description = Product.Name;
-            return;
-        }
-
-        TaskbarItemInfo.Overlay = TaskbarBadge.Render(count);
-        TaskbarItemInfo.Description = $"Termilly: {count} terminal{(count == 1 ? " needs" : "s need")} you";
+        TaskbarItemInfo.Overlay = count <= 0 ? null : TaskbarBadge.Render(count);
+        TaskbarItemInfo.Description = count <= 0 ? Product.Name : $"Termilly: {count} terminal{(count == 1 ? " needs" : "s need")} you";
+        _tray?.SetTip(TaskbarItemInfo.Description);
     }
 
-    /// <summary>Shows the window on top, restoring it from the taskbar if needed.</summary>
+    /// <summary>The tray icon: there only while the window is hidden in the tray (Settings › Workspaces › Minimize and Close).</summary>
+    private TrayIcon CreateTray()
+    {
+        var tray = new TrayIcon(BringToFront, RequestQuit);
+        IsVisibleChanged += (_, _) =>
+        {
+            if (IsVisible)
+            {
+                tray.Hide();
+            }
+        };
+        return tray;
+    }
+
+    /// <summary>Hides the window in the tray: Termilly keeps running, and the tray icon brings it back.</summary>
+    private void HideToTray()
+    {
+        Hide();
+        _tray?.Show();
+    }
+
+    /// <summary>The user wants to quit: asks first when something is running (QuitGate), then closes.</summary>
+    internal void RequestQuit() => _quit.Ask(() => Dispatcher.BeginInvoke(QuitNow));
+
+    /// <summary>Quits without asking: an update restarting Termilly, the page's last snapshot in, or the user said so.</summary>
+    internal void QuitNow()
+    {
+        _quit.Allow();
+        CloseOnce();
+    }
+
+    /// <summary>Windows is signing out or shutting down: Termilly closes without asking or hiding.</summary>
+    internal void AllowQuit() => _quit.Allow();
+
+    /// <summary>Shows the window on top, restoring it from the taskbar or the tray if needed.</summary>
     internal void BringToFront()
     {
-        if (WindowState == WindowState.Minimized)
-        {
-            WindowState = WindowState.Normal;
-        }
         Show();
+        WindowInterop.Restore(this);
         Activate();
         Web.Focus();
     }
@@ -342,6 +379,20 @@ public partial class MainWindow : Window
 
     protected override void OnClosing(CancelEventArgs e)
     {
+        // Close (the title bar, Alt+F4, the taskbar) goes to the tray or asks before quitting, as Settings say.
+        if (!_quit.Quitting)
+        {
+            e.Cancel = true;
+            if (Settings.Interface.CloseAction == SettingValues.CloseAction.Tray)
+            {
+                HideToTray();
+            }
+            else
+            {
+                RequestQuit();
+            }
+            return;
+        }
         // Ask the page for a last snapshot of what the terminals show, then close when it arrives (or after a
         // moment, if the page doesn't answer).
         if (_page.WantsLastSnapshot && Web.CoreWebView2 is not null)
@@ -360,6 +411,7 @@ public partial class MainWindow : Window
         _closing = true;
         WindowPlacement.Save(this);
         _hotkeys?.Dispose();
+        _tray?.Dispose();
         _services.Dispose(); // the page's host goes; shells the background host runs keep running
         base.OnClosing(e);
     }

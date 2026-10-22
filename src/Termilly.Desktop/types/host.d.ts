@@ -68,6 +68,12 @@ interface InterfaceSettings {
   gitStatus: boolean;
   checkForUpdates: boolean;
   disabledPlugins: string[] | null;
+  /** The window's Minimize: to the taskbar, or the tray (Windows). */
+  minimizeTo: string;
+  /** The window's Close: quit, or keep running in the tray (Windows). */
+  closeAction: string;
+  /** Quitting asks first while a command or an agent is still running (unless shells are kept running). */
+  confirmQuit: boolean;
 }
 
 /** The shells on offer: the default, the user's own profiles and notes, shell integration, COM ports and consoles. */

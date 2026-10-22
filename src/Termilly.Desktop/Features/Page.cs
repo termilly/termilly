@@ -240,10 +240,11 @@ internal sealed class WindowHandler : IMessageHandler
     private readonly INotifier _notifier;
     private readonly PageApi _api;
     private readonly TmuxClients _tmux;
+    private readonly QuitGate _quit;
 
-    public WindowHandler(PageChannel page, IAppWindow window, IFileDialogs dialogs, IDesktopShell desktop, INotifier notifier, PageApi api, TmuxClients tmux)
+    public WindowHandler(PageChannel page, IAppWindow window, IFileDialogs dialogs, IDesktopShell desktop, INotifier notifier, PageApi api, TmuxClients tmux, QuitGate quit)
     {
-        (_page, _window, _dialogs, _desktop, _notifier, _api, _tmux) = (page, window, dialogs, desktop, notifier, api, tmux);
+        (_page, _window, _dialogs, _desktop, _notifier, _api, _tmux, _quit) = (page, window, dialogs, desktop, notifier, api, tmux, quit);
         // A notification was clicked: its terminal comes forward.
         notifier.Clicked += terminal =>
         {
@@ -256,6 +257,15 @@ internal sealed class WindowHandler : IMessageHandler
     {
         router.On<FromPage.Window>(_window.Act);
         router.On<FromPage.Ready>(_ => Ready());
+        router.On<FromPage.QuitAnswer>(m =>
+        {
+            // The page asks the user what to do: the window has to be on screen for it (it may be in the tray).
+            if (m.Answer == QuitAnswers.Asking)
+            {
+                _window.BringToFront();
+            }
+            _quit.Answer(m.Answer);
+        });
         router.On<FromPage.PageError>(m => Console.Error.WriteLine($"termilly page: {m.Message} ({m.Where})"));
         router.On<FromPage.Notify>(m => _notifier.Notify(m.Id, m.Title ?? Product.Name, m.Body ?? ""));
         router.On<FromPage.NotifyWithdraw>(m => _notifier.Withdraw(m.Id));

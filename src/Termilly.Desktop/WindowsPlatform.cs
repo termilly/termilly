@@ -38,7 +38,9 @@ internal sealed class WindowsPlatform(MainWindow window) :
 
     public void Act(FromPage.Window action) => window.HandleWindowAction(action);
 
-    public void CloseNow() => window.Dispatcher.BeginInvoke(window.CloseOnce);
+    public void CloseNow() => window.Dispatcher.BeginInvoke(window.QuitNow);
+
+    public void Quit() => window.Dispatcher.BeginInvoke(window.RequestQuit);
 
     public void ShowBadge(int count) => window.ShowBadge(count);
 

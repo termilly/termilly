@@ -8,8 +8,18 @@ internal static class WindowActions
     public const string Minimize = "minimize";
     public const string Maximize = "maximize";
     public const string Close = "close";
+    /// <summary>Quit Termilly, whatever Close does (the palette's "Quit Termilly").</summary>
+    public const string Quit = "quit";
     public const string Drag = "drag";
     public const string Resize = "resize";
+}
+
+/// <summary>The page's answer when the host asks whether it may quit (QuitGate): quit, stay, or it's asking the user.</summary>
+internal static class QuitAnswers
+{
+    public const string Quit = "quit";
+    public const string Stay = "stay";
+    public const string Asking = "asking";
 }
 
 /// <summary>The edge or corner a resize drags (the "window" message's edge): compass points.</summary>
@@ -44,6 +54,12 @@ internal static partial class FromPage
     internal sealed record PageError(string? Message = null, string? Where = null) : IPageMessage
     {
         public static string Type => "page:error";
+    }
+
+    /// <summary>Whether Termilly may quit (<see cref="QuitAnswers"/>), after the host asked with quit:ask.</summary>
+    internal sealed record QuitAnswer(string? Answer = null) : IPageMessage
+    {
+        public static string Type => "quit:answer";
     }
 
     internal sealed record Notify(string Id = "", string? Title = null, string? Body = null) : IPageMessage
@@ -104,6 +120,12 @@ internal static partial class ToPage
     internal sealed record FocusTerminal(string Id) : IHostMessage
     {
         public static string Type => "focusTerminal";
+    }
+
+    /// <summary>The user wants to quit: may Termilly, or is something still running that the page should ask about?</summary>
+    internal sealed record QuitAsk : IHostMessage
+    {
+        public static string Type => "quit:ask";
     }
 
     /// <summary>The jump hotkey: the next terminal that needs the user.</summary>
