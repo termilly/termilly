@@ -51,13 +51,16 @@ const environmentOfPlace = p => environmentOf(/** @type {Tab} */ ({ profile: p.i
  */
 const byName = (a, b) => a.name.localeCompare(b.name);
 
-/** What the section lists when it isn't filtered: pinned, the recently used, then any other with a terminal open. */
+/**
+ * What the section lists when it isn't filtered: pinned, the recently used, then any other with a terminal open, each
+ * by name, so opening a place doesn't move the row under the mouse.
+ */
 function shortList() {
   const pinned = pins();
   const last = used();
   const all = places();
   const first = all.filter(p => pinned.has(p.id)).sort(byName);
-  const recent = all.filter(p => !pinned.has(p.id) && last[p.id]).sort((a, b) => last[b.id] - last[a.id]).slice(0, RECENT_SHOWN);
+  const recent = all.filter(p => !pinned.has(p.id) && last[p.id]).sort((a, b) => last[b.id] - last[a.id]).slice(0, RECENT_SHOWN).sort(byName);
   const open = all.filter(p => !pinned.has(p.id) && !recent.includes(p) && sessionsOf(p.id).length).sort(byName);
   return [...first, ...recent, ...open];
 }
