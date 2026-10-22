@@ -27,7 +27,7 @@
 
   <!-- The Windows app's code, without its window (WPF) and the parts only Windows has. -->
   <ItemGroup>
-    <Compile Include="..\Termilly.Desktop\**\*.cs" Exclude="..\Termilly.Desktop\bin\**;..\Termilly.Desktop\obj\**;..\Termilly.Desktop\App.xaml.cs;..\Termilly.Desktop\AssemblyInfo.cs;..\Termilly.Desktop\MainWindow.xaml.cs;..\Termilly.Desktop\WindowPlacement.cs;..\Termilly.Desktop\WindowInterop.cs;..\Termilly.Desktop\GlobalHotkeys.cs;..\Termilly.Desktop\Notifications.cs;..\Termilly.Desktop\Ports.cs;..\Termilly.Desktop\WindowsPlatform.cs;..\Termilly.Desktop\WindowsFonts.cs;..\Termilly.Desktop\StartupLoader.cs;..\Termilly.Desktop\TaskbarBadge.cs;..\Termilly.Desktop\TrayIcon.cs;..\Termilly.Desktop\WindowsUpdateInstaller.cs" LinkBase="Shared" />
+    <Compile Include="..\Termilly.Desktop\**\*.cs" Exclude="..\Termilly.Desktop\bin\**;..\Termilly.Desktop\obj\**;..\Termilly.Desktop\App.xaml.cs;..\Termilly.Desktop\AssemblyInfo.cs;..\Termilly.Desktop\MainWindow.xaml.cs;..\Termilly.Desktop\MainWindow.Tray.cs;..\Termilly.Desktop\WindowPlacement.cs;..\Termilly.Desktop\WindowInterop.cs;..\Termilly.Desktop\GlobalHotkeys.cs;..\Termilly.Desktop\Notifications.cs;..\Termilly.Desktop\Ports.cs;..\Termilly.Desktop\WindowsPlatform.cs;..\Termilly.Desktop\WindowsFonts.cs;..\Termilly.Desktop\StartupLoader.cs;..\Termilly.Desktop\TaskbarBadge.cs;..\Termilly.Desktop\TrayIcon.cs;..\Termilly.Desktop\WindowsUpdateInstaller.cs" LinkBase="Shared" />
   </ItemGroup>
 
   <!-- The page, served from next to the app, with the start-up loader's logo (drawn by the window on Windows). -->
