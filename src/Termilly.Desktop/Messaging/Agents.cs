@@ -4,7 +4,7 @@ using System.Text.Json.Nodes;
 namespace Termilly.Desktop.Messaging;
 
 // Coding agents (Claude Code): their state from hooks or `claude agents`, subagents, usage, cost and limits; hooks
-// reported from servers; and the page's answers to what the host asks it for the API and phone check-in.
+// reported from servers; and the page's answers to what the host asks it for the API.
 
 /// <summary>Where an agent state came from: Claude Code's hooks, or polling `claude agents` for unhooked ones.</summary>
 internal static class AgentSources
@@ -125,8 +125,7 @@ internal static partial class ToPage
 
     /// <summary>
     /// What the host asks the page, answered with api:result: the termilly command's and MCP server's requests
-    /// ("api"), and a phone's (checkin:state, checkin:output, checkin:answer). <see cref="Fields"/> go into the
-    /// message as they are, beside its type and request id.
+    /// ("api"). <see cref="Fields"/> go into the message as they are, beside its type and request id.
     /// </summary>
     internal sealed record PageCall(string Type, string RequestId, JsonObject Fields)
     {
@@ -147,10 +146,7 @@ internal static partial class ToPage
     internal static class Calls
     {
         public const string Api = "api";
-        public const string CheckinState = "checkin:state";
-        public const string CheckinOutput = "checkin:output";
-        public const string CheckinAnswer = "checkin:answer";
 
-        public static readonly string[] All = [Api, CheckinState, CheckinOutput, CheckinAnswer];
+        public static readonly string[] All = [Api];
     }
 }

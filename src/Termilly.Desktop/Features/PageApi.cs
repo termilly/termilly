@@ -9,7 +9,7 @@ using Termilly.Desktop.Services;
 namespace Termilly.Desktop.Features;
 
 /// <summary>
-/// The termilly command's and MCP server's requests (Termilly.Agent/Api.cs), and what a paired phone asks: command
+/// The termilly command's and MCP server's requests (Termilly.Agent/Api.cs): command
 /// history is answered here, always redacted; the rest is about terminals, which the page knows, so it's asked
 /// (<see cref="AskPageAsync"/>) and its answer returned.
 /// </summary>

@@ -22,7 +22,6 @@ internal static class Composition
         .AddSingleton<HistoryStore>()
         .AddSingleton<CommandHistory>()
         .AddSingleton<HistorySync>()
-        .AddSingleton<CheckinDevices>()
         // Programs Termilly runs, and what it reads with them.
         .AddSingleton<IProcessRunner, ProcessRunner>()
         .AddSingleton(_ => UpdateDownload.Create())
@@ -47,6 +46,7 @@ internal static class Composition
         .AddStartable<ActivityWatcher>()
         .AddStartable<AgentMonitor>()
         .AddStartable<RetiredAssistantKey>()
+        .AddStartable<RetiredPhonePairings>()
         // Each feature's messages.
         .AddHandler<WindowHandler>()
         .AddHandler<PageApi>()
@@ -64,7 +64,6 @@ internal static class Composition
         .AddHandler<SftpHandler>()
         .AddHandler<RecordingHandler>()
         .AddHandler<LogHandler>()
-        .AddHandler<CheckinHandler>()
         .AddHandler<SyncHandler>()
         .AddHandler<UpdateHandler>()
         .AddSingleton<PageHost>();

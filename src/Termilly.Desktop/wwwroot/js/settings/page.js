@@ -34,7 +34,6 @@ export const SECTION = Object.freeze({
   workspaces: 'workspaces',
   changes: 'changes',
   privacy: 'privacy',
-  phone: 'phone',
   plugins: 'plugins',
   keyboard: 'keyboard',
   about: 'about',

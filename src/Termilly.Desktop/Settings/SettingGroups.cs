@@ -338,23 +338,6 @@ internal sealed record ChangeSettings
     };
 }
 
-/// <summary>Phone check-in (CheckinServer.cs): on or off, whether a phone may answer prompts, and its port.</summary>
-internal sealed record CheckinSettings
-{
-    /// <summary>Ports it may listen on: not the well-known ones.</summary>
-    private const int MinPort = 1024;
-    private const int MaxPort = 65535;
-
-    public bool Enabled { get; init; }
-    public bool Answer { get; init; }
-    public int Port { get; init; } = CheckinServer.DefaultPort;
-
-    public CheckinSettings Normalize() => this with
-    {
-        Port = Port is >= MinPort and <= MaxPort ? Port : CheckinServer.DefaultPort,
-    };
-}
-
 /// <summary>Termilly's integration on servers: whether each host has it set up (RemoteIntegration).</summary>
 internal sealed record RemoteSettings
 {

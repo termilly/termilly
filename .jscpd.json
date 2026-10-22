@@ -1,7 +1,7 @@
 {
   "path": ["src", "installer"],
   "format": ["csharp", "javascript"],
-  "ignore": ["**/bin/**", "**/obj/**", "**/wwwroot/lib/**", "**/phone/lib/**", "**/*.d.ts"],
+  "ignore": ["**/bin/**", "**/obj/**", "**/wwwroot/lib/**", "**/*.d.ts"],
   "threshold": 0,
   "minTokens": 60,
   "minLines": 6,

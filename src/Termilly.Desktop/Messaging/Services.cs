@@ -1,6 +1,6 @@
 namespace Termilly.Desktop.Messaging;
 
-// Recordings and session logs, phone check-in, history sync between PCs, and the vault's
+// Recordings and session logs, history sync between PCs, and the vault's
 // recovery code.
 
 internal static partial class FromPage
@@ -61,21 +61,6 @@ internal static partial class FromPage
     internal sealed record LogReveal(string Id = "") : IPageMessage
     {
         public static string Type => "log:reveal";
-    }
-
-    internal sealed record CheckinStatus : IPageMessage
-    {
-        public static string Type => "checkin:status";
-    }
-
-    internal sealed record CheckinPair : IPageMessage
-    {
-        public static string Type => "checkin:pair";
-    }
-
-    internal sealed record CheckinRemove(string? Device = null) : IPageMessage
-    {
-        public static string Type => "checkin:remove";
     }
 
     internal sealed record SyncStatus : IPageMessage
@@ -205,17 +190,6 @@ internal static partial class ToPage
         public static string Type => "log:status";
 
         public string? Path { get; }
-    }
-
-    internal sealed record CheckinStatus(bool Running, string? Url, string? Error, object Devices) : IHostMessage
-    {
-        public static string Type => "checkin:status";
-    }
-
-    /// <summary>The pairing link (as a QR code on the page): the server's address with a one-time key.</summary>
-    internal sealed record CheckinPairing(string Url) : IHostMessage
-    {
-        public static string Type => "checkin:pairing";
     }
 
     /// <param name="Code">The sync code, when one is to be shown.</param>

@@ -1,6 +1,6 @@
 // Fails on magic values in Termilly's own code: a number written inline instead of as a named constant, or the same
 // identifier-like string ("needs-input", "PreToolUse", "terminal:input") written in more than one place instead of
-// coming from one constant. C# under src/ and installer/, and the page's JavaScript (wwwroot/js, phone/phone.js).
+// coming from one constant. C# under src/ and installer/, and the page's JavaScript (wwwroot/js).
 //
 // What is allowed without a constant:
 //   - numbers 0, 1, 2 and -1 (counting, halves, "not found"), and every number in a constant's own definition

@@ -5,6 +5,7 @@ What changed in each release. Termilly says in its title bar when a newer one is
 ## Unreleased
 
 - **The AI assistant is gone** (Settings › AI, Ctrl+Shift+K). Coding agents in a terminal do the same job better. If you saved an Anthropic API key for it, Termilly deletes it from Windows Credential Manager or the Linux keyring the first time it starts.
+- **Phone check-in is gone for now** (Settings › Phone check-in). It may come back in a later release. Paired phones are forgotten the first time Termilly starts.
 
 ## 1.1.0 (2026-10-21)
 

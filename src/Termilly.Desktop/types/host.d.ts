@@ -31,8 +31,6 @@ interface AppSettings {
   agents: AgentSettings;
   /** The change preview. */
   changes: ChangeSettings;
-  /** Phone check-in. */
-  checkin: CheckinSettings;
   /** Termilly on servers. */
   remote: RemoteSettings;
   /** What the page remembers. */
@@ -207,13 +205,6 @@ interface ChangeSettings {
   newFile: string;
   /** Files a shell command made or changed are listed too. */
   shellFiles: boolean;
-}
-
-/** Phone check-in (CheckinServer.cs): on or off, whether a phone may answer prompts, and its port. */
-interface CheckinSettings {
-  enabled: boolean;
-  answer: boolean;
-  port: number;
 }
 
 /** Termilly's integration on servers: whether each host has it set up (RemoteIntegration). */

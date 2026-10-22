@@ -20,16 +20,6 @@ Copyright: 2006 Ivan Sagalaev
            2006-2024 Josh Goebel and other contributors
 License: BSD-3-Clause
 
-Files: opt/termilly/wwwroot/lib/qrcode.js
-Copyright: 2009 Kazuhiko Arase
-Comment: The word "QR Code" is a registered trademark of DENSO WAVE INCORPORATED.
-License: Expat
-
-Files: opt/termilly/wwwroot/phone/lib/noble/*
-Copyright: 2022 Paul Miller
-           2016 Thomas Pornin
-License: Expat
-
 Files: opt/termilly/YamlDotNet.dll
 Copyright: 2008-2014 Antoine Aubry and contributors
 License: Expat

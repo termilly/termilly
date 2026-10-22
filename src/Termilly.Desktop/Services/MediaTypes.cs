@@ -1,6 +1,6 @@
 namespace Termilly.Desktop.Services;
 
-/// <summary>The media types Termilly serves files with (the phone page, Linux's app:// page), and the extensions they go by.</summary>
+/// <summary>The media types Termilly serves files with (Linux's app:// page), and the extensions they go by.</summary>
 internal static class MediaTypes
 {
     public const string PlainText = "text/plain";

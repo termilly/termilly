@@ -9,8 +9,6 @@ Termilly includes the components below, each under its own license. Termilly its
 | `@xterm/addon-unicode11` | 0.8.0 | MIT | `wwwroot/lib/addon-unicode11.js` |
 | `@xterm/addon-image`, with node-sixel, inwasm and xterm-wasm-parts inside | 0.9.0 | MIT | `wwwroot/lib/addon-image.js` |
 | [highlight.js](https://highlightjs.org) | 11.10.0 | BSD-3-Clause | `wwwroot/lib/highlight.min.js` |
-| [qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator) | 1.4.4 | MIT | `wwwroot/lib/qrcode.js` |
-| [@noble/ciphers](https://github.com/paulmillr/noble-ciphers) | 1.2.1 | MIT | `wwwroot/phone/lib/noble/` |
 | [YamlDotNet](https://github.com/aaubry/YamlDotNet) | 16.3.0 | MIT | `YamlDotNet.dll` |
 | System.IO.Ports, Microsoft.Extensions.DependencyInjection ([.NET](https://github.com/dotnet/runtime)) | 10.0 | MIT | `System.IO.Ports.dll`, `Microsoft.Extensions.DependencyInjection*.dll` |
 | [Windows Terminal's ConPTY](https://github.com/microsoft/terminal) (`Microsoft.Windows.Console.ConPTY`) | 1.25.260930003 | MIT | Windows: `conpty\conpty.dll`, `conpty\x64\OpenConsole.exe` |
@@ -27,8 +25,6 @@ Used by the components marked MIT above, under these copyright notices:
 - xterm.js and its addons: Copyright (c) 2017-2019, 2019, 2020, 2021, 2022, 2023 The xterm.js authors (https://github.com/xtermjs/xterm.js); Copyright (c) 2014-2016, SourceLair Private Company (https://www.sourcelair.com); Copyright (c) 2012-2013, Christopher Jeffrey (https://github.com/chjj/)
 - node-sixel, inwasm and xterm-wasm-parts (inside addon-image): Copyright (c) 2019, 2021 Joerg Breitbart
 - Code from VS Code inside xterm.js and addon-image: Copyright (c) Microsoft Corporation
-- qrcode-generator: Copyright (c) 2009 Kazuhiko Arase. The word "QR Code" is a registered trademark of DENSO WAVE INCORPORATED.
-- @noble/ciphers: Copyright (c) 2022 Paul Miller (https://paulmillr.com); Copyright (c) 2016 Thomas Pornin <pornin@bolet.org>
 - YamlDotNet: Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Antoine Aubry and contributors
 - .NET libraries, ConPTY and CsWinRT: Copyright (c) Microsoft Corporation and contributors
 

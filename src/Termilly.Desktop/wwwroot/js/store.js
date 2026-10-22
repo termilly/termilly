@@ -57,7 +57,6 @@ export const GROUPS = Object.freeze({
   ssh: 'ssh',
   agents: 'agents',
   changes: 'changes',
-  checkin: 'checkin',
   remote: 'remote',
   uiState: 'uiState',
   data: 'data',

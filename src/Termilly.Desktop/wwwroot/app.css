@@ -567,12 +567,6 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
   .tour-card[data-done="true"] [data-tour="next"] { animation: none; }
 }
 
-/* ---- Settings › Phone check-in (js/checkin.js) ---- */
-
-.pair-qr { display: grid; place-items: center; width: 240px; height: 240px; margin: 8px auto; border-radius: 10px; background: #fff; color: #333; }
-.pair-qr svg { width: 100%; height: 100%; }
-.pair-url { overflow-wrap: anywhere; font-size: 10.5px; }
-
 /* ---- Settings › Plugins (js/plugins.js) ---- */
 
 .plugin-row { display: flex; gap: 16px; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border); }

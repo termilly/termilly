@@ -50,7 +50,7 @@ internal sealed class Vault
     public string HistoryDirectory => Path.Combine(_dir, HistoryFolder);
     private string KeysPath => Path.Combine(_dir, KeysFileName);
 
-    /// <summary>A file of the vault's own in the data folder (sync settings, paired phones, the last snapshot).</summary>
+    /// <summary>A file of the vault's own in the data folder (sync settings, the last snapshot).</summary>
     public string PathOf(string fileName) => Path.Combine(_dir, fileName);
 
     /// <summary>An encrypted JSON file, opened; null when it's missing, the vault is locked, or it's damaged or from another key.</summary>

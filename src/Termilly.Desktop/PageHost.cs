@@ -24,7 +24,7 @@ internal sealed class PageHost(IEnumerable<IMessageHandler> handlers, IEnumerabl
 
     /// <summary>
     /// Starts what runs alongside the page, once the window is up: the activity watcher, agent hooks and the API pipe,
-    /// the running containers, port forwards that start on their own, phone check-in and the update check.
+    /// the running containers, port forwards that start on their own and the update check.
     /// </summary>
     public void Start()
     {

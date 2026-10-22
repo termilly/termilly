@@ -174,7 +174,7 @@ internal sealed class LastSnapshot(PageChannel page, ISettingsStore settings, Te
 
 /// <summary>The recovery code, unlocking after a password reset, and history set aside by "Start fresh" (Security/Vault.cs).</summary>
 internal sealed class SecurityHandler(
-    PageChannel page, Vault vault, PageBoot boot, HistoryHandler history, CommandHistory commands, HistorySync sync, CheckinDevices devices) : IMessageHandler
+    PageChannel page, Vault vault, PageBoot boot, HistoryHandler history, CommandHistory commands, HistorySync sync) : IMessageHandler
 {
     public void Register(MessageRouter router)
     {
@@ -196,7 +196,6 @@ internal sealed class SecurityHandler(
                 vault.StartFresh();
                 commands.Reset();
                 sync.Reset();
-                devices.Reset();
                 _ = boot.SendAsync();
             }
         }));

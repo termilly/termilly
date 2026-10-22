@@ -30,7 +30,6 @@ import { openSnippetsWindow } from './snippetswindow.js';
 import { THEMES } from './themes.js';
 import { isPreviewOpen, closePreview } from './preview.js';
 import { pluginCommands, reloadPlugins } from './plugins.js';
-import './checkin.js';
 import { startTour, offerTourOnce } from './tour.js';
 import './api.js';
 import { exportLayout, importLayout } from './layouts.js';

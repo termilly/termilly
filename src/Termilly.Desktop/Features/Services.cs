@@ -10,130 +10,20 @@ using Termilly.Desktop.Services;
 namespace Termilly.Desktop.Features;
 
 /// <summary>
-/// Phone check-in (CheckinServer.cs, docs/checkin.md): the server runs only while Settings turn it on; a paired phone
-/// sees the terminals that need the user, their last lines (redacted here) and can answer a prompt when allowed.
+/// Phone check-in (in Termilly until 1.1.0) kept the paired phones and their keys in checkin.json next to the vault.
+/// Now that it's gone, the file is deleted at start so no pairing is left behind.
 /// </summary>
-internal sealed class CheckinHandler : IMessageHandler, IStartable, IDisposable
+internal sealed class RetiredPhonePairings(Vault vault) : IStartable
 {
-    private readonly PageChannel _page;
-    private readonly ISettingsStore _settings;
-    private readonly Vault _vault;
-    private readonly CheckinDevices _devices;
-    private readonly PageApi _api;
-    private CheckinServer? _server;
-    private int _port;
-    private string? _error;
-
-    /// <summary>The phone page's files: wwwroot\phone next to the app.</summary>
-    private const string PhoneFolder = "phone";
-
-    /// <summary>What a paired phone asks (phone/phone.js): the terminals' state, one's output, or an answer to its prompt.</summary>
-    private static class Operations
-    {
-        public const string State = "state";
-        public const string Output = "output";
-        public const string Answer = "answer";
-    }
-
-    /// <summary>The fields of the page calls made for a phone, and of their answers.</summary>
-    private static class Fields
-    {
-        public const string Args = PageApi.CallFields.Args;
-        public const string Pane = ApiFields.Pane;
-        public const string Choice = "choice";
-        public const string AllowAnswer = "allowAnswer";
-    }
-
-    public CheckinHandler(PageChannel page, ISettingsStore settings, Vault vault, CheckinDevices devices, PageApi api)
-    {
-        (_page, _settings, _vault, _devices, _api) = (page, settings, vault, devices, api);
-        settings.Saved += _ => Update();
-    }
-
-    public void Register(MessageRouter router)
-    {
-        router.On<FromPage.CheckinStatus>(_ => PostStatus());
-        router.On<FromPage.CheckinPair>(_ => OfferPairing());
-        router.On<FromPage.CheckinRemove>(m =>
-        {
-            _devices.Remove(m.Device ?? "");
-            PostStatus();
-        });
-    }
+    private const string DevicesFile = "checkin.json";
 
     public void Start()
     {
-        _devices.Changed += PostStatus;
-        Update();
-    }
-
-    /// <summary>Starts or stops the server to match Settings.</summary>
-    private void Update()
-    {
-        var settings = _settings.Current;
-        if (_server is not null && (!settings.Checkin.Enabled || _port != settings.Checkin.Port))
+        var path = vault.PathOf(DevicesFile);
+        if (File.Exists(path))
         {
-            _server.Dispose();
-            _server = null;
+            Storage.Try(() => File.Delete(path));
         }
-        _error = null;
-        if (settings.Checkin.Enabled && _server is null)
-        {
-            try
-            {
-                _server = CheckinServer.Start(settings.Checkin.Port, Path.Combine(AppPaths.WebRoot, PhoneFolder), OperateAsync, _devices);
-                _port = settings.Checkin.Port;
-            }
-            catch (IOException e)
-            {
-                _error = e.Message;
-            }
-        }
-        PostStatus();
-    }
-
-    private void PostStatus() =>
-        _page.Post(new ToPage.CheckinStatus(_server is not null, _server?.BaseUrl, _error, _vault.IsLocked ? [] : _devices.List()));
-
-    private void OfferPairing()
-    {
-        if (_server is null || _vault.IsLocked)
-        {
-            return;
-        }
-        var (id, key) = _devices.Offer();
-        var secret = Convert.ToBase64String(key).TrimEnd('=').Replace('+', '-').Replace('/', '_');
-        _page.Post(new ToPage.CheckinPairing($"{_server.BaseUrl}#{id}.{secret}"));
-    }
-
-    /// <summary>What a paired phone asked for; the page knows the terminals, the host redacts their output.</summary>
-    private async Task<JsonNode?> OperateAsync(string op, JsonObject args)
-    {
-        switch (op)
-        {
-            case Operations.State:
-                var state = await _api.AskPageAsync(ToPage.Calls.CheckinState, new JsonObject { [Fields.Args] = new JsonObject() }).ConfigureAwait(false) as JsonObject ?? [];
-                state[Fields.AllowAnswer] = _settings.Current.Checkin.Answer;
-                return state;
-            case Operations.Output:
-                var lines = (await _api.AskPageAsync(ToPage.Calls.CheckinOutput, new JsonObject { [Fields.Args] = new JsonObject { [Fields.Pane] = args[Fields.Pane]?.DeepClone() } }).ConfigureAwait(false) as JsonArray ?? [])
-                    .Select(l => l?.ToString() ?? "").ToList();
-                return new JsonArray(SecretRedactor.Redact(lines).Select(l => (JsonNode)l).ToArray());
-            case Operations.Answer:
-                if (!_settings.Current.Checkin.Answer)
-                {
-                    throw new InvalidOperationException("Answering prompts from a phone is off (Settings › Phone check-in).");
-                }
-                return await _api.AskPageAsync(ToPage.Calls.CheckinAnswer, new JsonObject { [Fields.Args] = new JsonObject { [Fields.Pane] = args[Fields.Pane]?.DeepClone(), [Fields.Choice] = args[Fields.Choice]?.DeepClone() } }).ConfigureAwait(false);
-            default:
-                throw new InvalidOperationException("Unknown request.");
-        }
-    }
-
-    public void Dispose()
-    {
-        _devices.Changed -= PostStatus;
-        _server?.Dispose();
     }
 }
 

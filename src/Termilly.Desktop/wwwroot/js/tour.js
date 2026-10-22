@@ -133,7 +133,7 @@ const STEPS = [
   {
     target: '#settings-button', side: SIDE.below, pad: 4,
     title: 'Settings',
-    text: 'Fonts and theme, SSH connections and port forwards, triggers, the drop-down window, keeping shells running after you close Termilly, history sync, plugins - and phone check-in, off until you turn it on.',
+    text: 'Fonts and theme, SSH connections and port forwards, triggers, the drop-down window, keeping shells running after you close Termilly, history sync, plugins.',
     hint: `${keysHtml('Ctrl ,')} · every shortcut is in Settings › Keyboard`,
   },
   {

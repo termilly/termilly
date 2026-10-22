@@ -1,12 +1,11 @@
 // @ts-check
-// The Settings page's sections, in the nav's order. SSH, Serial and Phone check-in are drawn by their features'
+// The Settings page's sections, in the nav's order. SSH and Serial are drawn by their features'
 // own modules; the others have a module each in this folder.
 
 import { ICONS } from '../ui.js';
 import { sshSectionHtml, handleSshClick, setSshRerender, refreshSshStatus } from '../ssh.js';
 import { serialSectionHtml, handleSerialClick, handleSerialChange, setSerialRerender } from '../serial.js';
-import { checkinSectionHtml, handleCheckinClick, setCheckinRerender, refreshCheckin } from '../checkin.js';
-import { row, toggle, group } from './controls.js';
+import { row, group } from './controls.js';
 import { SECTION, redrawIfShowing } from './page.js';
 import appearance from './appearance.js';
 import terminal from './terminal.js';
@@ -33,18 +32,9 @@ const serial = {
   change: handleSerialChange,
 };
 
-/** @type {import('./page.js').Section} */
-const phone = {
-  id: SECTION.phone, label: 'Phone check-in', icon: ICONS.phone,
-  html: () => checkinSectionHtml(group, row, toggle),
-  refresh: refreshCheckin,
-  click: handleCheckinClick,
-};
-
 setSshRerender(() => redrawIfShowing(SECTION.ssh));
 setSerialRerender(() => redrawIfShowing(SECTION.serial));
-setCheckinRerender(() => redrawIfShowing(SECTION.phone));
 
 /** @type {Record<string, import('./page.js').Section>} by id, in the nav's order */
 export const SECTIONS = Object.fromEntries(
-  [appearance, terminal, ssh, serial, workspaces, changes, privacy, phone, plugins, keyboard, about].map(s => [s.id, s]));
+  [appearance, terminal, ssh, serial, workspaces, changes, privacy, plugins, keyboard, about].map(s => [s.id, s]));

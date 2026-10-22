@@ -5,7 +5,6 @@ declare const FitAddon: any;
 declare const ImageAddon: any;
 declare const Unicode11Addon: any;
 declare const hljs: any;
-declare const qrcode: any;
 
 /** WebView2's bridge to the host (Windows). */
 interface HostWebView {
