@@ -2,12 +2,6 @@
 
 What changed in each release. Termilly says in its title bar when a newer one is out.
 
-## Unreleased
-
-- **The AI assistant is gone** (Settings › AI, Ctrl+Shift+K). Coding agents in a terminal do the same job better. If you saved an Anthropic API key for it, Termilly deletes it from Windows Credential Manager or the Linux keyring the first time it starts.
-- **The drop-down window is gone** (Settings › Workspaces › Drop-down window, Win+`). Hiding it made Termilly vanish from the taskbar as if it had quit. The global shortcut for the next agent that needs you (Ctrl+Alt+J) stays.
-- **Phone check-in is gone for now** (Settings › Phone check-in). It may come back in a later release. Paired phones are forgotten the first time Termilly starts.
-
 ## 1.1.0 (2026-10-21)
 
 - **Updates from inside Termilly:** Download and install, then Restart to update. The installer is checked against the signed release before it runs, and nothing happens until you choose it. Updating from 1.0.0 still goes through the browser once.
