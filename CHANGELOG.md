@@ -2,6 +2,14 @@
 
 What changed in each release. Termilly says in its title bar when a newer one is out.
 
+## Unreleased
+
+- **`snippet:` in cmd,** and in PowerShell started from a cmd terminal. It only worked in PowerShell terminals before.
+- **Renaming a terminal:** Enter no longer runs what was typed at the prompt, and clicking inside the name keeps you editing instead of ending it.
+- **Agents talking to terminals:** `send_to_terminal` presses Enter a moment after the text, so Claude Code submits a long prompt instead of leaving it in its input box. `list_terminals` shows a Claude waiting at its prompt as idle, not as no agent.
+- **Claude over SSH** shows its progress in the tab, and the progress clears when you interrupt a turn. Hosts are offered an update of Termilly's scripts.
+- **The remote list** no longer moves the row under the mouse when you open a place.
+
 ## 1.2.0 (2026-10-22)
 
 - **Ask before quitting:** when a command is still running, or an agent is working or waiting for you, quitting names them and asks first, and quits by itself after a 30-second countdown if you don't answer. Not asked while Keep shells running is on, since they go on without the window. Turn it off in Settings › Workspaces.
