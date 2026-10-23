@@ -12,7 +12,12 @@ import { confirmProduction } from './environments.js';
 import { listForApi, runForApi } from './snippets.js';
 import { readTerminal, waitForTerminal, checkType } from './together.js';
 import { commandLine } from './quoting.js';
-import { AGENT_STATE } from './constants.js';
+
+/**
+ * How long after the text the API's Enter goes: typed together, a TUI such as Claude Code takes a long text and its
+ * Enter as one paste, and the Enter only adds a line instead of submitting (50 ms was enough when measured).
+ */
+const ENTER_DELAY_MS = 200;
 
 /** What the API says a terminal is busy with when it runs a command whose program it doesn't know. */
 const BUSY_COMMAND = 'command';
@@ -39,7 +44,8 @@ function describe(tab, detailed = false) {
     profile: profileOf(tab)?.name ?? tab.profile,
     cwd: tab.cwd ?? tab.startCwd ?? ws?.cwd ?? null,
     tags: tab.tags,
-    agent: tab.agent?.state && tab.agent.state !== AGENT_STATE.idle ? tab.agent.state : null,
+    // An agent waiting at its prompt is "idle", so another agent can tell it's there (null: no agent seen).
+    agent: tab.agent?.state ?? null,
     busy: tab.busy ?? (tab.running && !tab.interactive ? BUSY_COMMAND : null), // as the spinner: not while it waits on the user (ssh, a nested shell)
     status: tab.status ?? null,
     focused: tab === focusedTab(),
@@ -134,7 +140,11 @@ const METHODS = {
     checkType(tab, from);
     // A script or agent typing into production: the user says yes first (environments.js).
     if (!(await confirmProduction([tab], 'Let a script type', String(text ?? '')))) throw new Error(`Terminal ${tab.id} is on production, and the user said no.`);
-    send(PAGE.input, { id: tab.id, data: `${String(text ?? '')}${enter ? '\r' : ''}` });
+    send(PAGE.input, { id: tab.id, data: String(text ?? '') });
+    if (enter) {
+      await new Promise(resolve => setTimeout(resolve, ENTER_DELAY_MS));
+      if (!tab.exited) send(PAGE.input, { id: tab.id, data: '\r' });
+    }
     return { id: tab.id };
   },
 };
