@@ -137,7 +137,9 @@ export function createView(tab, { draggable = true } = {}) {
   tab.view = /** @type {TabView} */ (/** @type {unknown} */ ({ el, body, term: null, fit: null })); // its header comes next
   tab.view.header = headerBuilder(tab);
   el.append(tab.view.header, body);
-  el.addEventListener('mousedown', () => focusTab(tab), true);
+  // A click in a field on the pane (its name being renamed) stays there: giving the terminal the keyboard would end
+  // the edit, and a click there only moves the cursor.
+  el.addEventListener('mousedown', e => { if (!targetOf(e).closest('input')) focusTab(tab); }, true);
   if (draggable) wireDrag(tab, tab.view.header);
 }
 

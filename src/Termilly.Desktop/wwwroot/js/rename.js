@@ -42,8 +42,11 @@ export function beginRename(tab) {
   };
   input.addEventListener('keydown', e => {
     e.stopPropagation(); // typing a name must not trigger app shortcuts
-    if (e.key === 'Enter') finish(true);
-    else if (e.key === 'Escape') finish(false);
+    if (e.key !== 'Enter' && e.key !== 'Escape') return;
+    // Ends here: finishing gives the terminal the keyboard at once, and the key's keypress would follow it there,
+    // so Enter would run whatever was typed at the prompt.
+    e.preventDefault();
+    finish(e.key === 'Enter');
   });
   input.addEventListener('blur', () => finish(true));
 }

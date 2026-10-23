@@ -325,8 +325,9 @@ function beginWorkspaceRename(ws) {
   });
   input.addEventListener('keydown', e => {
     e.stopPropagation();
-    if (e.key === 'Enter') finish(true);
-    else if (e.key === 'Escape') finish(false);
+    if (e.key !== 'Enter' && e.key !== 'Escape') return;
+    e.preventDefault(); // the key ends here, as a terminal's rename does (rename.js)
+    finish(e.key === 'Enter');
   });
   input.addEventListener('blur', () => {
     if (finish(true) === false) finish(false);
