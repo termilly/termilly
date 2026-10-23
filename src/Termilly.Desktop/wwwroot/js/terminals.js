@@ -23,6 +23,7 @@ import { AGENT_STATE, AGENT_SOURCE } from './constants.js';
 import { find, field } from './dom.js';
 import { continuesOnNextRow } from './buffer.js';
 import { clipboardKey, wireClipboard, PASTE_LABEL } from './termclipboard.js';
+import { selectionKey } from './keyselect.js';
 
 /**
  * A theme plugin's terminal colours (state.pluginThemes).
@@ -296,7 +297,7 @@ function wireInput(tab, term) {
     quiet(tab);
     send(PAGE.resize, { id: tab.id, cols, rows });
   });
-  term.attachCustomKeyEventHandler((/** @type {KeyboardEvent} */ e) => inputHook(tab, term, e) && clipboardKey(term, e) && keyHandler(e));
+  term.attachCustomKeyEventHandler((/** @type {KeyboardEvent} */ e) => inputHook(tab, term, e) && clipboardKey(term, e) && selectionKey(term, e) && keyHandler(e));
 }
 
 /**
