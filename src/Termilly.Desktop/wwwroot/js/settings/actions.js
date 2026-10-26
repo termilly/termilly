@@ -61,7 +61,7 @@ const actionRow = a => `
 const placeholderHelp = `
     <p class="set-desc">A web address (<code>https://</code>) opens in your browser; anything else is a program, found on your PATH, with its arguments.
       Both can use <code>{selection}</code> (the selected text), <code>{folder}</code> (the terminal’s folder), <code>{file}</code> and <code>{line}</code>
-      (a selected file’s path and line), <code>{repo}</code> and <code>{branch}</code> (the folder’s repository on the web) and <code>{port}</code> (a port a
+      (a file path you select in the terminal, like <code>src/app.ts:42</code>, found from the terminal’s folder), <code>{repo}</code> and <code>{branch}</code> (the folder’s repository on the web) and <code>{port}</code> (a port a
       program in the terminal listens on). Each action is in the command palette; the ones on the right-click menu show when what they need is there.</p>`;
 
 onHost(HOST.actionDefaults, m => {
