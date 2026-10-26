@@ -5,6 +5,7 @@ What changed in each release. Termilly says in its title bar when a newer one is
 ## 1.3.0 (2026-10-26)
 
 - **Actions:** open your browser, your editor or a web search from a shortcut, the palette or the right-click menu.
+- **SSH connections:** pick a key from ~/.ssh, and save the password when ssh asks for one.
 - **Snippets from the command line:** `snippet:` now works in Command Prompt too.
 - Minor bugfixes.
 
