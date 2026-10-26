@@ -16,7 +16,8 @@ internal sealed class UpdateHandler(
     : IMessageHandler, IStartable, IDisposable
 {
     private static readonly TimeSpan Interval = TimeSpan.FromHours(12);
-    private static readonly TimeSpan First = TimeSpan.FromSeconds(30);
+    /// <summary>The first check: a few seconds after start, once the window is up, so a new version shows at once.</summary>
+    private static readonly TimeSpan First = TimeSpan.FromSeconds(3);
     private const int AllOfIt = 100;
 
     private readonly Lock _gate = new();

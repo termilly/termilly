@@ -33,6 +33,12 @@ internal sealed class Installation
     private const string BackupSuffix = ".old";
     /// <summary>How often extraction reports progress, in files.</summary>
     private const int ProgressEvery = 20;
+    /// <summary>
+    /// How often the folder swap is tried, and the wait between tries: Termilly may still be closing (it starts setup
+    /// and then quits), and an ended process lets go of its files a moment later.
+    /// </summary>
+    private const int SwapAttempts = 30;
+    private static readonly TimeSpan SwapRetryDelay = TimeSpan.FromMilliseconds(500);
 
     /// <summary>Where the Installing page's bar is at each step (0 to 1).</summary>
     private static class At
@@ -145,6 +151,27 @@ internal sealed class Installation
                 WriteCommandShim(staging);
             }
         }, cancel).ConfigureAwait(false);
+        for (var attempt = 1; !TrySwap(dir, staging, backup, attempt); attempt++)
+        {
+            if (attempt == SwapAttempts)
+            {
+                Folders.Delete(staging);
+                throw new SetupException($"Termilly's folder is in use: {dir}",
+                    "Close Termilly and any terminal or Explorer window open in that folder, then retry.");
+            }
+            // Whatever still runs from the folder (Termilly closing, a helper started meanwhile) is closed again.
+            await Task.Run(() => Processes.CloseAll(dir), cancel).ConfigureAwait(false);
+            await Task.Delay(SwapRetryDelay, cancel).ConfigureAwait(false);
+        }
+        report(new Progress(Step.Files, "Termilly copied", At.Copied, Done: true, Note: $"{Folders.SizeMb(dir):0} MB"));
+    }
+
+    /// <summary>
+    /// Puts the new files in place of the old ones (the old folder moved aside first). False, with the old install back
+    /// as it was, when something still has the folder open.
+    /// </summary>
+    internal static bool TrySwap(string dir, string staging, string backup, int attempt)
+    {
         try
         {
             if (Directory.Exists(dir))
@@ -152,20 +179,17 @@ internal sealed class Installation
                 Directory.Move(dir, backup);
             }
             Directory.Move(staging, dir);
+            return true;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            // Put things back the way they were: the old install, untouched.
             if (!Directory.Exists(dir) && Directory.Exists(backup))
             {
                 Directory.Move(backup, dir);
-                Log.Write("rolled back: the previous installation is back in place");
             }
-            Folders.Delete(staging);
-            throw new SetupException($"Termilly's folder is in use: {dir}",
-                "Close Termilly and any terminal or Explorer window open in that folder, then retry.");
+            Log.Write($"folder in use (try {attempt} of {SwapAttempts}): {e.Message}");
+            return false;
         }
-        report(new Progress(Step.Files, "Termilly copied", At.Copied, Done: true, Note: $"{Folders.SizeMb(dir):0} MB"));
     }
 
     private void ExtractApp(string target, Action<double> progress)
