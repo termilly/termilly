@@ -1759,6 +1759,8 @@ code.path { color: var(--text); font-size: 11.5px; word-break: break-all; }
 .res-line2 { margin-top: 3px; overflow: hidden; color: var(--muted); font: 11.5px/1.45 var(--mono); white-space: nowrap; text-overflow: ellipsis; }
 .res-right { display: flex; flex: none; flex-direction: column; align-items: flex-end; gap: 4px; color: var(--faint); font-size: 11px; white-space: nowrap; }
 .res-right kbd { font-size: 10px; }
+/* A command’s hint (its keys, or a settings section) on one line: the column stacks a result’s lines, not its keys. */
+.res-keys { display: flex; gap: 3px; align-items: center; }
 .res-empty { padding: 30px 12px; color: var(--faint); text-align: center; }
 .state { display: inline-flex; align-items: center; gap: 5px; }
 .state::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--ok); }

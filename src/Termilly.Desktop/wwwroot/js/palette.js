@@ -507,7 +507,7 @@ function workspaceRowHtml(r, q) {
  */
 const commandRowHtml = (r, q) => `<span class="cmd-icon">${r.cmd.icon ?? ICONS.plus}</span>
     <div class="res-main"><div class="res-line1"><span class="res-title">${highlight(r.cmd.label, q.text)}</span></div></div>
-    <div class="res-right">${r.cmd.hint ?? ''}</div>`;
+    <div class="res-right"><span class="res-keys">${r.cmd.hint ?? ''}</span></div>`;
 
 /**
  * Draws one kind of result. Each gets the kind of result it's listed for, so the table holds them as taking any.
