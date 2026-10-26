@@ -1720,7 +1720,7 @@ code.path { color: var(--text); font-size: 11.5px; word-break: break-all; }
 .palette {
   display: flex;
   flex-direction: column;
-  width: min(940px, calc(100vw - 48px));
+  width: min(1240px, calc(100vw - 48px));
   max-height: calc(100vh - 110px);
   overflow: hidden;
   border: 1px solid var(--border-strong);
@@ -1752,8 +1752,8 @@ code.path { color: var(--text); font-size: 11.5px; word-break: break-all; }
 .fchip.on { border-color: var(--accent); background: var(--accent-fill); color: var(--text-strong); }
 .fchip.on span { color: var(--accent); }
 
-.pal-main { display: flex; flex: 0 1 430px; min-height: 0; }
-.pal-results { width: 470px; flex: none; overflow-y: auto; padding: 6px; border-right: 1px solid var(--border); }
+.pal-main { display: flex; flex: 0 1 600px; min-height: 0; }
+.pal-results { width: 380px; flex: none; overflow-y: auto; padding: 6px; border-right: 1px solid var(--border); }
 .pal-results::-webkit-scrollbar { width: 6px; }
 .pal-results::-webkit-scrollbar-thumb { border-radius: 3px; background: var(--scroll-thumb); }
 .res-group { display: flex; padding: 10px 10px 4px; color: var(--muted); font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
@@ -1799,8 +1799,14 @@ mark { border-radius: 3px; background: var(--mark-bg); color: var(--text-strong)
 .pv-step-btn:hover { background: var(--hover, rgba(127,127,127,.15)); color: var(--text-strong); }
 .pv-step-btn svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.6; }
 .dot-sep { margin: 0 4px; color: var(--faint); }
-.pv-term { flex: 1; margin: 0; padding: 10px 14px; overflow: hidden; background: var(--term-bg); color: var(--term-text); font: 11.5px/1.55 var(--mono); white-space: pre; user-select: text; }
+.pv-term { flex: 1; margin: 0; padding: 10px 14px; overflow: auto; background: var(--term-bg); color: var(--term-text); font: 11.5px/1.55 var(--mono); white-space: pre; user-select: text; }
 .pv-line { display: block; min-height: 1.55em; }
+/* Wrap (the preview’s button): long lines break instead of scrolling sideways. */
+.pv-term.wrap { white-space: pre-wrap; overflow-wrap: anywhere; }
+.pv-term::-webkit-scrollbar { width: 8px; height: 8px; }
+.pv-term::-webkit-scrollbar-thumb { border: 2px solid var(--term-bg); border-radius: 4px; background: var(--scroll-thumb); }
+.pv-term::-webkit-scrollbar-corner { background: var(--term-bg); }
+.pv-tools { display: inline-flex; gap: 10px; align-items: center; margin-left: auto; }
 .pv-line.hit { margin: 0 -14px; padding: 0 14px; background: var(--hit-bg); box-shadow: inset 2px 0 0 var(--attention); }
 .pv-note, .pv-empty { flex: 1; padding: 20px 14px; color: var(--faint); line-height: 1.6; }
 .pv-list { flex: 1; padding: 8px; overflow-y: auto; }

@@ -18,6 +18,7 @@ import { pickFolder } from './dialogs.js';
 import { probeFolder, offerLayout, applyLayout } from './layouts.js';
 import { notesFor } from './notes.js';
 import { byId, targetOf } from './dom.js';
+import { toggleWrap } from './preview.js';
 
 /**
  * A closed terminal the host keeps (Host_history's entries), as panes.js recordHistory sent it.
@@ -93,7 +94,7 @@ const RANK = Object.freeze({ name: 0, tag: 1, note: 1.5, workspace: 2, output: 2
 /** Added to the rank of a terminal in a workspace other than the active one. */
 const OTHER_WORKSPACE_RANK = 0.1;
 /** The preview's buttons, by their data-act. */
-const ACT = Object.freeze({ go: 'go', copy: 'copy', forget: 'forget' });
+const ACT = Object.freeze({ go: 'go', copy: 'copy', forget: 'forget', wrap: 'wrap' });
 /** The command history's narrowing words: how a command ended, and the folder it ran in ("in:<folder text>"). */
 const FAILED_WORDS = ['failed', 'fail'];
 const OK_WORDS = ['ok', 'succeeded'];
@@ -593,6 +594,9 @@ function renderPreview(q = parseQuery(input.value)) {
         <button class="pv-step-btn" data-step="-1" title="Older match">${ICONS.chevronLeft}</button>
         <span>match ${/** @type {number} */ (r.match.at) + 1} of ${r.match.count}</span>
         <button class="pv-step-btn" data-step="1" title="Newer match">${ICONS.chevronRight}</button></span>` : '';
+    // Long output lines scroll sideways, or wrap: the same choice as the change preview's and the Git window's Wrap.
+    const wrap = !!state.settings.changes.wrap;
+    const wrapButton = r.lines.length ? `<span class="seg pv-seg"><button class="${wrap ? 'on' : ''}" data-act="${ACT.wrap}" title="Wrap long lines">Wrap</button></span>` : '';
 
     let body;
     if (!isOpen && r.entry.noHistory) {
@@ -603,12 +607,12 @@ function renderPreview(q = parseQuery(input.value)) {
       const center = r.match.inOutput ? r.match.line : r.lines.length - 1;
       const from = Math.max(0, center - PREVIEW_BEFORE);
       const to = Math.min(r.lines.length, from + PREVIEW_LINES);
-      body = `<pre class="pv-term">${r.lines.slice(from, to).map((line, i) =>
+      body = `<pre class="pv-term${wrap ? ' wrap' : ''}">${r.lines.slice(from, to).map((line, i) =>
         `<span class="pv-line${from + i === r.match.line ? ' hit' : ''}">${highlight(line, r.match.inOutput ? q.text : '') || ' '}</span>`).join('')}</pre>`;
     }
     previewEl.innerHTML = `
       <div class="pv-head"><div class="pv-title">${badgeHtml(profile)}${escapeHtml(title)} ${tags.map(t => tagChipHtml(t)).join('')}</div>
-        <div class="pv-meta">${meta}${stepper}</div></div>
+        <div class="pv-meta">${meta}<span class="pv-tools">${stepper}${wrapButton}</span></div></div>
       ${body}
       <div class="pv-actions">
         <button class="btn primary" data-act="go">${isOpen ? 'Go to terminal' : 'Reopen'} <kbd>Enter</kbd></button>
@@ -820,6 +824,11 @@ previewEl.addEventListener('click', e => {
   if (step) stepMatch(Number(step));
   const act = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-act]'))?.dataset.act;
   if (act === ACT.go) activate();
+  else if (act === ACT.wrap) {
+    toggleWrap();
+    renderPreview();
+    input.focus();
+  }
   else if (act === ACT.copy && results[selected]?.kind === KIND.ran) {
     navigator.clipboard.writeText(/** @type {RanResult} */ (results[selected]).entry.command);
     input.focus();
@@ -833,4 +842,12 @@ previewEl.addEventListener('click', e => {
 
 layer.addEventListener('mousedown', e => {
   if (e.target === layer) closePalette();
+});
+
+// Esc closes it wherever the focus is in it: after a click in the preview it's no longer in the search box.
+layer.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  e.preventDefault();
+  e.stopPropagation();
+  closePalette();
 });
