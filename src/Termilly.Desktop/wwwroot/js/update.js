@@ -42,7 +42,8 @@ const chip = document.createElement('button');
 chip.className = CHIP;
 chip.id = CHIP;
 chip.hidden = true;
-document.querySelector('#titlebar .toolbar')?.prepend(chip);
+// Right after the version, with the brand row’s gap (9px) between them.
+version.after(chip);
 
 /** The notice's icon: an arrow down into a tray. */
 const ICON = '<svg viewBox="0 0 16 16"><path d="M8 2.5v8M4.5 7L8 10.5 11.5 7M3 13.5h10"/></svg>';
