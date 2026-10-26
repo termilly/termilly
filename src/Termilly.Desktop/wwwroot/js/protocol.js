@@ -305,7 +305,7 @@ export const HOST = Object.freeze({
 /** @typedef {{ requestId: string|null, view: any|null, error: string|null }} Host_changesContent */
 /** @typedef {{ requestId: string|null, hits: Array<any>, error: string|null }} Host_changesFound */
 /** @typedef {{ id: string, files: any }} Host_changesList */
-/** @typedef {{ requestId: string|null, path: string|null, line: number|null, error: string|null }} Host_changesResolved */
+/** @typedef {{ requestId: string|null, path: string|null, line: number|null, error: string|null, folder?: boolean }} Host_changesResolved */
 /** @typedef {{ id: string, session: string|null, used: number, size: number, tokens: number|null }} Host_claudeContext */
 /** @typedef {{ id: string, session: string|null, usd: number, durationMs: number|null }} Host_claudeCost */
 /** @typedef {{ fiveHour: any|null, sevenDay: any|null }} Host_claudeLimits */

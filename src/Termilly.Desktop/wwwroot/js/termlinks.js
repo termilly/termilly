@@ -6,7 +6,7 @@
 /**
  * A kind of link: how to find it in a line, whether it's on, how it opens and what its tooltip says.
  * @typedef {object} LinkKind
- * @property {(text: string) => Array<{ start: number, end: number, text: string }>} find
+ * @property {(text: string) => FoundLink[] | Promise<FoundLink[]>} find Its links in a line; a link may bring its own tooltip.
  * @property {() => boolean} active Off (a setting), it gives no links.
  * @property {() => boolean} [plainClick] A click opens it, and it's underlined without Ctrl.
  * @property {(text: string) => string} title
@@ -14,6 +14,7 @@
  */
 
 /** @typedef {{ underline: boolean, pointerCursor: boolean }} Decorations */
+/** @typedef {{ start: number, end: number, text: string, title?: string }} FoundLink */
 
 let ctrlHeld = false;
 /**
@@ -71,6 +72,34 @@ function logicalLine(term, y) {
 }
 
 /**
+ * One link xterm can show: underlined and opened as its kind says, its tooltip on the terminal while hovered.
+ * @param {{ range: object, text: string, title: string }} found where it is on screen, its text and tooltip
+ * @param {LinkKind} kind
+ * @param {HTMLElement} body
+ */
+function makeLink({ range, text, title }, kind, body) {
+  const link = {
+    range,
+    text,
+    decorations: decorations(kind),
+    /** @param {MouseEvent} e */
+    activate(e) {
+      if ((e.ctrlKey || kind.plainClick?.()) && kind.active()) kind.open(text);
+    },
+    hover() {
+      hovered = { link, kind };
+      restyle(link, kind);
+      body.title = title;
+    },
+    leave() {
+      if (hovered?.link === link) hovered = null;
+      body.title = '';
+    },
+  };
+  return link;
+}
+
+/**
  * Makes a kind of link clickable in a terminal.
  * @param {any} term xterm
  * @param {HTMLElement} body the terminal's element, whose tooltip names the link
@@ -79,38 +108,20 @@ function logicalLine(term, y) {
 export function registerLinks(term, body, kind) {
   term.registerLinkProvider({
     /**
-     * xterm asks for the links on a row (1-based).
+     * xterm asks for the links on a row (1-based); a kind may need a moment to say which are real.
      * @param {number} y
      * @param {(links: object[] | undefined) => void} callback
      */
     provideLinks(y, callback) {
       if (!kind.active()) return callback(undefined);
       const { text, at } = logicalLine(term, y);
-      const links = kind.find(text)
-        .map(f => ({ range: { start: at(f.start), end: at(f.end - 1) }, text: f.text }))
-        .filter(l => l.range.start.y <= y && l.range.end.y >= y)
-        .map(({ range, text: linkText }) => {
-          const link = {
-            range,
-            text: linkText,
-            decorations: decorations(kind),
-            /** @param {MouseEvent} e */
-            activate(e) {
-              if ((e.ctrlKey || kind.plainClick?.()) && kind.active()) kind.open(linkText);
-            },
-            hover() {
-              hovered = { link, kind };
-              restyle(link, kind);
-              body.title = kind.title(linkText);
-            },
-            leave() {
-              if (hovered?.link === link) hovered = null;
-              body.title = '';
-            },
-          };
-          return link;
-        });
-      callback(links.length ? links : undefined);
+      Promise.resolve(kind.find(text)).then(found => {
+        const links = found
+          .map(f => ({ range: { start: at(f.start), end: at(f.end - 1) }, text: f.text, title: f.title ?? kind.title(f.text) }))
+          .filter(l => l.range.start.y <= y && l.range.end.y >= y)
+          .map(l => makeLink(l, kind, body));
+        callback(links.length ? links : undefined);
+      }, () => callback(undefined));
     },
   });
 }

@@ -41,16 +41,54 @@ onHost(HOST.changesList, m => {
 
 // ---- Opening ----
 
+/** How long what a printed path leads to is remembered: hovering asks once, not on every move. */
+const RESOLVED_FOR_MS = 10_000;
+/** More remembered paths than this, and the old ones go. */
+const MAX_RESOLVED = 500;
+/** @type {Map<string, { at: number, reply: Promise<import('./protocol.js').Host_changesResolved> }>} */
+const resolvedPaths = new Map();
+
 /**
- * Opens the change of a path printed in a terminal (resolved by the host: relative to where Claude or the shell works).
+ * Where a path printed in a terminal leads, as the host finds it (relative to where Claude or the shell works): a
+ * file, a folder, or nowhere.
+ * @param {Tab} tab
+ * @param {string} text
+ */
+function resolvePath(tab, text) {
+  const key = `${tab.id}\n${text}`;
+  const known = resolvedPaths.get(key);
+  if (known && Date.now() - known.at < RESOLVED_FOR_MS) return known.reply;
+  if (resolvedPaths.size > MAX_RESOLVED) resolvedPaths.clear();
+  const reply = request(PAGE.changesResolve, { id: tab.id, text, cwd: tab.cwd ?? null, wsCwd: wsById(tab.wsId)?.cwd ?? null, remote: isRemote(tab) });
+  resolvedPaths.set(key, { at: Date.now(), reply });
+  return reply;
+}
+
+/**
+ * Opens what a path printed in a terminal leads to: a file's change in the preview, a folder in the file manager.
  * @param {Tab} tab
  * @param {string} text
  */
 export function openChange(tab, text) {
-  request(PAGE.changesResolve, { id: tab.id, text, cwd: tab.cwd ?? null, wsCwd: wsById(tab.wsId)?.cwd ?? null, remote: isRemote(tab) }).then(reply => {
-    if (reply.path) showChange(tab, reply.path, { line: reply.line ?? null });
+  resolvePath(tab, text).then(reply => {
+    if (reply.folder && reply.path) send(PAGE.openPath, { path: reply.path });
+    else if (reply.path) showChange(tab, reply.path, { line: reply.line ?? null });
     else showMessage(tab, reply.error ?? 'File not found.');
   });
+}
+
+/**
+ * The paths in a line that lead somewhere real, each with a tooltip saying what Ctrl+click does with it: text that
+ * only looks like a path (a version, a sentence's "a/b") isn't a link.
+ * @param {Tab} tab
+ * @param {string} text
+ */
+async function realPaths(tab, text) {
+  const candidates = findLinks(text);
+  const replies = await Promise.all(candidates.map(c => resolvePath(tab, c.text)));
+  return candidates.flatMap((c, i) => (replies[i].path
+    ? [{ ...c, title: replies[i].folder ? 'Ctrl+click to open the folder' : 'Ctrl+click to preview the change' }]
+    : []));
 }
 
 /** How a change from under a minute ago is dated. */
@@ -232,7 +270,7 @@ on(EVENTS.terminalOpened, tab => {
   // The list survives a page reload in the host, so a terminal asks for it when it opens.
   send(PAGE.changesList, { id: tab.id });
   registerLinks(tab.view.term, tab.view.body, {
-    find: findLinks,
+    find: text => realPaths(tab, text),
     active: () => enabled() && settings().changes.links,
     title: () => 'Ctrl+click to preview the change',
     open: path => openChange(tab, path),
