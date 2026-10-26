@@ -31,6 +31,8 @@ internal sealed record TerminalSettings
     public bool ProgramClipboard { get; init; } = true;
     /// <summary>Selecting text in a terminal copies it.</summary>
     public bool CopyOnSelect { get; init; }
+    /// <summary>What opens a web address in a terminal’s output (js/weblinks.js): Ctrl+click, or a plain click.</summary>
+    public string LinkClick { get; init; } = SettingValues.LinkClick.Default;
     /// <summary>The terminal colour scheme's id (js/themes.js); null: the theme's own.</summary>
     public string? Colors { get; init; }
     /// <summary>A terminal's row shows the ports its programs listen on.</summary>
@@ -44,6 +46,7 @@ internal sealed record TerminalSettings
         LineHeight = Math.Clamp(Math.Round(LineHeight, LineHeightDigits), MinLineHeight, MaxLineHeight),
         Scrollback = Math.Clamp(Scrollback, MinScrollback, MaxScrollback),
         TextSmoothing = SettingChecks.OneOf(TextSmoothing, SettingValues.TextSmoothing.All, SettingValues.TextSmoothing.Default),
+        LinkClick = SettingChecks.OneOf(LinkClick, SettingValues.LinkClick.All, SettingValues.LinkClick.Default),
         Colors = SettingChecks.Trimmed(Colors),
     };
 }

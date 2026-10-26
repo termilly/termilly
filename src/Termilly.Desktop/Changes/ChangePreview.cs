@@ -4,7 +4,8 @@ using Termilly.Desktop.Services;
 namespace Termilly.Desktop;
 
 /// <summary>The file a printed path means and the line it named, or why there's none.</summary>
-internal sealed record ResolvedPath(string? Path, int? Line, string? Error)
+/// <summary>Where a path printed in a terminal leads: a file (with a line), a folder, or why nowhere.</summary>
+internal sealed record ResolvedPath(string? Path, int? Line, string? Error, bool Folder = false)
 {
     public static ResolvedPath NotAPath { get; } = new(null, null, "That isn't a file path.");
 }
@@ -114,8 +115,9 @@ internal sealed class ChangePreview(ChangeStore store, LocalGit git)
 
     /// <summary>
     /// The file a path printed in a terminal means (Ctrl+click): a file Claude changed in that pane first (its output
-    /// often shows paths relative to where it works), then an absolute path, then relative to the folders given. A
-    /// path on another machine (SSH, WSL) can't be previewed.
+    /// often shows paths relative to where it works), then an absolute path, then relative to the folders given; a
+    /// folder found that way is one too (it opens in the file manager). A path on another machine (SSH, WSL) can't be
+    /// previewed.
     /// </summary>
     public ResolvedPath Resolve(string paneId, string text, bool remote, params string?[] folders)
     {
@@ -151,9 +153,17 @@ internal sealed class ChangePreview(ChangeStore store, LocalGit git)
         clean = ChangePaths.ExpandHome(clean);
         foreach (var folder in folders.Where(f => !string.IsNullOrWhiteSpace(f)).Prepend(null))
         {
-            if (ChangePaths.Normalize(clean, folder) is { } candidate && File.Exists(candidate))
+            if (ChangePaths.Normalize(clean, folder) is not { } candidate)
+            {
+                continue;
+            }
+            if (File.Exists(candidate))
             {
                 return new(candidate, line, null);
+            }
+            if (Directory.Exists(candidate))
+            {
+                return new(candidate, null, null, Folder: true);
             }
         }
         return new(null, null, $"File not found: {clean}");

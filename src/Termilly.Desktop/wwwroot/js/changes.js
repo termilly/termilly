@@ -15,6 +15,8 @@ import { showChange, showMessage, KIND_BADGE } from './preview.js';
 import { PATH_PATTERNS } from './hints.js';
 import { find, targetOf } from './dom.js';
 import { MINUTE_MS, HOUR_MS } from './util.js';
+import { registerLinks } from './termlinks.js';
+import { findWebLinks } from './webaddress.js';
 
 /**
  * A file Claude changed, as the host lists it (Changes.cs): its path, how to show it (relative to Claude's folder,
@@ -39,16 +41,54 @@ onHost(HOST.changesList, m => {
 
 // ---- Opening ----
 
+/** How long what a printed path leads to is remembered: hovering asks once, not on every move. */
+const RESOLVED_FOR_MS = 10_000;
+/** More remembered paths than this, and the old ones go. */
+const MAX_RESOLVED = 500;
+/** @type {Map<string, { at: number, reply: Promise<import('./protocol.js').Host_changesResolved> }>} */
+const resolvedPaths = new Map();
+
 /**
- * Opens the change of a path printed in a terminal (resolved by the host: relative to where Claude or the shell works).
+ * Where a path printed in a terminal leads, as the host finds it (relative to where Claude or the shell works): a
+ * file, a folder, or nowhere.
+ * @param {Tab} tab
+ * @param {string} text
+ */
+function resolvePath(tab, text) {
+  const key = `${tab.id}\n${text}`;
+  const known = resolvedPaths.get(key);
+  if (known && Date.now() - known.at < RESOLVED_FOR_MS) return known.reply;
+  if (resolvedPaths.size > MAX_RESOLVED) resolvedPaths.clear();
+  const reply = request(PAGE.changesResolve, { id: tab.id, text, cwd: tab.cwd ?? null, wsCwd: wsById(tab.wsId)?.cwd ?? null, remote: isRemote(tab) });
+  resolvedPaths.set(key, { at: Date.now(), reply });
+  return reply;
+}
+
+/**
+ * Opens what a path printed in a terminal leads to: a file's change in the preview, a folder in the file manager.
  * @param {Tab} tab
  * @param {string} text
  */
 export function openChange(tab, text) {
-  request(PAGE.changesResolve, { id: tab.id, text, cwd: tab.cwd ?? null, wsCwd: wsById(tab.wsId)?.cwd ?? null, remote: isRemote(tab) }).then(reply => {
-    if (reply.path) showChange(tab, reply.path, { line: reply.line ?? null });
+  resolvePath(tab, text).then(reply => {
+    if (reply.folder && reply.path) send(PAGE.openPath, { path: reply.path });
+    else if (reply.path) showChange(tab, reply.path, { line: reply.line ?? null });
     else showMessage(tab, reply.error ?? 'File not found.');
   });
+}
+
+/**
+ * The paths in a line that lead somewhere real, each with a tooltip saying what Ctrl+click does with it: text that
+ * only looks like a path (a version, a sentence's "a/b") isn't a link.
+ * @param {Tab} tab
+ * @param {string} text
+ */
+async function realPaths(tab, text) {
+  const candidates = findLinks(text);
+  const replies = await Promise.all(candidates.map(c => resolvePath(tab, c.text)));
+  return candidates.flatMap((c, i) => (replies[i].path
+    ? [{ ...c, title: replies[i].folder ? 'Ctrl+click to open the folder' : 'Ctrl+click to preview the change' }]
+    : []));
 }
 
 /** How a change from under a minute ago is dated. */
@@ -209,6 +249,8 @@ const LINK_PATTERNS = [
 export function findLinks(text) {
   /** @type {FoundLink[]} */
   const found = [];
+  // A path inside a web address is part of the address (weblinks.js), not a changed file.
+  const addresses = findWebLinks(text);
   for (const { re, group } of LINK_PATTERNS) {
     re.lastIndex = 0;
     for (let m; (m = re.exec(text));) {
@@ -217,78 +259,20 @@ export function findLinks(text) {
       const start = m.index + (group ? m[0].indexOf(link) : 0);
       link = link.replace(/[.,;!?)\]}'"]+$/, '');
       const end = start + link.length;
-      if (link.length < MIN_LINK_CHARS || found.some(f => start < f.end && end > f.start)) continue;
+      if (link.length < MIN_LINK_CHARS || [...found, ...addresses].some(f => start < f.end && end > f.start)) continue;
       found.push({ start, end, text: link });
     }
   }
   return found;
 }
 
-let ctrlHeld = false;
-/** @type {{ decorations: { underline: boolean, pointerCursor: boolean } } | null} */
-let hovered = null; // the link under the mouse, so holding Ctrl can underline it
-
-/** @param {boolean} held */
-function setCtrl(held) {
-  if (held === ctrlHeld) return;
-  ctrlHeld = held;
-  if (hovered) hovered.decorations = { underline: held, pointerCursor: held };
-}
-window.addEventListener('keydown', e => setCtrl(e.ctrlKey), true);
-window.addEventListener('keyup', e => setCtrl(e.ctrlKey), true);
-window.addEventListener('blur', () => setCtrl(false));
-
 on(EVENTS.terminalOpened, tab => {
-  const term = tab.view.term;
   // The list survives a page reload in the host, so a terminal asks for it when it opens.
   send(PAGE.changesList, { id: tab.id });
-  term.registerLinkProvider({
-    /**
-     * xterm asks for the links on a row (1-based).
-     * @param {number} y
-     * @param {(links: object[] | undefined) => void} callback
-     */
-    provideLinks(y, callback) {
-      if (!enabled() || !settings().changes.links) return callback(undefined);
-      const buffer = term.buffer.active;
-      const cols = term.cols;
-      // A path can wrap across rows: read the whole logical line and map offsets back to cells.
-      let first = y - 1;
-      while (first > 0 && buffer.getLine(first)?.isWrapped) first--;
-      let last = y - 1;
-      while (buffer.getLine(last + 1)?.isWrapped) last++;
-      let text = '';
-      for (let row = first; row <= last; row++) {
-        const line = buffer.getLine(row);
-        text += line ? line.translateToString(row !== last).padEnd(row !== last ? cols : 0) : '';
-      }
-      /** @param {number} offset */
-      const at = offset => ({ x: (offset % cols) + 1, y: first + Math.floor(offset / cols) + 1 });
-      const links = findLinks(text)
-        .map(({ start, end, text: linkText }) => ({ range: { start: at(start), end: at(end - 1) }, text: linkText }))
-        .filter(l => l.range.start.y <= y && l.range.end.y >= y)
-        .map(({ range, text: linkText }) => {
-          const link = {
-            range,
-            text: linkText,
-            decorations: { underline: ctrlHeld, pointerCursor: ctrlHeld },
-            /** @param {MouseEvent} e */
-            activate(e) {
-              if (e.ctrlKey && enabled() && settings().changes.links) openChange(tab, linkText);
-            },
-            hover() {
-              hovered = link;
-              link.decorations = { underline: ctrlHeld, pointerCursor: ctrlHeld };
-              tab.view.body.title = 'Ctrl+click to preview the change';
-            },
-            leave() {
-              if (hovered === link) hovered = null;
-              tab.view.body.title = '';
-            },
-          };
-          return link;
-        });
-      callback(links.length ? links : undefined);
-    },
+  registerLinks(tab.view.term, tab.view.body, {
+    find: text => realPaths(tab, text),
+    active: () => enabled() && settings().changes.links,
+    title: () => 'Ctrl+click to preview the change',
+    open: path => openChange(tab, path),
   });
 });

@@ -61,13 +61,13 @@ internal sealed class ChangesHandler : IMessageHandler
         _page.Post(new ToPage.ChangeContent(requestId, view, error));
     }
 
-    /// <summary>Which file a path Ctrl+clicked in a terminal means.</summary>
+    /// <summary>Which file or folder a path in a terminal means (for its link, and when it's Ctrl+clicked).</summary>
     private void Resolve(FromPage.ChangesResolve m)
     {
-        var (path, line, error) = string.IsNullOrWhiteSpace(m.Text)
+        var (path, line, error, folder) = string.IsNullOrWhiteSpace(m.Text)
             ? ResolvedPath.NotAPath
             : _preview.Resolve(m.Id, m.Text, m.Remote, m.Cwd, m.WsCwd);
-        _page.Post(new ToPage.ChangeResolved(m.RequestId, path, line, error));
+        _page.Post(new ToPage.ChangeResolved(m.RequestId, path, line, error, folder));
     }
 
     /// <summary>The terminal's changed files with the text in their path or lines (disk work, so off the UI thread).</summary>

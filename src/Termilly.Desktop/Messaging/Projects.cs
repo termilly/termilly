@@ -170,7 +170,8 @@ internal static partial class ToPage
         public static string Type => "changes:content";
     }
 
-    internal sealed record ChangeResolved(string? RequestId, string? Path, int? Line, string? Error) : IHostMessage
+    /// <summary>Where a path in a terminal leads; <see cref="Folder"/>: it's a folder, not a file.</summary>
+    internal sealed record ChangeResolved(string? RequestId, string? Path, int? Line, string? Error, bool Folder = false) : IHostMessage
     {
         public static string Type => "changes:resolved";
     }
