@@ -235,6 +235,8 @@ select.field { padding-right: 6px; }
 }
 
 .logo { width: 20px; height: 20px; }
+/* The version follows the name as a word would: closer than the logo’s gap (5px, not 9px). */
+.brand-version { margin-left: -4px; }
 
 /* Which workspace is on screen: only while the sidebar is closed. */
 .crumb {
