@@ -654,6 +654,9 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
 .trigger-row .field.mono { font-family: var(--mono); font-size: 12.5px; }
 .trigger-row .field.invalid { border-color: var(--danger); }
 .trigger-presets { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+/* Settings › Terminal › Sounds: a sound's dropdown and its play button. */
+.sound-pick { display: flex; gap: 6px; align-items: center; }
+.sound-pick .field { width: 120px; }
 .act-row { display: grid; gap: 8px; padding: 10px 0; border-bottom: 1px solid var(--border); }
 .act-line { display: flex; gap: 8px; align-items: center; }
 .act-line .field { flex: 1 1 0; min-width: 0; }

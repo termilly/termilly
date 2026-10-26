@@ -107,6 +107,13 @@ interface NotificationSettings {
   error: boolean;
   done: boolean;
   jumpHotkey: boolean;
+  /** The sound (wwwroot/sounds, js/sounds.js) when an agent needs the user or wants attention; Off by choosing none. */
+  soundNeedsInput: string;
+  soundError: string;
+  soundDone: string;
+  /** When quitting asks first, because something is still running. */
+  soundQuit: string;
+  soundVolume: number;
 }
 
 /** What's kept between runs: the restore at start, history, hidden terminals' scrollback, background shells. */

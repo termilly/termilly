@@ -3,7 +3,7 @@
 // triggers and the shell profiles.
 
 import { sys, SYSTEM_NAME } from '../host.js';
-import { state, isSshProfile, activityChanged, GROUPS } from '../store.js';
+import { state, isSshProfile, activityChanged, getSetting, GROUPS } from '../store.js';
 import { escapeHtml, ICONS, profileOptionsHtml } from '../ui.js';
 import { environments } from '../environments.js';
 import { updateSettings } from '../preferences.js';
@@ -13,9 +13,36 @@ import { triggerList, triggerActions, triggerClick, triggerChange, triggerInput 
 import { shellList, profileActions, profileClick } from './profiles.js';
 import { SETTING_VALUES } from '../constants.js';
 import { targetOf } from '../dom.js';
+import { playSound } from '../sounds.js';
 
 /** The choices of the settings used here (C#'s SettingValues). */
-const { hiddenScrollback, costDisplay, agentLine, agentLimit, prodPaste, logFormat, linkClick } = SETTING_VALUES;
+const { hiddenScrollback, costDisplay, agentLine, agentLimit, prodPaste, logFormat, linkClick, sound, soundVolume } = SETTING_VALUES;
+
+/** The sound settings' keys start with this; the volume is one of them, and plays the "needs you" sound. */
+const SOUND_SETTING = 'notifications.sound';
+const VOLUME_SETTING = 'notifications.soundVolume';
+const NEEDS_INPUT_SOUND = 'notifications.soundNeedsInput';
+
+/**
+ * A sound's play button; true when it was one.
+ * @param {MouseEvent} e
+ */
+function playChosen(e) {
+  const key = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-play-sound]'))?.dataset.playSound;
+  if (!key) return false;
+  playSound(getSetting(key));
+  return true;
+}
+
+/** The sounds to pick from: none, then ping-1…ping-5 as Ping 1…Ping 5. */
+const SOUND_CHOICES = sound.all.map(v => [v, v === sound.none ? 'Off' : v.replace(/^ping-/, 'Ping ')]);
+
+/**
+ * A sound setting's dropdown, and a button to hear the chosen sound.
+ * @param {string} key notifications.sound…
+ */
+const soundPicker = key => `<span class="sound-pick"><select class="field" data-setting="${key}">${SOUND_CHOICES.map(([v, l]) => `<option value="${v}"${v === getSetting(key) ? ' selected' : ''}>${l}</option>`).join('')}</select>
+  <button class="btn small" data-play-sound="${key}" title="Play it" aria-label="Play it">${ICONS.play}</button></span>`;
 
 /** A row per environment (production, staging) with its host patterns, comma-separated. */
 function envPatternRows() {
@@ -90,6 +117,11 @@ const TERMINAL = {
         toggle('notifications.needsInput'))
       + row('Stopped with an error', '', toggle('notifications.error'))
       + row('Finished', 'When an agent finishes its turn.', toggle('notifications.done')))
+    + group('Sounds', row('Agent needs you', 'When an agent asks for permission or input in a terminal you can’t see.', soundPicker('notifications.soundNeedsInput'), { keywords: 'sound ping beep audio notification agent waits' })
+      + row('Agent stopped with an error', '', soundPicker('notifications.soundError'), { keywords: 'sound ping audio error' })
+      + row('Agent finished', '', soundPicker('notifications.soundDone'), { keywords: 'sound ping audio done finished' })
+      + row('Quitting while something runs', 'When Termilly asks before quitting, because a command or an agent is still running.', soundPicker('notifications.soundQuit'), { keywords: 'sound ping audio quit close busy' })
+      + row('Volume', '', seg('notifications.soundVolume', [[soundVolume.quiet, 'Quiet'], [soundVolume.medium, 'Medium'], [soundVolume.loud, 'Loud']]), { keywords: 'sound volume loud quiet' }))
     + group('Triggers', `${triggerList()}
         <p class="set-desc">Each new output line is matched against these regular expressions (case doesn’t matter). Matches can be highlighted, kept in the
           <b>Captured lines</b> list (sidebar), or raise a notification or the amber “wants attention” dot. For one terminal, use its menu: <b>Alert me</b>.</p>`)
@@ -104,7 +136,7 @@ const TERMINAL = {
           ? 'Read from <code>~/.ssh/config</code>; ssh itself handles keys, agents and jump hosts. Hosts named like production start tagged <b>prod</b>.'
           : `Add <code>Host</code> entries to <code>~/.ssh/config</code> and they appear here, opened with ${sys.name === SYSTEM_NAME.linux ? 'your OpenSSH client' : 'the OpenSSH client that comes with Windows'}.`}</p>`),
   actions: { ...triggerActions, ...profileActions },
-  click: e => triggerClick(e) || profileClick(e),
+  click: e => triggerClick(e) || profileClick(e) || playChosen(e),
   change(e) {
     if (triggerChange(e)) return true;
     if (targetOf(e).matches('input.log-tags')) {
@@ -117,6 +149,8 @@ const TERMINAL = {
   },
   input: triggerInput,
   changed(key) {
+    // A sound chosen, or the volume changed: hear it.
+    if (key.startsWith(SOUND_SETTING)) playSound(getSetting(key === VOLUME_SETTING ? NEEDS_INPUT_SOUND : key));
     if (key === 'interface.showActivity') for (const tab of state.tabs.values()) activityChanged(tab, true);
   },
 };

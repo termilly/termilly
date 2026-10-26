@@ -38,6 +38,28 @@ internal static class SettingValues
         public static readonly IReadOnlyList<string> All = [Grayscale, ClearType];
     }
 
+    /// <summary>A notification sound: off, or one of the pings in wwwroot/sounds (ping-1.mp3…), by its file name.</summary>
+    public static class Sound
+    {
+        public const string None = "none";
+        public const string Ping1 = "ping-1";
+        public const string Ping2 = "ping-2";
+        public const string Ping3 = "ping-3";
+        public const string Ping4 = "ping-4";
+        public const string Ping5 = "ping-5";
+        public static readonly IReadOnlyList<string> All = [None, Ping1, Ping2, Ping3, Ping4, Ping5];
+    }
+
+    /// <summary>How loud the sounds play, in percent.</summary>
+    public static class SoundVolume
+    {
+        public const int Quiet = 30;
+        public const int Medium = 60;
+        public const int Loud = 100;
+        public const int Default = Medium;
+        public static readonly IReadOnlyList<int> All = [Quiet, Medium, Loud];
+    }
+
     /// <summary>What opens a web address in a terminal: Ctrl+click (a plain click stays for selecting), or a click.</summary>
     public static class LinkClick
     {

@@ -197,6 +197,22 @@ export const SETTING_VALUES = Object.freeze({
     default: 'grayscale',
     all: Object.freeze(['grayscale', 'cleartype']),
   }),
+  sound: Object.freeze({
+    none: 'none',
+    ping1: 'ping-1',
+    ping2: 'ping-2',
+    ping3: 'ping-3',
+    ping4: 'ping-4',
+    ping5: 'ping-5',
+    all: Object.freeze(['none', 'ping-1', 'ping-2', 'ping-3', 'ping-4', 'ping-5']),
+  }),
+  soundVolume: Object.freeze({
+    quiet: 30,
+    medium: 60,
+    loud: 100,
+    default: 60,
+    all: Object.freeze([30, 60, 100]),
+  }),
   linkClick: Object.freeze({
     ctrl: 'ctrl',
     click: 'click',

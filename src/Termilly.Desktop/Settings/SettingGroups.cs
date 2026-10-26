@@ -201,8 +201,22 @@ internal sealed record NotificationSettings
     public bool Error { get; init; } = true;
     public bool Done { get; init; } = true;
     public bool JumpHotkey { get; init; }
+    /// <summary>The sound (wwwroot/sounds, js/sounds.js) when an agent needs the user or wants attention; Off by choosing none.</summary>
+    public string SoundNeedsInput { get; init; } = SettingValues.Sound.Ping1;
+    public string SoundError { get; init; } = SettingValues.Sound.None;
+    public string SoundDone { get; init; } = SettingValues.Sound.None;
+    /// <summary>When quitting asks first, because something is still running.</summary>
+    public string SoundQuit { get; init; } = SettingValues.Sound.None;
+    public int SoundVolume { get; init; } = SettingValues.SoundVolume.Default;
 
-    public NotificationSettings Normalize() => this;
+    public NotificationSettings Normalize() => this with
+    {
+        SoundNeedsInput = SettingChecks.OneOf(SoundNeedsInput, SettingValues.Sound.All, SettingValues.Sound.Ping1),
+        SoundError = SettingChecks.OneOf(SoundError, SettingValues.Sound.All, SettingValues.Sound.None),
+        SoundDone = SettingChecks.OneOf(SoundDone, SettingValues.Sound.All, SettingValues.Sound.None),
+        SoundQuit = SettingChecks.OneOf(SoundQuit, SettingValues.Sound.All, SettingValues.Sound.None),
+        SoundVolume = SettingChecks.OneOf(SoundVolume, SettingValues.SoundVolume.All, SettingValues.SoundVolume.Default),
+    };
 }
 
 /// <summary>What's kept between runs: the restore at start, history, hidden terminals' scrollback, background shells.</summary>

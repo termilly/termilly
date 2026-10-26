@@ -10,6 +10,7 @@ import { state, tabTitle, saveNow } from './store.js';
 import { modal, CONFIRM_DIALOG } from './dialogs.js';
 import { escapeHtml } from './ui.js';
 import { AGENT_STATE, QUIT_ANSWER } from './constants.js';
+import { playQuitSound } from './sounds.js';
 
 /** An agent in these states still has work it would lose. @type {Set<string>} */
 const AGENT_BUSY = new Set([AGENT_STATE.working, AGENT_STATE.needsInput]);
@@ -72,6 +73,7 @@ onHost(HOST.quitAsk, async () => {
     return;
   }
   answer(QUIT_ANSWER.asking);
+  playQuitSound();
   const quit = await askToQuit(busy);
   answer(quit ? QUIT_ANSWER.quit : QUIT_ANSWER.stay);
 });

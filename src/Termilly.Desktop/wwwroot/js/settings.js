@@ -336,7 +336,8 @@ function syncControls() {
     } else if (el.classList.contains('switch')) {
       el.setAttribute('aria-checked', String(!!value));
     } else if (el.tagName === 'SELECT') {
-      /** @type {HTMLSelectElement} */ (el).value = state.settings.shells.defaultProfile ?? state.profiles[0]?.id ?? '';
+      // Its own setting; the default shell, when none is chosen yet, is the first one.
+      /** @type {HTMLSelectElement} */ (el).value = String(value ?? state.profiles[0]?.id ?? '');
     }
   }
   for (const select of /** @type {NodeListOf<HTMLSelectElement>} */ (body.querySelectorAll('select.field'))) {

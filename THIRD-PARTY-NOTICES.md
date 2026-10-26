@@ -15,6 +15,7 @@ Termilly includes the components below, each under its own license. Termilly its
 | [WebView2 SDK](https://www.nuget.org/packages/Microsoft.Web.WebView2) (`Microsoft.Web.WebView2`) | 1.0.4258.31 | BSD-3-Clause style (below) | Windows: `Microsoft.Web.WebView2.*.dll`, `WebView2Loader.dll` |
 | Windows SDK projection (`Microsoft.Windows.SDK.NET.dll`, `WinRT.Runtime.dll`) | 10.0.19041 | Microsoft (CsWinRT: MIT) | Windows |
 | [Photino.NET](https://github.com/tryphotino/photino.NET) and Photino.Native | 4.0.16, 4.0.22 | Apache-2.0 | Linux: `Photino.NET.dll`, `Photino.Native.so` |
+| Notification sounds, from [Pixabay](https://pixabay.com) (below) | - | Pixabay Content License, **not** Apache-2.0 | `wwwroot/sounds/ping-1.mp3` to `ping-5.mp3` |
 
 **Installed alongside, not part of Termilly:** the full Windows setup carries Microsoft's own installers for the [.NET 10 Desktop Runtime](https://dotnet.microsoft.com) (MIT, with Microsoft's installer terms) and the [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/) (Microsoft Software License Terms), unchanged and signed by Microsoft, and runs them only if they're missing. On Linux, .NET and WebKitGTK come from the distribution's packages.
 
@@ -112,3 +113,15 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ## Photino.NET and Photino.Native: Apache License 2.0
 
 Copyright TryPhotino and contributors. Under the same Apache License 2.0 as Termilly: the full text is in [LICENSE](LICENSE).
+
+## Notification sounds: Pixabay Content License
+
+The five sounds in `wwwroot/sounds` come from [Pixabay](https://pixabay.com) under the [Pixabay Content License](https://pixabay.com/service/license-summary/), not under Termilly's Apache License 2.0: forks and copies of Termilly may use them as part of Termilly, but may not sell or hand them out on their own. They were edited for Termilly (trimmed, levelled, faded out, made mono and smaller).
+
+| File | Pixabay sound (by its uploader) |
+|---|---|
+| `ping-1.mp3` | "Short soft muted notification sound" (chrysalyn, 547377) |
+| `ping-2.mp3` | "Error notification sound" (musicnation782, 618950) |
+| `ping-3.mp3` | "UI soft glass ping" (soundshelfstudio, 526562) |
+| `ping-4.mp3` | "Digital success chime, futuristic UI notification" (soynoviembre, 562086) |
+| `ping-5.mp3` | "New notification 038" (universfield, 487899) |
