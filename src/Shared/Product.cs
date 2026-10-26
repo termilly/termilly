@@ -4,6 +4,8 @@ namespace Termilly.Shared;
 internal static class Product
 {
     public const string Name = "Termilly";
+    /// <summary>The docs on the website; a section is its #id (Settings’ help button opens one).</summary>
+    public const string DocsUrl = "https://termilly.com/docs/";
 }
 
 /// <summary>Where Git for Windows installs, and Git Bash in it (Windows only).</summary>

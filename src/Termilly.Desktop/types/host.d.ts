@@ -95,6 +95,8 @@ interface ShellSettings {
 interface CommandSettings {
   snippets: SnippetSetting[] | null;
   triggers: TriggerSetting[] | null;
+  /** Web pages and programs to start (Actions.cs); Termilly’s own until the user changes them. */
+  actions: ActionSetting[] | null;
 }
 
 /** When a terminal's agent tells the user, and the system-wide "next terminal that needs me" shortcut. */
@@ -281,6 +283,17 @@ interface CustomProfile {
   environment: Record<string, string> | null;
   tags: string[] | null;
   icon: string;
+}
+
+/** A web page or program started from Termilly (Actions.cs, js/actions.js): from the palette, a shortcut, or the terminal's right-click menu. Target and Arguments may hold {placeholders} (ActionPlaceholders). */
+interface ActionSetting {
+  id: string;
+  name: string;
+  target: string;
+  arguments: string | null;
+  shortcut: string | null;
+  menu: boolean;
+  enabled: boolean;
 }
 
 /** How a COM port is set up (Settings › Serial); one per port that's been changed from the defaults. */

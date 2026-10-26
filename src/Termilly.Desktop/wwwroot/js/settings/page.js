@@ -13,6 +13,7 @@ import { restoreFocus } from '../panes.js';
  * @property {string} id
  * @property {string} label
  * @property {string} icon
+ * @property {string} [docs] Its part of the docs (termilly.com/docs/#id), which the help button opens.
  * @property {() => string} html Its markup; rows are found again in it by the search and the palette.
  * @property {() => void} [refresh] On switching to it from another section: asks the host for what it shows.
  * @property {() => void} [opened] Each time Settings opens on it.
@@ -32,6 +33,7 @@ export const SECTION = Object.freeze({
   ssh: 'ssh',
   serial: 'serial',
   workspaces: 'workspaces',
+  actions: 'actions',
   changes: 'changes',
   privacy: 'privacy',
   plugins: 'plugins',

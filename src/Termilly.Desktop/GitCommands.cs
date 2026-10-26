@@ -28,6 +28,9 @@ internal static class GitCommands
     public const string Switch = "switch";
     public const string Worktree = "worktree";
     public const string Branch = "branch";
+    public const string Remote = "remote";
+    /// <summary>The remote a clone starts with.</summary>
+    public const string Origin = "origin";
 
     /// <summary>The options used in more than one place.</summary>
     public static class Options
@@ -47,6 +50,10 @@ internal static class GitCommands
         /// <summary>Only the size (cat-file), or no diff (show).</summary>
         public const string SizeOnly = "-s";
         public const string NoOptionalLocks = "--no-optional-locks";
+        /// <summary>A remote’s address (remote get-url).</summary>
+        public const string GetUrl = "get-url";
+        /// <summary>The branch checked out (branch --show-current); nothing when detached.</summary>
+        public const string ShowCurrent = "--show-current";
     }
 
     /// <summary>Where branches live among the refs.</summary>

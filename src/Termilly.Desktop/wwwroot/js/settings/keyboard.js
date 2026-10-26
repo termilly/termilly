@@ -1,9 +1,10 @@
 // @ts-check
 // Settings › Keyboard: every shortcut, by what it's for.
 
-import { ICONS, keysHtml } from '../ui.js';
+import { ICONS, keysHtml, escapeHtml } from '../ui.js';
 import { group } from './controls.js';
 import { SECTION } from './page.js';
+import { enabledActions, chordHtml } from '../actions.js';
 
 /**
  * [heading, [what it does, its keys]].
@@ -47,12 +48,25 @@ const SHORTCUTS = [
   ]],
 ];
 
+/**
+ * @param {string} label already escaped
+ * @param {string} keys as keyboard keys
+ */
+const keyRow = (label, keys) => `<div class="key-row"><span>${label}</span><span class="keys">${keys}</span></div>`;
+
+/** The keys the user gave their actions (Settings › Actions). */
+function actionKeys() {
+  const withKeys = enabledActions().filter(a => a.shortcut);
+  return withKeys.length ? group('Your actions', withKeys.map(a => keyRow(escapeHtml(a.name), chordHtml(/** @type {string} */ (a.shortcut)))).join('')) : '';
+}
+
 /** @type {import('./page.js').Section} */
 const KEYBOARD = {
   id: SECTION.keyboard,
   label: 'Keyboard', icon: ICONS.keyboard,
   html: () => SHORTCUTS.map(([heading, items]) => group(heading,
-    items.map(([label, keys]) => `<div class="key-row"><span>${label}</span><span class="keys">${keysHtml(keys)}</span></div>`).join(''))).join(''),
+    items.map(([label, keys]) => keyRow(label, keysHtml(keys))).join(''))).join('')
+    + actionKeys(),
 };
 
 export default KEYBOARD;

@@ -10,6 +10,7 @@ import { SECTION, redrawIfShowing } from './page.js';
 import appearance from './appearance.js';
 import terminal from './terminal.js';
 import workspaces from './workspaces.js';
+import actions from './actions.js';
 import changes from './changes.js';
 import privacy from './privacy.js';
 import plugins from './plugins.js';
@@ -35,6 +36,16 @@ const serial = {
 setSshRerender(() => redrawIfShowing(SECTION.ssh));
 setSerialRerender(() => redrawIfShowing(SECTION.serial));
 
+/**
+ * The part of the docs (termilly.com/docs/#id) each section's help button opens.
+ * @type {Readonly<Record<string, string>>}
+ */
+const DOCS = Object.freeze({
+  [SECTION.appearance]: 'themes', [SECTION.terminal]: 'terminals', [SECTION.ssh]: 'ssh', [SECTION.serial]: 'serial',
+  [SECTION.workspaces]: 'workspaces', [SECTION.actions]: 'actions', [SECTION.changes]: 'changes', [SECTION.privacy]: 'encryption',
+  [SECTION.plugins]: 'plugins', [SECTION.keyboard]: 'shortcuts', [SECTION.about]: 'updates',
+});
+
 /** @type {Record<string, import('./page.js').Section>} by id, in the nav's order */
 export const SECTIONS = Object.fromEntries(
-  [appearance, terminal, ssh, serial, workspaces, changes, privacy, plugins, keyboard, about].map(s => [s.id, s]));
+  [appearance, terminal, ssh, serial, workspaces, actions, changes, privacy, plugins, keyboard, about].map(s => [s.id, { ...s, docs: DOCS[s.id] }]));

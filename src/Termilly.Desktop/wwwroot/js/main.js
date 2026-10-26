@@ -37,6 +37,7 @@ import { isBroadcasting, startBroadcast, stopBroadcast, openCompose, BROADCAST_S
 import { cycleWorkspace } from './workspaces.js';
 
 import { openSnippets, snippetCommands } from './snippets.js';
+import { actionCommands, runActionShortcut } from './actions.js';
 import { activityLine, stopAllAgents } from './agentline.js';
 import './subagents.js';
 import './notify.js';
@@ -191,6 +192,7 @@ setCommands(() => [
   { label: 'Smaller text', keywords: 'font zoom out', hint: keysHtml('Ctrl -'), run: commands.fontSmaller },
   { label: 'Reset text size', keywords: 'font zoom', hint: keysHtml('Ctrl 0'), run: commands.fontReset },
   ...snippetCommands(),
+  ...actionCommands(),
   // Each setting, last so app commands come first.
   ...cachedSettingEntries().map(s => ({
     label: `Settings: ${s.name}`, keywords: `preferences ${s.sectionLabel} ${s.keywords}`, hint: s.sectionLabel,
@@ -335,6 +337,8 @@ function runShortcut(e) {
   else if (ctrl && MINUS_KEYS.includes(e.code)) commands.fontSmaller();
   else if (ctrl && (e.code === 'Digit0' || e.code === 'Numpad0')) commands.fontReset();
   else if (ctrl && e.code === 'Comma') commands.settings();
+  // Last, so Termilly’s own keys win (Settings › Actions refuses them anyway).
+  else if (runActionShortcut(e)) { /* done */ }
   else return false;
   return true;
 }

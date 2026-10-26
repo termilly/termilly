@@ -12,6 +12,20 @@ export const PASTE_LABEL = 'Paste';
 /** xterm's mouse mode while no program asks for the mouse; otherwise a right-click is the program's. */
 const NO_MOUSE_TRACKING = 'none';
 
+/**
+ * What a feature adds to the right-click menu after Copy and Paste (js/actions.js: open, actions, ask an agent).
+ * @type {(body: HTMLElement) => import('./popups.js').MenuEntry[]}
+ */
+let menuExtras = () => [];
+
+/**
+ * Sets what the right-click menu adds after Copy and Paste.
+ * @param {(body: HTMLElement) => import('./popups.js').MenuEntry[]} fn
+ */
+export function setMenuExtras(fn) {
+  menuExtras = fn;
+}
+
 /** @param {any} term xterm */
 function copySelection(term) {
   const text = term.getSelection();
@@ -37,7 +51,7 @@ export function clipboardKey(term, e) {
 }
 
 /**
- * Copy on select, and the right-click menu: Copy (with a selection) and Paste.
+ * Copy on select, and the right-click menu: Copy (with a selection), Paste, and what features add (setMenuExtras).
  * @param {any} term xterm
  * @param {HTMLElement} body the terminal's element
  * @param {(text: string) => void} paste types `text` after the terminal's paste checks
@@ -52,6 +66,7 @@ export function wireClipboard(term, body, paste) {
     showMenu([
       { label: 'Copy', hint: 'Ctrl+C', disabled: !term.hasSelection(), action: () => copySelection(term) },
       { label: PASTE_LABEL, hint: 'Ctrl+V', action: () => navigator.clipboard.readText().then(text => { if (text) paste(text); }).catch(() => {}) },
+      ...menuExtras(body),
     ], { x: e.clientX, y: e.clientY });
   });
 }

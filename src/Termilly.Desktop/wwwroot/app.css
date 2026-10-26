@@ -235,6 +235,8 @@ select.field { padding-right: 6px; }
 }
 
 .logo { width: 20px; height: 20px; }
+/* The version follows the name as a word would: closer than the logo’s gap (5px, not 9px). */
+.brand-version { margin-left: -4px; }
 
 /* Which workspace is on screen: only while the sidebar is closed. */
 .crumb {
@@ -652,6 +654,14 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
 .trigger-row .field.mono { font-family: var(--mono); font-size: 12.5px; }
 .trigger-row .field.invalid { border-color: var(--danger); }
 .trigger-presets { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.act-row { display: grid; gap: 8px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.act-row:last-of-type { margin-bottom: 10px; }
+.act-line { display: flex; gap: 8px; align-items: center; }
+.act-line .field { flex: 1 1 0; min-width: 0; }
+.act-line .field.mono { font-family: var(--mono); font-size: 12.5px; }
+.act-menu { display: flex; flex: none; gap: 6px; align-items: center; color: var(--muted); font-size: 12px; white-space: nowrap; cursor: pointer; }
+.act-keys { flex: none; min-width: 96px; justify-content: center; }
+.act-keys.capturing { border-color: var(--accent); color: var(--accent); }
 
 /* ---- "Needs me" inbox (js/inbox.js) ---- */
 
@@ -1647,6 +1657,8 @@ body.dragging-pane #drag-ghost { display: flex; }
 .set-close { display: grid; place-items: center; width: 30px; height: 28px; margin-left: auto; border-radius: 7px; color: var(--muted); }
 .set-close:hover { background: var(--hover); color: var(--text); }
 .set-close svg { width: 12px; height: 12px; stroke-width: 1.4; }
+/* Help sits before Close: it takes the push to the right, Close follows it. */
+.set-help + .set-close { margin-left: 2px; }
 .set-body { flex: 1; padding: 8px 24px 24px; overflow-y: auto; user-select: text; }
 .set-body::-webkit-scrollbar { width: 8px; }
 .set-body::-webkit-scrollbar-thumb { border: 2px solid var(--raised); border-radius: 4px; background: var(--scroll-thumb); }
@@ -1751,6 +1763,8 @@ code.path { color: var(--text); font-size: 11.5px; word-break: break-all; }
 .res-line2 { margin-top: 3px; overflow: hidden; color: var(--muted); font: 11.5px/1.45 var(--mono); white-space: nowrap; text-overflow: ellipsis; }
 .res-right { display: flex; flex: none; flex-direction: column; align-items: flex-end; gap: 4px; color: var(--faint); font-size: 11px; white-space: nowrap; }
 .res-right kbd { font-size: 10px; }
+/* A command’s hint (its keys, or a settings section) on one line: the column stacks a result’s lines, not its keys. */
+.res-keys { display: flex; gap: 3px; align-items: center; }
 .res-empty { padding: 30px 12px; color: var(--faint); text-align: center; }
 .state { display: inline-flex; align-items: center; gap: 5px; }
 .state::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--ok); }

@@ -93,6 +93,20 @@ export function confirmDialog({ title, body, confirm = OK_LABEL }) {
   }).then(result => result === true);
 }
 
+/**
+ * Tells the user something that needs no answer (why an action couldn't run): one OK button.
+ * @param {{ title: string, body: string }} notice
+ * @returns {Promise<void>}
+ */
+export function noticeDialog({ title, body }) {
+  return modal(CONFIRM_DIALOG, `
+    <h3>${escapeHtml(title)}</h3>
+    <p class="dialog-sub">${escapeHtml(body)}</p>
+    <div class="dialog-actions">
+      <button class="btn primary" data-ok autofocus>${OK_LABEL}</button>
+    </div>`, (dialog, close) => ({ submit: () => close(true) })).then(() => {});
+}
+
 /** The class of the small confirm dialog. */
 export const CONFIRM_DIALOG = 'confirm';
 /** The class of a dialog that's a form (New workspace, a worktree, a sync code). */
