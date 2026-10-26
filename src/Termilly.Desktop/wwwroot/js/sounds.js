@@ -1,5 +1,5 @@
 // @ts-check
-// Notification sounds (Settings › Terminal › Sounds): a short ping when an agent needs you, stops with an error or
+// Notification sounds (Settings › Notifications › Sounds): a short ping when an agent needs you, stops with an error or
 // finishes in a terminal you aren't looking at, and when quitting asks first because something still runs. The
 // sounds are wwwroot/sounds/ping-1.mp3 to ping-5.mp3, chosen per event, or none.
 

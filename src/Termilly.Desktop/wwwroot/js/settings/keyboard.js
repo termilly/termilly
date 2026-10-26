@@ -30,7 +30,7 @@ const SHORTCUTS = [
   ['Agents', [
     ['Next terminal that needs you', 'Ctrl Shift J'],
     ['Open the notification center', 'Ctrl Shift A'],
-    ['Next terminal that needs you, from any app (turn on in Terminal)', 'Ctrl Alt J'],
+    ['Next terminal that needs you, from any app (turn on in Notifications)', 'Ctrl Alt J'],
     ['Show the last file Claude changed here (turn on in Change preview)', 'Ctrl Shift D'],
   ]],
   ['App', [

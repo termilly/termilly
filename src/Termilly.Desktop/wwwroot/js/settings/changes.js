@@ -19,31 +19,31 @@ const CHANGES = {
   html: () => {
     const s = state.settings;
     return group('', row('Change preview',
-      'See the whole change when Claude Code edits a file, coloured for the file’s language. Claude’s own output shows only a short preview.',
+      'See Claude’s whole edit, coloured for the file’s language.',
       toggle('changes.enabled'))
       + (s.agents.integration ? '' : `<p class="set-desc set-note">Agent integration is off (Terminal), so Termilly doesn’t hear about Claude’s edits.
         Ctrl+click on a path still works, comparing the file with the last commit.</p>`))
       + `<div class="${s.changes.enabled ? '' : 'set-off'}">`
-      + group('Open it from', row('Ctrl+click a path', 'In any terminal’s output: Claude’s Update(…) and Write(…) lines, and other file paths. Files on SSH or WSL can’t be previewed.', toggle('changes.links'))
-        + row('Changed files list', 'A list on the terminal’s header of the files Claude changed there, which you clear yourself. It shows once Claude has run in the terminal.', toggle('changes.button'))
-        + row('Shortcut and palette', 'Ctrl+Shift+D shows the last change. When off, Ctrl+Shift+D goes to the shell.', toggle('changes.shortcut')))
-      + group('Where it opens', row('Placement', 'A pane next to the terminal, a panel over the right edge, or a window you can move.',
+      + group('Open it from', row('Ctrl+click a path', 'Paths in a terminal’s output open the preview.', toggle('changes.links'))
+        + row('Changed files list', 'The files Claude changed, listed on the terminal’s header.', toggle('changes.button'))
+        + row('Shortcut and palette', 'Ctrl+Shift+D shows the last change.', toggle('changes.shortcut')))
+      + group('Where it opens', row('Placement', 'A pane, a panel over the right edge, or a window.',
         seg('changes.placement', [[changePlacement.split, 'Pane'], [changePlacement.panel, 'Side panel'], [changePlacement.float, 'Floating']]))
-        + row('When Claude changes another file', 'While the preview is open: offer the new file with a button, or switch to it (the terminal keeps the keyboard).',
+        + row('When Claude changes another file', 'Offer the new file, or switch to it.',
           seg('changes.follow', [[changeFollow.offer, 'Offer it'], [changeFollow.follow, 'Follow']])))
       + group('Where changes come from', row('Source',
-        'File path: Claude’s hook passes only the file’s path, and Termilly copies the file just before and after each edit. Git: the file against the last commit, no copies. Full edit: Claude’s edit text is passed to Termilly as well.',
+        'Copies around each edit, Git, or Claude’s own edit text.',
         seg('changes.source', [[changeSource.path, 'File path'], [changeSource.git, 'Git'], [changeSource.fullEdits, 'Full edit']]), { stack: true })
         + row('Files changed by shell commands',
-          'Claude sometimes makes or changes files with a command (Copy-Item, Set-Content, sed). While one runs, Termilly watches Claude’s folder and the folders of files already listed, and lists what appears or changes. Only the folder is passed, never the command.',
+          'Also list files Claude changes with a command.',
           toggle('changes.shellFiles')))
       + group('View', row('Opens on', 'You can switch while it’s open, except with Diff only.',
           seg('changes.view', [[changeView.diff, 'Diff'], [changeView.file, 'Whole file'], [changeView.diffOnly, 'Diff only']]))
-        + row('Compare', 'All of Claude’s edits to the file since the first, or the last one only. Also switchable in the preview.',
+        + row('Compare', 'All of Claude’s edits since the first, or the last one.',
           seg('changes.compare', [[changeCompare.session, 'All edits'], [changeCompare.lastEdit, 'Last edit']]))
-        + row('New files open as', 'The file itself, coloured for its language, or a diff with every line added. Last edit still shows Claude’s later edits to it.',
+        + row('New files open as', 'The file itself, or a diff with every line added.',
           seg('changes.newFile', [[changeNewFile.file, 'The file'], [changeNewFile.diff, 'A diff']]))
-        + row('Keep the list', 'Until you clear it on the terminal’s header (or the terminal closes), or also empty it when Claude starts a new session there.',
+        + row('Keep the list', 'Until you clear it, or also when Claude starts a new session.',
           seg('changes.keep', [[changeKeep.terminal, 'Until I clear it'], [changeKeep.perSession, 'Per session']]))
         + row('Lines around a change', '', seg('changes.context', choices(changeContext.all, String)))
         + row('Layout', 'Side by side shows the old and new text in two columns.', seg('changes.layout', [[changeLayout.inline, 'Inline'], [changeLayout.sideBySide, 'Side by side']]))

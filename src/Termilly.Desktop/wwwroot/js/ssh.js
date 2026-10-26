@@ -156,9 +156,9 @@ export function sshSectionHtml(group, row) {
   const conns = connections();
   const fwds = forwards();
   const toggle = /** @param {string} key */ key => `<button class="switch" role="switch" data-setting="${key}" aria-label="${key}"><span></span></button>`;
-  return group('Dropped connections', row('Reconnect when the connection drops', 'When ssh ends because the network went away or the PC slept, the terminal reconnects by itself (3 s, then longer, at once when the network is back), returns to the folder it was in and runs the host’s “After reconnecting” command (its menu), e.g. <code>tmux attach</code>.',
+  return group('Dropped connections', row('Reconnect when the connection drops', 'Reconnect when the network is back or the PC wakes.',
       toggle('ssh.reconnect'), { keywords: 'ssh reconnect drop network sleep resume tmux' })
-    + row('Keepalives', 'Termilly’s SSH terminals check the connection every 15 seconds, so a dead one is noticed in under a minute instead of hanging.', toggle('ssh.keepAlive'), { keywords: 'ssh keepalive ServerAliveInterval timeout' }))
+    + row('Keepalives', 'Notice a dead connection in under a minute.', toggle('ssh.keepAlive'), { keywords: 'ssh keepalive ServerAliveInterval timeout' }))
     + group('Your connections', `
       ${conns.map(c => `
         <div class="ssh-row" data-conn="${escapeHtml(c.id)}">
@@ -168,13 +168,12 @@ export function sshSectionHtml(group, row) {
           <button class="btn small" data-ssh="${SSH_ACTION.remove}" title="Remove">${ICONS.trash}</button>
         </div>`).join('')}
       <button class="btn small" data-ssh="${SSH_ACTION.add}">${ICONS.plus}<span>Add connection</span></button>
-      <p class="set-desc">Opens from the + menu like any shell. Jump hosts go through each in turn (ssh -J). Sign-in is a reference:
-        ssh-agent, a key file, a FIDO2 key, or a password ${sys.credentials} or 1Password keeps. Termilly never stores a password.</p>`)
+      <p class="set-desc">Open from the + menu. Termilly never stores a password.</p>`)
     + group('Port forwards', `
       ${fwds.map(forwardRowHtml).join('')}
       <button class="btn small" data-ssh="${SSH_ACTION.addForward}"${sshTargets().length ? '' : ' disabled'}>${ICONS.plus}<span>Add forward</span></button>
-      <p class="set-desc">Each forward is a hidden <code>ssh -N</code> listening on this PC only (127.0.0.1). It needs a key or saved password: there's nowhere to type one.</p>`)
-    + group('Import', row('From other SSH apps', 'Finds sessions saved by PuTTY, MobaXterm, SecureCRT and mRemoteNG. Host, user, port and key file come across, never passwords.',
+      <p class="set-desc">Listens on this PC only; needs a key or saved password.</p>`)
+    + group('Import', row('From other SSH apps', 'PuTTY, MobaXterm, SecureCRT and mRemoteNG. Never passwords.',
       `<button class="btn small" data-ssh="${SSH_ACTION.import}">Find sessions</button>`));
 }
 

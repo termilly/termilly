@@ -31,24 +31,24 @@ const WORKSPACES = {
   html: () => group('', row('Closed sidebar shows', `Toggle the sidebar with ${keysHtml('Ctrl Shift B')}.`, `
       <span class="seg" data-sidebar-style><button data-value="rail">Icon rail</button><button data-value="hidden">Nothing</button></span>`)
     + row('Sidebar width', 'Drag the edge next to the sidebar to resize it.', '<button class="btn small" data-action="resetWidth">Reset width</button>')
-    + row('Keep shells running when Termilly closes', 'A background process (termilly-host) runs the terminals, so closing, crashing or updating the window doesn’t end them: the next window picks them up where they were. Takes effect when Termilly next starts.',
+    + row('Keep shells running when Termilly closes', 'Shells keep running when the window closes or updates.',
       toggle('session.backgroundShells'))
-    + row('Start it when you sign in', `Starts the background process when you sign in to ${sys.name}, so shells opened earlier are there.`, toggle('session.backgroundAtSignIn'))
-    + row('Background shells', 'Ends every shell the background process keeps, and the process itself.', '<button class="btn small danger-outline" data-action="stopHost">Stop background shells</button>')
-    + row('When Termilly starts', 'Bring back the terminals in the folders they were in, with their last output (encrypted, saved every half minute and on exit). A Claude Code session that was running picks up again by itself. Or only the layout, or a fresh workspace.',
+    + row('Start it when you sign in', `Start the background process when you sign in to ${sys.name}.`, toggle('session.backgroundAtSignIn'))
+    + row('Background shells', 'End every kept shell, and the background process.', '<button class="btn small danger-outline" data-action="stopHost">Stop background shells</button>')
+    + row('When Termilly starts', 'Terminals with their output, only the layout, or nothing.',
       seg('session.restore', [[restoreSession.scrollback, 'Terminals and output'], [restoreSession.layout, 'Layout only'], [restoreSession.off, 'Fresh']]))
     + row('Confirm before closing a workspace', 'Only asked when the workspace still has terminals.', toggle('interface.confirmCloseWorkspace')))
     + group('Minimize and Close',
       // No tray on Linux: GNOME has none without an extension.
-      (sys.name === SYSTEM_NAME.linux ? '' : row('Minimize', 'The tray keeps Termilly off the taskbar until you click its icon.',
+      (sys.name === SYSTEM_NAME.linux ? '' : row('Minimize', 'The tray keeps Termilly off the taskbar.',
         seg('interface.minimizeTo', [[minimizeTo.taskbar, 'Taskbar'], [minimizeTo.tray, 'Tray']]))
-        + row('Close', 'Keep running in the tray, and agents can still notify you. Quit from the tray icon’s menu or the palette.',
+        + row('Close', 'Keep running in the tray; quit from its menu or the palette.',
           seg('interface.closeAction', [[closeAction.quit, 'Quit Termilly'], [closeAction.tray, 'Keep running in the tray']])))
-      + row('Ask before quitting', 'When a command is still running, or an agent is working or waiting for you. Not asked while Keep shells running is on: they go on without the window.',
+      + row('Ask before quitting', 'When a command runs, or an agent works or waits for you.',
         toggle('interface.confirmQuit')))
-    + group('Project status', row('Git branch', 'The branch of each workspace’s folder on its row, a dot when there are uncommitted changes, and ↑↓ against its upstream; on a terminal’s row when it works in another repository or worktree. Read with git every few seconds at most, only for what’s on screen, never for network shares.',
+    + group('Project status', row('Git branch', 'Each folder’s branch and uncommitted changes, on its row.',
         toggle('interface.gitStatus'), { keywords: 'git branch dirty changes ahead behind upstream repository worktree' })
-      + row('Listening ports', 'The ports a terminal’s programs listen on (:3000) on its row; click one to open it in the browser.', toggle('terminal.ports'), { keywords: 'port server localhost dev listening url' })),
+      + row('Listening ports', 'Ports a terminal’s programs listen on; click one to open it.', toggle('terminal.ports'), { keywords: 'port server localhost dev listening url' })),
   sync: syncSidebarStyle,
   actions: {
     stopHost: async () => {

@@ -35,21 +35,20 @@ const PRIVACY = {
     <div class="secure-card">
       <div class="secure-icon">${ICONS.lock}</div>
       <div><div class="set-name">Encrypted on this PC</div>
-      <div class="set-desc">Workspaces and closed-terminal history are encrypted (AES-256) and unlock automatically
-        ${sys.unlocks}. Nothing leaves this PC unless you turn on sync below.</div></div>
+      <div class="set-desc">Encrypted (AES-256), unlocked ${sys.unlocks}. Nothing leaves this PC unless you turn on sync.</div></div>
     </div>`
     + group('Recovery code', row('Recovery code',
-      `${sys.name === SYSTEM_NAME.linux ? 'Opens your history if the key file that unlocks it is lost' : 'Opens your history if an administrator resets your Windows password'}. Keep it outside this PC.`, `
+      `Opens your history if ${sys.name === SYSTEM_NAME.linux ? 'its key file is lost' : 'your Windows password is reset'}.`, `
         <span class="btn-row"><button class="btn small" data-action="showCode">Show code</button>
         <button class="btn small" data-action="newCode">New code</button></span>`)
-      + (archives ? row(`Locked history (${archives})`, 'History set aside when it couldn’t be unlocked. Enter the recovery code it was saved with to bring it back.', `
+      + (archives ? row(`Locked history (${archives})`, 'History that couldn’t be unlocked; its recovery code opens it.', `
         <span class="field-row"><input class="field mono" data-restore-code placeholder="XXXX-XXXX-…" spellcheck="false" autocomplete="off">
         <button class="btn small" data-action="restore">Restore</button></span>
         <p class="set-status" data-restore-status hidden></p>`, { stack: true }) : ''))
     + group('History', row('Save output of closed terminals',
-      'When off, closed terminals keep only their name, tags and folder. Individual terminals can opt out from their menu.', toggle('session.saveOutput'))
+      'Off keeps only a closed terminal’s name, tags and folder.', toggle('session.saveOutput'))
       + row('Keep closed terminals for', '', seg('session.historyDays', choices(historyDays.all, days => (days === DAYS_PER_YEAR ? '1 year' : `${days} days`))))
-      + row('Redact secrets', 'Replaces tokens, keys and passwords with [redacted] before saving. Off keeps history complete; it’s encrypted either way.',
+      + row('Redact secrets', 'Replace tokens, keys and passwords with [redacted].',
         toggle('session.redactSecrets'))
       + row('Clear history', 'Deletes every closed terminal Termilly has kept.', '<button class="btn small danger-outline" data-action="clearHistory">Clear history</button>'))
     + syncSectionHtml(group, row),

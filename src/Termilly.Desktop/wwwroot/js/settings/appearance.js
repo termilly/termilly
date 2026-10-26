@@ -162,7 +162,7 @@ const FONT_STEP = 1;
 const APPEARANCE = {
   id: SECTION.appearance,
   label: 'Appearance', icon: ICONS.appearance,
-  html: () => group('', row('Theme', `Colours for the app and its terminals. System is Dark or Light as ${sys.name === SYSTEM_NAME.linux ? 'the desktop’s' : 'Windows’'} app mode says.`,
+  html: () => group('', row('Theme', `Colours for the app and terminals. System follows ${sys.name === SYSTEM_NAME.linux ? 'the desktop' : 'Windows'}.`,
     themeCards(), { stack: true, keywords: 'colour color dark light system look palette' }))
     // One list for both fonts; the switch picks which one it sets, and the note shows both choices.
     + group('Font', row('', '<span id="font-target-note"></span>', `
@@ -173,7 +173,7 @@ const APPEARANCE = {
         ${fontPicker(fontTarget)}`, { stack: true, keywords: 'font family typeface terminal app' }))
     + group('Terminal text',
       // ClearType is Windows' own; on Linux the desktop's font settings decide.
-      (sys.name === SYSTEM_NAME.linux ? '' : row('Text smoothing', 'Greyscale keeps coloured text crisp on the dark background; ClearType matches other Windows apps.',
+      (sys.name === SYSTEM_NAME.linux ? '' : row('Text smoothing', 'Greyscale keeps coloured text crisp; ClearType matches Windows.',
         seg('terminal.textSmoothing', [[textSmoothing.grayscale, 'Greyscale'], [textSmoothing.clearType, 'ClearType']])))
       + row('Size', `${keysHtml('Ctrl +')} ${keysHtml('Ctrl -')} ${keysHtml('Ctrl 0')}`, `
         <div class="size-control">

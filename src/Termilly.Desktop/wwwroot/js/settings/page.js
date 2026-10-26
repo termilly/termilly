@@ -31,6 +31,7 @@ import { restoreFocus } from '../panes.js';
 export const SECTION = Object.freeze({
   appearance: 'appearance',
   terminal: 'terminal',
+  notifications: 'notifications',
   ssh: 'ssh',
   serial: 'serial',
   workspaces: 'workspaces',
@@ -57,7 +58,7 @@ export const page = { current: SECTION.appearance };
 export const takenChords = new Set();
 onHost(HOST.hotkeyTaken, m => {
   takenChords.add(m.chord);
-  redrawIfShowing(SECTION.workspaces, SECTION.terminal);
+  redrawIfShowing(SECTION.workspaces, SECTION.terminal, SECTION.notifications);
 });
 
 let redrawPage = () => {};

@@ -26,7 +26,7 @@ const PLUGINS = {
   id: SECTION.plugins,
   label: 'Plugins', icon: ICONS.puzzle,
   html: () => group('', row('Plugins folder',
-    'Each plugin is a folder with a plugin.json (themes, and optionally a script that adds palette commands). Scripts run sandboxed: no network and no access to Termilly beyond its plugin API.', `
+    'A folder per plugin, with a plugin.json. Scripts run sandboxed.', `
       <span class="btn-row"><button class="btn small" data-action="openPlugins">Open folder</button>
       <button class="btn small" data-action="reloadPlugins">Reload</button></span>`))
     + group('Installed', plugins.length ? /** @type {PluginRow[]} */ (plugins).map(p => `

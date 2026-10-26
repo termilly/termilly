@@ -83,9 +83,8 @@ export function serialSectionHtml(group) {
       </span>
     </div>`;
   }).join('');
-  return group('COM ports', `${portRows || '<p class="set-desc">No COM ports on this PC right now. Plug in a USB serial adapter and reopen Settings.</p>'}
-      <p class="set-desc">They open from the + menu (Serial). Changes apply to terminals opened after them. Logs go to Documents\\Termilly\\logs, one timestamped line at a time.
-        In a terminal’s menu: Send Break, Hex view, and what Enter sends. An unplugged adapter is retried until it’s back.</p>`)
+  return group('COM ports', `${portRows || '<p class="set-desc">No COM ports right now. Plug one in and reopen Settings.</p>'}
+      <p class="set-desc">Open from the + menu (Serial). Changes apply to new terminals.</p>`)
     + group('Network consoles', `
       ${consoles().map(c => `
         <div class="ssh-row" data-console="${escapeHtml(c.id)}">
@@ -95,7 +94,7 @@ export function serialSectionHtml(group) {
           <button class="btn small" data-serial="${SERIAL_ACTION.remove}" title="Remove">${ICONS.trash}</button>
         </div>`).join('')}
       <button class="btn small" data-serial="${SERIAL_ACTION.add}">${ICONS.plus}<span>Add network console</span></button>
-      <p class="set-desc">A console server’s port, or a device on the network: raw TCP, or Telnet (with RFC 2217 to set the line speed).</p>`);
+      <p class="set-desc">A console server or network device, over raw TCP or Telnet.</p>`);
 }
 
 /** @param {NetworkConsole | null | undefined} existing */
