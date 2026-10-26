@@ -4,12 +4,9 @@ What changed in each release. Termilly says in its title bar when a newer one is
 
 ## 1.3.0 (2026-10-26)
 
-- **Actions:** open your browser, your editor or a web search from a shortcut, the palette or the right-click menu.
-- **SSH connections:** pick a key from ~/.ssh, and save the password when ssh asks for one.
-- **Snippets from the command line:** `snippet:` now works in Command Prompt too.
-- **Search:** a bigger window, and long output lines scroll or wrap.
-- **Help in Settings:** the ? next to Close opens that section's docs.
-- Minor bugfixes.
+- **Actions:** open your browser, your editor or a web search from a shortcut or the context menu.
+- **Snippets:** type `Snippet:` and execute one directly from terminal line.
+- **Help:** each page in Settings window can take you straight to Docs page.
 
 ## 1.2.0 (2026-10-22)
 
@@ -18,7 +15,7 @@ What changed in each release. Termilly says in its title bar when a newer one is
 
 ## 1.1.0 (2026-10-21)
 
-- **Updates from inside Termilly.**
+- **Updates** are handled by Termilly instead of manually running setup.
 - **Snippets at the prompt:** type `snippet:` to pick one.
 - **Images in the Git window,** before and after.
 - **Notifications** while Termilly is minimized or behind other windows.
