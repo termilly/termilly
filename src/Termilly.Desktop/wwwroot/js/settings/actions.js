@@ -13,13 +13,7 @@ import { chordOf, chordProblem, chordHtml } from '../actions.js';
 import { group } from './controls.js';
 import { SECTION, redraw, body } from './page.js';
 
-/** Ready-made actions to add. */
-const PRESETS = [
-  { name: 'Search GitHub code', target: 'https://github.com/search?type=code&q={selection}', menu: true },
-  { name: 'Search Stack Overflow', target: 'https://stackoverflow.com/search?q={selection}', menu: true },
-  { name: 'Translate', target: 'https://translate.google.com/?sl=auto&tl=en&text={selection}', menu: true },
-];
-/** What a program action is, until the user types one. */
+/** What a new action is, until the user types one. */
 const NEW_ACTION = { name: 'New action', target: 'https://', menu: false };
 const WEB_TARGET = /^\s*(https?:\/\/|\{repo\})/i;
 const CLEAR_KEYS = ['Backspace', 'Delete'];
@@ -68,17 +62,16 @@ onHost(HOST.actionDefaults, m => {
 const ACTIONS = {
   id: SECTION.actions,
   label: 'Actions', icon: ICONS.launch,
-  html: () => group('', `${actions().map(actionRow).join('')}
-    <div class="trigger-presets">
+  // The buttons stay at the top while the list scrolls under them.
+  html: () => group('', `
+    <div class="act-bar">
       <button class="btn small" data-action="addAction">${ICONS.plus}<span>Add action</span></button>
-      ${PRESETS.map((p, i) => `<button class="btn small" data-action="addAction" data-preset="${i}">${p.name}</button>`).join('')}
       <button class="btn small" data-action="resetActions">Restore Termilly’s actions</button>
-    </div>`),
+    </div>${actions().map(actionRow).join('')}`),
   actions: {
-    addAction: el => {
-      const preset = PRESETS[Number(el?.dataset.preset)] ?? NEW_ACTION;
+    addAction: () => {
       const id = `act${Date.now().toString(36)}`;
-      saveActions([...actions(), { id, enabled: true, ...preset }]);
+      saveActions([...actions(), { id, enabled: true, ...NEW_ACTION }]);
       redraw();
       // It's added at the end, likely out of sight: bring it into view with its name ready to type over.
       const name = /** @type {HTMLInputElement | null} */ (body.querySelector(`[data-act="${id}"] [data-act-field="name"]`));

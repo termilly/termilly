@@ -654,8 +654,9 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
 .trigger-row .field.mono { font-family: var(--mono); font-size: 12.5px; }
 .trigger-row .field.invalid { border-color: var(--danger); }
 .trigger-presets { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+/* Settings › Actions’ buttons: Add on the left, Restore on the right, kept in sight above the scrolling list. */
+.act-bar { position: sticky; top: -8px; z-index: 1; display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border); background: var(--raised); }
 .act-row { display: grid; gap: 8px; padding: 10px 0; border-bottom: 1px solid var(--border); }
-.act-row:last-of-type { margin-bottom: 10px; }
 .act-line { display: flex; gap: 8px; align-items: center; }
 .act-line .field { flex: 1 1 0; min-width: 0; }
 .act-line .field.mono { font-family: var(--mono); font-size: 12.5px; }
