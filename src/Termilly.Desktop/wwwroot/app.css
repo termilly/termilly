@@ -652,6 +652,14 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
 .trigger-row .field.mono { font-family: var(--mono); font-size: 12.5px; }
 .trigger-row .field.invalid { border-color: var(--danger); }
 .trigger-presets { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.act-row { display: grid; gap: 8px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.act-row:last-of-type { margin-bottom: 10px; }
+.act-line { display: flex; gap: 8px; align-items: center; }
+.act-line .field { flex: 1 1 0; min-width: 0; }
+.act-line .field.mono { font-family: var(--mono); font-size: 12.5px; }
+.act-menu { display: flex; flex: none; gap: 6px; align-items: center; color: var(--muted); font-size: 12px; white-space: nowrap; cursor: pointer; }
+.act-keys { flex: none; min-width: 96px; justify-content: center; }
+.act-keys.capturing { border-color: var(--accent); color: var(--accent); }
 
 /* ---- "Needs me" inbox (js/inbox.js) ---- */
 

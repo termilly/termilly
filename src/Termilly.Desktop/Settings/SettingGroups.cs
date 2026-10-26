@@ -150,8 +150,27 @@ internal sealed record CommandSettings
 
     public IReadOnlyList<SnippetSetting>? Snippets { get; init; }
     public IReadOnlyList<TriggerSetting>? Triggers { get; init; }
+    /// <summary>Web pages and programs to start (Actions.cs); Termilly’s own until the user changes them.</summary>
+    public IReadOnlyList<ActionSetting>? Actions { get; init; }
 
-    public CommandSettings Normalize() => this with { Triggers = NormalizeTriggers(Triggers) };
+    public CommandSettings Normalize() => this with { Triggers = NormalizeTriggers(Triggers), Actions = NormalizeActions(Actions) };
+
+    /// <summary>Drops actions without a name or target or with a repeated id; none saved yet means the defaults.</summary>
+    private static List<ActionSetting> NormalizeActions(IReadOnlyList<ActionSetting>? actions)
+    {
+        var ids = new HashSet<string>(StringComparer.Ordinal);
+        return (actions ?? Termilly.Desktop.Actions.Defaults)
+            .Where(a => !string.IsNullOrWhiteSpace(a.Id) && !string.IsNullOrWhiteSpace(a.Name) && !string.IsNullOrWhiteSpace(a.Target) && ids.Add(a.Id))
+            .Take(Termilly.Desktop.Actions.MaxActions)
+            .Select(a => a with
+            {
+                Name = a.Name.Trim(),
+                Target = a.Target.Trim(),
+                Arguments = SettingChecks.Trimmed(a.Arguments),
+                Shortcut = SettingChecks.Trimmed(a.Shortcut),
+            })
+            .ToList();
+    }
 
     /// <summary>Drops triggers without a pattern or with a repeated id, caps the pattern, and fixes odd values.</summary>
     private static List<TriggerSetting> NormalizeTriggers(IReadOnlyList<TriggerSetting>? triggers)

@@ -340,3 +340,15 @@ export const TERMINAL_SETTINGS = Object.freeze({
   defaultLineHeight: 1.2,
   defaultScrollback: 10000,
 });
+
+/** C#: ActionPlaceholders (Actions.cs). */
+export const ACTION_PLACEHOLDER = Object.freeze({
+  selection: 'selection',
+  folder: 'folder',
+  repo: 'repo',
+  branch: 'branch',
+  port: 'port',
+  file: 'file',
+  line: 'line',
+  all: Object.freeze(['selection', 'folder', 'repo', 'branch', 'port', 'file', 'line']),
+});

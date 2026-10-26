@@ -10,6 +10,7 @@ import { SECTION, redrawIfShowing } from './page.js';
 import appearance from './appearance.js';
 import terminal from './terminal.js';
 import workspaces from './workspaces.js';
+import actions from './actions.js';
 import changes from './changes.js';
 import privacy from './privacy.js';
 import plugins from './plugins.js';
@@ -37,4 +38,4 @@ setSerialRerender(() => redrawIfShowing(SECTION.serial));
 
 /** @type {Record<string, import('./page.js').Section>} by id, in the nav's order */
 export const SECTIONS = Object.fromEntries(
-  [appearance, terminal, ssh, serial, workspaces, changes, privacy, plugins, keyboard, about].map(s => [s.id, s]));
+  [appearance, terminal, ssh, serial, workspaces, actions, changes, privacy, plugins, keyboard, about].map(s => [s.id, s]));

@@ -32,6 +32,7 @@ export const SECTION = Object.freeze({
   ssh: 'ssh',
   serial: 'serial',
   workspaces: 'workspaces',
+  actions: 'actions',
   changes: 'changes',
   privacy: 'privacy',
   plugins: 'plugins',

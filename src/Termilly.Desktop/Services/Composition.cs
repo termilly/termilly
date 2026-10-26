@@ -64,6 +64,7 @@ internal static class Composition
         .AddHandler<SshHandler>()
         .AddHandler<SftpHandler>()
         .AddHandler<RecordingHandler>()
+        .AddHandler<ActionHandler>()
         .AddHandler<LogHandler>()
         .AddHandler<SyncHandler>()
         .AddHandler<UpdateHandler>()

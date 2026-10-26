@@ -48,3 +48,20 @@ internal sealed record CustomProfile(
     IReadOnlyDictionary<string, string>? Environment = null,
     IReadOnlyList<string>? Tags = null,
     string Icon = SettingValues.ProfileIcon.Default);
+
+/// <summary>
+/// A web page or program started from Termilly (Actions.cs, js/actions.js): from the palette, a shortcut, or the
+/// terminal's right-click menu. Target and Arguments may hold {placeholders} (ActionPlaceholders).
+/// </summary>
+/// <param name="Target">A web address (http://, https://, {repo}) or a program: a name on the PATH or a full path.</param>
+/// <param name="Arguments">A program's arguments, split as a shell would.</param>
+/// <param name="Shortcut">Keys that run it while Termilly has focus, as "Ctrl+Alt+B".</param>
+/// <param name="Menu">On the terminal's right-click menu, when what it needs is there.</param>
+internal sealed record ActionSetting(
+    string Id,
+    string Name,
+    string Target,
+    string? Arguments = null,
+    string? Shortcut = null,
+    bool Menu = false,
+    bool Enabled = true);
