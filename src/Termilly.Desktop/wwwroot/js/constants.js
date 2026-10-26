@@ -352,3 +352,9 @@ export const ACTION_PLACEHOLDER = Object.freeze({
   line: 'line',
   all: Object.freeze(['selection', 'folder', 'repo', 'branch', 'port', 'file', 'line']),
 });
+
+/** C#: Product (../Shared/Product.cs). */
+export const PRODUCT = Object.freeze({
+  name: 'Termilly',
+  docsUrl: 'https://termilly.com/docs/',
+});

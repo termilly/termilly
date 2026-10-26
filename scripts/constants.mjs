@@ -35,6 +35,7 @@ const SOURCES = [
   { file: 'Settings/SettingValues.cs', cls: 'SettingValues', js: 'SETTING_VALUES' },
   { file: 'Settings/SettingGroups.cs', cls: 'TerminalSettings', js: 'TERMINAL_SETTINGS' },
   { file: 'Actions.cs', cls: 'ActionPlaceholders', js: 'ACTION_PLACEHOLDER' },
+  { file: '../Shared/Product.cs', cls: 'Product', js: 'PRODUCT' },
 ];
 
 /** The files with the records the page gets as they are: AppSettings and every record it holds, and SessionProfile. */

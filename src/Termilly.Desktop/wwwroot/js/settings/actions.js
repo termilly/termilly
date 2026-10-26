@@ -58,11 +58,6 @@ const actionRow = a => `
         </div>
       </div>`;
 
-const placeholderHelp = `
-    <p class="set-desc">A web address (<code>https://</code>) opens in your browser; anything else is a program, found on your PATH, with its arguments.
-      Both can use <code>{selection}</code> (the selected text), <code>{folder}</code> (the terminal’s folder), <code>{file}</code> and <code>{line}</code>
-      (a file path you select in the terminal, like <code>src/app.ts:42</code>, found from the terminal’s folder), <code>{repo}</code> and <code>{branch}</code> (the folder’s repository on the web) and <code>{port}</code> (a port a
-      program in the terminal listens on). Each action is in the command palette; the ones on the context menu (right-click a terminal) show when what they need is there.</p>`;
 
 onHost(HOST.actionDefaults, m => {
   saveActions(m.actions);
@@ -73,7 +68,7 @@ onHost(HOST.actionDefaults, m => {
 const ACTIONS = {
   id: SECTION.actions,
   label: 'Actions', icon: ICONS.launch,
-  html: () => group('Your actions', `${placeholderHelp}${actions().map(actionRow).join('')}
+  html: () => group('', `${actions().map(actionRow).join('')}
     <div class="trigger-presets">
       <button class="btn small" data-action="addAction">${ICONS.plus}<span>Add action</span></button>
       ${PRESETS.map((p, i) => `<button class="btn small" data-action="addAction" data-preset="${i}">${p.name}</button>`).join('')}

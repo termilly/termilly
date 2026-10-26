@@ -1655,6 +1655,9 @@ body.dragging-pane #drag-ghost { display: flex; }
 .set-close { display: grid; place-items: center; width: 30px; height: 28px; margin-left: auto; border-radius: 7px; color: var(--muted); }
 .set-close:hover { background: var(--hover); color: var(--text); }
 .set-close svg { width: 12px; height: 12px; stroke-width: 1.4; }
+/* Help sits before Close: it takes the push to the right, Close follows it. */
+.set-help + .set-close { margin-left: 2px; }
+.set-help svg { width: 16px; height: 16px; stroke-width: 1; }
 .set-body { flex: 1; padding: 8px 24px 24px; overflow-y: auto; user-select: text; }
 .set-body::-webkit-scrollbar { width: 8px; }
 .set-body::-webkit-scrollbar-thumb { border: 2px solid var(--raised); border-radius: 4px; background: var(--scroll-thumb); }

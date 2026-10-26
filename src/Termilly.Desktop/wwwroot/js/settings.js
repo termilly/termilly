@@ -11,7 +11,9 @@ import { compileTriggers } from './triggers.js';
 import { updateSettings, setSetting, saveSoon, onApply } from './preferences.js';
 import { layer, body, button, page, setRedraw, closeSettings } from './settings/page.js';
 import { SECTIONS } from './settings/sections.js';
-import { SETTING_VALUES } from './constants.js';
+import { SETTING_VALUES, PRODUCT } from './constants.js';
+import { send } from './host.js';
+import { PAGE } from './protocol.js';
 import { byId, field, find, targetOf } from './dom.js';
 
 /** The choices of the settings used here (C#'s SettingValues). */
@@ -19,6 +21,8 @@ const { textSmoothing, theme } = SETTING_VALUES;
 
 const nav = byId('set-nav');
 const title = byId('set-title');
+/** The title bar's help button: the open section's part of the docs, in the browser. */
+const help = byId('set-help');
 
 /** How long a setting the search or palette went to stays lit. */
 const FLASH_MS = 1600;
@@ -92,6 +96,7 @@ function showSection(id) {
   searchBox.value = '';
   renderNav();
   title.textContent = section.label;
+  help.hidden = !section.docs;
   body.innerHTML = section.html();
   body.scrollTop = 0;
   section.drawn?.(body);
@@ -435,6 +440,10 @@ layer.addEventListener('mousedown', e => {
   if (e.target === layer) closeSettings();
 });
 byId('set-close').addEventListener('click', closeSettings);
+help.addEventListener('click', () => {
+  const docs = SECTIONS[page.current]?.docs;
+  if (docs) send(PAGE.openUrl, { url: `${PRODUCT.docsUrl}#${docs}` });
+});
 button.addEventListener('click', toggleSettings);
 
 on(EVENTS.sidebar, () => { if (!layer.hidden) syncControls(); });
