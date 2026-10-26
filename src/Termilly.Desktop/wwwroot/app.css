@@ -657,11 +657,8 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
 .act-line { display: flex; gap: 8px; align-items: center; }
 .act-line .field { flex: 1 1 0; min-width: 0; }
 .act-line .field.mono { font-family: var(--mono); font-size: 12.5px; }
-/* Enabled, name, keys, context menu, remove: the header row and each action’s first line share these columns. */
-.act-cols { display: grid; grid-template-columns: 64px minmax(0, 1fr) 112px 96px auto; gap: 8px; align-items: center; }
-.act-cols .field { width: 100%; }
-.act-head { position: sticky; top: -8px; z-index: 1; margin: 10px 0 0; padding: 8px 0 6px; border-bottom: 1px solid var(--border); background: var(--raised); color: var(--muted); font-size: 12px; font-weight: 500; }
-.act-keys { width: 100%; justify-content: center; }
+.act-menu { display: flex; flex: none; gap: 6px; align-items: center; color: var(--muted); font-size: 12px; white-space: nowrap; cursor: pointer; }
+.act-keys { flex: none; min-width: 96px; justify-content: center; }
 .act-keys.capturing { border-color: var(--accent); color: var(--accent); }
 
 /* ---- "Needs me" inbox (js/inbox.js) ---- */

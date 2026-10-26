@@ -45,11 +45,11 @@ const patchAction = (id, patch) => saveActions(actions().map(a => (a.id === id ?
 /** @param {ActionSetting} a */
 const actionRow = a => `
       <div class="act-row" data-act="${escapeHtml(a.id)}">
-        <div class="act-cols">
-          <button class="switch" role="switch" data-act-enabled aria-checked="${a.enabled !== false}" aria-label="Enabled"><span></span></button>
+        <div class="act-line">
+          <button class="switch" role="switch" data-act-enabled aria-checked="${a.enabled !== false}" aria-label="On" title="On"><span></span></button>
           <input class="field" data-act-field="name" value="${escapeHtml(a.name)}" aria-label="Name" spellcheck="false">
           <button class="btn small act-keys" data-act-keys title="The keys that run it while Termilly has focus. Backspace removes them.">${a.shortcut ? chordHtml(a.shortcut) : 'Add keys'}</button>
-          <button class="switch" role="switch" data-act-menu aria-checked="${!!a.menu}" aria-label="On the context menu" title="On a terminal’s right-click menu, when what it needs is there"><span></span></button>
+          <label class="act-menu" title="On a terminal’s right-click menu, when what it needs is there"><button class="switch" role="switch" data-act-menu aria-checked="${!!a.menu}"><span></span></button>Right-click menu</label>
           <button class="btn small" data-act-delete title="Remove">${ICONS.trash}</button>
         </div>
         <div class="act-line">
@@ -58,15 +58,11 @@ const actionRow = a => `
         </div>
       </div>`;
 
-/** Above the list, and kept in sight while it scrolls: what each column is. */
-const listHead = `
-      <div class="act-cols act-head"><span>Enabled</span><span>Name</span><span></span><span>Context menu</span><span></span></div>`;
-
 const placeholderHelp = `
     <p class="set-desc">A web address (<code>https://</code>) opens in your browser; anything else is a program, found on your PATH, with its arguments.
       Both can use <code>{selection}</code> (the selected text), <code>{folder}</code> (the terminal’s folder), <code>{file}</code> and <code>{line}</code>
       (a file path you select in the terminal, like <code>src/app.ts:42</code>, found from the terminal’s folder), <code>{repo}</code> and <code>{branch}</code> (the folder’s repository on the web) and <code>{port}</code> (a port a
-      program in the terminal listens on). Each action is in the command palette; the ones on the context menu (right-click a terminal) show when what they need is there.</p>`;
+      program in the terminal listens on). Each action is in the command palette; the ones on the right-click menu show when what they need is there.</p>`;
 
 onHost(HOST.actionDefaults, m => {
   saveActions(m.actions);
@@ -77,7 +73,7 @@ onHost(HOST.actionDefaults, m => {
 const ACTIONS = {
   id: SECTION.actions,
   label: 'Actions', icon: ICONS.launch,
-  html: () => group('Your actions', `${placeholderHelp}${listHead}${actions().map(actionRow).join('')}
+  html: () => group('Your actions', `${placeholderHelp}${actions().map(actionRow).join('')}
     <div class="trigger-presets">
       <button class="btn small" data-action="addAction">${ICONS.plus}<span>Add action</span></button>
       ${PRESETS.map((p, i) => `<button class="btn small" data-action="addAction" data-preset="${i}">${p.name}</button>`).join('')}
