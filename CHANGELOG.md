@@ -7,6 +7,7 @@ What changed in each release. Termilly says in its title bar when a newer one is
 - **Actions:** open your browser, your editor or a web search from a shortcut or the context menu.
 - **Snippets:** type `Snippet:` and execute one directly from terminal line.
 - **Help:** each page in Settings window can take you straight to Docs page.
+- **Links:** URLs, folders and files can now be opened directly from the terminal (Ctrl+click).
 
 ## 1.2.0 (2026-10-22)
 
