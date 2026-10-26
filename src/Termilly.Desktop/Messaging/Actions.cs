@@ -12,6 +12,12 @@ internal static partial class FromPage
     {
         public static string Type => "action:run";
     }
+
+    /// <summary>Settings › Actions › Restore: the actions Termilly starts with, to save in place of the user’s.</summary>
+    internal sealed record ActionDefaults : IPageMessage
+    {
+        public static string Type => "action:defaults";
+    }
 }
 
 internal static partial class ToPage
@@ -20,5 +26,10 @@ internal static partial class ToPage
     internal sealed record ActionFailed(string Name, string Message) : IHostMessage
     {
         public static string Type => "action:failed";
+    }
+
+    internal sealed record ActionDefaults(IReadOnlyList<ActionSetting> Actions) : IHostMessage
+    {
+        public static string Type => "action:defaults";
     }
 }

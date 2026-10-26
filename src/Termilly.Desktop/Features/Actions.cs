@@ -12,7 +12,11 @@ namespace Termilly.Desktop.Features;
 /// </summary>
 internal sealed class ActionHandler(PageChannel page, ISettingsStore settings, IDesktopShell desktop, LocalGitRunner git) : IMessageHandler
 {
-    public void Register(MessageRouter router) => router.On<FromPage.ActionRun>(m => Task.Run(() => Run(m)));
+    public void Register(MessageRouter router)
+    {
+        router.On<FromPage.ActionRun>(m => Task.Run(() => Run(m)));
+        router.On<FromPage.ActionDefaults>(_ => page.Post(new ToPage.ActionDefaults(Actions.Defaults)));
+    }
 
     private void Run(FromPage.ActionRun message)
     {

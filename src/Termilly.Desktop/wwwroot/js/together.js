@@ -15,7 +15,7 @@ import { lastOutput } from './commands.js';
 import { environmentOf } from './environments.js';
 import { showMenu } from './popups.js';
 import { switchWorkspace, focusTab } from './panes.js';
-import { confirmDialog } from './dialogs.js';
+import { noticeDialog } from './dialogs.js';
 import { PROFILE_SOURCE } from './constants.js';
 import { SECOND_MS } from './util.js';
 import { lineFrom } from './buffer.js';
@@ -249,7 +249,7 @@ export function sendToAgent(text, meta, anchor, source = null) {
     focusTab(tab);
   };
   if (!agents.length) {
-    confirmDialog({ title: 'No agent terminal', body: 'Start Claude Code (or another agent) in a terminal first; its output goes to that terminal’s prompt.' });
+    noticeDialog({ title: 'No agent terminal', body: 'Start Claude Code (or another agent) in a terminal first; its output goes to that terminal’s prompt.' });
     return;
   }
   if (agents.length === 1) return deliver(agents[0]);

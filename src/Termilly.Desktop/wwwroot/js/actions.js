@@ -9,7 +9,7 @@ import { state, tabTitle } from './store.js';
 import { ACTION_PLACEHOLDER } from './constants.js';
 import { keysHtml } from './ui.js';
 import { SEPARATOR } from './popups.js';
-import { confirmDialog } from './dialogs.js';
+import { noticeDialog } from './dialogs.js';
 import { focusedTab } from './panes.js';
 import { portsOf } from './gitstatus.js';
 import { sendToAgent } from './together.js';
@@ -50,6 +50,8 @@ const PLACEHOLDER = /\{(\w+)\}/g;
 const URL_ONLY = /^https?:\/\/[^\s"'<>`]+$/;
 /** A path alone in the selection (C:\..., \\server\..., /..., ~/..., ./...), maybe with :line or (line). */
 const PATH_ONLY = /^(?:[A-Za-z]:[\\/]|\\\\|~?\/|\.{1,2}[\\/])[^\s"'<>|*?]+$|^[\w.-]+[\\/][^\s"'<>|*?]+$/;
+/** A path that doesn't depend on the folder: C:\..., \\server\... or /... */
+const ABSOLUTE_PATH = /^(?:[A-Za-z]:[\\/]|\\\\|\/)/;
 const PATH_LINE = /(?::\d+(?::\d+)?|\(\d+(?:,\s*\d+)?\)):?$/;
 /** How much of a selection goes to an agent. */
 const MAX_AGENT_TEXT = 20000;
@@ -128,7 +130,7 @@ export function runAction(action, tab = focusedTab()) {
 }
 
 onHost(HOST.actionFailed, m => {
-  confirmDialog({ title: m.name, body: m.message });
+  noticeDialog({ title: m.name, body: m.message });
 });
 
 /**
@@ -168,14 +170,18 @@ function canRun(action, context) {
 }
 
 /**
- * The selection as a link or a path to open; null when it's neither.
+ * The selection as a link or a path to open; null when it's neither. A relative path is found from the terminal's
+ * folder, so it needs one.
  * @param {string | null} selection
+ * @param {string | null} folder
  */
-function openableOf(selection) {
+function openableOf(selection, folder) {
   const text = selection?.trim() ?? '';
   if (URL_ONLY.test(text)) return { label: 'Open link', action: () => send(PAGE.openUrl, { url: text }) };
-  if (PATH_ONLY.test(text)) return { label: 'Show in the file manager', action: () => send(PAGE.openPath, { path: text.replace(PATH_LINE, '') }) };
-  return null;
+  if (!PATH_ONLY.test(text)) return null;
+  const path = text.replace(PATH_LINE, '');
+  const full = ABSOLUTE_PATH.test(path) ? path : folder && `${folder}/${path}`;
+  return full ? { label: 'Show in the file manager', action: () => send(PAGE.openPath, { path: full }) } : null;
 }
 
 /**
@@ -188,7 +194,7 @@ function menuExtras(body) {
   const tab = [...state.tabs.values()].find(t => t.view?.body === body) ?? null;
   if (!tab) return [];
   const context = contextOf(tab);
-  const openable = openableOf(context.selection);
+  const openable = openableOf(context.selection, context.folder);
   const actions = enabledActions().filter(a => a.menu && canRun(a, context))
     // Without a selection, only actions that don't need one.
     .filter(a => context.selection || !placeholdersOf(a).some(p => FROM_SELECTION.includes(p)));

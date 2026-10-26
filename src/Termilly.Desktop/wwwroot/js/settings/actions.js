@@ -5,7 +5,9 @@
 import { state, GROUPS } from '../store.js';
 import { escapeHtml, ICONS } from '../ui.js';
 import { updateSettings } from '../preferences.js';
-import { confirmDialog } from '../dialogs.js';
+import { send, onHost } from '../host.js';
+import { PAGE, HOST } from '../protocol.js';
+import { confirmDialog, noticeDialog } from '../dialogs.js';
 import { targetOf } from '../dom.js';
 import { chordOf, chordProblem, chordHtml } from '../actions.js';
 import { group } from './controls.js';
@@ -62,11 +64,16 @@ const placeholderHelp = `
       (a selected file’s path and line), <code>{repo}</code> and <code>{branch}</code> (the folder’s repository on the web) and <code>{port}</code> (a port a
       program in the terminal listens on). Each action is in the command palette; the ones on the right-click menu show when what they need is there.</p>`;
 
+onHost(HOST.actionDefaults, m => {
+  saveActions(m.actions);
+  redraw();
+});
+
 /** @type {import('./page.js').Section} */
 const ACTIONS = {
   id: SECTION.actions,
   label: 'Actions', icon: ICONS.launch,
-  html: () => group('Actions', `${placeholderHelp}${actions().map(actionRow).join('')}
+  html: () => group('Your actions', `${placeholderHelp}${actions().map(actionRow).join('')}
     <div class="trigger-presets">
       <button class="btn small" data-action="addAction">${ICONS.plus}<span>Add action</span></button>
       ${PRESETS.map((p, i) => `<button class="btn small" data-action="addAction" data-preset="${i}">${p.name}</button>`).join('')}
@@ -80,7 +87,7 @@ const ACTIONS = {
     },
     resetActions: async () => {
       if (!await confirmDialog({ title: 'Restore Termilly’s actions?', body: 'Your own actions and changes are replaced by the ones Termilly starts with.', confirm: 'Restore' })) return;
-      updateSettings(GROUPS.commands, { actions: null }); // the host puts its defaults back
+      send(PAGE.actionDefaults); // the host has them, and answers below
     },
   },
   click: actionClick,
@@ -155,7 +162,7 @@ function captureKeys(button, action) {
     const problem = chordProblem(chord, action.id);
     stop();
     if (problem) {
-      confirmDialog({ title: 'Choose other keys', body: problem }).then(redraw);
+      noticeDialog({ title: 'Choose other keys', body: problem }).then(redraw);
       return;
     }
     patchAction(action.id, { shortcut: chord });
