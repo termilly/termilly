@@ -11,7 +11,7 @@ import { confirmDialog, noticeDialog } from '../dialogs.js';
 import { targetOf } from '../dom.js';
 import { chordOf, chordProblem, chordHtml } from '../actions.js';
 import { group } from './controls.js';
-import { SECTION, redraw } from './page.js';
+import { SECTION, redraw, body } from './page.js';
 
 /** Ready-made actions to add. */
 const PRESETS = [
@@ -77,8 +77,14 @@ const ACTIONS = {
   actions: {
     addAction: el => {
       const preset = PRESETS[Number(el?.dataset.preset)] ?? NEW_ACTION;
-      saveActions([...actions(), { id: `act${Date.now().toString(36)}`, enabled: true, ...preset }]);
+      const id = `act${Date.now().toString(36)}`;
+      saveActions([...actions(), { id, enabled: true, ...preset }]);
       redraw();
+      // It's added at the end, likely out of sight: bring it into view with its name ready to type over.
+      const name = /** @type {HTMLInputElement | null} */ (body.querySelector(`[data-act="${id}"] [data-act-field="name"]`));
+      name?.scrollIntoView({ block: 'center' });
+      name?.focus();
+      name?.select();
     },
     resetActions: async () => {
       if (!await confirmDialog({ title: 'Restore Termilly’s actions?', body: 'Your own actions and changes are replaced by the ones Termilly starts with.', confirm: 'Restore' })) return;
