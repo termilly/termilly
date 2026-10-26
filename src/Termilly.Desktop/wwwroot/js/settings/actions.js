@@ -62,12 +62,10 @@ onHost(HOST.actionDefaults, m => {
 const ACTIONS = {
   id: SECTION.actions,
   label: 'Actions', icon: ICONS.launch,
-  // The buttons stay at the top while the list scrolls under them.
-  html: () => group('', `
-    <div class="act-bar">
-      <button class="btn small" data-action="addAction">${ICONS.plus}<span>Add action</span></button>
-      <button class="btn small" data-action="resetActions">Restore Termilly’s actions</button>
-    </div>${actions().map(actionRow).join('')}`),
+  // Above the list, outside what scrolls: Add on the left, Restore on the right.
+  tools: () => `<button class="btn small" data-action="addAction">${ICONS.plus}<span>Add action</span></button>
+    <button class="btn small" data-action="resetActions">Restore Termilly’s actions</button>`,
+  html: () => group('', actions().map(actionRow).join('')),
   actions: {
     addAction: () => {
       const id = `act${Date.now().toString(36)}`;

@@ -23,6 +23,8 @@ const nav = byId('set-nav');
 const title = byId('set-title');
 /** The title bar's help button: the open section's part of the docs, in the browser. */
 const help = byId('set-help');
+/** The open section's own buttons, between the title and the body, so they stay put while it scrolls. */
+const tools = byId('set-tools');
 
 /** How long a setting the search or palette went to stays lit. */
 const FLASH_MS = 1600;
@@ -97,6 +99,8 @@ function showSection(id) {
   renderNav();
   title.textContent = section.label;
   help.hidden = !section.docs;
+  tools.innerHTML = section.tools?.() ?? '';
+  tools.hidden = !section.tools;
   body.innerHTML = section.html();
   body.scrollTop = 0;
   section.drawn?.(body);
@@ -229,6 +233,7 @@ function renderSearch() {
   const terms = queryTerms(searchQuery);
   renderNav();
   title.textContent = 'Search results';
+  tools.hidden = true;
   body.innerHTML = '';
   for (const section of sections) {
     const found = sectionMatches(section, terms);
@@ -440,6 +445,10 @@ layer.addEventListener('mousedown', e => {
   if (e.target === layer) closeSettings();
 });
 byId('set-close').addEventListener('click', closeSettings);
+tools.addEventListener('click', e => {
+  const action = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-action]'));
+  if (action) actions[/** @type {string} */ (action.dataset.action)]?.(action);
+});
 help.addEventListener('click', () => {
   const docs = SECTIONS[page.current]?.docs;
   if (docs) send(PAGE.openUrl, { url: `${PRODUCT.docsUrl}#${docs}` });

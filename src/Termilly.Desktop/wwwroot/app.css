@@ -654,8 +654,6 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
 .trigger-row .field.mono { font-family: var(--mono); font-size: 12.5px; }
 .trigger-row .field.invalid { border-color: var(--danger); }
 .trigger-presets { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
-/* Settings › Actions’ buttons: Add on the left, Restore on the right, kept in sight above the scrolling list. */
-.act-bar { position: sticky; top: -8px; z-index: 1; display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border); background: var(--raised); }
 .act-row { display: grid; gap: 8px; padding: 10px 0; border-bottom: 1px solid var(--border); }
 .act-line { display: flex; gap: 8px; align-items: center; }
 .act-line .field { flex: 1 1 0; min-width: 0; }
@@ -1660,8 +1658,13 @@ body.dragging-pane #drag-ghost { display: flex; }
 .set-close svg { width: 12px; height: 12px; stroke-width: 1.4; }
 /* Help sits before Close: it takes the push to the right, Close follows it. */
 .set-help + .set-close { margin-left: 2px; }
-.set-body { flex: 1; padding: 8px 24px 24px; overflow-y: auto; user-select: text; }
-.set-body::-webkit-scrollbar { width: 8px; }
+/* A section’s own buttons (Settings › Actions), first on the left, last on the right; they don’t scroll. */
+.set-tools { display: flex; flex: none; justify-content: space-between; align-items: center; padding: 10px calc(24px + var(--set-scrollbar)) 10px 24px; border-bottom: 1px solid var(--border); }
+.set-tools[hidden] { display: none; }
+/* The body keeps room for its scrollbar, so its right edge lines up with the buttons above it whether it scrolls or not. */
+.settings { --set-scrollbar: 8px; }
+.set-body { scrollbar-gutter: stable; flex: 1; padding: 8px 24px 24px; overflow-y: auto; user-select: text; }
+.set-body::-webkit-scrollbar { width: var(--set-scrollbar); }
 .set-body::-webkit-scrollbar-thumb { border: 2px solid var(--raised); border-radius: 4px; background: var(--scroll-thumb); }
 
 .set-group { padding: 6px 0; }
