@@ -197,6 +197,12 @@ export const SETTING_VALUES = Object.freeze({
     default: 'grayscale',
     all: Object.freeze(['grayscale', 'cleartype']),
   }),
+  linkClick: Object.freeze({
+    ctrl: 'ctrl',
+    click: 'click',
+    default: 'ctrl',
+    all: Object.freeze(['ctrl', 'click']),
+  }),
   historyDays: Object.freeze({
     default: 30,
     all: Object.freeze([7, 30, 90, 365]),

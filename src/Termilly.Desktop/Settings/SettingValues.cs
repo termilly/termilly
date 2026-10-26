@@ -38,6 +38,15 @@ internal static class SettingValues
         public static readonly IReadOnlyList<string> All = [Grayscale, ClearType];
     }
 
+    /// <summary>What opens a web address in a terminal: Ctrl+click (a plain click stays for selecting), or a click.</summary>
+    public static class LinkClick
+    {
+        public const string Ctrl = "ctrl";
+        public const string Click = "click";
+        public const string Default = Ctrl;
+        public static readonly IReadOnlyList<string> All = [Ctrl, Click];
+    }
+
     /// <summary>How many days of closed terminals' history are kept.</summary>
     public static class HistoryDays
     {

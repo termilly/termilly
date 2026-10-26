@@ -15,6 +15,8 @@ import { showChange, showMessage, KIND_BADGE } from './preview.js';
 import { PATH_PATTERNS } from './hints.js';
 import { find, targetOf } from './dom.js';
 import { MINUTE_MS, HOUR_MS } from './util.js';
+import { registerLinks } from './termlinks.js';
+import { findWebLinks } from './webaddress.js';
 
 /**
  * A file Claude changed, as the host lists it (Changes.cs): its path, how to show it (relative to Claude's folder,
@@ -209,6 +211,8 @@ const LINK_PATTERNS = [
 export function findLinks(text) {
   /** @type {FoundLink[]} */
   const found = [];
+  // A path inside a web address is part of the address (weblinks.js), not a changed file.
+  const addresses = findWebLinks(text);
   for (const { re, group } of LINK_PATTERNS) {
     re.lastIndex = 0;
     for (let m; (m = re.exec(text));) {
@@ -217,78 +221,20 @@ export function findLinks(text) {
       const start = m.index + (group ? m[0].indexOf(link) : 0);
       link = link.replace(/[.,;!?)\]}'"]+$/, '');
       const end = start + link.length;
-      if (link.length < MIN_LINK_CHARS || found.some(f => start < f.end && end > f.start)) continue;
+      if (link.length < MIN_LINK_CHARS || [...found, ...addresses].some(f => start < f.end && end > f.start)) continue;
       found.push({ start, end, text: link });
     }
   }
   return found;
 }
 
-let ctrlHeld = false;
-/** @type {{ decorations: { underline: boolean, pointerCursor: boolean } } | null} */
-let hovered = null; // the link under the mouse, so holding Ctrl can underline it
-
-/** @param {boolean} held */
-function setCtrl(held) {
-  if (held === ctrlHeld) return;
-  ctrlHeld = held;
-  if (hovered) hovered.decorations = { underline: held, pointerCursor: held };
-}
-window.addEventListener('keydown', e => setCtrl(e.ctrlKey), true);
-window.addEventListener('keyup', e => setCtrl(e.ctrlKey), true);
-window.addEventListener('blur', () => setCtrl(false));
-
 on(EVENTS.terminalOpened, tab => {
-  const term = tab.view.term;
   // The list survives a page reload in the host, so a terminal asks for it when it opens.
   send(PAGE.changesList, { id: tab.id });
-  term.registerLinkProvider({
-    /**
-     * xterm asks for the links on a row (1-based).
-     * @param {number} y
-     * @param {(links: object[] | undefined) => void} callback
-     */
-    provideLinks(y, callback) {
-      if (!enabled() || !settings().changes.links) return callback(undefined);
-      const buffer = term.buffer.active;
-      const cols = term.cols;
-      // A path can wrap across rows: read the whole logical line and map offsets back to cells.
-      let first = y - 1;
-      while (first > 0 && buffer.getLine(first)?.isWrapped) first--;
-      let last = y - 1;
-      while (buffer.getLine(last + 1)?.isWrapped) last++;
-      let text = '';
-      for (let row = first; row <= last; row++) {
-        const line = buffer.getLine(row);
-        text += line ? line.translateToString(row !== last).padEnd(row !== last ? cols : 0) : '';
-      }
-      /** @param {number} offset */
-      const at = offset => ({ x: (offset % cols) + 1, y: first + Math.floor(offset / cols) + 1 });
-      const links = findLinks(text)
-        .map(({ start, end, text: linkText }) => ({ range: { start: at(start), end: at(end - 1) }, text: linkText }))
-        .filter(l => l.range.start.y <= y && l.range.end.y >= y)
-        .map(({ range, text: linkText }) => {
-          const link = {
-            range,
-            text: linkText,
-            decorations: { underline: ctrlHeld, pointerCursor: ctrlHeld },
-            /** @param {MouseEvent} e */
-            activate(e) {
-              if (e.ctrlKey && enabled() && settings().changes.links) openChange(tab, linkText);
-            },
-            hover() {
-              hovered = link;
-              link.decorations = { underline: ctrlHeld, pointerCursor: ctrlHeld };
-              tab.view.body.title = 'Ctrl+click to preview the change';
-            },
-            leave() {
-              if (hovered === link) hovered = null;
-              tab.view.body.title = '';
-            },
-          };
-          return link;
-        });
-      callback(links.length ? links : undefined);
-    },
+  registerLinks(tab.view.term, tab.view.body, {
+    find: findLinks,
+    active: () => enabled() && settings().changes.links,
+    title: () => 'Ctrl+click to preview the change',
+    open: path => openChange(tab, path),
   });
 });
