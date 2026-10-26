@@ -25,7 +25,7 @@ internal static class SettingsFile
         {
             if (!File.Exists(path) || JsonNode.Parse(File.ReadAllText(path)) is not JsonObject file)
             {
-                return new();
+                return Defaults();
             }
             if (!SettingsMigration.IsVersion1(file))
             {
@@ -43,9 +43,15 @@ internal static class SettingsFile
         catch (Exception e) when (Storage.IsFileError(e) || e is JsonException)
         {
             // Unreadable settings fall back to defaults rather than blocking startup.
-            return new();
+            return Defaults();
         }
     }
+
+    /// <summary>
+    /// The defaults, checked like a file’s would be: some only come from Normalize (Termilly’s own actions), and a
+    /// first start has no file yet.
+    /// </summary>
+    private static AppSettings Defaults() => new AppSettings().Normalize();
 
     /// <summary>
     /// Whether the file still names Anthropic as the provider of the AI assistant, which Termilly had until 1.1.0:

@@ -136,4 +136,11 @@ public sealed class ActionsTests
         Assert.Equal(("Name", "https://x"), (only.Name, only.Target));
         Assert.Empty(new CommandSettings { Actions = [] }.Normalize().Actions!);
     }
+
+    [Fact]
+    public void A_first_start_without_a_settings_file_has_termillys_actions_too()
+    {
+        var missing = Path.Combine(Path.GetTempPath(), "termilly-no-settings-" + Guid.NewGuid().ToString("N"), "settings.json");
+        Assert.Equal(Actions.Defaults.Count, SettingsFile.Load(missing).Commands.Actions!.Count);
+    }
 }
