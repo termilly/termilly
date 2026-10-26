@@ -1,5 +1,6 @@
 extern alias agent;
 
+using System.IO;
 using agent::Termilly.Agent;
 
 namespace Termilly.Desktop.Tests;
@@ -157,5 +158,24 @@ public sealed class SshTests
 
         Assert.Empty(SshImport.MRemoteNg("<Connections FullFileEncryption=\"true\">gibberish</Connections>", notes));
         Assert.Contains(notes, n => n.Contains("encrypted"));
+    }
+
+    [Fact]
+    public void The_keys_in_the_ssh_folder_are_the_files_with_a_pub_next_to_them()
+    {
+        var folder = Directory.CreateTempSubdirectory("termilly-ssh").FullName;
+        try
+        {
+            foreach (var name in new[] { "id_ed25519", "id_ed25519.pub", "work_key", "work_key.pub", "config", "known_hosts", "lonely.pub" })
+            {
+                File.WriteAllText(Path.Combine(folder, name), "");
+            }
+            Assert.Equal([Path.Combine(folder, "id_ed25519"), Path.Combine(folder, "work_key")], SshConfig.Keys(folder));
+        }
+        finally
+        {
+            Directory.Delete(folder, true);
+        }
+        Assert.Empty(SshConfig.Keys(Path.Combine(folder, "gone")));
     }
 }

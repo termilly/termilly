@@ -26,6 +26,27 @@ internal static partial class SshConfig
     public static string DefaultPath =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), SshFolder, ConfigFile);
 
+    /// <summary>A public key’s file, next to its private one.</summary>
+    private const string PublicKeyExtension = ".pub";
+
+    /// <summary>
+    /// The private keys in an ssh folder, by full path and name: each file with its <c>.pub</c> next to it, as ssh-keygen
+    /// leaves them. Empty when the folder is missing.
+    /// </summary>
+    public static IReadOnlyList<string> Keys(string folder)
+    {
+        try
+        {
+            return [.. Directory.EnumerateFiles(folder)
+                .Where(f => !f.EndsWith(PublicKeyExtension, StringComparison.OrdinalIgnoreCase) && File.Exists(f + PublicKeyExtension))
+                .Order(StringComparer.OrdinalIgnoreCase)];
+        }
+        catch (Exception e) when (Storage.IsFileError(e))
+        {
+            return [];
+        }
+    }
+
     /// <summary>Hosts in file order (first mention wins), following <c>Include</c>; empty if the file is missing.</summary>
     public static IReadOnlyList<SshHost> Read(string path)
     {

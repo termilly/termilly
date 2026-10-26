@@ -18,9 +18,13 @@ import { FORWARD_STATE } from './constants.js';
  * @typedef {{ name: string, host: string, user?: string | null, port?: number | null, keyPath?: string | null,
  *   source: string }} ImportedHost
  */
+/**
+ * A host ~/.ssh/config names (SshConfig.cs): its alias, and the address, user and jump host it gives.
+ * @typedef {{ alias: string, hostName?: string | null, user?: string | null, proxyJump?: string | null }} ConfigHost
+ */
 
 /** How a connection signs in (SshConnection.identity). */
-const IDENTITY = Object.freeze({ agent: 'agent', key: 'key', securityKey: 'sk', password: 'wincred', onePassword: 'op' });
+export const IDENTITY = Object.freeze({ agent: 'agent', key: 'key', securityKey: 'sk', password: 'wincred', onePassword: 'op' });
 
 const IDENTITIES = [
   [IDENTITY.agent, 'ssh-agent / default keys'],
@@ -67,6 +71,13 @@ let credentialsSaved = {};
 /** @type {Record<string, import('./protocol.js').ForwardState>} */
 let forwardStates = {};
 let rerender = () => {};
+/**
+ * The private keys in ~/.ssh and the hosts in ~/.ssh/config, as the host last listed them.
+ * @type {{ keys: string[], hosts: ConfigHost[] }}
+ */
+let known = { keys: [], hosts: [] };
+/** What the open connection dialog does when a new list arrives. */
+let knownChanged = () => {};
 
 /**
  * settings.js re-renders the SSH section through this when something here changes.
@@ -81,6 +92,10 @@ export function refreshSshStatus() {
 }
 
 onHost(HOST.sshCredentials, m => { credentialsSaved = m.saved ?? {}; rerender(); });
+onHost(HOST.sshKnown, m => {
+  known = { keys: m.keys ?? [], hosts: m.hosts ?? [] };
+  knownChanged();
+});
 onHost(HOST.forwardAll, m => { forwardStates = m.states ?? {}; rerender(); });
 onHost(HOST.forwardStatus, m => { forwardStates[m.id] = { state: m.state, message: m.message }; rerender(); });
 onHost(HOST.sshError, m => modal(CONFIRM_DIALOG, `<h3>SSH</h3><p class="dialog-sub">${escapeHtml(m.message)}</p>
@@ -88,7 +103,7 @@ onHost(HOST.sshError, m => modal(CONFIRM_DIALOG, `<h3>SSH</h3><p class="dialog-s
   return { submit: () => close(true) };
 }));
 
-const connections = () => state.settings.ssh.connections ?? [];
+export const connections = () => state.settings.ssh.connections ?? [];
 const forwards = () => state.settings.ssh.forwards ?? [];
 const sshTargets = () => state.profiles.filter(p => isSshProfile(p));
 const newId = /** @param {string} prefix */ prefix => `${prefix}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
@@ -184,7 +199,7 @@ export const isPort = n => Number.isInteger(n) && /** @type {number} */ (n) > 0 
 /** Host names, users and jump hosts go to ssh's command line, so they keep to these characters. */
 const SAFE_HOST = /^[A-Za-z0-9._@:\-[\],%]+$/;
 /** A saved password goes to the host once the settings with its connection are saved (300 ms after a change). */
-const PASSWORD_AFTER_SAVE_MS = 900;
+export const PASSWORD_AFTER_SAVE_MS = 900;
 
 /**
  * The connection dialog's markup.
@@ -210,8 +225,9 @@ function connectionHtml(c, editing) {
       ${field(FIELD.jump, 'Jump hosts', c.jump, 'placeholder="bastion or user@jump1,jump2"')}
       ${field(FIELD.tags, 'Tags', (c.tags ?? []).join(' '), 'placeholder="prod db"')}
     </div>
+    <p class="ssh-note" data-config-note hidden></p>
     <label class="dialog-field">Sign in with<select class="field" name="identity">${IDENTITIES.map(([v, l]) => `<option value="${v}"${v === c.identity ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
-    <div data-show="${IDENTITY.key} ${IDENTITY.securityKey}">${field(FIELD.keyPath, 'Key file', c.keyPath, `placeholder="${escapeHtml(sys.keyExample)}"`)}</div>
+    <div data-show="${IDENTITY.key} ${IDENTITY.securityKey}">${field(FIELD.keyPath, 'Key file', c.keyPath, `placeholder="${escapeHtml(sys.keyExample)}"`)}<div class="ssh-keys" data-keys></div></div>
     <div data-show="${IDENTITY.onePassword}">${field(FIELD.secretRef, '1Password reference', c.secretRef, 'placeholder="op://Private/api-prod/password"')}</div>
     <div data-show="${IDENTITY.password}" class="dialog-field">Password
       <div class="row-inline"><input class="field" type="password" name="password" autocomplete="off" placeholder="${credentialsSaved[c.id] ? 'Saved - type to replace' : `Kept by ${sys.credentials}`}">
@@ -233,6 +249,65 @@ function connectionError(value) {
   return null;
 }
 
+/**
+ * The host in ~/.ssh/config that a typed host is: by its alias, or by the address it gives (HostName).
+ * @param {string} typed
+ */
+function configHostOf(typed) {
+  const name = typed.trim().toLowerCase();
+  return name ? known.hosts.find(h => h.alias.toLowerCase() === name || h.hostName?.toLowerCase() === name) ?? null : null;
+}
+
+/**
+ * What the dialog says under the host when ~/.ssh/config has it: that ssh will use it, or (typed as its address)
+ * a button to use its alias, so its key, user and port apply.
+ * @param {ConfigHost} found
+ * @param {string} typed
+ */
+function configNoteHtml(found, typed) {
+  const alias = escapeHtml(found.alias);
+  if (found.alias.toLowerCase() === typed.trim().toLowerCase()) return `<b>${alias}</b> is in <code>~/.ssh/config</code>: ssh uses its key, user and port.`;
+  return `<span>${escapeHtml(typed.trim())} is <b>${alias}</b> in <code>~/.ssh/config</code>, with its own key and user.</span>
+    <button type="button" class="btn small" data-use-alias="${alias}">Use ${alias}</button>`;
+}
+
+/**
+ * The connection dialog's help from ~/.ssh: the note when the host is in its config, and the keys there to pick.
+ * Asks the host for both; they're drawn again when the list arrives and as the host is typed.
+ * @param {HTMLElement} dialog
+ * @param {HTMLSelectElement} identity
+ */
+function wireKnown(dialog, identity) {
+  const host = field(dialog, `[name=${FIELD.host}]`);
+  const note = find(dialog, '[data-config-note]');
+  const keys = find(dialog, '[data-keys]');
+  const draw = () => {
+    const found = configHostOf(host.value);
+    note.hidden = !found;
+    if (found) note.innerHTML = configNoteHtml(found, host.value);
+    keys.innerHTML = known.keys.length ? `<span class="ssh-sub">In ~/.ssh:</span>${known.keys.map(k =>
+      `<button type="button" class="btn small" data-key="${escapeHtml(k)}">${escapeHtml(/** @type {string} */ (k.split(/[\\/]/).pop()))}</button>`).join('')}` : '';
+  };
+  note.addEventListener('click', e => {
+    const alias = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-use-alias]'))?.dataset.useAlias;
+    if (!alias) return;
+    // The config's entry decides the rest: what the form said would override it.
+    host.value = alias;
+    for (const name of [FIELD.user, FIELD.port, FIELD.jump]) field(dialog, `[name=${name}]`).value = '';
+    identity.value = IDENTITY.agent;
+    identity.dispatchEvent(new Event('change'));
+    draw();
+  });
+  keys.addEventListener('click', e => {
+    const key = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-key]'))?.dataset.key;
+    if (key) field(dialog, `[name=${FIELD.keyPath}]`).value = key;
+  });
+  host.addEventListener('input', draw);
+  knownChanged = draw;
+  draw();
+  send(PAGE.sshKnown);
+}
+
 /** @param {SshConnection | null | undefined} existing */
 function connectionDialog(existing) {
   // A new one has no user, port and the rest yet: the dialog shows them empty.
@@ -247,6 +322,7 @@ function connectionDialog(existing) {
     };
     identity.addEventListener('change', showFor);
     showFor();
+    wireKnown(dialog, identity);
     dialog.querySelector('[data-forget]')?.addEventListener('click', e => {
       e.preventDefault();
       send(PAGE.sshPasswordForget, { connection: c.id });
@@ -270,6 +346,7 @@ function connectionDialog(existing) {
     };
     return { submit };
   }).then(result => {
+    knownChanged = () => {};
     if (!result) return;
     const list = connections().filter(x => x.id !== result.value.id);
     save({ connections: [...list, result.value] });

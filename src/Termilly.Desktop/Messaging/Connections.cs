@@ -45,6 +45,12 @@ internal static partial class FromPage
         public static string Type => "ssh:status";
     }
 
+    /// <summary>The connection dialog opened: it lists the keys in ~/.ssh and spots a host ~/.ssh/config already has.</summary>
+    internal sealed record SshKnown : IPageMessage
+    {
+        public static string Type => "ssh:known";
+    }
+
     /// <param name="Id">The port forward.</param>
     internal sealed record ForwardStart(string Id = "") : IPageMessage
     {
@@ -87,6 +93,12 @@ internal static partial class ToPage
     internal sealed record SshImported(object Hosts, IReadOnlyList<string> Notes) : IHostMessage
     {
         public static string Type => "ssh:imported";
+    }
+
+    /// <summary>The private keys in ~/.ssh (full paths) and the hosts ~/.ssh/config names.</summary>
+    internal sealed record SshKnown(IReadOnlyList<string> Keys, IReadOnlyList<SshHost> Hosts) : IHostMessage
+    {
+        public static string Type => "ssh:known";
     }
 
     /// <param name="Saved">Connection id: whether its password is saved.</param>

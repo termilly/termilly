@@ -104,6 +104,11 @@ internal sealed class SshHandler : IMessageHandler, IStartable, IDisposable
             PostCredentialStatus();
             _page.Post(new ToPage.ForwardAll(new Dictionary<string, ToPage.ForwardState>(_forwardStates)));
         });
+        router.On<FromPage.SshKnown>(_ => Task.Run(() =>
+        {
+            var config = SshConfig.DefaultPath;
+            _page.Post(new ToPage.SshKnown(SshConfig.Keys(Path.GetDirectoryName(config)!), SshConfig.Read(config)));
+        }));
         router.On<FromPage.ForwardStart>(m => StartForward(m.Id));
         router.On<FromPage.ForwardStop>(m => _forwards.Stop(m.Id));
     }

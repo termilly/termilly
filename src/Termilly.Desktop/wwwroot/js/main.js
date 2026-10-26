@@ -38,6 +38,7 @@ import { cycleWorkspace } from './workspaces.js';
 
 import { openSnippets, snippetCommands } from './snippets.js';
 import { actionCommands, runActionShortcut } from './actions.js';
+import './sshsave.js';
 import { activityLine, stopAllAgents } from './agentline.js';
 import './subagents.js';
 import './notify.js';

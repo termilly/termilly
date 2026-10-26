@@ -2589,8 +2589,14 @@ mark.set-hit { border-radius: 2px; background: var(--accent-soft); color: inheri
 .rc-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--attention); animation: rec-blink 1.2s ease-in-out infinite; }
 .rc-text { overflow: hidden; text-overflow: ellipsis; }
 /* "Set up Termilly on this host" (js/remotehost.js): an offer, not a problem, so in the accent rather than yellow. */
-.remote-bar { position: absolute; top: 38px; left: 50%; z-index: 6; display: flex; align-items: center; gap: 10px; max-width: calc(100% - 24px); padding: 7px 8px 7px 12px; transform: translateX(-50%); border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); border-radius: 9px; background: color-mix(in srgb, var(--accent) 10%, var(--surface)); box-shadow: var(--shadow-pop); font-size: 12.5px; white-space: nowrap; }
-.remote-bar .rb-text { overflow: hidden; text-overflow: ellipsis; }
+.remote-bar, .ssh-save-bar { position: absolute; top: 38px; left: 50%; z-index: 6; display: flex; align-items: center; gap: 10px; max-width: calc(100% - 24px); padding: 7px 8px 7px 12px; transform: translateX(-50%); border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); border-radius: 9px; background: color-mix(in srgb, var(--accent) 10%, var(--surface)); box-shadow: var(--shadow-pop); font-size: 12.5px; white-space: nowrap; }
+.remote-bar .rb-text, .ssh-save-bar .rb-text { overflow: hidden; text-overflow: ellipsis; }
+/* Both bars at once (the password asked, the host not set up yet): the second sits under the first. */
+.remote-bar ~ .ssh-save-bar, .ssh-save-bar ~ .remote-bar { top: 84px; }
+/* Settings › SSH’s connection dialog: a host ~/.ssh/config already has, and the keys in ~/.ssh to pick from. */
+.ssh-note { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 2px 0 10px; color: var(--muted); font-size: 12.5px; }
+.ssh-keys { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; }
+.ssh-keys:empty { display: none; }
 
 /* tmux (js/tmux.js): fields shown only for some choices. */
 .dialog-field[hidden] { display: none; }
