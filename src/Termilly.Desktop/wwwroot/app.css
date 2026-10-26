@@ -2217,7 +2217,9 @@ textarea.field { height: auto; padding: 7px 10px; line-height: 1.5; resize: vert
 .gw-line-no { flex: none; min-width: 3ch; color: var(--faint); text-align: right; }
 .gw-hit-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: pre; }
 .gw-why { flex: none; color: var(--faint); font-size: 11px; }
-.gw-search-status { justify-content: center; color: var(--faint); cursor: default; }
+.gw-search-status { justify-content: center; gap: 8px; color: var(--faint); cursor: default; }
+.gw-searching { display: inline-flex; gap: 8px; align-items: center; }
+.fchip .busy-spin { display: inline-block; margin-right: 6px; vertical-align: -1px; }
 .gw-search-status:hover { background: none; }
 .gw-right { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; outline: none; }
 .gw-message { padding: 28px 20px; color: var(--muted); font-size: 13px; text-align: center; }
@@ -2465,9 +2467,9 @@ mark.set-hit { border-radius: 2px; background: var(--accent-soft); color: inheri
 .sub-row.done .sub-icon { color: var(--ok, #7ee787); }
 .sub-row.unknown .sub-icon { color: var(--muted); }
 .sub-row.error .sub-icon { color: var(--danger, #ff7b72); }
-.sub-spin { width: 9px; height: 9px; border: 1.5px solid var(--accent); border-right-color: transparent; border-radius: 50%; animation: sub-spin 0.9s linear infinite; }
+.sub-spin, .busy-spin { flex: none; width: 9px; height: 9px; border: 1.5px solid var(--accent); border-right-color: transparent; border-radius: 50%; animation: sub-spin 0.9s linear infinite; }
 @keyframes sub-spin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) { .sub-spin { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .sub-spin, .busy-spin { animation: none; } }
 .sub-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sub-name b { color: var(--text); font-weight: 500; }
 .sub-row.done .sub-name b, .sub-row.unknown .sub-name b { color: var(--muted); }

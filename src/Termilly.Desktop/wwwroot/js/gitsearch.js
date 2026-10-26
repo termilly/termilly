@@ -264,10 +264,13 @@ export function searchItems() {
   return out;
 }
 
+/** A small spinner beside "Searching": git can take seconds over a long history. */
+const BUSY = '<span class="busy-spin" aria-hidden="true"></span>';
+
 /** What the list says when the search has no rows. */
 export function searchEmptyText() {
   if (found.text.length < MIN_SEARCH) return `Type at least ${MIN_SEARCH} characters.`;
-  if (!found.result) return 'Searching';
+  if (!found.result) return `<span class="gw-searching">${BUSY}Searching</span>`;
   if (found.error) return escapeHtml(found.error);
   return `Nothing matches “${escapeHtml(found.text)}”${found.view === SEARCH_VIEW.all ? '' : ' here'}.`;
 }
@@ -285,7 +288,9 @@ export function filtersHtml() {
   return VIEWS.filter(([id]) => available(id)).map(([id, label]) => {
     const more = id === SEARCH_VIEW.code && found.codeMore ? '+' : '';
     const count = counts[id] || id === found.view ? ` <span>${counts[id]}${more}</span>` : '';
-    return `<button class="fchip${id === found.view ? ' on' : ''}" data-search-view="${id}">${label}${count}</button>`;
+    // Code takes longest: its chip spins while it searches, wherever its rows are in the list.
+    const busy = id === SEARCH_VIEW.code && found.codeBusy ? BUSY : '';
+    return `<button class="fchip${id === found.view ? ' on' : ''}" data-search-view="${id}">${busy}${label}${count}</button>`;
   }).join('');
 }
 
@@ -331,7 +336,7 @@ export function searchRowHtml(item, i, selected) {
     case ITEM.showAll: return `<div class="cw-row gw-more" data-i="${i}">Show all ${it.count}</div>`;
     case ITEM.moreCode:
       return `<div class="cw-row gw-more" data-i="${i}" title="Searched the latest ${it.searched} commits">Search older commits</div>`;
-    case ITEM.status: return `<div class="cw-row gw-search-status" data-i="${i}">${escapeHtml(it.text)}</div>`;
+    case ITEM.status: return `<div class="cw-row gw-search-status" data-i="${i}">${BUSY}${escapeHtml(it.text)}</div>`;
     default: return null;
   }
 }
