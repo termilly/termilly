@@ -1657,8 +1657,6 @@ body.dragging-pane #drag-ghost { display: flex; }
 .set-close svg { width: 12px; height: 12px; stroke-width: 1.4; }
 /* Help sits before Close: it takes the push to the right, Close follows it. */
 .set-help + .set-close { margin-left: 2px; }
-/* A little bigger than the close icon’s cross, so it reads as a question mark. */
-.set-help svg { width: 14px; height: 14px; stroke-width: 1.5; }
 .set-body { flex: 1; padding: 8px 24px 24px; overflow-y: auto; user-select: text; }
 .set-body::-webkit-scrollbar { width: 8px; }
 .set-body::-webkit-scrollbar-thumb { border: 2px solid var(--raised); border-radius: 4px; background: var(--scroll-thumb); }
