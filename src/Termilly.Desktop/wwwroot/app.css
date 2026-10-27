@@ -655,8 +655,9 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
 .trigger-row .field.invalid { border-color: var(--danger); }
 .trigger-presets { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
 /* Settings › Terminal › Sounds: a sound's dropdown and its play button. */
-.sound-pick { display: flex; gap: 6px; align-items: center; }
-.sound-pick .field { width: 120px; }
+.sound-pick { display: flex; width: 300px; gap: 6px; align-items: center; }
+.sound-pick .dropdown { flex: 1; width: auto; }
+.sound-device + .dropdown { width: 300px; }
 .act-row { display: grid; gap: 8px; padding: 10px 0; border-bottom: 1px solid var(--border); }
 .act-line { display: flex; gap: 8px; align-items: center; }
 .act-line .field { flex: 1 1 0; min-width: 0; }
@@ -1449,9 +1450,9 @@ body.dragging-pane #drag-ghost { display: flex; }
 }
 .size-control button:hover { background: var(--hover); color: var(--text); }
 .size-control button svg { width: 12px; height: 12px; stroke-width: 1.4; }
-#font-size-value { width: 36px; text-align: right; font-variant-numeric: tabular-nums; }
+#font-size-value, .set-range-value { width: 36px; text-align: right; font-variant-numeric: tabular-nums; }
 
-#font-size-range {
+#font-size-range, .set-range {
   flex: 1;
   height: 4px;
   border-radius: 2px;
@@ -1459,7 +1460,7 @@ body.dragging-pane #drag-ghost { display: flex; }
   appearance: none;
   outline: none;
 }
-#font-size-range::-webkit-slider-thumb {
+#font-size-range::-webkit-slider-thumb, .set-range::-webkit-slider-thumb {
   width: 14px;
   height: 14px;
   border: 2px solid var(--raised);

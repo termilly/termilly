@@ -208,6 +208,8 @@ internal sealed record NotificationSettings
     /// <summary>When quitting asks first, because something is still running.</summary>
     public string SoundQuit { get; init; } = SettingValues.Sound.None;
     public int SoundVolume { get; init; } = SettingValues.SoundVolume.Default;
+    /// <summary>The output the sounds play on (an id from <see cref="Platform.IAudioOutputs"/>); null for the system’s default.</summary>
+    public string? SoundDevice { get; init; }
 
     public NotificationSettings Normalize() => this with
     {
@@ -215,7 +217,8 @@ internal sealed record NotificationSettings
         SoundError = SettingChecks.OneOf(SoundError, SettingValues.Sound.All, SettingValues.Sound.None),
         SoundDone = SettingChecks.OneOf(SoundDone, SettingValues.Sound.All, SettingValues.Sound.None),
         SoundQuit = SettingChecks.OneOf(SoundQuit, SettingValues.Sound.All, SettingValues.Sound.None),
-        SoundVolume = SettingChecks.OneOf(SoundVolume, SettingValues.SoundVolume.All, SettingValues.SoundVolume.Default),
+        SoundVolume = Math.Clamp(SoundVolume, SettingValues.SoundVolume.Min, SettingValues.SoundVolume.Max),
+        SoundDevice = SettingChecks.Trimmed(SoundDevice),
     };
 }
 

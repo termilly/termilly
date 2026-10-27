@@ -1,10 +1,13 @@
 // @ts-check
 // Notification sounds (Settings › Notifications › Sounds): a short ping when an agent needs you, stops with an error or
 // finishes in a terminal you aren't looking at, and when quitting asks first because something still runs. The
-// sounds are wwwroot/sounds/ping-1.mp3 to ping-5.mp3, chosen per event, or none.
+// sounds are wwwroot/sounds/ping-1.mp3 to ping-5.mp3, chosen per event, or none. On the default output the page plays
+// them; on another one the host does (Features/Sounds.cs), as the browser engine can't name the outputs.
 
 import { state, on, isInView, EVENTS } from './store.js';
 import { AGENT_STATE, SETTING_VALUES } from './constants.js';
+import { send } from './host.js';
+import { PAGE } from './protocol.js';
 
 const { sound } = SETTING_VALUES;
 const FOLDER = 'sounds/';
@@ -36,12 +39,14 @@ const played = new WeakMap();
  */
 export function playSound(name) {
   if (!name || name === sound.none) return;
+  const { soundVolume: volume, soundDevice: device } = state.settings.notifications;
+  if (device) return send(PAGE.soundPlay, { name, volume, device });
   let audio = players.get(name);
   if (!audio) {
     audio = new Audio(`${FOLDER}${name}${EXTENSION}`);
     players.set(name, audio);
   }
-  audio.volume = state.settings.notifications.soundVolume / PERCENT;
+  audio.volume = volume / PERCENT;
   audio.currentTime = 0;
   audio.play().catch(() => {}); // the system has no audio device, or it's busy: a missed ping is no error
 }

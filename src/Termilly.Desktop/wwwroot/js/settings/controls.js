@@ -5,6 +5,17 @@
 import { escapeHtml } from '../ui.js';
 
 /**
+ * Sets a slider (type=range) to a value, with its track filled up to it (--fill, in app.css).
+ * @param {HTMLInputElement} range
+ * @param {number} value
+ */
+export function setRange(range, value) {
+  const min = Number(range.min), max = Number(range.max);
+  range.value = String(value);
+  range.style.setProperty('--fill', `${((value - min) / (max - min)) * 100}%`);
+}
+
+/**
  * A labelled row: title and description on the left, the control on the right (or below with `stack`).
  * `keywords` are other words the search finds it by.
  * @param {string} label

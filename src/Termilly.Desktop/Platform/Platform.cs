@@ -69,6 +69,21 @@ internal interface IDesktopShell
     void OpenUrl(Uri url);
 }
 
+/// <summary>An audio output: the id <see cref="IAudioOutputs.Play"/> takes, and the name the system shows for it.</summary>
+internal sealed record AudioOutput(string Id, string Name);
+
+/// <summary>
+/// The system’s audio outputs, for the notification sounds on another output than the default (Settings › Notifications).
+/// The page plays them itself on the default one; the browser engine doesn’t name the others without microphone access.
+/// </summary>
+internal interface IAudioOutputs
+{
+    Task<IReadOnlyList<AudioOutput>> ListAsync();
+
+    /// <summary>Plays a sound file on <paramref name="device"/>, or on the default output when it’s gone; volume from 0 to 1.</summary>
+    void Play(string file, double volume, string device);
+}
+
 /// <summary>The system's notifications.</summary>
 internal interface INotifier
 {

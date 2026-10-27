@@ -57,6 +57,7 @@ public partial class MainWindow : Window
             .AddPlatform(new WindowsPlatform(this))
             .AddSingleton<ICredentialStore, WindowsCredentialStore>()
             .AddSingleton<IFontCatalog, WindowsFonts>()
+            .AddSingleton<IAudioOutputs, WindowsAudio>()
             .AddSingleton<IUpdateInstaller, WindowsUpdateInstaller>()
             .BuildServiceProvider();
         _settings = _services.GetRequiredService<ISettingsStore>();

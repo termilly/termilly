@@ -7,7 +7,7 @@ import { state, getSetting, GROUPS } from '../store.js';
 import { THEMES } from '../themes.js';
 import { cssColor, cssString, escapeHtml, ICONS, keysHtml } from '../ui.js';
 import { setSetting, updateSettings, MIN_FONT_SIZE, MAX_FONT_SIZE } from '../preferences.js';
-import { row, seg, toggle, group } from './controls.js';
+import { row, seg, toggle, group, setRange } from './controls.js';
 import { SECTION, body, layer, page } from './page.js';
 import { SETTING_VALUES } from '../constants.js';
 import { field, find, targetOf } from '../dom.js';
@@ -131,9 +131,7 @@ function syncFonts(root) {
   const range = /** @type {HTMLInputElement | null} */ (root.querySelector('#font-size-range'));
   if (range) {
     const { fontSize } = state.settings.terminal;
-    // The number goes in as is; the input reads it as its text.
-    range.value = /** @type {any} */ (fontSize);
-    range.style.setProperty('--fill', `${((fontSize - MIN_FONT_SIZE) / (MAX_FONT_SIZE - MIN_FONT_SIZE)) * 100}%`);
+    setRange(range, fontSize);
     find(root, '#font-size-value').textContent = `${fontSize}px`;
   }
   for (const picker of /** @type {NodeListOf<HTMLElement>} */ (root.querySelectorAll(FONT_PICKER))) {

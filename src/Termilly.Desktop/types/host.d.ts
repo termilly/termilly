@@ -114,6 +114,8 @@ interface NotificationSettings {
   /** When quitting asks first, because something is still running. */
   soundQuit: string;
   soundVolume: number;
+  /** The output the sounds play on (an id from ); null for the system’s default. */
+  soundDevice: string | null;
 }
 
 /** What's kept between runs: the restore at start, history, hidden terminals' scrollback, background shells. */

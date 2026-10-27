@@ -35,6 +35,7 @@ const EVERY_MATCH_ANY_CASE = 'gi';
 
 /** The CSS variables for the app's font, and the terminals' font, which the change preview and replays use too. */
 const UI_FONT_VAR = '--ui-font';
+const DEFAULT_SHELL = 'shells.defaultProfile';
 
 const sections = Object.values(SECTIONS);
 
@@ -336,8 +337,8 @@ function syncControls() {
     } else if (el.classList.contains('switch')) {
       el.setAttribute('aria-checked', String(!!value));
     } else if (el.tagName === 'SELECT') {
-      // Its own setting; the default shell, when none is chosen yet, is the first one.
-      /** @type {HTMLSelectElement} */ (el).value = String(value ?? state.profiles[0]?.id ?? '');
+      // Its own setting; the default shell, when none is chosen yet, is the first one, and other unset ones the empty choice.
+      /** @type {HTMLSelectElement} */ (el).value = String(value ?? (el.dataset.setting === DEFAULT_SHELL ? state.profiles[0]?.id : null) ?? '');
     }
   }
   for (const select of /** @type {NodeListOf<HTMLSelectElement>} */ (body.querySelectorAll('select.field'))) {

@@ -207,11 +207,9 @@ export const SETTING_VALUES = Object.freeze({
     all: Object.freeze(['none', 'ping-1', 'ping-2', 'ping-3', 'ping-4', 'ping-5']),
   }),
   soundVolume: Object.freeze({
-    quiet: 30,
-    medium: 60,
-    loud: 100,
+    min: 0,
+    max: 100,
     default: 60,
-    all: Object.freeze([30, 60, 100]),
   }),
   linkClick: Object.freeze({
     ctrl: 'ctrl',

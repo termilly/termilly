@@ -50,14 +50,12 @@ internal static class SettingValues
         public static readonly IReadOnlyList<string> All = [None, Ping1, Ping2, Ping3, Ping4, Ping5];
     }
 
-    /// <summary>How loud the sounds play, in percent.</summary>
+    /// <summary>How loud the sounds play, in percent (the slider in Settings › Notifications).</summary>
     public static class SoundVolume
     {
-        public const int Quiet = 30;
-        public const int Medium = 60;
-        public const int Loud = 100;
-        public const int Default = Medium;
-        public static readonly IReadOnlyList<int> All = [Quiet, Medium, Loud];
+        public const int Min = 0;
+        public const int Max = 100;
+        public const int Default = 60;
     }
 
     /// <summary>What opens a web address in a terminal: Ctrl+click (a plain click stays for selecting), or a click.</summary>
