@@ -4,7 +4,7 @@
 // the closed-terminal history; a host's note lives in Settings and shows on every terminal opened to it.
 
 import { state, emit, persist, profileOf, wsById, GROUPS, isSshProfile, EVENTS } from './store.js';
-import { modal } from './dialogs.js';
+import { modal, confirmDialog } from './dialogs.js';
 import { escapeHtml } from './ui.js';
 import { updateSettings } from './preferences.js';
 
@@ -88,10 +88,26 @@ export function editNote(kind, target) {
         !!(/** @type {HTMLInputElement | null} */ (dialog.querySelector('[data-pin]')))?.checked);
       close(true);
     };
-    dialog.querySelector('[data-remove]')?.addEventListener('click', () => save(''));
+    dialog.querySelector('[data-remove]')?.addEventListener('click', () => {
+      // Dialogs don't stack: the editor closes for the question, and comes back if the note stays.
+      close(null);
+      confirmRemove(kind, target, current);
+    });
     // Enter makes new lines; Ctrl+Enter saves (modal()).
     return { submit: () => save(area.value) };
   });
+}
+
+/**
+ * Asks before removing a note; no brings its editor back.
+ * @param {string} kind
+ * @param {Tab | Workspace | string} target
+ * @param {{ text: string, pinned?: boolean }} note
+ */
+async function confirmRemove(kind, target, note) {
+  if (await confirmDialog({ title: 'Remove this note?', body: firstLine(note.text), confirm: 'Remove note' })) {
+    setNote(kind, target, '', !!note.pinned);
+  } else editNote(kind, target);
 }
 
 /**
