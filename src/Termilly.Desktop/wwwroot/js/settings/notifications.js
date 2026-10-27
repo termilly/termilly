@@ -3,7 +3,7 @@
 // you, and the sounds (js/sounds.js plays them): which one for what, the output they play on and how loud.
 
 import { HOST, PAGE } from '../protocol.js';
-import { onHost, send, sys, SYSTEM_NAME } from '../host.js';
+import { onHost, send } from '../host.js';
 import { getSetting, state } from '../store.js';
 import { escapeHtml, ICONS } from '../ui.js';
 import { SETTING_VALUES } from '../constants.js';
@@ -90,13 +90,12 @@ function playChosen(e) {
   return true;
 }
 
-const where = () => (sys.name === SYSTEM_NAME.linux ? 'A desktop' : 'A Windows');
 
 /** @type {import('./page.js').Section} */
 const NOTIFICATIONS = {
   id: SECTION.notifications,
   label: 'Notifications', icon: ICONS.bell,
-  html: () => group('When you can’t see the terminal', row('Agent needs you', `${where()} notification; clicking it opens the terminal.`, toggle('notifications.needsInput'), { keywords: 'notification toast agent waits permission input attention' })
+  html: () => group('Show notifications when', row('Agent needs you', '', toggle('notifications.needsInput'), { keywords: 'notification toast agent waits permission input attention' })
       + row('Agent stopped with an error', '', toggle('notifications.error'), { keywords: 'notification toast error' })
       + row('Agent finished', '', toggle('notifications.done'), { keywords: 'notification toast done finished' }))
     + group('Shortcut', row('Next terminal that needs you, from any app', takenChords.has(JUMP_CHORD)
