@@ -14,6 +14,7 @@ import { focusedTab } from './panes.js';
 import { portsOf } from './gitstatus.js';
 import { sendToAgent } from './together.js';
 import { setMenuExtras } from './termclipboard.js';
+import { linkUnderMouse } from './termlinks.js';
 
 /** Keys as the settings keep them: modifiers in this order, then the key, joined by +. */
 const CTRL = 'Ctrl';
@@ -124,9 +125,10 @@ function contextOf(tab) {
  * Runs an action for a terminal (the focused one when none is given).
  * @param {ActionSetting} action
  * @param {Tab | null} [tab]
+ * @param {ReturnType<typeof contextOf>} [context] what it runs with, when not the terminal's now (a right-clicked link)
  */
-export function runAction(action, tab = focusedTab()) {
-  send(PAGE.actionRun, { id: action.id, ...contextOf(tab) });
+export function runAction(action, tab = focusedTab(), context = contextOf(tab)) {
+  send(PAGE.actionRun, { id: action.id, ...context });
 }
 
 onHost(HOST.actionFailed, m => {
@@ -193,7 +195,9 @@ function openableOf(selection, folder) {
 function menuExtras(body) {
   const tab = [...state.tabs.values()].find(t => t.view?.body === body) ?? null;
   if (!tab) return [];
-  const context = contextOf(tab);
+  // Right-clicking a link (a web address or a path) without a selection offers what a selection of it would.
+  const context = { ...contextOf(tab) };
+  context.selection ||= linkUnderMouse();
   const openable = openableOf(context.selection, context.folder);
   const actions = enabledActions().filter(a => a.menu && canRun(a, context))
     // Without a selection, only actions that don't need one.
@@ -201,7 +205,7 @@ function menuExtras(body) {
   /** @type {import('./popups.js').MenuItem[]} */
   const items = [
     ...(openable ? [openable] : []),
-    ...actions.map(a => ({ label: a.name, hint: a.shortcut ? a.shortcut : undefined, action: () => runAction(a, tab) })),
+    ...actions.map(a => ({ label: a.name, hint: a.shortcut ? a.shortcut : undefined, action: () => runAction(a, tab, context) })),
     ...(context.selection?.trim() ? [{
       label: 'Ask an agent about this',
       action: () => sendToAgent(/** @type {string} */ (context.selection).slice(0, MAX_AGENT_TEXT), { title: tabTitle(tab) }, tab.view?.header, tab),

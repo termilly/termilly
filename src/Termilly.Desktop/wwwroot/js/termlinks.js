@@ -14,14 +14,19 @@
  */
 
 /** @typedef {{ underline: boolean, pointerCursor: boolean }} Decorations */
+
+const LEFT_BUTTON = 0;
 /** @typedef {{ start: number, end: number, text: string, title?: string }} FoundLink */
 
 let ctrlHeld = false;
 /**
  * The link under the mouse, so holding Ctrl can underline it.
- * @type {{ link: { decorations: Decorations }, kind: LinkKind } | null}
+ * @type {{ link: { text: string, decorations: Decorations }, kind: LinkKind } | null}
  */
 let hovered = null;
+
+/** The text of the link under the mouse (a web address or a path), for the right-click menu; null when none. */
+export const linkUnderMouse = () => hovered?.link.text ?? null;
 
 /** @param {LinkKind} kind */
 const decorations = kind => {
@@ -84,6 +89,8 @@ function makeLink({ range, text, title }, kind, body) {
     decorations: decorations(kind),
     /** @param {MouseEvent} e */
     activate(e) {
+      // xterm activates on any button; a right-click is for the menu (js/actions.js offers the link's actions there).
+      if (e.button !== LEFT_BUTTON) return;
       if ((e.ctrlKey || kind.plainClick?.()) && kind.active()) kind.open(text);
     },
     hover() {
