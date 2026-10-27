@@ -74,7 +74,7 @@ export const getSetting = path => {
 
 /**
  * The sidebar: open or closed (and what it shows then), its width, and whether its Remote section is folded.
- * @typedef {{ open: boolean, closedStyle: string, width?: number, remoteFolded?: boolean }} SidebarState
+ * @typedef {{ open: boolean, remoteFolded?: boolean }} SidebarState
  */
 
 /**
@@ -92,7 +92,7 @@ export const state = {
   /** @type {string | null} */
   activeId: null,
   /** @type {SidebarState} */
-  sidebar: { open: true, closedStyle: 'rail' },
+  sidebar: { open: true },
   /**
    * The terminal colours of the theme plugins that are on (plugins.js).
    * @type {PluginTheme[]}

@@ -7,7 +7,7 @@ import {
 } from './store.js';
 import { showMenu, SEPARATOR } from './popups.js';
 import { tabBadgeHtml, tagChipHtml, escapeHtml, cssColor, ICONS, activityHtml } from './ui.js';
-import { focusTab, switchWorkspace, newTab, restoreFocus, moveAllToTabs, allInTabs, NO_WORKSPACES } from './panes.js';
+import { focusTab, switchWorkspace, newTab, moveAllToTabs, allInTabs, NO_WORKSPACES } from './panes.js';
 import { exportLayout } from './layouts.js';
 import { scheduleFit } from './terminals.js';
 import { openTabMenu, RENAME_LABEL, NOTE_LABEL, GIT_LABEL } from './tabmenu.js';
@@ -27,7 +27,7 @@ import { remoteRailHtml, openRemoteMenu } from './remote.js';
 import { openNewWorkspace } from './newworkspace.js';
 import { hasUnreadResults } from './results.js';
 import { SETTING_VALUES } from './constants.js';
-import { byId, find, targetOf, dragPointer, showError } from './dom.js';
+import { byId, find, targetOf, showError } from './dom.js';
 import { RENAME_INPUT_CLASS } from './rename.js';
 
 /** The choices of the settings used here (C#'s SettingValues). */
@@ -41,7 +41,6 @@ const SHOWN = 'show';
 /** A tab row whose tags collapsed to the first one and "+N". */
 const COLLAPSED = 'collapsed';
 /** The body's class while the sidebar's edge is dragged. */
-const RESIZING = 'resizing-sidebar';
 
 const sidebar = byId('sidebar');
 const list = byId('ws-list');
@@ -88,16 +87,8 @@ export function setSidebarOpen(open) {
 
 export const toggleSidebar = () => setSidebarOpen(!state.sidebar.open);
 
-/** @param {string} style */
-export function setClosedStyle(style) {
-  state.sidebar.closedStyle = style;
-  applyMode();
-  emit(EVENTS.sidebar);
-  persist();
-}
-
 function applyMode() {
-  const mode = state.sidebar.open ? 'open' : state.sidebar.closedStyle;
+  const mode = state.sidebar.open ? 'open' : 'rail';
   document.body.dataset.sidebar = mode;
   for (const toggle of toggles) {
     toggle.setAttribute('aria-pressed', String(state.sidebar.open));
@@ -454,47 +445,6 @@ flyout.addEventListener('click', e => {
 // The toggles must not take keyboard focus from the terminal.
 for (const toggle of toggles) toggle.addEventListener('mousedown', e => e.preventDefault());
 
-// ---- Width (drag the gap between sidebar and terminals) ----
-
-const DEFAULT_WIDTH = 236;
-const MIN_WIDTH = 180;
-const MAX_WIDTH = 480;
-const resizer = byId('sidebar-resizer');
-
-function applyWidth() {
-  const width = Math.min(MAX_WIDTH,
-    Math.max(MIN_WIDTH, Math.round(state.sidebar.width ?? DEFAULT_WIDTH)));
-  document.body.style.setProperty('--sidebar-width', `${width}px`);
-}
-
-resizer.addEventListener('pointerdown', e => {
-  if (!state.sidebar.open || e.button !== 0) return;
-  e.preventDefault();
-  document.body.classList.add(RESIZING);
-  const { left, right } = sidebar.getBoundingClientRect();
-  const grab = e.clientX - right; // keep the grabbed point under the pointer (no jump on the first move)
-  dragPointer(resizer, e, ev => {
-    state.sidebar.width = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, ev.clientX - grab - left));
-    applyWidth();
-    scheduleFit();
-  }, () => {
-    document.body.classList.remove(RESIZING);
-    persist();
-    restoreFocus();
-  });
-});
-
-export function resetSidebarWidth() {
-  state.sidebar.width = DEFAULT_WIDTH;
-  applyWidth();
-  scheduleFit();
-  persist();
-}
-
-resizer.addEventListener('dblclick', () => {
-  if (state.sidebar.open) resetSidebarWidth();
-});
-
 // Terminals change size while the sidebar animates open or closed; refit when it settles.
 sidebar.addEventListener('transitionend', e => {
   if (e.propertyName === 'width') scheduleFit();
@@ -502,6 +452,5 @@ sidebar.addEventListener('transitionend', e => {
 
 export function initSidebar() {
   applyMode();
-  applyWidth();
   render();
 }

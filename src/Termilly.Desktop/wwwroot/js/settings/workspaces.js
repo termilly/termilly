@@ -1,37 +1,23 @@
 // @ts-check
-// Settings › Workspaces: the sidebar, background shells, what comes back at start, what Minimize and Close do, and
+// Settings › Workspaces: background shells, what comes back at start, what Minimize and Close do, and
 // project status.
 
 import { PAGE } from '../protocol.js';
 import { send, sys, SYSTEM_NAME } from '../host.js';
-import { state } from '../store.js';
-import { ICONS, keysHtml } from '../ui.js';
+import { ICONS } from '../ui.js';
 import { confirmDialog } from '../dialogs.js';
-import { setClosedStyle, resetSidebarWidth } from '../sidebar.js';
 import { row, seg, toggle, group } from './controls.js';
-import { SECTION, body } from './page.js';
+import { SECTION } from './page.js';
 import { SETTING_VALUES } from '../constants.js';
-import { targetOf } from '../dom.js';
 
 /** The choices of the settings used here (C#'s SettingValues). */
 const { restoreSession, minimizeTo, closeAction } = SETTING_VALUES;
-
-/**
- * The closed sidebar's choice, which is the sidebar's own state rather than a setting.
- * @param {HTMLElement} root
- */
-function syncSidebarStyle(root) {
-  for (const b of /** @type {NodeListOf<HTMLElement>} */ (root.querySelectorAll('[data-sidebar-style] [data-value]'))) b.classList.toggle('on', b.dataset.value === state.sidebar.closedStyle);
-}
 
 /** @type {import('./page.js').Section} */
 const WORKSPACES = {
   id: SECTION.workspaces,
   label: 'Workspaces', icon: ICONS.workspaces,
-  html: () => group('', row('Closed sidebar shows', `Toggle the sidebar with ${keysHtml('Ctrl Shift B')}.`, `
-      <span class="seg" data-sidebar-style><button data-value="rail">Icon rail</button><button data-value="hidden">Nothing</button></span>`)
-    + row('Sidebar width', 'Drag the edge next to the sidebar to resize it.', '<button class="btn small" data-action="resetWidth">Reset width</button>')
-    + row('Keep shells running when Termilly closes', 'Shells keep running when the window closes or updates.',
+  html: () => group('', row('Keep shells running when Termilly closes', 'Shells keep running when the window closes or updates.',
       toggle('session.backgroundShells'))
     + row('Start it when you sign in', `Start the background process when you sign in to ${sys.name}.`, toggle('session.backgroundAtSignIn'))
     + row('Background shells', 'End every kept shell, and the background process.', '<button class="btn small danger-outline" data-action="stopHost">Stop background shells</button>')
@@ -49,21 +35,12 @@ const WORKSPACES = {
     + group('Project status', row('Git branch', 'Each folder’s branch and uncommitted changes, on its row.',
         toggle('interface.gitStatus'), { keywords: 'git branch dirty changes ahead behind upstream repository worktree' })
       + row('Listening ports', 'Ports a terminal’s programs listen on; click one to open it.', toggle('terminal.ports'), { keywords: 'port server localhost dev listening url' })),
-  sync: syncSidebarStyle,
   actions: {
     stopHost: async () => {
       if (await confirmDialog({ title: 'Stop background shells?', body: 'Every terminal the background process runs ends now, with whatever runs in it.', confirm: 'Stop them' })) {
         send(PAGE.hostShutdown);
       }
     },
-    resetWidth: resetSidebarWidth,
-  },
-  click(e) {
-    const sidebarStyle = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-sidebar-style] [data-value]'));
-    if (!sidebarStyle) return false;
-    setClosedStyle(/** @type {string} */ (sidebarStyle.dataset.value));
-    syncSidebarStyle(body);
-    return true;
   },
 };
 
