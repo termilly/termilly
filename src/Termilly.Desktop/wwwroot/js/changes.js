@@ -17,6 +17,7 @@ import { find, targetOf } from './dom.js';
 import { MINUTE_MS, HOUR_MS } from './util.js';
 import { registerLinks } from './termlinks.js';
 import { findWebLinks } from './webaddress.js';
+import { findSpacedPaths } from './spacedpaths.js';
 
 /**
  * A file Claude changed, as the host lists it (Changes.cs): its path, how to show it (relative to Claude's folder,
@@ -84,11 +85,13 @@ export function openChange(tab, text) {
  * @param {string} text
  */
 async function realPaths(tab, text) {
-  const candidates = findLinks(text);
-  const replies = await Promise.all(candidates.map(c => resolvePath(tab, c.text)));
-  return candidates.flatMap((c, i) => (replies[i].path
-    ? [{ ...c, title: replies[i].folder ? 'Ctrl+click to open the folder' : 'Ctrl+click to preview the change' }]
-    : []));
+  /** @param {FoundLink[]} candidates the ones that lead somewhere, with what they lead to */
+  const real = async candidates => (await Promise.all(candidates.map(async c => ({ c, reply: await resolvePath(tab, c.text) }))))
+    .filter(r => r.reply.path);
+  // A path with spaces first (the usual patterns stop at a space); where it isn't real, the shorter path in it may be.
+  const spaced = await real(findSpacedPaths(text));
+  const plain = (await real(findLinks(text))).filter(r => !spaced.some(s => r.c.start < s.c.end && r.c.end > s.c.start));
+  return [...spaced, ...plain].map(({ c, reply }) => ({ ...c, title: reply.folder ? 'Ctrl+click to open the folder' : 'Ctrl+click to preview the change' }));
 }
 
 /** How a change from under a minute ago is dated. */
