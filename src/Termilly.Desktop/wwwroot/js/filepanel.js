@@ -314,7 +314,7 @@ function insertPath(path) {
 const copyText = text => navigator.clipboard.writeText(text);
 
 /**
- * Opens what was clicked: a folder in the panel, a file here in the preview.
+ * Opens what was double-clicked: a folder (or drive) in the panel, a file here in the preview.
  * @param {FileEntry} item
  */
 function openItem(item) {
@@ -335,12 +335,25 @@ panel.addEventListener('click', e => {
   if (action === FILES_ACTION.follow) { view.follow = /** @type {HTMLInputElement} */ (e.target).checked; return; }
   if (action === FILES_ACTION.mkdir) return makeFolder();
   if (!item) return;
-  if (atDrives()) return list(pathOf(item)); // a drive only opens
   if (action === FILES_ACTION.get) return download(item);
   if (action === FILES_ACTION.rename) return rename(item);
   if (action === FILES_ACTION.delete) return remove(item);
-  if (!action) openItem(item);
+  if (!action) select(/** @type {HTMLElement} */ (targetOf(e).closest('[data-i]')));
 });
+
+// A click selects a row, a double click opens it (as in Explorer). The rows aren't drawn again in between, or the
+// double click would lose the row it started on.
+panel.addEventListener('dblclick', e => {
+  const row = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-i]'));
+  const item = row && view?.entries[Number(row.dataset.i)];
+  if (item && !targetOf(e).closest('[data-files]')) openItem(item);
+});
+
+/** @param {HTMLElement} row */
+function select(row) {
+  for (const other of panel.querySelectorAll('.files-item.selected')) other.classList.remove('selected');
+  row.classList.add('selected');
+}
 
 // ---- The right-click menu ----
 
