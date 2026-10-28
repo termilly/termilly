@@ -20,7 +20,7 @@ import { updateSettings } from './preferences.js';
 import { resumeCommand, attachFor } from './resume.js';
 import { noteRemotePrompt, noteRemoteCwd, leftRemote } from './remotecwd.js';
 import { AGENT_STATE, AGENT_SOURCE } from './constants.js';
-import { find, field } from './dom.js';
+import { find, field, PATH_DRAG } from './dom.js';
 import { continuesOnNextRow } from './buffer.js';
 import { clipboardKey, wireClipboard, PASTE_LABEL } from './termclipboard.js';
 import { selectionKey } from './keyselect.js';
@@ -781,14 +781,23 @@ function shellMark(tab, data) {
 function wireDropAndPaste(tab, term) {
   const { body } = /** @type {TabView} */ (tab.view);
   body.addEventListener('dragover', e => {
-    if (!e.dataTransfer?.types.includes('Files')) return;
+    const types = e.dataTransfer?.types ?? [];
+    if (!types.includes('Files') && !types.includes(PATH_DRAG)) return;
     e.preventDefault();
-    e.dataTransfer.dropEffect = 'copy';
+    /** @type {DataTransfer} */ (e.dataTransfer).dropEffect = 'copy';
     body.classList.add(FILE_OVER);
   });
   body.addEventListener('dragleave', () => body.classList.remove(FILE_OVER));
   body.addEventListener('drop', e => {
     body.classList.remove(FILE_OVER);
+    // A file or folder from the Files panel: its path, here or on the terminal's server.
+    const fromPanel = e.dataTransfer?.getData(PATH_DRAG);
+    if (fromPanel) {
+      e.preventDefault();
+      e.stopPropagation();
+      typePaths(tab, [fromPanel]);
+      return;
+    }
     if (!e.dataTransfer?.files.length) return;
     e.preventDefault();
     e.stopPropagation();
@@ -829,14 +838,23 @@ function checkPaste(tab, text) {
   return true;
 }
 
-onHost(HOST.filesDropped, async m => {
-  const tab = state.tabs.get(m.id);
-  if (!tab || !m.paths?.length || tab.exited) return;
+/**
+ * Types dropped files' paths at the terminal, quoted the way its shell reads them (asked first on production).
+ * @param {Tab} tab
+ * @param {string[]} paths
+ */
+async function typePaths(tab, paths) {
+  if (!paths.length || tab.exited) return;
   const shell = state.profiles.find(p => p.id === tab.profile)?.icon;
-  const text = `${quotePaths(m.paths, shell)} `;
+  const text = `${quotePaths(paths, shell)} `;
   if (!(await confirmProduction([tab], 'Drop files', text))) return;
   send(PAGE.input, { id: tab.id, data: text });
   /** @type {TabView} */ (tab.view).term.focus();
+}
+
+onHost(HOST.filesDropped, m => {
+  const tab = state.tabs.get(m.id);
+  if (tab && m.paths?.length) typePaths(tab, m.paths);
 });
 
 /**

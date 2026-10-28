@@ -12,7 +12,7 @@ import { focusedTab, newTab } from './panes.js';
 import { scheduleFit } from './terminals.js';
 import { escapeHtml, ICONS } from './ui.js';
 import { modal, confirmDialog, CONFIRM_DIALOG } from './dialogs.js';
-import { byId, field, targetOf, dragPointer, WORKSPACE_ID } from './dom.js';
+import { byId, field, targetOf, dragPointer, WORKSPACE_ID, PATH_DRAG } from './dom.js';
 import { showMenu, SEPARATOR } from './popups.js';
 import { showChange } from './preview.js';
 import { pathActions } from './actions.js';
@@ -175,7 +175,7 @@ const sizeText = /** @param {number} n */ n => (n < KB ? `${n} B` : n < MB ? `${
  * @param {boolean} server
  */
 const entryRow = (e, i, server) => (e.label != null ? driveRow(e, i) : `
-  <div class="files-item${e.isDirectory ? ' dir' : ''}" data-i="${i}" title="${escapeHtml([e.permissions, e.modified].filter(Boolean).join(' · '))}">
+  <div class="files-item${e.isDirectory ? ' dir' : ''}" data-i="${i}" draggable="true" title="${escapeHtml([e.permissions, e.modified].filter(Boolean).join(' · '))}">
     <span class="files-name">${e.isDirectory ? '📁' : '📄'} ${escapeHtml(e.name)}</span>
     <span class="files-size">${e.isDirectory ? '' : sizeText(e.size)}</span>
     <span class="files-actions">
@@ -191,7 +191,7 @@ const entryRow = (e, i, server) => (e.label != null ? driveRow(e, i) : `
  * @param {number} i
  */
 const driveRow = (e, i) => `
-  <div class="files-item dir" data-i="${i}" title="${escapeHtml(e.modified)}">
+  <div class="files-item dir" data-i="${i}" draggable="true" title="${escapeHtml(e.modified)}">
     <span class="files-name">${DRIVE_ICON}${escapeHtml(`${e.label} (${e.name.replace(/\\$/, '')})`)}</span>
     <span class="files-size">${escapeHtml(e.modified.replace(/ of .*$/, ''))}</span>
   </div>`;
@@ -438,6 +438,15 @@ panel.addEventListener('click', e => {
   if (platform !== PLATFORM.linux || !view || !targetOf(e).closest('.files-upload')) return;
   e.preventDefault();
   send(PAGE.filesPick, { id: view.tab.id, requestId: `files${++requests}`, dir: view.path });
+});
+// A file or folder dragged out of the panel carries its path: a terminal types it where it's dropped (terminals.js).
+panel.addEventListener('dragstart', e => {
+  const item = view?.entries[Number(/** @type {HTMLElement | null} */ (targetOf(e).closest('[data-i]'))?.dataset.i)];
+  if (!item || !e.dataTransfer) return;
+  const path = pathOf(item);
+  e.dataTransfer.setData(PATH_DRAG, path);
+  e.dataTransfer.setData('text/plain', path);
+  e.dataTransfer.effectAllowed = 'copy';
 });
 panel.addEventListener('dragover', e => { if (e.dataTransfer?.types.includes('Files')) { e.preventDefault(); panel.classList.add('drop'); } });
 panel.addEventListener('dragleave', () => panel.classList.remove('drop'));

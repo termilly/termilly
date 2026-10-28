@@ -7,6 +7,8 @@
 export const WORKSPACE_ID = 'workspace';
 /** xterm's element the cells are drawn in: its size over the terminal's columns and rows is a cell's. */
 export const XTERM_SCREEN = '.xterm-screen';
+/** What a file or folder dragged from the Files panel carries: its path (a terminal types it where it's dropped). */
+export const PATH_DRAG = 'application/x-termilly-path';
 /** The mouse's middle button (its wheel), which closes a tab. */
 const MIDDLE_BUTTON = 1;
 

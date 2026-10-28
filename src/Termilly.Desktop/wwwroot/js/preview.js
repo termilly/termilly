@@ -134,8 +134,6 @@ let view = null;
  * @type {PreviewView[]}
  */
 let views = [];
-/** The most tabs kept open: opening one more closes the one opened longest ago. */
-const MAX_TABS = 12;
 /** @type {string | null} */
 let placement = null; // where the element is now: 'split' (with the workspace id), 'panel', 'float' or 'window'
 /** @type {string | null} */
@@ -365,8 +363,7 @@ export async function showChange(tab, path, { line = null, focus = true, wholeFi
 }
 
 /**
- * Puts a new file's view among the tabs: in place of the one shown (replace), else after it; past MAX_TABS, the
- * tab opened longest ago closes.
+ * Puts a new file's view among the tabs: in place of the one shown (replace), else after it.
  * @param {PreviewView} opened
  * @param {boolean} replace
  */
@@ -374,7 +371,6 @@ function addTab(opened, replace) {
   const at = view ? views.indexOf(view) : -1;
   if (replace && at >= 0) views[at] = opened;
   else views.splice(at >= 0 ? at + 1 : views.length, 0, opened);
-  if (views.length > MAX_TABS) views.splice(views[0] === opened ? 1 : 0, 1);
   watchTabs();
 }
 
