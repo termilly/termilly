@@ -30,7 +30,7 @@ import { planCopy } from './copyto.js';
 /** What the panel shows: its terminal, whether that's on a server, the folder and what's in it. */
 /**
  * @typedef {{ tab: Tab, server: boolean, path: string, entries: FileEntry[], loading: boolean, error: string | null,
- *   follow: boolean }} FilesView
+ * }} FilesView
  */
 /**
  * A transfer or file operation in the queue; a finished download keeps where it went, a copy what to say when it's
@@ -52,7 +52,7 @@ const JOB_STATE = Object.freeze({ running: 'running', done: 'done', failed: 'fai
 const JOB_KIND = Object.freeze({ put: 'put', get: 'get', rename: 'rename', delete: 'delete', mkdir: 'mkdir', open: 'open', copy: 'copy' });
 /** What the panel's buttons do (data-files). */
 const FILES_ACTION = Object.freeze({
-  close: 'close', up: 'up', refresh: 'refresh', mkdir: 'mkdir', follow: 'follow', get: 'get', rename: 'rename', delete: 'delete',
+  close: 'close', up: 'up', refresh: 'refresh', mkdir: 'mkdir', get: 'get', rename: 'rename', delete: 'delete',
 });
 /** The most jobs the queue keeps, and how many of the latest it shows. */
 const MAX_QUEUE = 50;
@@ -80,7 +80,8 @@ let requests = 0; // ids for the queue's file operations, whose answers come as 
 const downloadsTo = new Set();
 /** How many listings were asked for: only the latest one's answer is shown. */
 let listings = 0;
-/** Terminal id: the folder the panel last showed for it, to go back to when that terminal is focused again. */
+/** Terminal id: the folder the panel last showed for it, to go back to when that terminal is focused again while the
+ * panel stays open (opening the panel starts in the shell's folder). */
 /** @type {Map<string, string>} */
 const shownFolders = new Map();
 /** The rows selected (their indexes in the listing), and the one Shift+click selects from. */
@@ -142,13 +143,13 @@ export async function list(path) {
 }
 
 /**
- * The view of a terminal's files, starting in the folder its shell is in.
+ * The view of a terminal's files: the folder it last showed while the panel was open, else the one its shell is in.
  * @param {Tab} tab
  * @returns {FilesView}
  */
 function viewOf(tab) {
   const path = shownFolders.get(tab.id) ?? shellFolderOf(tab);
-  return { tab, server: isSsh(tab), path, entries: [], loading: false, error: null, follow: view?.follow ?? true };
+  return { tab, server: isSsh(tab), path, entries: [], loading: false, error: null };
 }
 
 /** @param {Tab | null | undefined} [tab] */
@@ -156,6 +157,7 @@ export function toggleFiles(tab = focusedTab()) {
   if (!panel.hidden && (!tab || view?.tab === tab)) {
     panel.hidden = true;
     view = null;
+    shownFolders.clear(); // opened again, it starts where each terminal's shell is
     return;
   }
   if (!tab || !hasFiles(tab)) return;
@@ -212,7 +214,7 @@ const queueHtml = () => (queue.length ? `<div class="files-queue">${queue.slice(
 
 function render() {
   if (!view) return;
-  const { tab, path, follow, server } = view;
+  const { tab, path, server } = view;
   panel.innerHTML = `
     <div class="files-grip" title="Drag to resize"></div>
     <div class="files-head">
@@ -224,7 +226,6 @@ function render() {
       <button class="btn small" data-files="${FILES_ACTION.refresh}" title="Refresh">⟳</button>
       <button class="btn small" data-files="${FILES_ACTION.mkdir}" title="New folder">${ICONS.plus}</button>
       ${server ? '<label class="btn small files-upload" title="Upload files">Upload<input type="file" multiple hidden data-files-pick></label>' : ''}
-      <label class="paste-never files-follow" title="Show the folder the terminal is in"><input type="checkbox" data-files="${FILES_ACTION.follow}"${follow ? ' checked' : ''}> Follow</label>
     </div>
     <div class="files-path" title="${escapeHtml(path)}">${escapeHtml(folderName(path))}</div>
     <div class="files-list">${listHtml(view)}</div>
@@ -367,7 +368,6 @@ panel.addEventListener('click', e => {
   if (action === FILES_ACTION.close) return toggleFiles(view.tab);
   if (action === FILES_ACTION.refresh) return list(view.path);
   if (action === FILES_ACTION.up) return list(parentOf(view.path));
-  if (action === FILES_ACTION.follow) { view.follow = /** @type {HTMLInputElement} */ (e.target).checked; return; }
   if (action === FILES_ACTION.mkdir) return makeFolder();
   if (!item) return action ? undefined : selectRows(new Set(), -1);
   // A row's own button acts on the selection when the row is in it, else on that row alone.
@@ -607,12 +607,12 @@ panel.addEventListener('pointerdown', e => {
 // ---- Following the terminal's folder ----
 
 /**
- * The panel's terminal moved to another folder: the panel goes there too while it follows.
+ * A terminal's shell moved to another folder: the panel goes there too.
  * @param {Tab} tab
  * @param {string | null | undefined} path
  */
 function followed(tab, path) {
-  if (!view?.follow || panel.hidden || !path) return;
+  if (!view || panel.hidden || !path) return;
   if (view.tab === tab) list(path);
   // Another terminal moved: it's there when the panel comes back to it, as if the panel had followed it all along.
   else if (shownFolders.has(tab.id)) shownFolders.set(tab.id, path);

@@ -139,7 +139,7 @@ function foldersHtml(p) {
   if (p.error) return `<div class="inbox-empty files-error">${escapeHtml(p.error)}</div>`;
   if (!p.folders.length) return '<div class="inbox-empty">No folders here. Copy here, or make one.</div>';
   return p.folders.map(f => `
-    <div class="files-item dir${f.name === p.sub ? ' selected' : ''}" data-folder="${escapeHtml(f.name)}">
+    <div class="files-item dir${f.name === p.sub ? ' selected' : ''}" data-folder="${escapeHtml(f.name)}" title="Click to copy into it, double-click to open it">
       <span class="files-name">${f.label != null ? `${DRIVE_ICON}${escapeHtml(`${f.label} (${f.name.replace(/\\$/, '')})`)}` : `📁 ${escapeHtml(f.name)}`}</span>
     </div>`).join('');
 }
@@ -158,10 +158,34 @@ function paint(dialog, p, source) {
   find(dialog, '[data-folders]').innerHTML = foldersHtml(p);
   // In a <bdi>: the path's own direction stays left to right while a long one is cut at its start (app.css).
   find(dialog, '[data-path]').innerHTML = p.tab ? `<bdi>${escapeHtml(folderName(p.path))}</bdi>` : '';
+  paintTarget(dialog, p);
+  /** @type {HTMLButtonElement} */ (find(dialog, '[data-mkdir]')).disabled = !p.tab || p.path === FOLDER_PATH.drives;
+}
+
+/**
+ * Selects a folder in the list (or none) without drawing the list again, so a double click keeps the row it
+ * started on and goes into it.
+ * @param {HTMLElement} dialog
+ * @param {Picker} p
+ * @param {string | null} sub
+ */
+function selectFolder(dialog, p, sub) {
+  p.sub = sub;
+  for (const row of /** @type {NodeListOf<HTMLElement>} */ (dialog.querySelectorAll('[data-folder]'))) {
+    row.classList.toggle('selected', row.dataset.folder === sub);
+  }
+  paintTarget(dialog, p);
+}
+
+/**
+ * The folder the items go to, below the lists, and whether they can go there.
+ * @param {HTMLElement} dialog
+ * @param {Picker} p
+ */
+function paintTarget(dialog, p) {
   const target = copyTarget(p);
   find(dialog, '[data-target]').textContent = target && p.tab ? `To ${folderOf(p.tab, target)}` : '';
   /** @type {HTMLButtonElement} */ (find(dialog, '[data-ok]')).disabled = !target;
-  /** @type {HTMLButtonElement} */ (find(dialog, '[data-mkdir]')).disabled = !p.tab || p.path === FOLDER_PATH.drives;
 }
 
 /**
@@ -303,7 +327,7 @@ function wirePicker(dialog, p, source) {
     const term = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-tab]'))?.dataset.tab;
     const folder = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-folder]'))?.dataset.folder;
     if (term) choose(dialog, p, source, /** @type {Tab} */ (state.tabs.get(term)));
-    else if (folder != null) { p.sub = p.sub === folder ? null : folder; paint(dialog, p, source); }
+    else if (folder != null) selectFolder(dialog, p, e.detail > 1 || p.sub !== folder ? folder : null);
     else if (targetOf(e).closest('[data-up]') && p.tab) browse(dialog, p, source, parentOf(p.path));
     else if (targetOf(e).closest('[data-mkdir]')) newFolderRow(dialog);
   });

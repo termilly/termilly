@@ -608,7 +608,6 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
 .files-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px 4px 12px; }
 .files-title { color: var(--text); font-size: 12.5px; font-weight: 600; }
 .files-bar { display: flex; gap: 6px; align-items: center; padding: 4px 10px; }
-.files-follow { margin-left: auto; }
 .files-path { overflow: hidden; padding: 4px 12px 6px; color: var(--muted); font: 12px var(--mono); text-overflow: ellipsis; white-space: nowrap; }
 .files-list { flex: 1; overflow-y: auto; padding: 0 6px; }
 .files-item { display: flex; gap: 8px; align-items: center; height: 28px; padding: 0 6px; border-radius: 6px; font-size: 12.5px; }
@@ -629,10 +628,10 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
 .files-panel:focus { outline: none; }
 
 /* "Copy to" (js/copyto.js): terminals on the left, the chosen one's folders on the right */
-.dialog.copyto-dialog { width: 720px; }
+.dialog.copyto-dialog { width: 920px; }
 .copyto { display: grid; grid-template-columns: 1fr 1.3fr; gap: 12px; margin-top: 12px; }
 .copyto-side { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.copyto-list { height: 300px; overflow-y: auto; padding: 4px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); }
+.copyto-list { height: min(460px, 60vh); overflow-y: auto; padding: 4px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); }
 .copyto-ws { padding: 6px 6px 2px; color: var(--faint); font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; }
 .copyto-term { display: flex; gap: 8px; align-items: center; height: 28px; padding: 0 6px; border-radius: 6px; font-size: 12.5px; cursor: pointer; }
 .copyto-term:hover { background: var(--hover); }
