@@ -9,6 +9,7 @@ import { PAGE, HOST } from './protocol.js';
 import { send, sendWithFiles, onHost, request, platform, droppedPaths, PLATFORM } from './host.js';
 import { on, profileOf, isSsh, isRemote, wsById, EVENTS } from './store.js';
 import { focusedTab, newTab } from './panes.js';
+import { scheduleFit } from './terminals.js';
 import { escapeHtml, ICONS } from './ui.js';
 import { modal, confirmDialog, CONFIRM_DIALOG } from './dialogs.js';
 import { byId, field, targetOf, dragPointer, WORKSPACE_ID } from './dom.js';
@@ -68,6 +69,9 @@ const queue = [];
 let requests = 0; // ids for the queue's file operations, whose answers come as files:done
 /** The requests that are downloads to a folder the host asks for: their queued file is a download, not an upload. */
 const downloadsTo = new Set();
+/** Terminal id: the folder the panel last showed for it, to go back to when that terminal is focused again. */
+/** @type {Map<string, string>} */
+const shownFolders = new Map();
 
 /** A path's separator: a backslash in a Windows folder, else a slash. */
 const sepOf = /** @param {string} path */ path => (/^[A-Za-z]:\\|^\\\\/.test(path) ? '\\' : '/');
@@ -119,6 +123,7 @@ export async function list(path) {
   if (m.error || m.ok === false) view.error = m.message ?? m.error;
   else {
     view.path = m.path;
+    shownFolders.set(view.tab.id, m.path);
     view.entries = m.entries ?? [];
   }
   render();
@@ -131,7 +136,7 @@ export async function list(path) {
  */
 function viewOf(tab) {
   const server = isSsh(tab);
-  const path = server ? tab.remoteCwd ?? '~' : tab.cwd ?? wsById(tab.wsId)?.cwd ?? '~';
+  const path = shownFolders.get(tab.id) ?? (server ? tab.remoteCwd ?? '~' : tab.cwd ?? wsById(tab.wsId)?.cwd ?? '~');
   return { tab, server, path, entries: [], loading: false, error: null, follow: view?.follow ?? true };
 }
 
@@ -408,6 +413,18 @@ panel.addEventListener('drop', e => {
   else copyIn(e.dataTransfer.files);
 });
 
+// ---- Docked on the right: the terminals end where it starts ----
+
+/** The space between the terminals and the panel: the app's gap between panes. */
+const gapPx = () => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--gap')) || 0;
+
+// Its width changes when it opens, closes (0), is dragged, or the window shrinks it to half the terminals' area.
+new ResizeObserver(() => {
+  const width = panel.hidden ? 0 : panel.offsetWidth + gapPx();
+  byId(WORKSPACE_ID).style.setProperty('--files-dock', `${width}px`);
+  scheduleFit();
+}).observe(panel);
+
 // ---- Resizing: the grip on its left edge, up to half the terminals' area (the width stays while Termilly runs) ----
 
 panel.addEventListener('pointerdown', e => {
@@ -427,11 +444,15 @@ panel.addEventListener('pointerdown', e => {
  * @param {string | null | undefined} path
  */
 function followed(tab, path) {
-  if (view?.tab === tab && view.follow && !panel.hidden && path) list(path);
+  if (!view?.follow || panel.hidden || !path) return;
+  if (view.tab === tab) list(path);
+  // Another terminal moved: it's there when the panel comes back to it, as if the panel had followed it all along.
+  else if (shownFolders.has(tab.id)) shownFolders.set(tab.id, path);
 }
 
-on(EVENTS.remoteCwd, tab => { if (view?.server) followed(tab, tab.remoteCwd); });
-on(EVENTS.cwd, tab => { if (view && !view.server) followed(tab, tab.cwd); });
+on(EVENTS.remoteCwd, tab => { if (isSsh(tab)) followed(tab, tab.remoteCwd); });
+on(EVENTS.cwd, tab => { if (!isSsh(tab) && !isRemote(tab)) followed(tab, tab.cwd); });
+on(EVENTS.tabClosed, tab => shownFolders.delete(tab.id));
 
 on(EVENTS.focus, tab => {
   // The panel follows the focused terminal while it has files to show.

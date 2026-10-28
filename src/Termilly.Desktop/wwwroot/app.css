@@ -583,23 +583,24 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
 
 /* ---- The Files side panel (js/filepanel.js) ---- */
 
+/* Docked on the right: the terminals end where it starts (--files-dock on #workspace, set by js/filepanel.js). Dragged
+   wider it stays at most half the terminals' area, also when the window shrinks later. */
 .files-panel {
   position: absolute;
   top: 0;
   right: 0;
   bottom: 0;
-  z-index: 55;
+  z-index: 5;
   display: flex;
   flex-direction: column;
   width: 340px;
-  border: 1px solid var(--border-strong);
+  min-width: 260px;
+  max-width: 50%;
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--raised);
-  box-shadow: var(--shadow-pop);
 }
 .files-panel[hidden] { display: none; }
-/* Dragged wider stays at most half the terminals' area, also when the window shrinks later (js/filepanel.js). */
-.files-panel { min-width: 260px; max-width: 50%; }
 .files-grip { position: absolute; top: 0; bottom: 0; left: -3px; z-index: 1; width: 6px; cursor: ew-resize; }
 .files-grip:hover { background: var(--accent); opacity: .5; }
 .files-panel.drop { outline: 2px dashed var(--accent); outline-offset: -6px; }
@@ -1018,7 +1019,7 @@ body[data-sidebar="rail"] .side-rail { opacity: 1; pointer-events: auto; }
 /* Every workspace stays laid out (so hidden terminals keep their size); only the active one shows. */
 .ws-layer {
   position: absolute;
-  inset: 0;
+  inset: 0 var(--files-dock, 0px) 0 0;
   display: flex;
   visibility: hidden;
 }
