@@ -25,6 +25,9 @@ internal static class FolderPaths
     public const string Drives = "drives:";
 }
 
+/// <summary>One item of a copy: its path where it is, and its name where it goes ("name (1)" to keep both).</summary>
+internal sealed record FileCopy(string Path = "", string Name = "");
+
 internal static partial class FromPage
 {
     /// <param name="Id">The terminal whose folders it lists.</param>
@@ -52,10 +55,20 @@ internal static partial class FromPage
         public static string Type => "files:pick";
     }
 
-    /// <summary>Downloads a server's file into a folder the user picks.</summary>
-    internal sealed record FilesGetTo(string Id = "", string? RequestId = null, string? Path = null) : IPageMessage
+    /// <summary>Downloads a server's files and folders into a folder the user picks.</summary>
+    internal sealed record FilesGetTo(string Id = "", string? RequestId = null, IReadOnlyList<string>? Paths = null) : IPageMessage
     {
         public static string Type => "files:getTo";
+    }
+
+    /// <summary>
+    /// "Copy to": files and folders of terminal <see cref="Id"/> copied into <see cref="Dir"/>, a folder of terminal
+    /// <see cref="To"/> (here or on its server, the same one or another), each under its <see cref="FileCopy.Name"/>
+    /// there, replacing a file of that name and merging into a folder of that name. Each is reported as it's done.
+    /// </summary>
+    internal sealed record FilesCopyTo(string Id = "", string? RequestId = null, string To = "", string? Dir = null, IReadOnlyList<FileCopy>? Items = null) : IPageMessage
+    {
+        public static string Type => "files:copyTo";
     }
 }
 
@@ -100,6 +113,14 @@ internal static partial class ToPage
         public static string Type => "files:done";
 
         public bool Ok { get; }
+    }
+
+    /// <summary>A file or folder downloaded into a folder picked, and where it went.</summary>
+    internal sealed record FilesSaved(string? RequestId, string File, string Local) : IHostMessage
+    {
+        public static string Type => "files:done";
+
+        public bool Ok { get; } = true;
     }
 
     /// <summary>The files picked for an upload (or the download whose folder was picked), each reported as it's done.</summary>

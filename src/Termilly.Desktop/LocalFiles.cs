@@ -104,6 +104,48 @@ internal static class LocalFiles
         return target;
     }
 
+    /// <summary>
+    /// Copies a file or a folder with everything in it to <paramref name="target"/>: a file replaces one there, a
+    /// folder merges into one there. Links (symbolic links, junctions) are left out rather than followed.
+    /// </summary>
+    public static void CopyTree(string source, string target)
+    {
+        if (File.Exists(source))
+        {
+            Guarded(() => File.Copy(source, target, true));
+            return;
+        }
+        if (!Directory.Exists(source))
+        {
+            throw new IOException($"{Path.GetFileName(source)} isn't there.");
+        }
+        if (IsInside(Path.GetFullPath(target), Path.GetFullPath(source), Path.DirectorySeparatorChar))
+        {
+            throw new IOException("A folder can't be copied into itself.");
+        }
+        var options = new EnumerationOptions { RecurseSubdirectories = true, AttributesToSkip = FileAttributes.ReparsePoint };
+        Guarded(() =>
+        {
+            Directory.CreateDirectory(target);
+            foreach (var dir in Directory.EnumerateDirectories(source, "*", options))
+            {
+                Directory.CreateDirectory(Path.Combine(target, Path.GetRelativePath(source, dir)));
+            }
+            foreach (var file in Directory.EnumerateFiles(source, "*", options))
+            {
+                File.Copy(file, Path.Combine(target, Path.GetRelativePath(source, file)), true);
+            }
+        });
+    }
+
+    /// <summary>Whether <paramref name="path"/> is <paramref name="folder"/> or in it (case aside, as on Windows).</summary>
+    public static bool IsInside(string path, string folder, char separator)
+    {
+        var root = folder.TrimEnd(separator);
+        return path.Equals(root, StringComparison.OrdinalIgnoreCase) ||
+            path.StartsWith(root + separator, StringComparison.OrdinalIgnoreCase);
+    }
+
     /// <summary>"name.txt", or "name (1).txt" when that's taken.</summary>
     public static string FreeName(string path)
     {

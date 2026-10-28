@@ -790,12 +790,12 @@ function wireDropAndPaste(tab, term) {
   body.addEventListener('dragleave', () => body.classList.remove(FILE_OVER));
   body.addEventListener('drop', e => {
     body.classList.remove(FILE_OVER);
-    // A file or folder from the Files panel: its path, here or on the terminal's server.
+    // Files and folders from the Files panel: their paths (one a line), here or on the terminal's server.
     const fromPanel = e.dataTransfer?.getData(PATH_DRAG);
     if (fromPanel) {
       e.preventDefault();
       e.stopPropagation();
-      typePaths(tab, [fromPanel]);
+      typePaths(tab, fromPanel.split('\n'));
       return;
     }
     if (!e.dataTransfer?.files.length) return;

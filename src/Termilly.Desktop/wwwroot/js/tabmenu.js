@@ -9,7 +9,8 @@ import { isBroadcasting, startBroadcast, stopBroadcast, openCompose, BROADCAST_S
 import { copyLastOutput, commandLog } from './commands.js';
 import { setAlert, ALERT } from './triggers.js';
 import { serialMenuItems } from './serial.js';
-import { toggleFiles, hasFiles } from './filepanel.js';
+import { toggleFiles } from './filepanel.js';
+import { hasFiles } from './filepaths.js';
 import { openCleanup } from './worktree.js';
 import { editNote, profileNote, NOTE_KIND } from './notes.js';
 import { isLogging, toggleLog, toggleProfileLogging } from './logging.js';

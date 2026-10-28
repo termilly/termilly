@@ -132,6 +132,9 @@ internal sealed partial class Sftp(IProcessRunner runner)
     [GeneratedRegex(@"^(?<perm>[dlcbps-][rwxsStT*-]{9}[.+@]?)\s+(?:\d+|\?)\s+\S+\s+\S+\s+(?<size>\d+)\s+(?<date>\w{3}\s+\d{1,2}\s+(?:\d{1,2}:\d{2}|\d{4}))\s(?<name>.+)$")]
     private static partial Regex LongListing();
 
+    /// <summary>A remote path's last part, its file or folder name.</summary>
+    public static string NameOf(string path) => path.TrimEnd('/').Split('/')[^1];
+
     /// <summary>Joins a remote folder and a name with forward slashes.</summary>
     public static string Join(string directory, string name) => directory.EndsWith('/') ? directory + name : $"{directory}/{name}";
 }

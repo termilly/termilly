@@ -30,6 +30,7 @@ internal static class Composition
         .AddSingleton<GitStatus>()
         .AddSingleton<Worktrees>()
         .AddSingleton<Sftp>()
+        .AddSingleton<FileCopies>()
         .AddSingleton<DynamicSources>()
         .AddSingleton<ClaudePlan>()
         .AddSingleton(_ => new ChangeStore())

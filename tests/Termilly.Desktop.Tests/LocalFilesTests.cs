@@ -66,4 +66,62 @@ public sealed class LocalFilesTests : IDisposable
         Assert.True(Directory.Exists(At("logs")));
         Assert.Throws<IOException>(() => LocalFiles.MakeDirectory(At("logs")));
     }
+
+    [Fact]
+    public void A_folder_copied_to_one_of_its_name_merges_into_it_replacing_the_files_both_have()
+    {
+        var source = Directory.CreateDirectory(At("from/docs/deep")).Parent!.FullName;
+        File.WriteAllText(Path.Combine(source, "a.md"), "new a");
+        File.WriteAllText(Path.Combine(source, "deep", "b.md"), "new b");
+        var target = Directory.CreateDirectory(At("to/docs")).FullName;
+        File.WriteAllText(Path.Combine(target, "a.md"), "old a");
+        File.WriteAllText(Path.Combine(target, "kept.md"), "kept");
+
+        LocalFiles.CopyTree(source, target);
+
+        Assert.Equal("new a", File.ReadAllText(Path.Combine(target, "a.md")));
+        Assert.Equal("new b", File.ReadAllText(Path.Combine(target, "deep", "b.md")));
+        Assert.Equal("kept", File.ReadAllText(Path.Combine(target, "kept.md")));
+    }
+
+    [Fact]
+    public void A_file_copied_replaces_one_there_and_a_folder_never_goes_into_itself()
+    {
+        File.WriteAllText(At("a.txt"), "new");
+        Directory.CreateDirectory(At("to"));
+        File.WriteAllText(At("to/a.txt"), "old");
+
+        LocalFiles.CopyTree(At("a.txt"), At("to/a.txt"));
+
+        Assert.Equal("new", File.ReadAllText(At("to/a.txt")));
+        var error = Assert.Throws<IOException>(() => LocalFiles.CopyTree(At("to"), At("to/inner")));
+        Assert.Contains("into itself", error.Message);
+        Assert.False(Directory.Exists(At("to/inner")));
+    }
+
+    [Theory]
+    [InlineData("/home/a/src/x", "/home/a/src", true)]
+    [InlineData("/home/a/src", "/home/a/src/", true)]
+    [InlineData("/home/a/srcs", "/home/a/src", false)]
+    [InlineData("/home/a", "/home/a/src", false)]
+    public void A_path_is_inside_a_folder_only_below_it_not_beside_it(string path, string folder, bool inside) =>
+        Assert.Equal(inside, LocalFiles.IsInside(path, folder, '/'));
+
+    [Fact]
+    public void A_copy_on_a_server_merges_a_folder_s_contents_and_quotes_every_path()
+    {
+        var command = FileCopies.CopyCommand("/srv/it's", "/home/a/it's");
+
+        Assert.Equal(
+            "if [ -d '/srv/it'\\''s' ]; then mkdir -p '/home/a/it'\\''s' && cp -R '/srv/it'\\''s/.' '/home/a/it'\\''s'; " +
+            "else cp -f '/srv/it'\\''s' '/home/a/it'\\''s'; fi", command);
+    }
+
+    [Fact]
+    public void Folders_uploaded_from_windows_get_the_servers_own_folder_mode_and_no_others_change()
+    {
+        Assert.Equal(
+            "find '/home/a/docs' -type d -perm 0707 -exec chmod \"$(printf %o $((0777 & ~$(umask))))\" {} +",
+            FileCopies.FolderModeCommand("/home/a/docs"));
+    }
 }
