@@ -85,9 +85,9 @@ public sealed class MessagingTests
         Assert.Equal(("agent", "hooks", "PreToolUse"), (hooked["type"]!.ToString(), hooked["source"]!.ToString(), hooked["event"]!.ToString()));
         Assert.Equal("poll", Written(new ToPage.PolledAgent("t1", "idle", null, null))["source"]!.ToString());
 
-        var failed = Written(new ToPage.SftpUploadFailed("r1", "a.txt", "denied"));
+        var failed = Written(new ToPage.FilesCopyFailed("r1", "a.txt", "denied"));
         Assert.Equal((false, "a.txt", "denied"), ((bool)failed["ok"]!, failed["file"]!.ToString(), failed["message"]!.ToString()));
-        Assert.True((bool)Written(new ToPage.SftpDone("r1", null))["ok"]!);
+        Assert.True((bool)Written(new ToPage.FilesDone("r1", null))["ok"]!);
 
         // A stopped recording or log still says path: null, which the page reads as "not recording".
         var stopped = Written(new ToPage.LogStopped("t1"));

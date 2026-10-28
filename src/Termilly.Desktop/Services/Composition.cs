@@ -62,7 +62,7 @@ internal static class Composition
         .AddHandler<WorktreeHandler>()
         .AddHandler<LayoutHandler>()
         .AddHandler<SshHandler>()
-        .AddHandler<SftpHandler>()
+        .AddHandler<FilesHandler>()
         .AddHandler<RecordingHandler>()
         .AddHandler<ActionHandler>()
         .AddHandler<SoundHandler>()

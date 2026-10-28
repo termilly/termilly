@@ -17,6 +17,11 @@ export const PAGE = Object.freeze({
   dataDirOpen: 'dataDir:open',
   dialogPickFolder: 'dialog:pickFolder',
   filesDrop: 'files:drop',
+  filesGetTo: 'files:getTo',
+  filesList: 'files:list',
+  filesOp: 'files:op',
+  filesPick: 'files:pick',
+  filesPut: 'files:put',
   forwardStart: 'forward:start',
   forwardStop: 'forward:stop',
   gitStatus: 'git:status',
@@ -77,10 +82,6 @@ export const PAGE = Object.freeze({
   serialHex: 'serial:hex',
   settingsLoad: 'settings:load',
   settingsSave: 'settings:save',
-  sftpList: 'sftp:list',
-  sftpOp: 'sftp:op',
-  sftpPick: 'sftp:pick',
-  sftpPut: 'sftp:put',
   snapshotSave: 'snapshot:save',
   soundOutputs: 'sound:outputs',
   soundPlay: 'sound:play',
@@ -132,7 +133,10 @@ export const HOST = Object.freeze({
   claudeUsage: 'claude:usage',
   error: 'error',
   exit: 'exit',
+  filesDone: 'files:done',
   filesDropped: 'files:dropped',
+  filesListing: 'files:listing',
+  filesQueued: 'files:queued',
   focusTerminal: 'focusTerminal',
   folderPicked: 'folderPicked',
   fonts: 'fonts',
@@ -164,9 +168,6 @@ export const HOST = Object.freeze({
   securityLocked: 'security:locked',
   securityRestored: 'security:restored',
   settings: 'settings',
-  sftpDone: 'sftp:done',
-  sftpListing: 'sftp:listing',
-  sftpQueued: 'sftp:queued',
   snapshotRequest: 'snapshot:request',
   soundOutputs: 'sound:outputs',
   sshCredentials: 'ssh:credentials',
@@ -204,6 +205,11 @@ export const HOST = Object.freeze({
 /** @typedef {{  }} Page_dataDirOpen */
 /** @typedef {{ requestId?: string|null, initial?: string|null }} Page_dialogPickFolder */
 /** @typedef {{ id?: string, paths?: Array<string>|null }} Page_filesDrop */
+/** @typedef {{ id?: string, requestId?: string|null, path?: string|null }} Page_filesGetTo */
+/** @typedef {{ id?: string, requestId?: string|null, path?: string|null }} Page_filesList */
+/** @typedef {{ id?: string, requestId?: string|null, op?: string|null, path?: string|null, to?: string|null }} Page_filesOp */
+/** @typedef {{ id?: string, requestId?: string|null, dir?: string|null }} Page_filesPick */
+/** @typedef {{ id?: string, requestId?: string|null, dir?: string|null, paths?: Array<string>|null }} Page_filesPut */
 /** @typedef {{ id?: string }} Page_forwardStart */
 /** @typedef {{ id?: string }} Page_forwardStop */
 /** @typedef {{ folders?: Array<string>|null, force?: boolean }} Page_gitStatus */
@@ -264,10 +270,6 @@ export const HOST = Object.freeze({
 /** @typedef {{ id?: string, on?: boolean }} Page_serialHex */
 /** @typedef {{  }} Page_settingsLoad */
 /** @typedef {{ group?: string, values?: any }} Page_settingsSave */
-/** @typedef {{ id?: string, requestId?: string|null, path?: string|null }} Page_sftpList */
-/** @typedef {{ id?: string, requestId?: string|null, op?: string|null, path?: string|null, to?: string|null }} Page_sftpOp */
-/** @typedef {{ id?: string, requestId?: string|null, dir?: string|null }} Page_sftpPick */
-/** @typedef {{ id?: string, requestId?: string|null, dir?: string|null, paths?: Array<string>|null }} Page_sftpPut */
 /** @typedef {{ snapshot?: any, final?: boolean }} Page_snapshotSave */
 /** @typedef {{  }} Page_soundOutputs */
 /** @typedef {{ name?: string, volume?: number, device?: string }} Page_soundPlay */
@@ -318,7 +320,16 @@ export const HOST = Object.freeze({
 /** @typedef {{ id: string, usage: any }} Host_claudeUsage */
 /** @typedef {{ id: string, message: string }} Host_error */
 /** @typedef {{ id: string, code: number }} Host_exit */
+/** @typedef {{ requestId: string|null, local: string|null, ok: boolean }} Host_filesDone_0 */
+/** @typedef {{ requestId: string|null, message: string, ok: boolean }} Host_filesDone_1 */
+/** @typedef {{ requestId: string|null, file: string, ok: boolean }} Host_filesDone_2 */
+/** @typedef {{ requestId: string|null, file: string, message: string, ok: boolean }} Host_filesDone_3 */
+/** @typedef {Host_filesDone_0|Host_filesDone_1|Host_filesDone_2|Host_filesDone_3} Host_filesDone */
 /** @typedef {{ id: string, paths: Array<string> }} Host_filesDropped */
+/** @typedef {{ requestId: string|null, path: string, entries: any }} Host_filesListing_0 */
+/** @typedef {{ requestId: string|null, message: string, ok: boolean }} Host_filesListing_1 */
+/** @typedef {Host_filesListing_0|Host_filesListing_1} Host_filesListing */
+/** @typedef {{ requestId: string|null, files: Array<string|null> }} Host_filesQueued */
 /** @typedef {{ id: string }} Host_focusTerminal */
 /** @typedef {{ requestId: string|null, path: string|null }} Host_folderPicked */
 /** @typedef {{ fonts: Array<string>, uiFonts: Array<string>, boldFonts: Array<string> }} Host_fonts */
@@ -364,15 +375,6 @@ export const HOST = Object.freeze({
 /** @typedef {{  }} Host_securityLocked */
 /** @typedef {{ count: number, archives: number }} Host_securityRestored */
 /** @typedef {{ settings: any, profiles: any, workspaces: any|null, snapshot: any|null, liveSessions: Array<string>, security: SecurityInfo, about: AboutInfo }} Host_settings */
-/** @typedef {{ requestId: string|null, local: string|null, ok: boolean }} Host_sftpDone_0 */
-/** @typedef {{ requestId: string|null, message: string, ok: boolean }} Host_sftpDone_1 */
-/** @typedef {{ requestId: string|null, file: string, ok: boolean }} Host_sftpDone_2 */
-/** @typedef {{ requestId: string|null, file: string, message: string, ok: boolean }} Host_sftpDone_3 */
-/** @typedef {Host_sftpDone_0|Host_sftpDone_1|Host_sftpDone_2|Host_sftpDone_3} Host_sftpDone */
-/** @typedef {{ requestId: string|null, path: string, entries: any }} Host_sftpListing_0 */
-/** @typedef {{ requestId: string|null, message: string, ok: boolean }} Host_sftpListing_1 */
-/** @typedef {Host_sftpListing_0|Host_sftpListing_1} Host_sftpListing */
-/** @typedef {{ requestId: string|null, files: Array<string|null> }} Host_sftpQueued */
 /** @typedef {{  }} Host_snapshotRequest */
 /** @typedef {{ outputs: Array<any> }} Host_soundOutputs */
 /** @typedef {{ saved: Object<string, boolean>, available: boolean, store: string }} Host_sshCredentials */
@@ -397,5 +399,5 @@ export const HOST = Object.freeze({
 /** @typedef {{ requestId: string|null, message: string, ok: boolean }} Host_worktreeReply_3 */
 /** @typedef {Host_worktreeReply_0|Host_worktreeReply_1|Host_worktreeReply_2|Host_worktreeReply_3} Host_worktreeReply */
 
-/** @typedef {{ 'action:defaults': Page_actionDefaults, 'action:run': Page_actionRun, 'api:result': Page_apiResult, 'badge': Page_badge, 'changes:clear': Page_changesClear, 'changes:get': Page_changesGet, 'changes:list': Page_changesList, 'changes:resolve': Page_changesResolve, 'changes:search': Page_changesSearch, 'dataDir:open': Page_dataDirOpen, 'dialog:pickFolder': Page_dialogPickFolder, 'files:drop': Page_filesDrop, 'forward:start': Page_forwardStart, 'forward:stop': Page_forwardStop, 'git:status': Page_gitStatus, 'gitview:act': Page_gitviewAct, 'gitview:branches': Page_gitviewBranches, 'gitview:commit': Page_gitviewCommit, 'gitview:diff': Page_gitviewDiff, 'gitview:log': Page_gitviewLog, 'gitview:search': Page_gitviewSearch, 'gitview:searchcode': Page_gitviewSearchcode, 'gitview:status': Page_gitviewStatus, 'history:add': Page_historyAdd, 'history:clear': Page_historyClear, 'history:command': Page_historyCommand, 'history:commands': Page_historyCommands, 'history:delete': Page_historyDelete, 'history:list': Page_historyList, 'host:shutdown': Page_hostShutdown, 'input': Page_input, 'kill': Page_kill, 'layout:export': Page_layoutExport, 'layout:import': Page_layoutImport, 'layout:probe': Page_layoutProbe, 'log:lines': Page_logLines, 'log:reveal': Page_logReveal, 'log:start': Page_logStart, 'log:stop': Page_logStop, 'memory:measure': Page_memoryMeasure, 'notify': Page_notify, 'notify:withdraw': Page_notifyWithdraw, 'open:path': Page_openPath, 'open:url': Page_openUrl, 'page:error': Page_pageError, 'plugins:list': Page_pluginsList, 'plugins:open': Page_pluginsOpen, 'ports:terminals': Page_portsTerminals, 'profiles:refresh': Page_profilesRefresh, 'quit:answer': Page_quitAnswer, 'ready': Page_ready, 'rec:list': Page_recList, 'rec:load': Page_recLoad, 'rec:mark': Page_recMark, 'rec:reveal': Page_recReveal, 'rec:start': Page_recStart, 'rec:stop': Page_recStop, 'remote:hook': Page_remoteHook, 'remote:install': Page_remoteInstall, 'remote:remove': Page_remoteRemove, 'resize': Page_resize, 'security:code': Page_securityCode, 'security:recover': Page_securityRecover, 'security:regenerate': Page_securityRegenerate, 'security:restore': Page_securityRestore, 'security:saved': Page_securitySaved, 'security:startFresh': Page_securityStartFresh, 'serial:break': Page_serialBreak, 'serial:eol': Page_serialEol, 'serial:hex': Page_serialHex, 'settings:load': Page_settingsLoad, 'settings:save': Page_settingsSave, 'sftp:list': Page_sftpList, 'sftp:op': Page_sftpOp, 'sftp:pick': Page_sftpPick, 'sftp:put': Page_sftpPut, 'snapshot:save': Page_snapshotSave, 'sound:outputs': Page_soundOutputs, 'sound:play': Page_soundPlay, 'ssh:import': Page_sshImport, 'ssh:known': Page_sshKnown, 'ssh:password': Page_sshPassword, 'ssh:passwordForget': Page_sshPasswordForget, 'ssh:status': Page_sshStatus, 'start': Page_start, 'state:save': Page_stateSave, 'sync:code': Page_syncCode, 'sync:join': Page_syncJoin, 'sync:now': Page_syncNow, 'sync:off': Page_syncOff, 'sync:on': Page_syncOn, 'sync:rotate': Page_syncRotate, 'sync:status': Page_syncStatus, 'tmux:start': Page_tmuxStart, 'tmux:stop': Page_tmuxStop, 'tmux:write': Page_tmuxWrite, 'update:cancel': Page_updateCancel, 'update:check': Page_updateCheck, 'update:download': Page_updateDownload, 'update:install': Page_updateInstall, 'update:status': Page_updateStatus, 'window': Page_window, 'worktree:create': Page_worktreeCreate, 'worktree:remove': Page_worktreeRemove, 'worktree:status': Page_worktreeStatus }} PageMessages */
-/** @typedef {{ 'action:defaults': Host_actionDefaults, 'action:failed': Host_actionFailed, 'agent': Host_agent, 'agents:next': Host_agentsNext, 'api': Host_api, 'attached': Host_attached, 'busy': Host_busy, 'changes:content': Host_changesContent, 'changes:found': Host_changesFound, 'changes:list': Host_changesList, 'changes:resolved': Host_changesResolved, 'claude:context': Host_claudeContext, 'claude:cost': Host_claudeCost, 'claude:limits': Host_claudeLimits, 'claude:plan': Host_claudePlan, 'claude:usage': Host_claudeUsage, 'error': Host_error, 'exit': Host_exit, 'files:dropped': Host_filesDropped, 'focusTerminal': Host_focusTerminal, 'folderPicked': Host_folderPicked, 'fonts': Host_fonts, 'forward:all': Host_forwardAll, 'forward:status': Host_forwardStatus, 'git:status': Host_gitStatus, 'gitview:result': Host_gitviewResult, 'history': Host_history, 'history:commands': Host_historyCommands, 'hotkey:taken': Host_hotkeyTaken, 'layout': Host_layout, 'layout:error': Host_layoutError, 'layout:exported': Host_layoutExported, 'layout:found': Host_layoutFound, 'log:status': Host_logStatus, 'memory': Host_memory, 'output': Host_output, 'plugins': Host_plugins, 'ports:terminals': Host_portsTerminals, 'profiles': Host_profiles, 'quit:ask': Host_quitAsk, 'rec:data': Host_recData, 'rec:list': Host_recList, 'rec:status': Host_recStatus, 'remote:install': Host_remoteInstall, 'remote:remove': Host_remoteRemove, 'security:code': Host_securityCode, 'security:error': Host_securityError, 'security:locked': Host_securityLocked, 'security:restored': Host_securityRestored, 'settings': Host_settings, 'sftp:done': Host_sftpDone, 'sftp:listing': Host_sftpListing, 'sftp:queued': Host_sftpQueued, 'snapshot:request': Host_snapshotRequest, 'sound:outputs': Host_soundOutputs, 'ssh:credentials': Host_sshCredentials, 'ssh:error': Host_sshError, 'ssh:imported': Host_sshImported, 'ssh:known': Host_sshKnown, 'start:folder': Host_startFolder, 'subagent': Host_subagent, 'subagent:cost': Host_subagentCost, 'sync:status': Host_syncStatus, 'tmux:data': Host_tmuxData, 'tmux:exit': Host_tmuxExit, 'update:status': Host_updateStatus, 'windowState': Host_windowState, 'worktree:reply': Host_worktreeReply }} HostMessages */
+/** @typedef {{ 'action:defaults': Page_actionDefaults, 'action:run': Page_actionRun, 'api:result': Page_apiResult, 'badge': Page_badge, 'changes:clear': Page_changesClear, 'changes:get': Page_changesGet, 'changes:list': Page_changesList, 'changes:resolve': Page_changesResolve, 'changes:search': Page_changesSearch, 'dataDir:open': Page_dataDirOpen, 'dialog:pickFolder': Page_dialogPickFolder, 'files:drop': Page_filesDrop, 'files:getTo': Page_filesGetTo, 'files:list': Page_filesList, 'files:op': Page_filesOp, 'files:pick': Page_filesPick, 'files:put': Page_filesPut, 'forward:start': Page_forwardStart, 'forward:stop': Page_forwardStop, 'git:status': Page_gitStatus, 'gitview:act': Page_gitviewAct, 'gitview:branches': Page_gitviewBranches, 'gitview:commit': Page_gitviewCommit, 'gitview:diff': Page_gitviewDiff, 'gitview:log': Page_gitviewLog, 'gitview:search': Page_gitviewSearch, 'gitview:searchcode': Page_gitviewSearchcode, 'gitview:status': Page_gitviewStatus, 'history:add': Page_historyAdd, 'history:clear': Page_historyClear, 'history:command': Page_historyCommand, 'history:commands': Page_historyCommands, 'history:delete': Page_historyDelete, 'history:list': Page_historyList, 'host:shutdown': Page_hostShutdown, 'input': Page_input, 'kill': Page_kill, 'layout:export': Page_layoutExport, 'layout:import': Page_layoutImport, 'layout:probe': Page_layoutProbe, 'log:lines': Page_logLines, 'log:reveal': Page_logReveal, 'log:start': Page_logStart, 'log:stop': Page_logStop, 'memory:measure': Page_memoryMeasure, 'notify': Page_notify, 'notify:withdraw': Page_notifyWithdraw, 'open:path': Page_openPath, 'open:url': Page_openUrl, 'page:error': Page_pageError, 'plugins:list': Page_pluginsList, 'plugins:open': Page_pluginsOpen, 'ports:terminals': Page_portsTerminals, 'profiles:refresh': Page_profilesRefresh, 'quit:answer': Page_quitAnswer, 'ready': Page_ready, 'rec:list': Page_recList, 'rec:load': Page_recLoad, 'rec:mark': Page_recMark, 'rec:reveal': Page_recReveal, 'rec:start': Page_recStart, 'rec:stop': Page_recStop, 'remote:hook': Page_remoteHook, 'remote:install': Page_remoteInstall, 'remote:remove': Page_remoteRemove, 'resize': Page_resize, 'security:code': Page_securityCode, 'security:recover': Page_securityRecover, 'security:regenerate': Page_securityRegenerate, 'security:restore': Page_securityRestore, 'security:saved': Page_securitySaved, 'security:startFresh': Page_securityStartFresh, 'serial:break': Page_serialBreak, 'serial:eol': Page_serialEol, 'serial:hex': Page_serialHex, 'settings:load': Page_settingsLoad, 'settings:save': Page_settingsSave, 'snapshot:save': Page_snapshotSave, 'sound:outputs': Page_soundOutputs, 'sound:play': Page_soundPlay, 'ssh:import': Page_sshImport, 'ssh:known': Page_sshKnown, 'ssh:password': Page_sshPassword, 'ssh:passwordForget': Page_sshPasswordForget, 'ssh:status': Page_sshStatus, 'start': Page_start, 'state:save': Page_stateSave, 'sync:code': Page_syncCode, 'sync:join': Page_syncJoin, 'sync:now': Page_syncNow, 'sync:off': Page_syncOff, 'sync:on': Page_syncOn, 'sync:rotate': Page_syncRotate, 'sync:status': Page_syncStatus, 'tmux:start': Page_tmuxStart, 'tmux:stop': Page_tmuxStop, 'tmux:write': Page_tmuxWrite, 'update:cancel': Page_updateCancel, 'update:check': Page_updateCheck, 'update:download': Page_updateDownload, 'update:install': Page_updateInstall, 'update:status': Page_updateStatus, 'window': Page_window, 'worktree:create': Page_worktreeCreate, 'worktree:remove': Page_worktreeRemove, 'worktree:status': Page_worktreeStatus }} PageMessages */
+/** @typedef {{ 'action:defaults': Host_actionDefaults, 'action:failed': Host_actionFailed, 'agent': Host_agent, 'agents:next': Host_agentsNext, 'api': Host_api, 'attached': Host_attached, 'busy': Host_busy, 'changes:content': Host_changesContent, 'changes:found': Host_changesFound, 'changes:list': Host_changesList, 'changes:resolved': Host_changesResolved, 'claude:context': Host_claudeContext, 'claude:cost': Host_claudeCost, 'claude:limits': Host_claudeLimits, 'claude:plan': Host_claudePlan, 'claude:usage': Host_claudeUsage, 'error': Host_error, 'exit': Host_exit, 'files:done': Host_filesDone, 'files:dropped': Host_filesDropped, 'files:listing': Host_filesListing, 'files:queued': Host_filesQueued, 'focusTerminal': Host_focusTerminal, 'folderPicked': Host_folderPicked, 'fonts': Host_fonts, 'forward:all': Host_forwardAll, 'forward:status': Host_forwardStatus, 'git:status': Host_gitStatus, 'gitview:result': Host_gitviewResult, 'history': Host_history, 'history:commands': Host_historyCommands, 'hotkey:taken': Host_hotkeyTaken, 'layout': Host_layout, 'layout:error': Host_layoutError, 'layout:exported': Host_layoutExported, 'layout:found': Host_layoutFound, 'log:status': Host_logStatus, 'memory': Host_memory, 'output': Host_output, 'plugins': Host_plugins, 'ports:terminals': Host_portsTerminals, 'profiles': Host_profiles, 'quit:ask': Host_quitAsk, 'rec:data': Host_recData, 'rec:list': Host_recList, 'rec:status': Host_recStatus, 'remote:install': Host_remoteInstall, 'remote:remove': Host_remoteRemove, 'security:code': Host_securityCode, 'security:error': Host_securityError, 'security:locked': Host_securityLocked, 'security:restored': Host_securityRestored, 'settings': Host_settings, 'snapshot:request': Host_snapshotRequest, 'sound:outputs': Host_soundOutputs, 'ssh:credentials': Host_sshCredentials, 'ssh:error': Host_sshError, 'ssh:imported': Host_sshImported, 'ssh:known': Host_sshKnown, 'start:folder': Host_startFolder, 'subagent': Host_subagent, 'subagent:cost': Host_subagentCost, 'sync:status': Host_syncStatus, 'tmux:data': Host_tmuxData, 'tmux:exit': Host_tmuxExit, 'update:status': Host_updateStatus, 'windowState': Host_windowState, 'worktree:reply': Host_worktreeReply }} HostMessages */

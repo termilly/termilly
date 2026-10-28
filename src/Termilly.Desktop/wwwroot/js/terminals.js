@@ -399,8 +399,10 @@ function shellFolder(tab, data) {
   let path = m[1];
   try { path = decodeURIComponent(path); } catch { /* keep it as sent */ }
   if (/^\/[A-Za-z]:/.test(path)) path = path.slice(1).replace(/\//g, '\\');
-  if (tab.cwd !== path) persist(); // where it starts after a restart (store.js lastFolderOf)
+  const moved = tab.cwd !== path;
+  if (moved) persist(); // where it starts after a restart (store.js lastFolderOf)
   tab.cwd = path;
+  if (moved) emit(EVENTS.cwd, tab); // the Files panel follows it (filepanel.js)
   const ssh = isSshProfile(state.profiles.find(p => p.id === tab.profile));
   if (platform === PLATFORM.linux) {
     if (ssh) noteRemoteCwd(tab, path); // a shell on the other end of ssh

@@ -23,7 +23,7 @@ import { toggleCaptures } from './triggers.js';
 import { toggleHints } from './hints.js';
 import { toggleScratch } from './scratch.js';
 import { openGitWindow, openAgentChanges, gitFolderOf, onServer, openRemoteGitNotice } from './gitwindow.js';
-import { toggleSftp } from './sftp.js';
+import { toggleFiles } from './filepanel.js';
 import { openNewWorktree } from './worktree.js';
 import { openChangedFiles } from './changes.js';
 import { openSnippetsWindow } from './snippetswindow.js';
@@ -177,7 +177,7 @@ setCommands(() => [
   { label: 'Scratch terminal (floating, on / off)', keywords: 'floating quick temporary popup', hint: keysHtml('Ctrl Shift `'), run: () => setTimeout(toggleScratch) },
   { label: 'Git: changes and history', keywords: 'git status diff log commits branches repository staged', hint: keysHtml('Ctrl Shift G'), run: () => setTimeout(openGitHere) },
   { label: 'Move this workspace’s terminals to tabs', keywords: 'tabs group stack stacked accordion collapse panes too many', run: () => moveAllToTabs(state.workspaces.find(w => w.id === state.activeId)) },
-  { label: 'SFTP files of this SSH terminal (on / off)', keywords: 'sftp files upload download remote scp', hint: keysHtml('Ctrl Shift L'), run: () => setTimeout(() => toggleSftp()) },
+  { label: 'Files of this terminal (on / off)', keywords: 'files folder explorer browse sftp upload download remote scp', hint: keysHtml('Ctrl Shift L'), run: () => setTimeout(() => toggleFiles()) },
   { label: 'Take the tour', keywords: 'tour help guide introduction tutorial walkthrough start learn', run: () => setTimeout(startTour) },
   { label: 'Quit Termilly', keywords: 'exit close quit stop tray', run: () => send(PAGE.window, { action: WINDOW_ACTION.quit }) },
   ...(changeShortcutOn() ? [
@@ -311,7 +311,7 @@ function runShortcut(e) {
   else if (ctrlShift && e.code === 'KeyF') commands.search();
   else if (ctrlShift && e.code === 'KeyO') commands.goTo();
   else if (ctrlShift && e.code === 'KeyE') toggleHints();
-  else if (ctrlShift && e.code === 'KeyL') toggleSftp();
+  else if (ctrlShift && e.code === 'KeyL') toggleFiles();
   else if (ctrlShift && e.code === 'Backquote') toggleScratch();
   else if (ctrlShift && e.code === 'KeyH') commands.commandHistory();
   else if (ctrlShift && e.code === 'KeyG') openGitHere();

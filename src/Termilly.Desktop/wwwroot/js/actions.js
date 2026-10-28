@@ -172,6 +172,20 @@ function canRun(action, context) {
 }
 
 /**
+ * The actions a file or folder on this machine offers (the Files panel's menu): run with its path as the selection,
+ * and a folder as the folder too.
+ * @param {Tab} tab
+ * @param {string} path
+ * @param {string} folder the folder it's in, or the folder itself
+ * @returns {import('./popups.js').MenuItem[]}
+ */
+export function pathActions(tab, path, folder) {
+  const context = { selection: path, folder, port: portsOf(tab)[0] ?? null };
+  return enabledActions().filter(a => a.menu && canRun(a, context))
+    .map(a => ({ label: a.name, hint: a.shortcut ? a.shortcut : undefined, action: () => runAction(a, tab, context) }));
+}
+
+/**
  * The selection as a link or a path to open; null when it's neither. A relative path is found from the terminal's
  * folder, so it needs one.
  * @param {string | null} selection

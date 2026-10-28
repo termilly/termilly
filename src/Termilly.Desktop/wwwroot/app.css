@@ -581,9 +581,9 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
 .sync-devices { display: flex; flex-direction: column; gap: 4px; width: 100%; }
 .sync-device { display: flex; justify-content: space-between; gap: 12px; font-size: 12.5px; }
 
-/* ---- SFTP side panel (js/sftp.js) ---- */
+/* ---- The Files side panel (js/filepanel.js) ---- */
 
-.sftp-panel {
+.files-panel {
   position: absolute;
   top: 0;
   right: 0;
@@ -597,27 +597,29 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
   background: var(--raised);
   box-shadow: var(--shadow-pop);
 }
-.sftp-panel[hidden] { display: none; }
-.sftp-panel.drop { outline: 2px dashed var(--accent); outline-offset: -6px; }
-.sftp-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px 4px 12px; }
-.sftp-title { color: var(--text); font-size: 12.5px; font-weight: 600; }
-.sftp-bar { display: flex; gap: 6px; align-items: center; padding: 4px 10px; }
-.sftp-follow { margin-left: auto; }
-.sftp-path { overflow: hidden; padding: 4px 12px 6px; color: var(--muted); font: 12px var(--mono); text-overflow: ellipsis; white-space: nowrap; }
-.sftp-list { flex: 1; overflow-y: auto; padding: 0 6px; }
-.sftp-item { display: flex; gap: 8px; align-items: center; height: 28px; padding: 0 6px; border-radius: 6px; font-size: 12.5px; }
-.sftp-item:hover { background: var(--hover); }
-.sftp-item.dir { cursor: pointer; }
-.sftp-name { overflow: hidden; flex: 1; text-overflow: ellipsis; white-space: nowrap; }
-.sftp-size { color: var(--faint); font-size: 11.5px; font-variant-numeric: tabular-nums; }
-.sftp-actions { display: none; gap: 2px; }
-.sftp-item:hover .sftp-actions { display: flex; }
-.sftp-error { color: var(--danger-text); }
-.sftp-queue { max-height: 150px; overflow-y: auto; padding: 6px 10px 8px; border-top: 1px solid var(--border); }
-.sftp-job { display: flex; gap: 8px; justify-content: space-between; color: var(--muted); font-size: 11.5px; line-height: 1.7; }
-.sftp-job span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sftp-job.failed { color: var(--danger-text); }
-.sftp-job.done span:first-child { color: var(--text); }
+.files-panel[hidden] { display: none; }
+.files-panel.drop { outline: 2px dashed var(--accent); outline-offset: -6px; }
+.files-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px 4px 12px; }
+.files-title { color: var(--text); font-size: 12.5px; font-weight: 600; }
+.files-bar { display: flex; gap: 6px; align-items: center; padding: 4px 10px; }
+.files-follow { margin-left: auto; }
+.files-path { overflow: hidden; padding: 4px 12px 6px; color: var(--muted); font: 12px var(--mono); text-overflow: ellipsis; white-space: nowrap; }
+.files-list { flex: 1; overflow-y: auto; padding: 0 6px; }
+.files-item { display: flex; gap: 8px; align-items: center; height: 28px; padding: 0 6px; border-radius: 6px; font-size: 12.5px; }
+.files-item:hover { background: var(--hover); }
+.files-item.dir { cursor: pointer; }
+.files-name { overflow: hidden; flex: 1; text-overflow: ellipsis; white-space: nowrap; }
+.files-size { color: var(--faint); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.files-actions { display: none; gap: 2px; }
+.files-item:hover .files-actions { display: flex; }
+.files-error { color: var(--danger-text); }
+.files-queue { max-height: 150px; overflow-y: auto; padding: 6px 10px 8px; border-top: 1px solid var(--border); }
+.files-job { display: flex; gap: 8px; justify-content: space-between; color: var(--muted); font-size: 11.5px; line-height: 1.7; }
+.files-job span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.files-job.failed { color: var(--danger-text); }
+.files-job.done span:first-child { color: var(--text); }
+.files-job[data-reveal] { cursor: pointer; }
+.files-job[data-reveal]:hover span:last-child { color: var(--text); text-decoration: underline; }
 
 /* ---- Settings › SSH (js/ssh.js) ---- */
 

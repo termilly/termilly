@@ -9,7 +9,7 @@ import { isBroadcasting, startBroadcast, stopBroadcast, openCompose, BROADCAST_S
 import { copyLastOutput, commandLog } from './commands.js';
 import { setAlert, ALERT } from './triggers.js';
 import { serialMenuItems } from './serial.js';
-import { toggleSftp } from './sftp.js';
+import { toggleFiles, hasFiles } from './filepanel.js';
 import { openCleanup } from './worktree.js';
 import { editNote, profileNote, NOTE_KIND } from './notes.js';
 import { isLogging, toggleLog, toggleProfileLogging } from './logging.js';
@@ -139,7 +139,7 @@ function keepingItems(tab) {
 }
 
 /**
- * What it can open: its worktree's clean-up, the assistant, SSH's options and files, changed files, git.
+ * What it can open: its worktree's clean-up, the assistant, SSH's options, its files, changed files, git.
  * @param {Tab} tab
  * @returns {MenuEntry[]}
  */
@@ -149,7 +149,7 @@ function toolItems(tab) {
     ...(tab.worktree ? [{ label: 'Clean up worktree', action: () => openCleanup(tab) }] : []),
     ...(ssh ? [{ label: 'After reconnecting', action: () => editAttach(tab) }] : []),
     ...remoteMenuItems(tab),
-    ...(ssh ? [{ label: 'Files (SFTP)', hint: keysHtml('Ctrl Shift L'), action: () => toggleSftp(tab) }] : []),
+    ...(hasFiles(tab) ? [{ label: 'Files', icon: ICONS.folder, hint: keysHtml('Ctrl Shift L'), action: () => toggleFiles(tab) }] : []),
     ...(state.settings.changes.enabled && tab.changes?.length
       ? [{ label: 'Files Claude changed', icon: ICONS.diff, action: () => emit(EVENTS.openChangedFiles, { tab, anchor: /** @type {TabView} */ (tab.view).header }) }] : []),
     ...gitItems(tab),

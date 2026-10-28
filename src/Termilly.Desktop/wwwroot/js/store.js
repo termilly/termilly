@@ -132,6 +132,8 @@ export const EVENTS = Object.freeze({
   claudeUsage: 'claudeUsage',
   commandEnding: 'commandEnding',
   commandStarted: 'commandStarted',
+  /** A terminal's shell moved to another folder (OSC 7): tab.cwd. */
+  cwd: 'cwd',
   dialogClosed: 'dialogClosed',
   focus: 'focus',
   gitChanged: 'gitChanged',

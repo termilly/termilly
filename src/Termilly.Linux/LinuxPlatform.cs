@@ -23,6 +23,11 @@ internal sealed class LinuxPlatform(Action<string> send, string? startFolder) :
 
     private const string AutostartEntry = "termilly-host.desktop";
     private const string BrowserEngine = "WebKit";
+    /// <summary>user-dirs.dirs' line naming the Downloads folder, and how its paths start in the home folder.</summary>
+    private const string DownloadDirKey = "XDG_DOWNLOAD_DIR=";
+    private const string HomePrefix = "$HOME/";
+    /// <summary>The Downloads folder's usual name, when the desktop doesn't name another.</summary>
+    private const string DownloadsName = "Downloads";
     /// <summary>Opens a folder or link with what the desktop chose for it.</summary>
     private const string XdgOpen = "xdg-open";
 
@@ -97,6 +102,10 @@ internal sealed class LinuxPlatform(Action<string> send, string? startFolder) :
 
     private static string Home => Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 
+    /// <summary>Where the desktop's settings are: XDG_CONFIG_HOME, else ~/.config.</summary>
+    private static string ConfigHome =>
+        Environment.GetEnvironmentVariable("XDG_CONFIG_HOME") is { Length: > 0 } config ? config : Path.Combine(Home, ".config");
+
     public async Task<string?> PickFolderAsync(string title, string initial) =>
         _window is null ? null : (await _window.ShowOpenFolderAsync(title, initial, false).ConfigureAwait(false))?.FirstOrDefault();
 
@@ -134,6 +143,60 @@ internal sealed class LinuxPlatform(Action<string> send, string? startFolder) :
         }
     }
 
+    public void OpenFile(string file) => Run(XdgOpen, file);
+
+    /// <summary>The desktop's trash (gio trash: GNOME's, which KDE and the others read too).</summary>
+    public void Trash(string path)
+    {
+        try
+        {
+            var start = new ProcessStartInfo("gio") { UseShellExecute = false, RedirectStandardError = true };
+            start.ArgumentList.Add("trash");
+            start.ArgumentList.Add("--");
+            start.ArgumentList.Add(path);
+            using var gio = Process.Start(start) ?? throw new IOException("gio didn't start.");
+            var error = gio.StandardError.ReadToEnd();
+            gio.WaitForExit();
+            if (gio.ExitCode != 0)
+            {
+                throw new IOException(error.Trim() is { Length: > 0 } message ? message : $"Couldn't move {Path.GetFileName(path)} to the trash.");
+            }
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            throw new IOException("Moving to the trash needs gio (the glib2 tools).");
+        }
+    }
+
+    /// <summary>XDG_DOWNLOAD_DIR from ~/.config/user-dirs.dirs (it's named in the desktop's language), else ~/Downloads.</summary>
+    public string DownloadsFolder
+    {
+        get
+        {
+            var dirs = Path.Combine(ConfigHome, "user-dirs.dirs");
+            try
+            {
+                return DownloadsIn(File.Exists(dirs) ? File.ReadAllText(dirs) : "", Home);
+            }
+            catch (Exception e) when (Storage.IsFileError(e))
+            {
+                return DownloadsIn("", Home);
+            }
+        }
+    }
+
+    /// <summary>The Downloads folder a user-dirs.dirs names (XDG_DOWNLOAD_DIR="$HOME/Downloads"), else ~/Downloads.</summary>
+    internal static string DownloadsIn(string userDirs, string home)
+    {
+        var line = userDirs.Split('\n').Select(l => l.Trim()).FirstOrDefault(l => l.StartsWith(DownloadDirKey, StringComparison.Ordinal));
+        var value = line?[DownloadDirKey.Length..].Trim('"');
+        if (string.IsNullOrEmpty(value) || value == "$HOME" || value == HomePrefix)
+        {
+            return Path.Combine(home, DownloadsName);
+        }
+        return value.StartsWith(HomePrefix, StringComparison.Ordinal) ? Path.Combine(home, value[HomePrefix.Length..]) : value;
+    }
+
     public void OpenUrl(Uri url) => Run(XdgOpen, url.AbsoluteUri);
 
     // ---- Notifications ----
@@ -161,9 +224,7 @@ internal sealed class LinuxPlatform(Action<string> send, string? startFolder) :
     /// </summary>
     public void Set(bool wanted, string hostExe)
     {
-        var folder = Path.Combine(Environment.GetEnvironmentVariable("XDG_CONFIG_HOME") is { Length: > 0 } config
-            ? config
-            : Path.Combine(Home, ".config"), "autostart");
+        var folder = Path.Combine(ConfigHome, "autostart");
         var entry = Path.Combine(folder, AutostartEntry);
         try
         {

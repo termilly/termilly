@@ -66,6 +66,15 @@ internal interface IDesktopShell
     /// <summary>Shows a file in the file manager, selected where the file manager can.</summary>
     void RevealFile(string file);
 
+    /// <summary>Opens a file with the app the system chose for it.</summary>
+    void OpenFile(string file);
+
+    /// <summary>Moves a file or folder to the Recycle Bin (the trash); throws an <see cref="System.IO.IOException"/> when it can't.</summary>
+    void Trash(string path);
+
+    /// <summary>The user's Downloads folder, wherever they moved it.</summary>
+    string DownloadsFolder { get; }
+
     void OpenUrl(Uri url);
 }
 

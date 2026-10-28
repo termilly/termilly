@@ -6,14 +6,8 @@ using Termilly.Desktop.Services;
 
 namespace Termilly.Desktop;
 
-/// <summary>A folder on a server, as listed: its full path and what's in it.</summary>
-internal sealed record RemoteListing(string Path, List<RemoteEntry> Entries);
-
-/// <summary>A file or folder in a remote listing.</summary>
-internal sealed record RemoteEntry(string Name, bool IsDirectory, long Size, string Modified, string Permissions);
-
 /// <summary>
-/// The SFTP side panel's file operations, for a terminal opened from an SSH host or connection: each runs
+/// The Files panel's operations on a server, for a terminal opened from an SSH host or connection: each runs
 /// OpenSSH's sftp in batch mode with the terminal's own connection settings (host, user, port, jump hosts, key),
 /// so nothing new has to be set up or stored. BatchMode means it never waits for a password nobody can type.
 /// </summary>
@@ -39,12 +33,6 @@ internal sealed partial class Sftp(IProcessRunner runner)
 
     /// <summary>A folder's own entry and its parent's, left out of a listing.</summary>
     private static readonly string[] DotEntries = [".", ".."];
-
-    /// <summary>Where downloads go: the user's Downloads folder (TERMILLY_DOWNLOAD_DIR overrides it, for tests).</summary>
-    public static string DownloadDirectory =>
-        Environment.GetEnvironmentVariable("TERMILLY_DOWNLOAD_DIR") is { Length: > 0 } dir
-            ? dir
-            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
 
     /// <summary>
     /// sftp's arguments from an ssh command line ("ssh.exe -p 2222 -J jump -i "key" user@host", ssh off Windows): the same options,
@@ -93,7 +81,7 @@ internal sealed partial class Sftp(IProcessRunner runner)
     }
 
     /// <summary>A folder's entries ("~" or empty: the home folder) and the folder's full path.</summary>
-    public RemoteListing List(string arguments, string? directory)
+    public FolderListing List(string arguments, string? directory)
     {
         var commands = new List<string>();
         if (!string.IsNullOrEmpty(directory) && directory != "~")
@@ -114,9 +102,9 @@ internal sealed partial class Sftp(IProcessRunner runner)
     /// `ls -la` lines: "drwxr-xr-x  2 user group 4096 Oct  9 12:00 name" (Windows' sftp shows "drwx******  ?" for
     /// the permissions and link count). "." and ".." are left out; folders come first, then files, by name.
     /// </summary>
-    public static List<RemoteEntry> ParseListing(string output)
+    public static List<FolderEntry> ParseListing(string output)
     {
-        var entries = new List<RemoteEntry>();
+        var entries = new List<FolderEntry>();
         foreach (var raw in output.Split('\n'))
         {
             var m = LongListing().Match(raw.TrimEnd('\r'));
@@ -134,7 +122,7 @@ internal sealed partial class Sftp(IProcessRunner runner)
             {
                 name = name[..name.IndexOf(" -> ", StringComparison.Ordinal)];
             }
-            entries.Add(new RemoteEntry(
+            entries.Add(new FolderEntry(
                 name, kind == 'd', long.TryParse(m.Groups[Parts.Size].Value, CultureInfo.InvariantCulture, out var size) ? size : 0,
                 m.Groups[Parts.Date].Value, m.Groups[Parts.Permissions].Value));
         }

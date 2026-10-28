@@ -1,16 +1,6 @@
 namespace Termilly.Desktop.Messaging;
 
-// SSH (Settings › SSH: imports, saved passwords, port forwards) and the SFTP side panel.
-
-/// <summary>The SFTP panel's file operations (the sftp:op message's op).</summary>
-internal static class SftpOperations
-{
-    public const string Get = "get";
-    public const string Remove = "rm";
-    public const string RemoveDirectory = "rmdir";
-    public const string MakeDirectory = "mkdir";
-    public const string Rename = "rename";
-}
+// SSH (Settings › SSH: imports, saved passwords, port forwards).
 
 /// <summary>A port forward's state, as the page shows it.</summary>
 internal static class ForwardStates
@@ -61,31 +51,6 @@ internal static partial class FromPage
     {
         public static string Type => "forward:stop";
     }
-
-    /// <param name="Id">The SSH terminal whose server it lists.</param>
-    internal sealed record SftpList(string Id = "", string? RequestId = null, string? Path = null) : IPageMessage
-    {
-        public static string Type => "sftp:list";
-    }
-
-    /// <param name="Op">One of <see cref="SftpOperations"/>.</param>
-    /// <param name="To">A rename's new path.</param>
-    internal sealed record SftpOp(string Id = "", string? RequestId = null, string? Op = null, string? Path = null, string? To = null) : IPageMessage
-    {
-        public static string Type => "sftp:op";
-    }
-
-    /// <summary>Uploads into <see cref="Dir"/>: the files the browser handed over, or <see cref="Paths"/>.</summary>
-    internal sealed record SftpPut(string Id = "", string? RequestId = null, string? Dir = null, IReadOnlyList<string>? Paths = null) : IPageMessage
-    {
-        public static string Type => "sftp:put";
-    }
-
-    /// <summary>The Upload button where the host's own dialog picks the files.</summary>
-    internal sealed record SftpPick(string Id = "", string? RequestId = null, string? Dir = null) : IPageMessage
-    {
-        public static string Type => "sftp:pick";
-    }
 }
 
 internal static partial class ToPage
@@ -123,52 +88,5 @@ internal static partial class ToPage
     internal sealed record ForwardAll(IReadOnlyDictionary<string, ForwardState> States) : IHostMessage
     {
         public static string Type => "forward:all";
-    }
-
-    internal sealed record SftpListing(string? RequestId, string Path, object Entries) : IHostMessage
-    {
-        public static string Type => "sftp:listing";
-    }
-
-    internal sealed record SftpListingFailed(string? RequestId, string Message) : IHostMessage
-    {
-        public static string Type => "sftp:listing";
-
-        public bool Ok { get; }
-    }
-
-    /// <param name="Local">Where a download was saved.</param>
-    internal sealed record SftpDone(string? RequestId, string? Local) : IHostMessage
-    {
-        public static string Type => "sftp:done";
-
-        public bool Ok { get; } = true;
-    }
-
-    internal sealed record SftpFailed(string? RequestId, string Message) : IHostMessage
-    {
-        public static string Type => "sftp:done";
-
-        public bool Ok { get; }
-    }
-
-    internal sealed record SftpUploaded(string? RequestId, string File) : IHostMessage
-    {
-        public static string Type => "sftp:done";
-
-        public bool Ok { get; } = true;
-    }
-
-    internal sealed record SftpUploadFailed(string? RequestId, string File, string Message) : IHostMessage
-    {
-        public static string Type => "sftp:done";
-
-        public bool Ok { get; }
-    }
-
-    /// <summary>The files picked for an upload, each reported as it's done.</summary>
-    internal sealed record SftpQueued(string? RequestId, IEnumerable<string?> Files) : IHostMessage
-    {
-        public static string Type => "sftp:queued";
     }
 }

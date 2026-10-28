@@ -85,6 +85,12 @@ internal sealed class WindowsPlatform(MainWindow window) :
 
     public void RevealFile(string file) => Process.Start(new ProcessStartInfo(Explorer, $"/select,\"{file}\"") { UseShellExecute = true });
 
+    public void OpenFile(string file) => Process.Start(new ProcessStartInfo(file) { UseShellExecute = true });
+
+    public void Trash(string path) => ShellFiles.Recycle(path);
+
+    public string DownloadsFolder => ShellFiles.Downloads;
+
     public void OpenUrl(Uri url) => Process.Start(new ProcessStartInfo(url.AbsoluteUri) { UseShellExecute = true });
 
     // ---- Toasts ----
