@@ -357,6 +357,9 @@ export function switchWorkspace(id) {
   if (tab) {
     ws.focusId = tab.id;
     focusTab(tab);
+    // The terminal in focus is another one now, though it's the one this workspace had (focusTab only tells when
+    // that changes): the Files panel follows it.
+    emit(EVENTS.focus, tab);
   } else {
     restoreFocus();
   }

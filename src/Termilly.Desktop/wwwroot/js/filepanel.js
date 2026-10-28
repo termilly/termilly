@@ -71,6 +71,8 @@ const queue = [];
 let requests = 0; // ids for the queue's file operations, whose answers come as files:done
 /** The requests that are downloads to a folder the host asks for: their queued file is a download, not an upload. */
 const downloadsTo = new Set();
+/** How many listings were asked for: only the latest one's answer is shown. */
+let listings = 0;
 /** Terminal id: the folder the panel last showed for it, to go back to when that terminal is focused again. */
 /** @type {Map<string, string>} */
 const shownFolders = new Map();
@@ -123,11 +125,15 @@ onHost(HOST.filesQueued, m => {
 /** @param {string | null | undefined} path */
 export async function list(path) {
   if (!view) return;
+  const current = view;
+  const asked = ++listings;
   view.loading = true;
   view.error = null;
   render();
   const m = await request(PAGE.filesList, { id: view.tab.id, path });
-  if (!view) return;
+  // An answer that comes after the panel moved on (another terminal, another folder: a server is slow) is dropped,
+  // or it would show, and be remembered, in the wrong place.
+  if (view !== current || asked !== listings) return;
   view.loading = false;
   if (m.error || m.ok === false) view.error = m.message ?? m.error;
   else {
