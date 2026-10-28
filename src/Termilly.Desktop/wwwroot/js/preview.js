@@ -5,18 +5,18 @@
 // keeps the copies and works out the diff (Changes.cs, LineDiff.cs); this only draws it, a screenful at a time, so
 // big files stay quick.
 
-import { PAGE } from './protocol.js';
-import { send, request, platform, PLATFORM } from './host.js';
+import { PAGE, HOST } from './protocol.js';
+import { send, request, onHost, platform, PLATFORM } from './host.js';
 import { state, on, emit, wsById, findPreview, EVENTS, GROUPS } from './store.js';
 import { focusTab, restoreFocus, setPreviewRenderer, insertPreview, removePreview } from './panes.js';
 import { scheduleFit } from './terminals.js';
-import { ICONS, ltrPath } from './ui.js';
+import { ICONS, ltrPath, escapeHtml } from './ui.js';
 import { buildDiffRows, diffRowHtml, DIFF_ROW, DIFF_SCROLL, DIFF_LINE, DIFF_TARGET } from './diffrows.js';
 import { debounce } from './util.js';
 import { fileSize, imagesHtml, measureImages } from './pictures.js';
 import { updateSettings } from './preferences.js';
 import { SETTING_VALUES, CHANGE_SOURCE, CHANGE_KIND } from './constants.js';
-import { byId, find, targetOf, WORKSPACE_ID, dragPointer, dragFloating } from './dom.js';
+import { byId, find, targetOf, WORKSPACE_ID, dragPointer, dragFloating, onMiddleClick } from './dom.js';
 
 /**
  * A file's change as the host sends it for the preview (Changes.cs): the diff, and what's shown around it: the path
@@ -37,8 +37,10 @@ import { byId, find, targetOf, WORKSPACE_ID, dragPointer, dragFloating } from '.
  * @typedef {{ tab: Tab, path: string | null, line?: number | null, mode: string, compare: string,
  *   compareChosen?: boolean, expanded: Set<string>, data: ChangeData | null, loading?: boolean,
  *   offeredAt?: string | null, offer?: ChangedFile | null, seenAt?: string, message?: string,
- *   error?: string | null }} PreviewView
+ *   error?: string | null, scroll?: number, stale?: boolean, gone?: boolean }} PreviewView
  */
+// A view is also a tab: each file open keeps its own (scroll, mode, folds, its answer); stale: it changed while its
+// tab wasn't shown, so it's read again when it is; gone: deleted outside Termilly.
 
 /** The choices of the settings used here (C#'s SettingValues). */
 const { changeView, changeCompare, changeNewFile, changeFollow, changeLayout, changePlacement } = SETTING_VALUES;
@@ -91,6 +93,7 @@ el.innerHTML = `
       <button class="pane-btn pv-btn" data-pv="close" title="Close (Esc)">${ICONS.close}</button>
     </span>
   </div>
+  <div class="pv-tabs" role="tablist" hidden></div>
   <div class="pv-note" hidden></div>
   <div class="pv-newer" hidden><span></span><button class="btn small" data-pv="newer">Show it</button></div>
   <div class="pv-scroll"><div class="pv-pictures" hidden></div><div class="pv-spacer"><div class="pv-rows"></div></div><div class="pv-message" hidden></div></div>`;
@@ -103,6 +106,7 @@ const noteEl = find(el, '.pv-note');
 const newerEl = find(el, '.pv-newer');
 const scroller = find(el, DIFF_SCROLL);
 const spacer = find(el, '.pv-spacer');
+const tabsEl = find(el, '.pv-tabs');
 const picturesEl = find(el, '.pv-pictures');
 const rowsEl = find(el, '.pv-rows');
 const messageEl = find(el, '.pv-message');
@@ -125,6 +129,13 @@ setPreviewRenderer(() => el);
  * @type {PreviewView | null}
  */
 let view = null;
+/**
+ * The files open in tabs, in their order; view is one of them (or a message, which isn't a tab).
+ * @type {PreviewView[]}
+ */
+let views = [];
+/** The most tabs kept open: opening one more closes the one opened longest ago. */
+const MAX_TABS = 12;
 /** @type {string | null} */
 let placement = null; // where the element is now: 'split' (with the workspace id), 'panel', 'float' or 'window'
 /** @type {string | null} */
@@ -152,6 +163,8 @@ export function setPreviewHost(container, { order = null } = {}) {
     if (!windowHost) return;
     if (placement === PLACEMENT.window) {
       view = null;
+      views = [];
+      watchTabs();
       unmount();
     }
     windowHost = null;
@@ -203,13 +216,97 @@ function unmount() {
   scheduleFit();
 }
 
+/** Closes the preview, with all its tabs. */
 export function closePreview() {
   if (!view) return;
   const tab = view.tab;
   view = null;
+  views = [];
+  watchTabs();
   unmount();
   if (state.tabs.has(tab.id)) focusTab(tab); else restoreFocus();
 }
+
+/**
+ * Closes one tab: the one beside it is shown (the next, else the one before); the last one closes the preview.
+ * @param {PreviewView} closing
+ */
+function closeTab(closing) {
+  const at = views.indexOf(closing);
+  if (at < 0) return;
+  if (views.length === 1) return closePreview();
+  views.splice(at, 1);
+  watchTabs();
+  if (view !== closing) return renderTabs();
+  const next = views[Math.min(at, views.length - 1)];
+  view = next;
+  mount(next.tab);
+  render();
+  restoreScroll();
+  if (next.stale) load(next, { keepScroll: true });
+}
+
+// ---- Tabs: one per file open, each watched for changes made outside Termilly ----
+
+/** A tab's name: the file's, with its folder when another tab has the same name. @param {PreviewView} v */
+function tabName(v) {
+  const parts = /** @type {string} */ (v.path).split(/[\\/]/);
+  const name = /** @type {string} */ (parts.pop());
+  const twin = views.some(o => o !== v && o.path?.split(/[\\/]/).pop()?.toLowerCase() === name.toLowerCase());
+  return twin && parts.length ? `${parts.pop()}/${name}` : name;
+}
+
+/** What the tab strip last drew. */
+let tabsHtml = '';
+
+/** The tab strip: shown with two tabs or more, and never in the Git window (which has its own list). */
+function renderTabs() {
+  tabsEl.hidden = views.length < 2 || placement === PLACEMENT.window;
+  if (tabsEl.hidden) return;
+  // Drawn again only when something changed: a redraw between a button's press and release would lose its click.
+  const html = views.map((v, i) => `
+    <span class="pv-tab${v === view ? ' on' : ''}${v.gone ? ' gone' : ''}" role="tab" aria-selected="${v === view}" data-tab="${i}"
+      title="${escapeHtml(`${v.path}${v.gone ? ' (deleted)' : ''}`)}"><span class="pv-tab-name">${escapeHtml(tabName(v))}</span><button class="pv-tab-close" data-tab-close="${i}" title="Close" aria-label="Close">${ICONS.close}</button></span>`).join('');
+  if (html === tabsHtml) return;
+  tabsHtml = html;
+  tabsEl.innerHTML = html;
+  tabsEl.querySelector('.pv-tab.on')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+}
+
+tabsEl.addEventListener('click', e => {
+  const close = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-tab-close]'));
+  if (close) return closeTab(views[Number(close.dataset.tabClose)]);
+  const tab = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-tab]'));
+  const v = tab && views[Number(tab.dataset.tab)];
+  if (v && v !== view && v.path) selectTab(v, { tab: v.tab, line: null, focus: true, wholeFile: false });
+});
+// A middle click closes a tab, as in a browser.
+onMiddleClick(tabsEl, e => {
+  const tab = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-tab]'));
+  if (tab) closeTab(views[Number(tab.dataset.tab)]);
+});
+
+/** The paths last asked to be watched, so the host is only told when they change. */
+let watched = '';
+/** Tells the host which files are open, to hear when one changes outside Termilly (PreviewWatch.cs). */
+function watchTabs() {
+  const paths = views.map(v => /** @type {string} */ (v.path));
+  const key = paths.join('\n');
+  if (key === watched) return;
+  watched = key;
+  send(PAGE.previewWatch, { paths });
+}
+
+// A file open in a tab changed, was deleted or came back: the tab shown reads it again where it is; another one
+// does when it's shown.
+onHost(HOST.previewFileChanged, m => {
+  for (const v of views.filter(o => samePath(o.path, m.path))) {
+    v.gone = !m.exists;
+    v.stale = true;
+    if (v === view) load(v, { keepScroll: true });
+  }
+  renderTabs();
+});
 
 // A workspace that lost its last terminal can't hold the pane any more.
 on(EVENTS.previewDropped, ws => {
@@ -234,34 +331,83 @@ const fetchChange = (tab, path, compare) => request(PAGE.changesGet, { id: tab.i
  * Opens the preview on a file's change in a terminal. line: a line to scroll to (a clicked path:line). Asking for
  * the file already shown, in the same terminal, just brings it forward. wholeFile: shown as the file rather than a
  * diff (the Git window's search, so a line that didn't change shows too).
+ * A file already open in a tab is brought forward in it (scrolled to the line, read again if it changed); another
+ * opens in a new tab, or, with replace (N and P, following Claude, the Git window), in the tab shown.
  * @param {Tab} tab
  * @param {string} path
- * @param {{ line?: number | null, focus?: boolean, wholeFile?: boolean }} [options]
+ * @param {{ line?: number | null, focus?: boolean, wholeFile?: boolean, replace?: boolean }} [options]
  */
-export async function showChange(tab, path, { line = null, focus = true, wholeFile = false } = {}) {
-  const sameFile = view?.tab === tab && samePath(view.path, path);
+export async function showChange(tab, path, { line = null, focus = true, wholeFile = false, replace = false } = {}) {
+  const open = views.find(v => samePath(v.path, path));
+  if (open) return selectTab(open, { tab, line, focus, wholeFile });
   const s = settings();
-  // sameFile (and so chosen) is only true while a view is open.
-  const chosen = sameFile && /** @type {PreviewView} */ (view).compareChosen;
-  view = {
+  /** @type {PreviewView} */
+  const opened = {
     tab, path, line,
-    mode: wholeFile ? changeView.file : sameFile
-      ? /** @type {PreviewView} */ (view).mode
-      : (s.changes.view === changeView.file ? changeView.file : changeView.diff),
-    compare: chosen ? /** @type {PreviewView} */ (view).compare : compareFor(tab, path),
-    compareChosen: chosen,
+    mode: wholeFile || s.changes.view === changeView.file ? changeView.file : changeView.diff,
+    compare: compareFor(tab, path),
+    compareChosen: false,
     expanded: new Set(),
-    data: sameFile ? /** @type {PreviewView} */ (view).data : null,
+    data: null,
     loading: true,
     // Files Claude changed before this opened aren't offered; only those it changes from now on.
     offeredAt: tab.changes?.[0]?.at ?? null,
     offer: null,
   };
+  saveScroll();
+  addTab(opened, replace || !!windowHost);
+  view = opened;
   mount(tab);
   render();
   if (focus) el.focus({ preventScroll: true });
   emit(EVENTS.previewShown, { tab, path });
-  await load();
+  await load(opened);
+}
+
+/**
+ * Puts a new file's view among the tabs: in place of the one shown (replace), else after it; past MAX_TABS, the
+ * tab opened longest ago closes.
+ * @param {PreviewView} opened
+ * @param {boolean} replace
+ */
+function addTab(opened, replace) {
+  const at = view ? views.indexOf(view) : -1;
+  if (replace && at >= 0) views[at] = opened;
+  else views.splice(at >= 0 ? at + 1 : views.length, 0, opened);
+  if (views.length > MAX_TABS) views.splice(views[0] === opened ? 1 : 0, 1);
+  watchTabs();
+}
+
+/**
+ * Shows a tab that's open: where it was scrolled, unless a line is asked for; read again when its file changed
+ * since, or the terminal asking is another one (whose copies of Claude's edits it compares).
+ * @param {PreviewView} open
+ * @param {{ tab: Tab, line: number | null, focus: boolean, wholeFile: boolean }} options
+ */
+async function selectTab(open, { tab, line, focus, wholeFile }) {
+  saveScroll();
+  const reread = open.stale || open.tab !== tab;
+  open.tab = tab;
+  if (line != null) open.line = line;
+  if (wholeFile) open.mode = changeView.file;
+  view = open;
+  mount(tab);
+  render({ scrollToChange: line != null });
+  if (line == null) restoreScroll();
+  if (focus) el.focus({ preventScroll: true });
+  emit(EVENTS.previewShown, { tab, path: open.path });
+  if (reread) await load(open, { keepScroll: line == null });
+}
+
+/** Keeps where the tab shown is scrolled, for when it's shown again. */
+function saveScroll() {
+  if (view) view.scroll = scroller.scrollTop;
+}
+
+function restoreScroll() {
+  scroller.scrollTop = view?.scroll ?? 0;
+  lastRange = '';
+  drawVisible();
 }
 
 /**
@@ -312,15 +458,25 @@ export function showMessage(tab, text, { focus = true } = {}) {
   if (focus) el.focus({ preventScroll: true });
 }
 
-async function load() {
-  const current = view;
+/**
+ * Reads a tab's file (the one shown, by default) and draws it if it's still shown. keepScroll: read again in place
+ * (it changed), rather than opened (scrolled to the first change).
+ * @param {PreviewView | null} [current]
+ * @param {{ keepScroll?: boolean }} [options]
+ */
+async function load(current = view, { keepScroll = false } = {}) {
   if (!current?.path) return;
   const reply = await fetchChange(current.tab, current.path, current.compare);
-  if (view !== current) return; // something else was opened meanwhile
   current.loading = false;
+  current.stale = false;
   current.data = reply.view ?? null;
   current.error = reply.error ?? reply.view?.error ?? null;
-  render({ scrollToChange: true });
+  current.gone = current.data?.kind === CHANGE_KIND.missing;
+  if (view !== current) return renderTabs(); // another tab is shown now
+  if (!keepScroll) return render({ scrollToChange: true });
+  saveScroll();
+  render();
+  restoreScroll();
 }
 
 // While Claude keeps editing the open file, the preview follows. When it changes another file, the preview offers it
@@ -329,6 +485,14 @@ async function load() {
 const RELOAD_DELAY = 300;
 const loadLater = debounce(() => view && load(), RELOAD_DELAY);
 on(EVENTS.changes, tab => {
+  // Claude changed a file open in a tab that isn't shown: it's read again when it is.
+  for (const v of views) {
+    const changed = v !== view && v.tab === tab && /** @type {ChangedFile[]} */ (tab.changes ?? []).find(f => samePath(f.path, v.path));
+    if (changed && changed.at !== v.seenAt) {
+      v.seenAt = changed.at;
+      v.stale = true;
+    }
+  }
   if (!view?.path || view.tab !== tab) return;
   const files = /** @type {ChangedFile[]} */ (tab.changes ?? []);
   const newest = files[0]; // the host lists the most recent first
@@ -336,7 +500,7 @@ on(EVENTS.changes, tab => {
   if (newest && placement !== PLACEMENT.window && !samePath(newest.path, view.path) && time(newest.at) > time(view.offeredAt)) {
     view.offeredAt = newest.at;
     if (settings().changes.follow === changeFollow.follow) {
-      showChange(tab, newest.path, { focus: false }); // the terminal keeps the keyboard
+      showChange(tab, newest.path, { focus: false, replace: true }); // the terminal keeps the keyboard
       return;
     }
     view.offer = newest;
@@ -406,6 +570,7 @@ const MAX_WRAPPED_ROWS = 3000;
 function render({ scrollToChange = false } = {}) {
   if (!view) return;
   const data = view.data;
+  renderTabs();
   renderTitle(data);
   renderToggles(data);
   renderNotes(data);
@@ -595,7 +760,7 @@ function moveFile(step) {
   if (files.length < 2) return;
   const at = files.findIndex(p => samePath(p, /** @type {PreviewView} */ (view).path));
   const next = files[(at + step + files.length) % files.length];
-  showChange(/** @type {PreviewView} */ (view).tab, next);
+  showChange(/** @type {PreviewView} */ (view).tab, next, { replace: true });
 }
 
 el.addEventListener('click', e => {
@@ -668,6 +833,11 @@ find(el, '.pv-head').addEventListener('pointerdown', e => {
 
 // Terminals closing take their changes with them.
 on(EVENTS.workspaces, () => {
-  if (view && !state.tabs.has(view.tab.id)) closePreview();
+  if (!view) return;
+  // A file's tab stays with another terminal open; it closes when its own terminal was the last one.
+  const anyTab = [...state.tabs.values()][0];
+  if (!anyTab) return closePreview();
+  for (const v of views) if (!state.tabs.has(v.tab.id)) v.tab = anyTab;
+  if (!state.tabs.has(view.tab.id)) closePreview();
 });
 

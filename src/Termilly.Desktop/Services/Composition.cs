@@ -63,6 +63,7 @@ internal static class Composition
         .AddHandler<LayoutHandler>()
         .AddHandler<SshHandler>()
         .AddHandler<FilesHandler>()
+        .AddHandler<PreviewWatchHandler>()
         .AddHandler<RecordingHandler>()
         .AddHandler<ActionHandler>()
         .AddHandler<SoundHandler>()

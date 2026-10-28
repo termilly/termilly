@@ -12,7 +12,7 @@ import {
 import { ICONS, tabBadgeHtml, activityHtml } from './ui.js';
 import { openTerminal, disposeTerminal, bufferLines, scheduleFit, prepareStart } from './terminals.js';
 import { wake } from './hibernate.js';
-import { byId, find, targetOf, WORKSPACE_ID, dragPointer } from './dom.js';
+import { byId, find, targetOf, WORKSPACE_ID, dragPointer, onMiddleClick } from './dom.js';
 import { ENV_CLASS, ENV_COLOR } from './environments.js';
 
 /** A pane's drop zones: beside it on a side, or in it as a tab (center). */
@@ -637,7 +637,7 @@ function stripTab(tab) {
   el.innerHTML = `<span class="strip-badge"></span><span class="strip-name"></span><span class="strip-activity"></span><button class="strip-close" title="Close terminal (Ctrl+Shift+W)">${ICONS.close}</button>`;
   find(el, '.strip-close').addEventListener('click', () => closeTab(tab));
   // A middle click closes the tab, as in a browser.
-  el.addEventListener('auxclick', e => { if (e.button === 1) closeTab(tab); });
+  onMiddleClick(el, () => closeTab(tab));
   el.addEventListener('mousedown', e => { if (e.button === 1) e.preventDefault(); });
   wireDrag(tab, el);
   updateStripTab(tab, el);

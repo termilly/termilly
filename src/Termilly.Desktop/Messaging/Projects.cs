@@ -41,6 +41,12 @@ internal static partial class FromPage
         public static string Type => "changes:get";
     }
 
+    /// <summary>The files open in the preview's tabs, to hear when they change outside Termilly (all of them: an empty list stops).</summary>
+    internal sealed record PreviewWatch(IReadOnlyList<string>? Paths = null) : IPageMessage
+    {
+        public static string Type => "preview:watch";
+    }
+
     /// <summary>The Git window's search in a terminal's changed files: their paths and what's in them now.</summary>
     internal sealed record ChangesSearch(string Id = "", string? RequestId = null, string? Query = null) : IPageMessage
     {
@@ -171,6 +177,12 @@ internal static partial class ToPage
     }
 
     /// <summary>Where a path in a terminal leads; <see cref="Folder"/>: it's a folder, not a file.</summary>
+    /// <summary>A file open in the preview changed, was deleted (Exists false) or came back; Path as the page sent it.</summary>
+    internal sealed record PreviewFileChanged(string Path, bool Exists) : IHostMessage
+    {
+        public static string Type => "preview:fileChanged";
+    }
+
     internal sealed record ChangeResolved(string? RequestId, string? Path, int? Line, string? Error, bool Folder = false) : IHostMessage
     {
         public static string Type => "changes:resolved";

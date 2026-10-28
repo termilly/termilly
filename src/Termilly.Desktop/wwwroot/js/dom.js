@@ -7,6 +7,19 @@
 export const WORKSPACE_ID = 'workspace';
 /** xterm's element the cells are drawn in: its size over the terminal's columns and rows is a cell's. */
 export const XTERM_SCREEN = '.xterm-screen';
+/** The mouse's middle button (its wheel), which closes a tab. */
+const MIDDLE_BUTTON = 1;
+
+/**
+ * Runs fn when the middle button clicks el (closing a tab, as browsers do).
+ * @param {HTMLElement} el
+ * @param {(e: MouseEvent) => void} fn
+ */
+export function onMiddleClick(el, fn) {
+  // Over something that scrolls, a middle press starts auto-scrolling on Windows, and then no auxclick comes.
+  el.addEventListener('mousedown', e => { if (e.button === MIDDLE_BUTTON) e.preventDefault(); });
+  el.addEventListener('auxclick', e => { if (e.button === MIDDLE_BUTTON) fn(e); });
+}
 
 /**
  * An element of index.html, by its id.
