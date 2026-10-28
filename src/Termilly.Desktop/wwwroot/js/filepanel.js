@@ -11,7 +11,7 @@ import { on, profileOf, isSsh, isRemote, wsById, EVENTS } from './store.js';
 import { focusedTab, newTab } from './panes.js';
 import { escapeHtml, ICONS } from './ui.js';
 import { modal, confirmDialog, CONFIRM_DIALOG } from './dialogs.js';
-import { byId, field, targetOf, WORKSPACE_ID } from './dom.js';
+import { byId, field, targetOf, dragPointer, WORKSPACE_ID } from './dom.js';
 import { showMenu, SEPARATOR } from './popups.js';
 import { showChange } from './preview.js';
 import { pathActions } from './actions.js';
@@ -50,6 +50,8 @@ const QUEUE_SHOWN = 6;
 /** Bytes in a kilobyte and in a megabyte, for sizes. */
 const KB = 1024;
 const MB = KB * KB;
+/** The panel's narrowest width; its widest is half the terminals' area (app.css max-width). */
+const MIN_WIDTH_PX = 260;
 /** Where this machine's deleted files go. */
 const BIN = platform === PLATFORM.windows ? 'the Recycle Bin' : 'the trash';
 const FILE_MANAGER = platform === PLATFORM.windows ? 'Explorer' : 'the file manager';
@@ -185,6 +187,7 @@ function render() {
   if (!view) return;
   const { tab, path, follow, server } = view;
   panel.innerHTML = `
+    <div class="files-grip" title="Drag to resize"></div>
     <div class="files-head">
       <span class="files-title">Files · ${escapeHtml(profileOf(tab)?.name ?? '')}</span>
       <button class="pane-btn" data-files="${FILES_ACTION.close}" title="Close">${ICONS.close}</button>
@@ -403,6 +406,17 @@ panel.addEventListener('drop', e => {
   e.preventDefault();
   if (platform === PLATFORM.linux) copyIn(null, droppedPaths(e.dataTransfer));
   else copyIn(e.dataTransfer.files);
+});
+
+// ---- Resizing: the grip on its left edge, up to half the terminals' area (the width stays while Termilly runs) ----
+
+panel.addEventListener('pointerdown', e => {
+  if (!targetOf(e).matches('.files-grip')) return;
+  e.preventDefault();
+  const area = byId(WORKSPACE_ID).getBoundingClientRect();
+  dragPointer(/** @type {HTMLElement} */ (e.target), e, ev => {
+    panel.style.width = `${Math.round(Math.min(area.width / 2, Math.max(MIN_WIDTH_PX, area.right - ev.clientX)))}px`;
+  });
 });
 
 // ---- Following the terminal's folder ----

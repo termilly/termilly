@@ -598,6 +598,10 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
   box-shadow: var(--shadow-pop);
 }
 .files-panel[hidden] { display: none; }
+/* Dragged wider stays at most half the terminals' area, also when the window shrinks later (js/filepanel.js). */
+.files-panel { min-width: 260px; max-width: 50%; }
+.files-grip { position: absolute; top: 0; bottom: 0; left: -3px; z-index: 1; width: 6px; cursor: ew-resize; }
+.files-grip:hover { background: var(--accent); opacity: .5; }
 .files-panel.drop { outline: 2px dashed var(--accent); outline-offset: -6px; }
 .files-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px 4px 12px; }
 .files-title { color: var(--text); font-size: 12.5px; font-weight: 600; }
