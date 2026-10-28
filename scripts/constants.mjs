@@ -29,6 +29,8 @@ const SOURCES = [
   { file: 'GitCommands.cs', cls: 'DiffSides', js: 'DIFF_SIDE' },
   { file: 'GitSearch.cs', cls: 'GitSearchMatches', js: 'GIT_MATCH' },
   { file: 'Messaging/Connections.cs', cls: 'ForwardStates', js: 'FORWARD_STATE' },
+  { file: 'Messaging/Files.cs', cls: 'FileOperations', js: 'FILE_OP' },
+  { file: 'Messaging/Files.cs', cls: 'FolderPaths', js: 'FOLDER_PATH' },
   { file: 'Messaging/Window.cs', cls: 'WindowActions', js: 'WINDOW_ACTION' },
   { file: 'Messaging/Window.cs', cls: 'QuitAnswers', js: 'QUIT_ANSWER' },
   { file: 'UpdateInstall.cs', cls: 'UpdateStates', js: 'UPDATE_STATE' },

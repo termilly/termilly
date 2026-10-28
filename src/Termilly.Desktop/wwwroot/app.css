@@ -602,6 +602,7 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
 }
 .files-panel[hidden] { display: none; }
 .files-grip { position: absolute; top: 0; bottom: 0; left: -3px; z-index: 1; width: 6px; cursor: ew-resize; }
+.files-drive { width: 16px; height: 16px; margin-right: 6px; stroke-width: 1; vertical-align: -3px; }
 .files-grip:hover { background: var(--accent); opacity: .5; }
 .files-panel.drop { outline: 2px dashed var(--accent); outline-offset: -6px; }
 .files-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px 4px 12px; }
@@ -776,11 +777,29 @@ body.maximized .edge { display: none; }
 }
 body[data-sidebar="rail"] #sidebar { width: 52px; }
 
-/* The gap between sidebar and terminals. */
+/* No width animation while dragging the edge, so the sidebar follows the pointer. */
+body.resizing-sidebar #sidebar { transition: none; }
+body.resizing-sidebar, body.resizing-sidebar * { cursor: col-resize !important; user-select: none; }
+/* The gap between sidebar and terminals doubles as the resize handle (while the sidebar is open). */
 #sidebar-gap {
+  position: relative;
   flex: none;
   width: var(--gap);
 }
+body[data-sidebar="open"] #sidebar-gap { cursor: col-resize; }
+#sidebar-gap::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 2px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+body[data-sidebar="open"] #sidebar-gap:hover::after, body.resizing-sidebar #sidebar-gap::after { opacity: 1; }
 
 .side-open, .side-rail {
   position: absolute;
@@ -2027,7 +2046,7 @@ textarea.field { height: auto; padding: 7px 10px; line-height: 1.5; resize: vert
 .pv-row { display: flex; min-height: 1.5em; font: var(--term-font-size, 12.5px)/1.5 var(--term-font, var(--mono)); white-space: pre; }
 .pv-no { flex: none; width: 4.5ch; padding-right: 1ch; color: var(--faint); text-align: right; user-select: none; }
 .pv-sign { flex: none; width: 2ch; color: var(--faint); text-align: center; user-select: none; }
-.pv-code { flex: 1; padding-right: 16px; }
+.pv-code { flex: 1; padding-right: 16px; user-select: text; }
 .pv-row.add { background: color-mix(in srgb, var(--ok) 13%, transparent); }
 .pv-row.add .pv-sign, .pv-half.add .pv-no { color: var(--ok); }
 .pv-row.del { background: color-mix(in srgb, var(--danger) 14%, transparent); }

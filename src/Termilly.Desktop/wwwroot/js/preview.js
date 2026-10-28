@@ -13,6 +13,7 @@ import { scheduleFit } from './terminals.js';
 import { ICONS, ltrPath } from './ui.js';
 import { buildDiffRows, diffRowHtml, DIFF_ROW, DIFF_SCROLL, DIFF_LINE, DIFF_TARGET } from './diffrows.js';
 import { debounce } from './util.js';
+import { fileSize, imagesHtml, measureImages } from './pictures.js';
 import { updateSettings } from './preferences.js';
 import { SETTING_VALUES, CHANGE_SOURCE, CHANGE_KIND } from './constants.js';
 import { byId, find, targetOf, WORKSPACE_ID, dragPointer, dragFloating } from './dom.js';
@@ -92,7 +93,7 @@ el.innerHTML = `
   </div>
   <div class="pv-note" hidden></div>
   <div class="pv-newer" hidden><span></span><button class="btn small" data-pv="newer">Show it</button></div>
-  <div class="pv-scroll"><div class="pv-spacer"><div class="pv-rows"></div></div><div class="pv-message" hidden></div></div>`;
+  <div class="pv-scroll"><div class="pv-pictures" hidden></div><div class="pv-spacer"><div class="pv-rows"></div></div><div class="pv-message" hidden></div></div>`;
 
 const nameEl = find(el, '.pv-name');
 const pathEl = find(el, '.pv-path');
@@ -102,6 +103,7 @@ const noteEl = find(el, '.pv-note');
 const newerEl = find(el, '.pv-newer');
 const scroller = find(el, DIFF_SCROLL);
 const spacer = find(el, '.pv-spacer');
+const picturesEl = find(el, '.pv-pictures');
 const rowsEl = find(el, '.pv-rows');
 const messageEl = find(el, '.pv-message');
 
@@ -408,11 +410,17 @@ function render({ scrollToChange = false } = {}) {
   renderToggles(data);
   renderNotes(data);
   renderOffer();
-  const message = view.message ?? (view.loading && !data ? 'Loading…' : messageFor(data));
+  // An image shows as pictures: alone when it's binary, above its text diff for an SVG.
+  const pictures = view.message ? '' : imagesHtml(/** @type {import('./pictures.js').Pictured} */ (data ?? {}));
+  picturesEl.innerHTML = pictures;
+  picturesEl.hidden = !pictures;
+  if (pictures) measureImages(picturesEl);
+  const textless = !!pictures && data?.before == null && data?.after == null;
+  const message = textless ? null : view.message ?? (view.loading && !data ? 'Loading…' : messageFor(data));
   messageEl.hidden = !message;
   messageEl.textContent = message ?? '';
-  spacer.hidden = !!message;
-  if (message) return;
+  spacer.hidden = !!message || textless;
+  if (message || textless) return;
   renderRows(data);
   if (scrollToChange) scrollToFirst();
 }
@@ -518,13 +526,6 @@ function messageFor(data) {
   if (!data.ops?.length) return data.after === '' || data.before === '' ? 'The file is empty.' : null;
   return null;
 }
-
-/** Bytes in a kilobyte and in a megabyte. */
-const KB_BYTES = 1024;
-const MB_BYTES = 1 << 20;
-
-/** A file size as people read it: KB, or MB from a megabyte. @param {number} bytes */
-export const fileSize = bytes => (bytes >= MB_BYTES ? `${(bytes / MB_BYTES).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / KB_BYTES))} KB`);
 
 function drawVisible() {
   if (!virtual || !rows.length) return;

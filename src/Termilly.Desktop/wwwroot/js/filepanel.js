@@ -16,9 +16,13 @@ import { byId, field, targetOf, dragPointer, WORKSPACE_ID } from './dom.js';
 import { showMenu, SEPARATOR } from './popups.js';
 import { showChange } from './preview.js';
 import { pathActions } from './actions.js';
+import { FILE_OP, FOLDER_PATH } from './constants.js';
 
-/** A file or folder, as the host lists it (Sftp.cs, LocalFiles.cs). */
-/** @typedef {{ name: string, isDirectory: boolean, size: number, permissions: string, modified: string }} FileEntry */
+/** A file or folder, as the host lists it (Sftp.cs, LocalFiles.cs); a drive has its label. */
+/**
+ * @typedef {{ name: string, isDirectory: boolean, size: number, permissions: string, modified: string, label?: string | null }}
+ *   FileEntry
+ */
 /** What the panel shows: its terminal, whether that's on a server, the folder and what's in it. */
 /**
  * @typedef {{ tab: Tab, server: boolean, path: string, entries: FileEntry[], loading: boolean, error: string | null,
@@ -39,8 +43,6 @@ import { pathActions } from './actions.js';
 const JOB_STATE = Object.freeze({ running: 'running', done: 'done', failed: 'failed' });
 /** What a job in the queue is (its icon). */
 const JOB_KIND = Object.freeze({ put: 'put', get: 'get', rename: 'rename', delete: 'delete', mkdir: 'mkdir', open: 'open' });
-/** The file operations the host runs (PAGE.filesOp's op; Messaging/Files.cs). */
-const FILE_OP = Object.freeze({ get: 'get', rename: 'rename', mkdir: 'mkdir', rmdir: 'rmdir', rm: 'rm', open: 'open' });
 /** What the panel's buttons do (data-files). */
 const FILES_ACTION = Object.freeze({
   close: 'close', up: 'up', refresh: 'refresh', mkdir: 'mkdir', follow: 'follow', get: 'get', rename: 'rename', delete: 'delete',
@@ -80,12 +82,19 @@ const sepOf = /** @param {string} path */ path => (/^[A-Za-z]:\\|^\\\\/.test(pat
  * @param {string} name
  */
 const joinPath = (dir, name) => (dir.endsWith(sepOf(dir)) ? dir + name : `${dir}${sepOf(dir)}${name}`);
-/** The folder a path is in; a drive's or the server's root stays itself. */
+/** A Windows drive's root ("C:\") or a network share's ("\\server\share"): above it are the drives. */
+const DRIVE_ROOT = /^[A-Za-z]:\\?$|^\\\\[^\\]+\\[^\\]+\\?$/;
+/** The folder a path is in: above a drive or share, the drives; the server's root (and the drives) stay themselves. */
 const parentOf = /** @param {string} path */ path => {
+  if (path === FOLDER_PATH.drives || DRIVE_ROOT.test(path)) return FOLDER_PATH.drives;
   const sep = sepOf(path);
   const up = path.replace(sep === '\\' ? /\\[^\\]+\\?$/ : /\/[^/]+\/?$/, '');
   return sep === '\\' ? (/^[A-Za-z]:$/.test(up) ? `${up}\\` : up || path) : up || '/';
 };
+/** A drive, drawn on whole pixels at 16px with 1px lines (half-pixel coordinates), so it stays crisp. */
+const DRIVE_ICON = '<svg class="files-drive" viewBox="0 0 16 16"><rect x="1.5" y="4.5" width="13" height="7" rx="1"/><path d="M3.5 9.5h1M11.5 9.5h1"/></svg>';
+/** Whether the panel shows the drives rather than a folder. */
+const atDrives = () => view?.path === FOLDER_PATH.drives;
 /** A path as a shell takes it: quoted when it has a space. */
 const shellPath = /** @param {string} path */ path => (/[\s'"&()]/.test(path) ? `"${path}"` : path);
 
@@ -165,7 +174,7 @@ const sizeText = /** @param {number} n */ n => (n < KB ? `${n} B` : n < MB ? `${
  * @param {number} i
  * @param {boolean} server
  */
-const entryRow = (e, i, server) => `
+const entryRow = (e, i, server) => (e.label != null ? driveRow(e, i) : `
   <div class="files-item${e.isDirectory ? ' dir' : ''}" data-i="${i}" title="${escapeHtml([e.permissions, e.modified].filter(Boolean).join(' · '))}">
     <span class="files-name">${e.isDirectory ? '📁' : '📄'} ${escapeHtml(e.name)}</span>
     <span class="files-size">${e.isDirectory ? '' : sizeText(e.size)}</span>
@@ -174,6 +183,17 @@ const entryRow = (e, i, server) => `
       <button class="pane-btn" data-files="${FILES_ACTION.rename}" title="Rename">${ICONS.rename}</button>
       <button class="pane-btn" data-files="${FILES_ACTION.delete}" title="Delete">${ICONS.trash}</button>
     </span>
+  </div>`);
+
+/**
+ * A drive's row: its label and letter ("Local Disk (C:)"), and its free space.
+ * @param {FileEntry} e
+ * @param {number} i
+ */
+const driveRow = (e, i) => `
+  <div class="files-item dir" data-i="${i}" title="${escapeHtml(e.modified)}">
+    <span class="files-name">${DRIVE_ICON}${escapeHtml(`${e.label} (${e.name.replace(/\\$/, '')})`)}</span>
+    <span class="files-size">${escapeHtml(e.modified.replace(/ of .*$/, ''))}</span>
   </div>`;
 
 /** @param {FilesView} v */
@@ -204,7 +224,7 @@ function render() {
       ${server ? '<label class="btn small files-upload" title="Upload files">Upload<input type="file" multiple hidden data-files-pick></label>' : ''}
       <label class="paste-never files-follow" title="Show the folder the terminal is in"><input type="checkbox" data-files="${FILES_ACTION.follow}"${follow ? ' checked' : ''}> Follow</label>
     </div>
-    <div class="files-path" title="${escapeHtml(path)}">${escapeHtml(path)}</div>
+    <div class="files-path" title="${escapeHtml(path)}">${escapeHtml(path === FOLDER_PATH.drives ? 'This PC' : path)}</div>
     <div class="files-list">${listHtml(view)}</div>
     ${queueHtml()}`;
 }
@@ -246,12 +266,13 @@ function askName(title, value = '') {
 
 // ---- What a file or folder can do ----
 
-/** @param {FileEntry} item */
-const pathOf = item => joinPath(/** @type {FilesView} */ (view).path, item.name);
+/** A file or folder's path; a drive's is its root. @param {FileEntry} item */
+const pathOf = item => (atDrives() ? item.name : joinPath(/** @type {FilesView} */ (view).path, item.name));
 
 async function makeFolder() {
+  if (atDrives()) return;
   const name = await askName('New folder');
-  if (name && view) operation(JOB_KIND.mkdir, name, { op: FILE_OP.mkdir, path: joinPath(view.path, name) }, true);
+  if (name && view) operation(JOB_KIND.mkdir, name, { op: FILE_OP.makeDirectory, path: joinPath(view.path, name) }, true);
 }
 
 /** @param {FileEntry} item */
@@ -266,7 +287,7 @@ async function remove(item) {
   const body = !view.server ? `It goes to ${BIN}.`
     : item.isDirectory ? 'Only an empty folder can be deleted.' : 'It’s deleted on the server; there’s no undo.';
   if (await confirmDialog({ title: `Delete ${item.name}?`, body, confirm: 'Delete' }) && view) {
-    operation(JOB_KIND.delete, item.name, { op: item.isDirectory ? FILE_OP.rmdir : FILE_OP.rm, path: pathOf(item) }, true);
+    operation(JOB_KIND.delete, item.name, { op: item.isDirectory ? FILE_OP.removeDirectory : FILE_OP.remove, path: pathOf(item) }, true);
   }
 }
 
@@ -314,6 +335,7 @@ panel.addEventListener('click', e => {
   if (action === FILES_ACTION.follow) { view.follow = /** @type {HTMLInputElement} */ (e.target).checked; return; }
   if (action === FILES_ACTION.mkdir) return makeFolder();
   if (!item) return;
+  if (atDrives()) return list(pathOf(item)); // a drive only opens
   if (action === FILES_ACTION.get) return download(item);
   if (action === FILES_ACTION.rename) return rename(item);
   if (action === FILES_ACTION.delete) return remove(item);
@@ -349,9 +371,12 @@ function itemMenu(v, item) {
     { label: 'Copy path', icon: ICONS.copy, action: () => copyText(path) },
     { label: 'Insert path in the terminal', action: () => insertPath(path) },
     .../** @type {import('./popups.js').MenuEntry[]} */ (actions.length ? [SEPARATOR, ...actions] : []),
-    SEPARATOR,
-    { label: 'Rename', icon: ICONS.rename, action: () => rename(item) },
-    { label: 'Delete', icon: ICONS.trash, danger: true, action: () => remove(item) },
+    // A drive can't be renamed or deleted from here.
+    .../** @type {import('./popups.js').MenuEntry[]} */ (atDrives() ? [] : [
+      SEPARATOR,
+      { label: 'Rename', icon: ICONS.rename, action: () => rename(item) },
+      { label: 'Delete', icon: ICONS.trash, danger: true, action: () => remove(item) },
+    ]),
   ];
 }
 
@@ -360,9 +385,20 @@ function itemMenu(v, item) {
  * @param {FilesView} v
  * @returns {import('./popups.js').MenuEntry[]}
  */
-const folderMenu = v => [
+const folderMenu = v => {
+  const refresh = { label: 'Refresh', action: () => list(v.path) };
+  return atDrives() ? [refresh] : folderItems(v, refresh);
+};
+
+/**
+ * The menu of a folder (not the drives).
+ * @param {FilesView} v
+ * @param {import('./popups.js').MenuItem} refresh
+ * @returns {import('./popups.js').MenuEntry[]}
+ */
+const folderItems = (v, refresh) => [
   { label: 'New folder', icon: ICONS.plus, action: makeFolder },
-  { label: 'Refresh', action: () => list(v.path) },
+  refresh,
   ...(v.server ? [] : [{ label: `Show in ${FILE_MANAGER}`, action: () => send(PAGE.openPath, { path: v.path }) }]),
   SEPARATOR,
   { label: 'Copy path', icon: ICONS.copy, action: () => copyText(v.path) },
@@ -385,7 +421,7 @@ panel.addEventListener('contextmenu', e => {
  * @param {string[] | null} [paths]
  */
 function copyIn(files, paths = null) {
-  if (!view || !(paths ?? files)?.length) return;
+  if (!view || atDrives() || !(paths ?? files)?.length) return;
   const requestId = `files${++requests}`;
   const names = paths ? paths.map(p => /** @type {string} */ (p.split(/[\\/]/).pop())) : [.../** @type {FileList} */ (files)].map(f => f.name);
   for (const name of names) addJob({ kind: JOB_KIND.put, name, state: JOB_STATE.running, refresh: true, requestId });

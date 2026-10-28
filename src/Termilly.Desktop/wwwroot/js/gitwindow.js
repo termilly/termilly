@@ -10,7 +10,8 @@
 import { PAGE } from './protocol.js';
 import { request } from './host.js';
 import { state, on, emit, isSsh, wsById, tabTitle, EVENTS } from './store.js';
-import { toggleWrap, fileSize } from './preview.js';
+import { toggleWrap } from './preview.js';
+import { imagesHtml, measureImages } from './pictures.js';
 import { debounce } from './util.js';
 import { restoreFocus } from './panes.js';
 import { closeAll, showMenu, SEPARATOR } from './popups.js';
@@ -887,42 +888,6 @@ function drawDiff() {
     + `<div class="pv-scroll gw-diff${sideBySide && !whole ? ' sbs' : ''}${wrap ? ' wrap' : ''}">${pictures}<div class="pv-rows">${rows.map(diffRowHtml).join('')}</div></div>`;
   if (pictures) measureImages(target);
   return hit && searching() ? markInDiff(target, hit.line) : null;
-}
-
-/**
- * An image's versions side by side (one for a new or deleted file), on a checkerboard so transparency shows, each
- * with its size; '' for a file that isn't an image.
- * @param {GitDiff} data
- */
-function imagesHtml(data) {
-  const both = !!data.beforeImage && !!data.afterImage;
-  /**
-   * @param {string | null | undefined} src
-   * @param {string} label
-   * @param {number | undefined} bytes
-   */
-  const picture = (src, label, bytes) => src ? `<figure class="gw-image">
-      <div class="gw-image-box"><img src="${escapeHtml(src)}" alt="${escapeHtml(label)}"></div>
-      <figcaption>${both ? `<b>${escapeHtml(label)}</b> · ` : ''}<span data-image-size></span>${fileSize(bytes ?? 0)}</figcaption>
-    </figure>` : '';
-  const shown = picture(data.beforeImage, 'Before', data.beforeSize) + picture(data.afterImage, 'After', data.afterSize);
-  return shown ? `<div class="gw-images">${shown}</div>` : '';
-}
-
-/**
- * Adds each picture's width and height to its caption once it has loaded.
- * @param {Element} target
- */
-function measureImages(target) {
-  for (const img of target.querySelectorAll('.gw-image img')) {
-    const image = /** @type {HTMLImageElement} */ (img);
-    const show = () => {
-      const size = image.closest('.gw-image')?.querySelector('[data-image-size]');
-      if (size && image.naturalWidth) size.textContent = `${image.naturalWidth} × ${image.naturalHeight} px · `;
-    };
-    if (image.complete) show();
-    else image.addEventListener('load', show, { once: true });
-  }
 }
 
 // A folded run of unchanged lines opens on a click.

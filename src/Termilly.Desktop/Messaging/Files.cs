@@ -18,6 +18,13 @@ internal static class FileOperations
     public const string Reveal = "reveal";
 }
 
+/// <summary>Folders the Files panel lists that aren't paths.</summary>
+internal static class FolderPaths
+{
+    /// <summary>This computer's drives, network drives too: above a drive's root on Windows.</summary>
+    public const string Drives = "drives:";
+}
+
 internal static partial class FromPage
 {
     /// <param name="Id">The terminal whose folders it lists.</param>

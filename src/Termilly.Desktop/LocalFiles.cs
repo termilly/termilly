@@ -6,8 +6,8 @@ namespace Termilly.Desktop;
 /// <summary>A folder as the Files panel lists it: its full path and what's in it.</summary>
 internal sealed record FolderListing(string Path, List<FolderEntry> Entries);
 
-/// <summary>A file or folder in a listing; Permissions is the server's ls text (empty on this machine).</summary>
-internal sealed record FolderEntry(string Name, bool IsDirectory, long Size, string Modified, string Permissions);
+/// <summary>A file or folder in a listing; Permissions is the server's ls text (empty on this machine), Label a drive's name.</summary>
+internal sealed record FolderEntry(string Name, bool IsDirectory, long Size, string Modified, string Permissions, string? Label = null);
 
 /// <summary>
 /// The Files panel's folders on this machine, for a terminal that isn't SSH: listing one, and renaming, making
@@ -16,10 +16,15 @@ internal sealed record FolderEntry(string Name, bool IsDirectory, long Size, str
 internal static class LocalFiles
 {
     private const string ModifiedFormat = "yyyy-MM-dd HH:mm";
+    private const long Gigabyte = 1L << 30;
 
-    /// <summary>A folder's entries, folders first, then files, by name ("~" or empty: the home folder).</summary>
+    /// <summary>A folder's entries, folders first, then files, by name ("~" or empty: the home folder; FolderPaths.Drives: the drives).</summary>
     public static FolderListing List(string? folder)
     {
+        if (folder == Messaging.FolderPaths.Drives)
+        {
+            return new(folder, Drives());
+        }
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         var path = string.IsNullOrEmpty(folder) || folder == "~" ? home
             : folder.StartsWith("~/", StringComparison.Ordinal) ? Path.Combine(home, folder[2..])
@@ -45,6 +50,18 @@ internal static class LocalFiles
             throw new IOException($"{dir.FullName} can't be read.");
         }
     }
+
+    /// <summary>
+    /// The drives that are there (a card reader without a card isn't), as folders named by their root ("C:\"), with
+    /// their label and free space: "Local Disk", "Network" for a mapped share without one.
+    /// </summary>
+    private static List<FolderEntry> Drives() =>
+        DriveInfo.GetDrives().Where(d => d.IsReady).Select(d =>
+        {
+            var label = d.VolumeLabel is { Length: > 0 } name ? name : d.DriveType == DriveType.Network ? "Network" : "Local Disk";
+            var free = $"{d.AvailableFreeSpace / Gigabyte:N0} GB free of {d.TotalSize / Gigabyte:N0} GB";
+            return new FolderEntry(d.Name, true, 0, free, d.DriveType.ToString(), label);
+        }).ToList();
 
     /// <summary>Renames (or moves) a file or folder; an existing one at <paramref name="to"/> is never replaced.</summary>
     public static void Rename(string path, string to)

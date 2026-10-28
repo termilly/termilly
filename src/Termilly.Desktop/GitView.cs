@@ -55,14 +55,6 @@ internal static partial class GitView
     private const string NoCommits = "does not have any commits";
     private const long BytesPerKb = 1024;
 
-    /// <summary>Images the Git window shows as pictures, by extension: what they're sent as.</summary>
-    private static readonly Dictionary<string, string> ImageTypes = new(StringComparer.OrdinalIgnoreCase)
-    {
-        [".png"] = "image/png", [".jpg"] = "image/jpeg", [".jpeg"] = "image/jpeg", [".gif"] = "image/gif",
-        [".webp"] = "image/webp", [".bmp"] = "image/bmp", [".ico"] = "image/x-icon", [".avif"] = "image/avif",
-        [".svg"] = "image/svg+xml",
-    };
-
     /// <summary>A log's branch and tag names in full (GitOutput.ShortRef shortens them).</summary>
     internal const string FullDecorations = "--decorate=full";
 
@@ -101,7 +93,7 @@ internal static partial class GitView
         var path = git.CheckPath(root, target.Path);
         var from = target.OldPath is null ? path : git.CheckPath(root, target.OldPath);
         var hash = target.Hash;
-        var image = ImageTypes.GetValueOrDefault(Path.GetExtension(path));
+        var image = ChangePictures.TypeOf(path);
         var keep = image is not null; // an image's bytes, to show it
         Blob before, after;
         switch (target.Side)
@@ -132,21 +124,9 @@ internal static partial class GitView
                 throw new ArgumentException("Unknown kind of change.");
         }
         var view = View(path, target.OldPath is null ? path : $"{from} → {path}", before, after);
-        return image is null ? view : WithImages(view, image, before, after);
+        return image is null ? view : ChangePictures.With(view, image, before, after);
     }
 
-    /// <summary>
-    /// An image's two versions as pictures (data: URLs) beside its diff: a binary one has no lines to compare, so the
-    /// note saying so goes; an SVG keeps its text diff too. One over the size limit keeps its note.
-    /// </summary>
-    private static ChangeView WithImages(ChangeView view, string type, Blob before, Blob after)
-    {
-        static string? Picture(Blob blob, string type) => blob.Raw is { } raw ? $"data:{type};base64,{Convert.ToBase64String(raw)}" : null;
-        var beforeImage = Picture(before, type);
-        var afterImage = Picture(after, type);
-        var shown = (beforeImage ?? afterImage) is not null && !before.TooLarge && !after.TooLarge;
-        return view with { BeforeImage = beforeImage, AfterImage = afterImage, Note = shown && (before.Binary || after.Binary) ? null : view.Note };
-    }
 
     /// <summary>The index, as a revision in a blob's name (":path").</summary>
     private const string Index = "";

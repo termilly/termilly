@@ -15,7 +15,7 @@ internal sealed class HeadCopies(LocalGit git)
     private const int MaxSizeBytes = 64;
 
     /// <summary>Git's copy: missing when git doesn't have it (new, untracked); null with a note when there's no repository or git can't show it.</summary>
-    public HeadCopy Read(string path, long maxBytes)
+    public HeadCopy Read(string path, long maxBytes, bool keepBytes = false)
     {
         var folder = Path.GetDirectoryName(path);
         while (folder is not null && !Directory.Exists(folder))
@@ -37,7 +37,7 @@ internal sealed class HeadCopies(LocalGit git)
             return new(new Blob(true, null, false, true, size), null);
         }
         return git.Raw(root, (int)Math.Min(maxBytes, int.MaxValue), GitCommands.Show, GitCommands.Object(GitCommands.Head, relative)) is { } bytes
-            ? new(Blob.From(bytes, maxBytes), null)
+            ? new(Blob.From(bytes, maxBytes, keepBytes), null)
             : new(null, "git couldn't show the last commit's copy.");
     }
 }

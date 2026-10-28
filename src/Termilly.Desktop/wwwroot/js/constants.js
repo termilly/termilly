@@ -150,6 +150,22 @@ export const FORWARD_STATE = Object.freeze({
   failed: 'failed',
 });
 
+/** C#: FileOperations (Messaging/Files.cs). */
+export const FILE_OP = Object.freeze({
+  get: 'get',
+  remove: 'rm',
+  removeDirectory: 'rmdir',
+  makeDirectory: 'mkdir',
+  rename: 'rename',
+  open: 'open',
+  reveal: 'reveal',
+});
+
+/** C#: FolderPaths (Messaging/Files.cs). */
+export const FOLDER_PATH = Object.freeze({
+  drives: 'drives:',
+});
+
 /** C#: WindowActions (Messaging/Window.cs). */
 export const WINDOW_ACTION = Object.freeze({
   minimize: 'minimize',

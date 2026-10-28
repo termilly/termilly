@@ -85,10 +85,12 @@ internal sealed class ChangePreview(ChangeStore store, LocalGit git)
         {
             return FromCopies(path, display, file!, before, after, max);
         }
-        // No copies to show: the disk against git's last commit, or the file alone.
-        var disk = Blob.Read(path, max);
-        var (head, gitNote) = _head.Read(path, max);
-        return ChangeViews.Build(path, display, head ?? disk, disk, file?.Edits ?? 0, ChangeSources.Git, head is null ? gitNote : file?.Note);
+        // No copies to show: the disk against git's last commit, or the file alone; an image as pictures.
+        var image = ChangePictures.TypeOf(path);
+        var disk = Blob.Read(path, max, image is not null);
+        var (head, gitNote) = _head.Read(path, max, image is not null);
+        var view = ChangeViews.Build(path, display, head ?? disk, disk, file?.Edits ?? 0, ChangeSources.Git, head is null ? gitNote : file?.Note);
+        return image is null ? view : ChangePictures.OfFile(view, image, head, disk);
     }
 
     /// <summary>A change from the copies kept: the disk stands in for a copy after it, git (or the file itself) for one before.</summary>
