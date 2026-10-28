@@ -67,6 +67,34 @@ function add(tab, result) {
   activityChanged(tab, true);
 }
 
+// ---- Kept over a restart (snapshot.js) ----
+
+/**
+ * A terminal's results as the snapshot keeps them: without the detector's state, or the commands (the snapshot's
+ * secret redaction reads only its lines).
+ * @param {Tab} tab
+ */
+export const savedResults = tab => (tab.results?.items.length ? tab.results.items.map(r => ({ ...r, active: false, command: null })) : null);
+
+/**
+ * A restored terminal's results, so a resumed Claude Code session, which prints its conversation again, doesn't
+ * bring back as new (and notify of) the pull requests it opened before. No app runs any more.
+ * @param {Tab} tab
+ * @param {any} saved
+ */
+export function restoreResults(tab, saved) {
+  if (!Array.isArray(saved)) return;
+  const kinds = Object.values(RESULT_KIND);
+  const items = saved.filter(r => r && kinds.includes(r.kind) && typeof r.title === 'string' && (r.url === null || typeof r.url === 'string'))
+    .slice(0, MAX_RESULTS)
+    .map(r => ({
+      kind: r.kind, url: r.url, title: r.title, ...(typeof r.detail === 'string' ? { detail: r.detail } : {}),
+      at: Number.isFinite(r.at) ? r.at : Date.now(), active: false, remote: !!r.remote,
+      command: typeof r.command === 'string' ? r.command : null,
+    }));
+  if (items.length) resultsOf(tab).items = items;
+}
+
 // ---- Reading the output ----
 
 /**
