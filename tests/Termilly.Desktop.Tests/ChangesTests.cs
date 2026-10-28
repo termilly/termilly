@@ -645,5 +645,5 @@ public sealed class ChangesTests : IDisposable
     [Fact]
     public void Change_preview_settings_fall_back_to_their_defaults() =>
         Assert.Equal(new ChangeSettings(),
-            new ChangeSettings { Placement = "window", Source = "x", View = "y", Compare = "z", Keep = "q", Context = 7, MaxFileKb = 1, Layout = "w" }.Normalize());
+            new ChangeSettings { Placement = "window", Source = "x", Compare = "z", Keep = "q", Context = 7, MaxFileKb = 1, Layout = "w" }.Normalize());
 }

@@ -337,7 +337,6 @@ internal sealed record ChangeSettings
     public bool Button { get; init; } = true;
     public bool Shortcut { get; init; } = true;
     public string Source { get; init; } = SettingValues.ChangeSource.Default;
-    public string View { get; init; } = SettingValues.ChangeView.Default;
     public string Compare { get; init; } = SettingValues.ChangeCompare.Default;
     public string Keep { get; init; } = SettingValues.ChangeKeep.Default;
     public int Context { get; init; } = SettingValues.ChangeContext.Default;
@@ -354,7 +353,6 @@ internal sealed record ChangeSettings
     {
         Placement = SettingChecks.OneOf(Placement, SettingValues.ChangePlacement.All, SettingValues.ChangePlacement.Default),
         Source = SettingChecks.OneOf(Source, SettingValues.ChangeSource.All, SettingValues.ChangeSource.Default),
-        View = SettingChecks.OneOf(View, SettingValues.ChangeView.All, SettingValues.ChangeView.Default),
         Compare = SettingChecks.OneOf(Compare, SettingValues.ChangeCompare.All, SettingValues.ChangeCompare.Default),
         Keep = SettingChecks.OneOf(Keep, SettingValues.ChangeKeep.All, SettingValues.ChangeKeep.Default),
         Context = SettingChecks.OneOf(Context, SettingValues.ChangeContext.All, SettingValues.ChangeContext.Default),

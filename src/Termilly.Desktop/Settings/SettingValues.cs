@@ -177,13 +177,11 @@ internal static class SettingValues
         public static readonly IReadOnlyList<string> All = [Path, Git, FullEdits];
     }
 
+    /// <summary>What the change preview shows: the diff, or the whole file (each tab switches; there's no setting).</summary>
     public static class ChangeView
     {
         public const string Diff = "diff";
         public const string File = "file";
-        public const string DiffOnly = "diffOnly";
-        public const string Default = Diff;
-        public static readonly IReadOnlyList<string> All = [Diff, File, DiffOnly];
     }
 
     /// <summary>Compare with the copy from before Claude's first edit in the list, or its last.</summary>

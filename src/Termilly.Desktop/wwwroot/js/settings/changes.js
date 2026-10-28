@@ -8,7 +8,7 @@ import { SECTION, redraw } from './page.js';
 import { SETTING_VALUES } from '../constants.js';
 
 /** The choices of the settings used here (C#'s SettingValues). */
-const { changePlacement, changeFollow, changeSource, changeView, changeCompare, changeNewFile, changeKeep, changeContext, changeLayout, changeMaxFileKb } = SETTING_VALUES;
+const { changePlacement, changeFollow, changeSource, changeCompare, changeNewFile, changeKeep, changeContext, changeLayout, changeMaxFileKb } = SETTING_VALUES;
 
 const KB_PER_MB = 1024;
 
@@ -37,9 +37,7 @@ const CHANGES = {
         + row('Files changed by shell commands',
           'Also list files Claude changes with a command.',
           toggle('changes.shellFiles')))
-      + group('View', row('Opens on', 'You can switch while it’s open, except with Diff only.',
-          seg('changes.view', [[changeView.diff, 'Diff'], [changeView.file, 'Whole file'], [changeView.diffOnly, 'Diff only']]))
-        + row('Compare', 'All of Claude’s edits since the first, or the last one.',
+      + group('View', row('Compare', 'All of Claude’s edits since the first, or the last one (the Git window’s Agent changes).',
           seg('changes.compare', [[changeCompare.session, 'All edits'], [changeCompare.lastEdit, 'Last edit']]))
         + row('New files open as', 'The file itself, or a diff with every line added.',
           seg('changes.newFile', [[changeNewFile.file, 'The file'], [changeNewFile.diff, 'A diff']]))

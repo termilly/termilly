@@ -200,7 +200,6 @@ interface ChangeSettings {
   button: boolean;
   shortcut: boolean;
   source: string;
-  view: string;
   compare: string;
   keep: string;
   context: number;

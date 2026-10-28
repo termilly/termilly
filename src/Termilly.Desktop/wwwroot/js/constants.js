@@ -305,9 +305,6 @@ export const SETTING_VALUES = Object.freeze({
   changeView: Object.freeze({
     diff: 'diff',
     file: 'file',
-    diffOnly: 'diffOnly',
-    default: 'diff',
-    all: Object.freeze(['diff', 'file', 'diffOnly']),
   }),
   changeCompare: Object.freeze({
     session: 'session',

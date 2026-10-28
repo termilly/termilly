@@ -108,7 +108,6 @@ internal static class SettingsMigration
         ["changeButton"] = (nameof(AppSettings.Changes), nameof(ChangeSettings.Button)),
         ["changeShortcut"] = (nameof(AppSettings.Changes), nameof(ChangeSettings.Shortcut)),
         ["changeSource"] = (nameof(AppSettings.Changes), nameof(ChangeSettings.Source)),
-        ["changeView"] = (nameof(AppSettings.Changes), nameof(ChangeSettings.View)),
         ["changeCompare"] = (nameof(AppSettings.Changes), nameof(ChangeSettings.Compare)),
         ["changeKeep"] = (nameof(AppSettings.Changes), nameof(ChangeSettings.Keep)),
         ["changeContext"] = (nameof(AppSettings.Changes), nameof(ChangeSettings.Context)),

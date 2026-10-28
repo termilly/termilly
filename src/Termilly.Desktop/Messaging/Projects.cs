@@ -41,6 +41,15 @@ internal static partial class FromPage
         public static string Type => "changes:get";
     }
 
+    /// <summary>
+    /// What changed in a file open in the preview since it was shown: the text shown (<see cref="Before"/>) against
+    /// the text now (<see cref="After"/>).
+    /// </summary>
+    internal sealed record ChangesDiff(string? RequestId = null, string? Before = null, string? After = null) : IPageMessage
+    {
+        public static string Type => "changes:diff";
+    }
+
     /// <summary>The files open in the preview's tabs, to hear when they change outside Termilly (all of them: an empty list stops).</summary>
     internal sealed record PreviewWatch(IReadOnlyList<string>? Paths = null) : IPageMessage
     {
@@ -174,6 +183,12 @@ internal static partial class ToPage
     internal sealed record ChangeContent(string? RequestId, ChangeView? View, string? Error) : IHostMessage
     {
         public static string Type => "changes:content";
+    }
+
+    /// <summary>A diff of two texts (ChangesDiff): its runs as [kind, count], as <see cref="ChangeView.Ops"/>.</summary>
+    internal sealed record ChangesDiffed(string? RequestId, IReadOnlyList<int[]> Ops, int Added, int Removed) : IHostMessage
+    {
+        public static string Type => "changes:diffed";
     }
 
     /// <summary>Where a path in a terminal leads; <see cref="Folder"/>: it's a folder, not a file.</summary>

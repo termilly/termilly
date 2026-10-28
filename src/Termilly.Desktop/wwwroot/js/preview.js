@@ -1,14 +1,16 @@
 // @ts-check
-// The change preview: the whole of a file Claude changed (or any file Ctrl+clicked in a terminal), as a diff or the
-// whole file, coloured for its language. One view, in one of three places (Settings › Change preview): a pane in
-// the workspace's layout next to the terminal, a panel over the right edge, or a window you can move. The host
-// keeps the copies and works out the diff (Changes.cs, LineDiff.cs); this only draws it, a screenful at a time, so
-// big files stay quick.
+// The File Explorer: files opened from a terminal (Ctrl+click, the Files panel, the changed files Claude made), each
+// in a tab, shown as they are, coloured for their language. Each workspace has its own tabs. A file that changes
+// after it was shown isn't read again by itself: its tab says so, and offers what changed (Diff) and Refresh. It
+// sits in one of three places (Settings › Change preview): a pane in the workspace's layout next to the terminal, a
+// panel over the right edge, or a window you can move. The Git window borrows it for its Agent changes, where it
+// shows Claude's edits as a diff. The host keeps the copies and works out the diffs (Changes.cs, LineDiff.cs); this
+// only draws them, a screenful at a time, so big files stay quick.
 
 import { PAGE, HOST } from './protocol.js';
 import { send, request, onHost, platform, PLATFORM } from './host.js';
 import { state, on, emit, wsById, findPreview, EVENTS, GROUPS } from './store.js';
-import { focusTab, restoreFocus, setPreviewRenderer, insertPreview, removePreview } from './panes.js';
+import { focusTab, restoreFocus, setPreviewRenderer, insertPreview, removePreview, renderWorkspace } from './panes.js';
 import { scheduleFit } from './terminals.js';
 import { ICONS, ltrPath, escapeHtml } from './ui.js';
 import { buildDiffRows, diffRowHtml, DIFF_ROW, DIFF_SCROLL, DIFF_LINE, DIFF_TARGET } from './diffrows.js';
@@ -37,14 +39,19 @@ import { byId, find, targetOf, WORKSPACE_ID, dragPointer, dragFloating, onMiddle
  * @typedef {{ tab: Tab, path: string | null, line?: number | null, mode: string, compare: string,
  *   compareChosen?: boolean, expanded: Set<string>, data: ChangeData | null, loading?: boolean,
  *   offeredAt?: string | null, offer?: ChangedFile | null, seenAt?: string, message?: string,
- *   error?: string | null, scroll?: number, changed?: boolean, gone?: boolean }} PreviewView
+ *   error?: string | null, scroll?: number, changed?: boolean, gone?: boolean, pending?: ChangeData | null,
+ *   delta?: ChangeData | null }} PreviewView
  */
 // A view is also a tab: each file open keeps its own (scroll, mode, folds, its answer). changed: the file on disk
-// isn't what's shown any more (changed outside Termilly, or by Claude in a tab not shown): it isn't read again by
-// itself, its tab is coloured and Reload reads it; gone: deleted.
+// isn't what's shown any more (changed outside Termilly, or by Claude): it isn't read again by itself, its tab is
+// coloured, Diff shows what changed (delta: the text shown against pending, the file now) and Refresh reads it;
+// gone: deleted.
 
 /** The choices of the settings used here (C#'s SettingValues). */
 const { changeView, changeCompare, changeNewFile, changeFollow, changeLayout, changePlacement } = SETTING_VALUES;
+
+/** The File Explorer's name, on its title. */
+const TITLE = 'File Explorer';
 
 /**
  * Where the preview is: Settings' places for it (a split beside the terminal, a side panel, a floating window), or
@@ -80,7 +87,7 @@ el.className = 'pane preview-pane';
 el.tabIndex = -1;
 el.innerHTML = `
   <div class="pane-header pv-head">
-    <span class="pane-title"><span class="pv-icon">${ICONS.diff}</span><span class="pane-name pv-name"></span><span class="pv-badge" hidden></span></span>
+    <span class="pane-title"><span class="pv-icon">${ICONS.folder}</span><span class="pane-name pv-name"></span><span class="pv-badge" hidden></span></span>
     <span class="pv-path"></span>
     <span class="pv-stats"></span>
     <span class="pane-actions">
@@ -97,7 +104,7 @@ el.innerHTML = `
   <div class="pv-tabs" role="tablist" hidden></div>
   <div class="pv-note" hidden></div>
   <div class="pv-newer" hidden><span></span><button class="btn small" data-pv="newer">Show it</button></div>
-  <div class="pv-changed" hidden><span></span><button class="btn small" data-pv="${CONTROL.reload}">Reload</button></div>
+  <div class="pv-changed" hidden><span></span><button class="btn small" data-pv="${CONTROL.reload}">Refresh</button></div>
   <div class="pv-scroll"><div class="pv-pictures" hidden></div><div class="pv-spacer"><div class="pv-rows"></div></div><div class="pv-message" hidden></div></div>`;
 
 const nameEl = find(el, '.pv-name');
@@ -124,7 +131,9 @@ floating.className = 'preview-float';
 floating.hidden = true;
 workspaceEl.append(panel, floating);
 
-setPreviewRenderer(() => el);
+// Only the workspace the preview sits in gets it; another one that kept its pane (its tabs put aside) draws it
+// empty, so drawing it doesn't take the preview away from the one shown.
+setPreviewRenderer(ws => (!ws || ws.id === splitWs ? el : document.createElement('div')));
 
 /**
  * What's shown: the terminal it's about, the file, the host's answer ({ before, after, ops, kind, note, ... }), the
@@ -133,10 +142,23 @@ setPreviewRenderer(() => el);
  */
 let view = null;
 /**
- * The files open in tabs, in their order; view is one of them (or a message, which isn't a tab).
+ * The files open in tabs, in their order; view is one of them (or a message, which isn't a tab). They're the
+ * workspace shown's (setWs); the other workspaces' wait in sets.
  * @type {PreviewView[]}
  */
 let views = [];
+/**
+ * The workspaces' tabs other than the one shown: workspace id → its files and the one it showed.
+ * @type {Map<string, { views: PreviewView[], view: PreviewView | null }>}
+ */
+const sets = new Map();
+/** @type {string | null} */
+let setWs = null; // the workspace whose tabs are in views and view
+/**
+ * The workspace's tabs while the Git window has the preview, given back when it closes.
+ * @type {{ views: PreviewView[], view: PreviewView | null } | null}
+ */
+let stashed = null;
 /** @type {string | null} */
 let placement = null; // where the element is now: 'split' (with the workspace id), 'panel', 'float' or 'window'
 /** @type {string | null} */
@@ -162,16 +184,55 @@ export const previewTab = () => view?.tab ?? null;
 export function setPreviewHost(container, { order = null } = {}) {
   if (!container) {
     if (!windowHost) return;
-    if (placement === PLACEMENT.window) {
-      view = null;
-      views = [];
-      watchTabs();
-      unmount();
-    }
     windowHost = null;
+    if (placement === PLACEMENT.window) unmount();
+    // The workspace's own tabs come back as they were.
+    views = stashed?.views ?? [];
+    view = stashed?.view ?? null;
+    stashed = null;
+    watchTabs();
+    if (view) showView();
     return;
   }
+  if (!windowHost) {
+    // The workspace's tabs are kept aside: the window's files don't mix with them.
+    saveScroll();
+    stashed = { views, view };
+    views = [];
+    view = null;
+    if (placement) unmount({ keepLayout: true });
+  }
   windowHost = { container, order };
+}
+
+/** Whether the preview is the Git window's (Claude's edits as a diff), rather than the File Explorer. */
+const inWindow = () => placement === PLACEMENT.window;
+
+/**
+ * Puts the tabs of a workspace in views and view, keeping the ones of the workspace shown before.
+ * @param {string | null} id
+ */
+function useWorkspace(id) {
+  if (id === setWs) return;
+  saveScroll();
+  if (setWs) {
+    if (views.length) sets.set(setWs, { views, view });
+    else sets.delete(setWs);
+  }
+  const next = id ? sets.get(id) : null;
+  if (id) sets.delete(id);
+  views = next?.views ?? [];
+  view = next?.view ?? null;
+  setWs = id;
+}
+
+/** Shows the tab in view where it is (after a workspace switch, or the Git window closed), checked for changes. */
+function showView() {
+  const shown = /** @type {PreviewView} */ (view);
+  mount(shown.tab);
+  render();
+  restoreScroll();
+  checkChanged(shown);
 }
 
 /** @param {Tab} tab */
@@ -190,11 +251,16 @@ function mount(tab) {
   if (placement === wanted && (wanted !== PLACEMENT.split || splitWs === ws?.id)) return;
   unmount();
   if (wanted === PLACEMENT.split) {
-    // A split always has its workspace: without one, wanted became 'panel' above.
-    if (!findPreview(/** @type {Workspace} */ (ws).root) && !insertPreview(/** @type {Workspace} */ (ws), tab.id)) {
+    // A split always has its workspace: without one, wanted became 'panel' above. A workspace that kept its pane
+    // (its tabs were put aside) gets the preview back in it.
+    const w = /** @type {Workspace} */ (ws);
+    splitWs = w.id; // first: drawing the workspace puts the preview where splitWs says
+    if (findPreview(w.root)) renderWorkspace(w);
+    else if (!insertPreview(w, tab.id)) {
+      splitWs = null;
       wanted = PLACEMENT.panel;
-    } else splitWs = /** @type {Workspace} */ (ws).id;
-  }
+    }
+  } else if (ws && findPreview(ws.root)) removePreview(ws); // a pane kept from before the placement changed
   if (wanted === PLACEMENT.panel) panel.append(el);
   if (wanted === PLACEMENT.float) floating.append(el);
   panel.hidden = wanted !== PLACEMENT.panel;
@@ -204,8 +270,12 @@ function mount(tab) {
   scheduleFit();
 }
 
-function unmount() {
-  if (placement === PLACEMENT.split && splitWs) {
+/**
+ * Takes the preview off the screen. keepLayout: the workspace's pane for it stays, for its tabs to come back to.
+ * @param {{ keepLayout?: boolean }} [options]
+ */
+function unmount({ keepLayout = false } = {}) {
+  if (placement === PLACEMENT.split && splitWs && !keepLayout) {
     const ws = wsById(splitWs);
     if (ws) removePreview(ws);
   }
@@ -217,12 +287,13 @@ function unmount() {
   scheduleFit();
 }
 
-/** Closes the preview, with all its tabs. */
+/** Closes the preview, with all its tabs: the workspace shown's (the others keep theirs). */
 export function closePreview() {
   if (!view) return;
   const tab = view.tab;
   view = null;
   views = [];
+  if (setWs) sets.delete(setWs);
   watchTabs();
   unmount();
   if (state.tabs.has(tab.id)) focusTab(tab); else restoreFocus();
@@ -259,9 +330,9 @@ function tabName(v) {
 /** What the tab strip last drew. */
 let tabsHtml = '';
 
-/** The tab strip: shown with two tabs or more, and never in the Git window (which has its own list). */
+/** The tab strip under the title, from the first file on; never in the Git window (which has its own list). */
 function renderTabs() {
-  tabsEl.hidden = views.length < 2 || placement === PLACEMENT.window;
+  tabsEl.hidden = !views.length || placement === PLACEMENT.window;
   if (tabsEl.hidden) return;
   // Drawn again only when something changed: a redraw between a button's press and release would lose its click.
   const html = views.map((v, i) => `
@@ -288,9 +359,12 @@ onMiddleClick(tabsEl, e => {
 
 /** The paths last asked to be watched, so the host is only told when they change. */
 let watched = '';
+/** Every tab open: the workspace shown's, the other workspaces', and those put aside for the Git window. */
+const allViews = () => [...views, ...[...sets.values()].flatMap(s => s.views), ...(stashed?.views ?? [])];
+
 /** Tells the host which files are open, to hear when one changes outside Termilly (PreviewWatch.cs). */
 function watchTabs() {
-  const paths = views.map(v => /** @type {string} */ (v.path));
+  const paths = [...new Set(allViews().map(v => /** @type {string} */ (v.path)))];
   const key = paths.join('\n');
   if (key === watched) return;
   watched = key;
@@ -298,27 +372,45 @@ function watchTabs() {
 }
 
 // A file open in a tab changed, was deleted or came back: it isn't shown again by itself. Its tab is coloured, and
-// the tab shown says so with a Reload button.
+// the tab shown says so with Refresh (and Diff, for what changed).
 onHost(HOST.previewFileChanged, m => {
-  for (const v of views.filter(o => samePath(o.path, m.path))) {
+  for (const v of allViews().filter(o => samePath(o.path, m.path))) {
     if (!m.exists) markChanged(v, true);
     else checkChanged(v);
   }
 });
 
 /**
+ * A file's text as the File Explorer shows it: as it is, or as it was before it was deleted.
+ * @param {ChangeData | null | undefined} data
+ */
+const textOf = data => (data?.kind === CHANGE_KIND.deleted ? data.before : data?.after) ?? null;
+
+/**
  * Reads a tab's file without showing it: only a real difference (not a save of the same text, nor Claude's edit the
- * preview already followed) marks it changed.
+ * Git window already followed) marks it changed, and keeps what it is now for Diff. Back to what's shown, it's
+ * unmarked.
  * @param {PreviewView} v
  */
 async function checkChanged(v) {
-  if (!v.path) return;
+  if (!v.path || v.loading) return;
   const reply = await fetchChange(v.tab, v.path, v.compare);
   const now = /** @type {ChangeData | null} */ (reply.view ?? null);
   const shown = v.data;
-  const same = !!now && !!shown && now.before === shown.before && now.after === shown.after && now.kind === shown.kind
+  // The File Explorer shows the file as it is: only that counts. The Git window shows Claude's edits: both sides do.
+  const same = !!now && !!shown && now.kind === shown.kind && textOf(now) === textOf(shown)
+    && (!inWindow() || now.before === shown.before)
     && /** @type {any} */ (now).afterImage === /** @type {any} */ (shown).afterImage;
-  if (!same) markChanged(v, now?.kind === CHANGE_KIND.missing);
+  if (same) {
+    if (v.changed && !v.gone) unmarkChanged(v);
+    return;
+  }
+  const keepDiff = v.mode === changeView.diff && v.pending;
+  v.pending = now;
+  v.delta = null;
+  markChanged(v, now?.kind === CHANGE_KIND.missing);
+  // Looking at what changed already: it shows the latest.
+  if (keepDiff && v === view && !inWindow()) showDelta(v);
 }
 
 /**
@@ -328,8 +420,39 @@ async function checkChanged(v) {
 function markChanged(v, gone) {
   v.changed = true;
   v.gone = gone;
+  if (gone) v.mode = changeView.file;
   renderTabs();
-  if (v === view) renderChanged();
+  if (v === view) render();
+}
+
+/** The file is again what's shown (an edit undone): nothing to refresh. @param {PreviewView} v */
+function unmarkChanged(v) {
+  v.changed = false;
+  v.pending = null;
+  v.delta = null;
+  if (!inWindow()) v.mode = changeView.file;
+  renderTabs();
+  if (v === view) render();
+}
+
+/**
+ * Diff: what changed in the file since it was shown (the host diffs the two texts).
+ * @param {PreviewView} v
+ */
+async function showDelta(v) {
+  const before = textOf(v.data) ?? '';
+  const after = textOf(v.pending) ?? '';
+  v.mode = changeView.diff;
+  if (!v.delta) {
+    const reply = await request(PAGE.changesDiff, { before, after });
+    if (textOf(v.pending) !== after) return; // it changed again meanwhile: that answer is on its way
+    v.delta = {
+      ...(/** @type {ChangeData} */ (v.pending)), kind: CHANGE_KIND.modified, before, after, ops: reply.ops,
+      added: reply.added, removed: reply.removed, note: null, error: null,
+    };
+  }
+  v.expanded.clear();
+  if (v === view) render({ scrollToChange: true });
 }
 
 /** The tab shown's bar when its file changed since it was read: what happened, and Reload. */
@@ -343,6 +466,7 @@ function renderChanged() {
 
 // A workspace that lost its last terminal can't hold the pane any more.
 on(EVENTS.previewDropped, ws => {
+  if (sets.delete(ws.id)) watchTabs();
   if (!view || placement !== PLACEMENT.split || splitWs !== ws.id) return;
   placement = null;
   splitWs = null;
@@ -371,13 +495,15 @@ const fetchChange = (tab, path, compare) => request(PAGE.changesGet, { id: tab.i
  * @param {{ line?: number | null, focus?: boolean, wholeFile?: boolean, replace?: boolean }} [options]
  */
 export async function showChange(tab, path, { line = null, focus = true, wholeFile = false, replace = false } = {}) {
+  // Files open in the workspace shown, among its own tabs.
+  if (!windowHost) useWorkspace(state.activeId);
   const open = views.find(v => samePath(v.path, path));
   if (open) return selectTab(open, { tab, line, focus, wholeFile });
-  const s = settings();
   /** @type {PreviewView} */
   const opened = {
     tab, path, line,
-    mode: wholeFile || s.changes.view === changeView.file ? changeView.file : changeView.diff,
+    // The File Explorer shows the file as it is; the Git window, Claude's edits.
+    mode: wholeFile || !windowHost ? changeView.file : changeView.diff,
     compare: compareFor(tab, path),
     compareChosen: false,
     expanded: new Set(),
@@ -417,8 +543,9 @@ function addTab(opened, replace) {
  */
 async function selectTab(open, { tab, line, focus, wholeFile }) {
   saveScroll();
-  // Its file isn't read again by itself (a changed one says so); only another terminal's copies change what it shows.
-  const reread = open.tab !== tab;
+  // Its file isn't read again by itself (a changed one says so, checked as it's shown); in the Git window, another
+  // terminal's copies change what it shows.
+  const reread = inWindow() && open.tab !== tab;
   open.tab = tab;
   if (line != null) open.line = line;
   if (wholeFile) open.mode = changeView.file;
@@ -429,6 +556,7 @@ async function selectTab(open, { tab, line, focus, wholeFile }) {
   if (focus) el.focus({ preventScroll: true });
   emit(EVENTS.previewShown, { tab, path: open.path });
   if (reread) await load(open, { keepScroll: line == null });
+  else checkChanged(open);
 }
 
 /** Keeps where the tab shown is scrolled, for when it's shown again. */
@@ -484,6 +612,7 @@ const showsWhole = data => asWholeFile(data) || nothingToCompare(data);
  * @param {{ focus?: boolean }} [options]
  */
 export function showMessage(tab, text, { focus = true } = {}) {
+  if (!windowHost) useWorkspace(state.activeId);
   view = { tab, path: null, mode: changeView.diff, compare: changeCompare.session, expanded: new Set(), data: null, message: text };
   mount(tab);
   render();
@@ -501,6 +630,9 @@ async function load(current = view, { keepScroll = false } = {}) {
   const reply = await fetchChange(current.tab, current.path, current.compare);
   current.loading = false;
   current.changed = false; // what's shown is the file as it is now
+  current.pending = null;
+  current.delta = null;
+  if (!inWindow()) current.mode = changeView.file;
   current.data = reply.view ?? null;
   current.error = reply.error ?? reply.view?.error ?? null;
   current.gone = current.data?.kind === CHANGE_KIND.missing;
@@ -511,8 +643,9 @@ async function load(current = view, { keepScroll = false } = {}) {
   restoreScroll();
 }
 
-// While Claude keeps editing the open file, the preview follows. When it changes another file, the preview offers it
-// with a button, or switches to it (Settings › Change preview › When Claude changes another file).
+// While Claude keeps editing the open file, the Git window follows (the File Explorer says it changed). When it
+// changes another file, the preview offers it with a button, or switches to it (Settings › Change preview › When
+// Claude changes another file).
 /** How long after Claude changes the file shown it's read again (its edits come in bursts). */
 const RELOAD_DELAY = 300;
 const loadLater = debounce(() => view && load(), RELOAD_DELAY);
@@ -541,6 +674,8 @@ on(EVENTS.changes, tab => {
   const shown = files.find(f => samePath(f.path, /** @type {PreviewView} */ (view).path));
   if (!shown || shown.at === view.seenAt) return;
   view.seenAt = shown.at;
+  // The File Explorer doesn't read it again by itself: it says it changed. The Git window follows Claude's edits.
+  if (!inWindow()) return void checkChanged(view);
   if (!view.compareChosen) view.compare = compareFor(tab, view.path);
   loadLater();
 });
@@ -566,8 +701,17 @@ on(EVENTS.settings, () => {
  * @param {string} mode
  */
 const buildRows = (data, mode) => buildDiffRows(/** @type {ChangeData} */ (data), {
-  mode, expanded: /** @type {PreviewView} */ (view).expanded, whole: showsWhole(data),
+  mode, expanded: /** @type {PreviewView} */ (view).expanded, whole: showsWhole(data) || (!inWindow() && !showingDelta()),
 });
+
+/** The File Explorer shows what changed since the file was shown (Diff, on a changed tab). */
+const showingDelta = () => !inWindow() && view?.mode === changeView.diff && !!view.delta;
+
+/**
+ * What the tab shown draws: what changed since it was shown (Diff), else its file (or, in the Git window, its change).
+ * @returns {ChangeData | null}
+ */
+const shownData = () => (showingDelta() ? /** @type {PreviewView} */ (view).delta ?? null : view?.data ?? null);
 const rowHtml = diffRowHtml;
 
 // ---- Drawing ----
@@ -601,15 +745,19 @@ const MAX_WRAPPED_ROWS = 3000;
 /** @param {{ scrollToChange?: boolean }} [options] */
 function render({ scrollToChange = false } = {}) {
   if (!view) return;
-  const data = view.data;
+  const data = shownData();
   renderTabs();
   renderChanged();
   renderTitle(data);
-  renderToggles(data);
+  renderToggles(view.data);
   renderNotes(data);
   renderOffer();
-  // An image shows as pictures: alone when it's binary, above its text diff for an SVG.
-  const pictures = view.message ? '' : imagesHtml(/** @type {import('./pictures.js').Pictured} */ (data ?? {}));
+  // An image shows as pictures: alone when it's binary, above its text diff for an SVG. The File Explorer shows the
+  // picture as it is (or was, deleted), not before and after.
+  const pictured = /** @type {import('./pictures.js').Pictured} */ (data ?? {});
+  const deleted = data?.kind === CHANGE_KIND.deleted;
+  const pictures = view.message ? '' : imagesHtml(inWindow() ? pictured
+    : { ...pictured, beforeImage: deleted ? pictured.beforeImage : null, afterImage: deleted ? null : pictured.afterImage });
   picturesEl.innerHTML = pictures;
   picturesEl.hidden = !pictures;
   if (pictures) measureImages(picturesEl);
@@ -631,34 +779,39 @@ function render({ scrollToChange = false } = {}) {
  */
 function renderTitle(data) {
   const file = /** @type {PreviewView} */ (view).path ?? '';
-  nameEl.textContent = /** @type {PreviewView} */ (view).message
-    ? 'Change preview'
-    : /** @type {string} */ (file.split(/[\\/]/).pop());
-  pathEl.textContent = /** @type {PreviewView} */ (view).message ? '' : ltrPath(data?.display ?? file);
+  const name = /** @type {string} */ (file.split(/[\\/]/).pop());
+  const message = !!(/** @type {PreviewView} */ (view).message);
+  // The Git window names the file; here it's the File Explorer's title.
+  nameEl.textContent = inWindow() ? (message ? 'Change preview' : name) : message ? TITLE : `${TITLE}: ${name}`;
+  pathEl.textContent = message ? '' : ltrPath(data?.display ?? file);
   pathEl.title = file;
   const kind = data?.kind;
-  badgeEl.hidden = !kind || kind === CHANGE_KIND.modified;
+  // A file as it is isn't "new": that's about Claude's change, which the File Explorer doesn't show.
+  badgeEl.hidden = !kind || kind === CHANGE_KIND.modified || (!inWindow() && kind === CHANGE_KIND.created);
   badgeEl.textContent = PREVIEW_BADGE[/** @type {string} */ (kind)] ?? '';
   badgeEl.dataset.kind = kind ?? '';
-  statsEl.innerHTML = data && (data.added || data.removed)
+  const counted = inWindow() || showingDelta();
+  statsEl.innerHTML = counted && data && (data.added || data.removed)
     ? `<span class="pv-plus">+${data.added}</span> <span class="pv-minus">−${data.removed}</span>` : '';
 }
 
 /**
- * Diff/File unless the setting says diff only; All/Last only when there's more than one edit; the buttons.
+ * Diff/File: in the File Explorer only once the file changed since it was shown (what changed, or the file as
+ * shown), in the Git window for a change with text; All/Last only when there's more than one edit; the buttons.
  * @param {ChangeData | null} data
  */
 function renderToggles(data) {
+  const v = /** @type {PreviewView} */ (view);
   const modeSeg = find(el, '[data-pv="mode"]');
   // No text on either side (a binary file, one too large, one that's gone): Diff and File would show the same.
   const textless = !!data && data.before == null && data.after == null;
-  modeSeg.hidden = !!(/** @type {PreviewView} */ (view).message)
-    || settings().changes.view === changeView.diffOnly || showsWhole(data) || textless;
+  const changedText = v.changed && !v.gone && textOf(v.data) != null && textOf(v.pending) != null;
+  modeSeg.hidden = !!v.message || (inWindow() ? showsWhole(data) || textless : !changedText);
   for (const b of /** @type {HTMLCollectionOf<HTMLElement>} */ (modeSeg.children)) {
-    b.classList.toggle('on', b.dataset.value === /** @type {PreviewView} */ (view).mode);
+    b.classList.toggle('on', b.dataset.value === v.mode);
   }
   const compareSeg = find(el, '[data-pv="compare"]');
-  compareSeg.hidden = !data || /** @type {number} */ (data.edits) < 2 || data.source === CHANGE_SOURCE.git;
+  compareSeg.hidden = !inWindow() || !data || /** @type {number} */ (data.edits) < 2 || data.source === CHANGE_SOURCE.git;
   for (const b of /** @type {HTMLCollectionOf<HTMLElement>} */ (compareSeg.children)) {
     b.classList.toggle('on', b.dataset.value === /** @type {PreviewView} */ (view).compare);
   }
@@ -677,6 +830,12 @@ function renderToggles(data) {
 function renderNotes(data) {
   const notes = [];
   if (/** @type {PreviewView} */ (view).error) notes.push(/** @type {PreviewView} */ (view).error);
+  // The notes are about Claude's change, which only the Git window shows.
+  if (!inWindow()) {
+    noteEl.textContent = notes.join(' ');
+    noteEl.hidden = !notes.length;
+    return;
+  }
   if (data?.note) notes.push(data.note);
   if (data?.eolOnly) notes.push('Only line endings changed.');
   if (data?.source === CHANGE_SOURCE.git && !data.note) notes.push('Compared with the last commit.');
@@ -701,8 +860,8 @@ function renderRows(data) {
     noteEl.hidden = false;
   }
   virtual = !changes.wrap || rows.length > MAX_WRAPPED_ROWS;
-  el.classList.toggle('sbs',
-    changes.layout === changeLayout.sideBySide && /** @type {PreviewView} */ (view).mode === changeView.diff);
+  el.classList.toggle('sbs', changes.layout === changeLayout.sideBySide
+    && /** @type {PreviewView} */ (view).mode === changeView.diff && (inWindow() || showingDelta()));
   el.classList.toggle(WRAP, !virtual);
   measureLine();
   lastRange = '';
@@ -722,11 +881,12 @@ function messageFor(data) {
   if (!data) return 'Nothing to show.';
   if (data.error) return data.error;
   if (data.kind === CHANGE_KIND.binary) {
-    // Its size before and after a change; one size when there's nothing to compare it with.
+    // Its size before and after a change (the Git window); one size when there's nothing to compare, or as it is.
     const before = fileSize(/** @type {number} */ (data.beforeSize)), after = fileSize(/** @type {number} */ (data.afterSize));
-    return `Binary file: ${before === after ? after : `${before} → ${after}`}. Show it in ${platform === PLATFORM.windows ? 'Explorer' : 'the file manager'} to open it.`;
+    return `Binary file: ${before === after || !inWindow() ? after : `${before} → ${after}`}. Show it in ${platform === PLATFORM.windows ? 'Explorer' : 'the file manager'} to open it.`;
   }
   if (data.kind === CHANGE_KIND.large) return data.note ?? 'Too large to preview.';
+  if (!inWindow() && !showingDelta()) return textOf(data) === '' ? 'The file is empty.' : null;
   if (!data.ops?.length) return data.after === '' || data.before === '' ? 'The file is empty.' : null;
   return null;
 }
@@ -782,11 +942,10 @@ const fileOrder = () => (placement === PLACEMENT.window && windowHost?.order ? w
 
 /**
  * The Git window on this terminal's Agent changes, at the file shown (js/gitwindow.js, through an event: it imports
- * this module). The preview moves there, so it closes here.
+ * this module). The preview moves there; the workspace's tabs come back when it closes (setPreviewHost).
  */
 function openInGitWindow() {
   const { tab, path } = /** @type {PreviewView} */ (view);
-  closePreview();
   emit(EVENTS.openAgentChanges, { tab, path });
 }
 
@@ -807,6 +966,8 @@ el.addEventListener('click', e => {
   const option = /** @type {HTMLElement | null} */ (targetOf(e).closest('.pv-seg [data-value]'));
   if (option) {
     const which = /** @type {HTMLElement} */ (option.parentElement).dataset.pv;
+    // The File Explorer's Diff: what changed since the file was shown.
+    if (which === CONTROL.mode && !inWindow() && option.dataset.value === changeView.diff) return void showDelta(view);
     if (which === CONTROL.mode) {
       view.mode = /** @type {string} */ (option.dataset.value);
       view.expanded.clear();
@@ -871,13 +1032,33 @@ find(el, '.pv-head').addEventListener('pointerdown', e => {
   dragFloating(floating, e, workspaceEl.getBoundingClientRect());
 });
 
-// Terminals closing take their changes with them.
 on(EVENTS.workspaces, () => {
+  switchedWorkspace();
+  // Terminals closing take their changes with them: a file's tab stays with another terminal of its workspace
+  // open (any terminal, in the Git window); its workspace's File Explorer closes with the last one.
+  for (const [id, set] of sets) {
+    const anyTab = [...state.tabs.values()].find(t => t.wsId === id);
+    if (!anyTab) {
+      sets.delete(id);
+      watchTabs();
+      const ws = wsById(id);
+      if (ws && findPreview(ws.root)) removePreview(ws);
+    } else for (const v of set.views) if (!state.tabs.has(v.tab.id)) v.tab = anyTab;
+  }
   if (!view) return;
-  // A file's tab stays with another terminal open; it closes when its own terminal was the last one.
-  const anyTab = [...state.tabs.values()][0];
+  const anyTab = [...state.tabs.values()].find(t => inWindow() || t.wsId === setWs);
   if (!anyTab) return closePreview();
   for (const v of views) if (!state.tabs.has(v.tab.id)) v.tab = anyTab;
-  if (!state.tabs.has(view.tab.id)) closePreview();
 });
+on(EVENTS.workspaceClosed, ws => { if (sets.delete(ws.id)) watchTabs(); });
+
+/** Another workspace is shown: its own tabs come up (or none), and the last one's wait for it. */
+function switchedWorkspace() {
+  if (windowHost || state.activeId === setWs) return;
+  const had = !!view;
+  if (placement) unmount({ keepLayout: true }); // its pane stays in the workspace left, for when it's back
+  useWorkspace(state.activeId);
+  if (view) showView();
+  else if (had) restoreFocus();
+}
 

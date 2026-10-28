@@ -37,6 +37,7 @@ internal sealed class ChangesHandler : IMessageHandler
         router.On<FromPage.ChangesList>(m => Task.Run(() => PostList(m.Id)));
         router.On<FromPage.ChangesClear>(m => _changes.Clear(m.Id, m.Path));
         router.On<FromPage.ChangesGet>(m => Task.Run(() => Get(m.Id, m.RequestId, m.Path, m.Compare)));
+        router.On<FromPage.ChangesDiff>(m => Task.Run(() => Diff(m)));
         router.On<FromPage.ChangesResolve>(m => Task.Run(() => Resolve(m)));
         router.On<FromPage.ChangesSearch>(m => Task.Run(() => Search(m)));
     }
@@ -59,6 +60,13 @@ internal sealed class ChangesHandler : IMessageHandler
             error = e.Message;
         }
         _page.Post(new ToPage.ChangeContent(requestId, view, error));
+    }
+
+    /// <summary>What changed in a file the preview shows since it was shown (a big file's diff, so off the UI thread).</summary>
+    private void Diff(FromPage.ChangesDiff m)
+    {
+        var diff = LineDiff.Diff(m.Before ?? "", m.After ?? "");
+        _page.Post(new ToPage.ChangesDiffed(m.RequestId, diff.Runs.Select(r => new[] { r.Kind, r.Count }).ToList(), diff.Added, diff.Removed));
     }
 
     /// <summary>Which file or folder a path in a terminal means (for its link, and when it's Ctrl+clicked).</summary>

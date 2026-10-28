@@ -433,7 +433,9 @@ export function renderWorkspace(ws) {
     /** @type {TabView} */ (tab.view).el.classList.remove(TAB_HIDDEN);
     takeBackHeader(tab);
   }
+  drawing = ws;
   layer.replaceChildren(renderNode(ws.root));
+  drawing = null;
   for (const tab of tabsOf(ws)) {
     /** @type {TabView} */ (tab.view).el.classList.toggle('focused', tab.id === ws.focusId);
     if (!(/** @type {TabView} */ (tab.view).term)) openTerminal(tab);
@@ -461,12 +463,16 @@ export function dropLayer(wsId) {
 
 // ---- The change preview's pane (js/preview.js) ----
 
-/** @type {() => HTMLElement} */
+/** @type {(ws: Workspace | null) => HTMLElement} */
 let previewElement = () => document.createElement('div');
+/** The workspace renderWorkspace draws: each workspace has its own preview pane, and only one shows it. */
+/** @type {Workspace | null} */
+let drawing = null;
 
 /**
- * preview.js hands over its element this way, so the two modules don't import each other.
- * @param {() => HTMLElement} fn
+ * preview.js hands over its element this way, so the two modules don't import each other. It's given the
+ * workspace drawn.
+ * @param {(ws: Workspace | null) => HTMLElement} fn
  */
 export function setPreviewRenderer(fn) {
   previewElement = fn;
@@ -515,7 +521,7 @@ function dropLonePreview(ws) {
  */
 function renderNode(node) {
   if (node.kind === NODE.leaf) return /** @type {TabView} */ (/** @type {Tab} */ (state.tabs.get(node.tabId)).view).el;
-  if (node.kind === NODE.preview) return previewElement();
+  if (node.kind === NODE.preview) return previewElement(drawing);
   if (node.kind === NODE.tabs) return renderGroup(node);
 
   const split = document.createElement('div');

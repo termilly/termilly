@@ -39,8 +39,9 @@ public sealed class SettingsMigrationTests : IDisposable
         var moved = SettingsMigration.ToVersion2(v1);
 
         // The AI assistant's settings (aiProvider…), phone check-in's (checkinPort…) and the drop-down window's
-        // (quakeChord…) are left behind: all three were removed after 1.1.0.
-        string[] gone = ["ai", "checkin", "quake"];
+        // (quakeChord…) are left behind: all three were removed after 1.1.0. So is the change preview's "Opens on"
+        // (changeView): the File Explorer shows files as they are.
+        string[] gone = ["ai", "checkin", "quake", "changeView"];
         var retired = v1.Count(s => gone.Any(prefix => s.Key.StartsWith(prefix, StringComparison.Ordinal)));
         var count = moved.Where(g => g.Value is JsonObject).Sum(g => ((JsonObject)g.Value!).Count);
         Assert.Equal(v1.Count - retired, count);
@@ -65,7 +66,7 @@ public sealed class SettingsMigrationTests : IDisposable
         Assert.Equal((@"D:\casts", false, true, 250), (s.Recording.Folder, s.Recording.Redact, s.Recording.Agents, s.Recording.MaxMb));
         Assert.Equal((false, false, "main", "db", "pg"), (s.Ssh.KeepAlive, s.Ssh.Reconnect, s.Ssh.Attach!["ssh-db"], s.Ssh.Connections![0].Name, s.Ssh.Forwards![0].Name));
         Assert.Equal((false, 4, false, true, "focused", "tokens", false, false), (s.Agents.Integration, s.Agents.Limit, s.Agents.ReadDefault, s.Agents.ApiAllowInput, s.Agents.Line, s.Agents.CostDisplay, s.Agents.ClaudeUsage, s.Agents.ClaudeLimits));
-        Assert.Equal((false, "float", false, false, false, "git", "file", "last", "session"), (s.Changes.Enabled, s.Changes.Placement, s.Changes.Links, s.Changes.Button, s.Changes.Shortcut, s.Changes.Source, s.Changes.View, s.Changes.Compare, s.Changes.Keep));
+        Assert.Equal((false, "float", false, false, false, "git", "last", "session"), (s.Changes.Enabled, s.Changes.Placement, s.Changes.Links, s.Changes.Button, s.Changes.Shortcut, s.Changes.Source, s.Changes.Compare, s.Changes.Keep));
         Assert.Equal((25, false, true, 8192, "sideBySide", "follow", "diff", false), (s.Changes.Context, s.Changes.Highlight, s.Changes.Wrap, s.Changes.MaxFileKb, s.Changes.Layout, s.Changes.Follow, s.Changes.NewFile, s.Changes.ShellFiles));
         Assert.Equal("installed", s.Remote.Setup!["ssh-db"]);
         Assert.Equal((true, "ssh-db", 1760700000000L, "#2E3440", true, "1.2.0"), (s.UiState.TourSeen, s.UiState.RemotePinned![0], s.UiState.RemoteRecent!["ssh-db"], s.UiState.WindowColors!.Background, s.UiState.StopAgentConfirmed, s.UiState.SkippedVersion));
