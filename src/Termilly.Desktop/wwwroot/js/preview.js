@@ -37,10 +37,11 @@ import { byId, find, targetOf, WORKSPACE_ID, dragPointer, dragFloating, onMiddle
  * @typedef {{ tab: Tab, path: string | null, line?: number | null, mode: string, compare: string,
  *   compareChosen?: boolean, expanded: Set<string>, data: ChangeData | null, loading?: boolean,
  *   offeredAt?: string | null, offer?: ChangedFile | null, seenAt?: string, message?: string,
- *   error?: string | null, scroll?: number, stale?: boolean, gone?: boolean }} PreviewView
+ *   error?: string | null, scroll?: number, changed?: boolean, gone?: boolean }} PreviewView
  */
-// A view is also a tab: each file open keeps its own (scroll, mode, folds, its answer); stale: it changed while its
-// tab wasn't shown, so it's read again when it is; gone: deleted outside Termilly.
+// A view is also a tab: each file open keeps its own (scroll, mode, folds, its answer). changed: the file on disk
+// isn't what's shown any more (changed outside Termilly, or by Claude in a tab not shown): it isn't read again by
+// itself, its tab is coloured and Reload reads it; gone: deleted.
 
 /** The choices of the settings used here (C#'s SettingValues). */
 const { changeView, changeCompare, changeNewFile, changeFollow, changeLayout, changePlacement } = SETTING_VALUES;
@@ -54,7 +55,7 @@ const PLACEMENT = Object.freeze({
 });
 /** The head's controls (data-pv): the mode and compare choices, and the buttons. */
 const CONTROL = Object.freeze({
-  mode: 'mode', compare: 'compare', prev: 'prev', next: 'next', reveal: 'reveal', close: 'close', newer: 'newer',
+  mode: 'mode', compare: 'compare', prev: 'prev', next: 'next', reveal: 'reveal', close: 'close', newer: 'newer', reload: 'reload',
   wrap: 'wrap', git: 'git',
 });
 /** The preview's classes (app.css) while it's in the Git window, and while its long lines wrap. */
@@ -96,6 +97,7 @@ el.innerHTML = `
   <div class="pv-tabs" role="tablist" hidden></div>
   <div class="pv-note" hidden></div>
   <div class="pv-newer" hidden><span></span><button class="btn small" data-pv="newer">Show it</button></div>
+  <div class="pv-changed" hidden><span></span><button class="btn small" data-pv="${CONTROL.reload}">Reload</button></div>
   <div class="pv-scroll"><div class="pv-pictures" hidden></div><div class="pv-spacer"><div class="pv-rows"></div></div><div class="pv-message" hidden></div></div>`;
 
 const nameEl = find(el, '.pv-name');
@@ -104,6 +106,7 @@ const badgeEl = find(el, '.pv-badge');
 const statsEl = find(el, '.pv-stats');
 const noteEl = find(el, '.pv-note');
 const newerEl = find(el, '.pv-newer');
+const changedEl = find(el, '.pv-changed');
 const scroller = find(el, DIFF_SCROLL);
 const spacer = find(el, '.pv-spacer');
 const tabsEl = find(el, '.pv-tabs');
@@ -241,7 +244,6 @@ function closeTab(closing) {
   mount(next.tab);
   render();
   restoreScroll();
-  if (next.stale) load(next, { keepScroll: true });
 }
 
 // ---- Tabs: one per file open, each watched for changes made outside Termilly ----
@@ -263,8 +265,8 @@ function renderTabs() {
   if (tabsEl.hidden) return;
   // Drawn again only when something changed: a redraw between a button's press and release would lose its click.
   const html = views.map((v, i) => `
-    <span class="pv-tab${v === view ? ' on' : ''}${v.gone ? ' gone' : ''}" role="tab" aria-selected="${v === view}" data-tab="${i}"
-      title="${escapeHtml(`${v.path}${v.gone ? ' (deleted)' : ''}`)}"><span class="pv-tab-name">${escapeHtml(tabName(v))}</span><button class="pv-tab-close" data-tab-close="${i}" title="Close" aria-label="Close">${ICONS.close}</button></span>`).join('');
+    <span class="pv-tab${v === view ? ' on' : ''}${v.gone ? ' gone' : v.changed ? ' changed' : ''}" role="tab" aria-selected="${v === view}" data-tab="${i}"
+      title="${escapeHtml(`${v.path}${v.gone ? ' (deleted)' : v.changed ? ' (changed: reload to see it)' : ''}`)}"><span class="pv-tab-name">${escapeHtml(tabName(v))}</span><button class="pv-tab-close" data-tab-close="${i}" title="Close" aria-label="Close">${ICONS.close}</button></span>`).join('');
   if (html === tabsHtml) return;
   tabsHtml = html;
   tabsEl.innerHTML = html;
@@ -295,16 +297,49 @@ function watchTabs() {
   send(PAGE.previewWatch, { paths });
 }
 
-// A file open in a tab changed, was deleted or came back: the tab shown reads it again where it is; another one
-// does when it's shown.
+// A file open in a tab changed, was deleted or came back: it isn't shown again by itself. Its tab is coloured, and
+// the tab shown says so with a Reload button.
 onHost(HOST.previewFileChanged, m => {
   for (const v of views.filter(o => samePath(o.path, m.path))) {
-    v.gone = !m.exists;
-    v.stale = true;
-    if (v === view) load(v, { keepScroll: true });
+    if (!m.exists) markChanged(v, true);
+    else checkChanged(v);
   }
-  renderTabs();
 });
+
+/**
+ * Reads a tab's file without showing it: only a real difference (not a save of the same text, nor Claude's edit the
+ * preview already followed) marks it changed.
+ * @param {PreviewView} v
+ */
+async function checkChanged(v) {
+  if (!v.path) return;
+  const reply = await fetchChange(v.tab, v.path, v.compare);
+  const now = /** @type {ChangeData | null} */ (reply.view ?? null);
+  const shown = v.data;
+  const same = !!now && !!shown && now.before === shown.before && now.after === shown.after && now.kind === shown.kind
+    && /** @type {any} */ (now).afterImage === /** @type {any} */ (shown).afterImage;
+  if (!same) markChanged(v, now?.kind === CHANGE_KIND.missing);
+}
+
+/**
+ * @param {PreviewView} v
+ * @param {boolean} gone deleted
+ */
+function markChanged(v, gone) {
+  v.changed = true;
+  v.gone = gone;
+  renderTabs();
+  if (v === view) renderChanged();
+}
+
+/** The tab shown's bar when its file changed since it was read: what happened, and Reload. */
+function renderChanged() {
+  const v = view;
+  changedEl.hidden = !v?.changed;
+  /** @type {Element} */ (changedEl.firstElementChild).textContent = v?.gone
+    ? 'The file was deleted. This is the copy from before.'
+    : 'The file has changed since this was shown.';
+}
 
 // A workspace that lost its last terminal can't hold the pane any more.
 on(EVENTS.previewDropped, ws => {
@@ -382,7 +417,8 @@ function addTab(opened, replace) {
  */
 async function selectTab(open, { tab, line, focus, wholeFile }) {
   saveScroll();
-  const reread = open.stale || open.tab !== tab;
+  // Its file isn't read again by itself (a changed one says so); only another terminal's copies change what it shows.
+  const reread = open.tab !== tab;
   open.tab = tab;
   if (line != null) open.line = line;
   if (wholeFile) open.mode = changeView.file;
@@ -464,7 +500,7 @@ async function load(current = view, { keepScroll = false } = {}) {
   if (!current?.path) return;
   const reply = await fetchChange(current.tab, current.path, current.compare);
   current.loading = false;
-  current.stale = false;
+  current.changed = false; // what's shown is the file as it is now
   current.data = reply.view ?? null;
   current.error = reply.error ?? reply.view?.error ?? null;
   current.gone = current.data?.kind === CHANGE_KIND.missing;
@@ -481,12 +517,12 @@ async function load(current = view, { keepScroll = false } = {}) {
 const RELOAD_DELAY = 300;
 const loadLater = debounce(() => view && load(), RELOAD_DELAY);
 on(EVENTS.changes, tab => {
-  // Claude changed a file open in a tab that isn't shown: it's read again when it is.
+  // Claude changed a file open in a tab that isn't shown: the tab is marked changed, for Reload.
   for (const v of views) {
     const changed = v !== view && v.tab === tab && /** @type {ChangedFile[]} */ (tab.changes ?? []).find(f => samePath(f.path, v.path));
     if (changed && changed.at !== v.seenAt) {
       v.seenAt = changed.at;
-      v.stale = true;
+      checkChanged(v);
     }
   }
   if (!view?.path || view.tab !== tab) return;
@@ -567,6 +603,7 @@ function render({ scrollToChange = false } = {}) {
   if (!view) return;
   const data = view.data;
   renderTabs();
+  renderChanged();
   renderTitle(data);
   renderToggles(data);
   renderNotes(data);
@@ -778,6 +815,7 @@ el.addEventListener('click', e => {
   }
   const action = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-pv]'))?.dataset.pv;
   if (action === CONTROL.close) return closePreview();
+  if (action === CONTROL.reload) return load(view, { keepScroll: true });
   if (action === CONTROL.newer && view.offer) return showChange(view.tab, view.offer.path);
   if (action === CONTROL.prev) return moveFile(-1);
   if (action === CONTROL.next) return moveFile(1);

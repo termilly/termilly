@@ -2144,13 +2144,17 @@ textarea.field { height: auto; padding: 7px 10px; line-height: 1.5; resize: vert
 /* "Claude changed another file" with a button to show it (Settings › Change preview › Offer it). */
 .pv-newer { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 5px 8px 5px 12px; border-bottom: 1px solid var(--border); background: var(--accent-fill); color: var(--text); font-size: 12px; }
 .pv-newer[hidden] { display: none; }
-/* The preview's tabs: one per file open (js/preview.js); a deleted file's is struck through. */
+/* The preview's tabs: one per file open (js/preview.js); a changed file's is amber, a deleted one's struck through. */
 .pv-tabs { display: flex; flex: none; gap: 2px; overflow-x: auto; padding: 4px 6px 0; border-bottom: 1px solid var(--border); scrollbar-width: none; }
 .pv-tabs[hidden] { display: none; }
 .pv-tab { display: flex; flex: none; align-items: center; gap: 4px; max-width: 200px; height: 26px; padding: 0 4px 0 10px; border: 1px solid transparent; border-bottom: 0; border-radius: 6px 6px 0 0; color: var(--muted); font-size: 12px; cursor: pointer; }
 .pv-tab:hover { background: var(--hover); color: var(--text); }
 .pv-tab.on { border-color: var(--border); background: var(--raised-2); color: var(--text-strong); }
+/* Changed on disk since it was read: shown as it was until Reload. */
+.pv-tab.changed .pv-tab-name { color: var(--attention); }
 .pv-tab.gone .pv-tab-name { color: var(--danger-text); text-decoration: line-through; }
+.pv-changed { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 5px 8px 5px 12px; border-bottom: 1px solid var(--border); background: color-mix(in srgb, var(--attention) 12%, transparent); color: var(--text); font-size: 12px; }
+.pv-changed[hidden] { display: none; }
 .pv-tab-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pv-tab-close { display: grid; flex: none; width: 18px; height: 18px; place-items: center; padding: 0; border: 0; border-radius: 4px; background: none; color: var(--faint); opacity: 0; }
 .pv-tab:hover .pv-tab-close, .pv-tab.on .pv-tab-close { opacity: 1; }
