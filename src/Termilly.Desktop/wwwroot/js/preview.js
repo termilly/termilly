@@ -650,8 +650,10 @@ function renderTitle(data) {
  */
 function renderToggles(data) {
   const modeSeg = find(el, '[data-pv="mode"]');
+  // No text on either side (a binary file, one too large, one that's gone): Diff and File would show the same.
+  const textless = !!data && data.before == null && data.after == null;
   modeSeg.hidden = !!(/** @type {PreviewView} */ (view).message)
-    || settings().changes.view === changeView.diffOnly || showsWhole(data);
+    || settings().changes.view === changeView.diffOnly || showsWhole(data) || textless;
   for (const b of /** @type {HTMLCollectionOf<HTMLElement>} */ (modeSeg.children)) {
     b.classList.toggle('on', b.dataset.value === /** @type {PreviewView} */ (view).mode);
   }
@@ -719,7 +721,11 @@ function renderRows(data) {
 function messageFor(data) {
   if (!data) return 'Nothing to show.';
   if (data.error) return data.error;
-  if (data.kind === CHANGE_KIND.binary) return `Binary file: ${fileSize(/** @type {number} */ (data.beforeSize))} → ${fileSize(/** @type {number} */ (data.afterSize))}. Show it in ${platform === PLATFORM.windows ? 'Explorer' : 'the file manager'} to open it.`;
+  if (data.kind === CHANGE_KIND.binary) {
+    // Its size before and after a change; one size when there's nothing to compare it with.
+    const before = fileSize(/** @type {number} */ (data.beforeSize)), after = fileSize(/** @type {number} */ (data.afterSize));
+    return `Binary file: ${before === after ? after : `${before} → ${after}`}. Show it in ${platform === PLATFORM.windows ? 'Explorer' : 'the file manager'} to open it.`;
+  }
   if (data.kind === CHANGE_KIND.large) return data.note ?? 'Too large to preview.';
   if (!data.ops?.length) return data.after === '' || data.before === '' ? 'The file is empty.' : null;
   return null;
