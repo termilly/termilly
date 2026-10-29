@@ -13,7 +13,7 @@ import { send, sendWithFiles, onHost, platform, droppedPaths, PLATFORM } from '.
 import { on, tabTitle, wsById, isSsh, isRemote, EVENTS } from './store.js';
 import { focusedTab, newTab } from './panes.js';
 import { scheduleFit, typePaths } from './terminals.js';
-import { escapeHtml, ICONS, countText } from './ui.js';
+import { escapeHtml, ICONS } from './ui.js';
 import { modal, confirmDialog, CONFIRM_DIALOG } from './dialogs.js';
 import { byId, field, targetOf, dragPointer, WORKSPACE_ID, PATH_DRAG } from './dom.js';
 import { showMenu, SEPARATOR } from './popups.js';
@@ -292,9 +292,9 @@ function foundHtml(v, found, html) {
   // The folder's name says where; its whole path shows on pointing at it.
   const where = found.dir === FOLDER_PATH.drives ? folderName(found.dir) : nameIn(found.dir);
   const line = found.error ? `<span class="files-error">${escapeHtml(found.error)}</span>`
-    : !found.done ? `<span class="files-searching"></span>Searching ${escapeHtml(where)} · ${countText(found.count)} found`
-    : found.stopped ? `Stopped at ${countText(found.count)} found in ${escapeHtml(where)}: a longer name finds fewer`
-    : found.count ? `${countText(found.count)} found in ${escapeHtml(where)}` : `Nothing by that name in ${escapeHtml(where)}`;
+    : !found.done ? `<span class="files-searching"></span>Searching ${escapeHtml(where)} · ${found.count.toLocaleString()} found`
+    : found.stopped ? `Stopped at ${found.count.toLocaleString()} found in ${escapeHtml(where)}: a longer name finds fewer`
+    : found.count ? `${found.count.toLocaleString()} found in ${escapeHtml(where)}` : `Nothing by that name in ${escapeHtml(where)}`;
   html.unshift(`<div class="files-status" title="${escapeHtml(folderName(found.dir))}">${line}</div>`);
   /**
    * @param {string} path
@@ -369,7 +369,7 @@ function render() {
       </span>
     </div>
     <div class="files-bar">
-      <input class="field files-search" type="search" placeholder="Search" title="Searches the folder selected (or the shell’s) and every folder in it. * and ? match any letters, or one" spellcheck="false" autocomplete="off" data-files-search value="${escapeHtml(view.query)}">
+      <input class="field files-search" type="search" placeholder="${escapeHtml(searchHint())}" title="Searches the folder selected (or the shell’s) and every folder in it. * and ? match any letters, or one" spellcheck="false" autocomplete="off" data-files-search value="${escapeHtml(view.query)}">
       ${server ? '<label class="btn small files-upload" title="Upload files into the folder selected">Upload<input type="file" multiple hidden data-files-pick></label>' : ''}
     </div>
     <div class="files-list">${treeHtml(view)}</div>`;
@@ -411,11 +411,26 @@ function search() {
     drawTree(true);
     return;
   }
-  const dir = targetDir() ?? rootOf(view.tab);
+  const dir = searchDir();
   view.search = { id: newRequestId(), dir, nodes: new Map(), count: 0, done: false, stopped: false, error: null };
   send(PAGE.filesSearch, { id: view.tab.id, searchId: view.search.id, dir, text });
   drawTree(true);
 }
+
+/**
+ * Where a search looks: the folder selected (the drives: every drive), or the one the file selected is in; else the
+ * one searched already (refining the text keeps it); else the shell's.
+ */
+function searchDir() {
+  const v = /** @type {FilesView} */ (view);
+  return (selected.size === 1 ? targetDir() ?? FOLDER_PATH.drives : null) ?? v.search?.dir ?? targetDir() ?? rootOf(v.tab);
+}
+
+/** What the search box says when it's empty: where it will look. */
+const searchHint = () => {
+  const dir = searchDir();
+  return `Search ${dir === FOLDER_PATH.drives || dir === '/' ? folderName(dir) : nameIn(dir)}`;
+};
 
 /** The name a folder has in the one it's in: a drive's root ("D:\") as it is, else its last name. @param {string} path */
 const nameIn = path => (parentOf(path) === FOLDER_PATH.drives ? path : path.split(/[\\/]/).filter(Boolean).pop() ?? path);
@@ -611,7 +626,8 @@ panel.addEventListener('click', e => {
   if (action === FILES_ACTION.refresh) return refresh();
   if (action === FILES_ACTION.fold) return fold();
   if (action === FILES_ACTION.mkdir) return makeFolder();
-  if (!r) return action ? undefined : selectRows(new Set(), null);
+  // A click on the tree's empty space clears the selection; one on the search box (or a button) keeps it.
+  if (!r) return action || !targetOf(e).closest(LIST) ? undefined : selectRows(new Set(), null);
   // The sign opens or closes; a double click's second click on it was a click already.
   if (targetOf(e).closest('[data-twist]')) return e.detail < 2 ? toggle(r.path) : undefined;
   // A row's own button acts on the selection when the row is in it, else on that row alone.
@@ -644,6 +660,7 @@ function selectRows(paths, from) {
   }
   const target = targetDir();
   /** @type {HTMLButtonElement | null} */ (panel.querySelector(`[data-files="${FILES_ACTION.mkdir}"]`))?.toggleAttribute('disabled', !target);
+  /** @type {HTMLInputElement | null} */ (panel.querySelector(SEARCH))?.setAttribute('placeholder', searchHint());
 }
 
 /**
