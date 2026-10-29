@@ -1,12 +1,13 @@
 // @ts-check
-// The notification center: every terminal whose agent is waiting for the user, failed, or finished out of sight, most
-// urgent first, with one key (Ctrl+Shift+J) to go to the next one.
+// The notification center: what an agent said out of sight (waiting for the user, failed, finished), newest first.
+// An entry stays, seen or dealt with, until the user clears it (its ×, or Clear all); a terminal closed takes its
+// own with it. One key (Ctrl+Shift+J) goes to the next terminal that still needs the user.
 
 import { HOST, PAGE } from './protocol.js';
 import { onHost, send } from './host.js';
-import { state, on, wsById, tabTitle, isUnread, EVENTS } from './store.js';
+import { state, on, wsById, tabTitle, EVENTS } from './store.js';
 import { openPopover, closePopover, isOpen } from './popups.js';
-import { tabBadgeHtml, escapeHtml, activityHtml, countText } from './ui.js';
+import { tabBadgeHtml, escapeHtml, activityHtml, countText, ICONS } from './ui.js';
 import { activityOf } from './store.js';
 import { focusTab, focusedTab } from './panes.js';
 import { AGENT_STATE, CLAUDE_TOOL } from './constants.js';
@@ -24,9 +25,18 @@ const NOW_LABEL = 'now';
 const REDRAW_MS = 30 * SECOND_MS;
 
 /**
- * A terminal in the inbox, and how urgent it is (rank(): lower first).
+ * A terminal that needs the user now, and how urgent it is (rank(): lower first).
  * @typedef {{ tab: Tab, rank: number | null }} InboxEntry
  */
+/**
+ * An entry in the notification center: what the agent said, as it was then (key: the terminal, the state and when).
+ * @typedef {{ key: string, tabId: string, state: string, activity: import('./store.js').Activity | null, detail: string, at: number }} Note
+ */
+
+/** @type {Note[]} */
+let notes = [];
+/** Notes the user cleared (their keys): a terminal that still says the same isn't taken in again. */
+const cleared = new Set();
 
 /** The count the taskbar button shows (0: none). */
 let badge = 0;
@@ -47,6 +57,7 @@ const filtersEl = byId('inbox-filters');
 const button = byId('inbox-button');
 const count = find(button, '.tool-count');
 const totalEl = byId('inbox-total');
+const clearAll = byId('inbox-clear');
 
 const FILTERS = [[FILTER.all, 'All'], [FILTER.unread, 'Unread'], [FILTER.errors, 'Errors']];
 /** @type {string} */
@@ -78,8 +89,20 @@ export function inboxEntries() {
       || (/** @type {AgentInfo} */ (x.tab.agent).at ?? 0) - (/** @type {AgentInfo} */ (y.tab.agent).at ?? 0));
 }
 
-/** @param {InboxEntry} e */
-const matches = e => filter === FILTER.all || (filter === FILTER.unread ? isUnread(e.tab) || e.rank === 0 : /** @type {AgentInfo} */ (e.tab.agent).state === AGENT_STATE.error);
+/** @param {Tab} tab */
+const keyOf = tab => `${tab.id}:${tab.agent?.state}:${tab.agent?.at ?? 0}`;
+
+/**
+ * Whether a note is still news: its terminal still needs the user for it.
+ * @param {Note} n
+ */
+function isLive(n) {
+  const tab = state.tabs.get(n.tabId);
+  return !!tab && rank(tab) !== null && keyOf(tab) === n.key;
+}
+
+/** @param {Note} n */
+const matches = n => filter === FILTER.all || (filter === FILTER.unread ? isLive(n) : n.state === AGENT_STATE.error);
 
 /**
  * "now", "4m", "2h", "3d": how long it has been waiting.
@@ -104,8 +127,31 @@ export function entryDetail(tab) {
   return a.message || (a.state === AGENT_STATE.done ? 'Finished' : 'Waiting for you');
 }
 
+/**
+ * Takes in what a terminal's agent says now, if it's inbox material: a terminal's newer note replaces its older.
+ * @param {Tab} tab
+ */
+function take(tab) {
+  const key = keyOf(tab);
+  if (rank(tab) === null || cleared.has(key) || notes.some(n => n.key === key)) return;
+  const a = /** @type {AgentInfo} */ (tab.agent);
+  const note = { key, tabId: tab.id, state: a.state, activity: activityOf(tab), detail: entryDetail(tab), at: a.at ?? Date.now() };
+  notes = [note, ...notes.filter(n => n.tabId !== tab.id)];
+}
+
+/**
+ * Clears one note (its key), or all of them (null).
+ * @param {string | null} key
+ */
+function clear(key) {
+  for (const n of notes) if (key === null || n.key === key) cleared.add(n.key);
+  notes = notes.filter(n => !cleared.has(n.key));
+  render();
+}
+
 function render() {
-  const all = inboxEntries();
+  for (const tab of state.tabs.values()) take(tab);
+  const all = notes;
   count.textContent = countText(all.length);
   count.hidden = !all.length;
   updateBadge(all.length);
@@ -117,19 +163,21 @@ function render() {
 
   filtersEl.innerHTML = FILTERS.map(([id, label]) =>
     `<button class="seg-btn${id === filter ? ' on' : ''}" data-filter="${id}">${label}</button>`).join('');
+  clearAll.hidden = !all.length;
   const shown = all.filter(matches);
-  list.innerHTML = shown.length ? shown.map(({ tab }) => {
+  list.innerHTML = shown.length ? shown.map(n => {
+    const tab = /** @type {Tab} */ (state.tabs.get(n.tabId));
     const ws = wsById(tab.wsId);
-    return `<button class="inbox-item${isUnread(tab) ? ' unread' : ''}" data-tab="${tab.id}">
-      ${activityHtml(activityOf(tab), 'inbox-state')}
+    return `<div class="inbox-row"><button class="inbox-item${isLive(n) ? ' unread' : ''}" data-tab="${tab.id}">
+      ${activityHtml(n.activity, 'inbox-state')}
       <span class="inbox-text">
         <span class="inbox-title">${tabBadgeHtml(tab)}<span class="name">${escapeHtml(tabTitle(tab))}</span>
           <span class="inbox-ws"><span class="ws-dot" style="background:${ws?.color ?? 'var(--muted)'}"></span>${escapeHtml(ws?.name ?? '')}</span>
           ${tab.tags.slice(0, 2).map(t => `<span class="inbox-tag">${escapeHtml(t)}</span>`).join('')}
-          <span class="inbox-age">${age(/** @type {AgentInfo} */ (tab.agent).at)}</span></span>
-        <span class="inbox-detail">${escapeHtml(entryDetail(tab))}</span>
+          <span class="inbox-age">${age(n.at)}</span></span>
+        <span class="inbox-detail">${escapeHtml(n.detail)}</span>
       </span>
-    </button>`;
+    </button><button class="pane-btn inbox-clear" data-clear="${escapeHtml(n.key)}" title="Clear" aria-label="Clear">${ICONS.close}</button></div>`;
   }).join('') : `<div class="inbox-empty">${all.length ? 'Nothing in this view.' : 'No notifications.'}</div>`;
 }
 
@@ -160,6 +208,11 @@ filtersEl.addEventListener('click', e => {
   render();
 });
 list.addEventListener('click', e => {
+  const x = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-clear]'));
+  if (x) {
+    clear(/** @type {string} */ (x.dataset.clear));
+    return;
+  }
   const item = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-tab]'));
   if (!item) return;
   closePopover(panel);
@@ -176,6 +229,15 @@ panel.addEventListener('keydown', e => {
 // The global shortcut (Settings › Terminal) brought the window forward; pick the terminal.
 onHost(HOST.agentsNext, () => jumpToNext());
 
+clearAll.addEventListener('click', () => clear(null));
+
+// Taken as the agent says it, before the user sees it and it's dealt with (markSeen).
+on(EVENTS.agent, take);
+on(EVENTS.tabClosed, tab => {
+  notes = notes.filter(n => n.tabId !== tab.id);
+  for (const key of cleared) if (key.startsWith(`${tab.id}:`)) cleared.delete(key);
+  render();
+});
 on(EVENTS.tab, render);
 on(EVENTS.workspaces, render);
 // Ages move on while the panel is open.
