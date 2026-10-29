@@ -632,6 +632,8 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
 .files-item.drop-here { outline: 1px solid var(--accent); outline-offset: -1px; }
 .files-note { color: var(--faint); }
 .files-note:hover { background: none; }
+/* The search's line above what it found: one line, cut short; the folder's whole path is its tooltip. */
+.files-status { display: flex; gap: 8px; align-items: center; height: 26px; padding: 0 6px; overflow: hidden; color: var(--muted); font-size: 12px; white-space: nowrap; text-overflow: ellipsis; }
 .files-panel:focus { outline: none; }
 
 /* "Copy to" (js/copyto.js): terminals on the left, the chosen one's folders on the right */
@@ -2684,7 +2686,7 @@ mark.set-hit { border-radius: 2px; background: var(--accent-soft); color: inheri
 .toast[data-state="failed"] .toast-text { color: var(--danger-text); }
 .toast-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .toast .toast-close { flex: none; opacity: 1; }
-.toast-spinner { flex: none; width: 12px; height: 12px; border: 2px solid var(--border-strong); border-top-color: var(--accent); border-radius: 50%; animation: toast-spin .8s linear infinite; }
+.toast-spinner, .files-searching { flex: none; width: 12px; height: 12px; border: 2px solid var(--border-strong); border-top-color: var(--accent); border-radius: 50%; animation: toast-spin .8s linear infinite; }
 @keyframes toast-in { from { opacity: 0; transform: translateY(8px); } }
 @keyframes toast-spin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) { .toast { animation: none; } .toast-spinner { animation-duration: 2.4s; } }
+@media (prefers-reduced-motion: reduce) { .toast { animation: none; } .toast-spinner, .files-searching { animation-duration: 2.4s; } }

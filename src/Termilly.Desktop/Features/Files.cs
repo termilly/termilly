@@ -12,7 +12,7 @@ namespace Termilly.Desktop.Features;
 /// server) and out (downloads), and "Copy to" another terminal's folder (FileCopies.cs).
 /// </summary>
 internal sealed class FilesHandler(
-    PageChannel page, Sftp sftp, FileCopies copies, FolderTree tree, TerminalSessions terminals, IFileDialogs dialogs, IDesktopShell desktop)
+    PageChannel page, Sftp sftp, FileCopies copies, FolderTree tree, FileSearch search, TerminalSessions terminals, IFileDialogs dialogs, IDesktopShell desktop)
     : IMessageHandler
 {
     public void Register(MessageRouter router)
@@ -24,7 +24,11 @@ internal sealed class FilesHandler(
         router.On<FromPage.FilesPick>(m => PickAndCopyInAsync(m.Id, m.RequestId, m.Dir));
         router.On<FromPage.FilesGetTo>(m => PickAndDownloadAsync(m.Id, m.RequestId, m.Paths ?? []));
         router.On<FromPage.FilesCopyTo>(m => Task.Run(() => CopyTo(m)));
+        router.On<FromPage.FilesSearch>(Search);
     }
+
+    /// <summary>The search running (one at a time: a new one, or none, stops it).</summary>
+    private CancellationTokenSource? searching;
 
     /// <summary>Where downloads go: the user's Downloads folder (TERMILLY_DOWNLOAD_DIR overrides it, for tests).</summary>
     private string Downloads =>
@@ -64,6 +68,43 @@ internal sealed class FilesHandler(
         {
             page.Post(new ToPage.FilesTree(requestId, [], ex.Message));
         }
+    }
+
+    /// <summary>A search, off the UI thread: what it finds as it goes (a server's at once), then its end.</summary>
+    private void Search(FromPage.FilesSearch m)
+    {
+        var cancel = new CancellationTokenSource();
+        Interlocked.Exchange(ref searching, cancel)?.Cancel();
+        if (string.IsNullOrWhiteSpace(m.Text) || m.Dir is null)
+        {
+            return;
+        }
+        var (id, dir, text, server) = (m.SearchId, m.Dir, m.Text.Trim(), PlaceOf(m.Id));
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                bool stopped;
+                if (server is null)
+                {
+                    stopped = FileSearch.Here(dir, text, found => page.Post(new ToPage.FilesFound(id, found)), cancel.Token);
+                }
+                else
+                {
+                    (var found, stopped) = search.OnServer(server, dir, text, cancel.Token);
+                    page.Post(new ToPage.FilesFound(id, found));
+                }
+                page.Post(new ToPage.FilesFound(id, [], Done: true, Stopped: stopped));
+            }
+            catch (OperationCanceledException)
+            {
+                // A newer search took over.
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                page.Post(new ToPage.FilesFound(id, [], Done: true, Error: ex.Message));
+            }
+        }, CancellationToken.None);
     }
 
     private void Operate(FromPage.FilesOp m)

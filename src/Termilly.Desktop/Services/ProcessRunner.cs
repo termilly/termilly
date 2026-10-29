@@ -86,9 +86,14 @@ internal sealed class ProcessRunner : IProcessRunner
             await process.WaitForExitAsync(timeout.Token).ConfigureAwait(false);
             return new ProcessResult(process.ExitCode, output, await error.ConfigureAwait(false), truncated);
         }
-        catch (OperationCanceledException) when (!cancel.IsCancellationRequested)
+        catch (OperationCanceledException)
         {
+            // Timed out, or the caller gave up (a newer search): either way the program stops too.
             Kill(process);
+            if (cancel.IsCancellationRequested)
+            {
+                throw;
+            }
             throw new ProcessTimeoutException(Path.GetFileNameWithoutExtension(request.File));
         }
     }

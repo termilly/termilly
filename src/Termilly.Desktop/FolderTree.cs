@@ -103,20 +103,27 @@ internal sealed class FolderTree(IProcessRunner runner)
     /// <summary>The folders in each of <paramref name="paths"/> on a server (with files: and their files), in one ssh call.</summary>
     public List<TreeBranch> OnServer(FileServer server, IReadOnlyList<string> paths, bool files = false)
     {
-        // The script's lines end as this file's do (CRLF in a Windows checkout): sh would read "do\r" as a word.
-        var script = Script.Replace("\r", "", StringComparison.Ordinal);
-        var command = $"sh -c {SshGitRunner.Quote(script)} sh {(files ? WithFiles : FoldersOnly)} {string.Join(' ', paths.Select(SshGitRunner.Quote))}";
-        var result = runner.Run(new ProcessRequest(SessionProfiles.SshCommand, [])
+        var result = runner.Run(ScriptRequest(server, Script, [files ? WithFiles : FoldersOnly, .. paths], ServerTimeout));
+        return Parse(Succeeded(result), paths, files);
+    }
+
+    /// <summary>Runs a shell script on a server over ssh, with its arguments (each quoted for the server's shell).</summary>
+    public static ProcessRequest ScriptRequest(FileServer server, string script, IEnumerable<string> arguments, TimeSpan timeout)
+    {
+        // The script's lines end as its file's do (CRLF in a Windows checkout): sh would read "do\r" as a word.
+        var unix = script.Replace("\r", "", StringComparison.Ordinal);
+        var command = $"sh -c {SshGitRunner.Quote(unix)} sh {string.Join(' ', arguments.Select(SshGitRunner.Quote))}";
+        return new ProcessRequest(SessionProfiles.SshCommand, [])
         {
             CommandLine = $"-T -o BatchMode=yes -o ConnectTimeout=15 {server.Ssh} {SshGitRunner.QuoteArgument(command)}",
-            Timeout = ServerTimeout,
-        });
-        if (!result.Succeeded)
-        {
-            throw new IOException(result.ErrorLines.LastOrDefault() ?? $"ssh failed ({result.ExitCode}).");
-        }
-        return Parse(result.Text, paths, files);
+            Timeout = timeout,
+        };
     }
+
+    /// <summary>What a server's script printed; why ssh failed, as an IOException, when it did.</summary>
+    public static string Succeeded(ProcessResult result) => result.Succeeded
+        ? result.Text
+        : throw new IOException(result.ErrorLines.LastOrDefault() ?? $"ssh failed ({result.ExitCode}).");
 
     /// <summary>The server's answer (<see cref="Script"/>), folder by folder, folders by name.</summary>
     public static List<TreeBranch> Parse(string output, IReadOnlyList<string> paths, bool files = false)

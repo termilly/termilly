@@ -8,19 +8,19 @@
 // downloads, deleting. Files dropped on the panel go into the folder they're dropped on. What's done is said in a
 // note at the bottom of the window (filejobs.js).
 
-import { PAGE } from './protocol.js';
-import { send, sendWithFiles, platform, droppedPaths, PLATFORM } from './host.js';
+import { PAGE, HOST } from './protocol.js';
+import { send, sendWithFiles, onHost, platform, droppedPaths, PLATFORM } from './host.js';
 import { on, tabTitle, wsById, isSsh, isRemote, EVENTS } from './store.js';
 import { focusedTab, newTab } from './panes.js';
 import { scheduleFit, typePaths } from './terminals.js';
-import { escapeHtml, ICONS } from './ui.js';
+import { escapeHtml, ICONS, countText } from './ui.js';
 import { modal, confirmDialog, CONFIRM_DIALOG } from './dialogs.js';
 import { byId, field, targetOf, dragPointer, WORKSPACE_ID, PATH_DRAG } from './dom.js';
 import { showMenu, SEPARATOR } from './popups.js';
 import { showChange } from './preview.js';
 import { pathActions } from './actions.js';
 import { FILE_OP, FOLDER_PATH } from './constants.js';
-import { parentOf, isInside, DRIVE_ICON, DRIVES_NAME, sizeText, hasFiles, shellFolderOf, folderOf, placeOf, sameMachine } from './filepaths.js';
+import { parentOf, isInside, DRIVE_ICON, DRIVES_NAME, folderName, sizeText, hasFiles, shellFolderOf, folderOf, placeOf, sameMachine } from './filepaths.js';
 import { rootOf, childPath, signHtml, indentRows, readFolders, pathDown } from './foldertree.js';
 import { planCopy, planInto } from './copyto.js';
 import { JOB_KIND, FILE_MANAGER, BIN, newRequestId, startJob, expectJob } from './filejobs.js';
@@ -32,7 +32,13 @@ import { JOB_KIND, FILE_MANAGER, BIN, newRequestId, startJob, expectJob } from '
  * the folder its shell is in (marked), a folder it moved to while another terminal was shown, why nothing shows, and
  * what the search box holds.
  * @typedef {{ tab: Tab, server: boolean, nodes: Map<string, TreeNode>, open: Set<string>, loading: Set<string>,
- *   cwd: string | null, moved: string | null, error: string | null, query: string }} FilesView
+ *   cwd: string | null, moved: string | null, error: string | null, query: string, search: Search | null }} FilesView
+ */
+/**
+ * A search of a folder and every folder in it (FileSearch.cs): what it found by the folder it's in (and the folders
+ * down to those), how many, and whether it's done, stopped at the most it finds, or failed.
+ * @typedef {{ id: string, dir: string, nodes: Map<string, FileEntry[]>, count: number, done: boolean, stopped: boolean,
+ *   error: string | null }} Search
  */
 /** A row drawn: its path, what it is (none for the tree's root), how deep it is, and the folder it's in. */
 /** @typedef {{ path: string, entry: FileEntry | null, depth: number, dir: string | null }} Row */
@@ -50,6 +56,8 @@ const EXPAND_ICON = '<svg class="files-fold-icon" viewBox="0 0 16 16"><path d="M
 const REFRESH_ICON = '<svg class="files-fold-icon" viewBox="0 0 16 16"><path d="M12.5 8.5a4.5 4.5 0 1 1-1.5-3.4"/><path d="M11.5 1.5v3.5H8"/></svg>';
 /** The search box. */
 const SEARCH = '[data-files-search]';
+/** How long typing pauses before the search starts. */
+const TYPING_MS = 300;
 /** The panel's narrowest width; its widest is half the terminals' area (app.css max-width). */
 const MIN_WIDTH_PX = 260;
 /** The tree's list, and the class of the folder row files dragged over go into. */
@@ -76,6 +84,7 @@ let rows = [];
 let selected = new Set();
 /** @type {string | null} */
 let anchor = null;
+let searchTimer = 0;
 /** @type {Row[]} the files and folders being dragged out of the panel (or last dragged) */
 let dragged = [];
 
@@ -181,7 +190,7 @@ function viewOf(tab) {
   const kept = views.get(tab.id);
   if (kept) return kept;
   /** @type {FilesView} */
-  const v = { tab, server: isSsh(tab), nodes: new Map(), open: new Set(), loading: new Set(), cwd: null, moved: shellFolderOf(tab), error: null, query: '' };
+  const v = { tab, server: isSsh(tab), nodes: new Map(), open: new Set(), loading: new Set(), cwd: null, moved: shellFolderOf(tab), error: null, query: '', search: null };
   views.set(tab.id, v);
   return v;
 }
@@ -214,6 +223,13 @@ export function toggleFiles(tab = focusedTab()) {
 // ---- Drawing ----
 
 /**
+ * Whether a folder shows open: in the tree, opened; searching, holding something found.
+ * @param {FilesView} v
+ * @param {string} path
+ */
+const isOpen = (v, path) => (v.search ? v.search.nodes.has(path) : v.open.has(path));
+
+/**
  * A row: its sign, icon and name, a file's size, and the buttons its hover shows.
  * @param {Row} r
  * @param {number} i
@@ -224,16 +240,16 @@ function rowHtml(r, i) {
   const cls = `files-item${!e || e.isDirectory ? ' dir' : ''}${selected.has(r.path) ? ' selected' : ''}${r.path === v.cwd ? ' cwd' : ''}`;
   if (!e) {
     const name = v.server ? `${placeOf(v.tab)} (/)` : r.path === FOLDER_PATH.drives ? DRIVES_NAME : '/';
-    return `<div class="${cls}" data-i="${i}" data-depth="0">${signHtml(true, v.open.has(r.path))}<span class="files-name">${ICONS.monitor} ${escapeHtml(name)}</span></div>`;
+    return `<div class="${cls}" data-i="${i}" data-depth="0">${signHtml(true, isOpen(v, r.path))}<span class="files-name">${ICONS.monitor} ${escapeHtml(name)}</span></div>`;
   }
   const node = v.nodes.get(r.path);
-  const has = e.isDirectory && (r.dir === FOLDER_PATH.drives || !!v.nodes.get(/** @type {string} */ (r.dir))?.folders.find(f => f.name === e.name)?.hasFolders || !!node?.entries?.length);
+  const has = e.isDirectory && (r.dir === FOLDER_PATH.drives || !!v.nodes.get(/** @type {string} */ (r.dir))?.folders.find(f => f.name === e.name)?.hasFolders || !!node?.entries?.length || !!v.search?.nodes.has(r.path));
   const drive = e.label != null;
   const name = drive ? `${DRIVE_ICON}${escapeHtml(`${e.label} (${e.name.replace(/\\$/, '')})`)}` : `${e.isDirectory ? '📁' : '📄'} ${escapeHtml(e.name)}`;
   const title = drive ? e.modified : [e.permissions, e.modified].filter(Boolean).join(' · ');
   return `
   <div class="${cls}" data-i="${i}" data-depth="${r.depth}" draggable="true" title="${escapeHtml(title)}">
-    ${signHtml(has, v.open.has(r.path))}
+    ${signHtml(has, isOpen(v, r.path))}
     <span class="files-name">${name}</span>
     <span class="files-size">${e.isDirectory ? '' : sizeText(e.size)}</span>
     ${drive ? '' : `<span class="files-actions">
@@ -252,30 +268,46 @@ function rowHtml(r, i) {
 const noteRow = (depth, html) => `<div class="files-item files-note" data-depth="${depth}">${html}</div>`;
 
 /**
- * Searching, the tree shows what's named so in the folders read so far (open or not), and the folders down to it:
- * whether a folder holds something found, and whether an entry shows.
- * @param {FilesView} v
- * @param {string} q lower case
+ * Adds an entry's row (to `rows` and `html`); returns its path.
+ * @param {string[]} html
+ * @param {string} dir
+ * @param {FileEntry} e
+ * @param {number} depth
  */
-function searchOf(v, q) {
-  /** @type {Map<string, boolean>} */
-  const found = new Map();
-  /** @param {string} path */
-  const holds = path => {
-    let has = found.get(path);
-    if (has === undefined) {
-      found.set(path, false); // a link back up doesn't go round for ever
-      has = (v.nodes.get(path)?.entries ?? []).some(e => shows(path, e));
-      found.set(path, has);
-    }
-    return has;
-  };
+function addRow(html, dir, e, depth) {
+  const row = { path: childPath(dir, e.name), entry: e, depth, dir };
+  rows.push(row);
+  html.push(rowHtml(row, rows.length - 1));
+  return row.path;
+}
+
+/**
+ * The search's rows: its line (running, what it found, or why it failed), then what it found, under the folders down
+ * to it, all open.
+ * @param {FilesView} v
+ * @param {Search} found
+ * @param {string[]} html
+ */
+function foundHtml(v, found, html) {
+  // The folder's name says where; its whole path shows on pointing at it.
+  const where = found.dir === FOLDER_PATH.drives ? folderName(found.dir) : nameIn(found.dir);
+  const line = found.error ? `<span class="files-error">${escapeHtml(found.error)}</span>`
+    : !found.done ? `<span class="files-searching"></span>Searching ${escapeHtml(where)} · ${countText(found.count)} found`
+    : found.stopped ? `Stopped at ${countText(found.count)} found in ${escapeHtml(where)}: a longer name finds fewer`
+    : found.count ? `${countText(found.count)} found in ${escapeHtml(where)}` : `Nothing by that name in ${escapeHtml(where)}`;
+  html.unshift(`<div class="files-status" title="${escapeHtml(folderName(found.dir))}">${line}</div>`);
   /**
-   * @param {string} dir
-   * @param {FileEntry} e
+   * @param {string} path
+   * @param {number} depth
    */
-  const shows = (dir, e) => e.name.toLowerCase().includes(q) || (e.isDirectory && holds(childPath(dir, e.name)));
-  return { holds, shows };
+  const walk = (path, depth) => {
+    const entries = [...found.nodes.get(path) ?? []].sort((a, b) => Number(b.isDirectory) - Number(a.isDirectory) || a.name.localeCompare(b.name));
+    for (const e of entries) {
+      const at = addRow(html, path, e, depth);
+      if (e.isDirectory) walk(at, depth + 1);
+    }
+  };
+  walk(rows[0].path, 1);
 }
 
 /** The tree's rows (into `rows`) and their markup. @param {FilesView} v */
@@ -287,31 +319,29 @@ function treeHtml(v) {
   const root = rootOf(v.tab);
   rows = [{ path: root, entry: null, depth: 0, dir: null }];
   const html = [rowHtml(rows[0], 0)];
-  const q = v.query.trim().toLowerCase();
-  const { holds, shows } = searchOf(v, q);
+  if (v.search) {
+    foundHtml(v, v.search, html);
+    return html.join('');
+  }
   /**
    * @param {string} path
    * @param {number} depth
    */
   const walk = (path, depth) => {
-    if (q ? !holds(path) : !v.open.has(path)) return;
+    if (!v.open.has(path)) return;
     const node = v.nodes.get(path);
     if (!node) {
       if (v.loading.has(path)) html.push(noteRow(depth, 'Loading…'));
       return;
     }
-    if (!q && node.error) html.push(noteRow(depth, `<span class="files-error">${escapeHtml(node.error)}</span>`));
-    else if (!q && !node.entries?.length && depth > 1) html.push(noteRow(depth, 'Empty'));
+    if (node.error) html.push(noteRow(depth, `<span class="files-error">${escapeHtml(node.error)}</span>`));
+    else if (!node.entries?.length && depth > 1) html.push(noteRow(depth, 'Empty'));
     for (const e of node.entries ?? []) {
-      if (q && !shows(path, e)) continue;
-      const row = { path: childPath(path, e.name), entry: e, depth, dir: path };
-      rows.push(row);
-      html.push(rowHtml(row, rows.length - 1));
-      if (e.isDirectory) walk(row.path, depth + 1);
+      const at = addRow(html, path, e, depth);
+      if (e.isDirectory) walk(at, depth + 1);
     }
   };
   walk(root, 1);
-  if (q && rows.length === 1) html.push(noteRow(1, 'Nothing by that name in the folders read so far'));
   return html.join('');
 }
 
@@ -339,7 +369,7 @@ function render() {
       </span>
     </div>
     <div class="files-bar">
-      <input class="field files-search" type="search" placeholder="Search" title="Search the folders read so far" spellcheck="false" autocomplete="off" data-files-search value="${escapeHtml(view.query)}">
+      <input class="field files-search" type="search" placeholder="Search" title="Searches the folder selected (or the shell’s) and every folder in it. * and ? match any letters, or one" spellcheck="false" autocomplete="off" data-files-search value="${escapeHtml(view.query)}">
       ${server ? '<label class="btn small files-upload" title="Upload files into the folder selected">Upload<input type="file" multiple hidden data-files-pick></label>' : ''}
     </div>
     <div class="files-list">${treeHtml(view)}</div>`;
@@ -353,14 +383,81 @@ function render() {
   }
 }
 
-/** Draws the tree again for what the search box holds (the box itself stays). */
-function drawTree() {
+/**
+ * Draws the tree again (the search box stays as it is): from the top for a new search, else where it was scrolled.
+ * @param {boolean} [top]
+ */
+function drawTree(top = false) {
   if (!view) return;
   const list = /** @type {HTMLElement} */ (panel.querySelector(LIST));
+  const scroll = top ? 0 : list.scrollTop;
   list.innerHTML = treeHtml(view);
   indentRows(list);
-  list.scrollTop = 0;
+  list.scrollTop = scroll;
 }
+
+// ---- Searching ----
+
+/**
+ * Searches what the box holds in the folder selected (or the one the file selected is in), else the shell's, and
+ * every folder in it; an empty box stops the search and shows the tree again.
+ */
+function search() {
+  if (!view) return;
+  const text = view.query.trim();
+  if (!text) {
+    if (view.search) send(PAGE.filesSearch, { id: view.tab.id, text: '' });
+    view.search = null;
+    drawTree(true);
+    return;
+  }
+  const dir = targetDir() ?? rootOf(view.tab);
+  view.search = { id: newRequestId(), dir, nodes: new Map(), count: 0, done: false, stopped: false, error: null };
+  send(PAGE.filesSearch, { id: view.tab.id, searchId: view.search.id, dir, text });
+  drawTree(true);
+}
+
+/** The name a folder has in the one it's in: a drive's root ("D:\") as it is, else its last name. @param {string} path */
+const nameIn = path => (parentOf(path) === FOLDER_PATH.drives ? path : path.split(/[\\/]/).filter(Boolean).pop() ?? path);
+
+/**
+ * Takes in a file or folder found: in the folder it's in, and that folder in its own, up to the tree's root.
+ * @param {FilesView} v
+ * @param {Search} found
+ * @param {string} dir
+ * @param {FileEntry} entry
+ */
+function addFound(v, found, dir, entry) {
+  /**
+   * @param {string} folder
+   * @param {FileEntry} e
+   */
+  const put = (folder, e) => {
+    const list = found.nodes.get(folder) ?? [];
+    if (!list.some(x => x.name === e.name)) list.push(e);
+    found.nodes.set(folder, list);
+  };
+  put(dir, entry);
+  const root = rootOf(v.tab);
+  for (let d = dir; d !== root;) {
+    const up = parentOf(d);
+    if (up === d) break;
+    // A folder the tree has read keeps what it knows of it (a drive's label).
+    const known = v.nodes.get(up)?.entries?.find(x => childPath(up, x.name) === d);
+    put(up, known ?? { name: nameIn(d), isDirectory: true, size: 0, modified: '', permissions: '' });
+    d = up;
+  }
+}
+
+onHost(HOST.filesFound, m => {
+  const v = [...views.values()].find(x => x.search?.id === m.searchId);
+  const found = v?.search;
+  if (!v || !found) return;
+  for (const f of /** @type {{ dir: string, entry: FileEntry }[]} */ (m.found)) addFound(v, found, f.dir, f.entry);
+  found.count += m.found.length;
+  if (m.done) Object.assign(found, { done: true, stopped: !!m.stopped, error: m.error ?? null });
+  if (v === view) drawTree();
+});
 
 // ---- What files and folders can do ----
 
@@ -719,7 +816,8 @@ function copyIn(dir, files, paths = null) {
 panel.addEventListener('input', e => {
   if (!view || !targetOf(e).matches(SEARCH)) return;
   view.query = /** @type {HTMLInputElement} */ (e.target).value;
-  drawTree();
+  clearTimeout(searchTimer);
+  searchTimer = window.setTimeout(search, TYPING_MS);
 });
 // Escape in the search box empties it (the box's own way), and a second one goes back to the tree.
 panel.addEventListener('keydown', e => {

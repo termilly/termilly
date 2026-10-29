@@ -76,6 +76,15 @@ internal static partial class FromPage
     {
         public static string Type => "files:copyTo";
     }
+
+    /// <summary>
+    /// Searches <see cref="Dir"/> and every folder in it for names with <see cref="Text"/> (FileSearch.cs), stopping
+    /// the search before; no text only stops it. What's found comes as files:found with its <see cref="SearchId"/>.
+    /// </summary>
+    internal sealed record FilesSearch(string Id = "", string? SearchId = null, string? Dir = null, string? Text = null) : IPageMessage
+    {
+        public static string Type => "files:search";
+    }
 }
 
 internal static partial class ToPage
@@ -133,6 +142,15 @@ internal static partial class ToPage
         public static string Type => "files:done";
 
         public bool Ok { get; } = true;
+    }
+
+    /// <summary>
+    /// A search's finds so far (a batch at a time), then, <see cref="Done"/>, its end: whether it <see cref="Stopped"/>
+    /// at FileSearch.Most, or why it failed.
+    /// </summary>
+    internal sealed record FilesFound(string? SearchId, IReadOnlyList<FoundEntry> Found, bool Done = false, bool Stopped = false, string? Error = null) : IHostMessage
+    {
+        public static string Type => "files:found";
     }
 
     /// <summary>The files picked for an upload (or the download whose folder was picked), each reported as it's done.</summary>
