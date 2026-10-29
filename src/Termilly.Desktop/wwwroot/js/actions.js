@@ -5,10 +5,11 @@
 
 import { PAGE, HOST } from './protocol.js';
 import { send, onHost } from './host.js';
-import { state, tabTitle } from './store.js';
+import { state, tabTitle, emit, EVENTS } from './store.js';
 import { ACTION_PLACEHOLDER } from './constants.js';
 import { keysHtml } from './ui.js';
-import { SEPARATOR } from './popups.js';
+import { SEPARATOR, showMenu, closeAll } from './popups.js';
+import { byId } from './dom.js';
 import { noticeDialog } from './dialogs.js';
 import { focusedTab } from './panes.js';
 import { portsOf } from './gitstatus.js';
@@ -229,3 +230,35 @@ function menuExtras(body) {
 }
 
 setMenuExtras(menuExtras);
+
+// ---- The title bar's Actions button ----
+
+/** Settings' Actions page (settings/page.js). */
+const ACTIONS_PAGE = 'actions';
+
+/**
+ * Why an action can't run for this terminal now, for its greyed-out entry.
+ * @param {ActionSetting} action
+ */
+const whyNot = action => (placeholdersOf(action).some(p => FROM_SELECTION.includes(p))
+  ? 'Select it in the terminal first' : 'Not here: it needs a folder or a port this terminal doesn’t have');
+
+/**
+ * Every action switched on, for the terminal in focus (one that can't run there is greyed out), then Edit actions.
+ * @param {HTMLElement} button
+ */
+function actionsMenu(button) {
+  if (button.classList.contains('open')) return closeAll();
+  const tab = focusedTab();
+  const context = contextOf(tab);
+  /** @type {import('./popups.js').MenuEntry[]} */
+  const items = enabledActions().map(a => {
+    const can = canRun(a, context);
+    return { label: a.name, hint: a.shortcut ? a.shortcut : undefined, disabled: !can, title: can ? undefined : whyNot(a), action: () => runAction(a, tab, context) };
+  });
+  if (!items.length) items.push({ label: 'No actions yet', disabled: true });
+  items.push(SEPARATOR, { label: 'Edit actions', action: () => emit(EVENTS.openSettings, ACTIONS_PAGE) });
+  showMenu(items, button);
+}
+
+byId('actions-button').addEventListener('click', e => actionsMenu(/** @type {HTMLElement} */ (e.currentTarget)));

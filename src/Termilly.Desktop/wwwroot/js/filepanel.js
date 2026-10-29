@@ -220,6 +220,9 @@ export function toggleFiles(tab = focusedTab()) {
   show(tab);
 }
 
+// The title bar's File Explorer button.
+byId('files-button').addEventListener('click', () => toggleFiles());
+
 // ---- Drawing ----
 
 /**
