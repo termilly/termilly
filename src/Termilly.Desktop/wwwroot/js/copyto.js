@@ -5,14 +5,15 @@
 // time in this workspace, or where its shell is; the copy itself is the host's (FileCopies.cs).
 
 import { PAGE } from './protocol.js';
-import { request, platform, PLATFORM } from './host.js';
+import { request } from './host.js';
 import { state, tabsOf, tabTitle, isSsh, activeWs, persist } from './store.js';
 import { modal, noticeDialog } from './dialogs.js';
 import { escapeHtml, ICONS } from './ui.js';
 import { find, targetOf } from './dom.js';
 import {
-  hasFiles, shellFolderOf, placeOf, folderOf, sameMachine, joinPath, parentOf, isInside, freeName, DRIVE_ICON, DRIVES_NAME,
+  hasFiles, shellFolderOf, placeOf, folderOf, sameMachine, parentOf, isInside, freeName, DRIVE_ICON, DRIVES_NAME,
 } from './filepaths.js';
+import { rootOf, childPath, signHtml, indentRows, readFolders, pathDown } from './foldertree.js';
 import { FILE_OP, FOLDER_PATH } from './constants.js';
 
 /** What to do about the items already in the folder. */
@@ -20,14 +21,11 @@ const CONFLICT = Object.freeze({ replace: 'replace', skip: 'skip', keep: 'keep' 
 /** How many of the items already there the question names. */
 const CLASHES_SHOWN = 8;
 
-/** A file or folder to copy, as the panel lists it. */
-/** @typedef {{ name: string, isDirectory: boolean }} CopyItem */
+/** A file or folder to copy, as the panel lists it, and where it is (the panel's tree can pick from several folders). */
+/** @typedef {{ name: string, isDirectory: boolean, path: string }} CopyItem */
 /** Where the items go and under which names. */
 /** @typedef {{ to: Tab, dir: string, items: { path: string, name: string }[] }} CopyPlan */
-/** A folder in the tree, as the host lists it (FolderTree.cs): its name (a drive's root), whether it has folders, a drive's label. */
-/** @typedef {{ name: string, hasFolders: boolean, label?: string | null }} TreeFolder */
-/** A folder's folders once read, or why they couldn't be. */
-/** @typedef {{ folders: TreeFolder[], error: string | null }} TreeNode */
+/** @typedef {import('./foldertree.js').TreeNode} TreeNode */
 /**
  * The window's state: the terminal the files are in and the one chosen, the folders read (per machine; nodes is the
  * chosen one's), which are open or being read, the one selected, the filter, and the folder a new one is being named in.
@@ -37,19 +35,18 @@ const CLASHES_SHOWN = 8;
  */
 
 /**
- * Asks where `items` (in `sourceDir`, a folder of `source`) go, then about the ones already there. Resolves with what
- * to copy where, or null when cancelled.
+ * Asks where `items` (files and folders of `source`) go, then about the ones already there. Resolves with what to
+ * copy where, or null when cancelled.
  * @param {Tab} source
- * @param {string} sourceDir
  * @param {CopyItem[]} items
  * @returns {Promise<CopyPlan | null>}
  */
-export async function planCopy(source, sourceDir, items) {
+export async function planCopy(source, items) {
   const target = await pickFolder(source, items.length);
   if (!target) return null;
   const { tab, dir } = target;
   const same = sameMachine(source, tab);
-  const inside = same && items.find(i => i.isDirectory && isInside(dir, joinPath(sourceDir, i.name)));
+  const inside = same && items.find(i => i.isDirectory && isInside(dir, i.path));
   if (inside) {
     await noticeDialog({ title: 'Can’t copy a folder into itself', body: `${dir} is in ${inside.name}.` });
     return null;
@@ -63,7 +60,8 @@ export async function planCopy(source, sourceDir, items) {
   const key = isSsh(tab) ? (/** @type {string} */ n) => n : (/** @type {string} */ n) => n.toLowerCase();
   const taken = new Set((m.entries ?? []).map((/** @type {{ name: string }} */ e) => key(e.name)));
   const clashes = items.filter(i => taken.has(key(i.name)));
-  const samePlace = same && key(m.path) === key(sourceDir);
+  // Copying into the folder they're in: only new names will do.
+  const samePlace = same && items.every(i => key(parentOf(i.path)) === key(m.path));
   const choice = clashes.length ? await askConflict(clashes, m.path, samePlace) : CONFLICT.replace;
   if (!choice) return null;
   const copies = [];
@@ -72,7 +70,7 @@ export async function planCopy(source, sourceDir, items) {
     if (clash && choice === CONFLICT.skip) continue;
     const name = clash && choice === CONFLICT.keep ? freeName(item.name, item.isDirectory, taken, key) : item.name;
     taken.add(key(name));
-    copies.push({ path: joinPath(sourceDir, item.name), name });
+    copies.push({ path: item.path, name });
   }
   return copies.length ? { to: tab, dir: m.path, items: copies } : null;
 }
@@ -141,44 +139,6 @@ function termsHtml(p, source) {
 
 // ---- The tree ----
 
-/** How far each level of the tree is indented, in pixels, and the first level's room. */
-const INDENT_PX = 16;
-const TREE_START_PX = 4;
-/** The tree's open (minus) and closed (plus) signs: a box with 1px lines on whole pixels, so they stay crisp. */
-const PLUS = '<svg class="copyto-sign" viewBox="0 0 9 9"><rect x="0.5" y="0.5" width="8" height="8" rx="1"/><path d="M2 4.5h5M4.5 2v5"/></svg>';
-const MINUS = '<svg class="copyto-sign" viewBox="0 0 9 9"><rect x="0.5" y="0.5" width="8" height="8" rx="1"/><path d="M2 4.5h5"/></svg>';
-/** A path the server or this machine knows as it is (not "~", which the host resolves first). */
-const ABSOLUTE = /^\/|^[A-Za-z]:\\|^\\\\/;
-
-/**
- * Where a terminal's tree starts: this PC's drives, or the root of its server (or of this machine, on Linux).
- * @param {Tab} tab
- */
-const rootOf = tab => (isSsh(tab) || platform !== PLATFORM.windows ? '/' : FOLDER_PATH.drives);
-
-/**
- * The folders from the tree's root down to `path`, the root first.
- * @param {string} path
- * @param {string} root
- */
-function chainOf(path, root) {
-  const chain = [path];
-  while (chain[0] !== root) {
-    const up = parentOf(chain[0]);
-    if (up === chain[0]) break;
-    chain.unshift(up);
-  }
-  if (chain[0] !== root) chain.unshift(root);
-  return chain;
-}
-
-/**
- * A folder's path in the tree: a drive's is its root ("C:\").
- * @param {string} parent
- * @param {string} name
- */
-const childPath = (parent, name) => (parent === FOLDER_PATH.drives ? name : joinPath(parent, name));
-
 /**
  * Which tree the terminal's folders are in: one per machine, read once while the window is open.
  * @param {Tab} tab
@@ -196,7 +156,7 @@ const machineOf = tab => (isSsh(tab) ? `ssh:${tab.profile}` : 'here');
 const nodeRow = (p, path, name, depth, hasFolders) => `
   <div class="files-item dir copyto-node${path === p.selected ? ' selected' : ''}" data-node="${escapeHtml(path)}" data-depth="${depth}"
     title="Click to copy into it${hasFolders ? ', double-click to open or close it' : ''}">
-    <span class="copyto-twist" data-twist>${hasFolders ? (p.open.has(path) ? MINUS : PLUS) : ''}</span>
+    ${signHtml(hasFolders, p.open.has(path))}
     <span class="files-name">${name}</span>
   </div>`;
 
@@ -205,7 +165,7 @@ const nodeRow = (p, path, name, depth, hasFolders) => `
  * @param {number} depth
  * @param {string} html
  */
-const noteRow = (depth, html) => `<div class="files-item copyto-note" data-depth="${depth}">${html}</div>`;
+const noteRow = (depth, html) => `<div class="files-item files-note" data-depth="${depth}">${html}</div>`;
 
 /** @param {Picker} p */
 function treeHtml(p) {
@@ -240,7 +200,7 @@ function treeHtml(p) {
 
 /**
  * Reads the folders of the ones not read yet (all at once: one ssh call on a server); false when the window moved
- * on to another terminal meanwhile, or the machine can't be reached.
+ * on to another terminal meanwhile, or the machine can’t be reached.
  * @param {HTMLElement} dialog
  * @param {Picker} p
  * @param {string[]} paths
@@ -251,58 +211,29 @@ async function load(dialog, p, paths) {
   if (!tab || !wanted.length) return !!tab;
   for (const path of wanted) p.loading.add(path);
   paint(dialog, p);
-  const m = await request(PAGE.filesTree, { id: tab.id, paths: wanted });
+  const error = await readFolders(tab, p.nodes, wanted, false);
   for (const path of wanted) p.loading.delete(path);
   if (p.tab !== tab) return false;
-  if (m.error) p.error = m.error;
-  for (const b of m.branches ?? []) {
-    const node = { folders: b.folders ?? [], error: b.error ?? null };
-    p.nodes.set(b.path, node);
-    if (b.full) p.nodes.set(b.full, node);
-  }
+  if (error) p.error = error;
   paint(dialog, p);
-  return !m.error;
+  return !error;
 }
 
 /**
- * Opens the tree down to a folder and selects it (or the deepest folder on the way that's still there).
+ * Opens the tree down to a folder and selects it (or the deepest folder on the way that’s still there).
  * @param {HTMLElement} dialog
  * @param {Picker} p
  * @param {string} path
  */
 async function reveal(dialog, p, path) {
   const tab = /** @type {Tab} */ (p.tab);
-  const root = rootOf(tab);
-  let full = path;
-  // "~" (a server's home): the host says where that is.
-  if (!ABSOLUTE.test(path)) {
-    const m = await request(PAGE.filesTree, { id: tab.id, paths: [path] });
-    if (p.tab !== tab) return;
-    const b = m.branches?.[0];
-    full = b?.full ?? root;
-    if (b?.full) p.nodes.set(b.full, { folders: b.folders ?? [], error: null });
-  }
-  const chain = chainOf(full, root);
-  p.open = new Set(chain);
-  if (!await load(dialog, p, chain) && p.tab !== tab) return;
-  // The folders that are there, down from the root, named as their folder lists them (case aside, here on
-  // Windows); a folder gone since leaves its parent selected.
-  const caseless = !isSsh(tab) && platform === PLATFORM.windows;
-  const same = (/** @type {string} */ a, /** @type {string} */ b) => (caseless ? a.toLowerCase() === b.toLowerCase() : a === b);
-  const there = [root];
-  for (const c of chain.slice(1)) {
-    const at = there[there.length - 1];
-    const folder = p.nodes.get(at)?.folders.find(f => same(childPath(at, f.name), c));
-    const node = p.nodes.get(c);
-    if (!folder || !node || node.error) break;
-    const path = childPath(at, folder.name);
-    p.nodes.set(path, node);
-    there.push(path);
-  }
+  const { there, error } = await pathDown(tab, p.nodes, path, false);
+  if (p.tab !== tab) return;
+  if (error) p.error = error;
   p.open = new Set(there);
   select(dialog, p, there[there.length - 1], false);
   paint(dialog, p);
-  find(dialog, '.copyto-node.selected')?.scrollIntoView({ block: 'center' });
+  find(dialog, ".copyto-node.selected")?.scrollIntoView({ block: "center" });
 }
 
 /**
@@ -362,9 +293,7 @@ function paint(dialog, p) {
   const scroll = tree.scrollTop;
   tree.innerHTML = treeHtml(p);
   tree.scrollTop = scroll;
-  for (const row of /** @type {NodeListOf<HTMLElement>} */ (tree.querySelectorAll('[data-depth]'))) {
-    row.style.paddingLeft = `${TREE_START_PX + Number(row.dataset.depth) * INDENT_PX}px`;
-  }
+  indentRows(tree);
   /** @type {HTMLInputElement | null} */ (tree.querySelector('[data-new-folder]'))?.focus();
   paintTarget(dialog, p);
 }
@@ -427,7 +356,7 @@ async function makeFolder(dialog, p, name) {
   const path = childPath(parent, name);
   const m = await request(PAGE.filesOp, { id: p.tab.id, op: FILE_OP.makeDirectory, path });
   if (m.ok === false) {
-    p.nodes.set(parent, { folders: p.nodes.get(parent)?.folders ?? [], error: m.message });
+    p.nodes.set(parent, { folders: p.nodes.get(parent)?.folders ?? [], entries: null, error: m.message });
     return paint(dialog, p);
   }
   p.nodes.delete(parent);

@@ -220,7 +220,7 @@ export const HOST = Object.freeze({
 /** @typedef {{ id?: string, requestId?: string|null, op?: string|null, path?: string|null, to?: string|null }} Page_filesOp */
 /** @typedef {{ id?: string, requestId?: string|null, dir?: string|null }} Page_filesPick */
 /** @typedef {{ id?: string, requestId?: string|null, dir?: string|null, paths?: Array<string>|null }} Page_filesPut */
-/** @typedef {{ id?: string, requestId?: string|null, paths?: Array<string>|null }} Page_filesTree */
+/** @typedef {{ id?: string, requestId?: string|null, paths?: Array<string>|null, files?: boolean }} Page_filesTree */
 /** @typedef {{ id?: string }} Page_forwardStart */
 /** @typedef {{ id?: string }} Page_forwardStop */
 /** @typedef {{ folders?: Array<string>|null, force?: boolean }} Page_gitStatus */

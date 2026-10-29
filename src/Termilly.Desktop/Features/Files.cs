@@ -18,7 +18,7 @@ internal sealed class FilesHandler(
     public void Register(MessageRouter router)
     {
         router.On<FromPage.FilesList>(m => Task.Run(() => List(m.Id, m.RequestId, m.Path)));
-        router.On<FromPage.FilesTree>(m => Task.Run(() => Tree(m.Id, m.RequestId, m.Paths ?? [])));
+        router.On<FromPage.FilesTree>(m => Task.Run(() => Tree(m.Id, m.RequestId, m.Paths ?? [], m.Files)));
         router.On<FromPage.FilesOp>(m => Task.Run(() => Operate(m)));
         router.On<FromPage.FilesPut>((m, files) => Task.Run(() => CopyIn(m.Id, m.RequestId, m.Dir, files ?? m.Paths ?? [])));
         router.On<FromPage.FilesPick>(m => PickAndCopyInAsync(m.Id, m.RequestId, m.Dir));
@@ -52,12 +52,12 @@ internal sealed class FilesHandler(
         }
     }
 
-    /// <summary>"Copy to"'s tree: the folders in each folder asked for (disk or ssh work, so off the UI thread).</summary>
-    private void Tree(string terminal, string? requestId, IReadOnlyList<string> paths)
+    /// <summary>A tree's folders (and files) in each folder asked for (disk or ssh work, so off the UI thread).</summary>
+    private void Tree(string terminal, string? requestId, IReadOnlyList<string> paths, bool files)
     {
         try
         {
-            var branches = PlaceOf(terminal) is { } server ? tree.OnServer(server, paths) : FolderTree.Here(paths);
+            var branches = PlaceOf(terminal) is { } server ? tree.OnServer(server, paths, files) : FolderTree.Here(paths, files);
             page.Post(new ToPage.FilesTree(requestId, branches));
         }
         catch (IOException ex)

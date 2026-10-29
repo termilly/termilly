@@ -36,8 +36,8 @@ internal static partial class FromPage
         public static string Type => "files:list";
     }
 
-    /// <summary>"Copy to"'s tree: the folders in each of <see cref="Paths"/>, of the terminal's files.</summary>
-    internal sealed record FilesTree(string Id = "", string? RequestId = null, IReadOnlyList<string>? Paths = null) : IPageMessage
+    /// <summary>A tree's folders in each of <see cref="Paths"/>, of the terminal's files; <see cref="Files"/>: their files too (the Files panel).</summary>
+    internal sealed record FilesTree(string Id = "", string? RequestId = null, IReadOnlyList<string>? Paths = null, bool Files = false) : IPageMessage
     {
         public static string Type => "files:tree";
     }

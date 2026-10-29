@@ -9,6 +9,12 @@ export const WORKSPACE_ID = 'workspace';
 export const XTERM_SCREEN = '.xterm-screen';
 /** What a file or folder dragged from the Files panel carries: its path (a terminal types it where it's dropped). */
 export const PATH_DRAG = 'application/x-termilly-path';
+
+/**
+ * Says changes to an element's text to a screen reader when it's idle (the tour's card, notes at the bottom).
+ * @param {HTMLElement} el
+ */
+export const announce = el => el.setAttribute('aria-live', 'polite');
 /** The mouse's middle button (its wheel), which closes a tab. */
 const MIDDLE_BUTTON = 1;
 

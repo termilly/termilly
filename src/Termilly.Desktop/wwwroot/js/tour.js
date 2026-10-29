@@ -9,7 +9,7 @@ import { closeAll, anyOpen } from './popups.js';
 import { focusedTab, restoreFocus } from './panes.js';
 import { escapeHtml, keysHtml } from './ui.js';
 import { updateSettings } from './preferences.js';
-import { find, targetOf } from './dom.js';
+import { find, targetOf, announce } from './dom.js';
 import { SECOND_MS } from './util.js';
 
 /**
@@ -162,7 +162,7 @@ export function startTour() {
   card = document.createElement('section');
   card.className = 'tour-card';
   card.setAttribute('role', 'dialog');
-  card.setAttribute('aria-live', 'polite');
+  announce(card);
   document.body.append(light, card);
   card.addEventListener('click', onClick);
   card.addEventListener('keydown', onKey);

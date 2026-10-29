@@ -57,4 +57,35 @@ public sealed class FolderTreeTests : IDisposable
 
         Assert.Equal("a\tb", Assert.Single(branch.Folders).Name);
     }
+
+    [Fact]
+    public void With_files_a_servers_answer_lists_everything_and_a_link_to_a_folder_is_a_folder()
+    {
+        const string output = "@@0\n/srv\ntotal 12\n"
+            + "drwxr-xr-x  3 a a 4096 Oct  9 12:00 .\n"
+            + "drwxr-xr-x  3 a a 4096 Oct  9 12:00 ..\n"
+            + "-rw-r--r--  1 a a   12 Oct  9 12:00 notes.txt\n"
+            + "drwxr-xr-x  2 a a 4096 Oct  9 12:00 empty\n"
+            + "lrwxrwxrwx  1 a a    4 Oct  9 12:00 www -> /var/www\n"
+            + "0\tempty\n1\twww\n";
+
+        var branch = Assert.Single(FolderTree.Parse(output, ["/srv"], files: true));
+
+        Assert.Equal(["empty", "www", "notes.txt"], branch.Entries!.Select(e => e.Name));
+        Assert.True(branch.Entries![1].IsDirectory);
+        Assert.Equal([new TreeFolder("empty", false), new TreeFolder("www", true)], branch.Folders);
+    }
+
+    [Fact]
+    public void Here_with_files_a_folder_with_only_files_in_it_has_something_to_open()
+    {
+        Directory.CreateDirectory(Path.Combine(_dir, "docs"));
+        File.WriteAllText(Path.Combine(_dir, "docs", "readme.md"), "");
+        File.WriteAllText(Path.Combine(_dir, "notes.txt"), "");
+
+        var branch = Assert.Single(FolderTree.Here([_dir], files: true));
+
+        Assert.Equal([new TreeFolder("docs", true)], branch.Folders);
+        Assert.Equal(["docs", "notes.txt"], branch.Entries!.Select(e => e.Name));
+    }
 }

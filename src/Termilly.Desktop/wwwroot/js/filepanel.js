@@ -1,14 +1,15 @@
 // @ts-check
-// The Files side panel (terminal menu › Files, or Ctrl+Shift+L): the folders of the terminal in focus, following
-// the folder its shell is in. For an SSH terminal they're on its server (the host runs sftp with the terminal's own
-// connection settings, Sftp.cs); for one on this machine they're here (LocalFiles.cs). A click selects (Ctrl and
-// Shift add to it, as in Explorer), a double click opens a folder, or a file here in the preview, and right-clicking
-// offers the rest, for all that's selected: "Copy to" another terminal's folder (copyto.js), downloads (to
-// Downloads, or a folder picked), deleting. Files dropped on the panel are uploaded to the folder shown (copied,
-// here). Transfers queue at the bottom.
+// The Files side panel (terminal menu › Files, or Ctrl+Shift+L): the files of the terminal in focus, as a tree from
+// This PC (the drives) or its server's root down, open at the folder its shell is in and following it. For an SSH
+// terminal they're on its server (the host reads them over ssh and sftp with the terminal's own connection settings);
+// for one on this machine they're here. A + opens a folder with something in it (as does a double click); a click
+// selects (Ctrl and Shift add to it, as in Explorer), a double click opens a file here in the preview, and
+// right-clicking offers the rest, for all that's selected: "Copy to" another terminal's folder (copyto.js),
+// downloads, deleting. Files dropped on the panel go into the folder they're dropped on. What's done is said in a
+// note at the bottom of the window (filejobs.js).
 
-import { PAGE, HOST } from './protocol.js';
-import { send, sendWithFiles, onHost, request, platform, droppedPaths, PLATFORM } from './host.js';
+import { PAGE } from './protocol.js';
+import { send, sendWithFiles, platform, droppedPaths, PLATFORM } from './host.js';
 import { on, profileOf, isSsh, isRemote, EVENTS } from './store.js';
 import { focusedTab, newTab } from './panes.js';
 import { scheduleFit } from './terminals.js';
@@ -19,137 +20,160 @@ import { showMenu, SEPARATOR } from './popups.js';
 import { showChange } from './preview.js';
 import { pathActions } from './actions.js';
 import { FILE_OP, FOLDER_PATH } from './constants.js';
-import { joinPath, parentOf, DRIVE_ICON, sizeText, hasFiles, shellFolderOf, folderOf, folderName, sameMachine } from './filepaths.js';
+import { parentOf, DRIVE_ICON, DRIVES_NAME, sizeText, hasFiles, shellFolderOf, folderOf, folderName, placeOf, sameMachine } from './filepaths.js';
+import { rootOf, childPath, signHtml, indentRows, readFolders, pathDown } from './foldertree.js';
 import { planCopy } from './copyto.js';
+import { JOB_KIND, FILE_MANAGER, BIN, newRequestId, startJob, expectJob } from './filejobs.js';
 
-/** A file or folder, as the host lists it (Sftp.cs, LocalFiles.cs); a drive has its label. */
+/** @typedef {import('./foldertree.js').FileEntry} FileEntry */
+/** @typedef {import('./foldertree.js').TreeNode} TreeNode */
 /**
- * @typedef {{ name: string, isDirectory: boolean, size: number, permissions: string, modified: string, label?: string | null }}
- *   FileEntry
+ * What the panel shows for a terminal: whether that's on a server, the folders read, which are open or being read,
+ * the folder its shell is in (marked), a folder it moved to while another terminal was shown, and why nothing shows.
+ * @typedef {{ tab: Tab, server: boolean, nodes: Map<string, TreeNode>, open: Set<string>, loading: Set<string>,
+ *   cwd: string | null, moved: string | null, error: string | null }} FilesView
  */
-/** What the panel shows: its terminal, whether that's on a server, the folder and what's in it. */
-/**
- * @typedef {{ tab: Tab, server: boolean, path: string, entries: FileEntry[], loading: boolean, error: string | null,
- * }} FilesView
- */
-/**
- * A transfer or file operation in the queue; a finished download keeps where it went, a copy what to say when it's
- * done and the folder it went to (listed again if the panel shows it).
- */
-/**
- * @typedef {{ kind: string, name: string | null, state: string, refresh: boolean, requestId: string | null,
- *   message?: string | null, local?: string | null, done?: string, where?: { tab: Tab, dir: string } }} FileJob
- */
-/** files:done, whichever of its shapes it has. */
-/**
- * @typedef {{ requestId: string | null, ok: boolean, file?: string, local?: string | null, message?: string }}
- *   FilesDone
- */
+/** A row drawn: its path, what it is (none for the tree's root), how deep it is, and the folder it's in. */
+/** @typedef {{ path: string, entry: FileEntry | null, depth: number, dir: string | null }} Row */
 
-/** A job's state in the queue. */
-const JOB_STATE = Object.freeze({ running: 'running', done: 'done', failed: 'failed' });
-/** What a job in the queue is (its icon). */
-const JOB_KIND = Object.freeze({ put: 'put', get: 'get', rename: 'rename', delete: 'delete', mkdir: 'mkdir', open: 'open', copy: 'copy' });
 /** What the panel's buttons do (data-files). */
-const FILES_ACTION = Object.freeze({
-  close: 'close', up: 'up', refresh: 'refresh', mkdir: 'mkdir', get: 'get', rename: 'rename', delete: 'delete',
-});
-/** The most jobs the queue keeps, and how many of the latest it shows. */
-const MAX_QUEUE = 50;
-const QUEUE_SHOWN = 6;
+const FILES_ACTION = Object.freeze({ close: 'close', refresh: 'refresh', mkdir: 'mkdir', get: 'get', rename: 'rename', delete: 'delete' });
 /** The panel's narrowest width; its widest is half the terminals' area (app.css max-width). */
 const MIN_WIDTH_PX = 260;
-/** Where this machine's deleted files go. */
-const BIN = platform === PLATFORM.windows ? 'the Recycle Bin' : 'the trash';
-const FILE_MANAGER = platform === PLATFORM.windows ? 'Explorer' : 'the file manager';
+/** The tree's list, and the class of the folder row files dragged over go into. */
+const LIST = '.files-list';
+const DROP_HERE = 'drop-here';
 /** Drag-and-drop's effect for what leaves the panel and what's dropped on it. */
 const COPY_EFFECT = 'copy';
 
 const panel = document.createElement('aside');
 panel.className = 'files-panel';
 panel.hidden = true;
-panel.tabIndex = -1; // focusable, for its keys (Ctrl+A, Delete, Escape)
+panel.tabIndex = -1; // focusable, for its keys (Ctrl+A, Delete, Escape, arrows)
 byId(WORKSPACE_ID).append(panel);
 
 /** @type {FilesView | null} */
 let view = null;
-/** @type {FileJob[]} */
-const queue = [];
-let requests = 0; // ids for the queue's file operations, whose answers come as files:done
-/** The requests that are downloads to a folder the host asks for: their queued files are downloads, not uploads. */
-const downloadsTo = new Set();
-/** How many listings were asked for: only the latest one's answer is shown. */
-let listings = 0;
-/** Terminal id: the folder the panel last showed for it, to go back to when that terminal is focused again while the
- * panel stays open (opening the panel starts in the shell's folder). */
-/** @type {Map<string, string>} */
-const shownFolders = new Map();
-/** The rows selected (their indexes in the listing), and the one Shift+click selects from. */
-/** @type {Set<number>} */
+/** Each terminal's tree while the panel stays open, to come back to as it was; closing the panel forgets them. */
+/** @type {Map<string, FilesView>} */
+const views = new Map();
+/** The rows drawn, in order; the paths selected, and the one Shift+click selects from. */
+/** @type {Row[]} */
+let rows = [];
+/** @type {Set<string>} */
 let selected = new Set();
-let anchor = -1;
+/** @type {string | null} */
+let anchor = null;
 
-/** Whether the panel shows the drives rather than a folder. */
-const atDrives = () => view?.path === FOLDER_PATH.drives;
 /** A path as a shell takes it: quoted when it has a space. */
 const shellPath = /** @param {string} path */ path => (/[\s'"&()]/.test(path) ? `"${path}"` : path);
 /** A count of items, for titles. @param {number} n */
 const itemsText = n => (n === 1 ? '1 item' : `${n} items`);
+/** The rows selected (not the tree's root), in the tree's order. */
+const selectedRows = () => rows.filter(r => r.entry && selected.has(r.path));
+/** A row as "Copy to" and the deleting take it. @param {Row} r */
+const itemOf = r => ({ name: /** @type {FileEntry} */ (r.entry).name, isDirectory: /** @type {FileEntry} */ (r.entry).isDirectory, path: r.path });
 
-onHost(HOST.filesDone, (/** @type {FilesDone} */ m) => {
-  const item = queue.find(q => q.requestId === m.requestId && (!m.file || q.name === m.file) && q.state === JOB_STATE.running);
-  if (item) {
-    item.state = m.ok ? JOB_STATE.done : JOB_STATE.failed;
-    item.local = m.ok ? m.local ?? null : null;
-    item.message = m.ok ? (m.local ? `saved to ${m.local}` : item.done ?? '') : m.message;
-  }
-  render();
-  // A copy lists the folder again when the panel shows it, from whichever terminal on that machine.
-  const shown = item?.where ? !!view && sameMachine(view.tab, item.where.tab) && view.path === item.where.dir : item?.refresh;
-  if (m.ok && shown) list(view?.path);
-});
+/**
+ * The folder something new goes into: the folder selected, or the one the file selected is in; else the shell's.
+ * None when that's the drives.
+ */
+function targetDir() {
+  if (!view) return null;
+  const only = selected.size === 1 ? rows.find(r => selected.has(r.path)) : null;
+  const dir = only ? (only.entry && !only.entry.isDirectory ? only.dir : only.path) : view.cwd ?? rootOf(view.tab);
+  return dir === FOLDER_PATH.drives ? null : dir;
+}
 
-// The files picked for "Upload" (Linux: its file dialog gives paths, the page's doesn't), or the ones "Download to"
-// downloads once its folder was picked, before they go.
-onHost(HOST.filesQueued, m => {
-  const kind = downloadsTo.delete(/** @type {string} */ (m.requestId)) ? JOB_KIND.get : JOB_KIND.put;
-  for (const name of m.files ?? []) addJob({ kind, name, state: JOB_STATE.running, refresh: kind === JOB_KIND.put, requestId: m.requestId });
-  render();
-});
+// ---- Reading folders ----
 
-/** @param {string | null | undefined} path */
-export async function list(path) {
-  if (!view) return;
-  const current = view;
-  const asked = ++listings;
-  view.loading = true;
-  view.error = null;
+/**
+ * Reads the folders not read yet (all at once: one ssh call on a server); an answer that comes after the panel
+ * moved to another terminal still fills that terminal's tree.
+ * @param {FilesView} v
+ * @param {string[]} paths
+ */
+async function load(v, paths) {
+  const wanted = paths.filter(path => !v.nodes.has(path) && !v.loading.has(path));
+  if (!wanted.length) return;
+  for (const path of wanted) v.loading.add(path);
   render();
-  const m = await request(PAGE.filesList, { id: view.tab.id, path });
-  // An answer that comes after the panel moved on (another terminal, another folder: a server is slow) is dropped,
-  // or it would show, and be remembered, in the wrong place.
-  if (view !== current || asked !== listings) return;
-  view.loading = false;
-  if (m.error || m.ok === false) view.error = m.message ?? m.error;
-  else {
-    // Another folder, or the same one listed again: the rows may not be the ones selected any more.
-    selected = new Set();
-    anchor = -1;
-    view.path = m.path;
-    shownFolders.set(view.tab.id, m.path);
-    view.entries = m.entries ?? [];
-  }
-  render();
+  const error = await readFolders(v.tab, v.nodes, wanted, true);
+  for (const path of wanted) v.loading.delete(path);
+  v.error = error;
+  if (v === view) render();
 }
 
 /**
- * The view of a terminal's files: the folder it last showed while the panel was open, else the one its shell is in.
+ * Opens the tree down to a folder (the shell's) and marks it; the folders opened by hand stay open.
+ * @param {FilesView} v
+ * @param {string} path
+ */
+async function reveal(v, path) {
+  const { there, error } = await pathDown(v.tab, v.nodes, path, true);
+  v.error = error;
+  for (const p of there) v.open.add(p);
+  v.cwd = there[there.length - 1];
+  v.moved = null;
+  if (v !== view) return;
+  render();
+  // At the top, so what's in it shows below.
+  panel.querySelector('.files-item.cwd')?.scrollIntoView({ block: 'start' });
+}
+
+/**
+ * Reads folders again (after something changed in them), those open at once.
+ * @param {Array<string | null | undefined>} dirs
+ */
+function reload(dirs) {
+  const v = view;
+  if (!v) return;
+  const again = [...new Set(dirs.filter(d => d != null))].filter(d => v.nodes.delete(/** @type {string} */ (d)));
+  load(v, /** @type {string[]} */ (again.filter(d => v.open.has(/** @type {string} */ (d)))));
+}
+
+/** Everything open, read again. */
+function refresh() {
+  if (!view) return;
+  view.nodes.clear();
+  load(view, [...view.open]);
+}
+
+/**
+ * Opens a folder (read if it wasn't) or closes it.
+ * @param {string} path
+ */
+function toggle(path) {
+  if (!view) return;
+  if (view.open.delete(path)) return render();
+  view.open.add(path);
+  render();
+  load(view, [path]);
+}
+
+/**
+ * A terminal's tree, as the panel left it, or a new one opening at its shell's folder.
  * @param {Tab} tab
- * @returns {FilesView}
  */
 function viewOf(tab) {
-  const path = shownFolders.get(tab.id) ?? shellFolderOf(tab);
-  return { tab, server: isSsh(tab), path, entries: [], loading: false, error: null };
+  const kept = views.get(tab.id);
+  if (kept) return kept;
+  /** @type {FilesView} */
+  const v = { tab, server: isSsh(tab), nodes: new Map(), open: new Set(), loading: new Set(), cwd: null, moved: shellFolderOf(tab), error: null };
+  views.set(tab.id, v);
+  return v;
+}
+
+/**
+ * Shows a terminal's tree, going to its shell's folder if it moved (or the tree is new).
+ * @param {Tab} tab
+ */
+function show(tab) {
+  view = viewOf(tab);
+  selected = new Set();
+  anchor = null;
+  render();
+  if (view.moved) reveal(view, view.moved);
 }
 
 /** @param {Tab | null | undefined} [tab] */
@@ -157,64 +181,93 @@ export function toggleFiles(tab = focusedTab()) {
   if (!panel.hidden && (!tab || view?.tab === tab)) {
     panel.hidden = true;
     view = null;
-    shownFolders.clear(); // opened again, it starts where each terminal's shell is
+    views.clear(); // opened again, it starts where each terminal's shell is
     return;
   }
   if (!tab || !hasFiles(tab)) return;
-  view = viewOf(tab);
   panel.hidden = false;
-  list(view.path);
+  show(tab);
 }
 
-/** @type {Record<string, string>} */
-const JOB_ICONS = {
-  [JOB_KIND.put]: '↑', [JOB_KIND.get]: '↓', [JOB_KIND.rename]: '✎', [JOB_KIND.delete]: '✕', [JOB_KIND.mkdir]: '+', [JOB_KIND.open]: '↗',
-  [JOB_KIND.copy]: '→',
-};
+// ---- Drawing ----
 
 /**
- * A file or folder's row, with the buttons its hover shows.
- * @param {FileEntry} e
+ * A row: its sign, icon and name, a file's size, and the buttons its hover shows.
+ * @param {Row} r
  * @param {number} i
- * @param {boolean} server
  */
-const entryRow = (e, i, server) => (e.label != null ? driveRow(e, i) : `
-  <div class="files-item${e.isDirectory ? ' dir' : ''}${selected.has(i) ? ' selected' : ''}" data-i="${i}" draggable="true" title="${escapeHtml([e.permissions, e.modified].filter(Boolean).join(' · '))}">
-    <span class="files-name">${e.isDirectory ? '📁' : '📄'} ${escapeHtml(e.name)}</span>
+function rowHtml(r, i) {
+  const v = /** @type {FilesView} */ (view);
+  const e = r.entry;
+  const cls = `files-item${!e || e.isDirectory ? ' dir' : ''}${selected.has(r.path) ? ' selected' : ''}${r.path === v.cwd ? ' cwd' : ''}`;
+  if (!e) {
+    const name = v.server ? `${placeOf(v.tab)} (/)` : r.path === FOLDER_PATH.drives ? DRIVES_NAME : '/';
+    return `<div class="${cls}" data-i="${i}" data-depth="0">${signHtml(true, v.open.has(r.path))}<span class="files-name">${ICONS.monitor} ${escapeHtml(name)}</span></div>`;
+  }
+  const node = v.nodes.get(r.path);
+  const has = e.isDirectory && (r.dir === FOLDER_PATH.drives || !!v.nodes.get(/** @type {string} */ (r.dir))?.folders.find(f => f.name === e.name)?.hasFolders || !!node?.entries?.length);
+  const drive = e.label != null;
+  const name = drive ? `${DRIVE_ICON}${escapeHtml(`${e.label} (${e.name.replace(/\\$/, '')})`)}` : `${e.isDirectory ? '📁' : '📄'} ${escapeHtml(e.name)}`;
+  const title = drive ? e.modified : [e.permissions, e.modified].filter(Boolean).join(' · ');
+  return `
+  <div class="${cls}" data-i="${i}" data-depth="${r.depth}" draggable="true" title="${escapeHtml(title)}">
+    ${signHtml(has, v.open.has(r.path))}
+    <span class="files-name">${name}</span>
     <span class="files-size">${e.isDirectory ? '' : sizeText(e.size)}</span>
-    <span class="files-actions">
-      ${server ? `<button class="pane-btn" data-files="${FILES_ACTION.get}" title="Download to Downloads">↓</button>` : ''}
+    ${drive ? '' : `<span class="files-actions">
+      ${v.server ? `<button class="pane-btn" data-files="${FILES_ACTION.get}" title="Download to Downloads">↓</button>` : ''}
       <button class="pane-btn" data-files="${FILES_ACTION.rename}" title="Rename">${ICONS.rename}</button>
       <button class="pane-btn" data-files="${FILES_ACTION.delete}" title="Delete">${ICONS.trash}</button>
-    </span>
-  </div>`);
-
-/**
- * A drive's row: its label and letter ("Local Disk (C:)"), and its free space.
- * @param {FileEntry} e
- * @param {number} i
- */
-const driveRow = (e, i) => `
-  <div class="files-item dir${selected.has(i) ? ' selected' : ''}" data-i="${i}" draggable="true" title="${escapeHtml(e.modified)}">
-    <span class="files-name">${DRIVE_ICON}${escapeHtml(`${e.label} (${e.name.replace(/\\$/, '')})`)}</span>
-    <span class="files-size">${escapeHtml(e.modified.replace(/ of .*$/, ''))}</span>
+    </span>`}
   </div>`;
-
-/** @param {FilesView} v */
-function listHtml({ loading, error, entries, server }) {
-  if (loading) return '<div class="inbox-empty">Loading…</div>';
-  if (error) return `<div class="inbox-empty files-error">${escapeHtml(error)}</div>`;
-  if (!entries.length) return `<div class="inbox-empty">Empty folder. Drop files here to ${server ? 'upload them' : 'copy them in'}.</div>`;
-  return entries.map((e, i) => entryRow(e, i, server)).join('');
 }
 
-/** The queue's latest jobs; a finished download's row shows the file in the file manager when clicked. */
-const queueHtml = () => (queue.length ? `<div class="files-queue">${queue.slice(-QUEUE_SHOWN).reverse().map(q => `
-  <div class="files-job ${q.state}"${q.local ? ` data-reveal="${escapeHtml(q.local)}" title="Show in ${FILE_MANAGER}"` : ''}><span>${JOB_ICONS[q.kind] ?? ''} ${escapeHtml(q.name)}</span><span>${escapeHtml(q.state === JOB_STATE.failed ? q.message ?? JOB_STATE.failed : q.state === JOB_STATE.done ? q.message || JOB_STATE.done : '…')}</span></div>`).join('')}</div>` : '');
+/**
+ * A row that isn't a file: loading, or why a folder can't be read.
+ * @param {number} depth
+ * @param {string} html
+ */
+const noteRow = (depth, html) => `<div class="files-item files-note" data-depth="${depth}">${html}</div>`;
+
+/** The tree's rows (into `rows`) and their markup. @param {FilesView} v */
+function treeHtml(v) {
+  if (v.error) {
+    rows = [];
+    return `<div class="inbox-empty files-error">${escapeHtml(v.error)}</div>`;
+  }
+  const root = rootOf(v.tab);
+  rows = [{ path: root, entry: null, depth: 0, dir: null }];
+  const html = [rowHtml(rows[0], 0)];
+  /**
+   * @param {string} path
+   * @param {number} depth
+   */
+  const walk = (path, depth) => {
+    if (!v.open.has(path)) return;
+    const node = v.nodes.get(path);
+    if (!node) {
+      if (v.loading.has(path)) html.push(noteRow(depth, 'Loading…'));
+      return;
+    }
+    if (node.error) html.push(noteRow(depth, `<span class="files-error">${escapeHtml(node.error)}</span>`));
+    else if (!node.entries?.length && depth > 1) html.push(noteRow(depth, 'Empty'));
+    for (const e of node.entries ?? []) {
+      const row = { path: childPath(path, e.name), entry: e, depth, dir: path };
+      rows.push(row);
+      html.push(rowHtml(row, rows.length - 1));
+      if (e.isDirectory) walk(row.path, depth + 1);
+    }
+  };
+  walk(root, 1);
+  return html.join('');
+}
 
 function render() {
   if (!view) return;
-  const { tab, path, server } = view;
+  const { tab, server } = view;
+  const list = panel.querySelector(LIST);
+  const scroll = list?.scrollTop ?? 0;
+  const target = targetDir();
   panel.innerHTML = `
     <div class="files-grip" title="Drag to resize"></div>
     <div class="files-head">
@@ -222,34 +275,30 @@ function render() {
       <button class="pane-btn" data-files="${FILES_ACTION.close}" title="Close">${ICONS.close}</button>
     </div>
     <div class="files-bar">
-      <button class="btn small" data-files="${FILES_ACTION.up}" title="Up a folder">↑</button>
       <button class="btn small" data-files="${FILES_ACTION.refresh}" title="Refresh">⟳</button>
-      <button class="btn small" data-files="${FILES_ACTION.mkdir}" title="New folder">${ICONS.plus}</button>
-      ${server ? '<label class="btn small files-upload" title="Upload files">Upload<input type="file" multiple hidden data-files-pick></label>' : ''}
+      <button class="btn small" data-files="${FILES_ACTION.mkdir}" title="New folder in the folder selected"${target ? '' : ' disabled'}>${ICONS.plus}</button>
+      ${server ? '<label class="btn small files-upload" title="Upload files into the folder selected">Upload<input type="file" multiple hidden data-files-pick></label>' : ''}
+      <span class="files-path" title="${escapeHtml(target ?? '')}">${escapeHtml(target ? folderName(target) : '')}</span>
     </div>
-    <div class="files-path" title="${escapeHtml(path)}">${escapeHtml(folderName(path))}</div>
-    <div class="files-list">${listHtml(view)}</div>
-    ${queueHtml()}`;
+    <div class="files-list">${treeHtml(view)}</div>`;
+  const drawn = /** @type {HTMLElement} */ (panel.querySelector(LIST));
+  indentRows(drawn);
+  drawn.scrollTop = scroll;
 }
 
-/** @param {FileJob} job */
-function addJob(job) {
-  queue.push(job);
-  if (queue.length > MAX_QUEUE) queue.shift();
-}
+// ---- What files and folders can do ----
 
 /**
- * Runs a file operation, shown in the queue until it's done; refresh lists the folder again afterwards.
+ * Runs a file operation on each of `items` as one job (its note says how it went); `after` once all are done.
  * @param {string} kind
- * @param {string} name
- * @param {{ op: string, path: string | null, to?: string }} fields
- * @param {boolean} [refresh]
+ * @param {{ name: string, fields: { op: string, path: string | null, to?: string } }[]} items
+ * @param {{ where?: string | null, after?: () => void }} [options]
  */
-function operation(kind, name, fields, refresh = false) {
-  const requestId = `files${++requests}`;
-  addJob({ kind, name, state: JOB_STATE.running, refresh, requestId });
-  send(PAGE.filesOp, { id: /** @type {FilesView} */ (view).tab.id, requestId, ...fields });
-  render();
+function operate(kind, items, { where = null, after } = {}) {
+  if (!view || !items.length) return;
+  const requestId = newRequestId();
+  startJob(requestId, items.map(i => i.name), { kind, here: !view.server, where, after });
+  for (const { fields } of items) send(PAGE.filesOp, { id: view.tab.id, requestId, ...fields });
 }
 
 /**
@@ -267,68 +316,67 @@ function askName(title, value = '') {
   });
 }
 
-// ---- What files and folders can do ----
-
-/** A file or folder's path; a drive's is its root. @param {FileEntry} item */
-const pathOf = item => (atDrives() ? item.name : joinPath(/** @type {FilesView} */ (view).path, item.name));
-
-/** The files and folders selected, in the listing's order. */
-const selectedItems = () => (view ? view.entries.filter((_, i) => selected.has(i)) : []);
-
-async function makeFolder() {
-  if (atDrives()) return;
+/** @param {string | null} [dir] the folder it goes in */
+async function makeFolder(dir = targetDir()) {
+  if (!dir) return;
   const name = await askName('New folder');
-  if (name && view) operation(JOB_KIND.mkdir, name, { op: FILE_OP.makeDirectory, path: joinPath(view.path, name) }, true);
+  if (!name || !view) return;
+  view.open.add(dir);
+  operate(JOB_KIND.mkdir, [{ name, fields: { op: FILE_OP.makeDirectory, path: childPath(dir, name) } }], { after: () => reload([dir]) });
 }
 
-/** @param {FileEntry} item */
-async function rename(item) {
-  const to = await askName(`Rename ${item.name}`, item.name);
-  if (to && to !== item.name && view) operation(JOB_KIND.rename, `${item.name} → ${to}`, { op: FILE_OP.rename, path: pathOf(item), to: joinPath(view.path, to) }, true);
+/** @param {Row} r */
+async function rename(r) {
+  const e = /** @type {FileEntry} */ (r.entry);
+  const to = await askName(`Rename ${e.name}`, e.name);
+  if (!to || to === e.name || !r.dir) return;
+  operate(JOB_KIND.rename, [{ name: `${e.name} → ${to}`, fields: { op: FILE_OP.rename, path: r.path, to: childPath(r.dir, to) } }], { after: () => reload([r.dir]) });
 }
 
 /**
  * Deletes files and folders, once asked: here to the Recycle Bin, on a server for good (only empty folders).
- * @param {FileEntry[]} items
+ * @param {Row[]} items
  */
 async function remove(items) {
-  if (!view || !items.length || atDrives()) return;
-  const folders = items.some(i => i.isDirectory);
-  const body = !view.server ? `${items.length === 1 ? 'It goes' : 'They go'} to ${BIN}.`
-    : `${folders ? 'Only empty folders can be deleted. ' : ''}It’s deleted on the server; there’s no undo.`;
-  const title = items.length === 1 ? `Delete ${items[0].name}?` : `Delete ${itemsText(items.length)}?`;
-  if (!await confirmDialog({ title, body, confirm: 'Delete' }) || !view) return;
-  for (const item of items) {
-    operation(JOB_KIND.delete, item.name, { op: item.isDirectory ? FILE_OP.removeDirectory : FILE_OP.remove, path: pathOf(item) }, true);
-  }
+  const v = view;
+  if (!v || !items.length || items.some(r => r.dir === FOLDER_PATH.drives)) return;
+  const entries = items.map(r => /** @type {FileEntry} */ (r.entry));
+  const body = !v.server ? `${items.length === 1 ? 'It goes' : 'They go'} to ${BIN}.`
+    : `${entries.some(e => e.isDirectory) ? 'Only empty folders can be deleted. ' : ''}It’s deleted on the server; there’s no undo.`;
+  const title = items.length === 1 ? `Delete ${entries[0].name}?` : `Delete ${itemsText(items.length)}?`;
+  if (!await confirmDialog({ title, body, confirm: 'Delete' }) || view !== v) return;
+  selected = new Set();
+  operate(JOB_KIND.delete, items.map(r => ({
+    name: /** @type {FileEntry} */ (r.entry).name,
+    fields: { op: /** @type {FileEntry} */ (r.entry).isDirectory ? FILE_OP.removeDirectory : FILE_OP.remove, path: r.path },
+  })), { after: () => reload(items.map(r => r.dir)) });
 }
 
-/** Downloads files and folders from the server to Downloads. @param {FileEntry[]} items */
-const download = items => items.forEach(item => operation(JOB_KIND.get, item.name, { op: FILE_OP.get, path: pathOf(item) }));
+/** Downloads files and folders from the server to Downloads. @param {Row[]} items */
+const download = items => operate(JOB_KIND.get, items.map(r => ({ name: /** @type {FileEntry} */ (r.entry).name, fields: { op: FILE_OP.get, path: r.path } })));
 
-/** Downloads files and folders from the server to a folder the host asks for. @param {FileEntry[]} items */
+/** Downloads files and folders from the server to a folder the host asks for. @param {Row[]} items */
 function downloadTo(items) {
   if (!view || !items.length) return;
-  const requestId = `files${++requests}`;
-  downloadsTo.add(requestId);
-  send(PAGE.filesGetTo, { id: view.tab.id, requestId, paths: items.map(pathOf) });
+  const requestId = newRequestId();
+  expectJob(requestId, { kind: JOB_KIND.get });
+  send(PAGE.filesGetTo, { id: view.tab.id, requestId, paths: items.map(r => r.path) });
 }
 
 /**
- * "Copy to": asks for the terminal's folder (and about what's already there), then copies, each item a job.
- * @param {FileEntry[]} items
+ * "Copy to": asks for the terminal's folder (and about what's already there), then copies, as one job.
+ * @param {Row[]} items
  */
 async function copyTo(items) {
-  if (!view || !items.length || atDrives()) return;
-  const { tab, path } = view;
-  const plan = await planCopy(tab, path, items);
+  const v = view;
+  if (!v || !items.length || items.some(r => r.dir === FOLDER_PATH.drives)) return;
+  const plan = await planCopy(v.tab, items.map(itemOf));
   if (!plan) return;
-  const requestId = `files${++requests}`;
-  const where = { tab: plan.to, dir: plan.dir };
-  const done = `copied to ${folderOf(plan.to, plan.dir)}`;
-  for (const { name } of plan.items) addJob({ kind: JOB_KIND.copy, name, state: JOB_STATE.running, refresh: false, requestId, done, where });
-  send(PAGE.filesCopyTo, { id: tab.id, requestId, to: plan.to.id, dir: plan.dir, items: plan.items });
-  render();
+  const requestId = newRequestId();
+  // The folder it went to is read again where it's shown, on that machine, and the one it's in (its +).
+  const after = () => { if (view && sameMachine(view.tab, plan.to)) reload([plan.dir, parentOf(plan.dir)]); };
+  startJob(requestId, plan.items.map(i => i.name), { kind: JOB_KIND.copy, where: folderOf(plan.to, plan.dir), after });
+  send(PAGE.filesCopyTo, { id: v.tab.id, requestId, to: plan.to.id, dir: plan.dir, items: plan.items });
 }
 
 /** @param {string[]} paths */
@@ -343,37 +391,36 @@ function insertPaths(paths) {
 const copyText = text => navigator.clipboard.writeText(text);
 
 /**
- * Opens what was double-clicked: a folder (or drive) in the panel, a file here in the preview.
- * @param {FileEntry} item
+ * Opens what was double-clicked: a folder (or drive) opens or closes, a file here shows in the preview.
+ * @param {Row} r
  */
-function openItem(item) {
+function openRow(r) {
   if (!view) return;
-  if (item.isDirectory) list(pathOf(item));
-  else if (!view.server) showChange(view.tab, pathOf(item));
+  if (!r.entry || r.entry.isDirectory) toggle(r.path);
+  else if (!view.server) showChange(view.tab, r.path);
 }
 
 /** The row an event is on, and its index. @param {Event} e */
 const rowOf = e => {
   const row = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-i]'));
-  return { row, i: row ? Number(row.dataset.i) : -1 };
+  const i = row ? Number(row.dataset.i) : -1;
+  return { i, r: rows[i] ?? null };
 };
 
 panel.addEventListener('click', e => {
   if (!view) return;
-  const reveal = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-reveal]'))?.dataset.reveal;
-  if (reveal) return send(PAGE.openPath, { path: reveal });
   const action = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-files]'))?.dataset.files;
-  const { i } = rowOf(e);
-  const item = view.entries[i];
+  const { i, r } = rowOf(e);
   if (action === FILES_ACTION.close) return toggleFiles(view.tab);
-  if (action === FILES_ACTION.refresh) return list(view.path);
-  if (action === FILES_ACTION.up) return list(parentOf(view.path));
+  if (action === FILES_ACTION.refresh) return refresh();
   if (action === FILES_ACTION.mkdir) return makeFolder();
-  if (!item) return action ? undefined : selectRows(new Set(), -1);
+  if (!r) return action ? undefined : selectRows(new Set(), null);
+  // The sign opens or closes; a double click's second click on it was a click already.
+  if (targetOf(e).closest('[data-twist]')) return e.detail < 2 ? toggle(r.path) : undefined;
   // A row's own button acts on the selection when the row is in it, else on that row alone.
-  const items = selected.has(i) ? selectedItems() : [item];
+  const items = selected.has(r.path) ? selectedRows() : [r];
   if (action === FILES_ACTION.get) return download(items);
-  if (action === FILES_ACTION.rename) return rename(item);
+  if (action === FILES_ACTION.rename) return rename(r);
   if (action === FILES_ACTION.delete) return remove(items);
   if (!action) clickRow(i, e);
 });
@@ -381,23 +428,27 @@ panel.addEventListener('click', e => {
 // A double click opens a row (as in Explorer). The rows aren't drawn again by the click before it, or the double
 // click would lose the row it started on.
 panel.addEventListener('dblclick', e => {
-  const item = view?.entries[rowOf(e).i];
-  if (item && !targetOf(e).closest('[data-files]') && !e.ctrlKey && !e.shiftKey) openItem(item);
+  const { r } = rowOf(e);
+  if (r && !targetOf(e).closest('[data-files], [data-twist]') && !e.ctrlKey && !e.shiftKey) openRow(r);
 });
 
 // ---- Selecting: a click, Ctrl+click to add or take away, Shift+click for a range, Ctrl+A for all ----
 
 /**
- * Selects rows (without drawing the panel again, so a double click keeps its row).
- * @param {Set<number>} rows
- * @param {number} from the row Shift+click selects from
+ * Selects rows by path (without drawing the tree again, so a double click keeps its row).
+ * @param {Set<string>} paths
+ * @param {string | null} from the row Shift+click selects from
  */
-function selectRows(rows, from) {
-  selected = rows;
+function selectRows(paths, from) {
+  selected = paths;
   anchor = from;
   for (const row of /** @type {NodeListOf<HTMLElement>} */ (panel.querySelectorAll('.files-item[data-i]'))) {
-    row.classList.toggle('selected', selected.has(Number(row.dataset.i)));
+    row.classList.toggle('selected', selected.has(rows[Number(row.dataset.i)]?.path));
   }
+  const target = targetDir();
+  const path = panel.querySelector('.files-path');
+  if (path) path.textContent = target ? folderName(target) : '';
+  /** @type {HTMLButtonElement | null} */ (panel.querySelector(`[data-files="${FILES_ACTION.mkdir}"]`))?.toggleAttribute('disabled', !target);
 }
 
 /**
@@ -406,24 +457,44 @@ function selectRows(rows, from) {
  */
 function clickRow(i, e) {
   panel.focus({ preventScroll: true });
-  if (e.shiftKey && anchor >= 0) {
-    const [from, to] = [Math.min(anchor, i), Math.max(anchor, i)];
-    const range = new Set(Array.from({ length: to - from + 1 }, (_, k) => from + k));
+  const path = rows[i].path;
+  const from = anchor ? rows.findIndex(r => r.path === anchor) : -1;
+  if (e.shiftKey && from >= 0) {
+    const range = new Set(rows.slice(Math.min(from, i), Math.max(from, i) + 1).filter(r => r.entry).map(r => r.path));
     selectRows(e.ctrlKey ? new Set([...selected, ...range]) : range, anchor);
   } else if (e.ctrlKey || e.metaKey) {
-    const rows = new Set(selected);
-    if (!rows.delete(i)) rows.add(i);
-    selectRows(rows, i);
-  } else selectRows(new Set([i]), i);
+    const paths = new Set(selected);
+    if (!paths.delete(path)) paths.add(path);
+    selectRows(paths, path);
+  } else selectRows(new Set([path]), path);
+}
+
+/**
+ * The arrows: up and down move the selection, right opens a folder, left closes it (or goes to its folder).
+ * @param {string} key
+ */
+function arrow(key) {
+  const at = anchor ? rows.findIndex(r => r.path === anchor) : -1;
+  const r = rows[at];
+  if (key === 'ArrowDown' || key === 'ArrowUp') {
+    const next = rows[Math.max(0, Math.min(rows.length - 1, at + (key === 'ArrowDown' ? 1 : -1)))];
+    if (next) selectRows(new Set([next.path]), next.path);
+    panel.querySelector('.files-item.selected')?.scrollIntoView({ block: 'nearest' });
+  } else if (r && key === 'ArrowRight' && (!r.entry || r.entry.isDirectory) && !view?.open.has(r.path)) toggle(r.path);
+  else if (r && key === 'ArrowLeft') {
+    if (view?.open.has(r.path)) toggle(r.path);
+    else if (r.dir) selectRows(new Set([r.dir]), r.dir);
+  }
 }
 
 panel.addEventListener('keydown', e => {
   if (!view || targetOf(e).closest('input')) return;
   const ctrl = e.ctrlKey || e.metaKey;
-  if (ctrl && e.key.toLowerCase() === 'a') selectRows(new Set(view.entries.map((_, i) => i)), 0);
-  else if (e.key === 'Escape' && selected.size) selectRows(new Set(), -1);
-  else if (e.key === 'Delete' && selected.size) remove(selectedItems());
-  else if (e.key === 'Enter' && selected.size === 1) openItem(selectedItems()[0]);
+  if (ctrl && e.key.toLowerCase() === 'a') selectRows(new Set(rows.filter(r => r.entry).map(r => r.path)), null);
+  else if (e.key === 'Escape' && selected.size) selectRows(new Set(), null);
+  else if (e.key === 'Delete' && selected.size) remove(selectedRows());
+  else if (e.key === 'Enter' && selected.size === 1) openRow(/** @type {Row} */ (rows.find(r => selected.has(r.path))));
+  else if (e.key.startsWith('Arrow')) arrow(e.key);
   else return;
   e.preventDefault();
   e.stopPropagation();
@@ -435,31 +506,33 @@ panel.addEventListener('keydown', e => {
  * What a file or folder's menu offers: opening it, getting it here (on a server), copying it to another terminal's
  * folder, its path, the actions that take a file (here), and renaming or deleting it.
  * @param {FilesView} v
- * @param {FileEntry} item
+ * @param {Row} r
  * @returns {import('./popups.js').MenuEntry[]}
  */
-function itemMenu(v, item) {
-  const path = pathOf(item);
-  const open = item.isDirectory ? [{ label: 'Open', icon: ICONS.folder, action: () => list(path) }]
+function itemMenu(v, r) {
+  const e = /** @type {FileEntry} */ (r.entry);
+  const open = e.isDirectory ? [{ label: v.open.has(r.path) ? 'Close folder' : 'Open', icon: ICONS.folder, action: () => toggle(r.path) }]
     : v.server ? [] : [
-      { label: 'Preview', action: () => showChange(v.tab, path) },
-      { label: 'Open in its app', action: () => operation(JOB_KIND.open, item.name, { op: FILE_OP.open, path }) },
+      { label: 'Preview', action: () => showChange(v.tab, r.path) },
+      { label: 'Open in its app', action: () => operate(JOB_KIND.open, [{ name: e.name, fields: { op: FILE_OP.open, path: r.path } }]) },
     ];
   const here = v.server ? [] : [
-    ...(item.isDirectory ? [{ label: 'Open a terminal here', icon: ICONS.terminal, action: () => newTab({ profile: v.tab.profile, wsId: v.tab.wsId, cwd: path }) }] : []),
-    { label: `Show in ${FILE_MANAGER}`, action: () => send(PAGE.openPath, { path }) },
+    ...(e.isDirectory ? [{ label: 'Open a terminal here', icon: ICONS.terminal, action: () => newTab({ profile: v.tab.profile, wsId: v.tab.wsId, cwd: r.path }) }] : []),
+    { label: `Show in ${FILE_MANAGER}`, action: () => send(PAGE.openPath, { path: r.path }) },
   ];
-  const actions = v.server ? [] : pathActions(v.tab, path, item.isDirectory ? path : v.path);
+  const actions = v.server ? [] : pathActions(v.tab, r.path, e.isDirectory ? r.path : /** @type {string} */ (r.dir));
+  const drive = r.dir === FOLDER_PATH.drives;
   return [
-    ...open, ...here, ...transferItems(v, [item]), SEPARATOR,
-    { label: 'Copy path', icon: ICONS.copy, action: () => copyText(path) },
-    { label: 'Insert path in the terminal', action: () => insertPaths([path]) },
+    ...open, ...here, ...transferItems(v, [r]), SEPARATOR,
+    { label: 'Copy path', icon: ICONS.copy, action: () => copyText(r.path) },
+    { label: 'Insert path in the terminal', action: () => insertPaths([r.path]) },
     .../** @type {import('./popups.js').MenuEntry[]} */ (actions.length ? [SEPARATOR, ...actions] : []),
+    .../** @type {import('./popups.js').MenuEntry[]} */ (e.isDirectory ? [SEPARATOR, { label: 'New folder', icon: ICONS.plus, action: () => makeFolder(r.path) }] : []),
     // A drive can't be renamed or deleted from here.
-    .../** @type {import('./popups.js').MenuEntry[]} */ (atDrives() ? [] : [
+    .../** @type {import('./popups.js').MenuEntry[]} */ (drive ? [] : [
       SEPARATOR,
-      { label: 'Rename', icon: ICONS.rename, action: () => rename(item) },
-      { label: 'Delete', icon: ICONS.trash, danger: true, action: () => remove([item]) },
+      { label: 'Rename', icon: ICONS.rename, action: () => rename(r) },
+      { label: 'Delete', icon: ICONS.trash, danger: true, action: () => remove([r]) },
     ]),
   ];
 }
@@ -467,10 +540,10 @@ function itemMenu(v, item) {
 /**
  * Getting files and folders elsewhere: to another terminal's folder, and from a server to this machine.
  * @param {FilesView} v
- * @param {FileEntry[]} items
+ * @param {Row[]} items
  * @returns {import('./popups.js').MenuEntry[]}
  */
-const transferItems = (v, items) => (atDrives() ? [] : [
+const transferItems = (v, items) => (items.some(r => r.dir === FOLDER_PATH.drives) ? [] : [
   ...(v.server ? [
     { label: 'Download to Downloads', action: () => download(items) },
     { label: 'Download to', action: () => downloadTo(items) },
@@ -481,16 +554,16 @@ const transferItems = (v, items) => (atDrives() ? [] : [
 /**
  * The menu of several files and folders selected.
  * @param {FilesView} v
- * @param {FileEntry[]} items
+ * @param {Row[]} items
  * @returns {import('./popups.js').MenuEntry[]}
  */
 function selectionMenu(v, items) {
-  const paths = items.map(pathOf);
+  const paths = items.map(r => r.path);
   return [
     ...transferItems(v, items), SEPARATOR,
     { label: 'Copy paths', icon: ICONS.copy, action: () => copyText(paths.join('\n')) },
     { label: 'Insert paths in the terminal', action: () => insertPaths(paths) },
-    .../** @type {import('./popups.js').MenuEntry[]} */ (atDrives() ? [] : [
+    .../** @type {import('./popups.js').MenuEntry[]} */ (items.some(r => r.dir === FOLDER_PATH.drives) ? [] : [
       SEPARATOR,
       { label: `Delete ${itemsText(items.length)}`, icon: ICONS.trash, danger: true, action: () => remove(items) },
     ]),
@@ -498,87 +571,106 @@ function selectionMenu(v, items) {
 }
 
 /**
- * The menu of the folder shown (right-clicking between its files).
+ * The menu of the tree's root, or of the space below the rows: the shell's folder.
  * @param {FilesView} v
  * @returns {import('./popups.js').MenuEntry[]}
  */
-const folderMenu = v => {
-  const refresh = { label: 'Refresh', action: () => list(v.path) };
-  return atDrives() ? [refresh] : folderItems(v, refresh);
-};
-
-/**
- * The menu of a folder (not the drives).
- * @param {FilesView} v
- * @param {import('./popups.js').MenuItem} refresh
- * @returns {import('./popups.js').MenuEntry[]}
- */
-const folderItems = (v, refresh) => [
-  { label: 'New folder', icon: ICONS.plus, action: makeFolder },
-  refresh,
-  ...(v.server ? [] : [{ label: `Show in ${FILE_MANAGER}`, action: () => send(PAGE.openPath, { path: v.path }) }]),
-  SEPARATOR,
-  { label: 'Copy path', icon: ICONS.copy, action: () => copyText(v.path) },
-  { label: 'Insert path in the terminal', action: () => insertPaths([v.path]) },
-];
+function folderMenu(v) {
+  const dir = v.cwd;
+  const refreshItem = { label: 'Refresh', action: refresh };
+  if (!dir || dir === FOLDER_PATH.drives) return [refreshItem];
+  return [
+    { label: 'New folder', icon: ICONS.plus, action: () => makeFolder(dir) },
+    refreshItem,
+    ...(v.server ? [] : [{ label: `Show in ${FILE_MANAGER}`, action: () => send(PAGE.openPath, { path: dir }) }]),
+    SEPARATOR,
+    { label: 'Copy path', icon: ICONS.copy, action: () => copyText(dir) },
+    { label: 'Insert path in the terminal', action: () => insertPaths([dir]) },
+  ];
+}
 
 panel.addEventListener('contextmenu', e => {
-  if (!view || !targetOf(e).closest('.files-list')) return;
+  if (!view || !targetOf(e).closest(LIST)) return;
   e.preventDefault();
-  const { i } = rowOf(e);
-  const item = view.entries[i];
+  const { r } = rowOf(e);
   // Right-clicking a row outside the selection selects that row alone, as Explorer does.
-  if (item && !selected.has(i)) selectRows(new Set([i]), i);
-  const menu = !item ? folderMenu(view) : selected.size > 1 ? selectionMenu(view, selectedItems()) : itemMenu(view, item);
+  if (r?.entry && !selected.has(r.path)) selectRows(new Set([r.path]), r.path);
+  const menu = !r?.entry ? folderMenu(view) : selected.size > 1 ? selectionMenu(view, selectedRows()) : itemMenu(view, r);
   showMenu(menu, { x: e.clientX, y: e.clientY });
 });
 
 // ---- Files in: uploads to a server, copies here ----
 
 /**
- * Copies files into the folder shown (uploads them, on a server). On Windows the files go to the host with the
- * message (WebView2 gives their paths); on Linux the page sends the paths a drop carried (`paths`).
+ * Copies files into a folder (uploads them, on a server). On Windows the files go to the host with the message
+ * (WebView2 gives their paths); on Linux the page sends the paths a drop carried (`paths`).
+ * @param {string | null} dir
  * @param {FileList | null} files
  * @param {string[] | null} [paths]
  */
-function copyIn(files, paths = null) {
-  if (!view || atDrives() || !(paths ?? files)?.length) return;
-  const requestId = `files${++requests}`;
+function copyIn(dir, files, paths = null) {
+  if (!view || !dir || !(paths ?? files)?.length) return;
+  const requestId = newRequestId();
   const names = paths ? paths.map(p => /** @type {string} */ (p.split(/[\\/]/).pop())) : [.../** @type {FileList} */ (files)].map(f => f.name);
-  for (const name of names) addJob({ kind: JOB_KIND.put, name, state: JOB_STATE.running, refresh: true, requestId });
-  if (paths) send(PAGE.filesPut, { id: view.tab.id, requestId, dir: view.path, paths });
-  else if (window.chrome?.webview) sendWithFiles(PAGE.filesPut, { id: view.tab.id, requestId, dir: view.path }, /** @type {FileList} */ (files));
-  render();
+  view.open.add(dir);
+  startJob(requestId, names, { kind: JOB_KIND.put, here: !view.server, where: folderOf(view.tab, dir), after: () => reload([dir]) });
+  if (paths) send(PAGE.filesPut, { id: view.tab.id, requestId, dir, paths });
+  else if (window.chrome?.webview) sendWithFiles(PAGE.filesPut, { id: view.tab.id, requestId, dir }, /** @type {FileList} */ (files));
 }
 
 panel.addEventListener('change', e => {
-  if (targetOf(e).matches('[data-files-pick]')) copyIn(/** @type {HTMLInputElement} */ (e.target).files);
+  if (targetOf(e).matches('[data-files-pick]')) copyIn(targetDir(), /** @type {HTMLInputElement} */ (e.target).files);
 });
 // Linux: the Upload button opens the host's file dialog instead of the page's.
 panel.addEventListener('click', e => {
-  if (platform !== PLATFORM.linux || !view || !targetOf(e).closest('.files-upload')) return;
+  const dir = targetDir();
+  if (platform !== PLATFORM.linux || !view || !dir || !targetOf(e).closest('.files-upload')) return;
   e.preventDefault();
-  send(PAGE.filesPick, { id: view.tab.id, requestId: `files${++requests}`, dir: view.path });
+  const requestId = newRequestId();
+  view.open.add(dir);
+  expectJob(requestId, { kind: JOB_KIND.put, where: folderOf(view.tab, dir), after: () => reload([dir]) });
+  send(PAGE.filesPick, { id: view.tab.id, requestId, dir });
 });
 // Files and folders dragged out of the panel carry their paths, one a line: a terminal types them where they're
 // dropped (terminals.js). A row in the selection drags the whole selection.
 panel.addEventListener('dragstart', e => {
-  const { i } = rowOf(e);
-  const item = view?.entries[i];
-  if (!item || !e.dataTransfer) return;
-  const paths = (selected.has(i) ? selectedItems() : [item]).map(pathOf).join('\n');
+  const { r } = rowOf(e);
+  if (!r?.entry || !e.dataTransfer) return;
+  const paths = (selected.has(r.path) ? selectedRows() : [r]).map(x => x.path).join('\n');
   e.dataTransfer.setData(PATH_DRAG, paths);
   e.dataTransfer.setData('text/plain', paths);
   e.dataTransfer.effectAllowed = COPY_EFFECT;
 });
-panel.addEventListener('dragover', e => { if (e.dataTransfer?.types.includes('Files')) { e.preventDefault(); panel.classList.add('drop'); } });
+/**
+ * The folder files dropped at an event go into: the folder dropped on, or the one the file dropped on is in; below
+ * the rows, the shell's.
+ * @param {Event} e
+ */
+function dropDir(e) {
+  const { r } = rowOf(e);
+  if (!r) return view?.cwd === FOLDER_PATH.drives ? null : view?.cwd ?? null;
+  const dir = !r.entry || r.entry.isDirectory ? r.path : r.dir;
+  return dir === FOLDER_PATH.drives ? null : dir;
+}
+panel.addEventListener('dragover', e => {
+  if (!e.dataTransfer?.types.includes('Files')) return;
+  e.preventDefault();
+  panel.classList.add('drop');
+  const { r } = rowOf(e);
+  for (const row of panel.querySelectorAll(`.files-item.${DROP_HERE}`)) row.classList.remove(DROP_HERE);
+  // The folder row it goes into lights up.
+  const dir = dropDir(e);
+  const at = rows.findIndex(x => x.path === dir);
+  if (r && at >= 0) panel.querySelector(`.files-item[data-i="${at}"]`)?.classList.add(DROP_HERE);
+});
 panel.addEventListener('dragleave', () => panel.classList.remove('drop'));
 panel.addEventListener('drop', e => {
   panel.classList.remove('drop');
   if (!e.dataTransfer?.files.length) return;
   e.preventDefault();
-  if (platform === PLATFORM.linux) copyIn(null, droppedPaths(e.dataTransfer));
-  else copyIn(e.dataTransfer.files);
+  const dir = dropDir(e);
+  if (platform === PLATFORM.linux) copyIn(dir, null, droppedPaths(e.dataTransfer));
+  else copyIn(dir, e.dataTransfer.files);
 });
 
 // ---- Docked on the right: the terminals end where it starts ----
@@ -607,25 +699,24 @@ panel.addEventListener('pointerdown', e => {
 // ---- Following the terminal's folder ----
 
 /**
- * A terminal's shell moved to another folder: the panel goes there too.
+ * A terminal's shell moved to another folder: the tree opens down to it. Another terminal's tree goes there when
+ * the panel comes back to it.
  * @param {Tab} tab
  * @param {string | null | undefined} path
  */
 function followed(tab, path) {
-  if (!view || panel.hidden || !path) return;
-  if (view.tab === tab) list(path);
-  // Another terminal moved: it's there when the panel comes back to it, as if the panel had followed it all along.
-  else if (shownFolders.has(tab.id)) shownFolders.set(tab.id, path);
+  if (panel.hidden || !path) return;
+  const v = views.get(tab.id);
+  if (!v) return;
+  if (v === view) reveal(v, path);
+  else v.moved = path;
 }
 
 on(EVENTS.remoteCwd, tab => { if (isSsh(tab)) followed(tab, tab.remoteCwd); });
 on(EVENTS.cwd, tab => { if (!isSsh(tab) && !isRemote(tab)) followed(tab, tab.cwd); });
-on(EVENTS.tabClosed, tab => shownFolders.delete(tab.id));
+on(EVENTS.tabClosed, tab => views.delete(tab.id));
 
 on(EVENTS.focus, tab => {
   // The panel follows the focused terminal while it has files to show.
-  if (!panel.hidden && view && tab !== view.tab && hasFiles(tab)) {
-    view = viewOf(tab);
-    list(view.path);
-  }
+  if (!panel.hidden && view && tab !== view.tab && hasFiles(tab)) show(tab);
 });
