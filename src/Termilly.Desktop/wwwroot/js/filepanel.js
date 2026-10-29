@@ -12,7 +12,7 @@ import { PAGE } from './protocol.js';
 import { send, sendWithFiles, platform, droppedPaths, PLATFORM } from './host.js';
 import { on, tabTitle, wsById, isSsh, isRemote, EVENTS } from './store.js';
 import { focusedTab, newTab } from './panes.js';
-import { scheduleFit } from './terminals.js';
+import { scheduleFit, typePaths } from './terminals.js';
 import { escapeHtml, ICONS } from './ui.js';
 import { modal, confirmDialog, CONFIRM_DIALOG } from './dialogs.js';
 import { byId, field, targetOf, dragPointer, WORKSPACE_ID, PATH_DRAG } from './dom.js';
@@ -20,9 +20,9 @@ import { showMenu, SEPARATOR } from './popups.js';
 import { showChange } from './preview.js';
 import { pathActions } from './actions.js';
 import { FILE_OP, FOLDER_PATH } from './constants.js';
-import { parentOf, DRIVE_ICON, DRIVES_NAME, sizeText, hasFiles, shellFolderOf, folderOf, placeOf, sameMachine } from './filepaths.js';
+import { parentOf, isInside, DRIVE_ICON, DRIVES_NAME, sizeText, hasFiles, shellFolderOf, folderOf, placeOf, sameMachine } from './filepaths.js';
 import { rootOf, childPath, signHtml, indentRows, readFolders, pathDown } from './foldertree.js';
-import { planCopy } from './copyto.js';
+import { planCopy, planInto } from './copyto.js';
 import { JOB_KIND, FILE_MANAGER, BIN, newRequestId, startJob, expectJob } from './filejobs.js';
 
 /** @typedef {import('./foldertree.js').FileEntry} FileEntry */
@@ -76,9 +76,9 @@ let rows = [];
 let selected = new Set();
 /** @type {string | null} */
 let anchor = null;
+/** @type {Row[]} the files and folders being dragged out of the panel (or last dragged) */
+let dragged = [];
 
-/** A path as a shell takes it: quoted when it has a space. */
-const shellPath = /** @param {string} path */ path => (/[\s'"&()]/.test(path) ? `"${path}"` : path);
 /** A count of items, for titles. @param {number} n */
 const itemsText = n => (n === 1 ? '1 item' : `${n} items`);
 /** The rows selected (not the tree's root), in the tree's order. */
@@ -251,17 +251,13 @@ function rowHtml(r, i) {
  */
 const noteRow = (depth, html) => `<div class="files-item files-note" data-depth="${depth}">${html}</div>`;
 
-/** The tree's rows (into `rows`) and their markup. @param {FilesView} v */
-function treeHtml(v) {
-  if (v.error) {
-    rows = [];
-    return `<div class="inbox-empty files-error">${escapeHtml(v.error)}</div>`;
-  }
-  const root = rootOf(v.tab);
-  rows = [{ path: root, entry: null, depth: 0, dir: null }];
-  const html = [rowHtml(rows[0], 0)];
-  // Searching, the tree shows what's named so in the folders read so far (open or not), and the folders down to it.
-  const q = v.query.trim().toLowerCase();
+/**
+ * Searching, the tree shows what's named so in the folders read so far (open or not), and the folders down to it:
+ * whether a folder holds something found, and whether an entry shows.
+ * @param {FilesView} v
+ * @param {string} q lower case
+ */
+function searchOf(v, q) {
   /** @type {Map<string, boolean>} */
   const found = new Map();
   /** @param {string} path */
@@ -279,6 +275,20 @@ function treeHtml(v) {
    * @param {FileEntry} e
    */
   const shows = (dir, e) => e.name.toLowerCase().includes(q) || (e.isDirectory && holds(childPath(dir, e.name)));
+  return { holds, shows };
+}
+
+/** The tree's rows (into `rows`) and their markup. @param {FilesView} v */
+function treeHtml(v) {
+  if (v.error) {
+    rows = [];
+    return `<div class="inbox-empty files-error">${escapeHtml(v.error)}</div>`;
+  }
+  const root = rootOf(v.tab);
+  rows = [{ path: root, entry: null, depth: 0, dir: null }];
+  const html = [rowHtml(rows[0], 0)];
+  const q = v.query.trim().toLowerCase();
+  const { holds, shows } = searchOf(v, q);
   /**
    * @param {string} path
    * @param {number} depth
@@ -430,13 +440,15 @@ function downloadTo(items) {
 }
 
 /**
- * "Copy to": asks for the terminal's folder (and about what's already there), then copies, as one job.
+ * "Copy to": asks for the terminal's folder (and about what's already there), then copies, as one job. Given a
+ * terminal, they go into its shell's folder, without asking where.
  * @param {Row[]} items
+ * @param {Tab | null} [target]
  */
-async function copyTo(items) {
+async function copyTo(items, target = null) {
   const v = view;
   if (!v || !items.length || items.some(r => r.dir === FOLDER_PATH.drives)) return;
-  const plan = await planCopy(v.tab, items.map(itemOf));
+  const plan = target ? await planInto(v.tab, items.map(itemOf), target, shellFolderOf(target)) : await planCopy(v.tab, items.map(itemOf));
   if (!plan) return;
   const requestId = newRequestId();
   // The folder it went to is read again where it's shown, on that machine, and the one it's in (its +).
@@ -445,12 +457,33 @@ async function copyTo(items) {
   send(PAGE.filesCopyTo, { id: v.tab.id, requestId, to: plan.to.id, dir: plan.dir, items: plan.items });
 }
 
-/** @param {string[]} paths */
-function insertPaths(paths) {
-  const term = view?.tab.view?.term;
-  if (!term) return;
-  term.paste(`${paths.map(shellPath).join(' ')} `);
-  term.focus();
+/**
+ * Types files' and folders' names in a terminal, quoted for its shell: from its shell's folder when they're in it
+ * (on the same machine), else their whole paths.
+ * @param {Tab} tab
+ * @param {string[]} paths
+ */
+function pasteNames(tab, paths) {
+  const here = shellFolderOf(tab).replace(/[\\/]$/, '');
+  const near = !!view && sameMachine(view.tab, tab) && here !== '~';
+  typePaths(tab, paths.map(p => (near && p.length > here.length && isInside(p, here) ? p.slice(here.length + 1) : p)));
+}
+
+/**
+ * What the files' own terminal can do with them: copy them into its shell's folder (unless they're all there
+ * already), or type their names.
+ * @param {Tab} tab
+ * @param {Row[]} items
+ * @returns {import('./popups.js').MenuEntry[]}
+ */
+function terminalItems(tab, items) {
+  const here = shellFolderOf(tab);
+  const inPlace = items.every(r => r.dir && isInside(r.dir, here) && isInside(here, r.dir));
+  const many = items.length > 1;
+  return [
+    ...(inPlace || items.some(r => r.dir === FOLDER_PATH.drives) ? [] : [{ label: 'Copy to the terminal’s folder', icon: ICONS.copy, action: () => copyTo(items, tab) }]),
+    { label: many ? 'Paste names in the terminal' : 'Paste name in the terminal', action: () => pasteNames(tab, items.map(r => r.path)) },
+  ];
 }
 
 /** @param {string} text */
@@ -590,7 +623,7 @@ function itemMenu(v, r) {
   return [
     ...open, ...here, ...transferItems(v, [r]), SEPARATOR,
     { label: 'Copy path', icon: ICONS.copy, action: () => copyText(r.path) },
-    { label: 'Insert path in the terminal', action: () => insertPaths([r.path]) },
+    ...terminalItems(v.tab, [r]),
     .../** @type {import('./popups.js').MenuEntry[]} */ (actions.length ? [SEPARATOR, ...actions] : []),
     .../** @type {import('./popups.js').MenuEntry[]} */ (e.isDirectory ? [SEPARATOR, { label: 'New folder', icon: ICONS.plus, action: () => makeFolder(r.path) }] : []),
     // A drive can't be renamed or deleted from here.
@@ -627,7 +660,7 @@ function selectionMenu(v, items) {
   return [
     ...transferItems(v, items), SEPARATOR,
     { label: 'Copy paths', icon: ICONS.copy, action: () => copyText(paths.join('\n')) },
-    { label: 'Insert paths in the terminal', action: () => insertPaths(paths) },
+    ...terminalItems(v.tab, items),
     .../** @type {import('./popups.js').MenuEntry[]} */ (items.some(r => r.dir === FOLDER_PATH.drives) ? [] : [
       SEPARATOR,
       { label: `Delete ${itemsText(items.length)}`, icon: ICONS.trash, danger: true, action: () => remove(items) },
@@ -650,7 +683,7 @@ function folderMenu(v) {
     ...(v.server ? [] : [{ label: `Show in ${FILE_MANAGER}`, action: () => send(PAGE.openPath, { path: dir }) }]),
     SEPARATOR,
     { label: 'Copy path', icon: ICONS.copy, action: () => copyText(dir) },
-    { label: 'Insert path in the terminal', action: () => insertPaths([dir]) },
+    { label: 'Insert path in the terminal', action: () => pasteNames(v.tab, [dir]) },
   ];
 }
 
@@ -712,7 +745,8 @@ panel.addEventListener('click', e => {
 panel.addEventListener('dragstart', e => {
   const { r } = rowOf(e);
   if (!r?.entry || !e.dataTransfer) return;
-  const paths = (selected.has(r.path) ? selectedRows() : [r]).map(x => x.path).join('\n');
+  dragged = selected.has(r.path) ? selectedRows() : [r];
+  const paths = dragged.map(x => x.path).join('\n');
   e.dataTransfer.setData(PATH_DRAG, paths);
   e.dataTransfer.setData('text/plain', paths);
   e.dataTransfer.effectAllowed = COPY_EFFECT;
@@ -728,6 +762,11 @@ function dropDir(e) {
   const dir = !r.entry || r.entry.isDirectory ? r.path : r.dir;
   return dir === FOLDER_PATH.drives ? null : dir;
 }
+// Dropped on a terminal (terminals.js): copy them into its shell's folder, or type their names there.
+on(EVENTS.panelDrop, (/** @type {{ tab: Tab, x: number, y: number }} */ { tab, x, y }) => {
+  if (dragged.length) showMenu(terminalItems(tab, dragged), { x, y });
+});
+
 panel.addEventListener('dragover', e => {
   if (!e.dataTransfer?.types.includes('Files')) return;
   e.preventDefault();

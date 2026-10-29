@@ -790,12 +790,11 @@ function wireDropAndPaste(tab, term) {
   body.addEventListener('dragleave', () => body.classList.remove(FILE_OVER));
   body.addEventListener('drop', e => {
     body.classList.remove(FILE_OVER);
-    // Files and folders from the Files panel: their paths (one a line), here or on the terminal's server.
-    const fromPanel = e.dataTransfer?.getData(PATH_DRAG);
-    if (fromPanel) {
+    // Files and folders from the Files panel: it asks whether to copy them here or type their names.
+    if (e.dataTransfer?.getData(PATH_DRAG)) {
       e.preventDefault();
       e.stopPropagation();
-      typePaths(tab, fromPanel.split('\n'));
+      emit(EVENTS.panelDrop, { tab, x: e.clientX, y: e.clientY });
       return;
     }
     if (!e.dataTransfer?.files.length) return;
@@ -843,7 +842,7 @@ function checkPaste(tab, text) {
  * @param {Tab} tab
  * @param {string[]} paths
  */
-async function typePaths(tab, paths) {
+export async function typePaths(tab, paths) {
   if (!paths.length || tab.exited) return;
   const shell = state.profiles.find(p => p.id === tab.profile)?.icon;
   const text = `${quotePaths(paths, shell)} `;

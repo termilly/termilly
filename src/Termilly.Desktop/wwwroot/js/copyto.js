@@ -43,8 +43,19 @@ const CLASHES_SHOWN = 8;
  */
 export async function planCopy(source, items) {
   const target = await pickFolder(source, items.length);
-  if (!target) return null;
-  const { tab, dir } = target;
+  return target ? planInto(source, items, target.tab, target.dir) : null;
+}
+
+/**
+ * Plans copying `items` (files and folders of `source`) into a folder of `tab` known already, asking only about the
+ * ones already there. Resolves with what to copy where, or null when cancelled.
+ * @param {Tab} source
+ * @param {CopyItem[]} items
+ * @param {Tab} tab
+ * @param {string} dir
+ * @returns {Promise<CopyPlan | null>}
+ */
+export async function planInto(source, items, tab, dir) {
   const same = sameMachine(source, tab);
   const inside = same && items.find(i => i.isDirectory && isInside(dir, i.path));
   if (inside) {

@@ -139,6 +139,8 @@ export const EVENTS = Object.freeze({
   gitChanged: 'gitChanged',
   history: 'history',
   openAgentChanges: 'openAgentChanges',
+  /** Files and folders dragged out of the Files panel were dropped on a terminal: { tab, x, y } (js/filepanel.js asks what to do). */
+  panelDrop: 'panelDrop',
   openChangedFiles: 'openChangedFiles',
   openGit: 'openGit',
   openSettings: 'openSettings',
