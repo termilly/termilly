@@ -606,9 +606,10 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
 .files-grip:hover { background: var(--accent); opacity: .5; }
 .files-panel.drop { outline: 2px dashed var(--accent); outline-offset: -6px; }
 .files-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px 4px 12px; }
-.files-title { color: var(--text); font-size: 12.5px; font-weight: 600; }
+.files-title { overflow: hidden; color: var(--text); font-size: 12.5px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.files-ws { margin-left: 4px; color: var(--faint); font-weight: 400; }
+.btn .files-fold-icon { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1; }
 .files-bar { display: flex; gap: 6px; align-items: center; padding: 4px 10px 6px; }
-.files-path { overflow: hidden; flex: 1; padding-left: 4px; color: var(--muted); font: 12px var(--mono); text-overflow: ellipsis; white-space: nowrap; }
 .files-list { flex: 1; overflow-y: auto; padding: 0 6px; }
 .files-item { display: flex; gap: 8px; align-items: center; height: 28px; padding: 0 6px; border-radius: 6px; font-size: 12.5px; }
 .files-item:hover { background: var(--hover); }

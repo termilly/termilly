@@ -10,7 +10,7 @@
 
 import { PAGE } from './protocol.js';
 import { send, sendWithFiles, platform, droppedPaths, PLATFORM } from './host.js';
-import { on, profileOf, isSsh, isRemote, EVENTS } from './store.js';
+import { on, tabTitle, wsById, isSsh, isRemote, EVENTS } from './store.js';
 import { focusedTab, newTab } from './panes.js';
 import { scheduleFit } from './terminals.js';
 import { escapeHtml, ICONS } from './ui.js';
@@ -20,7 +20,7 @@ import { showMenu, SEPARATOR } from './popups.js';
 import { showChange } from './preview.js';
 import { pathActions } from './actions.js';
 import { FILE_OP, FOLDER_PATH } from './constants.js';
-import { parentOf, DRIVE_ICON, DRIVES_NAME, sizeText, hasFiles, shellFolderOf, folderOf, folderName, placeOf, sameMachine } from './filepaths.js';
+import { parentOf, DRIVE_ICON, DRIVES_NAME, sizeText, hasFiles, shellFolderOf, folderOf, placeOf, sameMachine } from './filepaths.js';
 import { rootOf, childPath, signHtml, indentRows, readFolders, pathDown } from './foldertree.js';
 import { planCopy } from './copyto.js';
 import { JOB_KIND, FILE_MANAGER, BIN, newRequestId, startJob, expectJob } from './filejobs.js';
@@ -37,7 +37,15 @@ import { JOB_KIND, FILE_MANAGER, BIN, newRequestId, startJob, expectJob } from '
 /** @typedef {{ path: string, entry: FileEntry | null, depth: number, dir: string | null }} Row */
 
 /** What the panel's buttons do (data-files). */
-const FILES_ACTION = Object.freeze({ close: 'close', refresh: 'refresh', mkdir: 'mkdir', get: 'get', rename: 'rename', delete: 'delete' });
+const FILES_ACTION = Object.freeze({
+  close: 'close', refresh: 'refresh', mkdir: 'mkdir', fold: 'fold', get: 'get', rename: 'rename', delete: 'delete',
+});
+/**
+ * Collapse all (a box with −) and open to the shell's folder (a box with +), each in front of another box: 1px lines
+ * on whole pixels, so they stay crisp at 16px.
+ */
+const COLLAPSE_ICON = '<svg class="files-fold-icon" viewBox="0 0 16 16"><path d="M2.5 10.5v-8h8"/><rect x="4.5" y="4.5" width="8" height="8" rx="1"/><path d="M6 8.5h5"/></svg>';
+const EXPAND_ICON = '<svg class="files-fold-icon" viewBox="0 0 16 16"><path d="M2.5 10.5v-8h8"/><rect x="4.5" y="4.5" width="8" height="8" rx="1"/><path d="M6 8.5h5M8.5 6v5"/></svg>';
 /** The panel's narrowest width; its widest is half the terminals' area (app.css max-width). */
 const MIN_WIDTH_PX = 260;
 /** The tree's list, and the class of the folder row files dragged over go into. */
@@ -137,6 +145,16 @@ function refresh() {
   if (!view) return;
   view.nodes.clear();
   load(view, [...view.open]);
+}
+
+/** Collapses every folder (the top level stays), or, when they are, opens the tree to the shell's folder again. */
+function fold() {
+  if (!view) return;
+  if (view.open.size > 1) {
+    view.open = new Set([rootOf(view.tab)]);
+    render();
+    panel.querySelector(LIST)?.scrollTo({ top: 0 });
+  } else reveal(view, view.cwd ?? shellFolderOf(view.tab));
 }
 
 /**
@@ -268,17 +286,20 @@ function render() {
   const list = panel.querySelector(LIST);
   const scroll = list?.scrollTop ?? 0;
   const target = targetDir();
+  // Folders open below the top level: the button folds them all; else it opens the tree to the shell's folder.
+  const folded = view.open.size <= 1;
+  const ws = wsById(tab.wsId)?.name;
   panel.innerHTML = `
     <div class="files-grip" title="Drag to resize"></div>
     <div class="files-head">
-      <span class="files-title">Files · ${escapeHtml(profileOf(tab)?.name ?? '')}</span>
+      <span class="files-title">Files · ${escapeHtml(tabTitle(tab))}${ws ? ` <span class="files-ws">${escapeHtml(ws)}</span>` : ''}</span>
       <button class="pane-btn" data-files="${FILES_ACTION.close}" title="Close">${ICONS.close}</button>
     </div>
     <div class="files-bar">
       <button class="btn small" data-files="${FILES_ACTION.refresh}" title="Refresh">⟳</button>
       <button class="btn small" data-files="${FILES_ACTION.mkdir}" title="New folder in the folder selected"${target ? '' : ' disabled'}>${ICONS.plus}</button>
+      <button class="btn small files-fold" data-files="${FILES_ACTION.fold}" title="${folded ? 'Open the folders to the shell’s folder' : 'Collapse all folders'}">${folded ? EXPAND_ICON : COLLAPSE_ICON}</button>
       ${server ? '<label class="btn small files-upload" title="Upload files into the folder selected">Upload<input type="file" multiple hidden data-files-pick></label>' : ''}
-      <span class="files-path" title="${escapeHtml(target ?? '')}">${escapeHtml(target ? folderName(target) : '')}</span>
     </div>
     <div class="files-list">${treeHtml(view)}</div>`;
   const drawn = /** @type {HTMLElement} */ (panel.querySelector(LIST));
@@ -413,6 +434,7 @@ panel.addEventListener('click', e => {
   const { i, r } = rowOf(e);
   if (action === FILES_ACTION.close) return toggleFiles(view.tab);
   if (action === FILES_ACTION.refresh) return refresh();
+  if (action === FILES_ACTION.fold) return fold();
   if (action === FILES_ACTION.mkdir) return makeFolder();
   if (!r) return action ? undefined : selectRows(new Set(), null);
   // The sign opens or closes; a double click's second click on it was a click already.
@@ -446,8 +468,6 @@ function selectRows(paths, from) {
     row.classList.toggle('selected', selected.has(rows[Number(row.dataset.i)]?.path));
   }
   const target = targetDir();
-  const path = panel.querySelector('.files-path');
-  if (path) path.textContent = target ? folderName(target) : '';
   /** @type {HTMLButtonElement | null} */ (panel.querySelector(`[data-files="${FILES_ACTION.mkdir}"]`))?.toggleAttribute('disabled', !target);
 }
 
