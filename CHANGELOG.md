@@ -4,14 +4,8 @@ What changed in each release. Termilly says in its title bar when a newer one is
 
 ## 1.4.0 (unreleased)
 
-- **File Explorer:** explore, open files and copy them between workspaces.
-  - Browse files on this computer or a server in the Files panel, and search a folder or a whole drive.
-  - Open files in tabs, per workspace. A file changed since it was opened shows Diff and Refresh.
-  - Copy files to another terminal's folder, here, on a server or between two servers, or drag them onto a terminal.
-- **Sounds:** choose a sound for when an agent needs you, stops with an error or finishes, on any speakers or headset.
-- **Notification center** keeps notifications until you clear them.
-- **Sidebar** can be widened by dragging its edge.
-- Updates install more reliably.
+- **File Explorer:** explore, search, preview files and copy them between workspaces.
+- **Sounds:** configure sounds when there is a pending action or error.
 
 ## 1.3.0 (2026-10-26)
 
