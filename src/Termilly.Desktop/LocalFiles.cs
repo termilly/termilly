@@ -34,11 +34,9 @@ internal static class LocalFiles
         {
             throw new IOException($"{dir.FullName} isn't there.");
         }
-        // Hidden files show, as they do over SFTP (.env, .gitignore); Windows' system files (desktop.ini) don't.
-        var options = new EnumerationOptions { IgnoreInaccessible = true, AttributesToSkip = FileAttributes.System };
         try
         {
-            var entries = dir.EnumerateFileSystemInfos("*", options)
+            var entries = dir.EnumerateFileSystemInfos("*", ListOptions)
                 .Select(e => new FolderEntry(e.Name, e is DirectoryInfo, e is FileInfo f ? f.Length : 0,
                     e.LastWriteTime.ToString(ModifiedFormat, CultureInfo.InvariantCulture), ""))
                 .OrderBy(e => !e.IsDirectory).ThenBy(e => e.Name, StringComparer.OrdinalIgnoreCase)
@@ -58,10 +56,19 @@ internal static class LocalFiles
     private static List<FolderEntry> Drives() =>
         DriveInfo.GetDrives().Where(d => d.IsReady).Select(d =>
         {
-            var label = d.VolumeLabel is { Length: > 0 } name ? name : d.DriveType == DriveType.Network ? "Network" : "Local Disk";
             var free = $"{d.AvailableFreeSpace / Gigabyte:N0} GB free of {d.TotalSize / Gigabyte:N0} GB";
-            return new FolderEntry(d.Name, true, 0, free, d.DriveType.ToString(), label);
+            return new FolderEntry(d.Name, true, 0, free, d.DriveType.ToString(), DriveLabel(d));
         }).ToList();
+
+    /// <summary>A drive's name: its label, else "Network" for a mapped share, or "Local Disk".</summary>
+    public static string DriveLabel(DriveInfo d) =>
+        d.VolumeLabel is { Length: > 0 } name ? name : d.DriveType == DriveType.Network ? "Network" : "Local Disk";
+
+    /// <summary>
+    /// What a listing reads: hidden files show, as they do over SFTP (.env, .gitignore); Windows' system files
+    /// (desktop.ini) and folders (the old "Application Data" links) don't.
+    /// </summary>
+    public static readonly EnumerationOptions ListOptions = new() { IgnoreInaccessible = true, AttributesToSkip = FileAttributes.System };
 
     /// <summary>Renames (or moves) a file or folder; an existing one at <paramref name="to"/> is never replaced.</summary>
     public static void Rename(string path, string to)

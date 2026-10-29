@@ -31,6 +31,7 @@ internal static class Composition
         .AddSingleton<Worktrees>()
         .AddSingleton<Sftp>()
         .AddSingleton<FileCopies>()
+        .AddSingleton<FolderTree>()
         .AddSingleton<DynamicSources>()
         .AddSingleton<ClaudePlan>()
         .AddSingleton(_ => new ChangeStore())

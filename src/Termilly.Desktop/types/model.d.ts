@@ -50,6 +50,8 @@ interface Workspace {
   snippets?: SnippetSetting[];
   /** Folded in the sidebar. */
   collapsed?: boolean;
+  /** Where "Copy to" last copied from here (js/copyto.js): the terminal picked, and the folder picked in each. */
+  copyTo?: { tab: string | null; dirs: Record<string, string> };
   /** A tmux window shown as this workspace (js/tmux.js); never saved. */
   tmux?: { client: string; window: string };
   /** Saved by older versions, which could stack a workspace's terminals; read once, then dropped (store.js). */

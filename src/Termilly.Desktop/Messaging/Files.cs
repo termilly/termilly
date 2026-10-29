@@ -36,6 +36,12 @@ internal static partial class FromPage
         public static string Type => "files:list";
     }
 
+    /// <summary>"Copy to"'s tree: the folders in each of <see cref="Paths"/>, of the terminal's files.</summary>
+    internal sealed record FilesTree(string Id = "", string? RequestId = null, IReadOnlyList<string>? Paths = null) : IPageMessage
+    {
+        public static string Type => "files:tree";
+    }
+
     /// <param name="Op">One of <see cref="FileOperations"/>.</param>
     /// <param name="To">A rename's new path; a download's folder (none: Downloads).</param>
     internal sealed record FilesOp(string Id = "", string? RequestId = null, string? Op = null, string? Path = null, string? To = null) : IPageMessage
@@ -77,6 +83,12 @@ internal static partial class ToPage
     internal sealed record FilesListing(string? RequestId, string Path, object Entries) : IHostMessage
     {
         public static string Type => "files:listing";
+    }
+
+    /// <summary>The folders asked for, in their order; <see cref="Error"/> when none could be read (no connection).</summary>
+    internal sealed record FilesTree(string? RequestId, IReadOnlyList<TreeBranch> Branches, string? Error = null) : IHostMessage
+    {
+        public static string Type => "files:tree";
     }
 
     internal sealed record FilesListingFailed(string? RequestId, string Message) : IHostMessage

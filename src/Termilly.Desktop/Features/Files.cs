@@ -11,12 +11,14 @@ namespace Termilly.Desktop.Features;
 /// terminal, else on this machine (LocalFiles.cs). Listing, file operations, and copying files in (uploads, on a
 /// server) and out (downloads), and "Copy to" another terminal's folder (FileCopies.cs).
 /// </summary>
-internal sealed class FilesHandler(PageChannel page, Sftp sftp, FileCopies copies, TerminalSessions terminals, IFileDialogs dialogs, IDesktopShell desktop)
+internal sealed class FilesHandler(
+    PageChannel page, Sftp sftp, FileCopies copies, FolderTree tree, TerminalSessions terminals, IFileDialogs dialogs, IDesktopShell desktop)
     : IMessageHandler
 {
     public void Register(MessageRouter router)
     {
         router.On<FromPage.FilesList>(m => Task.Run(() => List(m.Id, m.RequestId, m.Path)));
+        router.On<FromPage.FilesTree>(m => Task.Run(() => Tree(m.Id, m.RequestId, m.Paths ?? [])));
         router.On<FromPage.FilesOp>(m => Task.Run(() => Operate(m)));
         router.On<FromPage.FilesPut>((m, files) => Task.Run(() => CopyIn(m.Id, m.RequestId, m.Dir, files ?? m.Paths ?? [])));
         router.On<FromPage.FilesPick>(m => PickAndCopyInAsync(m.Id, m.RequestId, m.Dir));
@@ -47,6 +49,20 @@ internal sealed class FilesHandler(PageChannel page, Sftp sftp, FileCopies copie
         catch (IOException ex)
         {
             page.Post(new ToPage.FilesListingFailed(requestId, ex.Message));
+        }
+    }
+
+    /// <summary>"Copy to"'s tree: the folders in each folder asked for (disk or ssh work, so off the UI thread).</summary>
+    private void Tree(string terminal, string? requestId, IReadOnlyList<string> paths)
+    {
+        try
+        {
+            var branches = PlaceOf(terminal) is { } server ? tree.OnServer(server, paths) : FolderTree.Here(paths);
+            page.Post(new ToPage.FilesTree(requestId, branches));
+        }
+        catch (IOException ex)
+        {
+            page.Post(new ToPage.FilesTree(requestId, [], ex.Message));
         }
     }
 
