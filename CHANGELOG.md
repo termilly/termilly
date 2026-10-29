@@ -6,6 +6,7 @@ What changed in each release. Termilly says in its title bar when a newer one is
 
 - **File Explorer:** explore, search, preview files and copy them between workspaces.
 - **Sounds:** configure sounds when there is a pending action or error.
+- Updates install more reliably.
 
 ## 1.3.0 (2026-10-26)
 
