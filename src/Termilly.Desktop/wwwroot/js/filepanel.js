@@ -29,9 +29,10 @@ import { JOB_KIND, FILE_MANAGER, BIN, newRequestId, startJob, expectJob } from '
 /** @typedef {import('./foldertree.js').TreeNode} TreeNode */
 /**
  * What the panel shows for a terminal: whether that's on a server, the folders read, which are open or being read,
- * the folder its shell is in (marked), a folder it moved to while another terminal was shown, and why nothing shows.
+ * the folder its shell is in (marked), a folder it moved to while another terminal was shown, why nothing shows, and
+ * what the search box holds.
  * @typedef {{ tab: Tab, server: boolean, nodes: Map<string, TreeNode>, open: Set<string>, loading: Set<string>,
- *   cwd: string | null, moved: string | null, error: string | null }} FilesView
+ *   cwd: string | null, moved: string | null, error: string | null, query: string }} FilesView
  */
 /** A row drawn: its path, what it is (none for the tree's root), how deep it is, and the folder it's in. */
 /** @typedef {{ path: string, entry: FileEntry | null, depth: number, dir: string | null }} Row */
@@ -46,6 +47,9 @@ const FILES_ACTION = Object.freeze({
  */
 const COLLAPSE_ICON = '<svg class="files-fold-icon" viewBox="0 0 16 16"><path d="M2.5 10.5v-8h8"/><rect x="4.5" y="4.5" width="8" height="8" rx="1"/><path d="M6 8.5h5"/></svg>';
 const EXPAND_ICON = '<svg class="files-fold-icon" viewBox="0 0 16 16"><path d="M2.5 10.5v-8h8"/><rect x="4.5" y="4.5" width="8" height="8" rx="1"/><path d="M6 8.5h5M8.5 6v5"/></svg>';
+const REFRESH_ICON = '<svg class="files-fold-icon" viewBox="0 0 16 16"><path d="M12.5 8.5a4.5 4.5 0 1 1-1.5-3.4"/><path d="M11.5 1.5v3.5H8"/></svg>';
+/** The search box. */
+const SEARCH = '[data-files-search]';
 /** The panel's narrowest width; its widest is half the terminals' area (app.css max-width). */
 const MIN_WIDTH_PX = 260;
 /** The tree's list, and the class of the folder row files dragged over go into. */
@@ -177,7 +181,7 @@ function viewOf(tab) {
   const kept = views.get(tab.id);
   if (kept) return kept;
   /** @type {FilesView} */
-  const v = { tab, server: isSsh(tab), nodes: new Map(), open: new Set(), loading: new Set(), cwd: null, moved: shellFolderOf(tab), error: null };
+  const v = { tab, server: isSsh(tab), nodes: new Map(), open: new Set(), loading: new Set(), cwd: null, moved: shellFolderOf(tab), error: null, query: '' };
   views.set(tab.id, v);
   return v;
 }
@@ -256,20 +260,40 @@ function treeHtml(v) {
   const root = rootOf(v.tab);
   rows = [{ path: root, entry: null, depth: 0, dir: null }];
   const html = [rowHtml(rows[0], 0)];
+  // Searching, the tree shows what's named so in the folders read so far (open or not), and the folders down to it.
+  const q = v.query.trim().toLowerCase();
+  /** @type {Map<string, boolean>} */
+  const found = new Map();
+  /** @param {string} path */
+  const holds = path => {
+    let has = found.get(path);
+    if (has === undefined) {
+      found.set(path, false); // a link back up doesn't go round for ever
+      has = (v.nodes.get(path)?.entries ?? []).some(e => shows(path, e));
+      found.set(path, has);
+    }
+    return has;
+  };
+  /**
+   * @param {string} dir
+   * @param {FileEntry} e
+   */
+  const shows = (dir, e) => e.name.toLowerCase().includes(q) || (e.isDirectory && holds(childPath(dir, e.name)));
   /**
    * @param {string} path
    * @param {number} depth
    */
   const walk = (path, depth) => {
-    if (!v.open.has(path)) return;
+    if (q ? !holds(path) : !v.open.has(path)) return;
     const node = v.nodes.get(path);
     if (!node) {
       if (v.loading.has(path)) html.push(noteRow(depth, 'Loading…'));
       return;
     }
-    if (node.error) html.push(noteRow(depth, `<span class="files-error">${escapeHtml(node.error)}</span>`));
-    else if (!node.entries?.length && depth > 1) html.push(noteRow(depth, 'Empty'));
+    if (!q && node.error) html.push(noteRow(depth, `<span class="files-error">${escapeHtml(node.error)}</span>`));
+    else if (!q && !node.entries?.length && depth > 1) html.push(noteRow(depth, 'Empty'));
     for (const e of node.entries ?? []) {
+      if (q && !shows(path, e)) continue;
       const row = { path: childPath(path, e.name), entry: e, depth, dir: path };
       rows.push(row);
       html.push(rowHtml(row, rows.length - 1));
@@ -277,6 +301,7 @@ function treeHtml(v) {
     }
   };
   walk(root, 1);
+  if (q && rows.length === 1) html.push(noteRow(1, 'Nothing by that name in the folders read so far'));
   return html.join('');
 }
 
@@ -289,22 +314,42 @@ function render() {
   // Folders open below the top level: the button folds them all; else it opens the tree to the shell's folder.
   const folded = view.open.size <= 1;
   const ws = wsById(tab.wsId)?.name;
+  // Drawn again while typing (a folder read comes in): the search box keeps the caret.
+  const typing = /** @type {HTMLInputElement | null} */ (document.activeElement?.closest(SEARCH) ?? null);
+  const caret = typing?.selectionStart ?? null;
   panel.innerHTML = `
     <div class="files-grip" title="Drag to resize"></div>
     <div class="files-head">
       <span class="files-title">Files · ${escapeHtml(tabTitle(tab))}${ws ? ` <span class="files-ws">${escapeHtml(ws)}</span>` : ''}</span>
-      <button class="pane-btn" data-files="${FILES_ACTION.close}" title="Close">${ICONS.close}</button>
+      <span class="files-tools">
+        <button class="pane-btn" data-files="${FILES_ACTION.refresh}" title="Refresh">${REFRESH_ICON}</button>
+        <button class="pane-btn" data-files="${FILES_ACTION.mkdir}" title="New folder in the folder selected"${target ? '' : ' disabled'}>${ICONS.plus}</button>
+        <button class="pane-btn" data-files="${FILES_ACTION.fold}" title="${folded ? 'Open the folders to the shell’s folder' : 'Collapse all folders'}">${folded ? EXPAND_ICON : COLLAPSE_ICON}</button>
+        <button class="pane-btn" data-files="${FILES_ACTION.close}" title="Close">${ICONS.close}</button>
+      </span>
     </div>
     <div class="files-bar">
-      <button class="btn small" data-files="${FILES_ACTION.refresh}" title="Refresh">⟳</button>
-      <button class="btn small" data-files="${FILES_ACTION.mkdir}" title="New folder in the folder selected"${target ? '' : ' disabled'}>${ICONS.plus}</button>
-      <button class="btn small files-fold" data-files="${FILES_ACTION.fold}" title="${folded ? 'Open the folders to the shell’s folder' : 'Collapse all folders'}">${folded ? EXPAND_ICON : COLLAPSE_ICON}</button>
+      <input class="field files-search" type="search" placeholder="Search" title="Search the folders read so far" spellcheck="false" autocomplete="off" data-files-search value="${escapeHtml(view.query)}">
       ${server ? '<label class="btn small files-upload" title="Upload files into the folder selected">Upload<input type="file" multiple hidden data-files-pick></label>' : ''}
     </div>
     <div class="files-list">${treeHtml(view)}</div>`;
   const drawn = /** @type {HTMLElement} */ (panel.querySelector(LIST));
   indentRows(drawn);
   drawn.scrollTop = scroll;
+  if (typing) {
+    const box = /** @type {HTMLInputElement} */ (panel.querySelector(SEARCH));
+    box.focus();
+    box.setSelectionRange(caret, caret);
+  }
+}
+
+/** Draws the tree again for what the search box holds (the box itself stays). */
+function drawTree() {
+  if (!view) return;
+  const list = /** @type {HTMLElement} */ (panel.querySelector(LIST));
+  list.innerHTML = treeHtml(view);
+  indentRows(list);
+  list.scrollTop = 0;
 }
 
 // ---- What files and folders can do ----
@@ -638,6 +683,17 @@ function copyIn(dir, files, paths = null) {
   else if (window.chrome?.webview) sendWithFiles(PAGE.filesPut, { id: view.tab.id, requestId, dir }, /** @type {FileList} */ (files));
 }
 
+panel.addEventListener('input', e => {
+  if (!view || !targetOf(e).matches(SEARCH)) return;
+  view.query = /** @type {HTMLInputElement} */ (e.target).value;
+  drawTree();
+});
+// Escape in the search box empties it (the box's own way), and a second one goes back to the tree.
+panel.addEventListener('keydown', e => {
+  const box = /** @type {HTMLInputElement} */ (e.target);
+  if (e.key !== 'Escape' || !targetOf(e).matches(SEARCH) || box.value) return;
+  panel.focus();
+});
 panel.addEventListener('change', e => {
   if (targetOf(e).matches('[data-files-pick]')) copyIn(targetDir(), /** @type {HTMLInputElement} */ (e.target).files);
 });

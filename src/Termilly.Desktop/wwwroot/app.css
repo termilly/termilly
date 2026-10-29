@@ -608,8 +608,14 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
 .files-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px 4px 12px; }
 .files-title { overflow: hidden; color: var(--text); font-size: 12.5px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .files-ws { margin-left: 4px; color: var(--faint); font-weight: 400; }
-.btn .files-fold-icon { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1; }
+/* Refresh, New folder and Collapse before the ×: 16px icons at a 1px stroke, on the pixel grid. */
+.files-tools { display: flex; flex-shrink: 0; gap: 2px; align-items: center; }
+.files-tools .pane-btn { opacity: 1; }
+.files-tools .pane-btn:disabled { opacity: 0.35; }
+.files-tools .pane-btn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1; }
+.files-tools .pane-btn:last-child svg { width: 10px; height: 10px; stroke-width: 1.4; }
 .files-bar { display: flex; gap: 6px; align-items: center; padding: 4px 10px 6px; }
+.files-search { flex: 1; min-width: 0; height: 26px; }
 .files-list { flex: 1; overflow-y: auto; padding: 0 6px; }
 .files-item { display: flex; gap: 8px; align-items: center; height: 28px; padding: 0 6px; border-radius: 6px; font-size: 12.5px; }
 .files-item:hover { background: var(--hover); }
