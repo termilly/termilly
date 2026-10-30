@@ -25,6 +25,8 @@ internal sealed record TerminalSettings
     public double LineHeight { get; init; } = DefaultLineHeight;
     public int Scrollback { get; init; } = DefaultScrollback;
     public string TextSmoothing { get; init; } = SettingValues.TextSmoothing.Default;
+    /// <summary>Terminals drawn on the GPU (xterm's WebGL add-on, js/gpu.js): smoother scrolling; text is greyscale-smoothed then.</summary>
+    public bool GpuRendering { get; init; } = true;
     /// <summary>Images programs print (sixel, iTerm2's), shown inline.</summary>
     public bool InlineImages { get; init; } = true;
     /// <summary>Programs may set the clipboard (OSC 52).</summary>

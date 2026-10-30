@@ -25,6 +25,7 @@ import { continuesOnNextRow } from './buffer.js';
 import { clipboardKey, wireClipboard, PASTE_LABEL } from './termclipboard.js';
 import { selectionKey } from './keyselect.js';
 import { hoverMarkedLink, COPY_HINT } from './termlinks.js';
+import { wireGpu, dropGpu, applyGpu } from './gpu.js';
 
 /**
  * A theme plugin's terminal colours (state.pluginThemes).
@@ -267,6 +268,8 @@ function createTerminal(tab) {
   // (Unicode 6) gives them one, which shifts TUI borders and columns.
   term.loadAddon(new Unicode11Addon.Unicode11Addon());
   term.unicode.activeVersion = '11';
+  // On the GPU while it's on screen (Settings › Appearance › GPU rendering).
+  wireGpu(tab, term, () => fit.fit());
   wireDropAndPaste(tab, term);
   /** @type {TabView} */ (tab.view).term = term;
   /** @type {TabView} */ (tab.view).fit = fit;
@@ -923,6 +926,7 @@ export function quiet(tab, ms = QUIET_MS) {
 /** @param {Tab} tab */
 export function disposeTerminal(tab) {
   send(PAGE.kill, { id: tab.id });
+  dropGpu(tab);
   tab.view?.term?.dispose();
 }
 
@@ -1029,6 +1033,7 @@ export function applyTerminalSettings() {
       if (term.options[key] !== value) term.options[key] = value;
     }
   }
+  applyGpu();
   scheduleFit();
 }
 

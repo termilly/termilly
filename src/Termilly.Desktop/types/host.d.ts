@@ -48,6 +48,8 @@ interface TerminalSettings {
   lineHeight: number;
   scrollback: number;
   textSmoothing: string;
+  /** Terminals drawn on the GPU (xterm's WebGL add-on, js/gpu.js): smoother scrolling; text is greyscale-smoothed then. */
+  gpuRendering: boolean;
   /** Images programs print (sixel, iTerm2's), shown inline. */
   inlineImages: boolean;
   /** Programs may set the clipboard (OSC 52). */
