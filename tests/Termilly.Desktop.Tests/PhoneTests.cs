@@ -1,0 +1,262 @@
+using System.IO;
+using System.Net;
+using System.Net.Http;
+using System.Net.Security;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
+using System.Text;
+using System.Text.Json.Nodes;
+using Termilly.Desktop.Phone;
+using Termilly.Desktop.Security;
+
+namespace Termilly.Desktop.Tests;
+
+[Collection("Environment")]
+public sealed class PhoneTests : IDisposable
+{
+    private readonly string _dir = Path.Combine(Path.GetTempPath(), "termilly-tests", Guid.NewGuid().ToString("N"));
+    private readonly string _web;
+    private readonly Vault _vault;
+    private readonly PhoneStore _store;
+    private readonly List<string> _alerts = [];
+
+    public PhoneTests()
+    {
+        _vault = Vault.Open(_dir);
+        _store = new PhoneStore(_vault);
+        _web = Path.Combine(_dir, "phone");
+        Directory.CreateDirectory(_web);
+        File.WriteAllText(Path.Combine(_web, "index.html"), "<p>app</p>");
+        File.WriteAllText(Path.Combine(_web, "setup.html"), "<p>setup</p>");
+        Environment.SetEnvironmentVariable("TERMILLY_PHONE_BIND", "127.0.0.1");
+    }
+
+    public void Dispose()
+    {
+        Environment.SetEnvironmentVariable("TERMILLY_PHONE_BIND", null);
+        Directory.Delete(_dir, recursive: true);
+    }
+
+    // ---- Web Push ----
+
+    [Fact]
+    public void Alerts_are_encrypted_exactly_as_RFC_8291_says()
+    {
+        // RFC 8291, Appendix A.
+        var plaintext = Encoding.UTF8.GetBytes("When I grow up, I want to be a watermelon");
+        var sender = Key("yfWPiYE-n46HLnH0KqZOF1fJJU3MYrct3AELtAQ-oRw", "BP4z9KsN6nGRTbVYI_c7VJSPQTBtkgcy27mlmlMoZIIgDll6e3vCYLocInmYWAmS6TlzAC8wEqKK6PBru3jl7A8");
+        var phonePublic = WebPush.FromBase64Url("BCVxsr7N_eNgVRqvHtD0zTZsEc6-VV-JvLexhqUzORcxaOzi6-AYWXvTBHm4bjyPjs7Vd8pZGH6SRpkNtoIAiw4");
+        var auth = WebPush.FromBase64Url("BTBZMqHH6r4Tts7J_aSIgg");
+        var salt = WebPush.FromBase64Url("DGv6ra1nlYgDCS1FRnbzlw");
+
+        var body = WebPush.Encrypt(plaintext, phonePublic, auth, sender, salt);
+
+        Assert.Equal("DGv6ra1nlYgDCS1FRnbzlwAAEABBBP4z9KsN6nGRTbVYI_c7VJSPQTBtkgcy27mlmlMoZIIgDll6e3vCYLocInmYWAmS6TlzAC8wEqKK6PBru3jl7A_yl95bQpu6cVPTpK4Mqgkf1CXztLVBSt2Ks3oZwbuwXPXLWyouBWLVWGNWQexSgSxsj_Qulcy4a-fN",
+            WebPush.Base64Url(body));
+    }
+
+    [Fact]
+    public void A_phone_opens_an_alert_with_its_own_key()
+    {
+        using var phone = ECDiffieHellman.Create(ECCurve.NamedCurves.nistP256);
+        var phonePublic = Point(phone.ExportParameters(false));
+        var auth = RandomNumberGenerator.GetBytes(16);
+
+        var body = WebPush.Encrypt(Encoding.UTF8.GetBytes("""{"title":"Needs you"}"""), phonePublic, auth);
+
+        Assert.Equal("""{"title":"Needs you"}""", Decrypt(body, phone, phonePublic, auth));
+    }
+
+    [Fact]
+    public void The_sender_token_is_signed_with_Termillys_key()
+    {
+        using var vapid = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var token = WebPush.Token(vapid, "https://web.push.apple.com", DateTimeOffset.UtcNow.AddHours(1));
+        var parts = token.Split('.');
+
+        Assert.Equal(3, parts.Length);
+        Assert.Contains("\"aud\":\"https://web.push.apple.com\"", Encoding.UTF8.GetString(WebPush.FromBase64Url(parts[1])));
+        Assert.True(vapid.VerifyData(Encoding.ASCII.GetBytes($"{parts[0]}.{parts[1]}"), WebPush.FromBase64Url(parts[2]), HashAlgorithmName.SHA256,
+            DSASignatureFormat.IeeeP1363FixedFieldConcatenation));
+        Assert.Equal(65, WebPush.FromBase64Url(WebPush.PublicKey(vapid)).Length);
+    }
+
+    [Theory]
+    [InlineData("https://web.push.apple.com/QGuQ", true)]
+    [InlineData("https://fcm.googleapis.com/fcm/send/abc", true)]
+    [InlineData("https://wns2-db5p.notify.windows.com/w/?token=x", true)]
+    [InlineData("http://fcm.googleapis.com/fcm/send/abc", false)]
+    [InlineData("https://192.168.1.10/steal", false)]
+    [InlineData("https://evil.com/.push.apple.com", false)]
+    [InlineData("not a url", false)]
+    public void Alerts_go_only_to_known_push_services(string endpoint, bool allowed) =>
+        Assert.Equal(allowed, PhoneAppApi.IsPushService(endpoint));
+
+    // ---- Certificates ----
+
+    [Fact]
+    public void The_server_certificate_names_this_PCs_address_and_chains_to_Termillys_authority()
+    {
+        using var authority = PhoneCertificates.CreateAuthority("TESTPC");
+        using var server = PhoneCertificates.IssueServer(authority, [IPAddress.Parse("192.168.1.20")], "testpc.local");
+
+        Assert.True(server.HasPrivateKey);
+        Assert.True(server.MatchesHostname("192.168.1.20"));
+        Assert.True(server.MatchesHostname("testpc.local"));
+        Assert.False(server.MatchesHostname("192.168.1.21"));
+        Assert.True((server.NotAfter - server.NotBefore).TotalDays <= 825);
+        using var chain = new X509Chain();
+        chain.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;
+        chain.ChainPolicy.CustomTrustStore.Add(authority);
+        chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
+        Assert.True(chain.Build(server));
+    }
+
+    [Fact]
+    public void The_authority_is_kept_sealed_and_the_same_after_a_restart()
+    {
+        using var first = _store.Authority("TESTPC");
+        var again = new PhoneStore(_vault);
+        using var second = again.Authority("TESTPC");
+
+        Assert.Equal(first.Thumbprint, second.Thumbprint);
+        Assert.True(second.HasPrivateKey);
+        Assert.DoesNotContain("Authority", File.ReadAllText(_vault.PathOf("phone.json")));
+    }
+
+    // ---- Pairing ----
+
+    [Fact]
+    public void A_code_pairs_one_phone_once_and_its_token_survives_a_restart()
+    {
+        Assert.Null(_store.Pair("WRONG123", "iPhone"));
+        var code = _store.OfferCode();
+
+        var token = _store.Pair(code.ToLowerInvariant(), "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4)");
+
+        Assert.NotNull(token);
+        Assert.Null(_store.Pair(code, "Android"));
+        var restarted = new PhoneStore(_vault);
+        Assert.NotNull(restarted.DeviceFor(token));
+        Assert.Equal("iPhone", Assert.Single(restarted.List()).Name);
+        Assert.Null(restarted.DeviceFor("not-a-token"));
+        Assert.DoesNotContain(token!, File.ReadAllText(_vault.PathOf("phone.json")));
+    }
+
+    [Fact]
+    public void Too_many_wrong_codes_withdraw_the_pairing()
+    {
+        var code = _store.OfferCode();
+        for (var i = 0; i < 10; i++)
+        {
+            Assert.Null(_store.Pair("AAAAAAAA", null));
+        }
+        Assert.Null(_store.Pair(code, null));
+    }
+
+    [Theory]
+    [InlineData("192.168.1.5", true)]
+    [InlineData("10.0.0.2", true)]
+    [InlineData("172.20.1.1", true)]
+    [InlineData("100.101.102.103", true)]
+    [InlineData("172.32.0.1", false)]
+    [InlineData("8.8.8.8", false)]
+    [InlineData("100.128.0.1", false)]
+    public void Only_private_addresses_count_as_the_local_network(string address, bool isPrivate) =>
+        Assert.Equal(isPrivate, PhoneServer.IsPrivate(IPAddress.Parse(address)));
+
+    // ---- The server ----
+
+    [Fact]
+    public async Task Plain_http_hands_out_only_the_setup_page_and_the_certificate()
+    {
+        using var authority = _store.Authority("TESTPC");
+        using var server = Start(authority);
+        using var http = new HttpClient();
+
+        Assert.Contains("setup", await http.GetStringAsync(server.SetupUrl));
+        var certificate = await http.GetByteArrayAsync(server.SetupUrl + "termilly.cer");
+        Assert.Equal(authority.Thumbprint, X509CertificateLoader.LoadCertificate(certificate).Thumbprint);
+        Assert.Equal(HttpStatusCode.NotFound, (await http.GetAsync(server.SetupUrl + "index.html")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await http.GetAsync(server.SetupUrl + "api/me")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Over_https_only_a_paired_phone_gets_in()
+    {
+        using var authority = _store.Authority("TESTPC");
+        using var server = Start(authority);
+        using var http = Https(authority);
+        var me = server.AppUrl + "api/me";
+
+        Assert.Contains("app", await http.GetStringAsync(server.AppUrl));
+        Assert.False(JsonNode.Parse(await http.GetStringAsync(me))!["paired"]!.GetValue<bool>());
+        Assert.Equal(HttpStatusCode.Forbidden, (await Post(http, server.AppUrl + "api/push", """{"endpoint":"https://fcm.googleapis.com/x","keys":{"p256dh":"a","auth":"b"}}""")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Post(http, server.AppUrl + "api/pair", """{"code":"WRONG123"}""")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await http.GetAsync(server.AppUrl + "..%2F..%2Fphone.json")).StatusCode);
+
+        var paired = await Post(http, server.AppUrl + "api/pair", $$"""{"code":"{{_store.OfferCode()}}"}""");
+        Assert.Equal(HttpStatusCode.OK, paired.StatusCode);
+        Assert.Contains("HttpOnly", string.Join(";", paired.Headers.GetValues("Set-Cookie")));
+        Assert.True(JsonNode.Parse(await http.GetStringAsync(me))!["paired"]!.GetValue<bool>());
+        Assert.Equal(HttpStatusCode.BadRequest, (await Post(http, server.AppUrl + "api/push", """{"endpoint":"https://example.com/x","keys":{"p256dh":"a","auth":"b"}}""")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Post(http, server.AppUrl + "api/push", """{"endpoint":"https://fcm.googleapis.com/x","keys":{"p256dh":"a","auth":"b"}}""")).StatusCode);
+        Assert.True(Assert.Single(_store.List()).Alerts);
+    }
+
+    private PhoneServer Start(X509Certificate2 authority) =>
+        PhoneServer.Start(0, _web, _store, authority, "key", device =>
+        {
+            _alerts.Add(device);
+            return Task.CompletedTask;
+        });
+
+    /// <summary>A client that trusts Termilly's authority alone, as a phone does once it's installed, and keeps cookies.</summary>
+    private static HttpClient Https(X509Certificate2 authority) => new(new HttpClientHandler
+    {
+        UseCookies = true,
+        CookieContainer = new CookieContainer(),
+        ServerCertificateCustomValidationCallback = (_, certificate, _, _) =>
+        {
+            using var chain = new X509Chain();
+            chain.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;
+            chain.ChainPolicy.CustomTrustStore.Add(authority);
+            chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
+            return certificate is not null && chain.Build(certificate) && certificate.MatchesHostname("127.0.0.1");
+        },
+    });
+
+    private static Task<HttpResponseMessage> Post(HttpClient http, string url, string json) =>
+        http.PostAsync(url, new StringContent(json, Encoding.UTF8, "application/json"));
+
+    private static ECDiffieHellman Key(string privateKey, string publicKey)
+    {
+        var point = WebPush.FromBase64Url(publicKey);
+        return ECDiffieHellman.Create(new ECParameters
+        {
+            Curve = ECCurve.NamedCurves.nistP256,
+            D = WebPush.FromBase64Url(privateKey),
+            Q = new ECPoint { X = point[1..33], Y = point[33..65] },
+        });
+    }
+
+    private static byte[] Point(ECParameters key) => [0x04, .. key.Q.X!, .. key.Q.Y!];
+
+    /// <summary>What a browser does with an alert (RFC 8291), written out again here so the test doesn't trust the code it checks.</summary>
+    private static string Decrypt(byte[] body, ECDiffieHellman phone, byte[] phonePublic, byte[] auth)
+    {
+        var salt = body[..16];
+        var idLength = body[20];
+        var senderPublic = body[21..(21 + idLength)];
+        var sealedRecord = body[(21 + idLength)..];
+        using var sender = ECDiffieHellman.Create(new ECParameters { Curve = ECCurve.NamedCurves.nistP256, Q = new ECPoint { X = senderPublic[1..33], Y = senderPublic[33..65] } });
+        var shared = phone.DeriveRawSecretAgreement(sender.PublicKey);
+        var ikm = HKDF.DeriveKey(HashAlgorithmName.SHA256, shared, 32, auth, [.. "WebPush: info\0"u8, .. phonePublic, .. senderPublic]);
+        var key = HKDF.DeriveKey(HashAlgorithmName.SHA256, ikm, 16, salt, "Content-Encoding: aes128gcm\0"u8.ToArray());
+        var nonce = HKDF.DeriveKey(HashAlgorithmName.SHA256, ikm, 12, salt, "Content-Encoding: nonce\0"u8.ToArray());
+        var record = new byte[sealedRecord.Length - 16];
+        using var gcm = new AesGcm(key, 16);
+        gcm.Decrypt(nonce, sealedRecord[..^16], sealedRecord[^16..], record);
+        return Encoding.UTF8.GetString(record[..Array.LastIndexOf(record, (byte)2)]);
+    }
+}

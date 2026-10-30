@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Set up Termilly</title>
+  <link rel="stylesheet" href="phone.css">
+</head>
+<body>
+  <main>
+    <h1>Termilly on your phone</h1>
+    <p class="muted">Three steps, once per phone. Everything stays on your own network.</p>
+
+    <section class="card">
+      <h2>1. Install Termilly's certificate</h2>
+      <p><a class="button" href="/termilly.cer">Download the certificate</a></p>
+      <div data-os="ios">
+        <p><b>iPhone:</b> tap <b>Allow</b>, then open <b>Settings › General › VPN &amp; Device Management</b>, tap the Termilly profile and <b>Install</b>.</p>
+        <p>Then <b>Settings › General › About › Certificate Trust Settings</b> and turn Termilly on.</p>
+      </div>
+      <div data-os="android">
+        <p><b>Android:</b> open <b>Settings</b>, search for <b>CA certificate</b> (under Encryption &amp; credentials › Install a certificate) and pick <b>Termilly.cer</b> from Downloads.</p>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>2. Open the app</h2>
+      <p><a class="button" id="open" href="/">Open Termilly</a></p>
+      <p class="muted">If the phone says the connection isn't private, step 1 isn't finished.</p>
+    </section>
+
+    <section class="card">
+      <h2>3. Add it to the Home Screen</h2>
+      <div data-os="ios"><p><b>iPhone:</b> in Safari, <b>Share › Add to Home Screen</b>. Open Termilly from there and pair it.</p></div>
+      <div data-os="android"><p><b>Android:</b> in Chrome, <b>⋮ › Add to Home screen</b>. Open Termilly from there and pair it.</p></div>
+    </section>
+  </main>
+  <script src="setup.js"></script>
+</body>
+</html>

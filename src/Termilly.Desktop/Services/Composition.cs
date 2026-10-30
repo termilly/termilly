@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Termilly.Desktop.Features;
 using Termilly.Desktop.Messaging;
+using Termilly.Desktop.Phone;
 using Termilly.Desktop.Security;
 
 namespace Termilly.Desktop.Services;
@@ -46,6 +47,7 @@ internal static class Composition
         .AddSingleton<TmuxClients>()
         .AddSingleton<PageBoot>()
         .AddSingleton<LastSnapshot>()
+        .AddSingleton<PhoneStore>()
         .AddStartable<ProfileCatalog>()
         .AddStartable<ActivityWatcher>()
         .AddStartable<AgentMonitor>()
@@ -74,6 +76,7 @@ internal static class Composition
         .AddHandler<LogHandler>()
         .AddHandler<SyncHandler>()
         .AddHandler<UpdateHandler>()
+        .AddHandler<PhoneHandler>()
         .AddSingleton<PageHost>();
 
     /// <summary>A service that's started once the window is up, as itself and as one of the <see cref="IStartable"/>s.</summary>

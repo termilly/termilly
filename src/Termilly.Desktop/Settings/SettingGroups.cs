@@ -195,6 +195,23 @@ internal sealed record CommandSettings
 }
 
 /// <summary>When a terminal's agent tells the user, and the system-wide "next terminal that needs me" shortcut.</summary>
+/// <summary>
+/// Termilly on a phone (Phone/PhoneServer.cs, docs/phone.md): off by default; while on, a server on this PC's local
+/// network address serves the phone app to paired phones over HTTPS.
+/// </summary>
+internal sealed record PhoneSettings
+{
+    public const int DefaultPort = 8765;
+    /// <summary>The ports a user may pick: the unprivileged ones.</summary>
+    public const int MinPort = 1024;
+    public const int MaxPort = 65535;
+
+    public bool Enabled { get; init; }
+    public int Port { get; init; } = DefaultPort;
+
+    public PhoneSettings Normalize() => this with { Port = Port is >= MinPort and <= MaxPort ? Port : DefaultPort };
+}
+
 internal sealed record NotificationSettings
 {
     public bool NeedsInput { get; init; } = true;

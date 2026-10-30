@@ -31,6 +31,8 @@ interface AppSettings {
   changes: ChangeSettings;
   /** Termilly on servers. */
   remote: RemoteSettings;
+  /** Termilly on a phone, served on the local network. */
+  phone: PhoneSettings;
   /** What the page remembers. */
   uiState: UiState;
   /** Data the page keeps here. */
@@ -102,6 +104,11 @@ interface CommandSettings {
 }
 
 /** When a terminal's agent tells the user, and the system-wide "next terminal that needs me" shortcut. */
+interface PhoneSettings {
+  enabled: boolean;
+  port: number;
+}
+
 interface NotificationSettings {
   needsInput: boolean;
   error: boolean;
