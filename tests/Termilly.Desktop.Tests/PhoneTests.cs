@@ -285,6 +285,17 @@ public sealed class PhoneTests : IDisposable
         var answered = JsonNode.Parse(await ReceiveText(phone))!;
         Assert.Equal(("answered", "approve"), (answered["type"]!.GetValue<string>(), answered["choice"]!.GetValue<string>()));
 
+        // Watching a terminal: what it printed lately first, then what it prints, in one batch.
+        _live.Recent = pane => pane == "t2" ? "earlier output" : "";
+        await phone.SendAsync(Encoding.UTF8.GetBytes("""{"op":"watch","pane":"t2"}"""), WebSocketMessageType.Text, true, CancellationToken.None);
+        var screen = JsonNode.Parse(await ReceiveText(phone))!;
+        Assert.Equal(("screen", "earlier output"), (screen["type"]!.GetValue<string>(), screen["data"]!.GetValue<string>()));
+        _live.Output("t1", "not watched");
+        _live.Output("t2", "new ");
+        _live.Output("t2", "line");
+        var output = JsonNode.Parse(await ReceiveText(phone))!;
+        Assert.Equal(("output", "new line"), (output["type"]!.GetValue<string>(), output["data"]!.GetValue<string>()));
+
         using var stranger = Socket(authority, "termilly=not-a-token");
         await Assert.ThrowsAnyAsync<WebSocketException>(() => stranger.ConnectAsync(new Uri(server.AppUrl.Replace("https", "wss") + "api/live"), CancellationToken.None));
     }
