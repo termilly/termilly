@@ -323,6 +323,23 @@ public sealed class PhoneTests : IDisposable
     }
 
     [Fact]
+    public async Task A_phone_unpairs_itself_and_is_a_stranger_after()
+    {
+        using var authority = _store.Authority("TESTPC");
+        using var server = Start(authority);
+        using var http = Https(authority);
+        await Post(http, server.AppUrl + "api/pair", $$"""{"code":"{{_store.OfferCode()}}","name":"Test phone"}""");
+        Assert.Contains("\"paired\":true", await http.GetStringAsync(server.AppUrl + "api/me"));
+
+        var forgot = await Post(http, server.AppUrl + "api/forget", "{}");
+
+        Assert.Equal(HttpStatusCode.OK, forgot.StatusCode);
+        Assert.Empty(_store.List());
+        Assert.Contains("\"paired\":false", await http.GetStringAsync(server.AppUrl + "api/me"));
+        Assert.Equal(HttpStatusCode.Forbidden, (await Post(http, server.AppUrl + "api/forget", "{}")).StatusCode);
+    }
+
+    [Fact]
     public async Task A_terminal_takes_the_size_of_the_phone_watching_it_and_its_own_back_when_the_phone_goes()
     {
         using var authority = _store.Authority("TESTPC");

@@ -32,6 +32,8 @@ internal sealed class PhoneAppApi(PhoneStore store, string pushKey, Func<string,
     {
         public const string Me = "/api/me";
         public const string Pair = "/api/pair";
+        /// <summary>The phone unpairs itself (the app's Settings).</summary>
+        public const string Forget = "/api/forget";
         public const string Push = "/api/push";
         public const string PushOff = "/api/push/off";
         public const string PushTest = "/api/push/test";
@@ -100,6 +102,9 @@ internal sealed class PhoneAppApi(PhoneStore store, string pushKey, Func<string,
             case Api.PushOff:
                 store.SetPush(device, null);
                 return Json(new JsonObject { [Fields.Alerts] = false });
+            case Api.Forget:
+                store.Remove(device);
+                return Json(new JsonObject { [Fields.Paired] = false }, $"Set-Cookie: {TokenCookie}=; Max-Age=0; Path=/; Secure; HttpOnly; SameSite=Strict\r\n");
             case Api.PushTest:
                 _ = Task.Delay(TestDelay).ContinueWith(_ => testAlert(device), TaskScheduler.Default);
                 return Json(new JsonObject { [Fields.InSeconds] = (int)TestDelay.TotalSeconds });

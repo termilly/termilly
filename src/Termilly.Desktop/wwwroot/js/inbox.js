@@ -101,6 +101,9 @@ function isLive(n) {
   return !!tab && rank(tab) !== null && keyOf(tab) === n.key;
 }
 
+/** The notification center for the phones (js/phone.js): each note's terminal, what it said, when, and whether it's still news. */
+export const notesForPhone = () => notes.map(n => ({ id: n.tabId, state: n.state, detail: n.detail, at: n.at, live: isLive(n) }));
+
 /** @param {Note} n */
 const matches = n => filter === FILTER.all || (filter === FILTER.unread ? isLive(n) : n.state === AGENT_STATE.error);
 

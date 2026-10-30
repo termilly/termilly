@@ -2,9 +2,11 @@
 // Termilly on a phone (Phone/PhoneServer.cs, docs/phone.md), design A with D's answer sheet: pairing with the code
 // Settings shows; then the home screen, live over a WebSocket (PhoneLive): what's waiting for you first, as cards with
 // their answers, then each workspace's terminals; a sheet to answer an agent (Approve, Approve and don't ask again,
-// Reject, or a reply); a terminal live (terminal.js); and this phone's alerts (Web Push).
+// Reject, or a reply); a terminal live (terminal.js); and this phone's alerts (Web Push). A bar at the bottom goes
+// between the terminals, the PC's notifications and this phone's settings (tabs.js).
 
-import { terminalView } from './terminal.js';
+import { terminalView, TEXT_SIZE } from './terminal.js';
+import { TAB, SETTING, TEXT_SIZES, navHtml, notesHtml, settingsHtml } from './tabs.js';
 
 const app = /** @type {HTMLElement} */ (document.getElementById('app'));
 
@@ -14,10 +16,10 @@ const app = /** @type {HTMLElement} */ (document.getElementById('app'));
 /** @typedef {{ kind: string, tool: string | null, target: string | null, text: string, at: number, always?: boolean }} Waiting */
 /** A terminal as the PC describes it (js/phone.js). */
 /** @typedef {{ id: string, ws: string, title: string, icon: string, badge: string, agent: string | null, activity: string | null, line: string | null, waiting: Waiting | null, production: boolean, cols: number | null, rows: number | null }} Terminal */
-/** @typedef {{ typing?: boolean, workspaces: { id: string, name: string, color: string }[], terminals: Terminal[] }} Snapshot */
+/** @typedef {{ typing?: boolean, snippets?: import('./snippets.js').PhoneSnippet[], notes?: import('./tabs.js').Note[], workspaces: { id: string, name: string, color: string }[], terminals: Terminal[] }} Snapshot */
 
 /** The PC's API for the app (PhoneServer, PhoneAppApi). */
-const API = Object.freeze({ me: '/api/me', pair: '/api/pair', push: '/api/push', pushOff: '/api/push/off', pushTest: '/api/push/test', live: '/api/live' });
+const API = Object.freeze({ me: '/api/me', pair: '/api/pair', forget: '/api/forget', push: '/api/push', pushOff: '/api/push/off', pushTest: '/api/push/test', live: '/api/live' });
 /** The PC's answer to a phone that isn't paired. */
 const FORBIDDEN = 403;
 /** What the app's buttons do (data-do). */
@@ -64,6 +66,10 @@ let retry = RETRY_MS;
 /** @type {string | null} */
 let sheetFor = null;
 let replying = false;
+/** The tab shown (the bottom bar). */
+let tab = TAB.terminals;
+/** The tabs' titles, at the top. */
+const TITLE = Object.freeze({ [TAB.terminals]: 'Termilly', [TAB.notes]: 'Notifications', [TAB.settings]: 'Settings' });
 
 /**
  * @param {string} path
@@ -123,7 +129,7 @@ async function start() {
       <button class="button" type="submit">Pair</button></div></form>
       <p>A name this PC knows already means that phone again: its old pairing goes.</p><p class="error" data-error></p></div></div>`);
   }
-  show('<header class="bar"><h1>Termilly</h1><span class="conn" data-conn></span></header><main id="home"></main><div id="sheet"></div><div class="toast" data-toast hidden></div>');
+  show('<header class="bar"><h1 data-title>Termilly</h1><span class="conn" data-conn></span></header><main id="home" class="tabbed"></main><div id="nav"></div><div id="sheet"></div><div class="toast" data-toast hidden></div>');
   connect();
   render();
   // The phone allows alerts already but the PC has none for this pairing (it's new): on again, without asking.
@@ -156,12 +162,48 @@ const GRANTED = 'granted';
 /** Whether this phone can take alerts at all (iOS: 16.4 or later, opened from the Home Screen). */
 const canAlert = () => hasWorker && 'PushManager' in window && 'Notification' in window;
 
-function alertsHtml() {
-  return `<div class="section">This phone</div><div class="list pad">
-    ${!canAlert() ? `<p class="muted">${ios ? 'Alerts need iOS 16.4 or later, and Termilly opened from the Home Screen.' : 'This browser can\'t take alerts.'}</p>`
+/** This phone's alerts: on (test, off), off (turn on), or why it can't have them. */
+function alertsBody() {
+  return `${!canAlert() ? `<p class="muted">${ios ? 'Alerts need iOS 16.4 or later, and Termilly opened from the Home Screen.' : 'This browser can\'t take alerts.'}</p>`
     : me?.alerts ? `<p>Alerts are on.</p><div class="w-actions"><button class="btn" data-do="${DO.test}">Send a test alert</button><button class="btn" data-do="${DO.off}">Turn off</button></div>`
       : `<p>Get an alert here when an agent needs you, even when the phone is locked.</p><div class="w-actions"><button class="btn primary" data-do="${DO.on}">Turn on alerts</button></div>`}
-    <p class="muted" data-note></p></div>`;
+    <p class="muted" data-note></p>`;
+}
+
+const alertsHtml = () => `<div class="section">This phone</div><div class="list pad">${alertsBody()}</div>`;
+
+/** The size the terminal's text is (pinched to, or set here). */
+const textSize = () => Number(localStorage.getItem(TEXT_SIZE.key)) || TEXT_SIZE.readable;
+
+/**
+ * One step bigger or smaller.
+ * @param {number} step 1 or -1
+ */
+function stepText(step) {
+  const now = textSize();
+  const next = step > 0 ? TEXT_SIZES.find(s => s > now) : [...TEXT_SIZES].reverse().find(s => s < now);
+  if (next) localStorage.setItem(TEXT_SIZE.key, String(next));
+  render();
+}
+
+/** What the Notifications tab needs of a terminal. */
+const noteParts = {
+  badge: (/** @type {string} */ id) => { const t = terminal(id); return t ? badge(t) : ''; },
+  title: (/** @type {string} */ id) => terminal(id)?.title ?? 'Closed terminal',
+  ws: (/** @type {string} */ id) => wsOf(terminal(id)?.ws ?? '')?.name ?? '',
+  age, waiting: (/** @type {string} */ id) => !!terminal(id)?.waiting, open: DO.open, term: DO.term,
+};
+
+/** The Terminals tab: what waits for you, then each workspace's terminals. */
+function terminalsHtml() {
+  const waiting = snap.terminals.filter(t => t.waiting).sort((a, b) => (b.waiting?.at ?? 0) - (a.waiting?.at ?? 0));
+  const groups = snap.workspaces.map(w => ({ w, list: snap.terminals.filter(t => t.ws === w.id) })).filter(g => g.list.length);
+  // Alerts not on yet (a new pairing starts without): asked first.
+  return (canAlert() && !me?.alerts ? alertsHtml() : '')
+    + (waiting.length ? `<div class="section">Waiting for you · ${waiting.length}</div>${waiting.map(cardHtml).join('')}` : '')
+    + (!snap.terminals.length ? `<p class="muted center">${connected ? 'No terminals open on your PC.' : 'Connecting to your PC.'}</p>` : '')
+    + groups.map(({ w, list }) => `<div class="ws"><span class="dot" style="background:${esc(w.color || DEFAULT_COLOR)}"></span>${esc(w.name)}<span class="count">${list.length}</span></div>
+      <div class="list">${list.map(rowHtml).join('')}</div>`).join('');
 }
 
 function render() {
@@ -169,16 +211,12 @@ function render() {
   if (!home) return;
   const conn = app.querySelector('[data-conn]');
   if (conn) conn.textContent = connected ? '' : 'Reconnecting';
-  const waiting = snap.terminals.filter(t => t.waiting).sort((a, b) => (b.waiting?.at ?? 0) - (a.waiting?.at ?? 0));
-  const groups = snap.workspaces.map(w => ({ w, list: snap.terminals.filter(t => t.ws === w.id) })).filter(g => g.list.length);
-  // Alerts not on yet (a new pairing starts without): asked first, not below every terminal.
-  const alertsFirst = canAlert() && !me?.alerts;
-  home.innerHTML = (alertsFirst ? alertsHtml() : '')
-    + (waiting.length ? `<div class="section">Waiting for you · ${waiting.length}</div>${waiting.map(cardHtml).join('')}` : '')
-    + (!snap.terminals.length ? `<p class="muted center">${connected ? 'No terminals open on your PC.' : 'Connecting to your PC.'}</p>` : '')
-    + groups.map(({ w, list }) => `<div class="ws"><span class="dot" style="background:${esc(w.color || DEFAULT_COLOR)}"></span>${esc(w.name)}<span class="count">${list.length}</span></div>
-      <div class="list">${list.map(rowHtml).join('')}</div>`).join('')
-    + (alertsFirst ? '' : alertsHtml());
+  const title = app.querySelector('[data-title]');
+  if (title) title.textContent = /** @type {Record<string, string>} */ (TITLE)[tab];
+  home.innerHTML = tab === TAB.notes ? notesHtml(snap.notes ?? [], noteParts)
+    : tab === TAB.settings ? settingsHtml({ alerts: alertsBody(), size: textSize(), host: location.host, connected })
+    : terminalsHtml();
+  /** @type {HTMLElement} */ (document.getElementById('nav')).innerHTML = navHtml(tab, snap.notes?.length ?? 0);
   renderSheet();
 }
 
@@ -314,7 +352,22 @@ async function test() {
 
 // ---- Wiring ----
 
+/** Unpairs this phone, when the user says so: the PC forgets it, and the app asks for a code again. */
+async function unpair() {
+  if (!window.confirm('Unpair this phone? You\'ll need a new code from the PC to use it again.')) return;
+  await turnOff().catch(() => {});
+  await call(API.forget, {});
+  location.reload();
+}
+
 app.addEventListener('click', e => {
+  const to = /** @type {HTMLElement} */ (e.target).closest('[data-tab]')?.getAttribute('data-tab');
+  if (to) {
+    tab = to;
+    render();
+    window.scrollTo(0, 0);
+    return;
+  }
   const target = /** @type {HTMLElement} */ (e.target).closest('[data-do]');
   if (!target) return;
   const id = target.getAttribute('data-id') ?? '';
@@ -332,6 +385,9 @@ app.addEventListener('click', e => {
     case DO.close: openSheet(null); break;
     case DO.reply: openSheet(id, true); break;
     case DO.answer: answer(id, /** @type {string} */ (target.getAttribute('data-choice'))); break;
+    case SETTING.smaller: stepText(-1); break;
+    case SETTING.bigger: stepText(1); break;
+    case SETTING.unpair: unpair(); break;
     case DO.send: {
       const text = /** @type {HTMLTextAreaElement | null} */ (app.querySelector('[data-reply]'))?.value.trim() ?? '';
       if (text) answer(id, CHOICE.reply, text);
@@ -360,6 +416,7 @@ setInterval(() => { if (!replying) render(); }, AGE_EVERY_MS);
 
 /** The terminal view (terminal.js): it talks over the live connection, and its Answer opens the sheet. */
 const terminalShown = terminalView({
+  snippets: () => snap.snippets ?? [],
   send: message => { if (live?.readyState === OPEN) live.send(JSON.stringify(message)); },
   toast,
   answer: id => openSheet(id),

@@ -116,3 +116,36 @@ body.tv-open { overflow: hidden; }
 .tv.keyboard .keybar { padding-bottom: 4px; }
 .tv.keyboard .tv-note { padding-bottom: 10px; }
 .tv-note { flex: none; margin: 0; padding: 10px 14px calc(10px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+/* The terminal view's snippets (snippets.js): a sheet over the terminal, above the key bar. */
+.tv-sheet { position: absolute; inset: auto 0 0; z-index: 2; max-height: 70%; overflow-y: auto; padding: 12px 14px calc(12px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); border-radius: 14px 14px 0 0; background: var(--sheet); box-shadow: 0 -8px 24px rgba(0, 0, 0, .35); }
+.tv.keyboard .tv-sheet { padding-bottom: 12px; }
+.tv-sheet-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.tv-sheet-close { padding: 4px 8px; border: 0; background: none; color: var(--muted); font-size: 18px; }
+.tv-sheet-list { display: flex; flex-direction: column; gap: 6px; }
+.snip { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border: 0; border-radius: 10px; background: var(--bg); color: var(--text); text-align: left; }
+.snip span { overflow: hidden; color: var(--muted); font: 12px ui-monospace, Menlo, Consolas, monospace; text-overflow: ellipsis; white-space: nowrap; }
+.snip-form { flex-direction: column; margin: 0; }
+.snip-form label { display: flex; flex-direction: column; gap: 4px; color: var(--muted); font-size: 13px; }
+.snip-form input { padding: 9px 11px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--text); font: 16px ui-monospace, Menlo, Consolas, monospace; }
+.snip-preview { margin: 4px 0; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+/* The bottom bar (tabs.js): Terminals, Notifications, Settings. The page leaves room for it. */
+main.tabbed { padding-bottom: calc(80px + env(safe-area-inset-bottom)); }
+.tabbar { position: fixed; inset: auto 0 0; z-index: 4; display: flex; padding: 6px 8px calc(4px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: color-mix(in srgb, var(--raised) 92%, transparent); backdrop-filter: blur(12px); }
+.tabbar button { position: relative; display: flex; flex: 1; flex-direction: column; gap: 2px; align-items: center; padding: 4px 0; border: 0; background: none; color: var(--muted); font-size: 11px; font-weight: 600; }
+.tabbar button.on { color: var(--accent); }
+.tabbar svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+.tab-count { position: absolute; top: 0; left: calc(50% + 6px); min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--accent); color: #fff; font-size: 10px; font-weight: 700; line-height: 16px; text-align: center; }
+.tabbed ~ .toast { bottom: calc(80px + env(safe-area-inset-bottom)); }
+/* The Notifications tab: what each agent said, its state as a label. */
+.note { align-items: flex-start; }
+.note .r-line { display: -webkit-box; overflow: hidden; white-space: normal; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.note.seen { opacity: .6; }
+.r-meta { margin-top: 2px; color: var(--muted); font-size: 12px; }
+.note-state { margin-left: 8px; padding: 1px 7px; border-radius: 6px; background: var(--line); font-size: 11px; font-weight: 600; vertical-align: 2px; }
+.n-needs-input, .n-attention { background: color-mix(in srgb, var(--attention) 22%, transparent); color: var(--attention); }
+.n-error { background: color-mix(in srgb, var(--danger) 20%, transparent); color: var(--danger); }
+.n-done { background: color-mix(in srgb, var(--ok) 20%, transparent); color: var(--ok); }
+/* Settings: the terminal's text size, a step at a time. */
+.stepper { display: flex; gap: 12px; align-items: center; }
+.stepper .btn { flex: none; width: 56px; }
+.stepper span { flex: 1; font-weight: 600; text-align: center; }

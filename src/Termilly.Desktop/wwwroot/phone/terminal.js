@@ -4,23 +4,26 @@
 // font and the keyboard coming up shortens it, and the size follows. First what it shows (the window's own terminal,
 // drawn again at that size), then what it prints.
 // With Settings › Phone › Allow typing on, the phone's keyboard types into it, and a key bar adds what a phone lacks:
-// Esc, Tab, Ctrl, the arrows and Paste.
+// Esc, Tab, Ctrl, the arrows, Paste and the PC's snippets.
 
 import { SCREEN, terminalTouch } from './gestures.js';
+import { snippetSheet } from './snippets.js';
 
 /** What the key bar sends (data-key), as a terminal reads it. */
 const KEYS = Object.freeze({
   esc: '\x1b', tab: '\t', up: '\x1b[A', down: '\x1b[B', right: '\x1b[C', left: '\x1b[D', enter: '\r',
 });
 /** The key bar's buttons, in order: what each sends and shows. Ctrl and Paste are handled apart. */
-const BAR = [['esc', 'esc'], ['tab', 'tab'], ['ctrl', 'ctrl'], ['up', '↑'], ['down', '↓'], ['left', '←'], ['right', '→'], ['enter', '⏎'], ['paste', 'paste']];
+const BAR = [['esc', 'esc'], ['tab', 'tab'], ['ctrl', 'ctrl'], ['up', '↑'], ['down', '↓'], ['left', '←'], ['right', '→'], ['enter', '⏎'], ['paste', 'paste'], ['snip', 'snip']];
 const CTRL = 'ctrl';
 const PASTE = 'paste';
+const SNIP = 'snip';
 /** Ctrl with a letter: its code is the letter's minus 64 (Ctrl+C is 3). */
 const CTRL_OFFSET = 64;
-/** The font size before anything is pinched, and where the phone keeps the size pinched to. */
-const READABLE = 13;
-const SIZE_KEY = 'termilly.terminal.size';
+/** The font size before anything is pinched, and where the phone keeps the size pinched to (or set in Settings). */
+export const TEXT_SIZE = Object.freeze({ readable: 13, key: 'termilly.terminal.size' });
+const READABLE = TEXT_SIZE.readable;
+const SIZE_KEY = TEXT_SIZE.key;
 /** The terminal's box, and its padding (both sides together, px). */
 const BOX = '.tv-box';
 const BOX_PADDING = Object.freeze({ width: 16, height: 12 });
@@ -70,7 +73,8 @@ const esc = text => String(text ?? '').replace(/[&<>"']/g, c => `&#${c.charCodeA
 
 /**
  * The terminal view, over the home screen while it's open.
- * @param {{ send: (message: object) => void, toast: (text: string) => void, answer: (id: string) => void, wsName: (id: string) => string }} app
+ * @param {{ send: (message: object) => void, toast: (text: string) => void, answer: (id: string) => void, wsName: (id: string) => string,
+ *   snippets: () => import('./snippets.js').PhoneSnippet[] }} app
  */
 export function terminalView(app) {
   const view = document.createElement('div');
@@ -124,6 +128,9 @@ export function terminalView(app) {
     app.send({ op: OP.input, pane: shown.id, data });
   }
 
+  // The terminal's workspace's snippets and the global ones.
+  const snippets = snippetSheet(view, { list: () => app.snippets().filter(s => !s.ws || s.ws === shown?.ws), type });
+
   /** @param {boolean} on */
   function setCtrl(on) {
     ctrl = on;
@@ -158,9 +165,12 @@ export function terminalView(app) {
     shown = t;
     typing = canType;
     confirmed = false;
+    fontSize = Number(localStorage.getItem(SIZE_KEY)) || READABLE; // Settings may have changed it
     view.hidden = false;
     document.body.classList.add(OPEN);
     view.innerHTML = '<div class="tv-box"></div>';
+    view.append(snippets.element);
+    snippets.close();
     frame();
     term = new Terminal({ cols: t.cols ?? DEFAULT_SIZE.cols, rows: t.rows ?? DEFAULT_SIZE.rows, fontSize, scrollback: SCROLLBACK,
       fontFamily: 'ui-monospace, Menlo, Consolas, monospace', theme: DARK, disableStdin: !canType, convertEol: false, cursorBlink: false });
@@ -267,6 +277,7 @@ export function terminalView(app) {
     if (action === TV.back) close();
     else if (action === TV.answer && shown) app.answer(shown.id);
     else if (key === CTRL) setCtrl(!ctrl);
+    else if (key === SNIP) snippets.open();
     else if (key === PASTE) {
       try {
         const text = await navigator.clipboard.readText();
@@ -275,7 +286,7 @@ export function terminalView(app) {
         app.toast('The phone didn\'t allow pasting.');
       }
     } else if (key) type(/** @type {Record<string, string>} */ (KEYS)[key]);
-    if (key) term?.focus();
+    if (key && key !== SNIP) term?.focus();
   });
 
   /** Back after the connection dropped: the terminal shown starts over with what it shows. */

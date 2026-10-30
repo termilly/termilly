@@ -7,12 +7,13 @@
 import { PAGE, HOST } from './protocol.js';
 import { send, onHost } from './host.js';
 import { state, on, wsById, tabTitle, profileOf, activityOf, runsClaude, BADGES, EVENTS } from './store.js';
-import { entryDetail } from './inbox.js';
+import { entryDetail, notesForPhone } from './inbox.js';
 import { AGENT_STATE, CLAUDE_TOOL, PROFILE_ICON } from './constants.js';
 import { debounce } from './util.js';
 import { isProduction } from './environments.js';
 import { screenOf } from './termscreen.js';
 import { agentInput } from './terminals.js';
+import { placeholders } from './snippets.js';
 
 /** How long changes settle before the phones hear of them. */
 const SEND_AFTER_MS = 300;
@@ -90,10 +91,26 @@ function terminalOf(tab) {
   };
 }
 
+/**
+ * A snippet as the phone runs it (its key bar's snip): the workspace it's for (null: every one), and its placeholders.
+ * @param {SnippetSetting} s
+ * @param {string | null} ws
+ */
+const phoneSnippet = (s, ws) => ({ ws, name: s.name, description: s.description ?? '', command: s.command, enter: s.enter !== false, fields: placeholders(s.command) });
+
+/** The snippets, for typing them from a phone: the global ones, then each workspace's. */
+const snippetsForPhone = () => [
+  ...(state.settings.commands.snippets ?? []).map(s => phoneSnippet(s, null)),
+  ...state.workspaces.flatMap(w => (w.snippets ?? []).map(s => phoneSnippet(s, w.id))),
+];
+
 /** What the phones show: this PC's workspaces, in order, their terminals, and whether a phone may type into them. */
 function snapshot() {
+  const typing = !!state.settings.phone?.allowTyping;
   return {
-    typing: !!state.settings.phone?.allowTyping,
+    typing,
+    snippets: typing ? snippetsForPhone() : [],
+    notes: notesForPhone(),
     workspaces: state.workspaces.map(w => ({ id: w.id, name: w.name, color: w.color })),
     terminals: [...state.tabs.values()].filter(t => t.wsId && wsById(t.wsId) && !t.virtual).map(terminalOf),
   };
