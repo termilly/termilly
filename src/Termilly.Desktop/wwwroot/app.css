@@ -1288,6 +1288,9 @@ body[data-sidebar="rail"] .side-rail { opacity: 1; pointer-events: auto; }
   background: var(--term-surface, transparent); /* a theme plugin's background reaches the edges */
 }
 
+/* A phone shows this terminal, at the phone's size (js/phone.js): said in the corner the terminal leaves free. */
+.pane-body.phone-sized::after { content: 'On the phone'; position: absolute; right: 12px; bottom: 8px; padding: 2px 8px; border-radius: 6px; background: var(--accent); color: #fff; font-size: 11px; font-weight: 600; pointer-events: none; }
+
 /* The padding sits on .xterm, not .pane-body: the fit addon measures the parent's full height and
    subtracts only .xterm's own padding, so padding on the parent makes the bottom row overflow. */
 .pane-body .xterm { padding: 8px 4px 8px 14px; }

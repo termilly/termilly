@@ -59,9 +59,7 @@ function terminalOf(tab) {
     line: tab.agent?.line ?? activity?.title ?? null,
     waiting: waitingFor(tab),
     production: isProduction(tab),
-    // The Claude Code session it runs: the phone shows its conversation (PhoneChat.cs) as well as the terminal.
-    session: runsClaude(tab) ? tab.agent?.session ?? null : null,
-    // The phone draws the terminal at the PC's size: Windows repaints it by row and column, so it can't be re-wrapped.
+    // The terminal's size: the phone starts at it, then asks for its own (Features/Phone.cs, phone:size).
     cols: tab.view?.term?.cols ?? null, rows: tab.view?.term?.rows ?? null,
   };
 }
@@ -112,6 +110,18 @@ async function answer({ pane, choice, text }) {
   send(PAGE.input, { id: tab.id, data: key });
   return { answered: choice };
 }
+
+// A phone shows a terminal: it takes the phone's size, so it fills the phone and what it prints fits it; it gets its
+// pane's size back when no phone shows it.
+onHost(HOST.phoneSize, m => {
+  const tab = state.tabs.get(m.id);
+  const view = tab?.view;
+  if (!tab || !view?.term) return;
+  tab.phoneSize = m.cols && m.rows ? { cols: m.cols, rows: m.rows } : null;
+  view.body.classList.toggle('phone-sized', !!tab.phoneSize);
+  if (tab.phoneSize) view.term.resize(tab.phoneSize.cols, tab.phoneSize.rows);
+  else view.fit?.fit();
+});
 
 onHost(HOST.phoneAnswer, async m => {
   try {

@@ -1061,7 +1061,8 @@ let fitFrame = 0;
 export function scheduleFit() {
   cancelAnimationFrame(fitFrame);
   fitFrame = requestAnimationFrame(() => {
-    for (const tab of state.tabs.values()) tab.view?.fit?.fit();
+    // One a phone shows keeps the phone's size (js/phone.js).
+    for (const tab of state.tabs.values()) if (!tab.phoneSize) tab.view?.fit?.fit();
   });
 }
 

@@ -70,4 +70,13 @@ internal static partial class ToPage
     {
         public static string Type => "phone:tested";
     }
+
+    /// <summary>
+    /// A phone shows this terminal: it takes the phone's size until no phone shows it (Cols and Rows null), so it fills
+    /// the phone and its output fits it.
+    /// </summary>
+    internal sealed record PhoneSize(string Id, int? Cols, int? Rows) : IHostMessage
+    {
+        public static string Type => "phone:size";
+    }
 }

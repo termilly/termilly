@@ -13,7 +13,7 @@ const app = /** @type {HTMLElement} */ (document.getElementById('app'));
 /** What a terminal waits for (js/phone.js). */
 /** @typedef {{ kind: string, tool: string | null, target: string | null, text: string, at: number }} Waiting */
 /** A terminal as the PC describes it (js/phone.js). */
-/** @typedef {{ id: string, ws: string, title: string, icon: string, badge: string, agent: string | null, activity: string | null, line: string | null, waiting: Waiting | null, production: boolean, session: string | null }} Terminal */
+/** @typedef {{ id: string, ws: string, title: string, icon: string, badge: string, agent: string | null, activity: string | null, line: string | null, waiting: Waiting | null, production: boolean, cols: number | null, rows: number | null }} Terminal */
 /** @typedef {{ typing?: boolean, workspaces: { id: string, name: string, color: string }[], terminals: Terminal[] }} Snapshot */
 
 /** The PC's API for the app (PhoneServer, PhoneAppApi). */
@@ -27,7 +27,7 @@ const CHOICE = Object.freeze({ approve: 'approve', always: 'always', reject: 're
 /** What a terminal waits for (js/phone.js). */
 const WAITING = Object.freeze({ permission: 'permission', question: 'question', attention: 'attention', error: 'error' });
 /** Messages from the PC on the live connection (PhoneLive.Kinds). */
-const LIVE = Object.freeze({ state: 'state', answered: 'answered', screen: 'screen', output: 'output', chat: 'chat' });
+const LIVE = Object.freeze({ state: 'state', answered: 'answered', screen: 'screen', output: 'output' });
 /** What the app asks of the live connection: an answer to an agent (Features/Phone.cs). */
 const OP = Object.freeze({ answer: 'answer', input: 'input' });
 /** The live connection is open (WebSocket.OPEN). */
@@ -229,7 +229,7 @@ function connect() {
       snap = m.state?.terminals ? m.state : { workspaces: [], terminals: [] };
       render();
       if (terminalShown.viewing) terminalShown.update(terminal(terminalShown.viewing), !!snap.typing);
-    } else if (m.type === LIVE.screen || m.type === LIVE.output || m.type === LIVE.chat) {
+    } else if (m.type === LIVE.screen || m.type === LIVE.output) {
       terminalShown.message(m);
     } else if (m.type === LIVE.answered && m.op === OP.input) {
       if (!m.ok) toast(m.error || 'That didn\'t go through.');

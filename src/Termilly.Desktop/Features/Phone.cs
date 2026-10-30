@@ -53,6 +53,7 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
         settings.Saved += _ => Update();
         live.Received = ReceivedAsync;
         live.Recent = output.Recent;
+        live.Sized = (pane, size) => _page.Post(new ToPage.PhoneSize(pane, size?.Cols, size?.Rows));
         output.Printed += live.Output;
     }
 

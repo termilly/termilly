@@ -1,12 +1,12 @@
 // @ts-check
 // Touch on the phone's terminal: one finger pans the screen and scrolls back through what it printed, and a flick
-// glides; two fingers zoom; a touch that doesn't move is a tap. The page never scrolls or zooms under it, and
+// glides; two fingers pinch the font; a touch that doesn't move is a tap. The page never scrolls or zooms under it, and
 // xterm's own touch handling is kept out (it scrolled nothing on the phone).
 
 /** How far a finger moves before a touch is a drag, not a tap (px). */
 const SLOP = 8;
-/** How far pinching zooms: from the whole width (1) to this many times it, in twentieths. */
-const ZOOM = Object.freeze({ min: 1, max: 6, steps: 20 });
+/** The font sizes pinching goes between, in half points. */
+const PINCH = Object.freeze({ min: 6, max: 28, step: 2 });
 /**
  * A flick keeps going, slowing by friction each frame (of about 16 ms) until it's slower than least (px per ms); not
  * when the finger rested longer than still (ms) before lifting.
@@ -30,7 +30,7 @@ const lineOf = term => {
 
 /**
  * @param {HTMLElement} box The box xterm is drawn in; it's moved by setting its scroll position.
- * @param {{ term: () => any, zoom: () => number, rezoom: (zoom: number) => void, zoomed: () => void, tap: () => void }} on
+ * @param {{ term: () => any, size: () => number, resize: (size: number) => void, sized: () => void, tap: () => void }} on
  */
 export function terminalTouch(box, on) {
   /** @type {{ x: number, y: number, at: number, vx: number, vy: number, moved: boolean } | null} */
@@ -74,7 +74,7 @@ export function terminalTouch(box, on) {
     cancelAnimationFrame(gliding);
     const [t] = e.touches;
     if (e.touches.length === 2) {
-      pinch = { distance: spread(e.touches), size: on.zoom() };
+      pinch = { distance: spread(e.touches), size: on.size() };
       drag = null;
     } else if (e.touches.length === 1 && !pinch) drag = { x: t.clientX, y: t.clientY, at: e.timeStamp, vx: 0, vy: 0, moved: false };
   }, FIRST);
@@ -83,8 +83,8 @@ export function terminalTouch(box, on) {
     e.stopPropagation();
     e.preventDefault();
     if (pinch && e.touches.length === 2) {
-      const zoom = Math.round(pinch.size * (spread(e.touches) / pinch.distance) * ZOOM.steps) / ZOOM.steps;
-      on.rezoom(Math.max(ZOOM.min, Math.min(ZOOM.max, zoom)));
+      const size = Math.round(pinch.size * (spread(e.touches) / pinch.distance) * PINCH.step) / PINCH.step;
+      on.resize(Math.max(PINCH.min, Math.min(PINCH.max, size)));
       return;
     }
     const [t] = e.touches;
@@ -102,7 +102,7 @@ export function terminalTouch(box, on) {
     if (pinch) {
       if (e.touches.length === 0) {
         pinch = null;
-        on.zoomed();
+        on.sized();
       }
       return;
     }
