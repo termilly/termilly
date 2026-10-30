@@ -69,7 +69,7 @@ export function editNote(kind, target) {
     <h3>Note on ${what}</h3>
     <p class="dialog-sub">${kind === NOTE_KIND.host ? 'Shows on every terminal opened to this host: runbook links, who to ask, what not to do.'
       : 'Markdown is fine. The first line shows when you hover its row in the sidebar.'}</p>
-    <textarea class="field note-text" rows="16" spellcheck="true" placeholder="e.g. staging DB is read-only until Friday">${escapeHtml(current.text)}</textarea>
+    <textarea class="field note-text" rows="16" spellcheck="false" autocapitalize="off" autocorrect="off" placeholder="e.g. staging DB is read-only until Friday">${escapeHtml(current.text)}</textarea>
     ${kind === NOTE_KIND.host ? '' : `<label class="note-pin"><input type="checkbox" data-pin ${current.pinned ? 'checked' : ''}> Pin the first line to ${kind === NOTE_KIND.terminal ? 'the terminal’s header' : 'the header of its terminals'}</label>`}
     <div class="dialog-actions">
       ${current.text ? '<button class="btn" data-remove>Remove note</button>' : ''}

@@ -70,7 +70,7 @@ panel.innerHTML = `
     </span>
   </div>
   <div class="pv-tabs np-tabs" role="tablist"></div>
-  <div class="np-editor"><textarea class="np-text" spellcheck="true"></textarea></div>`;
+  <div class="np-editor"><textarea class="np-text" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off"></textarea></div>`;
 byId(WORKSPACE_ID).append(panel);
 const tabsEl = find(panel, '.np-tabs');
 const area = /** @type {HTMLTextAreaElement} */ (find(panel, '.np-text'));
