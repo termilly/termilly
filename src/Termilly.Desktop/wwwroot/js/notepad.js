@@ -9,7 +9,7 @@ import { send, onHost, platform, PLATFORM } from './host.js';
 import { state, persist, newId, tabTitle, wsById } from './store.js';
 import { restoreFocus, stripBar } from './panes.js';
 import { scheduleFit } from './terminals.js';
-import { escapeHtml, cssColor, tabBadgeHtml, ICONS } from './ui.js';
+import { escapeHtml, cssColor, tabBadgeHtml, countText, ICONS } from './ui.js';
 import { byId, find, targetOf, dockRight, onMiddleClick, WORKSPACE_ID, DOCK_GRIP } from './dom.js';
 import { showMenu, SEPARATOR } from './popups.js';
 import { confirmDialog } from './dialogs.js';
@@ -93,6 +93,7 @@ const linksOn = () => state.notepad.links !== false;
 const wrapOn = () => state.notepad.wrap !== false;
 const links = padLinks(area, () => linksOn() && !panel.hidden);
 const button = byId('notepad-button');
+const countEl = find(button, '.np-count');
 
 /** Saves waiting for the host: the page and the text sent, by request. */
 /** @type {Map<string, { id: string, text: string }>} */
@@ -156,10 +157,22 @@ function toggleView(what) {
   area.focus();
 }
 
+/**
+ * While the Notepad is closed, its button counts the pages it keeps: those with something in them (an empty page, as
+ * closing the last one leaves, isn't counted).
+ */
+function showCount() {
+  const kept = pages().filter(p => p.path || p.text.trim()).length;
+  countEl.hidden = !panel.hidden || !kept;
+  countEl.textContent = countText(kept);
+  button.title = `Notepad (Ctrl+Shift+M)${countEl.hidden ? '' : `: ${kept} ${kept === 1 ? 'page' : 'pages'}`}`;
+}
+
 /** @param {boolean} open */
 function setOpen(open) {
   panel.hidden = !open;
   button.classList.toggle('open', open);
+  showCount();
   if (state.notepad.open !== open) {
     state.notepad.open = open;
     persist();
@@ -188,6 +201,7 @@ export function toggleNotepad() {
 
 /** Shows the Notepad as it was left (main.js, once the saved state is in). */
 export function initNotepad() {
+  showCount();
   if (state.notepad.width) panel.style.width = `${state.notepad.width}px`;
   if (state.notepad.open) show({ quiet: true });
 }

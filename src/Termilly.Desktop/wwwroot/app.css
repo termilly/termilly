@@ -752,7 +752,9 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
 
 /* ---- "Needs me" inbox (js/inbox.js) ---- */
 
-.inbox-button { position: relative; }
+.inbox-button, #notepad-button { position: relative; }
+/* The Notepad's pages while it's closed: news, not a call for attention. */
+.tool-count.np-count { background: var(--accent); }
 .inbox-button.has-items { color: var(--attention); }
 .tool-count {
   position: absolute;
