@@ -738,7 +738,7 @@ const ANSWER = /^(\r|\x1b|[1-9])$/;
  * @param {Tab} tab
  * @param {string} data
  */
-function agentInput(tab, data) {
+export function agentInput(tab, data) {
   const agent = tab.agent;
   if (!agent) return;
   const before = agent.state;

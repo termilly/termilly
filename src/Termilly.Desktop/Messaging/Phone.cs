@@ -79,4 +79,10 @@ internal static partial class ToPage
     {
         public static string Type => "phone:size";
     }
+
+    /// <summary>A key a phone typed into a terminal: one that answers its agent counts as typed on the PC (js/phone.js).</summary>
+    internal sealed record PhoneTyped(string Id, string Data) : IHostMessage
+    {
+        public static string Type => "phone:typed";
+    }
 }

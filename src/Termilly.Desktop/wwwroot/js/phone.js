@@ -12,6 +12,7 @@ import { AGENT_STATE, CLAUDE_TOOL, PROFILE_ICON } from './constants.js';
 import { debounce } from './util.js';
 import { isProduction } from './environments.js';
 import { screenOf } from './termscreen.js';
+import { agentInput } from './terminals.js';
 
 /** How long changes settle before the phones hear of them. */
 const SEND_AFTER_MS = 300;
@@ -127,12 +128,14 @@ async function answer({ pane, choice, text }) {
     send(PAGE.input, { id: tab.id, data: text });
     await pause(ENTER_DELAY_MS);
     send(PAGE.input, { id: tab.id, data: '\r' });
+    agentInput(tab, '\r');
     return { answered: choice };
   }
   if (!awaitsPermission(tab)) throw new Error('That terminal isn’t waiting for a yes or no any more.');
   const key = choice === CHOICE.always ? alwaysKey(tab) : /** @type {Record<string, string>} */ (KEYS)[choice ?? ''];
   if (!key) throw new Error(choice === CHOICE.always ? 'This prompt has no "don\'t ask again". Nothing was typed.' : 'Not an answer.');
   send(PAGE.input, { id: tab.id, data: key });
+  agentInput(tab, key); // answered, as from the keyboard here: no longer waiting
   return { answered: choice };
 }
 
@@ -153,6 +156,12 @@ onHost(HOST.phoneScreen, async m => {
   const term = state.tabs.get(m.args?.pane)?.view?.term;
   if (term) await new Promise(resolve => term.write('', resolve));
   send(PAGE.apiResult, { requestId: m.requestId, result: { data: term ? screenOf(term) : '' } });
+});
+
+// A key typed on a phone's terminal view: an answer to an agent counts as one typed here.
+onHost(HOST.phoneTyped, m => {
+  const tab = state.tabs.get(m.id);
+  if (tab) agentInput(tab, m.data);
 });
 
 onHost(HOST.phoneAnswer, async m => {

@@ -179,6 +179,10 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
             return new JsonObject { [Answer.Ok] = false, [Answer.Error] = "That terminal is gone." };
         }
         session.Write(data);
+        if (data.Length == 1)
+        {
+            _page.Post(new ToPage.PhoneTyped(pane, data)); // Enter, Esc or a number may answer the agent
+        }
         return new JsonObject { [Answer.Ok] = true, [OpField] = InputOp };
     }
 
