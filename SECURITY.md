@@ -15,4 +15,5 @@ Only the newest release gets security fixes. Termilly says in its title bar when
 - Workspaces, scrollback, command history and saved secrets are encrypted on disk. On Windows the key is protected with DPAPI; on Linux it's a file only your user can read. A recovery code can open them on another PC.
 - History sync goes through a folder you already sync, and only encrypted files go into it: see [docs/history-sync.md](docs/history-sync.md).
 - Plugins run in a sandboxed frame with no network access and no access to your files: see [docs/plugins.md](docs/plugins.md).
+- Termilly on your phone is off by default. When on, it listens only on your private network address, over HTTPS with its own certificate, and only paired phones get in: see [docs/phone.md](docs/phone.md).
 - Update checks read a version file from termilly.com, signed with an Ed25519 key that the app checks before saying an update is out. Termilly never downloads or installs updates by itself.

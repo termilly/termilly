@@ -1,7 +1,7 @@
 // @ts-check
 // Windows notifications for agent news the user can't see (another workspace, or Termilly not in front), and
 // the taskbar badge with the inbox count. The host shows them (Notifications.cs); clicking one comes back here as
-// "focusTerminal".
+// "focusTerminal". The same news goes to the phones too (Features/Phone.cs decides if the user is away).
 
 import { send, onHost } from './host.js';
 import { PAGE, HOST } from './protocol.js';
@@ -9,6 +9,7 @@ import { state, on, wsById, tabTitle, isInView, getSetting, EVENTS } from './sto
 import { focusTab } from './panes.js';
 import { entryDetail } from './inbox.js';
 import { AGENT_STATE } from './constants.js';
+import { windowInFront } from './windowshown.js';
 
 /**
  * Which setting allows a notification for each agent state, and how its title starts.
@@ -29,12 +30,18 @@ on(EVENTS.agent, tab => {
     return;
   }
   const [setting, what] = kind;
-  if (!getSetting(setting) || isInView(tab)) return;
+  if (!getSetting(setting)) return;
   const key = `${agent.state}@${agent.at}`;
-  if (tab.notified === key) return;
-  tab.notified = key;
   const ws = wsById(tab.wsId);
-  send(PAGE.notify, { id: tab.id, title: `${what}: ${tabTitle(tab)}${ws ? ` · ${ws.name}` : ''}`, body: entryDetail(tab) });
+  const title = `${what}: ${tabTitle(tab)}${ws ? ` · ${ws.name}` : ''}`;
+  // The phone, even when the terminal is in view here: the PC may be showing it to nobody (the host checks).
+  if (tab.phoneAlerted !== key) {
+    tab.phoneAlerted = key;
+    send(PAGE.phoneAlert, { id: tab.id, state: agent.state, title, body: entryDetail(tab), inFront: windowInFront() });
+  }
+  if (isInView(tab) || tab.notified === key) return;
+  tab.notified = key;
+  send(PAGE.notify, { id: tab.id, title, body: entryDetail(tab) });
 });
 
 // Looking at the terminal (or typing in it) makes its toast old news.

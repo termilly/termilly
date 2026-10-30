@@ -170,8 +170,10 @@ const APPEARANCE = {
         </span>
         ${fontPicker(fontTarget)}`, { stack: true, keywords: 'font family typeface terminal app' }))
     + group('Terminal text',
+      row('GPU rendering', 'Smoother scrolling and fast output, drawn by the graphics card. Its text is always greyscale.',
+        toggle('terminal.gpuRendering'), { keywords: 'gpu webgl renderer performance frame rate fps smooth scroll' })
       // ClearType is Windows' own; on Linux the desktop's font settings decide.
-      (sys.name === SYSTEM_NAME.linux ? '' : row('Text smoothing', 'Greyscale keeps coloured text crisp; ClearType matches Windows.',
+      + (sys.name === SYSTEM_NAME.linux ? '' : row('Text smoothing', 'Greyscale keeps coloured text crisp; ClearType matches Windows. Without GPU rendering only.',
         seg('terminal.textSmoothing', [[textSmoothing.grayscale, 'Greyscale'], [textSmoothing.clearType, 'ClearType']])))
       + row('Size', `${keysHtml('Ctrl +')} ${keysHtml('Ctrl -')} ${keysHtml('Ctrl 0')}`, `
         <div class="size-control">

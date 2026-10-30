@@ -638,6 +638,12 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
 .files-status { display: flex; gap: 8px; align-items: center; height: 26px; padding: 0 6px; overflow: hidden; color: var(--muted); font-size: 12px; white-space: nowrap; text-overflow: ellipsis; }
 .files-panel:focus { outline: none; }
 
+/* ---- Settings › Phone (js/settings/phone.js): the setup page's QR code, and the pairing code to type ---- */
+.pair-qr { display: grid; place-items: center; width: 200px; height: 200px; margin: 4px 0 0; padding: 8px; border-radius: 10px; background: #fff; }
+.pair-qr svg { width: 100%; height: 100%; }
+.pair-url { overflow-wrap: anywhere; font-size: 11px; }
+.pair-code { padding: 1px 6px; border-radius: 4px; background: var(--hover); color: var(--text-strong); font-size: 14px; letter-spacing: .12em; }
+
 /* ---- The Notepad (js/notepad.js): docked on the right edge, the Files panel and the terminals left of it
    (--notepad-dock on #workspace). It borrows the Files panel's head and grip, the File Explorer's tabs and a tab group's < and >. ---- */
 .notepad-panel {
@@ -1282,6 +1288,9 @@ body[data-sidebar="rail"] .side-rail { opacity: 1; pointer-events: auto; }
   background: var(--term-surface, transparent); /* a theme plugin's background reaches the edges */
 }
 
+/* A phone shows this terminal, at the phone's size (js/phone.js): said in the corner the terminal leaves free. */
+.pane-body.phone-sized::after { content: 'On the phone'; position: absolute; right: 12px; bottom: 8px; padding: 2px 8px; border-radius: 6px; background: var(--accent); color: #fff; font-size: 11px; font-weight: 600; pointer-events: none; }
+
 /* The padding sits on .xterm, not .pane-body: the fit addon measures the parent's full height and
    subtracts only .xterm's own padding, so padding on the parent makes the bottom row overflow. */
 .pane-body .xterm { padding: 8px 4px 8px 14px; }
@@ -1682,6 +1691,9 @@ body.dragging-pane #drag-ghost { display: flex; }
   animation: pop-in 0.14s ease-out;
 }
 .dialog.confirm { width: 400px; }
+/* Settings › Phone › Paired phones (js/settings/phone.js). */
+.dialog.phone-devices { width: 520px; }
+.phone-list { max-height: 60vh; margin-bottom: 14px; overflow-y: auto; }
 .dialog h3 { margin: 0; font-size: 16px; }
 .dialog-sub { margin: 4px 0 14px; color: var(--muted); font-size: 12.5px; line-height: 1.5; }
 .dialog-field {

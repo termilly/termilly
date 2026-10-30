@@ -25,6 +25,7 @@ import { continuesOnNextRow } from './buffer.js';
 import { clipboardKey, wireClipboard, PASTE_LABEL } from './termclipboard.js';
 import { selectionKey } from './keyselect.js';
 import { hoverMarkedLink, COPY_HINT } from './termlinks.js';
+import { wireGpu, dropGpu, applyGpu } from './gpu.js';
 
 /**
  * A theme plugin's terminal colours (state.pluginThemes).
@@ -45,7 +46,7 @@ export const isLight = () => currentTheme().base === THEME_BASE.light;
 let pluginTheme = { key: null, theme: null };
 /** The theme plugin whose terminal colours are chosen (Settings › Terminal), if any. */
 const chosenColors = () => state.settings.terminal.colors && state.pluginThemes.find(t => t.id === state.settings.terminal.colors);
-const termTheme = () => {
+export const termTheme = () => {
   const chosen = chosenColors();
   const key = chosen ? `${chosen.id}|${themeId()}` : null;
   document.documentElement.style.setProperty('--term-surface',
@@ -267,6 +268,8 @@ function createTerminal(tab) {
   // (Unicode 6) gives them one, which shifts TUI borders and columns.
   term.loadAddon(new Unicode11Addon.Unicode11Addon());
   term.unicode.activeVersion = '11';
+  // On the GPU while it's on screen (Settings › Appearance › GPU rendering).
+  wireGpu(tab, term, () => fit.fit());
   wireDropAndPaste(tab, term);
   /** @type {TabView} */ (tab.view).term = term;
   /** @type {TabView} */ (tab.view).fit = fit;
@@ -738,7 +741,7 @@ const ANSWER = /^(\r|\x1b|[1-9])$/;
  * @param {Tab} tab
  * @param {string} data
  */
-function agentInput(tab, data) {
+export function agentInput(tab, data) {
   const agent = tab.agent;
   if (!agent) return;
   const before = agent.state;
@@ -923,6 +926,7 @@ export function quiet(tab, ms = QUIET_MS) {
 /** @param {Tab} tab */
 export function disposeTerminal(tab) {
   send(PAGE.kill, { id: tab.id });
+  dropGpu(tab);
   tab.view?.term?.dispose();
 }
 
@@ -1029,6 +1033,7 @@ export function applyTerminalSettings() {
       if (term.options[key] !== value) term.options[key] = value;
     }
   }
+  applyGpu();
   scheduleFit();
 }
 
@@ -1061,7 +1066,8 @@ let fitFrame = 0;
 export function scheduleFit() {
   cancelAnimationFrame(fitFrame);
   fitFrame = requestAnimationFrame(() => {
-    for (const tab of state.tabs.values()) tab.view?.fit?.fit();
+    // One a phone shows keeps the phone's size (js/phone.js).
+    for (const tab of state.tabs.values()) if (!tab.phoneSize) tab.view?.fit?.fit();
   });
 }
 

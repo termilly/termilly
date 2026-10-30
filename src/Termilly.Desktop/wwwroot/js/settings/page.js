@@ -38,6 +38,7 @@ export const SECTION = Object.freeze({
   actions: 'actions',
   changes: 'changes',
   privacy: 'privacy',
+  phone: 'phone',
   plugins: 'plugins',
   keyboard: 'keyboard',
   about: 'about',

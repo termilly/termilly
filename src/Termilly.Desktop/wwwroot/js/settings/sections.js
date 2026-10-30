@@ -14,6 +14,7 @@ import workspaces from './workspaces.js';
 import actions from './actions.js';
 import changes from './changes.js';
 import privacy from './privacy.js';
+import phone from './phone.js';
 import plugins from './plugins.js';
 import keyboard from './keyboard.js';
 import about from './about.js';
@@ -43,10 +44,10 @@ setSerialRerender(() => redrawIfShowing(SECTION.serial));
  */
 const DOCS = Object.freeze({
   [SECTION.appearance]: 'themes', [SECTION.terminal]: 'terminals', [SECTION.notifications]: 'notifications', [SECTION.ssh]: 'ssh', [SECTION.serial]: 'serial',
-  [SECTION.workspaces]: 'workspaces', [SECTION.actions]: 'actions', [SECTION.changes]: 'changes', [SECTION.privacy]: 'encryption',
+  [SECTION.workspaces]: 'workspaces', [SECTION.actions]: 'actions', [SECTION.changes]: 'changes', [SECTION.privacy]: 'encryption', [SECTION.phone]: 'phone',
   [SECTION.plugins]: 'plugins', [SECTION.keyboard]: 'shortcuts', [SECTION.about]: 'updates',
 });
 
 /** @type {Record<string, import('./page.js').Section>} by id, in the nav's order */
 export const SECTIONS = Object.fromEntries(
-  [appearance, terminal, notifications, ssh, serial, workspaces, actions, changes, privacy, plugins, keyboard, about].map(s => [s.id, { ...s, docs: DOCS[s.id] }]));
+  [appearance, terminal, notifications, ssh, serial, workspaces, actions, changes, privacy, phone, plugins, keyboard, about].map(s => [s.id, { ...s, docs: DOCS[s.id] }]));

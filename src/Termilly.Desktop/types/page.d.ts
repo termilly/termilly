@@ -4,6 +4,7 @@ declare const Terminal: any;
 declare const FitAddon: any;
 declare const ImageAddon: any;
 declare const Unicode11Addon: any;
+declare const WebglAddon: any;
 declare const hljs: any;
 
 /** WebView2's bridge to the host (Windows). */

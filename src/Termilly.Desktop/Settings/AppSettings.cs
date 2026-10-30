@@ -42,6 +42,8 @@ internal sealed record AppSettings
     public ChangeSettings Changes { get; init; } = new();
     /// <summary>Termilly on servers.</summary>
     public RemoteSettings Remote { get; init; } = new();
+    /// <summary>Termilly on a phone, served on the local network.</summary>
+    public PhoneSettings Phone { get; init; } = new();
     /// <summary>What the page remembers.</summary>
     public UiState UiState { get; init; } = new();
     /// <summary>Data the page keeps here.</summary>
@@ -64,6 +66,7 @@ internal sealed record AppSettings
         Agents = (Agents ?? new()).Normalize(),
         Changes = (Changes ?? new()).Normalize(),
         Remote = (Remote ?? new()).Normalize(),
+        Phone = (Phone ?? new()).Normalize(),
         UiState = (UiState ?? new()).Normalize(),
         Data = (Data ?? new()).Normalize(),
     };
@@ -93,6 +96,7 @@ internal sealed record AppSettings
         [GroupName(nameof(Agents))] = (s, v) => s with { Agents = Read<AgentSettings>(v) },
         [GroupName(nameof(Changes))] = (s, v) => s with { Changes = Read<ChangeSettings>(v) },
         [GroupName(nameof(Remote))] = (s, v) => s with { Remote = Read<RemoteSettings>(v) },
+        [GroupName(nameof(Phone))] = (s, v) => s with { Phone = Read<PhoneSettings>(v) },
         [GroupName(nameof(UiState))] = (s, v) => s with { UiState = Read<UiState>(v) },
         [GroupName(nameof(Data))] = (s, v) => s with { Data = Read<SettingsData>(v) },
     };

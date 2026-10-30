@@ -31,6 +31,8 @@ interface AppSettings {
   changes: ChangeSettings;
   /** Termilly on servers. */
   remote: RemoteSettings;
+  /** Termilly on a phone, served on the local network. */
+  phone: PhoneSettings;
   /** What the page remembers. */
   uiState: UiState;
   /** Data the page keeps here. */
@@ -46,6 +48,8 @@ interface TerminalSettings {
   lineHeight: number;
   scrollback: number;
   textSmoothing: string;
+  /** Terminals drawn on the GPU (xterm's WebGL add-on, js/gpu.js): smoother scrolling; text is greyscale-smoothed then. */
+  gpuRendering: boolean;
   /** Images programs print (sixel, iTerm2's), shown inline. */
   inlineImages: boolean;
   /** Programs may set the clipboard (OSC 52). */
@@ -102,6 +106,17 @@ interface CommandSettings {
 }
 
 /** When a terminal's agent tells the user, and the system-wide "next terminal that needs me" shortcut. */
+interface PhoneSettings {
+  enabled: boolean;
+  port: number;
+  /** When an agent's news goes to the phones that take alerts (SettingValues.PhoneAlerts). */
+  alerts: string;
+  /** Alerts say only that an agent needs the user or finished: no terminal, workspace or message. */
+  hideDetails: boolean;
+  /** A paired phone may type into a terminal it shows (answers to an agent are always allowed). */
+  allowTyping: boolean;
+}
+
 interface NotificationSettings {
   needsInput: boolean;
   error: boolean;

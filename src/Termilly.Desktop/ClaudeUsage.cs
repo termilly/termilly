@@ -1,4 +1,3 @@
-using System.Buffers;
 using System.IO;
 using System.Text;
 using System.Text.Json;
@@ -27,7 +26,6 @@ internal sealed record ClaudeUsage(
 /// </summary>
 internal sealed class TranscriptUsage
 {
-    private const int Chunk = 1 << 20;
     /// <summary>A line this long is a tool result or a file, never a reply's usage: skipped unread.</summary>
     private const int MaxLine = 4 << 20;
 
@@ -44,9 +42,7 @@ internal sealed class TranscriptUsage
     private readonly string _session;
     // One reply is written as several lines (one per content block), each with the reply's usage: the last one counts.
     private readonly Dictionary<string, Tokens> _replies = new();
-    private readonly ArrayBufferWriter<byte> _pending = new();
-    private long _offset;
-    private bool _skipping;
+    private readonly TranscriptTail _tail;
     private string? _model;
     private long _window = DefaultContextWindow;
     private long _context;
@@ -62,83 +58,20 @@ internal sealed class TranscriptUsage
     /// transcript skips: they're its subagents').</param>
     public TranscriptUsage(string path, string session, bool sidechain = false)
     {
-        Path = path;
+        _tail = new TranscriptTail(path, MaxLine);
         _session = session;
         _sidechain = sidechain;
     }
 
     private readonly bool _sidechain;
 
-    public string Path { get; }
+    public string Path => _tail.Path;
 
     public ClaudeUsage Usage => new(_session, _model, _window, _context, _total.In, _total.Write, _total.Read, _total.Out,
         _replies.Count, _compactions, _version, GitBranch.Of(_cwd), _started, _last);
 
     /// <summary>Reads what was added since the last call; true when the usage changed.</summary>
-    public bool Read()
-    {
-        FileStream file;
-        try
-        {
-            file = new FileStream(Path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-        }
-        catch (Exception e) when (Storage.IsFileError(e))
-        {
-            return false;
-        }
-        using (file)
-        {
-            if (file.Length <= _offset)
-            {
-                return false; // nothing new, or rewritten under us (keep what we have)
-            }
-            file.Seek(_offset, SeekOrigin.Begin);
-            var changed = false;
-            var buffer = new byte[Chunk];
-            int read;
-            while ((read = file.Read(buffer, 0, buffer.Length)) > 0)
-            {
-                changed |= Feed(buffer.AsSpan(0, read));
-                _offset += read;
-            }
-            return changed;
-        }
-    }
-
-    /// <summary>Splits what was read into lines (a line can span reads); true when one of them changed the usage.</summary>
-    private bool Feed(ReadOnlySpan<byte> span)
-    {
-        var changed = false;
-        while (span.Length > 0)
-        {
-            var end = span.IndexOf((byte)'\n');
-            var part = end < 0 ? span : span[..end];
-            if (!_skipping)
-            {
-                if (_pending.WrittenCount + part.Length > MaxLine)
-                {
-                    _skipping = true;
-                    _pending.ResetWrittenCount();
-                }
-                else
-                {
-                    _pending.Write(part);
-                }
-            }
-            if (end < 0)
-            {
-                break;
-            }
-            if (!_skipping)
-            {
-                changed |= Line(_pending.WrittenSpan);
-            }
-            _pending.ResetWrittenCount();
-            _skipping = false;
-            span = span[(end + 1)..];
-        }
-        return changed;
-    }
+    public bool Read() => _tail.Read(Line);
 
     private bool Line(ReadOnlySpan<byte> line)
     {
@@ -308,12 +241,19 @@ internal sealed partial class ClaudeUsageTracker : IDisposable
     }
 
     /// <summary>The transcript of a session, in whichever project folder Claude Code put it.</summary>
-    public string? FindTranscript(string session)
+    public string? FindTranscript(string session) => FindTranscript(_projects, session);
+
+    /// <summary>The transcript of a session under a projects folder; null for one not written yet, or not a session id.</summary>
+    public static string? FindTranscript(string projects, string session)
     {
+        if (!SessionId().IsMatch(session))
+        {
+            return null;
+        }
         try
         {
-            return Directory.Exists(_projects)
-                ? Directory.EnumerateFiles(_projects, session + ".jsonl", SearchOption.AllDirectories).FirstOrDefault()
+            return Directory.Exists(projects)
+                ? Directory.EnumerateFiles(projects, session + ".jsonl", SearchOption.AllDirectories).FirstOrDefault()
                 : null;
         }
         catch (Exception e) when (Storage.IsFileError(e))

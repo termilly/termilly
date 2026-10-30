@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Set up Termilly</title>
+  <link rel="stylesheet" href="phone.css">
+</head>
+<body>
+  <main>
+    <h1>Termilly on your phone</h1>
+    <p class="muted">Three steps, once per phone. Everything stays on your own network.</p>
+
+    <section class="card">
+      <h2>1. Install Termilly's certificate</h2>
+      <p><a class="button" href="/termilly.cer">Download the certificate</a></p>
+      <div data-os="ios">
+        <ol class="steps">
+          <li>Tap <b>Allow</b>.</li>
+          <li>Open <b>Settings</b>: at the top is <b>Profile Downloaded</b>. Tap it, then <b>Install</b> (twice). Not there? <b>General › VPN &amp; Device Management</b>.</li>
+          <li><b>Settings › General › About › Certificate Trust Settings</b>: turn Termilly on. This one is easy to miss.</li>
+        </ol>
+      </div>
+      <div data-os="android">
+        <p><b>Android:</b> open <b>Settings</b>, search for <b>CA certificate</b> (Encryption &amp; credentials › Install a certificate › <b>CA certificate</b>, not "VPN &amp; app" or "Wi-Fi") and pick <b>Termilly.cer</b> from Downloads.</p>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>2. Open the app</h2>
+      <p class="trust" data-trust>Checking whether this phone trusts Termilly</p>
+      <p><a class="button" id="open" href="/" aria-disabled="true">Open Termilly</a></p>
+      <p class="muted">If the phone ever warns the connection isn't private, go back to step 1. Don't continue past the warning.</p>
+    </section>
+
+    <section class="card">
+      <h2>3. Add it to the Home Screen</h2>
+      <div data-os="ios"><p><b>iPhone:</b> in Safari, <b>Share › Add to Home Screen</b>. Open Termilly from there and pair it.</p></div>
+      <div data-os="android"><p><b>Android:</b> in Chrome, <b>⋮ › Add to Home screen</b>. Open Termilly from there and pair it.</p></div>
+    </section>
+  </main>
+  <script src="setup.js"></script>
+</body>
+</html>

@@ -25,6 +25,8 @@ internal sealed record TerminalSettings
     public double LineHeight { get; init; } = DefaultLineHeight;
     public int Scrollback { get; init; } = DefaultScrollback;
     public string TextSmoothing { get; init; } = SettingValues.TextSmoothing.Default;
+    /// <summary>Terminals drawn on the GPU (xterm's WebGL add-on, js/gpu.js): smoother scrolling; text is greyscale-smoothed then.</summary>
+    public bool GpuRendering { get; init; } = true;
     /// <summary>Images programs print (sixel, iTerm2's), shown inline.</summary>
     public bool InlineImages { get; init; } = true;
     /// <summary>Programs may set the clipboard (OSC 52).</summary>
@@ -195,6 +197,33 @@ internal sealed record CommandSettings
 }
 
 /// <summary>When a terminal's agent tells the user, and the system-wide "next terminal that needs me" shortcut.</summary>
+/// <summary>
+/// Termilly on a phone (Phone/PhoneServer.cs, docs/phone.md): off by default; while on, a server on this PC's local
+/// network address serves the phone app to paired phones over HTTPS.
+/// </summary>
+internal sealed record PhoneSettings
+{
+    public const int DefaultPort = 8765;
+    /// <summary>The ports a user may pick: the unprivileged ones.</summary>
+    public const int MinPort = 1024;
+    public const int MaxPort = 65535;
+
+    public bool Enabled { get; init; }
+    public int Port { get; init; } = DefaultPort;
+    /// <summary>When an agent's news goes to the phones that take alerts (SettingValues.PhoneAlerts).</summary>
+    public string Alerts { get; init; } = SettingValues.PhoneAlerts.Away;
+    /// <summary>Alerts say only that an agent needs the user or finished: no terminal, workspace or message.</summary>
+    public bool HideDetails { get; init; }
+    /// <summary>A paired phone may type into a terminal it shows (answers to an agent are always allowed).</summary>
+    public bool AllowTyping { get; init; }
+
+    public PhoneSettings Normalize() => this with
+    {
+        Port = Port is >= MinPort and <= MaxPort ? Port : DefaultPort,
+        Alerts = SettingChecks.OneOf(Alerts, SettingValues.PhoneAlerts.All, SettingValues.PhoneAlerts.Away),
+    };
+}
+
 internal sealed record NotificationSettings
 {
     public bool NeedsInput { get; init; } = true;

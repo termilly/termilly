@@ -72,6 +72,8 @@ interface AgentInfo {
   source?: string;
   event?: string | null;
   tool?: string | null;
+  /** What the tool works on: a command, a file or a pattern (PreToolUse). */
+  target?: string | null;
   message?: string | null;
   reason?: string | null;
   session?: string | null;
@@ -171,6 +173,10 @@ interface Tab {
   cost?: { usd: number; durationMs: number | null; session: string | null } | null;
   /** The last notification sent for it (js/notify.js). */
   notified?: string | null;
+  /** The last news sent to the phones for it (js/notify.js). */
+  phoneAlerted?: string | null;
+  /** The size a phone showing it asked for; it keeps that size until no phone shows it (js/phone.js). */
+  phoneSize?: { cols: number, rows: number } | null;
   /** What it brings back and types as its shell starts (js/terminals.js). */
   start?: import('../wwwroot/js/terminals.js').ShellStart;
   /** js/terminals.js's timers for its shell. */

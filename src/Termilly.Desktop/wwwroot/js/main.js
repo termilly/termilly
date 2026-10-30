@@ -44,6 +44,7 @@ import './weblinks.js';
 import { activityLine, stopAllAgents } from './agentline.js';
 import './subagents.js';
 import './notify.js';
+import './phone.js';
 import './snippetprompt.js';
 import './cost.js';
 import './quit.js';
@@ -457,6 +458,8 @@ onHost(HOST.agent, m => {
       // The hooks' message has the event, tool and reason; the poll's doesn't (they stay undefined then).
       state: m.state, source: m.source, event: /** @type {Partial<Host_agent_1>} */ (m).event,
       tool: /** @type {Partial<Host_agent_1>} */ (m).tool, message: m.message,
+      // What the tool works on (a command, a file), for the phones: PreToolUse says; a permission request after it doesn't.
+      target: /** @type {Partial<Host_agent_1>} */ (m).target ?? tab.agent?.target ?? null,
       reason: /** @type {Partial<Host_agent_1>} */ (m).reason,
       session: m.session ?? tab.agent?.session, at: Date.now(),
       // The sidebar's activity line (agentline.js): kept until an event says something new.
