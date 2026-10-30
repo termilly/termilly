@@ -106,22 +106,24 @@ export function badgeHtml(profile, extraClass = BADGE_SIZE.small) {
 const PIXEL_WORDS = { [PROFILE_ICON.serial]: 'COM', [PROFILE_ICON.ssh]: 'SSH', [PROFILE_ICON.wsl]: 'WSL' };
 /**
  * The pixel fonts for those words. A word's width and height must have the same evenness as the badge's inside to
- * sit exactly in its middle: 4 x 6 letters (a 14 x 6 word) in the small badge's 16px, and 3 x 5 letters drawn at 2x
- * (22 x 10) in the others' 26px and 24px.
+ * sit exactly in its middle: 6 rows, and 3 or 4 columns a letter (every word 12 wide), in the small badge's 16px; 6 x 8
+ * letters with two-pixel lines (20 x 8 words) in the others' 26px and 24px.
  */
 const SMALL_FONT = /** @type {Record<string, string[]>} */ ({
-  C: ['####', '#...', '#...', '#...', '#...', '####'], O: ['####', '#..#', '#..#', '#..#', '#..#', '####'],
-  M: ['#..#', '####', '####', '#..#', '#..#', '#..#'], S: ['####', '#...', '####', '...#', '...#', '####'],
+  C: ['###', '#..', '#..', '#..', '#..', '###'], O: ['###', '#.#', '#.#', '#.#', '#.#', '###'],
+  M: ['#..#', '####', '####', '#..#', '#..#', '#..#'], S: ['###', '#..', '###', '..#', '..#', '###'],
   H: ['#..#', '#..#', '####', '#..#', '#..#', '#..#'], W: ['#..#', '#..#', '#..#', '####', '####', '#..#'],
-  L: ['#...', '#...', '#...', '#...', '#...', '####'],
+  L: ['#..', '#..', '#..', '#..', '#..', '###'],
 });
+/** Rows of the large font: a full bar, the left side, the right side, both sides. */
+const [BAR, LEFT, RIGHT, SIDES] = ['######', '##....', '....##', '##..##'];
 const LARGE_FONT = /** @type {Record<string, string[]>} */ ({
-  C: ['###', '#..', '#..', '#..', '###'], O: ['###', '#.#', '#.#', '#.#', '###'], M: ['#.#', '###', '###', '#.#', '#.#'],
-  S: ['###', '#..', '###', '..#', '###'], H: ['#.#', '#.#', '###', '#.#', '#.#'], W: ['#.#', '#.#', '###', '###', '#.#'],
-  L: ['#..', '#..', '#..', '#..', '###'],
+  C: [BAR, BAR, LEFT, LEFT, LEFT, LEFT, BAR, BAR], O: [BAR, BAR, SIDES, SIDES, SIDES, SIDES, BAR, BAR],
+  M: [SIDES, SIDES, BAR, BAR, BAR, SIDES, SIDES, SIDES], S: [BAR, BAR, LEFT, BAR, BAR, RIGHT, BAR, BAR],
+  H: [SIDES, SIDES, SIDES, BAR, BAR, SIDES, SIDES, SIDES], W: [SIDES, SIDES, SIDES, BAR, BAR, BAR, SIDES, SIDES],
+  L: [LEFT, LEFT, LEFT, LEFT, LEFT, LEFT, BAR, BAR],
 });
-const LARGE_SCALE = 2;
-/** The gap between letters, in the font's pixels. */
+/** The gap between letters, in pixels. */
 const GAP_PX = 1;
 
 /**
@@ -131,14 +133,17 @@ const GAP_PX = 1;
  */
 function pixelWord(word, small) {
   const font = small ? SMALL_FONT : LARGE_FONT;
-  const scale = small ? 1 : LARGE_SCALE;
-  const letter = font.C[0].length, rows = font.C.length;
+  const rows = font.C.length;
   let d = '';
-  [...word].forEach((ch, i) => font[ch].forEach((row, y) => [...row].forEach((p, x) => {
-    if (p === '#') d += `M${i * (letter + GAP_PX) + x} ${y}h1v1h-1z`;
-  })));
-  const width = word.length * (letter + GAP_PX) - GAP_PX;
-  return `<svg class="badge-word" viewBox="0 0 ${width} ${rows}" width="${width * scale}" height="${rows * scale}" shape-rendering="crispEdges" aria-label="${word}"><path fill="currentColor" stroke="none" d="${d}"/></svg>`;
+  let left = 0;
+  for (const ch of word) {
+    font[ch].forEach((row, y) => [...row].forEach((p, x) => {
+      if (p === '#') d += `M${left + x} ${y}h1v1h-1z`;
+    }));
+    left += font[ch][0].length + GAP_PX;
+  }
+  const width = left - GAP_PX;
+  return `<svg class="badge-word" viewBox="0 0 ${width} ${rows}" width="${width}" height="${rows}" shape-rendering="crispEdges" aria-label="${word}"><path fill="currentColor" stroke="none" d="${d}"/></svg>`;
 }
 
 // A spark for Claude Code: straight bars on whole pixels (sharp at 12px), diagonal ones for the other rays.
