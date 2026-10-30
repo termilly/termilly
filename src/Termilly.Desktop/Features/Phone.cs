@@ -39,14 +39,17 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
     private readonly PageChannel _page;
     private readonly ISettingsStore _settings;
     private readonly PhoneStore _store;
+    private readonly PhoneLive _live;
+    private readonly PageApi _api;
     private PhoneServer? _server;
     private int _port;
     private string? _error;
 
-    public PhoneHandler(PageChannel page, ISettingsStore settings, PhoneStore store)
+    public PhoneHandler(PageChannel page, ISettingsStore settings, PhoneStore store, PhoneLive live, PageApi api)
     {
-        (_page, _settings, _store) = (page, settings, store);
+        (_page, _settings, _store, _live, _api) = (page, settings, store, live, api);
         settings.Saved += _ => Update();
+        live.Received = AnswerAsync;
     }
 
     public void Register(MessageRouter router)
@@ -59,7 +62,12 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
                 _page.Post(new ToPage.PhonePairing(_store.OfferCode()));
             }
         });
-        router.On<FromPage.PhoneRemove>(m => _store.Remove(m.Device ?? ""));
+        router.On<FromPage.PhoneRemove>(m =>
+        {
+            _store.Remove(m.Device ?? "");
+            _live.CloseAll(); // the others connect again; the removed phone can't
+        });
+        router.On<FromPage.PhoneState>(m => _live.SetState(m.State.GetRawText()));
         router.On<FromPage.PhoneAlert>(async m =>
         {
             var settings = _settings.Current.Phone;
@@ -112,12 +120,44 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
         };
     }
 
+    /// <summary>What a phone may ask: an answer to a waiting agent (approve, always, reject), or a reply in its own words.</summary>
+    private static readonly string[] Choices = ["approve", "always", "reject", "reply"];
+    /// <summary>The longest reply a phone may type to an agent.</summary>
+    private const int MaxReply = 4000;
+
+    /// <summary>
+    /// A phone answers an agent: the page checks the terminal still waits, then types the answer (js/phone.js). The
+    /// phone hears back whether it went through.
+    /// </summary>
+    private async Task<JsonObject> AnswerAsync(string device, JsonObject message)
+    {
+        var choice = message["choice"]?.GetValue<string>();
+        var text = message["text"]?.GetValue<string>() ?? "";
+        if (!Choices.Contains(choice) || text.Length > MaxReply)
+        {
+            return new JsonObject { ["ok"] = false, ["error"] = "Not something a phone can ask." };
+        }
+        try
+        {
+            await _api.AskPageAsync(ToPage.Calls.PhoneAnswer, new JsonObject
+            {
+                [PageApi.CallFields.Args] = new JsonObject { ["pane"] = message["pane"]?.DeepClone(), ["choice"] = choice, ["text"] = text },
+            }).ConfigureAwait(false);
+            return new JsonObject { ["ok"] = true, ["pane"] = message["pane"]?.DeepClone() };
+        }
+        catch (InvalidOperationException e)
+        {
+            return new JsonObject { ["ok"] = false, ["error"] = e.Message, ["pane"] = message["pane"]?.DeepClone() };
+        }
+    }
+
     /// <summary>Starts or stops the server to match Settings (and the vault: nothing runs while it's locked).</summary>
     private void Update()
     {
         var settings = _settings.Current.Phone;
         if (_server is not null && (!settings.Enabled || _port != settings.Port || _store.IsLocked))
         {
+            _live.CloseAll();
             _server.Dispose();
             _server = null;
         }
@@ -134,7 +174,7 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
                 {
                     using var authority = _store.Authority(Environment.MachineName);
                     using var vapid = _store.Vapid();
-                    _server = PhoneServer.Start(settings.Port, Path.Combine(AppPaths.WebRoot, PhoneFolder), _store, authority, WebPush.PublicKey(vapid),
+                    _server = PhoneServer.Start(settings.Port, Path.Combine(AppPaths.WebRoot, PhoneFolder), _store, _live, authority, WebPush.PublicKey(vapid),
                         device => AlertAsync(device, TestAlert));
                     _port = settings.Port;
                 }
@@ -192,6 +232,7 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
     public void Dispose()
     {
         _store.Changed -= PostStatus;
+        _live.CloseAll();
         _server?.Dispose();
     }
 }

@@ -48,6 +48,7 @@ internal static class Composition
         .AddSingleton<PageBoot>()
         .AddSingleton<LastSnapshot>()
         .AddSingleton<PhoneStore>()
+        .AddSingleton<PhoneLive>()
         .AddStartable<ProfileCatalog>()
         .AddStartable<ActivityWatcher>()
         .AddStartable<AgentMonitor>()

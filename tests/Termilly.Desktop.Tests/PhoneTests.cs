@@ -2,6 +2,7 @@ using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Net.Security;
+using System.Net.WebSockets;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
@@ -19,6 +20,7 @@ public sealed class PhoneTests : IDisposable
     private readonly Vault _vault;
     private readonly PhoneStore _store;
     private readonly List<string> _alerts = [];
+    private readonly PhoneLive _live = new();
 
     public PhoneTests()
     {
@@ -247,8 +249,55 @@ public sealed class PhoneTests : IDisposable
         Assert.True(Assert.Single(_store.List()).Alerts);
     }
 
+    [Fact]
+    public async Task A_paired_phone_gets_the_terminals_live_and_its_answers_reach_the_PC()
+    {
+        using var authority = _store.Authority("TESTPC");
+        using var server = Start(authority);
+        using var http = Https(authority);
+        var paired = await Post(http, server.AppUrl + "api/pair", $"""{"code":"{{_store.OfferCode()}}"}""");
+        var cookie = paired.Headers.GetValues("Set-Cookie").First().Split(';')[0];
+        _live.SetState("""{"terminals":[{"id":"t1"}]}""");
+        _live.Received = (device, message) => Task.FromResult(new JsonObject { ["ok"] = true, ["choice"] = message["choice"]?.DeepClone() });
+
+        using var phone = Socket(authority, cookie);
+        await phone.ConnectAsync(new Uri(server.AppUrl.Replace("https", "wss") + "api/live"), CancellationToken.None);
+        Assert.Contains("\"t1\"", await ReceiveText(phone));
+        _live.SetState("""{"terminals":[{"id":"t2"}]}""");
+        Assert.Contains("\"t2\"", await ReceiveText(phone));
+        await phone.SendAsync(Encoding.UTF8.GetBytes("""{"op":"answer","pane":"t2","choice":"approve"}"""), WebSocketMessageType.Text, true, CancellationToken.None);
+        var answered = JsonNode.Parse(await ReceiveText(phone))!;
+        Assert.Equal(("answered", "approve"), (answered["type"]!.GetValue<string>(), answered["choice"]!.GetValue<string>()));
+
+        using var stranger = Socket(authority, "termilly=not-a-token");
+        await Assert.ThrowsAnyAsync<WebSocketException>(() => stranger.ConnectAsync(new Uri(server.AppUrl.Replace("https", "wss") + "api/live"), CancellationToken.None));
+    }
+
+    private static ClientWebSocket Socket(X509Certificate2 authority, string cookie)
+    {
+        var socket = new ClientWebSocket();
+        socket.Options.SetRequestHeader("Cookie", cookie);
+        socket.Options.RemoteCertificateValidationCallback = (_, certificate, _, _) =>
+        {
+            using var chain = new X509Chain();
+            chain.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;
+            chain.ChainPolicy.CustomTrustStore.Add(authority);
+            chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
+            return certificate is X509Certificate2 c && chain.Build(c);
+        };
+        return socket;
+    }
+
+    private static async Task<string> ReceiveText(ClientWebSocket socket)
+    {
+        var buffer = new byte[64 * 1024];
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var result = await socket.ReceiveAsync(buffer, timeout.Token);
+        return Encoding.UTF8.GetString(buffer, 0, result.Count);
+    }
+
     private PhoneServer Start(X509Certificate2 authority) =>
-        PhoneServer.Start(0, _web, _store, authority, "key", device =>
+        PhoneServer.Start(0, _web, _store, _live, authority, "key", device =>
         {
             _alerts.Add(device);
             return Task.CompletedTask;

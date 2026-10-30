@@ -146,7 +146,9 @@ internal static partial class ToPage
     internal static class Calls
     {
         public const string Api = "api";
+        /// <summary>A paired phone answers an agent, or replies to it (Features/Phone.cs, js/phone.js).</summary>
+        public const string PhoneAnswer = "phone:answer";
 
-        public static readonly string[] All = [Api];
+        public static readonly string[] All = [Api, PhoneAnswer];
     }
 }

@@ -15,18 +15,22 @@
       <h2>1. Install Termilly's certificate</h2>
       <p><a class="button" href="/termilly.cer">Download the certificate</a></p>
       <div data-os="ios">
-        <p><b>iPhone:</b> tap <b>Allow</b>, then open <b>Settings › General › VPN &amp; Device Management</b>, tap the Termilly profile and <b>Install</b>.</p>
-        <p>Then <b>Settings › General › About › Certificate Trust Settings</b> and turn Termilly on.</p>
+        <ol class="steps">
+          <li>Tap <b>Allow</b>.</li>
+          <li>Open <b>Settings</b>: at the top is <b>Profile Downloaded</b>. Tap it, then <b>Install</b> (twice). Not there? <b>General › VPN &amp; Device Management</b>.</li>
+          <li><b>Settings › General › About › Certificate Trust Settings</b>: turn Termilly on. This one is easy to miss.</li>
+        </ol>
       </div>
       <div data-os="android">
-        <p><b>Android:</b> open <b>Settings</b>, search for <b>CA certificate</b> (under Encryption &amp; credentials › Install a certificate) and pick <b>Termilly.cer</b> from Downloads.</p>
+        <p><b>Android:</b> open <b>Settings</b>, search for <b>CA certificate</b> (Encryption &amp; credentials › Install a certificate › <b>CA certificate</b>, not "VPN &amp; app" or "Wi-Fi") and pick <b>Termilly.cer</b> from Downloads.</p>
       </div>
     </section>
 
     <section class="card">
       <h2>2. Open the app</h2>
-      <p><a class="button" id="open" href="/">Open Termilly</a></p>
-      <p class="muted">If the phone says the connection isn't private, step 1 isn't finished.</p>
+      <p class="trust" data-trust>Checking whether this phone trusts Termilly</p>
+      <p><a class="button" id="open" href="/" aria-disabled="true">Open Termilly</a></p>
+      <p class="muted">If the phone ever warns the connection isn't private, go back to step 1. Don't continue past the warning.</p>
     </section>
 
     <section class="card">

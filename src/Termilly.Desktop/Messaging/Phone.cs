@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace Termilly.Desktop.Messaging;
 
 // Termilly on a phone (Phone/, Features/Phone.cs, js/settings/phone.js): the server's state for Settings, pairing a
@@ -31,6 +33,15 @@ internal static partial class FromPage
     internal sealed record PhoneAlert(string Id = "", string? State = null, string? Title = null, string? Body = null, bool InFront = false) : IPageMessage
     {
         public static string Type => "phone:alert";
+    }
+
+    /// <summary>
+    /// What the phones show (js/phone.js builds it whenever a terminal or agent changes): the workspaces and their
+    /// terminals, with what each agent is doing or waiting for.
+    /// </summary>
+    internal sealed record PhoneState(JsonElement State = default) : IPageMessage
+    {
+        public static string Type => "phone:state";
     }
 
     /// <summary>A test alert to every phone that takes alerts.</summary>

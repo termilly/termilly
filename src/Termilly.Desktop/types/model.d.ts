@@ -72,6 +72,8 @@ interface AgentInfo {
   source?: string;
   event?: string | null;
   tool?: string | null;
+  /** What the tool works on: a command, a file or a pattern (PreToolUse). */
+  target?: string | null;
   message?: string | null;
   reason?: string | null;
   session?: string | null;

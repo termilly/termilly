@@ -60,6 +60,9 @@ internal sealed class PhoneAppApi(PhoneStore store, string pushKey, Func<string,
         Uri.TryCreate(endpoint, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps &&
         PushHosts.Any(h => h.StartsWith('.') ? uri.Host.EndsWith(h, StringComparison.OrdinalIgnoreCase) : uri.Host.Equals(h, StringComparison.OrdinalIgnoreCase));
 
+    /// <summary>The paired phone a request comes from (its id), or null.</summary>
+    public string? DeviceOf(PhoneRequest request) => store.DeviceFor(TokenFrom(request.Headers.GetValueOrDefault("Cookie")));
+
     /// <summary>The answer to an API request; null for one it refuses (403).</summary>
     public PhoneReply? Answer(PhoneRequest request)
     {
@@ -67,7 +70,7 @@ internal sealed class PhoneAppApi(PhoneStore store, string pushKey, Func<string,
         {
             return null;
         }
-        var device = store.DeviceFor(TokenFrom(request.Headers.GetValueOrDefault("Cookie")));
+        var device = DeviceOf(request);
         if (request.Path == Api.Me)
         {
             return Json(device is null ? new JsonObject { [Fields.Paired] = false, [Fields.Locked] = store.IsLocked }
