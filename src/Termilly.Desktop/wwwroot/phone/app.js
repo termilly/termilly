@@ -146,7 +146,7 @@ function alertsHtml() {
   return `<div class="section">This phone</div><div class="list pad">
     ${!canAlert ? `<p class="muted">${ios ? 'Alerts need iOS 16.4 or later, and Termilly opened from the Home Screen.' : 'This browser can\'t take alerts.'}</p>`
     : me?.alerts ? `<p>Alerts are on.</p><div class="w-actions"><button class="btn" data-do="${DO.test}">Send a test alert</button><button class="btn" data-do="${DO.off}">Turn off</button></div>`
-      : `<p>Get an alert here when an agent needs you, even when the phone is locked.</p><button class="btn primary" data-do="${DO.on}">Turn on alerts</button>`}
+      : `<p>Get an alert here when an agent needs you, even when the phone is locked.</p><div class="w-actions"><button class="btn primary" data-do="${DO.on}">Turn on alerts</button></div>`}
     <p class="muted" data-note></p></div>`;
 }
 

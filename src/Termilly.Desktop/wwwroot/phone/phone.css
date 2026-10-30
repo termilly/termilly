@@ -2,7 +2,7 @@
    Dark by default, light when the phone is. */
 :root { color-scheme: dark; --bg: #0d0d10; --raised: #17171c; --line: #26262e; --text: #e6e6eb; --muted: #8e8e9a; --accent: #8b7bff; --attention: #f2cc60; --danger: #ff6b6b; --ok: #3fb950; --sheet: #17171c; }
 @media (prefers-color-scheme: light) {
-  :root { color-scheme: light; --bg: #f3f3f5; --raised: #ffffff; --line: #e1e1e7; --text: #1d1d22; --muted: #6a6a76; --accent: #6d5cf0; --attention: #a8790a; --danger: #d63c3c; --ok: #1f8f3a; --sheet: #f3f3f5; }
+  :root { color-scheme: light; --bg: #f3f3f5; --raised: #ffffff; --line: #e1e1e7; --text: #1d1d22; --muted: #6a6a76; --accent: #6d5cf0; --attention: #a8790a; --danger: #d63c3c; --ok: #1f8f3a; --sheet: #ffffff; }
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 body { margin: 0; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); background: var(--bg); color: var(--text); font: 16px/1.4 -apple-system, "Segoe UI", Roboto, sans-serif; }
