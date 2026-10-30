@@ -21,6 +21,12 @@ const BOX_SPACE = Object.freeze({ padding: 16, least: 200 });
 /** What the view asks of the live connection, and its header's buttons (data-tv). */
 const OP = Object.freeze({ watch: 'watch', unwatch: 'unwatch', input: 'input' });
 const TV = Object.freeze({ back: 'back', answer: 'answer' });
+/**
+ * What xterm.js answers on its own (to the programs' queries in the output it draws: who are you, where's the cursor,
+ * what colours) and reports (focus, the mouse). The PC's terminal answers those already; from the phone they'd only
+ * reach the shell as junk, so only typing goes through.
+ */
+const AUTOMATIC = /^\x1b(?:\[\??[\d;]*[cnRIO]|\[[<M]|\][\s\S]*(?:\x07|\x1b\\)$|P[\s\S]*\x1b\\$)/;
 /** Lines kept above the screen. */
 const SCROLLBACK = 3000;
 /** The PC's size when it hasn't said yet. */
@@ -114,7 +120,7 @@ export function terminalView(app) {
     term = new Terminal({ cols: t.cols ?? DEFAULT_SIZE.cols, rows: t.rows ?? DEFAULT_SIZE.rows, fontSize: fontFor(t), scrollback: SCROLLBACK,
       fontFamily: 'ui-monospace, Menlo, Consolas, monospace', theme: DARK, disableStdin: !canType, convertEol: false, cursorBlink: false });
     term.open(view.querySelector(BOX));
-    term.onData(type);
+    term.onData(/** @param {string} data */ data => { if (!AUTOMATIC.test(data)) type(data); });
     app.send({ op: OP.watch, pane: t.id });
     fitViewport();
   }
