@@ -16,9 +16,6 @@ import { updateSettings } from './preferences.js';
 /** Where a note is from: a terminal's own, its SSH host's (kept in Settings), or its workspace's. */
 export const NOTE_KIND = Object.freeze({ terminal: 'terminal', host: 'host', workspace: 'workspace' });
 
-/** Longest note kept, in characters. */
-const MAX_NOTE = 4000;
-
 /**
  * The first non-empty line of a note, without markdown's heading and list marks.
  * @param {string | null | undefined} text
@@ -72,7 +69,7 @@ export function editNote(kind, target) {
     <h3>Note on ${what}</h3>
     <p class="dialog-sub">${kind === NOTE_KIND.host ? 'Shows on every terminal opened to this host: runbook links, who to ask, what not to do.'
       : 'Markdown is fine. The first line shows when you hover its row in the sidebar.'}</p>
-    <textarea class="field note-text" rows="8" maxlength="${MAX_NOTE}" spellcheck="true" placeholder="e.g. staging DB is read-only until Friday">${escapeHtml(current.text)}</textarea>
+    <textarea class="field note-text" rows="16" spellcheck="true" placeholder="e.g. staging DB is read-only until Friday">${escapeHtml(current.text)}</textarea>
     ${kind === NOTE_KIND.host ? '' : `<label class="note-pin"><input type="checkbox" data-pin ${current.pinned ? 'checked' : ''}> Pin the first line to ${kind === NOTE_KIND.terminal ? 'the terminal’s header' : 'the header of its terminals'}</label>`}
     <div class="dialog-actions">
       ${current.text ? '<button class="btn" data-remove>Remove note</button>' : ''}
@@ -84,7 +81,7 @@ export function editNote(kind, target) {
     setTimeout(() => { area.focus(); area.setSelectionRange(area.value.length, area.value.length); });
     /** @param {string} text */
     const save = text => {
-      setNote(kind, target, text.trim().slice(0, MAX_NOTE),
+      setNote(kind, target, text.trim(),
         !!(/** @type {HTMLInputElement | null} */ (dialog.querySelector('[data-pin]')))?.checked);
       close(true);
     };
@@ -99,8 +96,7 @@ export function editNote(kind, target) {
 }
 
 /**
- * Adds text to the end of a terminal's or workspace's note, as a new paragraph (the Notepad's Move to note). False
- * when the note would grow past the longest kept.
+ * Adds text to the end of a terminal's or workspace's note, as a new paragraph (the Notepad's Copy to note).
  * @param {string} kind 'terminal' or 'workspace'
  * @param {Tab | Workspace} target
  * @param {string} text
@@ -108,9 +104,7 @@ export function editNote(kind, target) {
 export function appendNote(kind, target, text) {
   const note = target.note;
   const joined = note?.text ? `${note.text}\n\n${text.trim()}` : text.trim();
-  if (joined.length > MAX_NOTE) return false;
   setNote(kind, target, joined, !!note?.pinned);
-  return true;
 }
 
 /**

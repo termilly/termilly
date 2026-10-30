@@ -38,8 +38,8 @@ internal static partial class WorkspaceLayout
     public const string FileName = ".termilly" + Extension;
     private const int MaxTerminals = 16;
     private const int MaxDepth = 8;
-    /// <summary>Longest note kept (characters), as in the page's note editor.</summary>
-    private const int MaxNote = 4000;
+    /// <summary>Longest note kept from a shared file (characters): notes have no limit, but a file from elsewhere can't flood one.</summary>
+    private const int MaxNote = 1_000_000;
     private const int MaxSnippets = 100;
 
     /// <summary>Longest workspace name kept, as the page's rename field allows.</summary>

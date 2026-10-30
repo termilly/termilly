@@ -2466,8 +2466,9 @@ mark.set-hit { border-radius: 2px; background: var(--accent-soft); color: inheri
 .pane-note[hidden] { display: none; }
 .pane-note span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pane-note svg { width: 12px; height: 12px; flex: none; color: var(--attention, #f2cc60); stroke-width: 1.5; }
-.dialog.note-editor { width: 520px; }
-.note-text { width: 100%; min-height: 150px; resize: vertical; font: 12.5px/1.5 var(--mono); }
+/* Big enough for a runbook, and resizable from its corner (the text box grows with it). */
+.dialog.note-editor { display: flex; flex-direction: column; width: min(760px, 90vw); min-width: 420px; height: min(560px, 80vh); min-height: 300px; max-width: 96vw; max-height: 92vh; overflow: hidden; resize: both; }
+.note-text { flex: 1; width: 100%; min-height: 120px; resize: none; font: 12.5px/1.5 var(--mono); }
 .note-pin { display: flex; align-items: center; gap: 8px; margin-top: 10px; color: var(--muted); font-size: 12.5px; }
 .note-editor .dialog-actions .spacer { flex: 1; }
 

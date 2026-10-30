@@ -10,6 +10,9 @@ import { showToast } from './toasts.js';
 
 /** The word for pasting, on the menu and on the production question (terminals.js). */
 export const PASTE_LABEL = 'Paste';
+/** Copy on a right-click menu, and the keys its entries show (the Notepad's menu too). */
+export const COPY_LABEL = 'Copy';
+export const MENU_KEYS = Object.freeze({ copy: 'Ctrl+C', paste: 'Ctrl+V' });
 
 /** xterm's mouse mode while no program asks for the mouse; otherwise a right-click is the program's. */
 const NO_MOUSE_TRACKING = 'none';
@@ -74,8 +77,8 @@ export function wireClipboard(term, body, paste) {
     e.preventDefault();
     if (term.modes.mouseTrackingMode !== NO_MOUSE_TRACKING) return;
     showMenu([
-      { label: 'Copy', hint: 'Ctrl+C', disabled: !term.hasSelection(), action: () => copySelection(term) },
-      { label: PASTE_LABEL, hint: 'Ctrl+V', action: () => navigator.clipboard.readText().then(text => { if (text) paste(text); }).catch(() => {}) },
+      { label: COPY_LABEL, hint: MENU_KEYS.copy, disabled: !term.hasSelection(), action: () => copySelection(term) },
+      { label: PASTE_LABEL, hint: MENU_KEYS.paste, action: () => navigator.clipboard.readText().then(text => { if (text) paste(text); }).catch(() => {}) },
       ...menuExtras(body),
     ], { x: e.clientX, y: e.clientY });
   });
