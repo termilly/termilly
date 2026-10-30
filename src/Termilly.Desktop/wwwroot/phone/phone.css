@@ -1,11 +1,10 @@
 /* Termilly on a phone (phone/): the setup page and the app. Design A (the desktop app's look) with D's answer sheet.
    Dark by default, light when the phone is. */
-:root { color-scheme: dark; --bg: #0d0d10; --raised: #17171c; --line: #26262e; --text: #e6e6eb; --muted: #8e8e9a; --accent: #8b7bff; --attention: #f2cc60; --danger: #ff6b6b; --ok: #3fb950; --sheet: #17171c; }
-/* Light: the phone's own setting (Automatic), or chosen in the app's Settings (html data-theme). */
+:root { --on-accent: #fff; color-scheme: dark; --bg: #0d0d10; --raised: #17171c; --line: #26262e; --text: #e6e6eb; --muted: #8e8e9a; --accent: #8b7bff; --attention: #f2cc60; --danger: #ff6b6b; --ok: #3fb950; --sheet: #17171c; }
+/* Light when the phone is (Automatic); a desktop theme chosen in the app's Settings sets these on the page instead (theme.js). */
 @media (prefers-color-scheme: light) {
-  :root:not([data-theme="dark"]) { color-scheme: light; --bg: #f3f3f5; --raised: #ffffff; --line: #e1e1e7; --text: #1d1d22; --muted: #6a6a76; --accent: #6d5cf0; --attention: #a8790a; --danger: #d63c3c; --ok: #1f8f3a; --sheet: #ffffff; }
+  :root { color-scheme: light; --bg: #f3f3f5; --raised: #ffffff; --line: #e1e1e7; --text: #1d1d22; --muted: #6a6a76; --accent: #6d5cf0; --attention: #a8790a; --danger: #d63c3c; --ok: #1f8f3a; --sheet: #ffffff; }
 }
-:root[data-theme="light"] { color-scheme: light; --bg: #f3f3f5; --raised: #ffffff; --line: #e1e1e7; --text: #1d1d22; --muted: #6a6a76; --accent: #6d5cf0; --attention: #a8790a; --danger: #d63c3c; --ok: #1f8f3a; --sheet: #ffffff; }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 body { margin: 0; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); background: var(--bg); color: var(--text); font: 16px/1.4 -apple-system, "Segoe UI", Roboto, sans-serif; }
 button { font: inherit; color: inherit; }
@@ -22,7 +21,7 @@ code { padding: 1px 5px; border-radius: 5px; background: var(--bg); font: 13.5px
 
 /* ---- The setup page (plain http) ---- */
 .card { margin: 0 0 14px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--raised); }
-.button { display: inline-block; padding: 10px 18px; border: 0; border-radius: 10px; background: var(--accent); color: #fff; font-family: inherit; font-size: 16px; font-weight: 600; line-height: 1.2; text-decoration: none; cursor: pointer; }
+.button { display: inline-block; padding: 10px 18px; border: 0; border-radius: 10px; background: var(--accent); color: var(--on-accent); font-family: inherit; font-size: 16px; font-weight: 600; line-height: 1.2; text-decoration: none; cursor: pointer; }
 .button[aria-disabled="true"] { opacity: .35; pointer-events: none; }
 .trust { color: var(--danger); font-size: 14px; }
 .trust.ok { color: var(--ok); }
@@ -57,7 +56,7 @@ form .button { flex: none; }
 .w-text { margin: 6px 0 10px; overflow-wrap: anywhere; font-size: 15px; }
 .w-actions { display: flex; gap: 8px; }
 .btn { flex: 1; padding: 9px 0; border: 0; border-radius: 10px; background: var(--raised); box-shadow: inset 0 0 0 1px var(--line); text-align: center; font-weight: 600; font-size: 15px; }
-.btn.primary { background: var(--accent); color: #fff; box-shadow: none; }
+.btn.primary { background: var(--accent); color: var(--on-accent); box-shadow: none; }
 .btn.danger { color: var(--danger); }
 .ws { display: flex; gap: 8px; align-items: center; margin: 16px 8px 6px; font-weight: 600; font-size: 15px; }
 .ws .count { margin-left: auto; color: var(--muted); font-weight: 400; font-size: 13px; }
@@ -95,7 +94,7 @@ form .button { flex: none; }
 .mono { margin: 10px 0 14px; padding: 12px; overflow-wrap: anywhere; border-radius: 11px; background: var(--bg); font: 15px ui-monospace, Menlo, Consolas, monospace; }
 .said { margin: 8px 0 14px; overflow-wrap: anywhere; font-size: 16px; }
 .ibtn { display: block; width: 100%; margin: 0 0 10px; padding: 14px 0; border: 0; border-radius: 13px; background: var(--bg); color: var(--accent); text-align: center; font-size: 17px; font-weight: 600; }
-.ibtn.fill { background: var(--accent); color: #fff; }
+.ibtn.fill { background: var(--accent); color: var(--on-accent); }
 .ibtn.red { color: var(--danger); }
 .reply-box { width: 100%; margin: 0 0 10px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); color: var(--text); font-family: inherit; font-size: 16px; resize: none; }
 .toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom)); z-index: 20; translate: -50% 0; padding: 10px 16px; border-radius: 12px; background: var(--text); color: var(--bg); font-size: 15px; }
@@ -112,8 +111,8 @@ body.tv-open { overflow: hidden; }
 .tv-box { flex: 1; min-height: 0; overflow: hidden; touch-action: none; padding: 6px 8px; background: #0a0a0c; }
 .tv-box * { touch-action: none; }
 .keybar { display: flex; flex: none; gap: 4px; padding: 4px 4px max(4px, calc(env(safe-area-inset-bottom) - 16px)); border-top: 1px solid var(--line); background: var(--raised); }
-.keybar button { flex: 1; padding: 3px 0; border: 0; border-radius: 6px; background: var(--bg); font: 600 12px ui-monospace, Menlo, Consolas, monospace; }
-.keybar button.on { background: var(--accent); color: #fff; }
+.keybar button { flex: 1; padding: 3px 0; border: 0; border-radius: 6px; background: var(--bg); box-shadow: inset 0 0 0 1px var(--line); font: 600 12px ui-monospace, Menlo, Consolas, monospace; }
+.keybar button.on { background: var(--accent); color: var(--on-accent); }
 /* The home indicator gets a little room (the bar sits just above it); with the keyboard up, none. */
 .tv.keyboard .keybar { padding-bottom: 4px; }
 .tv.keyboard .tv-note { padding-bottom: 10px; }
@@ -136,7 +135,7 @@ main.tabbed { padding-bottom: calc(80px + env(safe-area-inset-bottom)); }
 .tabbar button { position: relative; display: flex; flex: 1; flex-direction: column; gap: 2px; align-items: center; padding: 4px 0; border: 0; background: none; color: var(--muted); font-size: 11px; font-weight: 600; }
 .tabbar button.on { color: var(--accent); }
 .tabbar svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
-.tab-count { position: absolute; top: 0; left: calc(50% + 6px); min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--accent); color: #fff; font-size: 10px; font-weight: 700; line-height: 16px; text-align: center; }
+.tab-count { position: absolute; top: 0; left: calc(50% + 6px); min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--accent); color: var(--on-accent); font-size: 10px; font-weight: 700; line-height: 16px; text-align: center; }
 .tabbed ~ .toast { bottom: calc(80px + env(safe-area-inset-bottom)); }
 /* The Notifications tab: what each agent said, its state as a label. */
 .note { align-items: flex-start; }
@@ -151,6 +150,15 @@ main.tabbed { padding-bottom: calc(80px + env(safe-area-inset-bottom)); }
 .stepper { display: flex; gap: 12px; align-items: center; }
 .stepper .btn { flex: none; width: 56px; }
 .stepper span { flex: 1; font-weight: 600; text-align: center; }
-/* Settings: Automatic, Light or Dark side by side. */
-.segs { display: flex; gap: 6px; }
-.segs .btn.on { background: var(--accent); color: #fff; box-shadow: none; }
+/* Settings › Appearance: each look with its colours, the chosen one ticked. */
+.looks .look { width: 100%; border: 0; background: none; color: var(--text); font: inherit; text-align: left; }
+.swatch { position: relative; flex: none; width: 28px; height: 28px; border-radius: 8px; box-shadow: inset 0 0 0 1px var(--line); }
+.swatch i { position: absolute; right: 4px; bottom: 4px; width: 9px; height: 9px; border-radius: 50%; }
+.swatch.none { background: linear-gradient(135deg, #f3f3f5 50%, #0d0d10 50%); }
+.tick { flex: none; width: 18px; color: var(--accent); font-weight: 700; }
+.hint { margin: 8px 8px 0; font-size: 13px; }
+/* A Claude terminal's message box (terminal.js), above the key bar: the keyboard's mic dictates into it. */
+.tv-compose { display: flex; flex: none; gap: 8px; align-items: flex-end; margin: 0; padding: 6px 8px 2px; border-top: 1px solid var(--line); background: var(--raised); }
+.tv-compose textarea { flex: 1; min-height: 36px; max-height: 120px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 18px; background: var(--bg); color: var(--text); font-family: inherit; font-size: 16px; line-height: 1.3; resize: none; field-sizing: content; }
+.tv-compose .btn { flex: none; padding: 8px 14px; }
+.tv-compose + .keybar { border-top: 0; }

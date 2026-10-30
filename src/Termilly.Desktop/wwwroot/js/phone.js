@@ -14,6 +14,8 @@ import { isProduction } from './environments.js';
 import { screenOf } from './termscreen.js';
 import { agentInput } from './terminals.js';
 import { placeholders } from './snippets.js';
+import { THEMES, THEME_BASE, themeId, onSystemThemeChange } from './themes.js';
+import { termTheme } from './terminals.js';
 
 /** How long changes settle before the phones hear of them. */
 const SEND_AFTER_MS = 300;
@@ -104,6 +106,16 @@ const snippetsForPhone = () => [
   ...state.workspaces.flatMap(w => (w.snippets ?? []).map(s => phoneSnippet(s, w.id))),
 ];
 
+/**
+ * The desktop's themes as a phone draws itself with them (phone/theme.js): its few colours, and the terminal's.
+ * @param {import('./themes.js').Theme} t
+ */
+const phoneTheme = t => ({
+  id: t.id, name: t.name, light: t.base === THEME_BASE.light, terminal: t.terminal,
+  ui: { bg: t.window.background, raised: t.preview.side, line: t.preview.line, text: t.window.text, muted: t.preview.text, accent: t.window.accent },
+});
+const PHONE_THEMES = THEMES.map(phoneTheme);
+
 /** What the phones show: this PC's workspaces, in order, their terminals, and whether a phone may type into them. */
 function snapshot() {
   const typing = !!state.settings.phone?.allowTyping;
@@ -111,6 +123,8 @@ function snapshot() {
     typing,
     snippets: typing ? snippetsForPhone() : [],
     notes: notesForPhone(),
+    // Its themes, the one it shows now and its terminals' colours then (a theme plugin's, if one is chosen).
+    themes: PHONE_THEMES, pcTheme: themeId(), pcTerminal: termTheme(),
     workspaces: state.workspaces.map(w => ({ id: w.id, name: w.name, color: w.color })),
     terminals: [...state.tabs.values()].filter(t => t.wsId && wsById(t.wsId) && !t.virtual).map(terminalOf),
   };
@@ -121,6 +135,8 @@ const publish = debounce(() => {
 }, SEND_AFTER_MS);
 
 for (const event of [EVENTS.agent, EVENTS.tab, EVENTS.tabClosed, EVENTS.workspaces, EVENTS.settings]) on(event, publish);
+// Windows switched light and dark: the "system" theme is the other one now.
+onSystemThemeChange(publish);
 // A terminal resized on the PC: the phones draw it at its new size.
 on(EVENTS.terminalOpened, tab => tab.view?.term?.onResize(() => publish()));
 

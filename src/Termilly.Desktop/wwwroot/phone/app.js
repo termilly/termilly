@@ -6,19 +6,11 @@
 // between the terminals, the PC's notifications and this phone's settings (tabs.js).
 
 import { terminalView, TEXT_SIZE } from './terminal.js';
-import { TAB, SETTING, TEXT_SIZES, THEME, navHtml, notesHtml, settingsHtml } from './tabs.js';
+import { TAB, SETTING, TEXT_SIZES, navHtml, notesHtml, settingsHtml } from './tabs.js';
+import { applyLook, chooseLook, chosenLook, looks } from './theme.js';
 
 const app = /** @type {HTMLElement} */ (document.getElementById('app'));
 
-/** The app's look as chosen in Settings (Automatic leaves it to the phone). */
-const theme = () => localStorage.getItem(THEME.key) || THEME.auto;
-/** @param {string} pick */
-function setTheme(pick) {
-  localStorage.setItem(THEME.key, pick);
-  if (pick === THEME.auto) delete document.documentElement.dataset.theme;
-  else document.documentElement.dataset.theme = pick;
-}
-setTheme(theme());
 
 /** What the PC says about this phone. */
 /** @typedef {{ paired: boolean, locked?: boolean, pushKey?: string, alerts?: boolean }} Me */
@@ -26,7 +18,7 @@ setTheme(theme());
 /** @typedef {{ kind: string, tool: string | null, target: string | null, text: string, at: number, always?: boolean }} Waiting */
 /** A terminal as the PC describes it (js/phone.js). */
 /** @typedef {{ id: string, ws: string, title: string, icon: string, badge: string, agent: string | null, activity: string | null, line: string | null, waiting: Waiting | null, production: boolean, cols: number | null, rows: number | null }} Terminal */
-/** @typedef {{ typing?: boolean, snippets?: import('./snippets.js').PhoneSnippet[], notes?: import('./tabs.js').Note[], workspaces: { id: string, name: string, color: string }[], terminals: Terminal[] }} Snapshot */
+/** @typedef {import('./theme.js').Themed & { typing?: boolean, snippets?: import('./snippets.js').PhoneSnippet[], notes?: import('./tabs.js').Note[], workspaces: { id: string, name: string, color: string }[], terminals: Terminal[] }} Snapshot */
 
 /** The PC's API for the app (PhoneServer, PhoneAppApi). */
 const API = Object.freeze({ me: '/api/me', pair: '/api/pair', forget: '/api/forget', push: '/api/push', pushOff: '/api/push/off', pushTest: '/api/push/test', live: '/api/live' });
@@ -224,7 +216,7 @@ function render() {
   const title = app.querySelector('[data-title]');
   if (title) title.textContent = /** @type {Record<string, string>} */ (TITLE)[tab];
   home.innerHTML = tab === TAB.notes ? notesHtml(snap.notes ?? [], noteParts)
-    : tab === TAB.settings ? settingsHtml({ alerts: alertsBody(), size: textSize(), host: location.host, connected, theme: theme() })
+    : tab === TAB.settings ? settingsHtml({ alerts: alertsBody(), size: textSize(), host: location.host, connected, look: chosenLook(), looks: looks(snap) })
     : terminalsHtml();
   /** @type {HTMLElement} */ (document.getElementById('nav')).innerHTML = navHtml(tab, snap.notes?.length ?? 0);
   renderSheet();
@@ -286,6 +278,7 @@ function connect() {
     const m = JSON.parse(e.data);
     if (m.type === LIVE.state) {
       snap = m.state?.terminals ? m.state : { workspaces: [], terminals: [] };
+      restyle();
       render();
       if (terminalShown.viewing) terminalShown.update(terminal(terminalShown.viewing), !!snap.typing);
     } else if (m.type === LIVE.screen || m.type === LIVE.output) {
@@ -371,9 +364,10 @@ async function unpair() {
 }
 
 app.addEventListener('click', e => {
-  const pick = /** @type {HTMLElement} */ (e.target).closest('[data-theme-pick]')?.getAttribute('data-theme-pick');
+  const pick = /** @type {HTMLElement} */ (e.target).closest('[data-look]')?.getAttribute('data-look');
   if (pick) {
-    setTheme(pick);
+    chooseLook(pick);
+    restyle();
     render();
     return;
   }
@@ -431,6 +425,11 @@ app.addEventListener('submit', async e => {
 setInterval(() => { if (!replying) render(); }, AGE_EVERY_MS);
 
 /** The terminal view (terminal.js): it talks over the live connection, and its Answer opens the sheet. */
+/** The look as chosen, on the page and the terminal view (again whenever the PC's theme may have changed). */
+function restyle() {
+  terminalShown.retheme(applyLook(snap));
+}
+
 const terminalShown = terminalView({
   snippets: () => snap.snippets ?? [],
   send: message => { if (live?.readyState === OPEN) live.send(JSON.stringify(message)); },

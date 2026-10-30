@@ -4,7 +4,8 @@
 // font and the keyboard coming up shortens it, and the size follows. First what it shows (the window's own terminal,
 // drawn again at that size), then what it prints.
 // With Settings › Phone › Allow typing on, the phone's keyboard types into it, and a key bar adds what a phone lacks:
-// Esc, Tab, Ctrl, the arrows, Paste and the PC's snippets.
+// Esc, Tab, Ctrl, the arrows, Paste and the PC's snippets. A terminal running Claude Code also gets a box to message
+// it: a plain text field, so the phone's keyboard can dictate into it, and what's said is checked before it goes.
 
 import { SCREEN, terminalTouch } from './gestures.js';
 import { snippetSheet } from './snippets.js';
@@ -18,6 +19,10 @@ const BAR = [['esc', 'esc'], ['tab', 'tab'], ['ctrl', 'ctrl'], ['up', '↑'], ['
 const CTRL = 'ctrl';
 const PASTE = 'paste';
 const SNIP = 'snip';
+/** A message to Claude goes in, then Enter after this (as the PC's own send does, api.js); one with lines is pasted. */
+const ENTER_AFTER_MS = 200;
+const PASTED = Object.freeze({ start: '\x1b[200~', end: '\x1b[201~' });
+const COMPOSE = '.tv-compose';
 /** Ctrl with a letter: its code is the letter's minus 64 (Ctrl+C is 3). */
 const CTRL_OFFSET = 64;
 /** The font size before anything is pinched, and where the phone keeps the size pinched to (or set in Settings). */
@@ -51,7 +56,6 @@ const KEYBOARD_LEAST = 120;
 const DEFAULT_SIZE = Object.freeze({ cols: 80, rows: 24 });
 /** Messages from the PC about the terminal watched (PhoneLive.Kinds). */
 const LIVE = Object.freeze({ screen: 'screen', output: 'output' });
-const DARK = { background: '#0a0a0c', foreground: '#d7d7de', cursor: '#d7d7de', selectionBackground: '#3a3a55' };
 
 /** @typedef {{ id: string, title: string, ws: string, icon: string, badge: string, waiting: unknown, production: boolean, cols: number | null, rows: number | null }} Shown */
 
@@ -92,6 +96,22 @@ export function terminalView(app) {
   /** The size pinched to. */
   let fontSize = Number(localStorage.getItem(SIZE_KEY)) || READABLE;
   let sizeTimer = 0;
+  /** The terminal's colours, as the app's look says (theme.js); the desktop's Dark until it has said. */
+  /** @type {{ colors: Record<string, string>, contrast: number }} */
+  let look = { colors: {}, contrast: 1 };
+
+  /**
+   * New colours (the look was chosen, or the PC's theme changed): on the terminal shown, and its box around it.
+   * @param {{ colors: Record<string, string>, contrast: number }} next
+   */
+  function retheme(next) {
+    look = next;
+    const box = /** @type {HTMLElement | null} */ (view.querySelector(BOX));
+    if (box) box.style.background = next.colors.background ?? '';
+    if (!term) return;
+    term.options.theme = next.colors;
+    term.options.minimumContrastRatio = next.contrast;
+  }
 
   /** As many columns and rows as fit the terminal's box at its font size. */
   function grid() {
@@ -114,11 +134,14 @@ export function terminalView(app) {
     sizeTimer = setTimeout(() => { if (shown && term) app.send({ op: OP.size, pane: shown.id, cols: term.cols, rows: term.rows }); }, SIZE_AFTER_MS);
   }
 
-  /** @param {string} data */
+  /**
+   * Types into the terminal; false when it didn't (typing is off, or typing into production wasn't confirmed).
+   * @param {string} data
+   */
   function type(data) {
-    if (!shown || !typing) return;
+    if (!shown || !typing) return false;
     if (shown.production && !confirmed) {
-      if (!window.confirm(`${shown.title} is tagged prod. Type into it from this phone?`)) return;
+      if (!window.confirm(`${shown.title} is tagged prod. Type into it from this phone?`)) return false;
       confirmed = true;
     }
     if (ctrl && data.length === 1 && /[a-z@[\\\]^_]/i.test(data)) {
@@ -126,6 +149,7 @@ export function terminalView(app) {
       setCtrl(false);
     }
     app.send({ op: OP.input, pane: shown.id, data });
+    return true;
   }
 
   // The terminal's workspace's snippets and the global ones.
@@ -150,8 +174,11 @@ export function terminalView(app) {
     const box = view.querySelector(BOX);
     view.querySelectorAll('.tv-head, .tv-foot').forEach(el => el.remove());
     view.insertAdjacentHTML('afterbegin', head());
+    const compose = typing && shown?.icon === 'claude'
+      ? '<form class="tv-foot tv-compose"><textarea rows="1" placeholder="Message Claude" enterkeyhint="send" autocapitalize="sentences"></textarea><button class="btn primary" type="submit">Send</button></form>'
+      : '';
     box?.insertAdjacentHTML('afterend', typing
-      ? `<div class="tv-foot keybar">${BAR.map(([key, label]) => `<button data-key="${key}">${label}</button>`).join('')}</div>`
+      ? `${compose}<div class="tv-foot keybar">${BAR.map(([key, label]) => `<button data-key="${key}">${label}</button>`).join('')}</div>`
       : '<p class="tv-foot tv-note">Typing from the phone is off: Settings › Phone › Allow typing, on the PC.</p>');
   }
 
@@ -173,9 +200,10 @@ export function terminalView(app) {
     snippets.close();
     frame();
     term = new Terminal({ cols: t.cols ?? DEFAULT_SIZE.cols, rows: t.rows ?? DEFAULT_SIZE.rows, fontSize, scrollback: SCROLLBACK,
-      fontFamily: 'ui-monospace, Menlo, Consolas, monospace', theme: DARK, disableStdin: !canType, convertEol: false, cursorBlink: false });
+      fontFamily: 'ui-monospace, Menlo, Consolas, monospace', theme: look.colors, minimumContrastRatio: look.contrast, disableStdin: !canType, convertEol: false, cursorBlink: false });
     const box = /** @type {HTMLElement} */ (view.querySelector(BOX));
     term.open(box);
+    retheme(look);
     touch(box);
     term.onData(/** @param {string} data */ data => { if (!AUTOMATIC.test(data)) type(data); });
     fitViewport();
@@ -270,6 +298,26 @@ export function terminalView(app) {
   window.visualViewport?.addEventListener('resize', fitViewport);
   window.visualViewport?.addEventListener('scroll', pin);
 
+  /** Sends what's in the message box to Claude: the words, then Enter. */
+  function sendMessage() {
+    const field = /** @type {HTMLTextAreaElement | null} */ (view.querySelector(`${COMPOSE} textarea`));
+    const text = field?.value.trim() ?? '';
+    if (!field || !text) return;
+    if (!type(text.includes('\n') ? PASTED.start + text + PASTED.end : text)) return;
+    field.value = '';
+    setTimeout(() => type('\r'), ENTER_AFTER_MS);
+  }
+  view.addEventListener('submit', e => {
+    e.preventDefault();
+    if (/** @type {HTMLElement} */ (e.target).matches(COMPOSE)) sendMessage();
+  });
+  // Enter in the box sends (the keyboard's Send key); a hardware keyboard's Shift+Enter starts a new line.
+  view.addEventListener('keydown', e => {
+    if (e.key !== 'Enter' || e.shiftKey || !/** @type {HTMLElement} */ (e.target).closest(COMPOSE)) return;
+    e.preventDefault();
+    sendMessage();
+  });
+
   view.addEventListener('click', async e => {
     const target = /** @type {HTMLElement} */ (e.target);
     const key = target.closest('[data-key]')?.getAttribute('data-key');
@@ -293,7 +341,7 @@ export function terminalView(app) {
   const rewatch = () => { if (shown && term) app.send({ op: OP.watch, pane: shown.id, cols: term.cols, rows: term.rows }); };
 
   return {
-    open, close, update, message, rewatch,
+    open, close, update, message, rewatch, retheme,
     /** The terminal shown, or null. */
     get viewing() { return shown?.id ?? null; },
   };

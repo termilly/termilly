@@ -45,7 +45,7 @@ export const isLight = () => currentTheme().base === THEME_BASE.light;
 let pluginTheme = { key: null, theme: null };
 /** The theme plugin whose terminal colours are chosen (Settings › Terminal), if any. */
 const chosenColors = () => state.settings.terminal.colors && state.pluginThemes.find(t => t.id === state.settings.terminal.colors);
-const termTheme = () => {
+export const termTheme = () => {
   const chosen = chosenColors();
   const key = chosen ? `${chosen.id}|${themeId()}` : null;
   document.documentElement.style.setProperty('--term-surface',
