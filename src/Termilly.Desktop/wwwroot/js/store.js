@@ -57,6 +57,7 @@ export const GROUPS = Object.freeze({
   agents: 'agents',
   changes: 'changes',
   remote: 'remote',
+  phone: 'phone',
   uiState: 'uiState',
   data: 'data',
 });
