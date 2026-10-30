@@ -48,6 +48,15 @@ const TOOL_ICONS = Object.freeze({
   links: '<svg viewBox="0 0 16 16"><path d="M6.5 5.5h-2a3 3 0 0 0 0 6h2M9.5 5.5h2a3 3 0 0 1 0 6h-2M5.5 8.5h5"/></svg>',
   wrap: '<svg viewBox="0 0 16 16"><path d="M1.5 3.5h13M1.5 7.5h10a2 2 0 0 1 0 4h-3M1.5 11.5h4"/><path d="M10 9.5l-2 2 2 2"/></svg>',
 });
+/**
+ * The page's right-click menu, 16px at a 1px line: scissors (cut), a clipboard with lines (paste), a clipboard with a T
+ * (paste as plain text).
+ */
+const MENU_ICONS = Object.freeze({
+  cut: '<svg viewBox="0 0 16 16"><circle cx="4.5" cy="11.5" r="2"/><circle cx="11.5" cy="11.5" r="2"/><path d="M5.7 9.8L11 1.5M10.3 9.8L5 1.5"/></svg>',
+  paste: '<svg viewBox="0 0 16 16"><rect x="3.5" y="3.5" width="9" height="11" rx="1"/><path d="M6.5 2.5h3v2h-3zM5.5 7.5h5M5.5 10.5h3"/></svg>',
+  pastePlain: '<svg viewBox="0 0 16 16"><rect x="3.5" y="3.5" width="9" height="11" rx="1"/><path d="M6.5 2.5h3v2h-3zM5.5 7.5h4M7.5 7.5v5"/></svg>',
+});
 /** What its requests to the host start with. */
 const REQUEST = 'np';
 
@@ -285,10 +294,10 @@ function noteChoices() {
   const terminals = [...state.tabs.values()].filter(t => t.wsId && wsById(t.wsId) && !t.virtual);
   return [
     {
-      label: 'Workspace note', submenu: () => state.workspaces.map(w => ({ label: w.name, icon: `<span class="ws-dot" style="background:${cssColor(w.color)}"></span>`, action: () => copyToNote(NOTE_KIND.workspace, w, w.name) })),
+      label: 'Workspace note', icon: ICONS.workspaces, submenu: () => state.workspaces.map(w => ({ label: w.name, icon: `<span class="ws-dot" style="background:${cssColor(w.color)}"></span>`, action: () => copyToNote(NOTE_KIND.workspace, w, w.name) })),
     },
     {
-      label: 'Terminal note', disabled: !terminals.length,
+      label: 'Terminal note', icon: ICONS.terminal, disabled: !terminals.length,
       submenu: () => terminals.map(t => ({ label: tabTitle(t), icon: tabBadgeHtml(t), hint: escapeHtml(wsById(t.wsId)?.name ?? ''), action: () => copyToNote(NOTE_KIND.terminal, t, tabTitle(t)) })),
     },
   ];
@@ -327,12 +336,12 @@ function pageMenu(e) {
   const selected = start !== end;
   const selection = area.value.slice(start, end);
   showMenu([
-    { label: 'Cut', hint: 'Ctrl+X', disabled: !selected, action: () => { navigator.clipboard.writeText(selection).catch(() => {}); insert(''); } },
-    { label: COPY, hint: MENU_KEYS.copy, disabled: !selected, action: () => navigator.clipboard.writeText(selection).catch(() => {}) },
-    { label: PASTE_LABEL, hint: MENU_KEYS.paste, action: () => paste() },
-    { label: 'Paste as plain text', title: 'Without the colour codes, control characters and trailing spaces a terminal adds', action: () => paste(plainText) },
+    { label: 'Cut', icon: MENU_ICONS.cut, hint: 'Ctrl+X', disabled: !selected, action: () => { navigator.clipboard.writeText(selection).catch(() => {}); insert(''); } },
+    { label: COPY, icon: ICONS.copy, hint: MENU_KEYS.copy, disabled: !selected, action: () => navigator.clipboard.writeText(selection).catch(() => {}) },
+    { label: PASTE_LABEL, icon: MENU_ICONS.paste, hint: MENU_KEYS.paste, action: () => paste() },
+    { label: 'Paste as plain text', icon: MENU_ICONS.pastePlain, title: 'Without the colour codes, control characters and trailing spaces a terminal adds', action: () => paste(plainText) },
     SEPARATOR,
-    { label: 'Copy to note', disabled: !area.value.trim(), title: selected ? undefined : 'With nothing selected, the whole page', submenu: noteChoices },
+    { label: 'Copy to note', icon: TOOL_ICONS.move, disabled: !area.value.trim(), title: selected ? undefined : 'With nothing selected, the whole page', submenu: noteChoices },
   ], { x: e.clientX, y: e.clientY }, {
     // The text box keeps the focus while the menu shows, so its selection stays lit; closing, it gets it back.
     keepFocus: true,

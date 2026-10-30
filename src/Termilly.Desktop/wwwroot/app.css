@@ -957,6 +957,8 @@ body[data-sidebar="rail"] .side-rail { opacity: 1; pointer-events: auto; }
 .rail-remote:hover, .rail-remote.open { background: var(--hover); color: var(--text); }
 .rail-remote svg { width: 16px; height: 16px; stroke-width: 1; }
 .menu-icon .badge.small { width: 16px; height: 16px; border-radius: 4px; font-size: 7.5px; }
+/* A pixel word (COM, SSH, WSL) keeps its own size: stretched to the menu's 16px icons, it outgrew its tile. */
+.menu-icon .badge-word { width: auto; height: auto; }
 .side-list::-webkit-scrollbar { width: 6px; }
 .side-list::-webkit-scrollbar-thumb { border-radius: 3px; background: var(--scroll-thumb); }
 
