@@ -286,11 +286,10 @@ function connect() {
       if (terminalShown.viewing) terminalShown.update(terminal(terminalShown.viewing), !!snap.typing);
     } else if (m.type === LIVE.screen || m.type === LIVE.output) {
       terminalShown.message(m);
-    } else if (m.type === LIVE.answered && m.op === OP.input) {
-      if (!m.ok) toast(m.error || 'That didn\'t go through.');
     } else if (m.type === LIVE.answered) {
-      toast(m.ok ? 'Sent' : m.error || 'That didn\'t go through.');
-      if (m.ok && m.pane === sheetFor) openSheet(null);
+      // Only a failure is said; an answer that went through just closes its sheet.
+      if (!m.ok) toast(m.error || 'That didn\'t go through.');
+      else if (m.op !== OP.input && m.pane === sheetFor) openSheet(null);
     }
   });
   live.addEventListener('close', () => {
