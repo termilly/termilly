@@ -35,6 +35,7 @@ public sealed class PhoneTests : IDisposable
 
     public void Dispose()
     {
+        _live.Dispose();
         Environment.SetEnvironmentVariable("TERMILLY_PHONE_BIND", null);
         Directory.Delete(_dir, recursive: true);
     }

@@ -13,7 +13,7 @@ namespace Termilly.Desktop.Phone;
 /// answer to an agent) goes to <see cref="Received"/>, and its answer back to that phone alone. A phone may watch one
 /// terminal: it gets what that terminal printed lately (PhoneOutput), then what it prints, a few times a second.
 /// </summary>
-internal sealed class PhoneLive
+internal sealed class PhoneLive : IDisposable
 {
     /// <summary>The longest message a phone may send: a reply to an agent.</summary>
     private const int MaxMessage = 16 * 1024;
@@ -169,6 +169,12 @@ internal sealed class PhoneLive
             var screen = new JsonObject { [TypeField] = Kinds.Screen, [PaneField] = pane, [DataField] = Recent?.Invoke(pane) ?? "" };
             await SendAsync(socket, screen.ToJsonString()).ConfigureAwait(false);
         }
+    }
+
+    public void Dispose()
+    {
+        _flush.Dispose();
+        CloseAll();
     }
 
     /// <summary>Closes every phone's connection (the server stops, or a phone was removed: it connects again or not).</summary>
