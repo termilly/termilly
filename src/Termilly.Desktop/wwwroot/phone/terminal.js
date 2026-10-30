@@ -1,6 +1,7 @@
 // @ts-check
-// The phone's terminal view (design A): one terminal live, drawn by xterm.js at the PC's size (fitted to the phone's
-// width), first with what it printed lately and then as it prints (PhoneLive). With Settings › Phone › Allow typing on,
+// The phone's terminal view (design A): one terminal live, drawn by xterm.js at the PC's size (readable text that
+// scrolls sideways, or Fit to see the whole width), first with what it printed lately and then as it prints
+// (PhoneLive). With Settings › Phone › Allow typing on,
 // the phone's keyboard types into it, and a key bar adds what a phone lacks: Esc, Tab, Ctrl, the arrows and Paste.
 
 /** What the key bar sends (data-key), as a terminal reads it. */
@@ -13,14 +14,19 @@ const CTRL = 'ctrl';
 const PASTE = 'paste';
 /** Ctrl with a letter: its code is the letter's minus 64 (Ctrl+C is 3). */
 const CTRL_OFFSET = 64;
-/** The font sizes the view fits the PC's width with, and how wide a monospace character is per point. */
-const FONT = Object.freeze({ min: 6, max: 14, charWidth: 0.6, tenths: 10 });
+/**
+ * The font sizes: readable (the box scrolls sideways when the PC's terminal is wider than the phone), and the range Fit
+ * picks from to show the whole width; how wide a monospace character is per point until xterm has drawn one.
+ */
+const FONT = Object.freeze({ readable: 13, min: 3, max: 14, charWidth: 0.6, tenths: 10, tries: 6 });
+/** Where the phone keeps whether Fit is on. */
+const FIT_KEY = 'termilly.terminal.fit';
 /** The terminal's box: its element, its side padding together, and the narrowest width it's fitted to. */
 const BOX = '.tv-box';
 const BOX_SPACE = Object.freeze({ padding: 16, least: 200 });
 /** What the view asks of the live connection, and its header's buttons (data-tv). */
 const OP = Object.freeze({ watch: 'watch', unwatch: 'unwatch', input: 'input' });
-const TV = Object.freeze({ back: 'back', answer: 'answer' });
+const TV = Object.freeze({ back: 'back', answer: 'answer', fit: 'fit' });
 /**
  * What xterm.js answers on its own (to the programs' queries in the output it draws: who are you, where's the cursor,
  * what colours) and reports (focus, the mouse). The PC's terminal answers those already; from the phone they'd only
@@ -58,11 +64,28 @@ export function terminalView(app) {
   /** Whether typing into this production terminal was confirmed already. */
   let confirmed = false;
 
-  /** @param {Shown} t */
-  const fontFor = t => {
+  /** Whether the whole width is shown (small text) rather than readable text that scrolls sideways. */
+  let fit = localStorage.getItem(FIT_KEY) === '1';
+
+  /** Readable, or with Fit the size that shows all the PC's columns, measured from what xterm drew. */
+  function fitFont() {
+    if (!term) return;
+    if (!fit) {
+      term.options.fontSize = FONT.readable;
+      return;
+    }
     const width = Math.max(view.clientWidth - BOX_SPACE.padding, BOX_SPACE.least);
-    return Math.max(FONT.min, Math.min(FONT.max, Math.floor((width / ((t.cols ?? DEFAULT_SIZE.cols) * FONT.charWidth)) * FONT.tenths) / FONT.tenths));
-  };
+    // xterm rounds its cells to the screen's pixels, so the size is measured again until the screen fits.
+    for (let tries = 0; tries < FONT.tries; tries++) {
+      const drawn = /** @type {HTMLElement | null} */ (term.element?.querySelector('.xterm-screen'))?.offsetWidth;
+      if (drawn && drawn <= width && tries > 0) break;
+      const perPoint = drawn ? drawn / term.cols / term.options.fontSize : FONT.charWidth;
+      const size = Math.floor((width / (term.cols * perPoint)) * FONT.tenths) / FONT.tenths - (tries > 0 ? 1 / FONT.tenths : 0);
+      term.options.fontSize = Math.max(FONT.min, Math.min(FONT.max, size));
+    }
+    const box = view.querySelector(BOX);
+    if (box) box.scrollLeft = 0;
+  }
 
   /** @param {string} data */
   function type(data) {
@@ -89,6 +112,7 @@ export function terminalView(app) {
     return `<header class="tv-head"><button class="tv-back" data-tv="${TV.back}" aria-label="Back">‹</button>
       <span class="badge${shown.icon === 'claude' ? ' claude' : ''}" data-icon="${esc(shown.icon)}">${shown.icon === 'claude' ? '✻' : esc(shown.badge)}</span>
       <span class="tv-title">${esc(shown.title)}<span class="tv-ws"> · ${esc(app.wsName(shown.ws))}</span></span>
+      <button class="btn tv-fit${fit ? ' on' : ''}" data-tv="${TV.fit}" aria-pressed="${fit}">Fit</button>
       ${shown.waiting ? `<button class="btn primary tv-answer" data-tv="${TV.answer}">Answer</button>` : ''}</header>`;
   }
 
@@ -117,9 +141,10 @@ export function terminalView(app) {
     view.hidden = false;
     view.innerHTML = '<div class="tv-box"></div>';
     frame();
-    term = new Terminal({ cols: t.cols ?? DEFAULT_SIZE.cols, rows: t.rows ?? DEFAULT_SIZE.rows, fontSize: fontFor(t), scrollback: SCROLLBACK,
+    term = new Terminal({ cols: t.cols ?? DEFAULT_SIZE.cols, rows: t.rows ?? DEFAULT_SIZE.rows, fontSize: FONT.readable, scrollback: SCROLLBACK,
       fontFamily: 'ui-monospace, Menlo, Consolas, monospace', theme: DARK, disableStdin: !canType, convertEol: false, cursorBlink: false });
     term.open(view.querySelector(BOX));
+    fitFont();
     term.onData(/** @param {string} data */ data => { if (!AUTOMATIC.test(data)) type(data); });
     app.send({ op: OP.watch, pane: t.id });
     fitViewport();
@@ -152,7 +177,7 @@ export function terminalView(app) {
     shown = t;
     if (resized && term) {
       term.resize(t.cols ?? DEFAULT_SIZE.cols, t.rows ?? DEFAULT_SIZE.rows);
-      term.options.fontSize = fontFor(t);
+      fitFont();
     }
     if (changed) {
       typing = canType;
@@ -176,6 +201,7 @@ export function terminalView(app) {
   function fitViewport() {
     if (view.hidden || !window.visualViewport) return;
     view.style.height = `${window.visualViewport.height}px`;
+    fitFont();
     term?.scrollToBottom();
   }
   window.visualViewport?.addEventListener('resize', fitViewport);
@@ -186,6 +212,12 @@ export function terminalView(app) {
     const action = target.closest('[data-tv]')?.getAttribute('data-tv');
     if (action === TV.back) close();
     else if (action === TV.answer && shown) app.answer(shown.id);
+    else if (action === TV.fit) {
+      fit = !fit;
+      localStorage.setItem(FIT_KEY, fit ? '1' : '0');
+      fitFont();
+      frame();
+    }
     else if (key === CTRL) setCtrl(!ctrl);
     else if (key === PASTE) {
       try {
