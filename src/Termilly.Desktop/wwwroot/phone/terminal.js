@@ -3,8 +3,6 @@
 // width), first with what it printed lately and then as it prints (PhoneLive). With Settings › Phone › Allow typing on,
 // the phone's keyboard types into it, and a key bar adds what a phone lacks: Esc, Tab, Ctrl, the arrows and Paste.
 
-/* global Terminal */
-
 /** What the key bar sends (data-key), as a terminal reads it. */
 const KEYS = Object.freeze({
   esc: '\x1b', tab: '\t', up: '\x1b[A', down: '\x1b[B', right: '\x1b[C', left: '\x1b[D', enter: '\r',
@@ -25,7 +23,7 @@ const DEFAULT_SIZE = Object.freeze({ cols: 80, rows: 24 });
 const LIVE = Object.freeze({ screen: 'screen', output: 'output' });
 const DARK = { background: '#0a0a0c', foreground: '#d7d7de', cursor: '#d7d7de', selectionBackground: '#3a3a55' };
 
-/** @typedef {{ id: string, title: string, ws: string, icon: string, badge: string, waiting: unknown, production: boolean, cols: number | null, rows: number | null }} Terminal */
+/** @typedef {{ id: string, title: string, ws: string, icon: string, badge: string, waiting: unknown, production: boolean, cols: number | null, rows: number | null }} Shown */
 
 /** @param {unknown} text */
 const esc = text => String(text ?? '').replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
@@ -41,14 +39,14 @@ export function terminalView(app) {
   document.body.append(view);
   /** @type {any} */
   let term = null;
-  /** @type {Terminal | null} */
+  /** @type {Shown | null} */
   let shown = null;
   let typing = false;
   let ctrl = false;
   /** Whether typing into this production terminal was confirmed already. */
   let confirmed = false;
 
-  /** @param {Terminal} t */
+  /** @param {Shown} t */
   const fontFor = t => {
     const width = Math.max(view.clientWidth - 16, 200);
     return Math.max(FONT.min, Math.min(FONT.max, Math.floor((width / ((t.cols ?? DEFAULT_SIZE.cols) * FONT.charWidth)) * 10) / 10));
@@ -96,7 +94,7 @@ export function terminalView(app) {
 
   /**
    * Opens a terminal: the PC sends what it printed lately, then what it prints.
-   * @param {Terminal} t
+   * @param {Shown} t
    * @param {boolean} canType
    */
   function open(t, canType) {
@@ -127,7 +125,7 @@ export function terminalView(app) {
 
   /**
    * The PC's news about the terminal shown: gone, resized, waiting or not, typing allowed or not.
-   * @param {Terminal | undefined} t
+   * @param {Shown | undefined} t
    * @param {boolean} canType
    */
   function update(t, canType) {
