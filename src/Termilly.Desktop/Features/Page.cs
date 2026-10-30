@@ -232,6 +232,8 @@ internal sealed class WindowHandler : IMessageHandler
 {
     private const string FolderPickerTitle = "Choose the folder new terminals start in";
     private static readonly string[] WebSchemes = [Uri.UriSchemeHttp, Uri.UriSchemeHttps];
+    /// <summary>The files Ctrl+click opens in the browser rather than the File Explorer (js/changes.js WEB_PAGE).</summary>
+    private static readonly string[] WebPages = [".html", ".htm"];
 
     private readonly PageChannel _page;
     private readonly IAppWindow _window;
@@ -278,6 +280,14 @@ internal sealed class WindowHandler : IMessageHandler
             }
         });
         router.On<FromPage.OpenPath>(m => _desktop.ShowPath(m.Path));
+        // Only a web page that's there: the page can't start other programs through it.
+        router.On<FromPage.OpenPage>(m =>
+        {
+            if (m.Path is { } path && WebPages.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase) && File.Exists(path))
+            {
+                _desktop.OpenFile(path);
+            }
+        });
         router.On<FromPage.DataDirOpen>(_ => _desktop.OpenFolder(AppPaths.DataDirectory));
         router.On<FromPage.PickFolder>(m => PickFolderAsync(m.RequestId, m.Initial));
     }

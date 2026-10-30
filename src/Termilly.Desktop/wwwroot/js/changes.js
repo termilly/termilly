@@ -15,9 +15,12 @@ import { showChange, showMessage, KIND_BADGE } from './preview.js';
 import { PATH_PATTERNS } from './hints.js';
 import { find, targetOf } from './dom.js';
 import { MINUTE_MS, HOUR_MS } from './util.js';
-import { registerLinks } from './termlinks.js';
+import { registerLinks, COPY_HINT } from './termlinks.js';
 import { findWebLinks } from './webaddress.js';
 import { findSpacedPaths } from './spacedpaths.js';
+
+/** A web page on this machine: Ctrl+click opens it in the browser (Features/Page.cs WebPages), not the File Explorer. */
+const WEB_PAGE = /\.html?$/i;
 
 /**
  * A file Claude changed, as the host lists it (Changes.cs): its path, how to show it (relative to Claude's folder,
@@ -73,6 +76,7 @@ function resolvePath(tab, text) {
 export function openChange(tab, text) {
   resolvePath(tab, text).then(reply => {
     if (reply.folder && reply.path) send(PAGE.openPath, { path: reply.path });
+    else if (reply.path && WEB_PAGE.test(reply.path)) send(PAGE.openPage, { path: reply.path });
     else if (reply.path) showChange(tab, reply.path, { line: reply.line ?? null });
     else showMessage(tab, reply.error ?? 'File not found.');
   });
@@ -91,7 +95,8 @@ async function realPaths(tab, text) {
   // A path with spaces first (the usual patterns stop at a space); where it isn't real, the shorter path in it may be.
   const spaced = await real(findSpacedPaths(text));
   const plain = (await real(findLinks(text))).filter(r => !spaced.some(s => r.c.start < s.c.end && r.c.end > s.c.start));
-  return [...spaced, ...plain].map(({ c, reply }) => ({ ...c, title: reply.folder ? 'Ctrl+click to open the folder' : 'Ctrl+click to preview the change' }));
+  return [...spaced, ...plain].map(({ c, reply }) => ({ ...c, title: `${reply.folder ? 'Ctrl+click to open the folder'
+    : WEB_PAGE.test(/** @type {string} */ (reply.path)) ? 'Ctrl+click to open it in your browser' : 'Ctrl+click to open it in the File Explorer'}\n${COPY_HINT}` }));
 }
 
 /** How a change from under a minute ago is dated. */
@@ -275,7 +280,7 @@ on(EVENTS.terminalOpened, tab => {
   registerLinks(tab.view.term, tab.view.body, {
     find: text => realPaths(tab, text),
     active: () => enabled() && settings().changes.links,
-    title: () => 'Ctrl+click to preview the change',
+    title: () => `Ctrl+click to open it in the File Explorer\n${COPY_HINT}`,
     open: path => openChange(tab, path),
   });
 });

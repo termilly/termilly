@@ -28,6 +28,27 @@ let hovered = null;
 /** The text of the link under the mouse (a web address or a path), for the right-click menu; null when none. */
 export const linkUnderMouse = () => hovered?.link.text ?? null;
 
+/** A link's tooltip line about copying it (termclipboard.js copies it). */
+export const COPY_HINT = 'Ctrl+C to copy it';
+
+/** A link a program marked itself (OSC 8, terminals.js) under the mouse, which xterm underlines. */
+let marked = /** @type {string | null} */ (null);
+
+/** @param {string | null} uri the marked link the mouse is over, or null when it left */
+export function hoverMarkedLink(uri) {
+  marked = uri;
+}
+
+/**
+ * The link Ctrl+C copies: the one under the mouse while Ctrl holds it underlined; null when there's none, so Ctrl+C
+ * copies the selection or stops the program as usual.
+ */
+export function underlinedLink() {
+  if (!ctrlHeld) return null;
+  if (hovered && hovered.kind.active()) return hovered.link.text;
+  return marked;
+}
+
 /** @param {LinkKind} kind */
 const decorations = kind => {
   const on = !!kind.plainClick?.() || ctrlHeld;

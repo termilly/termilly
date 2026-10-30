@@ -24,6 +24,7 @@ import { find, field, PATH_DRAG } from './dom.js';
 import { continuesOnNextRow } from './buffer.js';
 import { clipboardKey, wireClipboard, PASTE_LABEL } from './termclipboard.js';
 import { selectionKey } from './keyselect.js';
+import { hoverMarkedLink, COPY_HINT } from './termlinks.js';
 
 /**
  * A theme plugin's terminal colours (state.pluginThemes).
@@ -696,13 +697,18 @@ function linkHandler(tab) {
         let path = uri.replace(/^file:\/\/[^/]*/i, '');
         try { path = decodeURIComponent(path); } catch { /* keep it as sent */ }
         if (/^\/[A-Za-z]:/.test(path)) path = path.slice(1).replace(/\//g, '\\');
-        send(PAGE.openPath, { path });
+        // A web page opens in the browser, as Ctrl+click on its path does (changes.js).
+        send(/\.html?$/i.test(path) ? PAGE.openPage : PAGE.openPath, { path });
       }
     },
     hover: (/** @type {MouseEvent} */ _event, /** @type {string} */ uri) => {
-      /** @type {TabView} */ (tab.view).body.title = `${uri}\nCtrl+click to open`;
+      hoverMarkedLink(uri);
+      /** @type {TabView} */ (tab.view).body.title = `${uri}\nCtrl+click to open\n${COPY_HINT}`;
     },
-    leave: () => { /** @type {TabView} */ (tab.view).body.removeAttribute('title'); },
+    leave: () => {
+      hoverMarkedLink(null);
+      /** @type {TabView} */ (tab.view).body.removeAttribute('title');
+    },
   };
 }
 

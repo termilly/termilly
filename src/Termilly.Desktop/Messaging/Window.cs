@@ -89,6 +89,12 @@ internal static partial class FromPage
         public static string Type => "open:path";
     }
 
+    /// <summary>A web page on this machine (an .html file) to open in the default browser.</summary>
+    internal sealed record OpenPage(string? Path = null) : IPageMessage
+    {
+        public static string Type => "open:page";
+    }
+
     internal sealed record DataDirOpen : IPageMessage
     {
         public static string Type => "dataDir:open";

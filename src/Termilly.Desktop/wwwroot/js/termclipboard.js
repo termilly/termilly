@@ -5,6 +5,8 @@
 import { state } from './store.js';
 import { showMenu } from './popups.js';
 import { clipboardAction, CLIPBOARD_ACTION } from './clipboardkeys.js';
+import { underlinedLink } from './termlinks.js';
+import { showToast } from './toasts.js';
 
 /** The word for pasting, on the menu and on the production question (terminals.js). */
 export const PASTE_LABEL = 'Paste';
@@ -40,6 +42,14 @@ function copySelection(term) {
  */
 export function clipboardKey(term, e) {
   if (e.type !== 'keydown') return true;
+  // Ctrl held over a link underlines it, and Ctrl+C then copies the link, unless text is selected.
+  const link = !term.hasSelection() && clipboardAction(e, true) === CLIPBOARD_ACTION.copy && !e.shiftKey ? underlinedLink() : null;
+  if (link) {
+    e.preventDefault();
+    navigator.clipboard.writeText(link).catch(() => {});
+    showToast({ text: `Copied ${link}` });
+    return false;
+  }
   const action = clipboardAction(e, term.hasSelection());
   if (action === CLIPBOARD_ACTION.copy) {
     e.preventDefault();
