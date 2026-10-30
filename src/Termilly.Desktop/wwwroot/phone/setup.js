@@ -25,7 +25,7 @@ async function check() {
   } catch {
     trusted = false;
   }
-  trust.textContent = trusted ? 'This phone trusts Termilly.' : 'Not yet: this phone doesn't trust Termilly. Finish step 1 first.';
+  trust.textContent = trusted ? 'This phone trusts Termilly.' : 'Not yet: this phone doesn’t trust Termilly. Finish step 1 first.';
   trust.classList.toggle('ok', trusted);
   open.setAttribute('aria-disabled', String(!trusted));
   if (!trusted) setTimeout(check, CHECK_EVERY_MS);
