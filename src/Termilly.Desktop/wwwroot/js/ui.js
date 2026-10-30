@@ -3,6 +3,7 @@
 
 import { BADGES, PROFILE_SOURCES, state, tagColor, profileOf, runsClaude, sourceOf } from './store.js';
 import { DAY_MS, WEEK_DAYS } from './util.js';
+import { PROFILE_ICON } from './constants.js';
 
 /** The class of a badge at its usual size, in lists and headers. */
 /** A badge's sizes. */
@@ -96,7 +97,48 @@ export const ltrPath = path => `‎${path ?? ''}‎`;
  */
 export function badgeHtml(profile, extraClass = BADGE_SIZE.small) {
   const icon = profile?.icon ?? '';
-  return `<span class="badge ${extraClass}" data-icon="${escapeHtml(icon)}">${escapeHtml(/** @type {Record<string, string>} */ (BADGES)[icon] ?? '>_')}</span>`;
+  const word = /** @type {Record<string, string>} */ (PIXEL_WORDS)[icon];
+  return `<span class="badge ${extraClass}" data-icon="${escapeHtml(icon)}">${word ? pixelWord(word, extraClass === BADGE_SIZE.small)
+    : `<span class="badge-text">${escapeHtml(/** @type {Record<string, string>} */ (BADGES)[icon] ?? '>_')}</span>`}</span>`;
+}
+
+/** Badges that are a word drawn in whole pixels, which a font can't keep sharp in an 18px badge. */
+const PIXEL_WORDS = { [PROFILE_ICON.serial]: 'COM', [PROFILE_ICON.ssh]: 'SSH', [PROFILE_ICON.wsl]: 'WSL' };
+/**
+ * The pixel fonts for those words. A word's width and height must have the same evenness as the badge's inside to
+ * sit exactly in its middle: 4 x 6 letters (a 14 x 6 word) in the small badge's 16px, and 3 x 5 letters drawn at 2x
+ * (22 x 10) in the others' 26px and 24px.
+ */
+const SMALL_FONT = /** @type {Record<string, string[]>} */ ({
+  C: ['####', '#...', '#...', '#...', '#...', '####'], O: ['####', '#..#', '#..#', '#..#', '#..#', '####'],
+  M: ['#..#', '####', '####', '#..#', '#..#', '#..#'], S: ['####', '#...', '####', '...#', '...#', '####'],
+  H: ['#..#', '#..#', '####', '#..#', '#..#', '#..#'], W: ['#..#', '#..#', '#..#', '####', '####', '#..#'],
+  L: ['#...', '#...', '#...', '#...', '#...', '####'],
+});
+const LARGE_FONT = /** @type {Record<string, string[]>} */ ({
+  C: ['###', '#..', '#..', '#..', '###'], O: ['###', '#.#', '#.#', '#.#', '###'], M: ['#.#', '###', '###', '#.#', '#.#'],
+  S: ['###', '#..', '###', '..#', '###'], H: ['#.#', '#.#', '###', '#.#', '#.#'], W: ['#.#', '#.#', '###', '###', '#.#'],
+  L: ['#..', '#..', '#..', '#..', '###'],
+});
+const LARGE_SCALE = 2;
+/** The gap between letters, in the font's pixels. */
+const GAP_PX = 1;
+
+/**
+ * A word in a pixel font, as one path of whole pixels.
+ * @param {string} word
+ * @param {boolean} small for a small badge
+ */
+function pixelWord(word, small) {
+  const font = small ? SMALL_FONT : LARGE_FONT;
+  const scale = small ? 1 : LARGE_SCALE;
+  const letter = font.C[0].length, rows = font.C.length;
+  let d = '';
+  [...word].forEach((ch, i) => font[ch].forEach((row, y) => [...row].forEach((p, x) => {
+    if (p === '#') d += `M${i * (letter + GAP_PX) + x} ${y}h1v1h-1z`;
+  })));
+  const width = word.length * (letter + GAP_PX) - GAP_PX;
+  return `<svg class="badge-word" viewBox="0 0 ${width} ${rows}" width="${width * scale}" height="${rows * scale}" shape-rendering="crispEdges" aria-label="${word}"><path fill="currentColor" stroke="none" d="${d}"/></svg>`;
 }
 
 // A spark for Claude Code: straight bars on whole pixels (sharp at 12px), diagonal ones for the other rays.

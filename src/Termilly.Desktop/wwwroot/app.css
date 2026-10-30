@@ -1293,6 +1293,9 @@ body[data-sidebar="rail"] .side-rail { opacity: 1; pointer-events: auto; }
 }
 .badge.small { width: 18px; height: 18px; border-radius: 5px; font-size: 8.5px; letter-spacing: -0.3px; }
 .badge.lg { width: 26px; height: 26px; font-size: 10.5px; }
+/* At the small size the font leaves a text badge's ink half a pixel right of the middle; a half-pixel move centres it.
+   (The larger sizes snap such a move to a whole pixel, which overshoots, so they keep the font's own place.) */
+.badge.small .badge-text { translate: -0.5px 0; }
 .badge[data-icon="powershell"] { --tint: #5aa9ff; }
 /* Claude Code running in the terminal (ui.js tabBadgeHtml): its spark in Claude's colour. */
 .badge[data-icon="claude"] { --tint: #d97757; }
