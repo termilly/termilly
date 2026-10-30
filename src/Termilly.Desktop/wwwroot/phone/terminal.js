@@ -19,8 +19,13 @@ const CTRL_OFFSET = 64;
  * picks from to show the whole width; how wide a monospace character is per point until xterm has drawn one.
  */
 const FONT = Object.freeze({ readable: 13, min: 3, max: 14, charWidth: 0.6, tenths: 10, tries: 6 });
-/** Where the phone keeps whether Fit is on. */
+/** The sizes pinching goes between, in half points. */
+const PINCH = Object.freeze({ min: 6, max: 28, step: 2 });
+/** Where the phone keeps whether Fit is on, and the size pinched to. */
 const FIT_KEY = 'termilly.terminal.fit';
+const SIZE_KEY = 'termilly.terminal.size';
+/** A finger lifted, which ends a tap or a pinch. */
+const TOUCH_END = 'touchend';
 /** The terminal's box: its element, its side padding together, and the narrowest width it's fitted to. */
 const BOX = '.tv-box';
 const BOX_SPACE = Object.freeze({ padding: 16, least: 200 });
@@ -48,6 +53,37 @@ const DARK = { background: '#0a0a0c', foreground: '#d7d7de', cursor: '#d7d7de', 
 /** @param {unknown} text */
 const esc = text => String(text ?? '').replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
 
+/** @param {TouchList} touches */
+const spread = touches => Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
+
+/**
+ * Two fingers on the element pinch a size (in half points, between PINCH's) instead of zooming the page.
+ * @param {HTMLElement} element
+ * @param {() => number} current
+ * @param {(size: number) => void} change
+ * @param {() => void} done
+ */
+function pinchOn(element, current, change, done) {
+  /** @type {{ distance: number, size: number } | null} */
+  let start = null;
+  element.addEventListener('touchstart', e => {
+    if (e.touches.length === 2) start = { distance: spread(e.touches), size: current() };
+  }, { passive: true });
+  element.addEventListener('touchmove', e => {
+    if (!start || e.touches.length !== 2) return;
+    e.preventDefault();
+    const size = Math.round(start.size * (spread(e.touches) / start.distance) * PINCH.step) / PINCH.step;
+    change(Math.max(PINCH.min, Math.min(PINCH.max, size)));
+  }, { passive: false });
+  element.addEventListener(TOUCH_END, e => {
+    if (!start || e.touches.length === 2) return;
+    start = null;
+    done();
+  });
+  // iOS zooms the page on its own gesture events too.
+  element.addEventListener('gesturestart', e => e.preventDefault());
+}
+
 /**
  * The terminal view, over the home screen while it's open.
  * @param {{ send: (message: object) => void, toast: (text: string) => void, answer: (id: string) => void, wsName: (id: string) => string }} app
@@ -68,12 +104,14 @@ export function terminalView(app) {
 
   /** Whether the whole width is shown (small text) rather than readable text that scrolls sideways. */
   let fit = localStorage.getItem(FIT_KEY) === '1';
+  /** The size without Fit: readable, or what the user pinched to. */
+  let readable = Number(localStorage.getItem(SIZE_KEY)) || FONT.readable;
 
   /** Readable, or with Fit the size that shows all the PC's columns, measured from what xterm drew. */
   function fitFont() {
     if (!term) return;
     if (!fit) {
-      term.options.fontSize = FONT.readable;
+      term.options.fontSize = readable;
       return;
     }
     const width = Math.max(view.clientWidth - BOX_SPACE.padding, BOX_SPACE.least);
@@ -144,7 +182,7 @@ export function terminalView(app) {
     document.body.classList.add(OPEN);
     view.innerHTML = '<div class="tv-box"></div>';
     frame();
-    term = new Terminal({ cols: t.cols ?? DEFAULT_SIZE.cols, rows: t.rows ?? DEFAULT_SIZE.rows, fontSize: FONT.readable, scrollback: SCROLLBACK,
+    term = new Terminal({ cols: t.cols ?? DEFAULT_SIZE.cols, rows: t.rows ?? DEFAULT_SIZE.rows, fontSize: readable, scrollback: SCROLLBACK,
       fontFamily: 'ui-monospace, Menlo, Consolas, monospace', theme: DARK, disableStdin: !canType, convertEol: false, cursorBlink: false });
     term.open(view.querySelector(BOX));
     fitFont();
@@ -239,10 +277,24 @@ export function terminalView(app) {
     } else if (key) type(/** @type {Record<string, string>} */ (KEYS)[key]);
     if (key) term?.focus();
   });
-  // Tapping the terminal brings up the keyboard when typing is allowed.
-  view.addEventListener('touchend', e => {
-    if (typing && /** @type {HTMLElement} */ (e.target).closest(BOX)) term?.focus();
+  // Tapping the terminal brings up the keyboard when typing is allowed (not at the end of a pinch).
+  let pinched = false;
+  view.addEventListener(TOUCH_END, e => {
+    if (pinched) pinched = e.touches.length > 0;
+    else if (typing && /** @type {HTMLElement} */ (e.target).closest(BOX)) term?.focus();
   });
+  // Pinching sizes the terminal's font, not the page; it leaves Fit, and the phone remembers the size.
+  pinchOn(view, () => term?.options.fontSize ?? readable, size => {
+    pinched = true;
+    if (!term || size === term.options.fontSize) return;
+    readable = size;
+    term.options.fontSize = size;
+    if (fit) {
+      fit = false;
+      localStorage.setItem(FIT_KEY, '0');
+      frame();
+    }
+  }, () => localStorage.setItem(SIZE_KEY, String(readable)));
 
   /** Back after the connection dropped: the terminal shown starts over with what it printed lately. */
   const rewatch = () => { if (shown) app.send({ op: OP.watch, pane: shown.id }); };

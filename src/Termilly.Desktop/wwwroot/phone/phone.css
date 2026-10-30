@@ -94,6 +94,7 @@ form { display: flex; gap: 8px; margin: 12px 0; }
 
 /* ---- The terminal view (terminal.js) ---- */
 body.tv-open { overflow: hidden; }
+.tv, .tv * { touch-action: pan-x pan-y; }
 .tv { position: fixed; inset: 0 0 auto; z-index: 5; display: flex; flex-direction: column; height: 100vh; padding-top: env(safe-area-inset-top); background: var(--bg); }
 .tv-head { display: flex; flex: none; gap: 10px; align-items: center; padding: 6px 12px 8px; border-bottom: 1px solid var(--line); }
 .tv-back { padding: 0 8px; border: 0; background: none; color: var(--accent); font-size: 28px; line-height: 1; }
