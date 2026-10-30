@@ -103,7 +103,10 @@ body.tv-open { overflow: hidden; }
 .tv-answer { flex: none; padding: 7px 14px; }
 .tv-box { flex: 1; min-height: 0; overflow: hidden; touch-action: none; padding: 6px 8px; background: #0a0a0c; }
 .tv-box * { touch-action: none; }
-.keybar { display: flex; flex: none; gap: 5px; padding: 6px 6px calc(6px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: var(--raised); }
-.keybar button { flex: 1; padding: 9px 0; border: 0; border-radius: 7px; background: var(--bg); font: 600 13px ui-monospace, Menlo, Consolas, monospace; }
+.keybar { display: flex; flex: none; gap: 4px; padding: 4px 4px calc(4px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: var(--raised); }
+.keybar button { flex: 1; padding: 3px 0; border: 0; border-radius: 6px; background: var(--bg); font: 600 12px ui-monospace, Menlo, Consolas, monospace; }
 .keybar button.on { background: var(--accent); color: #fff; }
+/* The keyboard covers the home indicator: no room is kept for it. */
+.tv.keyboard .keybar { padding-bottom: 4px; }
+.tv.keyboard .tv-note { padding-bottom: 10px; }
 .tv-note { flex: none; margin: 0; padding: 10px 14px calc(10px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }

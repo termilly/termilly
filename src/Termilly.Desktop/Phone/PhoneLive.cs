@@ -11,7 +11,7 @@ namespace Termilly.Desktop.Phone;
 /// The paired phones that have the app open (docs/phone.md): one WebSocket each. Every phone gets what the page last
 /// said about the terminals (js/phone.js) as soon as it connects and whenever it changes; what a phone sends (an
 /// answer to an agent) goes to <see cref="Received"/>, and its answer back to that phone alone. A phone may watch one
-/// terminal: it gets what that terminal printed lately (PhoneOutput), then what it prints, a few times a second. While
+/// terminal: it gets what that terminal shows (from the window), then what it prints, a few times a second. While
 /// a phone watches a terminal, the terminal takes the phone's size (<see cref="Sized"/>), so it fills the phone and
 /// its output fits it; it gets its own back when no phone watches it.
 /// </summary>
@@ -52,11 +52,16 @@ internal sealed class PhoneLive : IDisposable
     /// <summary>How often a watched terminal's new output goes out (a busy build prints thousands of times a second).</summary>
     private static readonly TimeSpan OutputEvery = TimeSpan.FromMilliseconds(40);
 
-    /// <summary>A connected phone: one send at a time, and the terminal it watches.</summary>
+    /// <summary>
+    /// A connected phone: one send at a time, the terminal it watches, and what that printed since the last flush. That
+    /// waits while the phone gets what the terminal shows (<see cref="Ready"/> false), so it comes after it.
+    /// </summary>
     private sealed class Phone
     {
         public SemaphoreSlim Gate { get; } = new(1, 1);
         public volatile string? Watching;
+        public volatile bool Ready;
+        public StringBuilder Pending { get; } = new();
         /// <summary>The size it asked for the terminal it watches, if it did.</summary>
         public volatile GridSize? Size;
     }
@@ -71,51 +76,51 @@ internal sealed class PhoneLive : IDisposable
     private const string StateField = "state";
 
     private readonly ConcurrentDictionary<WebSocket, Phone> _phones = new();
-    private readonly ConcurrentDictionary<string, StringBuilder> _pending = new();
     private readonly Timer _flush;
     private string _state = "{}";
 
     public PhoneLive() => _flush = new Timer(_ => Flush(), null, OutputEvery, OutputEvery);
 
-    /// <summary>What a terminal printed lately, for a phone that starts watching it.</summary>
-    public Func<string, string>? Recent { get; set; }
+    /// <summary>
+    /// What a terminal shows now, with its scrollback, as output that draws it again (js/phone.js), once it has taken
+    /// the phone's size.
+    /// </summary>
+    public Func<string, Task<string>>? Screen { get; set; }
 
     /// <summary>A terminal printed something: it goes to the phones watching it with the next flush.</summary>
     public void Output(string pane, string data)
     {
-        if (!_phones.Values.Any(p => p.Watching == pane))
+        foreach (var phone in _phones.Values)
         {
-            return;
-        }
-        var pending = _pending.GetOrAdd(pane, _ => new StringBuilder());
-        lock (pending)
-        {
-            pending.Append(data);
+            if (phone.Watching == pane)
+            {
+                lock (phone.Pending)
+                {
+                    phone.Pending.Append(data);
+                }
+            }
         }
     }
 
     private void Flush()
     {
-        foreach (var (pane, pending) in _pending)
+        foreach (var (socket, phone) in _phones)
         {
-            string data;
-            lock (pending)
+            if (!phone.Ready || phone.Watching is not { } pane)
             {
-                if (pending.Length == 0)
+                continue;
+            }
+            string data;
+            lock (phone.Pending)
+            {
+                if (phone.Pending.Length == 0)
                 {
                     continue;
                 }
-                data = pending.ToString();
-                pending.Clear();
+                data = phone.Pending.ToString();
+                phone.Pending.Clear();
             }
-            var message = new JsonObject { [TypeField] = Kinds.Output, [PaneField] = pane, [DataField] = data }.ToJsonString();
-            foreach (var (socket, phone) in _phones)
-            {
-                if (phone.Watching == pane)
-                {
-                    _ = SendAsync(socket, message);
-                }
-            }
+            _ = SendAsync(socket, new JsonObject { [TypeField] = Kinds.Output, [PaneField] = pane, [DataField] = data }.ToJsonString());
         }
     }
 
@@ -157,7 +162,7 @@ internal sealed class PhoneLive : IDisposable
                 var op = message?[OpField]?.GetValue<string>();
                 if (op is Ops.Watch or Ops.Unwatch)
                 {
-                    await WatchAsync(socket, me, op == Ops.Watch ? message?[PaneField]?.GetValue<string>() : null).ConfigureAwait(false);
+                    await WatchAsync(socket, me, op == Ops.Watch ? message : null).ConfigureAwait(false);
                 }
                 else if (op == Ops.Size)
                 {
@@ -184,26 +189,46 @@ internal sealed class PhoneLive : IDisposable
         }
     }
 
-    /// <summary>A phone watches a terminal (or none): first what it printed lately, then what it prints.</summary>
-    private async Task WatchAsync(WebSocket socket, Phone phone, string? pane)
+    /// <summary>
+    /// A phone watches a terminal (or none; <paramref name="watch"/> says which, and the phone's size for it): the
+    /// terminal takes that size, the phone gets what it shows then, and from then on what it prints.
+    /// </summary>
+    private async Task WatchAsync(WebSocket socket, Phone phone, JsonObject? watch)
     {
+        var pane = watch?[PaneField]?.GetValue<string>();
         if (phone.Watching != pane)
         {
             Leave(phone);
         }
+        phone.Ready = false;
         phone.Watching = pane;
-        if (pane is not null)
+        if (pane is null)
         {
-            var screen = new JsonObject { [TypeField] = Kinds.Screen, [PaneField] = pane, [DataField] = Recent?.Invoke(pane) ?? "" };
-            await SendAsync(socket, screen.ToJsonString()).ConfigureAwait(false);
+            return;
         }
+        Resize(phone, watch!);
+        lock (phone.Pending)
+        {
+            phone.Pending.Clear(); // what the screen below has already
+        }
+        string data;
+        try
+        {
+            data = Screen is { } screen ? await screen(pane).ConfigureAwait(false) : "";
+        }
+        catch (InvalidOperationException)
+        {
+            data = ""; // the window didn't answer: the phone starts empty, and gets what's printed from now
+        }
+        await SendAsync(socket, new JsonObject { [TypeField] = Kinds.Screen, [PaneField] = pane, [DataField] = data }.ToJsonString()).ConfigureAwait(false);
+        phone.Ready = phone.Watching == pane;
     }
 
     /// <summary>The phone's size for the terminal it watches (from the size of its screen and its font).</summary>
     private void Resize(Phone phone, JsonObject message)
     {
         if (phone.Watching is not { } pane || message[PaneField]?.GetValue<string>() != pane
-            || message[ColsField]?.GetValue<int>() is not { } cols || message[RowsField]?.GetValue<int>() is not { } rows)
+            || message[ColsField]?.GetValue<int?>() is not { } cols || message[RowsField]?.GetValue<int?>() is not { } rows)
         {
             return;
         }

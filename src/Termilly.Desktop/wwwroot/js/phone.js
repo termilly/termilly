@@ -11,6 +11,7 @@ import { entryDetail } from './inbox.js';
 import { AGENT_STATE, CLAUDE_TOOL, PROFILE_ICON } from './constants.js';
 import { debounce } from './util.js';
 import { isProduction } from './environments.js';
+import { screenOf } from './termscreen.js';
 
 /** How long changes settle before the phones hear of them. */
 const SEND_AFTER_MS = 300;
@@ -121,6 +122,13 @@ onHost(HOST.phoneSize, m => {
   view.body.classList.toggle('phone-sized', !!tab.phoneSize);
   if (tab.phoneSize) view.term.resize(tab.phoneSize.cols, tab.phoneSize.rows);
   else view.fit?.fit();
+});
+
+// A phone starts showing a terminal (already at its size): what it shows now, once what it printed is drawn.
+onHost(HOST.phoneScreen, async m => {
+  const term = state.tabs.get(m.args?.pane)?.view?.term;
+  if (term) await new Promise(resolve => term.write('', resolve));
+  send(PAGE.apiResult, { requestId: m.requestId, result: { data: term ? screenOf(term) : '' } });
 });
 
 onHost(HOST.phoneAnswer, async m => {

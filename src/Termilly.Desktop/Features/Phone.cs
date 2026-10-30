@@ -41,20 +41,38 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
     private readonly PhoneStore _store;
     private readonly PhoneLive _live;
     private readonly PageApi _api;
-    private readonly PhoneOutput _output;
     private readonly TerminalSessions _sessions;
     private PhoneServer? _server;
     private int _port;
     private string? _error;
 
-    public PhoneHandler(PageChannel page, ISettingsStore settings, PhoneStore store, PhoneLive live, PageApi api, PhoneOutput output, TerminalSessions sessions)
+    public PhoneHandler(PageChannel page, ISettingsStore settings, PhoneStore store, PhoneLive live, PageApi api, TerminalSessions sessions)
     {
-        (_page, _settings, _store, _live, _api, _output, _sessions) = (page, settings, store, live, api, output, sessions);
+        (_page, _settings, _store, _live, _api, _sessions) = (page, settings, store, live, api, sessions);
         settings.Saved += _ => Update();
         live.Received = ReceivedAsync;
-        live.Recent = output.Recent;
+        live.Screen = ScreenAsync;
         live.Sized = (pane, size) => _page.Post(new ToPage.PhoneSize(pane, size?.Cols, size?.Rows));
-        output.Printed += live.Output;
+        sessions.Output += Printed;
+    }
+
+    /// <summary>A terminal printed something: it goes on to the phones that show it (while the server runs).</summary>
+    private void Printed(string pane, string data)
+    {
+        if (_server is not null)
+        {
+            _live.Output(pane, data);
+        }
+    }
+
+    /// <summary>What a terminal shows now, drawn again as output, from the window's own terminal (js/phone.js).</summary>
+    private async Task<string> ScreenAsync(string pane)
+    {
+        var answer = await _api.AskPageAsync(ToPage.Calls.PhoneScreen, new JsonObject
+        {
+            [PageApi.CallFields.Args] = new JsonObject { [Answer.Pane] = pane },
+        }).ConfigureAwait(false);
+        return answer?[DataField]?.GetValue<string>() ?? "";
     }
 
     public void Register(MessageRouter router)
@@ -200,8 +218,6 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
         if (_server is not null && (!settings.Enabled || _port != settings.Port || _store.IsLocked))
         {
             _live.CloseAll();
-            _output.Keeping = false;
-            _output.Clear();
             _server.Dispose();
             _server = null;
         }
@@ -221,7 +237,6 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
                     _server = PhoneServer.Start(settings.Port, Path.Combine(AppPaths.WebRoot, PhoneFolder), _store, _live, authority, WebPush.PublicKey(vapid),
                         device => AlertAsync(device, TestAlert));
                     _port = settings.Port;
-                    _output.Keeping = true;
                 }
                 catch (IOException e)
                 {
@@ -277,6 +292,7 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
     public void Dispose()
     {
         _store.Changed -= PostStatus;
+        _sessions.Output -= Printed;
         _live.CloseAll();
         _server?.Dispose();
     }

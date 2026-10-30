@@ -1,7 +1,8 @@
 // @ts-check
 // The phone's terminal view (design A): one terminal live, filling the phone's screen. While the phone shows it, the
 // terminal takes the phone's size on the PC too (PhoneLive), so what it prints fits the phone; pinching sizes the
-// font and the keyboard coming up shortens it, and the size follows. First what it printed lately, then as it prints.
+// font and the keyboard coming up shortens it, and the size follows. First what it shows (the window's own terminal,
+// drawn again at that size), then what it prints.
 // With Settings › Phone › Allow typing on, the phone's keyboard types into it, and a key bar adds what a phone lacks:
 // Esc, Tab, Ctrl, the arrows and Paste.
 
@@ -40,6 +41,9 @@ const AUTOMATIC = /^\x1b(?:\[\??[\d;]*[cnRIO]|\[[<M]|\][\s\S]*(?:\x07|\x1b\\)$|P
 const SCROLLBACK = 3000;
 /** On the page while the view is open: the home underneath doesn't scroll. */
 const OPEN = 'tv-open';
+/** On the view while the phone's keyboard is up: the screen is shorter than the page by more than this (px). */
+const KEYBOARD = 'keyboard';
+const KEYBOARD_LEAST = 120;
 /** The PC's size when it hasn't said yet. */
 const DEFAULT_SIZE = Object.freeze({ cols: 80, rows: 24 });
 /** Messages from the PC about the terminal watched (PhoneLive.Kinds). */
@@ -83,22 +87,24 @@ export function terminalView(app) {
   let confirmed = false;
   /** The size pinched to. */
   let fontSize = Number(localStorage.getItem(SIZE_KEY)) || READABLE;
-  /** Whether what it printed lately has come: until then it stays at the PC's size, which that was drawn for. */
-  let replayed = false;
   let sizeTimer = 0;
 
-  /**
-   * Gives the terminal as many columns and rows as fit its box at its font size, and asks the PC for the same, so
-   * what it prints next fits.
-   */
-  function fitGrid() {
+  /** As many columns and rows as fit the terminal's box at its font size. */
+  function grid() {
     const box = /** @type {HTMLElement | null} */ (view.querySelector(BOX));
-    if (!term || !replayed || !box) return;
-    const cell = cellOf(term);
-    if (!cell) return;
-    const cols = Math.max(LEAST.cols, Math.floor((box.clientWidth - BOX_PADDING.width) / cell.width));
-    const rows = Math.max(LEAST.rows, Math.floor((box.clientHeight - BOX_PADDING.height) / cell.height));
-    if (cols !== term.cols || rows !== term.rows) term.resize(cols, rows);
+    const cell = term && cellOf(term);
+    if (!box || !cell) return null;
+    return {
+      cols: Math.max(LEAST.cols, Math.floor((box.clientWidth - BOX_PADDING.width) / cell.width)),
+      rows: Math.max(LEAST.rows, Math.floor((box.clientHeight - BOX_PADDING.height) / cell.height)),
+    };
+  }
+
+  /** Gives the terminal the size that fits now, and asks the PC for the same, so what it prints next fits. */
+  function fitGrid() {
+    const size = grid();
+    if (!term || !size) return;
+    if (size.cols !== term.cols || size.rows !== term.rows) term.resize(size.cols, size.rows);
     term.scrollToBottom();
     clearTimeout(sizeTimer);
     sizeTimer = setTimeout(() => { if (shown && term) app.send({ op: OP.size, pane: shown.id, cols: term.cols, rows: term.rows }); }, SIZE_AFTER_MS);
@@ -152,7 +158,6 @@ export function terminalView(app) {
     shown = t;
     typing = canType;
     confirmed = false;
-    replayed = false;
     view.hidden = false;
     document.body.classList.add(OPEN);
     view.innerHTML = '<div class="tv-box"></div>';
@@ -163,8 +168,8 @@ export function terminalView(app) {
     term.open(box);
     touch(box);
     term.onData(/** @param {string} data */ data => { if (!AUTOMATIC.test(data)) type(data); });
-    app.send({ op: OP.watch, pane: t.id });
     fitViewport();
+    app.send({ op: OP.watch, pane: t.id, cols: term.cols, rows: term.rows });
   }
 
   /**
@@ -225,14 +230,9 @@ export function terminalView(app) {
   function message(m) {
     if (!term || m.pane !== shown?.id) return;
     if (m.type === LIVE.screen) {
-      // Drawn at the PC's size; then the phone's size, which the PC takes and repaints at.
-      replayed = false;
+      // Drawn by the PC's terminal at this size already.
       term.reset();
-      term.resize(shown.cols ?? DEFAULT_SIZE.cols, shown.rows ?? DEFAULT_SIZE.rows);
-      term.write(m.data, () => {
-        replayed = true;
-        fitGrid();
-      });
+      term.write(m.data);
     } else if (m.type === LIVE.output) {
       term.write(m.data);
     }
@@ -242,6 +242,7 @@ export function terminalView(app) {
   function fitViewport() {
     if (view.hidden || !window.visualViewport) return;
     view.style.height = `${window.visualViewport.height}px`;
+    view.classList.toggle(KEYBOARD, window.visualViewport.height < window.innerHeight - KEYBOARD_LEAST);
     pin();
     fitGrid();
   }
@@ -270,8 +271,8 @@ export function terminalView(app) {
     if (key) term?.focus();
   });
 
-  /** Back after the connection dropped: the terminal shown starts over with what it printed lately. */
-  const rewatch = () => { if (shown) app.send({ op: OP.watch, pane: shown.id }); };
+  /** Back after the connection dropped: the terminal shown starts over with what it shows. */
+  const rewatch = () => { if (shown && term) app.send({ op: OP.watch, pane: shown.id, cols: term.cols, rows: term.rows }); };
 
   return {
     open, close, update, message, rewatch,
