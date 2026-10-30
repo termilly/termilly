@@ -11,7 +11,8 @@ namespace Termilly.Desktop.Phone;
 /// The paired phones that have the app open (docs/phone.md): one WebSocket each. Every phone gets what the page last
 /// said about the terminals (js/phone.js) as soon as it connects and whenever it changes; what a phone sends (an
 /// answer to an agent) goes to <see cref="Received"/>, and its answer back to that phone alone. A phone may watch one
-/// terminal: it gets what that terminal printed lately (PhoneOutput), then what it prints, a few times a second.
+/// terminal: it gets what that terminal printed lately (PhoneOutput), then what it prints, a few times a second; and
+/// when it runs Claude Code, the conversation (PhoneChat), then its new messages every second.
 /// </summary>
 internal sealed class PhoneLive : IDisposable
 {
@@ -26,6 +27,7 @@ internal sealed class PhoneLive : IDisposable
         public const string Answered = "answered";
         public const string Screen = "screen";
         public const string Output = "output";
+        public const string Chat = "chat";
     }
 
     /// <summary>What a phone asks of the connection itself: to watch a terminal, or stop.</summary>
@@ -40,12 +42,19 @@ internal sealed class PhoneLive : IDisposable
     private const string DataField = "data";
     /// <summary>How often a watched terminal's new output goes out (a busy build prints thousands of times a second).</summary>
     private static readonly TimeSpan OutputEvery = TimeSpan.FromMilliseconds(40);
+    /// <summary>How often the conversation of a watched terminal is looked at (one that hasn't grown costs a file-size check).</summary>
+    private static readonly TimeSpan ChatEvery = TimeSpan.FromSeconds(1);
+    private const string EntriesField = "entries";
+    private const string ResetField = "reset";
 
     /// <summary>A connected phone: one send at a time, and the terminal it watches.</summary>
     private sealed class Phone
     {
         public SemaphoreSlim Gate { get; } = new(1, 1);
         public volatile string? Watching;
+        /// <summary>The conversation this phone was sent (its session), and the last message it has.</summary>
+        public string? ChatSession;
+        public long ChatSeen;
     }
 
     private const string TypeField = "type";
@@ -54,9 +63,16 @@ internal sealed class PhoneLive : IDisposable
     private readonly ConcurrentDictionary<WebSocket, Phone> _phones = new();
     private readonly ConcurrentDictionary<string, StringBuilder> _pending = new();
     private readonly Timer _flush;
+    private readonly Timer _chatTimer;
+    private readonly PhoneChat _chat;
     private string _state = "{}";
 
-    public PhoneLive() => _flush = new Timer(_ => Flush(), null, OutputEvery, OutputEvery);
+    public PhoneLive(PhoneChat chat)
+    {
+        _chat = chat;
+        _flush = new Timer(_ => Flush(), null, OutputEvery, OutputEvery);
+        _chatTimer = new Timer(_ => SendChats(), null, ChatEvery, ChatEvery);
+    }
 
     /// <summary>What a terminal printed lately, for a phone that starts watching it.</summary>
     public Func<string, string>? Recent { get; set; }
@@ -100,6 +116,45 @@ internal sealed class PhoneLive : IDisposable
         }
     }
 
+    private void SendChats()
+    {
+        foreach (var (socket, phone) in _phones)
+        {
+            if (phone.Watching is { } pane)
+            {
+                SendChat(socket, phone, pane);
+            }
+        }
+    }
+
+    /// <summary>
+    /// The conversation in the terminal a phone watches: all of it the first time (or when a new session starts there),
+    /// then only what's new.
+    /// </summary>
+    private void SendChat(WebSocket socket, Phone phone, string pane)
+    {
+        if (_chat.Of(pane) is not var (session, transcript))
+        {
+            return;
+        }
+        string message;
+        lock (phone)
+        {
+            var reset = phone.ChatSession != session;
+            var (entries, last) = transcript.Since(reset ? 0 : phone.ChatSeen);
+            if (entries.Count == 0 && !reset)
+            {
+                return;
+            }
+            (phone.ChatSession, phone.ChatSeen) = (session, last);
+            message = new JsonObject
+            {
+                [TypeField] = Kinds.Chat, [PaneField] = pane, [ResetField] = reset, [EntriesField] = PhoneChat.ToJson(entries),
+            }.ToJsonString();
+        }
+        _ = SendAsync(socket, message);
+    }
+
     /// <summary>A phone sent something: its device id and the message; the answer goes back to it.</summary>
     public Func<string, JsonObject, Task<JsonObject>>? Received { get; set; }
 
@@ -109,6 +164,10 @@ internal sealed class PhoneLive : IDisposable
     /// <summary>The page's new picture of the terminals, for every phone.</summary>
     public void SetState(string stateJson)
     {
+        using (var state = JsonDocument.Parse(stateJson))
+        {
+            _chat.Learn(state.RootElement);
+        }
         _state = stateJson;
         var message = StateMessage();
         foreach (var phone in _phones.Keys)
@@ -164,16 +223,22 @@ internal sealed class PhoneLive : IDisposable
     private async Task WatchAsync(WebSocket socket, Phone phone, string? pane)
     {
         phone.Watching = pane;
+        lock (phone)
+        {
+            phone.ChatSession = null;
+        }
         if (pane is not null)
         {
             var screen = new JsonObject { [TypeField] = Kinds.Screen, [PaneField] = pane, [DataField] = Recent?.Invoke(pane) ?? "" };
             await SendAsync(socket, screen.ToJsonString()).ConfigureAwait(false);
+            SendChat(socket, phone, pane);
         }
     }
 
     public void Dispose()
     {
         _flush.Dispose();
+        _chatTimer.Dispose();
         CloseAll();
     }
 

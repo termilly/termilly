@@ -20,12 +20,15 @@ public sealed class PhoneTests : IDisposable
     private readonly Vault _vault;
     private readonly PhoneStore _store;
     private readonly List<string> _alerts = [];
-    private readonly PhoneLive _live = new();
+    private readonly string _projects;
+    private readonly PhoneLive _live;
 
     public PhoneTests()
     {
         _vault = Vault.Open(_dir);
         _store = new PhoneStore(_vault);
+        _projects = Path.Combine(_dir, "projects");
+        _live = new PhoneLive(new PhoneChat(_projects));
         _web = Path.Combine(_dir, "phone");
         Directory.CreateDirectory(_web);
         File.WriteAllText(Path.Combine(_web, "index.html"), "<p>app</p>");
@@ -298,6 +301,63 @@ public sealed class PhoneTests : IDisposable
 
         using var stranger = Socket(authority, "termilly=not-a-token");
         await Assert.ThrowsAnyAsync<WebSocketException>(() => stranger.ConnectAsync(new Uri(server.AppUrl.Replace("https", "wss") + "api/live"), CancellationToken.None));
+    }
+
+    // ---- The chat view ----
+
+    [Fact]
+    public void A_conversation_is_what_was_asked_said_and_run_without_tool_output_or_Claude_Codes_own_notes()
+    {
+        var path = Path.Combine(_dir, "chat.jsonl");
+        File.WriteAllLines(path,
+        [
+            """{"type":"user","message":{"role":"user","content":"fix the build"}}""",
+            """{"type":"user","isMeta":true,"message":{"role":"user","content":"meta"}}""",
+            """{"type":"user","message":{"role":"user","content":"<command-name>/compact</command-name>"}}""",
+            """{"type":"assistant","message":{"content":[{"type":"thinking","thinking":"hmm"},{"type":"text","text":"Looking."}]}}""",
+            """{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"dotnet build","description":"Build"}}]}}""",
+            """{"type":"user","message":{"role":"user","content":[{"type":"tool_result","content":"lots of output"}]}}""",
+            """{"type":"assistant","isSidechain":true,"message":{"content":[{"type":"text","text":"a subagent"}]}}""",
+        ]);
+        var chat = new ChatTranscript(path);
+
+        chat.Read();
+        var (all, last) = chat.Since(0);
+        File.AppendAllText(path, """{"type":"assistant","message":{"content":[{"type":"text","text":"Fixed."}]}}""" + "\n");
+        chat.Read();
+        var (added, _) = chat.Since(last);
+
+        Assert.Equal(
+            [new ChatEntry("you", "fix the build"), new ChatEntry("claude", "Looking."), new ChatEntry("tool", "Bash  dotnet build")],
+            all);
+        Assert.Equal([new ChatEntry("claude", "Fixed.")], added);
+    }
+
+    [Fact]
+    public async Task A_phone_watching_a_Claude_terminal_gets_its_conversation_then_what_is_new()
+    {
+        var session = Guid.NewGuid().ToString();
+        var transcript = Path.Combine(_projects, "D--work", session + ".jsonl");
+        Directory.CreateDirectory(Path.GetDirectoryName(transcript)!);
+        File.WriteAllText(transcript, """{"type":"user","message":{"role":"user","content":"hello"}}""" + "\n");
+        using var authority = _store.Authority("TESTPC");
+        using var server = Start(authority);
+        using var http = Https(authority);
+        var paired = await Post(http, server.AppUrl + "api/pair", $$"""{"code":"{{_store.OfferCode()}}"}""");
+        var cookie = paired.Headers.GetValues("Set-Cookie").First().Split(';')[0];
+        _live.SetState($$"""{"terminals":[{"id":"t1","session":"{{session}}"}]}""");
+        using var phone = Socket(authority, cookie);
+        await phone.ConnectAsync(new Uri(server.AppUrl.Replace("https", "wss") + "api/live"), CancellationToken.None);
+        await ReceiveText(phone); // the terminals
+
+        await phone.SendAsync(Encoding.UTF8.GetBytes("""{"op":"watch","pane":"t1"}"""), WebSocketMessageType.Text, true, CancellationToken.None);
+        await ReceiveText(phone); // the screen
+        var first = JsonNode.Parse(await ReceiveText(phone))!;
+        File.AppendAllText(transcript, """{"type":"assistant","message":{"content":[{"type":"text","text":"Hi."}]}}""" + "\n");
+        var next = JsonNode.Parse(await ReceiveText(phone))!;
+
+        Assert.Equal(("chat", true, "hello"), (first["type"]!.GetValue<string>(), first["reset"]!.GetValue<bool>(), first["entries"]![0]!["text"]!.GetValue<string>()));
+        Assert.Equal((false, "claude", "Hi."), (next["reset"]!.GetValue<bool>(), next["entries"]![0]!["role"]!.GetValue<string>(), next["entries"]![0]!["text"]!.GetValue<string>()));
     }
 
     private static ClientWebSocket Socket(X509Certificate2 authority, string cookie)

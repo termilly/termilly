@@ -48,6 +48,7 @@ internal static class Composition
         .AddSingleton<PageBoot>()
         .AddSingleton<LastSnapshot>()
         .AddSingleton<PhoneStore>()
+        .AddSingleton<PhoneChat>()
         .AddSingleton<PhoneLive>()
         .AddSingleton<PhoneOutput>()
         .AddStartable<ProfileCatalog>()
