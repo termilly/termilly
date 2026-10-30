@@ -11,7 +11,7 @@ const app = /** @type {HTMLElement} */ (document.getElementById('app'));
 /** What the PC says about this phone. */
 /** @typedef {{ paired: boolean, locked?: boolean, pushKey?: string, alerts?: boolean }} Me */
 /** What a terminal waits for (js/phone.js). */
-/** @typedef {{ kind: string, tool: string | null, target: string | null, text: string, at: number }} Waiting */
+/** @typedef {{ kind: string, tool: string | null, target: string | null, text: string, at: number, always?: boolean }} Waiting */
 /** A terminal as the PC describes it (js/phone.js). */
 /** @typedef {{ id: string, ws: string, title: string, icon: string, badge: string, agent: string | null, activity: string | null, line: string | null, waiting: Waiting | null, production: boolean, cols: number | null, rows: number | null }} Terminal */
 /** @typedef {{ typing?: boolean, workspaces: { id: string, name: string, color: string }[], terminals: Terminal[] }} Snapshot */
@@ -191,12 +191,12 @@ function renderSheet() {
     body = `<div class="meta">Claude wants to use ${esc(w.tool)}</div>${w.target ? `<div class="mono">${esc(w.target)}</div>` : ''}
       ${t.production ? '<p class="warn">This terminal is tagged prod.</p>' : ''}
       <button class="ibtn fill" data-do="${DO.answer}" data-choice="${CHOICE.approve}" data-id="${t.id}">Approve</button>
-      <button class="ibtn" data-do="${DO.answer}" data-choice="${CHOICE.always}" data-id="${t.id}">Approve and don't ask again</button>
+      ${w.always ? `<button class="ibtn" data-do="${DO.answer}" data-choice="${CHOICE.always}" data-id="${t.id}">Approve and don't ask again</button>` : ''}
       <button class="ibtn red" data-do="${DO.answer}" data-choice="${CHOICE.reject}" data-id="${t.id}">Reject</button>`;
   } else if (w) {
     body = `<div class="meta">${w.kind === WAITING.error ? 'Stopped with an error' : 'Waiting for you'}</div><div class="said">${esc(w.text)}</div>`;
   } else {
-    body = `<div class="meta">${esc(t.line || 'Nothing waiting here.')}</div><p class="muted">The live terminal view comes in the next version.</p>`;
+    body = `<div class="meta">${esc(t.line || 'Nothing waiting here.')}</div>`;
   }
   const reply = w ? (replying
     ? `<textarea class="reply-box" rows="3" placeholder="Tell Claude what to do" data-reply></textarea><button class="ibtn fill" data-do="${DO.send}" data-id="${t.id}">Send</button>`

@@ -16,7 +16,15 @@ import { screenOf } from './termscreen.js';
 /** How long changes settle before the phones hear of them. */
 const SEND_AFTER_MS = 300;
 /** Claude Code's permission prompt: Enter takes "Yes", 2 "Yes, and don't ask again", Esc "No, and tell Claude". */
-const KEYS = Object.freeze({ approve: '\r', always: '2', reject: '\x1b' });
+const KEYS = Object.freeze({ approve: '\r', reject: '\x1b' });
+/**
+ * A permission prompt's "Yes, and don't ask again" choice (or "Yes, allow all edits"), as Claude Code draws it: its
+ * number. Not every prompt has one (a command it won't remember, like rm, has only Yes and No), and where it has, it's
+ * not always 2, so it's read off the screen.
+ */
+const ALWAYS = /^\W*(\d)\.\s*Yes, (?:and don.t ask again|allow all)/i;
+/** How far above the screen's bottom the prompt's choices are looked for (lines). */
+const PROMPT_LINES = 40;
 const CHOICE = Object.freeze({ approve: 'approve', always: 'always', reject: 'reject', reply: 'reply' });
 /** After Esc, Claude Code takes a moment to show its prompt for what to do instead; then the text, then Enter. */
 const AFTER_ESC_MS = 400;
@@ -34,6 +42,21 @@ const CLAUDE_BADGE = 'claude';
 const awaitsPermission = tab => tab.agent?.state === AGENT_STATE.needsInput && !!tab.agent.tool && tab.agent.tool !== CLAUDE_TOOL.askUserQuestion;
 
 /**
+ * The key that picks the prompt's "don't ask again" choice, read off the terminal's screen; null when it has none.
+ * @param {Tab} tab
+ */
+function alwaysKey(tab) {
+  const term = tab.view?.term;
+  if (!term) return null;
+  const buffer = term.buffer.active;
+  for (let y = buffer.length - 1; y >= Math.max(0, buffer.length - PROMPT_LINES); y--) {
+    const found = ALWAYS.exec(buffer.getLine(y)?.translateToString(true) ?? '');
+    if (found) return found[1];
+  }
+  return null;
+}
+
+/**
  * What a terminal waits for, or null.
  * @param {Tab} tab
  */
@@ -44,7 +67,8 @@ function waitingFor(tab) {
     : a.state === AGENT_STATE.needsInput ? WAITING.question
     : a.state === AGENT_STATE.attention ? WAITING.attention
     : a.state === AGENT_STATE.error ? WAITING.error : null;
-  return kind && { kind, tool: a.tool ?? null, target: a.target ?? null, text: entryDetail(tab), at: a.at };
+  return kind && { kind, tool: a.tool ?? null, target: a.target ?? null, text: entryDetail(tab), at: a.at,
+    always: kind === WAITING.permission && !!alwaysKey(tab) };
 }
 
 /** @param {Tab} tab */
@@ -106,8 +130,8 @@ async function answer({ pane, choice, text }) {
     return { answered: choice };
   }
   if (!awaitsPermission(tab)) throw new Error('That terminal isn’t waiting for a yes or no any more.');
-  const key = /** @type {Record<string, string>} */ (KEYS)[choice ?? ''];
-  if (!key) throw new Error('Not an answer.');
+  const key = choice === CHOICE.always ? alwaysKey(tab) : /** @type {Record<string, string>} */ (KEYS)[choice ?? ''];
+  if (!key) throw new Error(choice === CHOICE.always ? 'This prompt has no "don\'t ask again". Nothing was typed.' : 'Not an answer.');
   send(PAGE.input, { id: tab.id, data: key });
   return { answered: choice };
 }
