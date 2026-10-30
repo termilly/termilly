@@ -409,6 +409,24 @@ onMiddleClick(tabsEl, e => {
   if (tab) closePage(/** @type {string} */ (tab.dataset.page));
 });
 
+// A tab's right-click menu: its file's path to the clipboard (a page never saved has none).
+tabsEl.addEventListener('contextmenu', e => {
+  const tab = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-page]'));
+  const page = tab && pages().find(p => p.id === tab.dataset.page);
+  if (!page) return;
+  e.preventDefault();
+  const path = page.path;
+  showMenu([
+    {
+      label: 'Copy path', disabled: !path, title: path ? path : 'Not saved to a file yet',
+      action: () => {
+        navigator.clipboard.writeText(/** @type {string} */ (path)).catch(() => {});
+        showToast({ text: `Copied ${path}` });
+      },
+    },
+  ], { x: e.clientX, y: e.clientY });
+});
+
 // Its own keys while it has the focus (Termilly's shortcuts leave text boxes alone): save, open, back to the terminal.
 panel.addEventListener('keydown', e => {
   const ctrl = e.ctrlKey && !e.altKey;
