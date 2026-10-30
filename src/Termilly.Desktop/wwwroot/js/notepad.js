@@ -193,7 +193,7 @@ function pick(id) {
 }
 
 /**
- * Closes a page, asking first when its text isn't in a file; the last one closes the Notepad.
+ * Closes a page, asking first when its text isn't in a file; closing the last one leaves an empty page.
  * @param {string} id
  */
 async function closePage(id) {
@@ -207,11 +207,11 @@ async function closePage(id) {
   const at = pages().indexOf(page);
   pages().splice(at, 1);
   if (state.notepad.activeId === id) state.notepad.activeId = pages()[Math.min(at, pages().length - 1)]?.id ?? null;
+  // The last one gives way to an empty page: the Notepad stays open.
+  if (!pages().length) newPage();
   persist();
-  if (!pages().length) {
-    setOpen(false);
-    restoreFocus();
-  } else render();
+  render();
+  area.focus();
 }
 
 /**
