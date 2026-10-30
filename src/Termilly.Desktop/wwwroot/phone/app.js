@@ -126,6 +126,8 @@ async function start() {
   show('<header class="bar"><h1>Termilly</h1><span class="conn" data-conn></span></header><main id="home"></main><div id="sheet"></div><div class="toast" data-toast hidden></div>');
   connect();
   render();
+  // The phone allows alerts already but the PC has none for this pairing (it's new): on again, without asking.
+  if (canAlert() && !me?.alerts && Notification.permission === GRANTED) turnOn();
 }
 
 // ---- Home ----
@@ -149,10 +151,14 @@ function rowHtml(t) {
   return `<div class="row" data-do="${DO.term}" data-id="${t.id}">${badge(t)}<div class="r-text"><div class="r-name">${esc(t.title)}</div><div class="r-line">${esc(t.line ?? '')}</div></div><span class="state s-${dot}"></span></div>`;
 }
 
+/** The phone's answer when it allows alerts. */
+const GRANTED = 'granted';
+/** Whether this phone can take alerts at all (iOS: 16.4 or later, opened from the Home Screen). */
+const canAlert = () => hasWorker && 'PushManager' in window && 'Notification' in window;
+
 function alertsHtml() {
-  const canAlert = hasWorker && 'PushManager' in window && 'Notification' in window;
   return `<div class="section">This phone</div><div class="list pad">
-    ${!canAlert ? `<p class="muted">${ios ? 'Alerts need iOS 16.4 or later, and Termilly opened from the Home Screen.' : 'This browser can\'t take alerts.'}</p>`
+    ${!canAlert() ? `<p class="muted">${ios ? 'Alerts need iOS 16.4 or later, and Termilly opened from the Home Screen.' : 'This browser can\'t take alerts.'}</p>`
     : me?.alerts ? `<p>Alerts are on.</p><div class="w-actions"><button class="btn" data-do="${DO.test}">Send a test alert</button><button class="btn" data-do="${DO.off}">Turn off</button></div>`
       : `<p>Get an alert here when an agent needs you, even when the phone is locked.</p><div class="w-actions"><button class="btn primary" data-do="${DO.on}">Turn on alerts</button></div>`}
     <p class="muted" data-note></p></div>`;
@@ -165,11 +171,14 @@ function render() {
   if (conn) conn.textContent = connected ? '' : 'Reconnecting';
   const waiting = snap.terminals.filter(t => t.waiting).sort((a, b) => (b.waiting?.at ?? 0) - (a.waiting?.at ?? 0));
   const groups = snap.workspaces.map(w => ({ w, list: snap.terminals.filter(t => t.ws === w.id) })).filter(g => g.list.length);
-  home.innerHTML = (waiting.length ? `<div class="section">Waiting for you · ${waiting.length}</div>${waiting.map(cardHtml).join('')}` : '')
+  // Alerts not on yet (a new pairing starts without): asked first, not below every terminal.
+  const alertsFirst = canAlert() && !me?.alerts;
+  home.innerHTML = (alertsFirst ? alertsHtml() : '')
+    + (waiting.length ? `<div class="section">Waiting for you · ${waiting.length}</div>${waiting.map(cardHtml).join('')}` : '')
     + (!snap.terminals.length ? `<p class="muted center">${connected ? 'No terminals open on your PC.' : 'Connecting to your PC.'}</p>` : '')
     + groups.map(({ w, list }) => `<div class="ws"><span class="dot" style="background:${esc(w.color || DEFAULT_COLOR)}"></span>${esc(w.name)}<span class="count">${list.length}</span></div>
       <div class="list">${list.map(rowHtml).join('')}</div>`).join('')
-    + alertsHtml();
+    + (alertsFirst ? '' : alertsHtml());
   renderSheet();
 }
 
@@ -274,7 +283,7 @@ function toast(text) {
 async function turnOn() {
   const note = /** @type {HTMLElement} */ (app.querySelector('[data-note]'));
   try {
-    if (await Notification.requestPermission() !== 'granted') {
+    if (await Notification.requestPermission() !== GRANTED) {
       note.textContent = 'Alerts are blocked for Termilly in this phone\'s settings.';
       return;
     }
