@@ -14,7 +14,13 @@ const PASTE = 'paste';
 /** Ctrl with a letter: its code is the letter's minus 64 (Ctrl+C is 3). */
 const CTRL_OFFSET = 64;
 /** The font sizes the view fits the PC's width with, and how wide a monospace character is per point. */
-const FONT = Object.freeze({ min: 6, max: 14, charWidth: 0.6 });
+const FONT = Object.freeze({ min: 6, max: 14, charWidth: 0.6, tenths: 10 });
+/** The terminal's box: its element, its side padding together, and the narrowest width it's fitted to. */
+const BOX = '.tv-box';
+const BOX_SPACE = Object.freeze({ padding: 16, least: 200 });
+/** What the view asks of the live connection, and its header's buttons (data-tv). */
+const OP = Object.freeze({ watch: 'watch', unwatch: 'unwatch', input: 'input' });
+const TV = Object.freeze({ back: 'back', answer: 'answer' });
 /** Lines kept above the screen. */
 const SCROLLBACK = 3000;
 /** The PC's size when it hasn't said yet. */
@@ -48,8 +54,8 @@ export function terminalView(app) {
 
   /** @param {Shown} t */
   const fontFor = t => {
-    const width = Math.max(view.clientWidth - 16, 200);
-    return Math.max(FONT.min, Math.min(FONT.max, Math.floor((width / ((t.cols ?? DEFAULT_SIZE.cols) * FONT.charWidth)) * 10) / 10));
+    const width = Math.max(view.clientWidth - BOX_SPACE.padding, BOX_SPACE.least);
+    return Math.max(FONT.min, Math.min(FONT.max, Math.floor((width / ((t.cols ?? DEFAULT_SIZE.cols) * FONT.charWidth)) * FONT.tenths) / FONT.tenths));
   };
 
   /** @param {string} data */
@@ -63,7 +69,7 @@ export function terminalView(app) {
       data = String.fromCharCode(data.toUpperCase().charCodeAt(0) - CTRL_OFFSET);
       setCtrl(false);
     }
-    app.send({ op: 'input', pane: shown.id, data });
+    app.send({ op: OP.input, pane: shown.id, data });
   }
 
   /** @param {boolean} on */
@@ -74,15 +80,15 @@ export function terminalView(app) {
 
   function head() {
     if (!shown) return '';
-    return `<header class="tv-head"><button class="tv-back" data-tv="back" aria-label="Back">‹</button>
+    return `<header class="tv-head"><button class="tv-back" data-tv="${TV.back}" aria-label="Back">‹</button>
       <span class="badge${shown.icon === 'claude' ? ' claude' : ''}" data-icon="${esc(shown.icon)}">${shown.icon === 'claude' ? '✻' : esc(shown.badge)}</span>
       <span class="tv-title">${esc(shown.title)}<span class="tv-ws"> · ${esc(app.wsName(shown.ws))}</span></span>
-      ${shown.waiting ? '<button class="btn primary tv-answer" data-tv="answer">Answer</button>' : ''}</header>`;
+      ${shown.waiting ? `<button class="btn primary tv-answer" data-tv="${TV.answer}">Answer</button>` : ''}</header>`;
   }
 
   /** Draws the parts around the terminal (its header, the key bar or why typing is off), keeping xterm as it is. */
   function frame() {
-    const box = view.querySelector('.tv-box');
+    const box = view.querySelector(BOX);
     const headEl = view.querySelector('.tv-head');
     if (headEl) headEl.outerHTML = head();
     else view.insertAdjacentHTML('afterbegin', head());
@@ -107,14 +113,14 @@ export function terminalView(app) {
     frame();
     term = new Terminal({ cols: t.cols ?? DEFAULT_SIZE.cols, rows: t.rows ?? DEFAULT_SIZE.rows, fontSize: fontFor(t), scrollback: SCROLLBACK,
       fontFamily: 'ui-monospace, Menlo, Consolas, monospace', theme: DARK, disableStdin: !canType, convertEol: false, cursorBlink: false });
-    term.open(view.querySelector('.tv-box'));
+    term.open(view.querySelector(BOX));
     term.onData(type);
-    app.send({ op: 'watch', pane: t.id });
+    app.send({ op: OP.watch, pane: t.id });
     fitViewport();
   }
 
   function close() {
-    if (shown) app.send({ op: 'unwatch' });
+    if (shown) app.send({ op: OP.unwatch });
     term?.dispose();
     term = null;
     shown = null;
@@ -172,8 +178,8 @@ export function terminalView(app) {
     const target = /** @type {HTMLElement} */ (e.target);
     const key = target.closest('[data-key]')?.getAttribute('data-key');
     const action = target.closest('[data-tv]')?.getAttribute('data-tv');
-    if (action === 'back') close();
-    else if (action === 'answer' && shown) app.answer(shown.id);
+    if (action === TV.back) close();
+    else if (action === TV.answer && shown) app.answer(shown.id);
     else if (key === CTRL) setCtrl(!ctrl);
     else if (key === PASTE) {
       try {
@@ -187,11 +193,14 @@ export function terminalView(app) {
   });
   // Tapping the terminal brings up the keyboard when typing is allowed.
   view.addEventListener('touchend', e => {
-    if (typing && /** @type {HTMLElement} */ (e.target).closest('.tv-box')) term?.focus();
+    if (typing && /** @type {HTMLElement} */ (e.target).closest(BOX)) term?.focus();
   });
 
+  /** Back after the connection dropped: the terminal shown starts over with what it printed lately. */
+  const rewatch = () => { if (shown) app.send({ op: OP.watch, pane: shown.id }); };
+
   return {
-    open, close, update, message,
+    open, close, update, message, rewatch,
     /** The terminal shown, or null. */
     get viewing() { return shown?.id ?? null; },
   };

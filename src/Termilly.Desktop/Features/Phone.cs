@@ -139,11 +139,12 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
     /// <summary>What a phone types into the terminal it watches, at most this much at a time.</summary>
     private const int MaxInput = 4096;
     private const string InputOp = "input";
+    private const string OpField = "op";
     private const string DataField = "data";
 
     /// <summary>A phone sent something: keys for the terminal it watches, or an answer to an agent.</summary>
     private Task<JsonObject> ReceivedAsync(string device, JsonObject message) =>
-        message["op"]?.GetValue<string>() == InputOp ? Task.FromResult(Type(message)) : AnswerAsync(device, message);
+        message[OpField]?.GetValue<string>() == InputOp ? Task.FromResult(Type(message)) : AnswerAsync(device, message);
 
     /// <summary>Keys from a phone, typed into the terminal: only while Settings › Phone allows typing.</summary>
     private JsonObject Type(JsonObject message)
@@ -159,7 +160,7 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
             return new JsonObject { [Answer.Ok] = false, [Answer.Error] = "That terminal is gone." };
         }
         session.Write(data);
-        return new JsonObject { [Answer.Ok] = true, ["op"] = InputOp };
+        return new JsonObject { [Answer.Ok] = true, [OpField] = InputOp };
     }
 
     /// <summary>The longest reply a phone may type to an agent.</summary>

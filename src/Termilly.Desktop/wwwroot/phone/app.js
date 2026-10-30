@@ -28,6 +28,8 @@ const CHOICE = Object.freeze({ approve: 'approve', always: 'always', reject: 're
 const WAITING = Object.freeze({ permission: 'permission', question: 'question', attention: 'attention', error: 'error' });
 /** Messages from the PC on the live connection (PhoneLive.Kinds). */
 const LIVE = Object.freeze({ state: 'state', answered: 'answered', screen: 'screen', output: 'output' });
+/** What the app asks of the live connection: an answer to an agent (Features/Phone.cs). */
+const OP = Object.freeze({ answer: 'answer', input: 'input' });
 /** The live connection is open (WebSocket.OPEN). */
 const OPEN = 1;
 /** The live connection tries again after this long, doubling up to the most. */
@@ -219,7 +221,7 @@ function connect() {
     retry = RETRY_MS;
     render();
     // Back after a drop: the terminal shown starts over with what it printed lately.
-    if (terminalShown.viewing) live?.send(JSON.stringify({ op: 'watch', pane: terminalShown.viewing }));
+    terminalShown.rewatch();
   });
   live.addEventListener('message', e => {
     const m = JSON.parse(e.data);
@@ -229,7 +231,7 @@ function connect() {
       if (terminalShown.viewing) terminalShown.update(terminal(terminalShown.viewing), !!snap.typing);
     } else if (m.type === LIVE.screen || m.type === LIVE.output) {
       terminalShown.message(m);
-    } else if (m.type === LIVE.answered && m.op === 'input') {
+    } else if (m.type === LIVE.answered && m.op === OP.input) {
       if (!m.ok) toast(m.error || 'That didn\'t go through.');
     } else if (m.type === LIVE.answered) {
       toast(m.ok ? 'Sent' : m.error || 'That didn\'t go through.');
@@ -251,7 +253,7 @@ function connect() {
  */
 function answer(pane, choice, text = '') {
   if (!connected || !live) return toast('Not connected to your PC.');
-  live.send(JSON.stringify({ op: 'answer', pane, choice, text }));
+  live.send(JSON.stringify({ op: OP.answer, pane, choice, text }));
 }
 
 /** @param {string} text */
