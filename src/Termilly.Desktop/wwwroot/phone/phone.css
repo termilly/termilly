@@ -93,6 +93,7 @@ form { display: flex; gap: 8px; margin: 12px 0; }
 .toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom)); z-index: 20; translate: -50% 0; padding: 10px 16px; border-radius: 12px; background: var(--text); color: var(--bg); font-size: 15px; }
 
 /* ---- The terminal view (terminal.js) ---- */
+body.tv-open { overflow: hidden; }
 .tv { position: fixed; inset: 0 0 auto; z-index: 5; display: flex; flex-direction: column; height: 100vh; padding-top: env(safe-area-inset-top); background: var(--bg); }
 .tv-head { display: flex; flex: none; gap: 10px; align-items: center; padding: 6px 12px 8px; border-bottom: 1px solid var(--line); }
 .tv-back { padding: 0 8px; border: 0; background: none; color: var(--accent); font-size: 28px; line-height: 1; }
@@ -101,7 +102,7 @@ form { display: flex; gap: 8px; margin: 12px 0; }
 .tv-answer { flex: none; padding: 7px 14px; }
 .tv-fit { flex: none; padding: 7px 12px; }
 .tv-fit.on { background: var(--accent); color: #fff; box-shadow: none; }
-.tv-box { flex: 1; min-height: 0; overflow: auto; padding: 6px 8px; background: #0a0a0c; }
+.tv-box { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 6px 8px; background: #0a0a0c; }
 .tv-box .xterm { width: max-content; min-width: 100%; }
 .keybar { display: flex; flex: none; gap: 5px; padding: 6px 6px calc(6px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: var(--raised); }
 .keybar button { flex: 1; padding: 9px 0; border: 0; border-radius: 7px; background: var(--bg); font: 600 13px ui-monospace, Menlo, Consolas, monospace; }

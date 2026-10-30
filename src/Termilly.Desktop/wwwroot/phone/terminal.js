@@ -35,6 +35,8 @@ const TV = Object.freeze({ back: 'back', answer: 'answer', fit: 'fit' });
 const AUTOMATIC = /^\x1b(?:\[\??[\d;]*[cnRIO]|\[[<M]|\][\s\S]*(?:\x07|\x1b\\)$|P[\s\S]*\x1b\\$)/;
 /** Lines kept above the screen. */
 const SCROLLBACK = 3000;
+/** On the page while the view is open: the home underneath doesn't scroll. */
+const OPEN = 'tv-open';
 /** The PC's size when it hasn't said yet. */
 const DEFAULT_SIZE = Object.freeze({ cols: 80, rows: 24 });
 /** Messages from the PC about the terminal watched (PhoneLive.Kinds). */
@@ -139,6 +141,7 @@ export function terminalView(app) {
     typing = canType;
     confirmed = false;
     view.hidden = false;
+    document.body.classList.add(OPEN);
     view.innerHTML = '<div class="tv-box"></div>';
     frame();
     term = new Terminal({ cols: t.cols ?? DEFAULT_SIZE.cols, rows: t.rows ?? DEFAULT_SIZE.rows, fontSize: FONT.readable, scrollback: SCROLLBACK,
@@ -157,6 +160,7 @@ export function terminalView(app) {
     shown = null;
     setCtrl(false);
     view.hidden = true;
+    document.body.classList.remove(OPEN);
     view.innerHTML = '';
   }
 
@@ -201,10 +205,16 @@ export function terminalView(app) {
   function fitViewport() {
     if (view.hidden || !window.visualViewport) return;
     view.style.height = `${window.visualViewport.height}px`;
+    pin();
     fitFont();
     term?.scrollToBottom();
   }
+  /** Keeps the view on what the phone shows: iOS moves the page under the keyboard, which would carry the header away. */
+  function pin() {
+    if (!view.hidden && window.visualViewport) view.style.transform = `translateY(${window.visualViewport.offsetTop}px)`;
+  }
   window.visualViewport?.addEventListener('resize', fitViewport);
+  window.visualViewport?.addEventListener('scroll', pin);
 
   view.addEventListener('click', async e => {
     const target = /** @type {HTMLElement} */ (e.target);
