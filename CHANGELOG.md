@@ -2,6 +2,10 @@
 
 What changed in each release. Termilly says in its title bar when a newer one is out.
 
+## 1.4.1 (unreleased)
+
+- Updates install on the first try.
+
 ## 1.4.0 (2026-10-29)
 
 - **File Explorer:** explore, search, preview files and copy them between workspaces.
