@@ -1,9 +1,11 @@
 /* Termilly on a phone (phone/): the setup page and the app. Design A (the desktop app's look) with D's answer sheet.
    Dark by default, light when the phone is. */
 :root { color-scheme: dark; --bg: #0d0d10; --raised: #17171c; --line: #26262e; --text: #e6e6eb; --muted: #8e8e9a; --accent: #8b7bff; --attention: #f2cc60; --danger: #ff6b6b; --ok: #3fb950; --sheet: #17171c; }
+/* Light: the phone's own setting (Automatic), or chosen in the app's Settings (html data-theme). */
 @media (prefers-color-scheme: light) {
-  :root { color-scheme: light; --bg: #f3f3f5; --raised: #ffffff; --line: #e1e1e7; --text: #1d1d22; --muted: #6a6a76; --accent: #6d5cf0; --attention: #a8790a; --danger: #d63c3c; --ok: #1f8f3a; --sheet: #ffffff; }
+  :root:not([data-theme="dark"]) { color-scheme: light; --bg: #f3f3f5; --raised: #ffffff; --line: #e1e1e7; --text: #1d1d22; --muted: #6a6a76; --accent: #6d5cf0; --attention: #a8790a; --danger: #d63c3c; --ok: #1f8f3a; --sheet: #ffffff; }
 }
+:root[data-theme="light"] { color-scheme: light; --bg: #f3f3f5; --raised: #ffffff; --line: #e1e1e7; --text: #1d1d22; --muted: #6a6a76; --accent: #6d5cf0; --attention: #a8790a; --danger: #d63c3c; --ok: #1f8f3a; --sheet: #ffffff; }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 body { margin: 0; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); background: var(--bg); color: var(--text); font: 16px/1.4 -apple-system, "Segoe UI", Roboto, sans-serif; }
 button { font: inherit; color: inherit; }
@@ -149,3 +151,6 @@ main.tabbed { padding-bottom: calc(80px + env(safe-area-inset-bottom)); }
 .stepper { display: flex; gap: 12px; align-items: center; }
 .stepper .btn { flex: none; width: 56px; }
 .stepper span { flex: 1; font-weight: 600; text-align: center; }
+/* Settings: Automatic, Light or Dark side by side. */
+.segs { display: flex; gap: 6px; }
+.segs .btn.on { background: var(--accent); color: #fff; box-shadow: none; }

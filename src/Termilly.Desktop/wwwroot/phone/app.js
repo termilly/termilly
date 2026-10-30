@@ -6,9 +6,19 @@
 // between the terminals, the PC's notifications and this phone's settings (tabs.js).
 
 import { terminalView, TEXT_SIZE } from './terminal.js';
-import { TAB, SETTING, TEXT_SIZES, navHtml, notesHtml, settingsHtml } from './tabs.js';
+import { TAB, SETTING, TEXT_SIZES, THEME, navHtml, notesHtml, settingsHtml } from './tabs.js';
 
 const app = /** @type {HTMLElement} */ (document.getElementById('app'));
+
+/** The app's look as chosen in Settings (Automatic leaves it to the phone). */
+const theme = () => localStorage.getItem(THEME.key) || THEME.auto;
+/** @param {string} pick */
+function setTheme(pick) {
+  localStorage.setItem(THEME.key, pick);
+  if (pick === THEME.auto) delete document.documentElement.dataset.theme;
+  else document.documentElement.dataset.theme = pick;
+}
+setTheme(theme());
 
 /** What the PC says about this phone. */
 /** @typedef {{ paired: boolean, locked?: boolean, pushKey?: string, alerts?: boolean }} Me */
@@ -214,7 +224,7 @@ function render() {
   const title = app.querySelector('[data-title]');
   if (title) title.textContent = /** @type {Record<string, string>} */ (TITLE)[tab];
   home.innerHTML = tab === TAB.notes ? notesHtml(snap.notes ?? [], noteParts)
-    : tab === TAB.settings ? settingsHtml({ alerts: alertsBody(), size: textSize(), host: location.host, connected })
+    : tab === TAB.settings ? settingsHtml({ alerts: alertsBody(), size: textSize(), host: location.host, connected, theme: theme() })
     : terminalsHtml();
   /** @type {HTMLElement} */ (document.getElementById('nav')).innerHTML = navHtml(tab, snap.notes?.length ?? 0);
   renderSheet();
@@ -361,6 +371,12 @@ async function unpair() {
 }
 
 app.addEventListener('click', e => {
+  const pick = /** @type {HTMLElement} */ (e.target).closest('[data-theme-pick]')?.getAttribute('data-theme-pick');
+  if (pick) {
+    setTheme(pick);
+    render();
+    return;
+  }
   const to = /** @type {HTMLElement} */ (e.target).closest('[data-tab]')?.getAttribute('data-tab');
   if (to) {
     tab = to;

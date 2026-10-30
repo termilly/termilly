@@ -9,6 +9,9 @@ export const TAB = Object.freeze({ terminals: 'terminals', notes: 'notes', setti
 const STATE_LABEL = Object.freeze({ 'needs-input': 'Needs you', attention: 'Needs you', error: 'Error', done: 'Done' });
 /** What the Settings tab's buttons do (data-do). */
 export const SETTING = Object.freeze({ smaller: 'smaller', bigger: 'bigger', unpair: 'unpair' });
+/** The looks the app can have: the phone's own (Automatic), or always light or dark; where the phone keeps it. */
+export const THEME = Object.freeze({ auto: 'auto', light: 'light', dark: 'dark', key: 'termilly.theme' });
+const THEME_LABEL = Object.freeze({ auto: 'Automatic', light: 'Light', dark: 'Dark' });
 /** The text sizes the terminal steps through (points). */
 export const TEXT_SIZES = [9, 10, 11, 12, 13, 14, 16, 18, 20];
 
@@ -54,10 +57,13 @@ export function notesHtml(notes, parts) {
 
 /**
  * This phone's settings.
- * @param {{ alerts: string, size: number, host: string, connected: boolean }} now
+ * @param {{ alerts: string, size: number, host: string, connected: boolean, theme: string }} now
  */
 export function settingsHtml(now) {
+  const looks = [THEME.auto, THEME.light, THEME.dark];
   return `<div class="section">This phone</div><div class="list pad">${now.alerts}</div>
+    <div class="section">Appearance</div><div class="list pad"><div class="segs">${looks.map(t => `<button class="btn${t === now.theme ? ' on' : ''}" data-theme-pick="${t}">${/** @type {Record<string, string>} */ (THEME_LABEL)[t]}</button>`).join('')}</div>
+      <p class="muted">Automatic follows the phone's light or dark mode.</p></div>
     <div class="section">Terminal text</div><div class="list pad stepper"><button class="btn" data-do="${SETTING.smaller}" aria-label="Smaller">A−</button>
       <span>${now.size} pt</span><button class="btn" data-do="${SETTING.bigger}" aria-label="Bigger">A+</button></div>
     <div class="section">Your PC</div><div class="list pad"><p class="mono">${esc(now.host)}</p>
