@@ -4,7 +4,9 @@ What changed in each release. Termilly says in its title bar when a newer one is
 
 ## 1.4.1 (unreleased)
 
-- **Links:** Ctrl+click opens .html files in your browser, and Ctrl+C copies the link under the mouse.
+- **Notepad:** write down quick notes, save them to files or copy them to workspace and terminal notes.
+- **Links:** highlighted under the mouse; Ctrl+click opens .html files in your browser, and Ctrl+C copies the link.
+- Light themes keep terminal text readable.
 - Updates install on the first try.
 
 ## 1.4.0 (2026-10-29)
