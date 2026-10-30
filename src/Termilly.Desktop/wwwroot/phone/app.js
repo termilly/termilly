@@ -6,7 +6,7 @@
 // between the terminals, the PC's notifications and this phone's settings (tabs.js).
 
 import { terminalView, TEXT_SIZE } from './terminal.js';
-import { TAB, SETTING, TEXT_SIZES, navHtml, notesHtml, settingsHtml } from './tabs.js';
+import { TAB, SETTING, TEXT_SIZES, navHtml, notesHtml, settingsHtml, themesHtml } from './tabs.js';
 import { applyLook, chooseLook, chosenLook, looks } from './theme.js';
 
 const app = /** @type {HTMLElement} */ (document.getElementById('app'));
@@ -68,8 +68,9 @@ let retry = RETRY_MS;
 /** @type {string | null} */
 let sheetFor = null;
 let replying = false;
-/** The tab shown (the bottom bar). */
+/** The tab shown (the bottom bar), and whether Settings shows its themes page. */
 let tab = TAB.terminals;
+let themesPage = false;
 /** The tabs' titles, at the top. */
 const TITLE = Object.freeze({ [TAB.terminals]: 'Termilly', [TAB.notes]: 'Notifications', [TAB.settings]: 'Settings' });
 
@@ -214,8 +215,10 @@ function render() {
   const conn = app.querySelector('[data-conn]');
   if (conn) conn.textContent = connected ? '' : 'Reconnecting';
   const title = app.querySelector('[data-title]');
-  if (title) title.textContent = /** @type {Record<string, string>} */ (TITLE)[tab];
+  const onThemes = tab === TAB.settings && themesPage;
+  if (title) title.textContent = onThemes ? 'Themes' : /** @type {Record<string, string>} */ (TITLE)[tab];
   home.innerHTML = tab === TAB.notes ? notesHtml(snap.notes ?? [], noteParts)
+    : onThemes ? themesHtml(looks(snap), chosenLook())
     : tab === TAB.settings ? settingsHtml({ alerts: alertsBody(), size: textSize(), host: location.host, connected, look: chosenLook(), looks: looks(snap) })
     : terminalsHtml();
   /** @type {HTMLElement} */ (document.getElementById('nav')).innerHTML = navHtml(tab, snap.notes?.length ?? 0);
@@ -374,6 +377,7 @@ app.addEventListener('click', e => {
   const to = /** @type {HTMLElement} */ (e.target).closest('[data-tab]')?.getAttribute('data-tab');
   if (to) {
     tab = to;
+    themesPage = false;
     render();
     window.scrollTo(0, 0);
     return;
@@ -398,6 +402,12 @@ app.addEventListener('click', e => {
     case SETTING.smaller: stepText(-1); break;
     case SETTING.bigger: stepText(1); break;
     case SETTING.unpair: unpair(); break;
+    case SETTING.themes:
+    case SETTING.back:
+      themesPage = target.dataset.do === SETTING.themes;
+      render();
+      window.scrollTo(0, 0);
+      break;
     case DO.send: {
       const text = /** @type {HTMLTextAreaElement | null} */ (app.querySelector('[data-reply]'))?.value.trim() ?? '';
       if (text) answer(id, CHOICE.reply, text);

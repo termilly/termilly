@@ -1,10 +1,12 @@
 // @ts-check
-// The app's look (Settings › Appearance): Same as PC (the desktop's theme, as it changes), Automatic (the phone's own
+// The app's look (Settings › Appearance): Same as PC (the desktop's theme, as it changes), System (the phone's own
 // light or dark: phone.css), or any of the desktop's themes (js/phone.js sends them). The page takes the theme's few
 // colours; the terminal view takes its terminal colours.
 
 /** The looks that aren't a theme, and where the phone keeps the one chosen. */
 export const LOOK = Object.freeze({ pc: 'pc', auto: 'auto', key: 'termilly.theme' });
+/** What the looks that aren't a theme are called. */
+const LOOK_NAME = Object.freeze({ pc: 'Same as PC', auto: 'System' });
 
 /**
  * A desktop theme as the phone draws itself with it.
@@ -13,7 +15,7 @@ export const LOOK = Object.freeze({ pc: 'pc', auto: 'auto', key: 'termilly.theme
  * @typedef {{ themes?: PhoneTheme[], pcTheme?: string, pcTerminal?: Record<string, string> }} Themed
  */
 
-/** The terminal's colours with no theme (Automatic): the desktop's Dark. */
+/** The terminal's colours with no theme (System): the desktop's Dark. */
 const DARK_TERMINAL = Object.freeze({ background: '#0a0a0c', foreground: '#d7d7de', cursor: '#d7d7de', selectionBackground: '#3a3a55' });
 /** How far text must stand out on a light terminal (WCAG's 4.5:1, as the desktop does); dark ones keep their colours. */
 const CONTRAST = Object.freeze({ light: 4.5, dark: 1 });
@@ -94,7 +96,7 @@ export function applyLook(snap) {
  * @param {Themed} snap
  */
 export const looks = snap => [
-  { id: LOOK.pc, name: 'Same as PC', swatch: null },
-  { id: LOOK.auto, name: 'Automatic', swatch: null },
+  { id: LOOK.pc, name: LOOK_NAME.pc, swatch: null },
+  { id: LOOK.auto, name: LOOK_NAME.auto, swatch: null },
   ...(snap.themes ?? []).map(t => ({ id: t.id, name: t.name, swatch: { bg: t.ui.bg, accent: t.ui.accent } })),
 ];
