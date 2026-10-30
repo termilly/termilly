@@ -59,12 +59,15 @@ function terminalOf(tab) {
     line: tab.agent?.line ?? activity?.title ?? null,
     waiting: waitingFor(tab),
     production: isProduction(tab),
+    // The phone draws the terminal at the PC's size, so the PC's layout stays as it is.
+    cols: tab.view?.term?.cols ?? null, rows: tab.view?.term?.rows ?? null,
   };
 }
 
-/** What the phones show: this PC's workspaces, in order, and their terminals. */
+/** What the phones show: this PC's workspaces, in order, their terminals, and whether a phone may type into them. */
 function snapshot() {
   return {
+    typing: !!state.settings.phone?.allowTyping,
     workspaces: state.workspaces.map(w => ({ id: w.id, name: w.name, color: w.color })),
     terminals: [...state.tabs.values()].filter(t => t.wsId && wsById(t.wsId) && !t.virtual).map(terminalOf),
   };
@@ -75,6 +78,8 @@ const publish = debounce(() => {
 }, SEND_AFTER_MS);
 
 for (const event of [EVENTS.agent, EVENTS.tab, EVENTS.tabClosed, EVENTS.workspaces, EVENTS.settings]) on(event, publish);
+// A terminal resized on the PC: the phones draw it at its new size.
+on(EVENTS.terminalOpened, tab => tab.view?.term?.onResize(() => publish()));
 
 /** @param {number} ms */
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));

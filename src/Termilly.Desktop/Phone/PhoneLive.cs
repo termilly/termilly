@@ -10,7 +10,8 @@ namespace Termilly.Desktop.Phone;
 /// <summary>
 /// The paired phones that have the app open (docs/phone.md): one WebSocket each. Every phone gets what the page last
 /// said about the terminals (js/phone.js) as soon as it connects and whenever it changes; what a phone sends (an
-/// answer to an agent) goes to <see cref="Received"/>, and its answer back to that phone alone.
+/// answer to an agent) goes to <see cref="Received"/>, and its answer back to that phone alone. A phone may watch one
+/// terminal: it gets what that terminal printed lately (PhoneOutput), then what it prints, a few times a second.
 /// </summary>
 internal sealed class PhoneLive
 {
@@ -23,13 +24,81 @@ internal sealed class PhoneLive
     {
         public const string State = "state";
         public const string Answered = "answered";
+        public const string Screen = "screen";
+        public const string Output = "output";
+    }
+
+    /// <summary>What a phone asks of the connection itself: to watch a terminal, or stop.</summary>
+    private static class Ops
+    {
+        public const string Watch = "watch";
+        public const string Unwatch = "unwatch";
+    }
+
+    private const string OpField = "op";
+    private const string PaneField = "pane";
+    private const string DataField = "data";
+    /// <summary>How often a watched terminal's new output goes out (a busy build prints thousands of times a second).</summary>
+    private static readonly TimeSpan OutputEvery = TimeSpan.FromMilliseconds(40);
+
+    /// <summary>A connected phone: one send at a time, and the terminal it watches.</summary>
+    private sealed class Phone
+    {
+        public SemaphoreSlim Gate { get; } = new(1, 1);
+        public volatile string? Watching;
     }
 
     private const string TypeField = "type";
     private const string StateField = "state";
 
-    private readonly ConcurrentDictionary<WebSocket, SemaphoreSlim> _phones = new();
+    private readonly ConcurrentDictionary<WebSocket, Phone> _phones = new();
+    private readonly ConcurrentDictionary<string, StringBuilder> _pending = new();
+    private readonly Timer _flush;
     private string _state = "{}";
+
+    public PhoneLive() => _flush = new Timer(_ => Flush(), null, OutputEvery, OutputEvery);
+
+    /// <summary>What a terminal printed lately, for a phone that starts watching it.</summary>
+    public Func<string, string>? Recent { get; set; }
+
+    /// <summary>A terminal printed something: it goes to the phones watching it with the next flush.</summary>
+    public void Output(string pane, string data)
+    {
+        if (!_phones.Values.Any(p => p.Watching == pane))
+        {
+            return;
+        }
+        var pending = _pending.GetOrAdd(pane, _ => new StringBuilder());
+        lock (pending)
+        {
+            pending.Append(data);
+        }
+    }
+
+    private void Flush()
+    {
+        foreach (var (pane, pending) in _pending)
+        {
+            string data;
+            lock (pending)
+            {
+                if (pending.Length == 0)
+                {
+                    continue;
+                }
+                data = pending.ToString();
+                pending.Clear();
+            }
+            var message = new JsonObject { [TypeField] = Kinds.Output, [PaneField] = pane, [DataField] = data }.ToJsonString();
+            foreach (var (socket, phone) in _phones)
+            {
+                if (phone.Watching == pane)
+                {
+                    _ = SendAsync(socket, message);
+                }
+            }
+        }
+    }
 
     /// <summary>A phone sent something: its device id and the message; the answer goes back to it.</summary>
     public Func<string, JsonObject, Task<JsonObject>>? Received { get; set; }
@@ -53,7 +122,8 @@ internal sealed class PhoneLive
     /// <summary>Serves one phone until it disconnects or the server stops.</summary>
     public async Task RunAsync(WebSocket socket, string device, CancellationToken stop)
     {
-        _phones[socket] = new SemaphoreSlim(1, 1);
+        var me = new Phone();
+        _phones[socket] = me;
         try
         {
             await SendAsync(socket, StateMessage()).ConfigureAwait(false);
@@ -64,7 +134,13 @@ internal sealed class PhoneLive
                 {
                     break;
                 }
-                if (Received is { } received && Parse(text) is { } message)
+                var message = Parse(text);
+                var op = message?[OpField]?.GetValue<string>();
+                if (op is Ops.Watch or Ops.Unwatch)
+                {
+                    await WatchAsync(socket, me, op == Ops.Watch ? message?[PaneField]?.GetValue<string>() : null).ConfigureAwait(false);
+                }
+                else if (Received is { } received && message is not null)
                 {
                     var answer = await received(device, message).ConfigureAwait(false);
                     answer[TypeField] = Kinds.Answered;
@@ -77,10 +153,21 @@ internal sealed class PhoneLive
         }
         finally
         {
-            _phones.TryRemove(socket, out var gate);
-            gate?.Dispose();
+            _phones.TryRemove(socket, out var gone);
+            gone?.Gate.Dispose();
             socket.Abort();
             socket.Dispose();
+        }
+    }
+
+    /// <summary>A phone watches a terminal (or none): first what it printed lately, then what it prints.</summary>
+    private async Task WatchAsync(WebSocket socket, Phone phone, string? pane)
+    {
+        phone.Watching = pane;
+        if (pane is not null)
+        {
+            var screen = new JsonObject { [TypeField] = Kinds.Screen, [PaneField] = pane, [DataField] = Recent?.Invoke(pane) ?? "" };
+            await SendAsync(socket, screen.ToJsonString()).ConfigureAwait(false);
         }
     }
 
@@ -95,20 +182,20 @@ internal sealed class PhoneLive
 
     private async Task SendAsync(WebSocket socket, string text)
     {
-        if (!_phones.TryGetValue(socket, out var gate))
+        if (!_phones.TryGetValue(socket, out var phone))
         {
             return;
         }
         try
         {
-            await gate.WaitAsync().ConfigureAwait(false);
+            await phone.Gate.WaitAsync().ConfigureAwait(false);
             try
             {
                 await socket.SendAsync(Encoding.UTF8.GetBytes(text), WebSocketMessageType.Text, true, CancellationToken.None).ConfigureAwait(false);
             }
             finally
             {
-                gate.Release();
+                phone.Gate.Release();
             }
         }
         catch (Exception e) when (e is WebSocketException or ObjectDisposedException or IOException)

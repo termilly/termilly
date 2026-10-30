@@ -65,6 +65,7 @@ function devicesHtml() {
     + row('Alerts', 'An agent’s news, as Settings › Notifications picks it. Away: Termilly isn’t in front, or the PC has been untouched for a minute.',
       seg('phone.alerts', [[SETTING_VALUES.phoneAlerts.away, 'When I’m away'], [SETTING_VALUES.phoneAlerts.always, 'Always'], [SETTING_VALUES.phoneAlerts.off, 'Off']]),
       { keywords: 'phone alert push notification away idle' })
+    + row('Allow typing', 'Paired phones can type into the terminals they show. Answers to an agent work either way.', toggle('phone.allowTyping'), { keywords: 'phone type keyboard input remote' })
     + row('Hide details in alerts', 'Only “An agent needs you” or “An agent finished”: no terminal, workspace or message on the lock screen.', toggle('phone.hideDetails'), { keywords: 'phone alert privacy lock screen' })
     + row('Test alert', tested ? escapeHtml(tested) : 'Sends an alert to each phone that has alerts on, even when it’s locked.',
       '<button class="btn small" data-action="testPhone">Send</button>', { keywords: 'phone alert push notification test' })

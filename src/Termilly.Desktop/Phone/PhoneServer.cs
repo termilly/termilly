@@ -76,7 +76,7 @@ internal sealed class PhoneServer : IDisposable
     };
 
     private const string PageSecurity =
-        "Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'\r\n";
+        "Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'\r\n";
 
     private readonly TcpListener _listener;
     private readonly string _webRoot;
@@ -321,9 +321,17 @@ internal sealed class PhoneServer : IDisposable
         return await StaticFile(request.Path == "/" ? IndexPage : Uri.UnescapeDataString(request.Path.TrimStart('/')));
     }
 
-    /// <summary>A file of the phone app, from wwwroot/phone only.</summary>
+    /// <summary>The page's own files the phone app uses too: xterm.js, for its terminal view.</summary>
+    private static readonly string[] SharedFiles = ["lib/xterm.js", "lib/xterm.css"];
+
+    /// <summary>A file of the phone app, from wwwroot/phone only (and xterm.js from wwwroot/lib).</summary>
     private async Task<PhoneReply> StaticFile(string relative)
     {
+        if (SharedFiles.Contains(relative))
+        {
+            var shared = Path.Combine(Path.GetDirectoryName(_webRoot)!, relative);
+            return File.Exists(shared) ? new(HttpStatusCode.OK, Types.GetValueOrDefault(Path.GetExtension(shared), MediaTypes.Binary), await File.ReadAllBytesAsync(shared), PageSecurity) : NotFound;
+        }
         var file = Path.GetFullPath(Path.Combine(_webRoot, relative));
         if (!file.StartsWith(_webRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) || !File.Exists(file))
         {

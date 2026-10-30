@@ -212,6 +212,8 @@ internal sealed record PhoneSettings
     public string Alerts { get; init; } = SettingValues.PhoneAlerts.Away;
     /// <summary>Alerts say only that an agent needs the user or finished: no terminal, workspace or message.</summary>
     public bool HideDetails { get; init; }
+    /// <summary>A paired phone may type into a terminal it shows (answers to an agent are always allowed).</summary>
+    public bool AllowTyping { get; init; }
 
     public PhoneSettings Normalize() => this with
     {

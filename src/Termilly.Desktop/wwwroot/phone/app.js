@@ -2,7 +2,9 @@
 // Termilly on a phone (Phone/PhoneServer.cs, docs/phone.md), design A with D's answer sheet: pairing with the code
 // Settings shows; then the home screen, live over a WebSocket (PhoneLive): what's waiting for you first, as cards with
 // their answers, then each workspace's terminals; a sheet to answer an agent (Approve, Approve and don't ask again,
-// Reject, or a reply); and this phone's alerts (Web Push).
+// Reject, or a reply); a terminal live (terminal.js); and this phone's alerts (Web Push).
+
+import { terminalView } from './terminal.js';
 
 const app = /** @type {HTMLElement} */ (document.getElementById('app'));
 
@@ -11,21 +13,23 @@ const app = /** @type {HTMLElement} */ (document.getElementById('app'));
 /** What a terminal waits for (js/phone.js). */
 /** @typedef {{ kind: string, tool: string | null, target: string | null, text: string, at: number }} Waiting */
 /** A terminal as the PC describes it (js/phone.js). */
-/** @typedef {{ id: string, ws: string, title: string, icon: string, badge: string, agent: string | null, activity: string | null, line: string | null, waiting: Waiting | null, production: boolean }} Terminal */
-/** @typedef {{ workspaces: { id: string, name: string, color: string }[], terminals: Terminal[] }} Snapshot */
+/** @typedef {{ id: string, ws: string, title: string, icon: string, badge: string, agent: string | null, activity: string | null, line: string | null, waiting: Waiting | null, production: boolean, cols: number | null, rows: number | null }} Terminal */
+/** @typedef {{ typing?: boolean, workspaces: { id: string, name: string, color: string }[], terminals: Terminal[] }} Snapshot */
 
 /** The PC's API for the app (PhoneServer, PhoneAppApi). */
 const API = Object.freeze({ me: '/api/me', pair: '/api/pair', push: '/api/push', pushOff: '/api/push/off', pushTest: '/api/push/test', live: '/api/live' });
 /** The PC's answer to a phone that isn't paired. */
 const FORBIDDEN = 403;
 /** What the app's buttons do (data-do). */
-const DO = Object.freeze({ retry: 'retry', on: 'on', off: 'off', test: 'test', open: 'open', close: 'close', answer: 'answer', reply: 'reply', send: 'send' });
+const DO = Object.freeze({ retry: 'retry', on: 'on', off: 'off', test: 'test', open: 'open', term: 'term', close: 'close', answer: 'answer', reply: 'reply', send: 'send' });
 /** The answers to an agent (Features/Phone.cs checks them). */
 const CHOICE = Object.freeze({ approve: 'approve', always: 'always', reject: 'reject', reply: 'reply' });
 /** What a terminal waits for (js/phone.js). */
 const WAITING = Object.freeze({ permission: 'permission', question: 'question', attention: 'attention', error: 'error' });
 /** Messages from the PC on the live connection (PhoneLive.Kinds). */
-const LIVE = Object.freeze({ state: 'state', answered: 'answered' });
+const LIVE = Object.freeze({ state: 'state', answered: 'answered', screen: 'screen', output: 'output' });
+/** The live connection is open (WebSocket.OPEN). */
+const OPEN = 1;
 /** The live connection tries again after this long, doubling up to the most. */
 const RETRY_MS = 1000;
 const RETRY_MAX_MS = 15000;
@@ -129,7 +133,7 @@ function cardHtml(t) {
   const what = w.kind === WAITING.permission ? `Allow ${esc(w.tool)}${w.target ? `: <code>${esc(w.target)}</code>` : '?'}` : esc(w.text);
   const actions = w.kind === WAITING.permission
     ? `<button class="btn danger" data-do="${DO.answer}" data-choice="${CHOICE.reject}" data-id="${t.id}">Reject</button><button class="btn primary" data-do="${DO.answer}" data-choice="${CHOICE.approve}" data-id="${t.id}">Approve</button>`
-    : `<button class="btn" data-do="${DO.reply}" data-id="${t.id}">Reply</button><button class="btn" data-do="${DO.open}" data-id="${t.id}">Open</button>`;
+    : `<button class="btn" data-do="${DO.reply}" data-id="${t.id}">Reply</button><button class="btn" data-do="${DO.term}" data-id="${t.id}">Open</button>`;
   return `<div class="waiting" data-do="${DO.open}" data-id="${t.id}">
     <div class="w-head">${badge(t)}<span class="w-title">${esc(t.title)}</span><span class="w-ws">${esc(ws?.name)} · ${age(w.at)}</span></div>
     <div class="w-text">${what}</div><div class="w-actions">${actions}</div></div>`;
@@ -138,7 +142,7 @@ function cardHtml(t) {
 /** @param {Terminal} t */
 function rowHtml(t) {
   const dot = (/** @type {Record<string, string>} */ (DOT))[t.agent ?? ''] ?? (t.activity ? 'work' : 'idle');
-  return `<div class="row" data-do="${DO.open}" data-id="${t.id}">${badge(t)}<div class="r-text"><div class="r-name">${esc(t.title)}</div><div class="r-line">${esc(t.line ?? '')}</div></div><span class="state s-${dot}"></span></div>`;
+  return `<div class="row" data-do="${DO.term}" data-id="${t.id}">${badge(t)}<div class="r-text"><div class="r-name">${esc(t.title)}</div><div class="r-line">${esc(t.line ?? '')}</div></div><span class="state s-${dot}"></span></div>`;
 }
 
 function alertsHtml() {
@@ -214,12 +218,19 @@ function connect() {
     connected = true;
     retry = RETRY_MS;
     render();
+    // Back after a drop: the terminal shown starts over with what it printed lately.
+    if (terminalShown.viewing) live?.send(JSON.stringify({ op: 'watch', pane: terminalShown.viewing }));
   });
   live.addEventListener('message', e => {
     const m = JSON.parse(e.data);
     if (m.type === LIVE.state) {
       snap = m.state?.terminals ? m.state : { workspaces: [], terminals: [] };
       render();
+      if (terminalShown.viewing) terminalShown.update(terminal(terminalShown.viewing), !!snap.typing);
+    } else if (m.type === LIVE.screen || m.type === LIVE.output) {
+      terminalShown.message(m);
+    } else if (m.type === LIVE.answered && m.op === 'input') {
+      if (!m.ok) toast(m.error || 'That didn\'t go through.');
     } else if (m.type === LIVE.answered) {
       toast(m.ok ? 'Sent' : m.error || 'That didn\'t go through.');
       if (m.ok && m.pane === sheetFor) openSheet(null);
@@ -300,6 +311,11 @@ app.addEventListener('click', e => {
     case DO.off: turnOff(); break;
     case DO.test: test(); break;
     case DO.open: openSheet(id); break;
+    case DO.term: {
+      const t = terminal(id);
+      if (t) terminalShown.open(t, !!snap.typing);
+      break;
+    }
     case DO.close: openSheet(null); break;
     case DO.reply: openSheet(id, true); break;
     case DO.answer: answer(id, /** @type {string} */ (target.getAttribute('data-choice'))); break;
@@ -327,6 +343,14 @@ app.addEventListener('submit', async e => {
 
 // The ages on the cards ("2m") move on while the app is open.
 setInterval(() => { if (!replying) render(); }, AGE_EVERY_MS);
+
+/** The terminal view (terminal.js): it talks over the live connection, and its Answer opens the sheet. */
+const terminalShown = terminalView({
+  send: message => { if (live?.readyState === OPEN) live.send(JSON.stringify(message)); },
+  toast,
+  answer: id => openSheet(id),
+  wsName: id => wsOf(id)?.name ?? '',
+});
 
 if (hasWorker) navigator.serviceWorker.register('/sw.js');
 start();

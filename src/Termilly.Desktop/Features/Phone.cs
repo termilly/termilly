@@ -41,15 +41,19 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
     private readonly PhoneStore _store;
     private readonly PhoneLive _live;
     private readonly PageApi _api;
+    private readonly PhoneOutput _output;
+    private readonly TerminalSessions _sessions;
     private PhoneServer? _server;
     private int _port;
     private string? _error;
 
-    public PhoneHandler(PageChannel page, ISettingsStore settings, PhoneStore store, PhoneLive live, PageApi api)
+    public PhoneHandler(PageChannel page, ISettingsStore settings, PhoneStore store, PhoneLive live, PageApi api, PhoneOutput output, TerminalSessions sessions)
     {
-        (_page, _settings, _store, _live, _api) = (page, settings, store, live, api);
+        (_page, _settings, _store, _live, _api, _output, _sessions) = (page, settings, store, live, api, output, sessions);
         settings.Saved += _ => Update();
-        live.Received = AnswerAsync;
+        live.Received = ReceivedAsync;
+        live.Recent = output.Recent;
+        output.Printed += live.Output;
     }
 
     public void Register(MessageRouter router)
@@ -132,6 +136,32 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
         public const string Error = "error";
     }
 
+    /// <summary>What a phone types into the terminal it watches, at most this much at a time.</summary>
+    private const int MaxInput = 4096;
+    private const string InputOp = "input";
+    private const string DataField = "data";
+
+    /// <summary>A phone sent something: keys for the terminal it watches, or an answer to an agent.</summary>
+    private Task<JsonObject> ReceivedAsync(string device, JsonObject message) =>
+        message["op"]?.GetValue<string>() == InputOp ? Task.FromResult(Type(message)) : AnswerAsync(device, message);
+
+    /// <summary>Keys from a phone, typed into the terminal: only while Settings › Phone allows typing.</summary>
+    private JsonObject Type(JsonObject message)
+    {
+        var pane = message[Answer.Pane]?.GetValue<string>() ?? "";
+        var data = message[DataField]?.GetValue<string>() ?? "";
+        if (!_settings.Current.Phone.AllowTyping)
+        {
+            return new JsonObject { [Answer.Ok] = false, [Answer.Error] = "Typing from the phone is off: Settings › Phone › Allow typing." };
+        }
+        if (data.Length is 0 or > MaxInput || _sessions.Get(pane) is not { } session)
+        {
+            return new JsonObject { [Answer.Ok] = false, [Answer.Error] = "That terminal is gone." };
+        }
+        session.Write(data);
+        return new JsonObject { [Answer.Ok] = true, ["op"] = InputOp };
+    }
+
     /// <summary>The longest reply a phone may type to an agent.</summary>
     private const int MaxReply = 4000;
 
@@ -168,6 +198,8 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
         if (_server is not null && (!settings.Enabled || _port != settings.Port || _store.IsLocked))
         {
             _live.CloseAll();
+            _output.Keeping = false;
+            _output.Clear();
             _server.Dispose();
             _server = null;
         }
@@ -187,6 +219,7 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
                     _server = PhoneServer.Start(settings.Port, Path.Combine(AppPaths.WebRoot, PhoneFolder), _store, _live, authority, WebPush.PublicKey(vapid),
                         device => AlertAsync(device, TestAlert));
                     _port = settings.Port;
+                    _output.Keeping = true;
                 }
                 catch (IOException e)
                 {
