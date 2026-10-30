@@ -165,6 +165,7 @@ function showCount() {
   const kept = pages().filter(p => p.path || p.text.trim()).length;
   countEl.hidden = !panel.hidden || !kept;
   countEl.textContent = countText(kept);
+  countEl.dataset.digits = String(countEl.textContent.length);
   button.title = `Notepad (Ctrl+Shift+M)${countEl.hidden ? '' : `: ${kept} ${kept === 1 ? 'page' : 'pages'}`}`;
 }
 
