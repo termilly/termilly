@@ -23,6 +23,14 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
     private const int MaxBody = 180;
     /// <summary>Agent states (AgentStates) whose alert says an agent finished; the rest say it needs the user.</summary>
     private static readonly string[] Finished = [AgentStates.Done];
+    /// <summary>An alert's fields, as phone/sw.js shows it.</summary>
+    private static class Alert
+    {
+        public const string Title = "title";
+        public const string Body = "body";
+        public const string Tag = "tag";
+    }
+
     /// <summary>Alerts give up on a push service this slow.</summary>
     private static readonly TimeSpan SendTimeout = TimeSpan.FromSeconds(15);
 
@@ -74,7 +82,7 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
     }
 
     /// <summary>The alert a test sends.</summary>
-    private static JsonObject TestAlert => new() { ["title"] = AlertTitle, ["body"] = "Alerts reach this phone." };
+    private static JsonObject TestAlert => new() { [Alert.Title] = AlertTitle, [Alert.Body] = "Alerts reach this phone." };
 
     /// <summary>An alert's title when it isn't about one terminal.</summary>
     private const string AlertTitle = "Termilly";
@@ -95,12 +103,12 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
     {
         if (hideDetails)
         {
-            return new JsonObject { ["title"] = AlertTitle, ["body"] = Finished.Contains(m.State) ? "An agent finished." : "An agent needs you.", ["tag"] = m.Id };
+            return new JsonObject { [Alert.Title] = AlertTitle, [Alert.Body] = Finished.Contains(m.State) ? "An agent finished." : "An agent needs you.", [Alert.Tag] = m.Id };
         }
         var body = SecretRedactor.Redact(m.Body ?? "");
         return new JsonObject
         {
-            ["title"] = m.Title ?? AlertTitle, ["body"] = body.Length > MaxBody ? body[..(MaxBody - 1)].TrimEnd() + "…" : body, ["tag"] = m.Id,
+            [Alert.Title] = m.Title ?? AlertTitle, [Alert.Body] = body.Length > MaxBody ? body[..(MaxBody - 1)].TrimEnd() + "…" : body, [Alert.Tag] = m.Id,
         };
     }
 
