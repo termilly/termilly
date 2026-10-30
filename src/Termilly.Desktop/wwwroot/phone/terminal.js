@@ -238,11 +238,18 @@ export function terminalView(app) {
     }
   }
 
+  /** The tallest the visible screen has been at this width (turning the phone starts over): the keyboard is down then. */
+  const full = { width: 0, height: 0 };
+
   /** The view fills what the keyboard leaves of the screen, so the key bar sits right above it. */
   function fitViewport() {
-    if (view.hidden || !window.visualViewport) return;
-    view.style.height = `${window.visualViewport.height}px`;
-    view.classList.toggle(KEYBOARD, window.visualViewport.height < window.innerHeight - KEYBOARD_LEAST);
+    const visible = window.visualViewport;
+    if (view.hidden || !visible) return;
+    view.style.height = `${visible.height}px`;
+    // Not the page's height: in a Home Screen app iOS shrinks that with the keyboard too.
+    if (visible.width !== full.width) Object.assign(full, { width: visible.width, height: 0 });
+    full.height = Math.max(full.height, visible.height);
+    view.classList.toggle(KEYBOARD, visible.height < full.height - KEYBOARD_LEAST);
     pin();
     fitGrid();
   }
