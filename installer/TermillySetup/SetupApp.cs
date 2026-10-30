@@ -30,4 +30,17 @@ internal static class SetupApp
 
     /// <summary>The value after <paramref name="flag"/>, or null.</summary>
     public static string? Value(string flag) => Args.Value(flag);
+
+    /// <summary>The working folder setup was started in, for paths given relative to it (--dir .\Termilly).</summary>
+    public static string StartFolder { get; private set; } = Environment.CurrentDirectory;
+
+    /// <summary>
+    /// Moves setup's working folder to the temp folder. Termilly's shortcut starts it in its install folder and an
+    /// update inherits that: while a process sits in the install folder, Windows won't let setup swap it.
+    /// </summary>
+    public static void LeaveStartFolder()
+    {
+        StartFolder = Environment.CurrentDirectory;
+        Environment.CurrentDirectory = System.IO.Path.GetTempPath();
+    }
 }

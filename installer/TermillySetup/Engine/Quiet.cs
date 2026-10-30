@@ -102,7 +102,7 @@ internal static class Quiet
         }
         if (args.Value(Flags.Dir) is { } dir)
         {
-            options.InstallDir = Environment.ExpandEnvironmentVariables(dir);
+            options.InstallDir = Path.GetFullPath(Path.Combine(SetupApp.StartFolder, Environment.ExpandEnvironmentVariables(dir)));
         }
         options.StartMenu &= !args.Has(Flags.NoStartMenu);
         options.Desktop |= args.Has(Flags.Desktop);

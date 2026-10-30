@@ -8,6 +8,7 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        SetupApp.LeaveStartFolder();
         if (SetupApp.Has("--quiet"))
         {
             Shutdown(Engine.Quiet.Run()); // no window: scripts and IT tools (Engine/Quiet.cs)

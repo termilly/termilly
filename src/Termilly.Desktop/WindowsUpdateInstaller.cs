@@ -27,7 +27,9 @@ internal sealed class WindowsUpdateInstaller : IUpdateInstaller
 #if DEBUG
         command = TestSetup(command);
 #endif
-        var start = new ProcessStartInfo(command.File, command.Arguments) { UseShellExecute = true };
+        // Started in its own folder: Termilly's working folder is often its install folder (the shortcut's), and setup
+        // can't swap that folder while a process sits in it.
+        var start = new ProcessStartInfo(command.File, command.Arguments) { UseShellExecute = true, WorkingDirectory = System.IO.Path.GetDirectoryName(command.File)! };
         if (command.AsAdministrator)
         {
             start.Verb = RunAs;

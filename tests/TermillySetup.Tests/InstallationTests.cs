@@ -38,4 +38,29 @@ public class InstallationTests
             Directory.Delete(root, true);
         }
     }
+
+    [Fact]
+    public void Setup_started_in_the_install_folder_leaves_it_so_the_folder_can_be_swapped()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "termilly-swap-" + Guid.NewGuid().ToString("N"));
+        var dir = Path.Combine(root, "Termilly");
+        var was = Environment.CurrentDirectory;
+        try
+        {
+            Directory.CreateDirectory(dir);
+            Directory.CreateDirectory(dir + ".new");
+            // An update starts setup from Termilly, whose working folder is its install folder (the shortcut's).
+            Environment.CurrentDirectory = dir;
+
+            Termilly.Setup.SetupApp.LeaveStartFolder();
+
+            Assert.Equal(dir, Termilly.Setup.SetupApp.StartFolder);
+            Assert.True(Installation.TrySwap(dir, dir + ".new", dir + ".old", 1));
+        }
+        finally
+        {
+            Environment.CurrentDirectory = was;
+            Directory.Delete(root, true);
+        }
+    }
 }
