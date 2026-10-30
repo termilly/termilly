@@ -418,7 +418,7 @@ tabsEl.addEventListener('contextmenu', e => {
   const path = page.path;
   showMenu([
     {
-      label: 'Copy path', disabled: !path, title: path ? path : 'Not saved to a file yet',
+      label: 'Copy path', icon: ICONS.copy, disabled: !path, title: path ? path : 'Not saved to a file yet',
       action: () => {
         navigator.clipboard.writeText(/** @type {string} */ (path)).catch(() => {});
         showToast({ text: `Copied ${path}` });
