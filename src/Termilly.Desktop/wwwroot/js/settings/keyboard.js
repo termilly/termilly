@@ -39,6 +39,7 @@ const SHORTCUTS = [
     ['Previous / next prompt', 'Ctrl Shift ↑ / Ctrl Shift ↓'],
     ['Hints: open a link, copy a path or hash (Shift: copy link, show path)', 'Ctrl Shift E'],
     ['Floating scratch terminal', 'Ctrl Shift `'],
+    ['Notepad', 'Ctrl Shift M'],
     ['SFTP files of an SSH terminal', 'Ctrl Shift L'],
     ['Go to a workspace, folder, closed terminal or SSH host', 'Ctrl Shift O'],
     ['Settings', 'Ctrl ,'],

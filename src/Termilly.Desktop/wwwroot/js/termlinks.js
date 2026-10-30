@@ -25,8 +25,11 @@ let ctrlHeld = false;
  */
 let hovered = null;
 
-/** The text of the link under the mouse (a web address or a path), for the right-click menu; null when none. */
-export const linkUnderMouse = () => hovered?.link.text ?? null;
+/**
+ * The text of the link under the mouse (a web address or a path, or a link a program marked), for the right-click
+ * menu; null when none.
+ */
+export const linkUnderMouse = () => hovered?.link.text ?? marked ?? null;
 
 /** A link's tooltip line about copying it (termclipboard.js copies it). */
 export const COPY_HINT = 'Ctrl+C to copy it';

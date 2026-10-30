@@ -125,6 +125,22 @@ internal sealed class LinuxPlatform(Action<string> send, string? startFolder) :
             : (await _window.ShowOpenFileAsync("Import workspace layout", Home, false,
                 [("Termilly layout", ["*" + WorkspaceLayout.Extension, "*.yaml"]), ("All files", ["*"])]).ConfigureAwait(false))?.FirstOrDefault();
 
+    public async Task<string?> PickTextToSaveAsync(string fileName, string? folder)
+    {
+        if (_window is null)
+        {
+            return null;
+        }
+        var path = await _window.ShowSaveFileAsync("Save note", Path.Combine(folder ?? Home, fileName), [("Text files", ["*.txt", "*.md"]), ("All files", ["*"])]).ConfigureAwait(false);
+        return string.IsNullOrEmpty(path) ? null : path;
+    }
+
+    public async Task<string?> PickTextToOpenAsync() =>
+        _window is null
+            ? null
+            : (await _window.ShowOpenFileAsync("Open in the Notepad", Home, false,
+                [("Text files", ["*.txt", "*.md"]), ("All files", ["*"])]).ConfigureAwait(false))?.FirstOrDefault();
+
     public async Task<IReadOnlyList<string>> PickFilesAsync(string title) =>
         _window is null ? [] : await _window.ShowOpenFileAsync(title, Home, true).ConfigureAwait(false) ?? [];
 

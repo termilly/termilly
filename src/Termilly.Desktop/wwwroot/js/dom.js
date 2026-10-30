@@ -83,6 +83,35 @@ export function dragPointer(el, e, move, done) {
   el.addEventListener('pointerup', up);
 }
 
+/** The class of a docked panel's grip, on its left edge. */
+export const DOCK_GRIP = 'files-grip';
+
+/**
+ * A panel docked on the workspace's right edge (the Files panel, the Notepad): what's left of it ends where it starts
+ * (its width and the gap between panes, in the CSS variable `dockVar` on the workspace), and its grip resizes it, up
+ * to half the workspace.
+ * @param {HTMLElement} panel
+ * @param {{ dockVar: string, minWidth: number, resized: () => void, dragged?: (width: number) => void }} how
+ *   resized: after its width changed (it opened, closed, was dragged or squeezed); dragged: after a drag, its width
+ */
+export function dockRight(panel, { dockVar, minWidth, resized, dragged }) {
+  const workspace = byId(WORKSPACE_ID);
+  const gap = () => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--gap')) || 0;
+  new ResizeObserver(() => {
+    workspace.style.setProperty(dockVar, `${panel.hidden ? 0 : panel.offsetWidth + gap()}px`);
+    resized();
+  }).observe(panel);
+  panel.addEventListener('pointerdown', e => {
+    if (!targetOf(e).classList.contains(DOCK_GRIP)) return;
+    e.preventDefault();
+    const half = workspace.getBoundingClientRect().width / 2;
+    const right = panel.getBoundingClientRect().right;
+    dragPointer(targetOf(e), e, ev => {
+      panel.style.width = `${Math.round(Math.min(half, Math.max(minWidth, right - ev.clientX)))}px`;
+    }, () => dragged?.(panel.offsetWidth));
+  });
+}
+
 /**
  * Lets `grip` resize the panel to its left (a window's file list), from `min` to `max` pixels wide.
  * @param {HTMLElement} grip

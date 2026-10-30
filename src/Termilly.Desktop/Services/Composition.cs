@@ -64,6 +64,7 @@ internal static class Composition
         .AddHandler<GitHandler>()
         .AddHandler<WorktreeHandler>()
         .AddHandler<LayoutHandler>()
+        .AddHandler<NotepadHandler>()
         .AddHandler<SshHandler>()
         .AddHandler<FilesHandler>()
         .AddHandler<PreviewWatchHandler>()

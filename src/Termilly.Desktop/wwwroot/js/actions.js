@@ -16,6 +16,7 @@ import { portsOf } from './gitstatus.js';
 import { sendToAgent } from './together.js';
 import { setMenuExtras } from './termclipboard.js';
 import { linkUnderMouse } from './termlinks.js';
+import { copyToNotepadItem } from './notepad.js';
 
 /** Keys as the settings keep them: modifiers in this order, then the key, joined by +. */
 const CTRL = 'Ctrl';
@@ -38,7 +39,7 @@ const FUNCTION_KEY = /^F([1-9]|1[0-2])$/;
  * Ctrl+Alt+J is the "next terminal that needs me" key from any app.
  */
 const RESERVED = [
-  /^Ctrl\+Shift\+([TWRFOELHGBNJAIDCV`1-9]|Up|Down|Left|Right|Insert)$/,
+  /^Ctrl\+Shift\+([TWRFOELHGBNJAIDCVM`1-9]|Up|Down|Left|Right|Insert)$/,
   /^Ctrl\+Alt\+([1-9]|J)$/,
   /^Alt\+Shift\+[=-]$/,
   /^Ctrl\+([=\-0,CV]|Tab|Insert|PageUp|PageDown)$/,
@@ -224,7 +225,7 @@ function menuExtras(body) {
     ...(context.selection?.trim() ? [{
       label: 'Ask an agent about this',
       action: () => sendToAgent(/** @type {string} */ (context.selection).slice(0, MAX_AGENT_TEXT), { title: tabTitle(tab) }, tab.view?.header, tab),
-    }] : []),
+    }, copyToNotepadItem(/** @type {string} */ (context.selection))] : []),
   ];
   return items.length ? [SEPARATOR, ...items] : [];
 }

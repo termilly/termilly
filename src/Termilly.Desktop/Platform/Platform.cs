@@ -51,6 +51,12 @@ internal interface IFileDialogs
 
     Task<string?> PickLayoutToOpenAsync();
 
+    /// <summary>Where to save a Notepad page: offering <paramref name="fileName"/>, in <paramref name="folder"/> when given.</summary>
+    Task<string?> PickTextToSaveAsync(string fileName, string? folder);
+
+    /// <summary>A text file to open in the Notepad.</summary>
+    Task<string?> PickTextToOpenAsync();
+
     /// <summary>
     /// Files to upload, picked in the host's own dialog (where the page's can't tell their paths). On Windows the
     /// page's file input gives them instead, so this is never asked there.

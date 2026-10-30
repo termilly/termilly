@@ -99,6 +99,21 @@ export function editNote(kind, target) {
 }
 
 /**
+ * Adds text to the end of a terminal's or workspace's note, as a new paragraph (the Notepad's Move to note). False
+ * when the note would grow past the longest kept.
+ * @param {string} kind 'terminal' or 'workspace'
+ * @param {Tab | Workspace} target
+ * @param {string} text
+ */
+export function appendNote(kind, target, text) {
+  const note = target.note;
+  const joined = note?.text ? `${note.text}\n\n${text.trim()}` : text.trim();
+  if (joined.length > MAX_NOTE) return false;
+  setNote(kind, target, joined, !!note?.pinned);
+  return true;
+}
+
+/**
  * Asks before removing a note; no brings its editor back.
  * @param {string} kind
  * @param {Tab | Workspace | string} target

@@ -15,7 +15,7 @@ import { focusedTab, newTab } from './panes.js';
 import { scheduleFit, typePaths } from './terminals.js';
 import { escapeHtml, ICONS } from './ui.js';
 import { modal, confirmDialog, CONFIRM_DIALOG } from './dialogs.js';
-import { byId, field, targetOf, dragPointer, WORKSPACE_ID, PATH_DRAG } from './dom.js';
+import { byId, field, targetOf, dockRight, WORKSPACE_ID, PATH_DRAG, DOCK_GRIP } from './dom.js';
 import { showMenu, SEPARATOR } from './popups.js';
 import { showChange } from './preview.js';
 import { pathActions } from './actions.js';
@@ -361,7 +361,7 @@ function render() {
   const typing = /** @type {HTMLInputElement | null} */ (document.activeElement?.closest(SEARCH) ?? null);
   const caret = typing?.selectionStart ?? null;
   panel.innerHTML = `
-    <div class="files-grip" title="Drag to resize"></div>
+    <div class="${DOCK_GRIP}" title="Drag to resize"></div>
     <div class="files-head">
       <span class="files-title">Files · ${escapeHtml(tabTitle(tab))}${ws ? ` <span class="files-ws">${escapeHtml(ws)}</span>` : ''}</span>
       <span class="files-tools">
@@ -906,28 +906,9 @@ panel.addEventListener('drop', e => {
   else copyIn(dir, e.dataTransfer.files);
 });
 
-// ---- Docked on the right: the terminals end where it starts ----
+// ---- Docked on the right: the terminals end where it starts; the grip on its left edge resizes it ----
 
-/** The space between the terminals and the panel: the app's gap between panes. */
-const gapPx = () => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--gap')) || 0;
-
-// Its width changes when it opens, closes (0), is dragged, or the window shrinks it to half the terminals' area.
-new ResizeObserver(() => {
-  const width = panel.hidden ? 0 : panel.offsetWidth + gapPx();
-  byId(WORKSPACE_ID).style.setProperty('--files-dock', `${width}px`);
-  scheduleFit();
-}).observe(panel);
-
-// ---- Resizing: the grip on its left edge, up to half the terminals' area (the width stays while Termilly runs) ----
-
-panel.addEventListener('pointerdown', e => {
-  if (!targetOf(e).matches('.files-grip')) return;
-  e.preventDefault();
-  const area = byId(WORKSPACE_ID).getBoundingClientRect();
-  dragPointer(/** @type {HTMLElement} */ (e.target), e, ev => {
-    panel.style.width = `${Math.round(Math.min(area.width / 2, Math.max(MIN_WIDTH_PX, area.right - ev.clientX)))}px`;
-  });
-});
+dockRight(panel, { dockVar: '--files-dock', minWidth: MIN_WIDTH_PX, resized: scheduleFit });
 
 // ---- Following the terminal's folder ----
 

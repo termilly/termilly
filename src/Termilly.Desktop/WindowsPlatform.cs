@@ -76,6 +76,30 @@ internal sealed class WindowsPlatform(MainWindow window) :
         return Task.FromResult(dialog.ShowDialog(window) == true ? dialog.FileName : null);
     }
 
+    public Task<string?> PickTextToSaveAsync(string fileName, string? folder)
+    {
+        var dialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Title = "Save note",
+            FileName = fileName,
+            Filter = TextFilter,
+            DefaultExt = ".txt",
+        };
+        if (folder is not null)
+        {
+            dialog.InitialDirectory = folder;
+        }
+        return Task.FromResult(dialog.ShowDialog(window) == true ? dialog.FileName : null);
+    }
+
+    public Task<string?> PickTextToOpenAsync()
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog { Title = "Open in the Notepad", Filter = TextFilter };
+        return Task.FromResult(dialog.ShowDialog(window) == true ? dialog.FileName : null);
+    }
+
+    private const string TextFilter = "Text files (*.txt;*.md)|*.txt;*.md|All files (*.*)|*.*";
+
     /// <summary>Never asked on Windows: the page's file input gives the files' paths.</summary>
     public Task<IReadOnlyList<string>> PickFilesAsync(string title) => Task.FromResult<IReadOnlyList<string>>([]);
 

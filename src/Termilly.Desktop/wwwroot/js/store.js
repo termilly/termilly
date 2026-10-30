@@ -78,6 +78,16 @@ export const getSetting = path => {
  */
 
 /**
+ * A Notepad page (js/notepad.js): its name, text, the file it was opened from or saved to, and the text as that file
+ * holds it (to tell unsaved changes), and whether the file has Windows line ends.
+ * @typedef {{ id: string, name: string, text: string, path?: string | null, saved?: string | null, crlf?: boolean }} NotepadPage
+ */
+/**
+ * The Notepad: open or closed, its pages, the one shown, and its width.
+ * @typedef {{ open: boolean, pages: NotepadPage[], activeId: string | null, width?: number }} NotepadState
+ */
+
+/**
  * A theme plugin's terminal colours (plugins.js), based on Light or Dark.
  * @typedef {{ id: string, name: string, light?: boolean, colors: Record<string, string> }} PluginTheme
  */
@@ -93,6 +103,8 @@ export const state = {
   activeId: null,
   /** @type {SidebarState} */
   sidebar: { open: true },
+  /** @type {NotepadState} */
+  notepad: { open: false, pages: [], activeId: null },
   /**
    * The terminal colours of the theme plugins that are on (plugins.js).
    * @type {PluginTheme[]}
@@ -656,6 +668,7 @@ function serialize() {
     sidebar: state.sidebar,
     tags: state.tags,
     recentDirs: state.recentDirs,
+    notepad: state.notepad,
     // tmux windows aren't saved: they're tmux's, and attaching again brings them back (tmux.js).
     workspaces: state.workspaces.filter(w => !w.tmux).map(({ id, name, color, cwd, focusId, root, note, snippets, collapsed, copyTo }) => ({ id, name, color, cwd, focusId, root: withoutPreview(root), note, snippets, collapsed: collapsed || undefined, copyTo })),
     tabs: [...state.tabs.values()].filter(t => !t.virtual).map(t => {
@@ -688,8 +701,12 @@ export function restore(saved) {
     state.tags = SUGGESTED_TAGS.map(([name, color]) => ({ name, color }));
     return false;
   }
-  // Tags and sidebar settings survive even when every workspace was closed.
+  // Tags, sidebar settings and the Notepad survive even when every workspace was closed.
   state.tags = Array.isArray(saved.tags) ? saved.tags : [];
+  if (Array.isArray(saved.notepad?.pages)) {
+    const pages = saved.notepad.pages.filter((/** @type {any} */ p) => typeof p?.id === 'string' && typeof p.text === 'string');
+    state.notepad = { ...saved.notepad, pages, activeId: pages.some((/** @type {NotepadPage} */ p) => p.id === saved.notepad.activeId) ? saved.notepad.activeId : pages[0]?.id ?? null };
+  }
   state.sidebar = { ...state.sidebar, ...saved.sidebar };
   state.recentDirs = Array.isArray(saved.recentDirs) ? saved.recentDirs.filter((/** @type {unknown} */ d) => typeof d === 'string').slice(0, MAX_RECENT_DIRS) : [];
   if (!Array.isArray(saved.workspaces) || !saved.workspaces.length) return false;
