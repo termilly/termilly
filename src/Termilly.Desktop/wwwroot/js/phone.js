@@ -10,6 +10,7 @@ import { state, on, wsById, tabTitle, profileOf, activityOf, runsClaude, BADGES,
 import { entryDetail } from './inbox.js';
 import { AGENT_STATE, CLAUDE_TOOL, PROFILE_ICON } from './constants.js';
 import { debounce } from './util.js';
+import { isProduction } from './environments.js';
 
 /** How long changes settle before the phones hear of them. */
 const SEND_AFTER_MS = 300;
@@ -57,7 +58,7 @@ function terminalOf(tab) {
     activity: activity?.kind ?? (tab.exited ? 'exited' : null),
     line: tab.agent?.line ?? activity?.title ?? null,
     waiting: waitingFor(tab),
-    production: !!tab.tags?.includes('prod'),
+    production: isProduction(tab),
   };
 }
 

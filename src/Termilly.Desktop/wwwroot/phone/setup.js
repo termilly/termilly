@@ -5,6 +5,8 @@
 
 /** How often the trust check runs while the page is open. */
 const CHECK_EVERY_MS = 2000;
+/** "Open Termilly" is off (aria-disabled) until the phone trusts Termilly. */
+const OFF = Object.freeze({ attribute: 'aria-disabled', yes: 'true' });
 
 const ios = /iPhone|iPad|iPod/.test(navigator.userAgent);
 const android = /Android/.test(navigator.userAgent);
@@ -27,11 +29,11 @@ async function check() {
   }
   trust.textContent = trusted ? 'This phone trusts Termilly.' : 'Not yet: this phone doesn’t trust Termilly. Finish step 1 first.';
   trust.classList.toggle('ok', trusted);
-  open.setAttribute('aria-disabled', String(!trusted));
+  open.setAttribute(OFF.attribute, String(!trusted));
   if (!trusted) setTimeout(check, CHECK_EVERY_MS);
 }
 
 open.addEventListener('click', e => {
-  if (open.getAttribute('aria-disabled') === 'true') e.preventDefault();
+  if (open.getAttribute(OFF.attribute) === OFF.yes) e.preventDefault();
 });
 check();

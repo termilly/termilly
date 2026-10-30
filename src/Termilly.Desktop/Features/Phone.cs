@@ -122,6 +122,16 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
 
     /// <summary>What a phone may ask: an answer to a waiting agent (approve, always, reject), or a reply in its own words.</summary>
     private static readonly string[] Choices = ["approve", "always", "reject", "reply"];
+    /// <summary>The fields of a phone's answer to an agent, and of what it hears back.</summary>
+    private static class Answer
+    {
+        public const string Pane = "pane";
+        public const string Choice = "choice";
+        public const string Text = "text";
+        public const string Ok = "ok";
+        public const string Error = "error";
+    }
+
     /// <summary>The longest reply a phone may type to an agent.</summary>
     private const int MaxReply = 4000;
 
@@ -131,23 +141,23 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
     /// </summary>
     private async Task<JsonObject> AnswerAsync(string device, JsonObject message)
     {
-        var choice = message["choice"]?.GetValue<string>();
-        var text = message["text"]?.GetValue<string>() ?? "";
+        var choice = message[Answer.Choice]?.GetValue<string>();
+        var text = message[Answer.Text]?.GetValue<string>() ?? "";
         if (!Choices.Contains(choice) || text.Length > MaxReply)
         {
-            return new JsonObject { ["ok"] = false, ["error"] = "Not something a phone can ask." };
+            return new JsonObject { [Answer.Ok] = false, [Answer.Error] = "Not something a phone can ask." };
         }
         try
         {
             await _api.AskPageAsync(ToPage.Calls.PhoneAnswer, new JsonObject
             {
-                [PageApi.CallFields.Args] = new JsonObject { ["pane"] = message["pane"]?.DeepClone(), ["choice"] = choice, ["text"] = text },
+                [PageApi.CallFields.Args] = new JsonObject { [Answer.Pane] = message[Answer.Pane]?.DeepClone(), [Answer.Choice] = choice, [Answer.Text] = text },
             }).ConfigureAwait(false);
-            return new JsonObject { ["ok"] = true, ["pane"] = message["pane"]?.DeepClone() };
+            return new JsonObject { [Answer.Ok] = true, [Answer.Pane] = message[Answer.Pane]?.DeepClone() };
         }
         catch (InvalidOperationException e)
         {
-            return new JsonObject { ["ok"] = false, ["error"] = e.Message, ["pane"] = message["pane"]?.DeepClone() };
+            return new JsonObject { [Answer.Ok] = false, [Answer.Error] = e.Message, [Answer.Pane] = message[Answer.Pane]?.DeepClone() };
         }
     }
 

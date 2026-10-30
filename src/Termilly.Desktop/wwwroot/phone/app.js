@@ -31,6 +31,8 @@ const RETRY_MS = 1000;
 const RETRY_MAX_MS = 15000;
 /** How long a note at the bottom stays. */
 const TOAST_MS = 2600;
+/** Ages on the cards: seconds in a minute and an hour, milliseconds in a second. */
+const TIME = Object.freeze({ ms: 1000, minute: 60, hour: 3600 });
 /** How often the ages on the cards move on while the app is open. */
 const AGE_EVERY_MS = 30000;
 /** The workspace colour when the PC sends none. */
@@ -75,8 +77,8 @@ const keyBytes = key => Uint8Array.from(atob(key.replace(/-/g, '+').replace(/_/g
 
 /** @param {number} at */
 function age(at) {
-  const s = Math.max(0, (Date.now() - at) / 1000);
-  return s < 60 ? 'now' : s < 3600 ? `${Math.floor(s / 60)}m` : `${Math.floor(s / 3600)}h`;
+  const s = Math.max(0, (Date.now() - at) / TIME.ms);
+  return s < TIME.minute ? 'now' : s < TIME.hour ? `${Math.floor(s / TIME.minute)}m` : `${Math.floor(s / TIME.hour)}h`;
 }
 
 /** @param {Terminal} t */
