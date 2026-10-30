@@ -659,8 +659,25 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
 /* The tabs, with < and > when they don't fit (js/panes.js stripBar). */
 .np-tabbar { height: auto; padding: 0 4px; border-bottom: 1px solid var(--border); }
 .np-tabbar .np-tabs { flex: 1; min-width: 0; padding: 4px 2px 0; border-bottom: 0; }
-.np-text { flex: 1; min-height: 0; margin: 0; padding: 10px 12px; border: 0; border-radius: 0 0 var(--radius) var(--radius); outline: none; background: transparent; color: var(--text); font: 13px/1.5 var(--mono); resize: none; }
+/* The page: a text box over a layer that draws its text with the links coloured (js/notepadlinks.js). Both have the
+   same font, padding and wrapping, so each character sits in the same place; with links on, the box's own text is
+   clear and its caret and selection show over the layer. While Ctrl is held the layer takes the mouse. */
+.np-editor { position: relative; display: flex; flex: 1; min-height: 0; }
+.np-text, .np-layer { margin: 0; padding: 10px 12px; font: 13px/1.5 var(--mono); tab-size: 4; white-space: pre-wrap; overflow-wrap: break-word; }
+.np-text { position: relative; z-index: 1; flex: 1; min-width: 0; border: 0; border-radius: 0 0 var(--radius) var(--radius); outline: none; background: transparent; color: var(--text); resize: none; }
 .np-text:disabled { opacity: .5; }
+.np-layer { position: absolute; top: 0; left: 0; box-sizing: border-box; overflow: hidden; color: var(--text); pointer-events: none; }
+.np-editor:not(.with-links) .np-layer { display: none; }
+.np-editor.with-links .np-text { color: transparent; caret-color: var(--text); }
+.np-editor.nowrap .np-text, .np-editor.nowrap .np-layer { white-space: pre; overflow-wrap: normal; }
+.np-link { color: #76e3ea; }
+:root[data-theme="light"] .np-link { color: #1b7c83; }
+.np-editor.np-ctrl .np-text { pointer-events: none; }
+.np-editor.np-ctrl .np-layer { z-index: 2; }
+.np-editor.np-ctrl .np-link { pointer-events: auto; cursor: pointer; }
+.np-editor.np-ctrl .np-link:hover { text-decoration: underline; }
+/* Links and word wrap: lit while on. */
+.files-tools .np-toggle[aria-pressed="true"] { background: var(--pressed); color: var(--text); }
 
 /* "Copy to" (js/copyto.js): terminals on the left, the chosen one's folders on the right */
 .dialog.copyto-dialog { width: 920px; }

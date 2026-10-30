@@ -88,7 +88,7 @@ export function openChange(tab, text) {
  * @param {Tab} tab
  * @param {string} text
  */
-async function realPaths(tab, text) {
+export async function realPaths(tab, text) {
   /** @param {FoundLink[]} candidates the ones that lead somewhere, with what they lead to */
   const real = async candidates => (await Promise.all(candidates.map(async c => ({ c, reply: await resolvePath(tab, c.text) }))))
     .filter(r => r.reply.path);

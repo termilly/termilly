@@ -15,11 +15,14 @@ import { showMenu, SEPARATOR } from './popups.js';
 import { confirmDialog } from './dialogs.js';
 import { showToast, TOAST } from './toasts.js';
 import { appendNote, NOTE_KIND } from './notes.js';
+import { padLinks } from './notepadlinks.js';
 
 /** @typedef {import('./store.js').NotepadPage} NotepadPage */
 
 /** What the Notepad's buttons do (data-np). */
-const NOTEPAD_ACTION = Object.freeze({ newPage: 'new', open: 'open', save: 'save', saveAs: 'saveAs', move: 'move', close: 'close' });
+const NOTEPAD_ACTION = Object.freeze({
+  newPage: 'new', open: 'open', save: 'save', saveAs: 'saveAs', move: 'move', links: 'links', wrap: 'wrap', close: 'close',
+});
 /** The name a new page gets, numbered. */
 const PAGE_NAME = 'Note';
 /** The panel's narrowest width; its widest is half the terminals' area (app.css max-width). */
@@ -33,7 +36,7 @@ const NEW_PAGE_LABEL = 'New page';
 export const NOTEPAD_KEY = Object.freeze({ toggle: 'KeyM', save: 'KeyS', open: 'KeyO' });
 /**
  * The header's tools, 16px at a 1px line on the pixel grid: a page with a +, an open folder, a disk (save), a disk
- * with a pen (save as), and text going into a note.
+ * with a pen (save as), text going into a note, a chain (links on or off) and a line that wraps (word wrap).
  */
 const TOOL_ICONS = Object.freeze({
   newPage: '<svg viewBox="0 0 16 16"><path d="M9.5 1.5h-6v13h9v-10z"/><path d="M9.5 1.5v3h3M7.5 7v5M5 9.5h5"/></svg>',
@@ -41,6 +44,8 @@ const TOOL_ICONS = Object.freeze({
   save: '<svg viewBox="0 0 16 16"><path d="M2.5 2.5h9l2 2v9h-11z"/><path d="M5.5 2.5v3h5v-3M4.5 13.5v-4h7v4"/></svg>',
   saveAs: '<svg viewBox="0 0 16 16"><path d="M7.5 13.5h-5v-11h9l2 2v3"/><path d="M5.5 2.5v3h5v-3M4.5 13.5v-4h3"/><path d="M9.5 14.5v-2l4-4 2 2-4 4z"/></svg>',
   move: '<svg viewBox="0 0 16 16"><rect x="7.5" y="2.5" width="7" height="11" rx="1"/><path d="M9.5 5.5h3M9.5 8.5h3M9.5 11.5h3M1.5 8.5h4M3.5 6.5l2 2-2 2"/></svg>',
+  links: '<svg viewBox="0 0 16 16"><path d="M6.5 5.5h-2a3 3 0 0 0 0 6h2M9.5 5.5h2a3 3 0 0 1 0 6h-2M5.5 8.5h5"/></svg>',
+  wrap: '<svg viewBox="0 0 16 16"><path d="M1.5 3.5h13M1.5 7.5h10a2 2 0 0 1 0 4h-3M1.5 11.5h4"/><path d="M10 9.5l-2 2 2 2"/></svg>',
 });
 /** What its requests to the host start with. */
 const REQUEST = 'np';
@@ -58,18 +63,25 @@ panel.innerHTML = `
       <button class="pane-btn" data-np="${NOTEPAD_ACTION.save}" title="Save (Ctrl+S)">${TOOL_ICONS.save}</button>
       <button class="pane-btn" data-np="${NOTEPAD_ACTION.saveAs}" title="Save as (Ctrl+Shift+S)">${TOOL_ICONS.saveAs}</button>
       <button class="pane-btn" data-np="${NOTEPAD_ACTION.move}" title="Move the selection, or the whole page, to a workspace's or a terminal's note">${TOOL_ICONS.move}</button>
+      <button class="pane-btn np-toggle" data-np="${NOTEPAD_ACTION.links}" title="Links: paths and web addresses, Ctrl+click to open (off: plain text)">${TOOL_ICONS.links}</button>
+      <button class="pane-btn np-toggle" data-np="${NOTEPAD_ACTION.wrap}" title="Word wrap">${TOOL_ICONS.wrap}</button>
       <button class="pane-btn" data-np="${NOTEPAD_ACTION.close}" title="Close (Ctrl+Shift+M)">${ICONS.close}</button>
     </span>
   </div>
   <div class="pv-tabs np-tabs" role="tablist"></div>
-  <textarea class="np-text" spellcheck="true" placeholder="Write anything down. A page is kept until you close it."></textarea>`;
+  <div class="np-editor"><textarea class="np-text" spellcheck="true"></textarea></div>`;
 byId(WORKSPACE_ID).append(panel);
 const tabsEl = find(panel, '.np-tabs');
 const area = /** @type {HTMLTextAreaElement} */ (find(panel, '.np-text'));
 // < and > scroll the tabs when they don't fit, as a tab group's do.
 const tabBar = stripBar(tabsEl);
 tabBar.classList.add('np-tabbar');
-area.before(tabBar);
+const editor = find(panel, '.np-editor');
+editor.before(tabBar);
+/** Links (Ctrl+click) or plain text, and word wrap: both on unless turned off. */
+const linksOn = () => state.notepad.links !== false;
+const wrapOn = () => state.notepad.wrap !== false;
+const links = padLinks(area, () => linksOn() && !panel.hidden);
 const button = byId('notepad-button');
 
 /** Saves waiting for the host: the page and the text sent, by request. */
@@ -109,7 +121,29 @@ function render() {
   const page = activePage();
   area.value = page?.text ?? '';
   area.disabled = !page;
+  applyView();
   tabsEl.querySelector('.on')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+}
+
+/** Links or plain text, and word wrap, as they're set: the buttons pressed or not, the page drawn again. */
+function applyView() {
+  editor.classList.toggle('with-links', linksOn());
+  area.wrap = wrapOn() ? 'soft' : 'off';
+  editor.classList.toggle('nowrap', !wrapOn());
+  find(panel, `[data-np="${NOTEPAD_ACTION.links}"]`).setAttribute('aria-pressed', String(linksOn()));
+  find(panel, `[data-np="${NOTEPAD_ACTION.wrap}"]`).setAttribute('aria-pressed', String(wrapOn()));
+  links.refresh();
+}
+
+/**
+ * Turns links or word wrap on or off.
+ * @param {'links' | 'wrap'} what
+ */
+function toggleView(what) {
+  state.notepad[what] = !(state.notepad[what] !== false);
+  persist();
+  applyView();
+  area.focus();
 }
 
 /** @param {boolean} open */
@@ -302,6 +336,7 @@ area.addEventListener('input', () => {
   const was = unsaved(page);
   page.text = area.value;
   persist();
+  links.edited();
   if (unsaved(page) !== was) renderTabs();
 });
 
@@ -318,6 +353,8 @@ panel.addEventListener('click', e => {
     case NOTEPAD_ACTION.save: save(false); break;
     case NOTEPAD_ACTION.saveAs: save(true); break;
     case NOTEPAD_ACTION.move: moveMenu(/** @type {HTMLElement} */ (action)); break;
+    case NOTEPAD_ACTION.links: toggleView(NOTEPAD_ACTION.links); break;
+    case NOTEPAD_ACTION.wrap: toggleView(NOTEPAD_ACTION.wrap); break;
     case NOTEPAD_ACTION.close: toggleNotepad(); break;
     default: break;
   }

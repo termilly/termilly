@@ -83,8 +83,9 @@ export const getSetting = path => {
  * @typedef {{ id: string, name: string, text: string, path?: string | null, saved?: string | null, crlf?: boolean }} NotepadPage
  */
 /**
- * The Notepad: open or closed, its pages, the one shown, and its width.
- * @typedef {{ open: boolean, pages: NotepadPage[], activeId: string | null, width?: number }} NotepadState
+ * The Notepad: open or closed, its pages, the one shown, its width, and whether it shows links and wraps words (both
+ * unless turned off).
+ * @typedef {{ open: boolean, pages: NotepadPage[], activeId: string | null, width?: number, links?: boolean, wrap?: boolean }} NotepadState
  */
 
 /**
