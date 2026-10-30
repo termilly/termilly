@@ -753,12 +753,9 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
 /* ---- "Needs me" inbox (js/inbox.js) ---- */
 
 .inbox-button, #notepad-button { position: relative; }
-/* The Notepad's pages while it's closed: news, not a call for attention. Its digits sit exactly in the middle: all
-   the same height (lining figures; the font's own drop 4, 7 and 9 below the line), trimmed to that height, 7px tall
-   in 13px, and whole-pixel widths for one digit, two and "99+" (js/notepad.js sets data-digits). */
-.tool-count.np-count { display: grid; place-items: center; box-sizing: border-box; top: 2px; right: 1px; width: 13px; min-width: 0; height: 13px; padding: 0; border-radius: 7px; background: var(--accent); font-size: 10px; line-height: 1; font-variant-numeric: lining-nums tabular-nums; text-box: trim-both cap alphabetic; }
-.np-count[data-digits="2"] { width: 17px; }
-.np-count[data-digits="3"] { width: 21px; }
+/* The Notepad's pages while it's closed: the notification centre's count, in the accent (news, not a call for
+   attention). */
+.tool-count.np-count { background: var(--accent); }
 .inbox-button.has-items { color: var(--attention); }
 .tool-count {
   position: absolute;
