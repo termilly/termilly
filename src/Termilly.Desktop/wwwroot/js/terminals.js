@@ -43,8 +43,10 @@ export const isLight = () => currentTheme().base === THEME_BASE.light;
  * @type {{ key: string | null, theme: any }}
  */
 let pluginTheme = { key: null, theme: null };
+/** The theme plugin whose terminal colours are chosen (Settings › Terminal), if any. */
+const chosenColors = () => state.settings.terminal.colors && state.pluginThemes.find(t => t.id === state.settings.terminal.colors);
 const termTheme = () => {
-  const chosen = state.settings.terminal.colors && state.pluginThemes.find(t => t.id === state.settings.terminal.colors);
+  const chosen = chosenColors();
   const key = chosen ? `${chosen.id}|${themeId()}` : null;
   document.documentElement.style.setProperty('--term-surface',
     (chosen || undefined)?.colors.background ?? '');
@@ -73,6 +75,19 @@ onHost(HOST.fonts, m => {
   applyTerminalSettings();
 });
 
+/** Whether the terminals' background is light: a theme plugin's colours say so themselves, else the app theme. */
+const lightTerminal = () => {
+  const chosen = chosenColors();
+  return chosen ? !!chosen.light : isLight();
+};
+/**
+ * How far a text colour must stand out from the background on a light terminal (WCAG's 4.5:1 for text): programs
+ * that print their own 24-bit colours (Claude Code's code, bat, delta) mostly pick them for a dark background, so
+ * light grey on cream would all but vanish. xterm darkens such a colour just enough. Dark terminals keep every colour
+ * as it is (1: no change).
+ */
+const CONTRAST = Object.freeze({ light: 4.5, dark: 1 });
+
 /** Terminal options that come from Settings. */
 const settingsOptions = () => ({
   fontFamily: fontStack(state.settings.terminal.fontFamily),
@@ -83,6 +98,7 @@ const settingsOptions = () => ({
   cursorStyle: state.settings.terminal.cursorStyle,
   scrollback: state.settings.terminal.scrollback,
   theme: termTheme(),
+  minimumContrastRatio: lightTerminal() ? CONTRAST.light : CONTRAST.dark,
 });
 
 /**
