@@ -107,6 +107,10 @@ interface CommandSettings {
 interface PhoneSettings {
   enabled: boolean;
   port: number;
+  /** When an agent's news goes to the phones that take alerts (SettingValues.PhoneAlerts). */
+  alerts: string;
+  /** Alerts say only that an agent needs the user or finished: no terminal, workspace or message. */
+  hideDetails: boolean;
 }
 
 interface NotificationSettings {

@@ -171,6 +171,8 @@ interface Tab {
   cost?: { usd: number; durationMs: number | null; session: string | null } | null;
   /** The last notification sent for it (js/notify.js). */
   notified?: string | null;
+  /** The last news sent to the phones for it (js/notify.js). */
+  phoneAlerted?: string | null;
   /** What it brings back and types as its shell starts (js/terminals.js). */
   start?: import('../wwwroot/js/terminals.js').ShellStart;
   /** js/terminals.js's timers for its shell. */

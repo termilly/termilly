@@ -24,6 +24,15 @@ internal static partial class FromPage
         public static string Type => "phone:remove";
     }
 
+    /// <summary>
+    /// An agent's news for the phones (js/notify.js decides, as for the PC's notifications): its state, the alert's
+    /// title and text, and whether Termilly is the window in front (the host adds how long the PC has been idle).
+    /// </summary>
+    internal sealed record PhoneAlert(string Id = "", string? State = null, string? Title = null, string? Body = null, bool InFront = false) : IPageMessage
+    {
+        public static string Type => "phone:alert";
+    }
+
     /// <summary>A test alert to every phone that takes alerts.</summary>
     internal sealed record PhoneTest : IPageMessage
     {

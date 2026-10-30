@@ -5,7 +5,8 @@
 import { HOST, PAGE } from '../protocol.js';
 import { onHost, send } from '../host.js';
 import { escapeHtml, ICONS } from '../ui.js';
-import { row, toggle, group } from './controls.js';
+import { row, toggle, group, seg } from './controls.js';
+import { SETTING_VALUES } from '../constants.js';
 import { SECTION, redrawIfShowing } from './page.js';
 
 /** The QR codes: the size of their cells and their quiet margin, in cells of the qrcode library. */
@@ -61,6 +62,10 @@ function devicesHtml() {
           <div class="set-desc">Paired ${escapeHtml(when(d.paired))} · last seen ${escapeHtml(when(d.lastSeen))} · alerts ${d.alerts ? 'on' : 'off'}</div></div>
         <button class="btn small danger-outline" data-action="removePhone">Remove</button>
       </div>`).join('')
+    + row('Alerts', 'An agent’s news, as Settings › Notifications picks it. Away: Termilly isn’t in front, or the PC has been untouched for a minute.',
+      seg('phone.alerts', [[SETTING_VALUES.phoneAlerts.away, 'When I’m away'], [SETTING_VALUES.phoneAlerts.always, 'Always'], [SETTING_VALUES.phoneAlerts.off, 'Off']]),
+      { keywords: 'phone alert push notification away idle' })
+    + row('Hide details in alerts', 'Only “An agent needs you” or “An agent finished”: no terminal, workspace or message on the lock screen.', toggle('phone.hideDetails'), { keywords: 'phone alert privacy lock screen' })
     + row('Test alert', tested ? escapeHtml(tested) : 'Sends an alert to each phone that has alerts on, even when it’s locked.',
       '<button class="btn small" data-action="testPhone">Send</button>', { keywords: 'phone alert push notification test' })
     : '<p class="set-desc">None yet. A removed phone can’t connect again until it’s paired anew.</p>');

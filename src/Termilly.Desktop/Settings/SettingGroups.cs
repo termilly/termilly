@@ -208,8 +208,16 @@ internal sealed record PhoneSettings
 
     public bool Enabled { get; init; }
     public int Port { get; init; } = DefaultPort;
+    /// <summary>When an agent's news goes to the phones that take alerts (SettingValues.PhoneAlerts).</summary>
+    public string Alerts { get; init; } = SettingValues.PhoneAlerts.Away;
+    /// <summary>Alerts say only that an agent needs the user or finished: no terminal, workspace or message.</summary>
+    public bool HideDetails { get; init; }
 
-    public PhoneSettings Normalize() => this with { Port = Port is >= MinPort and <= MaxPort ? Port : DefaultPort };
+    public PhoneSettings Normalize() => this with
+    {
+        Port = Port is >= MinPort and <= MaxPort ? Port : DefaultPort,
+        Alerts = SettingChecks.OneOf(Alerts, SettingValues.PhoneAlerts.All, SettingValues.PhoneAlerts.Away),
+    };
 }
 
 internal sealed record NotificationSettings

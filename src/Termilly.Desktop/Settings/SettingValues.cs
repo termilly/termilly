@@ -38,6 +38,15 @@ internal static class SettingValues
         public static readonly IReadOnlyList<string> All = [Grayscale, ClearType];
     }
 
+    /// <summary>When an agent's news goes to the phones (Settings › Phone): only while the user is away from the PC, always, or never.</summary>
+    public static class PhoneAlerts
+    {
+        public const string Away = "away";
+        public const string Always = "always";
+        public const string Off = "off";
+        public static readonly IReadOnlyList<string> All = [Away, Always, Off];
+    }
+
     /// <summary>A notification sound: off, or one of the pings in wwwroot/sounds (ping-1.mp3…), by its file name.</summary>
     public static class Sound
     {

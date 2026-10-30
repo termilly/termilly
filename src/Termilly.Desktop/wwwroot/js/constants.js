@@ -213,6 +213,12 @@ export const SETTING_VALUES = Object.freeze({
     default: 'grayscale',
     all: Object.freeze(['grayscale', 'cleartype']),
   }),
+  phoneAlerts: Object.freeze({
+    away: 'away',
+    always: 'always',
+    off: 'off',
+    all: Object.freeze(['away', 'always', 'off']),
+  }),
   sound: Object.freeze({
     none: 'none',
     ping1: 'ping-1',

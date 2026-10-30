@@ -92,6 +92,49 @@ public sealed class PhoneTests : IDisposable
     public void Alerts_go_only_to_known_push_services(string endpoint, bool allowed) =>
         Assert.Equal(allowed, PhoneAppApi.IsPushService(endpoint));
 
+    // ---- Agent alerts ----
+
+    [Theory]
+    [InlineData("always", true, 0, true)]
+    [InlineData("off", false, 600, false)]
+    [InlineData("away", false, 0, true)] // Termilly isn't in front
+    [InlineData("away", true, 10, false)] // in front, and the user was just here
+    [InlineData("away", true, 61, true)] // in front, but nobody has touched the PC for a minute
+    public void Alerts_go_out_as_Settings_says(string mode, bool inFront, int idleSeconds, bool sent) =>
+        Assert.Equal(sent, Features.PhoneHandler.ShouldAlert(mode, inFront, TimeSpan.FromSeconds(idleSeconds)));
+
+    [Fact]
+    public void Away_without_knowing_the_idle_time_goes_by_the_window_alone()
+    {
+        Assert.False(Features.PhoneHandler.ShouldAlert("away", true, null));
+        Assert.True(Features.PhoneHandler.ShouldAlert("away", false, null));
+    }
+
+    [Fact]
+    public void An_alert_carries_the_news_without_secrets_cut_short_and_one_per_terminal()
+    {
+        var news = new Messaging.FromPage.PhoneAlert("t1", "done", "Finished: api · backend", "Deployed with token ghp_" + new string('a', 36) + " " + new string('x', 300));
+
+        var alert = Features.PhoneHandler.AlertFor(news, hideDetails: false);
+
+        Assert.Equal("Finished: api · backend", alert["title"]!.GetValue<string>());
+        Assert.DoesNotContain("ghp_aaaa", alert["body"]!.GetValue<string>());
+        Assert.True(alert["body"]!.GetValue<string>().Length <= 180);
+        Assert.Equal("t1", alert["tag"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void Hidden_details_say_only_what_happened()
+    {
+        var done = Features.PhoneHandler.AlertFor(new Messaging.FromPage.PhoneAlert("t1", "done", "Finished: api · backend", "secret plan"), hideDetails: true);
+        var waiting = Features.PhoneHandler.AlertFor(new Messaging.FromPage.PhoneAlert("t2", "needs-input", "Needs you: db · ops", "Allow Bash?"), hideDetails: true);
+
+        Assert.Equal("An agent finished.", done["body"]!.GetValue<string>());
+        Assert.Equal("An agent needs you.", waiting["body"]!.GetValue<string>());
+        Assert.DoesNotContain("api", done.ToJsonString());
+        Assert.DoesNotContain("db", waiting.ToJsonString());
+    }
+
     // ---- Certificates ----
 
     [Fact]

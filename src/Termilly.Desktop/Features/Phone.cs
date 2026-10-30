@@ -17,6 +17,12 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
 {
     /// <summary>The phone app's files: wwwroot\phone next to the app.</summary>
     private const string PhoneFolder = "phone";
+    /// <summary>"When I'm away": the PC untouched this long counts as away, even with Termilly in front.</summary>
+    public static readonly TimeSpan AwayAfter = TimeSpan.FromSeconds(60);
+    /// <summary>The longest text an alert carries; the lock screen shows a few lines anyway.</summary>
+    private const int MaxBody = 180;
+    /// <summary>Agent states (AgentStates) whose alert says an agent finished; the rest say it needs the user.</summary>
+    private static readonly string[] Finished = [AgentStates.Done];
     /// <summary>Alerts give up on a push service this slow.</summary>
     private static readonly TimeSpan SendTimeout = TimeSpan.FromSeconds(15);
 
@@ -46,6 +52,14 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
             }
         });
         router.On<FromPage.PhoneRemove>(m => _store.Remove(m.Device ?? ""));
+        router.On<FromPage.PhoneAlert>(async m =>
+        {
+            var settings = _settings.Current.Phone;
+            if (_server is not null && ShouldAlert(settings.Alerts, m.InFront, UserIdle.Since()))
+            {
+                await AlertAsync(null, AlertFor(m, settings.HideDetails)).ConfigureAwait(false);
+            }
+        });
         router.On<FromPage.PhoneTest>(async _ =>
         {
             var (sent, error) = await AlertAsync(null, TestAlert).ConfigureAwait(false);
@@ -64,6 +78,31 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
 
     /// <summary>An alert's title when it isn't about one terminal.</summary>
     private const string AlertTitle = "Termilly";
+
+    /// <summary>Whether an agent's news goes to the phones: never, always, or while the user is away from the PC.</summary>
+    public static bool ShouldAlert(string mode, bool inFront, TimeSpan? idle) => mode switch
+    {
+        SettingValues.PhoneAlerts.Always => true,
+        SettingValues.PhoneAlerts.Away => !inFront || idle >= AwayAfter,
+        _ => false,
+    };
+
+    /// <summary>
+    /// The alert: the page's title and text (secrets taken out, cut short), or with details hidden only what happened.
+    /// One per terminal on the lock screen: a newer one replaces the older (its tag).
+    /// </summary>
+    public static JsonObject AlertFor(FromPage.PhoneAlert m, bool hideDetails)
+    {
+        if (hideDetails)
+        {
+            return new JsonObject { ["title"] = AlertTitle, ["body"] = Finished.Contains(m.State) ? "An agent finished." : "An agent needs you.", ["tag"] = m.Id };
+        }
+        var body = SecretRedactor.Redact(m.Body ?? "");
+        return new JsonObject
+        {
+            ["title"] = m.Title ?? AlertTitle, ["body"] = body.Length > MaxBody ? body[..(MaxBody - 1)].TrimEnd() + "…" : body, ["tag"] = m.Id,
+        };
+    }
 
     /// <summary>Starts or stops the server to match Settings (and the vault: nothing runs while it's locked).</summary>
     private void Update()
