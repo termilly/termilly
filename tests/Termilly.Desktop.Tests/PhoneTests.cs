@@ -255,7 +255,7 @@ public sealed class PhoneTests : IDisposable
         using var authority = _store.Authority("TESTPC");
         using var server = Start(authority);
         using var http = Https(authority);
-        var paired = await Post(http, server.AppUrl + "api/pair", $"""{"code":"{{_store.OfferCode()}}"}""");
+        var paired = await Post(http, server.AppUrl + "api/pair", $$"""{"code":"{{_store.OfferCode()}}"}""");
         var cookie = paired.Headers.GetValues("Set-Cookie").First().Split(';')[0];
         _live.SetState("""{"terminals":[{"id":"t1"}]}""");
         _live.Received = (device, message) => Task.FromResult(new JsonObject { ["ok"] = true, ["choice"] = message["choice"]?.DeepClone() });
