@@ -61,6 +61,8 @@ function terminalOf(tab) {
     production: isProduction(tab),
     // The Claude Code session it runs: the phone shows its conversation (PhoneChat.cs) as well as the terminal.
     session: runsClaude(tab) ? tab.agent?.session ?? null : null,
+    // The phone draws the terminal at the PC's size: Windows repaints it by row and column, so it can't be re-wrapped.
+    cols: tab.view?.term?.cols ?? null, rows: tab.view?.term?.rows ?? null,
   };
 }
 
@@ -78,6 +80,8 @@ const publish = debounce(() => {
 }, SEND_AFTER_MS);
 
 for (const event of [EVENTS.agent, EVENTS.tab, EVENTS.tabClosed, EVENTS.workspaces, EVENTS.settings]) on(event, publish);
+// A terminal resized on the PC: the phones draw it at its new size.
+on(EVENTS.terminalOpened, tab => tab.view?.term?.onResize(() => publish()));
 
 /** @param {number} ms */
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));

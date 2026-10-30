@@ -1,7 +1,7 @@
 // @ts-check
-// The phone's terminal view (design A): one terminal live, drawn by xterm.js to fill the phone's screen (the PC's
-// wide lines wrap; pinching sizes the font, and the keyboard coming up shortens it), first with what it printed lately
-// and then as it prints (PhoneLive). With Settings › Phone › Allow typing on, the phone's keyboard types into it, and a
+// The phone's terminal view (design A): one terminal live, drawn by xterm.js at the PC's exact size (Windows repaints
+// a terminal by row and column, so its output can't be re-wrapped), fitted to the phone's width; pinching zooms in and
+// one finger pans. First with what it printed lately, then as it prints (PhoneLive). With Settings › Phone › Allow typing on, the phone's keyboard types into it, and a
 // key bar adds what a phone lacks: Esc, Tab, Ctrl, the arrows and Paste. A terminal running Claude Code opens on its
 // conversation instead (chat.js), which reads better than the PC's screen squeezed onto a phone.
 
@@ -18,14 +18,16 @@ const CTRL = 'ctrl';
 const PASTE = 'paste';
 /** Ctrl with a letter: its code is the letter's minus 64 (Ctrl+C is 3). */
 const CTRL_OFFSET = 64;
-/** The font size before anything is pinched, and where the phone keeps the size pinched to. */
-const READABLE = 13;
-const SIZE_KEY = 'termilly.terminal.size';
+/**
+ * The font sizes a fitted terminal goes between, how wide a monospace character is per point until xterm has drawn
+ * one, and how many times the size is measured again (xterm rounds its cells to the screen's pixels).
+ */
+const FONT = Object.freeze({ min: 3, max: 40, charWidth: 0.6, tenths: 10, tries: 6 });
+/** Where the phone keeps how far it's zoomed in (1 is the whole width). */
+const ZOOM_KEY = 'termilly.terminal.zoom';
 /** The terminal's box, and its padding (both sides together, px). */
 const BOX = '.tv-box';
 const BOX_PADDING = Object.freeze({ width: 16, height: 12 });
-/** The smallest grid the terminal is given, however little room the keyboard leaves. */
-const LEAST = Object.freeze({ cols: 20, rows: 4 });
 /** What the view asks of the live connection, and its header's buttons (data-tv). */
 const OP = Object.freeze({ watch: 'watch', unwatch: 'unwatch', input: 'input' });
 const TV = Object.freeze({ back: 'back', answer: 'answer', mode: 'mode' });
@@ -42,14 +44,14 @@ const AUTOMATIC = /^\x1b(?:\[\??[\d;]*[cnRIO]|\[[<M]|\][\s\S]*(?:\x07|\x1b\\)$|P
 const SCROLLBACK = 3000;
 /** On the page while the view is open: the home underneath doesn't scroll. */
 const OPEN = 'tv-open';
-/** The grid before the box is measured. */
+/** The PC's size when it hasn't said yet. */
 const DEFAULT_SIZE = Object.freeze({ cols: 80, rows: 24 });
 /** Messages from the PC about the terminal watched (PhoneLive.Kinds). */
 const LIVE = Object.freeze({ screen: 'screen', output: 'output', chat: 'chat' });
 const DARK = { background: '#0a0a0c', foreground: '#d7d7de', cursor: '#d7d7de', selectionBackground: '#3a3a55' };
 const TYPING_OFF = '<p class="tv-foot tv-note">Typing from the phone is off: Settings › Phone › Allow typing, on the PC.</p>';
 
-/** @typedef {{ id: string, title: string, ws: string, icon: string, badge: string, waiting: unknown, production: boolean, session: string | null }} Shown */
+/** @typedef {{ id: string, title: string, ws: string, icon: string, badge: string, waiting: unknown, production: boolean, session: string | null, cols: number | null, rows: number | null }} Shown */
 
 /** @param {unknown} text */
 const esc = text => String(text ?? '').replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
@@ -71,21 +73,34 @@ export function terminalView(app) {
   let ctrl = false;
   /** Whether typing into this production terminal was confirmed already. */
   let confirmed = false;
-  /** The size pinched to. */
-  let fontSize = Number(localStorage.getItem(SIZE_KEY)) || READABLE;
+  /** How far it's zoomed in: 1 shows the PC's whole width. */
+  let zoom = Number(localStorage.getItem(ZOOM_KEY)) || 1;
   /** @type {string} */
   let mode = MODE.terminal;
 
-  /** Gives the terminal as many columns and rows as fit its box at its font size; what it printed wraps to them. */
-  function fitGrid() {
+  /** The font size that shows the PC's whole width, times the zoom; measured from what xterm drew. */
+  function fitFont() {
+    const box = /** @type {HTMLElement | null} */ (view.querySelector(BOX));
+    if (!term || !box || box.hidden || !box.clientWidth) return;
+    const width = (box.clientWidth - BOX_PADDING.width) * zoom;
+    for (let tries = 0; tries < FONT.tries; tries++) {
+      const drawn = /** @type {HTMLElement | null} */ (term.element?.querySelector(SCREEN))?.offsetWidth;
+      if (drawn && drawn <= width && tries > 0) break;
+      const perPoint = drawn ? drawn / term.cols / term.options.fontSize : FONT.charWidth;
+      const size = Math.floor((width / (term.cols * perPoint)) * FONT.tenths) / FONT.tenths - (tries > 0 ? 1 / FONT.tenths : 0);
+      term.options.fontSize = Math.max(FONT.min, Math.min(FONT.max, size));
+    }
+    showCursor();
+  }
+
+  /** Moves the box so the line the cursor is on shows (the keyboard came up, or it's zoomed in). */
+  function showCursor() {
     const box = /** @type {HTMLElement | null} */ (view.querySelector(BOX));
     const screen = /** @type {HTMLElement | null} */ (term?.element?.querySelector(SCREEN));
-    if (!term || !box || box.hidden || !screen?.offsetWidth) return;
-    const cell = { width: screen.offsetWidth / term.cols, height: screen.offsetHeight / term.rows };
-    const cols = Math.max(LEAST.cols, Math.floor((box.clientWidth - BOX_PADDING.width) / cell.width));
-    const rows = Math.max(LEAST.rows, Math.floor((box.clientHeight - BOX_PADDING.height) / cell.height));
-    if (cols !== term.cols || rows !== term.rows) term.resize(cols, rows);
-    term.scrollToBottom();
+    if (!term || !box || !screen?.offsetHeight) return;
+    const line = screen.offsetHeight / term.rows;
+    const below = (term.buffer.active.cursorY + 1) * line + BOX_PADDING.height - box.clientHeight;
+    box.scrollTop = Math.max(0, below);
   }
 
   /**
@@ -139,7 +154,7 @@ export function terminalView(app) {
       : typing ? `<div class="tv-foot keybar">${BAR.map(([key, label]) => `<button data-key="${key}">${label}</button>`).join('')}</div>`
       : TYPING_OFF;
     chat.list.insertAdjacentHTML('afterend', foot);
-    if (!chatting) requestAnimationFrame(fitGrid);
+    if (!chatting) requestAnimationFrame(fitFont);
   }
 
   /**
@@ -158,7 +173,7 @@ export function terminalView(app) {
     view.innerHTML = '<div class="tv-box"></div>';
     view.append(chat.list);
     chat.add([], true);
-    term = new Terminal({ cols: DEFAULT_SIZE.cols, rows: DEFAULT_SIZE.rows, fontSize, scrollback: SCROLLBACK,
+    term = new Terminal({ cols: t.cols ?? DEFAULT_SIZE.cols, rows: t.rows ?? DEFAULT_SIZE.rows, fontSize: FONT.min, scrollback: SCROLLBACK,
       fontFamily: 'ui-monospace, Menlo, Consolas, monospace', theme: DARK, disableStdin: !canType, convertEol: false, cursorBlink: false });
     const box = /** @type {HTMLElement} */ (view.querySelector(BOX));
     term.open(box);
@@ -170,21 +185,19 @@ export function terminalView(app) {
   }
 
   /**
-   * One finger scrolls back, two pinch the font (the grid follows; the size is remembered), and a tap brings up the
-   * keyboard when typing is allowed.
+   * One finger pans and scrolls back, two zoom (remembered), and a tap brings up the keyboard when typing is allowed.
    * @param {HTMLElement} box
    */
   function touch(box) {
     terminalTouch(box, {
       term: () => term,
-      size: () => fontSize,
-      resize: size => {
-        if (!term || size === fontSize) return;
-        fontSize = size;
-        term.options.fontSize = size;
-        requestAnimationFrame(fitGrid);
+      zoom: () => zoom,
+      rezoom: to => {
+        if (to === zoom) return;
+        zoom = to;
+        requestAnimationFrame(fitFont);
       },
-      sized: () => localStorage.setItem(SIZE_KEY, String(fontSize)),
+      zoomed: () => localStorage.setItem(ZOOM_KEY, String(zoom)),
       tap: () => { if (typing) term?.focus(); },
     });
   }
@@ -201,7 +214,7 @@ export function terminalView(app) {
   }
 
   /**
-   * The PC's news about the terminal shown: gone, waiting or not, typing allowed or not, a Claude session or not.
+   * The PC's news about the terminal shown: gone, resized, waiting or not, typing allowed or not, a Claude session or not.
    * @param {Shown | undefined} t
    * @param {boolean} canType
    */
@@ -212,8 +225,13 @@ export function terminalView(app) {
       app.toast('That terminal was closed on the PC.');
       return;
     }
+    const resized = t.cols !== shown.cols || t.rows !== shown.rows;
     const changed = !!t.waiting !== !!shown.waiting || canType !== typing || !!t.session !== !!shown.session;
     shown = t;
+    if (resized && term) {
+      term.resize(t.cols ?? DEFAULT_SIZE.cols, t.rows ?? DEFAULT_SIZE.rows);
+      fitFont();
+    }
     if (!t.session) mode = MODE.terminal;
     if (changed) {
       typing = canType;
@@ -240,7 +258,7 @@ export function terminalView(app) {
     if (view.hidden || !window.visualViewport) return;
     view.style.height = `${window.visualViewport.height}px`;
     pin();
-    fitGrid();
+    fitFont();
   }
   /** Keeps the view on what the phone shows: iOS moves the page under the keyboard, which would carry the header away. */
   function pin() {

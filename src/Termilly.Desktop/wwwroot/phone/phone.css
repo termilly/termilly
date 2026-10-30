@@ -105,6 +105,7 @@ body.tv-open { overflow: hidden; }
 .tv-modes button { flex: 1; padding: 6px 0; border: 0; border-radius: 8px; background: none; color: var(--muted); font-weight: 600; font-size: 14px; }
 .tv-modes button.on { background: var(--accent); color: #fff; }
 .tv-box { flex: 1; min-height: 0; overflow: hidden; touch-action: none; padding: 6px 8px; background: #0a0a0c; }
+.tv-box .xterm { width: max-content; }
 .tv-box * { touch-action: none; }
 .tv-modes + .tv-box, .tv-modes + .tv-box + .chat { margin-top: 8px; }
 .chat { display: flex; flex: 1; flex-direction: column; gap: 10px; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 12px 14px; }
