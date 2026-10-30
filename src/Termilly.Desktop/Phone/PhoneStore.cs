@@ -1,3 +1,4 @@
+using System.Net;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
@@ -33,7 +34,8 @@ internal sealed class PhoneStore(Vault vault)
     private Data? _data;
     private (string Code, DateTime Expires, int Tries)? _offer;
 
-    private sealed record Data(string? Authority, string? Vapid, List<Device> Devices);
+    /// <param name="Server">The server certificate last made, kept so a restart shows phones the same one.</param>
+    private sealed record Data(string? Authority, string? Vapid, List<Device> Devices, string? Server = null);
 
     /// <summary>A paired phone as kept: its token's hash, never the token.</summary>
     private sealed record Device(string Id, string Name, string TokenHash, long Paired, long LastSeen, PushTarget? Push);
@@ -57,6 +59,31 @@ internal sealed class PhoneStore(Vault vault)
             }
             var made = PhoneCertificates.CreateAuthority(machine);
             Save(data with { Authority = Convert.ToBase64String(PhoneCertificates.ToPkcs12(made)) });
+            return made;
+        }
+    }
+
+    /// <summary>
+    /// The server certificate for this PC's addresses: the one kept while it still names them, comes from this
+    /// authority and has a month left; otherwise a new one, kept for next time. Phones that trust the authority take
+    /// either; keeping it means a restart changes nothing they see.
+    /// </summary>
+    public X509Certificate2 ServerCertificate(X509Certificate2 authority, IReadOnlyList<IPAddress> addresses, string host)
+    {
+        lock (_gate)
+        {
+            var data = Load();
+            if (data.Server is { } kept)
+            {
+                var certificate = PhoneCertificates.FromPkcs12(Convert.FromBase64String(kept));
+                if (PhoneCertificates.Fits(certificate, authority, addresses, host))
+                {
+                    return certificate;
+                }
+                certificate.Dispose();
+            }
+            var made = PhoneCertificates.IssueServer(authority, addresses, host);
+            Save(data with { Server = Convert.ToBase64String(PhoneCertificates.ToPkcs12(made)) });
             return made;
         }
     }

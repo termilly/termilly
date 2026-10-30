@@ -169,6 +169,21 @@ public sealed class PhoneTests : IDisposable
         Assert.DoesNotContain("Authority", File.ReadAllText(_vault.PathOf("phone.json")));
     }
 
+    [Fact]
+    public void A_restart_keeps_the_server_certificate_and_a_new_address_gets_a_new_one()
+    {
+        using var authority = _store.Authority("TESTPC");
+        IPAddress[] here = [IPAddress.Parse("192.168.1.20")];
+        using var first = _store.ServerCertificate(authority, here, "testpc.local");
+
+        using var afterRestart = new PhoneStore(_vault).ServerCertificate(authority, here, "testpc.local");
+        using var elsewhere = new PhoneStore(_vault).ServerCertificate(authority, [IPAddress.Parse("10.0.0.7")], "testpc.local");
+
+        Assert.Equal(first.Thumbprint, afterRestart.Thumbprint);
+        Assert.NotEqual(first.Thumbprint, elsewhere.Thumbprint);
+        Assert.True(elsewhere.MatchesHostname("10.0.0.7"));
+    }
+
     // ---- Pairing ----
 
     [Fact]

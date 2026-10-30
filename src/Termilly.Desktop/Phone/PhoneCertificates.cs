@@ -63,6 +63,27 @@ internal static class PhoneCertificates
         return Reload(withKey);
     }
 
+    /// <summary>A server certificate is made again this long before it ends.</summary>
+    private const int RenewDays = 30;
+
+    /// <summary>
+    /// Whether a kept server certificate still serves: it names every address and the host name, it was signed by this
+    /// authority, and it has a while left.
+    /// </summary>
+    public static bool Fits(X509Certificate2 server, X509Certificate2 authority, IEnumerable<IPAddress> addresses, string host)
+    {
+        if (server.NotAfter < DateTime.Now.AddDays(RenewDays) || !server.HasPrivateKey || !server.MatchesHostname(host) ||
+            addresses.Any(a => !server.MatchesHostname(a.ToString())))
+        {
+            return false;
+        }
+        using var chain = new X509Chain();
+        chain.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;
+        chain.ChainPolicy.CustomTrustStore.Add(authority);
+        chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
+        return chain.Build(server);
+    }
+
     /// <summary>The authority as a phone installs it: the certificate alone, DER.</summary>
     public static byte[] AuthorityFile(X509Certificate2 authority) => authority.Export(X509ContentType.Cert);
 

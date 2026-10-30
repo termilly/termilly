@@ -93,7 +93,7 @@ internal sealed class PhoneServer : IDisposable
     private PhoneServer(IPAddress address, int port, string webRoot, PhoneStore store, PhoneLive live, X509Certificate2 authority, string pushKey, Func<string, Task> testAlert)
     {
         (_webRoot, _api, _live) = (Path.GetFullPath(webRoot), new PhoneAppApi(store, pushKey, testAlert), live);
-        _certificate = PhoneCertificates.IssueServer(authority, [address], HostName);
+        _certificate = store.ServerCertificate(authority, [address], HostName);
         _authorityFile = PhoneCertificates.AuthorityFile(authority);
         _listener = new TcpListener(address, port);
         _listener.Start();
