@@ -7,6 +7,7 @@ Termilly includes the components below, each under its own license. Termilly its
 | [xterm.js](https://github.com/xtermjs/xterm.js) (`@xterm/xterm`) | 6.0.0 | MIT | `wwwroot/lib/xterm.js`, `xterm.css` |
 | `@xterm/addon-fit` | 0.11.0 | MIT | `wwwroot/lib/addon-fit.js` |
 | `@xterm/addon-unicode11` | 0.8.0 | MIT | `wwwroot/lib/addon-unicode11.js` |
+| `@xterm/addon-webgl` | 0.19.0 | MIT | `wwwroot/lib/addon-webgl.js` |
 | `@xterm/addon-image`, with node-sixel, inwasm and xterm-wasm-parts inside | 0.9.0 | MIT | `wwwroot/lib/addon-image.js` |
 | [highlight.js](https://highlightjs.org) | 11.10.0 | BSD-3-Clause | `wwwroot/lib/highlight.min.js` |
 | [YamlDotNet](https://github.com/aaubry/YamlDotNet) | 16.3.0 | MIT | `YamlDotNet.dll` |
