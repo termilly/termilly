@@ -111,6 +111,8 @@ interface PhoneSettings {
   alerts: string;
   /** Alerts say only that an agent needs the user or finished: no terminal, workspace or message. */
   hideDetails: boolean;
+  /** A paired phone may type into a terminal it shows (answers to an agent are always allowed). */
+  allowTyping: boolean;
 }
 
 interface NotificationSettings {
