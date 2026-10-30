@@ -639,7 +639,7 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
 .files-panel:focus { outline: none; }
 
 /* ---- The Notepad (js/notepad.js): docked on the right edge, the Files panel and the terminals left of it
-   (--notepad-dock on #workspace). It borrows the Files panel's head and grip and the File Explorer's tabs. ---- */
+   (--notepad-dock on #workspace). It borrows the Files panel's head and grip, the File Explorer's tabs and a tab group's < and >. ---- */
 .notepad-panel {
   position: absolute;
   top: 0;
@@ -656,9 +656,9 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
   background: var(--raised);
 }
 .notepad-panel[hidden] { display: none; }
-.np-toolbar { display: flex; gap: 4px; align-items: center; padding: 2px 10px 6px; }
-.np-toolbar .spacer { flex: 1; }
-.np-tabs { padding: 0 10px; }
+/* The tabs, with < and > when they don't fit (js/panes.js stripBar). */
+.np-tabbar { height: auto; padding: 0 4px; border-bottom: 1px solid var(--border); }
+.np-tabbar .np-tabs { flex: 1; min-width: 0; padding: 4px 2px 0; border-bottom: 0; }
 .np-text { flex: 1; min-height: 0; margin: 0; padding: 10px 12px; border: 0; border-radius: 0 0 var(--radius) var(--radius); outline: none; background: transparent; color: var(--text); font: 13px/1.5 var(--mono); resize: none; }
 .np-text:disabled { opacity: .5; }
 
@@ -939,7 +939,7 @@ body[data-sidebar="rail"] .side-rail { opacity: 1; pointer-events: auto; }
 .rail-remote { display: grid; flex: none; place-items: center; width: 34px; height: 34px; border-radius: 9px; color: var(--muted); }
 .rail-remote:hover, .rail-remote.open { background: var(--hover); color: var(--text); }
 .rail-remote svg { width: 16px; height: 16px; stroke-width: 1; }
-.rm-menu .menu-icon .badge.small { width: 16px; height: 16px; border-radius: 4px; font-size: 7.5px; }
+.menu-icon .badge.small { width: 16px; height: 16px; border-radius: 4px; font-size: 7.5px; }
 .side-list::-webkit-scrollbar { width: 6px; }
 .side-list::-webkit-scrollbar-thumb { border-radius: 3px; background: var(--scroll-thumb); }
 

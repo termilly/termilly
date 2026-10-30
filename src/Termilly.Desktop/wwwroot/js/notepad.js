@@ -7,9 +7,9 @@
 import { PAGE, HOST } from './protocol.js';
 import { send, onHost, platform, PLATFORM } from './host.js';
 import { state, persist, newId, tabTitle, wsById } from './store.js';
-import { restoreFocus } from './panes.js';
+import { restoreFocus, stripBar } from './panes.js';
 import { scheduleFit } from './terminals.js';
-import { escapeHtml, ICONS } from './ui.js';
+import { escapeHtml, cssColor, tabBadgeHtml, ICONS } from './ui.js';
 import { byId, find, targetOf, dockRight, onMiddleClick, WORKSPACE_ID, DOCK_GRIP } from './dom.js';
 import { showMenu, SEPARATOR } from './popups.js';
 import { confirmDialog } from './dialogs.js';
@@ -31,6 +31,17 @@ const COPY_LABEL = 'Copy to Notepad';
 const NEW_PAGE_LABEL = 'New page';
 /** Its keys while it has the focus; the toggle is Termilly's own shortcut too (main.js). */
 export const NOTEPAD_KEY = Object.freeze({ toggle: 'KeyM', save: 'KeyS', open: 'KeyO' });
+/**
+ * The header's tools, 16px at a 1px line on the pixel grid: a page with a +, an open folder, a disk (save), a disk
+ * with a pen (save as), and text going into a note.
+ */
+const TOOL_ICONS = Object.freeze({
+  newPage: '<svg viewBox="0 0 16 16"><path d="M9.5 1.5h-6v13h9v-10z"/><path d="M9.5 1.5v3h3M7.5 7v5M5 9.5h5"/></svg>',
+  open: '<svg viewBox="0 0 16 16"><path d="M1.5 13.5v-10h4l1.5 1.5h6.5v2"/><path d="M1.5 13.5l2-6h11.5l-2 6z"/></svg>',
+  save: '<svg viewBox="0 0 16 16"><path d="M2.5 2.5h9l2 2v9h-11z"/><path d="M5.5 2.5v3h5v-3M4.5 13.5v-4h7v4"/></svg>',
+  saveAs: '<svg viewBox="0 0 16 16"><path d="M7.5 13.5h-5v-11h9l2 2v3"/><path d="M5.5 2.5v3h5v-3M4.5 13.5v-4h3"/><path d="M9.5 14.5v-2l4-4 2 2-4 4z"/></svg>',
+  move: '<svg viewBox="0 0 16 16"><rect x="7.5" y="2.5" width="7" height="11" rx="1"/><path d="M9.5 5.5h3M9.5 8.5h3M9.5 11.5h3M1.5 8.5h4M3.5 6.5l2 2-2 2"/></svg>',
+});
 /** What its requests to the host start with. */
 const REQUEST = 'np';
 
@@ -41,21 +52,24 @@ panel.innerHTML = `
   <div class="${DOCK_GRIP}" title="Drag to resize"></div>
   <div class="files-head">
     <span class="files-title">Notepad</span>
-    <span class="files-tools"><button class="pane-btn" data-np="${NOTEPAD_ACTION.close}" title="Close (Ctrl+Shift+M)">${ICONS.close}</button></span>
-  </div>
-  <div class="np-toolbar">
-    <button class="btn small" data-np="${NOTEPAD_ACTION.newPage}" title="New page">New</button>
-    <button class="btn small" data-np="${NOTEPAD_ACTION.open}" title="Open a text file (Ctrl+O)">Open</button>
-    <button class="btn small" data-np="${NOTEPAD_ACTION.save}" title="Save (Ctrl+S)">Save</button>
-    <button class="btn small" data-np="${NOTEPAD_ACTION.saveAs}" title="Save as (Ctrl+Shift+S)">Save as</button>
-    <span class="spacer"></span>
-    <button class="btn small" data-np="${NOTEPAD_ACTION.move}" title="Move the selection, or the whole page, to a workspace's or a terminal's note">Move to note</button>
+    <span class="files-tools">
+      <button class="pane-btn" data-np="${NOTEPAD_ACTION.newPage}" title="New page">${TOOL_ICONS.newPage}</button>
+      <button class="pane-btn" data-np="${NOTEPAD_ACTION.open}" title="Open a text file (Ctrl+O)">${TOOL_ICONS.open}</button>
+      <button class="pane-btn" data-np="${NOTEPAD_ACTION.save}" title="Save (Ctrl+S)">${TOOL_ICONS.save}</button>
+      <button class="pane-btn" data-np="${NOTEPAD_ACTION.saveAs}" title="Save as (Ctrl+Shift+S)">${TOOL_ICONS.saveAs}</button>
+      <button class="pane-btn" data-np="${NOTEPAD_ACTION.move}" title="Move the selection, or the whole page, to a workspace's or a terminal's note">${TOOL_ICONS.move}</button>
+      <button class="pane-btn" data-np="${NOTEPAD_ACTION.close}" title="Close (Ctrl+Shift+M)">${ICONS.close}</button>
+    </span>
   </div>
   <div class="pv-tabs np-tabs" role="tablist"></div>
   <textarea class="np-text" spellcheck="true" placeholder="Write anything down. A page is kept until you close it."></textarea>`;
 byId(WORKSPACE_ID).append(panel);
 const tabsEl = find(panel, '.np-tabs');
 const area = /** @type {HTMLTextAreaElement} */ (find(panel, '.np-text'));
+// < and > scroll the tabs when they don't fit, as a tab group's do.
+const tabBar = stripBar(tabsEl);
+tabBar.classList.add('np-tabbar');
+area.before(tabBar);
 const button = byId('notepad-button');
 
 /** Saves waiting for the host: the page and the text sent, by request. */
@@ -241,11 +255,11 @@ function moveMenu(anchor) {
   const terminals = [...state.tabs.values()].filter(t => t.wsId && wsById(t.wsId) && !t.virtual);
   showMenu([
     {
-      label: 'Workspace note', submenu: () => state.workspaces.map(w => ({ label: w.name, action: () => moveTo(NOTE_KIND.workspace, w, w.name) })),
+      label: 'Workspace note', submenu: () => state.workspaces.map(w => ({ label: w.name, icon: `<span class="ws-dot" style="background:${cssColor(w.color)}"></span>`, action: () => moveTo(NOTE_KIND.workspace, w, w.name) })),
     },
     {
       label: 'Terminal note', disabled: !terminals.length,
-      submenu: () => terminals.map(t => ({ label: tabTitle(t), hint: escapeHtml(wsById(t.wsId)?.name ?? ''), action: () => moveTo(NOTE_KIND.terminal, t, tabTitle(t)) })),
+      submenu: () => terminals.map(t => ({ label: tabTitle(t), icon: tabBadgeHtml(t), hint: escapeHtml(wsById(t.wsId)?.name ?? ''), action: () => moveTo(NOTE_KIND.terminal, t, tabTitle(t)) })),
     },
   ], anchor);
 }

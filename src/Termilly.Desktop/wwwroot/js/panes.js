@@ -590,10 +590,10 @@ function renderGroup(node) {
 
 /**
  * The strip with a < and > button on either side, shown only when its tabs don't fit: each scrolls the strip by
- * most of its width. The mouse wheel scrolls it sideways too.
+ * most of its width. The mouse wheel scrolls it sideways too. A tab group's strip, and the Notepad's (js/notepad.js).
  * @param {HTMLElement} strip
  */
-function stripBar(strip) {
+export function stripBar(strip) {
   const bar = document.createElement('div');
   bar.className = 'tab-strip-bar';
   /**
@@ -628,6 +628,8 @@ function stripBar(strip) {
     strip.scrollLeft += e.deltaY;
   }, { passive: false });
   new ResizeObserver(update).observe(strip);
+  // Tabs added or closed change whether they fit, as the strip's size does.
+  new MutationObserver(() => requestAnimationFrame(update)).observe(strip, { childList: true });
   bar.append(left, strip, right);
   requestAnimationFrame(update);
   return bar;
