@@ -8,6 +8,7 @@ import { escapeHtml, ICONS } from '../ui.js';
 import { row, toggle, group, seg } from './controls.js';
 import { SETTING_VALUES } from '../constants.js';
 import { SECTION, redrawIfShowing } from './page.js';
+import { modal } from '../dialogs.js';
 
 /** The QR codes: the size of their cells and their quiet margin, in cells of the qrcode library. */
 const QR_CELL = 5;
@@ -22,10 +23,18 @@ let status = { running: false, setupUrl: null, appUrl: null, error: null, device
 let code = '';
 let tested = '';
 
-const redraw = () => redrawIfShowing(SECTION.phone);
+/** The paired phones' window while it's open: its list, drawn again as phones pair and go. */
+/** @type {HTMLElement | null} */
+let phonesList = null;
+
+const redraw = () => {
+  redrawIfShowing(SECTION.phone);
+  if (phonesList) phonesList.innerHTML = phonesHtml();
+};
 
 onHost(HOST.phoneStatus, m => {
-  if (m.devices.length > status.devices.length) code = ''; // the phone took it
+  // The phone took the code (a phone paired again under its old name replaces its entry: the count can stay).
+  if (m.devices.length > status.devices.length || m.devices.some(d => !status.devices.some(o => o.id === d.id))) code = '';
   status = m;
   redraw();
 });
@@ -55,13 +64,39 @@ function setupHtml() {
     `<button class="btn small" data-action="pairPhone">${code ? 'New code' : 'Show a code'}</button>`, { keywords: 'phone pair code' }));
 }
 
-function devicesHtml() {
-  return group('Paired phones', status.devices.length ? status.devices.map(d => `
+/** The paired phones, each with Remove (in their own window). */
+function phonesHtml() {
+  return status.devices.length ? status.devices.map(d => `
       <div class="plugin-row" data-device="${escapeHtml(d.id)}">
         <div class="plugin-text"><div class="set-name">${escapeHtml(d.name)}</div>
           <div class="set-desc">Paired ${escapeHtml(when(d.paired))} · last seen ${escapeHtml(when(d.lastSeen))} · alerts ${d.alerts ? 'on' : 'off'}</div></div>
-        <button class="btn small danger-outline" data-action="removePhone">Remove</button>
+        <button class="btn small danger-outline" data-remove>Remove</button>
       </div>`).join('')
+    : '<p class="set-desc">None. A removed phone can’t connect again until it’s paired anew.</p>';
+}
+
+/** The paired phones' own window. */
+function openPhones() {
+  modal('phone-devices', `<h3>Paired phones</h3>
+    <p class="dialog-sub">A phone paired again under a name it had replaces its old entry.</p>
+    <div class="phone-list" data-phone-list>${phonesHtml()}</div>
+    <div class="dialog-actions"><button class="btn primary" data-ok autofocus>Done</button></div>`, (dialog, close) => {
+    phonesList = /** @type {HTMLElement} */ (dialog.querySelector('[data-phone-list]'));
+    phonesList.addEventListener('click', e => {
+      const device = /** @type {HTMLElement} */ (e.target).closest('[data-remove]')?.closest('[data-device]');
+      if (device) send(PAGE.phoneRemove, { device: /** @type {HTMLElement} */ (device).dataset.device });
+    });
+    return { submit: () => close(true) };
+  }).finally(() => { phonesList = null; });
+}
+
+/** @param {number} count */
+const phonesCount = count => (count === 1 ? 'One phone' : `${count} phones`);
+
+function devicesHtml() {
+  return group('Paired phones', status.devices.length
+    ? row('Paired phones', `${phonesCount(status.devices.length)}: ${escapeHtml(status.devices.map(d => d.name).join(', '))}.`,
+      '<button class="btn small" data-action="managePhones">Manage</button>', { keywords: 'phone paired devices remove' })
     + row('Alerts', 'An agent’s news, as Settings › Notifications picks it. Away: Termilly isn’t in front, or the PC has been untouched for a minute.',
       seg('phone.alerts', [[SETTING_VALUES.phoneAlerts.away, 'When I’m away'], [SETTING_VALUES.phoneAlerts.always, 'Always'], [SETTING_VALUES.phoneAlerts.off, 'Off']]),
       { keywords: 'phone alert push notification away idle' })
@@ -98,7 +133,7 @@ const PHONE = {
       redraw();
       send(PAGE.phoneTest);
     },
-    removePhone: el => send(PAGE.phoneRemove, { device: /** @type {HTMLElement} */ (el.closest('[data-device]')).dataset.device }),
+    managePhones: openPhones,
   },
 };
 

@@ -205,6 +205,22 @@ public sealed class PhoneTests : IDisposable
     }
 
     [Fact]
+    public void A_phone_paired_again_under_its_name_replaces_its_old_entry()
+    {
+        const string iPhone = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4)";
+        var first = _store.Pair(_store.OfferCode(), iPhone, "Work iPhone");
+        _store.Pair(_store.OfferCode(), iPhone, "Home iPhone");
+        _store.Pair(_store.OfferCode(), iPhone, "  work IPHONE\n");
+        var unnamed = _store.Pair(_store.OfferCode(), iPhone, "   ");
+
+        Assert.Null(_store.DeviceFor(first)); // its entry went
+        Assert.Equal(["Home iPhone", "work IPHONE", "iPhone"], _store.List().Select(d => d.Name));
+        Assert.NotNull(_store.DeviceFor(unnamed));
+        _store.Pair(_store.OfferCode(), iPhone, new string('x', 99));
+        Assert.Equal(40, _store.List()[^1].Name.Length);
+    }
+
+    [Fact]
     public void Too_many_wrong_codes_withdraw_the_pairing()
     {
         var code = _store.OfferCode();

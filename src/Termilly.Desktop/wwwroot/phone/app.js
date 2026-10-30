@@ -117,9 +117,11 @@ async function start() {
   }
   if (!me?.paired) {
     return setupScreen(`<div class="step done"><span class="step-n">✓</span><div><b>Certificate trusted</b></div></div>
-      <div class="step now"><span class="step-n">3</span><div><b>Pair with your PC</b><p>Settings › Phone › Show a code, then type it here.</p>
-      <form data-form="pair"><input class="code" name="code" autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" maxlength="9" placeholder="ABCD2345" required>
-      <button class="button" type="submit">Pair</button></form><p class="error" data-error></p></div></div>`);
+      <div class="step now"><span class="step-n">3</span><div><b>Pair with your PC</b><p>Name this phone, then type the code from Settings › Phone › Show a code.</p>
+      <form data-form="pair" class="pair-form"><input class="name" name="name" autocomplete="off" spellcheck="false" maxlength="40" placeholder="Name, like Work iPhone" required>
+      <div class="pair-row"><input class="code" name="code" autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" maxlength="9" placeholder="ABCD2345" required>
+      <button class="button" type="submit">Pair</button></div></form>
+      <p>A name this PC knows already means that phone again: its old pairing goes.</p><p class="error" data-error></p></div></div>`);
   }
   show('<header class="bar"><h1>Termilly</h1><span class="conn" data-conn></span></header><main id="home"></main><div id="sheet"></div><div class="toast" data-toast hidden></div>');
   connect();
@@ -335,8 +337,9 @@ app.addEventListener('submit', async e => {
   e.preventDefault();
   const form = /** @type {HTMLFormElement} */ (e.target);
   const code = /** @type {HTMLInputElement} */ (form.elements.namedItem('code')).value;
+  const name = /** @type {HTMLInputElement} */ (form.elements.namedItem('name')).value;
   try {
-    await call(API.pair, { code });
+    await call(API.pair, { code, name });
     await start();
   } catch {
     /** @type {HTMLElement} */ (app.querySelector('[data-error]')).textContent = `That code didn't work: ${code} is wrong or old. Show a new one on the PC.`;

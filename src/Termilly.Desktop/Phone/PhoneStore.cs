@@ -123,8 +123,15 @@ internal sealed class PhoneStore(Vault vault)
         return code;
     }
 
-    /// <summary>A phone typed the code: its new token, or null when the code is wrong, used or old.</summary>
-    public string? Pair(string? code, string? userAgent)
+    /// <summary>The longest name a phone may give itself.</summary>
+    private const int MaxName = 40;
+
+    /// <summary>
+    /// A phone typed the code: its new token, or null when the code is wrong, used or old. It may give itself a name
+    /// (else it's named after its kind: "iPhone"); a phone paired before under the same name is this one again (its Home
+    /// Screen app was removed and added, which takes its token), so that pairing makes way for this one.
+    /// </summary>
+    public string? Pair(string? code, string? userAgent, string? name = null)
     {
         string token;
         lock (_gate)
@@ -143,7 +150,12 @@ internal sealed class PhoneStore(Vault vault)
             token = WebPush.Base64Url(RandomNumberGenerator.GetBytes(TokenBytes));
             var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             var data = Load();
-            data.Devices.Add(new Device(Convert.ToHexString(RandomNumberGenerator.GetBytes(IdBytes)).ToLowerInvariant(), NameFrom(userAgent), Hash(token), now, now, null));
+            var given = Clean(name);
+            if (given is not null)
+            {
+                data.Devices.RemoveAll(d => string.Equals(d.Name, given, StringComparison.OrdinalIgnoreCase));
+            }
+            data.Devices.Add(new Device(Convert.ToHexString(RandomNumberGenerator.GetBytes(IdBytes)).ToLowerInvariant(), given ?? NameFrom(userAgent), Hash(token), now, now, null));
             Save(data);
         }
         Changed?.Invoke();
@@ -233,6 +245,13 @@ internal sealed class PhoneStore(Vault vault)
             _data = null;
             _offer = null;
         }
+    }
+
+    /// <summary>A name as a phone gave it: one line, trimmed and cut to length; null when there's none.</summary>
+    private static string? Clean(string? name)
+    {
+        var line = new string((name ?? "").Where(c => !char.IsControl(c)).ToArray()).Trim();
+        return line.Length == 0 ? null : line[..Math.Min(line.Length, MaxName)].TrimEnd();
     }
 
     public static string NameFrom(string? userAgent) => userAgent switch

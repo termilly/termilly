@@ -46,6 +46,7 @@ internal sealed class PhoneAppApi(PhoneStore store, string pushKey, Func<string,
         public const string Alerts = "alerts";
         public const string InSeconds = "inSeconds";
         public const string Code = "code";
+        public const string Name = "name";
         public const string Endpoint = "endpoint";
         public const string Keys = "keys";
         public const string P256dh = "p256dh";
@@ -78,7 +79,7 @@ internal sealed class PhoneAppApi(PhoneStore store, string pushKey, Func<string,
         }
         if (request.Path == Api.Pair)
         {
-            var token = store.Pair(Field(request.Body, Fields.Code), request.Headers.GetValueOrDefault("User-Agent"));
+            var token = store.Pair(Field(request.Body, Fields.Code), request.Headers.GetValueOrDefault("User-Agent"), Field(request.Body, Fields.Name));
             return token is null ? null
                 : Json(new JsonObject { [Fields.Paired] = true }, $"Set-Cookie: {TokenCookie}={token}; Max-Age={TokenDays * SecondsPerDay}; Path=/; Secure; HttpOnly; SameSite=Strict\r\n");
         }

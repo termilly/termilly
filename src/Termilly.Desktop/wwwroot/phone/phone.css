@@ -41,6 +41,9 @@ code { padding: 1px 5px; border-radius: 5px; background: var(--bg); font: 13.5px
 .step.now { box-shadow: inset 0 0 0 1.5px var(--accent); }
 form { display: flex; gap: 8px; margin: 12px 0; }
 form .button { flex: none; }
+.pair-form { flex-direction: column; }
+.pair-row { display: flex; gap: 8px; }
+.name { padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--text); font-family: inherit; font-size: 16px; }
 .code { flex: 1; min-width: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--text); font: 600 20px/1.2 ui-monospace, Menlo, Consolas, monospace; letter-spacing: .12em; text-transform: uppercase; }
 
 /* ---- Home: waiting cards, then workspaces ---- */
