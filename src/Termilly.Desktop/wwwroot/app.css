@@ -754,7 +754,7 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
 
 .inbox-button, #notepad-button { position: relative; }
 /* The Notepad's pages while it's closed: news, not a call for attention. */
-.tool-count.np-count { background: var(--accent); }
+.tool-count.np-count { top: 3px; right: 2px; min-width: 12px; height: 12px; padding: 0 3px; border-radius: 6px; background: var(--accent); font-size: 8px; line-height: 12px; }
 .inbox-button.has-items { color: var(--attention); }
 .tool-count {
   position: absolute;
