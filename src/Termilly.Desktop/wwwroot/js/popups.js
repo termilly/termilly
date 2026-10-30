@@ -20,7 +20,7 @@ export const SEPARATOR = 'separator';
 /** Which side of its anchor a popover opens on: below it, or to its right (a submenu). */
 export const SIDE = Object.freeze({ below: 'below', right: 'right' });
 
-/** @type {Array<{ el: HTMLElement, anchorEl: Element | null, onClose?: () => void, dynamic: boolean }>} */
+/** @type {Array<{ el: HTMLElement, anchorEl: Element | null, onClose?: () => void, dynamic: boolean, refocus?: () => void }>} */
 const stack = [];
 let restoreFocus = () => {};
 
@@ -42,19 +42,20 @@ export function setFocusRestorer(fn) {
 
 /**
  * Shows `el` (position: fixed) next to `anchor`: an element, a DOMRect, or a point { x, y }.
- * Options: side ('below' | 'right'), nested (keep the popovers under it open), onClose, dynamic (remove on close).
+ * Options: side ('below' | 'right'), nested (keep the popovers under it open), onClose, dynamic (remove on close),
+ * refocus (where the keyboard focus goes when it closes, instead of the terminal).
  * @param {HTMLElement} el
  * @param {Anchor} anchor
- * @param {{ side?: 'below' | 'right', nested?: boolean, onClose?: () => void, dynamic?: boolean }} [options]
+ * @param {{ side?: 'below' | 'right', nested?: boolean, onClose?: () => void, dynamic?: boolean, refocus?: () => void }} [options]
  */
-export function openPopover(el, anchor, { side = SIDE.below, nested = false, onClose, dynamic = false } = {}) {
+export function openPopover(el, anchor, { side = SIDE.below, nested = false, onClose, dynamic = false, refocus } = {}) {
   if (!nested) closeAll();
   if (dynamic && !el.isConnected) document.body.append(el);
   el.hidden = false;
   const anchorEl = anchor instanceof Element ? anchor : null;
   anchorEl?.classList.add('open');
   place(el, anchorEl ? anchorEl.getBoundingClientRect() : /** @type {DOMRect | { x: number, y: number }} */ (anchor), side);
-  stack.push({ el, anchorEl, onClose, dynamic });
+  stack.push({ el, anchorEl, onClose, dynamic, refocus });
 }
 
 /**
@@ -86,7 +87,8 @@ function closeFrom(index) {
     if (entry.dynamic) entry.el.remove();
     entry.onClose?.();
   }
-  if (!stack.length) restoreFocus();
+  // The bottom popover says where the focus goes back to; the terminal unless it says otherwise.
+  if (!stack.length) (closing[closing.length - 1].refocus ?? restoreFocus)();
 }
 
 /**
@@ -137,12 +139,13 @@ const CHEVRON = '<svg viewBox="0 0 12 12"><path d="M4.5 3L7.5 6 4.5 9"/></svg>';
 
 /**
  * Shows a menu at `anchor`. Items: { label, icon (svg markup), hint (markup), checked, danger, action,
- * submenu: () => items }, or 'separator'. Arrow keys move, Enter/Space run, Right opens a submenu.
+ * submenu: () => items }, or 'separator'. Arrow keys move, Enter/Space run, Right opens a submenu. keepFocus leaves the
+ * keyboard focus where it is (a text box keeps showing its selection), and refocus says where it goes on closing.
  * @param {MenuEntry[]} items
  * @param {Anchor} anchor
- * @param {{ side?: 'below' | 'right', nested?: boolean, className?: string }} [options]
+ * @param {{ side?: 'below' | 'right', nested?: boolean, className?: string, keepFocus?: boolean, refocus?: () => void }} [options]
  */
-export function showMenu(items, anchor, { side = SIDE.below, nested = false, className = '' } = {}) {
+export function showMenu(items, anchor, { side = SIDE.below, nested = false, className = '', keepFocus = false, refocus } = {}) {
   const menu = document.createElement('div');
   menu.className = `popover menu context-menu ${className}`;
   menu.setAttribute('role', 'menu');
@@ -165,8 +168,8 @@ export function showMenu(items, anchor, { side = SIDE.below, nested = false, cla
     }
   });
 
-  openPopover(menu, anchor, { side, nested, dynamic: true });
-  /** @type {HTMLButtonElement | null} */ (menu.querySelector('.menu-row:not(:disabled)'))?.focus();
+  openPopover(menu, anchor, { side, nested, dynamic: true, refocus });
+  if (!keepFocus) /** @type {HTMLButtonElement | null} */ (menu.querySelector('.menu-row:not(:disabled)'))?.focus();
   return menu;
 }
 

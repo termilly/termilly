@@ -113,7 +113,7 @@ function newPage(text = '') {
 function renderTabs() {
   tabsEl.innerHTML = pages().map(p => `
     <span class="pv-tab${p.id === state.notepad.activeId ? ' on' : ''}${unsaved(p) ? ' changed' : ''}" role="tab" aria-selected="${p.id === state.notepad.activeId}" data-page="${p.id}"
-      title="${escapeHtml(p.path ? `${p.path}${unsaved(p) ? ' (not saved)' : ''}` : p.name)}"><span class="pv-tab-name">${escapeHtml(p.name)}</span><button class="pv-tab-close" data-page-close="${p.id}" title="Close" aria-label="Close">${ICONS.close}</button></span>`).join('');
+      title="${escapeHtml(p.path ? `${p.path}${unsaved(p) ? ' (not saved)' : ''}` : p.name)}"><span class="pv-tab-name">${escapeHtml(p.name)}${unsaved(p) ? '*' : ''}</span><button class="pv-tab-close" data-page-close="${p.id}" title="Close" aria-label="Close">${ICONS.close}</button></span>`).join('');
 }
 
 /** Draws the tabs and shows the page picked in the text box. */
@@ -323,8 +323,9 @@ const paste = (clean = t => t) => navigator.clipboard.readText().then(text => { 
 /** @param {MouseEvent} e */
 function pageMenu(e) {
   e.preventDefault();
-  const selected = area.selectionStart !== area.selectionEnd;
-  const selection = area.value.slice(area.selectionStart, area.selectionEnd);
+  const { selectionStart: start, selectionEnd: end } = area;
+  const selected = start !== end;
+  const selection = area.value.slice(start, end);
   showMenu([
     { label: 'Cut', hint: 'Ctrl+X', disabled: !selected, action: () => { navigator.clipboard.writeText(selection).catch(() => {}); insert(''); } },
     { label: COPY, hint: MENU_KEYS.copy, disabled: !selected, action: () => navigator.clipboard.writeText(selection).catch(() => {}) },
@@ -332,7 +333,11 @@ function pageMenu(e) {
     { label: 'Paste as plain text', title: 'Without the colour codes, control characters and trailing spaces a terminal adds', action: () => paste(plainText) },
     SEPARATOR,
     { label: 'Copy to note', disabled: !area.value.trim(), title: selected ? undefined : 'With nothing selected, the whole page', submenu: noteChoices },
-  ], { x: e.clientX, y: e.clientY });
+  ], { x: e.clientX, y: e.clientY }, {
+    // The text box keeps the focus while the menu shows, so its selection stays lit; closing, it gets it back.
+    keepFocus: true,
+    refocus: () => { area.focus(); area.setSelectionRange(start, end); },
+  });
 }
 
 // ---- Copying text here (a terminal's right-click menu) ----
