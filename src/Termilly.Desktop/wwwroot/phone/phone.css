@@ -33,11 +33,14 @@ code { padding: 1px 5px; border-radius: 5px; background: var(--bg); font: 13.5px
 .conn { color: var(--attention); font-size: 13px; }
 .setup { padding-top: 10px; }
 .step { display: flex; gap: 12px; margin: 0 0 14px; padding: 14px; border-radius: 14px; background: var(--raised); }
+/* The text beside the number takes what's left, no more: the code box in it would push the Pair button off the screen. */
+.step > div { flex: 1; min-width: 0; }
 .step p { margin: 3px 0 0; color: var(--muted); font-size: 14px; }
 .step-n { display: grid; flex: none; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--line); font-weight: 700; font-size: 14px; }
 .step.done .step-n { background: var(--ok); color: #fff; }
 .step.now { box-shadow: inset 0 0 0 1.5px var(--accent); }
 form { display: flex; gap: 8px; margin: 12px 0; }
+form .button { flex: none; }
 .code { flex: 1; min-width: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--text); font: 600 20px/1.2 ui-monospace, Menlo, Consolas, monospace; letter-spacing: .12em; text-transform: uppercase; }
 
 /* ---- Home: waiting cards, then workspaces ---- */
