@@ -21,7 +21,7 @@ import { resumeCommand, attachFor } from './resume.js';
 import { noteRemotePrompt, noteRemoteCwd, leftRemote } from './remotecwd.js';
 import { AGENT_STATE, AGENT_SOURCE } from './constants.js';
 import { find, field, PATH_DRAG } from './dom.js';
-import { continuesOnNextRow } from './buffer.js';
+import { continuesOnNextRow, atPrompt } from './buffer.js';
 import { clipboardKey, wireClipboard, PASTE_LABEL } from './termclipboard.js';
 import { selectionKey } from './keyselect.js';
 import { hoverMarkedLink, COPY_HINT } from './termlinks.js';
@@ -601,9 +601,6 @@ function localFolder(folder) {
   return platform === PLATFORM.linux ? (folder.startsWith('/') ? folder : null) : (/^[A-Za-z]:\\|^\\\\/.test(folder) ? folder : null);
 }
 
-/** What waits on a password, a host key question or a passphrase rather than a command. */
-const NOT_A_PROMPT = /pass(word|phrase)|yes\/no|verification code|otp|login:|\(y\/n\)/i;
-
 /**
  * An SSH terminal's command waiting for its shell (after a restart or a reconnect): typed once output settles on
  * what looks like a prompt (ends in $, #, % or >), never into a password or host-key question. A shell with Termilly's
@@ -615,10 +612,8 @@ function waitForPrompt(tab) {
   clearTimeout(shell.promptTimer);
   shell.promptTimer = setTimeout(() => {
     const term = tab.view?.term;
-    if (!term || !tab.start?.command || tab.exited || term.buffer.active.type === 'alternate') return;
-    const buffer = term.buffer.active;
-    const line = (buffer.getLine(buffer.baseY + buffer.cursorY)?.translateToString(true) ?? '').trimEnd();
-    if (/[$#%>]$/.test(line) && !NOT_A_PROMPT.test(line)) runPendingCommand(tab);
+    if (!term || !tab.start?.command || tab.exited) return;
+    if (atPrompt(term)) runPendingCommand(tab);
   }, PROMPT_SETTLE_MS);
 }
 

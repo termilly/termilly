@@ -3,6 +3,21 @@
 
 import { platform, PLATFORM } from './host.js';
 
+/** What waits on a password, a host key question or a passphrase rather than a command. */
+const NOT_A_PROMPT = /pass(word|phrase)|yes\/no|verification code|otp|login:|\(y\/n\)/i;
+
+/**
+ * Whether the cursor sits after what looks like a shell's prompt (a line ending in $, #, % or >), not a password,
+ * host key or passphrase question, nor a full-screen program. For shells that don't mark their prompt.
+ * @param {any} term xterm
+ */
+export function atPrompt(term) {
+  const buffer = term.buffer.active;
+  if (buffer.type === 'alternate') return false;
+  const line = (buffer.getLine(buffer.baseY + buffer.cursorY)?.translateToString(true) ?? '').trimEnd();
+  return /[$#%>]$/.test(line) && !NOT_A_PROMPT.test(line);
+}
+
 /**
  * The line that starts on buffer row `y`, with the rows it wrapped onto (up to row `end`) joined on, trimmed. Null
  * when row `y` isn't there or goes on a line that started above it.

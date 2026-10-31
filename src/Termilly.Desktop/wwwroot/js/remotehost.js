@@ -16,6 +16,7 @@ import { PROFILE_SOURCE } from './constants.js';
 import { escapeHtml } from './ui.js';
 import { updateSettings } from './preferences.js';
 import { targetOf } from './dom.js';
+import { atPrompt } from './buffer.js';
 
 /** A repository as a prompt reported it (parseGit). */
 /**
@@ -43,8 +44,11 @@ onHost(HOST.settings, m => { if (m.about?.remoteVersion) currentVersion = m.abou
  */
 const remoteOf = tab => (tab.remote ??= { integration: null, git: null, gitReported: false, install: null, offer: 0 });
 
-/** How long after connecting a shell has to report the integration before the setup bar offers it. */
+/** How long after connecting a shell has to report the integration before the setup bar offers it; until the
+ * connection is at a prompt (signed in, not asking for a password), it looks again this often, this long. */
 const OFFER_AFTER_MS = 6000;
+const OFFER_RECHECK_MS = 2000;
+const OFFER_GIVE_UP_MS = 10 * 60_000;
 /** How long the install line has to say it's ready for the installer. */
 const READY_WAIT_MS = 15_000;
 /** The installer goes in pieces this big, this far apart, so no input buffer on the way overflows. */
@@ -190,11 +194,17 @@ export function watchRemote(tab) {
   remote.integration = null;
   if (remote.git) setRemoteGit(tab, null); // a new shell (a restart, a reconnect) reports its own
   if (!placeOf(tab) || tab.virtual || state.settings.shells.integration === false) return;
-  remote.offer = setTimeout(() => {
+  const until = Date.now() + OFFER_GIVE_UP_MS;
+  const look = () => {
     if (!state.tabs.has(tab.id) || tab.exited || remote.integration || setupOf(tab)) return;
-    if (tab.view?.term?.buffer.active.type === 'alternate') return; // a full-screen program, not a prompt
+    // Not signed in yet (a password, a host key question) or in a full-screen program: look again later.
+    if (!tab.view?.term || !atPrompt(tab.view.term)) {
+      if (Date.now() < until) remote.offer = setTimeout(look, OFFER_RECHECK_MS);
+      return;
+    }
     showBar(tab, BAR_KIND.setup);
-  }, OFFER_AFTER_MS);
+  };
+  remote.offer = setTimeout(look, OFFER_AFTER_MS);
 }
 
 /**
