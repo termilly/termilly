@@ -90,20 +90,32 @@ export function composer(view, app) {
     changed();
   }
 
-  /** The arrow shows once there's something to send, in place of the microphone. */
+  /** The arrow shows once there's something to send, in place of the microphone; while it listens, beside it. */
   function changed() {
     const has = !!field()?.value.trim();
     const go = /** @type {HTMLElement | null} */ (view.querySelector(PART.go));
     const mic = /** @type {HTMLElement | null} */ (view.querySelector(PART.mic));
     if (go) go.hidden = !has;
-    if (mic) mic.hidden = has;
+    if (mic) mic.hidden = has && !listening;
+  }
+
+  /** Stops listening, at once: the phone's microphone is let go. */
+  function stopListening() {
+    if (!listening) return;
+    const was = listening;
+    listening = null;
+    was.onresult = null;
+    was.onend = null;
+    was.abort();
+    view.querySelector(PART.mic)?.classList.remove('on');
+    changed();
   }
 
   /** Dictation into the field: the browser's own when it has it, else the keyboard's microphone. */
   function dictate() {
     const mic = view.querySelector(PART.mic);
     if (listening) {
-      listening.stop();
+      stopListening();
       return;
     }
     if (!Speech) {
@@ -120,9 +132,11 @@ export function composer(view, app) {
       const f = field();
       if (f) f.value = before ? `${before} ${said}` : said;
       changed();
+      // The words are final: done listening (a phone may otherwise keep its microphone on).
+      if ([...e.results].every(r => r.isFinal)) stopListening();
     };
-    listening.onend = () => { listening = null; mic?.classList.remove('on'); };
-    listening.onerror = () => { app.toast('Dictation didn\'t start: the keyboard\'s microphone works too.'); };
+    listening.onend = () => { listening = null; mic?.classList.remove('on'); changed(); };
+    listening.onerror = () => { stopListening(); app.toast('Dictation didn\'t start: the keyboard\'s microphone works too.'); };
     mic?.classList.add('on');
     listening.start();
   }
@@ -172,5 +186,8 @@ export function composer(view, app) {
   view.addEventListener('focusin', e => { if (/** @type {HTMLElement} */ (e.target).closest(PART.messages)) view.classList.add(WRITING); });
   view.addEventListener('focusout', e => { if (/** @type {HTMLElement} */ (e.target).closest(PART.messages)) view.classList.remove(WRITING); });
 
-  return { html, click, changed, field };
+  // The app goes to the background: the microphone is let go.
+  document.addEventListener('visibilitychange', () => { if (document.hidden) stopListening(); });
+
+  return { html, click, changed, field, stopListening };
 }
