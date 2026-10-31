@@ -62,6 +62,8 @@ const OPEN = 'tv-open';
 /** On the view while the phone's keyboard is up: the screen is shorter than the page by more than this (px). */
 const KEYBOARD = 'keyboard';
 const KEYBOARD_LEAST = 120;
+/** When to fit again after the focus moves (ms): iOS's keyboard takes about a third of a second to come or go. */
+const SETTLE_MS = [50, 350, 700];
 /** The PC's size when it hasn't said yet. */
 const DEFAULT_SIZE = Object.freeze({ cols: 80, rows: 24 });
 /** Messages from the PC about the terminal watched (PhoneLive.Kinds). */
@@ -360,17 +362,29 @@ export function terminalView(app) {
   function fitViewport() {
     const visible = window.visualViewport;
     if (view.hidden || !visible) return;
-    view.style.height = `${visible.height}px`;
     // Not the page's height: in a Home Screen app iOS shrinks that with the keyboard too.
     if (visible.width !== full.width) Object.assign(full, { width: visible.width, height: 0 });
     full.height = Math.max(full.height, visible.height);
-    view.classList.toggle(KEYBOARD, visible.height < full.height - KEYBOARD_LEAST);
+    // Nothing to type into, no keyboard: the whole screen, even when iOS still reports the height it had with one.
+    const up = writing() && visible.height < full.height - KEYBOARD_LEAST;
+    view.style.height = `${up ? visible.height : full.height}px`;
+    view.classList.toggle(KEYBOARD, up);
+    if (!up) window.scrollTo(0, 0); // iOS can leave the page where the keyboard pushed it
     pin();
     fitGrid();
   }
+  /** Whether something that brings the keyboard has the focus (the message box, the terminal's own field). */
+  const writing = () => !!document.activeElement?.matches('textarea, input');
+  /** iOS reports the keyboard's coming and going late, or not at all: fit again as it settles. */
+  function settle() {
+    for (const ms of SETTLE_MS) setTimeout(fitViewport, ms);
+  }
+  view.addEventListener('focusin', settle);
+  view.addEventListener('focusout', settle);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) settle(); });
   /** Keeps the view on what the phone shows: iOS moves the page under the keyboard, which would carry the header away. */
   function pin() {
-    if (!view.hidden && window.visualViewport) view.style.transform = `translateY(${window.visualViewport.offsetTop}px)`;
+    if (!view.hidden && window.visualViewport) view.style.transform = view.classList.contains(KEYBOARD) ? `translateY(${window.visualViewport.offsetTop}px)` : '';
   }
   window.visualViewport?.addEventListener('resize', fitViewport);
   window.visualViewport?.addEventListener('scroll', pin);
