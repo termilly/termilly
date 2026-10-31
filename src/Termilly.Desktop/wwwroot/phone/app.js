@@ -319,7 +319,7 @@ function connect() {
       render();
       if (terminalShown.viewing) terminalShown.update(terminal(terminalShown.viewing), !!snap.typing);
       manage.changed();
-      news(snap.notes ?? []);
+      news(snap.terminals);
     } else if (m.type === LIVE.screen || m.type === LIVE.output) {
       terminalShown.message(m);
     } else if (m.type === LIVE.answered && manage.answered(m)) {
@@ -354,32 +354,32 @@ function answer(pane, choice, text = '') {
 
 /** How long a banner stays. */
 const NEWS_MS = 7000;
-/** The notes already known (terminal@time); null until the first state, whose notes are old news. */
-/** @type {Set<string> | null} */
-let newsKnown = null;
+/**
+ * Each terminal's agent state at the last update; null until the first, which is how things already are. It follows
+ * the terminals themselves, not the PC's notification center: that leaves out the terminal the PC has on screen, and
+ * the user may be here while it does.
+ * @type {Map<string, string | null> | null}
+ */
+let newsStates = null;
 
-/** @param {import('./tabs.js').Note[]} notes */
-function news(notes) {
-  const key = (/** @type {import('./tabs.js').Note} */ n) => `${n.id}@${n.at}`;
-  if (!newsKnown) {
-    newsKnown = new Set(notes.map(key));
-    return;
-  }
-  for (const n of notes) {
-    if (newsKnown.has(key(n))) continue;
-    newsKnown.add(key(n));
-    const label = /** @type {Record<string, string>} */ (STATE_LABEL)[n.state];
-    if (n.live && label && n.id !== terminalShown.viewing && !document.hidden) showNews(n, label);
+/** @param {Terminal[]} terminals */
+function news(terminals) {
+  const before = newsStates;
+  newsStates = new Map(terminals.map(t => [t.id, t.agent]));
+  if (!before) return;
+  for (const t of terminals) {
+    if (!before.has(t.id) || before.get(t.id) === t.agent) continue;
+    const label = /** @type {Record<string, string>} */ (STATE_LABEL)[t.agent ?? ''];
+    if (label && t.id !== terminalShown.viewing && !document.hidden) showNews(t, label);
   }
 }
 
 /**
- * @param {import('./tabs.js').Note} n
+ * @param {Terminal} t
  * @param {string} label
  */
-function showNews(n, label) {
-  const t = terminal(n.id);
-  if (!t) return;
+function showNews(t, label) {
+  const n = { id: t.id, state: t.agent ?? '', detail: t.waiting?.text ?? t.line ?? '' };
   let el = /** @type {HTMLButtonElement | null} */ (document.getElementById(NEWS_ID));
   if (!el) {
     el = document.createElement('button');
