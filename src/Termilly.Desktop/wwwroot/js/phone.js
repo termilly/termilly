@@ -173,12 +173,16 @@ async function answer({ pane, choice, text }) {
 }
 
 // A phone shows a terminal: it takes the phone's size, so it fills the phone and what it prints fits it, drawn here in
-// a phone with that phone's name and address under it; it gets its pane's size back when no phone shows it.
+// a phone with that phone's name and address under it; it gets its pane's size back when no phone shows it. The phone
+// keeps its full height when the phone's keyboard takes rows away: its tallest size while it shows the terminal.
 onHost(HOST.phoneSize, m => {
   const tab = state.tabs.get(m.id);
   const view = tab?.view;
   if (!tab || !view?.term) return;
-  tab.phoneSize = m.cols && m.rows ? { cols: m.cols, rows: m.rows } : null;
+  const before = tab.phoneSize;
+  tab.phoneSize = m.cols && m.rows
+    ? { cols: m.cols, rows: m.rows, tallest: before?.cols === m.cols ? Math.max(before.tallest ?? 0, m.rows) : m.rows }
+    : null;
   view.body.classList.toggle('phone-sized', !!tab.phoneSize);
   if (tab.phoneSize) {
     view.body.dataset.phone = [m.name ?? 'A phone', m.address].filter(Boolean).join(' · ');
@@ -189,6 +193,7 @@ onHost(HOST.phoneSize, m => {
   } else {
     delete view.body.dataset.phone;
     resized.unobserve(view.body);
+    if (view.term.element) view.term.element.style.minHeight = '';
     view.term.options.fontSize = state.settings.terminal.fontSize;
     view.fit?.fit();
   }
@@ -196,6 +201,8 @@ onHost(HOST.phoneSize, m => {
 
 /** Room in a phone-sized pane for its padding and the phone's name under the phone (app.css). */
 const PHONE_ROOM = Object.freeze({ width: 40, height: 84 });
+/** Where xterm draws the characters: its size is the grid's. */
+const TERM_SCREEN = '.xterm-screen';
 /** The smallest font a phone's terminal gets here: it shows what the phone shows, smaller than one would type in. */
 const PHONE_MIN_FONT = 4;
 /** @type {WeakMap<Element, Tab>} */
@@ -208,12 +215,21 @@ const resized = new ResizeObserver(entries => {
 });
 
 /**
+ * The frame around a phone's terminal (app.css): its padding and border.
+ * @param {HTMLElement} element
+ */
+function phoneFrame(element) {
+  const s = getComputedStyle(element), px = (/** @type {string[]} */ ...names) => names.reduce((n, k) => n + parseFloat(s.getPropertyValue(k)), 0);
+  return { width: px('padding-left', 'padding-right', 'border-left-width', 'border-right-width'), height: px('padding-top', 'padding-bottom', 'border-top-width', 'border-bottom-width') };
+}
+
+/**
  * A terminal a phone shows, in its phone, fits its pane: its font gets smaller as needed (never bigger than Settings'),
- * as it keeps the phone's columns and rows.
+ * as it keeps the phone's columns and rows. The phone is as tall as its tallest rows, so the keyboard doesn't shrink it.
  * @param {Tab} tab
  */
 function fitPhone(tab) {
-  const view = tab.view, term = view?.term, screen = term?.element?.querySelector('.xterm-screen');
+  const view = tab.view, term = view?.term, screen = term?.element?.querySelector(TERM_SCREEN);
   if (!view || !term?.element || !screen) return;
   const full = state.settings.terminal.fontSize;
   if (term.options.fontSize !== full) {
@@ -221,11 +237,27 @@ function fitPhone(tab) {
     requestAnimationFrame(() => fitPhone(tab)); // measured at Settings' font, once drawn
     return;
   }
-  const inner = screen.getBoundingClientRect(), outer = term.element.getBoundingClientRect();
+  const inner = screen.getBoundingClientRect(), frame = phoneFrame(term.element);
+  const tall = inner.height * tallestOf(tab) / term.rows;
   const scale = Math.min(1,
-    (view.body.clientWidth - PHONE_ROOM.width - (outer.width - inner.width)) / inner.width,
-    (view.body.clientHeight - PHONE_ROOM.height - (outer.height - inner.height)) / inner.height);
+    (view.body.clientWidth - PHONE_ROOM.width - frame.width) / inner.width,
+    (view.body.clientHeight - PHONE_ROOM.height - frame.height) / tall);
   if (scale < 1) term.options.fontSize = Math.max(PHONE_MIN_FONT, Math.floor(full * scale * 2) / 2);
+  requestAnimationFrame(() => holdHeight(tab)); // at the new font, once drawn
+}
+
+/** @param {Tab} tab */
+const tallestOf = tab => Math.max(tab.phoneSize?.tallest ?? 0, tab.view?.term?.rows ?? 1);
+
+/**
+ * The phone keeps its tallest height: rows the keyboard took stay as empty screen under the terminal.
+ * @param {Tab} tab
+ */
+function holdHeight(tab) {
+  const term = tab.view?.term, screen = term?.element?.querySelector(TERM_SCREEN);
+  if (!tab.phoneSize || !term?.element || !screen) return;
+  const tall = screen.getBoundingClientRect().height * tallestOf(tab) / term.rows;
+  term.element.style.minHeight = `${Math.ceil(tall + phoneFrame(term.element).height)}px`;
 }
 
 // A phone starts showing a terminal (already at its size): what it shows now, once what it printed is drawn.
