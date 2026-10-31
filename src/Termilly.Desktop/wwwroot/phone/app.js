@@ -74,6 +74,8 @@ let replying = false;
 /** The tab shown (the bottom bar), and the Settings page shown ('' for its list). */
 let tab = TAB.terminals;
 let settingsPage = SETTINGS_PAGE.list;
+/** What Settings' list says of alerts. */
+const ALERTS_SET = Object.freeze({ none: 'Not here', on: 'On', off: 'Off' });
 /** The tabs' titles, at the top. */
 const TITLE = Object.freeze({ [TAB.terminals]: 'Termilly', [TAB.notes]: 'Notifications', [TAB.settings]: 'Settings' });
 
@@ -226,7 +228,7 @@ function render() {
   if (add) add.innerHTML = tab === TAB.terminals ? manage.addButton() : '';
   home.innerHTML = tab === TAB.notes ? notesHtml(snap.notes ?? [], noteParts)
     : page === SETTINGS_PAGE.themes ? themesHtml(looks(snap), chosenLook())
-    : tab === TAB.settings ? settingsHtml({ page, alerts: alertsBody(), alertsOn: !canAlert() ? 'Not here' : me?.alerts ? 'On' : 'Off', size: textSize(), scrolling: localStorage.getItem(SCROLLING.key) ?? SCROLLING.smooth, compose: composeStyle(), dictation: dictation(), host: location.host, connected, look: chosenLook(), looks: looks(snap) })
+    : tab === TAB.settings ? settingsHtml({ page, alerts: alertsBody(), alertsOn: !canAlert() ? ALERTS_SET.none : me?.alerts ? ALERTS_SET.on : ALERTS_SET.off, size: textSize(), scrolling: localStorage.getItem(SCROLLING.key) ?? SCROLLING.smooth, compose: composeStyle(), dictation: dictation(), host: location.host, connected, look: chosenLook(), looks: looks(snap) })
     : terminalsHtml();
   /** @type {HTMLElement} */ (document.getElementById('nav')).innerHTML = navHtml(tab, snap.notes?.length ?? 0);
   renderSheet();
