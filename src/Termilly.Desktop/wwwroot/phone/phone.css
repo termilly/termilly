@@ -185,8 +185,6 @@ main.tabbed { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
 .m-go { background: var(--accent); color: var(--on-accent); }
 .m-go svg, .b-go svg { width: 16px; height: 16px; stroke-width: 2.4; }
 .m-mic[hidden], .m-go[hidden] { display: none; }
-.tv.writing .keybar { display: none; }
-.tv.writing .tv-compose { padding-bottom: 7px; }
 .keybar.one-bar, .tv-compose.one-bar { align-items: center; gap: 4px; padding: 4px; }
 .keybar.one-bar { align-self: stretch; padding-bottom: max(4px, calc(env(safe-area-inset-bottom) - 16px)); }
 .b-mode { display: flex; flex: none; padding: 2px; border-radius: 8px; background: var(--bg); }

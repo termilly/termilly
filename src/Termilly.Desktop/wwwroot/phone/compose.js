@@ -1,7 +1,7 @@
 // @ts-check
 // The box under a Claude terminal for writing to Claude, as Settings › Message box says:
 // - Messages (the default): a round field with the microphone in it; the send arrow shows once there's something to
-//   send; a + holds paste, snippets, Claude's commands and changing its mode. The key bar steps aside while writing.
+//   send; a + holds paste, snippets, Claude's commands and changing its mode. The key bar stays under it while writing.
 // - One bar: the key bar and the field share one row, with a switch between keys and a message to Claude.
 // Other terminals get the key bar alone. terminal.js sends what's written (the words, then Enter).
 
@@ -18,15 +18,15 @@ const C = Object.freeze({ plus: 'plus', mic: 'mic', mode: 'mode', more: 'more', 
 const COMMANDS = ['/compact', '/clear'];
 /** Shift+Tab: Claude Code's next mode (accept edits, plan). */
 const SHIFT_TAB = '\x1b[Z';
-/** On the view while writing a message: the key bar steps aside (Messages). */
-const WRITING = 'writing';
 /** One bar's keys in keys mode, and the ones under its ⋯ (terminal.js BAR). */
 const FEW_KEYS = ['esc', 'tab', 'ctrl', 'up', 'down', 'enter'];
 const MORE_KEYS = ['left', 'right', 'paste', 'snip'];
 /** Its send buttons (Messages' arrow, One bar's). */
 const SEND = '.m-go, .b-go';
+/** The key bar under it. */
+const KEYBAR = '.keybar';
 /** Its parts. */
-const PART = Object.freeze({ menu: '.c-menu', mic: '.m-mic', go: '.m-go', messages: '.msg' });
+const PART = Object.freeze({ menu: '.c-menu', mic: '.m-mic', go: '.m-go' });
 
 const ICON = Object.freeze({
   plus: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6v12M6 12h12"/></svg>',
@@ -197,17 +197,18 @@ export function composer(view, app) {
     return true;
   }
 
-  // The send arrow keeps the keyboard where it is: losing it would shrink the view and move the arrow away before the
-  // tap's click, so a first tap did nothing. It sends as the finger lifts; the click after finds the box empty.
-  view.addEventListener('pointerdown', e => { if (/** @type {HTMLElement} */ (e.target).closest(SEND)) e.preventDefault(); });
+  // The send arrow, and a key bar key while writing, keep the keyboard where it is: losing it would shrink the view and
+  // move the button away before the tap's click, so a first tap did nothing. Send goes as the finger lifts; the click
+  // after finds the box empty.
+  view.addEventListener('pointerdown', e => {
+    const target = /** @type {HTMLElement} */ (e.target);
+    if (target.closest(SEND) || (target.closest(KEYBAR) && document.activeElement === field())) e.preventDefault();
+  });
   view.addEventListener('pointerup', e => {
     /** @type {HTMLElement} */ (e.target).closest(SEND)?.closest(COMPOSE)?.requestSubmit();
   });
 
   view.addEventListener('input', e => { if (/** @type {HTMLElement} */ (e.target).closest(COMPOSE)) changed(); });
-  // Messages: while writing, the key bar steps aside.
-  view.addEventListener('focusin', e => { if (/** @type {HTMLElement} */ (e.target).closest(PART.messages)) view.classList.add(WRITING); });
-  view.addEventListener('focusout', e => { if (/** @type {HTMLElement} */ (e.target).closest(PART.messages)) view.classList.remove(WRITING); });
 
   // The app goes to the background: the microphone is let go.
   document.addEventListener('visibilitychange', () => { if (document.hidden) stopListening(); });

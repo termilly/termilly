@@ -16,7 +16,7 @@ export const PAGE_TITLE = Object.freeze({ alerts: 'Alerts', appearance: 'Appeara
 /** How the microphone dictates (compose.js DICTATION), as Settings offers it. */
 const DICTATION_CHOICES = [['keyboard', 'Keyboard', 'Use the keyboard\'s microphone. The phone never asks'], ['termilly', 'Termilly', 'Dictates without the keyboard. iOS asks for the microphone after each restart']];
 /** The boxes for writing to Claude (compose.js COMPOSE_STYLE), as Settings offers them. */
-const COMPOSE_CHOICES = [['messages', 'Messages', 'A round field with the microphone; the keys step aside while you write'], ['bar', 'One bar', 'Keys and the field share one row, with a switch']];
+const COMPOSE_CHOICES = [['messages', 'Messages', 'A round field with the microphone, over the keys'], ['bar', 'One bar', 'Keys and the field share one row, with a switch']];
 /** The ways the terminal scrolls back (gestures.js SCROLLING), as Settings offers them. */
 const SCROLL_CHOICES = [['smooth', 'Smooth'], ['lines', 'Line by line']];
 /** The looks at the top of Settings › Appearance; the other themes have their own page. */
