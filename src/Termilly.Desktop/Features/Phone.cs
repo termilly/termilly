@@ -300,6 +300,11 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
         string? error = null;
         foreach (var (id, target) in targets)
         {
+            // A phone with the app open shows the news already; a test goes anyway.
+            if (only is null && _live.IsOpenOn(id))
+            {
+                continue;
+            }
             try
             {
                 var status = await WebPush.SendAsync(Http, vapid, target, alert.ToJsonString(), CancellationToken.None).ConfigureAwait(false);

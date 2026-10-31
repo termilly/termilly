@@ -36,7 +36,11 @@ internal sealed class PhoneLive : IDisposable
         public const string Watch = "watch";
         public const string Unwatch = "unwatch";
         public const string Size = "size";
+        /// <summary>The app came on screen or went to the background ({ shown }).</summary>
+        public const string Seen = "seen";
     }
+
+    private const string ShownField = "shown";
 
     private const string ColsField = "cols";
     private const string RowsField = "rows";
@@ -66,6 +70,8 @@ internal sealed class PhoneLive : IDisposable
         public StringBuilder Pending { get; } = new();
         /// <summary>The size it asked for the terminal it watches, if it did.</summary>
         public volatile GridSize? Size;
+        /// <summary>The app is on the phone's screen (connected means open, until it says it went to the background).</summary>
+        public volatile bool Shown = true;
     }
 
     /// <summary>A terminal's size in characters.</summary>
@@ -148,6 +154,9 @@ internal sealed class PhoneLive : IDisposable
 
     private string StateMessage() => $$"""{"{{TypeField}}":"{{Kinds.State}}","{{StateField}}":{{_state}}}""";
 
+    /// <summary>Whether a paired phone has the app open on its screen now: its alerts would tell it what it sees.</summary>
+    public bool IsOpenOn(string device) => _phones.Values.Any(p => p.Device == device && p.Shown);
+
     /// <summary>Serves one phone until it disconnects or the server stops.</summary>
     public async Task RunAsync(WebSocket socket, string device, string address, CancellationToken stop)
     {
@@ -172,6 +181,10 @@ internal sealed class PhoneLive : IDisposable
                 else if (op == Ops.Size)
                 {
                     Resize(me, message!);
+                }
+                else if (op == Ops.Seen)
+                {
+                    me.Shown = message?[ShownField]?.GetValue<bool>() ?? true;
                 }
                 else if (Received is { } received && message is not null)
                 {

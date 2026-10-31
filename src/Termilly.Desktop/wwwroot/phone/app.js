@@ -38,7 +38,7 @@ const WAITING = Object.freeze({ permission: 'permission', question: 'question', 
 /** Messages from the PC on the live connection (PhoneLive.Kinds). */
 const LIVE = Object.freeze({ state: 'state', answered: 'answered', screen: 'screen', output: 'output' });
 /** What the app asks of the live connection: an answer to an agent (Features/Phone.cs). */
-const OP = Object.freeze({ answer: 'answer', input: 'input' });
+const OP = Object.freeze({ answer: 'answer', input: 'input', seen: 'seen' });
 /** The live connection is open (WebSocket.OPEN). */
 const OPEN = 1;
 /** The live connection tries again after this long, doubling up to the most. */
@@ -294,9 +294,16 @@ async function reloadIfRebuilt() {
   }
 }
 
+/** Tells the PC whether the app is on screen: while it is, alerts don't come (what they'd say shows here). */
+function tellSeen() {
+  if (live?.readyState === OPEN) live.send(JSON.stringify({ op: OP.seen, shown: !document.hidden }));
+}
+document.addEventListener('visibilitychange', tellSeen);
+
 function connect() {
   live = new WebSocket(`wss://${location.host}${API.live}`);
   live.addEventListener('open', () => {
+    tellSeen();
     reloadIfRebuilt();
     connected = true;
     retry = RETRY_MS;

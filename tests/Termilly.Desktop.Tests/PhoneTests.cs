@@ -377,6 +377,41 @@ public sealed class PhoneTests : IDisposable
         Assert.Equal(("t1", null), sized[1]);
     }
 
+    [Fact]
+    public async Task A_phone_with_the_app_on_screen_counts_as_open_until_it_goes_to_the_background_or_disconnects()
+    {
+        using var authority = _store.Authority("TESTPC");
+        using var server = Start(authority);
+        using var http = Https(authority);
+        var paired = await Post(http, server.AppUrl + "api/pair", $$"""{"code":"{{_store.OfferCode()}}"}""");
+        var cookie = paired.Headers.GetValues("Set-Cookie").First().Split(';')[0];
+        var device = _store.List().Single().Id;
+        Assert.False(_live.IsOpenOn(device));
+
+        using var phone = Socket(authority, cookie);
+        await phone.ConnectAsync(new Uri(server.AppUrl.Replace("https", "wss") + "api/live"), CancellationToken.None);
+        await ReceiveText(phone); // the terminals
+        Assert.True(_live.IsOpenOn(device));
+
+        await Send(phone, """{"op":"seen","shown":false}""");
+        await Until(() => !_live.IsOpenOn(device));
+        await Send(phone, """{"op":"seen","shown":true}""");
+        await Until(() => _live.IsOpenOn(device));
+
+        phone.Abort(); // the app closed, or iOS ended it in the background
+        await Until(() => !_live.IsOpenOn(device));
+        Assert.False(_live.IsOpenOn("another-phone"));
+    }
+
+    private static async Task Until(Func<bool> condition)
+    {
+        for (var waited = 0; !condition(); waited += 20)
+        {
+            Assert.True(waited < 5000, "timed out");
+            await Task.Delay(20);
+        }
+    }
+
     private static Task Send(ClientWebSocket socket, string text) =>
         socket.SendAsync(Encoding.UTF8.GetBytes(text), WebSocketMessageType.Text, true, CancellationToken.None);
 
