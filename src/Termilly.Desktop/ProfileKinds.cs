@@ -30,6 +30,8 @@ internal static class ProfileIcons
     public const string Docker = ProfileSources.Docker;
     public const string Kubernetes = ProfileSources.Kubernetes;
     public const string Custom = ProfileSources.Custom;
+    /// <summary>Claude Code (SessionProfiles.ClaudeCode), in a shell.</summary>
+    public const string Claude = "claude";
 }
 
 /// <summary>

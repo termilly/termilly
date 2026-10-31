@@ -24,6 +24,7 @@ export const PROFILE_ICON = Object.freeze({
   docker: 'docker',
   kubernetes: 'k8s',
   custom: 'custom',
+  claude: 'claude',
 });
 
 /** C#: ProfileIds (ProfileKinds.cs). */

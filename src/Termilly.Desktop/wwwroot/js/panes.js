@@ -157,7 +157,8 @@ export function newTab({ profile = defaultProfile(), wsId = state.activeId, dir,
     id: newId('t'), wsId: ws.id, profile, name, tags: [...tags], noHistory: false, attention: false, startedAt: Date.now(), view: null, note,
     startCwd: cwd,
   });
-  prepareStart(tab, { output: restore ?? null, command }); // a reopened terminal's output; a command from the API (termilly open)
+  // A reopened terminal's output; a command from the API (termilly open), or the profile's own (Claude Code: claude).
+  prepareStart(tab, { output: restore ?? null, command: command ?? (restore ? null : state.profiles.find(p => p.id === profile)?.startCommand ?? null) });
   state.tabs.set(tab.id, tab);
   createView(tab);
   insertLeaf(ws, tab, dir);
@@ -183,7 +184,7 @@ export function createTab({ wsId, profile = defaultProfile(), name = null, tags 
     id: newId('t'), wsId, profile, name, tags: [...tags], noHistory: false, attention: false, startedAt: Date.now(), view: null,
     startCwd: cwd, env, startCommand: command, note,
   });
-  prepareStart(tab, { command });
+  prepareStart(tab, { command: command ?? state.profiles.find(p => p.id === profile)?.startCommand ?? null });
   state.tabs.set(tab.id, tab);
   createView(tab);
   return tab;

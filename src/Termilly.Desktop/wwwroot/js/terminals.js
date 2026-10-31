@@ -22,6 +22,7 @@ import { noteRemotePrompt, noteRemoteCwd, leftRemote } from './remotecwd.js';
 import { AGENT_STATE, AGENT_SOURCE } from './constants.js';
 import { find, field, PATH_DRAG } from './dom.js';
 import { continuesOnNextRow, atPrompt } from './buffer.js';
+import { isResuming, resumeTyped } from './resuming.js';
 import { clipboardKey, wireClipboard, PASTE_LABEL } from './termclipboard.js';
 import { selectionKey } from './keyselect.js';
 import { hoverMarkedLink, COPY_HINT } from './termlinks.js';
@@ -297,6 +298,10 @@ function wireInput(tab, term) {
     if (tab.exited) {
       if (tab.reconnect) return; // waiting to reconnect (reconnect.js): its bar has the buttons
       restartShell(tab);
+      return;
+    }
+    // Its Claude session is resuming (resuming.js): typing now would land around `claude --resume` and spoil it.
+    if (isResuming(tab) && !isTerminalReply(data)) {
       return;
     }
     // Broadcasting (broadcast.js) sends it to every terminal in the broadcast; otherwise just here.
@@ -753,9 +758,11 @@ function runPendingCommand(tab) {
   const start = startOf(tab);
   const { command } = start;
   if (!command || tab.exited) return;
+  const resuming = start.resumeSession;
   start.command = null;
   start.resumeSession = null; // typed: from here on the agent's hooks report its session
   send(PAGE.input, { id: tab.id, data: `${command}\r` });
+  if (resuming) resumeTyped(tab, command); // typed again if it didn't take
 }
 
 /**
@@ -864,8 +871,8 @@ function checkPaste(tab, text) {
  */
 export async function typePaths(tab, paths) {
   if (!paths.length || tab.exited) return;
-  const shell = state.profiles.find(p => p.id === tab.profile)?.icon;
-  const text = `${quotePaths(paths, shell)} `;
+  const profile = state.profiles.find(p => p.id === tab.profile);
+  const text = `${quotePaths(paths, profile?.shellIcon ?? profile?.icon)} `;
   if (!(await confirmProduction([tab], 'Drop files', text))) return;
   send(PAGE.input, { id: tab.id, data: text });
   /** @type {TabView} */ (tab.view).term.focus();

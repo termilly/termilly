@@ -13,6 +13,9 @@ namespace Termilly.Desktop;
 /// <param name="Source">Where it came from, for grouping: one of <see cref="ProfileSources"/>.</param>
 /// <param name="WorkingDirectory">Start folder; when null the workspace's folder is used.</param>
 /// <param name="Tags">Tags a new terminal of this profile starts with.</param>
+/// <param name="StartCommand">Typed at a new terminal's first prompt (Claude Code: claude).</param>
+/// <param name="ShellIcon">The shell it runs in, when its icon is something else (Claude Code in PowerShell): its
+/// integration and its quoting are the shell's.</param>
 internal sealed record SessionProfile(
     string Id,
     string Name,
@@ -22,7 +25,13 @@ internal sealed record SessionProfile(
     string Source,
     string? WorkingDirectory = null,
     IReadOnlyDictionary<string, string>? Environment = null,
-    IReadOnlyList<string>? Tags = null);
+    IReadOnlyList<string>? Tags = null,
+    string? StartCommand = null,
+    string? ShellIcon = null)
+{
+    /// <summary>The shell's icon: its own, or the one it runs in.</summary>
+    public string Shell => ShellIcon ?? Icon;
+}
 
 /// <summary>
 /// The profiles on offer: shells found on this machine, WSL distributions, the user's own profiles from Settings,
@@ -63,6 +72,10 @@ internal static partial class SessionProfiles
     {
         var profiles = new List<SessionProfile>();
         profiles.AddRange(LocalShells());
+        if (ClaudeCode(profiles) is { } claude)
+        {
+            profiles.Add(claude);
+        }
         profiles.AddRange(WslShells());
         profiles.AddRange(CustomShells(settings.Shells.Profiles ?? [], profiles));
         profiles.AddRange(Connections(settings.Ssh.Connections ?? [], profiles));
@@ -91,6 +104,51 @@ internal static partial class SessionProfiles
         {
             yield return new SessionProfile(Shells.GitBash, "Git Bash", "Git for Windows", ProfileIcons.Bash, $"\"{gitBash}\" --login -i", ProfileSources.Local);
         }
+    }
+
+    /// <summary>Claude Code's profile and command.</summary>
+    public const string ClaudeId = "claude";
+    private const string ClaudeCommand = "claude";
+
+    /// <summary>
+    /// Claude Code, when it's installed (a claude on PATH that isn't a Termilly's own): the first shell, with claude
+    /// typed at its first prompt. Claude gets Termilly's hooks as any claude typed there does, and when it exits the
+    /// shell is still there.
+    /// </summary>
+    private static SessionProfile? ClaudeCode(List<SessionProfile> shells)
+    {
+        if (shells.Count == 0 || FindClaude() is null)
+        {
+            return null;
+        }
+        var shell = shells[0];
+        return new SessionProfile(ClaudeId, "Claude Code", $"claude in {shell.Name}", ProfileIcons.Claude, shell.CommandLine, ProfileSources.Local,
+            StartCommand: ClaudeCommand, ShellIcon: shell.Shell);
+    }
+
+    /// <summary>The real claude on PATH (claude.exe, claude.cmd on Windows), not a Termilly's shim beside its hook helper.</summary>
+    internal static string? FindClaude(string? path = null)
+    {
+        var names = OperatingSystem.IsWindows() ? new[] { AppPaths.Exe(ClaudeCommand), ClaudeCommand + ".cmd" } : [ClaudeCommand];
+        foreach (var dir in (path ?? Environment.GetEnvironmentVariable(SystemVariables.Path) ?? "").Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            try
+            {
+                if (Directory.Exists(dir) && Directory.EnumerateFiles(dir, AgentExecutables.Hook + "*").Any())
+                {
+                    continue; // a Termilly's agent folder
+                }
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException)
+            {
+                continue;
+            }
+            if (names.Select(n => Path.Combine(dir, n)).FirstOrDefault(File.Exists) is { } found)
+            {
+                return found;
+            }
+        }
+        return null;
     }
 
     /// <summary>The ssh client: Windows' ssh.exe, or ssh on other systems.</summary>

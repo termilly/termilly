@@ -10,6 +10,7 @@ import { send, onHost } from './host.js';
 import { state } from './store.js';
 import { bufferLines, scrolledBack, prepareStart } from './terminals.js';
 import { markHibernated } from './hibernate.js';
+import { startResuming } from './resuming.js';
 import { SETTING_VALUES } from './constants.js';
 import { savedResults, restoreResults } from './results.js';
 
@@ -70,6 +71,12 @@ setInterval(() => {
 onHost(HOST.snapshotRequest, () => send(PAGE.snapshotSave, { snapshot: snapshot(), final: true }));
 
 /**
+ * What a terminal's profile types at its first prompt (Claude Code: claude), or null.
+ * @param {Tab} tab
+ */
+const startCommandOf = tab => state.profiles.find(p => p.id === tab.profile)?.startCommand ?? null;
+
+/**
  * At start: gives each restored terminal its saved lines (shown dimmed by writeRestoredOutput). A Claude Code
  * session that was running resumes by itself at the shell's first prompt (terminals.js types its start command);
  * a hibernated one waits for its terminal to be opened (hibernate.js). Nothing else runs by itself.
@@ -91,6 +98,9 @@ export function applySnapshot(saved) {
       markHibernated(tab, session, saved.savedAt, folder);
     } else if (session) {
       prepareStart(tab, { resumeSession: session, command: `claude --resume ${session}` });
+      startResuming(tab, session);
+    } else if (startCommandOf(tab)) {
+      prepareStart(tab, { command: startCommandOf(tab) }); // a Claude Code terminal with nothing to resume: a new claude
     }
   }
 }

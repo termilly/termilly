@@ -257,6 +257,35 @@ public sealed class SessionProfileTests : IDisposable
     }
 
     [Fact]
+    public void Claude_Code_runs_in_its_shell_with_the_shells_integration_and_types_claude()
+    {
+        var script = Path.Combine(_dir, "termilly.ps1");
+        File.WriteAllText(script, "");
+        var claude = new SessionProfile("claude", "Claude Code", "claude in PowerShell", ProfileIcons.Claude, "pwsh.exe -NoLogo", ProfileSources.Local,
+            StartCommand: "claude", ShellIcon: ProfileIcons.PowerShell);
+
+        var (commandLine, vars) = SessionLaunch.WithShellIntegration(claude, new Dictionary<string, string>(), script);
+
+        Assert.StartsWith("pwsh.exe -NoLogo -NoExit -Command", commandLine);
+        Assert.Equal("1", vars["TERMILLY_SHELL_INTEGRATION"]);
+        Assert.Equal(ProfileIcons.PowerShell, claude.Shell);
+    }
+
+    [Fact]
+    public void Claude_is_found_on_path_but_not_a_termillys_own_shim()
+    {
+        var shim = Directory.CreateDirectory(Path.Combine(_dir, "agent")).FullName;
+        var real = Directory.CreateDirectory(Path.Combine(_dir, "bin")).FullName;
+        var name = OperatingSystem.IsWindows() ? "claude.exe" : "claude";
+        File.WriteAllText(Path.Combine(shim, name), "");
+        File.WriteAllText(Path.Combine(shim, OperatingSystem.IsWindows() ? "termilly-hook.exe" : "termilly-hook"), "");
+        File.WriteAllText(Path.Combine(real, name), "");
+
+        Assert.Equal(Path.Combine(real, name), SessionProfiles.FindClaude(string.Join(Path.PathSeparator, shim, real)));
+        Assert.Null(SessionProfiles.FindClaude(shim));
+    }
+
+    [Fact]
     public void The_integration_script_loads_where_running_scripts_is_disabled()
     {
         // A clean Windows: the Restricted policy refuses every .ps1 file, the integration has to load anyway.

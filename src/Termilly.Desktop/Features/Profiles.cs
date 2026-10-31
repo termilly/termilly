@@ -71,7 +71,7 @@ internal sealed class ProfileCatalog : IStartable
 
     /// <summary>What the page needs to list and badge profiles (not their command lines or variables).</summary>
     public IEnumerable<ToPage.ProfileSummary> Summaries() =>
-        _profiles.Select(p => new ToPage.ProfileSummary(p.Id, p.Name, p.Description, p.Icon, p.Source, p.Tags ?? []));
+        _profiles.Select(p => new ToPage.ProfileSummary(p.Id, p.Name, p.Description, p.Icon, p.Source, p.Tags ?? [], p.StartCommand, p.ShellIcon));
 
     public void Post() => _page.Post(new ToPage.ProfileList(Summaries()));
 

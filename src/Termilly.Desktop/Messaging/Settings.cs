@@ -136,7 +136,9 @@ internal static partial class ToPage
         public static string Type => "profiles";
     }
 
-    internal sealed record ProfileSummary(string Id, string Name, string? Description, string Icon, string Source, IReadOnlyList<string> Tags);
+    /// <param name="StartCommand">Typed at a new terminal's first prompt (Claude Code: claude).</param>
+    /// <param name="ShellIcon">The shell it runs in, when its icon is something else.</param>
+    internal sealed record ProfileSummary(string Id, string Name, string? Description, string Icon, string Source, IReadOnlyList<string> Tags, string? StartCommand = null, string? ShellIcon = null);
 
     internal sealed record PluginList(object Plugins) : IHostMessage
     {
