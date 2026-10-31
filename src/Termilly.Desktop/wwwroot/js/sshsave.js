@@ -1,6 +1,6 @@
 // @ts-check
-// When ssh asks for a password in a terminal opened from one of Settings › SSH's connections, a bar offers to save
-// it: typed once more into Termilly's own field, it goes to the system's credential store (never to Termilly's
+// When ssh asks for a password in a terminal opened from one of Settings › SSH's connections and the password typed
+// there works (the connection signs in), a bar offers to save it: typed once more into Termilly's own field, it goes to the system's credential store (never to Termilly's
 // files), and the connection signs in with it from then on, reconnects included. What was typed into ssh itself
 // isn't read: the terminal's input stays the shell's.
 
@@ -22,8 +22,16 @@ const BAR_CLASS = 'ssh-save-bar';
 /** What the bar's buttons do (data-ss). */
 const BAR_ACTION = Object.freeze({ save: 'save', later: 'later' });
 
+/** A password that didn't work: ssh asks again, so it isn't one to keep. */
+const REFUSED = /Permission denied|Authentication failed|Too many authentication failures/i;
+/** Signed in: the server's greeting, or a shell's prompt at the end of the last line. */
+const SIGNED_IN = /Last login|Welcome to|[$#%>] ?$/;
+
 /** Terminals already offered it, so a mistyped password and its second prompt don't offer again. */
 const offered = new WeakSet();
+/** Terminals ssh asked for a password, until they sign in: the bar waits for the password to work. */
+/** @type {WeakMap<Tab, SshConnection>} */
+const asked = new WeakMap();
 
 /**
  * The connection a terminal was opened from, when it signs in without a saved password.
@@ -39,10 +47,17 @@ function connectionOf(tab) {
 onHost(HOST.output, m => {
   const tab = state.tabs.get(m.id);
   if (!tab || offered.has(tab)) return;
-  const lastLine = String(m.data).replace(ESCAPES, '').split(/\r?\n|\r/).pop() ?? '';
-  if (!PASSWORD_PROMPT.test(lastLine)) return;
-  const connection = connectionOf(tab);
-  if (!connection) return;
+  const text = String(m.data).replace(ESCAPES, '');
+  const lastLine = text.split(/\r?\n|\r/).pop() ?? '';
+  if (PASSWORD_PROMPT.test(lastLine)) {
+    // Asked: the offer waits until the password typed into ssh has worked.
+    const connection = connectionOf(tab);
+    if (connection) asked.set(tab, connection);
+    return;
+  }
+  const connection = asked.get(tab);
+  if (!connection || REFUSED.test(text) || !(SIGNED_IN.test(text) || SIGNED_IN.test(lastLine.trimEnd()))) return;
+  asked.delete(tab);
   offered.add(tab);
   showBar(tab, connection);
 });
