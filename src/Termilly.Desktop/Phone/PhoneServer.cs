@@ -92,7 +92,7 @@ internal sealed class PhoneServer : IDisposable
 
     private PhoneServer(IPAddress address, int port, string webRoot, PhoneStore store, PhoneLive live, X509Certificate2 authority, string pushKey, Func<string, Task> testAlert)
     {
-        (_webRoot, _api, _live) = (Path.GetFullPath(webRoot), new PhoneAppApi(store, pushKey, testAlert), live);
+        (_webRoot, _api, _live) = (Path.GetFullPath(webRoot), new PhoneAppApi(store, pushKey, testAlert, BuildOf(webRoot)), live);
         _certificate = store.ServerCertificate(authority, [address], HostName);
         _authorityFile = PhoneCertificates.AuthorityFile(authority);
         _listener = new TcpListener(address, port);
@@ -106,6 +106,11 @@ internal sealed class PhoneServer : IDisposable
     private static string HostName => $"{Dns.GetHostName().ToLowerInvariant()}.local";
 
     /// <summary>Starts on the local network address (TERMILLY_PHONE_BIND overrides it, for tests). IOException when it can't.</summary>
+    /// <summary>The app's build: the newest of its files' times, so a rebuilt app is a new one.</summary>
+    private static string BuildOf(string webRoot) => Directory.Exists(webRoot)
+        ? Directory.EnumerateFiles(webRoot, "*", SearchOption.AllDirectories).Select(File.GetLastWriteTimeUtc).DefaultIfEmpty().Max().Ticks.ToString("x", System.Globalization.CultureInfo.InvariantCulture)
+        : "";
+
     public static PhoneServer Start(int port, string webRoot, PhoneStore store, PhoneLive live, X509Certificate2 authority, string pushKey, Func<string, Task> testAlert)
     {
         var address = Environment.GetEnvironmentVariable("TERMILLY_PHONE_BIND") is { Length: > 0 } bind

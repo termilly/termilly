@@ -15,7 +15,7 @@ const app = /** @type {HTMLElement} */ (document.getElementById('app'));
 
 
 /** What the PC says about this phone. */
-/** @typedef {{ paired: boolean, locked?: boolean, pushKey?: string, alerts?: boolean }} Me */
+/** @typedef {{ paired: boolean, locked?: boolean, pushKey?: string, alerts?: boolean, build?: string }} Me */
 /** What a terminal waits for (js/phone.js). */
 /** @typedef {{ kind: string, tool: string | null, target: string | null, text: string, at: number, always?: boolean }} Waiting */
 /** A terminal as the PC describes it (js/phone.js). */
@@ -118,6 +118,7 @@ const setupScreen = body => show(`<header class="bar"><h1>Termilly</h1></header>
 async function start() {
   try {
     me = await call(API.me);
+    build ||= me?.build ?? ''; // the build loaded now
   } catch {
     return setupScreen(`<p>Can't reach your PC. Is Termilly running, with Settings › Phone on, and this phone on the same Wi-Fi?</p><button class="button" data-do="${DO.retry}">Try again</button>`);
   }
@@ -273,9 +274,27 @@ function openSheet(id, reply = false) {
 
 // ---- The live connection ----
 
+/** The app's build when it loaded (the PC's /api/me says which it serves). */
+let build = '';
+
+/**
+ * A Home Screen app stays open across a restart of Termilly and only connects again: when the PC now serves a newer
+ * build of the app, it loads that one.
+ */
+async function reloadIfRebuilt() {
+  try {
+    const now = /** @type {Me} */ (await call(API.me)).build ?? '';
+    if (!build) build = now;
+    else if (now && now !== build) location.reload();
+  } catch {
+    // The PC isn't answering yet: the next connection asks again.
+  }
+}
+
 function connect() {
   live = new WebSocket(`wss://${location.host}${API.live}`);
   live.addEventListener('open', () => {
+    reloadIfRebuilt();
     connected = true;
     retry = RETRY_MS;
     render();

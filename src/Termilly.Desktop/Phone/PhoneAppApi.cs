@@ -18,7 +18,7 @@ internal readonly record struct PhoneReply(HttpStatusCode Status, string Type, b
 /// holds a token in an HttpOnly cookie), and turning its alerts on, off or testing them. Only a paired phone gets more
 /// than "not paired".
 /// </summary>
-internal sealed class PhoneAppApi(PhoneStore store, string pushKey, Func<string, Task> testAlert)
+internal sealed class PhoneAppApi(PhoneStore store, string pushKey, Func<string, Task> testAlert, string build = "")
 {
     /// <summary>The token's cookie, and how long a phone keeps it.</summary>
     private const string TokenCookie = "termilly";
@@ -43,6 +43,8 @@ internal sealed class PhoneAppApi(PhoneStore store, string pushKey, Func<string,
     private static class Fields
     {
         public const string Paired = "paired";
+        /// <summary>Which build of the app the PC serves: a Home Screen app still open from before reloads on a new one.</summary>
+        public const string Build = "build";
         public const string Locked = "locked";
         public const string PushKey = "pushKey";
         public const string Alerts = "alerts";
@@ -76,8 +78,8 @@ internal sealed class PhoneAppApi(PhoneStore store, string pushKey, Func<string,
         var device = DeviceOf(request);
         if (request.Path == Api.Me)
         {
-            return Json(device is null ? new JsonObject { [Fields.Paired] = false, [Fields.Locked] = store.IsLocked }
-                : new JsonObject { [Fields.Paired] = true, [Fields.PushKey] = pushKey, [Fields.Alerts] = store.PushTargets(device).Count > 0 });
+            return Json(device is null ? new JsonObject { [Fields.Paired] = false, [Fields.Locked] = store.IsLocked, [Fields.Build] = build }
+                : new JsonObject { [Fields.Paired] = true, [Fields.PushKey] = pushKey, [Fields.Alerts] = store.PushTargets(device).Count > 0, [Fields.Build] = build });
         }
         if (request.Path == Api.Pair)
         {
