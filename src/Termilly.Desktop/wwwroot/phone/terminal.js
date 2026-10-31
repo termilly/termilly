@@ -378,6 +378,7 @@ export function terminalView(app) {
     if (!type(text.includes('\n') ? PASTED.start + text + PASTED.end : text)) return;
     field.value = '';
     compose.stopListening(); // sent: no more dictation into it
+    field.blur(); // and the keyboard goes, which ends the keyboard's own dictation (it listens while the box has it)
     compose.changed();
     setTimeout(() => type('\r'), ENTER_AFTER_MS);
   }
