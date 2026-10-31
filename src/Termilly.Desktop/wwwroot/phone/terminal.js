@@ -10,14 +10,19 @@
 
 import { SCREEN, terminalTouch } from './gestures.js';
 import { snippetSheet, asTyped } from './snippets.js';
-import { composer, COMPOSE } from './compose.js';
+import { composer, COMPOSE, CLEAR_INPUT } from './compose.js';
 
 /** What the key bar sends (data-key), as a terminal reads it. */
 const KEYS = Object.freeze({
-  esc: '\x1b', tab: '\t', up: '\x1b[A', down: '\x1b[B', right: '\x1b[C', left: '\x1b[D', enter: '\r',
+  esc: '\x1b', tab: '\t', up: '\x1b[A', down: '\x1b[B', right: '\x1b[C', left: '\x1b[D', bksp: '\x7f', enter: '\r',
 });
+/** Ctrl+Backspace, as the PC's terminal sends it: a word back in Claude Code and PowerShell (one character in bash). */
+const CTRL_BACKSPACE = '\x08';
+/** Backspace held down repeats: after this long, this often. */
+const REPEAT = Object.freeze({ after: 450, every: 70 });
+const BACKSPACE = 'bksp';
 /** The key bar's buttons, in order: what each sends and shows. Ctrl and Paste are handled apart. */
-const BAR = [['esc', 'esc'], ['tab', 'tab'], ['ctrl', 'ctrl'], ['up', '↑'], ['down', '↓'], ['left', '←'], ['right', '→'], ['enter', '⏎'], ['paste', 'paste'], ['snip', 'snip']];
+const BAR = [['esc', 'esc'], ['tab', 'tab'], ['ctrl', 'ctrl'], ['up', '↑'], ['down', '↓'], ['left', '←'], ['right', '→'], ['bksp', '⌫'], ['enter', '⏎'], ['paste', 'paste'], ['snip', 'snip']];
 const CTRL = 'ctrl';
 const PASTE = 'paste';
 const SNIP = 'snip';
@@ -42,10 +47,8 @@ const OP = Object.freeze({ watch: 'watch', unwatch: 'unwatch', input: 'input', s
 const TV = Object.freeze({ back: 'back', answer: 'answer', stop: 'stop' });
 /** Claude Code's (and Codex's) interrupt, as the PC's stop button sends it (js/agentline.js stopAgent). */
 const STOP = '\x1b';
-/** Then the box cleared: stopped before it answered, Claude Code puts the message back in its box. Ctrl+U clears a
- * line, Backspace joins the one above (cursor at the end); in an empty box they do nothing. */
-const CLEAR = '\x15' + '\x7f\x15'.repeat(20);
-/** How long Claude Code takes to put the message back. */
+/** Then the box cleared (compose.js CLEAR_INPUT): stopped before it answers, Claude Code puts the message back in it,
+ * which takes it this long. */
 const CLEAR_AFTER_MS = 800;
 /** The agent states the stop button shows in (js/agentline.js isAgentWorking). */
 const STOPPABLE = ['working', 'needs-input'];
@@ -194,7 +197,10 @@ export function terminalView(app) {
       if (!window.confirm(`${shown.title} is tagged prod. Type into it from this phone?`)) return false;
       confirmed = true;
     }
-    if (ctrl && data.length === 1 && /[a-z@[\\\]^_]/i.test(data)) {
+    if (ctrl && data === KEYS.bksp) {
+      data = CTRL_BACKSPACE;
+      setCtrl(false);
+    } else if (ctrl && data.length === 1 && /[a-z@[\\\]^_]/i.test(data)) {
       data = String.fromCharCode(data.toUpperCase().charCodeAt(0) - CTRL_OFFSET);
       setCtrl(false);
     }
@@ -421,7 +427,7 @@ export function terminalView(app) {
     else if (action === TV.answer && shown) app.answer(shown.id);
     else if (action === TV.stop && shown && typing && type(STOP)) {
       const stopped = shown.id;
-      setTimeout(() => { if (shown?.id === stopped) type(CLEAR); }, CLEAR_AFTER_MS);
+      setTimeout(() => { if (shown?.id === stopped) type(CLEAR_INPUT); }, CLEAR_AFTER_MS);
     }
     else if (key === CTRL) setCtrl(!ctrl);
     else if (key === SNIP) snippets.open();
@@ -436,6 +442,20 @@ export function terminalView(app) {
     // The keyboard stays with the terminal after a key, except under a message box (see the tap).
     if (key && key !== SNIP && !compose.field()) term?.focus();
   });
+
+  // Backspace held down goes on deleting, as a phone's keyboard does (the first press is the click's).
+  let repeat = 0;
+  const stopRepeat = () => {
+    clearTimeout(repeat);
+    clearInterval(repeat);
+    repeat = 0;
+  };
+  view.addEventListener('pointerdown', e => {
+    if (!/** @type {HTMLElement} */ (e.target).closest(`[data-key="${BACKSPACE}"]`)) return;
+    stopRepeat();
+    repeat = window.setTimeout(() => { repeat = window.setInterval(() => type(KEYS.bksp), REPEAT.every); }, REPEAT.after);
+  });
+  for (const end of ['pointerup', 'pointercancel']) view.addEventListener(end, stopRepeat);
 
   /** Back after the connection dropped: the terminal shown starts over with what it shows. */
   const rewatch = () => { if (shown && term) app.send({ op: OP.watch, pane: shown.id, cols: term.cols, rows: term.rows }); };

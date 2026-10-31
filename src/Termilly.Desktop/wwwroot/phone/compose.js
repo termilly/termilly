@@ -13,13 +13,18 @@ const MODE = Object.freeze({ keys: 'keys', claude: 'claude' });
 /** The box's form (terminal.js sends from it). */
 export const COMPOSE = '.tv-compose';
 /** What its own buttons do (data-c). */
-const C = Object.freeze({ plus: 'plus', mic: 'mic', mode: 'mode', more: 'more', fill: 'fill', shiftTab: 'shift-tab', pasteIn: 'paste-in' });
+const C = Object.freeze({ plus: 'plus', mic: 'mic', mode: 'mode', more: 'more', fill: 'fill', shiftTab: 'shift-tab', pasteIn: 'paste-in', clear: 'clear' });
+/** Empties Claude Code's own box (what was typed in the terminal): Ctrl+U clears a line, Backspace joins the one
+ * above (the cursor is at the end); in an empty box they do nothing. Stop sends it too (terminal.js). */
+export const CLEAR_INPUT = '\x15' + '\x7f\x15'.repeat(20);
+/** Under a Claude terminal, Paste and Snippets are in the +, not on the key bar. */
+const IN_PLUS = ['paste', 'snip'];
 /** Claude's commands the + offers: they go in the field, to send or change first. */
 const COMMANDS = ['/compact', '/clear'];
 /** Shift+Tab: Claude Code's next mode (accept edits, plan). */
 const SHIFT_TAB = '\x1b[Z';
 /** One bar's keys in keys mode, and the ones under its ⋯ (terminal.js BAR). */
-const FEW_KEYS = ['esc', 'tab', 'ctrl', 'up', 'down', 'enter'];
+const FEW_KEYS = ['esc', 'tab', 'ctrl', 'up', 'down', 'bksp', 'enter'];
 const MORE_KEYS = ['left', 'right', 'paste', 'snip'];
 /** Its send buttons (Messages' arrow, One bar's). */
 const SEND = '.m-go, .b-go';
@@ -61,11 +66,12 @@ export function composer(view, app) {
   let listening = null;
 
   const keyButtons = (/** @type {[string, string][]} */ keys) => keys.map(([key, label]) => `<button data-key="${key}">${label}</button>`).join('');
-  const keybar = () => `<div class="tv-foot keybar">${keyButtons(app.keys)}</div>`;
+  /** @param {boolean} [claude] Under a Claude terminal: without what the + has. */
+  const keybar = claude => `<div class="tv-foot keybar">${keyButtons(claude ? app.keys.filter(([key]) => !IN_PLUS.includes(key)) : app.keys)}</div>`;
 
   /** Messages: the round field with the + and the microphone, over the key bar. */
   const messagesHtml = () => `<form class="tv-foot tv-compose msg"><button type="button" class="m-plus" data-c="${C.plus}" aria-label="More">${ICON.plus}</button>
-    <div class="m-pill">${FIELD}${dictation() === DICTATION.termilly ? `<button type="button" class="m-mic" data-c="${C.mic}" aria-label="Dictate">${ICON.mic}</button>` : ''}<button type="submit" class="m-go" aria-label="Send" hidden>${ICON.up}</button></div></form>${keybar()}`;
+    <div class="m-pill">${FIELD}${dictation() === DICTATION.termilly ? `<button type="button" class="m-mic" data-c="${C.mic}" aria-label="Dictate">${ICON.mic}</button>` : ''}<button type="submit" class="m-go" aria-label="Send" hidden>${ICON.up}</button></div></form>${keybar(true)}`;
 
   /** One bar: the switch, then the keys or the field. The keys that don't fit wait under ⋯. */
   function barHtml() {
@@ -170,7 +176,7 @@ export function composer(view, app) {
     switch (el.dataset.c) {
       case C.plus:
         if (view.querySelector(PART.menu)) closeMenu();
-        else menu(`<button data-c="${C.pasteIn}">Paste</button><button data-key="snip">Snippets</button>${COMMANDS.map(c => `<button data-c="${C.fill}" data-text="${c}">${c}</button>`).join('')}<button data-c="${C.shiftTab}">Change mode (Shift+Tab)</button>`);
+        else menu(`<button data-c="${C.clear}">Clear text from terminal</button><button data-c="${C.pasteIn}">Paste</button><button data-key="snip">Snippets</button>${COMMANDS.map(c => `<button data-c="${C.fill}" data-text="${c}">${c}</button>`).join('')}<button data-c="${C.shiftTab}">Change mode (Shift+Tab)</button>`);
         break;
       case C.more:
         if (view.querySelector(PART.menu)) closeMenu();
@@ -186,6 +192,7 @@ export function composer(view, app) {
         break;
       case C.fill: closeMenu(); fill(el.dataset.text ?? ''); break;
       case C.shiftTab: closeMenu(); app.type(SHIFT_TAB); break;
+      case C.clear: closeMenu(); app.type(CLEAR_INPUT); break;
       case C.mic: dictate(); break;
       case C.mode:
         localStorage.setItem(MODE_KEY, el.dataset.mode ?? MODE.keys);
