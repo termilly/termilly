@@ -17,6 +17,8 @@ const GLIDE = Object.freeze({ friction: 0.95, least: 0.02, frame: 16, still: 100
 export const SCREEN = '.xterm-screen';
 /** A line's height before xterm has drawn one (px). */
 const LINE = 16;
+/** The touch events a finger sends (manage.js swipes rows with them too). */
+export const TOUCH = Object.freeze({ start: 'touchstart', move: 'touchmove', end: 'touchend' });
 /** How the terminal scrolls back (Settings › Scrolling), and where the phone keeps it. */
 export const SCROLLING = Object.freeze({ key: 'termilly.terminal.scrolling', smooth: 'smooth', lines: 'lines' });
 const smooth = () => localStorage.getItem(SCROLLING.key) !== SCROLLING.lines;
@@ -96,7 +98,7 @@ export function terminalTouch(box, on) {
     gliding = requestAnimationFrame(() => glide(vx * GLIDE.friction, vy * GLIDE.friction));
   }
 
-  box.addEventListener('touchstart', e => {
+  box.addEventListener(TOUCH.start, e => {
     e.stopPropagation();
     cancelAnimationFrame(gliding);
     const [t] = e.touches;
@@ -106,7 +108,7 @@ export function terminalTouch(box, on) {
     } else if (e.touches.length === 1 && !pinch) drag = { x: t.clientX, y: t.clientY, at: e.timeStamp, vx: 0, vy: 0, moved: false };
   }, FIRST);
 
-  box.addEventListener('touchmove', e => {
+  box.addEventListener(TOUCH.move, e => {
     e.stopPropagation();
     e.preventDefault();
     if (pinch && e.touches.length === 2) {
@@ -124,7 +126,7 @@ export function terminalTouch(box, on) {
     pan(dx, dy);
   }, FIRST);
 
-  box.addEventListener('touchend', e => {
+  box.addEventListener(TOUCH.end, e => {
     e.stopPropagation();
     if (pinch) {
       if (e.touches.length === 0) {

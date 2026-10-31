@@ -32,6 +32,8 @@ code { padding: 1px 5px; border-radius: 5px; background: var(--bg); font: 13.5px
 .bar { display: flex; gap: 10px; align-items: center; max-width: 600px; margin: 0 auto; padding: 14px 20px 8px; }
 .bar h1 { flex: 1; }
 .conn { color: var(--attention); font-size: 13px; }
+.add-btn { display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 0; border-radius: 50%; background: var(--raised); color: var(--accent); }
+.add-btn svg, .m-sheet .chip.add svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
 .setup { padding-top: 10px; }
 .step { display: flex; gap: 12px; margin: 0 0 14px; padding: 14px; border-radius: 14px; background: var(--raised); }
 /* The text beside the number takes what's left, no more: the code box in it would push the Pair button off the screen. */
@@ -180,3 +182,47 @@ main.tabbed { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
 .more-value { color: var(--muted); font-size: 14px; }
 .chev { flex: none; color: var(--muted); font-size: 20px; line-height: 1; }
 .back-row { margin: 0 0 10px; padding: 4px 6px; border: 0; background: none; color: var(--accent); font: inherit; font-size: 16px; }
+
+/* ---- Managing terminals (manage.js): swipe rows, the Remote section, the sheets ---- */
+.swipe { position: relative; overflow: hidden; }
+.swipe + .swipe { border-top: 1px solid var(--line); }
+.swipe > .row { position: relative; z-index: 1; background: var(--raised); transition: transform .2s ease; }
+.swipe.open > .row { transform: translateX(-148px); }
+.swipe-acts { position: absolute; inset: 0 0 0 auto; display: flex; }
+.swipe-acts button { width: 74px; border: 0; background: #5b5b66; color: #fff; font: 600 14px/1 inherit; }
+.swipe-acts button.red { background: var(--danger); }
+.section-row { display: flex; align-items: center; margin: 18px 8px 6px; }
+.section-row .section { flex: 1; margin: 0; }
+.link { padding: 0; border: 0; background: none; color: var(--accent); font: inherit; font-size: 15px; }
+.more-link { display: block; margin: 8px auto 0; }
+button.row { width: 100%; border: 0; background: none; color: inherit; font: inherit; text-align: left; }
+.list > button.row + button.row { border-top: 1px solid var(--line); }
+.chev { color: var(--muted); font-size: 20px; }
+.prod { padding: 1px 6px; border-radius: 6px; background: color-mix(in srgb, var(--danger) 18%, transparent); color: var(--danger); font-size: 11px; font-weight: 700; }
+.m-sheet .list, .m-sheet .form, .m-sheet .tile, .m-sheet .chip, .m-sheet .seg { background: var(--bg); }
+.m-sheet.tall { max-height: calc(100vh - 40px); }
+.m-head { display: flex; align-items: center; margin: 0 0 8px; }
+.m-head h2 { flex: 1; margin: 0; font-size: 17px; text-align: center; }
+.m-head button, .m-head > span { min-width: 70px; padding: 6px 0; border: 0; background: none; color: var(--accent); font: inherit; font-size: 17px; text-align: left; }
+.m-head button.strong { font-weight: 600; text-align: right; }
+.tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.tile { display: flex; flex-direction: column; gap: 6px; align-items: center; min-width: 0; padding: 10px 4px 8px; border: 0; border-radius: 13px; color: var(--text); font: 600 12px/1.2 inherit; text-align: center; }
+.tile span:last-child { max-width: 100%; overflow-wrap: anywhere; }
+.tile.on, .chip.on { box-shadow: inset 0 0 0 2px var(--accent); }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { display: inline-flex; gap: 7px; align-items: center; padding: 6px 11px 6px 7px; border: 0; border-radius: 10px; color: var(--text); font: 600 14px/1.2 inherit; }
+.chip .badge { width: 22px; height: 22px; font-size: 8px; }
+.chip.add { padding-left: 11px; color: var(--accent); }
+.form { overflow: hidden; border-radius: 12px; }
+.f-row { display: flex; gap: 10px; align-items: center; min-height: 46px; padding: 0 14px; }
+.f-row + .f-row { border-top: 1px solid var(--line); }
+.f-row > span { flex: none; width: 92px; }
+.f-row input, .f-row select { flex: 1; min-width: 0; padding: 10px 0; border: 0; background: none; color: var(--text); font: inherit; font-size: 16px; outline: none; }
+.f-row input::placeholder { color: var(--muted); }
+.form + .form, .seg + .form { margin-top: 12px; }
+.seg { display: flex; padding: 3px; border-radius: 10px; }
+.seg button { flex: 1; padding: 8px 0; border: 0; border-radius: 8px; background: none; color: var(--text); font: 600 14px/1 inherit; }
+.seg button.on { background: var(--accent); color: var(--on-accent); }
+.m-sheet .hint { margin: 6px 4px 0; font-size: 13px; }
+.m-sheet .s-head h2 { font-size: 20px; }
+.c-title { margin: 0 0 6px; font-size: 20px; }

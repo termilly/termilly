@@ -239,7 +239,7 @@ function connectionHtml(c, editing) {
  * What's wrong with a connection as entered, or null.
  * @param {SshConnection} value
  */
-function connectionError(value) {
+export function connectionError(value) {
   const unsafe = [value.host, value.user, value.jump].some(v => v && !SAFE_HOST.test(v));
   if (!value.name || !value.host) return 'A name and a host are needed.';
   if (unsafe) return 'Host, user and jump hosts can’t have spaces or quotes.';

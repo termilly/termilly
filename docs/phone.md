@@ -2,7 +2,7 @@
 
 Termilly can serve a small app to phones on your network: your workspaces and terminals live, the agents that wait
 for you (Approve, Reject or a reply), any terminal live, and alerts on a locked phone when an agent needs you. With
-**Allow typing** on, the phone can also type into a terminal. Termilly serves it itself: there's no account, no relay
+**Allow typing** on, the phone can also type into a terminal, open and close terminals and add SSH hosts. Termilly serves it itself: there's no account, no relay
 and no cloud service of ours. It is **off by default** (Settings › Phone).
 
 ## How it fits together
@@ -41,7 +41,7 @@ nothing.
 | A device on your network that isn't paired | Without a paired phone's token, the app gets nothing but "pair first". A pairing code expires after 5 minutes or 10 wrong tries. |
 | A web page in the phone's browser | The cookie is `SameSite=Strict`, so another site can't use it, and the app's pages forbid scripts from elsewhere (CSP). |
 | A lost or stolen phone | Settings › Phone lists the paired phones; **Remove** forgets one at once and closes its connection. Turning the feature off stops the server. |
-| A paired phone (or its thief) typing commands | Typing is off by default (**Allow typing**). Without it, a phone can only answer an agent that is waiting: Approve, Approve and don't ask again, Reject, or a reply, and Termilly checks it's still waiting before typing anything. Terminals tagged prod ask on the phone first. |
+| A paired phone (or its thief) typing commands | Typing is off by default (**Allow typing**). Without it, a phone can only answer an agent that is waiting: Approve, Approve and don't ask again, Reject, or a reply, and Termilly checks it's still waiting before typing anything. Terminals tagged prod ask on the phone first. Opening, closing, renaming and moving terminals and adding SSH hosts need **Allow typing** too; an SSH host added from a phone never carries a password or key (the PC asks for a password itself). |
 | Apple or Google | An alert is encrypted for that phone alone; the push service sees only that one was sent, when, and how big. **Hide details in alerts** leaves even the terminal's name out. Alert text is redacted (the same redaction as history) and cut to 180 characters. |
 
 ## What it does *not* defend against

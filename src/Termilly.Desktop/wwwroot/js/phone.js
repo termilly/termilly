@@ -16,6 +16,7 @@ import { agentInput } from './terminals.js';
 import { placeholders } from './snippets.js';
 import { THEMES, THEME_BASE, themeId, onSystemThemeChange } from './themes.js';
 import { termTheme } from './terminals.js';
+import { placesForPhone } from './phonemanage.js';
 
 /** How long changes settle before the phones hear of them. */
 const SEND_AFTER_MS = 300;
@@ -38,6 +39,11 @@ const WAITING = Object.freeze({ permission: 'permission', question: 'question', 
 /** The badge marks the phone draws: the desktop's pixel words as text. */
 const WORDS = { [PROFILE_ICON.serial]: 'COM', [PROFILE_ICON.ssh]: 'SSH', [PROFILE_ICON.wsl]: 'WSL' };
 const CLAUDE_BADGE = 'claude';
+/**
+ * A badge's text for a profile's icon, as the PC's sidebar shows it.
+ * @param {string} icon
+ */
+const badgeOf = icon => /** @type {Record<string, string>} */ (WORDS)[icon] ?? /** @type {Record<string, string>} */ (BADGES)[icon] ?? '>_';
 
 /**
  * Waiting on a permission prompt (not a question, which needs typing).
@@ -82,7 +88,7 @@ function terminalOf(tab) {
   const activity = activityOf(tab);
   return {
     id: tab.id, ws: tab.wsId, title: tabTitle(tab), icon,
-    badge: /** @type {Record<string, string>} */ (WORDS)[icon] ?? /** @type {Record<string, string>} */ (BADGES)[icon] ?? '>_',
+    badge: badgeOf(icon),
     agent: tab.agent?.state ?? null,
     activity: activity?.kind ?? (tab.exited ? 'exited' : null),
     percent: activity?.percent ?? null,
@@ -127,7 +133,9 @@ function snapshot() {
     notes: notesForPhone(),
     // Its themes, the one it shows now and its terminals' colours then (a theme plugin's, if one is chosen).
     themes: PHONE_THEMES, pcTheme: themeId(), pcTerminal: termTheme(),
-    workspaces: state.workspaces.map(w => ({ id: w.id, name: w.name, color: w.color })),
+    workspaces: state.workspaces.map(w => ({ id: w.id, name: w.name, color: w.color, cwd: w.cwd ?? null })),
+    // What a phone may open a terminal on, and where it opens by default (only while it may type: js/phonemanage.js).
+    places: typing ? placesForPhone(badgeOf) : [], activeWs: state.activeId,
     terminals: [...state.tabs.values()].filter(t => t.wsId && wsById(t.wsId) && !t.virtual).map(terminalOf),
   };
 }
@@ -136,7 +144,7 @@ const publish = debounce(() => {
   if (state.settings.phone?.enabled) send(PAGE.phoneState, { state: snapshot() });
 }, SEND_AFTER_MS);
 
-for (const event of [EVENTS.agent, EVENTS.tab, EVENTS.tabClosed, EVENTS.workspaces, EVENTS.settings]) on(event, publish);
+for (const event of [EVENTS.agent, EVENTS.tab, EVENTS.tabClosed, EVENTS.workspaces, EVENTS.settings, EVENTS.profiles]) on(event, publish);
 // Windows switched light and dark: the "system" theme is the other one now.
 onSystemThemeChange(publish);
 // A terminal resized on the PC: the phones draw it at its new size.

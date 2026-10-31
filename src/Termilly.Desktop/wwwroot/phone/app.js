@@ -8,6 +8,7 @@
 import { terminalView, activityHtml, TEXT_SIZE } from './terminal.js';
 import { TAB, SETTING, TEXT_SIZES, navHtml, notesHtml, settingsHtml, themesHtml } from './tabs.js';
 import { SCROLLING } from './gestures.js';
+import { manager } from './manage.js';
 import { applyLook, chooseLook, chosenLook, looks } from './theme.js';
 
 const app = /** @type {HTMLElement} */ (document.getElementById('app'));
@@ -19,10 +20,12 @@ const app = /** @type {HTMLElement} */ (document.getElementById('app'));
 /** @typedef {{ kind: string, tool: string | null, target: string | null, text: string, at: number, always?: boolean }} Waiting */
 /** A terminal as the PC describes it (js/phone.js). */
 /** @typedef {{ id: string, ws: string, title: string, icon: string, badge: string, agent: string | null, activity: string | null, percent: number | null, hint: string | null, line: string | null, waiting: Waiting | null, production: boolean, cols: number | null, rows: number | null }} Terminal */
-/** @typedef {import('./theme.js').Themed & { typing?: boolean, snippets?: import('./snippets.js').PhoneSnippet[], notes?: import('./tabs.js').Note[], workspaces: { id: string, name: string, color: string }[], terminals: Terminal[] }} Snapshot */
+/** @typedef {import('./theme.js').Themed & { typing?: boolean, snippets?: import('./snippets.js').PhoneSnippet[], notes?: import('./tabs.js').Note[], workspaces: { id: string, name: string, color: string, cwd: string | null }[], terminals: Terminal[], places?: import('./manage.js').Place[], activeWs?: string }} Snapshot */
 
 /** The PC's API for the app (PhoneServer, PhoneAppApi). */
 const API = Object.freeze({ me: '/api/me', pair: '/api/pair', forget: '/api/forget', push: '/api/push', pushOff: '/api/push/off', pushTest: '/api/push/test', live: '/api/live' });
+/** The home's element: what the tab shown draws. */
+const HOME = 'home';
 /** The PC's answer to a phone that isn't paired. */
 const FORBIDDEN = 403;
 /** What the app's buttons do (data-do). */
@@ -131,7 +134,8 @@ async function start() {
       <button class="button" type="submit">Pair</button></div></form>
       <p>A name this PC knows already means that phone again: its old pairing goes.</p><p class="error" data-error></p></div></div>`);
   }
-  show('<header class="bar"><h1 data-title>Termilly</h1><span class="conn" data-conn></span></header><main id="home" class="tabbed"></main><div id="nav"></div><div id="sheet"></div><div class="toast" data-toast hidden></div>');
+  show(`<header class="bar"><h1 data-title>Termilly</h1><span class="conn" data-conn></span><span data-add></span></header><main id="${HOME}" class="tabbed"></main><div id="nav"></div><div id="sheet"></div><div class="toast" data-toast hidden></div>`);
+  manage.swipe(/** @type {HTMLElement} */ (document.getElementById(HOME)));
   connect();
   render();
   // The phone allows alerts already but the PC has none for this pairing (it's new): on again, without asking.
@@ -204,17 +208,20 @@ function terminalsHtml() {
     + (waiting.length ? `<div class="section">Waiting for you · ${waiting.length}</div>${waiting.map(cardHtml).join('')}` : '')
     + (!snap.terminals.length ? `<p class="muted center">${connected ? 'No terminals open on your PC.' : 'Connecting to your PC.'}</p>` : '')
     + groups.map(({ w, list }) => `<div class="ws"><span class="dot" style="background:${esc(w.color || DEFAULT_COLOR)}"></span>${esc(w.name)}<span class="count">${list.length}</span></div>
-      <div class="list">${list.map(rowHtml).join('')}</div>`).join('');
+      <div class="list">${list.map(t => manage.rowWrap(t, rowHtml(t))).join('')}</div>`).join('')
+    + manage.remoteHtml();
 }
 
 function render() {
-  const home = document.getElementById('home');
+  const home = document.getElementById(HOME);
   if (!home) return;
   const conn = app.querySelector('[data-conn]');
   if (conn) conn.textContent = connected ? '' : 'Reconnecting';
   const title = app.querySelector('[data-title]');
   const onThemes = tab === TAB.settings && themesPage;
   if (title) title.textContent = onThemes ? 'Themes' : /** @type {Record<string, string>} */ (TITLE)[tab];
+  const add = app.querySelector('[data-add]');
+  if (add) add.innerHTML = tab === TAB.terminals ? manage.addButton() : '';
   home.innerHTML = tab === TAB.notes ? notesHtml(snap.notes ?? [], noteParts)
     : onThemes ? themesHtml(looks(snap), chosenLook())
     : tab === TAB.settings ? settingsHtml({ alerts: alertsBody(), size: textSize(), scrolling: localStorage.getItem(SCROLLING.key) ?? SCROLLING.smooth, host: location.host, connected, look: chosenLook(), looks: looks(snap) })
@@ -282,8 +289,11 @@ function connect() {
       restyle();
       render();
       if (terminalShown.viewing) terminalShown.update(terminal(terminalShown.viewing), !!snap.typing);
+      manage.changed();
     } else if (m.type === LIVE.screen || m.type === LIVE.output) {
       terminalShown.message(m);
+    } else if (m.type === LIVE.answered && manage.answered(m)) {
+      // Opening, closing and the rest (manage.js) said how it went.
     } else if (m.type === LIVE.answered) {
       // Only a failure is said; an answer that went through just closes its sheet.
       if (!m.ok) toast(m.error || 'That didn\'t go through.');
@@ -379,6 +389,10 @@ app.addEventListener('click', e => {
     window.scrollTo(0, 0);
     return;
   }
+  if (manage.click(/** @type {HTMLElement} */ (e.target))) {
+    e.stopPropagation();
+    return;
+  }
   const target = /** @type {HTMLElement} */ (e.target).closest('[data-do]');
   if (!target) return;
   const id = target.getAttribute('data-id') ?? '';
@@ -447,6 +461,15 @@ const terminalShown = terminalView({
   toast,
   answer: id => openSheet(id),
   wsName: id => wsOf(id)?.name ?? '',
+});
+
+/** Opening, closing and moving terminals, the Remote section and adding an SSH host (manage.js). */
+const manage = manager({
+  snap: () => snap,
+  send: message => { if (live?.readyState === OPEN) live.send(JSON.stringify(message)); },
+  toast,
+  openTerminal: id => { const t = terminal(id); if (t) terminalShown.open(t, !!snap.typing); },
+  render,
 });
 
 if (hasWorker) navigator.serviceWorker.register('/sw.js');
