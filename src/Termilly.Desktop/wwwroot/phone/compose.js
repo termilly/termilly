@@ -34,6 +34,12 @@ const ICON = Object.freeze({
 
 const FIELD = '<textarea rows="1" placeholder="Message Claude" enterkeyhint="send" autocapitalize="sentences"></textarea>';
 
+/** How the microphone dictates (Settings › Dictation): the keyboard's (the default; iOS asks nothing) or Termilly's own
+ * (no keyboard in the way, but iOS asks for the microphone each time the app starts). */
+export const DICTATION = Object.freeze({ key: 'termilly.dictation', keyboard: 'keyboard', termilly: 'termilly' });
+/** @returns {string} */
+export const dictation = () => (localStorage.getItem(DICTATION.key) === DICTATION.termilly ? DICTATION.termilly : DICTATION.keyboard);
+
 /** @returns {string} */
 export const composeStyle = () => (localStorage.getItem(COMPOSE_STYLE.key) === COMPOSE_STYLE.bar ? COMPOSE_STYLE.bar : COMPOSE_STYLE.messages);
 
@@ -121,7 +127,7 @@ export function composer(view, app) {
       stopListening();
       return;
     }
-    if (!Speech) {
+    if (!Speech || dictation() === DICTATION.keyboard) {
       field()?.focus();
       app.toast('Tap the microphone on the keyboard to dictate.');
       return;
