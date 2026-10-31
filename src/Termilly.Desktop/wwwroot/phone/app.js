@@ -5,7 +5,7 @@
 // Reject, or a reply); a terminal live (terminal.js); and this phone's alerts (Web Push). A bar at the bottom goes
 // between the terminals, the PC's notifications and this phone's settings (tabs.js).
 
-import { terminalView, TEXT_SIZE } from './terminal.js';
+import { terminalView, activityHtml, TEXT_SIZE } from './terminal.js';
 import { TAB, SETTING, TEXT_SIZES, navHtml, notesHtml, settingsHtml, themesHtml } from './tabs.js';
 import { applyLook, chooseLook, chosenLook, looks } from './theme.js';
 
@@ -17,7 +17,7 @@ const app = /** @type {HTMLElement} */ (document.getElementById('app'));
 /** What a terminal waits for (js/phone.js). */
 /** @typedef {{ kind: string, tool: string | null, target: string | null, text: string, at: number, always?: boolean }} Waiting */
 /** A terminal as the PC describes it (js/phone.js). */
-/** @typedef {{ id: string, ws: string, title: string, icon: string, badge: string, agent: string | null, activity: string | null, line: string | null, waiting: Waiting | null, production: boolean, cols: number | null, rows: number | null }} Terminal */
+/** @typedef {{ id: string, ws: string, title: string, icon: string, badge: string, agent: string | null, activity: string | null, percent: number | null, hint: string | null, line: string | null, waiting: Waiting | null, production: boolean, cols: number | null, rows: number | null }} Terminal */
 /** @typedef {import('./theme.js').Themed & { typing?: boolean, snippets?: import('./snippets.js').PhoneSnippet[], notes?: import('./tabs.js').Note[], workspaces: { id: string, name: string, color: string }[], terminals: Terminal[] }} Snapshot */
 
 /** The PC's API for the app (PhoneServer, PhoneAppApi). */
@@ -47,8 +47,6 @@ const TIME = Object.freeze({ ms: 1000, minute: 60, hour: 3600 });
 const AGE_EVERY_MS = 30000;
 /** The workspace colour when the PC sends none. */
 const DEFAULT_COLOR = '#8b7bff';
-/** Agent states (AgentStates.cs) the home shows with a dot. */
-const DOT = Object.freeze({ working: 'work', 'needs-input': 'wait', attention: 'wait', error: 'err', done: 'done' });
 
 const ios = /iPhone|iPad|iPod/.test(navigator.userAgent);
 /** Opened from the Home Screen, where iPhone keeps the app's own storage (and its alerts). */
@@ -156,8 +154,7 @@ function cardHtml(t) {
 
 /** @param {Terminal} t */
 function rowHtml(t) {
-  const dot = (/** @type {Record<string, string>} */ (DOT))[t.agent ?? ''] ?? (t.activity ? 'work' : 'idle');
-  return `<div class="row" data-do="${DO.term}" data-id="${t.id}">${badge(t)}<div class="r-text"><div class="r-name">${esc(t.title)}</div><div class="r-line">${esc(t.line ?? '')}</div></div><span class="state s-${dot}"></span></div>`;
+  return `<div class="row" data-do="${DO.term}" data-id="${t.id}">${badge(t)}<div class="r-text"><div class="r-name">${esc(t.title)}</div><div class="r-line">${esc(t.line ?? '')}</div></div><span class="activity-slot">${activityHtml(t)}</span></div>`;
 }
 
 /** The phone's answer when it allows alerts. */

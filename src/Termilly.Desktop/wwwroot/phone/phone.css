@@ -68,12 +68,25 @@ form .button { flex: none; }
 .r-text { flex: 1; min-width: 0; }
 .r-name { font-size: 15.5px; }
 .r-line { overflow: hidden; color: var(--muted); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
-.state { flex: none; width: 8px; height: 8px; border-radius: 50%; }
-.s-work { background: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent); }
-.s-wait { background: var(--attention); }
-.s-err { background: var(--danger); }
-.s-done { background: var(--ok); }
-.s-idle { background: var(--line); }
+/* A terminal's activity, drawn as on the PC (app.css .activity): a spinner, a progress ring, a pulsing dot, a tick. */
+.activity-slot { display: inline-flex; flex: none; align-items: center; justify-content: center; min-width: 14px; }
+.activity-slot:empty { display: none; }
+.activity { --size: 13px; --c: var(--accent); display: inline-block; flex: none; box-sizing: border-box; width: var(--size); height: var(--size); border-radius: 50%; }
+.activity.spin { border: 2px solid color-mix(in srgb, var(--c) 20%, transparent); border-top-color: var(--c); border-right-color: var(--c); animation: activity-spin 0.8s linear infinite; }
+.activity.percent, .activity.error, .activity.paused {
+  background: conic-gradient(var(--c) calc(var(--p) * 1%), color-mix(in srgb, var(--c) 22%, transparent) 0);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1.5px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1.5px));
+}
+.activity.error { --c: var(--danger); }
+.activity.paused { --c: var(--attention); }
+.activity.hibernated { box-shadow: inset -3px -1px 0 0 var(--muted); transform: rotate(-20deg); }
+.activity.needs { --c: var(--attention); background: var(--c); box-shadow: 0 0 0 2px color-mix(in srgb, var(--c) 30%, transparent); animation: activity-pulse 1.2s ease-in-out infinite; }
+.activity.done { --c: var(--ok); border: solid var(--c); border-width: 0 2px 2px 0; border-radius: 0; width: calc(var(--size) * 0.5); height: var(--size); transform: translateY(-1px) rotate(45deg); margin: 0 calc(var(--size) * 0.25); }
+.tv-head .activity-slot { margin-left: -2px; }
+@keyframes activity-spin { to { transform: rotate(360deg); } }
+@keyframes activity-pulse { 50% { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) { .activity.spin { border-color: var(--c); animation: activity-pulse 1.6s ease-in-out infinite; } }
 
 /* ---- Shell badges, as in the desktop sidebar ---- */
 .badge { --tint: #c8c8c8; display: inline-grid; flex: none; place-items: center; width: 26px; height: 26px; border: 1px solid color-mix(in srgb, var(--tint) 40%, transparent); border-radius: 7px; background: color-mix(in srgb, var(--tint) 16%, transparent); color: var(--tint); font: 700 9.5px/1 ui-monospace, Menlo, Consolas, monospace; }

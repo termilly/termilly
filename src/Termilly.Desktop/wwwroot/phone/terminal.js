@@ -58,7 +58,22 @@ const DEFAULT_SIZE = Object.freeze({ cols: 80, rows: 24 });
 /** Messages from the PC about the terminal watched (PhoneLive.Kinds). */
 const LIVE = Object.freeze({ screen: 'screen', output: 'output' });
 
-/** @typedef {{ id: string, title: string, ws: string, icon: string, badge: string, waiting: unknown, production: boolean, cols: number | null, rows: number | null }} Shown */
+/** @typedef {{ id: string, title: string, ws: string, icon: string, badge: string, waiting: unknown, production: boolean, cols: number | null, rows: number | null, activity: string | null, percent: number | null, hint: string | null }} Shown */
+
+/** The activities the PC draws next to a terminal's title (store.js ACTIVITY); others ("exited") draw nothing. */
+const ACTIVITIES = new Set(['needs', 'error', 'paused', 'done', 'percent', 'spin', 'hibernated']);
+const FULL = 100;
+
+/**
+ * A terminal's activity as the PC draws it (ui.js activityHtml): a spinner, a progress ring, a pulsing dot or a tick;
+ * empty when idle.
+ * @param {{ activity: string | null, percent: number | null, hint: string | null }} t
+ */
+export function activityHtml(t) {
+  if (!t.activity || !ACTIVITIES.has(t.activity)) return '';
+  const percent = t.percent === null || t.percent === undefined ? '' : ` style="--p:${Math.max(0, Math.min(FULL, t.percent))}"`;
+  return `<span class="activity ${t.activity}"${percent} role="img" aria-label="${esc(t.hint ?? '')}"></span>`;
+}
 
 /**
  * A character cell's size (px) at the terminal's font: xterm's own measure (its screen element is resized only when it
@@ -190,6 +205,7 @@ export function terminalView(app) {
     return `<header class="tv-head"><button class="tv-back" data-tv="${TV.back}" aria-label="Back">‹</button>
       <span class="badge${shown.icon === 'claude' ? ' claude' : ''}" data-icon="${esc(shown.icon)}">${shown.icon === 'claude' ? '✻' : esc(shown.badge)}</span>
       <span class="tv-title">${esc(shown.title)}<span class="tv-ws"> · ${esc(app.wsName(shown.ws))}</span></span>
+      <span class="activity-slot">${activityHtml(shown)}</span>
       ${shown.waiting ? `<button class="btn primary tv-answer" data-tv="${TV.answer}">Answer</button>` : ''}</header>`;
   }
 
@@ -283,6 +299,9 @@ export function terminalView(app) {
     }
     const changed = !!t.waiting !== !!shown.waiting || canType !== typing;
     shown = t;
+    // Only when it changes, so the spinner doesn't start over with every update.
+    const slot = view.querySelector('.tv-head .activity-slot'), activity = activityHtml(t);
+    if (slot && slot.innerHTML !== activity) slot.innerHTML = activity;
     if (changed) {
       typing = canType;
       if (term) term.options.disableStdin = !canType;

@@ -85,6 +85,8 @@ function terminalOf(tab) {
     badge: /** @type {Record<string, string>} */ (WORDS)[icon] ?? /** @type {Record<string, string>} */ (BADGES)[icon] ?? '>_',
     agent: tab.agent?.state ?? null,
     activity: activity?.kind ?? (tab.exited ? 'exited' : null),
+    percent: activity?.percent ?? null,
+    hint: activity?.title ?? null,
     line: tab.agent?.line ?? activity?.title ?? null,
     waiting: waitingFor(tab),
     production: isProduction(tab),
