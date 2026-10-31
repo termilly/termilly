@@ -10,6 +10,7 @@
 
 import { SCREEN, terminalTouch } from './gestures.js';
 import { snippetSheet, asTyped } from './snippets.js';
+import { composer, COMPOSE } from './compose.js';
 
 /** What the key bar sends (data-key), as a terminal reads it. */
 const KEYS = Object.freeze({
@@ -23,7 +24,6 @@ const SNIP = 'snip';
 /** A message to Claude goes in, then Enter after this (as the PC's own send does, api.js); one with lines is pasted. */
 const ENTER_AFTER_MS = 200;
 const PASTED = Object.freeze({ start: '\x1b[200~', end: '\x1b[201~' });
-const COMPOSE = '.tv-compose';
 /** Ctrl with a letter: its code is the letter's minus 64 (Ctrl+C is 3). */
 const CTRL_OFFSET = 64;
 /** The font size before anything is pinched, and where the phone keeps the size pinched to (or set in Settings). */
@@ -191,6 +191,9 @@ export function terminalView(app) {
     return true;
   }
 
+  // The box under a Claude terminal (compose.js): Messages or One bar, as Settings says.
+  const compose = composer(view, { keys: BAR, type, toast: app.toast, redraw: () => frame() });
+
   // The terminal's workspace's snippets and the global ones.
   const snippets = snippetSheet(view, { list: () => app.snippets().filter(s => !s.ws || s.ws === shown?.ws), type });
 
@@ -212,14 +215,12 @@ export function terminalView(app) {
   /** Draws the parts around the terminal (its header, the key bar or why typing is off), keeping xterm as it is. */
   function frame() {
     const box = view.querySelector(BOX);
-    view.querySelectorAll('.tv-head, .tv-foot').forEach(el => el.remove());
+    view.querySelectorAll('.tv-head, .tv-foot, .c-menu').forEach(el => el.remove());
     view.insertAdjacentHTML('afterbegin', head());
-    const compose = typing && shown?.icon === 'claude'
-      ? '<form class="tv-foot tv-compose"><textarea rows="1" placeholder="Message Claude" enterkeyhint="send" autocapitalize="sentences"></textarea><button class="btn primary" type="submit">Send</button></form>'
-      : '';
     box?.insertAdjacentHTML('afterend', typing
-      ? `${compose}<div class="tv-foot keybar">${BAR.map(([key, label]) => `<button data-key="${key}">${label}</button>`).join('')}</div>`
+      ? compose.html(shown?.icon === 'claude')
       : '<p class="tv-foot tv-note">Typing from the phone is off: Settings › Phone › Allow typing, on the PC.</p>');
+    setCtrl(ctrl);
   }
 
   /**
@@ -350,6 +351,7 @@ export function terminalView(app) {
     if (!field || !text) return;
     if (!type(text.includes('\n') ? PASTED.start + text + PASTED.end : text)) return;
     field.value = '';
+    compose.changed();
     setTimeout(() => type('\r'), ENTER_AFTER_MS);
   }
   view.addEventListener('submit', e => {
@@ -365,6 +367,7 @@ export function terminalView(app) {
 
   view.addEventListener('click', async e => {
     const target = /** @type {HTMLElement} */ (e.target);
+    if (await compose.click(target)) return;
     const key = target.closest('[data-key]')?.getAttribute('data-key');
     const action = target.closest('[data-tv]')?.getAttribute('data-tv');
     if (action === TV.back) close();

@@ -173,10 +173,31 @@ main.tabbed { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
 .tick { flex: none; width: 18px; color: var(--accent); font-weight: 700; }
 .hint { margin: 8px 8px 0; font-size: 13px; }
 /* A Claude terminal's message box (terminal.js), above the key bar: the keyboard's mic dictates into it. */
-.tv-compose { display: flex; flex: none; gap: 8px; align-items: flex-end; margin: 0; padding: 6px 8px 2px; border-top: 1px solid var(--line); background: var(--raised); }
-.tv-compose textarea { flex: 1; min-height: 36px; max-height: 120px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 18px; background: var(--bg); color: var(--text); font-family: inherit; font-size: 16px; line-height: 1.3; resize: none; field-sizing: content; }
-.tv-compose .btn { flex: none; padding: 8px 14px; }
+/* The box for writing to Claude (compose.js): Messages, or One bar. */
+.tv-compose { position: relative; display: flex; flex: none; gap: 8px; align-items: flex-end; margin: 0; padding: 7px 8px 5px; border-top: 1px solid var(--line); background: var(--raised); }
+.tv-compose textarea { flex: 1; min-width: 0; min-height: 34px; max-height: 120px; padding: 7px 0 6px; border: 0; background: none; color: var(--text); font-family: inherit; font-size: 16px; line-height: 1.3; resize: none; outline: none; field-sizing: content; }
 .tv-compose + .keybar { border-top: 0; }
+.tv-compose svg, .c-menu svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.m-plus { display: grid; flex: none; place-items: center; width: 34px; height: 34px; margin-bottom: 1px; padding: 0; border: 0; border-radius: 50%; background: var(--bg); color: var(--muted); }
+.m-pill { display: flex; flex: 1; gap: 6px; align-items: flex-end; min-width: 0; padding: 0 4px 0 14px; border: 1px solid var(--line); border-radius: 19px; background: var(--bg); }
+.m-mic, .m-go { display: grid; flex: none; place-items: center; width: 30px; height: 30px; margin: 0 0 3px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--muted); }
+.m-mic.on { background: var(--danger); color: #fff; }
+.m-go { background: var(--accent); color: var(--on-accent); }
+.m-go svg, .b-go svg { width: 16px; height: 16px; stroke-width: 2.4; }
+.m-mic[hidden], .m-go[hidden] { display: none; }
+.tv.writing .keybar { display: none; }
+.tv.writing .tv-compose { padding-bottom: 7px; }
+.keybar.one-bar, .tv-compose.one-bar { align-items: center; gap: 4px; padding: 4px; }
+.keybar.one-bar { align-self: stretch; padding-bottom: max(4px, calc(env(safe-area-inset-bottom) - 16px)); }
+.b-mode { display: flex; flex: none; padding: 2px; border-radius: 8px; background: var(--bg); }
+.b-mode button { flex: none; width: 30px; padding: 3px 0; border: 0; border-radius: 6px; background: none; box-shadow: none; color: var(--muted); font: 14px/1.2 inherit; }
+.b-mode button.on { background: var(--accent); color: var(--on-accent); }
+.b-mode button.claude.on { background: #d97757; color: #fff; }
+.tv-compose.one-bar textarea { padding: 6px 10px; border-radius: 8px; background: var(--bg); box-shadow: inset 0 0 0 1px var(--line); min-height: 30px; }
+.b-go { display: grid; flex: none; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 8px; background: #d97757; color: #fff; }
+.c-menu { position: absolute; left: 8px; bottom: 96px; z-index: 6; display: flex; flex-direction: column; min-width: 220px; overflow: hidden; border-radius: 14px; background: var(--sheet); box-shadow: 0 10px 30px rgba(0, 0, 0, .45); }
+.c-menu button { padding: 12px 16px; border: 0; background: none; color: var(--text); font: inherit; font-size: 15px; text-align: left; }
+.c-menu button + button { border-top: 1px solid var(--line); }
 /* Appearance: More themes opens their own page, which leads back with ‹ Settings. */
 .look.more .r-text { flex: 1; }
 .more-value { color: var(--muted); font-size: 14px; }

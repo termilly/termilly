@@ -8,7 +8,9 @@ export const TAB = Object.freeze({ terminals: 'terminals', notes: 'notes', setti
 /** What a note says about its terminal's agent (AgentStates.cs). */
 const STATE_LABEL = Object.freeze({ 'needs-input': 'Needs you', attention: 'Needs you', error: 'Error', done: 'Done' });
 /** What the Settings tab's buttons do (data-do). */
-export const SETTING = Object.freeze({ smaller: 'smaller', bigger: 'bigger', unpair: 'unpair', themes: 'themes', back: 'back', scrolling: 'scrolling' });
+export const SETTING = Object.freeze({ smaller: 'smaller', bigger: 'bigger', unpair: 'unpair', themes: 'themes', back: 'back', scrolling: 'scrolling', compose: 'compose' });
+/** The boxes for writing to Claude (compose.js COMPOSE_STYLE), as Settings offers them. */
+const COMPOSE_CHOICES = [['messages', 'Messages', 'A round field with the microphone; the keys step aside while you write'], ['bar', 'One bar', 'Keys and the field share one row, with a switch']];
 /** The ways the terminal scrolls back (gestures.js SCROLLING), as Settings offers them. */
 const SCROLL_CHOICES = [['smooth', 'Smooth'], ['lines', 'Line by line']];
 /** The looks at the top of Settings › Appearance; the other themes have their own page. */
@@ -80,7 +82,7 @@ export function themesHtml(looks, chosen) {
 
 /**
  * This phone's settings.
- * @param {{ alerts: string, size: number, scrolling: string, host: string, connected: boolean, look: string, looks: Look[] }} now
+ * @param {{ alerts: string, size: number, scrolling: string, compose: string, host: string, connected: boolean, look: string, looks: Look[] }} now
  */
 export function settingsHtml(now) {
   const other = FIRST_LOOKS.includes(now.look) ? null : now.looks.find(l => l.id === now.look);
@@ -92,6 +94,9 @@ export function settingsHtml(now) {
       <span>${now.size} pt</span><button class="btn" data-do="${SETTING.bigger}" aria-label="Bigger">A+</button></div>
     <div class="section">Scrolling</div><div class="list looks">${SCROLL_CHOICES.map(([id, name]) => `<button class="row look${id === now.scrolling ? ' on' : ''}" data-do="${SETTING.scrolling}" data-scrolling="${id}">
       <span class="r-text">${name}</span><span class="tick">${id === now.scrolling ? '✓' : ''}</span></button>`).join('')}</div>
+    <div class="section">Message box</div><div class="list looks">${COMPOSE_CHOICES.map(([id, name, hint]) => `<button class="row look${id === now.compose ? ' on' : ''}" data-do="${SETTING.compose}" data-compose="${id}">
+      <span class="r-text"><span class="r-name">${name}</span><span class="r-line">${hint}</span></span><span class="tick">${id === now.compose ? '✓' : ''}</span></button>`).join('')}</div>
+    <p class="muted hint">Under a Claude terminal, for writing or dictating to Claude.</p>
     <div class="section">Your PC</div><div class="list pad"><p class="mono">${esc(now.host)}</p>
       <p class="muted">${now.connected ? 'Connected.' : 'Reconnecting.'}</p></div>
     <div class="section">Pairing</div><div class="list pad"><p class="muted">The PC forgets this phone; it needs a new code to come back.</p>
