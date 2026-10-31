@@ -169,16 +169,19 @@ window.addEventListener('keydown', e => setCtrl(e.ctrlKey), true);
 window.addEventListener('keyup', e => setCtrl(e.ctrlKey), true);
 window.addEventListener('blur', () => setCtrl(false));
 
-/** A row that ends this near the right edge, on a character, may go on in the next row: a program (Claude Code, a
- * pager) that breaks long lines itself writes the rest there after a real line break. */
+/** A program (Claude Code, a pager) that breaks long lines itself writes the rest in the next row after a real line
+ * break: a row that ends this near the right edge, on a character, went on mid-word (a long path or address); a row
+ * the next one's first word wouldn't have fitted on went on at a space (a path with spaces). */
 const EDGE = 4;
+/** How a row goes on in the next: mid-word, or at a space (put back between them). */
+const GOES_ON = Object.freeze({ no: '', word: 'word', space: 'space' });
 /** How many rows a line is looked for in, each way. */
 const MAX_ROWS = 24;
 
 /**
  * The whole line row y (1-based) is part of, and where each of its characters is on screen (1-based): the rows the
- * terminal wrapped, and the rows a program broke at the right edge (the next one's indent left out). A path or a link
- * broken either way is found whole.
+ * terminal wrapped, and the rows a program broke (the next one's indent left out). A path or a link broken any of these
+ * ways is found whole.
  * @param {any} term xterm
  * @param {number} y
  */
@@ -191,14 +194,25 @@ function logicalLine(term, y) {
   const groupEnd = (/** @type {number} */ row) => { while (wrapped(row + 1)) row++; return row; };
   // Row end (the last of its group) goes on in row end + 1, which starts a group of its own.
   const goesOn = (/** @type {number} */ end) => {
-    if (!buffer.getLine(end + 1)) return false;
+    if (!buffer.getLine(end + 1)) return GOES_ON.no;
     const t = textOf(end);
-    return t.length >= cols - EDGE && /\S$/.test(t) && /\S/.test(textOf(end + 1));
+    const next = textOf(end + 1).trimStart();
+    if (!/\S$/.test(t) || !next) return GOES_ON.no;
+    if (t.length >= cols - EDGE) return GOES_ON.word;
+    return t.length + 1 + next.split(' ')[0].length > cols - EDGE ? GOES_ON.space : GOES_ON.no;
+  };
+  /** @type {Map<number, string>} the rows that went on at a space */
+  const spaced = new Map();
+  /** @param {number} end */
+  const joins = end => {
+    const how = goesOn(end);
+    if (how === GOES_ON.space) spaced.set(end + 1, ' ');
+    return how !== GOES_ON.no;
   };
   let first = groupStart(y - 1);
-  while (first > 0 && first > y - 1 - MAX_ROWS && goesOn(first - 1)) first = groupStart(first - 1);
+  while (first > 0 && first > y - 1 - MAX_ROWS && joins(first - 1)) first = groupStart(first - 1);
   let last = groupEnd(y - 1);
-  while (last < y - 1 + MAX_ROWS && goesOn(last)) last = groupEnd(last + 1);
+  while (last < y - 1 + MAX_ROWS && joins(last)) last = groupEnd(last + 1);
   let text = '';
   /** @type {{ x: number, y: number }[]} */
   const where = [];
@@ -210,6 +224,12 @@ function logicalLine(term, y) {
     if (soft) part = part.padEnd(cols);
     // A row a program went on in: its indent isn't part of the line.
     const skip = row > first && !line.isWrapped ? part.length - part.trimStart().length : 0;
+    if (spaced.has(row) && where.length) {
+      // The space the line was broken at, where the row before ends.
+      const end = where[where.length - 1];
+      where.push({ x: Math.min(end.x + 1, cols), y: end.y });
+      text += ' ';
+    }
     for (let i = skip; i < part.length; i++) where.push({ x: i + 1, y: row + 1 });
     text += part.slice(skip);
   }
