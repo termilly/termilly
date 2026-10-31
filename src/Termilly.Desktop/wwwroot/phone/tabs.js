@@ -10,7 +10,7 @@ const STATE_LABEL = Object.freeze({ 'needs-input': 'Needs you', attention: 'Need
 /** What the Settings tab's buttons do (data-do). */
 export const SETTING = Object.freeze({ smaller: 'smaller', bigger: 'bigger', unpair: 'unpair', themes: 'themes', back: 'back', scrolling: 'scrolling', compose: 'compose', dictation: 'dictation' });
 /** How the microphone dictates (compose.js DICTATION), as Settings offers it. */
-const DICTATION_CHOICES = [['keyboard', 'Keyboard', 'Opens the keyboard: tap its microphone. The phone never asks'], ['termilly', 'Termilly', 'Dictates without the keyboard. iOS asks for the microphone after each restart']];
+const DICTATION_CHOICES = [['keyboard', 'Keyboard', 'Use the keyboard\'s microphone. The phone never asks'], ['termilly', 'Termilly', 'Dictates without the keyboard. iOS asks for the microphone after each restart']];
 /** The boxes for writing to Claude (compose.js COMPOSE_STYLE), as Settings offers them. */
 const COMPOSE_CHOICES = [['messages', 'Messages', 'A round field with the microphone; the keys step aside while you write'], ['bar', 'One bar', 'Keys and the field share one row, with a switch']];
 /** The ways the terminal scrolls back (gestures.js SCROLLING), as Settings offers them. */
