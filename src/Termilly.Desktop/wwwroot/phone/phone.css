@@ -249,3 +249,7 @@ button.row { width: 100%; border: 0; background: none; color: inherit; font: inh
 .m-sheet .hint { margin: 6px 4px 0; font-size: 13px; }
 .m-sheet .s-head h2 { font-size: 20px; }
 .c-title { margin: 0 0 6px; font-size: 20px; }
+/* Stops the agent (Esc), beside its spinner in the terminal's header, as on the PC. */
+.tv-head .activity-slot { display: inline-flex; gap: 8px; align-items: center; }
+.tv-stop { position: relative; flex: none; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 8px; background: color-mix(in srgb, var(--danger) 18%, transparent); }
+.tv-stop::after { content: ''; position: absolute; inset: 10px; border-radius: 2px; background: var(--danger); }

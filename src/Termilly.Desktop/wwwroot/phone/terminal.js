@@ -39,7 +39,11 @@ const LEAST = Object.freeze({ cols: 20, rows: 4 });
 const SIZE_AFTER_MS = 150;
 /** What the view asks of the live connection, and its header's buttons (data-tv). */
 const OP = Object.freeze({ watch: 'watch', unwatch: 'unwatch', input: 'input', size: 'size' });
-const TV = Object.freeze({ back: 'back', answer: 'answer' });
+const TV = Object.freeze({ back: 'back', answer: 'answer', stop: 'stop' });
+/** Claude Code's (and Codex's) interrupt, as the PC's stop button sends it (js/agentline.js stopAgent). */
+const STOP = '\x1b';
+/** The agent states the stop button shows in (js/agentline.js isAgentWorking). */
+const STOPPABLE = ['working', 'needs-input'];
 /**
  * What xterm.js answers on its own (to the programs' queries in the output it draws: who are you, where's the cursor,
  * what colours) and reports (focus, the mouse). The PC's terminal answers those already; from the phone they'd only
@@ -203,12 +207,19 @@ export function terminalView(app) {
     view.querySelector(`[data-key="${CTRL}"]`)?.classList.toggle('on', on);
   }
 
+  /**
+   * The spinner, and beside it, while an agent works and typing is allowed, a button that stops it (Esc).
+   * @param {any} t
+   */
+  const slotHtml = t => activityHtml(t) + (typing && STOPPABLE.includes(t.agent)
+    ? `<button class="tv-stop" data-tv="${TV.stop}" aria-label="Stop ${esc(t.title)}"></button>` : '');
+
   function head() {
     if (!shown) return '';
     return `<header class="tv-head"><button class="tv-back" data-tv="${TV.back}" aria-label="Back">‹</button>
       <span class="badge${shown.icon === 'claude' ? ' claude' : ''}" data-icon="${esc(shown.icon)}">${shown.icon === 'claude' ? '✻' : esc(shown.badge)}</span>
       <span class="tv-title">${esc(shown.title)}<span class="tv-ws"> · ${esc(app.wsName(shown.ws))}</span></span>
-      <span class="activity-slot">${activityHtml(shown)}</span>
+      <span class="activity-slot">${slotHtml(shown)}</span>
       ${shown.waiting ? `<button class="btn primary tv-answer" data-tv="${TV.answer}">Answer</button>` : ''}</header>`;
   }
 
@@ -312,7 +323,7 @@ export function terminalView(app) {
     const typingChanged = canType !== typing;
     shown = t;
     // Only when it changes, so the spinner doesn't start over with every update.
-    const slot = view.querySelector('.tv-head .activity-slot'), activity = activityHtml(t);
+    const slot = view.querySelector('.tv-head .activity-slot'), activity = slotHtml(t);
     if (slot && slot.innerHTML !== activity) slot.innerHTML = activity;
     if (typingChanged) {
       typing = canType;
@@ -388,6 +399,7 @@ export function terminalView(app) {
     const action = target.closest('[data-tv]')?.getAttribute('data-tv');
     if (action === TV.back) close();
     else if (action === TV.answer && shown) app.answer(shown.id);
+    else if (action === TV.stop && shown && typing) type(STOP);
     else if (key === CTRL) setCtrl(!ctrl);
     else if (key === SNIP) snippets.open();
     else if (key === PASTE) {
