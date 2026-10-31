@@ -1,7 +1,7 @@
 {
   "fontSize": 99,
   "cursorStyle": "triangle",
-  "historyDays": 12,
+  "historyDays": -12,
   "quake": true,
   "quakeHeight": 42,
   "changeSource": "magic",

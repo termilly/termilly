@@ -1715,6 +1715,7 @@ body.dragging-pane #drag-ghost { display: flex; }
 .dialog-field .field, .dialog-field .seg { text-transform: none; letter-spacing: 0; font-size: 12.5px; font-weight: 400; }
 .field-row { display: flex; gap: 8px; }
 .field-row .field { flex: 1; min-width: 0; }
+.field-row .keep-count { flex: 0 0 76px; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
 
 .dialog-icon { display: grid; place-items: center; width: 36px; height: 36px; margin-bottom: 12px; border-radius: 10px; background: var(--accent-fill); color: var(--accent); }

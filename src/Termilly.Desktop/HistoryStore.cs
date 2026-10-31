@@ -8,6 +8,15 @@ using Termilly.Desktop.Security;
 
 namespace Termilly.Desktop;
 
+/// <summary>How long history is kept (Settings › Privacy › Keep history for): the oldest moment still kept.</summary>
+internal static class Retention
+{
+    /// <summary>Unix milliseconds: what's older goes. Forever keeps everything.</summary>
+    public static long CutoffMs(int days) => days == SettingValues.HistoryDays.Forever
+        ? long.MinValue
+        : DateTimeOffset.UtcNow.AddDays(-days).ToUnixTimeMilliseconds();
+}
+
 /// <summary>
 /// A terminal as the page saves it, in the closed-session history (HistoryStore) and the session snapshot
 /// (SessionSnapshot): the fields read here.
@@ -21,12 +30,11 @@ internal static class TerminalRecordFields
 
 /// <summary>
 /// Closed terminal sessions (name, tags, shell and saved scrollback), one encrypted file each under
-/// %LOCALAPPDATA%\Termilly\history. Entries expire after the user's retention setting, and only the newest
-/// <see cref="MaxEntries"/> are kept. Nothing leaves the machine.
+/// %LOCALAPPDATA%\Termilly\history. Entries expire after the user's retention setting (Forever: never); nothing
+/// else limits them. Nothing leaves the machine.
 /// </summary>
 internal sealed partial class HistoryStore(Vault vault)
 {
-    public const int MaxEntries = 300;
     private const string Extension = ".tmh";
 
     private string Folder => vault.HistoryDirectory;
@@ -53,13 +61,13 @@ internal sealed partial class HistoryStore(Vault vault)
         AppPaths.WriteAtomically(PathOf(id), Sealed.Seal(Key, json));
     }
 
-    /// <summary>All live entries as a JSON array, newest first. Prunes expired and surplus entries.</summary>
+    /// <summary>All live entries as a JSON array, newest first. Prunes expired entries.</summary>
     public JsonDocument List(int retentionDays)
     {
         var entries = new List<(long ClosedAt, string Id, string Json)>();
         if (Directory.Exists(Folder))
         {
-            var cutoff = DateTimeOffset.UtcNow.AddDays(-retentionDays).ToUnixTimeMilliseconds();
+            var cutoff = Retention.CutoffMs(retentionDays);
             foreach (var file in Directory.EnumerateFiles(Folder, "*" + Extension))
             {
                 try
@@ -82,13 +90,8 @@ internal sealed partial class HistoryStore(Vault vault)
         }
 
         entries.Sort((a, b) => b.ClosedAt.CompareTo(a.ClosedAt));
-        foreach (var surplus in entries.Skip(MaxEntries))
-        {
-            TryDelete(surplus.Id);
-        }
-
         var array = new StringBuilder("[");
-        array.AppendJoin(',', entries.Take(MaxEntries).Select(e => e.Json));
+        array.AppendJoin(',', entries.Select(e => e.Json));
         array.Append(']');
         return JsonDocument.Parse(array.ToString());
     }

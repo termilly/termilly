@@ -52,6 +52,39 @@ public sealed class CommandHistoryTests : IDisposable
     }
 
     [Fact]
+    public void Forever_keeps_every_command_however_old_or_many()
+    {
+        _history.Add(Entry("ancient", at: DateTimeOffset.UtcNow.AddYears(-20).ToUnixTimeMilliseconds()), redactSecrets: false);
+        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        _history.Import(Enumerable.Range(0, 6000).Select(i => new JsonObject { ["id"] = $"c{i}", ["command"] = $"cmd {i}", ["at"] = now - i }), "laptop");
+        var all = JsonNode.Parse(_history.List(SettingValues.HistoryDays.Forever))!.AsArray();
+        Assert.Equal(6001, all.Count);
+        Assert.Equal("ancient", all[^1]!["command"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void Closed_terminals_are_kept_by_age_alone_and_forever_keeps_them_all()
+    {
+        var closed = new HistoryStore(_vault);
+        var old = DateTimeOffset.UtcNow.AddDays(-400).ToUnixTimeMilliseconds();
+        closed.Add(JsonDocument.Parse($$"""{"id":"old","closedAt":{{old}},"lines":["kept a long time"]}""").RootElement, redactSecrets: false);
+        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        for (var i = 0; i < 320; i++)
+        {
+            closed.Add(JsonDocument.Parse($$"""{"id":"t{{i}}","closedAt":{{now - i}}}""").RootElement, redactSecrets: false);
+        }
+
+        using (var forever = closed.List(SettingValues.HistoryDays.Forever))
+        {
+            Assert.Equal(321, forever.RootElement.GetArrayLength()); // no cap on how many
+        }
+        using (var year = closed.List(365))
+        {
+            Assert.Equal(320, year.RootElement.GetArrayLength()); // the 400-day-old one is past it
+        }
+    }
+
+    [Fact]
     public void Old_commands_expire()
     {
         _history.Add(Entry("old", at: DateTimeOffset.UtcNow.AddDays(-40).ToUnixTimeMilliseconds()), redactSecrets: false);

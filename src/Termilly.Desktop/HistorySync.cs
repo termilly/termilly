@@ -125,7 +125,7 @@ internal sealed class HistorySync(Vault vault, CommandHistory history)
             [Fields.Device] = deviceId,
             [Fields.Name] = name,
             [Fields.Updated] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-            [Fields.Entries] = new JsonArray(entries.TakeLast(CommandHistory.MaxEntries).Select(e => (JsonNode)e.DeepClone()).ToArray()),
+            [Fields.Entries] = new JsonArray(entries.Select(e => (JsonNode)e.DeepClone()).ToArray()),
         };
         Directory.CreateDirectory(syncDir);
         AppPaths.WriteAtomically(Path.Combine(syncDir, deviceId + DeviceExtension), Sealed.Seal(key, data.ToJsonString()));

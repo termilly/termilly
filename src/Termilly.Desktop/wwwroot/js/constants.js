@@ -241,7 +241,9 @@ export const SETTING_VALUES = Object.freeze({
   }),
   historyDays: Object.freeze({
     default: 30,
-    all: Object.freeze([7, 30, 90, 365]),
+    forever: 0,
+    max: 36500,
+    daysPerMonth: 30,
   }),
   minimizeTo: Object.freeze({
     taskbar: 'taskbar',

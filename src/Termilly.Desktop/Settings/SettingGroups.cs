@@ -268,7 +268,7 @@ internal sealed record SessionSettings
     public SessionSettings Normalize() => this with
     {
         Restore = SettingChecks.OneOf(Restore, SettingValues.RestoreSession.All, SettingValues.RestoreSession.Default),
-        HistoryDays = SettingChecks.OneOf(HistoryDays, SettingValues.HistoryDays.All, SettingValues.HistoryDays.Default),
+        HistoryDays = HistoryDays < 0 ? SettingValues.HistoryDays.Default : Math.Min(HistoryDays, SettingValues.HistoryDays.Max),
         HiddenScrollback = SettingChecks.OneOf(HiddenScrollback, SettingValues.HiddenScrollback.All, SettingValues.HiddenScrollback.Default),
     };
 }

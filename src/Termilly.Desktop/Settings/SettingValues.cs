@@ -76,11 +76,16 @@ internal static class SettingValues
         public static readonly IReadOnlyList<string> All = [Ctrl, Click];
     }
 
-    /// <summary>How many days of closed terminals' history are kept.</summary>
+    /// <summary>
+    /// How many days history is kept (closed terminals and their output, the commands run): any number the user picks,
+    /// in days or months (30 days each), or Forever. Nothing else limits it.
+    /// </summary>
     public static class HistoryDays
     {
         public const int Default = 30;
-        public static readonly IReadOnlyList<int> All = [7, Default, 90, 365];
+        public const int Forever = 0;
+        public const int Max = 36_500;
+        public const int DaysPerMonth = 30;
     }
 
     /// <summary>What the window's Minimize does: the taskbar, or the tray (Windows, TrayIcon.cs).</summary>

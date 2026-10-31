@@ -3,12 +3,13 @@
 
 import { PAGE, HOST } from '../protocol.js';
 import { send, onHost, sys, SYSTEM_NAME } from '../host.js';
-import { emit, EVENTS } from '../store.js';
+import { emit, getSetting, GROUPS, EVENTS } from '../store.js';
+import { updateSettings } from '../preferences.js';
 import { ICONS } from '../ui.js';
 import { confirmDialog } from '../dialogs.js';
 import { showRecoveryCode } from '../security.js';
 import { syncSectionHtml, handleSyncClick, setSyncRerender, refreshSyncStatus } from '../sync.js';
-import { row, seg, toggle, group, choices } from './controls.js';
+import { row, toggle, group } from './controls.js';
 import { SECTION, body, redrawIfShowing } from './page.js';
 import { SETTING_VALUES } from '../constants.js';
 import { field } from '../dom.js';
@@ -16,7 +17,51 @@ import { field } from '../dom.js';
 /** The choices of the settings used here (C#'s SettingValues). */
 const { historyDays } = SETTING_VALUES;
 
-const DAYS_PER_YEAR = 365;
+/** How long history is kept: a number of days or months, or Forever (0 days). */
+const KEEP_FOR = Object.freeze({ days: 'days', months: 'months', forever: 'forever' });
+const KEEP_COUNT = '[data-keep-count]';
+const KEEP_UNIT = '[data-keep-unit]';
+const FIELD_ROW = '.field-row';
+/** The most the number goes to, in days and in months (C#'s HistoryDays.Max: 100 years). */
+const MOST = Object.freeze({ days: historyDays.max, months: Math.floor(historyDays.max / historyDays.daysPerMonth) });
+
+/**
+ * The setting as the row shows it: a whole number of months when it divides, else days.
+ * @param {number} days
+ * @returns {{ unit: string, count: number }}
+ */
+function keepFor(days) {
+  if (days === historyDays.forever) return { unit: KEEP_FOR.forever, count: historyDays.default };
+  if (days % historyDays.daysPerMonth === 0) return { unit: KEEP_FOR.months, count: days / historyDays.daysPerMonth };
+  return { unit: KEEP_FOR.days, count: days };
+}
+
+/** Keep history for: [number] [Days | Months | Forever]. */
+function keepForHtml() {
+  const now = keepFor(getSetting('session.historyDays'));
+  const units = [[KEEP_FOR.days, 'Days'], [KEEP_FOR.months, 'Months'], [KEEP_FOR.forever, 'Forever']];
+  return `<span class="field-row"><input class="field keep-count" data-keep-count type="number" min="1" max="${MOST.days}" value="${now.count}" aria-label="How many"${now.unit === KEEP_FOR.forever ? ' hidden' : ''}>
+    <select class="field" data-keep-unit aria-label="Days, months or forever">${units.map(([v, l]) => `<option value="${v}"${v === now.unit ? ' selected' : ''}>${l}</option>`).join('')}</select></span>`;
+}
+
+/**
+ * Saves what the row says; a number out of range is brought back in.
+ * @param {Event} e
+ */
+function keepForChanged(e) {
+  const target = /** @type {HTMLElement} */ (e.target);
+  if (!target.matches(`${KEEP_COUNT}, ${KEEP_UNIT}`)) return false;
+  const rowEl = /** @type {HTMLElement} */ (target.closest(FIELD_ROW));
+  const count = /** @type {HTMLInputElement} */ (rowEl.querySelector(KEEP_COUNT));
+  const unit = /** @type {HTMLSelectElement} */ (rowEl.querySelector(KEEP_UNIT)).value;
+  count.hidden = unit === KEEP_FOR.forever;
+  const most = unit === KEEP_FOR.months ? MOST.months : MOST.days;
+  const n = Math.min(most, Math.max(1, Math.round(Number(count.value)) || 1));
+  count.value = String(n);
+  const days = unit === KEEP_FOR.forever ? historyDays.forever : unit === KEEP_FOR.months ? n * historyDays.daysPerMonth : n;
+  updateSettings(GROUPS.session, { historyDays: days });
+  return true;
+}
 
 /** How many locked history archives there are (set aside when they couldn't be unlocked). */
 let archives = 0;
@@ -47,13 +92,14 @@ const PRIVACY = {
         <p class="set-status" data-restore-status hidden></p>`, { stack: true }) : ''))
     + group('History', row('Save output of closed terminals',
       'Off keeps only a closed terminal’s name, tags and folder.', toggle('session.saveOutput'))
-      + row('Keep closed terminals for', '', seg('session.historyDays', choices(historyDays.all, days => (days === DAYS_PER_YEAR ? '1 year' : `${days} days`))))
+      + row('Keep history for', 'Closed terminals with their output, and the commands run. A month is 30 days.', keepForHtml(), { keywords: 'retention history days months forever keep expire' })
       + row('Redact secrets', 'Replace tokens, keys and passwords with [redacted].',
         toggle('session.redactSecrets'))
       + row('Clear history', 'Deletes every closed terminal Termilly has kept.', '<button class="btn small danger-outline" data-action="clearHistory">Clear history</button>'))
     + syncSectionHtml(group, row),
   refresh: refreshSyncStatus,
   click: handleSyncClick,
+  change: keepForChanged,
   actions: {
     showCode: () => { pendingCode = CODE_REQUEST.show; send(PAGE.securityCode); },
     async newCode() {
@@ -110,7 +156,7 @@ onHost(HOST.securityRestored, m => {
   emit(EVENTS.history);
   // Keep the row (until Settings is reopened) so the result stays visible; drop the form if nothing is left.
   const input = body.querySelector('[data-restore-code]');
-  if (input && !archives) /** @type {HTMLElement} */ (input.closest('.field-row')).remove();
+  if (input && !archives) /** @type {HTMLElement} */ (input.closest(FIELD_ROW)).remove();
   restoreStatus(`Restored ${m.count} closed terminal${m.count === 1 ? '' : 's'}. Find them in Recently closed.`, true);
 });
 onHost(HOST.securityError, m => restoreStatus(m.message, false));

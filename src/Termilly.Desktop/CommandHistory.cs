@@ -9,13 +9,12 @@ namespace Termilly.Desktop;
 /// <summary>
 /// Every command run in a terminal with shell integration: the command line, exit code, duration, folder and
 /// terminal. It's one encrypted file next to the closed-session history, kept in memory once read, newest last.
-/// Entries expire with the same retention setting, and only the newest <see cref="MaxEntries"/> are kept.
+/// Entries expire with the same retention setting, and nothing else limits them.
 /// Commands are redacted before they're stored when Settings asks for it. Each entry has an id; commands from other
 /// PCs (history sync, HistorySync.cs) also have the host that ran them.
 /// </summary>
 internal sealed class CommandHistory(Vault vault)
 {
-    public const int MaxEntries = 5000;
     private const int MaxCommandLength = 2000;
 
     /// <summary>An entry's fields, as the page sends them (js/history.js) and the API and assistant read them.</summary>
@@ -68,10 +67,6 @@ internal sealed class CommandHistory(Vault vault)
         {
             var entries = Load();
             entries.Add(node);
-            if (entries.Count > MaxEntries)
-            {
-                entries.RemoveRange(0, entries.Count - MaxEntries);
-            }
             Save(entries);
             OwnVersion++;
         }
@@ -110,10 +105,6 @@ internal sealed class CommandHistory(Vault vault)
             if (added > 0)
             {
                 entries.Sort((a, b) => (a[Fields.At]?.GetValue<long>() ?? 0).CompareTo(b[Fields.At]?.GetValue<long>() ?? 0));
-                if (entries.Count > MaxEntries)
-                {
-                    entries.RemoveRange(0, entries.Count - MaxEntries);
-                }
                 Save(entries);
             }
             return added;
@@ -123,7 +114,7 @@ internal sealed class CommandHistory(Vault vault)
     /// <summary>The commands from the last <paramref name="retentionDays"/> days, newest first, as a JSON array.</summary>
     public string List(int retentionDays)
     {
-        var cutoff = DateTimeOffset.UtcNow.AddDays(-retentionDays).ToUnixTimeMilliseconds();
+        var cutoff = Retention.CutoffMs(retentionDays);
         lock (_gate)
         {
             var entries = Load();
