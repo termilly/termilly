@@ -6,7 +6,7 @@
 
 import { PAGE, HOST } from './protocol.js';
 import { send, onHost } from './host.js';
-import { state, on, wsById, tabTitle, profileOf, activityOf, runsClaude, BADGES, EVENTS } from './store.js';
+import { state, on, wsById, tabTitle, profileOf, activityOf, runsClaude, markSeen, BADGES, EVENTS } from './store.js';
 import { entryDetail, notesForPhone } from './inbox.js';
 import { AGENT_STATE, CLAUDE_TOOL, PROFILE_ICON } from './constants.js';
 import { debounce } from './util.js';
@@ -281,6 +281,12 @@ onHost(HOST.phoneScreen, async m => {
 onHost(HOST.phoneTyped, m => {
   const tab = state.tabs.get(m.id);
   if (tab) agentInput(tab, m.data);
+});
+
+// A phone has the terminal on its screen: its news is seen there, so here too (unread, the Windows notification).
+onHost(HOST.phoneSeen, m => {
+  const tab = state.tabs.get(m.id);
+  if (tab) markSeen(tab);
 });
 
 onHost(HOST.phoneAnswer, async m => {

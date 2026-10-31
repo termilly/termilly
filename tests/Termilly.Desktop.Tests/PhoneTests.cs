@@ -403,6 +403,32 @@ public sealed class PhoneTests : IDisposable
         Assert.False(_live.IsOpenOn("another-phone"));
     }
 
+    [Fact]
+    public async Task A_terminal_a_phone_opens_or_comes_back_to_counts_as_seen()
+    {
+        using var authority = _store.Authority("TESTPC");
+        using var server = Start(authority);
+        using var http = Https(authority);
+        var paired = await Post(http, server.AppUrl + "api/pair", $$"""{"code":"{{_store.OfferCode()}}"}""");
+        var cookie = paired.Headers.GetValues("Set-Cookie").First().Split(';')[0];
+        var opened = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        _live.Opened = opened.Enqueue;
+
+        using var phone = Socket(authority, cookie);
+        await phone.ConnectAsync(new Uri(server.AppUrl.Replace("https", "wss") + "api/live"), CancellationToken.None);
+        await ReceiveText(phone); // the terminals
+        await Send(phone, """{"op":"watch","pane":"p1","cols":40,"rows":20}""");
+        await Until(() => opened.Count == 1);
+        Assert.True(_live.IsShownOnPhone("p1"));
+
+        await Send(phone, """{"op":"seen","shown":false}"""); // locked, or another app
+        await Until(() => !_live.IsShownOnPhone("p1"));
+        await Send(phone, """{"op":"seen","shown":true}""");
+        await Until(() => opened.Count == 2);
+        Assert.Equal(["p1", "p1"], opened);
+        Assert.False(_live.IsShownOnPhone("p2"));
+    }
+
     private static async Task Until(Func<bool> condition)
     {
         for (var waited = 0; !condition(); waited += 20)

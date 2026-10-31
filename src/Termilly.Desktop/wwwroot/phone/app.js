@@ -320,6 +320,7 @@ function connect() {
       if (terminalShown.viewing) terminalShown.update(terminal(terminalShown.viewing), !!snap.typing);
       manage.changed();
       news(snap.terminals);
+      openAsked();
     } else if (m.type === LIVE.screen || m.type === LIVE.output) {
       terminalShown.message(m);
     } else if (m.type === LIVE.answered && manage.answered(m)) {
@@ -346,6 +347,30 @@ function connect() {
 function answer(pane, choice, text = '') {
   if (!connected || !live) return toast('Not connected to your PC.');
   live.send(JSON.stringify({ op: OP.answer, pane, choice, text }));
+}
+
+// ---- A tapped alert opens its terminal ----
+
+/** The alert's terminal, in the address the app starts at (Features/Phone.cs OpenUrl). */
+const OPEN_PARAM = 'open';
+/** The terminal a tapped alert asked for, until the PC's state has it. */
+let openAsk = new URLSearchParams(location.search).get(OPEN_PARAM);
+if (openAsk) history.replaceState(null, '', location.pathname); // once: a reload starts on the list
+
+function openAsked() {
+  const t = openAsk ? terminal(openAsk) : null;
+  if (!t) return;
+  openAsk = null;
+  terminalShown.open(t, !!snap.typing);
+}
+
+// The app was running already: the service worker says which terminal.
+if (hasWorker) {
+  navigator.serviceWorker.addEventListener('message', e => {
+    if (!e.data?.[OPEN_PARAM]) return;
+    openAsk = e.data[OPEN_PARAM];
+    openAsked();
+  });
 }
 
 // ---- News from the other terminals ----

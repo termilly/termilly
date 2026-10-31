@@ -29,7 +29,12 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
         public const string Title = "title";
         public const string Body = "body";
         public const string Tag = "tag";
+        /// <summary>What a tap on it opens: the app on its terminal (phone/app.js OPEN_PARAM).</summary>
+        public const string Url = "url";
     }
+
+    /// <summary>The phone app, opening on this terminal.</summary>
+    private static string OpenUrl(string? pane) => pane is null ? "/" : "/?open=" + Uri.EscapeDataString(pane);
 
     /// <summary>Alerts give up on a push service this slow.</summary>
     private static readonly TimeSpan SendTimeout = TimeSpan.FromSeconds(15);
@@ -54,6 +59,7 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
         live.Screen = ScreenAsync;
         live.Sized = (pane, phone) => _page.Post(new ToPage.PhoneSize(pane, phone?.Size.Cols, phone?.Size.Rows,
             phone is null ? null : store.List().FirstOrDefault(d => d.Id == phone.Device)?.Name, phone?.Address));
+        live.Opened = pane => _page.Post(new ToPage.PhoneSeen(pane));
         sessions.Output += Printed;
     }
 
@@ -95,6 +101,10 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
         router.On<FromPage.PhoneAlert>(async m =>
         {
             var settings = _settings.Current.Phone;
+            if (m.Id is { } id && _live.IsShownOnPhone(id))
+            {
+                _page.Post(new ToPage.PhoneSeen(id)); // seen on the phone as it came: not news on the PC either
+            }
             if (_server is not null && ShouldAlert(settings.Alerts, m.InFront, UserIdle.Since()))
             {
                 await AlertAsync(null, AlertFor(m, settings.HideDetails)).ConfigureAwait(false);
@@ -135,12 +145,12 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
     {
         if (hideDetails)
         {
-            return new JsonObject { [Alert.Title] = AlertTitle, [Alert.Body] = Finished.Contains(m.State) ? "An agent finished." : "An agent needs you.", [Alert.Tag] = m.Id };
+            return new JsonObject { [Alert.Title] = AlertTitle, [Alert.Body] = Finished.Contains(m.State) ? "An agent finished." : "An agent needs you.", [Alert.Tag] = m.Id, [Alert.Url] = OpenUrl(m.Id) };
         }
         var body = SecretRedactor.Redact(m.Body ?? "");
         return new JsonObject
         {
-            [Alert.Title] = m.Title ?? AlertTitle, [Alert.Body] = body.Length > MaxBody ? body[..(MaxBody - 1)].TrimEnd() + "…" : body, [Alert.Tag] = m.Id,
+            [Alert.Title] = m.Title ?? AlertTitle, [Alert.Body] = body.Length > MaxBody ? body[..(MaxBody - 1)].TrimEnd() + "…" : body, [Alert.Tag] = m.Id, [Alert.Url] = OpenUrl(m.Id),
         };
     }
 

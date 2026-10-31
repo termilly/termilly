@@ -20,7 +20,14 @@ sw.addEventListener('push', e => {
   }));
 });
 
+// A tap opens the app on the alert's terminal: the app already running is told which (app.js), else it starts there.
+// Opening it there is what makes the news seen, on the PC too.
 sw.addEventListener('notificationclick', e => {
   e.notification.close();
-  e.waitUntil(sw.clients.matchAll({ type: 'window' }).then(open => (open.length ? open[0].focus() : sw.clients.openWindow(e.notification.data?.url || '/'))));
+  const url = e.notification.data?.url || '/';
+  e.waitUntil(sw.clients.matchAll({ type: 'window' }).then(async open => {
+    if (!open.length) return sw.clients.openWindow(url);
+    const client = await open[0].focus();
+    client.postMessage({ open: new URL(url, sw.location.origin).searchParams.get('open') });
+  }));
 });

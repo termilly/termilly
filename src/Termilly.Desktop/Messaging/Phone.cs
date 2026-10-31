@@ -85,4 +85,13 @@ internal static partial class ToPage
     {
         public static string Type => "phone:typed";
     }
+
+    /// <summary>
+    /// A phone has this terminal on its screen (opened there, or its news came while it was): the news there is seen,
+    /// as when the terminal is focused on the PC (js/phone.js).
+    /// </summary>
+    internal sealed record PhoneSeen(string Id) : IHostMessage
+    {
+        public static string Type => "phone:seen";
+    }
 }

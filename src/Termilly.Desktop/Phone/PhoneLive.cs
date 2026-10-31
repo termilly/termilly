@@ -157,6 +157,12 @@ internal sealed class PhoneLive : IDisposable
     /// <summary>Whether a paired phone has the app open on its screen now: its alerts would tell it what it sees.</summary>
     public bool IsOpenOn(string device) => _phones.Values.Any(p => p.Device == device && p.Shown);
 
+    /// <summary>Whether a phone has this terminal on its screen now (the app open on it, the terminal shown).</summary>
+    public bool IsShownOnPhone(string pane) => _phones.Values.Any(p => p.Watching == pane && p.Shown);
+
+    /// <summary>A phone put a terminal on its screen (opened it, or came back to the app on it): its news is seen.</summary>
+    public Action<string>? Opened { get; set; }
+
     /// <summary>Serves one phone until it disconnects or the server stops.</summary>
     public async Task RunAsync(WebSocket socket, string device, string address, CancellationToken stop)
     {
@@ -184,7 +190,7 @@ internal sealed class PhoneLive : IDisposable
                 }
                 else if (op == Ops.Seen)
                 {
-                    me.Shown = message?[ShownField]?.GetValue<bool>() ?? true;
+                    Seen(me, message);
                 }
                 else if (Received is { } received && message is not null)
                 {
@@ -207,6 +213,17 @@ internal sealed class PhoneLive : IDisposable
         }
     }
 
+    /// <summary>The app came on the phone's screen or went to the background; back on a terminal, that's seen again.</summary>
+    private void Seen(Phone phone, JsonObject? message)
+    {
+        var was = phone.Shown;
+        phone.Shown = message?[ShownField]?.GetValue<bool>() ?? true;
+        if (phone.Shown && !was && phone.Watching is { } pane)
+        {
+            Opened?.Invoke(pane);
+        }
+    }
+
     /// <summary>
     /// A phone watches a terminal (or none; <paramref name="watch"/> says which, and the phone's size for it): the
     /// terminal takes that size, the phone gets what it shows then, and from then on what it prints.
@@ -225,6 +242,10 @@ internal sealed class PhoneLive : IDisposable
             return;
         }
         Resize(phone, watch!);
+        if (phone.Shown)
+        {
+            Opened?.Invoke(pane);
+        }
         lock (phone.Pending)
         {
             phone.Pending.Clear(); // what the screen below has already
