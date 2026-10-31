@@ -16,6 +16,7 @@ import { agentInput } from './terminals.js';
 import { placeholders } from './snippets.js';
 import { THEMES, THEME_BASE, themeId, onSystemThemeChange } from './themes.js';
 import { termTheme } from './terminals.js';
+import { placesForPhone } from './phonemanage.js';
 
 /** How long changes settle before the phones hear of them. */
 const SEND_AFTER_MS = 300;
@@ -38,6 +39,11 @@ const WAITING = Object.freeze({ permission: 'permission', question: 'question', 
 /** The badge marks the phone draws: the desktop's pixel words as text. */
 const WORDS = { [PROFILE_ICON.serial]: 'COM', [PROFILE_ICON.ssh]: 'SSH', [PROFILE_ICON.wsl]: 'WSL' };
 const CLAUDE_BADGE = 'claude';
+/**
+ * A badge's text for a profile's icon, as the PC's sidebar shows it.
+ * @param {string} icon
+ */
+const badgeOf = icon => /** @type {Record<string, string>} */ (WORDS)[icon] ?? /** @type {Record<string, string>} */ (BADGES)[icon] ?? '>_';
 
 /**
  * Waiting on a permission prompt (not a question, which needs typing).
@@ -82,9 +88,11 @@ function terminalOf(tab) {
   const activity = activityOf(tab);
   return {
     id: tab.id, ws: tab.wsId, title: tabTitle(tab), icon,
-    badge: /** @type {Record<string, string>} */ (WORDS)[icon] ?? /** @type {Record<string, string>} */ (BADGES)[icon] ?? '>_',
+    badge: badgeOf(icon),
     agent: tab.agent?.state ?? null,
     activity: activity?.kind ?? (tab.exited ? 'exited' : null),
+    percent: activity?.percent ?? null,
+    hint: activity?.title ?? null,
     line: tab.agent?.line ?? activity?.title ?? null,
     waiting: waitingFor(tab),
     production: isProduction(tab),
@@ -125,7 +133,9 @@ function snapshot() {
     notes: notesForPhone(),
     // Its themes, the one it shows now and its terminals' colours then (a theme plugin's, if one is chosen).
     themes: PHONE_THEMES, pcTheme: themeId(), pcTerminal: termTheme(),
-    workspaces: state.workspaces.map(w => ({ id: w.id, name: w.name, color: w.color })),
+    workspaces: state.workspaces.map(w => ({ id: w.id, name: w.name, color: w.color, cwd: w.cwd ?? null })),
+    // What a phone may open a terminal on, and where it opens by default (only while it may type: js/phonemanage.js).
+    places: typing ? placesForPhone(badgeOf) : [], activeWs: state.activeId,
     terminals: [...state.tabs.values()].filter(t => t.wsId && wsById(t.wsId) && !t.virtual).map(terminalOf),
   };
 }
@@ -134,7 +144,7 @@ const publish = debounce(() => {
   if (state.settings.phone?.enabled) send(PAGE.phoneState, { state: snapshot() });
 }, SEND_AFTER_MS);
 
-for (const event of [EVENTS.agent, EVENTS.tab, EVENTS.tabClosed, EVENTS.workspaces, EVENTS.settings]) on(event, publish);
+for (const event of [EVENTS.agent, EVENTS.tab, EVENTS.tabClosed, EVENTS.workspaces, EVENTS.settings, EVENTS.profiles]) on(event, publish);
 // Windows switched light and dark: the "system" theme is the other one now.
 onSystemThemeChange(publish);
 // A terminal resized on the PC: the phones draw it at its new size.
@@ -172,17 +182,93 @@ async function answer({ pane, choice, text }) {
   return { answered: choice };
 }
 
-// A phone shows a terminal: it takes the phone's size, so it fills the phone and what it prints fits it; it gets its
-// pane's size back when no phone shows it.
+// A phone shows a terminal: it takes the phone's size, so it fills the phone and what it prints fits it, drawn here in
+// a phone with that phone's name and address under it; it gets its pane's size back when no phone shows it. The phone
+// keeps its full height when the phone's keyboard takes rows away: its tallest size while it shows the terminal.
 onHost(HOST.phoneSize, m => {
   const tab = state.tabs.get(m.id);
   const view = tab?.view;
   if (!tab || !view?.term) return;
-  tab.phoneSize = m.cols && m.rows ? { cols: m.cols, rows: m.rows } : null;
+  const before = tab.phoneSize;
+  tab.phoneSize = m.cols && m.rows
+    ? { cols: m.cols, rows: m.rows, tallest: before?.cols === m.cols ? Math.max(before.tallest ?? 0, m.rows) : m.rows }
+    : null;
   view.body.classList.toggle('phone-sized', !!tab.phoneSize);
-  if (tab.phoneSize) view.term.resize(tab.phoneSize.cols, tab.phoneSize.rows);
-  else view.fit?.fit();
+  if (tab.phoneSize) {
+    view.body.dataset.phone = [m.name ?? 'A phone', m.address].filter(Boolean).join(' · ');
+    view.term.resize(tab.phoneSize.cols, tab.phoneSize.rows);
+    phoneTabs.set(view.body, tab);
+    resized.observe(view.body);
+    requestAnimationFrame(() => fitPhone(tab)); // once the new size is drawn
+  } else {
+    delete view.body.dataset.phone;
+    resized.unobserve(view.body);
+    if (view.term.element) view.term.element.style.minHeight = '';
+    view.term.options.fontSize = state.settings.terminal.fontSize;
+    view.fit?.fit();
+  }
 });
+
+/** Room in a phone-sized pane for its padding and the phone's name under the phone (app.css). */
+const PHONE_ROOM = Object.freeze({ width: 40, height: 84 });
+/** Where xterm draws the characters: its size is the grid's. */
+const TERM_SCREEN = '.xterm-screen';
+/** The smallest font a phone's terminal gets here: it shows what the phone shows, smaller than one would type in. */
+const PHONE_MIN_FONT = 4;
+/** @type {WeakMap<Element, Tab>} */
+const phoneTabs = new WeakMap();
+const resized = new ResizeObserver(entries => {
+  for (const e of entries) {
+    const tab = phoneTabs.get(e.target);
+    if (tab?.phoneSize) fitPhone(tab);
+  }
+});
+
+/**
+ * The frame around a phone's terminal (app.css): its padding and border.
+ * @param {HTMLElement} element
+ */
+function phoneFrame(element) {
+  const s = getComputedStyle(element), px = (/** @type {string[]} */ ...names) => names.reduce((n, k) => n + parseFloat(s.getPropertyValue(k)), 0);
+  return { width: px('padding-left', 'padding-right', 'border-left-width', 'border-right-width'), height: px('padding-top', 'padding-bottom', 'border-top-width', 'border-bottom-width') };
+}
+
+/**
+ * A terminal a phone shows, in its phone, fits its pane: its font gets smaller as needed (never bigger than Settings'),
+ * as it keeps the phone's columns and rows. The phone is as tall as its tallest rows, so the keyboard doesn't shrink it.
+ * @param {Tab} tab
+ */
+function fitPhone(tab) {
+  const view = tab.view, term = view?.term, screen = term?.element?.querySelector(TERM_SCREEN);
+  if (!view || !term?.element || !screen) return;
+  const full = state.settings.terminal.fontSize;
+  if (term.options.fontSize !== full) {
+    term.options.fontSize = full;
+    requestAnimationFrame(() => fitPhone(tab)); // measured at Settings' font, once drawn
+    return;
+  }
+  const inner = screen.getBoundingClientRect(), frame = phoneFrame(term.element);
+  const tall = inner.height * tallestOf(tab) / term.rows;
+  const scale = Math.min(1,
+    (view.body.clientWidth - PHONE_ROOM.width - frame.width) / inner.width,
+    (view.body.clientHeight - PHONE_ROOM.height - frame.height) / tall);
+  if (scale < 1) term.options.fontSize = Math.max(PHONE_MIN_FONT, Math.floor(full * scale * 2) / 2);
+  requestAnimationFrame(() => holdHeight(tab)); // at the new font, once drawn
+}
+
+/** @param {Tab} tab */
+const tallestOf = tab => Math.max(tab.phoneSize?.tallest ?? 0, tab.view?.term?.rows ?? 1);
+
+/**
+ * The phone keeps its tallest height: rows the keyboard took stay as empty screen under the terminal.
+ * @param {Tab} tab
+ */
+function holdHeight(tab) {
+  const term = tab.view?.term, screen = term?.element?.querySelector(TERM_SCREEN);
+  if (!tab.phoneSize || !term?.element || !screen) return;
+  const tall = screen.getBoundingClientRect().height * tallestOf(tab) / term.rows;
+  term.element.style.minHeight = `${Math.ceil(tall + phoneFrame(term.element).height)}px`;
+}
 
 // A phone starts showing a terminal (already at its size): what it shows now, once what it printed is drawn.
 onHost(HOST.phoneScreen, async m => {

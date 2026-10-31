@@ -56,8 +56,10 @@ internal sealed class PhoneLive : IDisposable
     /// A connected phone: one send at a time, the terminal it watches, and what that printed since the last flush. That
     /// waits while the phone gets what the terminal shows (<see cref="Ready"/> false), so it comes after it.
     /// </summary>
-    private sealed class Phone
+    private sealed class Phone(string device, string address)
     {
+        public string Device => device;
+        public string Address => address;
         public SemaphoreSlim Gate { get; } = new(1, 1);
         public volatile string? Watching;
         public volatile bool Ready;
@@ -69,8 +71,11 @@ internal sealed class PhoneLive : IDisposable
     /// <summary>A terminal's size in characters.</summary>
     public sealed record GridSize(int Cols, int Rows);
 
-    /// <summary>A terminal should take this size, or (null) its own again: no phone watches it.</summary>
-    public Action<string, GridSize?>? Sized { get; set; }
+    /// <summary>A phone watching a terminal: the size it asked for, which paired phone it is, and its address.</summary>
+    public sealed record Viewer(GridSize Size, string Device, string Address);
+
+    /// <summary>A terminal should take this phone's size, or (null) its own again: no phone watches it.</summary>
+    public Action<string, Viewer?>? Sized { get; set; }
 
     private const string TypeField = "type";
     private const string StateField = "state";
@@ -144,9 +149,9 @@ internal sealed class PhoneLive : IDisposable
     private string StateMessage() => $$"""{"{{TypeField}}":"{{Kinds.State}}","{{StateField}}":{{_state}}}""";
 
     /// <summary>Serves one phone until it disconnects or the server stops.</summary>
-    public async Task RunAsync(WebSocket socket, string device, CancellationToken stop)
+    public async Task RunAsync(WebSocket socket, string device, string address, CancellationToken stop)
     {
-        var me = new Phone();
+        var me = new Phone(device, address);
         _phones[socket] = me;
         try
         {
@@ -234,7 +239,7 @@ internal sealed class PhoneLive : IDisposable
         }
         var size = new GridSize(Math.Clamp(cols, MinCols, MaxCols), Math.Clamp(rows, MinRows, MaxRows));
         phone.Size = size;
-        Sized?.Invoke(pane, size);
+        Sized?.Invoke(pane, new Viewer(size, phone.Device, phone.Address));
     }
 
     /// <summary>
@@ -249,7 +254,7 @@ internal sealed class PhoneLive : IDisposable
         }
         phone.Size = null;
         var other = _phones.Values.FirstOrDefault(p => p != phone && p.Watching == pane && p.Size is not null);
-        Sized?.Invoke(pane, other?.Size);
+        Sized?.Invoke(pane, other?.Size is { } size ? new Viewer(size, other.Device, other.Address) : null);
     }
 
     public void Dispose()

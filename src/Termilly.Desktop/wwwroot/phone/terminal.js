@@ -1,14 +1,16 @@
 // @ts-check
 // The phone's terminal view (design A): one terminal live, filling the phone's screen. While the phone shows it, the
 // terminal takes the phone's size on the PC too (PhoneLive), so what it prints fits the phone; pinching sizes the
-// font and the keyboard coming up shortens it, and the size follows. First what it shows (the window's own terminal,
-// drawn again at that size), then what it prints.
+// font, and the size follows. The keyboard doesn't: the terminal keeps the rows of the whole screen (resizing would
+// push the text up, here and on the PC), and while the keyboard is up the view slides up to keep the cursor's line
+// above it. First what it shows (the window's own terminal, drawn again at that size), then what it prints.
 // With Settings › Phone › Allow typing on, the phone's keyboard types into it, and a key bar adds what a phone lacks:
 // Esc, Tab, Ctrl, the arrows, Paste and the PC's snippets. A terminal running Claude Code also gets a box to message
 // it: a plain text field, so the phone's keyboard can dictate into it, and what's said is checked before it goes.
 
 import { SCREEN, terminalTouch } from './gestures.js';
 import { snippetSheet, asTyped } from './snippets.js';
+import { composer, COMPOSE } from './compose.js';
 
 /** What the key bar sends (data-key), as a terminal reads it. */
 const KEYS = Object.freeze({
@@ -22,7 +24,6 @@ const SNIP = 'snip';
 /** A message to Claude goes in, then Enter after this (as the PC's own send does, api.js); one with lines is pasted. */
 const ENTER_AFTER_MS = 200;
 const PASTED = Object.freeze({ start: '\x1b[200~', end: '\x1b[201~' });
-const COMPOSE = '.tv-compose';
 /** Ctrl with a letter: its code is the letter's minus 64 (Ctrl+C is 3). */
 const CTRL_OFFSET = 64;
 /** The font size before anything is pinched, and where the phone keeps the size pinched to (or set in Settings). */
@@ -57,7 +58,22 @@ const DEFAULT_SIZE = Object.freeze({ cols: 80, rows: 24 });
 /** Messages from the PC about the terminal watched (PhoneLive.Kinds). */
 const LIVE = Object.freeze({ screen: 'screen', output: 'output' });
 
-/** @typedef {{ id: string, title: string, ws: string, icon: string, badge: string, waiting: unknown, production: boolean, cols: number | null, rows: number | null }} Shown */
+/** @typedef {{ id: string, title: string, ws: string, icon: string, badge: string, waiting: unknown, production: boolean, cols: number | null, rows: number | null, activity: string | null, percent: number | null, hint: string | null }} Shown */
+
+/** The activities the PC draws next to a terminal's title (store.js ACTIVITY); others ("exited") draw nothing. */
+const ACTIVITIES = new Set(['needs', 'error', 'paused', 'done', 'percent', 'spin', 'hibernated']);
+const FULL = 100;
+
+/**
+ * A terminal's activity as the PC draws it (ui.js activityHtml): a spinner, a progress ring, a pulsing dot or a tick;
+ * empty when idle.
+ * @param {{ activity: string | null, percent: number | null, hint: string | null }} t
+ */
+export function activityHtml(t) {
+  if (!t.activity || !ACTIVITIES.has(t.activity)) return '';
+  const percent = t.percent === null || t.percent === undefined ? '' : ` style="--p:${Math.max(0, Math.min(FULL, t.percent))}"`;
+  return `<span class="activity ${t.activity}"${percent} role="img" aria-label="${esc(t.hint ?? '')}"></span>`;
+}
 
 /**
  * A character cell's size (px) at the terminal's font: xterm's own measure (its screen element is resized only when it
@@ -113,15 +129,37 @@ export function terminalView(app) {
     term.options.minimumContrastRatio = next.contrast;
   }
 
-  /** As many columns and rows as fit the terminal's box at its font size. */
+  /** As many columns and rows as fit the terminal's box at its font size, with the keyboard down. */
   function grid() {
     const box = /** @type {HTMLElement | null} */ (view.querySelector(BOX));
     const cell = term && cellOf(term);
     if (!box || !cell) return null;
     return {
       cols: Math.max(LEAST.cols, Math.floor((box.clientWidth - BOX_PADDING.width) / cell.width)),
-      rows: Math.max(LEAST.rows, Math.floor((box.clientHeight - BOX_PADDING.height) / cell.height)),
+      rows: Math.max(LEAST.rows, Math.floor((box.clientHeight + keyboardHeight() - BOX_PADDING.height) / cell.height)),
     };
+  }
+
+  /** How much of the screen the keyboard takes now (px), 0 when it's down. */
+  const keyboardHeight = () => view.classList.contains(KEYBOARD) && window.visualViewport ? Math.max(0, full.height - window.visualViewport.height) : 0;
+
+  /**
+   * While the keyboard is up, the terminal slides up just enough that the cursor's line shows above it (the rows over
+   * it go under the header); back down when the keyboard goes.
+   */
+  function lift() {
+    const el = term?.element, box = /** @type {HTMLElement | null} */ (view.querySelector(BOX)), cell = term && cellOf(term);
+    if (!el) return;
+    if (!box || !cell || !keyboardHeight()) {
+      el.style.transform = '';
+      return;
+    }
+    const buffer = term.buffer.active;
+    const at = buffer.cursorY + buffer.baseY - buffer.viewportY;
+    const row = at >= 0 && at < term.rows ? at : term.rows - 1;
+    const room = box.clientHeight - BOX_PADDING.height;
+    const shift = Math.max(0, Math.min((row + 1) * cell.height, term.rows * cell.height) - room);
+    el.style.transform = shift ? `translateY(-${Math.ceil(shift)}px)` : '';
   }
 
   /** Gives the terminal the size that fits now, and asks the PC for the same, so what it prints next fits. */
@@ -130,6 +168,7 @@ export function terminalView(app) {
     if (!term || !size) return;
     if (size.cols !== term.cols || size.rows !== term.rows) term.resize(size.cols, size.rows);
     term.scrollToBottom();
+    lift();
     clearTimeout(sizeTimer);
     sizeTimer = setTimeout(() => { if (shown && term) app.send({ op: OP.size, pane: shown.id, cols: term.cols, rows: term.rows }); }, SIZE_AFTER_MS);
   }
@@ -152,6 +191,9 @@ export function terminalView(app) {
     return true;
   }
 
+  // The box under a Claude terminal (compose.js): Messages or One bar, as Settings says.
+  const compose = composer(view, { keys: BAR, type, toast: app.toast, redraw: () => frame() });
+
   // The terminal's workspace's snippets and the global ones.
   const snippets = snippetSheet(view, { list: () => app.snippets().filter(s => !s.ws || s.ws === shown?.ws), type });
 
@@ -166,20 +208,19 @@ export function terminalView(app) {
     return `<header class="tv-head"><button class="tv-back" data-tv="${TV.back}" aria-label="Back">‹</button>
       <span class="badge${shown.icon === 'claude' ? ' claude' : ''}" data-icon="${esc(shown.icon)}">${shown.icon === 'claude' ? '✻' : esc(shown.badge)}</span>
       <span class="tv-title">${esc(shown.title)}<span class="tv-ws"> · ${esc(app.wsName(shown.ws))}</span></span>
+      <span class="activity-slot">${activityHtml(shown)}</span>
       ${shown.waiting ? `<button class="btn primary tv-answer" data-tv="${TV.answer}">Answer</button>` : ''}</header>`;
   }
 
   /** Draws the parts around the terminal (its header, the key bar or why typing is off), keeping xterm as it is. */
   function frame() {
     const box = view.querySelector(BOX);
-    view.querySelectorAll('.tv-head, .tv-foot').forEach(el => el.remove());
+    view.querySelectorAll('.tv-head, .tv-foot, .c-menu').forEach(el => el.remove());
     view.insertAdjacentHTML('afterbegin', head());
-    const compose = typing && shown?.icon === 'claude'
-      ? '<form class="tv-foot tv-compose"><textarea rows="1" placeholder="Message Claude" enterkeyhint="send" autocapitalize="sentences"></textarea><button class="btn primary" type="submit">Send</button></form>'
-      : '';
     box?.insertAdjacentHTML('afterend', typing
-      ? `${compose}<div class="tv-foot keybar">${BAR.map(([key, label]) => `<button data-key="${key}">${label}</button>`).join('')}</div>`
+      ? compose.html(shown?.icon === 'claude')
       : '<p class="tv-foot tv-note">Typing from the phone is off: Settings › Phone › Allow typing, on the PC.</p>');
+    setCtrl(ctrl);
   }
 
   /**
@@ -206,6 +247,8 @@ export function terminalView(app) {
     retheme(look);
     touch(box);
     term.onData(/** @param {string} data */ data => { if (!AUTOMATIC.test(data)) type(data); });
+    term.onCursorMove(lift);
+    term.onScroll(lift);
     fitViewport();
     app.send({ op: OP.watch, pane: t.id, cols: term.cols, rows: term.rows });
   }
@@ -257,6 +300,9 @@ export function terminalView(app) {
     }
     const changed = !!t.waiting !== !!shown.waiting || canType !== typing;
     shown = t;
+    // Only when it changes, so the spinner doesn't start over with every update.
+    const slot = view.querySelector('.tv-head .activity-slot'), activity = activityHtml(t);
+    if (slot && slot.innerHTML !== activity) slot.innerHTML = activity;
     if (changed) {
       typing = canType;
       if (term) term.options.disableStdin = !canType;
@@ -305,6 +351,7 @@ export function terminalView(app) {
     if (!field || !text) return;
     if (!type(text.includes('\n') ? PASTED.start + text + PASTED.end : text)) return;
     field.value = '';
+    compose.changed();
     setTimeout(() => type('\r'), ENTER_AFTER_MS);
   }
   view.addEventListener('submit', e => {
@@ -320,6 +367,7 @@ export function terminalView(app) {
 
   view.addEventListener('click', async e => {
     const target = /** @type {HTMLElement} */ (e.target);
+    if (await compose.click(target)) return;
     const key = target.closest('[data-key]')?.getAttribute('data-key');
     const action = target.closest('[data-tv]')?.getAttribute('data-tv');
     if (action === TV.back) close();

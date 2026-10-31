@@ -150,7 +150,9 @@ internal static partial class ToPage
         public const string PhoneAnswer = "phone:answer";
         /// <summary>What a terminal shows now, for a phone that starts showing it (Phone/PhoneLive.cs, js/phone.js).</summary>
         public const string PhoneScreen = "phone:screen";
+        /// <summary>A paired phone opens, closes, renames or moves a terminal, or adds an SSH host (js/phonemanage.js).</summary>
+        public const string PhoneManage = "phone:manage";
 
-        public static readonly string[] All = [Api, PhoneAnswer, PhoneScreen];
+        public static readonly string[] All = [Api, PhoneAnswer, PhoneScreen, PhoneManage];
     }
 }

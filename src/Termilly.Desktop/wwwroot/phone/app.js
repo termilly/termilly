@@ -5,23 +5,28 @@
 // Reject, or a reply); a terminal live (terminal.js); and this phone's alerts (Web Push). A bar at the bottom goes
 // between the terminals, the PC's notifications and this phone's settings (tabs.js).
 
-import { terminalView, TEXT_SIZE } from './terminal.js';
+import { terminalView, activityHtml, TEXT_SIZE } from './terminal.js';
 import { TAB, SETTING, TEXT_SIZES, navHtml, notesHtml, settingsHtml, themesHtml } from './tabs.js';
+import { SCROLLING } from './gestures.js';
+import { manager } from './manage.js';
+import { COMPOSE_STYLE, composeStyle } from './compose.js';
 import { applyLook, chooseLook, chosenLook, looks } from './theme.js';
 
 const app = /** @type {HTMLElement} */ (document.getElementById('app'));
 
 
 /** What the PC says about this phone. */
-/** @typedef {{ paired: boolean, locked?: boolean, pushKey?: string, alerts?: boolean }} Me */
+/** @typedef {{ paired: boolean, locked?: boolean, pushKey?: string, alerts?: boolean, build?: string }} Me */
 /** What a terminal waits for (js/phone.js). */
 /** @typedef {{ kind: string, tool: string | null, target: string | null, text: string, at: number, always?: boolean }} Waiting */
 /** A terminal as the PC describes it (js/phone.js). */
-/** @typedef {{ id: string, ws: string, title: string, icon: string, badge: string, agent: string | null, activity: string | null, line: string | null, waiting: Waiting | null, production: boolean, cols: number | null, rows: number | null }} Terminal */
-/** @typedef {import('./theme.js').Themed & { typing?: boolean, snippets?: import('./snippets.js').PhoneSnippet[], notes?: import('./tabs.js').Note[], workspaces: { id: string, name: string, color: string }[], terminals: Terminal[] }} Snapshot */
+/** @typedef {{ id: string, ws: string, title: string, icon: string, badge: string, agent: string | null, activity: string | null, percent: number | null, hint: string | null, line: string | null, waiting: Waiting | null, production: boolean, cols: number | null, rows: number | null }} Terminal */
+/** @typedef {import('./theme.js').Themed & { typing?: boolean, snippets?: import('./snippets.js').PhoneSnippet[], notes?: import('./tabs.js').Note[], workspaces: { id: string, name: string, color: string, cwd: string | null }[], terminals: Terminal[], places?: import('./manage.js').Place[], activeWs?: string }} Snapshot */
 
 /** The PC's API for the app (PhoneServer, PhoneAppApi). */
 const API = Object.freeze({ me: '/api/me', pair: '/api/pair', forget: '/api/forget', push: '/api/push', pushOff: '/api/push/off', pushTest: '/api/push/test', live: '/api/live' });
+/** The home's element: what the tab shown draws. */
+const HOME = 'home';
 /** The PC's answer to a phone that isn't paired. */
 const FORBIDDEN = 403;
 /** What the app's buttons do (data-do). */
@@ -47,8 +52,6 @@ const TIME = Object.freeze({ ms: 1000, minute: 60, hour: 3600 });
 const AGE_EVERY_MS = 30000;
 /** The workspace colour when the PC sends none. */
 const DEFAULT_COLOR = '#8b7bff';
-/** Agent states (AgentStates.cs) the home shows with a dot. */
-const DOT = Object.freeze({ working: 'work', 'needs-input': 'wait', attention: 'wait', error: 'err', done: 'done' });
 
 const ios = /iPhone|iPad|iPod/.test(navigator.userAgent);
 /** Opened from the Home Screen, where iPhone keeps the app's own storage (and its alerts). */
@@ -116,6 +119,7 @@ const setupScreen = body => show(`<header class="bar"><h1>Termilly</h1></header>
 async function start() {
   try {
     me = await call(API.me);
+    build ||= me?.build ?? ''; // the build loaded now
   } catch {
     return setupScreen(`<p>Can't reach your PC. Is Termilly running, with Settings › Phone on, and this phone on the same Wi-Fi?</p><button class="button" data-do="${DO.retry}">Try again</button>`);
   }
@@ -132,7 +136,8 @@ async function start() {
       <button class="button" type="submit">Pair</button></div></form>
       <p>A name this PC knows already means that phone again: its old pairing goes.</p><p class="error" data-error></p></div></div>`);
   }
-  show('<header class="bar"><h1 data-title>Termilly</h1><span class="conn" data-conn></span></header><main id="home" class="tabbed"></main><div id="nav"></div><div id="sheet"></div><div class="toast" data-toast hidden></div>');
+  show(`<header class="bar"><h1 data-title>Termilly</h1><span class="conn" data-conn></span><span data-add></span></header><main id="${HOME}" class="tabbed"></main><div id="nav"></div><div id="sheet"></div><div class="toast" data-toast hidden></div>`);
+  manage.swipe(/** @type {HTMLElement} */ (document.getElementById(HOME)));
   connect();
   render();
   // The phone allows alerts already but the PC has none for this pairing (it's new): on again, without asking.
@@ -156,8 +161,7 @@ function cardHtml(t) {
 
 /** @param {Terminal} t */
 function rowHtml(t) {
-  const dot = (/** @type {Record<string, string>} */ (DOT))[t.agent ?? ''] ?? (t.activity ? 'work' : 'idle');
-  return `<div class="row" data-do="${DO.term}" data-id="${t.id}">${badge(t)}<div class="r-text"><div class="r-name">${esc(t.title)}</div><div class="r-line">${esc(t.line ?? '')}</div></div><span class="state s-${dot}"></span></div>`;
+  return `<div class="row" data-do="${DO.term}" data-id="${t.id}">${badge(t)}<div class="r-text"><div class="r-name">${esc(t.title)}</div><div class="r-line">${esc(t.line ?? '')}</div></div><span class="activity-slot">${activityHtml(t)}</span></div>`;
 }
 
 /** The phone's answer when it allows alerts. */
@@ -206,20 +210,23 @@ function terminalsHtml() {
     + (waiting.length ? `<div class="section">Waiting for you · ${waiting.length}</div>${waiting.map(cardHtml).join('')}` : '')
     + (!snap.terminals.length ? `<p class="muted center">${connected ? 'No terminals open on your PC.' : 'Connecting to your PC.'}</p>` : '')
     + groups.map(({ w, list }) => `<div class="ws"><span class="dot" style="background:${esc(w.color || DEFAULT_COLOR)}"></span>${esc(w.name)}<span class="count">${list.length}</span></div>
-      <div class="list">${list.map(rowHtml).join('')}</div>`).join('');
+      <div class="list">${list.map(t => manage.rowWrap(t, rowHtml(t))).join('')}</div>`).join('')
+    + manage.remoteHtml();
 }
 
 function render() {
-  const home = document.getElementById('home');
+  const home = document.getElementById(HOME);
   if (!home) return;
   const conn = app.querySelector('[data-conn]');
   if (conn) conn.textContent = connected ? '' : 'Reconnecting';
   const title = app.querySelector('[data-title]');
   const onThemes = tab === TAB.settings && themesPage;
   if (title) title.textContent = onThemes ? 'Themes' : /** @type {Record<string, string>} */ (TITLE)[tab];
+  const add = app.querySelector('[data-add]');
+  if (add) add.innerHTML = tab === TAB.terminals ? manage.addButton() : '';
   home.innerHTML = tab === TAB.notes ? notesHtml(snap.notes ?? [], noteParts)
     : onThemes ? themesHtml(looks(snap), chosenLook())
-    : tab === TAB.settings ? settingsHtml({ alerts: alertsBody(), size: textSize(), host: location.host, connected, look: chosenLook(), looks: looks(snap) })
+    : tab === TAB.settings ? settingsHtml({ alerts: alertsBody(), size: textSize(), scrolling: localStorage.getItem(SCROLLING.key) ?? SCROLLING.smooth, compose: composeStyle(), host: location.host, connected, look: chosenLook(), looks: looks(snap) })
     : terminalsHtml();
   /** @type {HTMLElement} */ (document.getElementById('nav')).innerHTML = navHtml(tab, snap.notes?.length ?? 0);
   renderSheet();
@@ -268,9 +275,27 @@ function openSheet(id, reply = false) {
 
 // ---- The live connection ----
 
+/** The app's build when it loaded (the PC's /api/me says which it serves). */
+let build = '';
+
+/**
+ * A Home Screen app stays open across a restart of Termilly and only connects again: when the PC now serves a newer
+ * build of the app, it loads that one.
+ */
+async function reloadIfRebuilt() {
+  try {
+    const now = /** @type {Me} */ (await call(API.me)).build ?? '';
+    if (!build) build = now;
+    else if (now && now !== build) location.reload();
+  } catch {
+    // The PC isn't answering yet: the next connection asks again.
+  }
+}
+
 function connect() {
   live = new WebSocket(`wss://${location.host}${API.live}`);
   live.addEventListener('open', () => {
+    reloadIfRebuilt();
     connected = true;
     retry = RETRY_MS;
     render();
@@ -284,8 +309,11 @@ function connect() {
       restyle();
       render();
       if (terminalShown.viewing) terminalShown.update(terminal(terminalShown.viewing), !!snap.typing);
+      manage.changed();
     } else if (m.type === LIVE.screen || m.type === LIVE.output) {
       terminalShown.message(m);
+    } else if (m.type === LIVE.answered && manage.answered(m)) {
+      // Opening, closing and the rest (manage.js) said how it went.
     } else if (m.type === LIVE.answered) {
       // Only a failure is said; an answer that went through just closes its sheet.
       if (!m.ok) toast(m.error || 'That didn\'t go through.');
@@ -381,6 +409,10 @@ app.addEventListener('click', e => {
     window.scrollTo(0, 0);
     return;
   }
+  if (manage.click(/** @type {HTMLElement} */ (e.target))) {
+    e.stopPropagation();
+    return;
+  }
   const target = /** @type {HTMLElement} */ (e.target).closest('[data-do]');
   if (!target) return;
   const id = target.getAttribute('data-id') ?? '';
@@ -401,6 +433,14 @@ app.addEventListener('click', e => {
     case SETTING.smaller: stepText(-1); break;
     case SETTING.bigger: stepText(1); break;
     case SETTING.unpair: unpair(); break;
+    case SETTING.compose:
+      localStorage.setItem(COMPOSE_STYLE.key, target.dataset.compose ?? COMPOSE_STYLE.messages);
+      render();
+      break;
+    case SETTING.scrolling:
+      localStorage.setItem(SCROLLING.key, target.dataset.scrolling ?? SCROLLING.smooth);
+      render();
+      break;
     case SETTING.themes:
     case SETTING.back:
       themesPage = target.dataset.do === SETTING.themes;
@@ -445,6 +485,15 @@ const terminalShown = terminalView({
   toast,
   answer: id => openSheet(id),
   wsName: id => wsOf(id)?.name ?? '',
+});
+
+/** Opening, closing and moving terminals, the Remote section and adding an SSH host (manage.js). */
+const manage = manager({
+  snap: () => snap,
+  send: message => { if (live?.readyState === OPEN) live.send(JSON.stringify(message)); },
+  toast,
+  openTerminal: id => { const t = terminal(id); if (t) terminalShown.open(t, !!snap.typing); },
+  render,
 });
 
 if (hasWorker) navigator.serviceWorker.register('/sw.js');

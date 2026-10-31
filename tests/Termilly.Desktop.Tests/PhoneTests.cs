@@ -340,22 +340,22 @@ public sealed class PhoneTests : IDisposable
     }
 
     [Fact]
-    public async Task A_terminal_takes_the_size_of_the_phone_watching_it_and_its_own_back_when_the_phone_goes()
+    public async Task A_terminal_takes_the_size_of_the_phone_watching_it_with_which_phone_and_its_own_back_when_the_phone_goes()
     {
         using var authority = _store.Authority("TESTPC");
         using var server = Start(authority);
         using var http = Https(authority);
         var paired = await Post(http, server.AppUrl + "api/pair", $$"""{"code":"{{_store.OfferCode()}}"}""");
         var cookie = paired.Headers.GetValues("Set-Cookie").First().Split(';')[0];
-        var sized = new List<(string Pane, PhoneLive.GridSize? Size)>();
+        var sized = new List<(string Pane, PhoneLive.Viewer? Phone)>();
         var released = new TaskCompletionSource();
-        _live.Sized = (pane, size) =>
+        _live.Sized = (pane, phone) =>
         {
             lock (sized)
             {
-                sized.Add((pane, size));
+                sized.Add((pane, phone));
             }
-            if (size is null)
+            if (phone is null)
             {
                 released.TrySetResult();
             }
@@ -371,7 +371,10 @@ public sealed class PhoneTests : IDisposable
         await Send(phone, """{"op":"unwatch"}""");
         await released.Task.WaitAsync(TimeSpan.FromSeconds(10));
 
-        Assert.Equal([("t1", new PhoneLive.GridSize(400, 30)), ("t1", null)], sized);
+        Assert.Equal(2, sized.Count);
+        Assert.Equal(("t1", new PhoneLive.GridSize(400, 30), "127.0.0.1"), (sized[0].Pane, sized[0].Phone!.Size, sized[0].Phone!.Address));
+        Assert.Equal(_store.List().Single().Id, sized[0].Phone!.Device);
+        Assert.Equal(("t1", null), sized[1]);
     }
 
     private static Task Send(ClientWebSocket socket, string text) =>

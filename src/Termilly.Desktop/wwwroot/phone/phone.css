@@ -32,6 +32,8 @@ code { padding: 1px 5px; border-radius: 5px; background: var(--bg); font: 13.5px
 .bar { display: flex; gap: 10px; align-items: center; max-width: 600px; margin: 0 auto; padding: 14px 20px 8px; }
 .bar h1 { flex: 1; }
 .conn { color: var(--attention); font-size: 13px; }
+.add-btn { display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 0; border-radius: 50%; background: var(--raised); color: var(--accent); }
+.add-btn svg, .m-sheet .chip.add svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
 .setup { padding-top: 10px; }
 .step { display: flex; gap: 12px; margin: 0 0 14px; padding: 14px; border-radius: 14px; background: var(--raised); }
 /* The text beside the number takes what's left, no more: the code box in it would push the Pair button off the screen. */
@@ -68,12 +70,25 @@ form .button { flex: none; }
 .r-text { flex: 1; min-width: 0; }
 .r-name { font-size: 15.5px; }
 .r-line { overflow: hidden; color: var(--muted); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
-.state { flex: none; width: 8px; height: 8px; border-radius: 50%; }
-.s-work { background: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent); }
-.s-wait { background: var(--attention); }
-.s-err { background: var(--danger); }
-.s-done { background: var(--ok); }
-.s-idle { background: var(--line); }
+/* A terminal's activity, drawn as on the PC (app.css .activity): a spinner, a progress ring, a pulsing dot, a tick. */
+.activity-slot { display: inline-flex; flex: none; align-items: center; justify-content: center; min-width: 14px; }
+.activity-slot:empty { display: none; }
+.activity { --size: 13px; --c: var(--accent); display: inline-block; flex: none; box-sizing: border-box; width: var(--size); height: var(--size); border-radius: 50%; }
+.activity.spin { border: 2px solid color-mix(in srgb, var(--c) 20%, transparent); border-top-color: var(--c); border-right-color: var(--c); animation: activity-spin 0.8s linear infinite; }
+.activity.percent, .activity.error, .activity.paused {
+  background: conic-gradient(var(--c) calc(var(--p) * 1%), color-mix(in srgb, var(--c) 22%, transparent) 0);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1.5px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1.5px));
+}
+.activity.error { --c: var(--danger); }
+.activity.paused { --c: var(--attention); }
+.activity.hibernated { box-shadow: inset -3px -1px 0 0 var(--muted); transform: rotate(-20deg); }
+.activity.needs { --c: var(--attention); background: var(--c); box-shadow: 0 0 0 2px color-mix(in srgb, var(--c) 30%, transparent); animation: activity-pulse 1.2s ease-in-out infinite; }
+.activity.done { --c: var(--ok); border: solid var(--c); border-width: 0 2px 2px 0; border-radius: 0; width: calc(var(--size) * 0.5); height: var(--size); transform: translateY(-1px) rotate(45deg); margin: 0 calc(var(--size) * 0.25); }
+.tv-head .activity-slot { margin-left: -2px; }
+@keyframes activity-spin { to { transform: rotate(360deg); } }
+@keyframes activity-pulse { 50% { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) { .activity.spin { border-color: var(--c); animation: activity-pulse 1.6s ease-in-out infinite; } }
 
 /* ---- Shell badges, as in the desktop sidebar ---- */
 .badge { --tint: #c8c8c8; display: inline-grid; flex: none; place-items: center; width: 26px; height: 26px; border: 1px solid color-mix(in srgb, var(--tint) 40%, transparent); border-radius: 7px; background: color-mix(in srgb, var(--tint) 16%, transparent); color: var(--tint); font: 700 9.5px/1 ui-monospace, Menlo, Consolas, monospace; }
@@ -131,8 +146,8 @@ body.tv-open { overflow: hidden; }
 .snip-preview { margin: 4px 0; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
 /* The bottom bar (tabs.js): Terminals, Notifications, Settings. The page leaves room for it. */
 main.tabbed { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
-.tabbar { position: fixed; inset: auto 0 0; z-index: 4; display: flex; padding: 3px 8px max(2px, calc(env(safe-area-inset-bottom) - 18px)); border-top: 1px solid var(--line); background: color-mix(in srgb, var(--raised) 92%, transparent); backdrop-filter: blur(12px); }
-.tabbar button { position: relative; display: flex; flex: 1; flex-direction: column; gap: 1px; align-items: center; padding: 2px 0; border: 0; background: none; color: var(--muted); font-size: 10px; font-weight: 600; }
+.tabbar { position: fixed; inset: auto 0 0; z-index: 4; display: flex; justify-content: center; gap: 8px; padding: 3px 8px max(2px, calc(env(safe-area-inset-bottom) - 18px)); border-top: 1px solid var(--line); background: color-mix(in srgb, var(--raised) 92%, transparent); backdrop-filter: blur(12px); }
+.tabbar button { position: relative; display: flex; flex: 0 1 96px; flex-direction: column; gap: 1px; align-items: center; padding: 2px 0; border: 0; background: none; color: var(--muted); font-size: 10px; font-weight: 600; }
 .tabbar button.on { color: var(--accent); }
 .tabbar svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
 .tab-count { position: absolute; top: 0; left: calc(50% + 6px); min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--accent); color: var(--on-accent); font-size: 10px; font-weight: 700; line-height: 16px; text-align: center; }
@@ -158,12 +173,77 @@ main.tabbed { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
 .tick { flex: none; width: 18px; color: var(--accent); font-weight: 700; }
 .hint { margin: 8px 8px 0; font-size: 13px; }
 /* A Claude terminal's message box (terminal.js), above the key bar: the keyboard's mic dictates into it. */
-.tv-compose { display: flex; flex: none; gap: 8px; align-items: flex-end; margin: 0; padding: 6px 8px 2px; border-top: 1px solid var(--line); background: var(--raised); }
-.tv-compose textarea { flex: 1; min-height: 36px; max-height: 120px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 18px; background: var(--bg); color: var(--text); font-family: inherit; font-size: 16px; line-height: 1.3; resize: none; field-sizing: content; }
-.tv-compose .btn { flex: none; padding: 8px 14px; }
+/* The box for writing to Claude (compose.js): Messages, or One bar. */
+.tv-compose { position: relative; display: flex; flex: none; gap: 8px; align-items: flex-end; margin: 0; padding: 7px 8px 5px; border-top: 1px solid var(--line); background: var(--raised); }
+.tv-compose textarea { flex: 1; min-width: 0; min-height: 34px; max-height: 120px; padding: 7px 0 6px; border: 0; background: none; color: var(--text); font-family: inherit; font-size: 16px; line-height: 1.3; resize: none; outline: none; field-sizing: content; }
 .tv-compose + .keybar { border-top: 0; }
+.tv-compose svg, .c-menu svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.m-plus { display: grid; flex: none; place-items: center; width: 34px; height: 34px; margin-bottom: 1px; padding: 0; border: 0; border-radius: 50%; background: var(--bg); color: var(--muted); }
+.m-pill { display: flex; flex: 1; gap: 6px; align-items: flex-end; min-width: 0; padding: 0 4px 0 14px; border: 1px solid var(--line); border-radius: 19px; background: var(--bg); }
+.m-mic, .m-go { display: grid; flex: none; place-items: center; width: 30px; height: 30px; margin: 0 0 3px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--muted); }
+.m-mic.on { background: var(--danger); color: #fff; }
+.m-go { background: var(--accent); color: var(--on-accent); }
+.m-go svg, .b-go svg { width: 16px; height: 16px; stroke-width: 2.4; }
+.m-mic[hidden], .m-go[hidden] { display: none; }
+.tv.writing .keybar { display: none; }
+.tv.writing .tv-compose { padding-bottom: 7px; }
+.keybar.one-bar, .tv-compose.one-bar { align-items: center; gap: 4px; padding: 4px; }
+.keybar.one-bar { align-self: stretch; padding-bottom: max(4px, calc(env(safe-area-inset-bottom) - 16px)); }
+.b-mode { display: flex; flex: none; padding: 2px; border-radius: 8px; background: var(--bg); }
+.b-mode button { flex: none; width: 30px; padding: 3px 0; border: 0; border-radius: 6px; background: none; box-shadow: none; color: var(--muted); font: 14px/1.2 inherit; }
+.b-mode button.on { background: var(--accent); color: var(--on-accent); }
+.b-mode button.claude.on { background: #d97757; color: #fff; }
+.tv-compose.one-bar textarea { padding: 6px 10px; border-radius: 8px; background: var(--bg); box-shadow: inset 0 0 0 1px var(--line); min-height: 30px; }
+.b-go { display: grid; flex: none; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 8px; background: #d97757; color: #fff; }
+.c-menu { position: absolute; left: 8px; bottom: 96px; z-index: 6; display: flex; flex-direction: column; min-width: 220px; overflow: hidden; border-radius: 14px; background: var(--sheet); box-shadow: 0 10px 30px rgba(0, 0, 0, .45); }
+.c-menu button { padding: 12px 16px; border: 0; background: none; color: var(--text); font: inherit; font-size: 15px; text-align: left; }
+.c-menu button + button { border-top: 1px solid var(--line); }
 /* Appearance: More themes opens their own page, which leads back with ‹ Settings. */
 .look.more .r-text { flex: 1; }
 .more-value { color: var(--muted); font-size: 14px; }
 .chev { flex: none; color: var(--muted); font-size: 20px; line-height: 1; }
 .back-row { margin: 0 0 10px; padding: 4px 6px; border: 0; background: none; color: var(--accent); font: inherit; font-size: 16px; }
+
+/* ---- Managing terminals (manage.js): swipe rows, the Remote section, the sheets ---- */
+.swipe { position: relative; overflow: hidden; }
+.swipe + .swipe { border-top: 1px solid var(--line); }
+.swipe > .row { position: relative; z-index: 1; background: var(--raised); transition: transform .2s ease; }
+.swipe.open > .row { transform: translateX(-148px); }
+.swipe-acts { position: absolute; inset: 0 0 0 auto; display: flex; }
+.swipe-acts button { width: 74px; border: 0; background: #5b5b66; color: #fff; font: 600 14px/1 inherit; }
+.swipe-acts button.red { background: var(--danger); }
+.section-row { display: flex; align-items: center; margin: 18px 8px 6px; }
+.section-row .section { flex: 1; margin: 0; }
+.link { padding: 0; border: 0; background: none; color: var(--accent); font: inherit; font-size: 15px; }
+.more-link { display: block; margin: 8px auto 0; }
+button.row { width: 100%; border: 0; background: none; color: inherit; font: inherit; text-align: left; }
+.list > button.row + button.row { border-top: 1px solid var(--line); }
+.chev { color: var(--muted); font-size: 20px; }
+.prod { padding: 1px 6px; border-radius: 6px; background: color-mix(in srgb, var(--danger) 18%, transparent); color: var(--danger); font-size: 11px; font-weight: 700; }
+.m-sheet .list, .m-sheet .form, .m-sheet .tile, .m-sheet .chip, .m-sheet .seg { background: var(--bg); }
+.m-sheet.tall { max-height: calc(100vh - 40px); }
+.m-head { display: flex; align-items: center; margin: 0 0 8px; }
+.m-head h2 { flex: 1; margin: 0; font-size: 17px; text-align: center; }
+.m-head button, .m-head > span { min-width: 70px; padding: 6px 0; border: 0; background: none; color: var(--accent); font: inherit; font-size: 17px; text-align: left; }
+.m-head button.strong { font-weight: 600; text-align: right; }
+.tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.tile { display: flex; flex-direction: column; gap: 6px; align-items: center; min-width: 0; padding: 10px 4px 8px; border: 0; border-radius: 13px; color: var(--text); font: 600 12px/1.2 inherit; text-align: center; }
+.tile span:last-child { max-width: 100%; overflow-wrap: anywhere; }
+.tile.on, .chip.on { box-shadow: inset 0 0 0 2px var(--accent); }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { display: inline-flex; gap: 7px; align-items: center; padding: 6px 11px 6px 7px; border: 0; border-radius: 10px; color: var(--text); font: 600 14px/1.2 inherit; }
+.chip .badge { width: 22px; height: 22px; font-size: 8px; }
+.chip.add { padding-left: 11px; color: var(--accent); }
+.form { overflow: hidden; border-radius: 12px; }
+.f-row { display: flex; gap: 10px; align-items: center; min-height: 46px; padding: 0 14px; }
+.f-row + .f-row { border-top: 1px solid var(--line); }
+.f-row > span { flex: none; width: 92px; }
+.f-row input, .f-row select { flex: 1; min-width: 0; padding: 10px 0; border: 0; background: none; color: var(--text); font: inherit; font-size: 16px; outline: none; }
+.f-row input::placeholder { color: var(--muted); }
+.form + .form, .seg + .form { margin-top: 12px; }
+.seg { display: flex; padding: 3px; border-radius: 10px; }
+.seg button { flex: 1; padding: 8px 0; border: 0; border-radius: 8px; background: none; color: var(--text); font: 600 14px/1 inherit; }
+.seg button.on { background: var(--accent); color: var(--on-accent); }
+.m-sheet .hint { margin: 6px 4px 0; font-size: 13px; }
+.m-sheet .s-head h2 { font-size: 20px; }
+.c-title { margin: 0 0 6px; font-size: 20px; }

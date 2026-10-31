@@ -92,7 +92,7 @@ internal sealed class PhoneServer : IDisposable
 
     private PhoneServer(IPAddress address, int port, string webRoot, PhoneStore store, PhoneLive live, X509Certificate2 authority, string pushKey, Func<string, Task> testAlert)
     {
-        (_webRoot, _api, _live) = (Path.GetFullPath(webRoot), new PhoneAppApi(store, pushKey, testAlert), live);
+        (_webRoot, _api, _live) = (Path.GetFullPath(webRoot), new PhoneAppApi(store, pushKey, testAlert, BuildOf(webRoot)), live);
         _certificate = store.ServerCertificate(authority, [address], HostName);
         _authorityFile = PhoneCertificates.AuthorityFile(authority);
         _listener = new TcpListener(address, port);
@@ -106,6 +106,11 @@ internal sealed class PhoneServer : IDisposable
     private static string HostName => $"{Dns.GetHostName().ToLowerInvariant()}.local";
 
     /// <summary>Starts on the local network address (TERMILLY_PHONE_BIND overrides it, for tests). IOException when it can't.</summary>
+    /// <summary>The app's build: the newest of its files' times, so a rebuilt app is a new one.</summary>
+    private static string BuildOf(string webRoot) => Directory.Exists(webRoot)
+        ? Directory.EnumerateFiles(webRoot, "*", SearchOption.AllDirectories).Select(File.GetLastWriteTimeUtc).DefaultIfEmpty().Max().Ticks.ToString("x", System.Globalization.CultureInfo.InvariantCulture)
+        : "";
+
     public static PhoneServer Start(int port, string webRoot, PhoneStore store, PhoneLive live, X509Certificate2 authority, string pushKey, Func<string, Task> testAlert)
     {
         var address = Environment.GetEnvironmentVariable("TERMILLY_PHONE_BIND") is { Length: > 0 } bind
@@ -200,7 +205,7 @@ internal sealed class PhoneServer : IDisposable
                 var request = await ReadRequest(stream, timeout.Token);
                 if (secure && request.Path == LivePath && request.Headers.TryGetValue("Sec-WebSocket-Key", out var key))
                 {
-                    await ServeLive(stream, request, key, timeout.Token);
+                    await ServeLive(stream, request, key, (client.Client.RemoteEndPoint as IPEndPoint)?.Address.MapToIPv4().ToString() ?? "", timeout.Token);
                     return;
                 }
                 var reply = secure ? await RespondSecure(request) : await RespondPlain(request);
@@ -213,7 +218,7 @@ internal sealed class PhoneServer : IDisposable
     }
 
     /// <summary>A paired phone's live connection (RFC 6455): accepted, then PhoneLive serves it until it closes.</summary>
-    private async Task ServeLive(Stream stream, PhoneRequest request, string key, CancellationToken cancel)
+    private async Task ServeLive(Stream stream, PhoneRequest request, string key, string address, CancellationToken cancel)
     {
         if (_api.DeviceOf(request) is not { } device)
         {
@@ -226,7 +231,7 @@ internal sealed class PhoneServer : IDisposable
         await stream.WriteAsync(Encoding.ASCII.GetBytes($"HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: {accept}\r\n\r\n"), cancel);
         await stream.FlushAsync(cancel);
         var socket = WebSocket.CreateFromStream(stream, new WebSocketCreationOptions { IsServer = true, KeepAliveInterval = KeepAlive });
-        await _live.RunAsync(socket, device, _stop.Token);
+        await _live.RunAsync(socket, device, address, _stop.Token);
     }
 
     private static async Task<PhoneRequest> ReadRequest(Stream stream, CancellationToken cancel)

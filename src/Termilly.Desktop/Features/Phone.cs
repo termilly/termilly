@@ -52,7 +52,8 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
         settings.Saved += _ => Update();
         live.Received = ReceivedAsync;
         live.Screen = ScreenAsync;
-        live.Sized = (pane, size) => _page.Post(new ToPage.PhoneSize(pane, size?.Cols, size?.Rows));
+        live.Sized = (pane, phone) => _page.Post(new ToPage.PhoneSize(pane, phone?.Size.Cols, phone?.Size.Rows,
+            phone is null ? null : store.List().FirstOrDefault(d => d.Id == phone.Device)?.Name, phone?.Address));
         sessions.Output += Printed;
     }
 
@@ -162,8 +163,38 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
     private const string DataField = "data";
 
     /// <summary>A phone sent something: keys for the terminal it watches, or an answer to an agent.</summary>
-    private Task<JsonObject> ReceivedAsync(string device, JsonObject message) =>
-        message[OpField]?.GetValue<string>() == InputOp ? Task.FromResult(Type(message)) : AnswerAsync(device, message);
+    private Task<JsonObject> ReceivedAsync(string device, JsonObject message) => message[OpField]?.GetValue<string>() switch
+    {
+        InputOp => Task.FromResult(Type(message)),
+        ManageOp => ManageAsync(message),
+        _ => AnswerAsync(device, message),
+    };
+
+    private const string ManageOp = "manage";
+
+    /// <summary>
+    /// A phone opens, closes, renames or moves a terminal, or adds an SSH host: only while Settings › Phone allows typing
+    /// (a new terminal runs whatever its shell does). The page does it and says how it went (js/phonemanage.js).
+    /// </summary>
+    private async Task<JsonObject> ManageAsync(JsonObject message)
+    {
+        if (!_settings.Current.Phone.AllowTyping)
+        {
+            return new JsonObject { [Answer.Ok] = false, [OpField] = ManageOp, [Answer.Error] = "Managing terminals from the phone is off: Settings › Phone › Allow typing." };
+        }
+        try
+        {
+            var done = await _api.AskPageAsync(ToPage.Calls.PhoneManage, new JsonObject { [PageApi.CallFields.Args] = message.DeepClone() }).ConfigureAwait(false);
+            var answer = done?.DeepClone() as JsonObject ?? [];
+            answer[Answer.Ok] = true;
+            answer[OpField] = ManageOp;
+            return answer;
+        }
+        catch (InvalidOperationException e)
+        {
+            return new JsonObject { [Answer.Ok] = false, [OpField] = ManageOp, [Answer.Error] = e.Message };
+        }
+    }
 
     /// <summary>Keys from a phone, typed into the terminal: only while Settings › Phone allows typing.</summary>
     private JsonObject Type(JsonObject message)

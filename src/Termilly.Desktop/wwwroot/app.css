@@ -1288,8 +1288,13 @@ body[data-sidebar="rail"] .side-rail { opacity: 1; pointer-events: auto; }
   background: var(--term-surface, transparent); /* a theme plugin's background reaches the edges */
 }
 
-/* A phone shows this terminal, at the phone's size (js/phone.js): said in the corner the terminal leaves free. */
-.pane-body.phone-sized::after { content: 'On the phone'; position: absolute; right: 12px; bottom: 8px; padding: 2px 8px; border-radius: 6px; background: var(--accent); color: #fff; font-size: 11px; font-weight: 600; pointer-events: none; }
+/* A phone shows this terminal, at the phone's size (js/phone.js): the terminal drawn in a phone in the middle of the
+   pane (its island, its home bar), with the phone's name and address under it. */
+.pane-body.phone-sized { display: flex; flex-direction: column; align-items: center; justify-content: safe center; gap: 12px; padding: 16px; overflow: auto; }
+.pane-body.phone-sized > .xterm { flex: none; overflow: hidden; padding: 34px 8px 24px; border: 9px solid #050506; border-radius: 44px; box-shadow: 0 0 0 2px #55555d, 0 0 0 3px #1c1c20, 0 16px 40px rgba(0, 0, 0, 0.45); }
+.pane-body.phone-sized > .xterm::before { content: ''; position: absolute; top: 8px; left: 50%; z-index: 10; width: 84px; height: 22px; border-radius: 11px; background: #000; transform: translateX(-50%); pointer-events: none; }
+.pane-body.phone-sized > .xterm::after { content: ''; position: absolute; bottom: 8px; left: 50%; z-index: 10; width: 30%; height: 4px; border-radius: 2px; background: var(--muted); opacity: 0.7; transform: translateX(-50%); pointer-events: none; }
+.pane-body.phone-sized::after { content: attr(data-phone); flex: none; display: flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; background: var(--accent); color: #fff; font-size: 12px; font-weight: 600; pointer-events: none; }
 
 /* The padding sits on .xterm, not .pane-body: the fit addon measures the parent's full height and
    subtracts only .xterm's own padding, so padding on the parent makes the bottom row overflow. */
