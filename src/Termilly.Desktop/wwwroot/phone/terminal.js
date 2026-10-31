@@ -215,6 +215,7 @@ export function terminalView(app) {
   /** Draws the parts around the terminal (its header, the key bar or why typing is off), keeping xterm as it is. */
   function frame() {
     const box = view.querySelector(BOX);
+    compose.stopListening(); // its box is drawn again
     view.querySelectorAll('.tv-head, .tv-foot, .c-menu').forEach(el => el.remove());
     view.insertAdjacentHTML('afterbegin', head());
     box?.insertAdjacentHTML('afterend', typing
@@ -276,6 +277,7 @@ export function terminalView(app) {
   /** Closes the view; the PC gives the terminal its own size back. */
   function close() {
     clearTimeout(sizeTimer);
+    compose.stopListening();
     if (shown) app.send({ op: OP.unwatch });
     term?.dispose();
     term = null;
@@ -298,15 +300,20 @@ export function terminalView(app) {
       app.toast('That terminal was closed on the PC.');
       return;
     }
-    const changed = !!t.waiting !== !!shown.waiting || canType !== typing;
+    const waitingChanged = !!t.waiting !== !!shown.waiting;
+    const typingChanged = canType !== typing;
     shown = t;
     // Only when it changes, so the spinner doesn't start over with every update.
     const slot = view.querySelector('.tv-head .activity-slot'), activity = activityHtml(t);
     if (slot && slot.innerHTML !== activity) slot.innerHTML = activity;
-    if (changed) {
+    if (typingChanged) {
       typing = canType;
       if (term) term.options.disableStdin = !canType;
       frame();
+    } else if (waitingChanged) {
+      // Only the header's Answer button: the box under the terminal keeps what's being written (and dictated).
+      view.querySelector('.tv-head')?.remove();
+      view.insertAdjacentHTML('afterbegin', head());
     }
   }
 
@@ -351,6 +358,7 @@ export function terminalView(app) {
     if (!field || !text) return;
     if (!type(text.includes('\n') ? PASTED.start + text + PASTED.end : text)) return;
     field.value = '';
+    compose.stopListening(); // sent: no more dictation into it
     compose.changed();
     setTimeout(() => type('\r'), ENTER_AFTER_MS);
   }
