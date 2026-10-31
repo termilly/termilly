@@ -17,7 +17,7 @@ public sealed class SessionSnapshotTests : IDisposable
     [Fact]
     public void Snapshots_are_encrypted_trimmed_and_redacted()
     {
-        var lines = Enumerable.Range(1, 800).Select(i => $"line {i}").Append("net user admin Hunter2Secret! /add").ToArray();
+        var lines = Enumerable.Range(1, SessionSnapshot.MaxLines + 300).Select(i => $"line {i}").Append("net user admin Hunter2Secret! /add").ToArray();
         var snapshot = JsonSerializer.SerializeToElement(new
         {
             savedAt = 1,
@@ -31,7 +31,7 @@ public sealed class SessionSnapshotTests : IDisposable
         Assert.Equal(SessionSnapshot.MaxLines, tab.GetProperty("lines").GetArrayLength());
         Assert.DoesNotContain("Hunter2Secret!", tab.GetProperty("lines").GetRawText());
         var file = Directory.GetFiles(_dir, "session.tms").Single();
-        Assert.DoesNotContain("line 799", File.ReadAllText(file));
+        Assert.DoesNotContain($"line {SessionSnapshot.MaxLines}", File.ReadAllText(file));
     }
 
     [Fact]

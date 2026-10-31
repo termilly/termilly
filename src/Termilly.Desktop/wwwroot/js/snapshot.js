@@ -17,7 +17,6 @@ import { savedResults, restoreResults } from './results.js';
 const { restoreSession } = SETTING_VALUES;
 
 const EVERY = 30000;
-const LINES = 500;
 const SESSION_ID = /^[0-9a-f][0-9a-f-]{7,63}$/i;
 
 /**
@@ -41,7 +40,7 @@ function snapshot() {
     if (!tab.view?.term || tab.noHistory) continue;
     // A session still waiting to resume (its shell hasn't shown a prompt yet) is kept for the next start too.
     const session = tab.agent?.session ?? tab.hibernated?.session ?? tab.start?.resumeSession;
-    const lines = bufferLines(tab, LINES);
+    const lines = bufferLines(tab); // the whole scrollback: it all comes back
     tabs[tab.id] = {
       lines,
       scroll: scrolledBack(tab, lines), // null at the bottom
@@ -56,8 +55,15 @@ function snapshot() {
 
 const enabled = () => state.settings.session.restore === restoreSession.scrollback;
 
+/** The last snapshot sent, without its time: an unchanged one isn't sent again (the whole scrollback is big). */
+let lastSent = '';
 setInterval(() => {
-  if (enabled() && state.tabs.size) send(PAGE.snapshotSave, { snapshot: snapshot() });
+  if (!enabled() || !state.tabs.size) return;
+  const now = snapshot();
+  const same = JSON.stringify(now.tabs);
+  if (same === lastSent) return;
+  lastSent = same;
+  send(PAGE.snapshotSave, { snapshot: now });
 }, EVERY);
 
 // Termilly is closing: one last, current snapshot, then the host closes.

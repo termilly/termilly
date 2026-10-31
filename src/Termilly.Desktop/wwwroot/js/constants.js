@@ -380,6 +380,7 @@ export const TERMINAL_SETTINGS = Object.freeze({
   maxFontSize: 32,
   defaultLineHeight: 1.2,
   defaultScrollback: 10000,
+  maxScrollback: 50000,
 });
 
 /** C#: ActionPlaceholders (Actions.cs). */

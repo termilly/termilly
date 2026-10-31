@@ -16,7 +16,7 @@ internal sealed record TerminalSettings
     private const int LineHeightDigits = 1;
     public const int DefaultScrollback = 10_000;
     private const int MinScrollback = 1_000;
-    private const int MaxScrollback = 50_000;
+    public const int MaxScrollback = 50_000;
 
     public string FontFamily { get; init; } = DefaultFont;
     public double FontSize { get; init; } = DefaultFontSize;

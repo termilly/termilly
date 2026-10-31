@@ -3,7 +3,7 @@
 // matching names, tags, workspace, shell and terminal output.
 
 import { PAGE, HOST } from './protocol.js';
-import { send, onHost } from './host.js';
+import { send, onHost, request } from './host.js';
 import {
   state, on, wsById, tabsOf, tabTitle, profileOf, ensureTag, isSshProfile, EVENTS, DEFAULT_TAB_TITLE,
 } from './store.js';
@@ -24,7 +24,7 @@ import { toggleWrap } from './preview.js';
  * A closed terminal the host keeps (Host_history's entries), as panes.js recordHistory sent it.
  * @typedef {{ id: string, name: string, customName?: string | null, profile: string, tags?: string[] | null,
  *   note?: Note | null, wsId?: string | null, wsName?: string | null, closedAt: number, noHistory?: boolean,
- *   lines?: string[] | null }} HistoryEntry
+ *   lines?: string[] | null, earlier?: string | null }} HistoryEntry
  */
 /**
  * A command a terminal ran (Host_historyCommands' entries), as commands.js sent it; host is the PC it ran on, when
@@ -182,6 +182,8 @@ export function closePalette() {
   if (layer.hidden) return;
   layer.hidden = true;
   lineCache = new Map();
+  earlierFor = '';
+  earlierFound = new Map();
   restoreFocus();
 }
 
@@ -202,6 +204,54 @@ function parseQuery(text) {
   }
   q.text = free.join(' ');
   return q;
+}
+
+// ---- Earlier output: what left the terminals' scrollback (js/earlier.js), searched by the host ----
+
+/** How long typing pauses before the host is asked. */
+const EARLIER_WAIT_MS = 150;
+/** Between a terminal's earlier output and its scrollback (EarlierOutput.cs Gap, which also parts its runs). */
+const EARLIER_GAP = '⋯';
+/** The text the earlier output was searched for, and per terminal what it found: the lines around its matches. */
+let earlierFor = '';
+/** @type {Map<string, string[]>} */
+let earlierFound = new Map();
+let earlierTimer = 0;
+
+/**
+ * Asks the host which earlier output has the text (once typing pauses); the results come again when it answers.
+ * @param {string} text
+ */
+function searchEarlier(text) {
+  if (text === earlierFor) return;
+  clearTimeout(earlierTimer);
+  if (!text) {
+    earlierFor = '';
+    earlierFound = new Map();
+    return;
+  }
+  earlierTimer = setTimeout(async () => {
+    const m = await request(PAGE.earlierSearch, { query: text });
+    if (layer.hidden || parseQuery(input.value).text !== text) return;
+    earlierFor = text;
+    earlierFound = new Map((m?.hits ?? []).map((/** @type {{ id: string, lines: string[] }} */ h) => [h.id, h.lines]));
+    run();
+  }, EARLIER_WAIT_MS);
+}
+
+/**
+ * A terminal's lines with what its earlier output matched before them (those rows aren't in the terminal any more).
+ * @param {string | null | undefined} id Whose earlier output.
+ * @param {Lines} lines
+ * @returns {Lines}
+ */
+function withEarlier(id, lines) {
+  const found = id ? earlierFound.get(id) : undefined;
+  if (!found?.length) return lines;
+  /** @type {Lines} */
+  const all = [...found, EARLIER_GAP, ...lines];
+  if (lines.rows) all.rows = [...new Array(found.length + 1), ...lines.rows];
+  return all;
 }
 
 /**
@@ -358,7 +408,7 @@ function openMatches(q) {
   for (const ws of state.workspaces) {
     for (const tab of tabsOf(ws)) {
       const profile = profileOf(tab);
-      const lines = lineCache.get(tab.id) ?? [];
+      const lines = withEarlier(tab.id, lineCache.get(tab.id) ?? []);
       if (!passesFilters(q, { tags: tab.tags, wsName: ws.name, shell: [profile?.name ?? '', profile?.icon ?? ''] })) continue;
       const m = textMatch(q, { title: tabTitle(tab), tags: tab.tags, wsName: ws.name, lines, note: notesFor(tab).map(n => n.text).join('\n') });
       if (m) found.push({ kind: KIND.open, tab, ws, lines, match: m, rank: m.rank + (ws.id === state.activeId ? 0 : OTHER_WORKSPACE_RANK) });
@@ -377,7 +427,7 @@ function closedMatches(q) {
   const found = [];
   for (const entry of history) {
     const profile = state.profiles.find(p => p.id === entry.profile);
-    const lines = entry.lines ?? [];
+    const lines = withEarlier(entry.earlier, entry.lines ?? []);
     if (!passesFilters(q, { tags: entry.tags ?? [], wsName: entry.wsName, shell: [profile?.name ?? '', profile?.icon ?? ''] })) continue;
     const m = textMatch(q, { title: entry.name ?? '', tags: entry.tags ?? [], wsName: entry.wsName, lines, note: entry.note?.text });
     if (m) found.push({ kind: KIND.closed, entry, profile, lines, match: m, rank: m.rank });
@@ -390,6 +440,7 @@ function search() {
   if (filter === PALETTE_VIEW.go) return { q: parseQuery(''), groups: { go: goPlaces(input.value) } };
   if (filter === PALETTE_VIEW.ran) return { q: parseQuery(''), groups: { ran: ranResults(input.value) } };
   const q = parseQuery(input.value);
+  searchEarlier(q.text);
   /**
    * @type {{ open: OpenResult[], closed: ClosedResult[], workspaces: WorkspaceResult[],
    *   commands: CommandResult[] }}
@@ -747,7 +798,7 @@ function reopen(entry) {
   for (const tag of entry.tags ?? []) ensureTag(tag);
   const ws = wsById(entry.wsId) ?? ensureActiveWorkspace();
   if (ws.id !== state.activeId) switchWorkspace(ws.id);
-  newTab({
+  const tab = newTab({
     wsId: ws.id,
     profile: entry.profile,
     name: entry.customName ?? null,
@@ -755,12 +806,15 @@ function reopen(entry) {
     note: entry.note ?? null,
     restore: entry.lines?.length ? { lines: entry.lines, closedAt: entry.closedAt } : undefined,
   });
-  forget(entry);
+  // Its earlier output comes along.
+  if (entry.earlier) send(PAGE.earlierMove, { from: entry.earlier, to: tab.id });
+  forget({ ...entry, earlier: null });
 }
 
 /** @param {HistoryEntry} entry */
 function forget(entry) {
   send(PAGE.historyDelete, { id: entry.id });
+  if (entry.earlier) send(PAGE.earlierDelete, { id: entry.earlier });
   history = history.filter(e => e.id !== entry.id);
 }
 

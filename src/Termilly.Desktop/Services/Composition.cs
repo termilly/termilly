@@ -21,6 +21,7 @@ internal static class Composition
         .AddSingleton<WorkspaceStore>()
         .AddSingleton<SessionSnapshot>()
         .AddSingleton<HistoryStore>()
+        .AddSingleton<EarlierOutput>()
         .AddSingleton<CommandHistory>()
         .AddSingleton<HistorySync>()
         // Programs Termilly runs, and what it reads with them.
@@ -61,6 +62,7 @@ internal static class Composition
         .AddHandler<SystemHandler>()
         .AddHandler<SettingsHandler>()
         .AddHandler<HistoryHandler>()
+        .AddHandler<EarlierHandler>()
         .AddHandler<SecurityHandler>()
         .AddHandler<RemoteHandler>()
         .AddHandler<ChangesHandler>()

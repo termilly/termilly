@@ -5,6 +5,7 @@ import { PAGE, HOST } from '../protocol.js';
 import { send, onHost, sys, SYSTEM_NAME } from '../host.js';
 import { emit, getSetting, GROUPS, EVENTS } from '../store.js';
 import { updateSettings } from '../preferences.js';
+import { keepEarlierOfOpen } from '../earlier.js';
 import { ICONS } from '../ui.js';
 import { confirmDialog } from '../dialogs.js';
 import { showRecoveryCode } from '../security.js';
@@ -123,6 +124,7 @@ const PRIVACY = {
         confirm: 'Clear history',
       })) {
         send(PAGE.historyClear);
+        keepEarlierOfOpen(); // closed terminals' earlier output goes with them
         emit(EVENTS.history);
       }
     },

@@ -19,6 +19,7 @@ import { openPalette, setCommands, openGoTo, openCommandHistory, PALETTE_VIEW } 
 import { jumpToPrompt, copyLastOutput } from './commands.js';
 import { toggleInbox, jumpToNext } from './inbox.js';
 import { applySnapshot } from './snapshot.js';
+import { keepEarlierOfOpen } from './earlier.js';
 import { toggleCaptures } from './triggers.js';
 import { toggleHints } from './hints.js';
 import { toggleScratch } from './scratch.js';
@@ -528,6 +529,7 @@ function boot(saved, snapshot, liveSessions = []) {
   applySettings();
   if (state.activeId) switchWorkspace(state.activeId);
   if (!restored) newTab();
+  keepEarlierOfOpen();
   // Show the page when the focused terminal prints its prompt (see 'output'); straight away if there is
   // no terminal to wait for, and after a few seconds at most.
   if (!focusedTab()) signalReady();

@@ -5,7 +5,7 @@ using Termilly.Desktop.Security;
 namespace Termilly.Desktop;
 
 /// <summary>
-/// What the open terminals showed, so a restart (or a crash) can bring it back: per terminal its last lines and the
+/// What the open terminals showed, so a restart (or a crash) can bring it back: per terminal its scrollback and the
 /// agent session it ran. Written every half minute while terminals are open and once more on exit, encrypted like
 /// the workspaces (session.tms), with secrets redacted when Settings asks. The page owns the shape:
 /// { savedAt, tabs: { id: { lines, scroll, agentSession, agentFolder, hibernated, results } } }, scroll being how far
@@ -13,8 +13,9 @@ namespace Termilly.Desktop;
 /// </summary>
 internal sealed class SessionSnapshot(Vault vault)
 {
-    /// <summary>Lines kept per terminal: enough to see where things were, small enough to write often.</summary>
-    public const int MaxLines = 500;
+    /// <summary>Lines kept per terminal: its whole scrollback, as much as Settings allows (what scrolled out before is
+    /// in its earlier output, EarlierOutput).</summary>
+    public const int MaxLines = TerminalSettings.MaxScrollback;
 
     private string FilePath => vault.PathOf("session.tms");
 

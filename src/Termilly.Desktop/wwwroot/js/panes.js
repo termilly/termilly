@@ -257,7 +257,10 @@ export function closeTab(tab) {
 /** @param {Tab} tab */
 function recordHistory(tab) {
   const ws = wsById(tab.wsId);
-  const lines = tab.noHistory || !state.settings.session.saveOutput ? [] : bufferLines(tab);
+  const keepsOutput = !tab.noHistory && !!state.settings.session.saveOutput;
+  const lines = keepsOutput ? bufferLines(tab) : [];
+  // Its earlier output (js/earlier.js) stays with the entry; when output isn't kept, it goes.
+  if (!keepsOutput) send(PAGE.earlierDelete, { id: tab.id });
   send(PAGE.historyAdd, {
     entry: {
       id: newId('h'),
@@ -273,8 +276,9 @@ function recordHistory(tab) {
       cwd: ws?.cwd ?? null,
       startedAt: tab.startedAt,
       closedAt: Date.now(),
-      noHistory: !!tab.noHistory || !state.settings.session.saveOutput,
+      noHistory: !keepsOutput,
       lines,
+      earlier: keepsOutput ? tab.id : null,
     },
   });
   emit(EVENTS.history);
