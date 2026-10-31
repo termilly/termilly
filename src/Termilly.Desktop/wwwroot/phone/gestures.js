@@ -21,6 +21,8 @@ const LINE = 16;
 export const TOUCH = Object.freeze({ start: 'touchstart', move: 'touchmove', end: 'touchend' });
 /** How the terminal scrolls back (Settings › Scrolling), and where the phone keeps it. */
 export const SCROLLING = Object.freeze({ key: 'termilly.terminal.scrolling', smooth: 'smooth', lines: 'lines' });
+/** How long settling on a line takes (ms). */
+const SETTLE_MS = 120;
 const smooth = () => localStorage.getItem(SCROLLING.key) !== SCROLLING.lines;
 /** Listened to before xterm's own handlers, which are inside the box. */
 const FIRST = Object.freeze({ capture: true, passive: false });
@@ -51,12 +53,34 @@ export function terminalTouch(box, on) {
   function scrollback(term, dy) {
     lines += dy / lineOf(term);
     const whole = Math.trunc(lines);
-    if (whole) term.scrollLines(-whole);
     lines -= whole;
+    const moved = scrollBy(term, whole);
     // Nothing to slide toward past the oldest line or the newest.
     const buffer = term.buffer.active;
     if ((lines > 0 && buffer.viewportY <= 0) || (lines < 0 && buffer.viewportY >= buffer.baseY)) lines = 0;
-    slide(term);
+    if (!moved) slide(term);
+  }
+
+  /** Waiting for xterm to draw lines scrolled to, to slide the screen with them. @type {{ dispose: () => void } | null} */
+  let drawing = null;
+
+  /**
+   * Scrolls whole lines back or forward; true when that moved the screen. xterm draws the lines a frame later, so the
+   * screen slides to its new place when they're drawn, not before: sliding at once showed the old lines a line off for
+   * a frame, a flicker when scrolling fast.
+   * @param {any} term @param {number} whole @param {() => void} [then] What to do once they're drawn (slide there).
+   */
+  function scrollBy(term, whole, then = () => slide(term)) {
+    if (!whole) return false;
+    const before = term.buffer.active.viewportY;
+    term.scrollLines(-whole);
+    if (term.buffer.active.viewportY === before) return false;
+    drawing ??= term.onRender(() => {
+      drawing?.dispose();
+      drawing = null;
+      then();
+    });
+    return true;
   }
 
   /** Smooth: the screen sits the part of a line not scrolled yet lower or higher. @param {any} term */
@@ -65,14 +89,26 @@ export function terminalTouch(box, on) {
     if (screen) screen.style.transform = smooth() && lines ? `translateY(${(lines * lineOf(term)).toFixed(1)}px)` : '';
   }
 
-  /** The scrolling stopped: smooth settles on the nearest line. */
+  /** The scrolling stopped: smooth settles on the nearest line, easing there rather than jumping. */
   function settle() {
     const term = on.term();
     if (!term || !smooth()) return;
     const whole = Math.round(lines);
-    if (whole) term.scrollLines(-whole);
-    lines = 0;
+    lines -= whole; // what's left once on that line: the screen starts there, then eases to none
+    if (!scrollBy(term, whole, () => ease(term))) ease(term);
+  }
+
+  /** @param {any} term */
+  function ease(term) {
     slide(term);
+    const screen = /** @type {HTMLElement | null} */ (term.element?.querySelector(SCREEN));
+    if (!screen) return;
+    requestAnimationFrame(() => {
+      screen.style.transition = `transform ${SETTLE_MS}ms ease-out`;
+      lines = 0;
+      slide(term);
+      setTimeout(() => { screen.style.transition = ''; }, SETTLE_MS);
+    });
   }
 
   /** Follows the finger: sideways; down shows the top of the screen, then what scrolled off it; up comes back. */
@@ -101,6 +137,8 @@ export function terminalTouch(box, on) {
   box.addEventListener(TOUCH.start, e => {
     e.stopPropagation();
     cancelAnimationFrame(gliding);
+    const screen = /** @type {HTMLElement | null} */ (on.term()?.element?.querySelector(SCREEN));
+    if (screen) screen.style.transition = ''; // a finger takes over from easing at once
     const [t] = e.touches;
     if (e.touches.length === 2) {
       pinch = { distance: spread(e.touches), size: on.size() };
