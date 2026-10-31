@@ -22,7 +22,7 @@ import { replayMenuItems } from './replay.js';
 import { editAttach } from './reconnect.js';
 import { remoteMenuItems, remoteGit } from './remotehost.js';
 import { openNewWorkspace } from './newworkspace.js';
-import { beginRename } from './rename.js';
+import { beginRename, RENAME_IN } from './rename.js';
 import { openTagPicker } from './tagpicker.js';
 /** How many of the last commands "Open output in viewer" lists, and how much of each it shows. */
 const RECENT_COMMANDS = 12;
@@ -49,10 +49,11 @@ const swatch = (/** @type {string} */ color) => `<span class="ws-swatch" style="
 /**
  * @param {Tab} tab
  * @param {import('./popups.js').Anchor} at
+ * @param {string} [from] RENAME_IN: where it was opened, where Rename edits the name
  */
-export function openTabMenu(tab, at) {
+export function openTabMenu(tab, at, from = RENAME_IN.header) {
   showMenu([
-    ...nameItems(tab),
+    ...nameItems(tab, from),
     moveItem(tab),
     ...replayMenuItems(tab),
     ...keepingItems(tab),
@@ -89,11 +90,12 @@ function snippetItems(tab) {
 /**
  * Its name, tags and notes (its own, and its SSH host's).
  * @param {Tab} tab
+ * @param {string} from
  * @returns {MenuEntry[]}
  */
-function nameItems(tab) {
+function nameItems(tab, from) {
   return [
-    { label: RENAME_LABEL, icon: ICONS.rename, hint: keysHtml('Ctrl Shift R'), action: () => beginRename(tab) },
+    { label: RENAME_LABEL, icon: ICONS.rename, hint: keysHtml('Ctrl Shift R'), action: () => beginRename(tab, from) },
     {
       label: 'Tags', icon: ICONS.tag,
       action: () => openTagPicker(tab, /** @type {Element} */ (/** @type {TabView} */ (tab.view).header.querySelector(TAG_BUTTON))),

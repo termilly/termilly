@@ -169,24 +169,51 @@ window.addEventListener('keydown', e => setCtrl(e.ctrlKey), true);
 window.addEventListener('keyup', e => setCtrl(e.ctrlKey), true);
 window.addEventListener('blur', () => setCtrl(false));
 
+/** A row that ends this near the right edge, on a character, may go on in the next row: a program (Claude Code, a
+ * pager) that breaks long lines itself writes the rest there after a real line break. */
+const EDGE = 4;
+/** How many rows a line is looked for in, each way. */
+const MAX_ROWS = 24;
+
 /**
- * The whole logical line row y (1-based) is part of, and where a character offset in it is on screen (1-based).
+ * The whole line row y (1-based) is part of, and where each of its characters is on screen (1-based): the rows the
+ * terminal wrapped, and the rows a program broke at the right edge (the next one's indent left out). A path or a link
+ * broken either way is found whole.
  * @param {any} term xterm
  * @param {number} y
  */
 function logicalLine(term, y) {
   const buffer = term.buffer.active;
   const cols = term.cols;
-  let first = y - 1;
-  while (first > 0 && buffer.getLine(first)?.isWrapped) first--;
-  let last = y - 1;
-  while (buffer.getLine(last + 1)?.isWrapped) last++;
+  const textOf = (/** @type {number} */ row) => buffer.getLine(row)?.translateToString(true) ?? '';
+  const wrapped = (/** @type {number} */ row) => !!buffer.getLine(row)?.isWrapped;
+  const groupStart = (/** @type {number} */ row) => { while (row > 0 && wrapped(row)) row--; return row; };
+  const groupEnd = (/** @type {number} */ row) => { while (wrapped(row + 1)) row++; return row; };
+  // Row end (the last of its group) goes on in row end + 1, which starts a group of its own.
+  const goesOn = (/** @type {number} */ end) => {
+    if (!buffer.getLine(end + 1)) return false;
+    const t = textOf(end);
+    return t.length >= cols - EDGE && /\S$/.test(t) && /\S/.test(textOf(end + 1));
+  };
+  let first = groupStart(y - 1);
+  while (first > 0 && first > y - 1 - MAX_ROWS && goesOn(first - 1)) first = groupStart(first - 1);
+  let last = groupEnd(y - 1);
+  while (last < y - 1 + MAX_ROWS && goesOn(last)) last = groupEnd(last + 1);
   let text = '';
+  /** @type {{ x: number, y: number }[]} */
+  const where = [];
   for (let row = first; row <= last; row++) {
     const line = buffer.getLine(row);
-    text += line ? line.translateToString(row !== last).padEnd(row !== last ? cols : 0) : '';
+    if (!line) continue;
+    const soft = wrapped(row + 1) && row !== last;
+    let part = line.translateToString(!soft);
+    if (soft) part = part.padEnd(cols);
+    // A row a program went on in: its indent isn't part of the line.
+    const skip = row > first && !line.isWrapped ? part.length - part.trimStart().length : 0;
+    for (let i = skip; i < part.length; i++) where.push({ x: i + 1, y: row + 1 });
+    text += part.slice(skip);
   }
-  return { text, at: (/** @type {number} */ offset) => ({ x: (offset % cols) + 1, y: first + Math.floor(offset / cols) + 1 }) };
+  return { text, at: (/** @type {number} */ offset) => where[Math.min(offset, where.length - 1)] ?? { x: 1, y } };
 }
 
 /**

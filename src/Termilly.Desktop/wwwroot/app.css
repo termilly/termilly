@@ -997,7 +997,7 @@ body[data-sidebar="rail"] .side-rail { opacity: 1; pointer-events: auto; }
 .ws-key kbd { min-width: 0; padding: 0 3px; font-size: 9.5px; }
 .ws-row:hover .ws-key { display: inline-flex; gap: 2px; }
 .ws-row:hover .ws-count { display: none; }
-.ws-row .rename-input { flex: 1; min-width: 0; }
+:is(.ws-row, .tab-row) .rename-input { flex: 1; min-width: 0; }
 .rename-error { padding: 2px 8px 6px 30px; color: var(--danger-text); font-size: 11.5px; white-space: normal; }
 :is(.rename-input, .field).invalid { border-color: var(--danger); box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 22%, transparent); }
 
