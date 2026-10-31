@@ -22,7 +22,7 @@ import { noteRemotePrompt, noteRemoteCwd, leftRemote } from './remotecwd.js';
 import { AGENT_STATE, AGENT_SOURCE } from './constants.js';
 import { find, field, PATH_DRAG } from './dom.js';
 import { continuesOnNextRow, atPrompt } from './buffer.js';
-import { isResuming, resumeTyped } from './resuming.js';
+import { isResuming, resumeTyped, cancelResume, CANCEL_KEY } from './resuming.js';
 import { clipboardKey, wireClipboard, PASTE_LABEL } from './termclipboard.js';
 import { selectionKey } from './keyselect.js';
 import { hoverMarkedLink, COPY_HINT } from './termlinks.js';
@@ -301,7 +301,9 @@ function wireInput(tab, term) {
       return;
     }
     // Its Claude session is resuming (resuming.js): typing now would land around `claude --resume` and spoil it.
+    // Esc alone calls the resume off.
     if (isResuming(tab) && !isTerminalReply(data)) {
+      if (data === CANCEL_KEY) cancelResume(tab);
       return;
     }
     // Broadcasting (broadcast.js) sends it to every terminal in the broadcast; otherwise just here.

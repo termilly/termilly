@@ -2815,7 +2815,9 @@ textarea.field.note-text { flex: 1; width: 100%; min-height: 120px; resize: none
 .hist-result ul { margin: 6px 0 0; padding-left: 18px; font-size: 12.5px; }
 .hist-keeps { margin-top: 8px; color: var(--muted); font-size: 12px; }
 .hist-pick.hist-keep { margin-top: 12px; }
-/* A Claude session resuming after a restart (js/resuming.js): a note over the terminal's top, and a spinner. */
-.resume-note { position: absolute; top: 8px; left: 50%; z-index: 6; display: flex; align-items: center; gap: 10px; padding: 6px 8px 6px 12px; border: 1px solid var(--border-strong); border-radius: 9px; background: var(--raised); box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35); color: var(--text); font-size: 12.5px; transform: translateX(-50%); white-space: nowrap; }
-.resume-note .btn svg { width: 10px; height: 10px; }
+/* A Claude session resuming after a restart (js/resuming.js): an overlay over the whole terminal, a spinner in its middle. */
+.resume-overlay { position: absolute; inset: 0; z-index: 6; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: color-mix(in srgb, var(--bg) 78%, transparent); backdrop-filter: blur(2px); color: var(--text); cursor: default; }
+.resume-overlay .resume-spinner { width: 28px; height: 28px; border-width: 3px; }
+.resume-text { font-size: 14px; font-weight: 600; }
+.resume-hint { color: var(--muted); font-size: 12.5px; }
 .resume-spinner { flex: none; width: 12px; height: 12px; border: 2px solid var(--border-strong); border-top-color: var(--accent); border-radius: 50%; animation: toast-spin .8s linear infinite; }
