@@ -8,7 +8,7 @@
 // it: a plain text field, so the phone's keyboard can dictate into it, and what's said is checked before it goes.
 
 import { SCREEN, terminalTouch } from './gestures.js';
-import { snippetSheet } from './snippets.js';
+import { snippetSheet, asTyped } from './snippets.js';
 
 /** What the key bar sends (data-key), as a terminal reads it. */
 const KEYS = Object.freeze({
@@ -329,7 +329,7 @@ export function terminalView(app) {
     else if (key === PASTE) {
       try {
         const text = await navigator.clipboard.readText();
-        if (text) type(text);
+        if (text) type(asTyped(text)); // lines in order, as a paste on the PC goes
       } catch {
         app.toast('The phone didn\'t allow pasting.');
       }
