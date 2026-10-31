@@ -39,6 +39,8 @@ export const composeStyle = () => (localStorage.getItem(COMPOSE_STYLE.key) === C
 
 /** The browser's speech recognition, where there is one (Safari has it as webkitSpeechRecognition). */
 const Speech = /** @type {any} */ (window).SpeechRecognition ?? /** @type {any} */ (window).webkitSpeechRecognition;
+/** Its errors that mean dictation can't work here (others: silence, a stop, a dropped network). */
+const MIC_REFUSED = ['not-allowed', 'service-not-allowed', 'audio-capture'];
 
 /**
  * @param {HTMLElement} view The terminal view.
@@ -106,6 +108,7 @@ export function composer(view, app) {
     listening = null;
     was.onresult = null;
     was.onend = null;
+    was.onerror = null; // aborting reports an "aborted" error: not a failure
     was.abort();
     view.querySelector(PART.mic)?.classList.remove('on');
     changed();
@@ -136,7 +139,11 @@ export function composer(view, app) {
       if ([...e.results].every(r => r.isFinal)) stopListening();
     };
     listening.onend = () => { listening = null; mic?.classList.remove('on'); changed(); };
-    listening.onerror = () => { stopListening(); app.toast('Dictation didn\'t start: the keyboard\'s microphone works too.'); };
+    // Only a refused or missing microphone is worth saying; silence or a stop isn't.
+    listening.onerror = (/** @type {any} */ e) => {
+      stopListening();
+      if (MIC_REFUSED.includes(e?.error)) app.toast('Dictation didn\'t start: the keyboard\'s microphone works too.');
+    };
     mic?.classList.add('on');
     listening.start();
   }
