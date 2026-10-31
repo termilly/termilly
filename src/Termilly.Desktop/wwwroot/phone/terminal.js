@@ -42,6 +42,11 @@ const OP = Object.freeze({ watch: 'watch', unwatch: 'unwatch', input: 'input', s
 const TV = Object.freeze({ back: 'back', answer: 'answer', stop: 'stop' });
 /** Claude Code's (and Codex's) interrupt, as the PC's stop button sends it (js/agentline.js stopAgent). */
 const STOP = '\x1b';
+/** Then the box cleared: stopped before it answered, Claude Code puts the message back in its box. Ctrl+U clears a
+ * line, Backspace joins the one above (cursor at the end); in an empty box they do nothing. */
+const CLEAR = '\x15' + '\x7f\x15'.repeat(20);
+/** How long Claude Code takes to put the message back. */
+const CLEAR_AFTER_MS = 800;
 /** The agent states the stop button shows in (js/agentline.js isAgentWorking). */
 const STOPPABLE = ['working', 'needs-input'];
 /**
@@ -400,7 +405,10 @@ export function terminalView(app) {
     const action = target.closest('[data-tv]')?.getAttribute('data-tv');
     if (action === TV.back) close();
     else if (action === TV.answer && shown) app.answer(shown.id);
-    else if (action === TV.stop && shown && typing) type(STOP);
+    else if (action === TV.stop && shown && typing && type(STOP)) {
+      const stopped = shown.id;
+      setTimeout(() => { if (shown?.id === stopped) type(CLEAR); }, CLEAR_AFTER_MS);
+    }
     else if (key === CTRL) setCtrl(!ctrl);
     else if (key === SNIP) snippets.open();
     else if (key === PASTE) {

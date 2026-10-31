@@ -86,7 +86,7 @@ internal static class Shim
     /// one has both on PATH, and each shim starting the other's would loop without end.
     /// </summary>
     private static bool IsAgentFolder(string directory) =>
-        File.Exists(Path.Combine(directory, AgentExecutables.Hook)) || File.Exists(Path.Combine(directory, AgentExecutables.Hook + ".exe"));
+        Directory.Exists(directory) && Directory.EnumerateFiles(directory, AgentExecutables.Hook + "*").Any();
 
     private const UnixFileMode Executable = UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute;
 
