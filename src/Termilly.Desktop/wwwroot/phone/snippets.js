@@ -8,6 +8,13 @@ const PLACEHOLDER = /\{\{\s*([A-Za-z_][\w.-]*)\s*(?:=([^}]*))?\}\}/g;
 
 /** @typedef {{ ws: string | null, name: string, description: string, command: string, enter: boolean, fields: { name: string, def: string }[] }} PhoneSnippet */
 
+/**
+ * Text as typed: each line ends with Enter. A bare new line is Ctrl+Enter to PowerShell's PSReadLine, which opens a
+ * line above, so the lines would run in reverse (as the PC's own sendSnippet says, js/snippets.js).
+ * @param {string} text
+ */
+export const asTyped = text => text.replace(/\r?\n/g, '\r');
+
 /** @param {unknown} text */
 const esc = text => String(text ?? '').replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
 
@@ -50,7 +57,7 @@ export function snippetSheet(view, terminal) {
   /** @param {PhoneSnippet} s @param {Record<string, string>} values */
   function run(s, values) {
     close();
-    terminal.type(fill(s.command, values) + (s.enter ? '\r' : ''));
+    terminal.type(asTyped(fill(s.command, values)) + (s.enter ? '\r' : ''));
   }
 
   sheet.addEventListener('click', e => {
