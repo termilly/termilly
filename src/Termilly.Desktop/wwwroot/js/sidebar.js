@@ -28,7 +28,7 @@ import { openNewWorkspace } from './newworkspace.js';
 import { hasUnreadResults } from './results.js';
 import { SETTING_VALUES } from './constants.js';
 import { byId, find, targetOf, dragPointer, showError } from './dom.js';
-import { RENAME_INPUT_CLASS } from './rename.js';
+import { RENAME_INPUT_CLASS, RENAME_IN, shownName } from './rename.js';
 
 /** The choices of the settings used here (C#'s SettingValues). */
 const { costDisplay } = SETTING_VALUES;
@@ -108,7 +108,7 @@ function tabRowHtml(tab, ws) {
   const focused = ws.id === state.activeId && ws.focusId === tab.id;
   const env = environmentOf(tab);
   return `<button class="tab-row${focused ? ' focused' : ''}${isUnread(tab) ? ' unread' : ''}${env ? ' env' : ''}" data-tab="${escapeHtml(tab.id)}" title="${escapeHtml(tabTitle(tab))}${env ? ` · ${escapeHtml(env.label)}` : ''}"${env ? ` style="--env:${cssColor(env.color)}"` : ''}>
-    ${tabBadgeHtml(tab)}<span class="name">${escapeHtml(tabTitle(tab))}</span>${notesFor(tab).length ? `<span class="note-mark" data-note-tab="${escapeHtml(tab.id)}" title="${escapeHtml(`${noteTitle(notesFor(tab))}\nClick to open`)}">${ICONS.note}</span>` : ''}
+    ${tabBadgeHtml(tab)}<span class="name">${escapeHtml(shownName(tab))}</span>${notesFor(tab).length ? `<span class="note-mark" data-note-tab="${escapeHtml(tab.id)}" title="${escapeHtml(`${noteTitle(notesFor(tab))}\nClick to open`)}">${ICONS.note}</span>` : ''}
     <span class="chips">${tabProjectHtml(tab, ws)}${tab.tags.map(t => tagChipHtml(t, { mini: true })).join('')}${tab.tags.length > 1
       ? `<span class="tag mini more-tags" data-more-tags title="Show all tags">+${tab.tags.length - 1}</span>` : ''}${activityHtml(activityOf(tab), 'mini')}${tab.attention ? '<span class="attn"></span>' : ''}${hasUnreadResults(tab) ? '<span class="res-dot" title="New results: a pull request, a running app or a push"></span>' : ''}${costText(costOf(tab)) ? `<span class="cost-chip" title="${escapeHtml(costTitle(costOf(tab)))}">${escapeHtml(costText(costOf(tab)))}</span>` : ''}${runningSubagents(tab) ? `<span class="sub-badge" title="Subagents running">${runningSubagents(tab)} agent${runningSubagents(tab) === 1 ? '' : 's'}</span>` : ''}</span>
     ${isAgentWorking(tab) ? `<span class="agent-stop" data-stop="${escapeHtml(tab.id)}" title="Stop the agent (Esc)" role="button"></span>` : ''}
@@ -160,6 +160,8 @@ function onMoreTagsClick(e) {
 }
 
 export function render() {
+  // A name being typed in the list stays: finishing it draws the list again.
+  if (list.contains(document.activeElement) && document.activeElement?.classList.contains(RENAME_INPUT_CLASS)) return;
   document.body.classList.toggle(NO_WORKSPACES, !state.workspaces.length);
   list.innerHTML = state.workspaces.map((ws, i) => {
     const active = ws.id === state.activeId;
@@ -308,6 +310,7 @@ function beginWorkspaceRename(ws) {
       return false;
     }
     done = true;
+    input.remove(); // the list may be drawn again now
     render();
     return true;
   };
@@ -402,7 +405,7 @@ list.addEventListener('contextmenu', e => {
   e.preventDefault();
   const tabRow = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-tab]'));
   if (tabRow) return openTabMenu(/** @type {Tab} */ (state.tabs.get(/** @type {string} */ (tabRow.dataset.tab))),
-    { x: e.clientX, y: e.clientY });
+    { x: e.clientX, y: e.clientY }, RENAME_IN.sidebar);
   const row = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-ws]'));
   if (row) openWorkspaceMenu(/** @type {Workspace} */ (wsById(row.dataset.ws)), { x: e.clientX, y: e.clientY });
 });

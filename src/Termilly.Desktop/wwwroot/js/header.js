@@ -3,7 +3,7 @@
 // environment, notes, recording, results, changed files, its Claude session, broadcast), and its buttons. The tag
 // picker, the menu and renaming are modules of their own.
 
-import { state, emit, on, tabTitle, activityOf, EVENTS } from './store.js';
+import { state, emit, on, activityOf, EVENTS } from './store.js';
 import { tabBadgeHtml, tagChipHtml, escapeHtml, ICONS, activityHtml } from './ui.js';
 import { closeTab, setHeaderBuilder } from './panes.js';
 import { isCandidate, isReceiving, toggleReceiver } from './broadcast.js';
@@ -15,7 +15,7 @@ import { isAgentWorking, stopAgent } from './agentline.js';
 import { openResults, resultCount, hasUnreadResults } from './results.js';
 import { accessMarkText } from './together.js';
 import { isRecording, toggleRecording, recordingFile } from './replay.js';
-import { beginRename, PANE_NAME } from './rename.js';
+import { beginRename, shownName, PANE_NAME } from './rename.js';
 import { openTagPicker } from './tagpicker.js';
 import { openTabMenu, TAG_BUTTON } from './tabmenu.js';
 import { find } from './dom.js';
@@ -124,7 +124,7 @@ export function updateHeader(tab) {
   showEnvironment(tab, header);
   const name = /** @type {HTMLElement | null} */ (header.querySelector(PANE_NAME));
   if (name) {
-    name.textContent = tabTitle(tab);
+    name.textContent = shownName(tab);
     name.title = 'Double-click to rename';
   }
   find(header, '.pane-tags').innerHTML = tab.tags.map(t => tagChipHtml(t)).join('');
