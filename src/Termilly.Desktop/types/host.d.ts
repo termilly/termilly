@@ -137,6 +137,9 @@ interface NotificationSettings {
 interface SessionSettings {
   restore: string;
   historyDays: number;
+  /** Termilly says when history passes . */
+  historyWarn: boolean;
+  historyWarnGb: number;
   hiddenScrollback: number;
   /** Closed terminals' output is kept in the history. */
   saveOutput: boolean;

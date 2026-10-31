@@ -245,6 +245,11 @@ export const SETTING_VALUES = Object.freeze({
     max: 36500,
     daysPerMonth: 30,
   }),
+  historyWarnGb: Object.freeze({
+    default: 2,
+    min: 1,
+    max: 1000,
+  }),
   minimizeTo: Object.freeze({
     taskbar: 'taskbar',
     tray: 'tray',

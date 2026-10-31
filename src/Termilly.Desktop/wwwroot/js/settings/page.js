@@ -13,6 +13,7 @@ import { restoreFocus } from '../panes.js';
  * @property {string} id
  * @property {string} label
  * @property {string} icon
+ * @property {string} [parent] The section it opens from: not in the nav itself, which marks its parent, and its title says both.
  * @property {string} [docs] Its part of the docs (termilly.com/docs/#id), which the help button opens.
  * @property {() => string} [tools] Its buttons above the scrolling body (data-action ones, as in the body).
  * @property {() => string} html Its markup; rows are found again in it by the search and the palette.
@@ -38,6 +39,7 @@ export const SECTION = Object.freeze({
   actions: 'actions',
   changes: 'changes',
   privacy: 'privacy',
+  history: 'history',
   phone: 'phone',
   plugins: 'plugins',
   keyboard: 'keyboard',

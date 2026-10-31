@@ -14,8 +14,8 @@ const MOST = 4;
 export const TOAST = Object.freeze({ running: 'running', done: 'done', failed: 'failed' });
 
 /**
- * What a note says: its text, its state, and a button.
- * @typedef {{ text: string, state?: string, action?: { label: string, run: () => void } | null }} ToastContent
+ * What a note says: its text, its state, and a button. One that stays waits for its button or its ×.
+ * @typedef {{ text: string, state?: string, action?: { label: string, run: () => void } | null, stay?: boolean }} ToastContent
  */
 /**
  * A note shown: change what it says (a finished one closes by itself), or close it.
@@ -43,8 +43,10 @@ export function showToast(content) {
     clearTimeout(timer);
     el.remove();
   };
+  let stays = false;
   /** @param {ToastContent} c */
-  const update = ({ text, state = TOAST.done, action = null }) => {
+  const update = ({ text, state = TOAST.done, action = null, stay = false }) => {
+    stays = stay;
     run = action?.run ?? null;
     el.dataset.state = state;
     el.innerHTML = `
@@ -53,7 +55,7 @@ export function showToast(content) {
       ${action ? `<button class="btn small" data-toast-action>${escapeHtml(action.label)}</button>` : ''}
       <button class="pane-btn toast-close" data-toast-close title="Close" aria-label="Close">${ICONS.close}</button>`;
     clearTimeout(timer);
-    if (state !== TOAST.running) timer = window.setTimeout(close, SHOWN_MS);
+    if (state !== TOAST.running && !stays) timer = window.setTimeout(close, SHOWN_MS);
   };
   el.addEventListener('click', e => {
     if (targetOf(e).closest('[data-toast-close]')) close();
@@ -64,7 +66,7 @@ export function showToast(content) {
   });
   // Pointing at a finished note keeps it while it's read.
   el.addEventListener('pointerenter', () => { if (el.dataset.state !== TOAST.running) clearTimeout(timer); });
-  el.addEventListener('pointerleave', () => { if (el.dataset.state !== TOAST.running) timer = window.setTimeout(close, SHOWN_MS); });
+  el.addEventListener('pointerleave', () => { if (el.dataset.state !== TOAST.running && !stays) timer = window.setTimeout(close, SHOWN_MS); });
   update(content);
   area.append(el);
   while (area.children.length > MOST) area.firstElementChild?.remove();

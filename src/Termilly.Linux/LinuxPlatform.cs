@@ -119,6 +119,16 @@ internal sealed class LinuxPlatform(Action<string> send, string? startFolder) :
         return string.IsNullOrEmpty(path) ? null : path;
     }
 
+    public async Task<string?> PickZipToSaveAsync(string fileName)
+    {
+        if (_window is null)
+        {
+            return null;
+        }
+        var path = await _window.ShowSaveFileAsync("Export history", Path.Combine(Home, fileName), [("Zip archive", ["*.zip"])]).ConfigureAwait(false);
+        return string.IsNullOrEmpty(path) ? null : path;
+    }
+
     public async Task<string?> PickLayoutToOpenAsync() =>
         _window is null
             ? null

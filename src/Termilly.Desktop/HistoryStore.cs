@@ -64,7 +64,19 @@ internal sealed partial class HistoryStore(Vault vault)
     /// <summary>All live entries as a JSON array, newest first. Prunes expired entries.</summary>
     public JsonDocument List(int retentionDays)
     {
-        var entries = new List<(long ClosedAt, string Id, string Json)>();
+        var array = new StringBuilder("[");
+        array.AppendJoin(',', Entries(retentionDays).Select(e => e.Json));
+        array.Append(']');
+        return JsonDocument.Parse(array.ToString());
+    }
+
+    /// <summary>A closed terminal as kept: its id, when it closed, its JSON and its file's size.</summary>
+    public sealed record Entry(string Id, long ClosedAt, string Json, long Bytes);
+
+    /// <summary>All live entries, newest first. Prunes expired entries.</summary>
+    public List<Entry> Entries(int retentionDays)
+    {
+        var entries = new List<Entry>();
         if (Directory.Exists(Folder))
         {
             var cutoff = Retention.CutoffMs(retentionDays);
@@ -80,7 +92,7 @@ internal sealed partial class HistoryStore(Vault vault)
                         File.Delete(file);
                         continue;
                     }
-                    entries.Add((closedAt, Path.GetFileNameWithoutExtension(file), json));
+                    entries.Add(new Entry(Path.GetFileNameWithoutExtension(file), closedAt, json, new FileInfo(file).Length));
                 }
                 catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException or CryptographicException)
                 {
@@ -90,10 +102,16 @@ internal sealed partial class HistoryStore(Vault vault)
         }
 
         entries.Sort((a, b) => b.ClosedAt.CompareTo(a.ClosedAt));
-        var array = new StringBuilder("[");
-        array.AppendJoin(',', entries.Select(e => e.Json));
-        array.Append(']');
-        return JsonDocument.Parse(array.ToString());
+        return entries;
+    }
+
+    /// <summary>Writes an entry again as given (its output taken out: History › Free up space).</summary>
+    public void Replace(string id, string json)
+    {
+        if (ValidId().IsMatch(id) && File.Exists(PathOf(id)))
+        {
+            AppPaths.WriteAtomically(PathOf(id), Sealed.Seal(Key, json));
+        }
     }
 
     public void Delete(string id)

@@ -40,6 +40,9 @@ internal static class AppPaths
     public static string Exe(string name) => OperatingSystem.IsWindows() ? name + ".exe" : name;
 
     /// <summary>Writes to a temp file and swaps it in, so a crash mid-write never leaves a truncated file.</summary>
+    /// <summary>A plain text file's extension.</summary>
+    public const string TextExtension = ".txt";
+
     public static void WriteAtomically(string path, string contents)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);

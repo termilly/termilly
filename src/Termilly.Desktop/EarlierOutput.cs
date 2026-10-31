@@ -213,29 +213,61 @@ internal sealed partial class EarlierOutput(Vault vault)
         var cutoff = Retention.CutoffMs(retentionDays);
         foreach (var id in Ids())
         {
-            lock (_gate)
+            DropBefore(id, cutoff, dryRun: false);
+        }
+    }
+
+    /// <summary>The size of a terminal's file (0 when it has none).</summary>
+    public long Bytes(string id) => ValidId().IsMatch(id) && File.Exists(PathOf(id)) ? new FileInfo(PathOf(id)).Length : 0;
+
+    /// <summary>When a terminal's oldest kept chunk was kept (null when it has none).</summary>
+    public long? Oldest(string id)
+    {
+        if (!ValidId().IsMatch(id))
+        {
+            return null;
+        }
+        lock (_gate)
+        {
+            return Chunks(id).Select(c => (long?)c.At).FirstOrDefault();
+        }
+    }
+
+    /// <summary>
+    /// Drops a terminal's chunks kept before <paramref name="cutoff"/> (unix ms; all of them with long.MaxValue), or with
+    /// <paramref name="dryRun"/> only counts them: the lines and bytes that go.
+    /// </summary>
+    public (long Lines, long Bytes) DropBefore(string id, long cutoff, bool dryRun)
+    {
+        if (!ValidId().IsMatch(id))
+        {
+            return (0, 0);
+        }
+        lock (_gate)
+        {
+            var chunks = Chunks(id).ToList();
+            var old = chunks.Where(c => c.At < cutoff).ToList();
+            var gone = (old.Sum(c => (long)c.Lines.Length), old.Sum(c => (long)c.Sealed.Length + LengthSize));
+            if (old.Count == 0 || dryRun)
             {
-                var chunks = Chunks(id).ToList();
-                if (chunks.All(c => c.At >= cutoff))
-                {
-                    continue;
-                }
-                var kept = chunks.Where(c => c.At >= cutoff).ToList();
-                if (kept.Count == 0)
-                {
-                    File.Delete(PathOf(id));
-                }
-                else
-                {
-                    using var stream = new MemoryStream();
-                    foreach (var c in kept)
-                    {
-                        WriteChunk(stream, c.Sealed);
-                    }
-                    AppPaths.WriteAtomically(PathOf(id), stream.ToArray());
-                }
-                _read.Remove(id);
+                return gone;
             }
+            var kept = chunks.Where(c => c.At >= cutoff).ToList();
+            if (kept.Count == 0)
+            {
+                File.Delete(PathOf(id));
+            }
+            else
+            {
+                using var stream = new MemoryStream();
+                foreach (var c in kept)
+                {
+                    WriteChunk(stream, c.Sealed);
+                }
+                AppPaths.WriteAtomically(PathOf(id), stream.ToArray());
+            }
+            _read.Remove(id);
+            return gone;
         }
     }
 

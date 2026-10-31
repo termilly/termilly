@@ -38,7 +38,9 @@ internal sealed class CommandHistory(Vault vault)
     /// <summary>Goes up with every command run here, so sync knows when this PC's file needs writing.</summary>
     public int OwnVersion { get; private set; }
 
-    private string FilePath => Path.Combine(vault.HistoryDirectory, "commands.tmc");
+    /// <summary>Its file in the history folder.</summary>
+    public const string FileName = "commands.tmc";
+    private string FilePath => Path.Combine(vault.HistoryDirectory, FileName);
     private byte[] Key => vault.Key ?? throw new InvalidOperationException("History is locked.");
 
     /// <summary>
@@ -124,6 +126,36 @@ internal sealed class CommandHistory(Vault vault)
                 Save(entries);
             }
             return new JsonArray(entries.AsEnumerable().Reverse().Select(e => (JsonNode)e.DeepClone()).ToArray()).ToJsonString();
+        }
+    }
+
+    /// <summary>Reads the commands (oldest first) while nothing changes them.</summary>
+    public T Read<T>(Func<IReadOnlyList<JsonObject>, T> read)
+    {
+        lock (_gate)
+        {
+            return read(Load());
+        }
+    }
+
+    /// <summary>
+    /// The commands that match (all of them with <paramref name="dryRun"/> only counted): how many, and how much of the
+    /// file they took (their text's share).
+    /// </summary>
+    public (int Count, long Bytes) RemoveWhere(Func<JsonObject, bool> match, bool dryRun)
+    {
+        lock (_gate)
+        {
+            var entries = Load();
+            var gone = entries.Where(match).ToList();
+            var bytes = gone.Sum(e => (long)e.ToJsonString().Length);
+            if (!dryRun && gone.Count > 0)
+            {
+                var drop = gone.ToHashSet();
+                entries.RemoveAll(drop.Contains);
+                Save(entries);
+            }
+            return (gone.Count, bytes);
         }
     }
 

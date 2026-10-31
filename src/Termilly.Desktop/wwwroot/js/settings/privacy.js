@@ -5,7 +5,6 @@ import { PAGE, HOST } from '../protocol.js';
 import { send, onHost, sys, SYSTEM_NAME } from '../host.js';
 import { emit, getSetting, GROUPS, EVENTS } from '../store.js';
 import { updateSettings } from '../preferences.js';
-import { keepEarlierOfOpen } from '../earlier.js';
 import { ICONS } from '../ui.js';
 import { confirmDialog } from '../dialogs.js';
 import { showRecoveryCode } from '../security.js';
@@ -20,6 +19,9 @@ const { historyDays } = SETTING_VALUES;
 
 /** How long history is kept: a number of days or months, or Forever (0 days). */
 const KEEP_FOR = Object.freeze({ days: 'days', months: 'months', forever: 'forever' });
+/** The setting, and its Forever choice as it reads. */
+export const HISTORY_DAYS = 'session.historyDays';
+export const FOREVER = 'Forever';
 const KEEP_COUNT = '[data-keep-count]';
 const KEEP_UNIT = '[data-keep-unit]';
 const FIELD_ROW = '.field-row';
@@ -39,8 +41,8 @@ function keepFor(days) {
 
 /** Keep history for: [number] [Days | Months | Forever]. */
 function keepForHtml() {
-  const now = keepFor(getSetting('session.historyDays'));
-  const units = [[KEEP_FOR.days, 'Days'], [KEEP_FOR.months, 'Months'], [KEEP_FOR.forever, 'Forever']];
+  const now = keepFor(getSetting(HISTORY_DAYS));
+  const units = [[KEEP_FOR.days, 'Days'], [KEEP_FOR.months, 'Months'], [KEEP_FOR.forever, FOREVER]];
   return `<span class="field-row"><input class="field keep-count" data-keep-count type="number" min="1" max="${MOST.days}" value="${now.count}" aria-label="How many"${now.unit === KEEP_FOR.forever ? ' hidden' : ''}>
     <select class="field" data-keep-unit aria-label="Days, months or forever">${units.map(([v, l]) => `<option value="${v}"${v === now.unit ? ' selected' : ''}>${l}</option>`).join('')}</select></span>`;
 }
@@ -96,7 +98,7 @@ const PRIVACY = {
       + row('Keep history for', 'Closed terminals with their output, and the commands run. A month is 30 days.', keepForHtml(), { keywords: 'retention history days months forever keep expire' })
       + row('Redact secrets', 'Replace tokens, keys and passwords with [redacted].',
         toggle('session.redactSecrets'))
-      + row('Clear history', 'Deletes every closed terminal Termilly has kept.', '<button class="btn small danger-outline" data-action="clearHistory">Clear history</button>'))
+      + row('Manage history', 'What’s kept and the space it takes; clear part of it, or export it.', '<button class="btn small" data-action="manageHistory">Manage</button>', { keywords: 'history size disk space clear delete export' }))
     + syncSectionHtml(group, row),
   refresh: refreshSyncStatus,
   click: handleSyncClick,
@@ -117,17 +119,7 @@ const PRIVACY = {
       const input = field(body, '[data-restore-code]');
       if (input.value.trim()) send(PAGE.securityRestore, { code: input.value });
     },
-    async clearHistory() {
-      if (await confirmDialog({
-        title: 'Clear history?',
-        body: 'This deletes every closed session Termilly has kept, including their saved output. Open terminals are not affected.',
-        confirm: 'Clear history',
-      })) {
-        send(PAGE.historyClear);
-        keepEarlierOfOpen(); // closed terminals' earlier output goes with them
-        emit(EVENTS.history);
-      }
-    },
+    manageHistory: () => emit(EVENTS.openSettings, SECTION.history),
   },
 };
 

@@ -256,6 +256,9 @@ internal sealed record SessionSettings
 {
     public string Restore { get; init; } = SettingValues.RestoreSession.Default;
     public int HistoryDays { get; init; } = SettingValues.HistoryDays.Default;
+    /// <summary>Termilly says when history passes <see cref="HistoryWarnGb"/>.</summary>
+    public bool HistoryWarn { get; init; } = true;
+    public int HistoryWarnGb { get; init; } = SettingValues.HistoryWarnGb.Default;
     public int HiddenScrollback { get; init; } = SettingValues.HiddenScrollback.Default;
     /// <summary>Closed terminals' output is kept in the history.</summary>
     public bool SaveOutput { get; init; } = true;
@@ -269,6 +272,7 @@ internal sealed record SessionSettings
     {
         Restore = SettingChecks.OneOf(Restore, SettingValues.RestoreSession.All, SettingValues.RestoreSession.Default),
         HistoryDays = HistoryDays < 0 ? SettingValues.HistoryDays.Default : Math.Min(HistoryDays, SettingValues.HistoryDays.Max),
+        HistoryWarnGb = Math.Clamp(HistoryWarnGb, SettingValues.HistoryWarnGb.Min, SettingValues.HistoryWarnGb.Max),
         HiddenScrollback = SettingChecks.OneOf(HiddenScrollback, SettingValues.HiddenScrollback.All, SettingValues.HiddenScrollback.Default),
     };
 }

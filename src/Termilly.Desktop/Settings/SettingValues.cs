@@ -88,6 +88,14 @@ internal static class SettingValues
         public const int DaysPerMonth = 30;
     }
 
+    /// <summary>The size history may reach before Termilly says so (History › Warn me when history passes), in GB.</summary>
+    public static class HistoryWarnGb
+    {
+        public const int Default = 2;
+        public const int Min = 1;
+        public const int Max = 1000;
+    }
+
     /// <summary>What the window's Minimize does: the taskbar, or the tray (Windows, TrayIcon.cs).</summary>
     public static class MinimizeTo
     {

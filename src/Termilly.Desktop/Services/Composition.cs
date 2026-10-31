@@ -22,6 +22,7 @@ internal static class Composition
         .AddSingleton<SessionSnapshot>()
         .AddSingleton<HistoryStore>()
         .AddSingleton<EarlierOutput>()
+        .AddSingleton<HistoryManager>()
         .AddSingleton<CommandHistory>()
         .AddSingleton<HistorySync>()
         // Programs Termilly runs, and what it reads with them.
@@ -52,6 +53,7 @@ internal static class Composition
         .AddSingleton<PhoneLive>()
         .AddStartable<ProfileCatalog>()
         .AddStartable<ActivityWatcher>()
+        .AddStartable<HistoryWatch>()
         .AddStartable<AgentMonitor>()
         .AddStartable<RetiredAssistantKey>()
         .AddStartable<RetiredPhonePairings>()
@@ -63,6 +65,7 @@ internal static class Composition
         .AddHandler<SettingsHandler>()
         .AddHandler<HistoryHandler>()
         .AddHandler<EarlierHandler>()
+        .AddHandler<HistoryManageHandler>()
         .AddHandler<SecurityHandler>()
         .AddHandler<RemoteHandler>()
         .AddHandler<ChangesHandler>()

@@ -17,7 +17,10 @@ internal sealed class SessionSnapshot(Vault vault)
     /// in its earlier output, EarlierOutput).</summary>
     public const int MaxLines = TerminalSettings.MaxScrollback;
 
-    private string FilePath => vault.PathOf("session.tms");
+    public string FilePath => vault.PathOf("session.tms");
+
+    /// <summary>The snapshot's terminals, by id.</summary>
+    public const string TabsField = "tabs";
 
     public void Save(JsonElement snapshot, bool redactSecrets)
     {
@@ -25,7 +28,7 @@ internal sealed class SessionSnapshot(Vault vault)
         {
             return;
         }
-        if (root["tabs"] is JsonObject tabs)
+        if (root[TabsField] is JsonObject tabs)
         {
             foreach (var (_, tab) in tabs)
             {

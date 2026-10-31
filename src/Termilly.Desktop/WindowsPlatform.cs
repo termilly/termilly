@@ -66,6 +66,18 @@ internal sealed class WindowsPlatform(MainWindow window) :
         return Task.FromResult(dialog.ShowDialog(window) == true ? dialog.FileName : null);
     }
 
+    public Task<string?> PickZipToSaveAsync(string fileName)
+    {
+        var dialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Title = "Export history",
+            FileName = fileName,
+            Filter = "Zip archive (*.zip)|*.zip",
+            DefaultExt = ".zip",
+        };
+        return Task.FromResult(dialog.ShowDialog(window) == true ? dialog.FileName : null);
+    }
+
     public Task<string?> PickLayoutToOpenAsync()
     {
         var dialog = new Microsoft.Win32.OpenFileDialog
@@ -83,7 +95,7 @@ internal sealed class WindowsPlatform(MainWindow window) :
             Title = "Save note",
             FileName = fileName,
             Filter = TextFilter,
-            DefaultExt = ".txt",
+            DefaultExt = AppPaths.TextExtension,
         };
         if (folder is not null)
         {

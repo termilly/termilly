@@ -51,6 +51,9 @@ internal interface IFileDialogs
 
     Task<string?> PickLayoutToOpenAsync();
 
+    /// <summary>Where to save history exported as a zip (Settings › Privacy › History › Export).</summary>
+    Task<string?> PickZipToSaveAsync(string fileName);
+
     /// <summary>Where to save a Notepad page: offering <paramref name="fileName"/>, in <paramref name="folder"/> when given.</summary>
     Task<string?> PickTextToSaveAsync(string fileName, string? folder);
 

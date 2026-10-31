@@ -86,8 +86,9 @@ const searchBox = field(nav, '#set-search');
 const navItems = find(nav, '.set-nav-items');
 
 function renderNav() {
-  navItems.innerHTML = sections.map(s =>
-    `<button class="set-nav-item${s.id === page.current && !searchQuery ? ' on' : ''}" data-section="${s.id}">${s.icon}<span>${s.label}</span></button>`).join('');
+  const shown = SECTIONS[page.current]?.parent ?? page.current;
+  navItems.innerHTML = sections.filter(s => !s.parent).map(s =>
+    `<button class="set-nav-item${s.id === shown && !searchQuery ? ' on' : ''}" data-section="${s.id}">${s.icon}<span>${s.label}</span></button>`).join('');
 }
 
 /** @param {string} id */
@@ -98,7 +99,7 @@ function showSection(id) {
   searchQuery = '';
   searchBox.value = '';
   renderNav();
-  title.textContent = section.label;
+  title.textContent = section.parent ? `${SECTIONS[section.parent].label} › ${section.label}` : section.label;
   help.hidden = !section.docs;
   tools.innerHTML = section.tools?.() ?? '';
   tools.hidden = !section.tools;
