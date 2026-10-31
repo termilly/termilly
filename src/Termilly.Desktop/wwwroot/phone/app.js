@@ -6,7 +6,7 @@
 // between the terminals, the PC's notifications and this phone's settings (tabs.js).
 
 import { terminalView, activityHtml, TEXT_SIZE } from './terminal.js';
-import { TAB, SETTING, TEXT_SIZES, navHtml, notesHtml, settingsHtml, themesHtml } from './tabs.js';
+import { TAB, SETTING, SETTINGS_PAGE, PAGE_TITLE, TEXT_SIZES, navHtml, notesHtml, settingsHtml, themesHtml } from './tabs.js';
 import { SCROLLING } from './gestures.js';
 import { manager } from './manage.js';
 import { COMPOSE_STYLE, composeStyle, DICTATION, dictation } from './compose.js';
@@ -71,9 +71,11 @@ let retry = RETRY_MS;
 /** @type {string | null} */
 let sheetFor = null;
 let replying = false;
-/** The tab shown (the bottom bar), and whether Settings shows its themes page. */
+/** The tab shown (the bottom bar), and the Settings page shown ('' for its list). */
 let tab = TAB.terminals;
-let themesPage = false;
+let settingsPage = SETTINGS_PAGE.list;
+/** What Settings' list says of alerts. */
+const ALERTS_SET = Object.freeze({ none: 'Not here', on: 'On', off: 'Off' });
 /** The tabs' titles, at the top. */
 const TITLE = Object.freeze({ [TAB.terminals]: 'Termilly', [TAB.notes]: 'Notifications', [TAB.settings]: 'Settings' });
 
@@ -220,13 +222,13 @@ function render() {
   const conn = app.querySelector('[data-conn]');
   if (conn) conn.textContent = connected ? '' : 'Reconnecting';
   const title = app.querySelector('[data-title]');
-  const onThemes = tab === TAB.settings && themesPage;
-  if (title) title.textContent = onThemes ? 'Themes' : /** @type {Record<string, string>} */ (TITLE)[tab];
+  const page = tab === TAB.settings ? settingsPage : SETTINGS_PAGE.list;
+  if (title) title.textContent = page ? /** @type {Record<string, string>} */ (PAGE_TITLE)[page] : /** @type {Record<string, string>} */ (TITLE)[tab];
   const add = app.querySelector('[data-add]');
   if (add) add.innerHTML = tab === TAB.terminals ? manage.addButton() : '';
   home.innerHTML = tab === TAB.notes ? notesHtml(snap.notes ?? [], noteParts)
-    : onThemes ? themesHtml(looks(snap), chosenLook())
-    : tab === TAB.settings ? settingsHtml({ alerts: alertsBody(), size: textSize(), scrolling: localStorage.getItem(SCROLLING.key) ?? SCROLLING.smooth, compose: composeStyle(), dictation: dictation(), host: location.host, connected, look: chosenLook(), looks: looks(snap) })
+    : page === SETTINGS_PAGE.themes ? themesHtml(looks(snap), chosenLook())
+    : tab === TAB.settings ? settingsHtml({ page, alerts: alertsBody(), alertsOn: !canAlert() ? ALERTS_SET.none : me?.alerts ? ALERTS_SET.on : ALERTS_SET.off, size: textSize(), scrolling: localStorage.getItem(SCROLLING.key) ?? SCROLLING.smooth, compose: composeStyle(), dictation: dictation(), host: location.host, connected, look: chosenLook(), looks: looks(snap) })
     : terminalsHtml();
   /** @type {HTMLElement} */ (document.getElementById('nav')).innerHTML = navHtml(tab, snap.notes?.length ?? 0);
   renderSheet();
@@ -404,7 +406,7 @@ app.addEventListener('click', e => {
   const to = /** @type {HTMLElement} */ (e.target).closest('[data-tab]')?.getAttribute('data-tab');
   if (to) {
     tab = to;
-    themesPage = false;
+    settingsPage = SETTINGS_PAGE.list;
     render();
     window.scrollTo(0, 0);
     return;
@@ -445,9 +447,8 @@ app.addEventListener('click', e => {
       localStorage.setItem(SCROLLING.key, target.dataset.scrolling ?? SCROLLING.smooth);
       render();
       break;
-    case SETTING.themes:
-    case SETTING.back:
-      themesPage = target.dataset.do === SETTING.themes;
+    case SETTING.page:
+      settingsPage = target.dataset.page ?? SETTINGS_PAGE.list;
       render();
       window.scrollTo(0, 0);
       break;
