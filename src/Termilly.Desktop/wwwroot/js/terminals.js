@@ -1030,6 +1030,7 @@ export function applyTerminalSettings() {
     const term = tab.view?.term;
     if (!term) continue;
     for (const [key, value] of Object.entries({ ...options, scrollback: scrollbackFor(tab) })) {
+      if (key === 'fontSize' && tab.phoneSize) continue; // smaller, to fit its phone in the pane (js/phone.js)
       if (term.options[key] !== value) term.options[key] = value;
     }
   }

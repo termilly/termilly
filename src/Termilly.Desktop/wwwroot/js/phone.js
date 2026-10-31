@@ -172,17 +172,61 @@ async function answer({ pane, choice, text }) {
   return { answered: choice };
 }
 
-// A phone shows a terminal: it takes the phone's size, so it fills the phone and what it prints fits it; it gets its
-// pane's size back when no phone shows it.
+// A phone shows a terminal: it takes the phone's size, so it fills the phone and what it prints fits it, drawn here in
+// a phone with that phone's name and address under it; it gets its pane's size back when no phone shows it.
 onHost(HOST.phoneSize, m => {
   const tab = state.tabs.get(m.id);
   const view = tab?.view;
   if (!tab || !view?.term) return;
   tab.phoneSize = m.cols && m.rows ? { cols: m.cols, rows: m.rows } : null;
   view.body.classList.toggle('phone-sized', !!tab.phoneSize);
-  if (tab.phoneSize) view.term.resize(tab.phoneSize.cols, tab.phoneSize.rows);
-  else view.fit?.fit();
+  if (tab.phoneSize) {
+    view.body.dataset.phone = [m.name ?? 'A phone', m.address].filter(Boolean).join(' · ');
+    view.term.resize(tab.phoneSize.cols, tab.phoneSize.rows);
+    phoneTabs.set(view.body, tab);
+    resized.observe(view.body);
+    requestAnimationFrame(() => fitPhone(tab)); // once the new size is drawn
+  } else {
+    delete view.body.dataset.phone;
+    resized.unobserve(view.body);
+    view.term.options.fontSize = state.settings.terminal.fontSize;
+    view.fit?.fit();
+  }
 });
+
+/** Room in a phone-sized pane for its padding and the phone's name under the phone (app.css). */
+const PHONE_ROOM = Object.freeze({ width: 40, height: 84 });
+/** The smallest font a phone's terminal gets here: it shows what the phone shows, smaller than one would type in. */
+const PHONE_MIN_FONT = 4;
+/** @type {WeakMap<Element, Tab>} */
+const phoneTabs = new WeakMap();
+const resized = new ResizeObserver(entries => {
+  for (const e of entries) {
+    const tab = phoneTabs.get(e.target);
+    if (tab?.phoneSize) fitPhone(tab);
+  }
+});
+
+/**
+ * A terminal a phone shows, in its phone, fits its pane: its font gets smaller as needed (never bigger than Settings'),
+ * as it keeps the phone's columns and rows.
+ * @param {Tab} tab
+ */
+function fitPhone(tab) {
+  const view = tab.view, term = view?.term, screen = term?.element?.querySelector('.xterm-screen');
+  if (!view || !term?.element || !screen) return;
+  const full = state.settings.terminal.fontSize;
+  if (term.options.fontSize !== full) {
+    term.options.fontSize = full;
+    requestAnimationFrame(() => fitPhone(tab)); // measured at Settings' font, once drawn
+    return;
+  }
+  const inner = screen.getBoundingClientRect(), outer = term.element.getBoundingClientRect();
+  const scale = Math.min(1,
+    (view.body.clientWidth - PHONE_ROOM.width - (outer.width - inner.width)) / inner.width,
+    (view.body.clientHeight - PHONE_ROOM.height - (outer.height - inner.height)) / inner.height);
+  if (scale < 1) term.options.fontSize = Math.max(PHONE_MIN_FONT, Math.floor(full * scale * 2) / 2);
+}
 
 // A phone starts showing a terminal (already at its size): what it shows now, once what it printed is drawn.
 onHost(HOST.phoneScreen, async m => {

@@ -52,7 +52,8 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
         settings.Saved += _ => Update();
         live.Received = ReceivedAsync;
         live.Screen = ScreenAsync;
-        live.Sized = (pane, size) => _page.Post(new ToPage.PhoneSize(pane, size?.Cols, size?.Rows));
+        live.Sized = (pane, phone) => _page.Post(new ToPage.PhoneSize(pane, phone?.Size.Cols, phone?.Size.Rows,
+            phone is null ? null : store.List().FirstOrDefault(d => d.Id == phone.Device)?.Name, phone?.Address));
         sessions.Output += Printed;
     }
 

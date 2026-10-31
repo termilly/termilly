@@ -73,9 +73,9 @@ internal static partial class ToPage
 
     /// <summary>
     /// A phone shows this terminal: it takes the phone's size until no phone shows it (Cols and Rows null), so it fills
-    /// the phone and its output fits it.
+    /// the phone and its output fits it. Name and Address say which phone (its paired name, its network address).
     /// </summary>
-    internal sealed record PhoneSize(string Id, int? Cols, int? Rows) : IHostMessage
+    internal sealed record PhoneSize(string Id, int? Cols, int? Rows, string? Name, string? Address) : IHostMessage
     {
         public static string Type => "phone:size";
     }
