@@ -190,13 +190,17 @@ onHost(HOST.phoneSize, m => {
   const view = tab?.view;
   if (!tab || !view?.term) return;
   const before = tab.phoneSize;
-  // The same size again (the phone's keyboard came or went): nothing to redraw, and redrawing made the pane flicker.
-  if (before && m.cols === before.cols && m.rows === before.rows) return;
+  // The phone's keyboard came or went: the same columns, rows no more than its tallest. The phone keeps its size and
+  // font; only its rows change (fitting again drew it at Settings' font for a frame, and the pane's scrollbar blinked).
+  if (before && m.cols === before.cols && m.rows && m.rows <= (before.tallest ?? 0)) {
+    tab.phoneSize = { ...before, rows: m.rows };
+    if (view.term.rows !== m.rows) view.term.resize(m.cols, m.rows);
+    return;
+  }
   tab.phoneSize = m.cols && m.rows
     ? { cols: m.cols, rows: m.rows, tallest: before?.cols === m.cols ? Math.max(before.tallest ?? 0, m.rows) : m.rows }
     : null;
   view.body.classList.toggle('phone-sized', !!tab.phoneSize);
-  fitted.delete(tab); // a new size, or none: fitted afresh
   if (tab.phoneSize) {
     view.body.dataset.phone = [m.name ?? 'A phone', m.address].filter(Boolean).join(' · ');
     view.term.resize(tab.phoneSize.cols, tab.phoneSize.rows);
@@ -236,56 +240,40 @@ function phoneFrame(element) {
   return { width: px('padding-left', 'padding-right', 'border-left-width', 'border-right-width'), height: px('padding-top', 'padding-bottom', 'border-top-width', 'border-bottom-width') };
 }
 
-/** Font sizes go in halves. */
-const FONT_STEP = 0.5;
-/** What each phone's terminal was last fitted to (its room, grid and Settings' font). */
-/** @type {WeakMap<Tab, string>} */
-const fitted = new WeakMap();
-
 /**
  * A terminal a phone shows, in its phone, fits its pane: its font gets smaller as needed (never bigger than Settings'),
  * as it keeps the phone's columns and rows. The phone is as tall as its tallest rows, so the keyboard doesn't shrink it.
- * The size it would have at Settings' font is worked out from the one it has, not drawn: drawing it at that font for a
- * frame made the pane overflow, and its scrollbar blink.
  * @param {Tab} tab
  */
 function fitPhone(tab) {
   const view = tab.view, term = view?.term, screen = term?.element?.querySelector(TERM_SCREEN);
-  if (!view || !term?.element || !screen || !view.body.clientWidth) return; // a pane not on screen has no room to fit
-  const full = state.settings.terminal.fontSize, now = term.options.fontSize;
+  if (!view || !term?.element || !screen) return;
+  const full = state.settings.terminal.fontSize;
+  if (term.options.fontSize !== full) {
+    term.options.fontSize = full;
+    requestAnimationFrame(() => fitPhone(tab)); // measured at Settings' font, once drawn
+    return;
+  }
   const inner = screen.getBoundingClientRect(), frame = phoneFrame(term.element);
-  if (!inner.width || !inner.height) return;
-  const room = { width: view.body.clientWidth - PHONE_ROOM.width - frame.width, height: view.body.clientHeight - PHONE_ROOM.height - frame.height };
-  // Fitted already for this room, grid and font: fitting again could only go back and forth.
-  const key = `${room.width}x${room.height} ${term.cols}x${tallestOf(tab)} ${full}`;
-  if (fitted.get(tab) === key) return;
-  fitted.set(tab, key);
-  const grow = full / now; // what it would be at Settings' font
-  const scale = Math.min(1, room.width / (inner.width * grow), room.height / (inner.height * grow * tallestOf(tab) / term.rows));
-  const font = Math.max(PHONE_MIN_FONT, Math.floor(full * scale / FONT_STEP) * FONT_STEP);
-  if (font !== now) term.options.fontSize = font;
-  requestAnimationFrame(() => holdHeight(tab, room)); // at the new font, once drawn
+  const tall = inner.height * tallestOf(tab) / term.rows;
+  const scale = Math.min(1,
+    (view.body.clientWidth - PHONE_ROOM.width - frame.width) / inner.width,
+    (view.body.clientHeight - PHONE_ROOM.height - frame.height) / tall);
+  if (scale < 1) term.options.fontSize = Math.max(PHONE_MIN_FONT, Math.floor(full * scale * 2) / 2);
+  requestAnimationFrame(() => holdHeight(tab)); // at the new font, once drawn
 }
 
 /** @param {Tab} tab */
 const tallestOf = tab => Math.max(tab.phoneSize?.tallest ?? 0, tab.view?.term?.rows ?? 1);
 
 /**
- * The phone keeps its tallest height: rows the keyboard took stay as empty screen under the terminal. Cells are whole
- * pixels, so a font worked out may come out a little too wide: then a half size smaller.
+ * The phone keeps its tallest height: rows the keyboard took stay as empty screen under the terminal.
  * @param {Tab} tab
- * @param {{ width: number, height: number }} [room] The room it has, when it was just fitted.
  */
-function holdHeight(tab, room) {
+function holdHeight(tab) {
   const term = tab.view?.term, screen = term?.element?.querySelector(TERM_SCREEN);
   if (!tab.phoneSize || !term?.element || !screen) return;
-  const inner = screen.getBoundingClientRect();
-  if (room && inner.width > room.width && term.options.fontSize > PHONE_MIN_FONT) {
-    term.options.fontSize -= FONT_STEP;
-    requestAnimationFrame(() => holdHeight(tab, room));
-    return;
-  }
-  const tall = inner.height * tallestOf(tab) / term.rows;
+  const tall = screen.getBoundingClientRect().height * tallestOf(tab) / term.rows;
   term.element.style.minHeight = `${Math.ceil(tall + phoneFrame(term.element).height)}px`;
 }
 
