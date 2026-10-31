@@ -8,7 +8,9 @@ export const TAB = Object.freeze({ terminals: 'terminals', notes: 'notes', setti
 /** What a note says about its terminal's agent (AgentStates.cs). */
 const STATE_LABEL = Object.freeze({ 'needs-input': 'Needs you', attention: 'Needs you', error: 'Error', done: 'Done' });
 /** What the Settings tab's buttons do (data-do). */
-export const SETTING = Object.freeze({ smaller: 'smaller', bigger: 'bigger', unpair: 'unpair', themes: 'themes', back: 'back' });
+export const SETTING = Object.freeze({ smaller: 'smaller', bigger: 'bigger', unpair: 'unpair', themes: 'themes', back: 'back', scrolling: 'scrolling' });
+/** The ways the terminal scrolls back (gestures.js SCROLLING), as Settings offers them. */
+const SCROLL_CHOICES = [['smooth', 'Smooth'], ['lines', 'Line by line']];
 /** The looks at the top of Settings › Appearance; the other themes have their own page. */
 const FIRST_LOOKS = Object.freeze(['pc', 'auto', 'dark', 'light']);
 /** The text sizes the terminal steps through (points). */
@@ -78,7 +80,7 @@ export function themesHtml(looks, chosen) {
 
 /**
  * This phone's settings.
- * @param {{ alerts: string, size: number, host: string, connected: boolean, look: string, looks: Look[] }} now
+ * @param {{ alerts: string, size: number, scrolling: string, host: string, connected: boolean, look: string, looks: Look[] }} now
  */
 export function settingsHtml(now) {
   const other = FIRST_LOOKS.includes(now.look) ? null : now.looks.find(l => l.id === now.look);
@@ -88,6 +90,8 @@ export function settingsHtml(now) {
     <p class="muted hint">Same as PC follows the desktop's theme as it changes; System, the phone's light or dark mode.</p>
     <div class="section">Terminal text</div><div class="list pad stepper"><button class="btn" data-do="${SETTING.smaller}" aria-label="Smaller">A−</button>
       <span>${now.size} pt</span><button class="btn" data-do="${SETTING.bigger}" aria-label="Bigger">A+</button></div>
+    <div class="section">Scrolling</div><div class="list looks">${SCROLL_CHOICES.map(([id, name]) => `<button class="row look${id === now.scrolling ? ' on' : ''}" data-do="${SETTING.scrolling}" data-scrolling="${id}">
+      <span class="r-text">${name}</span><span class="tick">${id === now.scrolling ? '✓' : ''}</span></button>`).join('')}</div>
     <div class="section">Your PC</div><div class="list pad"><p class="mono">${esc(now.host)}</p>
       <p class="muted">${now.connected ? 'Connected.' : 'Reconnecting.'}</p></div>
     <div class="section">Pairing</div><div class="list pad"><p class="muted">The PC forgets this phone; it needs a new code to come back.</p>

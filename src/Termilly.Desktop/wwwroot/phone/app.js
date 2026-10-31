@@ -7,6 +7,7 @@
 
 import { terminalView, activityHtml, TEXT_SIZE } from './terminal.js';
 import { TAB, SETTING, TEXT_SIZES, navHtml, notesHtml, settingsHtml, themesHtml } from './tabs.js';
+import { SCROLLING } from './gestures.js';
 import { applyLook, chooseLook, chosenLook, looks } from './theme.js';
 
 const app = /** @type {HTMLElement} */ (document.getElementById('app'));
@@ -216,7 +217,7 @@ function render() {
   if (title) title.textContent = onThemes ? 'Themes' : /** @type {Record<string, string>} */ (TITLE)[tab];
   home.innerHTML = tab === TAB.notes ? notesHtml(snap.notes ?? [], noteParts)
     : onThemes ? themesHtml(looks(snap), chosenLook())
-    : tab === TAB.settings ? settingsHtml({ alerts: alertsBody(), size: textSize(), host: location.host, connected, look: chosenLook(), looks: looks(snap) })
+    : tab === TAB.settings ? settingsHtml({ alerts: alertsBody(), size: textSize(), scrolling: localStorage.getItem(SCROLLING.key) ?? SCROLLING.smooth, host: location.host, connected, look: chosenLook(), looks: looks(snap) })
     : terminalsHtml();
   /** @type {HTMLElement} */ (document.getElementById('nav')).innerHTML = navHtml(tab, snap.notes?.length ?? 0);
   renderSheet();
@@ -398,6 +399,10 @@ app.addEventListener('click', e => {
     case SETTING.smaller: stepText(-1); break;
     case SETTING.bigger: stepText(1); break;
     case SETTING.unpair: unpair(); break;
+    case SETTING.scrolling:
+      localStorage.setItem(SCROLLING.key, target.dataset.scrolling ?? SCROLLING.smooth);
+      render();
+      break;
     case SETTING.themes:
     case SETTING.back:
       themesPage = target.dataset.do === SETTING.themes;
