@@ -38,7 +38,7 @@ const lineOf = term => {
 
 /**
  * @param {HTMLElement} box The box xterm is drawn in; it's moved by setting its scroll position.
- * @param {{ term: () => any, size: () => number, resize: (size: number) => void, sized: () => void, tap: () => void }} on
+ * @param {{ term: () => any, size: () => number, resize: (size: number) => void, sized: () => void, tap: () => boolean | void }} on
  */
 export function terminalTouch(box, on) {
   /** @type {{ x: number, y: number, at: number, vx: number, vy: number, moved: boolean } | null} */
@@ -177,7 +177,8 @@ export function terminalTouch(box, on) {
       if (e.timeStamp - drag.at < GLIDE.still) glide(drag.vx, drag.vy);
       else settle();
     }
-    else if (drag) on.tap();
+    // A tap that put the keyboard somewhere else: no mouse events after it, or the terminal would take it back.
+    else if (drag && on.tap()) e.preventDefault();
     drag = null;
   }, FIRST);
 

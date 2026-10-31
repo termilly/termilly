@@ -270,7 +270,15 @@ export function terminalView(app) {
         requestAnimationFrame(fitGrid);
       },
       sized: () => localStorage.setItem(SIZE_KEY, String(fontSize)),
-      tap: () => { if (typing) term?.focus(); },
+      // Under a Claude terminal the tap goes to the message box: the keyboard's dictation works there, while in the
+      // terminal itself it garbles (it rewrites words already sent, so they come out twice).
+      tap: () => {
+        if (!typing) return false;
+        const field = compose.field();
+        if (!field) term?.focus();
+        field?.focus();
+        return !!field;
+      },
     });
   }
 
@@ -390,7 +398,8 @@ export function terminalView(app) {
         app.toast('The phone didn\'t allow pasting.');
       }
     } else if (key) type(/** @type {Record<string, string>} */ (KEYS)[key]);
-    if (key && key !== SNIP) term?.focus();
+    // The keyboard stays with the terminal after a key, except under a message box (see the tap).
+    if (key && key !== SNIP && !compose.field()) term?.focus();
   });
 
   /** Back after the connection dropped: the terminal shown starts over with what it shows. */
