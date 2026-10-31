@@ -95,6 +95,14 @@ internal sealed class ClaudeAgentsPoller : IDisposable
         }
     }
 
+    private bool IsHooked(string terminal)
+    {
+        lock (_lock)
+        {
+            return _hooked.ContainsKey(terminal);
+        }
+    }
+
     public void Dispose() => _timer.Dispose();
 
     private void Tick()
@@ -177,7 +185,9 @@ internal sealed class ClaudeAgentsPoller : IDisposable
         foreach (var (terminal, last) in _reported.Where(r => !seen.Contains(r.Key)).ToList())
         {
             _reported.Remove(terminal);
-            if (roots.ContainsKey(terminal))
+            // Its hooks report it now (it was seen here first, as a resumed session is before its SessionStart):
+            // it didn't exit, it's just not the poll's to report any more.
+            if (roots.ContainsKey(terminal) && !IsHooked(terminal))
             {
                 _changed(terminal, AgentStates.Exited, null, last.Session);
             }

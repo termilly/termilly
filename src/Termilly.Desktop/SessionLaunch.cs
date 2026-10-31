@@ -145,7 +145,7 @@ internal static class SessionLaunch
     {
         script ??= PowerShellIntegrationScript;
         var withMarks = new Dictionary<string, string>(vars, StringComparer.OrdinalIgnoreCase);
-        switch (profile.Source, profile.Icon)
+        switch (profile.Source, profile.Shell)
         {
             case (ProfileSources.Local, ProfileIcons.PowerShell) when File.Exists(script):
                 withMarks[Variables.ShellIntegration] = "1";

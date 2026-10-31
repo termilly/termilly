@@ -177,6 +177,8 @@ interface Tab {
   phoneAlerted?: string | null;
   /** The size a phone showing it asked for; it keeps that size until no phone shows it (js/phone.js). */
   phoneSize?: { cols: number, rows: number, tallest?: number } | null;
+  /** Its Claude Code session is resuming after a restart, until it reports in (js/resuming.js). */
+  resuming?: { session: string; command: string | null; retried: boolean; timer: number } | null;
   /** What it brings back and types as its shell starts (js/terminals.js). */
   start?: import('../wwwroot/js/terminals.js').ShellStart;
   /** js/terminals.js's timers for its shell. */

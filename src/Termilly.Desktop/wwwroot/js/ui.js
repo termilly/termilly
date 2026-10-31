@@ -97,6 +97,7 @@ export const ltrPath = path => `‎${path ?? ''}‎`;
  */
 export function badgeHtml(profile, extraClass = BADGE_SIZE.small) {
   const icon = profile?.icon ?? '';
+  if (icon === PROFILE_ICON.claude) return claudeBadge(extraClass);
   const word = /** @type {Record<string, string>} */ (PIXEL_WORDS)[icon];
   return `<span class="badge ${extraClass}" data-icon="${escapeHtml(icon)}">${word ? pixelWord(word, extraClass === BADGE_SIZE.small)
     : `<span class="badge-text">${escapeHtml(/** @type {Record<string, string>} */ (BADGES)[icon] ?? '>_')}</span>`}</span>`;
@@ -157,8 +158,16 @@ const CLAUDE_MARK = '<svg viewBox="0 0 12 12"><g fill="currentColor" stroke="non
  * @param {string} [extraClass]
  */
 export function tabBadgeHtml(tab, extraClass = BADGE_SIZE.small) {
-  if (!runsClaude(tab)) return badgeHtml(profileOf(tab), extraClass);
-  return `<span class="badge ${extraClass}" data-icon="claude" title="Claude Code is running here">${CLAUDE_MARK}</span>`;
+  return runsClaude(tab) ? claudeBadge(extraClass, 'Claude Code is running here') : badgeHtml(profileOf(tab), extraClass);
+}
+
+/**
+ * Claude's badge: a Claude Code terminal, or one Claude runs in.
+ * @param {string} extraClass
+ * @param {string} [title]
+ */
+function claudeBadge(extraClass, title) {
+  return `<span class="badge ${extraClass}" data-icon="${PROFILE_ICON.claude}"${title ? ` title="${title}"` : ''}>${CLAUDE_MARK}</span>`;
 }
 
 /**

@@ -254,6 +254,11 @@ export function terminalView(app) {
    * @param {boolean} canType
    */
   function open(t, canType) {
+    // Its Claude session is still resuming on the PC: opened now, what's typed could spoil it.
+    if (t.resuming) {
+      app.toast('Claude is resuming on the PC. Try again in a moment.');
+      return;
+    }
     close();
     shown = t;
     typing = canType;

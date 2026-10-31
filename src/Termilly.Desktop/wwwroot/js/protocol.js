@@ -236,7 +236,7 @@ export const HOST = Object.freeze({
 /** @typedef {{ id?: string, name?: string, paired?: number, lastSeen?: number, alerts?: boolean }} PhoneDevice */
 /** @typedef {{ newRecoveryCode: string|null, archives: number }} SecurityInfo */
 /** @typedef {{ version: string|null, dataDir: string, remoteVersion: number, crashes: Array<any> }} AboutInfo */
-/** @typedef {{ id: string, name: string, description: string|null, icon: string, source: string, tags: Array<string> }} ProfileSummary */
+/** @typedef {{ id: string, name: string, description: string|null, icon: string, source: string, tags: Array<string>, startCommand?: string|null, shellIcon?: string|null }} ProfileSummary */
 /** @typedef {{ version: string, date: string|null, notes: string|null, installable: boolean, endsShells: boolean, linux: boolean }} UpdateAvailable */
 /** @typedef {{ state: string, percent: number, message: string|null, command: string|null }} UpdateProgress */
 

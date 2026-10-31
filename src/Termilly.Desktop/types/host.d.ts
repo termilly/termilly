@@ -386,4 +386,6 @@ interface SessionProfile {
   workingDirectory: string | null;
   environment: Record<string, string> | null;
   tags: string[] | null;
+  startCommand: string | null;
+  shellIcon: string | null;
 }

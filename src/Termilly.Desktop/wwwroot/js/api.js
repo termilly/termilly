@@ -112,7 +112,10 @@ const METHODS = {
   open: ({ profile, cwd, name, workspace, command, argv, reuse }) => {
     // The termilly command sends the words after "--" one by one: quoted here for the shell that will read them.
     const profileId = profileFor(profile);
-    if (Array.isArray(argv) && argv.length) command = commandLine(argv, state.profiles.find(p => p.id === profileId)?.icon);
+    if (Array.isArray(argv) && argv.length) {
+      const p = state.profiles.find(x => x.id === profileId);
+      command = commandLine(argv, p?.shellIcon ?? p?.icon);
+    }
     // "Open in Termilly" (reuse): a terminal already in that folder comes to the front instead of a second one.
     const existing = reuse && cwd && !command ? terminalIn(cwd) : null;
     if (existing) {
