@@ -6,7 +6,7 @@
 // between the terminals, the PC's notifications and this phone's settings (tabs.js).
 
 import { terminalView, activityHtml, TEXT_SIZE } from './terminal.js';
-import { TAB, SETTING, SETTINGS_PAGE, PAGE_TITLE, TEXT_SIZES, navHtml, notesHtml, settingsHtml, themesHtml } from './tabs.js';
+import { TAB, SETTING, SETTINGS_PAGE, PAGE_TITLE, STATE_LABEL, TEXT_SIZES, navHtml, notesHtml, settingsHtml, themesHtml } from './tabs.js';
 import { SCROLLING } from './gestures.js';
 import { manager } from './manage.js';
 import { COMPOSE_STYLE, composeStyle, DICTATION, dictation } from './compose.js';
@@ -319,6 +319,7 @@ function connect() {
       render();
       if (terminalShown.viewing) terminalShown.update(terminal(terminalShown.viewing), !!snap.typing);
       manage.changed();
+      news(snap.notes ?? []);
     } else if (m.type === LIVE.screen || m.type === LIVE.output) {
       terminalShown.message(m);
     } else if (m.type === LIVE.answered && manage.answered(m)) {
@@ -346,6 +347,60 @@ function answer(pane, choice, text = '') {
   if (!connected || !live) return toast('Not connected to your PC.');
   live.send(JSON.stringify({ op: OP.answer, pane, choice, text }));
 }
+
+// ---- News from the other terminals ----
+// While the app is open the phone gets no alerts (Features/Phone.cs): what an agent says shows here instead, as a
+// banner on top, for every terminal but the one on screen. A tap opens that terminal.
+
+/** How long a banner stays. */
+const NEWS_MS = 7000;
+/** The notes already known (terminal@time); null until the first state, whose notes are old news. */
+/** @type {Set<string> | null} */
+let newsKnown = null;
+
+/** @param {import('./tabs.js').Note[]} notes */
+function news(notes) {
+  const key = (/** @type {import('./tabs.js').Note} */ n) => `${n.id}@${n.at}`;
+  if (!newsKnown) {
+    newsKnown = new Set(notes.map(key));
+    return;
+  }
+  for (const n of notes) {
+    if (newsKnown.has(key(n))) continue;
+    newsKnown.add(key(n));
+    const label = /** @type {Record<string, string>} */ (STATE_LABEL)[n.state];
+    if (n.live && label && n.id !== terminalShown.viewing && !document.hidden) showNews(n, label);
+  }
+}
+
+/**
+ * @param {import('./tabs.js').Note} n
+ * @param {string} label
+ */
+function showNews(n, label) {
+  const t = terminal(n.id);
+  if (!t) return;
+  let el = /** @type {HTMLButtonElement | null} */ (document.getElementById(NEWS_ID));
+  if (!el) {
+    el = document.createElement('button');
+    el.id = NEWS_ID;
+    el.className = NEWS_ID;
+    document.body.append(el);
+    el.addEventListener('click', () => {
+      const banner = /** @type {HTMLButtonElement} */ (document.getElementById(NEWS_ID));
+      banner.hidden = true;
+      const to = terminal(banner.dataset.id ?? '');
+      if (to) terminalShown.open(to, !!snap.typing);
+    });
+  }
+  el.dataset.id = n.id;
+  el.className = `${NEWS_ID} n-${n.state}`;
+  el.innerHTML = `<span class="news-state">${esc(label)}</span><span class="news-text"><b>${esc(t.title)}</b> · ${esc(wsOf(t.ws)?.name ?? "")}<span>${esc(n.detail)}</span></span>`;
+  el.hidden = false;
+  clearTimeout(Number(el.dataset.timer));
+  el.dataset.timer = String(setTimeout(() => { /** @type {HTMLElement} */ (el).hidden = true; }, NEWS_MS));
+}
+const NEWS_ID = 'news';
 
 /** @param {string} text */
 function toast(text) {

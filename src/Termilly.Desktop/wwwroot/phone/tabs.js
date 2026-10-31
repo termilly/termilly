@@ -6,7 +6,7 @@
 /** The tabs (data-tab). */
 export const TAB = Object.freeze({ terminals: 'terminals', notes: 'notes', settings: 'settings' });
 /** What a note says about its terminal's agent (AgentStates.cs). */
-const STATE_LABEL = Object.freeze({ 'needs-input': 'Needs you', attention: 'Needs you', error: 'Error', done: 'Done' });
+export const STATE_LABEL = Object.freeze({ 'needs-input': 'Needs you', attention: 'Needs you', error: 'Error', done: 'Done' });
 /** What the Settings tab's buttons do (data-do). */
 export const SETTING = Object.freeze({ smaller: 'smaller', bigger: 'bigger', unpair: 'unpair', page: 'page', scrolling: 'scrolling', compose: 'compose', dictation: 'dictation' });
 /** Settings' pages (data-page): the list ('') opens each; themes opens from Appearance. */

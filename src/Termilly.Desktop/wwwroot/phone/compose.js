@@ -23,6 +23,8 @@ const WRITING = 'writing';
 /** One bar's keys in keys mode, and the ones under its ⋯ (terminal.js BAR). */
 const FEW_KEYS = ['esc', 'tab', 'ctrl', 'up', 'down', 'enter'];
 const MORE_KEYS = ['left', 'right', 'paste', 'snip'];
+/** Its send buttons (Messages' arrow, One bar's). */
+const SEND = '.m-go, .b-go';
 /** Its parts. */
 const PART = Object.freeze({ menu: '.c-menu', mic: '.m-mic', go: '.m-go', messages: '.msg' });
 
@@ -194,6 +196,13 @@ export function composer(view, app) {
     }
     return true;
   }
+
+  // The send arrow keeps the keyboard where it is: losing it would shrink the view and move the arrow away before the
+  // tap's click, so a first tap did nothing. It sends as the finger lifts; the click after finds the box empty.
+  view.addEventListener('pointerdown', e => { if (/** @type {HTMLElement} */ (e.target).closest(SEND)) e.preventDefault(); });
+  view.addEventListener('pointerup', e => {
+    /** @type {HTMLElement} */ (e.target).closest(SEND)?.closest(COMPOSE)?.requestSubmit();
+  });
 
   view.addEventListener('input', e => { if (/** @type {HTMLElement} */ (e.target).closest(COMPOSE)) changed(); });
   // Messages: while writing, the key bar steps aside.
