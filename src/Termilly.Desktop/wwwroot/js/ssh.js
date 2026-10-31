@@ -5,11 +5,12 @@
 import { PAGE, HOST } from './protocol.js';
 import { send, onHost, sys } from './host.js';
 import { state, GROUPS, isSshProfile } from './store.js';
-import { modal, CONFIRM_DIALOG, DIALOG_ERROR } from './dialogs.js';
+import { modal, confirmDialog, CONFIRM_DIALOG, DIALOG_ERROR } from './dialogs.js';
+import { closeTab } from './panes.js';
 import { escapeHtml, ICONS } from './ui.js';
 import { updateSettings } from './preferences.js';
 import { find, field, targetOf, showError } from './dom.js';
-import { FORWARD_STATE } from './constants.js';
+import { FORWARD_STATE, PROFILE_ID_PREFIX } from './constants.js';
 
 /** What the connection dialog gives back: the connection, and a password to save (wincred), else ''. */
 /** @typedef {{ value: SshConnection, password: string }} ConnectionResult */
@@ -440,6 +441,29 @@ onHost(HOST.sshImported, m => {
   });
 });
 
+/**
+ * Deletes a connection once the user says so: its open terminals close at once, its saved password goes.
+ * @param {SshConnection | undefined} conn
+ */
+async function removeConnection(conn) {
+  if (!conn) return;
+  const open = [...state.tabs.values()].filter(t => t.profile === PROFILE_ID_PREFIX.connection + conn.id);
+  const saved = conn.identity === IDENTITY.password;
+  const parts = [
+    open.length ? `its ${open.length === 1 ? 'open terminal closes' : `${open.length} open terminals close`} now` : '',
+    saved ? `its saved password is deleted from ${sys.credentials}` : '',
+  ].filter(Boolean);
+  const ok = await confirmDialog({
+    title: `Delete ${conn.name}?`,
+    body: parts.length ? `The connection is removed, ${parts.join(', and ')}.` : 'The connection is removed from Settings.',
+    confirm: 'Delete',
+  });
+  if (!ok) return;
+  for (const tab of open) closeTab(tab);
+  if (saved) send(PAGE.sshPasswordForget, { connection: conn.id });
+  save({ connections: connections().filter(c => c.id !== conn.id) });
+}
+
 // ---- Clicks in the section ----
 
 /** @param {Event} e */
@@ -453,10 +477,7 @@ export function handleSshClick(e) {
   switch (button.dataset.ssh) {
     case SSH_ACTION.add: connectionDialog(null); break;
     case SSH_ACTION.edit: connectionDialog(conn); break;
-    case SSH_ACTION.remove:
-      if (conn?.identity === IDENTITY.password) send(PAGE.sshPasswordForget, { connection: conn.id });
-      save({ connections: connections().filter(c => c !== conn) });
-      break;
+    case SSH_ACTION.remove: removeConnection(conn); break;
     case SSH_ACTION.addForward: forwardDialog(null); break;
     case SSH_ACTION.editForward: forwardDialog(fwd); break;
     case SSH_ACTION.removeForward:
