@@ -198,8 +198,10 @@ main.tabbed { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
 .c-menu { position: absolute; left: 8px; bottom: 96px; z-index: 6; display: flex; flex-direction: column; min-width: 220px; overflow: hidden; border-radius: 14px; background: var(--sheet); box-shadow: 0 10px 30px rgba(0, 0, 0, .45); }
 .c-menu button { padding: 12px 16px; border: 0; background: none; color: var(--text); font: inherit; font-size: 15px; text-align: left; }
 .c-menu button + button { border-top: 1px solid var(--line); }
-/* Appearance: More themes opens their own page, which leads back with ‹ Settings. */
-.look.more .r-text { flex: 1; }
+/* Settings: a list of rows, each opening its page (with ‹ back to where it opens from). */
+.look .r-text > span { display: block; }
+.r-line.wrap { overflow: visible; white-space: normal; }
+.more-value { flex: none; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .more-value { color: var(--muted); font-size: 14px; }
 .chev { flex: none; color: var(--muted); font-size: 20px; line-height: 1; }
 .back-row { margin: 0 0 10px; padding: 4px 6px; border: 0; background: none; color: var(--accent); font: inherit; font-size: 16px; }

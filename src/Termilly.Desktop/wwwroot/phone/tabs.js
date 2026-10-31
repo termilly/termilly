@@ -8,7 +8,11 @@ export const TAB = Object.freeze({ terminals: 'terminals', notes: 'notes', setti
 /** What a note says about its terminal's agent (AgentStates.cs). */
 const STATE_LABEL = Object.freeze({ 'needs-input': 'Needs you', attention: 'Needs you', error: 'Error', done: 'Done' });
 /** What the Settings tab's buttons do (data-do). */
-export const SETTING = Object.freeze({ smaller: 'smaller', bigger: 'bigger', unpair: 'unpair', themes: 'themes', back: 'back', scrolling: 'scrolling', compose: 'compose', dictation: 'dictation' });
+export const SETTING = Object.freeze({ smaller: 'smaller', bigger: 'bigger', unpair: 'unpair', page: 'page', scrolling: 'scrolling', compose: 'compose', dictation: 'dictation' });
+/** Settings' pages (data-page): the list ('') opens each; themes opens from Appearance. */
+export const SETTINGS_PAGE = Object.freeze({ list: '', alerts: 'alerts', appearance: 'appearance', themes: 'themes', text: 'text', scrolling: 'scrolling', compose: 'compose', dictation: 'dictation', pc: 'pc' });
+/** Their titles, at the top. */
+export const PAGE_TITLE = Object.freeze({ alerts: 'Alerts', appearance: 'Appearance', themes: 'More themes', text: 'Terminal text', scrolling: 'Scrolling', compose: 'Message box', dictation: 'Dictation', pc: 'Your PC' });
 /** How the microphone dictates (compose.js DICTATION), as Settings offers it. */
 const DICTATION_CHOICES = [['keyboard', 'Keyboard', 'Use the keyboard\'s microphone. The phone never asks'], ['termilly', 'Termilly', 'Dictates without the keyboard. iOS asks for the microphone after each restart']];
 /** The boxes for writing to Claude (compose.js COMPOSE_STYLE), as Settings offers them. */
@@ -78,31 +82,68 @@ const lookHtml = (l, chosen) => `<button class="row look${l.id === chosen ? ' on
  * @param {string} chosen
  */
 export function themesHtml(looks, chosen) {
-  return `<button class="back-row" data-do="${SETTING.back}">‹ Settings</button>
+  return `${backRow(SETTINGS_PAGE.appearance)}
     <div class="list looks">${looks.filter(l => !FIRST_LOOKS.includes(l.id)).map(l => lookHtml(l, chosen)).join('')}</div>`;
 }
 
 /**
- * This phone's settings.
- * @param {{ alerts: string, size: number, scrolling: string, compose: string, dictation: string, host: string, connected: boolean, look: string, looks: Look[] }} now
+ * Back to where a page opens from.
+ * @param {string} to The page ('' for the list).
+ */
+const backRow = to => `<button class="back-row" data-do="${SETTING.page}" data-page="${to}">‹ ${to ? /** @type {Record<string, string>} */ (PAGE_TITLE)[to] : 'Settings'}</button>`;
+
+/**
+ * A row of the list: the setting, what it's set to, and its page.
+ * @param {string} page
+ * @param {string} value
+ */
+const pageRow = (page, value) => `<button class="row look" data-do="${SETTING.page}" data-page="${page}"><span class="r-text">${/** @type {Record<string, string>} */ (PAGE_TITLE)[page]}</span>
+  <span class="more-value">${esc(value)}</span><span class="chev">›</span></button>`;
+
+/**
+ * Choices with a tick on the one set.
+ * @param {string[][]} list [id, name, hint?]
+ * @param {string} chosen
+ * @param {string} action data-do; the id goes in data-<action>
+ */
+const choicesHtml = (list, chosen, action) => `<div class="list looks">${list.map(([id, name, hint]) => `<button class="row look${id === chosen ? ' on' : ''}" data-do="${action}" data-${action}="${id}">
+  <span class="r-text"><span class="r-name">${name}</span>${hint ? `<span class="r-line wrap">${hint}</span>` : ''}</span><span class="tick">${id === chosen ? '✓' : ''}</span></button>`).join('')}</div>`;
+
+/**
+ * The name of the choice set.
+ * @param {string[][]} list
+ * @param {string} id
+ */
+const nameOf = (list, id) => list.find(c => c[0] === id)?.[1] ?? '';
+
+/**
+ * This phone's settings: a list of rows, each with its own page.
+ * @param {{ page: string, alerts: string, alertsOn: string, size: number, scrolling: string, compose: string, dictation: string, host: string, connected: boolean, look: string, looks: Look[] }} now
  */
 export function settingsHtml(now) {
-  const other = FIRST_LOOKS.includes(now.look) ? null : now.looks.find(l => l.id === now.look);
-  return `<div class="section">This phone</div><div class="list pad">${now.alerts}</div>
-    <div class="section">Appearance</div><div class="list looks">${now.looks.filter(l => FIRST_LOOKS.includes(l.id)).map(l => lookHtml(l, now.look)).join('')}
-      <button class="row look more" data-do="${SETTING.themes}"><span class="r-text">More themes</span><span class="more-value">${esc(other?.name ?? '')}</span><span class="chev">›</span></button></div>
-    <p class="muted hint">Same as PC follows the desktop's theme as it changes; System, the phone's light or dark mode.</p>
-    <div class="section">Terminal text</div><div class="list pad stepper"><button class="btn" data-do="${SETTING.smaller}" aria-label="Smaller">A−</button>
-      <span>${now.size} pt</span><button class="btn" data-do="${SETTING.bigger}" aria-label="Bigger">A+</button></div>
-    <div class="section">Scrolling</div><div class="list looks">${SCROLL_CHOICES.map(([id, name]) => `<button class="row look${id === now.scrolling ? ' on' : ''}" data-do="${SETTING.scrolling}" data-scrolling="${id}">
-      <span class="r-text">${name}</span><span class="tick">${id === now.scrolling ? '✓' : ''}</span></button>`).join('')}</div>
-    <div class="section">Message box</div><div class="list looks">${COMPOSE_CHOICES.map(([id, name, hint]) => `<button class="row look${id === now.compose ? ' on' : ''}" data-do="${SETTING.compose}" data-compose="${id}">
-      <span class="r-text"><span class="r-name">${name}</span><span class="r-line">${hint}</span></span><span class="tick">${id === now.compose ? '✓' : ''}</span></button>`).join('')}</div>
-    <p class="muted hint">Under a Claude terminal, for writing or dictating to Claude.</p>
-    <div class="section">Dictation</div><div class="list looks">${DICTATION_CHOICES.map(([id, name, hint]) => `<button class="row look${id === now.dictation ? ' on' : ''}" data-do="${SETTING.dictation}" data-dictation="${id}">
-      <span class="r-text"><span class="r-name">${name}</span><span class="r-line">${hint}</span></span><span class="tick">${id === now.dictation ? '✓' : ''}</span></button>`).join('')}</div>
-    <div class="section">Your PC</div><div class="list pad"><p class="mono">${esc(now.host)}</p>
+  const back = backRow(SETTINGS_PAGE.list);
+  switch (now.page) {
+    case SETTINGS_PAGE.alerts: return `${back}<div class="list pad">${now.alerts}</div>`;
+    case SETTINGS_PAGE.appearance: {
+      const other = FIRST_LOOKS.includes(now.look) ? null : now.looks.find(l => l.id === now.look);
+      return `${back}<div class="list looks">${now.looks.filter(l => FIRST_LOOKS.includes(l.id)).map(l => lookHtml(l, now.look)).join('')}
+      ${pageRow(SETTINGS_PAGE.themes, other?.name ?? '')}</div>
+      <p class="muted hint">Same as PC follows the desktop's theme as it changes; System, the phone's light or dark mode.</p>`;
+    }
+    case SETTINGS_PAGE.text: return `${back}<div class="list pad stepper"><button class="btn" data-do="${SETTING.smaller}" aria-label="Smaller">A−</button>
+      <span>${now.size} pt</span><button class="btn" data-do="${SETTING.bigger}" aria-label="Bigger">A+</button></div>`;
+    case SETTINGS_PAGE.scrolling: return back + choicesHtml(SCROLL_CHOICES, now.scrolling, SETTING.scrolling);
+    case SETTINGS_PAGE.compose: return `${back}${choicesHtml(COMPOSE_CHOICES, now.compose, SETTING.compose)}
+      <p class="muted hint">Under a Claude terminal, for writing to Claude.</p>`;
+    case SETTINGS_PAGE.dictation: return back + choicesHtml(DICTATION_CHOICES, now.dictation, SETTING.dictation);
+    case SETTINGS_PAGE.pc: return `${back}<div class="list pad"><p class="mono">${esc(now.host)}</p>
       <p class="muted">${now.connected ? 'Connected.' : 'Reconnecting.'}</p></div>
-    <div class="section">Pairing</div><div class="list pad"><p class="muted">The PC forgets this phone; it needs a new code to come back.</p>
+      <div class="section">Pairing</div><div class="list pad"><p class="muted">The PC forgets this phone; it needs a new code to come back.</p>
       <div class="w-actions"><button class="btn danger" data-do="${SETTING.unpair}">Unpair this phone</button></div></div>`;
+    default: return `<div class="section">This phone</div><div class="list looks">${pageRow(SETTINGS_PAGE.alerts, now.alertsOn)}
+      ${pageRow(SETTINGS_PAGE.appearance, now.looks.find(l => l.id === now.look)?.name ?? '')}${pageRow(SETTINGS_PAGE.text, `${now.size} pt`)}
+      ${pageRow(SETTINGS_PAGE.scrolling, nameOf(SCROLL_CHOICES, now.scrolling))}${pageRow(SETTINGS_PAGE.compose, nameOf(COMPOSE_CHOICES, now.compose))}
+      ${pageRow(SETTINGS_PAGE.dictation, nameOf(DICTATION_CHOICES, now.dictation))}</div>
+    <div class="section">Connection</div><div class="list looks">${pageRow(SETTINGS_PAGE.pc, now.connected ? 'Connected' : 'Reconnecting')}</div>`;
+  }
 }
