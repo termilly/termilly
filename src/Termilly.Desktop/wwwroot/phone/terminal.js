@@ -1,8 +1,9 @@
 // @ts-check
 // The phone's terminal view (design A): one terminal live, filling the phone's screen. While the phone shows it, the
 // terminal takes the phone's size on the PC too (PhoneLive), so what it prints fits the phone; pinching sizes the
-// font and the keyboard coming up shortens it, and the size follows. First what it shows (the window's own terminal,
-// drawn again at that size), then what it prints.
+// font, and the size follows. The keyboard doesn't: the terminal keeps the rows of the whole screen (resizing would
+// push the text up, here and on the PC), and while the keyboard is up the view slides up to keep the cursor's line
+// above it. First what it shows (the window's own terminal, drawn again at that size), then what it prints.
 // With Settings › Phone › Allow typing on, the phone's keyboard types into it, and a key bar adds what a phone lacks:
 // Esc, Tab, Ctrl, the arrows, Paste and the PC's snippets. A terminal running Claude Code also gets a box to message
 // it: a plain text field, so the phone's keyboard can dictate into it, and what's said is checked before it goes.
@@ -113,15 +114,37 @@ export function terminalView(app) {
     term.options.minimumContrastRatio = next.contrast;
   }
 
-  /** As many columns and rows as fit the terminal's box at its font size. */
+  /** As many columns and rows as fit the terminal's box at its font size, with the keyboard down. */
   function grid() {
     const box = /** @type {HTMLElement | null} */ (view.querySelector(BOX));
     const cell = term && cellOf(term);
     if (!box || !cell) return null;
     return {
       cols: Math.max(LEAST.cols, Math.floor((box.clientWidth - BOX_PADDING.width) / cell.width)),
-      rows: Math.max(LEAST.rows, Math.floor((box.clientHeight - BOX_PADDING.height) / cell.height)),
+      rows: Math.max(LEAST.rows, Math.floor((box.clientHeight + keyboardHeight() - BOX_PADDING.height) / cell.height)),
     };
+  }
+
+  /** How much of the screen the keyboard takes now (px), 0 when it's down. */
+  const keyboardHeight = () => view.classList.contains(KEYBOARD) && window.visualViewport ? Math.max(0, full.height - window.visualViewport.height) : 0;
+
+  /**
+   * While the keyboard is up, the terminal slides up just enough that the cursor's line shows above it (the rows over
+   * it go under the header); back down when the keyboard goes.
+   */
+  function lift() {
+    const el = term?.element, box = /** @type {HTMLElement | null} */ (view.querySelector(BOX)), cell = term && cellOf(term);
+    if (!el) return;
+    if (!box || !cell || !keyboardHeight()) {
+      el.style.transform = '';
+      return;
+    }
+    const buffer = term.buffer.active;
+    const at = buffer.cursorY + buffer.baseY - buffer.viewportY;
+    const row = at >= 0 && at < term.rows ? at : term.rows - 1;
+    const room = box.clientHeight - BOX_PADDING.height;
+    const shift = Math.max(0, Math.min((row + 1) * cell.height, term.rows * cell.height) - room);
+    el.style.transform = shift ? `translateY(-${Math.ceil(shift)}px)` : '';
   }
 
   /** Gives the terminal the size that fits now, and asks the PC for the same, so what it prints next fits. */
@@ -130,6 +153,7 @@ export function terminalView(app) {
     if (!term || !size) return;
     if (size.cols !== term.cols || size.rows !== term.rows) term.resize(size.cols, size.rows);
     term.scrollToBottom();
+    lift();
     clearTimeout(sizeTimer);
     sizeTimer = setTimeout(() => { if (shown && term) app.send({ op: OP.size, pane: shown.id, cols: term.cols, rows: term.rows }); }, SIZE_AFTER_MS);
   }
@@ -206,6 +230,8 @@ export function terminalView(app) {
     retheme(look);
     touch(box);
     term.onData(/** @param {string} data */ data => { if (!AUTOMATIC.test(data)) type(data); });
+    term.onCursorMove(lift);
+    term.onScroll(lift);
     fitViewport();
     app.send({ op: OP.watch, pane: t.id, cols: term.cols, rows: term.rows });
   }
