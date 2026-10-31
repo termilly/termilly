@@ -144,8 +144,8 @@ body.tv-open { overflow: hidden; }
 .snip-preview { margin: 4px 0; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
 /* The bottom bar (tabs.js): Terminals, Notifications, Settings. The page leaves room for it. */
 main.tabbed { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
-.tabbar { position: fixed; inset: auto 0 0; z-index: 4; display: flex; padding: 3px 8px max(2px, calc(env(safe-area-inset-bottom) - 18px)); border-top: 1px solid var(--line); background: color-mix(in srgb, var(--raised) 92%, transparent); backdrop-filter: blur(12px); }
-.tabbar button { position: relative; display: flex; flex: 1; flex-direction: column; gap: 1px; align-items: center; padding: 2px 0; border: 0; background: none; color: var(--muted); font-size: 10px; font-weight: 600; }
+.tabbar { position: fixed; inset: auto 0 0; z-index: 4; display: flex; justify-content: center; gap: 8px; padding: 3px 8px max(2px, calc(env(safe-area-inset-bottom) - 18px)); border-top: 1px solid var(--line); background: color-mix(in srgb, var(--raised) 92%, transparent); backdrop-filter: blur(12px); }
+.tabbar button { position: relative; display: flex; flex: 0 1 96px; flex-direction: column; gap: 1px; align-items: center; padding: 2px 0; border: 0; background: none; color: var(--muted); font-size: 10px; font-weight: 600; }
 .tabbar button.on { color: var(--accent); }
 .tabbar svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
 .tab-count { position: absolute; top: 0; left: calc(50% + 6px); min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--accent); color: var(--on-accent); font-size: 10px; font-weight: 700; line-height: 16px; text-align: center; }
