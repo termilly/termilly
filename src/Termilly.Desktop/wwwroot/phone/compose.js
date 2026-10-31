@@ -34,8 +34,9 @@ const ICON = Object.freeze({
 
 const FIELD = '<textarea rows="1" placeholder="Message Claude" enterkeyhint="send" autocapitalize="sentences"></textarea>';
 
-/** How the microphone dictates (Settings › Dictation): the keyboard's (the default; iOS asks nothing) or Termilly's own
- * (no keyboard in the way, but iOS asks for the microphone each time the app starts). */
+/** How to dictate (Settings › Dictation): with the keyboard's microphone (the default; the box has none of its own and
+ * iOS asks nothing; a page can't start the keyboard's) or Termilly's (no keyboard in the way, but iOS asks for the
+ * microphone each time the app starts). */
 export const DICTATION = Object.freeze({ key: 'termilly.dictation', keyboard: 'keyboard', termilly: 'termilly' });
 /** @returns {string} */
 export const dictation = () => (localStorage.getItem(DICTATION.key) === DICTATION.termilly ? DICTATION.termilly : DICTATION.keyboard);
@@ -62,7 +63,7 @@ export function composer(view, app) {
 
   /** Messages: the round field with the + and the microphone, over the key bar. */
   const messagesHtml = () => `<form class="tv-foot tv-compose msg"><button type="button" class="m-plus" data-c="${C.plus}" aria-label="More">${ICON.plus}</button>
-    <div class="m-pill">${FIELD}<button type="button" class="m-mic" data-c="${C.mic}" aria-label="Dictate">${ICON.mic}</button><button type="submit" class="m-go" aria-label="Send" hidden>${ICON.up}</button></div></form>${keybar()}`;
+    <div class="m-pill">${FIELD}${dictation() === DICTATION.termilly ? `<button type="button" class="m-mic" data-c="${C.mic}" aria-label="Dictate">${ICON.mic}</button>` : ''}<button type="submit" class="m-go" aria-label="Send" hidden>${ICON.up}</button></div></form>${keybar()}`;
 
   /** One bar: the switch, then the keys or the field. The keys that don't fit wait under ⋯. */
   function barHtml() {
@@ -127,7 +128,7 @@ export function composer(view, app) {
       stopListening();
       return;
     }
-    if (!Speech || dictation() === DICTATION.keyboard) {
+    if (!Speech) {
       field()?.focus();
       app.toast('Tap the microphone on the keyboard to dictate.');
       return;
