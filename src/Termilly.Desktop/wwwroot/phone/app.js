@@ -9,7 +9,7 @@ import { terminalView, activityHtml, TEXT_SIZE } from './terminal.js';
 import { TAB, SETTING, TEXT_SIZES, navHtml, notesHtml, settingsHtml, themesHtml } from './tabs.js';
 import { SCROLLING } from './gestures.js';
 import { manager } from './manage.js';
-import { COMPOSE_STYLE, composeStyle } from './compose.js';
+import { COMPOSE_STYLE, composeStyle, DICTATION, dictation } from './compose.js';
 import { applyLook, chooseLook, chosenLook, looks } from './theme.js';
 
 const app = /** @type {HTMLElement} */ (document.getElementById('app'));
@@ -226,7 +226,7 @@ function render() {
   if (add) add.innerHTML = tab === TAB.terminals ? manage.addButton() : '';
   home.innerHTML = tab === TAB.notes ? notesHtml(snap.notes ?? [], noteParts)
     : onThemes ? themesHtml(looks(snap), chosenLook())
-    : tab === TAB.settings ? settingsHtml({ alerts: alertsBody(), size: textSize(), scrolling: localStorage.getItem(SCROLLING.key) ?? SCROLLING.smooth, compose: composeStyle(), host: location.host, connected, look: chosenLook(), looks: looks(snap) })
+    : tab === TAB.settings ? settingsHtml({ alerts: alertsBody(), size: textSize(), scrolling: localStorage.getItem(SCROLLING.key) ?? SCROLLING.smooth, compose: composeStyle(), dictation: dictation(), host: location.host, connected, look: chosenLook(), looks: looks(snap) })
     : terminalsHtml();
   /** @type {HTMLElement} */ (document.getElementById('nav')).innerHTML = navHtml(tab, snap.notes?.length ?? 0);
   renderSheet();
@@ -435,6 +435,10 @@ app.addEventListener('click', e => {
     case SETTING.unpair: unpair(); break;
     case SETTING.compose:
       localStorage.setItem(COMPOSE_STYLE.key, target.dataset.compose ?? COMPOSE_STYLE.messages);
+      render();
+      break;
+    case SETTING.dictation:
+      localStorage.setItem(DICTATION.key, target.dataset.dictation ?? DICTATION.keyboard);
       render();
       break;
     case SETTING.scrolling:
