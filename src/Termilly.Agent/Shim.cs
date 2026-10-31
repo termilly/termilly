@@ -65,7 +65,7 @@ internal static class Shim
             {
                 continue;
             }
-            if (string.Equals(full, shim, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(full, shim, StringComparison.OrdinalIgnoreCase) || IsAgentFolder(full))
             {
                 continue;
             }
@@ -80,6 +80,13 @@ internal static class Shim
         }
         return null;
     }
+
+    /// <summary>
+    /// Another Termilly's agent folder (its hook helper beside its shim): a Termilly started from a terminal of another
+    /// one has both on PATH, and each shim starting the other's would loop without end.
+    /// </summary>
+    private static bool IsAgentFolder(string directory) =>
+        File.Exists(Path.Combine(directory, AgentExecutables.Hook)) || File.Exists(Path.Combine(directory, AgentExecutables.Hook + ".exe"));
 
     private const UnixFileMode Executable = UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute;
 

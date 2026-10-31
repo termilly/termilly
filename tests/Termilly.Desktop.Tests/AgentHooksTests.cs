@@ -425,6 +425,21 @@ public sealed class AgentHooksTests : IDisposable
     }
 
     [Fact]
+    public void The_shim_skips_another_termillys_shim_so_a_termilly_inside_a_termilly_does_not_loop()
+    {
+        var shim = Directory.CreateDirectory(Path.Combine(_dir, "agent")).FullName;
+        var outer = Directory.CreateDirectory(Path.Combine(_dir, "outer-agent")).FullName;
+        var native = Directory.CreateDirectory(Path.Combine(_dir, "native")).FullName;
+        File.WriteAllText(Path.Combine(shim, "claude.exe"), "");
+        File.WriteAllText(Path.Combine(outer, "claude.exe"), "");
+        File.WriteAllText(Path.Combine(outer, "termilly-hook.exe"), "");
+        File.WriteAllText(Path.Combine(native, "claude.exe"), "");
+
+        Assert.Equal(Path.Combine(native, "claude.exe"), Shim.FindReal($"{shim};{outer};{shim};{native}", ".EXE", shim));
+        Assert.Null(Shim.FindReal($"{shim};{outer}", ".EXE", shim));
+    }
+
+    [Fact]
     public void Terminals_get_the_agent_folder_first_on_their_own_path()
     {
         var vars = SessionLaunch.WithAgent(
