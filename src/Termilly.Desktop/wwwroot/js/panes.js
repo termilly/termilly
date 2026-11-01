@@ -414,7 +414,7 @@ export function moveFocus(direction) {
 // ---- Rendering ----
 
 export function renderAll() {
-  for (const ws of state.workspaces) renderWorkspace(ws);
+  for (const ws of [...state.workspaces, ...state.remoteSpaces]) renderWorkspace(ws);
   for (const [wsId, layer] of layers) {
     if (!wsById(wsId)) {
       layer.remove();

@@ -111,6 +111,9 @@ export const getSetting = path => {
 export const state = {
   /** @type {Workspace[]} */
   workspaces: [],
+  /** Other Termilly computers' terminals open here, a workspace per computer (js/remotepc.js): not listed, never saved. */
+  /** @type {Workspace[]} */
+  remoteSpaces: [],
   /** @type {Map<string, Tab>} */
   tabs: new Map(),
   /** @type {Tag[]} */
@@ -229,7 +232,7 @@ export function emit(event, arg) {
 // ---- Lookups ----
 
 /** @param {string | null | undefined} id */
-export const wsById = id => state.workspaces.find(w => w.id === id);
+export const wsById = id => state.workspaces.find(w => w.id === id) ?? state.remoteSpaces.find(w => w.id === id);
 export const activeWs = () => wsById(state.activeId);
 /**
  * A terminal's profile (the first one when its own is gone).

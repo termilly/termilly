@@ -182,6 +182,9 @@ export function profileOptionsHtml(selectedId) {
   }).join('');
 }
 
+/** The small activity mark, as a row in a list shows it. */
+export const MINI_ACTIVITY = 'mini';
+
 /**
  * The spinner (or progress ring) for a terminal's activity (see activityOf); empty when idle.
  * @param {import('./store.js').Activity | null} activity

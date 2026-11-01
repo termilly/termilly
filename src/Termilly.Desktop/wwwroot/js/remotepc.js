@@ -6,10 +6,10 @@
 
 import { PAGE, HOST } from './protocol.js';
 import { send, request, onHost } from './host.js';
-import { state, on, EVENTS } from './store.js';
-import { newTab, focusTab } from './panes.js';
+import { state, on, EVENTS, ACTIVITY, WORKSPACE_COLORS, tabsOf } from './store.js';
+import { newTab, focusTab, switchWorkspace, renderWorkspace, renderAll } from './panes.js';
 import { setVirtualInput } from './terminals.js';
-import { escapeHtml, ICONS } from './ui.js';
+import { escapeHtml, ICONS, activityHtml, MINI_ACTIVITY } from './ui.js';
 import { modal, FORM_DIALOG, DIALOG_ERROR, confirmDialog } from './dialogs.js';
 import { showMenu } from './popups.js';
 import { byId, targetOf } from './dom.js';
@@ -18,7 +18,7 @@ import { showToast, TOAST } from './toasts.js';
 
 /** @typedef {import('./protocol.js').PcView} Pc */
 /** A computer's state, as its phone app gets it (js/phone.js snapshot): what the tree shows of it. */
-/** @typedef {{ workspaces: { id: string, name: string, color: string }[], terminals: { id: string, ws: string, title: string, badge?: string, icon?: string, cols?: number | null, rows?: number | null }[] }} PcState */
+/** @typedef {{ workspaces: { id: string, name: string, color: string }[], terminals: { id: string, ws: string, title: string, badge?: string, icon?: string, cols?: number | null, rows?: number | null, activity?: string | null, hint?: string | null }[] }} PcState */
 
 /** A virtual terminal's kind (tab.virtual): another computer's. */
 export const PC_KIND = 'pc';
@@ -43,6 +43,48 @@ function stateOf(pc) {
   }
 }
 
+/** Its terminals open here, each watching its terminal there: tab id to the workspace it's in. */
+/** @type {Map<string, string>} */
+const watching = new Map();
+/** This PC's workspace to come back to when a computer's last terminal here closes. */
+/** @type {string | null} */
+let lastLocal = null;
+
+/**
+ * A computer's own workspace here, where its terminals open: not listed with this PC's (the tree lists them).
+ * @param {Pc} pc
+ * @returns {Workspace}
+ */
+function spaceOf(pc) {
+  let ws = state.remoteSpaces.find(w => w.remote === pc.id);
+  if (!ws) {
+    ws = { id: `pc-${pc.id}`, name: pc.name, color: WORKSPACE_COLORS[0], cwd: null, focusId: null, root: null, remote: pc.id };
+    state.remoteSpaces.push(ws);
+    renderWorkspace(ws);
+  }
+  return ws;
+}
+
+/** Shows a computer's workspace here, remembering this PC's one to come back to. @param {Workspace} ws */
+function showSpace(ws) {
+  if (state.workspaces.some(w => w.id === state.activeId)) lastLocal = state.activeId;
+  switchWorkspace(ws.id);
+}
+
+/**
+ * The computer's terminal shown here now (its workspace in front, it in focus): its row is the selected one.
+ * @param {Pc} pc
+ * @param {string} pane
+ */
+function inFront(pc, pane) {
+  const ws = state.remoteSpaces.find(w => w.remote === pc.id);
+  return !!ws && state.activeId === ws.id && state.tabs.get(ws.focusId ?? '')?.virtual?.pane === pane;
+}
+
+/** A terminal's activity there (busy, waiting), as this PC's sidebar shows its own. @param {PcState['terminals'][number]} t */
+const activityOfRemote = t => (t.activity && Object.values(ACTIVITY).includes(/** @type {any} */ (t.activity))
+  ? activityHtml({ kind: /** @type {any} */ (t.activity === ACTIVITY.percent ? ACTIVITY.spin : t.activity), title: t.hint ?? '' }, MINI_ACTIVITY) : '');
+
 /** @param {string} key @param {string} html */
 const chev = (key, html) => `<span class="pc-chev${folded.has(key) ? '' : ' open'}">${ICONS.chevronRight}</span>${html}`;
 
@@ -58,8 +100,8 @@ function computerHtml(pc) {
     const terms = s.terminals.filter(t => t.ws === w.id);
     return `<button class="rm-row pc-ws" data-pc-workspace="${escapeHtml(key)}">${chev(key, `<span class="pc-wsdot" style="background:${escapeHtml(w.color)}"></span>`)}
       <span class="rm-name">${escapeHtml(w.name)}</span><span class="rm-chips"><span class="rm-count">${terms.length}</span></span></button>`
-      + (folded.has(key) ? '' : terms.map(t => `<button class="rm-row pc-term" data-pc-terminal="${escapeHtml(pc.id)}" data-pane="${escapeHtml(t.id)}" title="Open ${escapeHtml(t.title)} from ${escapeHtml(pc.name)} here">
-        <span class="badge small" data-icon="${escapeHtml(t.icon ?? '')}"><span class="badge-text">${escapeHtml(t.badge ?? '')}</span></span><span class="rm-name">${escapeHtml(t.title)}</span></button>`).join(''));
+      + (folded.has(key) ? '' : terms.map(t => `<button class="rm-row pc-term${inFront(pc, t.id) ? ' on' : ''}" data-pc-terminal="${escapeHtml(pc.id)}" data-pane="${escapeHtml(t.id)}" title="Open ${escapeHtml(t.title)} from ${escapeHtml(pc.name)} here">
+        <span class="badge small" data-icon="${escapeHtml(t.icon ?? '')}"><span class="badge-text">${escapeHtml(t.badge ?? '')}</span></span><span class="rm-name">${escapeHtml(t.title)}</span><span class="rm-chips">${activityOfRemote(t)}</span></button>`).join(''));
   }).join('');
 }
 
@@ -100,10 +142,12 @@ function addComputer() {
  * @param {string} pane
  */
 function openTerminal(pc, pane) {
+  const ws = spaceOf(pc);
+  showSpace(ws);
   const open = [...state.tabs.values()].find(t => t.virtual?.kind === PC_KIND && t.virtual.client === pc.id && t.virtual.pane === pane);
   if (open) return focusTab(open);
   const t = stateOf(pc).terminals.find(x => x.id === pane);
-  newTab({ name: `${t?.title ?? 'Terminal'} · ${pc.name}`, virtual: { kind: PC_KIND, client: pc.id, pane, cols: t?.cols ?? START_SIZE.cols, rows: t?.rows ?? START_SIZE.rows } });
+  newTab({ wsId: ws.id, name: `${t?.title ?? 'Terminal'} · ${pc.name}`, virtual: { kind: PC_KIND, client: pc.id, pane, cols: t?.cols ?? START_SIZE.cols, rows: t?.rows ?? START_SIZE.rows } });
 }
 
 // Its terminal here is on screen: it starts watching there at its size, and tells its size as it changes.
@@ -112,10 +156,32 @@ on(EVENTS.terminalOpened, (/** @type {Tab} */ tab) => {
   const term = tab.view?.term;
   if (v?.kind !== PC_KIND || !term) return;
   tab.noHistory = true;
+  watching.set(tab.id, tab.wsId);
   send(PAGE.pcWatch, { id: v.client, tab: tab.id, pane: v.pane, cols: term.cols, rows: term.rows });
   term.onResize((/** @type {{ cols: number, rows: number }} */ { cols, rows }) => send(PAGE.pcSize, { tab: tab.id, cols, rows }));
 });
-on(EVENTS.tabClosed, (/** @type {Tab} */ tab) => { if (tab.virtual?.kind === PC_KIND) send(PAGE.pcUnwatch, { tab: tab.id }); });
+/**
+ * Its terminals closed here since: the other computer stops showing them at this one's size, and a computer whose
+ * last terminal here closed loses its workspace, this PC's coming back. (Closing a terminal sends the workspaces
+ * event, not one of its own.)
+ */
+function closedHere() {
+  /** @type {Set<string>} */
+  const left = new Set();
+  for (const [id, wsId] of [...watching].filter(([id]) => !state.tabs.has(id))) {
+    watching.delete(id);
+    left.add(wsId);
+    send(PAGE.pcUnwatch, { tab: id });
+  }
+  const empty = state.remoteSpaces.filter(w => left.has(w.id) && !tabsOf(w).length);
+  if (!empty.length) return;
+  for (const ws of empty) state.remoteSpaces.splice(state.remoteSpaces.indexOf(ws), 1);
+  renderAll();
+  if (empty.some(w => w.id === state.activeId)) switchWorkspace(lastLocal && state.workspaces.some(w => w.id === lastLocal) ? lastLocal : state.workspaces[0]?.id ?? '');
+}
+on(EVENTS.workspaces, () => { closedHere(); renderRemote(); });
+// Which of its terminals is in front here: the tree marks it.
+on(EVENTS.focus, () => renderRemote());
 
 setVirtualInput(PC_KIND, (tab, data) => send(PAGE.pcInput, { tab: tab.id, data }));
 

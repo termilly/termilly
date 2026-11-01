@@ -1010,6 +1010,8 @@ body[data-sidebar="rail"] .side-rail { opacity: 1; pointer-events: auto; }
 .rm-row.pc-ws { padding-left: 22px; }
 .pc-wsdot { width: 8px; height: 8px; border-radius: 3px; }
 .rm-row.pc-term { padding-left: 44px; }
+/* The computer's terminal in front here: selected, as this PC's terminal in focus is in the sidebar. */
+.rm-row.pc-term.on { background: var(--hover); color: var(--text); }
 .pc-add { color: var(--muted); }
 .pc-add svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.2; }
 /* The section's own groups (Termilly computers, Discovered): headings that fold; what's inside sits a little in. */
