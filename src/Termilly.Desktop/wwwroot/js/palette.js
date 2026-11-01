@@ -19,6 +19,7 @@ import { probeFolder, offerLayout, applyLayout } from './layouts.js';
 import { notesFor } from './notes.js';
 import { byId, targetOf } from './dom.js';
 import { toggleWrap } from './preview.js';
+import { fileMatches, fileRowHtml, filePreviewHtml, openFile, stillLooking } from './palettefiles.js';
 
 /**
  * A closed terminal the host keeps (Host_history's entries), as panes.js recordHistory sent it.
@@ -74,7 +75,7 @@ import { toggleWrap } from './preview.js';
  */
 /**
  * A row the palette shows.
- * @typedef {OpenResult | ClosedResult | WorkspaceResult | CommandResult | RanResult | GoResult} PaletteResult
+ * @typedef {OpenResult | ClosedResult | WorkspaceResult | CommandResult | RanResult | GoResult | import('./palettefiles.js').FileResult} PaletteResult
  */
 
 const layer = byId('palette-layer');
@@ -84,7 +85,7 @@ const resultsEl = byId('pal-results');
 const previewEl = byId('pal-preview');
 
 /** The kinds of result, in the order the palette lists their groups. */
-const KIND = Object.freeze({ open: 'open', closed: 'closed', workspaces: 'workspaces', commands: 'commands', go: 'go', ran: 'ran' });
+const KIND = Object.freeze({ open: 'open', closed: 'closed', workspaces: 'workspaces', commands: 'commands', go: 'go', ran: 'ran', files: 'files' });
 /** The palette's views (its filter chips): everything, or one kind of result. */
 export const PALETTE_VIEW = Object.freeze({ all: 'all', ...KIND });
 /** The kinds of place "Go to" offers, and its row that makes a new workspace. */
@@ -112,13 +113,14 @@ const SCROLL_CONTEXT_ROWS = 3;
 
 const FILTERS = [
   [PALETTE_VIEW.all, 'All'], [PALETTE_VIEW.open, 'Open'], [PALETTE_VIEW.closed, 'Recently closed'],
-  [PALETTE_VIEW.workspaces, 'Workspaces'], [PALETTE_VIEW.commands, 'Commands'], [PALETTE_VIEW.ran, 'Command history'],
-  [PALETTE_VIEW.go, 'Go to'],
+  [PALETTE_VIEW.workspaces, 'Workspaces'], [PALETTE_VIEW.files, 'Files'],
 ];
 /** @type {Record<string, string>} */
-const GROUP_TITLES = { open: 'Open terminals', closed: 'Recently closed', workspaces: 'Workspaces', commands: 'Commands', go: 'Go to', ran: 'Commands run' };
+const GROUP_TITLES = { open: 'Open terminals', closed: 'Recently closed', workspaces: 'Workspaces', commands: 'Commands', go: 'Go to', ran: 'Commands run', files: 'Files, folders and web addresses' };
+/** The views opened by their own keys, named where the chips are (they have no chip). */
+const OWN_VIEWS = { [PALETTE_VIEW.ran]: 'Command history', [PALETTE_VIEW.go]: 'Go to' };
 /** @type {Record<string, number>} */
-const LIMITS = { open: 40, closed: 40, workspaces: 12, commands: 12, go: 60, ran: 200 };
+const LIMITS = { open: 40, closed: 40, workspaces: 12, commands: 12, go: 60, ran: 200, files: 300 };
 /** How many of a terminal's matching lines are listed under it (the newest); the preview steps through the rest. */
 const MOST_HITS = 50;
 
@@ -438,10 +440,15 @@ function closedMatches(q) {
   return found;
 }
 
+/** The Files view's results: what the open terminals printed (drawn again as the paths in it are looked up). */
+const filesFound = () => fileMatches([...state.tabs.values()].filter(t => !t.virtual).map(tab => ({ tab, lines: lineCache.get(tab.id) ?? [] })),
+  input.value, () => { if (!layer.hidden && filter === PALETTE_VIEW.files) run(); });
+
 /** @returns {{ q: Query, groups: Record<string, PaletteResult[]> }} */
 function search() {
   if (filter === PALETTE_VIEW.go) return { q: parseQuery(''), groups: { go: goPlaces(input.value) } };
   if (filter === PALETTE_VIEW.ran) return { q: parseQuery(''), groups: { ran: ranResults(input.value) } };
+  if (filter === PALETTE_VIEW.files) return { q: parseQuery(''), groups: { files: filesFound() } };
   const q = parseQuery(input.value);
   searchEarlier(q.text);
   /**
@@ -603,7 +610,7 @@ const commandRowHtml = (r, q) => `<span class="cmd-icon">${r.cmd.icon ?? ICONS.p
  * How each kind of result is drawn; anything else is a command.
  * @type {Record<string, RowHtml>}
  */
-const ROW_HTML = { open: terminalRowHtml, closed: terminalRowHtml, ran: ranRowHtml, go: goRowHtml, workspaces: workspaceRowHtml };
+const ROW_HTML = { open: terminalRowHtml, closed: terminalRowHtml, ran: ranRowHtml, go: goRowHtml, workspaces: workspaceRowHtml, files: r => fileRowHtml(r, input.value) };
 
 /**
  * @param {PaletteResult} r
@@ -616,6 +623,7 @@ const rowHtml = (r, index, q) => resultRow(index, (ROW_HTML[r.kind] ?? /** @type
 const PLACEHOLDERS = {
   go: 'Go to a workspace, folder, closed terminal or SSH host',
   ran: 'Search commands you ran · failed · in:folder',
+  files: 'Files, folders and web addresses in the output · a name, or a pattern like *.txt',
   default: 'Search terminals, closed sessions, output and commands',
 };
 
@@ -636,7 +644,7 @@ function run() {
     }
   }
   if (!results.length) {
-    html = `<div class="res-empty">${input.value.trim() ? 'Nothing matches' : 'Nothing here yet'}</div>`;
+    html = `<div class="res-empty">${filter === PALETTE_VIEW.files && stillLooking() ? 'Looking up the paths the terminals printed' : input.value.trim() ? 'Nothing matches' : 'Nothing here yet'}</div>`;
   }
   selected = Math.min(selected, Math.max(0, results.length - 1));
   resultsEl.innerHTML = html;
@@ -646,7 +654,8 @@ function run() {
   const counts = { [PALETTE_VIEW.all]: 0 };
   for (const [kind, list] of Object.entries(groups)) counts[kind] = list.length;
   counts.all = Object.values(groups).reduce((n, list) => n + list.length, 0);
-  filtersEl.innerHTML = FILTERS.map(([id, label]) =>
+  const ownView = /** @type {Record<string, string>} */ (OWN_VIEWS)[filter];
+  filtersEl.innerHTML = (ownView ? `<span class="fview">${ownView}</span>` : '') + FILTERS.map(([id, label]) =>
     `<button class="fchip${id === filter ? ' on' : ''}" data-filter="${id}">${label}${id === filter || counts[id] ? ` <span>${counts[id] ?? 0}</span>` : ''}</button>`).join('');
   renderPreview(q);
 }
@@ -707,6 +716,10 @@ function renderPreview(q = parseQuery(input.value)) {
       </div>`;
     return;
   }
+  if (r.kind === KIND.files) {
+    previewEl.innerHTML = filePreviewHtml(r);
+    return;
+  }
   if (r.kind === KIND.ran) {
     const e = r.entry;
     previewEl.innerHTML = `
@@ -757,6 +770,8 @@ function activate(r = results[selected]) {
     switchWorkspace(r.ws.id);
   } else if (r.kind === KIND.go) {
     goTo(r);
+  } else if (r.kind === KIND.files) {
+    openFile(r);
   } else if (r.kind === KIND.ran) {
     insertCommand(r.entry.command);
   } else {
@@ -919,8 +934,9 @@ previewEl.addEventListener('click', e => {
     renderPreview();
     input.focus();
   }
-  else if (act === ACT.copy && results[selected]?.kind === KIND.ran) {
-    navigator.clipboard.writeText(/** @type {RanResult} */ (results[selected]).entry.command);
+  else if (act === ACT.copy && (results[selected]?.kind === KIND.ran || results[selected]?.kind === KIND.files)) {
+    const r = results[selected];
+    navigator.clipboard.writeText(r.kind === KIND.ran ? r.entry.command : /** @type {import('./palettefiles.js').FileResult} */ (r).path);
     input.focus();
   }
   else if (act === ACT.forget) {

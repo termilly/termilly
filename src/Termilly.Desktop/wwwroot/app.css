@@ -1987,6 +1987,8 @@ code.path { color: var(--text); font-size: 11.5px; word-break: break-all; }
 .res.res-hit.sel .res-hit-line { color: var(--text); }
 .res-total { padding: 8px 10px 2px; color: var(--text); font-size: 12px; font-weight: 600; }
 .res-more { padding: 3px 10px 3px 52px; color: var(--faint); font-size: 11px; }
+/* A view with its own keys (Command history, Go to), named where the chips are. */
+.fview { align-self: center; margin-right: 6px; color: var(--text); font-size: 12.5px; font-weight: 600; }
 .res-right { display: flex; flex: none; flex-direction: column; align-items: flex-end; gap: 4px; color: var(--faint); font-size: 11px; white-space: nowrap; }
 .res-right kbd { font-size: 10px; }
 /* A command’s hint (its keys, or a settings section) on one line: the column stacks a result’s lines, not its keys. */
