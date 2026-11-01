@@ -1,5 +1,5 @@
 // @ts-check
-// My prompts: what you asked Claude Code in a terminal, by day and time, from the header's button. Each one leads to
+// Prompt history: what you asked Claude Code in a terminal, by day and time, from the header's button. Each one leads to
 // where it is in the terminal's output. The host has them (PromptsHandler): Termilly's own record, kept from the
 // prompt hook as history is, and the sessions' transcripts on this PC for older ones. With neither, they're read from
 // the prompts the output still shows (no times then).
@@ -105,10 +105,10 @@ function place(prompts, shown) {
 
 const pop = document.createElement('section');
 pop.className = 'popover inbox prompts-pop';
-pop.setAttribute('aria-label', 'My prompts');
+pop.setAttribute('aria-label', 'Prompt history');
 pop.hidden = true;
 pop.innerHTML = `
-  <div class="inbox-head"><span class="section-head">My prompts</span><span class="prompts-count"></span>
+  <div class="inbox-head"><span class="section-head">Prompt history</span><span class="prompts-count"></span>
     <button class="btn small" data-clear title="Hides the prompts listed now. Nothing is deleted: Show them again brings them back.">Clear</button></div>
   <div class="prompts-filter"><input type="text" placeholder="Filter" spellcheck="false" aria-label="Filter prompts"></div>
   <div class="inbox-list prompts-list" role="listbox"></div>
