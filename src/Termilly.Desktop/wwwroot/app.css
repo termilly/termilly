@@ -684,6 +684,9 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
 .clip-meta { overflow: hidden; color: var(--faint); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .clip-acts { display: none; flex: none; gap: 1px; }
 .clip-row:hover .clip-acts { display: flex; }
+/* An expanded clip keeps its collapse button on screen. */
+.clip-row:has(.clip-expand.on) .clip-acts { display: flex; }
+.clip-row:has(.clip-expand.on):not(:hover) .clip-acts .pane-btn:not(.clip-expand) { display: none; }
 .clip-acts .pane-btn { opacity: 1; }
 .clip-acts .pane-btn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1; }
 .clip-acts .pane-btn.on { color: var(--accent); }

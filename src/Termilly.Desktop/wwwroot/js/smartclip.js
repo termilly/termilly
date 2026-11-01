@@ -2,9 +2,8 @@
 // Smart Clip (the title bar's button, Ctrl+Shift+X, or a terminal's right-click menu): every copy kept, text and
 // images, made in Termilly or (on Windows) in any app, kept by the host (SmartClip.cs). A terminal's right-click menu
 // offers the newest under Paste from Smart Clip; the panel docked on the right shows them all, pinned first, images in
-// a grid. A click selects a clip and shows more of it (a second click folds it), Delete deletes it; a double click (or
-// Enter) pastes it into the terminal in focus
-// through its paste checks, a clip dragged onto a terminal pastes there, and an image pastes as the path of a PNG file
+// a grid. A click selects a clip, its first button shows all of it (or folds it again), Delete deletes it; a double
+// click (or Enter) pastes it into the terminal in focus through its paste checks, a clip dragged onto a terminal pastes there, and an image pastes as the path of a PNG file
 // (what agents such as Claude Code read). Secrets show masked and go after a while.
 
 import { PAGE, HOST } from './protocol.js';
@@ -35,7 +34,7 @@ const TIP_CHARS = 400;
 const MIN_WIDTH_PX = 280;
 /** From this many characters a clip's size shows with it. */
 const SIZE_FROM = 1_000;
-const ROW_TIP = 'Click to see more, double-click or Enter to paste, Del to delete';
+const ROW_TIP = 'Double-click or Enter to paste, Del to delete';
 const MINUTE_MS = 60_000;
 const HOUR_MS = 60 * MINUTE_MS;
 const DAY_HOURS = 24;
@@ -59,6 +58,9 @@ const KIND_ICONS = Object.freeze({
   [CLIP_KIND.image]: '<svg viewBox="0 0 16 16"><rect x="1.5" y="2.5" width="13" height="11" rx="1"/><path d="M1.5 11.5l4-4 3 3 2-2 4 4"/><rect x="10" y="5" width="2" height="2" fill="currentColor" stroke="none"/></svg>',
   [CLIP_KIND.secret]: ICONS.lock,
 });
+/** A clip's text shown in full (a chevron down) or folded (a chevron right), 16px at a 1px line. */
+const EXPAND_ICON = ICONS.chevronRight;
+const COLLAPSE_ICON = '<svg viewBox="0 0 16 16"><path d="M3.5 6l4.5 4.5L12.5 6"/></svg>';
 /** @type {Readonly<Record<string, string>>} */
 const KIND_LABELS = Object.freeze({
   [CLIP_KIND.text]: 'Text', [CLIP_KIND.command]: 'Command', [CLIP_KIND.path]: 'Path', [CLIP_KIND.url]: 'Link',
@@ -70,7 +72,7 @@ const TOOL_ICONS = Object.freeze({
 });
 /** What the panel's buttons do (data-clips), and what a clip's own buttons do (data-clip-act). */
 const PANEL_ACTION = Object.freeze({ pause: 'pause', clear: 'clear', close: 'close' });
-const CLIP_ACTION = Object.freeze({ open: 'open', run: 'run', pin: 'pin', forget: 'forget' });
+const CLIP_ACTION = Object.freeze({ expand: 'expand', open: 'open', run: 'run', pin: 'pin', forget: 'forget' });
 const SEARCH = '[data-clips-search]';
 const LIST = '.clips-list';
 
@@ -79,7 +81,10 @@ const LIST = '.clips-list';
 let clips = [];
 let keeping = true;
 let query = '';
-/** The clip selected in the panel: shown in full below its row (or outlined, an image), what Enter pastes. */
+/** The clips shown in full below their row (their expand button). */
+/** @type {Set<string>} */
+const expanded = new Set();
+/** The clip selected in the panel (highlighted, an image outlined): what Enter pastes and Delete deletes. */
 /** @type {string | null} */
 let selected = null;
 /** Images as data: URLs, by clip id: a clip never changes, so each is asked for once. */
@@ -233,14 +238,17 @@ function rowHtml(c) {
   return `<div class="clip-row${c.id === selected ? ' selected' : ''}" data-clip="${escapeHtml(c.id)}" draggable="true" title="${ROW_TIP}">
     <span class="clip-kind k-${escapeHtml(c.kind)}">${iconOf(c)}</span>
     <span class="clip-body"><span class="clip-text${mono}">${escapeHtml(titleOf(c))}</span><span class="clip-meta">${escapeHtml(metaOf(c))}</span></span>
-    <span class="clip-acts">${open ? `<button class="pane-btn" data-clip-act="${CLIP_ACTION.open}" title="${open.label}">${ICONS.launch}</button>` : ''}${runnable(c) ? `<button class="pane-btn" data-clip-act="${CLIP_ACTION.run}" title="Paste and run">${ICONS.play}</button>` : ''}
+    <span class="clip-acts">${expandHtml(c)}${open ? `<button class="pane-btn" data-clip-act="${CLIP_ACTION.open}" title="${open.label}">${ICONS.launch}</button>` : ''}${runnable(c) ? `<button class="pane-btn" data-clip-act="${CLIP_ACTION.run}" title="Paste and run">${ICONS.play}</button>` : ''}
       ${c.kind === CLIP_KIND.secret ? '' : `<button class="pane-btn${c.pinned ? ' on' : ''}" data-clip-act="${CLIP_ACTION.pin}" title="${c.pinned ? UNPIN_LABEL : 'Pin: kept at the top, never dropped'}">${TOOL_ICONS.pin}</button>`}
       <button class="pane-btn" data-clip-act="${CLIP_ACTION.forget}" title="Delete (Del)">${ICONS.cross}</button></span>
-  </div>${c.id === selected ? previewHtml(c) : ''}`;
+  </div>${expanded.has(c.id) ? previewHtml(c) : ''}`;
 }
 
+/** The expand button, kept on screen while the clip is open so it can be folded again. @param {Clip} c */
+const expandHtml = c => `<button class="pane-btn clip-expand${expanded.has(c.id) ? ' on' : ''}" data-clip-act="${CLIP_ACTION.expand}" title="${expanded.has(c.id) ? 'Collapse' : 'Expand: see all of it'}">${expanded.has(c.id) ? COLLAPSE_ICON : EXPAND_ICON}</button>`;
+
 /**
- * The selected clip's text, scrolling within a few lines' height; a long clip shows its start and says how much more
+ * An expanded clip's text, scrolling within a few lines' height; a long clip shows its start and says how much more
  * there is (the whole of it pastes).
  * @param {Clip} c
  */
@@ -380,7 +388,10 @@ async function clipMenu(c, e) {
 
 /** @param {string} act @param {Clip} c */
 function clipAct(act, c) {
-  if (act === CLIP_ACTION.open) openOf(c)?.run();
+  if (act === CLIP_ACTION.expand) {
+    if (!expanded.delete(c.id)) expanded.add(c.id);
+    drawList();
+  } else if (act === CLIP_ACTION.open) openOf(c)?.run();
   else if (act === CLIP_ACTION.run) pasteClip(c, focusedTab(), true);
   else if (act === CLIP_ACTION.pin) send(PAGE.clipPin, { id: c.id, pinned: !c.pinned });
   else if (act === CLIP_ACTION.forget) send(PAGE.clipForget, { id: c.id });
@@ -396,9 +407,8 @@ panel.addEventListener('click', e => {
   if (!c) return;
   const act = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-clip-act]'))?.dataset.clipAct;
   if (act) return clipAct(act, c);
-  // The second click of a double click pastes (dblclick), it doesn't fold.
-  if (e.detail > 1) return;
-  selected = selected === c.id ? null : c.id;
+  if (selected === c.id) return;
+  selected = c.id;
   drawList();
 });
 
@@ -477,6 +487,7 @@ onHost(HOST.clipClips, m => {
   keeping = m.keeping;
   for (const id of pictures.keys()) if (!clipById(id)) pictures.delete(id);
   if (selected && !clipById(selected)) selected = null;
+  for (const id of expanded) if (!clipById(id)) expanded.delete(id);
   render();
 });
 
