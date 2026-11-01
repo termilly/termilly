@@ -59,7 +59,7 @@ function computerHtml(pc) {
     return `<button class="rm-row pc-ws" data-pc-workspace="${escapeHtml(key)}">${chev(key, `<span class="pc-wsdot" style="background:${escapeHtml(w.color)}"></span>`)}
       <span class="rm-name">${escapeHtml(w.name)}</span><span class="rm-chips"><span class="rm-count">${terms.length}</span></span></button>`
       + (folded.has(key) ? '' : terms.map(t => `<button class="rm-row pc-term" data-pc-terminal="${escapeHtml(pc.id)}" data-pane="${escapeHtml(t.id)}" title="Open ${escapeHtml(t.title)} from ${escapeHtml(pc.name)} here">
-        <span class="badge pc-badge">${escapeHtml(t.badge ?? '')}</span><span class="rm-name">${escapeHtml(t.title)}</span></button>`).join(''));
+        <span class="badge small" data-icon="${escapeHtml(t.icon ?? '')}"><span class="badge-text">${escapeHtml(t.badge ?? '')}</span></span><span class="rm-name">${escapeHtml(t.title)}</span></button>`).join(''));
   }).join('');
 }
 
