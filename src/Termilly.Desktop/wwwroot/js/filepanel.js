@@ -254,6 +254,9 @@ export async function initFiles() {
   render();
   if (!restored.has(v)) return reveal(v, shellFolderOf(tab));
   await load(v, [...v.open]);
+  // Folders deleted or moved since aren't open any more (their parent no longer lists them, so they never showed).
+  for (const path of [...v.open]) if (v.nodes.get(path)?.error) v.open.delete(path);
+  render();
   const list = /** @type {HTMLElement | null} */ (panel.querySelector(LIST));
   if (list) list.scrollTop = saved.scroll ?? 0;
 }
@@ -971,7 +974,9 @@ function followed(tab, path) {
   if (panel.hidden || !path) return;
   const v = views.get(tab.id);
   if (!v) return;
-  if (restored.delete(v)) {
+  // Back after a restart, a shell in a folder the tree shows only marks it; one elsewhere (its old folder gone, say)
+  // opens the tree down to it as usual.
+  if (restored.delete(v) && v.open.has(parentOf(path) ?? '')) {
     v.cwd = path;
     if (v === view) drawTree();
     return;
