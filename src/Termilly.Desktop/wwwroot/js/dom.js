@@ -7,6 +7,8 @@
 export const WORKSPACE_ID = 'workspace';
 /** xterm's element the cells are drawn in: its size over the terminal's columns and rows is a cell's. */
 export const XTERM_SCREEN = '.xterm-screen';
+/** The mouse coming over an element (it bubbles, unlike mouseenter). */
+export const MOUSE_OVER = 'mouseover';
 /** What a file or folder dragged from the Files panel carries: its path (a terminal types it where it's dropped). */
 export const PATH_DRAG = 'application/x-termilly-path';
 /** What a clip dragged from Smart Clip carries: its id. */

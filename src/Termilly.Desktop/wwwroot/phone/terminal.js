@@ -4,7 +4,7 @@
 // font, and the size follows. The keyboard doesn't: the terminal keeps the rows of the whole screen (resizing would
 // push the text up, here and on the PC), and while the keyboard is up the view slides up to keep the cursor's line
 // above it. First what it shows (the window's own terminal, drawn again at that size), then what it prints.
-// With Settings › Phone › Allow typing on, the phone's keyboard types into it, and a key bar adds what a phone lacks:
+// With Settings › Remote › Allow typing on, the phone's keyboard types into it, and a key bar adds what a phone lacks:
 // Esc, Tab, Ctrl, the arrows, Paste and the PC's snippets. A terminal running Claude Code also gets a box to message
 // it: a plain text field, so the phone's keyboard can dictate into it, and what's said is checked before it goes.
 
@@ -261,7 +261,7 @@ export function terminalView(app) {
     view.insertAdjacentHTML('afterbegin', head());
     box?.insertAdjacentHTML('afterend', typing
       ? compose.html(shown?.icon === 'claude')
-      : '<p class="tv-foot tv-note">Typing from the phone is off: Settings › Phone › Allow typing, on the PC.</p>');
+      : '<p class="tv-foot tv-note">Typing from the phone is off: Settings › Remote › Allow typing, on the PC.</p>');
     setCtrl(ctrl);
   }
 

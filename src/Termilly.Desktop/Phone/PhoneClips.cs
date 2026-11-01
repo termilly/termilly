@@ -6,7 +6,7 @@ using Termilly.Desktop.Services;
 namespace Termilly.Desktop.Phone;
 
 /// <summary>
-/// Smart Clip from a phone (phone/clips.js), only while Settings › Phone allows typing and clips: pasting a clip into
+/// Smart Clip from a phone (phone/clips.js), only while Settings › Remote allows typing and clips: pasting a clip into
 /// a terminal (the page pastes its text, as its own Paste would, so the text stays on the PC), or a clip's text for the
 /// message box to Claude (never a secret's).
 /// </summary>
@@ -63,7 +63,7 @@ internal sealed class PhoneClips(ISettingsStore settings, TerminalSessions sessi
     private JsonObject? Refused(string op)
     {
         var phone = settings.Current.Phone;
-        return phone.AllowTyping && phone.Clips ? null : Failed(op, "Smart Clip on the phone is off: Settings › Phone.");
+        return phone.AllowTyping && phone.Clips ? null : Failed(op, "Smart Clip on the phone is off: Settings › Remote.");
     }
 
     private static JsonObject Failed(string op, string error) => new() { [OkField] = false, [OpField] = op, [ErrorField] = error };

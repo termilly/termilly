@@ -152,7 +152,11 @@ internal sealed class PhoneLive : IDisposable
         }
     }
 
-    private string StateMessage() => $$"""{"{{TypeField}}":"{{Kinds.State}}","{{StateField}}":{{_state}}}""";
+    /// <summary>The state, with this computer's name: another Termilly computer lists it by that, not by its address.</summary>
+    private string StateMessage() => $$"""{"{{TypeField}}":"{{Kinds.State}}","{{ComputerField}}":{{System.Text.Json.JsonSerializer.Serialize(Environment.MachineName)}},"{{StateField}}":{{_state}}}""";
+
+    /// <summary>The state message's field with the computer's name.</summary>
+    public const string ComputerField = "computer";
 
     /// <summary>Whether a paired phone has the app open on its screen now: its alerts would tell it what it sees.</summary>
     public bool IsOpenOn(string device) => _phones.Values.Any(p => p.Device == device && p.Shown);

@@ -492,7 +492,7 @@ export const HOST = Object.freeze({
 /** @typedef {{ requestId: string, method?: string, args?: any }} Host_phoneScreen */
 /** @typedef {{ id: string }} Host_phoneSeen */
 /** @typedef {{ id: string, cols: number|null, rows: number|null, name: string|null, address: string|null, computer?: boolean }} Host_phoneSize */
-/** @typedef {{ running: boolean, setupUrl: string|null, appUrl: string|null, error: string|null, devices: Array<PhoneDevice> }} Host_phoneStatus */
+/** @typedef {{ running: boolean, setupUrl: string|null, appUrl: string|null, error: string|null, devices: Array<PhoneDevice>, computer?: string|null }} Host_phoneStatus */
 /** @typedef {{ sent: number, error: string|null }} Host_phoneTested */
 /** @typedef {{ id: string, data: string }} Host_phoneTyped */
 /** @typedef {{ plugins: any }} Host_plugins */

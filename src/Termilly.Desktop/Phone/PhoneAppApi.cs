@@ -18,7 +18,8 @@ internal readonly record struct PhoneReply(HttpStatusCode Status, string Type, b
 /// holds a token in an HttpOnly cookie), and turning its alerts on, off or testing them. Only a paired phone gets more
 /// than "not paired".
 /// </summary>
-internal sealed class PhoneAppApi(PhoneStore store, string pushKey, Func<string, Task> testAlert, string build = "")
+/// <param name="attachedTo">The name of the computer this one shows, by its authority's fingerprint; null for any other.</param>
+internal sealed class PhoneAppApi(PhoneStore store, string pushKey, Func<string, Task> testAlert, string build = "", Func<string, string?>? attachedTo = null)
 {
     /// <summary>The token's cookie, and how long a phone keeps it.</summary>
     private const string TokenCookie = "termilly";
@@ -51,6 +52,9 @@ internal sealed class PhoneAppApi(PhoneStore store, string pushKey, Func<string,
         public const string InSeconds = "inSeconds";
         public const string Code = "code";
         public const string Name = "name";
+        /// <summary>Another Termilly computer pairing: its authority's fingerprint (PcConnection.FingerprintOf).</summary>
+        public const string Computer = "computer";
+        public const string Error = "error";
         public const string Endpoint = "endpoint";
         public const string Keys = "keys";
         public const string P256dh = "p256dh";
@@ -86,9 +90,17 @@ internal sealed class PhoneAppApi(PhoneStore store, string pushKey, Func<string,
         }
         if (request.Path == Api.Pair)
         {
+            // Computers attach one way: one this computer shows can't show this one too (each would show the other).
+            if (Field(request.Body, Fields.Computer) is { } computer && attachedTo?.Invoke(computer) is { } shown)
+            {
+                return new(HttpStatusCode.Conflict, MediaTypes.Utf8(MediaTypes.Json), Encoding.UTF8.GetBytes(new JsonObject
+                {
+                    [Fields.Error] = $"{shown} already shows this computer’s workspaces, and computers attach one way only. To attach the other way, forget this computer on {shown} first (Remote › Termilly computers).",
+                }.ToJsonString()));
+            }
             var token = store.Pair(Field(request.Body, Fields.Code), request.Headers.GetValueOrDefault("User-Agent"), Field(request.Body, Fields.Name));
             return token is null ? null
-                : Json(new JsonObject { [Fields.Paired] = true }, $"Set-Cookie: {TokenCookie}={token}; Max-Age={TokenDays * SecondsPerDay}; Path=/; Secure; HttpOnly; SameSite=Strict\r\n");
+                : Json(new JsonObject { [Fields.Paired] = true, [Fields.Name] = Environment.MachineName }, $"Set-Cookie: {TokenCookie}={token}; Max-Age={TokenDays * SecondsPerDay}; Path=/; Secure; HttpOnly; SameSite=Strict\r\n");
         }
         if (device is null)
         {

@@ -13,7 +13,7 @@ namespace Termilly.Desktop.Features;
 /// what it shows, then what it prints, and typing and its size going back. The other computer decides what's allowed
 /// (Settings › Phone › Allow typing there).
 /// </summary>
-internal sealed class RemotePcsHandler(PageChannel page, RemotePcStore store) : IMessageHandler, IStartable, IDisposable
+internal sealed class RemotePcsHandler(PageChannel page, RemotePcStore store, Phone.PhoneStore phones) : IMessageHandler, IStartable, IDisposable
 {
     private static readonly TimeSpan RetryAfter = TimeSpan.FromSeconds(10);
     /// <summary>What a phone (or this computer) types at once (Features/Phone.cs takes up to 4096).</summary>
@@ -90,7 +90,7 @@ internal sealed class RemotePcsHandler(PageChannel page, RemotePcStore store) : 
         }
         try
         {
-            var pc = await PcConnection.PairAsync(address, m.Code, Environment.MachineName + PcConnection.ComputerMark, _stop.Token).ConfigureAwait(false);
+            var pc = await PcConnection.PairAsync(address, m.Code, Environment.MachineName + PcConnection.ComputerMark, MyAuthority(), _stop.Token).ConfigureAwait(false);
             foreach (var old in store.List().Where(p => string.Equals(p.Address, address, StringComparison.OrdinalIgnoreCase)))
             {
                 Stop(old.Id);
@@ -103,6 +103,20 @@ internal sealed class RemotePcsHandler(PageChannel page, RemotePcStore store) : 
         catch (InvalidOperationException e)
         {
             page.Post(new ToPage.PcAdded(m.RequestId, e.Message));
+        }
+    }
+
+    /// <summary>This computer's authority's fingerprint (made if it has none yet); null while it can't be read.</summary>
+    private string? MyAuthority()
+    {
+        try
+        {
+            using var authority = phones.Authority(Environment.MachineName);
+            return PcConnection.FingerprintOf(authority.RawData);
+        }
+        catch (Exception e) when (e is System.Security.Cryptography.CryptographicException or InvalidOperationException or IOException)
+        {
+            return null;
         }
     }
 
@@ -163,6 +177,12 @@ internal sealed class RemotePcsHandler(PageChannel page, RemotePcStore store) : 
                 if (message[Fields.Type]?.GetValue<string>() == Kinds.State && message[Fields.State] is { } state)
                 {
                     live.State = state.ToJsonString();
+                    if (message[Phone.PhoneLive.ComputerField]?.GetValue<string>() is { Length: > 0 } name && name != pc.Name)
+                    {
+                        // Its own name, not what the network called its address when it was paired.
+                        pc = pc with { Name = name };
+                        store.Add(pc);
+                    }
                     Post();
                 }
             }

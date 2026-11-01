@@ -68,7 +68,7 @@ internal sealed class PcFilesApi(FilesHandler files, ISettingsStore settings)
     private static readonly TimeSpan Idle = TimeSpan.FromMinutes(1);
     private const int Chunk = 81920;
     private const string TempPrefix = "termilly-in-";
-    private const string Refused = "Copying files here is off: on that computer, Settings › Phone › Allow typing.";
+    private const string Refused = "Copying files here is off: on that computer, Settings › Remote › Allow typing.";
 
     public static bool Handles(string path) => path is PcFiles.Tree or PcFiles.List or PcFiles.MakeFolder;
 

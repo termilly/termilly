@@ -2,7 +2,7 @@
 // Other Termilly computers, under Remote › Termilly computers (Features/RemotePcs.cs): each paired computer, its
 // workspaces and their terminals, as a tree. A terminal opened from it is a pane here that shows the one there live
 // (what it shows, then what it prints) and types into it, with the computer's name in its title. Pairing takes the
-// other computer's address and the code its Settings › Phone › Set up a phone shows; what may be typed is up to it.
+// other computer's address and the code its Settings › Remote › Pair a computer shows; what may be typed is up to it.
 
 import { PAGE, HOST } from './protocol.js';
 import { send, request, onHost } from './host.js';
@@ -167,7 +167,7 @@ setRemoteExtra(groupHtml);
 function addComputer() {
   modal(FORM_DIALOG, `
     <h3>Add a Termilly computer</h3>
-    <p class="dialog-sub">On the other computer, turn on Termilly on the phone and open Settings › Phone › Set up a phone. Type its address and the code it shows.</p>
+    <p class="dialog-sub">On the other computer, turn on Settings › Remote › Remote access. Pair a computer there shows what to type here.</p>
     <label class="dialog-field">Address<input class="field" data-pc-address placeholder="192.168.0.20 or desktop.local" spellcheck="false" autocomplete="off" autofocus></label>
     <label class="dialog-field">Code<input class="field mono" data-pc-code placeholder="ABCD-1234" spellcheck="false" autocomplete="off"></label>
     <p class="dialog-error" hidden></p>

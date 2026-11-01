@@ -1,6 +1,7 @@
 // @ts-check
-// Settings › Phone (Features/Phone.cs, Phone/PhoneServer.cs, docs/phone.md): turning Termilly on a phone on, setting
-// up a phone (Termilly's certificate, then a pairing code), the paired phones and a test alert.
+// Settings › Remote (Features/Phone.cs, Phone/PhoneServer.cs, docs/phone.md): remote access on or off, pairing another
+// Termilly computer, setting up a phone (Termilly's certificate, then a pairing code), the paired devices, the phones'
+// alerts and a test alert. Its settings stay in the phone group.
 
 import { HOST, PAGE } from '../protocol.js';
 import { onHost, send } from '../host.js';
@@ -15,10 +16,12 @@ const QR_CELL = 5;
 const QR_MARGIN = 4;
 /** A QR code's slot in the markup: its text in data-qr. */
 const QR_SLOT = '[data-qr]';
+/** The port another computer tries when none is typed (PhoneSettings.DefaultPort). */
+const DEFAULT_PORT = 8765;
 
 /** The host's state of Termilly on a phone: running or not, its addresses, why it isn't, the paired phones. */
 /** @type {import('../protocol.js').Host_phoneStatus} */
-let status = { running: false, setupUrl: null, appUrl: null, error: null, devices: [] };
+let status = { running: false, setupUrl: null, appUrl: null, error: null, devices: [], computer: null };
 /** The pairing code shown, and what the test alert said. */
 let code = '';
 let tested = '';
@@ -54,14 +57,30 @@ const when = /** @param {number | undefined} ms */ ms => (ms ? new Date(ms).toLo
 /** @param {string} text */
 const qrSlot = text => `<div class="pair-qr" data-qr="${escapeHtml(text)}"></div><p class="set-desc mono pair-url">${escapeHtml(text)}</p>`;
 
+/** The pairing code's row: the code while it's good, else a button that shows one. @param {string} where what to open */
+const codeRow = where => row('2. Pair it', code ? `${where} and type <span class="pair-code mono">${escapeHtml(code)}</span>. It works once, for 5 minutes.`
+  : `${where}, then show a code to type there.`,
+`<button class="btn small" data-action="pairPhone">${code ? 'New code' : 'Show a code'}</button>`, { keywords: 'pair code computer phone' });
+
+/** Attaching this PC to another Termilly computer: what to type there. */
+function computerHtml() {
+  const url = status.appUrl ? new URL(status.appUrl) : null;
+  // The port only when it isn't the one a computer tries by itself.
+  const port = url && url.port !== String(DEFAULT_PORT) ? `:${url.port}` : '';
+  const address = `${url?.hostname ?? ''}${port}`;
+  const named = status.computer ? `<span class="mono">${escapeHtml(status.computer + port)}</span> (or <span class="mono">${escapeHtml(address)}</span>)` : `<span class="mono">${escapeHtml(address)}</span>`;
+  return group('Pair a computer',
+    row('1. Add this PC there', `On the other Termilly computer, open Remote › Termilly computers › Add a computer and type ${named}.`, '',
+      { stack: true, keywords: 'computer laptop pc attach remote address' })
+    + codeRow('In the same window'));
+}
+
 function setupHtml() {
   return group('Set up a phone',
     row('1. Get the app', 'Scan with the phone’s camera, on the same Wi-Fi. The page walks you through installing Termilly’s certificate and adding the app to the Home Screen.',
       '', { stack: true, keywords: 'phone qr setup certificate install' })
     + qrSlot(/** @type {string} */ (status.setupUrl))
-    + row('2. Pair it', code ? `Open Termilly from the phone’s Home Screen and type <span class="pair-code mono">${escapeHtml(code)}</span>. It works once, for 5 minutes.`
-      : 'Open Termilly from the phone’s Home Screen, then show a code to type there.',
-    `<button class="btn small" data-action="pairPhone">${code ? 'New code' : 'Show a code'}</button>`, { keywords: 'phone pair code' }));
+    + codeRow('Open Termilly from the phone’s Home Screen'));
 }
 
 /** The paired phones, each with Remove (in their own window). */
@@ -72,13 +91,13 @@ function phonesHtml() {
           <div class="set-desc">Paired ${escapeHtml(when(d.paired))} · last seen ${escapeHtml(when(d.lastSeen))} · alerts ${d.alerts ? 'on' : 'off'}</div></div>
         <button class="btn small danger-outline" data-remove>Remove</button>
       </div>`).join('')
-    : '<p class="set-desc">None. A removed phone can’t connect again until it’s paired anew.</p>';
+    : '<p class="set-desc">None. A removed device can’t connect again until it’s paired anew.</p>';
 }
 
-/** The paired phones' own window. */
+/** The paired devices' own window. */
 function openPhones() {
-  modal('phone-devices', `<h3>Paired phones</h3>
-    <p class="dialog-sub">A phone paired again under a name it had replaces its old entry.</p>
+  modal('phone-devices', `<h3>Paired devices</h3>
+    <p class="dialog-sub">A device paired again under a name it had replaces its old entry.</p>
     <div class="phone-list" data-phone-list>${phonesHtml()}</div>
     <div class="dialog-actions"><button class="btn primary" data-ok autofocus>Done</button></div>`, (dialog, close) => {
     phonesList = /** @type {HTMLElement} */ (dialog.querySelector('[data-phone-list]'));
@@ -91,32 +110,32 @@ function openPhones() {
 }
 
 /** @param {number} count */
-const phonesCount = count => (count === 1 ? 'One phone' : `${count} phones`);
+const phonesCount = count => (count === 1 ? 'One device' : `${count} devices`);
 
 function devicesHtml() {
-  return group('Paired phones', status.devices.length
-    ? row('Paired phones', `${phonesCount(status.devices.length)}: ${escapeHtml(status.devices.map(d => d.name).join(', '))}.`,
-      '<button class="btn small" data-action="managePhones">Manage</button>', { keywords: 'phone paired devices remove' })
+  return group('Paired devices', status.devices.length
+    ? row('Paired devices', `${phonesCount(status.devices.length)}: ${escapeHtml(status.devices.map(d => d.name).join(', '))}.`,
+      '<button class="btn small" data-action="managePhones">Manage</button>', { keywords: 'phone computer paired devices remove' })
     + row('Alerts', 'An agent’s news, as Settings › Notifications picks it, also for the terminal in front of you here. Not while the phone app is open: it shows the news itself. When I’m away: once Termilly isn’t in front or the PC has been untouched for a minute, even if that’s after the news came.',
       seg('phone.alerts', [[SETTING_VALUES.phoneAlerts.always, 'Always'], [SETTING_VALUES.phoneAlerts.away, 'When I’m away'], [SETTING_VALUES.phoneAlerts.off, 'Off']]),
       { keywords: 'phone alert push notification away idle' })
-    + row('Allow typing', 'Paired phones can type into the terminals they show. Answers to an agent work either way.', toggle('phone.allowTyping'), { keywords: 'phone type keyboard input remote' })
+    + row('Allow typing', 'Paired phones and computers can type into the terminals they show, and computers can copy files into them. Answers to an agent work either way.', toggle('phone.allowTyping'), { keywords: 'phone computer type keyboard input remote copy files' })
     + row('Smart Clip on the phone', 'With typing allowed, phones can paste your recent text clips. They get only each one’s first line, secrets masked; this PC pastes it.', toggle('phone.clips'), { keywords: 'phone smart clip clipboard paste' })
     + row('Hide details in alerts', 'Only “An agent needs you” or “An agent finished”: no terminal, workspace or message on the lock screen.', toggle('phone.hideDetails'), { keywords: 'phone alert privacy lock screen' })
     + row('Test alert', tested ? escapeHtml(tested) : 'Sends an alert to each phone that has alerts on, even when it’s locked.',
       '<button class="btn small" data-action="testPhone">Send</button>', { keywords: 'phone alert push notification test' })
-    : '<p class="set-desc">None yet. A removed phone can’t connect again until it’s paired anew.</p>');
+    : '<p class="set-desc">None yet. A removed device can’t connect again until it’s paired anew.</p>');
 }
 
 /** @type {import('./page.js').Section} */
 const PHONE = {
   id: SECTION.phone,
-  label: 'Phone', icon: ICONS.phone,
-  html: () => group('', row('Termilly on your phone',
-    'Your terminals and agents on your phone, served by this PC on your own network over HTTPS. Off by default: nothing listens while it’s off.',
-    toggle('phone.enabled'), { keywords: 'phone mobile iphone android remote lan wifi' })
+  label: 'Remote', icon: ICONS.remote,
+  html: () => group('', row('Remote access',
+    'Your terminals and agents on your phone or another Termilly computer, served by this PC on your own network over HTTPS. Off by default: nothing listens while it’s off.',
+    toggle('phone.enabled'), { keywords: 'remote phone mobile iphone android computer laptop lan wifi' })
     + (status.error ? `<p class="set-status">${escapeHtml(status.error)}</p>` : ''))
-    + (status.running ? setupHtml() + devicesHtml() : ''),
+    + (status.running ? computerHtml() + setupHtml() + devicesHtml() : ''),
   refresh: () => send(PAGE.phoneStatus),
   opened: () => send(PAGE.phoneStatus),
   drawn(body) {

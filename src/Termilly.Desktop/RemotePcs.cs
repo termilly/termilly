@@ -55,7 +55,7 @@ internal sealed class RemotePcStore(Vault vault)
 }
 
 /// <summary>
-/// Reaching another Termilly over its phone server (Phone/PhoneServer.cs): pairing with the code its Settings › Phone
+/// Reaching another Termilly over its phone server (Phone/PhoneServer.cs): pairing with the code its Settings › Remote
 /// shows, and its live connection. Its certificate is checked against its own authority only, fetched at pairing (the
 /// code the user types proves this computer to it; the authority is kept from then on).
 /// </summary>
@@ -109,7 +109,20 @@ internal static class PcConnection
     /// Pairs with the Termilly at <paramref name="address"/>: fetches its authority, then hands it the code over HTTPS
     /// checked against that authority. Throws <see cref="InvalidOperationException"/> with what went wrong, for the user.
     /// </summary>
-    public static async Task<RemotePc> PairAsync(string address, string code, string myName, CancellationToken cancel)
+    /// <summary>The fields of a pairing's request and answer (Phone/PhoneAppApi.cs).</summary>
+    private static class PairFields
+    {
+        public const string Code = "code";
+        public const string Name = "name";
+        public const string Computer = "computer";
+        public const string Error = "error";
+    }
+
+    /// <summary>A certificate's fingerprint (SHA-256, hex): how computers know each other's authority.</summary>
+    public static string FingerprintOf(byte[] der) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(der));
+
+    /// <param name="myAuthority">This computer's authority's fingerprint: the other refuses one it shows itself.</param>
+    public static async Task<RemotePc> PairAsync(string address, string code, string myName, string? myAuthority, CancellationToken cancel)
     {
         using var plain = new HttpClient { Timeout = Timeout };
         byte[] der;
@@ -119,19 +132,38 @@ internal static class PcConnection
         }
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException)
         {
-            throw new InvalidOperationException($"Couldn’t reach Termilly at {address}. Is Termilly on the phone turned on there (Settings › Phone)?", e);
+            throw new InvalidOperationException($"Couldn’t reach Termilly at {address}. Is Remote access on there (Settings › Remote)?", e);
         }
         using var authority = X509CertificateLoader.LoadCertificate(der);
         using var handler = new HttpClientHandler { ServerCertificateCustomValidationCallback = (_, cert, _, errors) => Trusted(cert, authority, errors), UseCookies = false };
         using var secure = new HttpClient(handler) { Timeout = Timeout };
-        var body = new JsonObject { ["code"] = code, ["name"] = myName }.ToJsonString();
+        var body = new JsonObject { [PairFields.Code] = code, [PairFields.Name] = myName, [PairFields.Computer] = myAuthority }.ToJsonString();
         using var response = await secure.PostAsync(new Uri($"https://{address}{PairPath}"), new StringContent(body, Encoding.UTF8, "application/json"), cancel).ConfigureAwait(false);
+        var answer = await AnswerOf(response, cancel).ConfigureAwait(false);
+        if (response.StatusCode == HttpStatusCode.Conflict && answer?[PairFields.Error]?.GetValue<string>() is { } refused)
+        {
+            throw new InvalidOperationException(refused);
+        }
         var token = response.Headers.TryGetValues("Set-Cookie", out var cookies) ? cookies.Select(TokenFrom).FirstOrDefault(t => t is not null) : null;
         if (response.StatusCode == HttpStatusCode.Forbidden || token is null)
         {
-            throw new InvalidOperationException("That code didn’t work: it’s wrong or old. Show a new one there, in Settings › Phone › Set up a phone.");
+            throw new InvalidOperationException("That code didn’t work: it’s wrong or old. Show a new one there, in Settings › Remote › Pair a computer.");
         }
-        return new RemotePc(Guid.NewGuid().ToString("N"), await NameOf(address).ConfigureAwait(false), address, token, Convert.ToBase64String(der));
+        var name = answer?[PairFields.Name]?.GetValue<string>() is { Length: > 0 } own ? own : await NameOf(address).ConfigureAwait(false);
+        return new RemotePc(Guid.NewGuid().ToString("N"), name, address, token, Convert.ToBase64String(der));
+    }
+
+    /// <summary>An answer's JSON; null when it has none.</summary>
+    private static async Task<JsonObject?> AnswerOf(HttpResponseMessage response, CancellationToken cancel)
+    {
+        try
+        {
+            return JsonNode.Parse(await response.Content.ReadAsStringAsync(cancel).ConfigureAwait(false)) as JsonObject;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     private static string? TokenFrom(string cookie)

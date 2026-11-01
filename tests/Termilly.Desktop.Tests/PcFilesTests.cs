@@ -66,3 +66,32 @@ public sealed class PcFilesTests
         Assert.Equal(HttpStatusCode.BadRequest, put.Status);
     }
 }
+
+/// <summary>Computers attach one way: one this computer shows can't pair to show this one (Phone/PhoneAppApi.cs).</summary>
+public sealed class OneWayPairingTests : IDisposable
+{
+    private readonly string _dir = Path.Combine(Path.GetTempPath(), "termilly-tests", Guid.NewGuid().ToString("N"));
+    private readonly PhoneStore _store;
+
+    public OneWayPairingTests() => _store = new PhoneStore(Termilly.Desktop.Security.Vault.Open(_dir));
+
+    public void Dispose() => Directory.Delete(_dir, recursive: true);
+
+    private static PhoneReply? Pair(PhoneAppApi api, string code, string? computer) => api.Answer(new PhoneRequest("POST", "/api/pair", [],
+        Encoding.UTF8.GetBytes(new System.Text.Json.Nodes.JsonObject { ["code"] = code, ["name"] = "LAPTOP (Termilly)", ["computer"] = computer }.ToJsonString())));
+
+    [Fact]
+    public void A_computer_this_one_shows_is_refused_and_the_code_still_works_for_another()
+    {
+        var api = new PhoneAppApi(_store, "key", _ => Task.CompletedTask, attachedTo: fp => fp == "AB12" ? "LAPTOP" : null);
+        var code = _store.OfferCode();
+
+        var refused = Pair(api, code, "AB12");
+        Assert.Equal(HttpStatusCode.Conflict, refused?.Status);
+        Assert.Contains("LAPTOP already shows this computer", Encoding.UTF8.GetString(refused!.Value.Content), StringComparison.Ordinal);
+
+        var paired = Pair(api, code, "CD34");
+        Assert.Equal(HttpStatusCode.OK, paired?.Status);
+        Assert.Contains(Environment.MachineName, Encoding.UTF8.GetString(paired!.Value.Content), StringComparison.Ordinal);
+    }
+}

@@ -69,6 +69,7 @@ import { openNewWorkspace } from './newworkspace.js';
 import { remoteGit } from './remotehost.js';
 import { AGENT_STATE, SETTING_VALUES, WINDOW_ACTION } from './constants.js';
 import { rememberSession, recordPrompt } from './myprompts.js';
+import './tooltips.js';
 import { byId, find, targetOf, WORKSPACE_ID } from './dom.js';
 
 /** @typedef {import('./protocol.js').Host_agent_1} Host_agent_1 */

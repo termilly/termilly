@@ -61,7 +61,7 @@ internal static partial class ToPage
 {
     /// <param name="SetupUrl">The plain-http page a new phone opens first, to get Termilly's certificate.</param>
     /// <param name="AppUrl">The phone app, over HTTPS.</param>
-    internal sealed record PhoneStatus(bool Running, string? SetupUrl, string? AppUrl, string? Error, IReadOnlyList<PhoneDevice> Devices) : IHostMessage
+    internal sealed record PhoneStatus(bool Running, string? SetupUrl, string? AppUrl, string? Error, IReadOnlyList<PhoneDevice> Devices, string? Computer = null) : IHostMessage
     {
         public static string Type => "phone:status";
     }

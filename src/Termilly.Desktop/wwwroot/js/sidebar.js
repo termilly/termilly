@@ -27,7 +27,7 @@ import { remoteRailHtml, openRemoteMenu } from './remote.js';
 import { openNewWorkspace } from './newworkspace.js';
 import { hasUnreadResults } from './results.js';
 import { SETTING_VALUES } from './constants.js';
-import { byId, find, targetOf, dragPointer, showError } from './dom.js';
+import { byId, find, targetOf, dragPointer, showError, MOUSE_OVER } from './dom.js';
 import { RENAME_INPUT_CLASS, RENAME_IN, shownName } from './rename.js';
 
 /** The choices of the settings used here (C#'s SettingValues). */
@@ -423,7 +423,7 @@ rail.addEventListener('click', e => {
     hideFlyout();
   }
 });
-rail.addEventListener('mouseover', e => {
+rail.addEventListener(MOUSE_OVER, e => {
   const tile = /** @type {HTMLElement | null} */ (targetOf(e).closest(RAIL_TILE));
   if (tile) showFlyout(tile);
 });

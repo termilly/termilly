@@ -139,7 +139,7 @@ async function start() {
     me = await call(API.me);
     build ||= me?.build ?? ''; // the build loaded now
   } catch {
-    return setupScreen(`<p>Can't reach your PC. Is Termilly running, with Settings › Phone on, and this phone on the same Wi-Fi?</p><button class="button" data-do="${DO.retry}">Try again</button>`);
+    return setupScreen(`<p>Can't reach your PC. Is Termilly running, with Settings › Remote › Remote access on, and this phone on the same Wi-Fi?</p><button class="button" data-do="${DO.retry}">Try again</button>`);
   }
   if (me?.locked) return setupScreen(`<p>Termilly is locked on your PC. Unlock it there, then come back.</p><button class="button" data-do="${DO.retry}">Try again</button>`);
   if (!me?.paired && ios && !standalone) {
@@ -148,7 +148,7 @@ async function start() {
   }
   if (!me?.paired) {
     return setupScreen(`<div class="step done"><span class="step-n">✓</span><div><b>Certificate trusted</b></div></div>
-      <div class="step now"><span class="step-n">3</span><div><b>Pair with your PC</b><p>Name this phone, then type the code from Settings › Phone › Show a code.</p>
+      <div class="step now"><span class="step-n">3</span><div><b>Pair with your PC</b><p>Name this phone, then type the code from Settings › Remote › Set up a phone › Show a code.</p>
       <form data-form="pair" class="pair-form"><input class="name" name="name" autocomplete="off" spellcheck="false" maxlength="40" placeholder="Name, like Work iPhone" required>
       <div class="pair-row"><input class="code" name="code" autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" maxlength="9" placeholder="ABCD2345" required>
       <button class="button" type="submit">Pair</button></div></form>

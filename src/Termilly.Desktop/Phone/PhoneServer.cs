@@ -94,9 +94,9 @@ internal sealed class PhoneServer : IDisposable
     private readonly PcFilesApi? _files;
 
     private PhoneServer(IPAddress address, int port, string webRoot, PhoneStore store, PhoneLive live, X509Certificate2 authority, string pushKey,
-        Func<string, Task> testAlert, PcFilesApi? files)
+        Func<string, Task> testAlert, PcFilesApi? files, Func<string, string?>? attachedTo)
     {
-        (_webRoot, _api, _live, _files) = (Path.GetFullPath(webRoot), new PhoneAppApi(store, pushKey, testAlert, BuildOf(webRoot)), live, files);
+        (_webRoot, _api, _live, _files) = (Path.GetFullPath(webRoot), new PhoneAppApi(store, pushKey, testAlert, BuildOf(webRoot), attachedTo), live, files);
         _certificate = store.ServerCertificate(authority, [address], HostName);
         _authorityFile = PhoneCertificates.AuthorityFile(authority);
         _listener = new TcpListener(address, port);
@@ -116,14 +116,14 @@ internal sealed class PhoneServer : IDisposable
         : "";
 
     public static PhoneServer Start(int port, string webRoot, PhoneStore store, PhoneLive live, X509Certificate2 authority, string pushKey, Func<string, Task> testAlert,
-        PcFilesApi? files = null)
+        PcFilesApi? files = null, Func<string, string?>? attachedTo = null)
     {
         var address = Environment.GetEnvironmentVariable("TERMILLY_PHONE_BIND") is { Length: > 0 } bind
             ? IPAddress.Parse(bind)
             : LocalNetworkAddress() ?? throw new IOException("This PC isn't on a local network (no 10.x, 172.16–31.x, 192.168.x or 100.64–127.x address).");
         try
         {
-            return new PhoneServer(address, port, webRoot, store, live, authority, pushKey, testAlert, files);
+            return new PhoneServer(address, port, webRoot, store, live, authority, pushKey, testAlert, files, attachedTo);
         }
         catch (SocketException e)
         {

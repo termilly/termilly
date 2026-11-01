@@ -249,6 +249,8 @@ export const ICONS = {
   lock: '<svg viewBox="0 0 16 16"><rect x="3.5" y="7.5" width="9" height="6" rx="1.5"/><path d="M5.5 7.5V5a2.5 2.5 0 0 1 5 0v2.5"/></svg>',
   appearance: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><path d="M8 2.5v11A5.5 5.5 0 0 0 8 2.5z" fill="currentColor" stroke="none"/></svg>',
   phone: '<svg viewBox="0 0 16 16"><rect x="4.5" y="1.5" width="7" height="13" rx="1.5"/><path d="M7 12.5h2"/></svg>',
+  /** A screen with a phone in front of it: remote access, from phones and other computers. */
+  remote: '<svg viewBox="0 0 16 16"><path d="M8.5 10.5h-6a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v2M4.5 13.5h4"/><rect x="10.5" y="7.5" width="4" height="7" rx="1"/></svg>',
   terminal: '<svg viewBox="0 0 16 16"><rect x="1.5" y="2.5" width="13" height="11" rx="2"/><path d="M4.5 6.5l2 1.5-2 1.5M8 9.5h3.5"/></svg>',
   workspaces: '<svg viewBox="0 0 16 16"><rect x="2.5" y="2.5" width="11" height="11" rx="2"/><path d="M6.5 2.5v11"/></svg>',
   keyboard: '<svg viewBox="0 0 16 16"><rect x="1.5" y="3.5" width="13" height="9" rx="1.5"/><path d="M5.5 9.5h5"/><rect x="4" y="6" width="1" height="1" fill="currentColor" stroke="none"/><rect x="6" y="6" width="1" height="1" fill="currentColor" stroke="none"/><rect x="8" y="6" width="1" height="1" fill="currentColor" stroke="none"/><rect x="10" y="6" width="1" height="1" fill="currentColor" stroke="none"/><rect x="12" y="6" width="1" height="1" fill="currentColor" stroke="none"/></svg>',

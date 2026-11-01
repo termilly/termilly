@@ -10,7 +10,7 @@ using Termilly.Desktop.Services;
 namespace Termilly.Desktop.Features;
 
 /// <summary>
-/// Termilly on a phone (Settings › Phone, docs/phone.md): starts and stops the phone server with Settings, shows its
+/// Termilly on a phone (Settings › Remote, docs/phone.md): starts and stops the phone server with Settings, shows its
 /// addresses, pairing codes and the paired phones, and sends alerts to the phones that take them.
 /// </summary>
 internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
@@ -56,11 +56,17 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
 
     /// <summary>Another Termilly computer's Copy to, which the server takes too.</summary>
     private readonly PcFilesApi _files;
+    /// <summary>The computers this one shows (Remote › Termilly computers): none of them may show this one too.</summary>
+    private readonly RemotePcStore _computers;
+
+    /// <summary>The name of the computer this one shows with that authority fingerprint; null when it shows none.</summary>
+    private string? ShownComputer(string fingerprint) =>
+        _computers.List().FirstOrDefault(pc => PcConnection.FingerprintOf(Convert.FromBase64String(pc.Authority)) == fingerprint)?.Name;
 
     public PhoneHandler(PageChannel page, ISettingsStore settings, PhoneStore store, PhoneLive live, PageApi api, TerminalSessions sessions, PhoneClips clips,
-        PcFilesApi files)
+        PcFilesApi files, RemotePcStore computers)
     {
-        (_page, _settings, _store, _live, _api, _sessions, _clips, _files) = (page, settings, store, live, api, sessions, clips, files);
+        (_page, _settings, _store, _live, _api, _sessions, _clips, _files, _computers) = (page, settings, store, live, api, sessions, clips, files, computers);
         settings.Saved += _ => Update();
         live.Received = ReceivedAsync;
         live.Screen = ScreenAsync;
@@ -213,14 +219,14 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
     private const string ActionField = "action";
 
     /// <summary>
-    /// A phone opens, closes, renames or moves a terminal, or adds an SSH host: only while Settings › Phone allows typing
+    /// A phone opens, closes, renames or moves a terminal, or adds an SSH host: only while Settings › Remote allows typing
     /// (a new terminal runs whatever its shell does). The page does it and says how it went (js/phonemanage.js).
     /// </summary>
     private async Task<JsonObject> ManageAsync(JsonObject message)
     {
         if (!_settings.Current.Phone.AllowTyping && message[ActionField]?.GetValue<string>() != ClearNoteAction)
         {
-            return new JsonObject { [Answer.Ok] = false, [OpField] = ManageOp, [Answer.Error] = "Managing terminals from the phone is off: Settings › Phone › Allow typing." };
+            return new JsonObject { [Answer.Ok] = false, [OpField] = ManageOp, [Answer.Error] = "Managing terminals from the phone is off: Settings › Remote › Allow typing." };
         }
         try
         {
@@ -236,14 +242,14 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
         }
     }
 
-    /// <summary>Keys from a phone, typed into the terminal: only while Settings › Phone allows typing.</summary>
+    /// <summary>Keys from a phone, typed into the terminal: only while Settings › Remote allows typing.</summary>
     private JsonObject Type(JsonObject message)
     {
         var pane = message[Answer.Pane]?.GetValue<string>() ?? "";
         var data = message[DataField]?.GetValue<string>() ?? "";
         if (!_settings.Current.Phone.AllowTyping)
         {
-            return new JsonObject { [Answer.Ok] = false, [Answer.Error] = "Typing from the phone is off: Settings › Phone › Allow typing." };
+            return new JsonObject { [Answer.Ok] = false, [Answer.Error] = "Typing from the phone is off: Settings › Remote › Allow typing." };
         }
         if (data.Length is 0 or > MaxInput || _sessions.Get(pane) is not { } session)
         {
@@ -310,7 +316,7 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
                     using var authority = _store.Authority(Environment.MachineName);
                     using var vapid = _store.Vapid();
                     _server = PhoneServer.Start(settings.Port, Path.Combine(AppPaths.WebRoot, PhoneFolder), _store, _live, authority, WebPush.PublicKey(vapid),
-                        device => AlertAsync(device, TestAlert), _files);
+                        device => AlertAsync(device, TestAlert), _files, ShownComputer);
                     _port = settings.Port;
                 }
                 catch (IOException e)
@@ -322,7 +328,7 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
         PostStatus();
     }
 
-    private void PostStatus() => _page.Post(new ToPage.PhoneStatus(_server is not null, _server?.SetupUrl, _server?.AppUrl, _error, _store.List()));
+    private void PostStatus() => _page.Post(new ToPage.PhoneStatus(_server is not null, _server?.SetupUrl, _server?.AppUrl, _error, _store.List(), Environment.MachineName));
 
     /// <summary>
     /// An alert to the phones that take them (or just one): how many it reached, and why not when none did. A phone

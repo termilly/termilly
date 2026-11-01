@@ -1,6 +1,6 @@
 // @ts-check
 // The Notes tab: the PC's notes on its workspaces and terminals (js/notes.js), each workspace with its terminals under
-// it. A tap opens the note to read; with Settings › Phone › Allow typing on the PC, to edit, pin or remove as well.
+// it. A tap opens the note to read; with Settings › Remote › Allow typing on the PC, to edit, pin or remove as well.
 // Saving goes through the manage op (js/phonemanage.js sets it as the PC's own editor does).
 
 /** @typedef {{ text: string, pinned?: boolean } | null} PhoneNote */
@@ -55,7 +55,7 @@ export function memosTab(app) {
       <textarea class="memo-text" data-memo-text rows="14" spellcheck="false" autocapitalize="sentences" placeholder="e.g. staging DB is read-only until Friday"${typing ? '' : ' readonly'}>${esc(x.note?.text ?? '')}</textarea>
       ${typing ? `<label class="memo-pinbox"><input type="checkbox" data-memo-pin${x.note?.pinned ? ' checked' : ''}> Pin the first line to ${e.kind === KIND.terminal ? 'the terminal’s header' : 'its terminals’ headers'}</label>
       <div class="memo-actions">${x.note?.text ? `<button class="button ghost" data-memo="${MEMO.remove}">Remove</button>` : ''}<span class="grow"></span><button class="button" data-memo="${MEMO.save}">Save</button></div>`
-        : '<p class="muted">To edit notes from this phone, turn on Allow typing in Termilly’s Settings › Phone on the PC.</p>'}</div>`;
+        : '<p class="muted">To edit notes from this phone, turn on Allow typing in Termilly’s Settings › Remote on the PC.</p>'}</div>`;
   }
 
   /**
