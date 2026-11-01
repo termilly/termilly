@@ -7,7 +7,7 @@ import { PAGE, HOST } from './protocol.js';
 import { send, onHost } from './host.js';
 import { state, tabTitle, emit, EVENTS } from './store.js';
 import { ACTION_PLACEHOLDER } from './constants.js';
-import { keysHtml } from './ui.js';
+import { keysHtml, ICONS } from './ui.js';
 import { SEPARATOR, showMenu, closeAll } from './popups.js';
 import { byId } from './dom.js';
 import { noticeDialog } from './dialogs.js';
@@ -16,7 +16,7 @@ import { portsOf } from './gitstatus.js';
 import { sendToAgent } from './together.js';
 import { setMenuExtras } from './termclipboard.js';
 import { linkUnderMouse } from './termlinks.js';
-import { copyToNotepadItem } from './notepad.js';
+import { copyToNotepadItem, copyToNoteItem } from './notepad.js';
 
 /** Keys as the settings keep them: modifiers in this order, then the key, joined by +. */
 const CTRL = 'Ctrl';
@@ -195,11 +195,11 @@ export function pathActions(tab, path, folder) {
  */
 function openableOf(selection, folder) {
   const text = selection?.trim() ?? '';
-  if (URL_ONLY.test(text)) return { label: 'Open link', action: () => send(PAGE.openUrl, { url: text }) };
+  if (URL_ONLY.test(text)) return { label: 'Open link', icon: ICONS.link, action: () => send(PAGE.openUrl, { url: text }) };
   if (!PATH_ONLY.test(text)) return null;
   const path = text.replace(PATH_LINE, '');
   const full = ABSOLUTE_PATH.test(path) ? path : folder && `${folder}/${path}`;
-  return full ? { label: 'Show in the file manager', action: () => send(PAGE.openPath, { path: full }) } : null;
+  return full ? { label: 'Show in the file manager', icon: ICONS.folder, action: () => send(PAGE.openPath, { path: full }) } : null;
 }
 
 /**
@@ -221,11 +221,11 @@ function menuExtras(body) {
   /** @type {import('./popups.js').MenuItem[]} */
   const items = [
     ...(openable ? [openable] : []),
-    ...actions.map(a => ({ label: a.name, hint: a.shortcut ? a.shortcut : undefined, action: () => runAction(a, tab, context) })),
+    ...actions.map(a => ({ label: a.name, icon: ICONS.play, hint: a.shortcut ? a.shortcut : undefined, action: () => runAction(a, tab, context) })),
     ...(context.selection?.trim() ? [{
-      label: 'Ask an agent about this',
+      label: 'Ask an agent about this', icon: ICONS.ask,
       action: () => sendToAgent(/** @type {string} */ (context.selection).slice(0, MAX_AGENT_TEXT), { title: tabTitle(tab) }, tab.view?.header, tab),
-    }, copyToNotepadItem(/** @type {string} */ (context.selection))] : []),
+    }, copyToNotepadItem(/** @type {string} */ (context.selection)), copyToNoteItem(/** @type {string} */ (context.selection))] : []),
   ];
   return items.length ? [SEPARATOR, ...items] : [];
 }

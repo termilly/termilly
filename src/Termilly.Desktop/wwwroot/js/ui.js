@@ -223,6 +223,12 @@ export const ICONS = {
   folder: '<svg viewBox="0 0 16 16"><path d="M2.5 4.5a1 1 0 0 1 1-1h3l1 1h5a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1z"/></svg>',
   bell: '<svg viewBox="0 0 16 16"><path d="M4.5 11V7.5a3.5 3.5 0 0 1 7 0V11l1.5 1.5h-10z"/><path d="M6.5 14a1.5 1.5 0 0 0 3 0"/></svg>',
   copy: '<svg viewBox="0 0 16 16"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 5.5v-2a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2"/></svg>',
+  /** A clipboard with lines. */
+  paste: '<svg viewBox="0 0 16 16"><rect x="3.5" y="3.5" width="9" height="11" rx="1"/><path d="M6.5 2.5h3v2h-3zM5.5 7.5h5M5.5 10.5h3"/></svg>',
+  /** Two links of a chain. */
+  link: '<svg viewBox="0 0 16 16"><path d="M6.5 5.5h-2a3 3 0 0 0 0 6h2M9.5 5.5h2a3 3 0 0 1 0 6h-2M5.5 8.5h5"/></svg>',
+  /** A speech bubble: asking an agent. */
+  ask: '<svg viewBox="0 0 16 16"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/><path d="M5.5 6.5h5M5.5 8.5h3"/></svg>',
   broadcast: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="1.5"/><path d="M5 5a4.2 4.2 0 0 0 0 6M11 5a4.2 4.2 0 0 1 0 6M3 3a7 7 0 0 0 0 10M13 3a7 7 0 0 1 0 10"/></svg>',
   tag: '<svg viewBox="0 0 16 16"><path d="M2.5 2.5h5l6 6-5 5-6-6z"/><circle cx="5.5" cy="5.5" r="1"/></svg>',
   rename: '<svg viewBox="0 0 16 16"><path d="M2.5 12.5H6l6.5-6.5-3-3-7 7z"/></svg>',

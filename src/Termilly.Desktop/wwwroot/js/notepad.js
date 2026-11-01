@@ -32,6 +32,7 @@ const LF = '\n';
 const CRLF = '\r\n';
 /** The menu entry that copies text here, on a terminal's right-click menu. */
 const COPY_LABEL = 'Copy to Notepad';
+const COPY_TO_NOTE = 'Copy to note';
 const NEW_PAGE_LABEL = 'New page';
 /** Its keys while it has the focus; the toggle is Termilly's own shortcut too (main.js). */
 export const NOTEPAD_KEY = Object.freeze({ toggle: 'KeyM', save: 'KeyS', open: 'KeyO' });
@@ -45,16 +46,15 @@ const TOOL_ICONS = Object.freeze({
   save: '<svg viewBox="0 0 16 16"><path d="M2.5 2.5h9l2 2v9h-11z"/><path d="M5.5 2.5v3h5v-3M4.5 13.5v-4h7v4"/></svg>',
   saveAs: '<svg viewBox="0 0 16 16"><path d="M7.5 13.5h-5v-11h9l2 2v3"/><path d="M5.5 2.5v3h5v-3M4.5 13.5v-4h3"/><path d="M9.5 14.5v-2l4-4 2 2-4 4z"/></svg>',
   move: '<svg viewBox="0 0 16 16"><rect x="7.5" y="2.5" width="7" height="11" rx="1"/><path d="M9.5 5.5h3M9.5 8.5h3M9.5 11.5h3M1.5 8.5h4M3.5 6.5l2 2-2 2"/></svg>',
-  links: '<svg viewBox="0 0 16 16"><path d="M6.5 5.5h-2a3 3 0 0 0 0 6h2M9.5 5.5h2a3 3 0 0 1 0 6h-2M5.5 8.5h5"/></svg>',
+  links: ICONS.link,
   wrap: '<svg viewBox="0 0 16 16"><path d="M1.5 3.5h13M1.5 7.5h10a2 2 0 0 1 0 4h-3M1.5 11.5h4"/><path d="M10 9.5l-2 2 2 2"/></svg>',
 });
 /**
- * The page's right-click menu, 16px at a 1px line: scissors (cut), a clipboard with lines (paste), a clipboard with a T
- * (paste as plain text).
+ * The page's right-click menu, 16px at a 1px line: scissors (cut) and a clipboard with a T (paste as plain text); paste
+ * is ICONS.paste.
  */
 const MENU_ICONS = Object.freeze({
   cut: '<svg viewBox="0 0 16 16"><circle cx="4.5" cy="11.5" r="2"/><circle cx="11.5" cy="11.5" r="2"/><path d="M5.7 9.8L11 1.5M10.3 9.8L5 1.5"/></svg>',
-  paste: '<svg viewBox="0 0 16 16"><rect x="3.5" y="3.5" width="9" height="11" rx="1"/><path d="M6.5 2.5h3v2h-3zM5.5 7.5h5M5.5 10.5h3"/></svg>',
   pastePlain: '<svg viewBox="0 0 16 16"><rect x="3.5" y="3.5" width="9" height="11" rx="1"/><path d="M6.5 2.5h3v2h-3zM5.5 7.5h4M7.5 7.5v5"/></svg>',
 });
 /** What its requests to the host start with. */
@@ -291,28 +291,32 @@ function chosenText() {
 }
 
 /**
- * Adds the selection (or the page) to the end of a note; the page keeps it.
+ * Adds text to the end of a note: the page's selection (or the page), or what a terminal's menu gives.
  * @param {string} kind 'workspace' or 'terminal'
  * @param {Workspace | Tab} target
  * @param {string} name what the note is on, for the message
+ * @param {() => string} [textOf]
  */
-function copyToNote(kind, target, name) {
-  const text = chosenText();
-  if (!activePage() || !text.trim()) return showToast({ text: 'Nothing to copy: the page is empty', state: TOAST.failed });
+function copyToNote(kind, target, name, textOf = chosenText) {
+  const text = textOf();
+  if (!text.trim()) return showToast({ text: 'Nothing to copy: there is no text', state: TOAST.failed });
   appendNote(kind, target, text);
   showToast({ text: `Copied to the note on ${name}`, state: TOAST.done });
 }
 
-/** A workspace's note or a terminal's, each workspace with its colour and each terminal with its badge. */
-function noteChoices() {
+/**
+ * A workspace's note or a terminal's, each workspace with its colour and each terminal with its badge.
+ * @param {() => string} [textOf] The text to copy: the page's selection (or the page) by default.
+ */
+function noteChoices(textOf = chosenText) {
   const terminals = [...state.tabs.values()].filter(t => t.wsId && wsById(t.wsId) && !t.virtual);
   return [
     {
-      label: 'Workspace note', icon: ICONS.workspaces, submenu: () => state.workspaces.map(w => ({ label: w.name, icon: `<span class="ws-dot" style="background:${cssColor(w.color)}"></span>`, action: () => copyToNote(NOTE_KIND.workspace, w, w.name) })),
+      label: 'Workspace note', icon: ICONS.workspaces, submenu: () => state.workspaces.map(w => ({ label: w.name, icon: `<span class="ws-dot" style="background:${cssColor(w.color)}"></span>`, action: () => copyToNote(NOTE_KIND.workspace, w, w.name, textOf) })),
     },
     {
       label: 'Terminal note', icon: ICONS.terminal, disabled: !terminals.length,
-      submenu: () => terminals.map(t => ({ label: tabTitle(t), icon: tabBadgeHtml(t), hint: escapeHtml(wsById(t.wsId)?.name ?? ''), action: () => copyToNote(NOTE_KIND.terminal, t, tabTitle(t)) })),
+      submenu: () => terminals.map(t => ({ label: tabTitle(t), icon: tabBadgeHtml(t), hint: escapeHtml(wsById(t.wsId)?.name ?? ''), action: () => copyToNote(NOTE_KIND.terminal, t, tabTitle(t), textOf) })),
     },
   ];
 }
@@ -352,10 +356,10 @@ function pageMenu(e) {
   showMenu([
     { label: 'Cut', icon: MENU_ICONS.cut, hint: 'Ctrl+X', disabled: !selected, action: () => { navigator.clipboard.writeText(selection).catch(() => {}); insert(''); } },
     { label: COPY, icon: ICONS.copy, hint: MENU_KEYS.copy, disabled: !selected, action: () => navigator.clipboard.writeText(selection).catch(() => {}) },
-    { label: PASTE_LABEL, icon: MENU_ICONS.paste, hint: MENU_KEYS.paste, action: () => paste() },
+    { label: PASTE_LABEL, icon: ICONS.paste, hint: MENU_KEYS.paste, action: () => paste() },
     { label: 'Paste as plain text', icon: MENU_ICONS.pastePlain, title: 'Without the colour codes, control characters and trailing spaces a terminal adds', action: () => paste(plainText) },
     SEPARATOR,
-    { label: 'Copy to note', icon: TOOL_ICONS.move, disabled: !area.value.trim(), title: selected ? undefined : 'With nothing selected, the whole page', submenu: noteChoices },
+    { label: COPY_TO_NOTE, icon: TOOL_ICONS.move, disabled: !area.value.trim(), title: selected ? undefined : 'With nothing selected, the whole page', submenu: () => noteChoices() },
   ], { x: e.clientX, y: e.clientY }, {
     // The text box keeps the focus while the menu shows, so its selection stays lit; closing, it gets it back.
     keepFocus: true,
@@ -386,12 +390,19 @@ function copyHere(id, text) {
  * @returns {import('./popups.js').MenuItem}
  */
 export function copyToNotepadItem(text) {
-  if (!pages().length) return { label: COPY_LABEL, action: () => copyHere(null, text) };
+  if (!pages().length) return { label: COPY_LABEL, icon: ICONS.note, action: () => copyHere(null, text) };
   return {
-    label: COPY_LABEL,
+    label: COPY_LABEL, icon: ICONS.note,
     submenu: () => [...pages().map(p => ({ label: p.name, action: () => copyHere(p.id, text) })), SEPARATOR, { label: NEW_PAGE_LABEL, action: () => copyHere(null, text) }],
   };
 }
+
+/**
+ * The right-click menu's Copy to note for some text (a terminal's selection): a workspace's note or a terminal's.
+ * @param {string} text
+ * @returns {import('./popups.js').MenuItem}
+ */
+export const copyToNoteItem = text => ({ label: COPY_TO_NOTE, icon: TOOL_ICONS.move, submenu: () => noteChoices(() => text) });
 
 // ---- Wiring ----
 

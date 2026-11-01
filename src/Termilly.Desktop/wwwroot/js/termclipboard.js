@@ -7,6 +7,7 @@ import { showMenu } from './popups.js';
 import { clipboardAction, CLIPBOARD_ACTION } from './clipboardkeys.js';
 import { underlinedLink } from './termlinks.js';
 import { showToast } from './toasts.js';
+import { ICONS } from './ui.js';
 
 /** The word for pasting, on the menu and on the production question (terminals.js). */
 export const PASTE_LABEL = 'Paste';
@@ -77,8 +78,8 @@ export function wireClipboard(term, body, paste) {
     e.preventDefault();
     if (term.modes.mouseTrackingMode !== NO_MOUSE_TRACKING) return;
     showMenu([
-      { label: COPY_LABEL, hint: MENU_KEYS.copy, disabled: !term.hasSelection(), action: () => copySelection(term) },
-      { label: PASTE_LABEL, hint: MENU_KEYS.paste, action: () => navigator.clipboard.readText().then(text => { if (text) paste(text); }).catch(() => {}) },
+      { label: COPY_LABEL, icon: ICONS.copy, hint: MENU_KEYS.copy, disabled: !term.hasSelection(), action: () => copySelection(term) },
+      { label: PASTE_LABEL, icon: ICONS.paste, hint: MENU_KEYS.paste, action: () => navigator.clipboard.readText().then(text => { if (text) paste(text); }).catch(() => {}) },
       ...menuExtras(body),
     ], { x: e.clientX, y: e.clientY });
   });
