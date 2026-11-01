@@ -91,6 +91,21 @@ const groupedHtml = list => SOURCES
   .map(([label, group]) => `<div class="rm-group">${escapeHtml(label)}</div>${group.map(rowHtml).join('')}`)
   .join('');
 
+/** The section's groups, each folding on its own: other Termilly computers, and the places found here. */
+export const REMOTE_GROUP = Object.freeze({ computers: 'computers', discovered: 'discovered' });
+
+/** @param {string} key */
+export const isGroupFolded = key => !!state.sidebar.remoteGroups?.[key];
+
+/**
+ * A group's heading, a button that folds it, with how many it holds.
+ * @param {string} key
+ * @param {string} label
+ * @param {number} count
+ */
+export const groupHead = (key, label, count) => `<button class="rm-group rm-group-fold" data-rm-group="${key}" title="Show or hide ${escapeHtml(label)}">
+  <span class="pc-chev${isGroupFolded(key) ? '' : ' open'}">${ICONS.chevronRight}</span>${escapeHtml(label)}<span class="rm-count">${count}</span></button>`;
+
 /** What goes above the places: other Termilly computers (remotepc.js). */
 let extraHtml = () => '';
 /**
@@ -117,7 +132,8 @@ export function renderRemote() {
     body.innerHTML = found.length ? groupedHtml(found) : '<div class="rm-empty">Nothing matches.</div>';
     return;
   }
-  body.innerHTML = extra + placesHtml(all);
+  body.innerHTML = extra + (all.length ? groupHead(REMOTE_GROUP.discovered, 'Discovered', all.length)
+    + (isGroupFolded(REMOTE_GROUP.discovered) ? '' : `<div class="rm-sub">${placesHtml(all)}</div>`) : '');
 }
 
 /**
@@ -247,6 +263,14 @@ filter.addEventListener('keydown', e => {
 });
 
 body.addEventListener('click', e => {
+  const fold = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-rm-group]'));
+  if (fold) {
+    const key = /** @type {string} */ (fold.dataset.rmGroup);
+    state.sidebar.remoteGroups = { ...state.sidebar.remoteGroups, [key]: !isGroupFolded(key) };
+    persist();
+    renderRemote();
+    return;
+  }
   if (targetOf(e).closest('[data-rm-all]')) {
     showAll = !showAll;
     renderRemote();

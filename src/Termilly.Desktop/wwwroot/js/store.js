@@ -76,7 +76,8 @@ export const getSetting = path => {
 
 /**
  * The sidebar: open or closed (and what it shows then), its width, and whether its Remote section is folded.
- * @typedef {{ open: boolean, width?: number, remoteFolded?: boolean }} SidebarState
+ * and which of the Remote section's groups (Termilly computers, Discovered) are folded.
+ * @typedef {{ open: boolean, width?: number, remoteFolded?: boolean, remoteGroups?: Record<string, boolean> }} SidebarState
  */
 
 /**

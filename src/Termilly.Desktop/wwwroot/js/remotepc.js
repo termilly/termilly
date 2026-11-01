@@ -13,7 +13,7 @@ import { escapeHtml, ICONS } from './ui.js';
 import { modal, FORM_DIALOG, DIALOG_ERROR, confirmDialog } from './dialogs.js';
 import { showMenu } from './popups.js';
 import { byId, targetOf } from './dom.js';
-import { renderRemote, setRemoteExtra, REMOTE_ID } from './remote.js';
+import { renderRemote, setRemoteExtra, REMOTE_ID, REMOTE_GROUP, groupHead, isGroupFolded } from './remote.js';
 import { showToast, TOAST } from './toasts.js';
 
 /** @typedef {import('./protocol.js').PcView} Pc */
@@ -64,8 +64,9 @@ function computerHtml(pc) {
 }
 
 /** The group in Remote: each computer's tree, and adding one. */
-const groupHtml = () => `<div class="rm-group">Termilly computers</div>${pcs.map(computerHtml).join('')}
-  <button class="rm-row pc-add" data-pc-add>${ICONS.plus}<span class="rm-name">Add a computer</span></button>`;
+const groupHtml = () => groupHead(REMOTE_GROUP.computers, 'Termilly computers', pcs.length) + (isGroupFolded(REMOTE_GROUP.computers) ? ''
+  : `<div class="rm-sub">${pcs.map(computerHtml).join('')}
+  <button class="rm-row pc-add" data-pc-add>${ICONS.plus}<span class="rm-name">Add a computer</span></button></div>`);
 
 setRemoteExtra(groupHtml);
 

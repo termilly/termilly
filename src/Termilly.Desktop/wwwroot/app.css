@@ -1012,6 +1012,12 @@ body[data-sidebar="rail"] .side-rail { opacity: 1; pointer-events: auto; }
 .rm-row.pc-term { padding-left: 44px; }
 .pc-add { color: var(--muted); }
 .pc-add svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.2; }
+/* The section's own groups (Termilly computers, Discovered): headings that fold; what's inside sits a little in. */
+.rm-group-fold { display: flex; gap: 6px; align-items: center; width: 100%; border: 0; background: none; cursor: pointer; text-align: left; }
+.rm-group-fold:hover { color: var(--muted); }
+.rm-group-fold .rm-count { margin-left: auto; font-weight: 500; letter-spacing: 0; }
+.rm-sub { padding-left: 8px; }
+.rm-sub .rm-group { padding-top: 6px; font-size: 10px; }
 .rm-group { padding: 8px 8px 3px; color: var(--faint); font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
 .rm-row {
   display: flex; align-items: center; gap: 7px; width: 100%; padding: 4px 6px; border-radius: 6px;
