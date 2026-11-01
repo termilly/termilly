@@ -10,7 +10,7 @@
 import { PAGE, HOST } from './protocol.js';
 import { send, request, onHost } from './host.js';
 import { state, on, tabTitle, wsById, EVENTS, GROUPS } from './store.js';
-import { focusedTab, restoreFocus } from './panes.js';
+import { focusedTab, restoreFocus, newTab } from './panes.js';
 import { scheduleFit, pasteInto } from './terminals.js';
 import { escapeHtml, formatWhen, ICONS } from './ui.js';
 import { byId, targetOf, dockRight, WORKSPACE_ID, DOCK_GRIP, CLIP_DRAG } from './dom.js';
@@ -21,6 +21,9 @@ import { setClipHooks } from './termclipboard.js';
 import { CLIP_KIND, CLIP_FORM, PRODUCT } from './constants.js';
 import { updateSettings } from './preferences.js';
 import { fileSize } from './pictures.js';
+import { pathActions } from './actions.js';
+import { copyToNotepadItem, copyToNoteItem } from './notepad.js';
+import { parentOf } from './filepaths.js';
 
 /** @typedef {import('./protocol.js').ClipView} Clip */
 
@@ -67,7 +70,7 @@ const TOOL_ICONS = Object.freeze({
 });
 /** What the panel's buttons do (data-clips), and what a clip's own buttons do (data-clip-act). */
 const PANEL_ACTION = Object.freeze({ pause: 'pause', clear: 'clear', close: 'close' });
-const CLIP_ACTION = Object.freeze({ run: 'run', pin: 'pin', forget: 'forget' });
+const CLIP_ACTION = Object.freeze({ open: 'open', run: 'run', pin: 'pin', forget: 'forget' });
 const SEARCH = '[data-clips-search]';
 const LIST = '.clips-list';
 
@@ -226,10 +229,11 @@ const button = byId('clips-button');
 /** A clip's row: its icon (or picture), first line and where and when; its buttons show on hover. @param {Clip} c */
 function rowHtml(c) {
   const mono = c.kind !== CLIP_KIND.text ? ' mono' : '';
+  const open = openOf(c);
   return `<div class="clip-row${c.id === selected ? ' selected' : ''}" data-clip="${escapeHtml(c.id)}" draggable="true" title="${ROW_TIP}">
     <span class="clip-kind k-${escapeHtml(c.kind)}">${iconOf(c)}</span>
     <span class="clip-body"><span class="clip-text${mono}">${escapeHtml(titleOf(c))}</span><span class="clip-meta">${escapeHtml(metaOf(c))}</span></span>
-    <span class="clip-acts">${runnable(c) ? `<button class="pane-btn" data-clip-act="${CLIP_ACTION.run}" title="Paste and run">${ICONS.play}</button>` : ''}
+    <span class="clip-acts">${open ? `<button class="pane-btn" data-clip-act="${CLIP_ACTION.open}" title="${open.label}">${ICONS.launch}</button>` : ''}${runnable(c) ? `<button class="pane-btn" data-clip-act="${CLIP_ACTION.run}" title="Paste and run">${ICONS.play}</button>` : ''}
       ${c.kind === CLIP_KIND.secret ? '' : `<button class="pane-btn${c.pinned ? ' on' : ''}" data-clip-act="${CLIP_ACTION.pin}" title="${c.pinned ? UNPIN_LABEL : 'Pin: kept at the top, never dropped'}">${TOOL_ICONS.pin}</button>`}
       <button class="pane-btn" data-clip-act="${CLIP_ACTION.forget}" title="Delete (Del)">${ICONS.cross}</button></span>
   </div>${c.id === selected ? previewHtml(c) : ''}`;
@@ -316,14 +320,55 @@ export function toggleClips() {
   /** @type {HTMLElement | null} */ (panel.querySelector(SEARCH))?.focus();
 }
 
+/** A path clip's path, without the quotes it may have been copied with. @param {Clip} c */
+const pathOf = c => c.text.trim().replace(/^["']|["']$/g, '');
+
 /**
- * A clip's right-click menu: paste (an image as its path), paste and run, copy, pin, delete.
+ * What opening a clip does: a link in the browser, a folder in the file manager, a file shown there, an image in the
+ * image viewer; null for the rest (and a path that isn't on this PC).
+ * @param {Clip} c
+ * @returns {{ label: string, run: () => void } | null}
+ */
+function openOf(c) {
+  if (c.kind === CLIP_KIND.url) return { label: 'Open in browser', run: () => send(PAGE.openUrl, { url: c.text.trim() }) };
+  if (c.kind === CLIP_KIND.image) return { label: 'Open the image', run: () => send(PAGE.clipOpen, { id: c.id }) };
+  if (c.kind !== CLIP_KIND.path || c.folder == null) return null;
+  return { label: c.folder ? 'Open folder' : 'Show in the file manager', run: () => send(PAGE.openPath, { path: pathOf(c) }) };
+}
+
+/**
+ * What a clip of its kind offers first: open it; a folder or a file's folder, a new terminal there; a command, run in
+ * a new terminal; text, into the Notepad or a note; and the user's actions that take it (Settings › Actions).
+ * @param {Clip} c
+ * @param {string} text the clip's whole text
+ * @returns {import('./popups.js').MenuEntry[]}
+ */
+function kindEntries(c, text) {
+  const open = openOf(c);
+  const folder = c.kind === CLIP_KIND.path && c.folder != null ? (c.folder ? pathOf(c) : parentOf(pathOf(c))) : null;
+  const tab = focusedTab();
+  const entries = [
+    ...(open ? [{ label: open.label, icon: c.kind === CLIP_KIND.url ? ICONS.link : c.kind === CLIP_KIND.image ? ICONS.launch : ICONS.folder, action: open.run }] : []),
+    ...(c.kind === CLIP_KIND.path && c.folder == null ? [{ label: 'Not found on this PC', disabled: true }] : []),
+    ...(folder ? [{ label: c.folder ? 'New terminal here' : 'New terminal in its folder', icon: ICONS.terminal, action: () => newTab({ cwd: folder }) }] : []),
+    ...(c.kind === CLIP_KIND.command ? [{ label: 'Run in a new terminal', icon: ICONS.terminal, action: () => newTab({ command: text.trim() }) }] : []),
+    ...(c.kind === CLIP_KIND.text || c.kind === CLIP_KIND.command ? [copyToNotepadItem(text), copyToNoteItem(text)] : []),
+    ...(tab && c.kind !== CLIP_KIND.image && c.kind !== CLIP_KIND.secret ? pathActions(tab, text.trim(), folder ?? '').map(a => ({ ...a, icon: ICONS.play })) : []),
+  ];
+  return entries.length ? [...entries, SEPARATOR] : [];
+}
+
+/**
+ * A clip's right-click menu: what its kind offers (kindEntries), then paste (an image as its path), paste and run,
+ * copy, pin, delete. A long clip's whole text is asked for first, so what it hands on is all of it.
  * @param {Clip} c
  * @param {MouseEvent} e
  */
-function clipMenu(c, e) {
+async function clipMenu(c, e) {
   const isImage = c.kind === CLIP_KIND.image;
+  const text = c.chars > c.text.length && c.kind !== CLIP_KIND.secret ? await take(c, CLIP_FORM.text) ?? c.text : c.text;
   showMenu([
+    ...kindEntries(c, text),
     { label: isImage ? 'Paste the file path' : 'Paste', icon: ICONS.paste, action: () => pasteClip(c) },
     ...(runnable(c) ? [{ label: 'Paste and run', icon: ICONS.play, action: () => pasteClip(c, focusedTab(), true) }] : []),
     { label: isImage ? 'Copy the image' : 'Copy', icon: ICONS.copy, action: () => copyClip(c) },
@@ -335,7 +380,8 @@ function clipMenu(c, e) {
 
 /** @param {string} act @param {Clip} c */
 function clipAct(act, c) {
-  if (act === CLIP_ACTION.run) pasteClip(c, focusedTab(), true);
+  if (act === CLIP_ACTION.open) openOf(c)?.run();
+  else if (act === CLIP_ACTION.run) pasteClip(c, focusedTab(), true);
   else if (act === CLIP_ACTION.pin) send(PAGE.clipPin, { id: c.id, pinned: !c.pinned });
   else if (act === CLIP_ACTION.forget) send(PAGE.clipForget, { id: c.id });
 }

@@ -137,6 +137,18 @@ public sealed class SmartClipTests : IDisposable
     }
 
     [Fact]
+    public void A_path_says_whether_it_is_a_folder_or_a_file_or_not_here()
+    {
+        var store = Store();
+        var file = Path.Combine(_dir, "notes.txt");
+        File.WriteAllText(file, "x");
+        store.AddText(_dir, Here, null, _now);
+        store.AddText(file, Here, null, _now + 1);
+        store.AddText(@"Q:\nowhere\at\all.txt", Here, null, _now + 2);
+        Assert.Equal([null, false, true], store.Views().Select(v => v.Folder));
+    }
+
+    [Fact]
     public void Clear_forgets_all_but_the_pinned()
     {
         var store = Store();

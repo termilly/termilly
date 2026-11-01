@@ -34,6 +34,12 @@ internal static partial class FromPage
         public static string Type => "clip:clear";
     }
 
+    /// <summary>An image clip opened in the system's image viewer (saved as a PNG file first).</summary>
+    internal sealed record ClipOpen(string Id = "") : IPageMessage
+    {
+        public static string Type => "clip:open";
+    }
+
     /// <summary>
     /// What a clip pastes, <see cref="As"/> one of <see cref="ClipForms"/>: its text, an image's file path, or an image
     /// as a data: URL (to show it, or to put it back on the clipboard).
@@ -61,9 +67,10 @@ internal static partial class ToPage
 
 /// <summary>
 /// A clip as the page shows it: a secret's text masked, long text cut short (<see cref="Lines"/> and <see cref="Chars"/>
-/// count all of it), an image's size; <see cref="At"/> in Unix milliseconds.
+/// count all of it), an image's size; <see cref="At"/> in Unix milliseconds. A path's <see cref="Folder"/>: true for a
+/// folder, false for a file, null when it wasn't found on this PC.
 /// </summary>
-internal sealed record ClipView(string Id, string Kind, string Text, int Lines, int Chars, string Source, long At, bool Pinned, int Width, int Height, long Bytes);
+internal sealed record ClipView(string Id, string Kind, string Text, int Lines, int Chars, string Source, long At, bool Pinned, int Width, int Height, long Bytes, bool? Folder);
 
 /// <summary>What a clip is taken as (<see cref="FromPage.ClipTake"/>).</summary>
 internal static class ClipForms

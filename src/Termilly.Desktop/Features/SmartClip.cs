@@ -11,7 +11,7 @@ namespace Termilly.Desktop.Features;
 /// paste: its text, or an image as a file or a picture. Secrets go after a while; the clips are written a moment after
 /// they change.
 /// </summary>
-internal sealed class SmartClipHandler(ClipStore store, PageChannel page, ISettingsStore settings, IEnumerable<IClipboardWatch> watches)
+internal sealed class SmartClipHandler(ClipStore store, PageChannel page, ISettingsStore settings, IDesktopShell desktop, IEnumerable<IClipboardWatch> watches)
     : IMessageHandler, IStartable, IDisposable
 {
     private static readonly TimeSpan ExpireEvery = TimeSpan.FromMinutes(1);
@@ -45,6 +45,13 @@ internal sealed class SmartClipHandler(ClipStore store, PageChannel page, ISetti
         router.On<FromPage.ClipForget>(m => Changed(store.Forget(m.Id)));
         router.On<FromPage.ClipClear>(_ => Changed(store.Clear()));
         router.On<FromPage.ClipTake>(m => page.Post(Take(m)));
+        router.On<FromPage.ClipOpen>(m =>
+        {
+            if (Take(new FromPage.ClipTake(null, m.Id, ClipForms.Path)) is { Text: { } file, Error: null })
+            {
+                desktop.OpenFile(file);
+            }
+        });
     }
 
     public void Start()

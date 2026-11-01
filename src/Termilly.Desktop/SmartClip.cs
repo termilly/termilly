@@ -22,8 +22,11 @@ internal static class ClipKinds
     public static readonly IReadOnlyList<string> All = [Text, Command, Path, Url, Image, Secret];
 }
 
-/// <summary>A clip: its text (none for an image), where it was copied, when (Unix ms), and an image's size and hash.</summary>
-internal sealed record Clip(string Id, string Kind, string Text, string Source, long At, bool Pinned = false, int Width = 0, int Height = 0, long Bytes = 0, string? Hash = null);
+/// <summary>
+/// A clip: its text (none for an image), where it was copied, when (Unix ms), an image's size and hash, and whether a
+/// path is a folder (true), a file (false) or wasn't found (null), as it was when copied.
+/// </summary>
+internal sealed record Clip(string Id, string Kind, string Text, string Source, long At, bool Pinned = false, int Width = 0, int Height = 0, long Bytes = 0, string? Hash = null, bool? Folder = null);
 
 /// <summary>
 /// Smart Clip's clips, newest first: text and images copied in Termilly or (on Windows) anywhere, with the same copy
@@ -90,7 +93,7 @@ internal sealed partial class ClipStore(Vault vault)
             {
                 return MoveToTop(same, source, classified, now);
             }
-            _clips.Insert(0, new Clip(NewId(), classified, text, source, now));
+            _clips.Insert(0, new Clip(NewId(), classified, text, source, now, Folder: classified == ClipKinds.Path ? IsFolder(text) : null));
             Trim();
             return true;
         }
@@ -189,7 +192,7 @@ internal sealed partial class ClipStore(Vault vault)
     {
         var text = c.Kind == ClipKinds.Secret ? SecretRedactor.Redact(c.Text) : c.Text;
         var lines = c.Text.Length == 0 ? 0 : c.Text.Count(ch => ch == '\n') + 1;
-        return new ClipView(c.Id, c.Kind, text.Length > ShownChars ? text[..ShownChars] : text, lines, c.Text.Length, c.Source, c.At, c.Pinned, c.Width, c.Height, c.Bytes);
+        return new ClipView(c.Id, c.Kind, text.Length > ShownChars ? text[..ShownChars] : text, lines, c.Text.Length, c.Source, c.At, c.Pinned, c.Width, c.Height, c.Bytes, c.Folder);
     }
 
     /// <summary>A clip's whole text, a secret's too; null for an image or a clip that's gone.</summary>
@@ -251,6 +254,20 @@ internal sealed partial class ClipStore(Vault vault)
     // C:\ or C:/, \\server\share, or a Unix path of two parts or more (so "/help" stays text).
     [GeneratedRegex(@"^(?:[A-Za-z]:[\\/]|\\\\[^\\\s]+\\|(?:~|\.{1,2})?/[^\s/]+/)")]
     private static partial Regex FilePath();
+
+    /// <summary>
+    /// A path on this PC: a folder, a file, or null when it isn't there. A network path (\\server) isn't looked at: a
+    /// server that's away would hold the copy up.
+    /// </summary>
+    public static bool? IsFolder(string text)
+    {
+        var path = Environment.ExpandEnvironmentVariables(text.Trim().Trim('"', '\''));
+        if (path.StartsWith(@"\\", StringComparison.Ordinal))
+        {
+            return null;
+        }
+        return Directory.Exists(path) ? true : File.Exists(path) ? false : null;
+    }
 
     private static string NewId() => Guid.NewGuid().ToString("N")[..IdLength];
 
