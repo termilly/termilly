@@ -85,7 +85,7 @@ const resultsEl = byId('pal-results');
 const previewEl = byId('pal-preview');
 
 /** The kinds of result, in the order the palette lists their groups. */
-const KIND = Object.freeze({ open: 'open', closed: 'closed', workspaces: 'workspaces', commands: 'commands', go: 'go', ran: 'ran', files: 'files' });
+const KIND = Object.freeze({ files: 'files', open: 'open', closed: 'closed', workspaces: 'workspaces', commands: 'commands', go: 'go', ran: 'ran' });
 /** The palette's views (its filter chips): everything, or one kind of result. */
 export const PALETTE_VIEW = Object.freeze({ all: 'all', ...KIND });
 /** The kinds of place "Go to" offers, and its row that makes a new workspace. */
@@ -123,6 +123,8 @@ const OWN_VIEWS = { [PALETTE_VIEW.ran]: 'Command history', [PALETTE_VIEW.go]: 'G
 const LIMITS = { open: 40, closed: 40, workspaces: 12, commands: 12, go: 60, ran: 200, files: 300 };
 /** How many of a terminal's matching lines are listed under it (the newest); the preview steps through the rest. */
 const MOST_HITS = 50;
+/** How many files the All view lists (the Files chip lists them all). */
+const FILES_IN_ALL = 8;
 
 /** @type {string} */
 let filter = PALETTE_VIEW.all;
@@ -441,26 +443,29 @@ function closedMatches(q) {
 }
 
 /** The Files view's results: what the open terminals printed (drawn again as the paths in it are looked up). */
-const filesFound = () => fileMatches([...state.tabs.values()].filter(t => !t.virtual).map(tab => ({ tab, lines: lineCache.get(tab.id) ?? [] })),
-  input.value, () => { if (!layer.hidden && filter === PALETTE_VIEW.files) run(); });
+/** @param {string} text */
+const filesFound = text => fileMatches([...state.tabs.values()].filter(t => !t.virtual).map(tab => ({ tab, lines: lineCache.get(tab.id) ?? [] })),
+  text, () => { if (!layer.hidden && (filter === PALETTE_VIEW.files || filter === PALETTE_VIEW.all)) run(); });
 
 /** @returns {{ q: Query, groups: Record<string, PaletteResult[]> }} */
 function search() {
   if (filter === PALETTE_VIEW.go) return { q: parseQuery(''), groups: { go: goPlaces(input.value) } };
   if (filter === PALETTE_VIEW.ran) return { q: parseQuery(''), groups: { ran: ranResults(input.value) } };
-  if (filter === PALETTE_VIEW.files) return { q: parseQuery(''), groups: { files: filesFound() } };
+  if (filter === PALETTE_VIEW.files) return { q: parseQuery(''), groups: { files: filesFound(input.value) } };
   const q = parseQuery(input.value);
   searchEarlier(q.text);
   /**
    * @type {{ open: OpenResult[], closed: ClosedResult[], workspaces: WorkspaceResult[],
-   *   commands: CommandResult[] }}
+   *   commands: CommandResult[], files: import('./palettefiles.js').FileResult[] }}
    */
-  const groups = { open: [], closed: [], workspaces: [], commands: [] };
+  const groups = { open: [], closed: [], workspaces: [], commands: [], files: [] };
   /** @param {string} kind */
   const want = kind => filter === PALETTE_VIEW.all || filter === kind;
 
   if (want(KIND.open)) groups.open = openMatches(q);
   if (want(KIND.closed)) groups.closed = closedMatches(q);
+  // The files, folders and web addresses printed, when there's text to look for (the Files chip lists them all).
+  if (filter === PALETTE_VIEW.all && q.text && !q.tag && !q.ws && !q.shell) groups.files = filesFound(q.text);
 
   const hasFilter = q.tag || q.ws || q.shell;
   if (want(KIND.workspaces) && !hasFilter) {
@@ -636,7 +641,7 @@ function run() {
   for (const kind of Object.values(KIND)) {
     const list = groups[kind] ?? [];
     if (!list.length) continue;
-    const shown = list.slice(0, LIMITS[kind]);
+    const shown = list.slice(0, kind === KIND.files && filter === PALETTE_VIEW.all ? FILES_IN_ALL : LIMITS[kind]);
     html += `<div class="res-group">${GROUP_TITLES[kind]}<span>${list.length}</span></div>`;
     for (const r of shown) {
       html += rowHtml(r, results.length, q);
