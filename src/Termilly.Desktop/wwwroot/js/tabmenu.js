@@ -61,7 +61,7 @@ export function openTabMenu(tab, at, from = RENAME_IN.header) {
     ...toolItems(tab),
     ...commandItems(tab),
     ...togetherMenuItems(tab),
-    { label: 'Run snippet', icon: ICONS.terminal, action: () => openSnippets() },
+    { label: 'Run snippet', icon: ICONS.snippet, action: () => openSnippets() },
     ...snippetItems(tab),
     alertItem(tab),
     broadcastItem(tab),
@@ -84,7 +84,7 @@ export function openTabMenu(tab, at, from = RENAME_IN.header) {
  */
 function snippetItems(tab) {
   const command = tab.lastCommand?.command;
-  return command ? [{ label: 'Save the last command as a snippet', action: () => saveAsSnippet(command) }] : [];
+  return command ? [{ label: 'Save the last command as a snippet', icon: ICONS.snippet, action: () => saveAsSnippet(command) }] : [];
 }
 
 /**

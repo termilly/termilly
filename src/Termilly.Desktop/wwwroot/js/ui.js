@@ -259,6 +259,10 @@ export const ICONS = {
   moon: '<svg viewBox="0 0 16 16"><path d="M13 9.6A5.5 5.5 0 0 1 6.4 3 5.5 5.5 0 1 0 13 9.6z"/></svg>',
   /** A speech bubble with a prompt's chevron: what you asked an agent. */
   prompts: '<svg viewBox="0 0 16 16"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/><path d="M5.5 5.5l2 1.5-2 1.5M8.5 8.5h2"/></svg>',
+  /** Braces: a snippet (as on termilly.com). */
+  snippet: '<svg viewBox="0 0 16 16"><path d="M6.5 2.5h-1a1 1 0 0 0-1 1v3L3 8l1.5 1.5v3a1 1 0 0 0 1 1h1M9.5 2.5h1a1 1 0 0 1 1 1v3L13 8l-1.5 1.5v3a1 1 0 0 1-1 1h-1"/></svg>',
+  /** A lightning bolt: an action (as on termilly.com). */
+  action: '<svg viewBox="0 0 16 16"><path d="M9 1.5l-6 8h4.5l-1 5 6.5-8H8.5z"/></svg>',
   note: '<svg viewBox="0 0 16 16"><path d="M3.5 2.5h6l3 3v8h-9z"/><path d="M9.5 2.5v3h3M5.5 8.5h5M5.5 10.5h3.5"/></svg>',
   // A play triangle: hear a sound.
   play: '<svg viewBox="0 0 16 16"><path d="M5.5 3.5v9l7-4.5z"/></svg>',

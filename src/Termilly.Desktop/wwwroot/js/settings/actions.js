@@ -134,7 +134,7 @@ addCloseCheck(async () => {
 /** @type {import('./page.js').Section} */
 const ACTIONS = {
   id: SECTION.actions,
-  label: 'Actions', icon: ICONS.launch,
+  label: 'Actions', icon: ICONS.action,
   // Above the list, outside what scrolls: Add on the left, Restore on the right.
   tools: () => `<button class="btn small" data-action="addAction">${ICONS.plus}<span>Add action</span></button>
     <button class="btn small" data-action="resetActions">Restore Termilly’s actions</button>`,

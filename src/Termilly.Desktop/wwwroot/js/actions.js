@@ -181,7 +181,7 @@ function menuExtras(body) {
   /** @type {import('./popups.js').MenuItem[]} */
   const items = [
     ...(openable ? [openable] : []),
-    ...actions.map(a => ({ label: a.name, icon: ICONS.play, hint: a.shortcut ? a.shortcut : undefined, action: () => runAction(a, tab, context) })),
+    ...actions.map(a => ({ label: a.name, icon: ICONS.action, hint: a.shortcut ? a.shortcut : undefined, action: () => runAction(a, tab, context) })),
     ...(context.selection?.trim() ? [{
       label: 'Ask an agent about this', icon: ICONS.ask,
       action: () => sendToAgent(/** @type {string} */ (context.selection).slice(0, MAX_AGENT_TEXT), { title: tabTitle(tab) }, tab.view?.header, tab),
