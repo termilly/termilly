@@ -8,7 +8,7 @@
 
 import { PAGE, HOST } from './protocol.js';
 import { send, request, onHost } from './host.js';
-import { state, on, tabTitle, wsById, persist, EVENTS, GROUPS } from './store.js';
+import { state, on, emit, tabTitle, wsById, persist, EVENTS, GROUPS } from './store.js';
 import { focusedTab, restoreFocus, newTab } from './panes.js';
 import { scheduleFit, pasteInto } from './terminals.js';
 import { escapeHtml, formatWhen, ICONS } from './ui.js';
@@ -26,6 +26,9 @@ import { parentOf } from './filepaths.js';
 
 /** @typedef {import('./protocol.js').ClipView} Clip */
 
+/** How many clips a phone gets (pinned first), and how much of each one's first line. */
+const PHONE_COUNT = 20;
+const PHONE_CHARS = 160;
 /** How many of the newest clips the right-click menu offers, each with its digit. */
 const MENU_COUNT = 6;
 /** The longest label a clip gets in a menu, and the most of its text a tooltip shows. */
@@ -44,6 +47,7 @@ const KEYS_TEXT = 'Ctrl+Shift+X';
 const OPEN_LABEL = 'Open Smart Clip';
 const CLEAR_LABEL = 'Clear history';
 const UNPIN_LABEL = 'Unpin';
+const PINNED_LABEL = 'Pinned';
 /** A clip's age under a minute. */
 const JUST_NOW = 'now';
 
@@ -153,6 +157,22 @@ async function copyClip(clip) {
 
 /** @param {string} id */
 const clipById = id => clips.find(c => c.id === id);
+
+/**
+ * The clips a phone may paste (js/phone.js): text only, pinned first, then the newest; each one's first line, a
+ * secret's masked. The phone asks the PC to paste one by its id, so no clip's whole text goes to it.
+ */
+export const clipsForPhone = () => [...clips.filter(c => c.pinned), ...clips.filter(c => !c.pinned)]
+  .filter(c => c.kind !== CLIP_KIND.image).slice(0, PHONE_COUNT)
+  .map(c => ({ id: c.id, kind: c.kind, text: titleOf(c).slice(0, PHONE_CHARS), lines: c.lines, pinned: c.pinned }));
+
+// A phone pastes a clip (Features/Phone.cs checked it may): its whole text, pasted as the terminal's own Paste does.
+onHost(HOST.phoneClip, async m => {
+  const tab = state.tabs.get(m.pane);
+  const c = clipById(m.id);
+  const text = tab?.view && c ? await take(c, CLIP_FORM.text) : null;
+  if (text && tab?.view) tab.view.term.paste(text);
+});
 
 /** @param {Clip} clip */
 const runnable = clip => (clip.kind === CLIP_KIND.text || clip.kind === CLIP_KIND.command) && clip.lines === 1;
@@ -277,7 +297,7 @@ function listHtml() {
   const list = shown();
   const texts = list.filter(c => c.kind !== CLIP_KIND.image);
   const images = list.filter(c => c.kind === CLIP_KIND.image);
-  const html = groupHtml('Pinned', texts.filter(c => c.pinned).map(rowHtml).join(''))
+  const html = groupHtml(PINNED_LABEL, texts.filter(c => c.pinned).map(rowHtml).join(''))
     + groupHtml('Recent', texts.filter(c => !c.pinned).map(rowHtml).join(''))
     + groupHtml('Images', images.length ? `<div class="clips-grid">${images.map(pictureHtml).join('')}</div>` : '');
   if (html) return html;
@@ -520,6 +540,7 @@ onHost(HOST.clipClips, m => {
   const before = expanded.size;
   for (const id of expanded) if (!clipById(id)) expanded.delete(id);
   if (expanded.size !== before) keepExpanded();
+  emit(EVENTS.clips);
   render();
 });
 

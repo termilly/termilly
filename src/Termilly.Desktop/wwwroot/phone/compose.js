@@ -1,7 +1,7 @@
 // @ts-check
 // The box under a Claude terminal for writing to Claude, as Settings › Message box says:
 // - Messages (the default): a round field with the microphone in it; the send arrow shows once there's something to
-//   send; a + holds paste, snippets, Claude's commands and changing its mode. The key bar stays under it while writing.
+//   send; a + holds paste, Smart Clip, snippets, Claude's commands and changing its mode. The key bar stays under it while writing.
 // - One bar: the key bar and the field share one row, with a switch between keys and a message to Claude.
 // Other terminals get the key bar alone. terminal.js sends what's written (the words, then Enter).
 
@@ -17,15 +17,15 @@ const C = Object.freeze({ plus: 'plus', mic: 'mic', mode: 'mode', more: 'more', 
 /** Empties Claude Code's own box (what was typed in the terminal): Ctrl+U clears a line, Backspace joins the one
  * above (the cursor is at the end); in an empty box they do nothing. Stop sends it too (terminal.js). */
 export const CLEAR_INPUT = '\x15' + '\x7f\x15'.repeat(20);
-/** Under a Claude terminal, Paste and Snippets are in the +, not on the key bar. */
-const IN_PLUS = ['paste', 'snip'];
+/** Under a Claude terminal, Paste, Smart Clip and Snippets are in the +, not on the key bar. */
+const IN_PLUS = ['paste', 'clips', 'snip'];
 /** Claude's commands the + offers: they go in the field, to send or change first. */
 const COMMANDS = ['/compact', '/clear'];
 /** Shift+Tab: Claude Code's next mode (accept edits, plan). */
 const SHIFT_TAB = '\x1b[Z';
 /** One bar's keys in keys mode, and the ones under its ⋯ (terminal.js BAR). */
 const FEW_KEYS = ['esc', 'tab', 'ctrl', 'up', 'down', 'bksp', 'enter'];
-const MORE_KEYS = ['left', 'right', 'paste', 'snip'];
+const MORE_KEYS = ['left', 'right', 'paste', 'clips', 'snip'];
 /** Its send buttons (Messages' arrow, One bar's). */
 const SEND = '.m-go, .b-go';
 /** The key bar under it. */
@@ -176,7 +176,7 @@ export function composer(view, app) {
     switch (el.dataset.c) {
       case C.plus:
         if (view.querySelector(PART.menu)) closeMenu();
-        else menu(`<button data-c="${C.clear}">Clear text from terminal</button><button data-c="${C.pasteIn}">Paste</button><button data-key="snip">Snippets</button>${COMMANDS.map(c => `<button data-c="${C.fill}" data-text="${c}">${c}</button>`).join('')}<button data-c="${C.shiftTab}">Change mode (Shift+Tab)</button>`);
+        else menu(`<button data-c="${C.clear}">Clear text from terminal</button><button data-c="${C.pasteIn}">Paste</button><button data-key="clips">Paste from Smart Clip</button><button data-key="snip">Snippets</button>${COMMANDS.map(c => `<button data-c="${C.fill}" data-text="${c}">${c}</button>`).join('')}<button data-c="${C.shiftTab}">Change mode (Shift+Tab)</button>`);
         break;
       case C.more:
         if (view.querySelector(PART.menu)) closeMenu();

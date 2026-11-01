@@ -47,13 +47,14 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
     private readonly PhoneLive _live;
     private readonly PageApi _api;
     private readonly TerminalSessions _sessions;
+    private readonly ClipStore _clips;
     private PhoneServer? _server;
     private int _port;
     private string? _error;
 
-    public PhoneHandler(PageChannel page, ISettingsStore settings, PhoneStore store, PhoneLive live, PageApi api, TerminalSessions sessions)
+    public PhoneHandler(PageChannel page, ISettingsStore settings, PhoneStore store, PhoneLive live, PageApi api, TerminalSessions sessions, ClipStore clips)
     {
-        (_page, _settings, _store, _live, _api, _sessions) = (page, settings, store, live, api, sessions);
+        (_page, _settings, _store, _live, _api, _sessions, _clips) = (page, settings, store, live, api, sessions, clips);
         settings.Saved += _ => Update();
         live.Received = ReceivedAsync;
         live.Screen = ScreenAsync;
@@ -176,6 +177,7 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
     private Task<JsonObject> ReceivedAsync(string device, JsonObject message) => message[OpField]?.GetValue<string>() switch
     {
         InputOp => Task.FromResult(Type(message)),
+        ClipOp => Task.FromResult(Paste(message)),
         ManageOp => ManageAsync(message),
         _ => AnswerAsync(device, message),
     };
@@ -225,6 +227,30 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
             _page.Post(new ToPage.PhoneTyped(pane, data)); // Enter, Esc or a number may answer the agent
         }
         return new JsonObject { [Answer.Ok] = true, [OpField] = InputOp };
+    }
+
+    private const string ClipOp = "clip";
+    private const string IdField = "id";
+
+    /// <summary>
+    /// A phone pastes a Smart Clip clip into a terminal: only while typing and clips are allowed, and only text (the
+    /// page pastes it, as its own Paste would, so a program asking for pasted text gets it marked as such).
+    /// </summary>
+    private JsonObject Paste(JsonObject message)
+    {
+        var pane = message[Answer.Pane]?.GetValue<string>() ?? "";
+        var id = message[IdField]?.GetValue<string>() ?? "";
+        var phone = _settings.Current.Phone;
+        if (!phone.AllowTyping || !phone.Clips)
+        {
+            return new JsonObject { [Answer.Ok] = false, [OpField] = ClipOp, [Answer.Error] = "Pasting from the phone is off: Settings › Phone." };
+        }
+        if (_sessions.Get(pane) is null || _clips.TextOf(id) is null)
+        {
+            return new JsonObject { [Answer.Ok] = false, [OpField] = ClipOp, [Answer.Error] = "That terminal or clip is gone." };
+        }
+        _page.Post(new ToPage.PhoneClip(pane, id));
+        return new JsonObject { [Answer.Ok] = true, [OpField] = ClipOp };
     }
 
     /// <summary>The longest reply a phone may type to an agent.</summary>

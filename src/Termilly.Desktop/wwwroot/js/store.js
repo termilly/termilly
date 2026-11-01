@@ -174,6 +174,8 @@ export const EVENTS = Object.freeze({
   panelDrop: 'panelDrop',
   /** A clip dragged from Smart Clip onto a terminal: { tab, id } (js/smartclip.js pastes it). */
   clipDrop: 'clipDrop',
+  /** Smart Clip's clips changed (js/smartclip.js): the phones get the new list (js/phone.js). */
+  clips: 'clips',
   openChangedFiles: 'openChangedFiles',
   openGit: 'openGit',
   openSettings: 'openSettings',

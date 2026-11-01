@@ -21,7 +21,7 @@ const app = /** @type {HTMLElement} */ (document.getElementById('app'));
 /** @typedef {{ kind: string, tool: string | null, target: string | null, text: string, at: number, always?: boolean }} Waiting */
 /** A terminal as the PC describes it (js/phone.js). */
 /** @typedef {{ id: string, ws: string, title: string, icon: string, badge: string, agent: string | null, activity: string | null, percent: number | null, hint: string | null, line: string | null, waiting: Waiting | null, production: boolean, cols: number | null, rows: number | null }} Terminal */
-/** @typedef {import('./theme.js').Themed & { typing?: boolean, snippets?: import('./snippets.js').PhoneSnippet[], notes?: import('./tabs.js').Note[], workspaces: { id: string, name: string, color: string, cwd: string | null }[], terminals: Terminal[], places?: import('./manage.js').Place[], activeWs?: string }} Snapshot */
+/** @typedef {import('./theme.js').Themed & { typing?: boolean, snippets?: import('./snippets.js').PhoneSnippet[], clips?: import('./clips.js').PhoneClip[], notes?: import('./tabs.js').Note[], workspaces: { id: string, name: string, color: string, cwd: string | null }[], terminals: Terminal[], places?: import('./manage.js').Place[], activeWs?: string }} Snapshot */
 
 /** The PC's API for the app (PhoneServer, PhoneAppApi). */
 const API = Object.freeze({ me: '/api/me', pair: '/api/pair', forget: '/api/forget', push: '/api/push', pushOff: '/api/push/off', pushTest: '/api/push/test', live: '/api/live' });
@@ -573,6 +573,7 @@ function restyle() {
 
 const terminalShown = terminalView({
   snippets: () => snap.snippets ?? [],
+  clips: () => snap.clips ?? [],
   send: message => { if (live?.readyState === OPEN) live.send(JSON.stringify(message)); },
   toast,
   answer: id => openSheet(id),

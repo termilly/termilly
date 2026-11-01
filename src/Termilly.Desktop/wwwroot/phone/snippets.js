@@ -3,6 +3,9 @@
 // the phone is allowed), the global ones and the terminal's workspace's. One with {{placeholders}} asks for their
 // values first; then the command is typed, with Enter unless the snippet says not to.
 
+/** A sheet over the terminal view (Smart Clip's too, clips.js). */
+export const SHEET_CLASS = 'tv-sheet';
+
 /** {{name}} or {{name=default}} in a snippet's command (as js/snippets.js reads them). */
 const PLACEHOLDER = /\{\{\s*([A-Za-z_][\w.-]*)\s*(?:=([^}]*))?\}\}/g;
 
@@ -32,7 +35,7 @@ const fill = (command, values) => command.replace(PLACEHOLDER, (_, name, def) =>
  */
 export function snippetSheet(view, terminal) {
   const sheet = document.createElement('div');
-  sheet.className = 'tv-sheet';
+  sheet.className = SHEET_CLASS;
   sheet.hidden = true;
   /** @type {PhoneSnippet[]} */
   let shown = [];

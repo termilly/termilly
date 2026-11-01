@@ -234,6 +234,11 @@ internal sealed record PhoneSettings
     public bool HideDetails { get; init; }
     /// <summary>A paired phone may type into a terminal it shows (answers to an agent are always allowed).</summary>
     public bool AllowTyping { get; init; }
+    /// <summary>
+    /// While typing is allowed, a phone may paste Smart Clip's text clips: it gets their first lines (secrets masked) and
+    /// asks the PC to paste one, so a clip's text never goes to the phone.
+    /// </summary>
+    public bool Clips { get; init; } = true;
 
     public PhoneSettings Normalize() => this with
     {

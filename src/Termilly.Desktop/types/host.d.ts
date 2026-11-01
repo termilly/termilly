@@ -129,6 +129,8 @@ interface PhoneSettings {
   hideDetails: boolean;
   /** A paired phone may type into a terminal it shows (answers to an agent are always allowed). */
   allowTyping: boolean;
+  /** While typing is allowed, a phone may paste Smart Clip's text clips: it gets their first lines (secrets masked) and asks the PC to paste one, so a clip's text never goes to the phone. */
+  clips: boolean;
 }
 
 interface NotificationSettings {

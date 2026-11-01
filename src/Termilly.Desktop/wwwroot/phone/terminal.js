@@ -10,6 +10,7 @@
 
 import { SCREEN, terminalTouch } from './gestures.js';
 import { snippetSheet, asTyped } from './snippets.js';
+import { clipSheet } from './clips.js';
 import { composer, COMPOSE, CLEAR_INPUT } from './compose.js';
 
 /** What the key bar sends (data-key), as a terminal reads it. */
@@ -22,10 +23,12 @@ const CTRL_BACKSPACE = '\x08';
 const REPEAT = Object.freeze({ after: 450, every: 70 });
 const BACKSPACE = 'bksp';
 /** The key bar's buttons, in order: what each sends and shows. Ctrl and Paste are handled apart. */
-const BAR = [['esc', 'esc'], ['tab', 'tab'], ['ctrl', 'ctrl'], ['up', '↑'], ['down', '↓'], ['left', '←'], ['right', '→'], ['bksp', '⌫'], ['enter', '⏎'], ['paste', 'paste'], ['snip', 'snip']];
+const BAR = [['esc', 'esc'], ['tab', 'tab'], ['ctrl', 'ctrl'], ['up', '↑'], ['down', '↓'], ['left', '←'], ['right', '→'], ['bksp', '⌫'], ['enter', '⏎'], ['paste', 'paste'], ['clips', 'clips'], ['snip', 'snip']];
 const CTRL = 'ctrl';
 const PASTE = 'paste';
 const SNIP = 'snip';
+/** Smart Clip's sheet: the PC's text clips to paste (clips.js). */
+const CLIPS = 'clips';
 /** A message to Claude goes in, then Enter after this (as the PC's own send does, api.js); one with lines is pasted. */
 const ENTER_AFTER_MS = 200;
 const PASTED = Object.freeze({ start: '\x1b[200~', end: '\x1b[201~' });
@@ -43,7 +46,7 @@ const LEAST = Object.freeze({ cols: 20, rows: 4 });
 /** The size goes to the PC once it has settled this long (pinching changes it many times a second). */
 const SIZE_AFTER_MS = 150;
 /** What the view asks of the live connection, and its header's buttons (data-tv). */
-const OP = Object.freeze({ watch: 'watch', unwatch: 'unwatch', input: 'input', size: 'size' });
+const OP = Object.freeze({ watch: 'watch', unwatch: 'unwatch', input: 'input', size: 'size', clip: 'clip' });
 const TV = Object.freeze({ back: 'back', answer: 'answer', stop: 'stop' });
 /** Claude Code's (and Codex's) interrupt, as the PC's stop button sends it (js/agentline.js stopAgent). */
 const STOP = '\x1b';
@@ -108,7 +111,7 @@ const esc = text => String(text ?? '').replace(/[&<>"']/g, c => `&#${c.charCodeA
 /**
  * The terminal view, over the home screen while it's open.
  * @param {{ send: (message: object) => void, toast: (text: string) => void, answer: (id: string) => void, wsName: (id: string) => string,
- *   snippets: () => import('./snippets.js').PhoneSnippet[] }} app
+ *   snippets: () => import('./snippets.js').PhoneSnippet[], clips: () => import('./clips.js').PhoneClip[] }} app
  */
 export function terminalView(app) {
   const view = document.createElement('div');
@@ -187,16 +190,22 @@ export function terminalView(app) {
     sizeTimer = setTimeout(() => { if (shown && term) app.send({ op: OP.size, pane: shown.id, cols: term.cols, rows: term.rows }); }, SIZE_AFTER_MS);
   }
 
-  /**
-   * Types into the terminal; false when it didn't (typing is off, or typing into production wasn't confirmed).
-   * @param {string} data
-   */
-  function type(data) {
+  /** Whether typing here is allowed, and, into a production terminal, confirmed (asked once per opening). */
+  function mayType() {
     if (!shown || !typing) return false;
     if (shown.production && !confirmed) {
       if (!window.confirm(`${shown.title} is tagged prod. Type into it from this phone?`)) return false;
       confirmed = true;
     }
+    return true;
+  }
+
+  /**
+   * Types into the terminal; false when it didn't (typing is off, or typing into production wasn't confirmed).
+   * @param {string} data
+   */
+  function type(data) {
+    if (!mayType()) return false;
     if (ctrl && data === KEYS.bksp) {
       data = CTRL_BACKSPACE;
       setCtrl(false);
@@ -213,6 +222,8 @@ export function terminalView(app) {
 
   // The terminal's workspace's snippets and the global ones.
   const snippets = snippetSheet(view, { list: () => app.snippets().filter(s => !s.ws || s.ws === shown?.ws), type });
+  // Smart Clip: the PC pastes the clip picked (its text stays there).
+  const clipsSheet = clipSheet(view, { list: app.clips, paste: id => { if (shown && mayType()) app.send({ op: OP.clip, pane: shown.id, id }); } });
 
   /** @param {boolean} on */
   function setCtrl(on) {
@@ -267,8 +278,9 @@ export function terminalView(app) {
     view.hidden = false;
     document.body.classList.add(OPEN);
     view.innerHTML = '<div class="tv-box"></div>';
-    view.append(snippets.element);
+    view.append(snippets.element, clipsSheet.element);
     snippets.close();
+    clipsSheet.close();
     frame();
     term = new Terminal({ cols: t.cols ?? DEFAULT_SIZE.cols, rows: t.rows ?? DEFAULT_SIZE.rows, fontSize, scrollback: SCROLLBACK,
       fontFamily: 'ui-monospace, Menlo, Consolas, monospace', theme: look.colors, minimumContrastRatio: look.contrast, disableStdin: !canType, convertEol: false, cursorBlink: false });
@@ -436,6 +448,7 @@ export function terminalView(app) {
     }
     else if (key === CTRL) setCtrl(!ctrl);
     else if (key === SNIP) snippets.open();
+    else if (key === CLIPS) clipsSheet.open();
     else if (key === PASTE) {
       try {
         const text = await navigator.clipboard.readText();
@@ -445,7 +458,7 @@ export function terminalView(app) {
       }
     } else if (key) type(/** @type {Record<string, string>} */ (KEYS)[key]);
     // The keyboard stays with the terminal after a key, except under a message box (see the tap).
-    if (key && key !== SNIP && !compose.field()) term?.focus();
+    if (key && key !== SNIP && key !== CLIPS && !compose.field()) term?.focus();
   });
 
   // Backspace held down goes on deleting, as a phone's keyboard does (the first press is the click's).
