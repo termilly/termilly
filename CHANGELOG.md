@@ -5,7 +5,7 @@ What changed in each release. Termilly says in its title bar when a newer one is
 ## 1.6.0 (unreleased)
 
 - **Remote:** Access your workspaces, terminals, and agent sessions from your phone or another PC.
-- **Search:** Improved search with detected paths, files, and URLs grouped into separate lists. Search behavior is now configurable in Settings.
+- **Search:** Improved search with detected paths, files, and URLs grouped into separate lists.
 - **History:** Choose how long to keep your terminal history.
 - **Clipboard:** Keep track of everything you copy, including text, images, and links.
 - **Prompt history:** Browse prompts sent to agents in your terminals, organized by date and time.
