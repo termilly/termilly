@@ -24,7 +24,7 @@ import { fileMatches, fileRowHtml, filePreviewHtml, openFile, stillLooking } fro
 /**
  * A closed terminal the host keeps (Host_history's entries), as panes.js recordHistory sent it.
  * @typedef {{ id: string, name: string, customName?: string | null, profile: string, tags?: string[] | null,
- *   note?: Note | null, wsId?: string | null, wsName?: string | null, closedAt: number, noHistory?: boolean,
+ *   note?: Note | null, wsId?: string | null, wsName?: string | null, cwd?: string | null, closedAt: number, noHistory?: boolean,
  *   lines?: string[] | null, earlier?: string | null }} HistoryEntry
  */
 /**
@@ -96,7 +96,7 @@ const RANK = Object.freeze({ name: 0, tag: 1, note: 1.5, workspace: 2, output: 2
 /** Added to the rank of a terminal in a workspace other than the active one. */
 const OTHER_WORKSPACE_RANK = 0.1;
 /** The preview's buttons, by their data-act. */
-const ACT = Object.freeze({ go: 'go', copy: 'copy', forget: 'forget', wrap: 'wrap' });
+const ACT = Object.freeze({ go: 'go', copy: 'copy', forget: 'forget', wrap: 'wrap', openFile: 'openfile' });
 /** The command history's narrowing words: how a command ended, and the folder it ran in ("in:<folder text>"). */
 const FAILED_WORDS = ['failed', 'fail'];
 const OK_WORDS = ['ok', 'succeeded'];
@@ -443,9 +443,45 @@ function closedMatches(q) {
 }
 
 /** The Files view's results: what the open terminals printed (drawn again as the paths in it are looked up). */
-/** @param {string} text */
-const filesFound = text => fileMatches([...state.tabs.values()].filter(t => !t.virtual).map(tab => ({ tab, lines: lineCache.get(tab.id) ?? [] })),
-  text, () => { if (!layer.hidden && (filter === PALETTE_VIEW.files || filter === PALETTE_VIEW.all)) run(); });
+/**
+ * What a closed terminal's paths are looked up from, as an open one's are: a stand-in tab with its id, shell and folder.
+ * @param {HistoryEntry} entry
+ * @returns {Tab}
+ */
+const standIn = entry => /** @type {Tab} */ (/** @type {unknown} */ ({ id: entry.id, profile: entry.profile, cwd: entry.cwd ?? null, wsId: entry.wsId ?? null, tags: [] }));
+
+/**
+ * The files, folders and web addresses the terminals printed, open and closed ones (drawn again as the paths in them
+ * are looked up).
+ * @param {string} text
+ */
+const filesFound = text => fileMatches([
+  ...[...state.tabs.values()].filter(t => !t.virtual).map(tab => ({ tab, lines: lineCache.get(tab.id) ?? [] })),
+  ...history.filter(e => !e.noHistory && e.lines?.length).map(entry => ({ tab: standIn(entry), lines: /** @type {string[]} */ (entry.lines), entry })),
+], text, () => { if (!layer.hidden && (filter === PALETTE_VIEW.files || filter === PALETTE_VIEW.all)) run(); });
+
+/** How long a reopened terminal takes to show its old output and scroll to it, before the line is found in it (ms). */
+const REOPENED_AFTER_MS = 2200;
+
+/**
+ * Goes to where a file, folder or web address was printed: its terminal (a closed one reopened), scrolled to the line
+ * with it selected, so Ctrl+click and the rest work from there.
+ * @param {import('./palettefiles.js').FileResult} r
+ */
+function goToPrinted(r) {
+  if (!r.entry) {
+    focusTab(r.tab);
+    showMatch(r.tab, r.lines, r.index, r.text);
+    return;
+  }
+  const tab = reopen(r.entry);
+  setTimeout(() => {
+    const lines = bufferLines(tab);
+    let at = lines.length - 1;
+    while (at >= 0 && !lines[at].includes(r.line.trim())) at--;
+    if (at >= 0) showMatch(tab, lines, at, r.text);
+  }, REOPENED_AFTER_MS);
+}
 
 /** @returns {{ q: Query, groups: Record<string, PaletteResult[]> }} */
 function search() {
@@ -777,7 +813,7 @@ function activate(r = results[selected]) {
   } else if (r.kind === KIND.go) {
     goTo(r);
   } else if (r.kind === KIND.files) {
-    openFile(r);
+    goToPrinted(r);
   } else if (r.kind === KIND.ran) {
     insertCommand(r.entry.command);
   } else {
@@ -850,6 +886,7 @@ async function openFolder(dir) {
 /** Reopens a closed session: same shell, name and tags, in its workspace if it still exists, with the
  *  saved output shown above the new prompt. The history entry is used up.
  * @param {HistoryEntry} entry
+ * @returns {Tab}
  */
 function reopen(entry) {
   for (const tag of entry.tags ?? []) ensureTag(tag);
@@ -866,6 +903,7 @@ function reopen(entry) {
   // Its earlier output comes along.
   if (entry.earlier) send(PAGE.earlierMove, { from: entry.earlier, to: tab.id });
   forget({ ...entry, earlier: null });
+  return tab;
 }
 
 /** @param {HistoryEntry} entry */
@@ -935,6 +973,10 @@ previewEl.addEventListener('click', e => {
   if (step) stepMatch(Number(step));
   const act = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-act]'))?.dataset.act;
   if (act === ACT.go) activate();
+  else if (act === ACT.openFile && results[selected]?.kind === KIND.files) {
+    closePalette();
+    openFile(/** @type {import('./palettefiles.js').FileResult} */ (results[selected]));
+  }
   else if (act === ACT.wrap) {
     toggleWrap();
     renderPreview();

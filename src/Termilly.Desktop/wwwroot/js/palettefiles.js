@@ -1,16 +1,17 @@
 // @ts-check
-// Search's Files view (palette.js): the files, folders and web addresses the open terminals printed, found by name or
-// by a pattern like *.txt or *.html. A path counts only where it leads somewhere real: the host looks it up from where
-// the terminal works, as Ctrl+click does, so the list holds real files with their whole paths. Web addresses count as
-// they are. Each shows once, with the terminal that printed it last.
+// Search's Files view (palette.js): the files, folders and web addresses the terminals printed, open and closed ones,
+// found by name or by a pattern like *.txt or *.html. A path counts only where it leads somewhere real: the host looks
+// it up from where the terminal works, as Ctrl+click does, so the list holds real files with their whole paths. Web
+// addresses count as they are. Each shows once, with the terminal that printed it last, and leads back there.
 
 import { findLinks, resolvePath, openChange } from './changes.js';
+import { focusedTab } from './panes.js';
 import { findWebLinks } from './webaddress.js';
 import { send } from './host.js';
 import { PAGE } from './protocol.js';
 import { tabTitle, wsById } from './store.js';
 import { parentOf, joinPath } from './filepaths.js';
-import { escapeHtml, highlight, snippet, ICONS } from './ui.js';
+import { escapeHtml, highlight, ICONS } from './ui.js';
 
 /** What a result is. */
 export const FILE_WHAT = Object.freeze({ file: 'file', folder: 'folder', web: 'web' });
@@ -27,10 +28,12 @@ const BARE_NAME = /(?<![\w/\\.:@-])([\w@][\w.@-]*\.[A-Za-z][A-Za-z0-9]{0,9})(?![
 const WILDCARD = /[*?]/;
 
 /**
- * A file, folder or web address a terminal printed.
- * @typedef {{ kind: 'files', what: string, path: string, text: string, tab: Tab, line: string, count: number }} FileResult
+ * A file, folder or web address a terminal printed: where (an open terminal, or a closed one's entry with a stand-in
+ * tab for looking its paths up), the line and its place in the terminal's lines.
+ * @typedef {{ kind: 'files', what: string, path: string, text: string, tab: Tab, entry?: any, line: string,
+ *   index: number, lines: string[], count: number }} FileResult
  */
-/** @typedef {{ tab: Tab, lines: string[] }} FileSource */
+/** @typedef {{ tab: Tab, lines: string[], entry?: any }} FileSource */
 
 /** Lookups at a time, how long one may take (ms), and how often the list is drawn again as answers come (ms). */
 const AT_ONCE = 16;
@@ -74,17 +77,18 @@ export function fileMatcher(text) {
  * @param {FileSource[]} sources
  */
 function* printed(sources) {
-  for (const { tab, lines } of sources) {
-    for (let i = lines.length - 1; i >= 0; i--) {
-      const line = lines[i];
-      for (const w of findWebLinks(line)) yield { tab, line, text: w.text, web: true, dirs: /** @type {string[]} */ ([]) };
+  for (const { tab, lines, entry } of sources) {
+    for (let index = lines.length - 1; index >= 0; index--) {
+      const line = lines[index];
+      const at = { tab, entry, lines, index, line };
+      for (const w of findWebLinks(line)) yield { ...at, text: w.text, web: true, dirs: /** @type {string[]} */ ([]) };
       const paths = findLinks(line);
       // Whole paths on the line: a name on it may be in one (cd /d/notes; cat >> todo.txt).
       const dirs = paths.map(p => p.text).filter(t => WHOLE_PATH.test(t));
-      for (const p of paths) yield { tab, line, text: p.text, web: false, dirs };
+      for (const p of paths) yield { ...at, text: p.text, web: false, dirs };
       BARE_NAME.lastIndex = 0;
       for (let m; (m = BARE_NAME.exec(line));) {
-        if (!paths.some(p => m && m.index >= p.start && m.index < p.end)) yield { tab, line, text: m[1], web: false, dirs };
+        if (!paths.some(p => m && m.index >= p.start && m.index < p.end)) yield { ...at, text: m[1], web: false, dirs };
       }
     }
   }
@@ -163,11 +167,11 @@ export function fileMatches(sources, text, redraw) {
   /** @type {Map<string, FileResult>} */
   const found = new Map();
   let lookups = 0;
-  const add = (/** @type {string} */ path, /** @type {string} */ what, /** @type {{ tab: Tab, line: string, text: string }} */ c) => {
+  const add = (/** @type {string} */ path, /** @type {string} */ what, /** @type {{ tab: Tab, entry?: any, lines: string[], index: number, line: string, text: string }} */ c) => {
     const key = what === FILE_WHAT.web ? path : path.toLowerCase();
     const known = found.get(key);
     if (known) known.count++;
-    else found.set(key, { kind: 'files', what, path, text: c.text, tab: c.tab, line: c.line, count: 1 });
+    else found.set(key, { kind: 'files', what, path, text: c.text, tab: c.tab, entry: c.entry, line: c.line, index: c.index, lines: c.lines, count: 1 });
   };
   for (const c of printed(sources)) {
     if (c.web) {
@@ -189,6 +193,10 @@ export function fileMatches(sources, text, redraw) {
 const iconOf = what => (what === FILE_WHAT.web ? ICONS.link : what === FILE_WHAT.folder ? ICONS.folder : ICONS.note);
 /** The text to mark in a path: the search's, unless it's a pattern. @param {string} text */
 const marked = text => (WILDCARD.test(text) ? '' : text.trim());
+/** Where it was printed: the terminal, or the closed one. @param {FileResult} r */
+const whereOf = r => (r.entry ? `${r.entry.customName ?? r.entry.name} (closed)` : tabTitle(r.tab));
+/** What opening it is called. @param {FileResult} r */
+const openLabel = r => (r.what === FILE_WHAT.web ? 'Open in browser' : r.what === FILE_WHAT.folder ? 'Open the folder' : 'Open the file');
 
 /**
  * A result's row: its icon, the whole path (or address), and where it was printed.
@@ -197,7 +205,7 @@ const marked = text => (WILDCARD.test(text) ? '' : text.trim());
  */
 export const fileRowHtml = (r, text) => `<span class="cmd-icon">${iconOf(r.what)}</span>
     <div class="res-main"><div class="res-line1"><span class="res-title mono">${highlight(r.path, marked(text))}</span></div>
-      <div class="res-line2">${escapeHtml(tabTitle(r.tab))}${r.count > 1 ? ` · printed ${r.count} times` : ''}</div></div>`;
+      <div class="res-line2">${escapeHtml(whereOf(r))}${r.count > 1 ? ` · printed ${r.count} times` : ''}</div></div>`;
 
 /**
  * A result's preview: what it is, where it was printed and the line it was in.
@@ -205,9 +213,10 @@ export const fileRowHtml = (r, text) => `<span class="cmd-icon">${iconOf(r.what)
  */
 export const filePreviewHtml = r => `
     <div class="pv-head"><div class="pv-title mono">${escapeHtml(r.path)}</div>
-      <div class="pv-meta">${r.what === FILE_WHAT.web ? 'Web address' : r.what === FILE_WHAT.folder ? 'Folder' : 'File'}<span class="dot-sep">·</span>printed in ${escapeHtml(tabTitle(r.tab))}</div></div>
-    <pre class="pv-term"><span class="pv-line hit">${snippet(r.line, r.text) || escapeHtml(r.line)}</span></pre>
-    <div class="pv-actions"><button class="btn primary" data-act="go">${r.what === FILE_WHAT.web ? 'Open in browser' : r.what === FILE_WHAT.folder ? 'Open the folder' : 'Open'} <kbd>Enter</kbd></button>
+      <div class="pv-meta">${r.what === FILE_WHAT.web ? 'Web address' : r.what === FILE_WHAT.folder ? 'Folder' : 'File'}<span class="dot-sep">·</span>printed in ${escapeHtml(whereOf(r))}</div></div>
+    <pre class="pv-term">${r.lines.slice(Math.max(0, r.index - 6), r.index + 7).map((l, i) => `<span class="pv-line${Math.max(0, r.index - 6) + i === r.index ? ' hit' : ''}">${Math.max(0, r.index - 6) + i === r.index ? highlight(l, r.text) : escapeHtml(l) || ' '}</span>`).join('')}</pre>
+    <div class="pv-actions"><button class="btn primary" data-act="go">${r.entry ? 'Reopen the terminal there' : 'Go to it in the terminal'} <kbd>Enter</kbd></button>
+      <button class="btn" data-act="openfile">${openLabel(r)}</button>
       <button class="btn" data-act="copy">Copy</button></div>`;
 
 /**
@@ -217,5 +226,5 @@ export const filePreviewHtml = r => `
 export function openFile(r) {
   if (r.what === FILE_WHAT.web) send(PAGE.openUrl, { url: r.path });
   else if (r.what === FILE_WHAT.folder) send(PAGE.openPath, { path: r.path });
-  else openChange(r.tab, r.text);
+  else openChange(r.entry ? focusedTab() ?? r.tab : r.tab, r.path);
 }
