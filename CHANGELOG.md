@@ -5,11 +5,15 @@ What changed in each release. Termilly says in its title bar when a newer one is
 ## 1.6.0 (unreleased)
 
 - **Termilly on your phone:** see your terminals and agents, answer them and type, with alerts when an agent needs you.
+- **Other computers:** attach another PC's Termilly workspaces to your laptop or any PC.
 - **Smart Clip:** every copy kept, text and images, to paste again from the right-click menu or its panel.
+- **My prompts:** everything you asked Claude in a terminal, by day, one click away from where you asked it.
+- **Search:** the files, folders and links any terminal printed, and every matching line under its terminal.
 - **History:** kept as long as you choose, earlier output searchable, and a page to see and clear it.
 - **Claude Code:** its own terminal type, and resumed sessions stay Claude after a restart.
-- **Right-click menu:** Copy to note, and icons on every item.
-- Faster scrolling, and links and paths broken across lines are found whole.
+- **Keyboard:** change any of Termilly's shortcuts.
+- **Right-click menu:** Copy to note, Copy link, and icons on every item.
+- Faster scrolling, long menus scroll, links broken across lines are found whole, and quitting is quick again.
 
 ## 1.5.0 (2026-10-30)
 
