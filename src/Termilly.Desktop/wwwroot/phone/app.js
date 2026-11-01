@@ -38,7 +38,7 @@ const WAITING = Object.freeze({ permission: 'permission', question: 'question', 
 /** Messages from the PC on the live connection (PhoneLive.Kinds). */
 const LIVE = Object.freeze({ state: 'state', answered: 'answered', screen: 'screen', output: 'output' });
 /** What the app asks of the live connection: an answer to an agent (Features/Phone.cs). */
-const OP = Object.freeze({ answer: 'answer', input: 'input', seen: 'seen' });
+const OP = Object.freeze({ answer: 'answer', input: 'input', seen: 'seen', clipText: 'clipText' });
 /** The live connection is open (WebSocket.OPEN). */
 const OPEN = 1;
 /** The live connection tries again after this long, doubling up to the most. */
@@ -323,6 +323,8 @@ function connect() {
       openAsked();
     } else if (m.type === LIVE.screen || m.type === LIVE.output) {
       terminalShown.message(m);
+    } else if (m.type === LIVE.answered && m.op === OP.clipText && m.ok) {
+      terminalShown.fillBox(m.text ?? '');
     } else if (m.type === LIVE.answered && manage.answered(m)) {
       // Opening, closing and the rest (manage.js) said how it went.
     } else if (m.type === LIVE.answered) {

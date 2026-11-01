@@ -52,6 +52,7 @@ internal static class Composition
         .AddSingleton<PhoneStore>()
         .AddSingleton<PhoneLive>()
         .AddSingleton<ClipStore>()
+        .AddSingleton<PhoneClips>()
         .AddStartable<ProfileCatalog>()
         .AddStartable<ActivityWatcher>()
         .AddStartable<HistoryWatch>()

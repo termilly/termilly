@@ -208,6 +208,15 @@ internal sealed partial class ClipStore(Vault vault)
         }
     }
 
+    /// <summary>Whether a clip is a secret (its text isn't handed to a phone).</summary>
+    public bool IsSecret(string id)
+    {
+        lock (_lock)
+        {
+            return _clips.Find(c => c.Id == id)?.Kind == ClipKinds.Secret;
+        }
+    }
+
     /// <summary>An image clip's PNG, read from disk the first time; null when it's gone or can't be read.</summary>
     public byte[]? ImageOf(string id)
     {

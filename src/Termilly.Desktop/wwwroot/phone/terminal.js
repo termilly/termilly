@@ -29,6 +29,8 @@ const PASTE = 'paste';
 const SNIP = 'snip';
 /** Smart Clip's sheet: the PC's text clips to paste (clips.js). */
 const CLIPS = 'clips';
+/** The same from Claude's +: the clip's text goes to the message box. */
+const CLIPS_BOX = 'clips-box';
 /** A message to Claude goes in, then Enter after this (as the PC's own send does, api.js); one with lines is pasted. */
 const ENTER_AFTER_MS = 200;
 const PASTED = Object.freeze({ start: '\x1b[200~', end: '\x1b[201~' });
@@ -46,7 +48,7 @@ const LEAST = Object.freeze({ cols: 20, rows: 4 });
 /** The size goes to the PC once it has settled this long (pinching changes it many times a second). */
 const SIZE_AFTER_MS = 150;
 /** What the view asks of the live connection, and its header's buttons (data-tv). */
-const OP = Object.freeze({ watch: 'watch', unwatch: 'unwatch', input: 'input', size: 'size', clip: 'clip' });
+const OP = Object.freeze({ watch: 'watch', unwatch: 'unwatch', input: 'input', size: 'size', clip: 'clip', clipText: 'clipText' });
 const TV = Object.freeze({ back: 'back', answer: 'answer', stop: 'stop' });
 /** Claude Code's (and Codex's) interrupt, as the PC's stop button sends it (js/agentline.js stopAgent). */
 const STOP = '\x1b';
@@ -223,7 +225,11 @@ export function terminalView(app) {
   // The terminal's workspace's snippets and the global ones.
   const snippets = snippetSheet(view, { list: () => app.snippets().filter(s => !s.ws || s.ws === shown?.ws), type });
   // Smart Clip: the PC pastes the clip picked (its text stays there).
-  const clipsSheet = clipSheet(view, { list: app.clips, paste: id => { if (shown && mayType()) app.send({ op: OP.clip, pane: shown.id, id }); } });
+  const clipsSheet = clipSheet(view, {
+    list: app.clips,
+    paste: id => { if (shown && mayType()) app.send({ op: OP.clip, pane: shown.id, id }); },
+    fill: id => app.send({ op: OP.clipText, id }),
+  });
 
   /** @param {boolean} on */
   function setCtrl(on) {
@@ -449,6 +455,7 @@ export function terminalView(app) {
     else if (key === CTRL) setCtrl(!ctrl);
     else if (key === SNIP) snippets.open();
     else if (key === CLIPS) clipsSheet.open();
+    else if (key === CLIPS_BOX) clipsSheet.open(true);
     else if (key === PASTE) {
       try {
         const text = await navigator.clipboard.readText();
@@ -458,7 +465,7 @@ export function terminalView(app) {
       }
     } else if (key) type(/** @type {Record<string, string>} */ (KEYS)[key]);
     // The keyboard stays with the terminal after a key, except under a message box (see the tap).
-    if (key && key !== SNIP && key !== CLIPS && !compose.field()) term?.focus();
+    if (key && key !== SNIP && key !== CLIPS && key !== CLIPS_BOX && !compose.field()) term?.focus();
   });
 
   // Backspace held down goes on deleting, as a phone's keyboard does (the first press is the click's).
@@ -480,6 +487,8 @@ export function terminalView(app) {
 
   return {
     open, close, update, message, rewatch, retheme,
+    /** A clip's text the PC sent for the message box (Paste from Smart Clip in Claude's +). @param {string} text */
+    fillBox: text => compose.fill(text),
     /** The terminal shown, or null. */
     get viewing() { return shown?.id ?? null; },
   };

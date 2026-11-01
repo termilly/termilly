@@ -135,10 +135,14 @@ body.tv-open { overflow: hidden; }
 /* The terminal view's snippets (snippets.js): a sheet over the terminal, above the key bar. */
 .tv-sheet { position: absolute; inset: auto 0 0; z-index: 2; max-height: 70%; overflow-y: auto; padding: 12px 14px calc(12px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); border-radius: 14px 14px 0 0; background: var(--sheet); box-shadow: 0 -8px 24px rgba(0, 0, 0, .35); }
 .tv.keyboard .tv-sheet { padding-bottom: 12px; }
-.tv-sheet-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+/* The sheet's title and close stay on top as its list scrolls. */
+.tv-sheet-head { position: sticky; top: -12px; z-index: 1; display: flex; align-items: center; justify-content: space-between; margin: -12px -14px 8px; padding: 12px 14px 8px; background: var(--sheet); }
 .tv-sheet-close { padding: 4px 8px; border: 0; background: none; color: var(--muted); font-size: 18px; }
 .tv-sheet-list { display: flex; flex-direction: column; gap: 6px; }
-.snip { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border: 0; border-radius: 10px; background: var(--bg); color: var(--text); text-align: left; }
+.snip { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 10px 12px; border: 0; border-radius: 10px; background: var(--bg); color: var(--text); text-align: left; }
+/* A long line wraps inside its item, two lines at most. */
+.snip b { display: -webkit-box; overflow: hidden; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.snip:disabled { opacity: .5; }
 .snip span { overflow: hidden; color: var(--muted); font: 12px ui-monospace, Menlo, Consolas, monospace; text-overflow: ellipsis; white-space: nowrap; }
 .snip-form { flex-direction: column; margin: 0; }
 .snip-form label { display: flex; flex-direction: column; gap: 4px; color: var(--muted); font-size: 13px; }

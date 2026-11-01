@@ -176,7 +176,7 @@ export function composer(view, app) {
     switch (el.dataset.c) {
       case C.plus:
         if (view.querySelector(PART.menu)) closeMenu();
-        else menu(`<button data-c="${C.clear}">Clear text from terminal</button><button data-c="${C.pasteIn}">Paste</button><button data-key="clips">Paste from Smart Clip</button><button data-key="snip">Snippets</button>${COMMANDS.map(c => `<button data-c="${C.fill}" data-text="${c}">${c}</button>`).join('')}<button data-c="${C.shiftTab}">Change mode (Shift+Tab)</button>`);
+        else menu(`<button data-c="${C.clear}">Clear text from terminal</button><button data-c="${C.pasteIn}">Paste</button><button data-key="clips-box">Paste from Smart Clip</button><button data-key="snip">Snippets</button>${COMMANDS.map(c => `<button data-c="${C.fill}" data-text="${c}">${c}</button>`).join('')}<button data-c="${C.shiftTab}">Change mode (Shift+Tab)</button>`);
         break;
       case C.more:
         if (view.querySelector(PART.menu)) closeMenu();
@@ -220,5 +220,5 @@ export function composer(view, app) {
   // The app goes to the background: the microphone is let go.
   document.addEventListener('visibilitychange', () => { if (document.hidden) stopListening(); });
 
-  return { html, click, changed, field, stopListening };
+  return { html, click, changed, field, fill, stopListening };
 }
