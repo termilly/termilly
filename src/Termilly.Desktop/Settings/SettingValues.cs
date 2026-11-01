@@ -38,7 +38,10 @@ internal static class SettingValues
         public static readonly IReadOnlyList<string> All = [Grayscale, ClearType];
     }
 
-    /// <summary>When an agent's news goes to the phones (Settings › Phone): only while the user is away from the PC, always, or never.</summary>
+    /// <summary>
+    /// When an agent's news goes to the phones (Settings › Phone): always (but not to a phone with the app open, which
+    /// shows it itself), only once the user is away from the PC, or never.
+    /// </summary>
     public static class PhoneAlerts
     {
         public const string Away = "away";

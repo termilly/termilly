@@ -97,8 +97,8 @@ function devicesHtml() {
   return group('Paired phones', status.devices.length
     ? row('Paired phones', `${phonesCount(status.devices.length)}: ${escapeHtml(status.devices.map(d => d.name).join(', '))}.`,
       '<button class="btn small" data-action="managePhones">Manage</button>', { keywords: 'phone paired devices remove' })
-    + row('Alerts', 'An agent’s news, as Settings › Notifications picks it. Away: Termilly isn’t in front, or the PC has been untouched for a minute.',
-      seg('phone.alerts', [[SETTING_VALUES.phoneAlerts.away, 'When I’m away'], [SETTING_VALUES.phoneAlerts.always, 'Always'], [SETTING_VALUES.phoneAlerts.off, 'Off']]),
+    + row('Alerts', 'An agent’s news, as Settings › Notifications picks it, also for the terminal in front of you here. Not while the phone app is open: it shows the news itself. When I’m away: once Termilly isn’t in front or the PC has been untouched for a minute, even if that’s after the news came.',
+      seg('phone.alerts', [[SETTING_VALUES.phoneAlerts.always, 'Always'], [SETTING_VALUES.phoneAlerts.away, 'When I’m away'], [SETTING_VALUES.phoneAlerts.off, 'Off']]),
       { keywords: 'phone alert push notification away idle' })
     + row('Allow typing', 'Paired phones can type into the terminals they show. Answers to an agent work either way.', toggle('phone.allowTyping'), { keywords: 'phone type keyboard input remote' })
     + row('Smart Clip on the phone', 'With typing allowed, phones can paste your recent text clips. They get only each one’s first line, secrets masked; this PC pastes it.', toggle('phone.clips'), { keywords: 'phone smart clip clipboard paste' })
