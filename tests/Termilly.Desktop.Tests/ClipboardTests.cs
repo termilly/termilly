@@ -3,7 +3,7 @@ using Termilly.Desktop.Security;
 
 namespace Termilly.Desktop.Tests;
 
-public sealed class SmartClipTests : IDisposable
+public sealed class ClipboardTests : IDisposable
 {
     private const string Here = "api server · backend";
     private const string Token = "ghp_0123456789abcdefghijklmnopqrstuvwxyzAB";
@@ -11,7 +11,7 @@ public sealed class SmartClipTests : IDisposable
     private readonly Vault _vault;
     private readonly long _now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
-    public SmartClipTests() => _vault = Vault.Open(_dir);
+    public ClipboardTests() => _vault = Vault.Open(_dir);
 
     public void Dispose() => Directory.Delete(_dir, recursive: true);
 

@@ -106,8 +106,8 @@ internal interface IAudioOutputs
 internal sealed record ClipboardContent(string? Text, byte[]? Png = null, int Width = 0, int Height = 0);
 
 /// <summary>
-/// The system clipboard's changes, for Smart Clip. Only where the system tells about them (Windows); without one, Smart
-/// Clip keeps only the copies made in Termilly.
+/// The system clipboard's changes, for the Clipboard panel. Only where the system tells about them (Windows); without
+/// one, it keeps only the copies made in Termilly.
 /// </summary>
 internal interface IClipboardWatch
 {

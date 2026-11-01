@@ -44,7 +44,7 @@ internal sealed record AppSettings
     public RemoteSettings Remote { get; init; } = new();
     /// <summary>Termilly on a phone, served on the local network.</summary>
     public PhoneSettings Phone { get; init; } = new();
-    /// <summary>Smart Clip: every copy kept.</summary>
+    /// <summary>Clipboard: every copy kept.</summary>
     public ClipSettings Clips { get; init; } = new();
     /// <summary>What the page remembers.</summary>
     public UiState UiState { get; init; } = new();

@@ -209,12 +209,12 @@ internal sealed record CommandSettings
 
 /// <summary>When a terminal's agent tells the user, and the system-wide "next terminal that needs me" shortcut.</summary>
 /// <summary>
-/// Smart Clip (SmartClip.cs): every copy kept, text and images, to paste any of them later. Copies made in other apps
+/// Clipboard (Clipboard.cs): every copy kept, text and images, to paste any of them later. Copies made in other apps
 /// are kept too where the system tells about them (Windows); kept after a restart encrypted with the vault.
 /// </summary>
 internal sealed record ClipSettings
 {
-    /// <summary>Copies are kept; off, Smart Clip only shows what it already has.</summary>
+    /// <summary>Copies are kept; off, Clipboard only shows what it already has.</summary>
     public bool Enabled { get; init; } = true;
     /// <summary>Copies made in other apps are kept too, not only Termilly's.</summary>
     public bool OtherApps { get; init; } = true;
@@ -246,7 +246,7 @@ internal sealed record PhoneSettings
     /// <summary>A paired phone may type into a terminal it shows (answers to an agent are always allowed).</summary>
     public bool AllowTyping { get; init; }
     /// <summary>
-    /// While typing is allowed, a phone may paste Smart Clip's text clips: it gets their first lines (secrets masked) and
+    /// While typing is allowed, a phone may paste Clipboard's text clips: it gets their first lines (secrets masked) and
     /// asks the PC to paste one, so a clip's text never goes to the phone.
     /// </summary>
     public bool Clips { get; init; } = true;

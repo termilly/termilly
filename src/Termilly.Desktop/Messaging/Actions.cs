@@ -7,7 +7,7 @@ internal static partial class FromPage
     /// <summary>
     /// Runs the action with this id from the settings, with what the page knows about the terminal. The page names an
     /// action rather than sending a program to start, so only what the user set up can run. <see cref="Image"/> is an
-    /// image file to hand on (a Smart Clip image).
+    /// image file to hand on (a Clipboard image).
     /// </summary>
     internal sealed record ActionRun(string? Id = null, string? Selection = null, string? Folder = null, int? Port = null, string? Image = null) : IPageMessage
     {

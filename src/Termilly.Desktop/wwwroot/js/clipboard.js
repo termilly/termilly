@@ -1,7 +1,7 @@
 // @ts-check
-// Smart Clip (the title bar's button, Ctrl+Shift+X, or a terminal's right-click menu): every copy kept, text and
-// images, made in Termilly or (on Windows) in any app, kept by the host (SmartClip.cs). A terminal's right-click menu
-// offers the newest under Paste from Smart Clip; the panel docked on the right shows them all, pinned first, images in
+// Clipboard (the title bar's button, Ctrl+Shift+X, or a terminal's right-click menu): every copy kept, text and
+// images, made in Termilly or (on Windows) in any app, kept by the host (Clipboard.cs). A terminal's right-click menu
+// offers the newest under Paste from Clipboard; the panel docked on the right shows them all, pinned first, images in
 // a grid. A click selects a clip, its first button shows all of it (or folds it again), Delete deletes it; a double
 // click (or Enter) pastes it into the terminal in focus through its paste checks, a clip dragged onto a terminal pastes there, and an image pastes as the path of a PNG file
 // (what agents such as Claude Code read). Secrets show masked and go after a while.
@@ -43,7 +43,7 @@ const MINUTE_MS = 60_000;
 const HOUR_MS = 60 * MINUTE_MS;
 const DAY_HOURS = 24;
 const KEYS_TEXT = 'Ctrl+Shift+X';
-const OPEN_LABEL = 'Open Smart Clip';
+const OPEN_LABEL = 'Open Clipboard';
 const CLEAR_LABEL = 'Clear history';
 const UNPIN_LABEL = 'Unpin';
 const PINNED_LABEL = 'Pinned';
@@ -206,7 +206,7 @@ const iconOf = clip => KIND_ICONS[clip.kind] ?? KIND_ICONS[CLIP_KIND.text];
 const tabOf = body => (body ? [...state.tabs.values()].find(t => t.view?.body.contains(body)) ?? null : null);
 
 /**
- * Paste from Smart Clip: the newest clips, each with its digit, then Open Smart Clip and Clear history.
+ * Paste from Clipboard: the newest clips, each with its digit, then Open Clipboard and Clear history.
  * @param {HTMLElement} body
  * @param {(text: string) => void} paste the terminal's own paste, with its checks
  * @returns {import('./popups.js').MenuEntry[]}
@@ -221,7 +221,7 @@ function menuEntries(body, paste) {
     },
   }));
   return [{
-    label: 'Paste from Smart Clip', icon: CLIP_ICON,
+    label: 'Paste from Clipboard', icon: CLIP_ICON,
     submenu: () => [
       ...(recent.length ? recent : [{ label: 'Nothing copied yet', disabled: true }]),
       SEPARATOR,
@@ -232,7 +232,7 @@ function menuEntries(body, paste) {
 }
 
 /**
- * A copy made in a terminal, for Smart Clip: where it came from, the terminal and its workspace.
+ * A copy made in a terminal, for Clipboard: where it came from, the terminal and its workspace.
  * @param {string} text
  * @param {HTMLElement | null} body
  * @param {boolean} link
@@ -310,7 +310,7 @@ function render() {
   panel.innerHTML = `
     <div class="${DOCK_GRIP}" title="Drag to resize"></div>
     <div class="files-head">
-      <span class="files-title">Smart Clip <span class="files-ws">${clips.length === 1 ? '1 clip' : `${clips.length} clips`}${keeping ? '' : ' · paused'}</span></span>
+      <span class="files-title">Clipboard <span class="files-ws">${clips.length === 1 ? '1 clip' : `${clips.length} clips`}${keeping ? '' : ' · paused'}</span></span>
       <span class="files-tools">
         <button class="pane-btn np-toggle" data-clips="${PANEL_ACTION.pause}" aria-pressed="${!keeping}" title="${keeping ? 'Pause: stop keeping copies (while sharing your screen)' : 'Paused: copies aren’t kept. Click to keep them again'}">${TOOL_ICONS.pause}</button>
         <button class="pane-btn" data-clips="${PANEL_ACTION.clear}" title="Clear history (pinned clips stay)"${clips.some(c => !c.pinned) ? '' : ' disabled'}>${ICONS.trash}</button>

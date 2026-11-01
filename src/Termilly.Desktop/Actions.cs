@@ -23,7 +23,7 @@ internal static class ActionPlaceholders
     public const string Line = "line";
     /// <summary>The selection when it's a web address (an action using it is offered only for one).</summary>
     public const string Url = "url";
-    /// <summary>An image file: a Smart Clip image (saved as a PNG), or a selected path to an image.</summary>
+    /// <summary>An image file: a Clipboard image (saved as a PNG), or a selected path to an image.</summary>
     public const string Image = "image";
     public static readonly IReadOnlyList<string> All = [Selection, Folder, Repo, Branch, Port, File, Line, Url, Image];
 }
@@ -278,7 +278,7 @@ internal static partial class Actions
         ActionPlaceholders.Branch => "This terminal’s folder isn’t on a Git branch.",
         ActionPlaceholders.Port => "No program in this terminal is listening on a port.",
         ActionPlaceholders.Url => "Select a web address first.",
-        ActionPlaceholders.Image => "Pick an image first: one in Smart Clip, or a path to one.",
+        ActionPlaceholders.Image => "Pick an image first: one in the Clipboard, or a path to one.",
         _ => "Select a file’s path in the terminal first.",
     };
 

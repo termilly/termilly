@@ -409,7 +409,7 @@ export const ACTION_PLACEHOLDER = Object.freeze({
   all: Object.freeze(['selection', 'folder', 'repo', 'branch', 'port', 'file', 'line', 'url', 'image']),
 });
 
-/** C#: ClipKinds (SmartClip.cs). */
+/** C#: ClipKinds (Clipboard.cs). */
 export const CLIP_KIND = Object.freeze({
   text: 'text',
   command: 'command',
@@ -420,7 +420,7 @@ export const CLIP_KIND = Object.freeze({
   all: Object.freeze(['text', 'command', 'path', 'url', 'image', 'secret']),
 });
 
-/** C#: ClipForms (Messaging/SmartClip.cs). */
+/** C#: ClipForms (Messaging/Clipboard.cs). */
 export const CLIP_FORM = Object.freeze({
   text: 'text',
   path: 'path',

@@ -830,7 +830,7 @@ function wireDropAndPaste(tab, term) {
   body.addEventListener('dragleave', () => body.classList.remove(FILE_OVER));
   body.addEventListener('drop', e => {
     body.classList.remove(FILE_OVER);
-    // A clip from Smart Clip: it pastes it here.
+    // A clip from Clipboard: it pastes it here.
     const clip = e.dataTransfer?.getData(CLIP_DRAG);
     if (clip) {
       e.preventDefault();
@@ -866,7 +866,7 @@ function wireDropAndPaste(tab, term) {
 
 /**
  * Pastes text into a terminal as its Paste does (asked first on production, or for several lines), for other
- * features (Smart Clip); with `run`, a line is run as well, once it's pasted.
+ * features (Clipboard); with `run`, a line is run as well, once it's pasted.
  * @param {Tab} tab
  * @param {string} text
  * @param {boolean} [run]

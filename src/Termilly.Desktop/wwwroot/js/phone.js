@@ -14,7 +14,7 @@ import { isProduction } from './environments.js';
 import { screenOf } from './termscreen.js';
 import { agentInput } from './terminals.js';
 import { placeholders } from './snippets.js';
-import { clipsForPhone } from './smartclip.js';
+import { clipsForPhone } from './clipboard.js';
 import { THEMES, THEME_BASE, themeId, onSystemThemeChange } from './themes.js';
 import { termTheme } from './terminals.js';
 import { placesForPhone } from './phonemanage.js';
@@ -143,7 +143,7 @@ function snapshot() {
     // Which system it runs on: another computer's Copy to draws its folders from drives (Windows) or from /.
     os: platform,
     snippets: typing ? snippetsForPhone() : [],
-    // Smart Clip's text clips to paste (their first lines; the PC pastes the whole one): Settings › Phone.
+    // Clipboard's text clips to paste (their first lines; the PC pastes the whole one): Settings › Phone.
     clips: typing && state.settings.phone?.clips !== false ? clipsForPhone() : [],
     notes: notesForPhone(),
     // Its themes, the one it shows now and its terminals' colours then (a theme plugin's, if one is chosen).

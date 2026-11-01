@@ -1,6 +1,6 @@
 namespace Termilly.Desktop.Messaging;
 
-// Smart Clip (js/smartclip.js, Features/SmartClip.cs): every copy kept, text and images, to paste any of them later.
+// Clipboard (js/clipboard.js, Features/Clipboard.cs): every copy kept, text and images, to paste any of them later.
 
 internal static partial class FromPage
 {
@@ -52,7 +52,7 @@ internal static partial class FromPage
 
 internal static partial class ToPage
 {
-    /// <summary>The clips, newest first, and whether copies are kept (Settings › Terminal › Smart Clip).</summary>
+    /// <summary>The clips, newest first, and whether copies are kept (Settings › Terminal › Clipboard).</summary>
     internal sealed record Clips(IReadOnlyList<ClipView> Items, bool Keeping) : IHostMessage
     {
         public static string Type => "clip:clips";

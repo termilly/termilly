@@ -33,7 +33,7 @@ interface AppSettings {
   remote: RemoteSettings;
   /** Termilly on a phone, served on the local network. */
   phone: PhoneSettings;
-  /** Smart Clip: every copy kept. */
+  /** Clipboard: every copy kept. */
   clips: ClipSettings;
   /** What the page remembers. */
   uiState: UiState;
@@ -111,7 +111,7 @@ interface CommandSettings {
 
 /** When a terminal's agent tells the user, and the system-wide "next terminal that needs me" shortcut. */
 interface ClipSettings {
-  /** Copies are kept; off, Smart Clip only shows what it already has. */
+  /** Copies are kept; off, Clipboard only shows what it already has. */
   enabled: boolean;
   /** Copies made in other apps are kept too, not only Termilly's. */
   otherApps: boolean;
@@ -131,7 +131,7 @@ interface PhoneSettings {
   hideDetails: boolean;
   /** A paired phone may type into a terminal it shows (answers to an agent are always allowed). */
   allowTyping: boolean;
-  /** While typing is allowed, a phone may paste Smart Clip's text clips: it gets their first lines (secrets masked) and asks the PC to paste one, so a clip's text never goes to the phone. */
+  /** While typing is allowed, a phone may paste Clipboard's text clips: it gets their first lines (secrets masked) and asks the PC to paste one, so a clip's text never goes to the phone. */
   clips: boolean;
 }
 

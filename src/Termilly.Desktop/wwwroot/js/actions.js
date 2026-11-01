@@ -138,7 +138,7 @@ function canRun(action, context) {
  * @param {Tab} tab
  * @param {string} path
  * @param {string} folder the folder it's in, or the folder itself
- * @param {string | null} [image] an image file for {image} (a Smart Clip image)
+ * @param {string | null} [image] an image file for {image} (a Clipboard image)
  * @returns {import('./popups.js').MenuItem[]}
  */
 export function pathActions(tab, path, folder, image = null) {

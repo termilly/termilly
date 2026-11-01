@@ -25,19 +25,19 @@ const NO_MOUSE_TRACKING = 'none';
 let menuExtras = () => [];
 
 /**
- * What Smart Clip adds right after Paste (js/smartclip.js), given how this terminal pastes.
+ * What Clipboard adds right after Paste (js/clipboard.js), given how this terminal pastes.
  * @type {(body: HTMLElement, paste: (text: string) => void) => import('./popups.js').MenuEntry[]}
  */
 let clipEntries = () => [];
 /**
- * Who hears of a copy made here (Smart Clip keeps it, with where it came from): the text, the terminal's element,
+ * Who hears of a copy made here (Clipboard keeps it, with where it came from): the text, the terminal's element,
  * and whether it's a link.
  * @type {(text: string, body: HTMLElement | null, link: boolean) => void}
  */
 let copied = () => {};
 
 /**
- * Sets Smart Clip's part of the right-click menu, and what hears of copies.
+ * Sets Clipboard's part of the right-click menu, and what hears of copies.
  * @param {typeof clipEntries} entries
  * @param {typeof copied} onCopy
  */

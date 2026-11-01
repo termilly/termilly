@@ -6,12 +6,12 @@ using Termilly.Desktop.Services;
 namespace Termilly.Desktop.Features;
 
 /// <summary>
-/// Smart Clip (js/smartclip.js): keeps every copy in <see cref="ClipStore"/>, from the page (Termilly's own copies, with
+/// Clipboard (js/clipboard.js): keeps every copy in <see cref="ClipStore"/>, from the page (Termilly's own copies, with
 /// where they came from) and from the system clipboard where it tells (copies in other apps), and hands a clip back to
 /// paste: its text, or an image as a file or a picture. Secrets go after a while; the clips are written a moment after
 /// they change.
 /// </summary>
-internal sealed class SmartClipHandler(ClipStore store, PageChannel page, ISettingsStore settings, IDesktopShell desktop, IEnumerable<IClipboardWatch> watches)
+internal sealed class ClipboardHandler(ClipStore store, PageChannel page, ISettingsStore settings, IDesktopShell desktop, IEnumerable<IClipboardWatch> watches)
     : IMessageHandler, IStartable, IDisposable
 {
     private static readonly TimeSpan ExpireEvery = TimeSpan.FromMinutes(1);
@@ -80,7 +80,7 @@ internal sealed class SmartClipHandler(ClipStore store, PageChannel page, ISetti
         store.Persist = clips.Keep;
     }
 
-    /// <summary>A copy anywhere: kept while Smart Clip keeps copies from other apps (Termilly's own come from the page too).</summary>
+    /// <summary>A copy anywhere: kept while Clipboard keeps copies from other apps (Termilly's own come from the page too).</summary>
     private void OnClipboard(ClipboardContent content)
     {
         if (!Clips.Enabled || !Clips.OtherApps)

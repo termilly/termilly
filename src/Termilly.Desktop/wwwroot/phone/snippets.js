@@ -3,7 +3,7 @@
 // the phone is allowed), the global ones and the terminal's workspace's. One with {{placeholders}} asks for their
 // values first; then the command is typed, with Enter unless the snippet says not to.
 
-/** A sheet over the terminal view (Smart Clip's too, clips.js). */
+/** A sheet over the terminal view (Clipboard's too, clips.js). */
 export const SHEET_CLASS = 'tv-sheet';
 
 /** {{name}} or {{name=default}} in a snippet's command (as js/snippets.js reads them). */

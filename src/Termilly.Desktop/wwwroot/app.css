@@ -640,7 +640,7 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
 .files-status { display: flex; gap: 8px; align-items: center; height: 26px; padding: 0 6px; overflow: hidden; color: var(--muted); font-size: 12px; white-space: nowrap; text-overflow: ellipsis; }
 .files-panel:focus { outline: none; }
 
-/* ---- Smart Clip (js/smartclip.js): docked on the right, between the Notepad (on the edge) and the Files panel
+/* ---- Clipboard (js/clipboard.js): docked on the right, between the Notepad (on the edge) and the Files panel
    (--clips-dock on #workspace). It borrows the Files panel's head, grip and search box. ---- */
 .clips-panel {
   position: absolute;

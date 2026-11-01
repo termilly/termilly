@@ -88,7 +88,7 @@ export const getSetting = path => {
  *   scroll?: number, caret?: number, caretEnd?: number }} NotepadPage
  */
 /**
- * The Smart Clip panel (js/smartclip.js) as it was left: open or closed, its width, what its search box held, the
+ * The Clipboard panel (js/clipboard.js) as it was left: open or closed, its width, what its search box held, the
  * clips shown in full, and where its list was scrolled.
  * @typedef {{ open: boolean, width?: number, query?: string, expanded?: string[], scroll?: number }} ClipsState
  */
@@ -178,9 +178,9 @@ export const EVENTS = Object.freeze({
   openAgentChanges: 'openAgentChanges',
   /** Files and folders dragged out of the Files panel were dropped on a terminal: { tab, x, y } (js/filepanel.js asks what to do). */
   panelDrop: 'panelDrop',
-  /** A clip dragged from Smart Clip onto a terminal: { tab, id } (js/smartclip.js pastes it). */
+  /** A clip dragged from Clipboard onto a terminal: { tab, id } (js/clipboard.js pastes it). */
   clipDrop: 'clipDrop',
-  /** Smart Clip's clips changed (js/smartclip.js): the phones get the new list (js/phone.js). */
+  /** Clipboard's clips changed (js/clipboard.js): the phones get the new list (js/phone.js). */
   clips: 'clips',
   openChangedFiles: 'openChangedFiles',
   openGit: 'openGit',

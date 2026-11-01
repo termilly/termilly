@@ -91,7 +91,7 @@ internal static class SettingValues
         public const int DaysPerMonth = 30;
     }
 
-    /// <summary>The most clips Smart Clip keeps that aren't pinned (Settings › Terminal › Smart Clip).</summary>
+    /// <summary>The most clips Clipboard keeps that aren't pinned (Settings › Terminal › Clipboard).</summary>
     public static class ClipLimit
     {
         public const int Default = 100;

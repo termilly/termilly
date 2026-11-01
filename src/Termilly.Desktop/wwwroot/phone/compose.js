@@ -1,7 +1,7 @@
 // @ts-check
 // The box under a Claude terminal for writing to Claude, as Settings › Message box says:
 // - Messages (the default): a round field with the microphone in it; the send arrow shows once there's something to
-//   send; a + holds paste, Smart Clip, snippets, Claude's commands and changing its mode. The key bar stays under it while writing.
+//   send; a + holds paste, Clipboard, snippets, Claude's commands and changing its mode. The key bar stays under it while writing.
 // - One bar: the key bar and the field share one row, with a switch between keys and a message to Claude.
 // Other terminals get the key bar alone. terminal.js sends what's written (the words, then Enter).
 
@@ -17,9 +17,9 @@ const C = Object.freeze({ plus: 'plus', keysPlus: 'keys-plus', mic: 'mic', mode:
 /** Empties Claude Code's own box (what was typed in the terminal): Ctrl+U clears a line, Backspace joins the one
  * above (the cursor is at the end); in an empty box they do nothing. Stop sends it too (terminal.js). */
 export const CLEAR_INPUT = '\x15' + '\x7f\x15'.repeat(20);
-/** Under a Claude terminal, Paste, Smart Clip and Snippets are in the +, not on the key bar. */
+/** Under a Claude terminal, Paste, Clipboard and Snippets are in the +, not on the key bar. */
 const IN_PLUS = ['paste', 'clips', 'snip'];
-/** Under any other terminal, the key bar's + holds Paste and Paste from Smart Clip. */
+/** Under any other terminal, the key bar's + holds Paste and Paste from Clipboard. */
 const IN_KEYS_PLUS = ['paste', 'clips'];
 /** Where the key bar's + goes: before the snippets. */
 const PLUS_BEFORE = 'snip';
@@ -72,7 +72,7 @@ export function composer(view, app) {
   const keyButtons = (/** @type {[string, string][]} */ keys) => keys.map(([key, label]) => `<button data-key="${key}">${label}</button>`).join('');
   /** @param {boolean} [claude] Under a Claude terminal: without what the + has. */
   const keybar = claude => `<div class="tv-foot keybar">${claude ? keyButtons(app.keys.filter(([key]) => !IN_PLUS.includes(key))) : plainKeys()}</div>`;
-  /** Another terminal's keys: Paste and Paste from Smart Clip under a + (before the snippets). */
+  /** Another terminal's keys: Paste and Paste from Clipboard under a + (before the snippets). */
   const plainKeys = () => app.keys.filter(([key]) => !IN_KEYS_PLUS.includes(key))
     .map(([key, label]) => `${key === PLUS_BEFORE ? `<button class="kb-plus" data-c="${C.keysPlus}" aria-label="Paste">${ICON.plus}</button>` : ''}<button data-key="${key}">${label}</button>`).join('');
 
@@ -186,11 +186,11 @@ export function composer(view, app) {
     switch (el.dataset.c) {
       case C.plus:
         if (view.querySelector(PART.menu)) closeMenu();
-        else menu(`<button data-c="${C.clear}">Clear text from terminal</button><button data-c="${C.pasteIn}">Paste</button><button data-key="clips-box">Paste from Smart Clip</button><button data-key="snip">Snippets</button>${COMMANDS.map(c => `<button data-c="${C.fill}" data-text="${c}">${c}</button>`).join('')}<button data-c="${C.shiftTab}">Change mode (Shift+Tab)</button>`);
+        else menu(`<button data-c="${C.clear}">Clear text from terminal</button><button data-c="${C.pasteIn}">Paste</button><button data-key="clips-box">Paste from Clipboard</button><button data-key="snip">Snippets</button>${COMMANDS.map(c => `<button data-c="${C.fill}" data-text="${c}">${c}</button>`).join('')}<button data-c="${C.shiftTab}">Change mode (Shift+Tab)</button>`);
         break;
       case C.keysPlus:
         if (view.querySelector(PART.menu)) closeMenu();
-        else menu('<button data-key="paste">Paste</button><button data-key="clips">Paste from Smart Clip</button>', 'from-keys');
+        else menu('<button data-key="paste">Paste</button><button data-key="clips">Paste from Clipboard</button>', 'from-keys');
         break;
       case C.more:
         if (view.querySelector(PART.menu)) closeMenu();

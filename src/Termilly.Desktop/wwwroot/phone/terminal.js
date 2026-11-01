@@ -27,7 +27,7 @@ const BAR = [['esc', 'esc'], ['tab', 'tab'], ['ctrl', 'ctrl'], ['up', '↑'], ['
 const CTRL = 'ctrl';
 const PASTE = 'paste';
 const SNIP = 'snip';
-/** Smart Clip's sheet: the PC's text clips to paste (clips.js). */
+/** Clipboard's sheet: the PC's text clips to paste (clips.js). */
 const CLIPS = 'clips';
 /** The same from Claude's +: the clip's text goes to the message box. */
 const CLIPS_BOX = 'clips-box';
@@ -224,7 +224,7 @@ export function terminalView(app) {
 
   // The terminal's workspace's snippets and the global ones.
   const snippets = snippetSheet(view, { list: () => app.snippets().filter(s => !s.ws || s.ws === shown?.ws), type });
-  // Smart Clip: the PC pastes the clip picked (its text stays there).
+  // Clipboard: the PC pastes the clip picked (its text stays there).
   const clipsSheet = clipSheet(view, {
     list: app.clips,
     paste: id => { if (shown && mayType()) app.send({ op: OP.clip, pane: shown.id, id }); },
@@ -487,7 +487,7 @@ export function terminalView(app) {
 
   return {
     open, close, update, message, rewatch, retheme,
-    /** A clip's text the PC sent for the message box (Paste from Smart Clip in Claude's +). @param {string} text */
+    /** A clip's text the PC sent for the message box (Paste from Clipboard in Claude's +). @param {string} text */
     fillBox: text => compose.fill(text),
     /** The terminal shown, or null. */
     get viewing() { return shown?.id ?? null; },

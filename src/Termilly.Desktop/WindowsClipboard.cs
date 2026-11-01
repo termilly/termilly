@@ -10,7 +10,7 @@ using Termilly.Desktop.Platform;
 namespace Termilly.Desktop;
 
 /// <summary>
-/// The Windows clipboard's changes (AddClipboardFormatListener), for Smart Clip: text, files copied in Explorer (as
+/// The Windows clipboard's changes (AddClipboardFormatListener), for Clipboard: text, files copied in Explorer (as
 /// their paths) or an image (as a PNG). Copies an app marks as private (password managers) are left alone, as Windows'
 /// own clipboard history does.
 /// </summary>

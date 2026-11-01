@@ -1,7 +1,7 @@
 // @ts-check
-// The terminal view's Smart Clip sheet: the PC's text clips, pinned first, each as its first line (a secret's masked).
+// The terminal view's Clipboard sheet: the PC's text clips, pinned first, each as its first line (a secret's masked).
 // From the key bar's clips a tap asks the PC to paste the clip into the terminal, its whole text staying on the PC;
-// from Paste from Smart Clip in Claude's + the clip's text comes to the message box, to edit or copy (never a
+// from Paste from Clipboard in Claude's + the clip's text comes to the message box, to edit or copy (never a
 // secret's). Phone/PhoneClips.cs answers both.
 
 import { SHEET_CLASS } from './snippets.js';
@@ -21,7 +21,7 @@ const metaOf = c => [/** @type {Record<string, string>} */ (KIND)[c.kind] ?? KIN
   .filter(Boolean).join(' · ');
 
 /**
- * The Smart Clip sheet, over the terminal view.
+ * The Clipboard sheet, over the terminal view.
  * @param {HTMLElement} view
  * @param {{ list: () => PhoneClip[], paste: (id: string) => void, fill: (id: string) => void }} terminal
  */
@@ -36,7 +36,7 @@ export function clipSheet(view, terminal) {
 
   function listHtml() {
     const shown = terminal.list();
-    return `<div class="tv-sheet-head"><b>Smart Clip</b><button class="tv-sheet-close" data-clip-close aria-label="Close">✕</button></div>`
+    return `<div class="tv-sheet-head"><b>Clipboard</b><button class="tv-sheet-close" data-clip-close aria-label="Close">✕</button></div>`
       + (shown.length ? `<div class="tv-sheet-list">${shown.map(c => {
         const kept = intoBox && c.kind === SECRET;
         return `<button class="snip clip-${esc(c.kind)}" data-clip="${esc(c.id)}"${kept ? ' disabled' : ''}><b>${esc(c.text)}</b>

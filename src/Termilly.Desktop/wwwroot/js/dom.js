@@ -11,7 +11,7 @@ export const XTERM_SCREEN = '.xterm-screen';
 export const MOUSE_OVER = 'mouseover';
 /** What a file or folder dragged from the Files panel carries: its path (a terminal types it where it's dropped). */
 export const PATH_DRAG = 'application/x-termilly-path';
-/** What a clip dragged from Smart Clip carries: its id. */
+/** What a clip dragged from Clipboard carries: its id. */
 export const CLIP_DRAG = 'application/x-termilly-clip';
 
 /**

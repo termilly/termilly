@@ -29,7 +29,7 @@ internal static class ClipKinds
 internal sealed record Clip(string Id, string Kind, string Text, string Source, long At, bool Pinned = false, int Width = 0, int Height = 0, long Bytes = 0, string? Hash = null, bool? Folder = null);
 
 /// <summary>
-/// Smart Clip's clips, newest first: text and images copied in Termilly or (on Windows) anywhere, with the same copy
+/// Clipboard's clips, newest first: text and images copied in Termilly or (on Windows) anywhere, with the same copy
 /// made again moved to the top instead of kept twice. Pinned clips are never dropped; the oldest of the others go past
 /// <see cref="Limit"/> (and past <see cref="MaxImages"/> images). Kept after a restart encrypted with the vault, images
 /// each in a file of their own read when first asked for; secrets and long clips stay in memory only.
@@ -67,7 +67,7 @@ internal sealed partial class ClipStore(Vault vault)
     private List<Clip> _clips = [];
     private bool _loaded;
 
-    /// <summary>The most clips kept that aren't pinned (Settings › Terminal › Smart Clip).</summary>
+    /// <summary>The most clips kept that aren't pinned (Settings › Terminal › Clipboard).</summary>
     public int Limit { get; set; } = SettingValues.ClipLimit.Default;
 
     /// <summary>Whether clips are kept after a restart; off, nothing is written and what was is deleted.</summary>

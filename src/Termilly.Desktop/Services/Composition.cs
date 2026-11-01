@@ -90,7 +90,7 @@ internal static class Composition
         .AddHandler<SyncHandler>()
         .AddHandler<UpdateHandler>()
         .AddHandler<PhoneHandler>()
-        .AddHandler<SmartClipHandler>()
+        .AddHandler<ClipboardHandler>()
         .AddHandler<RemotePcsHandler>()
         .AddSingleton<PageHost>();
 

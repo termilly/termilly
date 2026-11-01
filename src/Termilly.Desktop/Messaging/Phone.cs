@@ -87,7 +87,7 @@ internal static partial class ToPage
         public static string Type => "phone:size";
     }
 
-    /// <summary>A phone pastes a Smart Clip clip into a terminal: the page pastes its text, as its own Paste would (js/smartclip.js).</summary>
+    /// <summary>A phone pastes a Clipboard clip into a terminal: the page pastes its text, as its own Paste would (js/clipboard.js).</summary>
     internal sealed record PhoneClip(string Pane, string Id) : IHostMessage
     {
         public static string Type => "phone:clip";
