@@ -58,6 +58,8 @@ internal sealed partial class ClipStore(Vault vault)
     private const int IdLength = 12;
     /// <summary>The longest text taken as a path or a link (one line).</summary>
     private const int MaxLinkChars = 1_000;
+    /// <summary>The longest line looked at for a secret.</summary>
+    private const int MaxSecretLine = 2_000;
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
     private readonly Lock _lock = new();
@@ -190,9 +192,11 @@ internal sealed partial class ClipStore(Vault vault)
 
     private static ClipView View(Clip c)
     {
-        var text = c.Kind == ClipKinds.Secret ? SecretRedactor.Redact(c.Text) : c.Text;
+        // Only what's shown is masked: the rules are slow on a long text.
+        var shown = c.Text.Length > ShownChars ? c.Text[..ShownChars] : c.Text;
+        var text = c.Kind == ClipKinds.Secret ? SecretRedactor.Redact(shown) : shown;
         var lines = c.Text.Length == 0 ? 0 : c.Text.Count(ch => ch == '\n') + 1;
-        return new ClipView(c.Id, c.Kind, text.Length > ShownChars ? text[..ShownChars] : text, lines, c.Text.Length, c.Source, c.At, c.Pinned, c.Width, c.Height, c.Bytes, c.Folder);
+        return new ClipView(c.Id, c.Kind, text, lines, c.Text.Length, c.Source, c.At, c.Pinned, c.Width, c.Height, c.Bytes, c.Folder);
     }
 
     /// <summary>A clip's whole text, a secret's too; null for an image or a clip that's gone.</summary>
@@ -229,7 +233,7 @@ internal sealed partial class ClipStore(Vault vault)
     /// <summary>What a text says it is: a secret first (whatever the page said), then a link or a path; else what the page said, or text.</summary>
     public static string Classify(string text, string? kind)
     {
-        if (SecretRedactor.Redact(text) != text)
+        if (HasSecret(text))
         {
             return ClipKinds.Secret;
         }
@@ -247,6 +251,13 @@ internal sealed partial class ClipStore(Vault vault)
         }
         return kind == ClipKinds.Command ? ClipKinds.Command : ClipKinds.Text;
     }
+
+    /// <summary>
+    /// Whether a line of the text holds a secret. Line by line, leaving out lines longer than <see cref="MaxSecretLine"/>:
+    /// the redaction rules take minutes on a long run of text without spaces, and a token or a password line is short.
+    /// </summary>
+    private static bool HasSecret(string text) =>
+        text.Split('\n').Any(line => line.Length <= MaxSecretLine && SecretRedactor.Redact(line) != line);
 
     [GeneratedRegex(@"^(?:https?|ftp)://\S+$", RegexOptions.IgnoreCase)]
     private static partial Regex Link();
