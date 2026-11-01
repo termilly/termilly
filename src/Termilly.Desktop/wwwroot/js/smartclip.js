@@ -8,7 +8,7 @@
 
 import { PAGE, HOST } from './protocol.js';
 import { send, request, onHost } from './host.js';
-import { state, on, tabTitle, wsById, EVENTS, GROUPS } from './store.js';
+import { state, on, tabTitle, wsById, persist, EVENTS, GROUPS } from './store.js';
 import { focusedTab, restoreFocus, newTab } from './panes.js';
 import { scheduleFit, pasteInto } from './terminals.js';
 import { escapeHtml, formatWhen, ICONS } from './ui.js';
@@ -84,6 +84,11 @@ let query = '';
 /** The clips shown in full below their row (their expand button). */
 /** @type {Set<string>} */
 const expanded = new Set();
+/** Keeps the clips shown in full with the panel's state, for a restart. */
+const keepExpanded = () => {
+  state.clips.expanded = [...expanded];
+  persist();
+};
 /** The clip selected in the panel (highlighted, an image outlined): what Enter pastes and Delete deletes. */
 /** @type {string | null} */
 let selected = null;
@@ -300,6 +305,7 @@ function render() {
     box.focus();
     box.setSelectionRange(box.value.length, box.value.length);
   }
+  /** @type {HTMLElement} */ (panel.querySelector(LIST)).scrollTop = state.clips.scroll ?? 0;
   loadPictures();
 }
 
@@ -320,12 +326,31 @@ export function openClips() {
   if (panel.hidden) toggleClips();
 }
 
+/** Opens or closes the panel; open, the search box has the keys. */
 export function toggleClips() {
-  panel.hidden = !panel.hidden;
+  setOpen(panel.hidden === true);
   if (panel.hidden) return restoreFocus();
+  /** @type {HTMLElement | null} */ (panel.querySelector(SEARCH))?.focus();
+}
+
+/** @param {boolean} open */
+function setOpen(open) {
+  panel.hidden = !open;
+  if (state.clips.open !== open) {
+    state.clips.open = open;
+    persist();
+  }
+  if (!open) return;
   send(PAGE.clipList);
   render();
-  /** @type {HTMLElement | null} */ (panel.querySelector(SEARCH))?.focus();
+}
+
+/** The panel as it was left when Termilly closed: open or not, its width, search, clips shown in full and scroll. */
+export function initClips() {
+  query = state.clips.query ?? '';
+  for (const id of state.clips.expanded ?? []) expanded.add(id);
+  if (state.clips.width) panel.style.width = `${state.clips.width}px`;
+  if (state.clips.open) setOpen(true);
 }
 
 /** A path clip's path, without the quotes it may have been copied with. @param {Clip} c */
@@ -392,6 +417,7 @@ async function clipMenu(c, e) {
 function clipAct(act, c) {
   if (act === CLIP_ACTION.expand) {
     if (!expanded.delete(c.id)) expanded.add(c.id);
+    keepExpanded();
     drawList();
   } else if (act === CLIP_ACTION.open) openOf(c)?.run();
   else if (act === CLIP_ACTION.run) pasteClip(c, focusedTab(), true);
@@ -456,6 +482,8 @@ panel.addEventListener('contextmenu', e => {
 panel.addEventListener('input', e => {
   if (!targetOf(e).matches(SEARCH)) return;
   query = /** @type {HTMLInputElement} */ (e.target).value;
+  state.clips.query = query;
+  persist();
   drawList();
 });
 
@@ -489,12 +517,24 @@ onHost(HOST.clipClips, m => {
   keeping = m.keeping;
   for (const id of pictures.keys()) if (!clipById(id)) pictures.delete(id);
   if (selected && !clipById(selected)) selected = null;
+  const before = expanded.size;
   for (const id of expanded) if (!clipById(id)) expanded.delete(id);
+  if (expanded.size !== before) keepExpanded();
   render();
 });
 
 button.addEventListener('click', () => toggleClips());
 
-dockRight(panel, { dockVar: '--clips-dock', minWidth: MIN_WIDTH_PX, resized: scheduleFit });
+dockRight(panel, {
+  dockVar: '--clips-dock', minWidth: MIN_WIDTH_PX, resized: scheduleFit,
+  dragged: width => { state.clips.width = width; persist(); },
+});
+
+// Where the list was scrolled, for a restart (the list is drawn anew, so the panel listens).
+panel.addEventListener('scroll', e => {
+  if (!targetOf(e).matches(LIST)) return;
+  state.clips.scroll = /** @type {HTMLElement} */ (e.target).scrollTop;
+  persist();
+}, true);
 
 send(PAGE.clipList);

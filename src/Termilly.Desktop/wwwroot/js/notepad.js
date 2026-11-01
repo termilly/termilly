@@ -133,6 +133,10 @@ function render() {
   area.value = page?.text ?? '';
   area.disabled = !page;
   applyView();
+  if (page) {
+    area.setSelectionRange(page.caret ?? 0, page.caretEnd ?? page.caret ?? 0);
+    area.scrollTop = page.scroll ?? 0;
+  }
   tabsEl.querySelector('.on')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 }
 
@@ -407,6 +411,23 @@ export const copyToNoteItem = text => ({ label: COPY_TO_NOTE, icon: TOOL_ICONS.m
 // ---- Wiring ----
 
 area.addEventListener('contextmenu', pageMenu);
+
+// Where each page was left (scrolled to, the caret), kept with it so a restart comes back there.
+area.addEventListener('scroll', () => {
+  const page = activePage();
+  if (!page || page.scroll === area.scrollTop) return;
+  page.scroll = area.scrollTop;
+  persist();
+});
+for (const kind of ['keyup', 'mouseup', 'select']) {
+  area.addEventListener(kind, () => {
+    const page = activePage();
+    if (!page || (page.caret === area.selectionStart && page.caretEnd === area.selectionEnd)) return;
+    page.caret = area.selectionStart;
+    page.caretEnd = area.selectionEnd;
+    persist();
+  });
+}
 
 area.addEventListener('input', () => {
   const page = activePage();

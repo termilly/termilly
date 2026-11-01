@@ -26,7 +26,7 @@ import { toggleScratch } from './scratch.js';
 import { openGitWindow, openAgentChanges, gitFolderOf, onServer, openRemoteGitNotice } from './gitwindow.js';
 import { toggleFiles } from './filepanel.js';
 import { toggleNotepad, initNotepad, NOTEPAD_KEY } from './notepad.js';
-import { toggleClips, CLIPS_KEY } from './smartclip.js';
+import { toggleClips, initClips, CLIPS_KEY } from './smartclip.js';
 import { openNewWorktree } from './worktree.js';
 import { openChangedFiles } from './changes.js';
 import { openSnippetsWindow } from './snippetswindow.js';
@@ -531,6 +531,7 @@ function boot(saved, snapshot, liveSessions = []) {
   renderAll();
   initSidebar();
   initNotepad();
+  initClips();
   applySettings();
   if (state.activeId) switchWorkspace(state.activeId);
   if (!restored) newTab();

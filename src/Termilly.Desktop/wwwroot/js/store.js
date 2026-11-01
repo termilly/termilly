@@ -81,8 +81,15 @@ export const getSetting = path => {
 
 /**
  * A Notepad page (js/notepad.js): its name, text, the file it was opened from or saved to, and the text as that file
- * holds it (to tell unsaved changes), and whether the file has Windows line ends.
- * @typedef {{ id: string, name: string, text: string, path?: string | null, saved?: string | null, crlf?: boolean }} NotepadPage
+ * holds it (to tell unsaved changes), whether the file has Windows line ends, and where it was left: scrolled to and
+ * the caret (or the selection), to come back there after a restart.
+ * @typedef {{ id: string, name: string, text: string, path?: string | null, saved?: string | null, crlf?: boolean,
+ *   scroll?: number, caret?: number, caretEnd?: number }} NotepadPage
+ */
+/**
+ * The Smart Clip panel (js/smartclip.js) as it was left: open or closed, its width, what its search box held, the
+ * clips shown in full, and where its list was scrolled.
+ * @typedef {{ open: boolean, width?: number, query?: string, expanded?: string[], scroll?: number }} ClipsState
  */
 /**
  * The Notepad: open or closed, its pages, the one shown, its width, and whether it shows links and wraps words (both
@@ -108,6 +115,8 @@ export const state = {
   sidebar: { open: true },
   /** @type {NotepadState} */
   notepad: { open: false, pages: [], activeId: null },
+  /** @type {ClipsState} */
+  clips: { open: false },
   /**
    * The terminal colours of the theme plugins that are on (plugins.js).
    * @type {PluginTheme[]}
@@ -674,6 +683,7 @@ function serialize() {
     tags: state.tags,
     recentDirs: state.recentDirs,
     notepad: state.notepad,
+    clips: state.clips,
     // tmux windows aren't saved: they're tmux's, and attaching again brings them back (tmux.js).
     workspaces: state.workspaces.filter(w => !w.tmux).map(({ id, name, color, cwd, focusId, root, note, snippets, collapsed, copyTo }) => ({ id, name, color, cwd, focusId, root: withoutPreview(root), note, snippets, collapsed: collapsed || undefined, copyTo })),
     tabs: [...state.tabs.values()].filter(t => !t.virtual).map(t => {
@@ -712,6 +722,7 @@ export function restore(saved) {
     const pages = saved.notepad.pages.filter((/** @type {any} */ p) => typeof p?.id === 'string' && typeof p.text === 'string');
     state.notepad = { ...saved.notepad, pages, activeId: pages.some((/** @type {NotepadPage} */ p) => p.id === saved.notepad.activeId) ? saved.notepad.activeId : pages[0]?.id ?? null };
   }
+  if (saved.clips && typeof saved.clips === 'object') state.clips = { ...state.clips, ...saved.clips };
   state.sidebar = { ...state.sidebar, ...saved.sidebar };
   state.recentDirs = Array.isArray(saved.recentDirs) ? saved.recentDirs.filter((/** @type {unknown} */ d) => typeof d === 'string').slice(0, MAX_RECENT_DIRS) : [];
   if (!Array.isArray(saved.workspaces) || !saved.workspaces.length) return false;
