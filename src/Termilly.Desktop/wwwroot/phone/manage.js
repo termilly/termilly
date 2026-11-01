@@ -111,32 +111,37 @@ export function manager(app) {
   const chosenWs = () => wsOf(sheet?.ws ?? snap().activeWs) ?? snap().workspaces[0];
   /** @param {string} to @param {string} label */
   const pageBack = (to, label) => `<button class="back-row" data-m="${to}">‹ ${label}</button>`;
+  /** @param {string} to @param {string} label @param {string} title */
+  const pageHead = (to, label, title) => `${pageBack(to, label)}<h1 class="page-title">${title}</h1>`;
 
+  /** @typedef {{ head: string, body: string, dock?: string }} PageParts A page's parts: its head and Open stay put, its body scrolls. */
+
+  /** @returns {PageParts} */
   function newHtml() {
     const chosen = chosenPlace(), ws = chosenWs(), remote = places().filter(p => p.remote);
     const opt = (/** @type {Place} */ p) => `<button class="row opt${p.id === chosen?.id ? ' on' : ''}" data-m="${M.pick}" data-p="${esc(p.id)}">${badgeHtml(p)}
       <div class="r-text"><div class="r-name">${esc(p.name)}${p.production ? ' <span class="prod">prod</span>' : ''}</div>${p.remote && p.description ? `<div class="r-line">${esc(p.description)}</div>` : ''}</div>
       <span class="tick">${p.id === chosen?.id ? '✓' : ''}</span></button>`;
-    return `<div class="page-head">${pageBack(M.cancel, 'Terminals')}<h1 class="page-title">New terminal</h1></div>
-      <div class="section">Shell</div><div class="list">${places().filter(p => !p.remote).map(opt).join('')}</div>
+    return { head: pageHead(M.cancel, 'Terminals', 'New terminal'), body: `<div class="section">Shell</div><div class="list">${places().filter(p => !p.remote).map(opt).join('')}</div>
       <div class="section-row"><span class="section">Remote</span><button class="link" data-m="${M.host}">Add SSH host</button></div>
       ${remote.length ? `<div class="list">${remote.map(opt).join('')}</div>` : '<p class="muted hint">No SSH hosts, WSL or serial ports on the PC yet.</p>'}
       <div class="section">Where</div><div class="list">
         <button class="row" data-m="${M.toWs}"><span class="r-text">Workspace</span><span class="more-value"><span class="dot" style="background:${esc(ws?.color)}"></span> ${esc(ws?.name)}</span><span class="chev">›</span></button>
-        <button class="row" data-m="${M.toFolder}"><span class="r-text">Folder</span><span class="more-value">${esc(sheet?.cwd || 'Workspace folder')}</span><span class="chev">›</span></button></div>
-      <div class="m-dock"><button class="btn primary" data-m="${M.openNew}"${chosen ? '' : ' disabled'}>Open ${esc(chosen?.name ?? '')}</button></div>`;
+        <button class="row" data-m="${M.toFolder}"><span class="r-text">Folder</span><span class="more-value">${esc(sheet?.cwd || 'Workspace folder')}</span><span class="chev">›</span></button></div>`,
+      dock: `<button class="btn primary" data-m="${M.openNew}"${chosen ? '' : ' disabled'}>Open ${esc(chosen?.name ?? '')}</button>` };
   }
 
+  /** @returns {PageParts} */
   function newWsHtml() {
     const ws = chosenWs();
-    return `<div class="page-head">${pageBack(M.toNew, 'New terminal')}<h1 class="page-title">Workspace</h1></div><div class="list">${snap().workspaces.map(w =>
+    return { head: pageHead(M.toNew, 'New terminal', 'Workspace'), body: `<div class="list">${snap().workspaces.map(w =>
       `<button class="row opt${w.id === ws?.id ? ' on' : ''}" data-m="${M.pickWs}" data-ws="${esc(w.id)}"><span class="dot" style="background:${esc(w.color)}"></span>
-        <div class="r-text"><div class="r-name">${esc(w.name)}</div>${w.cwd ? `<div class="r-line">${esc(w.cwd)}</div>` : ''}</div><span class="tick">${w.id === ws?.id ? '✓' : ''}</span></button>`).join('')}</div>`;
+        <div class="r-text"><div class="r-name">${esc(w.name)}</div>${w.cwd ? `<div class="r-line">${esc(w.cwd)}</div>` : ''}</div><span class="tick">${w.id === ws?.id ? '✓' : ''}</span></button>`).join('')}</div>` };
   }
 
-  const newFolderHtml = () => `<div class="page-head">${pageBack(M.toNew, 'New terminal')}<h1 class="page-title">Folder</h1></div>
-    <div class="form"><label class="f-row"><span>Folder</span><input name="${FIELD.cwd}" value="${esc(sheet?.cwd ?? '')}" placeholder="${esc(chosenWs()?.cwd ?? 'The workspace folder')}" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="done"></label></div>
-    <p class="hint muted">Empty: the workspace's own folder.</p>`;
+  /** @returns {PageParts} */
+  const newFolderHtml = () => ({ head: pageHead(M.toNew, 'New terminal', 'Folder'), body: `<div class="form"><label class="f-row"><span>Folder</span><input name="${FIELD.cwd}" value="${esc(sheet?.cwd ?? '')}" placeholder="${esc(chosenWs()?.cwd ?? 'The workspace folder')}" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="done"></label></div>
+    <p class="hint muted">Empty: the workspace's own folder.</p>` });
 
   function hostHtml() {
     const field = (/** @type {string} */ name, /** @type {string} */ label, /** @type {string} */ hint, mode = '') =>
@@ -176,18 +181,22 @@ export function manager(app) {
   const confirmHtml = () => `<div class="grabber"></div><h2 class="c-title">${esc(sheet?.title)}</h2><p class="muted">${esc(sheet?.text)}</p>
     <button class="ibtn red" data-m="${M.go}">${esc(sheet?.title?.split(' ')[0] ?? 'OK')}</button><button class="ibtn" data-m="${M.cancel}">Cancel</button>`;
 
-  const SHEETS = { [SHEET.new]: newHtml, [SHEET.newWs]: newWsHtml, [SHEET.newFolder]: newFolderHtml, [SHEET.host]: hostHtml, [SHEET.more]: moreHtml, [SHEET.rename]: renameHtml, [SHEET.move]: moveHtml, [SHEET.confirm]: confirmHtml };
+  const SHEETS = { [SHEET.host]: hostHtml, [SHEET.more]: moreHtml, [SHEET.rename]: renameHtml, [SHEET.move]: moveHtml, [SHEET.confirm]: confirmHtml };
+  /** @type {Record<string, () => PageParts>} */
+  const PAGE_PARTS = { [SHEET.new]: newHtml, [SHEET.newWs]: newWsHtml, [SHEET.newFolder]: newFolderHtml };
 
   /**
-   * A page, above the tab bar.
+   * A page, above the tab bar: its head at the top and Open at the bottom never move; only the body between them
+   * scrolls (iOS's bounce stays in there).
    * @param {Shown} shown
    */
   const pageHtml = shown => {
     const now = sheet;
     sheet = shown;
-    const html = `<div class="m-page"><div class="m-in">${SHEETS[shown.kind]()}</div></div>`;
+    const { head, body, dock } = PAGE_PARTS[shown.kind]();
     sheet = now;
-    return html;
+    return `<div class="m-page"><div class="page-head"><div class="m-in">${head}</div></div>
+      <div class="m-body"><div class="m-in">${body}</div></div>${dock ? `<div class="m-dock"><div class="m-in">${dock}</div></div>` : ''}</div>`;
   };
 
   /** Draws the sheet or page shown (or none); only on the phone's own steps, so what's typed in it stays. */

@@ -272,17 +272,19 @@ button.row { width: 100%; border: 0; background: none; color: inherit; font: inh
 .m-head button, .m-head > span { min-width: 70px; padding: 6px 0; border: 0; background: none; color: var(--accent); font: inherit; font-size: 17px; text-align: left; }
 .m-head button.strong { font-weight: 600; text-align: right; }
 .form { overflow: hidden; border-radius: 12px; background: var(--raised); }
-/* New terminal and its Workspace and Folder pages: over the home, above the tab bar, scrolling up and down only; Open
-   stays at the bottom of the page. */
-.m-page { position: fixed; inset: 0 0 var(--tabbar, 0px); z-index: 6; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; background: var(--bg); }
-.m-in { display: flex; flex-direction: column; min-height: 100%; max-width: 600px; margin: 0 auto; padding: 0 12px; }
-/* The page's back row and title stay at the top as it scrolls. */
-.page-head { position: sticky; top: 0; z-index: 1; margin: 0 -12px; padding: calc(env(safe-area-inset-top) + 10px) 12px 4px; background: var(--bg); }
+/* New terminal and its Workspace and Folder pages: over the home, above the tab bar. The head and Open never move;
+   only the body between them scrolls, up and down, with iOS's bounce kept inside it. */
+.m-page { position: fixed; inset: 0 0 var(--tabbar, 0px); z-index: 6; display: flex; flex-direction: column; overflow: hidden; background: var(--bg); }
+.m-in { max-width: 600px; margin: 0 auto; padding: 0 12px; }
+.page-head { flex: none; padding: calc(env(safe-area-inset-top) + 10px) 0 4px; }
+.page-head .back-row { margin-bottom: 4px; }
+.m-body { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; }
+.m-body > .m-in { padding-bottom: 16px; }
 .page-title { margin: 0 8px 4px; font-size: 28px; letter-spacing: -.3px; }
 .opt.on .r-name { font-weight: 600; }
 .m-page .more-value .dot { width: 8px; height: 8px; margin-right: 2px; }
 .m-page .form + .hint, .m-page .list + .hint { margin: 8px 8px 0; }
-.m-dock { position: sticky; bottom: 0; margin: auto -12px 0; padding: 18px 12px 12px; background: linear-gradient(transparent, var(--bg) 14px); }
+.m-dock { flex: none; padding: 10px 0 12px; border-top: 1px solid var(--line); background: var(--bg); }
 .m-dock .btn { display: block; width: 100%; padding: 13px 0; font-size: 16px; }
 .m-dock .btn:disabled { opacity: .4; }
 .f-row { display: flex; gap: 10px; align-items: center; min-height: 46px; padding: 0 14px; }
