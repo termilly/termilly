@@ -53,10 +53,11 @@ import { toggleWrap } from './preview.js';
  * How a terminal matched: its rank (lower is better), what matched, and the output lines that did.
  * @typedef {{ rank: number, on?: string } & (OutputHit | NoHit)} TextMatch
  */
-/** @typedef {{ kind: 'open', tab: Tab, ws: Workspace, lines: Lines, match: TextMatch, rank: number }} OpenResult */
+/** A terminal's row; hit marks the row of one of its matching lines, listed under it. */
+/** @typedef {{ kind: 'open', tab: Tab, ws: Workspace, lines: Lines, match: TextMatch, rank: number, hit?: boolean }} OpenResult */
 /**
  * @typedef {{ kind: 'closed', entry: HistoryEntry, profile: SessionProfile | undefined, lines: Lines,
- *   match: TextMatch, rank: number }} ClosedResult
+ *   match: TextMatch, rank: number, hit?: boolean }} ClosedResult
  */
 /** @typedef {{ kind: 'workspaces', ws: Workspace }} WorkspaceResult */
 /** @typedef {{ kind: 'commands', cmd: PaletteCommand }} CommandResult */
@@ -118,6 +119,8 @@ const FILTERS = [
 const GROUP_TITLES = { open: 'Open terminals', closed: 'Recently closed', workspaces: 'Workspaces', commands: 'Commands', go: 'Go to', ran: 'Commands run' };
 /** @type {Record<string, number>} */
 const LIMITS = { open: 40, closed: 40, workspaces: 12, commands: 12, go: 60, ran: 200 };
+/** How many of a terminal's matching lines are listed under it (the newest); the preview steps through the rest. */
+const MOST_HITS = 50;
 
 /** @type {string} */
 let filter = PALETTE_VIEW.all;
@@ -516,6 +519,37 @@ function terminalRowHtml(r, q) {
 }
 
 /**
+ * A terminal's matching lines, as rows under it in the output's order (the newest MOST_HITS), each a result of its
+ * own: Up and Down walk every match in every terminal. Only when there are two or more (one shows in its row).
+ * @param {OpenResult | ClosedResult} r
+ * @param {Query} q
+ * @param {PaletteResult[]} into where the rows' results go, after the terminal's
+ */
+function hitRowsHtml(r, q, into) {
+  const hits = r.match.hits ?? [];
+  if (hits.length < 2) return '';
+  const from = Math.max(0, hits.length - MOST_HITS);
+  let html = from ? `<div class="res-more">${from} older match${from === 1 ? '' : 'es'}: step through them in the preview</div>` : '';
+  for (let at = from; at < hits.length; at++) {
+    const index = into.length;
+    into.push(/** @type {OpenResult | ClosedResult} */ ({ ...r, hit: true, match: { ...r.match, at, line: hits[at] } }));
+    html += `<div class="res res-hit${index === selected ? ' sel' : ''}" data-index="${index}" role="option"><span class="res-hit-line">${snippet(r.lines[hits[at]], q.text)}</span></div>`;
+  }
+  return html;
+}
+
+/**
+ * How many output lines matched, in how many terminals, above the list; empty when none did.
+ * @param {Record<string, PaletteResult[]>} groups
+ */
+function totalHtml(groups) {
+  const found = [...(groups[KIND.open] ?? []), ...(groups[KIND.closed] ?? [])]
+    .map(r => /** @type {OpenResult | ClosedResult} */ (r).match.count ?? 0).filter(Boolean);
+  const n = found.reduce((sum, count) => sum + count, 0);
+  return n ? `<div class="res-total">${n} match${n === 1 ? '' : 'es'} in ${found.length} terminal${found.length === 1 ? '' : 's'}</div>` : '';
+}
+
+/**
  * A command from the history: how it ended, where and when it ran.
  * @param {RanResult} r
  */
@@ -589,7 +623,7 @@ function run() {
   input.placeholder = PLACEHOLDERS[filter] ?? PLACEHOLDERS.default;
   const { q, groups } = search();
   results = [];
-  let html = '';
+  let html = q.text ? totalHtml(groups) : '';
   for (const kind of Object.values(KIND)) {
     const list = groups[kind] ?? [];
     if (!list.length) continue;
@@ -598,6 +632,7 @@ function run() {
     for (const r of shown) {
       html += rowHtml(r, results.length, q);
       results.push(r);
+      if (kind === KIND.open || kind === KIND.closed) html += hitRowsHtml(/** @type {OpenResult | ClosedResult} */ (r), q, results);
     }
   }
   if (!results.length) {
@@ -641,7 +676,8 @@ function renderPreview(q = parseQuery(input.value)) {
       isOpen ? RUNNING_LABEL : `closed ${escapeHtml(formatWhen(r.entry.closedAt))}`,
       r.match.count === 1 ? '1 matching line' : '',
     ].filter(Boolean).join('<span class="dot-sep">·</span>');
-    const stepper = /** @type {number} */ (r.match.count) > 1 ? `<span class="pv-step">
+    // A match's own row shows that match; its terminal's row steps through them all.
+    const stepper = !r.hit && /** @type {number} */ (r.match.count) > 1 ? `<span class="pv-step">
         <button class="pv-step-btn" data-step="-1" title="Older match">${ICONS.chevronLeft}</button>
         <span>match ${/** @type {number} */ (r.match.at) + 1} of ${r.match.count}</span>
         <button class="pv-step-btn" data-step="1" title="Newer match">${ICONS.chevronRight}</button></span>` : '';

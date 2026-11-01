@@ -1981,6 +1981,12 @@ code.path { color: var(--text); font-size: 11.5px; word-break: break-all; }
 .res-title { overflow: hidden; text-overflow: ellipsis; }
 .res-where { color: var(--faint); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; }
 .res-line2 { margin-top: 3px; overflow: hidden; color: var(--muted); font: 11.5px/1.45 var(--mono); white-space: nowrap; text-overflow: ellipsis; }
+/* A terminal's matching lines, under its row; the total above the list; the older matches not listed. */
+.res.res-hit { padding: 4px 10px 4px 52px; }
+.res-hit-line { overflow: hidden; color: var(--muted); font: 11.5px/1.45 var(--mono); white-space: nowrap; text-overflow: ellipsis; }
+.res.res-hit.sel .res-hit-line { color: var(--text); }
+.res-total { padding: 8px 10px 2px; color: var(--text); font-size: 12px; font-weight: 600; }
+.res-more { padding: 3px 10px 3px 52px; color: var(--faint); font-size: 11px; }
 .res-right { display: flex; flex: none; flex-direction: column; align-items: flex-end; gap: 4px; color: var(--faint); font-size: 11px; white-space: nowrap; }
 .res-right kbd { font-size: 10px; }
 /* A command’s hint (its keys, or a settings section) on one line: the column stacks a result’s lines, not its keys. */
