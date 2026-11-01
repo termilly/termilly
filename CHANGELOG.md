@@ -5,7 +5,7 @@ What changed in each release. Termilly says in its title bar when a newer one is
 ## 1.6.0 (unreleased)
 
 - **Termilly on your phone:** see your terminals and agents, answer them and type, with alerts when an agent needs you.
-- **Other computers:** attach another PC's Termilly workspaces to your laptop or any PC.
+- **Other computers:** attach another PC's Termilly workspaces to your laptop or any PC, and copy files to them.
 - **Smart Clip:** every copy kept, text and images, to paste again from the right-click menu or its panel.
 - **My prompts:** everything you asked Claude in a terminal, by day, one click away from where you asked it.
 - **Search:** the files, folders and links any terminal printed, and every matching line under its terminal.

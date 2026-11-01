@@ -15,6 +15,7 @@ import {
 } from './filepaths.js';
 import { rootOf, childPath, signHtml, indentRows, readFolders, pathDown } from './foldertree.js';
 import { FILE_OP, FOLDER_PATH } from './constants.js';
+import { fileTargets, fileTarget } from './remotepc.js';
 
 /** What to do about the items already in the folder. */
 const CONFLICT = Object.freeze({ replace: 'replace', skip: 'skip', keep: 'keep' });
@@ -68,7 +69,8 @@ export async function planInto(source, items, tab, dir) {
     return null;
   }
   // Names on a server tell case apart; here they don't.
-  const key = isSsh(tab) ? (/** @type {string} */ n) => n : (/** @type {string} */ n) => n.toLowerCase();
+  const caseless = tab.pcFiles ? tab.pcFiles.caseless : !isSsh(tab);
+  const key = caseless ? (/** @type {string} */ n) => n.toLowerCase() : (/** @type {string} */ n) => n;
   const taken = new Set((m.entries ?? []).map((/** @type {{ name: string }} */ e) => key(e.name)));
   const clashes = items.filter(i => taken.has(key(i.name)));
   // Copying into the folder they're in: only new names will do.
@@ -120,8 +122,17 @@ function askConflict(clashes, dir, samePlace) {
 
 // ---- The window: terminals on the left, the chosen one's folders on the right, as a tree ----
 
-/** The terminals whose files can be shown, by workspace in the sidebar's order. */
-const terminals = () => state.workspaces.map(ws => ({ ws, tabs: tabsOf(ws).filter(hasFiles) })).filter(g => g.tabs.length);
+/**
+ * The terminals whose files can be shown, by workspace in the sidebar's order, then the paired computers' (js/remotepc.js).
+ * @returns {{ name: string, tabs: Tab[] }[]}
+ */
+const terminals = () => [
+  ...state.workspaces.map(ws => ({ name: ws.name, tabs: tabsOf(ws).filter(hasFiles) })).filter(g => g.tabs.length),
+  ...fileTargets(),
+];
+
+/** A terminal the window lists, by its id: this PC's, or another computer's. @param {string} id */
+const listed = id => state.tabs.get(id) ?? fileTarget(id);
 
 /**
  * Whether a terminal matches what's typed in the filter: its name, workspace or host.
@@ -137,9 +148,9 @@ const matches = (tab, wsName, filter) => !filter || [tabTitle(tab), wsName, plac
  * @param {Tab} source
  */
 function termsHtml(p, source) {
-  const html = terminals().map(({ ws, tabs }) => {
-    const shown = tabs.filter(t => matches(t, ws.name, p.filter));
-    return shown.length ? `<div class="copyto-ws">${escapeHtml(ws.name)}</div>${shown.map(t => `
+  const html = terminals().map(({ name, tabs }) => {
+    const shown = tabs.filter(t => matches(t, name, p.filter));
+    return shown.length ? `<div class="copyto-ws">${escapeHtml(name)}</div>${shown.map(t => `
       <div class="copyto-term${t === p.tab ? ' on' : ''}" data-tab="${escapeHtml(t.id)}">
         <span class="files-name">${escapeHtml(tabTitle(t))}${t === source ? ' <span class="copyto-host">(this one)</span>' : ''}</span>
         <span class="copyto-host">${escapeHtml(placeOf(t))}</span>
@@ -154,7 +165,7 @@ function termsHtml(p, source) {
  * Which tree the terminal's folders are in: one per machine, read once while the window is open.
  * @param {Tab} tab
  */
-const machineOf = tab => (isSsh(tab) ? `ssh:${tab.profile}` : 'here');
+const machineOf = tab => (tab.pcFiles ? `pc:${tab.pcFiles.machine}` : isSsh(tab) ? `ssh:${tab.profile}` : 'here');
 
 /**
  * One folder's row: its sign (+ when it has folders, − when open), icon and name.
@@ -183,7 +194,9 @@ function treeHtml(p) {
   if (!p.tab) return '';
   if (p.error) return `<div class="inbox-empty files-error">${escapeHtml(p.error)}</div>`;
   const root = rootOf(p.tab);
-  const rows = [nodeRow(p, root, `${ICONS.monitor} ${escapeHtml(isSsh(p.tab) ? `${placeOf(p.tab)} (/)` : root === '/' ? '/' : DRIVES_NAME)}`, 0, true)];
+  const rootName = p.tab.pcFiles ? (root === '/' ? `${placeOf(p.tab)} (/)` : placeOf(p.tab))
+    : isSsh(p.tab) ? `${placeOf(p.tab)} (/)` : root === '/' ? '/' : DRIVES_NAME;
+  const rows = [nodeRow(p, root, `${ICONS.monitor} ${escapeHtml(rootName)}`, 0, true)];
   /**
    * @param {string} path
    * @param {number} depth
@@ -337,7 +350,7 @@ function choose(dialog, p, tab) {
 }
 
 /** The terminals the filter shows, in order. @param {Picker} p */
-const shownTerms = p => terminals().flatMap(({ ws, tabs }) => tabs.filter(t => matches(t, ws.name, p.filter)));
+const shownTerms = p => terminals().flatMap(({ name, tabs }) => tabs.filter(t => matches(t, name, p.filter)));
 
 /**
  * The filter changed, or an arrow key moved: the terminal chosen stays if it's still shown, else the first one is.
@@ -418,7 +431,7 @@ function pickFolder(source, count) {
     window.addEventListener('keydown', keys, true);
     wirePicker(dialog, p);
     // The terminal picked last time in this workspace; else the first that isn't the one the files are in.
-    const last = state.tabs.get(memoOf()?.tab ?? '');
+    const last = listed(memoOf()?.tab ?? '');
     const first = last && hasFiles(last) ? last : shownTerms(p).find(t => t !== source) ?? source;
     choose(dialog, p, first);
     const submit = () => {
@@ -445,7 +458,7 @@ function wirePicker(dialog, p) {
   dialog.addEventListener('click', e => {
     const term = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-tab]'))?.dataset.tab;
     const node = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-node]'))?.dataset.node;
-    if (term) choose(dialog, p, /** @type {Tab} */ (state.tabs.get(term)));
+    if (term) choose(dialog, p, /** @type {Tab} */ (listed(term)));
     else if (node != null && targetOf(e).closest('[data-twist]') && e.detail < 2) toggle(dialog, p, node);
     else if (node != null) select(dialog, p, node);
     else if (targetOf(e).closest('[data-mkdir]') && copyTarget(p)) {

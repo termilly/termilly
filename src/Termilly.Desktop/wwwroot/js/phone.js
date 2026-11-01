@@ -6,7 +6,7 @@
 
 import { PAGE, HOST } from './protocol.js';
 import { send, onHost } from './host.js';
-import { state, on, wsById, tabTitle, profileOf, activityOf, runsClaude, markSeen, BADGES, EVENTS } from './store.js';
+import { state, on, wsById, tabTitle, profileOf, activityOf, runsClaude, markSeen, isSsh, BADGES, EVENTS } from './store.js';
 import { entryDetail, notesForPhone } from './inbox.js';
 import { AGENT_STATE, CLAUDE_TOOL, PROFILE_ICON } from './constants.js';
 import { debounce } from './util.js';
@@ -18,6 +18,8 @@ import { clipsForPhone } from './smartclip.js';
 import { THEMES, THEME_BASE, themeId, onSystemThemeChange } from './themes.js';
 import { termTheme } from './terminals.js';
 import { placesForPhone } from './phonemanage.js';
+import { hasFiles, shellFolderOf, placeOf } from './filepaths.js';
+import { platform } from './host.js';
 
 /** How long changes settle before the phones hear of them. */
 const SEND_AFTER_MS = 300;
@@ -104,6 +106,9 @@ function terminalOf(tab) {
     resuming: !!tab.resuming,
     // The terminal's size: the phone starts at it, then asks for its own (Features/Phone.cs, phone:size).
     cols: tab.view?.term?.cols ?? null, rows: tab.view?.term?.rows ?? null,
+    // Where its files are, for another Termilly computer's Copy to (only while others may type here).
+    files: state.settings.phone?.allowTyping && hasFiles(tab)
+      ? { ssh: isSsh(tab), place: isSsh(tab) ? placeOf(tab) : null, cwd: shellFolderOf(tab) } : null,
   };
 }
 
@@ -135,6 +140,8 @@ function snapshot() {
   const typing = !!state.settings.phone?.allowTyping;
   return {
     typing,
+    // Which system it runs on: another computer's Copy to draws its folders from drives (Windows) or from /.
+    os: platform,
     snippets: typing ? snippetsForPhone() : [],
     // Smart Clip's text clips to paste (their first lines; the PC pastes the whole one): Settings › Phone.
     clips: typing && state.settings.phone?.clips !== false ? clipsForPhone() : [],

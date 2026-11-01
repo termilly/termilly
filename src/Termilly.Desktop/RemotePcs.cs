@@ -156,6 +156,19 @@ internal static class PcConnection
         }
     }
 
+    /// <summary>
+    /// An HTTPS client for the computer's API, trusting only its own authority and sending this computer's token (its
+    /// files, for Copy to: Features/RemotePcFiles.cs).
+    /// </summary>
+    public static HttpClient ClientFor(RemotePc pc, TimeSpan timeout)
+    {
+        var authority = X509CertificateLoader.LoadCertificate(Convert.FromBase64String(pc.Authority));
+        var handler = new HttpClientHandler { ServerCertificateCustomValidationCallback = (_, cert, _, errors) => Trusted(cert, authority, errors), UseCookies = false };
+        var client = new HttpClient(handler, disposeHandler: true) { Timeout = timeout, BaseAddress = new Uri($"https://{pc.Address}") };
+        client.DefaultRequestHeaders.Add(Phone.PhoneAppApi.CookieHeader, $"{TokenCookie}={pc.Token}");
+        return client;
+    }
+
     /// <summary>Opens the computer's live connection (what its phone app gets), with this computer's token.</summary>
     public static async Task<ClientWebSocket> ConnectAsync(RemotePc pc, CancellationToken cancel)
     {

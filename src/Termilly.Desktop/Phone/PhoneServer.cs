@@ -90,9 +90,13 @@ internal sealed class PhoneServer : IDisposable
     public string SetupUrl { get; }
     public string AppUrl { get; }
 
-    private PhoneServer(IPAddress address, int port, string webRoot, PhoneStore store, PhoneLive live, X509Certificate2 authority, string pushKey, Func<string, Task> testAlert)
+    /// <summary>Another Termilly computer's Copy to (PcFilesApi); null where nothing takes it.</summary>
+    private readonly PcFilesApi? _files;
+
+    private PhoneServer(IPAddress address, int port, string webRoot, PhoneStore store, PhoneLive live, X509Certificate2 authority, string pushKey,
+        Func<string, Task> testAlert, PcFilesApi? files)
     {
-        (_webRoot, _api, _live) = (Path.GetFullPath(webRoot), new PhoneAppApi(store, pushKey, testAlert, BuildOf(webRoot)), live);
+        (_webRoot, _api, _live, _files) = (Path.GetFullPath(webRoot), new PhoneAppApi(store, pushKey, testAlert, BuildOf(webRoot)), live, files);
         _certificate = store.ServerCertificate(authority, [address], HostName);
         _authorityFile = PhoneCertificates.AuthorityFile(authority);
         _listener = new TcpListener(address, port);
@@ -111,14 +115,15 @@ internal sealed class PhoneServer : IDisposable
         ? Directory.EnumerateFiles(webRoot, "*", SearchOption.AllDirectories).Select(File.GetLastWriteTimeUtc).DefaultIfEmpty().Max().Ticks.ToString("x", System.Globalization.CultureInfo.InvariantCulture)
         : "";
 
-    public static PhoneServer Start(int port, string webRoot, PhoneStore store, PhoneLive live, X509Certificate2 authority, string pushKey, Func<string, Task> testAlert)
+    public static PhoneServer Start(int port, string webRoot, PhoneStore store, PhoneLive live, X509Certificate2 authority, string pushKey, Func<string, Task> testAlert,
+        PcFilesApi? files = null)
     {
         var address = Environment.GetEnvironmentVariable("TERMILLY_PHONE_BIND") is { Length: > 0 } bind
             ? IPAddress.Parse(bind)
             : LocalNetworkAddress() ?? throw new IOException("This PC isn't on a local network (no 10.x, 172.16–31.x, 192.168.x or 100.64–127.x address).");
         try
         {
-            return new PhoneServer(address, port, webRoot, store, live, authority, pushKey, testAlert);
+            return new PhoneServer(address, port, webRoot, store, live, authority, pushKey, testAlert, files);
         }
         catch (SocketException e)
         {
@@ -208,6 +213,15 @@ internal sealed class PhoneServer : IDisposable
                     await ServeLive(stream, request, key, (client.Client.RemoteEndPoint as IPEndPoint)?.Address.MapToIPv4().ToString() ?? "", timeout.Token);
                     return;
                 }
+                if (request.Path == PcFiles.Put)
+                {
+                    // Its body can be large and slow: read here, not with the request, and not within its time.
+                    var taken = secure && _files is not null && request.Method == HttpMethod.Put.Method && _api.DeviceOf(request) is not null
+                        ? await _files.UploadAsync(request, stream, _stop.Token)
+                        : Forbidden;
+                    await WriteResponse(stream, taken, _stop.Token);
+                    return;
+                }
                 var reply = secure ? await RespondSecure(request) : await RespondPlain(request);
                 await WriteResponse(stream, reply, timeout.Token);
             }
@@ -263,6 +277,13 @@ internal sealed class PhoneServer : IDisposable
                 headers[line[..colon].Trim()] = line[(colon + 1)..].Trim();
             }
         }
+        var path = start[1].Split('?')[0];
+        if (path == PcFiles.Put)
+        {
+            // An upload's body is streamed to a file (PcFilesApi): only what came with the head is passed on here.
+            var extra = buffer.GetBuffer().AsSpan(headerEnd + HeadEnd.Length, (int)buffer.Length - headerEnd - HeadEnd.Length).ToArray();
+            return new PhoneRequest(start[0], path, headers, extra);
+        }
         var length = headers.TryGetValue("Content-Length", out var l) && int.TryParse(l, out var n) ? n : 0;
         if (length is < 0 or > MaxBody)
         {
@@ -280,7 +301,7 @@ internal sealed class PhoneServer : IDisposable
             }
             have += read;
         }
-        return new PhoneRequest(start[0], start[1].Split('?')[0], headers, body);
+        return new PhoneRequest(start[0], path, headers, body);
     }
 
     private static async Task WriteResponse(Stream stream, PhoneReply reply, CancellationToken cancel)
@@ -315,6 +336,12 @@ internal sealed class PhoneServer : IDisposable
     /// <summary>HTTPS: the phone app's files, and its API.</summary>
     private async Task<PhoneReply> RespondSecure(PhoneRequest request)
     {
+        if (PcFilesApi.Handles(request.Path))
+        {
+            return _files is not null && request.Method == HttpMethod.Post.Method && _api.DeviceOf(request) is not null
+                ? await Task.Run(() => _files.Answer(request))
+                : Forbidden;
+        }
         if (request.Path.StartsWith("/api/", StringComparison.Ordinal))
         {
             return _api.Answer(request) ?? Forbidden;

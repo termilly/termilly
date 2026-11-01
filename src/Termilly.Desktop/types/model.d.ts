@@ -163,6 +163,11 @@ interface Tab {
   agentSeen?: boolean;
   /** The Claude Code sessions it ran, oldest first, for My prompts (js/myprompts.js). */
   agentSessions?: string[];
+  /**
+   * Another Termilly computer's terminal, as Copy to lists it (js/remotepc.js fileTargets): the computer, where its
+   * files are there (its own disk, or an SSH host it reaches), and the folder its shell is in.
+   */
+  pcFiles?: { pcId: string; pc: string; machine: string; place: string; root: string; caseless: boolean; cwd: string };
   /** When My prompts was last cleared: prompts from before it are hidden (js/myprompts.js). Nothing is deleted. */
   promptsClearedAt?: number | null;
   /** Its agent was ended, to resume (js/hibernate.js). */

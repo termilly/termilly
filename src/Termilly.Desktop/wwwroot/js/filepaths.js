@@ -44,28 +44,29 @@ export const folderName = /** @param {string} path */ path => (path === FOLDER_P
 export const sizeText = /** @param {number} n */ n => (n < KB ? `${n} B` : n < MB ? `${(n / KB).toFixed(1)} KB` : `${(n / MB).toFixed(1)} MB`);
 
 /** Whether a terminal's files can be shown: its server's over SFTP, or this machine's (not WSL, a container or serial). */
-export const hasFiles = /** @param {Tab} tab */ tab => isSsh(tab) || !isRemote(tab);
+export const hasFiles = /** @param {Tab} tab */ tab => !!tab.pcFiles || isSsh(tab) || !isRemote(tab);
 
 /** The folder a terminal's shell is in (on its server, for SSH), or its workspace's, or home. */
 export const shellFolderOf = /** @param {Tab} tab */ tab =>
-  (isSsh(tab) ? tab.remoteCwd ?? '~' : tab.cwd ?? wsById(tab.wsId)?.cwd ?? '~');
+  (tab.pcFiles ? tab.pcFiles.cwd : isSsh(tab) ? tab.remoteCwd ?? '~' : tab.cwd ?? wsById(tab.wsId)?.cwd ?? '~');
 
 /** Where a terminal's files are: its SSH host's name, or this computer. */
-export const placeOf = /** @param {Tab} tab */ tab => (isSsh(tab) ? profileOf(tab)?.name ?? '' : DRIVES_NAME);
+export const placeOf = /** @param {Tab} tab */ tab => (tab.pcFiles ? tab.pcFiles.place : isSsh(tab) ? profileOf(tab)?.name ?? '' : DRIVES_NAME);
 
 /**
  * A folder of a terminal, said where it matters which machine it's on: "host: /path" on a server, the path here.
  * @param {Tab} tab
  * @param {string} dir
  */
-export const folderOf = (tab, dir) => (isSsh(tab) ? `${placeOf(tab)}: ${dir}` : dir);
+export const folderOf = (tab, dir) => (tab.pcFiles || isSsh(tab) ? `${placeOf(tab)}: ${dir}` : dir);
 
 /**
  * Whether two terminals' files are on the same machine: both here, or both on one SSH host.
  * @param {Tab} a
  * @param {Tab} b
  */
-export const sameMachine = (a, b) => isSsh(a) === isSsh(b) && (!isSsh(a) || a.profile === b.profile);
+export const sameMachine = (a, b) => (a.pcFiles || b.pcFiles ? a.pcFiles?.machine === b.pcFiles?.machine
+  : isSsh(a) === isSsh(b) && (!isSsh(a) || a.profile === b.profile));
 
 /**
  * "name.txt", or "name (1).txt" when that's taken among `taken` (a folder's whole name is its stem), as the host's

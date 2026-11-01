@@ -41,7 +41,7 @@ export const signHtml = (has, open) => `<span class="tree-twist" data-twist>${ha
  * Where a terminal's tree starts: this PC's drives, or the root of its server (or of this machine, on Linux).
  * @param {Tab} tab
  */
-export const rootOf = tab => (isSsh(tab) || platform !== PLATFORM.windows ? '/' : FOLDER_PATH.drives);
+export const rootOf = tab => (tab.pcFiles ? tab.pcFiles.root : isSsh(tab) || platform !== PLATFORM.windows ? '/' : FOLDER_PATH.drives);
 
 /**
  * A folder's path in a tree: a drive's is its root ("C:\").
@@ -116,7 +116,7 @@ export async function pathDown(tab, nodes, path, files) {
   const chain = chainOf(full, root);
   const missing = chain.filter(c => !nodes.has(c));
   const error = missing.length ? await readFolders(tab, nodes, missing, files) : null;
-  const caseless = !isSsh(tab) && platform === PLATFORM.windows;
+  const caseless = tab.pcFiles ? tab.pcFiles.caseless : !isSsh(tab) && platform === PLATFORM.windows;
   const same = (/** @type {string} */ a, /** @type {string} */ b) => (caseless ? a.toLowerCase() === b.toLowerCase() : a === b);
   const there = [root];
   for (const c of chain.slice(1)) {

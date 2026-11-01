@@ -15,10 +15,13 @@ import { showMenu } from './popups.js';
 import { byId, targetOf } from './dom.js';
 import { renderRemote, setRemoteExtra, REMOTE_ID, REMOTE_GROUP, groupHead, isGroupFolded } from './remote.js';
 import { showToast, TOAST } from './toasts.js';
+import { FOLDER_PATH } from './constants.js';
 
 /** @typedef {import('./protocol.js').PcView} Pc */
 /** A computer's state, as its phone app gets it (js/phone.js snapshot): what the tree shows of it. */
-/** @typedef {{ workspaces: { id: string, name: string, color: string }[], terminals: { id: string, ws: string, title: string, badge?: string, icon?: string, cols?: number | null, rows?: number | null, activity?: string | null, hint?: string | null }[] }} PcState */
+/** Where a terminal's files are there: an SSH host it reaches (by name) or its own disk, and its shell's folder. */
+/** @typedef {{ ssh: boolean, place: string | null, cwd: string }} PcFiles */
+/** @typedef {{ os?: string, workspaces: { id: string, name: string, color: string }[], terminals: { id: string, ws: string, title: string, badge?: string, icon?: string, cols?: number | null, rows?: number | null, activity?: string | null, hint?: string | null, files?: PcFiles | null }[] }} PcState */
 
 /** A virtual terminal's kind (tab.virtual): another computer's. */
 export const PC_KIND = 'pc';
@@ -42,6 +45,54 @@ function stateOf(pc) {
     return { workspaces: [], terminals: [] };
   }
 }
+
+/** Copy to's stand-ins for the computers' terminals (js/copyto.js), by their ids, so a choice stays the same one. */
+/** @type {Map<string, Tab>} */
+const standIns = new Map();
+
+/** The system a computer says it runs (its state's os), whose folders start at drives. */
+const WINDOWS_OS = 'windows';
+
+/**
+ * A computer's terminal as Copy to lists it: an id the host routes to that computer, its name, and where its files
+ * are (Tab.pcFiles).
+ * @param {Pc} pc
+ * @param {PcState} s
+ * @param {PcState['terminals'][number]} t
+ * @param {PcFiles} files
+ * @returns {Tab}
+ */
+function standIn(pc, s, t, files) {
+  const id = `pc:${pc.id}:${t.id}`;
+  const windows = s.os === WINDOWS_OS;
+  const tab = standIns.get(id) ?? /** @type {Tab} */ (/** @type {unknown} */ ({ id, wsId: null, profile: '', tags: [] }));
+  tab.name = t.title;
+  tab.pcFiles = {
+    pcId: pc.id, pc: pc.name, machine: `${pc.id}:${files.ssh ? files.place : ''}`,
+    place: files.ssh ? `${files.place} on ${pc.name}` : pc.name,
+    root: files.ssh || !windows ? '/' : FOLDER_PATH.drives, caseless: !files.ssh && windows, cwd: files.cwd,
+  };
+  standIns.set(id, tab);
+  return tab;
+}
+
+/**
+ * The paired computers' terminals Copy to can copy into, by workspace (named with the computer): the ones whose
+ * files they share, while they're reachable.
+ * @returns {{ name: string, tabs: Tab[] }[]}
+ */
+export function fileTargets() {
+  return pcs.filter(pc => pc.online).flatMap(pc => {
+    const s = stateOf(pc);
+    return s.workspaces.map(ws => ({
+      name: `${ws.name} · ${pc.name}`,
+      tabs: s.terminals.filter(t => t.ws === ws.id && t.files).map(t => standIn(pc, s, t, /** @type {PcFiles} */ (t.files))),
+    })).filter(g => g.tabs.length);
+  });
+}
+
+/** A computer's terminal Copy to listed, by its id. @param {string} id */
+export const fileTarget = id => standIns.get(id);
 
 /** Its terminals open here, each watching its terminal there: tab id to the workspace it's in. */
 /** @type {Map<string, string>} */
