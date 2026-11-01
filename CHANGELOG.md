@@ -2,7 +2,7 @@
 
 What changed in each release. Termilly says in its title bar when a newer one is out.
 
-## 1.6.0 (unreleased)
+## 1.6.0 (2026-11-01)
 
 - **Remote:** Access your workspaces, terminals, and agent sessions from your phone or another PC.
 - **Search:** Improved search with detected paths, files, and URLs grouped into separate lists.
