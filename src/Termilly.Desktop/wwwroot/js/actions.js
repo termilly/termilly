@@ -7,7 +7,8 @@ import { PAGE, HOST } from './protocol.js';
 import { send, onHost } from './host.js';
 import { state, tabTitle, emit, EVENTS } from './store.js';
 import { ACTION_PLACEHOLDER } from './constants.js';
-import { keysHtml, ICONS } from './ui.js';
+import { ICONS } from './ui.js';
+import { chordOf, chordHtml, takenBy, JOIN, FUNCTION_KEY, ACTION_MODIFIERS } from './keymap.js';
 import { SEPARATOR, showMenu, closeAll } from './popups.js';
 import { byId } from './dom.js';
 import { noticeDialog } from './dialogs.js';
@@ -18,32 +19,9 @@ import { setMenuExtras } from './termclipboard.js';
 import { linkUnderMouse } from './termlinks.js';
 import { copyToNotepadItem, copyToNoteItem } from './notepad.js';
 
-/** Keys as the settings keep them: modifiers in this order, then the key, joined by +. */
-const CTRL = 'Ctrl';
-const ALT = 'Alt';
-const MODIFIERS = [CTRL, ALT, 'Shift'];
-const JOIN = '+';
-/** Keys named by their code rather than the character they type (which Shift and the layout change). */
-const PUNCTUATION = Object.freeze({
-  Backquote: '`', Minus: '-', Equal: '=', BracketLeft: '[', BracketRight: ']', Backslash: '\\',
-  Semicolon: ';', Quote: "'", Comma: ',', Period: '.', Slash: '/',
-});
-const NAMED_KEYS = ['Space', 'Enter', 'Home', 'End', 'PageUp', 'PageDown', 'Insert', 'Delete'];
-const ARROW = 'Arrow';
-const KEY_CODE = /^Key([A-Z])$/;
-const DIGIT_CODE = /^Digit(\d)$/;
-const FUNCTION_KEY = /^F([1-9]|1[0-2])$/;
-
-/**
- * Termilly's own shortcuts (main.js runShortcut, the clipboard and selection keys), which an action can't take.
- * Ctrl+Alt+J is the "next terminal that needs me" key from any app.
- */
-const RESERVED = [
-  /^Ctrl\+Shift\+([TWRFOELHGBNJAIDCVM`1-9]|Up|Down|Left|Right|Insert)$/,
-  /^Ctrl\+Alt\+([1-9]|J)$/,
-  /^Alt\+Shift\+[=-]$/,
-  /^Ctrl\+([=\-0,CV]|Tab|Insert|PageUp|PageDown)$/,
-];
+const { ctrl: CTRL, alt: ALT } = ACTION_MODIFIERS;
+/** Re-exported for Settings › Actions and Keyboard. */
+export { chordOf, chordHtml };
 
 /** The placeholders a selection fills, so an action using one is on the right-click menu only with a selection. */
 /** @type {readonly string[]} */
@@ -72,26 +50,6 @@ export const placeholdersOf = action =>
   [...`${action.target} ${action.arguments ?? ''}`.matchAll(PLACEHOLDER)].map(m => m[1]).filter(p => ACTION_PLACEHOLDER.all.includes(p));
 
 /**
- * A keydown as an action's keys ("Ctrl+Alt+B"), or null for a key an action can't use.
- * @param {KeyboardEvent} e
- */
-export function chordOf(e) {
-  const key = keyName(e.code);
-  if (!key) return null;
-  const held = [e.ctrlKey, e.altKey, e.shiftKey];
-  return [...MODIFIERS.filter((_, i) => held[i]), key].join(JOIN);
-}
-
-/** @param {string} code */
-function keyName(code) {
-  const letter = KEY_CODE.exec(code) ?? DIGIT_CODE.exec(code);
-  if (letter) return letter[1];
-  if (FUNCTION_KEY.test(code) || NAMED_KEYS.includes(code)) return code;
-  if (code.startsWith(ARROW)) return code.slice(ARROW.length);
-  return PUNCTUATION[/** @type {keyof typeof PUNCTUATION} */ (code)] ?? null;
-}
-
-/**
  * Why these keys can't run an action, or '' when they can. An action's keys need Ctrl or Alt with another modifier
  * (or a function key), so they never take a key a shell or program uses.
  * @param {string} chord
@@ -105,16 +63,12 @@ export function chordProblem(chord, except) {
   if (!withFunctionKey && (modifiers.length < 2 || !(modifiers.includes(CTRL) || modifiers.includes(ALT)))) {
     return 'Use two of Ctrl, Alt and Shift (one of them Ctrl or Alt) with a key, or a modifier with F1–F12, so shells and programs keep their keys.';
   }
-  if (RESERVED.some(re => re.test(chord))) return 'Termilly already uses these keys.';
+  const taken = takenBy(chord);
+  if (taken) return `Termilly already uses these keys: ${taken}.`;
   const other = enabledActions().find(a => a.id !== except && a.shortcut === chord);
   return other ? `“${other.name}” already uses these keys.` : '';
 }
 
-/**
- * An action's keys for showing: "Ctrl Alt B" as keyboard keys.
- * @param {string} chord
- */
-export const chordHtml = chord => keysHtml(chord.split(JOIN).join(' '));
 
 /**
  * What a terminal offers its actions: the selection, its folder (a local one) and the first port a program listens on.

@@ -57,6 +57,9 @@ internal sealed record TerminalSettings
 internal sealed record InterfaceSettings
 {
     private const int MaxDisabledPlugins = 100;
+    /// <summary>The most shortcuts with keys of their own, and the longest id or keys one may have.</summary>
+    private const int MaxShortcuts = 100;
+    private const int MaxShortcutText = 40;
     /// <summary>The longest theme id js/themes.js uses.</summary>
     private const int MaxThemeId = 40;
 
@@ -74,6 +77,11 @@ internal sealed record InterfaceSettings
     public string CloseAction { get; init; } = SettingValues.CloseAction.Default;
     /// <summary>Quitting asks first while a command or an agent is still running (unless shells are kept running).</summary>
     public bool ConfirmQuit { get; init; } = true;
+    /// <summary>
+    /// Termilly's shortcuts with keys of the user's own (js/keymap.js, Settings › Keyboard): a shortcut's id to its keys
+    /// ("Ctrl+Shift+T"), "" for none. One not here has its default.
+    /// </summary>
+    public IReadOnlyDictionary<string, string>? Shortcuts { get; init; }
 
     public InterfaceSettings Normalize() => this with
     {
@@ -82,6 +90,9 @@ internal sealed record InterfaceSettings
         CloseAction = SettingChecks.OneOf(CloseAction, SettingValues.CloseAction.All, SettingValues.CloseAction.Default),
         Font = SettingChecks.Trimmed(Font),
         DisabledPlugins = (DisabledPlugins ?? []).Where(id => !string.IsNullOrWhiteSpace(id)).Distinct().Take(MaxDisabledPlugins).ToList(),
+        Shortcuts = (Shortcuts ?? new Dictionary<string, string>())
+            .Where(s => s.Key.Length is > 0 and <= MaxShortcutText && (s.Value ?? "").Length <= MaxShortcutText)
+            .Take(MaxShortcuts).ToDictionary(s => s.Key, s => s.Value ?? ""),
     };
 
     /// <summary>A theme's id as js/themes.js has them: lowercase letters, digits and hyphens.</summary>
