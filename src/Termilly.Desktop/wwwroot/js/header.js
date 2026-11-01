@@ -54,7 +54,7 @@ const HEADER_HTML = `
       <button class="pane-btn results-btn" title="What commands here produced: pull requests, running apps, pushes" hidden></button>
       <button class="pane-btn changes-btn" title="Files Claude changed in this terminal" hidden></button>
       <button class="pane-btn menu-btn" title="Terminal menu">${ICONS.more}</button>
-      <button class="pane-btn prompts-btn" title="My prompts: what you asked Claude here" hidden>${ICONS.prompts}</button>
+      <button class="pane-btn prompts-btn" title="Prompt History" hidden>${ICONS.prompts}</button>
       <button class="pane-btn note-btn" hidden>${ICONS.note}</button>
       <button class="pane-btn tag-btn" title="Tags">${ICONS.tag}</button>
       <button class="pane-btn close-btn" title="Close terminal (Ctrl+Shift+W)">${ICONS.close}</button>
