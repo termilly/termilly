@@ -12,6 +12,7 @@ import { bufferLines, scrolledBack, prepareStart } from './terminals.js';
 import { markHibernated } from './hibernate.js';
 import { startResuming } from './resuming.js';
 import { SETTING_VALUES } from './constants.js';
+import { showClosing, painted } from './closing.js';
 import { savedResults, restoreResults } from './results.js';
 
 /** The choices of the settings used here (C#'s SettingValues). */
@@ -68,7 +69,12 @@ setInterval(() => {
 }, EVERY);
 
 // Termilly is closing: one last, current snapshot, then the host closes.
-onHost(HOST.snapshotRequest, () => send(PAGE.snapshotSave, { snapshot: snapshot(), final: true }));
+onHost(HOST.snapshotRequest, async () => {
+  showClosing('Saving what your terminals show');
+  await painted();
+  send(PAGE.snapshotSave, { snapshot: snapshot(), final: true });
+  showClosing('Closing the terminals');
+});
 
 /**
  * What a terminal's profile types at its first prompt (Claude Code: claude), or null.

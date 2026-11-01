@@ -11,6 +11,7 @@ import { modal, CONFIRM_DIALOG } from './dialogs.js';
 import { escapeHtml } from './ui.js';
 import { AGENT_STATE, QUIT_ANSWER } from './constants.js';
 import { playQuitSound } from './sounds.js';
+import { showClosing } from './closing.js';
 
 /** An agent in these states still has work it would lose. @type {Set<string>} */
 const AGENT_BUSY = new Set([AGENT_STATE.working, AGENT_STATE.needsInput]);
@@ -62,7 +63,10 @@ function askToQuit(busy) {
 
 /** @param {string} answer */
 function answer(answer) {
-  if (answer === QUIT_ANSWER.quit) saveNow(); // don't lose a change made in the last moments
+  if (answer === QUIT_ANSWER.quit) {
+    showClosing('Saving your workspaces');
+    saveNow(); // don't lose a change made in the last moments
+  }
   send(PAGE.quitAnswer, { answer });
 }
 

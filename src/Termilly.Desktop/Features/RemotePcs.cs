@@ -56,6 +56,7 @@ internal sealed class RemotePcsHandler(PageChannel page, RemotePcStore store) : 
     private readonly ConcurrentDictionary<string, Live> _live = new();
     private readonly ConcurrentDictionary<string, Watch> _watches = new();
     private readonly CancellationTokenSource _stop = new();
+    private int _disposed;
 
     public void Register(MessageRouter router)
     {
@@ -264,8 +265,16 @@ internal sealed class RemotePcsHandler(PageChannel page, RemotePcStore store) : 
         }
     }
 
+    /// <remarks>
+    /// Registered as a handler and as a startable, so the container disposes it twice: the second time does nothing
+    /// (cancelling a disposed token source threw, and every quit crashed).
+    /// </remarks>
     public void Dispose()
     {
+        if (Interlocked.Exchange(ref _disposed, 1) == 1)
+        {
+            return;
+        }
         _stop.Cancel();
         foreach (var tab in _watches.Keys.ToList())
         {
