@@ -24,7 +24,7 @@ import { toggleCaptures } from './triggers.js';
 import { toggleHints } from './hints.js';
 import { toggleScratch } from './scratch.js';
 import { openGitWindow, openAgentChanges, gitFolderOf, onServer, openRemoteGitNotice } from './gitwindow.js';
-import { toggleFiles } from './filepanel.js';
+import { toggleFiles, initFiles } from './filepanel.js';
 import { toggleNotepad, initNotepad, NOTEPAD_KEY } from './notepad.js';
 import { toggleClips, initClips, CLIPS_KEY } from './smartclip.js';
 import { openNewWorktree } from './worktree.js';
@@ -534,6 +534,7 @@ function boot(saved, snapshot, liveSessions = []) {
   initClips();
   applySettings();
   if (state.activeId) switchWorkspace(state.activeId);
+  initFiles();
   if (!restored) newTab();
   keepEarlierOfOpen();
   // Show the page when the focused terminal prints its prompt (see 'output'); straight away if there is

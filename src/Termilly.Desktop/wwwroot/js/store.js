@@ -92,6 +92,11 @@ export const getSetting = path => {
  * @typedef {{ open: boolean, width?: number, query?: string, expanded?: string[], scroll?: number }} ClipsState
  */
 /**
+ * The File Explorer (js/filepanel.js) as it was left: open or closed, its width, the terminal it showed, that tree's
+ * open folders and where it was scrolled.
+ * @typedef {{ open: boolean, width?: number, tabId?: string | null, folders?: string[], scroll?: number }} FilesState
+ */
+/**
  * The Notepad: open or closed, its pages, the one shown, its width, and whether it shows links and wraps words (both
  * unless turned off).
  * @typedef {{ open: boolean, pages: NotepadPage[], activeId: string | null, width?: number, links?: boolean, wrap?: boolean }} NotepadState
@@ -117,6 +122,8 @@ export const state = {
   notepad: { open: false, pages: [], activeId: null },
   /** @type {ClipsState} */
   clips: { open: false },
+  /** @type {FilesState} */
+  files: { open: false },
   /**
    * The terminal colours of the theme plugins that are on (plugins.js).
    * @type {PluginTheme[]}
@@ -684,6 +691,7 @@ function serialize() {
     recentDirs: state.recentDirs,
     notepad: state.notepad,
     clips: state.clips,
+    files: state.files,
     // tmux windows aren't saved: they're tmux's, and attaching again brings them back (tmux.js).
     workspaces: state.workspaces.filter(w => !w.tmux).map(({ id, name, color, cwd, focusId, root, note, snippets, collapsed, copyTo }) => ({ id, name, color, cwd, focusId, root: withoutPreview(root), note, snippets, collapsed: collapsed || undefined, copyTo })),
     tabs: [...state.tabs.values()].filter(t => !t.virtual).map(t => {
@@ -723,6 +731,7 @@ export function restore(saved) {
     state.notepad = { ...saved.notepad, pages, activeId: pages.some((/** @type {NotepadPage} */ p) => p.id === saved.notepad.activeId) ? saved.notepad.activeId : pages[0]?.id ?? null };
   }
   if (saved.clips && typeof saved.clips === 'object') state.clips = { ...state.clips, ...saved.clips };
+  if (saved.files && typeof saved.files === 'object') state.files = { ...state.files, ...saved.files };
   state.sidebar = { ...state.sidebar, ...saved.sidebar };
   state.recentDirs = Array.isArray(saved.recentDirs) ? saved.recentDirs.filter((/** @type {unknown} */ d) => typeof d === 'string').slice(0, MAX_RECENT_DIRS) : [];
   if (!Array.isArray(saved.workspaces) || !saved.workspaces.length) return false;
