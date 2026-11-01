@@ -251,7 +251,7 @@ export const HOST = Object.freeze({
 /** @typedef {{ id: string, kind: string, text: string, lines: number, chars: number, source: string, at: number, pinned: boolean, width: number, height: number, bytes: number, folder: boolean|null }} ClipView */
 
 /** @typedef {{  }} Page_actionDefaults */
-/** @typedef {{ id?: string|null, selection?: string|null, folder?: string|null, port?: number|null }} Page_actionRun */
+/** @typedef {{ id?: string|null, selection?: string|null, folder?: string|null, port?: number|null, image?: string|null }} Page_actionRun */
 /** @typedef {{ requestId?: string|null, result?: any|null, error?: string|null }} Page_apiResult */
 /** @typedef {{ count?: number }} Page_badge */
 /** @typedef {{ id?: string, path?: string|null }} Page_changesClear */

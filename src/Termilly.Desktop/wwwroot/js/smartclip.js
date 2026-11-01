@@ -349,9 +349,10 @@ function openOf(c) {
  * a new terminal; text, into the Notepad or a note; and the user's actions that take it (Settings › Actions).
  * @param {Clip} c
  * @param {string} text the clip's whole text
+ * @param {string | null} image an image clip's PNG file, for actions with {image}
  * @returns {import('./popups.js').MenuEntry[]}
  */
-function kindEntries(c, text) {
+function kindEntries(c, text, image) {
   const open = openOf(c);
   const folder = c.kind === CLIP_KIND.path && c.folder != null ? (c.folder ? pathOf(c) : parentOf(pathOf(c))) : null;
   const tab = focusedTab();
@@ -361,7 +362,7 @@ function kindEntries(c, text) {
     ...(folder ? [{ label: c.folder ? 'New terminal here' : 'New terminal in its folder', icon: ICONS.terminal, action: () => newTab({ cwd: folder }) }] : []),
     ...(c.kind === CLIP_KIND.command ? [{ label: 'Run in a new terminal', icon: ICONS.terminal, action: () => newTab({ command: text.trim() }) }] : []),
     ...(c.kind === CLIP_KIND.text || c.kind === CLIP_KIND.command ? [copyToNotepadItem(text), copyToNoteItem(text)] : []),
-    ...(tab && c.kind !== CLIP_KIND.image && c.kind !== CLIP_KIND.secret ? pathActions(tab, text.trim(), folder ?? '').map(a => ({ ...a, icon: ICONS.play })) : []),
+    ...(tab && c.kind !== CLIP_KIND.secret ? pathActions(tab, text.trim(), folder ?? '', image).map(a => ({ ...a, icon: ICONS.play })) : []),
   ];
   return entries.length ? [...entries, SEPARATOR] : [];
 }
@@ -375,8 +376,9 @@ function kindEntries(c, text) {
 async function clipMenu(c, e) {
   const isImage = c.kind === CLIP_KIND.image;
   const text = c.chars > c.text.length && c.kind !== CLIP_KIND.secret ? await take(c, CLIP_FORM.text) ?? c.text : c.text;
+  const image = isImage ? await take(c, CLIP_FORM.path) : null;
   showMenu([
-    ...kindEntries(c, text),
+    ...kindEntries(c, text, image),
     { label: isImage ? 'Paste the file path' : 'Paste', icon: ICONS.paste, action: () => pasteClip(c) },
     ...(runnable(c) ? [{ label: 'Paste and run', icon: ICONS.play, action: () => pasteClip(c, focusedTab(), true) }] : []),
     { label: isImage ? 'Copy the image' : 'Copy', icon: ICONS.copy, action: () => copyClip(c) },

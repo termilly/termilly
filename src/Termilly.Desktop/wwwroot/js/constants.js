@@ -404,7 +404,9 @@ export const ACTION_PLACEHOLDER = Object.freeze({
   port: 'port',
   file: 'file',
   line: 'line',
-  all: Object.freeze(['selection', 'folder', 'repo', 'branch', 'port', 'file', 'line']),
+  url: 'url',
+  image: 'image',
+  all: Object.freeze(['selection', 'folder', 'repo', 'branch', 'port', 'file', 'line', 'url', 'image']),
 });
 
 /** C#: ClipKinds (SmartClip.cs). */

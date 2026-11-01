@@ -125,6 +125,28 @@ public sealed class ActionsTests
     }
 
     [Fact]
+    public void Url_is_the_selection_only_when_it_is_a_web_address_and_image_an_image_file_that_is_there()
+    {
+        var picture = Path.ChangeExtension(Path.GetTempFileName(), ".png");
+        File.WriteAllText(picture, "x");
+        try
+        {
+            var link = Actions.Values(new ActionContext(" https://www.reddit.com/ ", null, null), null, null);
+            Assert.Equal("https://www.reddit.com/", link[ActionPlaceholders.Url]);
+            Assert.False(Actions.Values(new ActionContext("not a link", null, null), null, null).ContainsKey(ActionPlaceholders.Url));
+            Assert.Equal(picture, Actions.Values(new ActionContext(null, null, null, picture), null, null)[ActionPlaceholders.Image]);
+            Assert.Equal(picture, Actions.Values(new ActionContext(picture, null, null), null, null)[ActionPlaceholders.Image]);
+            Assert.False(Actions.Values(new ActionContext(null, null, null, picture + ".missing.png"), null, null).ContainsKey(ActionPlaceholders.Image));
+            var launch = Actions.Prepare(new ActionSetting("c", "Chrome", "chrome.exe", "{url}"), link);
+            Assert.Equal(["https://www.reddit.com/"], launch.Arguments);
+        }
+        finally
+        {
+            File.Delete(picture);
+        }
+    }
+
+    [Fact]
     public void No_saved_actions_means_termillys_own_and_bad_ones_are_dropped()
     {
         Assert.Equal(Actions.Defaults.Select(a => a.Id), new CommandSettings().Normalize().Actions!.Select(a => a.Id));

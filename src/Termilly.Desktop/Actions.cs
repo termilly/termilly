@@ -21,11 +21,15 @@ internal static class ActionPlaceholders
     public const string File = "file";
     /// <summary>The line the selection names after the file; 1 when it names none.</summary>
     public const string Line = "line";
-    public static readonly IReadOnlyList<string> All = [Selection, Folder, Repo, Branch, Port, File, Line];
+    /// <summary>The selection when it's a web address (an action using it is offered only for one).</summary>
+    public const string Url = "url";
+    /// <summary>An image file: a Smart Clip image (saved as a PNG), or a selected path to an image.</summary>
+    public const string Image = "image";
+    public static readonly IReadOnlyList<string> All = [Selection, Folder, Repo, Branch, Port, File, Line, Url, Image];
 }
 
 /// <summary>What the page knows when an action runs; the host works out the rest (the repository, the file).</summary>
-internal sealed record ActionContext(string? Selection, string? Folder, int? Port);
+internal sealed record ActionContext(string? Selection, string? Folder, int? Port, string? Image = null);
 
 /// <summary>An action ready to start: a web page, or a program with its arguments and folder.</summary>
 internal sealed record ActionLaunch(Uri? Url, string? Program = null, IReadOnlyList<string>? Arguments = null, string? Folder = null);
@@ -53,6 +57,8 @@ internal static partial class Actions
     private const string HostGroup = "host";
     private const string GitSuffix = ".git";
     private const string GitScheme = "git";
+    /// <summary>The files {image} takes.</summary>
+    private static readonly string[] ImageExtensions = [".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".tif", ".tiff"];
     private static readonly string[] RemoteSchemes = [Uri.UriSchemeHttps, Uri.UriSchemeHttp, Uri.UriSchemeSsh, GitScheme];
     private static readonly string[] WebPrefixes = [Uri.UriSchemeHttps + "://", Uri.UriSchemeHttp + "://", Brace(ActionPlaceholders.Repo)];
 
@@ -119,13 +125,23 @@ internal static partial class Actions
         Add(ActionPlaceholders.Repo, repo);
         Add(ActionPlaceholders.Branch, branch);
         Add(ActionPlaceholders.Port, context.Port?.ToString(System.Globalization.CultureInfo.InvariantCulture));
-        if (FileOf(context.Selection, context.Folder) is { } file)
+        var file = FileOf(context.Selection, context.Folder);
+        if (file is { } named)
         {
-            Add(ActionPlaceholders.File, file.Path);
-            Add(ActionPlaceholders.Line, file.Line ?? LineOne);
+            Add(ActionPlaceholders.File, named.Path);
+            Add(ActionPlaceholders.Line, named.Line ?? LineOne);
         }
+        Add(ActionPlaceholders.Url, selection is not null && WebAddress().IsMatch(selection) ? selection : null);
+        Add(ActionPlaceholders.Image, ImageFile(context.Image) ?? ImageFile(file?.Path));
         return values;
     }
+
+    /// <summary>The path when it's an image file that's there, else null.</summary>
+    private static string? ImageFile(string? path) =>
+        !string.IsNullOrWhiteSpace(path) && ImageExtensions.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase) && System.IO.File.Exists(path) ? path : null;
+
+    [GeneratedRegex(@"^https?://\S+$", RegexOptions.IgnoreCase)]
+    private static partial Regex WebAddress();
 
     /// <summary>The selection on one line, spaces squeezed, cut to a sensible length.</summary>
     public static string? CleanSelection(string? selection)
@@ -261,6 +277,8 @@ internal static partial class Actions
         ActionPlaceholders.Repo => "This terminal’s folder isn’t in a Git repository with a remote on the web.",
         ActionPlaceholders.Branch => "This terminal’s folder isn’t on a Git branch.",
         ActionPlaceholders.Port => "No program in this terminal is listening on a port.",
+        ActionPlaceholders.Url => "Select a web address first.",
+        ActionPlaceholders.Image => "Pick an image first: one in Smart Clip, or a path to one.",
         _ => "Select a file’s path in the terminal first.",
     };
 

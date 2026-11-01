@@ -815,6 +815,11 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
 .act-menu { display: flex; flex: none; gap: 6px; align-items: center; color: var(--muted); font-size: 12px; white-space: nowrap; cursor: pointer; }
 .act-keys { flex: none; min-width: 96px; justify-content: center; }
 .act-keys.capturing { border-color: var(--accent); color: var(--accent); }
+/* An action with changes not saved: a mark on its left, and its Save button in the accent. */
+.act-row.unsaved { box-shadow: inset 2px 0 0 var(--accent); padding-left: 8px; }
+.act-save { color: var(--accent); }
+.act-line .btn.small svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1; }
+.act-vars { margin: 6px 0 2px; }
 
 /* ---- "Needs me" inbox (js/inbox.js) ---- */
 
@@ -1804,8 +1809,8 @@ body.dragging-pane #drag-ghost { display: flex; }
 
 .settings {
   display: flex;
-  width: min(900px, calc(100vw - 48px));
-  height: min(640px, calc(100vh - 80px));
+  width: min(1000px, calc(100vw - 48px));
+  height: min(720px, calc(100vh - 80px));
   overflow: hidden;
   border: 1px solid var(--border-strong);
   border-radius: 14px;
