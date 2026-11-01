@@ -5,7 +5,7 @@
 import { state } from './store.js';
 import { showMenu } from './popups.js';
 import { clipboardAction, CLIPBOARD_ACTION } from './clipboardkeys.js';
-import { underlinedLink } from './termlinks.js';
+import { underlinedLink, linkUnderMouse } from './termlinks.js';
 import { showToast } from './toasts.js';
 import { ICONS } from './ui.js';
 
@@ -105,8 +105,12 @@ export function wireClipboard(term, body, paste) {
   body.addEventListener('contextmenu', e => {
     e.preventDefault();
     if (term.modes.mouseTrackingMode !== NO_MOUSE_TRACKING) return;
+    // Nothing selected, a link under the mouse: Copy takes the link, as Ctrl+C does over it.
+    const link = term.hasSelection() ? null : linkUnderMouse();
     showMenu([
-      { label: COPY_LABEL, icon: ICONS.copy, hint: MENU_KEYS.copy, disabled: !term.hasSelection(), action: () => copySelection(term, body) },
+      link
+        ? { label: 'Copy link', icon: ICONS.copy, action: () => { navigator.clipboard.writeText(link).catch(() => {}); copied(link, body, true); showToast({ text: `Copied ${link}` }); } }
+        : { label: COPY_LABEL, icon: ICONS.copy, hint: MENU_KEYS.copy, disabled: !term.hasSelection(), action: () => copySelection(term, body) },
       { label: PASTE_LABEL, icon: ICONS.paste, hint: MENU_KEYS.paste, action: () => navigator.clipboard.readText().then(text => { if (text) paste(text); }).catch(() => {}) },
       ...clipEntries(body, paste),
       ...menuExtras(body),

@@ -1701,6 +1701,15 @@ body.dragging-pane #drag-ghost { display: flex; }
 /* ---- Context menus ---- */
 
 .context-menu { width: auto; min-width: 230px; padding: 5px; }
+/* Taller than the window: it scrolls, with an arrow at its top and bottom (js/popups.js), no scrollbar. */
+.context-menu.scrolls { overflow-y: auto; scrollbar-width: none; overscroll-behavior: contain; }
+.context-menu.scrolls::-webkit-scrollbar { display: none; }
+.menu-scroll { position: sticky; z-index: 1; display: flex; align-items: center; justify-content: center; height: 22px; margin: 0 -5px; background: var(--raised); color: var(--muted); }
+.menu-scroll.up { top: -5px; margin-top: -5px; border-bottom: 1px solid var(--border); }
+.menu-scroll.down { bottom: -5px; margin-bottom: -5px; border-top: 1px solid var(--border); }
+.menu-scroll:hover { color: var(--text); }
+.menu-scroll.off { color: var(--border-strong); pointer-events: none; }
+.menu-scroll svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
 /* The Git window's right-click menu (js/gitwindow.js) opens over the window, which is above ordinary menus. */
 .popover.git-menu { z-index: 3100; }
 .menu-row {
