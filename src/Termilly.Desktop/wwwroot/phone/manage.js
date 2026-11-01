@@ -20,6 +20,8 @@ const M = Object.freeze({
   renameNow: 'rename-now', move: 'move', moveTo: 'move-to', host: 'host', saveHost: 'save-host', sign: 'sign', all: 'all', cancel: 'cancel', go: 'go',
 });
 /** The sheets it shows, and the pages (New terminal and its Workspace and Folder pages). */
+/** The pages' titles (and where their back rows lead). */
+const PAGE_TITLE = Object.freeze({ terminals: 'Terminals', new: 'New terminal', ws: 'Workspace', folder: 'Folder' });
 const SHEET = Object.freeze({ new: 'new', newWs: 'new-ws', newFolder: 'new-folder', more: 'more', rename: 'rename', move: 'move', host: 'host', confirm: 'confirm' });
 /** The ones drawn as a page over the home, above the tab bar, rather than as a sheet. */
 const PAGES = [SHEET.new, SHEET.newWs, SHEET.newFolder];
@@ -122,7 +124,7 @@ export function manager(app) {
     const opt = (/** @type {Place} */ p) => `<button class="row opt${p.id === chosen?.id ? ' on' : ''}" data-m="${M.pick}" data-p="${esc(p.id)}">${badgeHtml(p)}
       <div class="r-text"><div class="r-name">${esc(p.name)}${p.production ? ' <span class="prod">prod</span>' : ''}</div>${p.remote && p.description ? `<div class="r-line">${esc(p.description)}</div>` : ''}</div>
       <span class="tick">${p.id === chosen?.id ? '✓' : ''}</span></button>`;
-    return { head: pageHead(M.cancel, 'Terminals', 'New terminal'), body: `<div class="section">Shell</div><div class="list">${places().filter(p => !p.remote).map(opt).join('')}</div>
+    return { head: pageHead(M.cancel, PAGE_TITLE.terminals, PAGE_TITLE.new), body: `<div class="section">Shell</div><div class="list">${places().filter(p => !p.remote).map(opt).join('')}</div>
       <div class="section-row"><span class="section">Remote</span><button class="link" data-m="${M.host}">Add SSH host</button></div>
       ${remote.length ? `<div class="list">${remote.map(opt).join('')}</div>` : '<p class="muted hint">No SSH hosts, WSL or serial ports on the PC yet.</p>'}
       <div class="section">Where</div><div class="list">
@@ -134,13 +136,13 @@ export function manager(app) {
   /** @returns {PageParts} */
   function newWsHtml() {
     const ws = chosenWs();
-    return { head: pageHead(M.toNew, 'New terminal', 'Workspace'), body: `<div class="list">${snap().workspaces.map(w =>
+    return { head: pageHead(M.toNew, PAGE_TITLE.new, PAGE_TITLE.ws), body: `<div class="list">${snap().workspaces.map(w =>
       `<button class="row opt${w.id === ws?.id ? ' on' : ''}" data-m="${M.pickWs}" data-ws="${esc(w.id)}"><span class="dot" style="background:${esc(w.color)}"></span>
         <div class="r-text"><div class="r-name">${esc(w.name)}</div>${w.cwd ? `<div class="r-line">${esc(w.cwd)}</div>` : ''}</div><span class="tick">${w.id === ws?.id ? '✓' : ''}</span></button>`).join('')}</div>` };
   }
 
   /** @returns {PageParts} */
-  const newFolderHtml = () => ({ head: pageHead(M.toNew, 'New terminal', 'Folder'), body: `<div class="form"><label class="f-row"><span>Folder</span><input name="${FIELD.cwd}" value="${esc(sheet?.cwd ?? '')}" placeholder="${esc(chosenWs()?.cwd ?? 'The workspace folder')}" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="done"></label></div>
+  const newFolderHtml = () => ({ head: pageHead(M.toNew, PAGE_TITLE.new, PAGE_TITLE.folder), body: `<div class="form"><label class="f-row"><span>Folder</span><input name="${FIELD.cwd}" value="${esc(sheet?.cwd ?? '')}" placeholder="${esc(chosenWs()?.cwd ?? 'The workspace folder')}" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="done"></label></div>
     <p class="hint muted">Empty: the workspace's own folder.</p>` });
 
   function hostHtml() {
