@@ -174,7 +174,7 @@ main.tabbed { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
 .memo-pinbox { display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: 14px; }
 .memo-actions { display: flex; gap: 8px; align-items: center; }
 .memo-actions .grow { flex: 1; }
-.tabbar svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.tabbar svg { width: 25px; height: 25px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
 .tab-count { position: absolute; top: 0; left: calc(50% + 6px); min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--accent); color: var(--on-accent); font-size: 10px; font-weight: 700; line-height: 16px; text-align: center; }
 .tabbed ~ .toast { bottom: calc(64px + env(safe-area-inset-bottom)); }
 /* The Notifications tab: what each agent said, its state as a label. */
