@@ -27,6 +27,11 @@ on(EVENTS.agent, tab => {
   const kind = agent && KINDS[agent.state];
   if (!kind) {
     withdraw(tab); // answered, working again, or gone: an old toast would only mislead
+    // Nor does an alert held for the phone until the user leaves the PC go now.
+    if (tab.phoneAlerted) {
+      tab.phoneAlerted = null;
+      send(PAGE.phoneWithdraw, { id: tab.id });
+    }
     return;
   }
   const [setting, what] = kind;
