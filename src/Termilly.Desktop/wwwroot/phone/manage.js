@@ -1,6 +1,6 @@
 // @ts-check
-// Managing terminals from the phone (design A, "Plus and sheets"): a + in the title opens New terminal (a shell or a
-// remote place, the workspace, a folder); the Remote section under the workspaces opens a place in the PC's current
+// Managing terminals from the phone (design A, "Plus and sheets"): a + in the title opens the New terminal page (a
+// shell or a remote place, then where: the workspace and a folder, each on its own page, as Settings' pages); the Remote section under the workspaces opens a place in the PC's current
 // workspace; a terminal swiped left shows More (rename, move) and Close; Add SSH host saves one on the PC. All of it
 // only while the PC allows typing from the phone (js/phonemanage.js does it on the PC).
 
@@ -16,11 +16,13 @@ const ACTION = Object.freeze({ open: 'open', close: 'close', rename: 'rename', m
 const OP = 'manage';
 /** What the module's buttons do (data-m). */
 const M = Object.freeze({
-  new: 'new', pick: 'pick', openNew: 'open-new', place: 'place', more: 'more', close: 'close', closeNow: 'close-now', rename: 'rename',
+  new: 'new', pick: 'pick', openNew: 'open-new', toWs: 'to-ws', pickWs: 'pick-ws', toFolder: 'to-folder', toNew: 'to-new', place: 'place', more: 'more', close: 'close', closeNow: 'close-now', rename: 'rename',
   renameNow: 'rename-now', move: 'move', moveTo: 'move-to', host: 'host', saveHost: 'save-host', sign: 'sign', all: 'all', cancel: 'cancel', go: 'go',
 });
-/** The sheets it shows. */
-const SHEET = Object.freeze({ new: 'new', more: 'more', rename: 'rename', move: 'move', host: 'host', confirm: 'confirm' });
+/** The sheets it shows, and the pages (New terminal and its Workspace and Folder pages). */
+const SHEET = Object.freeze({ new: 'new', newWs: 'new-ws', newFolder: 'new-folder', more: 'more', rename: 'rename', move: 'move', host: 'host', confirm: 'confirm' });
+/** The ones drawn as a page over the home, above the tab bar, rather than as a sheet. */
+const PAGES = [SHEET.new, SHEET.newWs, SHEET.newFolder];
 /** How a host signs in, as the phone offers it (ssh.js IDENTITY): nothing secret is typed on the phone. */
 const SIGN_IN = Object.freeze({ agent: 'agent', key: 'key', password: 'wincred' });
 const SIGN = [[SIGN_IN.agent, 'Keys'], [SIGN_IN.key, 'Key file'], [SIGN_IN.password, 'Password']];
@@ -46,7 +48,15 @@ export function manager(app) {
   const layer = document.createElement('div');
   document.body.append(layer);
   layer.addEventListener('click', e => click(/** @type {HTMLElement} */ (e.target)));
-  /** @type {{ kind: string, id?: string, profile?: string, ws?: string, then?: () => void, title?: string, text?: string, error?: string } | null} */
+  // Done on the keyboard in the Folder field goes back to New terminal with it.
+  layer.addEventListener('keydown', e => { if (e.key === 'Enter' && sheet?.kind === SHEET.newFolder) { e.preventDefault(); backToNew(); } });
+  // A tab tapped while a page or sheet shows leaves it.
+  document.addEventListener('click', e => { if (sheet && /** @type {HTMLElement} */ (e.target).closest('[data-tab]')) open(null); }, true);
+  /**
+   * The sheet or page shown; a sheet opened over a page keeps that page (from) to go back to.
+   * @typedef {{ kind: string, id?: string, profile?: string, ws?: string, cwd?: string, then?: () => void, title?: string, text?: string, error?: string, from?: Shown }} Shown
+   * @type {Shown | null}
+   */
   let sheet = null;
   /** A terminal the phone opened, to show once the PC lists it. */
   let pending = '';
@@ -93,20 +103,40 @@ export function manager(app) {
   /** @param {string} title @param {string} action @param {string} label */
   const head = (title, action, label) => `<div class="m-head"><button data-m="${M.cancel}">Cancel</button><h2>${esc(title)}</h2>${action ? `<button class="strong" data-m="${action}">${label}</button>` : '<span></span>'}</div>`;
 
+  // ---- The New terminal page ----
+
+  /** The place chosen (the first shell until one is ticked). */
+  const chosenPlace = () => places().find(p => p.id === sheet?.profile) ?? places().find(p => !p.remote);
+  /** The workspace it opens in (the PC's current one until another is picked). */
+  const chosenWs = () => wsOf(sheet?.ws ?? snap().activeWs) ?? snap().workspaces[0];
+  /** @param {string} to @param {string} label */
+  const pageBack = (to, label) => `<button class="back-row" data-m="${to}">‹ ${label}</button>`;
+
   function newHtml() {
-    const all = places();
-    const chosen = sheet?.profile ?? all.find(p => !p.remote)?.id ?? '';
-    const ws = wsOf(sheet?.ws ?? snap().activeWs) ?? snap().workspaces[0];
-    const tile = (/** @type {Place} */ p) => `<button class="tile${p.id === chosen ? ' on' : ''}" data-m="${M.pick}" data-p="${esc(p.id)}">${badgeHtml(p)}<span>${esc(p.name)}</span></button>`;
-    const chip = (/** @type {Place} */ p) => `<button class="chip${p.id === chosen ? ' on' : ''}" data-m="${M.pick}" data-p="${esc(p.id)}">${badgeHtml(p)}${esc(p.name)}</button>`;
-    return `${head('New terminal', M.openNew, 'Open')}
-      <div class="section">Shell</div><div class="tiles">${all.filter(p => !p.remote).map(tile).join('')}</div>
-      <div class="section">Remote</div><div class="chips">${all.filter(p => p.remote).map(chip).join('')}<button class="chip add" data-m="${M.host}">+ Add host</button></div>
-      <div class="section">In workspace</div>
-      <div class="form"><label class="f-row"><span>Workspace</span><select name="${FIELD.ws}">${snap().workspaces.map(w => `<option value="${esc(w.id)}"${w.id === ws?.id ? ' selected' : ''}>${esc(w.name)}</option>`).join('')}</select></label>
-        <label class="f-row"><span>Folder</span><input name="${FIELD.cwd}" placeholder="${esc(ws?.cwd ?? 'The workspace\'s own')}" autocapitalize="off" autocorrect="off" spellcheck="false"></label></div>
-      <p class="hint muted">Empty: the workspace's own folder.</p>`;
+    const chosen = chosenPlace(), ws = chosenWs(), remote = places().filter(p => p.remote);
+    const opt = (/** @type {Place} */ p) => `<button class="row opt${p.id === chosen?.id ? ' on' : ''}" data-m="${M.pick}" data-p="${esc(p.id)}">${badgeHtml(p)}
+      <div class="r-text"><div class="r-name">${esc(p.name)}${p.production ? ' <span class="prod">prod</span>' : ''}</div>${p.remote && p.description ? `<div class="r-line">${esc(p.description)}</div>` : ''}</div>
+      <span class="tick">${p.id === chosen?.id ? '✓' : ''}</span></button>`;
+    return `${pageBack(M.cancel, 'Terminals')}<h1 class="page-title">New terminal</h1>
+      <div class="section">Shell</div><div class="list">${places().filter(p => !p.remote).map(opt).join('')}</div>
+      <div class="section-row"><span class="section">Remote</span><button class="link" data-m="${M.host}">Add SSH host</button></div>
+      ${remote.length ? `<div class="list">${remote.map(opt).join('')}</div>` : '<p class="muted hint">No SSH hosts, WSL or serial ports on the PC yet.</p>'}
+      <div class="section">Where</div><div class="list">
+        <button class="row" data-m="${M.toWs}"><span class="r-text">Workspace</span><span class="more-value"><span class="dot" style="background:${esc(ws?.color)}"></span> ${esc(ws?.name)}</span><span class="chev">›</span></button>
+        <button class="row" data-m="${M.toFolder}"><span class="r-text">Folder</span><span class="more-value">${esc(sheet?.cwd || 'Workspace folder')}</span><span class="chev">›</span></button></div>
+      <div class="m-dock"><button class="btn primary" data-m="${M.openNew}"${chosen ? '' : ' disabled'}>Open ${esc(chosen?.name ?? '')}</button></div>`;
   }
+
+  function newWsHtml() {
+    const ws = chosenWs();
+    return `${pageBack(M.toNew, 'New terminal')}<h1 class="page-title">Workspace</h1><div class="list">${snap().workspaces.map(w =>
+      `<button class="row opt${w.id === ws?.id ? ' on' : ''}" data-m="${M.pickWs}" data-ws="${esc(w.id)}"><span class="dot" style="background:${esc(w.color)}"></span>
+        <div class="r-text"><div class="r-name">${esc(w.name)}</div>${w.cwd ? `<div class="r-line">${esc(w.cwd)}</div>` : ''}</div><span class="tick">${w.id === ws?.id ? '✓' : ''}</span></button>`).join('')}</div>`;
+  }
+
+  const newFolderHtml = () => `${pageBack(M.toNew, 'New terminal')}<h1 class="page-title">Folder</h1>
+    <div class="form"><label class="f-row"><span>Folder</span><input name="${FIELD.cwd}" value="${esc(sheet?.cwd ?? '')}" placeholder="${esc(chosenWs()?.cwd ?? 'The workspace folder')}" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="done"></label></div>
+    <p class="hint muted">Empty: the workspace's own folder.</p>`;
 
   function hostHtml() {
     const field = (/** @type {string} */ name, /** @type {string} */ label, /** @type {string} */ hint, mode = '') =>
@@ -146,25 +176,49 @@ export function manager(app) {
   const confirmHtml = () => `<div class="grabber"></div><h2 class="c-title">${esc(sheet?.title)}</h2><p class="muted">${esc(sheet?.text)}</p>
     <button class="ibtn red" data-m="${M.go}">${esc(sheet?.title?.split(' ')[0] ?? 'OK')}</button><button class="ibtn" data-m="${M.cancel}">Cancel</button>`;
 
-  const SHEETS = { [SHEET.new]: newHtml, [SHEET.host]: hostHtml, [SHEET.more]: moreHtml, [SHEET.rename]: renameHtml, [SHEET.move]: moveHtml, [SHEET.confirm]: confirmHtml };
+  const SHEETS = { [SHEET.new]: newHtml, [SHEET.newWs]: newWsHtml, [SHEET.newFolder]: newFolderHtml, [SHEET.host]: hostHtml, [SHEET.more]: moreHtml, [SHEET.rename]: renameHtml, [SHEET.move]: moveHtml, [SHEET.confirm]: confirmHtml };
 
-  /** Draws the sheet shown (or none); only on the phone's own steps, so what's typed in it stays. */
+  /**
+   * A page, above the tab bar.
+   * @param {Shown} shown
+   */
+  const pageHtml = shown => {
+    const now = sheet;
+    sheet = shown;
+    const html = `<div class="m-page"><div class="m-in">${SHEETS[shown.kind]()}</div></div>`;
+    sheet = now;
+    return html;
+  };
+
+  /** Draws the sheet or page shown (or none); only on the phone's own steps, so what's typed in it stays. */
   function draw() {
-    layer.innerHTML = sheet ? `<div class="dim" data-m="${M.cancel}"></div><div class="sheet m-sheet${sheet.kind === SHEET.host ? ' tall' : ''}">${SHEETS[sheet.kind]()}</div>` : '';
+    const tabbar = /** @type {HTMLElement | null} */ (document.querySelector('.tabbar'));
+    layer.style.setProperty('--tabbar', `${tabbar?.offsetHeight ?? 0}px`);
+    if (!sheet) layer.innerHTML = '';
+    else if (PAGES.includes(sheet.kind)) layer.innerHTML = pageHtml(sheet);
+    else layer.innerHTML = `${sheet.from ? pageHtml(sheet.from) : ''}<div class="dim" data-m="${M.cancel}"></div><div class="sheet m-sheet${sheet.kind === SHEET.host ? ' tall' : ''}">${SHEETS[sheet.kind]()}</div>`;
     const first = /** @type {HTMLInputElement | null} */ (layer.querySelector(`input[name=${FIELD.name}]`));
     if (sheet?.kind === SHEET.rename && first) first.select();
   }
+  /** The page shown, for a sheet opened over it to go back to. */
+  const page = () => (sheet && PAGES.includes(sheet.kind) ? sheet : sheet?.from);
   /** @param {typeof sheet} next */
   const open = next => { sheet = next; draw(); };
 
   /** @param {string} name */
   const value = name => /** @type {HTMLInputElement | null} */ (layer.querySelector(`[name=${name}]`))?.value.trim() ?? '';
 
+  /** Back to New terminal from its Workspace or Folder page; the folder typed there stays. */
+  function backToNew() {
+    const cwd = sheet?.kind === SHEET.newFolder ? value(FIELD.cwd) : sheet?.cwd;
+    open({ ...sheet, kind: SHEET.new, cwd });
+  }
+
   /**
    * Asks first, then does it.
    * @param {string} title @param {string} text @param {() => void} then
    */
-  const confirm = (title, text, then) => open({ kind: SHEET.confirm, title, text, then });
+  const confirm = (title, text, then) => open({ kind: SHEET.confirm, title, text, then, from: page() });
 
   /** @param {Place | undefined} p @param {string | undefined} ws @param {string} cwd */
   function openOn(p, ws, cwd) {
@@ -214,11 +268,14 @@ export function manager(app) {
       return true;
     }
     const id = target.dataset.id;
-    const keep = () => ({ ws: value(FIELD.ws) || sheet?.ws }); // the workspace picked stays as the sheet redraws
     switch (target.dataset.m) {
       case M.new: open({ kind: SHEET.new }); break;
-      case M.pick: open({ ...sheet, ...keep(), kind: SHEET.new, profile: target.dataset.p }); break;
-      case M.openNew: openOn(places().find(p => p.id === (sheet?.profile ?? places().find(x => !x.remote)?.id)), value(FIELD.ws) || snap().activeWs, value(FIELD.cwd)); break;
+      case M.pick: open({ ...sheet, kind: SHEET.new, profile: target.dataset.p }); break;
+      case M.toWs: open({ ...sheet, kind: SHEET.newWs }); break;
+      case M.pickWs: open({ ...sheet, kind: SHEET.new, ws: target.dataset.ws }); break;
+      case M.toFolder: open({ ...sheet, kind: SHEET.newFolder }); break;
+      case M.toNew: backToNew(); break;
+      case M.openNew: openOn(chosenPlace(), chosenWs()?.id, sheet?.cwd ?? ''); break;
       case M.place: openOn(places().find(p => p.id === target.dataset.p), snap().activeWs, ''); break;
       case M.all: showAll = !showAll; app.render(); break;
       case M.more: open({ kind: SHEET.more, id }); break;
@@ -227,11 +284,11 @@ export function manager(app) {
       case M.renameNow: send({ action: ACTION.rename, pane: sheet?.id, name: value(FIELD.name) }); open(null); break;
       case M.move: open({ kind: SHEET.move, id }); break;
       case M.moveTo: send({ action: ACTION.move, pane: sheet?.id, ws: target.dataset.ws }); open(null); break;
-      case M.host: open({ kind: SHEET.host }); break;
+      case M.host: open({ kind: SHEET.host, from: page() }); break;
       case M.sign: sign(target); break;
       case M.saveHost: saveHost(); break;
       case M.go: sheet?.then?.(); break;
-      case M.cancel: open(null); break;
+      case M.cancel: open(sheet?.from ?? null); break;
       default: return false;
     }
     return true;
@@ -254,7 +311,7 @@ export function manager(app) {
       changed();
     } else if (m.action === ACTION.addHost) {
       app.toast('Saved on the PC.');
-      open(null);
+      open(sheet?.from ?? null);
     }
     return true;
   }

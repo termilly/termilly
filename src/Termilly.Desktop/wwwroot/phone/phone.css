@@ -35,7 +35,7 @@ code { padding: 1px 5px; border-radius: 5px; background: var(--bg); font: 13.5px
 .bar h1 { flex: 1; }
 .conn { color: var(--attention); font-size: 13px; }
 .add-btn { display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 0; border-radius: 50%; background: var(--raised); color: var(--accent); }
-.add-btn svg, .m-sheet .chip.add svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.add-btn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
 .setup { padding-top: 10px; }
 .step { display: flex; gap: 12px; margin: 0 0 14px; padding: 14px; border-radius: 14px; background: var(--raised); }
 /* The text beside the number takes what's left, no more: the code box in it would push the Pair button off the screen. */
@@ -256,21 +256,25 @@ button.row { width: 100%; border: 0; background: none; color: inherit; font: inh
 .list > button.row + button.row { border-top: 1px solid var(--line); }
 .chev { color: var(--muted); font-size: 20px; }
 .prod { padding: 1px 6px; border-radius: 6px; background: color-mix(in srgb, var(--danger) 18%, transparent); color: var(--danger); font-size: 11px; font-weight: 700; }
-.m-sheet .list, .m-sheet .form, .m-sheet .tile, .m-sheet .chip, .m-sheet .seg { background: var(--bg); }
+.m-sheet .list, .m-sheet .form, .m-sheet .seg { background: var(--bg); }
 .m-sheet.tall { max-height: calc(100vh - 40px); }
 .m-head { display: flex; align-items: center; margin: 0 0 8px; }
 .m-head h2 { flex: 1; margin: 0; font-size: 17px; text-align: center; }
 .m-head button, .m-head > span { min-width: 70px; padding: 6px 0; border: 0; background: none; color: var(--accent); font: inherit; font-size: 17px; text-align: left; }
 .m-head button.strong { font-weight: 600; text-align: right; }
-.tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
-.tile { display: flex; flex-direction: column; gap: 6px; align-items: center; min-width: 0; padding: 10px 4px 8px; border: 0; border-radius: 13px; color: var(--text); font: 600 12px/1.2 inherit; text-align: center; }
-.tile span:last-child { max-width: 100%; overflow-wrap: anywhere; }
-.tile.on, .chip.on { box-shadow: inset 0 0 0 2px var(--accent); }
-.chips { display: flex; flex-wrap: wrap; gap: 8px; }
-.chip { display: inline-flex; gap: 7px; align-items: center; padding: 6px 11px 6px 7px; border: 0; border-radius: 10px; color: var(--text); font: 600 14px/1.2 inherit; }
-.chip .badge { width: 22px; height: 22px; font-size: 8px; }
-.chip.add { padding-left: 11px; color: var(--accent); }
-.form { overflow: hidden; border-radius: 12px; }
+.form { overflow: hidden; border-radius: 12px; background: var(--raised); }
+/* New terminal and its Workspace and Folder pages: over the home, above the tab bar, scrolling up and down only; Open
+   stays at the bottom of the page. */
+.m-page { position: fixed; inset: 0 0 var(--tabbar, 0px); z-index: 3; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; padding-top: calc(env(safe-area-inset-top) + 10px); background: var(--bg); }
+.m-in { display: flex; flex-direction: column; min-height: 100%; max-width: 600px; margin: 0 auto; padding: 0 12px; }
+.m-in > .back-row { align-self: flex-start; }
+.page-title { margin: 0 8px 4px; font-size: 28px; letter-spacing: -.3px; }
+.opt.on .r-name { font-weight: 600; }
+.m-page .more-value .dot { width: 8px; height: 8px; margin-right: 2px; }
+.m-page .form + .hint, .m-page .list + .hint { margin: 8px 8px 0; }
+.m-dock { position: sticky; bottom: 0; margin: auto -12px 0; padding: 18px 12px 12px; background: linear-gradient(transparent, var(--bg) 14px); }
+.m-dock .btn { display: block; width: 100%; padding: 13px 0; font-size: 16px; }
+.m-dock .btn:disabled { opacity: .4; }
 .f-row { display: flex; gap: 10px; align-items: center; min-height: 46px; padding: 0 14px; }
 .f-row + .f-row { border-top: 1px solid var(--line); }
 .f-row > span { flex: none; width: 92px; }
