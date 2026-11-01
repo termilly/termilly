@@ -60,11 +60,17 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
         settings.Saved += _ => Update();
         live.Received = ReceivedAsync;
         live.Screen = ScreenAsync;
-        live.Sized = (pane, phone) => _page.Post(new ToPage.PhoneSize(pane, phone?.Size.Cols, phone?.Size.Rows,
-            phone is null ? null : store.List().FirstOrDefault(d => d.Id == phone.Device)?.Name, phone?.Address));
+        live.Sized = (pane, phone) => _page.Post(SizeOf(pane, phone, phone is null ? null : store.List().FirstOrDefault(d => d.Id == phone.Device)?.Name));
         live.Opened = pane => _page.Post(new ToPage.PhoneSeen(pane));
         sessions.Output += Printed;
         _away = new PhoneAwayAlerts(alert => AlertAsync(null, alert), UserIdle.Since, AwayAfter);
+    }
+
+    /// <summary>The size a phone (or another Termilly computer) gives a terminal, and who it is; none when no one shows it.</summary>
+    private static ToPage.PhoneSize SizeOf(string pane, PhoneLive.Viewer? phone, string? name)
+    {
+        var computer = name?.EndsWith(PcConnection.ComputerMark, StringComparison.Ordinal) == true;
+        return new ToPage.PhoneSize(pane, phone?.Size.Cols, phone?.Size.Rows, computer ? name![..^PcConnection.ComputerMark.Length] : name, phone?.Address, computer);
     }
 
     /// <summary>A terminal printed something: it goes on to the phones that show it (while the server runs).</summary>

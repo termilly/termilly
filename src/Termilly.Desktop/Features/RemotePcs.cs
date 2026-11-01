@@ -89,7 +89,7 @@ internal sealed class RemotePcsHandler(PageChannel page, RemotePcStore store) : 
         }
         try
         {
-            var pc = await PcConnection.PairAsync(address, m.Code, $"{Environment.MachineName} (Termilly)", _stop.Token).ConfigureAwait(false);
+            var pc = await PcConnection.PairAsync(address, m.Code, Environment.MachineName + PcConnection.ComputerMark, _stop.Token).ConfigureAwait(false);
             foreach (var old in store.List().Where(p => string.Equals(p.Address, address, StringComparison.OrdinalIgnoreCase)))
             {
                 Stop(old.Id);

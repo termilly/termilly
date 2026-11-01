@@ -62,6 +62,8 @@ internal sealed class RemotePcStore(Vault vault)
 internal static class PcConnection
 {
     public const int DefaultPort = PhoneSettings.DefaultPort;
+    /// <summary>What a computer's paired name ends with on the other side ("LAPTOP (Termilly)"): it isn't a phone.</summary>
+    public const string ComputerMark = " (Termilly)";
     private const string AuthorityPath = "/termilly.cer";
     private const string PairPath = "/api/pair";
     private const string LivePath = "/api/live";
