@@ -212,7 +212,9 @@ select.field { padding-right: 6px; }
 #titlebar {
   display: grid;
   flex: none;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  /* The search box sits in the middle; when the window is too narrow for that, the toolbar keeps its room and the
+     search box moves left rather than under it. */
+  grid-template-columns: minmax(0, 1fr) auto minmax(max-content, 1fr);
   align-items: center;
   gap: 14px;
   height: 42px;

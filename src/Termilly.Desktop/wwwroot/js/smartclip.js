@@ -134,7 +134,7 @@ async function copyClip(clip) {
 const clipById = id => clips.find(c => c.id === id);
 
 /** @param {Clip} clip */
-const runnable = clip => clip.kind !== CLIP_KIND.image && clip.lines === 1;
+const runnable = clip => (clip.kind === CLIP_KIND.text || clip.kind === CLIP_KIND.command) && clip.lines === 1;
 
 // ---- How a clip reads ----
 
