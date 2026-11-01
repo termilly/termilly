@@ -29,7 +29,7 @@ internal sealed class ActionHandler(PageChannel page, ISettingsStore settings, I
             var used = Actions.PlaceholdersIn(action);
             var needsGit = used.Contains(ActionPlaceholders.Repo) || used.Contains(ActionPlaceholders.Branch);
             var (repo, branch) = needsGit ? RepoOf(message.Folder) : (null, null);
-            var launch = Actions.Prepare(action, Actions.Values(new ActionContext(message.Selection, message.Folder, message.Port), repo, branch));
+            var launch = Actions.Prepare(action, Actions.Values(new ActionContext(message.Selection, message.Folder, message.Port, message.Image), repo, branch));
             if (launch.Url is { } url)
             {
                 desktop.OpenUrl(url);

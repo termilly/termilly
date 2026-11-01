@@ -10,7 +10,7 @@
 
 import { PAGE, HOST } from './protocol.js';
 import { send, sendWithFiles, onHost, platform, droppedPaths, PLATFORM } from './host.js';
-import { on, tabTitle, wsById, isSsh, isRemote, EVENTS } from './store.js';
+import { state, on, persist, tabTitle, wsById, isSsh, isRemote, EVENTS } from './store.js';
 import { focusedTab, newTab } from './panes.js';
 import { scheduleFit, typePaths } from './terminals.js';
 import { escapeHtml, ICONS } from './ui.js';
@@ -42,6 +42,9 @@ import { JOB_KIND, FILE_MANAGER, BIN, newRequestId, startJob, expectJob } from '
  */
 /** A row drawn: its path, what it is (none for the tree's root), how deep it is, and the folder it's in. */
 /** @typedef {{ path: string, entry: FileEntry | null, depth: number, dir: string | null }} Row */
+/** A tree brought back after a restart: the shell's first folder report only marks its folder, keeping the scroll. */
+/** @type {Set<FilesView>} */
+const restored = new Set();
 
 /** What the panel's buttons do (data-files). */
 const FILES_ACTION = Object.freeze({
@@ -213,11 +216,49 @@ export function toggleFiles(tab = focusedTab()) {
     panel.hidden = true;
     view = null;
     views.clear(); // opened again, it starts where each terminal's shell is
+    keep();
     return;
   }
   if (!tab || !hasFiles(tab)) return;
   panel.hidden = false;
   show(tab);
+}
+
+/** Keeps how the panel is (open, its terminal, the folders open, the scroll) for a restart. */
+function keep() {
+  const list = /** @type {HTMLElement | null} */ (panel.querySelector(LIST));
+  state.files = {
+    ...state.files, open: !panel.hidden, tabId: view?.tab.id ?? null, folders: view ? [...view.open] : [],
+    scroll: list?.scrollTop ?? 0,
+  };
+  persist();
+}
+
+/**
+ * The panel as Termilly left it: open on the same terminal's tree (or the one in focus), its folders open again and
+ * read, scrolled where it was.
+ */
+export async function initFiles() {
+  const saved = state.files;
+  if (saved.width) panel.style.width = `${saved.width}px`;
+  const tab = (saved.tabId && state.tabs.get(saved.tabId)) || focusedTab();
+  if (!saved.open || !tab || !hasFiles(tab)) return;
+  const v = viewOf(tab);
+  if (saved.tabId === tab.id && saved.folders?.length) {
+    v.open = new Set(saved.folders);
+    v.moved = null;
+    restored.add(v);
+  }
+  panel.hidden = false;
+  view = v;
+  render();
+  if (!restored.has(v)) return reveal(v, shellFolderOf(tab));
+  await load(v, [...v.open]);
+  // Folders deleted or moved since aren't open any more (their parent no longer lists them, so they never showed).
+  for (const path of [...v.open]) if (v.nodes.get(path)?.error) v.open.delete(path);
+  render();
+  const list = /** @type {HTMLElement | null} */ (panel.querySelector(LIST));
+  if (list) list.scrollTop = saved.scroll ?? 0;
 }
 
 // The title bar's File Explorer button.
@@ -379,6 +420,7 @@ function render() {
   const drawn = /** @type {HTMLElement} */ (panel.querySelector(LIST));
   indentRows(drawn);
   drawn.scrollTop = scroll;
+  keep();
   if (typing) {
     const box = /** @type {HTMLInputElement} */ (panel.querySelector(SEARCH));
     box.focus();
@@ -908,7 +950,17 @@ panel.addEventListener('drop', e => {
 
 // ---- Docked on the right: the terminals end where it starts; the grip on its left edge resizes it ----
 
-dockRight(panel, { dockVar: '--files-dock', minWidth: MIN_WIDTH_PX, resized: scheduleFit });
+dockRight(panel, {
+  dockVar: '--files-dock', minWidth: MIN_WIDTH_PX, resized: scheduleFit,
+  dragged: width => { state.files.width = width; persist(); },
+});
+
+// Where the tree was scrolled, for a restart (the list is drawn anew, so the panel listens).
+panel.addEventListener('scroll', e => {
+  if (!view || !targetOf(e).matches(LIST)) return;
+  state.files.scroll = /** @type {HTMLElement} */ (e.target).scrollTop;
+  persist();
+}, true);
 
 // ---- Following the terminal's folder ----
 
@@ -922,6 +974,13 @@ function followed(tab, path) {
   if (panel.hidden || !path) return;
   const v = views.get(tab.id);
   if (!v) return;
+  // Back after a restart, a shell in a folder the tree shows only marks it; one elsewhere (its old folder gone, say)
+  // opens the tree down to it as usual.
+  if (restored.delete(v) && v.open.has(parentOf(path) ?? '')) {
+    v.cwd = path;
+    if (v === view) drawTree();
+    return;
+  }
   if (v === view) reveal(v, path);
   else v.moved = path;
 }

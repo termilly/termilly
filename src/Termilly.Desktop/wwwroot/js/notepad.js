@@ -43,7 +43,7 @@ export const NOTEPAD_KEY = Object.freeze({ toggle: 'KeyM', save: 'KeyS', open: '
 const TOOL_ICONS = Object.freeze({
   newPage: '<svg viewBox="0 0 16 16"><path d="M9.5 1.5h-6v13h9v-10z"/><path d="M9.5 1.5v3h3M7.5 7v5M5 9.5h5"/></svg>',
   open: '<svg viewBox="0 0 16 16"><path d="M1.5 13.5v-10h4l1.5 1.5h6.5v2"/><path d="M1.5 13.5l2-6h11.5l-2 6z"/></svg>',
-  save: '<svg viewBox="0 0 16 16"><path d="M2.5 2.5h9l2 2v9h-11z"/><path d="M5.5 2.5v3h5v-3M4.5 13.5v-4h7v4"/></svg>',
+  save: ICONS.save,
   saveAs: '<svg viewBox="0 0 16 16"><path d="M7.5 13.5h-5v-11h9l2 2v3"/><path d="M5.5 2.5v3h5v-3M4.5 13.5v-4h3"/><path d="M9.5 14.5v-2l4-4 2 2-4 4z"/></svg>',
   move: '<svg viewBox="0 0 16 16"><rect x="7.5" y="2.5" width="7" height="11" rx="1"/><path d="M9.5 5.5h3M9.5 8.5h3M9.5 11.5h3M1.5 8.5h4M3.5 6.5l2 2-2 2"/></svg>',
   links: ICONS.link,
@@ -133,6 +133,10 @@ function render() {
   area.value = page?.text ?? '';
   area.disabled = !page;
   applyView();
+  if (page) {
+    area.setSelectionRange(page.caret ?? 0, page.caretEnd ?? page.caret ?? 0);
+    area.scrollTop = page.scroll ?? 0;
+  }
   tabsEl.querySelector('.on')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 }
 
@@ -407,6 +411,23 @@ export const copyToNoteItem = text => ({ label: COPY_TO_NOTE, icon: TOOL_ICONS.m
 // ---- Wiring ----
 
 area.addEventListener('contextmenu', pageMenu);
+
+// Where each page was left (scrolled to, the caret), kept with it so a restart comes back there.
+area.addEventListener('scroll', () => {
+  const page = activePage();
+  if (!page || page.scroll === area.scrollTop) return;
+  page.scroll = area.scrollTop;
+  persist();
+});
+for (const kind of ['keyup', 'mouseup', 'select']) {
+  area.addEventListener(kind, () => {
+    const page = activePage();
+    if (!page || (page.caret === area.selectionStart && page.caretEnd === area.selectionEnd)) return;
+    page.caret = area.selectionStart;
+    page.caretEnd = area.selectionEnd;
+    persist();
+  });
+}
 
 area.addEventListener('input', () => {
   const page = activePage();

@@ -47,7 +47,9 @@ const RESERVED = [
 
 /** The placeholders a selection fills, so an action using one is on the right-click menu only with a selection. */
 /** @type {readonly string[]} */
-const FROM_SELECTION = [ACTION_PLACEHOLDER.selection, ACTION_PLACEHOLDER.file, ACTION_PLACEHOLDER.line];
+const FROM_SELECTION = [ACTION_PLACEHOLDER.selection, ACTION_PLACEHOLDER.file, ACTION_PLACEHOLDER.line, ACTION_PLACEHOLDER.url, ACTION_PLACEHOLDER.image];
+/** A path {image} takes (Actions.cs checks the file is there). */
+const IMAGE_PATH = /\.(?:png|jpe?g|gif|bmp|webp|tiff?)$/i;
 const PLACEHOLDER = /\{(\w+)\}/g;
 /** A web address, alone in the selection. */
 const URL_ONLY = /^https?:\/\/[^\s"'<>`]+$/;
@@ -120,7 +122,7 @@ export const chordHtml = chord => keysHtml(chord.split(JOIN).join(' '));
  */
 function contextOf(tab) {
   const selection = tab?.view?.term.getSelection() || null;
-  return { selection, folder: tab?.cwd ?? null, port: tab ? portsOf(tab)[0] ?? null : null };
+  return { selection, folder: tab?.cwd ?? null, port: tab ? portsOf(tab)[0] ?? null : null, image: /** @type {string | null} */ (null) };
 }
 
 /**
@@ -161,12 +163,15 @@ export const actionCommands = () => enabledActions().map(a => ({
  * Whether what an action needs is there; for the menu, so it only offers what can run. The repository and branch
  * aren't known here: an action using them is offered wherever there's a folder, and the host says when it isn't one.
  * @param {ActionSetting} action
- * @param {{ selection: string | null, folder: string | null, port: number | null }} context
+ * @param {{ selection: string | null, folder: string | null, port: number | null, image?: string | null }} context
  */
 function canRun(action, context) {
-  const looksLikePath = !!context.selection && PATH_ONLY.test(context.selection.trim());
+  const text = context.selection?.trim() ?? '';
+  const looksLikePath = PATH_ONLY.test(text);
   return placeholdersOf(action).every(p => {
-    if (p === ACTION_PLACEHOLDER.selection) return !!context.selection?.trim();
+    if (p === ACTION_PLACEHOLDER.selection) return !!text;
+    if (p === ACTION_PLACEHOLDER.url) return URL_ONLY.test(text);
+    if (p === ACTION_PLACEHOLDER.image) return !!context.image || (looksLikePath && IMAGE_PATH.test(text));
     if (p === ACTION_PLACEHOLDER.file || p === ACTION_PLACEHOLDER.line) return looksLikePath;
     if (p === ACTION_PLACEHOLDER.port) return context.port != null;
     return !!context.folder;
@@ -179,10 +184,11 @@ function canRun(action, context) {
  * @param {Tab} tab
  * @param {string} path
  * @param {string} folder the folder it's in, or the folder itself
+ * @param {string | null} [image] an image file for {image} (a Smart Clip image)
  * @returns {import('./popups.js').MenuItem[]}
  */
-export function pathActions(tab, path, folder) {
-  const context = { selection: path, folder, port: portsOf(tab)[0] ?? null };
+export function pathActions(tab, path, folder, image = null) {
+  const context = { selection: path, folder, port: portsOf(tab)[0] ?? null, image };
   return enabledActions().filter(a => a.menu && canRun(a, context))
     .map(a => ({ label: a.name, hint: a.shortcut ? a.shortcut : undefined, action: () => runAction(a, tab, context) }));
 }

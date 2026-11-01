@@ -107,6 +107,29 @@ export function noticeDialog({ title, body }) {
     </div>`, (dialog, close) => ({ submit: () => close(true) })).then(() => {});
 }
 
+/** What the save question answers: save, or drop the changes; null is Cancel (stay). */
+export const SAVE_ANSWER = Object.freeze({ save: 'save', discard: 'discard' });
+
+/**
+ * Asks what to do with changes that aren't saved: Save (Enter), Don't save, or Cancel (Escape).
+ * @param {{ title: string, body: string }} question
+ * @returns {Promise<string | null>} SAVE_ANSWER.save, SAVE_ANSWER.discard, or null
+ */
+export function saveDialog({ title, body }) {
+  return modal(CONFIRM_DIALOG, `
+    <h3>${escapeHtml(title)}</h3>
+    <p class="dialog-sub">${escapeHtml(body)}</p>
+    <div class="dialog-actions">
+      <button class="btn" data-discard>Don’t save</button>
+      <span class="spacer"></span>
+      <button class="btn" data-cancel>Cancel</button>
+      <button class="btn primary" data-ok autofocus>Save</button>
+    </div>`, (dialog, close) => {
+    dialog.querySelector('[data-discard]')?.addEventListener('click', () => close(SAVE_ANSWER.discard));
+    return { submit: () => close(SAVE_ANSWER.save) };
+  });
+}
+
 /** The class of the small confirm dialog. */
 export const CONFIRM_DIALOG = 'confirm';
 /** The class of a dialog that's a form (New workspace, a worktree, a sync code). */

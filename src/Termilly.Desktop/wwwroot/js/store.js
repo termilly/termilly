@@ -58,6 +58,7 @@ export const GROUPS = Object.freeze({
   changes: 'changes',
   remote: 'remote',
   phone: 'phone',
+  clips: 'clips',
   uiState: 'uiState',
   data: 'data',
 });
@@ -80,8 +81,20 @@ export const getSetting = path => {
 
 /**
  * A Notepad page (js/notepad.js): its name, text, the file it was opened from or saved to, and the text as that file
- * holds it (to tell unsaved changes), and whether the file has Windows line ends.
- * @typedef {{ id: string, name: string, text: string, path?: string | null, saved?: string | null, crlf?: boolean }} NotepadPage
+ * holds it (to tell unsaved changes), whether the file has Windows line ends, and where it was left: scrolled to and
+ * the caret (or the selection), to come back there after a restart.
+ * @typedef {{ id: string, name: string, text: string, path?: string | null, saved?: string | null, crlf?: boolean,
+ *   scroll?: number, caret?: number, caretEnd?: number }} NotepadPage
+ */
+/**
+ * The Smart Clip panel (js/smartclip.js) as it was left: open or closed, its width, what its search box held, the
+ * clips shown in full, and where its list was scrolled.
+ * @typedef {{ open: boolean, width?: number, query?: string, expanded?: string[], scroll?: number }} ClipsState
+ */
+/**
+ * The File Explorer (js/filepanel.js) as it was left: open or closed, its width, the terminal it showed, that tree's
+ * open folders and where it was scrolled.
+ * @typedef {{ open: boolean, width?: number, tabId?: string | null, folders?: string[], scroll?: number }} FilesState
  */
 /**
  * The Notepad: open or closed, its pages, the one shown, its width, and whether it shows links and wraps words (both
@@ -107,6 +120,10 @@ export const state = {
   sidebar: { open: true },
   /** @type {NotepadState} */
   notepad: { open: false, pages: [], activeId: null },
+  /** @type {ClipsState} */
+  clips: { open: false },
+  /** @type {FilesState} */
+  files: { open: false },
   /**
    * The terminal colours of the theme plugins that are on (plugins.js).
    * @type {PluginTheme[]}
@@ -155,6 +172,10 @@ export const EVENTS = Object.freeze({
   openAgentChanges: 'openAgentChanges',
   /** Files and folders dragged out of the Files panel were dropped on a terminal: { tab, x, y } (js/filepanel.js asks what to do). */
   panelDrop: 'panelDrop',
+  /** A clip dragged from Smart Clip onto a terminal: { tab, id } (js/smartclip.js pastes it). */
+  clipDrop: 'clipDrop',
+  /** Smart Clip's clips changed (js/smartclip.js): the phones get the new list (js/phone.js). */
+  clips: 'clips',
   openChangedFiles: 'openChangedFiles',
   openGit: 'openGit',
   openSettings: 'openSettings',
@@ -671,6 +692,8 @@ function serialize() {
     tags: state.tags,
     recentDirs: state.recentDirs,
     notepad: state.notepad,
+    clips: state.clips,
+    files: state.files,
     // tmux windows aren't saved: they're tmux's, and attaching again brings them back (tmux.js).
     workspaces: state.workspaces.filter(w => !w.tmux).map(({ id, name, color, cwd, focusId, root, note, snippets, collapsed, copyTo }) => ({ id, name, color, cwd, focusId, root: withoutPreview(root), note, snippets, collapsed: collapsed || undefined, copyTo })),
     tabs: [...state.tabs.values()].filter(t => !t.virtual).map(t => {
@@ -709,6 +732,8 @@ export function restore(saved) {
     const pages = saved.notepad.pages.filter((/** @type {any} */ p) => typeof p?.id === 'string' && typeof p.text === 'string');
     state.notepad = { ...saved.notepad, pages, activeId: pages.some((/** @type {NotepadPage} */ p) => p.id === saved.notepad.activeId) ? saved.notepad.activeId : pages[0]?.id ?? null };
   }
+  if (saved.clips && typeof saved.clips === 'object') state.clips = { ...state.clips, ...saved.clips };
+  if (saved.files && typeof saved.files === 'object') state.files = { ...state.files, ...saved.files };
   state.sidebar = { ...state.sidebar, ...saved.sidebar };
   state.recentDirs = Array.isArray(saved.recentDirs) ? saved.recentDirs.filter((/** @type {unknown} */ d) => typeof d === 'string').slice(0, MAX_RECENT_DIRS) : [];
   if (!Array.isArray(saved.workspaces) || !saved.workspaces.length) return false;

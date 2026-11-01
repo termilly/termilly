@@ -2,7 +2,7 @@
 // Settings › Terminal: the default shell, scrollback, agents, production safety, logs, recordings, triggers and the
 // shell profiles. Notifications and sounds have their own page (notifications.js).
 
-import { sys, SYSTEM_NAME } from '../host.js';
+import { sys, SYSTEM_NAME, platform, PLATFORM } from '../host.js';
 import { state, isSshProfile, activityChanged, GROUPS } from '../store.js';
 import { escapeHtml, ICONS, profileOptionsHtml } from '../ui.js';
 import { environments } from '../environments.js';
@@ -15,7 +15,13 @@ import { SETTING_VALUES } from '../constants.js';
 import { targetOf } from '../dom.js';
 
 /** The choices of the settings used here (C#'s SettingValues). */
-const { hiddenScrollback, costDisplay, agentLine, agentLimit, prodPaste, logFormat, linkClick } = SETTING_VALUES;
+const { hiddenScrollback, costDisplay, agentLine, agentLimit, prodPaste, logFormat, linkClick, clipLimit } = SETTING_VALUES;
+
+/** Smart Clip's rows: keeping copies, from other apps too (Windows tells about those), after a restart, how many. */
+const clipRows = () => row('Keep copies', 'Every copy kept, to paste again from a terminal’s right-click menu or the Smart Clip panel (Ctrl+Shift+X).', toggle('clips.enabled'), { keywords: 'smart clip clipboard history copy paste' })
+  + (platform === PLATFORM.windows ? row('Copies from other apps', 'Also keep what you copy in other apps. Copies a password manager marks private are left out.', toggle('clips.otherApps'), { keywords: 'smart clip clipboard history other apps' }) : '')
+  + row('Keep after a restart', 'Encrypted on this PC. Secrets are never written and go after 10 minutes.', toggle('clips.keep'), { keywords: 'smart clip clipboard history restart encrypted' })
+  + row('Clips kept', 'The oldest go first. Pinned clips don’t count.', seg('clips.limit', choices(clipLimit.all, String)), { keywords: 'smart clip clipboard history limit' });
 
 /** A row per environment (production, staging) with its host patterns, comma-separated. */
 function envPatternRows() {
@@ -66,6 +72,7 @@ const TERMINAL = {
       seg('agents.line', [[agentLine.on, 'On'], [agentLine.focused, 'This workspace'], [agentLine.off, 'Off']]), { keywords: 'agent claude activity status line sidebar' })
     + row('Live agents', 'Above this many, idle agents in other workspaces hibernate.',
       seg('agents.limit', choices(agentLimit.all, limit => (limit ? String(limit) : 'No limit')))))
+    + group('Smart Clip', clipRows())
     + group('Production', row('Ask before pasting', 'Ask before pasting into a production terminal.',
         seg('safety.prodPaste', [[prodPaste.always, 'Always'], [prodPaste.multiline, 'Several lines or risky'], [prodPaste.dangerous, 'Risky words'], [prodPaste.never, 'Never']]), { keywords: 'production prod safety confirm paste rm drop delete' })
       + envPatternRows()

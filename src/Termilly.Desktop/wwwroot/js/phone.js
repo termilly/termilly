@@ -14,6 +14,7 @@ import { isProduction } from './environments.js';
 import { screenOf } from './termscreen.js';
 import { agentInput } from './terminals.js';
 import { placeholders } from './snippets.js';
+import { clipsForPhone } from './smartclip.js';
 import { THEMES, THEME_BASE, themeId, onSystemThemeChange } from './themes.js';
 import { termTheme } from './terminals.js';
 import { placesForPhone } from './phonemanage.js';
@@ -90,7 +91,7 @@ function terminalOf(tab) {
   const icon = runsClaude(tab) ? CLAUDE_BADGE : profile?.icon ?? '';
   const activity = activityOf(tab);
   return {
-    id: tab.id, ws: tab.wsId, title: tabTitle(tab), icon,
+    id: tab.id, ws: tab.wsId, title: tabTitle(tab), icon, note: tab.note ?? null,
     badge: badgeOf(icon),
     agent: tab.agent?.state ?? null,
     activity: activity?.kind ?? (tab.exited ? 'exited' : null),
@@ -135,10 +136,12 @@ function snapshot() {
   return {
     typing,
     snippets: typing ? snippetsForPhone() : [],
+    // Smart Clip's text clips to paste (their first lines; the PC pastes the whole one): Settings › Phone.
+    clips: typing && state.settings.phone?.clips !== false ? clipsForPhone() : [],
     notes: notesForPhone(),
     // Its themes, the one it shows now and its terminals' colours then (a theme plugin's, if one is chosen).
     themes: PHONE_THEMES, pcTheme: themeId(), pcTerminal: termTheme(),
-    workspaces: state.workspaces.map(w => ({ id: w.id, name: w.name, color: w.color, cwd: w.cwd ?? null })),
+    workspaces: state.workspaces.map(w => ({ id: w.id, name: w.name, color: w.color, cwd: w.cwd ?? null, note: w.note ?? null })),
     // What a phone may open a terminal on, and where it opens by default (only while it may type: js/phonemanage.js).
     places: typing ? placesForPhone(badgeOf) : [], activeWs: state.activeId,
     terminals: [...state.tabs.values()].filter(t => t.wsId && wsById(t.wsId) && !t.virtual).map(terminalOf),
@@ -149,7 +152,7 @@ const publish = debounce(() => {
   if (state.settings.phone?.enabled) send(PAGE.phoneState, { state: snapshot() });
 }, SEND_AFTER_MS);
 
-for (const event of [EVENTS.agent, EVENTS.tab, EVENTS.tabClosed, EVENTS.workspaces, EVENTS.settings, EVENTS.profiles]) on(event, publish);
+for (const event of [EVENTS.agent, EVENTS.tab, EVENTS.tabClosed, EVENTS.workspaces, EVENTS.settings, EVENTS.profiles, EVENTS.clips]) on(event, publish);
 // Windows switched light and dark: the "system" theme is the other one now.
 onSystemThemeChange(publish);
 // A terminal resized on the PC: the phones draw it at its new size.

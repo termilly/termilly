@@ -135,10 +135,14 @@ body.tv-open { overflow: hidden; }
 /* The terminal view's snippets (snippets.js): a sheet over the terminal, above the key bar. */
 .tv-sheet { position: absolute; inset: auto 0 0; z-index: 2; max-height: 70%; overflow-y: auto; padding: 12px 14px calc(12px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); border-radius: 14px 14px 0 0; background: var(--sheet); box-shadow: 0 -8px 24px rgba(0, 0, 0, .35); }
 .tv.keyboard .tv-sheet { padding-bottom: 12px; }
-.tv-sheet-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+/* The sheet's title and close stay on top as its list scrolls. */
+.tv-sheet-head { position: sticky; top: -12px; z-index: 1; display: flex; align-items: center; justify-content: space-between; margin: -12px -14px 8px; padding: 12px 14px 8px; background: var(--sheet); }
 .tv-sheet-close { padding: 4px 8px; border: 0; background: none; color: var(--muted); font-size: 18px; }
 .tv-sheet-list { display: flex; flex-direction: column; gap: 6px; }
-.snip { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border: 0; border-radius: 10px; background: var(--bg); color: var(--text); text-align: left; }
+.snip { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 10px 12px; border: 0; border-radius: 10px; background: var(--bg); color: var(--text); text-align: left; }
+/* A long line wraps inside its item, two lines at most. */
+.snip b { display: -webkit-box; overflow: hidden; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.snip:disabled { opacity: .5; }
 .snip span { overflow: hidden; color: var(--muted); font: 12px ui-monospace, Menlo, Consolas, monospace; text-overflow: ellipsis; white-space: nowrap; }
 .snip-form { flex-direction: column; margin: 0; }
 .snip-form label { display: flex; flex-direction: column; gap: 4px; color: var(--muted); font-size: 13px; }
@@ -150,6 +154,19 @@ main.tabbed { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
 .tabbar { position: fixed; inset: auto 0 0; z-index: 4; display: flex; justify-content: center; gap: 8px; padding: max(6px, calc(env(safe-area-inset-bottom) - 18px)) 8px; border-top: 1px solid var(--line); background: color-mix(in srgb, var(--raised) 92%, transparent); backdrop-filter: blur(12px); }
 .tabbar button { position: relative; display: flex; flex: 0 1 96px; flex-direction: column; gap: 1px; align-items: center; padding: 2px 0; border: 0; background: none; color: var(--muted); font-size: 10px; font-weight: 600; }
 .tabbar button.on { color: var(--accent); }
+/* The Notes tab (memos.js): each workspace, its terminals under it, and a note's editor. */
+.memo { width: 100%; border: 0; background: none; color: var(--text); text-align: left; }
+.memo-term { padding-left: 28px; }
+.memo .r-text { display: flex; flex-direction: column; min-width: 0; }
+.memo .r-line { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.memo-pin { margin-left: 4px; color: var(--accent); font-size: 11px; font-weight: 500; }
+.memo-editor { display: flex; flex-direction: column; gap: 10px; }
+.memo-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.memo-head .link { padding: 4px 0; border: 0; background: none; color: var(--accent); font-size: 15px; }
+.memo-text { min-height: 40vh; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--raised); color: var(--text); font: 15px/1.45 ui-monospace, Menlo, Consolas, monospace; resize: vertical; }
+.memo-pinbox { display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: 14px; }
+.memo-actions { display: flex; gap: 8px; align-items: center; }
+.memo-actions .grow { flex: 1; }
 .tabbar svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
 .tab-count { position: absolute; top: 0; left: calc(50% + 6px); min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--accent); color: var(--on-accent); font-size: 10px; font-weight: 700; line-height: 16px; text-align: center; }
 .tabbed ~ .toast { bottom: calc(64px + env(safe-area-inset-bottom)); }
@@ -197,6 +214,9 @@ main.tabbed { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
 .c-menu { position: absolute; left: 8px; bottom: 96px; z-index: 6; display: flex; flex-direction: column; min-width: 220px; overflow: hidden; border-radius: 14px; background: var(--sheet); box-shadow: 0 10px 30px rgba(0, 0, 0, .45); }
 .c-menu button { padding: 12px 16px; border: 0; background: none; color: var(--text); font: inherit; font-size: 15px; text-align: left; }
 .c-menu button + button { border-top: 1px solid var(--line); }
+/* Over the key bar's + (another terminal's): on the right, just above the keys. */
+.c-menu.from-keys { right: 8px; left: auto; bottom: calc(56px + env(safe-area-inset-bottom)); }
+.keybar .kb-plus svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
 /* Settings: a list of rows, each opening its page (with ‹ back to where it opens from). */
 .look .r-text > span { display: block; }
 .r-line.wrap { overflow: visible; white-space: normal; }

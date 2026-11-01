@@ -102,6 +102,22 @@ internal interface IAudioOutputs
     void Play(string file, double volume, string device);
 }
 
+/// <summary>What the system clipboard holds after a change: text (or files, as their paths), or an image as a PNG.</summary>
+internal sealed record ClipboardContent(string? Text, byte[]? Png = null, int Width = 0, int Height = 0);
+
+/// <summary>
+/// The system clipboard's changes, for Smart Clip. Only where the system tells about them (Windows); without one, Smart
+/// Clip keeps only the copies made in Termilly.
+/// </summary>
+internal interface IClipboardWatch
+{
+    /// <summary>The clipboard changed, on the window's thread.</summary>
+    event Action<ClipboardContent>? Changed;
+
+    /// <summary>Starts listening, once the window is up.</summary>
+    void Start();
+}
+
 /// <summary>The system's notifications.</summary>
 internal interface INotifier
 {

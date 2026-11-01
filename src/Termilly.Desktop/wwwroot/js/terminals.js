@@ -20,7 +20,7 @@ import { updateSettings } from './preferences.js';
 import { resumeCommand, attachFor } from './resume.js';
 import { noteRemotePrompt, noteRemoteCwd, leftRemote } from './remotecwd.js';
 import { AGENT_STATE, AGENT_SOURCE } from './constants.js';
-import { find, field, PATH_DRAG } from './dom.js';
+import { find, field, PATH_DRAG, CLIP_DRAG } from './dom.js';
 import { continuesOnNextRow, atPrompt } from './buffer.js';
 import { isResuming, resumeTyped, cancelResume, CANCEL_KEY } from './resuming.js';
 import { clipboardKey, wireClipboard, PASTE_LABEL } from './termclipboard.js';
@@ -811,7 +811,7 @@ function wireDropAndPaste(tab, term) {
   const { body } = /** @type {TabView} */ (tab.view);
   body.addEventListener('dragover', e => {
     const types = e.dataTransfer?.types ?? [];
-    if (!types.includes('Files') && !types.includes(PATH_DRAG)) return;
+    if (!types.includes('Files') && !types.includes(PATH_DRAG) && !types.includes(CLIP_DRAG)) return;
     e.preventDefault();
     /** @type {DataTransfer} */ (e.dataTransfer).dropEffect = 'copy';
     body.classList.add(FILE_OVER);
@@ -819,6 +819,14 @@ function wireDropAndPaste(tab, term) {
   body.addEventListener('dragleave', () => body.classList.remove(FILE_OVER));
   body.addEventListener('drop', e => {
     body.classList.remove(FILE_OVER);
+    // A clip from Smart Clip: it pastes it here.
+    const clip = e.dataTransfer?.getData(CLIP_DRAG);
+    if (clip) {
+      e.preventDefault();
+      e.stopPropagation();
+      emit(EVENTS.clipDrop, { tab, id: clip });
+      return;
+    }
     // Files and folders from the Files panel: it asks whether to copy them here or type their names.
     if (e.dataTransfer?.getData(PATH_DRAG)) {
       e.preventDefault();
@@ -843,6 +851,25 @@ function wireDropAndPaste(tab, term) {
   }, true);
   // The right-click menu's Paste has no paste event: the same checks, then xterm types it.
   wireClipboard(term, body, text => { if (!checkPaste(tab, text)) term.paste(text); });
+}
+
+/**
+ * Pastes text into a terminal as its Paste does (asked first on production, or for several lines), for other
+ * features (Smart Clip); with `run`, a line is run as well, once it's pasted.
+ * @param {Tab} tab
+ * @param {string} text
+ * @param {boolean} [run]
+ */
+export async function pasteInto(tab, text, run = false) {
+  const { term } = /** @type {TabView} */ (tab.view);
+  term.focus();
+  if (!run) {
+    if (!checkPaste(tab, text)) term.paste(text);
+    return;
+  }
+  if (pasteNeedsConfirm(tab, text) && !(await confirmProduction([tab], PASTE_LABEL, text))) return;
+  term.paste(text);
+  send(PAGE.input, { id: tab.id, data: '\r' });
 }
 
 /**

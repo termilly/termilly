@@ -80,8 +80,19 @@ export function redrawIfShowing(...ids) {
   if (!layer.hidden && ids.includes(page.current)) redrawPage();
 }
 
-export function closeSettings() {
+/** What's asked before Settings closes (a section's changes that aren't saved): each says whether it may close. */
+/** @type {Array<() => Promise<boolean>>} */
+const closeChecks = [];
+
+/**
+ * Asks before Settings closes; the check answers false to keep it open.
+ * @param {() => Promise<boolean>} check
+ */
+export const addCloseCheck = check => { closeChecks.push(check); };
+
+export async function closeSettings() {
   if (layer.hidden) return;
+  for (const check of closeChecks) if (!(await check())) return;
   layer.hidden = true;
   button.classList.remove('open');
   restoreFocus();

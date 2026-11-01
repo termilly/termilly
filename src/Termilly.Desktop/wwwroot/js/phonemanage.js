@@ -11,9 +11,10 @@ import { connections, connectionError, IDENTITY } from './ssh.js';
 import { updateSettings } from './preferences.js';
 import { isProduction } from './environments.js';
 import { PROFILE_ID_PREFIX } from './constants.js';
+import { setNote, NOTE_KIND } from './notes.js';
 
 /** What a phone may ask (the message's "action"). */
-const ACTION = Object.freeze({ open: 'open', close: 'close', rename: 'rename', move: 'move', addHost: 'addHost' });
+const ACTION = Object.freeze({ open: 'open', close: 'close', rename: 'rename', move: 'move', addHost: 'addHost', note: 'note' });
 /** The longest a terminal's name and a folder typed on the phone may be. */
 const MAX = Object.freeze({ name: 80, folder: 400 });
 /** How a phone's SSH host may sign in: the ones that need nothing typed on the phone. */
@@ -101,6 +102,18 @@ function addHost(m) {
   return { profile: `${PROFILE_ID_PREFIX.connection}${value.id}` };
 }
 
+/**
+ * A note written on the phone (its Notes tab): a workspace's or a terminal's, saved as the PC's own editor saves it
+ * (empty removes it).
+ * @param {Record<string, any>} m
+ */
+function note(m) {
+  const target = m.kind === NOTE_KIND.workspace ? wsById(String(m.id)) : state.tabs.get(String(m.id));
+  if (!target || (m.kind !== NOTE_KIND.workspace && m.kind !== NOTE_KIND.terminal)) throw new Error('That workspace or terminal is gone.');
+  setNote(m.kind, target, String(m.text ?? '').trim(), !!m.pinned);
+  return {};
+}
+
 /** @type {Record<string, (m: Record<string, any>) => object>} */
 const DO = {
   [ACTION.open]: open,
@@ -108,6 +121,7 @@ const DO = {
   [ACTION.rename]: rename,
   [ACTION.move]: move,
   [ACTION.addHost]: addHost,
+  [ACTION.note]: note,
 };
 
 onHost(HOST.phoneManage, m => {

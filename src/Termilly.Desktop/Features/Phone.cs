@@ -47,13 +47,14 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
     private readonly PhoneLive _live;
     private readonly PageApi _api;
     private readonly TerminalSessions _sessions;
+    private readonly PhoneClips _clips;
     private PhoneServer? _server;
     private int _port;
     private string? _error;
 
-    public PhoneHandler(PageChannel page, ISettingsStore settings, PhoneStore store, PhoneLive live, PageApi api, TerminalSessions sessions)
+    public PhoneHandler(PageChannel page, ISettingsStore settings, PhoneStore store, PhoneLive live, PageApi api, TerminalSessions sessions, PhoneClips clips)
     {
-        (_page, _settings, _store, _live, _api, _sessions) = (page, settings, store, live, api, sessions);
+        (_page, _settings, _store, _live, _api, _sessions, _clips) = (page, settings, store, live, api, sessions, clips);
         settings.Saved += _ => Update();
         live.Received = ReceivedAsync;
         live.Screen = ScreenAsync;
@@ -176,6 +177,8 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
     private Task<JsonObject> ReceivedAsync(string device, JsonObject message) => message[OpField]?.GetValue<string>() switch
     {
         InputOp => Task.FromResult(Type(message)),
+        PhoneClips.PasteOp => Task.FromResult(_clips.Paste(message)),
+        PhoneClips.TextOp => Task.FromResult(_clips.Text(message)),
         ManageOp => ManageAsync(message),
         _ => AnswerAsync(device, message),
     };
