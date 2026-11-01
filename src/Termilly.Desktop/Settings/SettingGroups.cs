@@ -229,7 +229,7 @@ internal sealed record PhoneSettings
     public bool Enabled { get; init; }
     public int Port { get; init; } = DefaultPort;
     /// <summary>When an agent's news goes to the phones that take alerts (SettingValues.PhoneAlerts).</summary>
-    public string Alerts { get; init; } = SettingValues.PhoneAlerts.Away;
+    public string Alerts { get; init; } = SettingValues.PhoneAlerts.Always;
     /// <summary>Alerts say only that an agent needs the user or finished: no terminal, workspace or message.</summary>
     public bool HideDetails { get; init; }
     /// <summary>A paired phone may type into a terminal it shows (answers to an agent are always allowed).</summary>
@@ -243,7 +243,7 @@ internal sealed record PhoneSettings
     public PhoneSettings Normalize() => this with
     {
         Port = Port is >= MinPort and <= MaxPort ? Port : DefaultPort,
-        Alerts = SettingChecks.OneOf(Alerts, SettingValues.PhoneAlerts.All, SettingValues.PhoneAlerts.Away),
+        Alerts = SettingChecks.OneOf(Alerts, SettingValues.PhoneAlerts.All, SettingValues.PhoneAlerts.Always),
     };
 }
 

@@ -35,6 +35,12 @@ internal static partial class FromPage
         public static string Type => "phone:alert";
     }
 
+    /// <summary>A terminal's news is old (its agent answered or moved on): an alert held until the user is away doesn't go.</summary>
+    internal sealed record PhoneWithdraw(string Id = "") : IPageMessage
+    {
+        public static string Type => "phone:withdraw";
+    }
+
     /// <summary>
     /// What the phones show (js/phone.js builds it whenever a terminal or agent changes): the workspaces and their
     /// terminals, with what each agent is doing or waiting for.

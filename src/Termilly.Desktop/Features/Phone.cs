@@ -49,6 +49,8 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
     private readonly TerminalSessions _sessions;
     private readonly PhoneClips _clips;
     private PhoneServer? _server;
+    /// <summary>Alerts held while the user was at the PC (When I'm away), sent once the PC is left alone.</summary>
+    private readonly PhoneAwayAlerts _away;
     private int _port;
     private string? _error;
 
@@ -62,6 +64,7 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
             phone is null ? null : store.List().FirstOrDefault(d => d.Id == phone.Device)?.Name, phone?.Address));
         live.Opened = pane => _page.Post(new ToPage.PhoneSeen(pane));
         sessions.Output += Printed;
+        _away = new PhoneAwayAlerts(alert => AlertAsync(null, alert), UserIdle.Since, AwayAfter);
     }
 
     /// <summary>A terminal printed something: it goes on to the phones that show it (while the server runs).</summary>
@@ -106,11 +109,22 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
             {
                 _page.Post(new ToPage.PhoneSeen(id)); // seen on the phone as it came: not news on the PC either
             }
-            if (_server is not null && ShouldAlert(settings.Alerts, m.InFront, UserIdle.Since()))
+            _away.Drop(m.Id); // a newer one replaces it
+            if (_server is null)
             {
-                await AlertAsync(null, AlertFor(m, settings.HideDetails)).ConfigureAwait(false);
+                return;
+            }
+            var alert = AlertFor(m, settings.HideDetails);
+            if (ShouldAlert(settings.Alerts, m.InFront, UserIdle.Since()))
+            {
+                await AlertAsync(null, alert).ConfigureAwait(false);
+            }
+            else if (settings.Alerts == SettingValues.PhoneAlerts.Away)
+            {
+                _away.Hold(m.Id, alert); // the user is at the PC now; it goes if they leave before it's answered
             }
         });
+        router.On<FromPage.PhoneWithdraw>(m => _away.Drop(m.Id));
         router.On<FromPage.PhoneTest>(async _ =>
         {
             var (sent, error) = await AlertAsync(null, TestAlert).ConfigureAwait(false);
@@ -348,5 +362,6 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
         _sessions.Output -= Printed;
         _live.CloseAll();
         _server?.Dispose();
+        _away.Dispose();
     }
 }
