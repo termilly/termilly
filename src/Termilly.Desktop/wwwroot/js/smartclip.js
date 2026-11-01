@@ -2,7 +2,8 @@
 // Smart Clip (the title bar's button, Ctrl+Shift+X, or a terminal's right-click menu): every copy kept, text and
 // images, made in Termilly or (on Windows) in any app, kept by the host (SmartClip.cs). A terminal's right-click menu
 // offers the newest under Paste from Smart Clip; the panel docked on the right shows them all, pinned first, images in
-// a grid. A click selects a clip and shows more of it; a double click (or Enter) pastes it into the terminal in focus
+// a grid. A click selects a clip and shows more of it (a second click folds it), Delete forgets it; a double click (or
+// Enter) pastes it into the terminal in focus
 // through its paste checks, a clip dragged onto a terminal pastes there, and an image pastes as the path of a PNG file
 // (what agents such as Claude Code read). Secrets show masked and go after a while.
 
@@ -31,7 +32,7 @@ const TIP_CHARS = 400;
 const MIN_WIDTH_PX = 280;
 /** From this many characters a clip's size shows with it. */
 const SIZE_FROM = 1_000;
-const ROW_TIP = 'Click to see more, double-click or Enter to paste';
+const ROW_TIP = 'Click to see more, double-click or Enter to paste, Delete to forget';
 const MINUTE_MS = 60_000;
 const HOUR_MS = 60 * MINUTE_MS;
 const DAY_HOURS = 24;
@@ -349,8 +350,9 @@ panel.addEventListener('click', e => {
   if (!c) return;
   const act = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-clip-act]'))?.dataset.clipAct;
   if (act) return clipAct(act, c);
-  if (selected === c.id) return;
-  selected = c.id;
+  // The second click of a double click pastes (dblclick), it doesn't fold.
+  if (e.detail > 1) return;
+  selected = selected === c.id ? null : c.id;
   drawList();
 });
 
@@ -358,8 +360,22 @@ panel.addEventListener('dblclick', e => {
   if (targetOf(e).closest('[data-clip-act]')) return;
   const el = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-clip]'));
   const c = el && clipById(/** @type {string} */ (el.dataset.clip));
-  if (c) pasteClip(c);
+  if (!c) return;
+  if (selected !== c.id) {
+    selected = c.id;
+    drawList();
+  }
+  pasteClip(c);
 });
+
+/** Forgets the selected clip; the one after it (or before, at the end) is selected instead. */
+function forgetSelected() {
+  const list = shown();
+  const i = list.findIndex(c => c.id === selected);
+  if (i < 0) return;
+  send(PAGE.clipForget, { id: list[i].id });
+  selected = (list[i + 1] ?? list[i - 1])?.id ?? null;
+}
 
 /** Draws the list again where it was scrolled (the head and search box stay). */
 function drawList() {
@@ -389,6 +405,8 @@ panel.addEventListener('keydown', e => {
   const chosen = selected ? clipById(selected) : shown()[0];
   if (e.key === 'Escape' && !e.ctrlKey && !e.shiftKey && !e.altKey) restoreFocus();
   else if (e.key === 'Enter' && !e.ctrlKey && !e.shiftKey && !e.altKey && chosen) pasteClip(chosen);
+  // In the search box Delete deletes letters.
+  else if (e.key === 'Delete' && !e.ctrlKey && !e.shiftKey && !e.altKey && selected && !targetOf(e).matches(SEARCH)) forgetSelected();
   else if (e.ctrlKey && e.shiftKey && !e.altKey && e.code === CLIPS_KEY) toggleClips();
   else return;
   e.preventDefault();
