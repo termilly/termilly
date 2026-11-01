@@ -60,8 +60,9 @@ if event == "PreToolUse":
         target = text(inp, "subagent_type", 60)
     if target:
         m["target"] = target
-if event == "SessionStart":
-    # The folder the session belongs to: where `claude --resume` runs again after Termilly restarts.
+if event == "SessionStart" and p.get("source") not in ("compact", "clear"):
+    # The folder the session belongs to: where `claude --resume` runs again after Termilly restarts. Not after a
+    # compaction or /clear: those report the folder Claude has cd-ed to, where resume wouldn't find the session.
     m["folder"] = text(p, "cwd", 1000, False)
 if event == "UserPromptSubmit":
     m["prompt"] = text(p, "prompt", 1200)

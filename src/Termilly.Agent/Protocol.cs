@@ -60,6 +60,7 @@ internal static partial class Protocol
         public const string AgentType = "agent_type";
         public const string AgentTranscriptPath = "agent_transcript_path";
         public const string Cwd = "cwd";
+        public const string Source = "source"; // SessionStart's cause: startup, resume, clear or compact
         public const string OriginalFile = "originalFile";
         /// <summary>The id an Agent call's response gives the subagent it started.</summary>
         public const string LaunchedAgentId = "agentId";
@@ -208,12 +209,12 @@ internal static partial class Protocol
     }
 
     /// <summary>
-    /// SessionStart: where `claude --resume` has to run again after a restart (the shell may have moved on: `cd x &&
-    /// claude`). UserPromptSubmit: the prompt the user sent, for My prompts.
+    /// SessionStart: where `claude --resume` runs again after a restart, as the session starts or resumes (not after a
+    /// compaction or /clear: those say where Claude has cd-ed to). UserPromptSubmit: the prompt sent, for My prompts.
     /// </summary>
     private static void AddSessionFields(JsonObject message, JsonObject? payload, string hookEvent)
     {
-        if (hookEvent == HookEvents.SessionStart)
+        if (hookEvent == HookEvents.SessionStart && Text(payload, Payload.Source, MaxId) is not ("compact" or "clear"))
         {
             message[HookMessage.Fields.Folder] = Text(payload, Payload.Cwd, MaxPath, cut: false);
         }

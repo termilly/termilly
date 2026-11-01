@@ -234,6 +234,23 @@ public sealed class AgentHooksTests : IDisposable
     }
 
     [Theory]
+    [InlineData("compact")]
+    [InlineData("clear")]
+    public void Session_start_after_compacting_or_clearing_keeps_the_folder_it_had(string source)
+    {
+        // Claude's folder drifts as it works (cd); the session still belongs to the one it started in, where
+        // `claude --resume` finds it. A compaction or /clear reports the drifted one: it mustn't replace that.
+        var payload = $$"""{"session_id":"abc","cwd":"D:/Development/termilly/src/js","source":"{{source}}"}""";
+        Assert.Null(AgentHooks.Parse(Protocol.Message("pane-1", "SessionStart", payload))!.Folder);
+    }
+
+    [Theory]
+    [InlineData("""{"session_id":"abc","cwd":"D:/work","source":"resume"}""")]
+    [InlineData("""{"session_id":"abc","cwd":"D:/work"}""")]
+    public void Session_start_on_a_resume_or_from_an_older_claude_names_the_folder(string payload) =>
+        Assert.Equal("D:/work", AgentHooks.Parse(Protocol.Message("pane-1", "SessionStart", payload))!.Folder);
+
+    [Theory]
     [InlineData("Bash")]
     [InlineData("PowerShell")]
     public void Shell_commands_pass_only_folders_and_the_program_never_the_command(string tool)
