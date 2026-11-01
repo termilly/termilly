@@ -5,7 +5,7 @@
 
 import { HOST, PAGE } from './protocol.js';
 import { onHost, send } from './host.js';
-import { state, on, wsById, tabTitle, EVENTS } from './store.js';
+import { state, on, emit, wsById, tabTitle, EVENTS } from './store.js';
 import { openPopover, closePopover, isOpen } from './popups.js';
 import { tabBadgeHtml, escapeHtml, activityHtml, countText, ICONS } from './ui.js';
 import { activityOf } from './store.js';
@@ -102,7 +102,7 @@ function isLive(n) {
 }
 
 /** The notification center for the phones (js/phone.js): each note's terminal, what it said, when, and whether it's still news. */
-export const notesForPhone = () => notes.map(n => ({ id: n.tabId, state: n.state, detail: n.detail, at: n.at, live: isLive(n) }));
+export const notesForPhone = () => notes.map(n => ({ id: n.tabId, key: n.key, state: n.state, detail: n.detail, at: n.at, live: isLive(n) }));
 
 /** @param {Note} n */
 const matches = n => filter === FILTER.all || (filter === FILTER.unread ? isLive(n) : n.state === AGENT_STATE.error);
@@ -146,10 +146,11 @@ function take(tab) {
  * Clears one note (its key), or all of them (null).
  * @param {string | null} key
  */
-function clear(key) {
+export function clear(key) {
   for (const n of notes) if (key === null || n.key === key) cleared.add(n.key);
   notes = notes.filter(n => !cleared.has(n.key));
   render();
+  emit(EVENTS.inbox);
 }
 
 function render() {

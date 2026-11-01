@@ -4,6 +4,8 @@
 // by the part of a line not scrolled yet, and settles on a line when it stops) or line by line, as Settings say. The page never scrolls or zooms under it, and
 // xterm's own touch handling is kept out (it scrolled nothing on the phone).
 
+/** iOS Safari's own pinch, which would zoom the page (app.js and the terminal keep it from doing so). */
+export const GESTURE_START = 'gesturestart';
 /** How far a finger moves before a touch is a drag, not a tap (px). */
 const SLOP = 8;
 /** The font sizes pinching goes between, in half points. */
@@ -183,5 +185,5 @@ export function terminalTouch(box, on) {
   }, FIRST);
 
   // iOS zooms the page on its own gesture events too.
-  box.addEventListener('gesturestart', e => e.preventDefault());
+  box.addEventListener(GESTURE_START, e => e.preventDefault());
 }

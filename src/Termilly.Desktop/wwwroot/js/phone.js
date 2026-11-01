@@ -152,7 +152,7 @@ const publish = debounce(() => {
   if (state.settings.phone?.enabled) send(PAGE.phoneState, { state: snapshot() });
 }, SEND_AFTER_MS);
 
-for (const event of [EVENTS.agent, EVENTS.tab, EVENTS.tabClosed, EVENTS.workspaces, EVENTS.settings, EVENTS.profiles, EVENTS.clips]) on(event, publish);
+for (const event of [EVENTS.agent, EVENTS.tab, EVENTS.tabClosed, EVENTS.workspaces, EVENTS.settings, EVENTS.profiles, EVENTS.clips, EVENTS.inbox]) on(event, publish);
 // Windows switched light and dark: the "system" theme is the other one now.
 onSystemThemeChange(publish);
 // A terminal resized on the PC: the phones draw it at its new size.

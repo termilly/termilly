@@ -39,7 +39,7 @@ export function memosTab(app) {
   function listHtml() {
     const snap = app.snap();
     if (!snap.workspaces.length) return '<p class="muted center">No workspaces on your PC.</p>';
-    return snap.workspaces.map((/** @type {any} */ w) => `<div class="list">
+    return snap.workspaces.map((/** @type {any} */ w) => `<div class="list memo-ws">
       ${rowHtml(KIND.workspace, w, `<span class="dot" style="background:${esc(w.color)}"></span>`)}
       ${snap.terminals.filter((/** @type {any} */ t) => t.ws === w.id).map((/** @type {any} */ t) => rowHtml(KIND.terminal, t, app.badge(t))).join('')}</div>`).join('');
   }

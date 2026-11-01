@@ -732,6 +732,12 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
 .np-text, .np-layer { margin: 0; padding: 10px 12px; font: 13px/1.5 var(--mono); tab-size: 4; white-space: pre-wrap; overflow-wrap: break-word; }
 .np-text { position: relative; z-index: 1; flex: 1; min-width: 0; border: 0; border-radius: 0 0 var(--radius) var(--radius); outline: none; background: transparent; color: var(--text); resize: none; }
 .np-text:disabled { opacity: .5; }
+.np-text[hidden] { display: none; }
+/* No pages: New page and Open a file, in the middle of the panel. */
+.np-empty { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--muted); }
+.np-empty[hidden] { display: none; }
+.np-empty p { margin: 0; font-size: 13px; }
+.np-empty-actions { display: flex; gap: 8px; }
 .np-layer { position: absolute; top: 0; left: 0; box-sizing: border-box; overflow: hidden; color: var(--text); pointer-events: none; }
 .np-editor:not(.with-links) .np-layer { display: none; }
 .np-editor.with-links .np-text { color: transparent; caret-color: var(--text); }

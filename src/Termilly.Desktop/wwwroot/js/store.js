@@ -173,6 +173,8 @@ export const EVENTS = Object.freeze({
   focus: 'focus',
   gitChanged: 'gitChanged',
   history: 'history',
+  /** The Notification center's list changed (cleared): the phones get it again. */
+  inbox: 'inbox',
   openAgentChanges: 'openAgentChanges',
   /** Files and folders dragged out of the Files panel were dropped on a terminal: { tab, x, y } (js/filepanel.js asks what to do). */
   panelDrop: 'panelDrop',

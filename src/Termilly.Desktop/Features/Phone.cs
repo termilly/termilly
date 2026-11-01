@@ -204,6 +204,9 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
     };
 
     private const string ManageOp = "manage";
+    /// <summary>The manage action that clears notifications (js/phonemanage.js): allowed with typing off too.</summary>
+    private const string ClearNoteAction = "clearNote";
+    private const string ActionField = "action";
 
     /// <summary>
     /// A phone opens, closes, renames or moves a terminal, or adds an SSH host: only while Settings › Phone allows typing
@@ -211,7 +214,7 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
     /// </summary>
     private async Task<JsonObject> ManageAsync(JsonObject message)
     {
-        if (!_settings.Current.Phone.AllowTyping)
+        if (!_settings.Current.Phone.AllowTyping && message[ActionField]?.GetValue<string>() != ClearNoteAction)
         {
             return new JsonObject { [Answer.Ok] = false, [OpField] = ManageOp, [Answer.Error] = "Managing terminals from the phone is off: Settings › Phone › Allow typing." };
         }
