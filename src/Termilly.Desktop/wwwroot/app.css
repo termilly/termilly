@@ -999,6 +999,20 @@ body[data-sidebar="rail"] .side-rail { opacity: 1; pointer-events: auto; }
 .rm-filter[hidden] { display: none; }
 .rm-body { min-height: 0; padding: 0 6px 6px; overflow-y: auto; }
 .rm-body::-webkit-scrollbar { width: 6px; }
+/* Other Termilly computers (js/remotepc.js): a tree of each computer, its workspaces and their terminals. */
+.pc-chev { display: grid; flex: none; place-items: center; width: 12px; color: var(--faint); }
+.pc-chev svg { width: 12px; height: 12px; transition: transform 0.15s; }
+.pc-chev.open svg { transform: rotate(90deg); }
+.pc-icon { display: grid; place-items: center; color: var(--muted); }
+.pc-icon svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1; }
+.pc-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
+.pc-dot.on { background: #3fb950; }
+.pc-ws { padding-left: 22px; }
+.pc-wsdot { width: 8px; height: 8px; border-radius: 3px; }
+.pc-term { padding-left: 52px; }
+.pc-badge { min-width: 22px; font-size: 9px; }
+.pc-add { color: var(--muted); }
+.pc-add svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.2; }
 .rm-group { padding: 8px 8px 3px; color: var(--faint); font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
 .rm-row {
   display: flex; align-items: center; gap: 7px; width: 100%; padding: 4px 6px; border-radius: 6px;

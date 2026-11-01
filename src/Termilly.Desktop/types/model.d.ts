@@ -161,8 +161,11 @@ interface Tab {
   agentSeen?: boolean;
   /** Its agent was ended, to resume (js/hibernate.js). */
   hibernated?: { session: string; at: number; folder?: string | null } | null;
-  /** A tmux pane rather than a shell of its own (js/tmux.js). */
-  virtual?: { kind: 'tmux'; client: string; pane: string; cols: number; rows: number } | null;
+  /**
+   * A terminal without a shell of its own: a tmux pane (js/tmux.js; client is its tmux client), or another Termilly
+   * computer's terminal (js/remotepc.js; client is the computer).
+   */
+  virtual?: { kind: 'tmux' | 'pc'; client: string; pane: string; cols: number; rows: number } | null;
   /** An SSH connection that dropped, reconnecting (js/reconnect.js). */
   reconnect?: import('../wwwroot/js/reconnect.js').Reconnecting | null;
   /** A status set through the API (js/api.js). */

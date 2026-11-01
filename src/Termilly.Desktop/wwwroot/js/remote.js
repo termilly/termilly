@@ -26,7 +26,9 @@ const PIN = '<svg viewBox="0 0 16 16"><path d="M6 2.5h5M7 2.5v4l-2 3h7l-2-3v-4M8
 /** A globe for the rail's button, on the same grid. */
 const GLOBE = '<svg viewBox="0 0 16 16"><circle cx="8.5" cy="8.5" r="5.5"/><path d="M3 8.5h11M8.5 3c-1.6 1.6-2.4 3.4-2.4 5.5s.8 3.9 2.4 5.5c1.6-1.6 2.4-3.4 2.4-5.5S10.1 4.6 8.5 3"/></svg>';
 
-const section = byId('remote');
+/** The section's element id (remotepc.js listens on it too). */
+export const REMOTE_ID = 'remote';
+const section = byId(REMOTE_ID);
 const head = find(section, '.rm-head');
 const filter = field(section, '.rm-filter');
 const body = find(section, '.rm-body');
@@ -89,10 +91,19 @@ const groupedHtml = list => SOURCES
   .map(([label, group]) => `<div class="rm-group">${escapeHtml(label)}</div>${group.map(rowHtml).join('')}`)
   .join('');
 
+/** What goes above the places: other Termilly computers (remotepc.js). */
+let extraHtml = () => '';
+/**
+ * Sets what the section shows above its places.
+ * @param {() => string} fn
+ */
+export const setRemoteExtra = fn => { extraHtml = fn; };
+
 export function renderRemote() {
   const all = places();
-  section.hidden = !all.length;
-  if (!all.length) return;
+  const extra = extraHtml();
+  section.hidden = !all.length && !extra;
+  if (section.hidden) return;
   const folded = !!state.sidebar.remoteFolded;
   section.classList.toggle('folded', folded);
   find(head, '.rm-count').textContent = String(all.length);
@@ -106,13 +117,19 @@ export function renderRemote() {
     body.innerHTML = found.length ? groupedHtml(found) : '<div class="rm-empty">Nothing matches.</div>';
     return;
   }
+  body.innerHTML = extra + placesHtml(all);
+}
+
+/**
+ * The places, unfiltered: the short list (pinned and recent), or all of them grouped.
+ * @param {SessionProfile[]} all
+ */
+function placesHtml(all) {
+  if (!all.length) return '';
   const short = shortList();
   // Nothing pinned or used yet: everything, grouped, so there's something to start from.
-  if (showAll || !short.length) {
-    body.innerHTML = groupedHtml(all) + (short.length ? '<button class="rm-more" data-rm-all>Show fewer</button>' : '');
-    return;
-  }
-  body.innerHTML = short.map(rowHtml).join('')
+  if (showAll || !short.length) return groupedHtml(all) + (short.length ? '<button class="rm-more" data-rm-all>Show fewer</button>' : '');
+  return short.map(rowHtml).join('')
     + (all.length > short.length ? `<button class="rm-more" data-rm-all>All ${all.length} places</button>` : '');
 }
 

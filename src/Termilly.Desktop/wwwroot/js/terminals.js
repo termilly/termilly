@@ -157,12 +157,16 @@ let inputHook = () => true;
 export const setInputHook = fn => { inputHook = fn; };
 
 /**
- * Where typing in a terminal without its own shell goes (a tmux pane: tmux.js).
- * @type {(tab: Tab, data: string) => void}
+ * Where typing in a terminal without its own shell goes, by its kind: a tmux pane (tmux.js), another computer's
+ * terminal (remotepc.js).
+ * @type {Record<string, (tab: Tab, data: string) => void>}
  */
-let virtualInput = () => {};
-/** @param {(tab: Tab, data: string) => void} fn */
-export const setVirtualInput = fn => { virtualInput = fn; };
+const virtualInputs = {};
+/**
+ * @param {string} kind
+ * @param {(tab: Tab, data: string) => void} fn
+ */
+export const setVirtualInput = (kind, fn) => { virtualInputs[kind] = fn; };
 
 /**
  * xterm's key hook for app shortcuts (returns false to keep a key from the shell).
@@ -292,7 +296,7 @@ function createTerminal(tab) {
 function wireInput(tab, term) {
   term.onData((/** @type {string} */ data) => {
     if (tab.virtual) {
-      virtualInput(tab, data);
+      virtualInputs[tab.virtual.kind]?.(tab, data);
       return;
     }
     if (tab.exited) {

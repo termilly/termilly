@@ -66,7 +66,10 @@ internal sealed class PhoneAppApi(PhoneStore store, string pushKey, Func<string,
         PushHosts.Any(h => h.StartsWith('.') ? uri.Host.EndsWith(h, StringComparison.OrdinalIgnoreCase) : uri.Host.Equals(h, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>The paired phone a request comes from (its id), or null.</summary>
-    public string? DeviceOf(PhoneRequest request) => store.DeviceFor(TokenFrom(request.Headers.GetValueOrDefault("Cookie")));
+    public string? DeviceOf(PhoneRequest request) => store.DeviceFor(TokenFrom(request.Headers.GetValueOrDefault(CookieHeader)));
+
+    /// <summary>The header a paired device's token comes in (another Termilly computer sends it too: RemotePcs.cs).</summary>
+    public const string CookieHeader = "Cookie";
 
     /// <summary>The answer to an API request; null for one it refuses (403).</summary>
     public PhoneReply? Answer(PhoneRequest request)

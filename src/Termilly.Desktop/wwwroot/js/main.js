@@ -15,6 +15,7 @@ import {
   cycleGroupTab, moveAllToTabs, DIRECTION,
 } from './panes.js';
 import { initSidebar, toggleSidebar } from './sidebar.js';
+import './remotepc.js';
 import { openPalette, setCommands, openGoTo, openCommandHistory, PALETTE_VIEW } from './palette.js';
 import { jumpToPrompt, copyLastOutput } from './commands.js';
 import { toggleInbox, jumpToNext } from './inbox.js';
