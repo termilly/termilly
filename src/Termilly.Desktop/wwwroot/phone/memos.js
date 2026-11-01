@@ -90,7 +90,7 @@ export function memosTab(app) {
         return true;
       }
       app.redraw();
-      window.scrollTo(0, 0);
+      document.getElementById('home')?.scrollTo(0, 0); // the page under the header scrolls, not the document
       return true;
     },
   };

@@ -525,7 +525,7 @@ app.addEventListener('click', e => {
     tab = to;
     settingsPage = SETTINGS_PAGE.list;
     render();
-    window.scrollTo(0, 0);
+    document.getElementById(HOME)?.scrollTo(0, 0);
     return;
   }
   if (tab === TAB.memos && memos.click(/** @type {HTMLElement} */ (e.target))) return;
@@ -570,7 +570,7 @@ app.addEventListener('click', e => {
     case SETTING.page:
       settingsPage = target.dataset.page ?? SETTINGS_PAGE.list;
       render();
-      window.scrollTo(0, 0);
+      document.getElementById(HOME)?.scrollTo(0, 0);
       break;
     case DO.send: {
       const text = /** @type {HTMLTextAreaElement | null} */ (app.querySelector('[data-reply]'))?.value.trim() ?? '';

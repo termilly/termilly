@@ -6,8 +6,9 @@
   :root { color-scheme: light; --bg: #f3f3f5; --raised: #ffffff; --line: #e1e1e7; --text: #1d1d22; --muted: #6a6a76; --accent: #6d5cf0; --attention: #a8790a; --danger: #d63c3c; --ok: #1f8f3a; --sheet: #ffffff; }
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-/* The pages only scroll up and down: iOS would otherwise let a sideways drag pull the whole page, its header too. */
-html, body { overflow-x: clip; overscroll-behavior-x: none; }
+/* The document never scrolls, so iOS can't pull a page or its header in any direction: what scrolls is the page under
+   the header (#home), and the terminal, sheets and New terminal in their own boxes. */
+html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
 body { margin: 0; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); background: var(--bg); color: var(--text); font: 16px/1.4 -apple-system, "Segoe UI", Roboto, sans-serif; }
 button { font: inherit; color: inherit; }
 main { max-width: 600px; margin: 0 auto; padding: 4px 12px 40px; }
@@ -31,8 +32,11 @@ code { padding: 1px 5px; border-radius: 5px; background: var(--bg); font: 13.5px
 .steps li { margin: 0 0 6px; }
 
 /* ---- The app: header, setup steps, pairing ---- */
-/* The header stays at the top as the page scrolls, over the status bar's strip too (the page scrolls under both). */
-.bar { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; max-width: 600px; margin: calc(-1 * env(safe-area-inset-top)) auto 0; padding: calc(env(safe-area-inset-top) + 14px) 20px 8px; background: var(--bg); }
+/* The app with a header (the home, the setup steps): the header a fixed strip at the top, the page under it scrolling
+   on its own, up and down only. */
+#app:has(> .bar) { position: fixed; inset: 0; display: flex; flex-direction: column; max-width: none; margin: 0; padding: 0 env(safe-area-inset-right) 0 env(safe-area-inset-left); }
+#app:has(> .bar) > main { flex: 1; width: 100%; min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; }
+.bar { flex: none; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; width: 100%; max-width: 600px; margin: 0 auto; padding: calc(env(safe-area-inset-top) + 14px) 20px 8px; background: var(--bg); }
 /* A Settings page's way back, above its title. */
 .bar [data-back] { flex-basis: 100%; margin: -8px 0 -6px -6px; }
 .bar [data-back]:empty { display: none; }
