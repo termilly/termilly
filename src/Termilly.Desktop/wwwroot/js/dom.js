@@ -9,6 +9,8 @@ export const WORKSPACE_ID = 'workspace';
 export const XTERM_SCREEN = '.xterm-screen';
 /** What a file or folder dragged from the Files panel carries: its path (a terminal types it where it's dropped). */
 export const PATH_DRAG = 'application/x-termilly-path';
+/** What a clip dragged from Smart Clip carries: its id. */
+export const CLIP_DRAG = 'application/x-termilly-clip';
 
 /**
  * Says changes to an element's text to a screen reader when it's idle (the tour's card, notes at the bottom).

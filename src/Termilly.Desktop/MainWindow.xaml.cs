@@ -59,6 +59,7 @@ public partial class MainWindow : Window
             .AddSingleton<IFontCatalog, WindowsFonts>()
             .AddSingleton<IAudioOutputs, WindowsAudio>()
             .AddSingleton<IUpdateInstaller, WindowsUpdateInstaller>()
+            .AddSingleton<IClipboardWatch>(new WindowsClipboard(this))
             .BuildServiceProvider();
         _settings = _services.GetRequiredService<ISettingsStore>();
         _channel = _services.GetRequiredService<PageChannel>();

@@ -246,6 +246,12 @@ export const SETTING_VALUES = Object.freeze({
     max: 36500,
     daysPerMonth: 30,
   }),
+  clipLimit: Object.freeze({
+    default: 100,
+    min: 10,
+    max: 1000,
+    all: Object.freeze([50, 100, 250, 500, 1000]),
+  }),
   historyWarnGb: Object.freeze({
     default: 2,
     min: 1,
@@ -399,6 +405,25 @@ export const ACTION_PLACEHOLDER = Object.freeze({
   file: 'file',
   line: 'line',
   all: Object.freeze(['selection', 'folder', 'repo', 'branch', 'port', 'file', 'line']),
+});
+
+/** C#: ClipKinds (SmartClip.cs). */
+export const CLIP_KIND = Object.freeze({
+  text: 'text',
+  command: 'command',
+  path: 'path',
+  url: 'url',
+  image: 'image',
+  secret: 'secret',
+  all: Object.freeze(['text', 'command', 'path', 'url', 'image', 'secret']),
+});
+
+/** C#: ClipForms (Messaging/SmartClip.cs). */
+export const CLIP_FORM = Object.freeze({
+  text: 'text',
+  path: 'path',
+  picture: 'picture',
+  all: Object.freeze(['text', 'path', 'picture']),
 });
 
 /** C#: Product (../Shared/Product.cs). */

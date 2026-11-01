@@ -37,6 +37,8 @@ const SOURCES = [
   { file: 'Settings/SettingValues.cs', cls: 'SettingValues', js: 'SETTING_VALUES' },
   { file: 'Settings/SettingGroups.cs', cls: 'TerminalSettings', js: 'TERMINAL_SETTINGS' },
   { file: 'Actions.cs', cls: 'ActionPlaceholders', js: 'ACTION_PLACEHOLDER' },
+  { file: 'SmartClip.cs', cls: 'ClipKinds', js: 'CLIP_KIND' },
+  { file: 'Messaging/SmartClip.cs', cls: 'ClipForms', js: 'CLIP_FORM' },
   { file: '../Shared/Product.cs', cls: 'Product', js: 'PRODUCT' },
 ];
 

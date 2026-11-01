@@ -58,6 +58,7 @@ export const GROUPS = Object.freeze({
   changes: 'changes',
   remote: 'remote',
   phone: 'phone',
+  clips: 'clips',
   uiState: 'uiState',
   data: 'data',
 });
@@ -155,6 +156,8 @@ export const EVENTS = Object.freeze({
   openAgentChanges: 'openAgentChanges',
   /** Files and folders dragged out of the Files panel were dropped on a terminal: { tab, x, y } (js/filepanel.js asks what to do). */
   panelDrop: 'panelDrop',
+  /** A clip dragged from Smart Clip onto a terminal: { tab, id } (js/smartclip.js pastes it). */
+  clipDrop: 'clipDrop',
   openChangedFiles: 'openChangedFiles',
   openGit: 'openGit',
   openSettings: 'openSettings',

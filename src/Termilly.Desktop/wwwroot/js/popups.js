@@ -9,8 +9,9 @@
 
 /**
  * One of a menu's entries, or 'separator'. `checked` makes it a checkbox; `submenu` opens more entries beside it.
+ * `key` picks it while its menu has the focus (a digit, shown as its hint).
  * @typedef {{ label: string, icon?: string, hint?: string, checked?: boolean, danger?: boolean, disabled?: boolean,
- *   title?: string, action?: () => unknown, submenu?: () => MenuEntry[] }} MenuItem
+ *   title?: string, action?: () => unknown, submenu?: () => MenuEntry[], key?: string }} MenuItem
  * @typedef {MenuItem | typeof SEPARATOR} MenuEntry
  */
 
@@ -165,6 +166,9 @@ export function showMenu(items, anchor, { side = SIDE.below, nested = false, cla
     } else if (e.key === 'ArrowLeft' && nested) {
       e.preventDefault();
       closePopover(menu);
+    } else if (!e.ctrlKey && !e.altKey && !e.metaKey) {
+      const keyed = rows.find(r => r.dataset.key === e.key);
+      if (keyed) { e.preventDefault(); keyed.click(); }
     }
   });
 
@@ -192,6 +196,7 @@ function menuRow(menu, item) {
   // Shown but greyed out and not clickable (a disabled button gets no clicks); title says why.
   if (item.disabled) button.disabled = true;
   if (item.title) button.title = item.title;
+  if (item.key) button.dataset.key = item.key;
   const closeSubmenus = () => { for (const other of menu.querySelectorAll('.menu-row.open')) closePopoverAt(other); };
   const { submenu } = item;
   if (submenu) {

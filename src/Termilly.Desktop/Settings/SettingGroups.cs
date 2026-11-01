@@ -198,6 +198,24 @@ internal sealed record CommandSettings
 
 /// <summary>When a terminal's agent tells the user, and the system-wide "next terminal that needs me" shortcut.</summary>
 /// <summary>
+/// Smart Clip (SmartClip.cs): every copy kept, text and images, to paste any of them later. Copies made in other apps
+/// are kept too where the system tells about them (Windows); kept after a restart encrypted with the vault.
+/// </summary>
+internal sealed record ClipSettings
+{
+    /// <summary>Copies are kept; off, Smart Clip only shows what it already has.</summary>
+    public bool Enabled { get; init; } = true;
+    /// <summary>Copies made in other apps are kept too, not only Termilly's.</summary>
+    public bool OtherApps { get; init; } = true;
+    /// <summary>Clips are kept after a restart (encrypted); off, they last until Termilly closes.</summary>
+    public bool Keep { get; init; } = true;
+    /// <summary>The most clips kept that aren't pinned.</summary>
+    public int Limit { get; init; } = SettingValues.ClipLimit.Default;
+
+    public ClipSettings Normalize() => this with { Limit = Math.Clamp(Limit, SettingValues.ClipLimit.Min, SettingValues.ClipLimit.Max) };
+}
+
+/// <summary>
 /// Termilly on a phone (Phone/PhoneServer.cs, docs/phone.md): off by default; while on, a server on this PC's local
 /// network address serves the phone app to paired phones over HTTPS.
 /// </summary>

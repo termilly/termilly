@@ -88,6 +88,16 @@ internal static class SettingValues
         public const int DaysPerMonth = 30;
     }
 
+    /// <summary>The most clips Smart Clip keeps that aren't pinned (Settings › Terminal › Smart Clip).</summary>
+    public static class ClipLimit
+    {
+        public const int Default = 100;
+        public const int Min = 10;
+        public const int Max = 1_000;
+        /// <summary>The choices Settings offers.</summary>
+        public static readonly IReadOnlyList<int> All = [50, Default, 250, 500, Max];
+    }
+
     /// <summary>The size history may reach before Termilly says so (History › Warn me when history passes), in GB.</summary>
     public static class HistoryWarnGb
     {

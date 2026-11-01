@@ -44,6 +44,8 @@ internal sealed record AppSettings
     public RemoteSettings Remote { get; init; } = new();
     /// <summary>Termilly on a phone, served on the local network.</summary>
     public PhoneSettings Phone { get; init; } = new();
+    /// <summary>Smart Clip: every copy kept.</summary>
+    public ClipSettings Clips { get; init; } = new();
     /// <summary>What the page remembers.</summary>
     public UiState UiState { get; init; } = new();
     /// <summary>Data the page keeps here.</summary>
@@ -67,6 +69,7 @@ internal sealed record AppSettings
         Changes = (Changes ?? new()).Normalize(),
         Remote = (Remote ?? new()).Normalize(),
         Phone = (Phone ?? new()).Normalize(),
+        Clips = (Clips ?? new()).Normalize(),
         UiState = (UiState ?? new()).Normalize(),
         Data = (Data ?? new()).Normalize(),
     };
@@ -97,6 +100,7 @@ internal sealed record AppSettings
         [GroupName(nameof(Changes))] = (s, v) => s with { Changes = Read<ChangeSettings>(v) },
         [GroupName(nameof(Remote))] = (s, v) => s with { Remote = Read<RemoteSettings>(v) },
         [GroupName(nameof(Phone))] = (s, v) => s with { Phone = Read<PhoneSettings>(v) },
+        [GroupName(nameof(Clips))] = (s, v) => s with { Clips = Read<ClipSettings>(v) },
         [GroupName(nameof(UiState))] = (s, v) => s with { UiState = Read<UiState>(v) },
         [GroupName(nameof(Data))] = (s, v) => s with { Data = Read<SettingsData>(v) },
     };

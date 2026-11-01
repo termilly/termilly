@@ -26,6 +26,7 @@ import { toggleScratch } from './scratch.js';
 import { openGitWindow, openAgentChanges, gitFolderOf, onServer, openRemoteGitNotice } from './gitwindow.js';
 import { toggleFiles } from './filepanel.js';
 import { toggleNotepad, initNotepad, NOTEPAD_KEY } from './notepad.js';
+import { toggleClips, CLIPS_KEY } from './smartclip.js';
 import { openNewWorktree } from './worktree.js';
 import { openChangedFiles } from './changes.js';
 import { openSnippetsWindow } from './snippetswindow.js';
@@ -296,6 +297,12 @@ function openGitHere() {
 }
 
 /**
+ * The panels Ctrl+Shift and a key opens and closes: Files, the scratch terminal, the Notepad and Smart Clip.
+ * @type {Readonly<Record<string, () => void>>}
+ */
+const PANEL_KEYS = Object.freeze({ KeyL: () => toggleFiles(), Backquote: toggleScratch, [NOTEPAD_KEY.toggle]: toggleNotepad, [CLIPS_KEY]: toggleClips });
+
+/**
  * Runs the shortcut for a keydown. Returns true when it handled the key.
  * @param {KeyboardEvent} e
  */
@@ -315,9 +322,7 @@ function runShortcut(e) {
   else if (ctrlShift && e.code === 'KeyF') commands.search();
   else if (ctrlShift && e.code === 'KeyO') commands.goTo();
   else if (ctrlShift && e.code === 'KeyE') toggleHints();
-  else if (ctrlShift && e.code === 'KeyL') toggleFiles();
-  else if (ctrlShift && e.code === 'Backquote') toggleScratch();
-  else if (ctrlShift && e.code === NOTEPAD_KEY.toggle) toggleNotepad();
+  else if (ctrlShift && PANEL_KEYS[e.code]) PANEL_KEYS[e.code]();
   else if (ctrlShift && e.code === 'KeyH') commands.commandHistory();
   else if (ctrlShift && e.code === 'KeyG') openGitHere();
   else if (ctrlShift && e.key === 'ArrowUp') commands.previousPrompt();

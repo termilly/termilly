@@ -33,6 +33,8 @@ interface AppSettings {
   remote: RemoteSettings;
   /** Termilly on a phone, served on the local network. */
   phone: PhoneSettings;
+  /** Smart Clip: every copy kept. */
+  clips: ClipSettings;
   /** What the page remembers. */
   uiState: UiState;
   /** Data the page keeps here. */
@@ -106,6 +108,18 @@ interface CommandSettings {
 }
 
 /** When a terminal's agent tells the user, and the system-wide "next terminal that needs me" shortcut. */
+interface ClipSettings {
+  /** Copies are kept; off, Smart Clip only shows what it already has. */
+  enabled: boolean;
+  /** Copies made in other apps are kept too, not only Termilly's. */
+  otherApps: boolean;
+  /** Clips are kept after a restart (encrypted); off, they last until Termilly closes. */
+  keep: boolean;
+  /** The most clips kept that aren't pinned. */
+  limit: number;
+}
+
+/** Termilly on a phone (Phone/PhoneServer.cs, docs/phone.md): off by default; while on, a server on this PC's local network address serves the phone app to paired phones over HTTPS. */
 interface PhoneSettings {
   enabled: boolean;
   port: number;

@@ -25,6 +25,28 @@ const NO_MOUSE_TRACKING = 'none';
 let menuExtras = () => [];
 
 /**
+ * What Smart Clip adds right after Paste (js/smartclip.js), given how this terminal pastes.
+ * @type {(body: HTMLElement, paste: (text: string) => void) => import('./popups.js').MenuEntry[]}
+ */
+let clipEntries = () => [];
+/**
+ * Who hears of a copy made here (Smart Clip keeps it, with where it came from): the text, the terminal's element,
+ * and whether it's a link.
+ * @type {(text: string, body: HTMLElement | null, link: boolean) => void}
+ */
+let copied = () => {};
+
+/**
+ * Sets Smart Clip's part of the right-click menu, and what hears of copies.
+ * @param {typeof clipEntries} entries
+ * @param {typeof copied} onCopy
+ */
+export function setClipHooks(entries, onCopy) {
+  clipEntries = entries;
+  copied = onCopy;
+}
+
+/**
  * Sets what the right-click menu adds after Copy and Paste.
  * @param {(body: HTMLElement) => import('./popups.js').MenuEntry[]} fn
  */
@@ -32,10 +54,15 @@ export function setMenuExtras(fn) {
   menuExtras = fn;
 }
 
-/** @param {any} term xterm */
-function copySelection(term) {
+/**
+ * @param {any} term xterm
+ * @param {HTMLElement | null} [body] the terminal's element, to say where a copy came from
+ */
+function copySelection(term, body = null) {
   const text = term.getSelection();
-  if (text) navigator.clipboard.writeText(text).catch(() => {});
+  if (!text) return;
+  navigator.clipboard.writeText(text).catch(() => {});
+  copied(text, body, false);
 }
 
 /**
@@ -51,13 +78,14 @@ export function clipboardKey(term, e) {
   if (link) {
     e.preventDefault();
     navigator.clipboard.writeText(link).catch(() => {});
+    copied(link, term.element?.parentElement ?? null, true);
     showToast({ text: `Copied ${link}` });
     return false;
   }
   const action = clipboardAction(e, term.hasSelection());
   if (action === CLIPBOARD_ACTION.copy) {
     e.preventDefault();
-    copySelection(term);
+    copySelection(term, term.element?.parentElement ?? null);
     // Ctrl+C lets go of what it copied, so the next Ctrl+C stops the program again (as in Windows Terminal).
     if (!e.shiftKey) term.clearSelection();
   }
@@ -72,14 +100,15 @@ export function clipboardKey(term, e) {
  */
 export function wireClipboard(term, body, paste) {
   body.addEventListener('mouseup', () => {
-    if (state.settings.terminal.copyOnSelect && term.hasSelection()) copySelection(term);
+    if (state.settings.terminal.copyOnSelect && term.hasSelection()) copySelection(term, body);
   });
   body.addEventListener('contextmenu', e => {
     e.preventDefault();
     if (term.modes.mouseTrackingMode !== NO_MOUSE_TRACKING) return;
     showMenu([
-      { label: COPY_LABEL, icon: ICONS.copy, hint: MENU_KEYS.copy, disabled: !term.hasSelection(), action: () => copySelection(term) },
+      { label: COPY_LABEL, icon: ICONS.copy, hint: MENU_KEYS.copy, disabled: !term.hasSelection(), action: () => copySelection(term, body) },
       { label: PASTE_LABEL, icon: ICONS.paste, hint: MENU_KEYS.paste, action: () => navigator.clipboard.readText().then(text => { if (text) paste(text); }).catch(() => {}) },
+      ...clipEntries(body, paste),
       ...menuExtras(body),
     ], { x: e.clientX, y: e.clientY });
   });

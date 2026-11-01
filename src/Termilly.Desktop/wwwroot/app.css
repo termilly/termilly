@@ -590,7 +590,7 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
 .files-panel {
   position: absolute;
   top: 0;
-  right: var(--notepad-dock, 0px);
+  right: calc(var(--notepad-dock, 0px) + var(--clips-dock, 0px));
   bottom: 0;
   z-index: 5;
   display: flex;
@@ -637,6 +637,55 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
 /* The search's line above what it found: one line, cut short; the folder's whole path is its tooltip. */
 .files-status { display: flex; gap: 8px; align-items: center; height: 26px; padding: 0 6px; overflow: hidden; color: var(--muted); font-size: 12px; white-space: nowrap; text-overflow: ellipsis; }
 .files-panel:focus { outline: none; }
+
+/* ---- Smart Clip (js/smartclip.js): docked on the right, between the Notepad (on the edge) and the Files panel
+   (--clips-dock on #workspace). It borrows the Files panel's head, grip and search box. ---- */
+.clips-panel {
+  position: absolute;
+  top: 0;
+  right: var(--notepad-dock, 0px);
+  bottom: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  width: 330px;
+  min-width: 280px;
+  max-width: 50%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--raised);
+}
+.clips-panel[hidden] { display: none; }
+.clips-panel:focus { outline: none; }
+.clips-list { flex: 1; overflow-y: auto; padding: 0 6px 8px; }
+.clips-group { margin: 8px 6px 4px; color: var(--faint); font-size: 10.5px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; }
+.clips-empty { margin: 16px 8px; color: var(--muted); font-size: 12.5px; }
+.clip-row { display: flex; gap: 9px; align-items: center; padding: 6px 6px; border-radius: 7px; cursor: pointer; user-select: none; }
+.clip-row:hover { background: var(--hover); }
+.clip-kind { display: grid; flex: none; place-items: center; width: 28px; height: 28px; border-radius: 7px; background: var(--hover); color: var(--muted); }
+.clip-kind svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1; }
+.k-command { color: var(--ok, #7ee787); }
+.k-path { color: #e6b450; }
+.k-url { color: #76e3ea; }
+.k-secret { color: var(--danger-text); }
+:root[data-theme="light"] .k-path { color: #a8741a; }
+:root[data-theme="light"] .k-url { color: #1b7c83; }
+.clip-body { display: flex; flex: 1; flex-direction: column; min-width: 0; }
+.clip-text { overflow: hidden; color: var(--text); font-size: 12.5px; text-overflow: ellipsis; white-space: nowrap; }
+.clip-text.mono { font: 12px var(--mono); }
+.clip-meta { overflow: hidden; color: var(--faint); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.clip-acts { display: none; flex: none; gap: 1px; }
+.clip-row:hover .clip-acts { display: flex; }
+.clip-acts .pane-btn { opacity: 1; }
+.clip-acts .pane-btn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1; }
+.clip-acts .pane-btn.on { color: var(--accent); }
+.clips-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 6px; padding: 0 4px; }
+.clip-pic { display: grid; place-items: center; height: 72px; overflow: hidden; border: 1px solid var(--border); border-radius: 7px; background: var(--hover); color: var(--muted); cursor: pointer; }
+.clip-pic:hover { border-color: var(--accent); }
+.clip-pic.pinned { border-color: var(--accent); }
+.clip-pic img { width: 100%; height: 100%; object-fit: cover; }
+.clip-pic svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1; }
+#clips-button.paused svg { opacity: .45; }
 
 /* ---- Settings › Phone (js/settings/phone.js): the setup page's QR code, and the pairing code to type ---- */
 .pair-qr { display: grid; place-items: center; width: 200px; height: 200px; margin: 4px 0 0; padding: 8px; border-radius: 10px; background: #fff; }
@@ -1125,7 +1174,7 @@ body[data-sidebar="rail"] .side-rail { opacity: 1; pointer-events: auto; }
 /* Every workspace stays laid out (so hidden terminals keep their size); only the active one shows. */
 .ws-layer {
   position: absolute;
-  inset: 0 calc(var(--files-dock, 0px) + var(--notepad-dock, 0px)) 0 0;
+  inset: 0 calc(var(--files-dock, 0px) + var(--notepad-dock, 0px) + var(--clips-dock, 0px)) 0 0;
   display: flex;
   visibility: hidden;
 }
