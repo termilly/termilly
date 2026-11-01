@@ -2,7 +2,7 @@
 // Smart Clip (the title bar's button, Ctrl+Shift+X, or a terminal's right-click menu): every copy kept, text and
 // images, made in Termilly or (on Windows) in any app, kept by the host (SmartClip.cs). A terminal's right-click menu
 // offers the newest under Paste from Smart Clip; the panel docked on the right shows them all, pinned first, images in
-// a grid. A click selects a clip and shows more of it (a second click folds it), Delete forgets it; a double click (or
+// a grid. A click selects a clip and shows more of it (a second click folds it), Delete deletes it; a double click (or
 // Enter) pastes it into the terminal in focus
 // through its paste checks, a clip dragged onto a terminal pastes there, and an image pastes as the path of a PNG file
 // (what agents such as Claude Code read). Secrets show masked and go after a while.
@@ -32,7 +32,7 @@ const TIP_CHARS = 400;
 const MIN_WIDTH_PX = 280;
 /** From this many characters a clip's size shows with it. */
 const SIZE_FROM = 1_000;
-const ROW_TIP = 'Click to see more, double-click or Enter to paste, Delete to forget';
+const ROW_TIP = 'Click to see more, double-click or Enter to paste, Del to delete';
 const MINUTE_MS = 60_000;
 const HOUR_MS = 60 * MINUTE_MS;
 const DAY_HOURS = 24;
@@ -231,7 +231,7 @@ function rowHtml(c) {
     <span class="clip-body"><span class="clip-text${mono}">${escapeHtml(titleOf(c))}</span><span class="clip-meta">${escapeHtml(metaOf(c))}</span></span>
     <span class="clip-acts">${runnable(c) ? `<button class="pane-btn" data-clip-act="${CLIP_ACTION.run}" title="Paste and run">${ICONS.play}</button>` : ''}
       ${c.kind === CLIP_KIND.secret ? '' : `<button class="pane-btn${c.pinned ? ' on' : ''}" data-clip-act="${CLIP_ACTION.pin}" title="${c.pinned ? UNPIN_LABEL : 'Pin: kept at the top, never dropped'}">${TOOL_ICONS.pin}</button>`}
-      <button class="pane-btn" data-clip-act="${CLIP_ACTION.forget}" title="Forget">${ICONS.cross}</button></span>
+      <button class="pane-btn" data-clip-act="${CLIP_ACTION.forget}" title="Delete (Del)">${ICONS.cross}</button></span>
   </div>${c.id === selected ? previewHtml(c) : ''}`;
 }
 
@@ -317,7 +317,7 @@ export function toggleClips() {
 }
 
 /**
- * A clip's right-click menu: paste (an image as its path), paste and run, copy, pin, forget.
+ * A clip's right-click menu: paste (an image as its path), paste and run, copy, pin, delete.
  * @param {Clip} c
  * @param {MouseEvent} e
  */
@@ -329,7 +329,7 @@ function clipMenu(c, e) {
     { label: isImage ? 'Copy the image' : 'Copy', icon: ICONS.copy, action: () => copyClip(c) },
     SEPARATOR,
     ...(c.kind === CLIP_KIND.secret ? [] : [{ label: c.pinned ? UNPIN_LABEL : 'Pin', icon: TOOL_ICONS.pin, action: () => send(PAGE.clipPin, { id: c.id, pinned: !c.pinned }) }]),
-    { label: 'Forget', icon: ICONS.trash, action: () => send(PAGE.clipForget, { id: c.id }) },
+    { label: 'Delete', icon: ICONS.trash, hint: 'Del', action: () => send(PAGE.clipForget, { id: c.id }) },
   ], { x: e.clientX, y: e.clientY });
 }
 
@@ -368,7 +368,7 @@ panel.addEventListener('dblclick', e => {
   pasteClip(c);
 });
 
-/** Forgets the selected clip; the one after it (or before, at the end) is selected instead. */
+/** Deletes the selected clip; the one after it (or before, at the end) is selected instead. */
 function forgetSelected() {
   const list = shown();
   const i = list.findIndex(c => c.id === selected);
