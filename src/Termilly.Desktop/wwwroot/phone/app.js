@@ -7,6 +7,7 @@
 
 import { terminalView, activityHtml, TEXT_SIZE } from './terminal.js';
 import { TAB, SETTING, SETTINGS_PAGE, PAGE_TITLE, STATE_LABEL, TEXT_SIZES, navHtml, notesHtml, settingsHtml, themesHtml } from './tabs.js';
+import { memosTab, MEMO_EDITOR } from './memos.js';
 import { SCROLLING } from './gestures.js';
 import { manager } from './manage.js';
 import { COMPOSE_STYLE, composeStyle, DICTATION, dictation } from './compose.js';
@@ -77,7 +78,7 @@ let settingsPage = SETTINGS_PAGE.list;
 /** What Settings' list says of alerts. */
 const ALERTS_SET = Object.freeze({ none: 'Not here', on: 'On', off: 'Off' });
 /** The tabs' titles, at the top. */
-const TITLE = Object.freeze({ [TAB.terminals]: 'Termilly', [TAB.notes]: 'Notifications', [TAB.settings]: 'Settings' });
+const TITLE = Object.freeze({ [TAB.terminals]: 'Termilly', [TAB.memos]: 'Notes', [TAB.notes]: 'Notifications', [TAB.settings]: 'Settings' });
 
 /**
  * @param {string} path
@@ -203,6 +204,12 @@ const noteParts = {
   age, waiting: (/** @type {string} */ id) => !!terminal(id)?.waiting, open: DO.open, term: DO.term,
 };
 
+/** The Notes tab (memos.js): the PC's notes on its workspaces and terminals. */
+const memos = memosTab({
+  snap: () => snap, badge: t => badge(t), redraw: () => render(), toast: text => toast(text),
+  send: message => { if (live?.readyState === OPEN) live.send(JSON.stringify(message)); },
+});
+
 /** The Terminals tab: what waits for you, then each workspace's terminals. */
 function terminalsHtml() {
   const waiting = snap.terminals.filter(t => t.waiting).sort((a, b) => (b.waiting?.at ?? 0) - (a.waiting?.at ?? 0));
@@ -226,7 +233,10 @@ function render() {
   if (title) title.textContent = page ? /** @type {Record<string, string>} */ (PAGE_TITLE)[page] : /** @type {Record<string, string>} */ (TITLE)[tab];
   const add = app.querySelector('[data-add]');
   if (add) add.innerHTML = tab === TAB.terminals ? manage.addButton() : '';
-  home.innerHTML = tab === TAB.notes ? notesHtml(snap.notes ?? [], noteParts)
+  // A note being written stays as it is while the PC's news comes in.
+  if (tab === TAB.memos && memos.editing() && home.querySelector(MEMO_EDITOR)) { /* kept */ }
+  else home.innerHTML = tab === TAB.memos ? memos.html()
+    : tab === TAB.notes ? notesHtml(snap.notes ?? [], noteParts)
     : page === SETTINGS_PAGE.themes ? themesHtml(looks(snap), chosenLook())
     : tab === TAB.settings ? settingsHtml({ page, alerts: alertsBody(), alertsOn: !canAlert() ? ALERTS_SET.none : me?.alerts ? ALERTS_SET.on : ALERTS_SET.off, size: textSize(), scrolling: localStorage.getItem(SCROLLING.key) ?? SCROLLING.smooth, compose: composeStyle(), dictation: dictation(), host: location.host, connected, look: chosenLook(), looks: looks(snap) })
     : terminalsHtml();
@@ -500,6 +510,7 @@ app.addEventListener('click', e => {
     window.scrollTo(0, 0);
     return;
   }
+  if (tab === TAB.memos && memos.click(/** @type {HTMLElement} */ (e.target))) return;
   if (manage.click(/** @type {HTMLElement} */ (e.target))) {
     e.stopPropagation();
     return;

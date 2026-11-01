@@ -125,7 +125,7 @@ async function confirmRemove(kind, target, note) {
  * @param {string} text
  * @param {boolean} pinned
  */
-function setNote(kind, target, text, pinned) {
+export function setNote(kind, target, text, pinned) {
   if (kind === NOTE_KIND.host) {
     /** @type {Record<string, string>} */
     const notes = { ...(state.settings.shells.notes ?? {}) };

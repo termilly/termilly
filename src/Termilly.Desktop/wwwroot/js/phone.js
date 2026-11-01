@@ -91,7 +91,7 @@ function terminalOf(tab) {
   const icon = runsClaude(tab) ? CLAUDE_BADGE : profile?.icon ?? '';
   const activity = activityOf(tab);
   return {
-    id: tab.id, ws: tab.wsId, title: tabTitle(tab), icon,
+    id: tab.id, ws: tab.wsId, title: tabTitle(tab), icon, note: tab.note ?? null,
     badge: badgeOf(icon),
     agent: tab.agent?.state ?? null,
     activity: activity?.kind ?? (tab.exited ? 'exited' : null),
@@ -141,7 +141,7 @@ function snapshot() {
     notes: notesForPhone(),
     // Its themes, the one it shows now and its terminals' colours then (a theme plugin's, if one is chosen).
     themes: PHONE_THEMES, pcTheme: themeId(), pcTerminal: termTheme(),
-    workspaces: state.workspaces.map(w => ({ id: w.id, name: w.name, color: w.color, cwd: w.cwd ?? null })),
+    workspaces: state.workspaces.map(w => ({ id: w.id, name: w.name, color: w.color, cwd: w.cwd ?? null, note: w.note ?? null })),
     // What a phone may open a terminal on, and where it opens by default (only while it may type: js/phonemanage.js).
     places: typing ? placesForPhone(badgeOf) : [], activeWs: state.activeId,
     terminals: [...state.tabs.values()].filter(t => t.wsId && wsById(t.wsId) && !t.virtual).map(terminalOf),
