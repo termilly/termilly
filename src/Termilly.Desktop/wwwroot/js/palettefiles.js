@@ -90,16 +90,24 @@ function* printed(sources) {
   }
 }
 
+/** A lookup still unanswered after WAIT_MS: its place goes to the next one, its answer still counts when it comes. */
+const SLOW = Symbol('slow');
+/** @typedef {{ path: string, folder: boolean } | null} Real */
+
 /**
- * Where a printed path leads: the host's answer, or nothing when it takes too long.
+ * Where a printed path leads, as the host answers (null: nowhere).
  * @param {Tab} tab
  * @param {string} text
- * @returns {Promise<{ path: string, folder: boolean } | null>}
+ * @returns {Promise<Real>}
  */
-async function leadsTo(tab, text) {
-  const late = new Promise(resolve => setTimeout(() => resolve(null), WAIT_MS));
-  const reply = /** @type {any} */ (await Promise.race([resolvePath(tab, text).catch(() => null), late]));
-  return reply?.path ? { path: reply.path, folder: !!reply.folder } : null;
+const leadsTo = (tab, text) => resolvePath(tab, text)
+  .then(reply => (reply?.path ? { path: reply.path, folder: !!reply.folder } : null))
+  .catch(() => null);
+
+/** @param {() => void} redraw */
+function redrawSoon(redraw) {
+  clearTimeout(redrawTimer);
+  redrawTimer = setTimeout(redraw, asking.size ? REDRAW_MS : 0);
 }
 
 /** Runs waiting lookups, a few at a time. */
@@ -125,15 +133,19 @@ function lookUp(c, key, redraw) {
   const home = c.tab.cwd ?? wsById(c.tab.wsId)?.cwd ?? null;
   const others = WHOLE_PATH.test(c.text) ? [] : [...c.dirs.map(d => joinPath(d, c.text)), ...(home ? [joinPath(parentOf(home), c.text)] : [])];
   waiting.push(async () => {
+    /** @type {Real} */
     let real = null;
+    /** @type {Promise<Real>[]} */
+    const slow = [];
     for (const text of [c.text, ...others]) {
-      real = await leadsTo(c.tab, text);
-      if (real) break;
+      const answer = leadsTo(c.tab, text);
+      const first = await Promise.race([answer, new Promise(resolve => setTimeout(() => resolve(SLOW), WAIT_MS))]);
+      if (first === SLOW) slow.push(answer);
+      else if (first) { real = /** @type {Real} */ (first); break; }
     }
-    looked.set(key, real);
-    asking.delete(key);
-    clearTimeout(redrawTimer);
-    redrawTimer = setTimeout(redraw, asking.size ? REDRAW_MS : 0);
+    const done = (/** @type {Real} */ found) => { looked.set(key, found); asking.delete(key); redrawSoon(redraw); };
+    if (real || !slow.length) done(real);
+    else Promise.all(slow).then(found => done(found.find(Boolean) ?? null));
   });
   next();
 }
