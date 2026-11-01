@@ -4,15 +4,14 @@ What changed in each release. Termilly says in its title bar when a newer one is
 
 ## 1.6.0 (unreleased)
 
-- **Remote:** your terminals and agents on your phone, with alerts when an agent needs you, or on another PC or laptop, with Copy to its folders.
-- **Clipboard:** every copy kept, text and images, to paste again from the right-click menu or its panel.
-- **My prompts:** everything you asked Claude in a terminal, by day, one click away from where you asked it.
-- **Search:** the files, folders and links any terminal printed, and every matching line under its terminal.
-- **History:** kept as long as you choose, earlier output searchable, and a page to see and clear it.
-- **Claude Code:** its own terminal type, and resumed sessions stay Claude after a restart.
-- **Keyboard:** change any of Termilly's shortcuts.
-- **Right-click menu:** Copy to note, Copy link, and icons on every item.
-- Faster scrolling, long menus scroll, links broken across lines are found whole, and quitting is quick again.
+- **Remote:** Access your workspaces, terminals, and agent sessions from your phone or another PC.
+- **Search:** Improved search with detected paths, files, and URLs grouped into separate lists. Search behavior is now configurable in Settings.
+- **History:** Choose how long to keep your terminal history.
+- **Clipboard:** Keep track of everything you copy, including text, images, and links.
+- **Prompt history:** Browse prompts sent to agents in your terminals, organized by date and time.
+- **Keyboard:** Customize any Termilly keyboard shortcut.
+- **Terminal improvements:** Faster scrolling, scrollable long menus, and automatic detection of files, paths, and URLs.
+- Various improvements and bug fixes.
 
 ## 1.5.0 (2026-10-30)
 
