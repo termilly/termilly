@@ -2,9 +2,9 @@
 // Smart Clip (the title bar's button, Ctrl+Shift+X, or a terminal's right-click menu): every copy kept, text and
 // images, made in Termilly or (on Windows) in any app, kept by the host (SmartClip.cs). A terminal's right-click menu
 // offers the newest under Paste from Smart Clip; the panel docked on the right shows them all, pinned first, images in
-// a grid. A click pastes into the terminal in focus through its paste checks, a clip dragged onto a terminal pastes
-// there, and an image pastes as the path of a PNG file (what agents such as Claude Code read). Secrets show masked and
-// go after a while.
+// a grid. A click selects a clip and shows more of it; a double click (or Enter) pastes it into the terminal in focus
+// through its paste checks, a clip dragged onto a terminal pastes there, and an image pastes as the path of a PNG file
+// (what agents such as Claude Code read). Secrets show masked and go after a while.
 
 import { PAGE, HOST } from './protocol.js';
 import { send, request, onHost } from './host.js';
@@ -19,6 +19,7 @@ import { quotePaths } from './quoting.js';
 import { setClipHooks } from './termclipboard.js';
 import { CLIP_KIND, CLIP_FORM, PRODUCT } from './constants.js';
 import { updateSettings } from './preferences.js';
+import { fileSize } from './pictures.js';
 
 /** @typedef {import('./protocol.js').ClipView} Clip */
 
@@ -28,6 +29,9 @@ const MENU_COUNT = 6;
 const MENU_CHARS = 48;
 const TIP_CHARS = 400;
 const MIN_WIDTH_PX = 280;
+/** From this many characters a clip's size shows with it. */
+const SIZE_FROM = 1_000;
+const ROW_TIP = 'Click to see more, double-click or Enter to paste';
 const MINUTE_MS = 60_000;
 const HOUR_MS = 60 * MINUTE_MS;
 const DAY_HOURS = 24;
@@ -71,6 +75,9 @@ const LIST = '.clips-list';
 let clips = [];
 let keeping = true;
 let query = '';
+/** The clip selected in the panel: shown in full below its row (or outlined, an image), what Enter pastes. */
+/** @type {string | null} */
+let selected = null;
 /** Images as data: URLs, by clip id: a clip never changes, so each is asked for once. */
 /** @type {Map<string, string>} */
 const pictures = new Map();
@@ -151,7 +158,8 @@ function age(at) {
 const titleOf = clip => (clip.kind === CLIP_KIND.image ? `Image ${clip.width} × ${clip.height}` : clip.text.trim().split('\n')[0]);
 
 /** @param {Clip} clip */
-const metaOf = clip => [KIND_LABELS[clip.kind] ?? '', clip.source, clip.lines > 1 ? `${clip.lines} lines` : '', age(clip.at)].filter(Boolean).join(' · ');
+const metaOf = clip => [KIND_LABELS[clip.kind] ?? '', clip.source, clip.lines > 1 ? `${clip.lines.toLocaleString()} lines` : '',
+  clip.chars >= SIZE_FROM ? fileSize(clip.chars) : '', age(clip.at)].filter(Boolean).join(' · ');
 
 /** @param {Clip} clip */
 const iconOf = clip => KIND_ICONS[clip.kind] ?? KIND_ICONS[CLIP_KIND.text];
@@ -217,17 +225,25 @@ const button = byId('clips-button');
 /** A clip's row: its icon (or picture), first line and where and when; its buttons show on hover. @param {Clip} c */
 function rowHtml(c) {
   const mono = c.kind !== CLIP_KIND.text ? ' mono' : '';
-  return `<div class="clip-row" data-clip="${escapeHtml(c.id)}" draggable="true" title="${escapeHtml(c.text.slice(0, TIP_CHARS))}">
+  return `<div class="clip-row${c.id === selected ? ' selected' : ''}" data-clip="${escapeHtml(c.id)}" draggable="true" title="${ROW_TIP}">
     <span class="clip-kind k-${escapeHtml(c.kind)}">${iconOf(c)}</span>
     <span class="clip-body"><span class="clip-text${mono}">${escapeHtml(titleOf(c))}</span><span class="clip-meta">${escapeHtml(metaOf(c))}</span></span>
     <span class="clip-acts">${runnable(c) ? `<button class="pane-btn" data-clip-act="${CLIP_ACTION.run}" title="Paste and run">${ICONS.play}</button>` : ''}
       ${c.kind === CLIP_KIND.secret ? '' : `<button class="pane-btn${c.pinned ? ' on' : ''}" data-clip-act="${CLIP_ACTION.pin}" title="${c.pinned ? UNPIN_LABEL : 'Pin: kept at the top, never dropped'}">${TOOL_ICONS.pin}</button>`}
       <button class="pane-btn" data-clip-act="${CLIP_ACTION.forget}" title="Forget">${ICONS.cross}</button></span>
-  </div>`;
+  </div>${c.id === selected ? previewHtml(c) : ''}`;
 }
 
+/**
+ * The selected clip's text, scrolling within a few lines' height; a long clip shows its start and says how much more
+ * there is (the whole of it pastes).
+ * @param {Clip} c
+ */
+const previewHtml = c => `<div class="clip-preview"><pre>${escapeHtml(c.text)}</pre>${c.chars > c.text.length
+  ? `<div class="clip-cut">The first ${c.text.length.toLocaleString()} of ${c.chars.toLocaleString()} characters. Pasting gives all of it.</div>` : ''}</div>`;
+
 /** An image in the grid: its picture once it's here. @param {Clip} c */
-const pictureHtml = c => `<div class="clip-pic${c.pinned ? ' pinned' : ''}" data-clip="${escapeHtml(c.id)}" draggable="true" title="Image ${c.width} × ${c.height} · ${escapeHtml(c.source)} · ${age(c.at)}">
+const pictureHtml = c => `<div class="clip-pic${c.pinned ? ' pinned' : ''}${c.id === selected ? ' selected' : ''}" data-clip="${escapeHtml(c.id)}" draggable="true" title="Image ${c.width} × ${c.height} · ${escapeHtml(c.source)} · ${age(c.at)}. Double-click to paste its file path">
   ${pictures.has(c.id) ? `<img src="${escapeHtml(/** @type {string} */ (pictures.get(c.id)))}" alt="">` : iconOf(c)}</div>`;
 
 /** @param {string} title @param {string} body */
@@ -332,9 +348,28 @@ panel.addEventListener('click', e => {
   const c = el && clipById(/** @type {string} */ (el.dataset.clip));
   if (!c) return;
   const act = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-clip-act]'))?.dataset.clipAct;
-  if (act) clipAct(act, c);
-  else pasteClip(c);
+  if (act) return clipAct(act, c);
+  if (selected === c.id) return;
+  selected = c.id;
+  drawList();
 });
+
+panel.addEventListener('dblclick', e => {
+  if (targetOf(e).closest('[data-clip-act]')) return;
+  const el = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-clip]'));
+  const c = el && clipById(/** @type {string} */ (el.dataset.clip));
+  if (c) pasteClip(c);
+});
+
+/** Draws the list again where it was scrolled (the head and search box stay). */
+function drawList() {
+  const list = /** @type {HTMLElement | null} */ (panel.querySelector(LIST));
+  if (!list) return;
+  const scroll = list.scrollTop;
+  list.innerHTML = listHtml();
+  list.scrollTop = scroll;
+  loadPictures();
+}
 
 panel.addEventListener('contextmenu', e => {
   const el = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-clip]'));
@@ -347,12 +382,13 @@ panel.addEventListener('contextmenu', e => {
 panel.addEventListener('input', e => {
   if (!targetOf(e).matches(SEARCH)) return;
   query = /** @type {HTMLInputElement} */ (e.target).value;
-  /** @type {HTMLElement} */ (panel.querySelector(LIST)).innerHTML = listHtml();
-  loadPictures();
+  drawList();
 });
 
 panel.addEventListener('keydown', e => {
+  const chosen = selected ? clipById(selected) : shown()[0];
   if (e.key === 'Escape' && !e.ctrlKey && !e.shiftKey && !e.altKey) restoreFocus();
+  else if (e.key === 'Enter' && !e.ctrlKey && !e.shiftKey && !e.altKey && chosen) pasteClip(chosen);
   else if (e.ctrlKey && e.shiftKey && !e.altKey && e.code === CLIPS_KEY) toggleClips();
   else return;
   e.preventDefault();
@@ -376,6 +412,7 @@ onHost(HOST.clipClips, m => {
   clips = m.items;
   keeping = m.keeping;
   for (const id of pictures.keys()) if (!clipById(id)) pictures.delete(id);
+  if (selected && !clipById(selected)) selected = null;
   render();
 });
 

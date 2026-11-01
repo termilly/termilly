@@ -29,12 +29,18 @@ internal sealed record Clip(string Id, string Kind, string Text, string Source, 
 /// Smart Clip's clips, newest first: text and images copied in Termilly or (on Windows) anywhere, with the same copy
 /// made again moved to the top instead of kept twice. Pinned clips are never dropped; the oldest of the others go past
 /// <see cref="Limit"/> (and past <see cref="MaxImages"/> images). Kept after a restart encrypted with the vault, images
-/// each in a file of their own read when first asked for; secrets stay in memory only.
+/// each in a file of their own read when first asked for; secrets and long clips stay in memory only.
 /// </summary>
 internal sealed partial class ClipStore(Vault vault)
 {
     /// <summary>Copies bigger than this aren't kept: a clip is for pasting, not a log.</summary>
-    public const int MaxTextChars = 100_000;
+    public const int MaxTextChars = 1_000_000;
+    /// <summary>
+    /// Text longer than this is a long clip: only the newest few are kept, and only until Termilly closes, so the
+    /// clips written to disk stay small.
+    /// </summary>
+    public const int LongChars = 100_000;
+    public const int MaxLong = 5;
     public const int MaxImageBytes = 16 * 1024 * 1024;
     public const int MaxImages = 20;
     /// <summary>The most of a clip's text the page gets to show.</summary>
@@ -183,7 +189,7 @@ internal sealed partial class ClipStore(Vault vault)
     {
         var text = c.Kind == ClipKinds.Secret ? SecretRedactor.Redact(c.Text) : c.Text;
         var lines = c.Text.Length == 0 ? 0 : c.Text.Count(ch => ch == '\n') + 1;
-        return new ClipView(c.Id, c.Kind, text.Length > ShownChars ? text[..ShownChars] : text, lines, c.Source, c.At, c.Pinned, c.Width, c.Height, c.Bytes);
+        return new ClipView(c.Id, c.Kind, text.Length > ShownChars ? text[..ShownChars] : text, lines, c.Text.Length, c.Source, c.At, c.Pinned, c.Width, c.Height, c.Bytes);
     }
 
     /// <summary>A clip's whole text, a secret's too; null for an image or a clip that's gone.</summary>
@@ -253,10 +259,11 @@ internal sealed partial class ClipStore(Vault vault)
     {
         var texts = 0;
         var images = 0;
+        var longs = 0;
         var dropped = new HashSet<string>();
         foreach (var c in _clips.Where(c => !c.Pinned))
         {
-            var over = c.Kind == ClipKinds.Image ? ++images > MaxImages : ++texts > Limit;
+            var over = c.Kind == ClipKinds.Image ? ++images > MaxImages : ++texts > Limit || (c.Text.Length > LongChars && ++longs > MaxLong);
             if (over)
             {
                 dropped.Add(c.Id);
@@ -300,7 +307,7 @@ internal sealed partial class ClipStore(Vault vault)
         }
     }
 
-    /// <summary>Writes the clips (secrets left out); with keeping after a restart off, deletes what was written.</summary>
+    /// <summary>Writes the clips (secrets and long clips left out); with keeping after a restart off, deletes what was written.</summary>
     public void Save()
     {
         lock (_lock)
@@ -313,7 +320,7 @@ internal sealed partial class ClipStore(Vault vault)
             }
             if (_loaded)
             {
-                vault.WriteSealed(ListPath, JsonSerializer.Serialize(_clips.Where(c => c.Kind != ClipKinds.Secret), Json));
+                vault.WriteSealed(ListPath, JsonSerializer.Serialize(_clips.Where(c => c.Kind != ClipKinds.Secret && c.Text.Length <= LongChars), Json));
             }
         }
     }

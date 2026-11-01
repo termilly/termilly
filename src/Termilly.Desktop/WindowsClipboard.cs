@@ -3,6 +3,7 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
+using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Termilly.Desktop.Platform;
 
@@ -22,6 +23,23 @@ internal sealed class WindowsClipboard(Window window) : IClipboardWatch, IDispos
     /// <summary>Another app may still hold the clipboard just after it changes: tries this many times, this far apart.</summary>
     private const int Tries = 3;
     private static readonly TimeSpan Retry = TimeSpan.FromMilliseconds(50);
+    /// <summary>An image as a PNG file (browsers, Snipping Tool) and as a bitmap without its file header (Paint, most apps).</summary>
+    private const string PngFormat = "PNG";
+    /// <summary>BITMAPFILEHEADER: "BM", the file's size, two reserved words, where the pixels start.</summary>
+    private const int FileHeaderSize = 14;
+    private const int SizeAt = 2;
+    private const int PixelsAt = 10;
+    /// <summary>BITMAPINFOHEADER's fields read here: bit count, compression, colours used; BI_BITFIELDS with its three masks after a 40-byte header.</summary>
+    private const int InfoHeaderSize = 40;
+    private const int BitCountAt = 14;
+    private const int CompressionAt = 16;
+    private const int ColorsUsedAt = 32;
+    private const int BitFields = 3;
+    private const int MaskBytes = 12;
+    private const int ColorBytes = 4;
+    private const int MaxPaletteBits = 8;
+    private const int BytesPerPixel = 4;
+    private const int AlphaOffset = 3;
     private IntPtr _hwnd;
     private HwndSource? _source;
 
@@ -78,7 +96,67 @@ internal sealed class WindowsClipboard(Window window) : IClipboardWatch, IDispos
         {
             return new ClipboardContent(string.Join(Environment.NewLine, Paths(files)));
         }
-        return Clipboard.ContainsImage() && Clipboard.GetImage() is { } image ? Png(image) : null;
+        return ReadImage() is { } image ? Png(image) : null;
+    }
+
+    /// <summary>
+    /// The clipboard's image: its PNG when it has one, else its bitmap read here. WPF's own GetImage reads a 32-bit
+    /// bitmap (what Paint copies) as fully transparent, so that's the last resort.
+    /// </summary>
+    private static BitmapSource? ReadImage()
+    {
+        if (Clipboard.GetData(PngFormat) is MemoryStream png)
+        {
+            return Decode(new PngBitmapDecoder(png, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad));
+        }
+        if (Clipboard.GetData(DataFormats.Dib) is MemoryStream dib && Bitmap(dib.ToArray()) is { } file)
+        {
+            using var stream = new MemoryStream(file);
+            return Decode(new BmpBitmapDecoder(stream, BitmapCreateOptions.None, BitmapCacheOption.OnLoad));
+        }
+        return Clipboard.ContainsImage() ? Opaque(Clipboard.GetImage()) : null;
+    }
+
+    private static BitmapSource? Decode(BitmapDecoder decoder) => decoder.Frames.Count > 0 ? Opaque(decoder.Frames[0]) : null;
+
+    /// <summary>A device-independent bitmap as a .bmp file: the file header in front, saying where its pixels start.</summary>
+    private static byte[]? Bitmap(byte[] dib)
+    {
+        if (dib.Length < InfoHeaderSize)
+        {
+            return null;
+        }
+        var header = BitConverter.ToInt32(dib, 0);
+        var bits = BitConverter.ToInt16(dib, BitCountAt);
+        var colors = BitConverter.ToInt32(dib, ColorsUsedAt);
+        var masks = header == InfoHeaderSize && BitConverter.ToInt32(dib, CompressionAt) == BitFields ? MaskBytes : 0;
+        var palette = (colors == 0 && bits <= MaxPaletteBits ? 1 << bits : colors) * ColorBytes;
+        var file = new byte[FileHeaderSize + dib.Length];
+        file[0] = (byte)'B';
+        file[1] = (byte)'M';
+        BitConverter.GetBytes(file.Length).CopyTo(file, SizeAt);
+        BitConverter.GetBytes(FileHeaderSize + header + masks + palette).CopyTo(file, PixelsAt);
+        dib.CopyTo(file, FileHeaderSize);
+        return file;
+    }
+
+    /// <summary>An image whose alpha is 0 everywhere (a bitmap that has none, read as if it had) made opaque.</summary>
+    private static BitmapSource? Opaque(BitmapSource? image)
+    {
+        if (image is null || (image.Format != PixelFormats.Bgra32 && image.Format != PixelFormats.Pbgra32))
+        {
+            return image;
+        }
+        var pixels = new byte[image.PixelWidth * image.PixelHeight * BytesPerPixel];
+        image.CopyPixels(pixels, image.PixelWidth * BytesPerPixel, 0);
+        for (var i = AlphaOffset; i < pixels.Length; i += BytesPerPixel)
+        {
+            if (pixels[i] != 0)
+            {
+                return image;
+            }
+        }
+        return new FormatConvertedBitmap(image, PixelFormats.Bgr32, null, 0);
     }
 
     private static IEnumerable<string> Paths(StringCollection files)

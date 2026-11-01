@@ -664,6 +664,12 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
 .clips-empty { margin: 16px 8px; color: var(--muted); font-size: 12.5px; }
 .clip-row { display: flex; gap: 9px; align-items: center; padding: 6px 6px; border-radius: 7px; cursor: pointer; user-select: none; }
 .clip-row:hover { background: var(--hover); }
+.clip-row.selected { background: var(--accent-fill); }
+.clip-pic.selected { outline: 2px solid var(--accent); outline-offset: -1px; }
+/* The selected clip in full: a few lines high, scrolling; a long one says how much more pastes. */
+.clip-preview { margin: 2px 6px 6px 43px; }
+.clip-preview pre { max-height: 180px; margin: 0; padding: 6px 8px; overflow: auto; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); font: 11.5px/1.45 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+.clip-cut { margin-top: 4px; color: var(--faint); font-size: 11px; }
 .clip-kind { display: grid; flex: none; place-items: center; width: 28px; height: 28px; border-radius: 7px; background: var(--hover); color: var(--muted); }
 .clip-kind svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1; }
 .k-command { color: var(--ok, #7ee787); }

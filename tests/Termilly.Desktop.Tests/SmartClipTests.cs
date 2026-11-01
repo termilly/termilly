@@ -116,6 +116,27 @@ public sealed class SmartClipTests : IDisposable
     }
 
     [Fact]
+    public void Long_clips_are_kept_whole_for_the_session_shown_cut_short_and_only_the_newest_few()
+    {
+        var store = Store();
+        var big = new string('x', ClipStore.LongChars + 1);
+        for (var i = 0; i <= ClipStore.MaxLong; i++)
+        {
+            Assert.True(store.AddText($"{i}{big}", Here, null, _now + i));
+        }
+        Assert.False(store.AddText(new string('y', ClipStore.MaxTextChars + 1), Here, null, _now));
+        var views = store.Views();
+        Assert.Equal(ClipStore.MaxLong, views.Count);
+        Assert.Equal(ClipStore.ShownChars, views[0].Text.Length);
+        Assert.Equal(big.Length + 1, views[0].Chars);
+        Assert.Equal(big.Length + 1, store.TextOf(views[0].Id)!.Length);
+
+        store.AddText("short", Here, null, _now);
+        store.Save();
+        Assert.Equal(["short"], Store().Views().Select(v => v.Text));
+    }
+
+    [Fact]
     public void Clear_forgets_all_but_the_pinned()
     {
         var store = Store();

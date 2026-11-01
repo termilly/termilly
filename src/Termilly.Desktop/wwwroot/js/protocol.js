@@ -247,7 +247,7 @@ export const HOST = Object.freeze({
 /** @typedef {{ id: string, name: string, description: string|null, icon: string, source: string, tags: Array<string>, startCommand?: string|null, shellIcon?: string|null }} ProfileSummary */
 /** @typedef {{ version: string, date: string|null, notes: string|null, installable: boolean, endsShells: boolean, linux: boolean }} UpdateAvailable */
 /** @typedef {{ state: string, percent: number, message: string|null, command: string|null }} UpdateProgress */
-/** @typedef {{ id: string, kind: string, text: string, lines: number, source: string, at: number, pinned: boolean, width: number, height: number, bytes: number }} ClipView */
+/** @typedef {{ id: string, kind: string, text: string, lines: number, chars: number, source: string, at: number, pinned: boolean, width: number, height: number, bytes: number }} ClipView */
 
 /** @typedef {{  }} Page_actionDefaults */
 /** @typedef {{ id?: string|null, selection?: string|null, folder?: string|null, port?: number|null }} Page_actionRun */

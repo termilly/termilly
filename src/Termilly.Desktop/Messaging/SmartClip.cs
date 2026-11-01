@@ -60,10 +60,10 @@ internal static partial class ToPage
 }
 
 /// <summary>
-/// A clip as the page shows it: a secret's text masked, long text cut short (<see cref="Lines"/> counts all of it), an
-/// image's size; <see cref="At"/> in Unix milliseconds.
+/// A clip as the page shows it: a secret's text masked, long text cut short (<see cref="Lines"/> and <see cref="Chars"/>
+/// count all of it), an image's size; <see cref="At"/> in Unix milliseconds.
 /// </summary>
-internal sealed record ClipView(string Id, string Kind, string Text, int Lines, string Source, long At, bool Pinned, int Width, int Height, long Bytes);
+internal sealed record ClipView(string Id, string Kind, string Text, int Lines, int Chars, string Source, long At, bool Pinned, int Width, int Height, long Bytes);
 
 /// <summary>What a clip is taken as (<see cref="FromPage.ClipTake"/>).</summary>
 internal static class ClipForms
