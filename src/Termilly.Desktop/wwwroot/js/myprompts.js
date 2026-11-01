@@ -1,11 +1,13 @@
 // @ts-check
 // My prompts: what you asked Claude Code in a terminal, by day and time, from the header's button. Each one leads to
-// where it is in the terminal's output. The prompts come from the sessions' transcripts on this PC (PromptsHandler);
-// for a terminal on another machine, from the prompts its output still shows (no times then).
+// where it is in the terminal's output. The host has them (PromptsHandler): Termilly's own record, kept from the
+// prompt hook as history is, and the sessions' transcripts on this PC for older ones. With neither, they're read from
+// the prompts the output still shows (no times then).
 
 import { PAGE } from './protocol.js';
-import { request } from './host.js';
-import { state, isRemote, persist } from './store.js';
+import { request, send } from './host.js';
+import { HOOK_EVENT } from './constants.js';
+import { state, persist } from './store.js';
 import { openPopover, closePopover, isOpen } from './popups.js';
 import { escapeHtml, highlight, ICONS } from './ui.js';
 import { bufferLines } from './terminals.js';
@@ -39,6 +41,16 @@ export function rememberSession(tab) {
   if (!session || !SESSION_ID.test(session) || tab.agentSessions?.at(-1) === session) return;
   tab.agentSessions = [...(tab.agentSessions ?? []).filter(s => s !== session), session].slice(-KEPT_SESSIONS);
   persist();
+}
+
+/**
+ * Keeps a prompt the terminal's agent was sent (the prompt hook's), unless the terminal keeps no history.
+ * @param {Tab} tab
+ * @param {{ event?: string, prompt?: string | null, session?: string | null }} m
+ */
+export function recordPrompt(tab, m) {
+  if (m.event !== HOOK_EVENT.userPromptSubmit || !m.prompt || tab.noHistory) return;
+  send(PAGE.promptAdd, { id: tab.id, session: m.session ?? null, text: m.prompt });
 }
 
 /** @param {Tab} tab */
@@ -152,14 +164,13 @@ function goTo(f) {
 }
 
 /**
- * The prompts: from the transcripts on this PC, else (another machine's terminal, or none found) from the output.
+ * The prompts: Termilly's record and the transcripts on this PC, else (none of either) the ones the output shows.
  * @param {Tab} tab
  * @param {{ line: number, text: string }[]} shown
  * @returns {Promise<Prompt[]>}
  */
 async function promptsOf(tab, shown) {
-  const sessions = isRemote(tab) ? [] : sessionsOf(tab);
-  const reply = sessions.length ? await request(PAGE.promptsList, { sessions }) : null;
+  const reply = await request(PAGE.promptsList, { id: tab.id, sessions: sessionsOf(tab) });
   const listed = /** @type {Prompt[]} */ (reply?.prompts ?? []);
   return listed.length ? listed : shown.map(s => ({ text: s.text, at: null }));
 }

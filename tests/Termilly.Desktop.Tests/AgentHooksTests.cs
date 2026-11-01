@@ -184,6 +184,19 @@ public sealed class AgentHooksTests : IDisposable
     }
 
     [Fact]
+    public void Only_the_prompt_the_user_sent_is_passed_on_cut_to_its_limit()
+    {
+        var sent = """{"session_id":"abc","hook_event_name":"UserPromptSubmit","prompt":"fix the build","transcript_path":"C:/t.jsonl"}""";
+        Assert.Equal("fix the build", AgentHooks.Parse(Protocol.Message("p", "UserPromptSubmit", sent))!.Prompt);
+
+        var longOne = $$"""{"session_id":"abc","prompt":"{{new string('a', Termilly.Shared.HookMessage.MaxPrompt + 50)}}"}""";
+        Assert.Equal(Termilly.Shared.HookMessage.MaxPrompt + 1, AgentHooks.Parse(Protocol.Message("p", "UserPromptSubmit", longOne))!.Prompt!.Length);
+
+        // Any other event's prompt field stays in the hook.
+        Assert.Null(AgentHooks.Parse(Protocol.Message("p", "Stop", sent))!.Prompt);
+    }
+
+    [Fact]
     public void Messages_carry_only_what_termilly_shows()
     {
         var payload = """

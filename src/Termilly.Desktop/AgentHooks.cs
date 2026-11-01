@@ -16,7 +16,7 @@ namespace Termilly.Desktop;
 /// </summary>
 internal sealed record AgentEvent(string Pane, string Event, string? Session, string? Tool, string? Message, string? Reason,
     string? File = null, string? Cwd = null, IReadOnlyList<string>? Dirs = null, string? Target = null, Subagent? Subagent = null,
-    StatusReport? Status = null, string? Folder = null);
+    StatusReport? Status = null, string? Folder = null, string? Prompt = null);
 
 /// <summary>What Termilly's status line reports (Termilly.Agent/StatusLine.cs): the plan's limits, the context, Claude's cost.</summary>
 internal sealed record StatusReport(PlanLimits? Limits, ContextFigures? Context, ClaudeCost? Cost);
@@ -195,7 +195,8 @@ internal sealed class AgentHooks : IDisposable
             }
             return new AgentEvent(pane, hookEvent, Text(message, Fields.Session), Text(message, Fields.Tool), Text(message, Fields.Message),
                 Text(message, Fields.Reason), Text(message, Fields.File), Text(message, Fields.Cwd), Folders(message),
-                Text(message, Fields.Target), SubagentOf(message), StatusOf(message), Text(message, Fields.Folder));
+                Text(message, Fields.Target), SubagentOf(message), StatusOf(message), Text(message, Fields.Folder),
+                Text(message, Fields.Prompt) is { } prompt && prompt.Length <= Termilly.Shared.HookMessage.MaxPrompt + 1 ? prompt : null);
         }
         catch (Exception e) when (e is JsonException or FormatException or InvalidOperationException)
         {

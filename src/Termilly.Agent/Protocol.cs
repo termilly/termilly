@@ -53,6 +53,7 @@ internal static partial class Protocol
         public const string ToolUseId = "tool_use_id";
         public const string Message = "message";
         public const string LastAssistantMessage = "last_assistant_message";
+        public const string Prompt = "prompt";
         public const string Reason = "reason";
         public const string Error = "error";
         public const string AgentId = "agent_id";
@@ -156,8 +157,9 @@ internal static partial class Protocol
 
     /// <summary>
     /// The one-line message for an agent event: the pane, the event and the few payload fields Termilly shows.
-    /// Prompts, transcripts and tool input are never passed on, apart from the path of the file an edit tool
-    /// changes, and the folder Claude works in for edit and shell tools, which the change preview needs.
+    /// Transcripts and tool input are never passed on, apart from the path of the file an edit tool changes, and the
+    /// folder Claude works in for edit and shell tools, which the change preview needs. The prompt the user sent
+    /// (UserPromptSubmit) is, for My prompts; a subagent's prompt never is.
     /// </summary>
     public static string Message(string paneId, string hookEvent, string? payloadJson)
     {
@@ -201,12 +203,24 @@ internal static partial class Protocol
         {
             AddFiles(message, payload, tool);
         }
-        // Where `claude --resume` has to run again after a restart: the shell may have moved on (`cd x && claude`).
+        AddSessionFields(message, payload, hookEvent);
+        return message.ToJsonString();
+    }
+
+    /// <summary>
+    /// SessionStart: where `claude --resume` has to run again after a restart (the shell may have moved on: `cd x &&
+    /// claude`). UserPromptSubmit: the prompt the user sent, for My prompts.
+    /// </summary>
+    private static void AddSessionFields(JsonObject message, JsonObject? payload, string hookEvent)
+    {
         if (hookEvent == HookEvents.SessionStart)
         {
             message[HookMessage.Fields.Folder] = Text(payload, Payload.Cwd, MaxPath, cut: false);
         }
-        return message.ToJsonString();
+        else if (hookEvent == HookEvents.UserPromptSubmit)
+        {
+            message[HookMessage.Fields.Prompt] = Text(payload, Payload.Prompt, HookMessage.MaxPrompt);
+        }
     }
 
     /// <summary>An Agent call: what it starts (never its prompt), whether in the background, and the id it got.</summary>

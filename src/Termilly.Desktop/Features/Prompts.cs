@@ -7,28 +7,57 @@ using Termilly.Desktop.Services;
 
 namespace Termilly.Desktop.Features;
 
-/// <summary>My prompts (js/myprompts.js): what the user asked Claude Code in a terminal, from its sessions' transcripts.</summary>
-internal sealed class PromptsHandler(PageChannel page) : IMessageHandler
+/// <summary>
+/// My prompts (js/myprompts.js): what the user asked Claude Code in a terminal. Two sources: Termilly's own record
+/// (PromptHistory, from the prompt hook, kept as long as history is) and the sessions' transcripts (which hold prompts
+/// from before Termilly recorded them, until Claude Code deletes them). Each session's prompts come from one source
+/// only, so none shows twice: its transcript when it's still there, else Termilly's record.
+/// </summary>
+internal sealed class PromptsHandler(PageChannel page, PromptHistory history, ISettingsStore settings) : IMessageHandler
 {
     /// <summary>At most this many sessions are read for one terminal.</summary>
     private const int MaxSessions = 20;
 
-    public void Register(MessageRouter router) =>
+    public void Register(MessageRouter router)
+    {
         router.On<FromPage.PromptsList>(m => Task.Run(() => List(m)));
+        router.On<FromPage.PromptAdd>(m => Storage.Try(() =>
+            history.Add(m.Id, m.Session, m.Text ?? "", settings.Current.Session.RedactSecrets, settings.Current.Session.HistoryDays)));
+    }
 
     private void List(FromPage.PromptsList m)
     {
+        IReadOnlyList<StoredPrompt> stored = [];
+        Storage.Try(() => stored = history.Of(m.Id, settings.Current.Session.HistoryDays));
         var projects = ClaudeUsageTracker.ProjectsDirectory();
+        var prompts = Merge(m.Sessions ?? [], session => ClaudeUsageTracker.FindTranscript(projects, session), stored);
+        page.Post(new ToPage.PromptsListed(m.RequestId, prompts));
+    }
+
+    /// <summary>
+    /// A terminal's prompts, oldest first, from its sessions' transcripts and Termilly's record. A session with a
+    /// transcript takes its prompts from there and its recorded ones are left out; one without (deleted, or on another
+    /// machine) takes the recorded ones. A prompt in two transcripts (an older Claude Code copied a resumed
+    /// conversation into the new session's) shows once.
+    /// </summary>
+    public static IReadOnlyList<AgentPrompt> Merge(IEnumerable<string> sessions, Func<string, string?> transcriptOf, IReadOnlyList<StoredPrompt> stored)
+    {
         var prompts = new List<AgentPrompt>();
-        foreach (var session in (m.Sessions ?? []).Distinct().TakeLast(MaxSessions))
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var fromTranscript = new HashSet<string>(StringComparer.Ordinal);
+        var all = sessions.Concat(stored.Select(p => p.Session).OfType<string>()).Distinct().TakeLast(MaxSessions);
+        foreach (var session in all)
         {
-            if (ClaudeUsageTracker.FindTranscript(projects, session) is { } path)
+            if (transcriptOf(session) is not { } path)
             {
-                prompts.AddRange(TranscriptPrompts.Read(path));
+                continue;
             }
+            fromTranscript.Add(session);
+            prompts.AddRange(TranscriptPrompts.ReadKeyed(path).Where(p => seen.Add(p.Key)).Select(p => p.Prompt));
         }
+        prompts.AddRange(stored.Where(p => p.Session is null || !fromTranscript.Contains(p.Session)).Select(p => new AgentPrompt(p.Text, p.At)));
         prompts.Sort((a, b) => string.CompareOrdinal(a.At, b.At));
-        page.Post(new ToPage.PromptsListed(m.RequestId, prompts.TakeLast(TranscriptPrompts.MaxPrompts).ToList()));
+        return prompts.TakeLast(TranscriptPrompts.MaxPrompts).ToList();
     }
 }
 
@@ -67,19 +96,26 @@ internal static partial class TranscriptPrompts
         public const string IsSidechain = "isSidechain";
         public const string IsCompactSummary = "isCompactSummary";
         public const string ToolUseResult = "toolUseResult";
+        public const string Uuid = "uuid";
     }
 
     /// <summary>The prompts in a transcript, oldest first; none when it can't be read.</summary>
-    public static IReadOnlyList<AgentPrompt> Read(string path)
+    public static IReadOnlyList<AgentPrompt> Read(string path) => ReadKeyed(path).Select(p => p.Prompt).ToList();
+
+    /// <summary>
+    /// The prompts in a transcript, oldest first, each with what tells it apart: the line's uuid, which a copy of the
+    /// line in another transcript keeps (else its time and text).
+    /// </summary>
+    public static IReadOnlyList<(AgentPrompt Prompt, string Key)> ReadKeyed(string path)
     {
-        var prompts = new List<AgentPrompt>();
+        var prompts = new List<(AgentPrompt, string)>();
         try
         {
             using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
             using var reader = new StreamReader(stream, Encoding.UTF8);
             while (reader.ReadLine() is { } line)
             {
-                if (line.Length <= MaxLine && line.Contains("\"type\":\"user\"", StringComparison.Ordinal) && Prompt(line) is { } prompt)
+                if (line.Length <= MaxLine && line.Contains("\"type\":\"user\"", StringComparison.Ordinal) && Keyed(line) is { } prompt)
                 {
                     prompts.Add(prompt);
                 }
@@ -93,7 +129,9 @@ internal static partial class TranscriptPrompts
     }
 
     /// <summary>One transcript line's prompt; null for any other line.</summary>
-    public static AgentPrompt? Prompt(string line)
+    public static AgentPrompt? Prompt(string line) => Keyed(line)?.Prompt;
+
+    private static (AgentPrompt Prompt, string Key)? Keyed(string line)
     {
         try
         {
@@ -108,9 +146,12 @@ internal static partial class TranscriptPrompts
                 return null;
             }
             text = PastedTag().Replace(text, "").Trim();
-            return text.Length == 0 || NotTyped.Any(n => text.StartsWith(n, StringComparison.Ordinal))
-                ? null
-                : new AgentPrompt(text.Length > MaxText ? text[..MaxText] : text, at);
+            if (text.Length == 0 || NotTyped.Any(n => text.StartsWith(n, StringComparison.Ordinal)))
+            {
+                return null;
+            }
+            var prompt = new AgentPrompt(text.Length > MaxText ? text[..MaxText] : text, at);
+            return (prompt, Str(root, Fields.Uuid) ?? $"{at}\n{prompt.Text}");
         }
         catch (JsonException)
         {

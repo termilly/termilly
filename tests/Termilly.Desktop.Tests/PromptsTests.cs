@@ -79,3 +79,86 @@ public sealed class PromptsTests
     public void A_missing_transcript_has_no_prompts() =>
         Assert.Empty(TranscriptPrompts.Read(Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".jsonl")));
 }
+
+/// <summary>
+/// Termilly's own record of prompts (PromptHistory), and how My prompts merges it with the transcripts: each session
+/// from one source, so no prompt shows twice.
+/// </summary>
+public sealed class PromptHistoryTests : IDisposable
+{
+    private const int Days = 30;
+    private const string Pane = "t1";
+    private readonly string _dir = Path.Combine(Path.GetTempPath(), "termilly-tests", Guid.NewGuid().ToString("N"));
+    private readonly Termilly.Desktop.Security.Vault _vault;
+    private readonly PromptHistory _history;
+
+    public PromptHistoryTests()
+    {
+        _vault = Termilly.Desktop.Security.Vault.Open(_dir);
+        _history = new PromptHistory(_vault);
+    }
+
+    public void Dispose() => Directory.Delete(_dir, recursive: true);
+
+    private string Transcript(string name, params (string Uuid, string Text, string At)[] prompts)
+    {
+        var path = Path.Combine(_dir, name + ".jsonl");
+        File.WriteAllLines(path, prompts.Select(p =>
+            $$"""{"type":"user","uuid":"{{p.Uuid}}","message":{"role":"user","content":"{{p.Text}}"},"timestamp":"{{p.At}}"}"""));
+        return path;
+    }
+
+    [Fact]
+    public void Prompts_are_kept_per_terminal_redacted_and_survive_a_restart()
+    {
+        _history.Add(Pane, "s1", "deploy with token ghp_abcdefghijklmnopqrstuvwxyz0123456789", redact: true, Days);
+        _history.Add("t2", "s2", "another terminal", redact: true, Days);
+
+        var kept = new PromptHistory(_vault).Of(Pane, Days);
+
+        Assert.Single(kept);
+        Assert.DoesNotContain("ghp_", kept[0].Text, StringComparison.Ordinal);
+        Assert.Equal("s1", kept[0].Session);
+    }
+
+    [Fact]
+    public void Old_prompts_go_with_history_and_clear_empties_it()
+    {
+        _history.Add(Pane, "s1", "long ago", redact: false, Days, DateTimeOffset.UtcNow.AddDays(-Days - 1));
+        _history.Add(Pane, "s1", "today", redact: false, Days);
+
+        Assert.Equal(["today"], _history.Of(Pane, Days).Select(p => p.Text));
+        _history.Clear();
+        Assert.Empty(new PromptHistory(_vault).Of(Pane, Days));
+    }
+
+    [Fact]
+    public void A_session_with_a_transcript_takes_it_and_its_recorded_prompts_are_not_shown_again()
+    {
+        var transcript = Transcript("s1", ("u1", "fix the build", "2026-11-01T10:00:00.000Z"), ("u2", "now the tests", "2026-11-01T10:05:00.000Z"));
+        StoredPrompt[] stored =
+        [
+            new(Pane, "s1", "fix the build", "2026-11-01T10:00:00.010Z"),
+            new(Pane, "s1", "now the tests", "2026-11-01T10:05:00.020Z"),
+            // Its transcript was deleted (Claude Code keeps them 30 days): only the record has these.
+            new(Pane, "s0", "an old question", "2026-09-01T09:00:00.000Z"),
+            // Sent on another machine, no session known.
+            new(Pane, null, "on the server", "2026-11-01T11:00:00.000Z"),
+        ];
+
+        var merged = PromptsHandler.Merge(["s1"], s => s == "s1" ? transcript : null, stored);
+
+        Assert.Equal(["an old question", "fix the build", "now the tests", "on the server"], merged.Select(p => p.Text));
+    }
+
+    [Fact]
+    public void A_prompt_copied_into_a_resumed_sessions_transcript_shows_once_but_a_prompt_sent_twice_shows_twice()
+    {
+        var first = Transcript("s1", ("u1", "start", "2026-11-01T10:00:00.000Z"));
+        var resumed = Transcript("s2", ("u1", "start", "2026-11-01T10:00:00.000Z"), ("u2", "yes", "2026-11-01T10:01:00.000Z"), ("u3", "yes", "2026-11-01T10:02:00.000Z"));
+
+        var merged = PromptsHandler.Merge(["s1", "s2"], s => s == "s1" ? first : s == "s2" ? resumed : null, []);
+
+        Assert.Equal(["start", "yes", "yes"], merged.Select(p => p.Text));
+    }
+}
