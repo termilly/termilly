@@ -80,7 +80,7 @@ export function beginRename(tab, where = RENAME_IN.header) {
     e.preventDefault();
     finish(e.key === 'Enter');
   });
-  // In the sidebar's row (a button): a click or a key in the field isn't the row's.
-  for (const type of ['click', 'mousedown', 'keyup', 'dblclick']) input.addEventListener(type, e => e.stopPropagation());
+  // In the sidebar's row (a button): a click or a key in the field isn't the row's, and Space doesn't press it.
+  for (const type of ['click', 'mousedown', 'keyup', 'dblclick']) input.addEventListener(type, e => { e.stopPropagation(); if (e instanceof KeyboardEvent && e.key === ' ') e.preventDefault(); });
   input.addEventListener('blur', () => finish(true));
 }

@@ -182,6 +182,9 @@ export function profileOptionsHtml(selectedId) {
   }).join('');
 }
 
+/** The small activity mark, as a row in a list shows it. */
+export const MINI_ACTIVITY = 'mini';
+
 /**
  * The spinner (or progress ring) for a terminal's activity (see activityOf); empty when idle.
  * @param {import('./store.js').Activity | null} activity
@@ -252,6 +255,8 @@ export const ICONS = {
   info: '<svg viewBox="0 0 16 16"><circle cx="8.5" cy="8.5" r="5.5"/><path d="M8.5 8v3"/><rect x="8" y="5.5" width="1" height="1" fill="currentColor" stroke="none"/></svg>',
   sun: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.8"/><path d="M8 1.8v1.4M8 12.8v1.4M1.8 8h1.4M12.8 8h1.4M3.6 3.6l1 1M11.4 11.4l1 1M3.6 12.4l1-1M11.4 4.6l1-1"/></svg>',
   moon: '<svg viewBox="0 0 16 16"><path d="M13 9.6A5.5 5.5 0 0 1 6.4 3 5.5 5.5 0 1 0 13 9.6z"/></svg>',
+  /** A speech bubble with a prompt's chevron: what you asked an agent. */
+  prompts: '<svg viewBox="0 0 16 16"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/><path d="M5.5 5.5l2 1.5-2 1.5M8.5 8.5h2"/></svg>',
   note: '<svg viewBox="0 0 16 16"><path d="M3.5 2.5h6l3 3v8h-9z"/><path d="M9.5 2.5v3h3M5.5 8.5h5M5.5 10.5h3.5"/></svg>',
   // A play triangle: hear a sound.
   play: '<svg viewBox="0 0 16 16"><path d="M5.5 3.5v9l7-4.5z"/></svg>',

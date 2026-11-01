@@ -50,9 +50,9 @@ export function navHtml(current, count) {
 }
 
 /**
- * @typedef {{ id: string, state: string, detail: string, at: number, live: boolean }} Note
+ * @typedef {{ id: string, key: string, state: string, detail: string, at: number, live: boolean }} Note
  * @typedef {{ badge: (id: string) => string, title: (id: string) => string, ws: (id: string) => string, age: (at: number) => string,
- *   waiting: (id: string) => boolean, open: string, term: string }} NoteParts
+ *   waiting: (id: string) => boolean, open: string, term: string, clear: string, clearAll: string }} NoteParts
  */
 
 /**
@@ -62,9 +62,11 @@ export function navHtml(current, count) {
  */
 export function notesHtml(notes, parts) {
   if (!notes.length) return '<p class="muted center">Nothing new. What an agent says when you’re not looking shows here.</p>';
-  return `<div class="list">${notes.map(n => `<div class="row note${n.live ? '' : ' seen'}" data-do="${parts.waiting(n.id) ? parts.open : parts.term}" data-id="${esc(n.id)}">
+  return `<div class="notes-head"><button class="link" data-do="${parts.clearAll}">Clear all</button></div>
+    <div class="list">${notes.map(n => `<div class="row note${n.live ? '' : ' seen'}" data-do="${parts.waiting(n.id) ? parts.open : parts.term}" data-id="${esc(n.id)}">
       ${parts.badge(n.id)}<div class="r-text"><div class="r-name">${esc(parts.title(n.id))}<span class="note-state n-${esc(n.state)}">${esc(/** @type {Record<string, string>} */ (STATE_LABEL)[n.state] ?? n.state)}</span></div>
-      <div class="r-line">${esc(n.detail)}</div><div class="r-meta">${esc(parts.ws(n.id))} · ${esc(parts.age(n.at))}</div></div></div>`).join('')}</div>`;
+      <div class="r-line">${esc(n.detail)}</div><div class="r-meta">${esc(parts.ws(n.id))} · ${esc(parts.age(n.at))}</div></div>
+      <button class="note-clear" data-do="${parts.clear}" data-key="${esc(n.key)}" aria-label="Clear">×</button></div>`).join('')}</div>`;
 }
 
 /** @typedef {{ id: string, name: string, swatch: { bg: string, accent: string } | null }} Look */

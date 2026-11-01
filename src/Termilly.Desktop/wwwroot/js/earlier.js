@@ -3,14 +3,14 @@
 // still finds them. They leave two ways: the scrollback is full and its oldest rows drop off the top, or a program
 // wipes it (cls; Claude Code wipes and draws itself again whenever the terminal's size changes, a phone showing it
 // included, and when it compacts or resumes). The rows go to the host just before either.
-// What a program draws again after a wipe is mostly kept already: runs of lines found in what's kept are left out.
-// They're compared by pieces of their text without the spaces, so a redraw at another width, wrapped differently,
-// still counts as the same; a short line that comes again is real output and stays.
+// What a program draws again after a wipe is mostly kept already: long runs of lines that are exactly what's kept
+// are left out. They're compared without their spaces, so a redraw at another width, wrapped differently, still
+// counts as the same; a line that only resembles one kept, and a short line that comes again, are real output and stay.
 
 import { send, request } from './host.js';
 import { PAGE } from './protocol.js';
 import { state, on, EVENTS } from './store.js';
-import { leaveOutRepeats, piecesOf } from './earlierrepeats.js';
+import { leaveOutRepeats, keptFrom } from './earlierrepeats.js';
 
 /** Rows sent at a time as the scrollback fills, before its top drops them. */
 const BATCH = 1000;
@@ -18,11 +18,13 @@ const BATCH = 1000;
 const ERASES = [2, 3];
 /** How many kept lines a terminal starts comparing with (the host's last ones). */
 const START_LINES = 5000;
+/** Lines compared at a time, the window getting a turn between (a redraw can bring thousands). */
+const SLICE = 300;
 
 /**
- * Per terminal: the first row not sent yet (a marker, so it stays on its row as the top drops rows), the pieces of
- * what's kept, and the sends in order (the first waits for the pieces).
- * @typedef {{ marker: any, pieces: Set<number> | null, queue: Promise<void> }} Earlier
+ * Per terminal: the first row not sent yet (a marker, so it stays on its row as the top drops rows), what's kept
+ * (its text), and the sends in order (the first waits for what's kept).
+ * @typedef {{ marker: any, kept: import('./earlierrepeats.js').Kept | null, queue: Promise<void> }} Earlier
  */
 /** @type {WeakMap<Tab, Earlier>} */
 const earlier = new WeakMap();
@@ -104,7 +106,7 @@ function wiped(tab) {
 }
 
 /**
- * Sends lines to the host, leaving out what it has already; in order, after the terminal's pieces are known.
+ * Sends lines to the host, leaving out what it has already; in order, after what the terminal kept is known.
  * @param {Tab} tab
  * @param {Earlier} e
  * @param {string[]} lines
@@ -113,28 +115,31 @@ function keep(tab, e, lines) {
   if (!lines.length) return;
   e.queue = e.queue.then(async () => {
     if (!keeps(tab)) return;
-    if (!e.pieces) e.pieces = await piecesKept(tab);
-    const fresh = leaveOutRepeats(lines, e.pieces);
+    if (!e.kept) e.kept = await keptAlready(tab);
+    /** @type {string[]} */
+    const fresh = [];
+    for (let i = 0; i < lines.length; i += SLICE) {
+      fresh.push(...leaveOutRepeats(lines.slice(i, i + SLICE), /** @type {import('./earlierrepeats.js').Kept} */ (e.kept)));
+      await new Promise(resolve => setTimeout(resolve));
+    }
     if (fresh.length) send(PAGE.earlierAdd, { id: tab.id, lines: fresh });
   }).catch(err => console.warn('earlier output', err));
 }
 
 /**
- * The pieces of what the host has kept for the terminal already (its last lines): after a restart, what Claude Code
+ * What the host has kept for the terminal already (its last lines): after a restart, what Claude Code
  * draws again is still known.
  * @param {Tab} tab
- * @returns {Promise<Set<number>>}
+ * @returns {Promise<import('./earlierrepeats.js').Kept>}
  */
-async function piecesKept(tab) {
+async function keptAlready(tab) {
   const m = await request(PAGE.earlierTail, { id: tab.id, count: START_LINES });
-  const pieces = new Set();
-  piecesOf(Array.isArray(m?.lines) ? m.lines : [], (h) => { pieces.add(h); });
-  return pieces;
+  return keptFrom(Array.isArray(m?.lines) ? m.lines : []);
 }
 
 on(EVENTS.terminalOpened, tab => {
   const term = tab.view.term;
-  earlier.set(tab, { marker: markAt(term, 0), pieces: null, queue: Promise.resolve() });
+  earlier.set(tab, { marker: markAt(term, 0), kept: null, queue: Promise.resolve() });
   term.onLineFeed(() => nearlyFull(tab));
   term.parser.registerCsiHandler({ final: 'J' }, (/** @type {number[]} */ params) => {
     if (ERASES.includes(params[0])) wiped(tab);

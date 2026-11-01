@@ -79,9 +79,10 @@ internal static partial class ToPage
 
     /// <summary>
     /// A phone shows this terminal: it takes the phone's size until no phone shows it (Cols and Rows null), so it fills
-    /// the phone and its output fits it. Name and Address say which phone (its paired name, its network address).
+    /// the phone and its output fits it. Name and Address say which phone (its paired name, its network address);
+    /// Computer, that it's another Termilly computer rather than a phone (Name is then the computer's own).
     /// </summary>
-    internal sealed record PhoneSize(string Id, int? Cols, int? Rows, string? Name, string? Address) : IHostMessage
+    internal sealed record PhoneSize(string Id, int? Cols, int? Rows, string? Name, string? Address, bool Computer = false) : IHostMessage
     {
         public static string Type => "phone:size";
     }

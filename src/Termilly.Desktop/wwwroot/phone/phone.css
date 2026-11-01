@@ -163,7 +163,10 @@ main.tabbed { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
 .memo-editor { display: flex; flex-direction: column; gap: 10px; }
 .memo-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .memo-head .link { padding: 4px 0; border: 0; background: none; color: var(--accent); font-size: 15px; }
-.memo-text { min-height: 40vh; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--raised); color: var(--text); font: 15px/1.45 ui-monospace, Menlo, Consolas, monospace; resize: vertical; }
+/* 16px: smaller text makes iOS zoom in on the field, and stay zoomed. */
+.memo-text { min-height: 40vh; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--raised); color: var(--text); font: 16px/1.45 ui-monospace, Menlo, Consolas, monospace; resize: vertical; }
+/* Each workspace with its terminals, apart from the next. */
+.memo-ws + .memo-ws { margin-top: 18px; }
 .memo-pinbox { display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: 14px; }
 .memo-actions { display: flex; gap: 8px; align-items: center; }
 .memo-actions .grow { flex: 1; }
@@ -174,6 +177,11 @@ main.tabbed { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
 .note { align-items: flex-start; }
 .note .r-line { display: -webkit-box; overflow: hidden; white-space: normal; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .note.seen { opacity: .6; }
+/* Clearing: each notification's ×, and Clear all above them. */
+.notes-head { display: flex; justify-content: flex-end; margin: 0 0 8px; }
+.notes-head .link { padding: 4px 2px; border: 0; background: none; color: var(--accent); font: inherit; font-size: 15px; }
+.note-clear { flex: none; align-self: center; width: 36px; height: 36px; margin: -6px -8px -6px 0; border: 0; border-radius: 50%; background: none; color: var(--muted); font-size: 20px; line-height: 1; }
+.note-clear:active { background: var(--line); }
 .r-meta { margin-top: 2px; color: var(--muted); font-size: 12px; }
 .note-state { margin-left: 8px; padding: 1px 7px; border-radius: 6px; background: var(--line); font-size: 11px; font-weight: 600; vertical-align: 2px; }
 .n-needs-input, .n-attention { background: color-mix(in srgb, var(--attention) 22%, transparent); color: var(--attention); }

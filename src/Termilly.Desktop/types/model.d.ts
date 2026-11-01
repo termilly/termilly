@@ -52,6 +52,8 @@ interface Workspace {
   collapsed?: boolean;
   /** Where "Copy to" last copied from here (js/copyto.js): the terminal picked, and the folder picked in each. */
   copyTo?: { tab: string | null; dirs: Record<string, string> };
+  /** Another Termilly computer's terminals open here (js/remotepc.js): its id. Not listed with this PC's; never saved. */
+  remote?: string;
   /** A tmux window shown as this workspace (js/tmux.js); never saved. */
   tmux?: { client: string; window: string };
   /** Saved by older versions, which could stack a workspace's terminals; read once, then dropped (store.js). */
@@ -159,10 +161,17 @@ interface Tab {
   agent?: AgentInfo | null;
   /** An agent has run in it. */
   agentSeen?: boolean;
+  /** The Claude Code sessions it ran, oldest first, for My prompts (js/myprompts.js). */
+  agentSessions?: string[];
+  /** When My prompts was last cleared: prompts from before it are hidden (js/myprompts.js). Nothing is deleted. */
+  promptsClearedAt?: number | null;
   /** Its agent was ended, to resume (js/hibernate.js). */
   hibernated?: { session: string; at: number; folder?: string | null } | null;
-  /** A tmux pane rather than a shell of its own (js/tmux.js). */
-  virtual?: { kind: 'tmux'; client: string; pane: string; cols: number; rows: number } | null;
+  /**
+   * A terminal without a shell of its own: a tmux pane (js/tmux.js; client is its tmux client), or another Termilly
+   * computer's terminal (js/remotepc.js; client is the computer).
+   */
+  virtual?: { kind: 'tmux' | 'pc'; client: string; pane: string; cols: number; rows: number } | null;
   /** An SSH connection that dropped, reconnecting (js/reconnect.js). */
   reconnect?: import('../wwwroot/js/reconnect.js').Reconnecting | null;
   /** A status set through the API (js/api.js). */

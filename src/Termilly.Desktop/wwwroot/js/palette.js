@@ -19,11 +19,12 @@ import { probeFolder, offerLayout, applyLayout } from './layouts.js';
 import { notesFor } from './notes.js';
 import { byId, targetOf } from './dom.js';
 import { toggleWrap } from './preview.js';
+import { fileMatches, fileRowHtml, filePreviewHtml, openFile, stillLooking } from './palettefiles.js';
 
 /**
  * A closed terminal the host keeps (Host_history's entries), as panes.js recordHistory sent it.
  * @typedef {{ id: string, name: string, customName?: string | null, profile: string, tags?: string[] | null,
- *   note?: Note | null, wsId?: string | null, wsName?: string | null, closedAt: number, noHistory?: boolean,
+ *   note?: Note | null, wsId?: string | null, wsName?: string | null, cwd?: string | null, closedAt: number, noHistory?: boolean,
  *   lines?: string[] | null, earlier?: string | null }} HistoryEntry
  */
 /**
@@ -53,10 +54,11 @@ import { toggleWrap } from './preview.js';
  * How a terminal matched: its rank (lower is better), what matched, and the output lines that did.
  * @typedef {{ rank: number, on?: string } & (OutputHit | NoHit)} TextMatch
  */
-/** @typedef {{ kind: 'open', tab: Tab, ws: Workspace, lines: Lines, match: TextMatch, rank: number }} OpenResult */
+/** A terminal's row; hit marks the row of one of its matching lines, listed under it. */
+/** @typedef {{ kind: 'open', tab: Tab, ws: Workspace, lines: Lines, match: TextMatch, rank: number, hit?: boolean }} OpenResult */
 /**
  * @typedef {{ kind: 'closed', entry: HistoryEntry, profile: SessionProfile | undefined, lines: Lines,
- *   match: TextMatch, rank: number }} ClosedResult
+ *   match: TextMatch, rank: number, hit?: boolean }} ClosedResult
  */
 /** @typedef {{ kind: 'workspaces', ws: Workspace }} WorkspaceResult */
 /** @typedef {{ kind: 'commands', cmd: PaletteCommand }} CommandResult */
@@ -73,7 +75,7 @@ import { toggleWrap } from './preview.js';
  */
 /**
  * A row the palette shows.
- * @typedef {OpenResult | ClosedResult | WorkspaceResult | CommandResult | RanResult | GoResult} PaletteResult
+ * @typedef {OpenResult | ClosedResult | WorkspaceResult | CommandResult | RanResult | GoResult | import('./palettefiles.js').FileResult} PaletteResult
  */
 
 const layer = byId('palette-layer');
@@ -83,7 +85,7 @@ const resultsEl = byId('pal-results');
 const previewEl = byId('pal-preview');
 
 /** The kinds of result, in the order the palette lists their groups. */
-const KIND = Object.freeze({ open: 'open', closed: 'closed', workspaces: 'workspaces', commands: 'commands', go: 'go', ran: 'ran' });
+const KIND = Object.freeze({ files: 'files', open: 'open', closed: 'closed', workspaces: 'workspaces', commands: 'commands', go: 'go', ran: 'ran' });
 /** The palette's views (its filter chips): everything, or one kind of result. */
 export const PALETTE_VIEW = Object.freeze({ all: 'all', ...KIND });
 /** The kinds of place "Go to" offers, and its row that makes a new workspace. */
@@ -94,7 +96,7 @@ const RANK = Object.freeze({ name: 0, tag: 1, note: 1.5, workspace: 2, output: 2
 /** Added to the rank of a terminal in a workspace other than the active one. */
 const OTHER_WORKSPACE_RANK = 0.1;
 /** The preview's buttons, by their data-act. */
-const ACT = Object.freeze({ go: 'go', copy: 'copy', forget: 'forget', wrap: 'wrap' });
+const ACT = Object.freeze({ go: 'go', copy: 'copy', forget: 'forget', wrap: 'wrap', openFile: 'openfile' });
 /** The command history's narrowing words: how a command ended, and the folder it ran in ("in:<folder text>"). */
 const FAILED_WORDS = ['failed', 'fail'];
 const OK_WORDS = ['ok', 'succeeded'];
@@ -111,13 +113,18 @@ const SCROLL_CONTEXT_ROWS = 3;
 
 const FILTERS = [
   [PALETTE_VIEW.all, 'All'], [PALETTE_VIEW.open, 'Open'], [PALETTE_VIEW.closed, 'Recently closed'],
-  [PALETTE_VIEW.workspaces, 'Workspaces'], [PALETTE_VIEW.commands, 'Commands'], [PALETTE_VIEW.ran, 'Command history'],
-  [PALETTE_VIEW.go, 'Go to'],
+  [PALETTE_VIEW.workspaces, 'Workspaces'], [PALETTE_VIEW.files, 'Files'],
 ];
 /** @type {Record<string, string>} */
-const GROUP_TITLES = { open: 'Open terminals', closed: 'Recently closed', workspaces: 'Workspaces', commands: 'Commands', go: 'Go to', ran: 'Commands run' };
+const GROUP_TITLES = { open: 'Open terminals', closed: 'Recently closed', workspaces: 'Workspaces', commands: 'Commands', go: 'Go to', ran: 'Commands run', files: 'Files, folders and web addresses' };
+/** The views opened by their own keys, named where the chips are (they have no chip). */
+const OWN_VIEWS = { [PALETTE_VIEW.ran]: 'Command history', [PALETTE_VIEW.go]: 'Go to' };
 /** @type {Record<string, number>} */
-const LIMITS = { open: 40, closed: 40, workspaces: 12, commands: 12, go: 60, ran: 200 };
+const LIMITS = { open: 40, closed: 40, workspaces: 12, commands: 12, go: 60, ran: 200, files: 300 };
+/** How many of a terminal's matching lines are listed under it (the newest); the preview steps through the rest. */
+const MOST_HITS = 50;
+/** How many files the All view lists (the Files chip lists them all). */
+const FILES_IN_ALL = 8;
 
 /** @type {string} */
 let filter = PALETTE_VIEW.all;
@@ -435,22 +442,66 @@ function closedMatches(q) {
   return found;
 }
 
+/** The Files view's results: what the open terminals printed (drawn again as the paths in it are looked up). */
+/**
+ * What a closed terminal's paths are looked up from, as an open one's are: a stand-in tab with its id, shell and folder.
+ * @param {HistoryEntry} entry
+ * @returns {Tab}
+ */
+const standIn = entry => /** @type {Tab} */ (/** @type {unknown} */ ({ id: entry.id, profile: entry.profile, cwd: entry.cwd ?? null, wsId: entry.wsId ?? null, tags: [] }));
+
+/**
+ * The files, folders and web addresses the terminals printed, open and closed ones (drawn again as the paths in them
+ * are looked up).
+ * @param {string} text
+ */
+const filesFound = text => fileMatches([
+  ...[...state.tabs.values()].filter(t => !t.virtual).map(tab => ({ tab, lines: lineCache.get(tab.id) ?? [] })),
+  ...history.filter(e => !e.noHistory && e.lines?.length).map(entry => ({ tab: standIn(entry), lines: /** @type {string[]} */ (entry.lines), entry })),
+], text, () => { if (!layer.hidden && (filter === PALETTE_VIEW.files || filter === PALETTE_VIEW.all)) run(); });
+
+/** How long a reopened terminal takes to show its old output and scroll to it, before the line is found in it (ms). */
+const REOPENED_AFTER_MS = 2200;
+
+/**
+ * Goes to where a file, folder or web address was printed: its terminal (a closed one reopened), scrolled to the line
+ * with it selected, so Ctrl+click and the rest work from there.
+ * @param {import('./palettefiles.js').FileResult} r
+ */
+function goToPrinted(r) {
+  if (!r.entry) {
+    focusTab(r.tab);
+    showMatch(r.tab, r.lines, r.index, r.text);
+    return;
+  }
+  const tab = reopen(r.entry);
+  setTimeout(() => {
+    const lines = bufferLines(tab);
+    let at = lines.length - 1;
+    while (at >= 0 && !lines[at].includes(r.line.trim())) at--;
+    if (at >= 0) showMatch(tab, lines, at, r.text);
+  }, REOPENED_AFTER_MS);
+}
+
 /** @returns {{ q: Query, groups: Record<string, PaletteResult[]> }} */
 function search() {
   if (filter === PALETTE_VIEW.go) return { q: parseQuery(''), groups: { go: goPlaces(input.value) } };
   if (filter === PALETTE_VIEW.ran) return { q: parseQuery(''), groups: { ran: ranResults(input.value) } };
+  if (filter === PALETTE_VIEW.files) return { q: parseQuery(''), groups: { files: filesFound(input.value) } };
   const q = parseQuery(input.value);
   searchEarlier(q.text);
   /**
    * @type {{ open: OpenResult[], closed: ClosedResult[], workspaces: WorkspaceResult[],
-   *   commands: CommandResult[] }}
+   *   commands: CommandResult[], files: import('./palettefiles.js').FileResult[] }}
    */
-  const groups = { open: [], closed: [], workspaces: [], commands: [] };
+  const groups = { open: [], closed: [], workspaces: [], commands: [], files: [] };
   /** @param {string} kind */
   const want = kind => filter === PALETTE_VIEW.all || filter === kind;
 
   if (want(KIND.open)) groups.open = openMatches(q);
   if (want(KIND.closed)) groups.closed = closedMatches(q);
+  // The files, folders and web addresses printed, when there's text to look for (the Files chip lists them all).
+  if (filter === PALETTE_VIEW.all && q.text && !q.tag && !q.ws && !q.shell) groups.files = filesFound(q.text);
 
   const hasFilter = q.tag || q.ws || q.shell;
   if (want(KIND.workspaces) && !hasFilter) {
@@ -516,6 +567,37 @@ function terminalRowHtml(r, q) {
 }
 
 /**
+ * A terminal's matching lines, as rows under it in the output's order (the newest MOST_HITS), each a result of its
+ * own: Up and Down walk every match in every terminal. Only when there are two or more (one shows in its row).
+ * @param {OpenResult | ClosedResult} r
+ * @param {Query} q
+ * @param {PaletteResult[]} into where the rows' results go, after the terminal's
+ */
+function hitRowsHtml(r, q, into) {
+  const hits = r.match.hits ?? [];
+  if (hits.length < 2) return '';
+  const from = Math.max(0, hits.length - MOST_HITS);
+  let html = from ? `<div class="res-more">${from} older match${from === 1 ? '' : 'es'}: step through them in the preview</div>` : '';
+  for (let at = from; at < hits.length; at++) {
+    const index = into.length;
+    into.push(/** @type {OpenResult | ClosedResult} */ ({ ...r, hit: true, match: { ...r.match, at, line: hits[at] } }));
+    html += `<div class="res res-hit${index === selected ? ' sel' : ''}" data-index="${index}" role="option"><span class="res-hit-line">${snippet(r.lines[hits[at]], q.text)}</span></div>`;
+  }
+  return html;
+}
+
+/**
+ * How many output lines matched, in how many terminals, above the list; empty when none did.
+ * @param {Record<string, PaletteResult[]>} groups
+ */
+function totalHtml(groups) {
+  const found = [...(groups[KIND.open] ?? []), ...(groups[KIND.closed] ?? [])]
+    .map(r => /** @type {OpenResult | ClosedResult} */ (r).match.count ?? 0).filter(Boolean);
+  const n = found.reduce((sum, count) => sum + count, 0);
+  return n ? `<div class="res-total">${n} match${n === 1 ? '' : 'es'} in ${found.length} terminal${found.length === 1 ? '' : 's'}</div>` : '';
+}
+
+/**
  * A command from the history: how it ended, where and when it ran.
  * @param {RanResult} r
  */
@@ -569,7 +651,7 @@ const commandRowHtml = (r, q) => `<span class="cmd-icon">${r.cmd.icon ?? ICONS.p
  * How each kind of result is drawn; anything else is a command.
  * @type {Record<string, RowHtml>}
  */
-const ROW_HTML = { open: terminalRowHtml, closed: terminalRowHtml, ran: ranRowHtml, go: goRowHtml, workspaces: workspaceRowHtml };
+const ROW_HTML = { open: terminalRowHtml, closed: terminalRowHtml, ran: ranRowHtml, go: goRowHtml, workspaces: workspaceRowHtml, files: r => fileRowHtml(r, input.value) };
 
 /**
  * @param {PaletteResult} r
@@ -582,6 +664,7 @@ const rowHtml = (r, index, q) => resultRow(index, (ROW_HTML[r.kind] ?? /** @type
 const PLACEHOLDERS = {
   go: 'Go to a workspace, folder, closed terminal or SSH host',
   ran: 'Search commands you ran · failed · in:folder',
+  files: 'Files, folders and web addresses in the output · a name, or a pattern like *.txt',
   default: 'Search terminals, closed sessions, output and commands',
 };
 
@@ -589,19 +672,21 @@ function run() {
   input.placeholder = PLACEHOLDERS[filter] ?? PLACEHOLDERS.default;
   const { q, groups } = search();
   results = [];
-  let html = '';
+  const looking = filter === PALETTE_VIEW.files ? stillLooking() : 0;
+  let html = looking ? `<div class="res-total">Looking up ${looking} path${looking === 1 ? '' : 's'} the terminals printed</div>` : q.text ? totalHtml(groups) : '';
   for (const kind of Object.values(KIND)) {
     const list = groups[kind] ?? [];
     if (!list.length) continue;
-    const shown = list.slice(0, LIMITS[kind]);
+    const shown = list.slice(0, kind === KIND.files && filter === PALETTE_VIEW.all ? FILES_IN_ALL : LIMITS[kind]);
     html += `<div class="res-group">${GROUP_TITLES[kind]}<span>${list.length}</span></div>`;
     for (const r of shown) {
       html += rowHtml(r, results.length, q);
       results.push(r);
+      if (kind === KIND.open || kind === KIND.closed) html += hitRowsHtml(/** @type {OpenResult | ClosedResult} */ (r), q, results);
     }
   }
   if (!results.length) {
-    html = `<div class="res-empty">${input.value.trim() ? 'Nothing matches' : 'Nothing here yet'}</div>`;
+    html += `<div class="res-empty">${looking ? '' : input.value.trim() ? 'Nothing matches' : 'Nothing here yet'}</div>`;
   }
   selected = Math.min(selected, Math.max(0, results.length - 1));
   resultsEl.innerHTML = html;
@@ -611,7 +696,8 @@ function run() {
   const counts = { [PALETTE_VIEW.all]: 0 };
   for (const [kind, list] of Object.entries(groups)) counts[kind] = list.length;
   counts.all = Object.values(groups).reduce((n, list) => n + list.length, 0);
-  filtersEl.innerHTML = FILTERS.map(([id, label]) =>
+  const ownView = /** @type {Record<string, string>} */ (OWN_VIEWS)[filter];
+  filtersEl.innerHTML = (ownView ? `<span class="fview">${ownView}</span>` : '') + FILTERS.map(([id, label]) =>
     `<button class="fchip${id === filter ? ' on' : ''}" data-filter="${id}">${label}${id === filter || counts[id] ? ` <span>${counts[id] ?? 0}</span>` : ''}</button>`).join('');
   renderPreview(q);
 }
@@ -641,7 +727,8 @@ function renderPreview(q = parseQuery(input.value)) {
       isOpen ? RUNNING_LABEL : `closed ${escapeHtml(formatWhen(r.entry.closedAt))}`,
       r.match.count === 1 ? '1 matching line' : '',
     ].filter(Boolean).join('<span class="dot-sep">·</span>');
-    const stepper = /** @type {number} */ (r.match.count) > 1 ? `<span class="pv-step">
+    // A match's own row shows that match; its terminal's row steps through them all.
+    const stepper = !r.hit && /** @type {number} */ (r.match.count) > 1 ? `<span class="pv-step">
         <button class="pv-step-btn" data-step="-1" title="Older match">${ICONS.chevronLeft}</button>
         <span>match ${/** @type {number} */ (r.match.at) + 1} of ${r.match.count}</span>
         <button class="pv-step-btn" data-step="1" title="Newer match">${ICONS.chevronRight}</button></span>` : '';
@@ -669,6 +756,10 @@ function renderPreview(q = parseQuery(input.value)) {
         <button class="btn primary" data-act="go">${isOpen ? 'Go to terminal' : 'Reopen'} <kbd>Enter</kbd></button>
         ${isOpen ? '' : '<button class="btn" data-act="forget">Remove from history</button>'}
       </div>`;
+    return;
+  }
+  if (r.kind === KIND.files) {
+    previewEl.innerHTML = filePreviewHtml(r);
     return;
   }
   if (r.kind === KIND.ran) {
@@ -721,6 +812,8 @@ function activate(r = results[selected]) {
     switchWorkspace(r.ws.id);
   } else if (r.kind === KIND.go) {
     goTo(r);
+  } else if (r.kind === KIND.files) {
+    goToPrinted(r);
   } else if (r.kind === KIND.ran) {
     insertCommand(r.entry.command);
   } else {
@@ -793,6 +886,7 @@ async function openFolder(dir) {
 /** Reopens a closed session: same shell, name and tags, in its workspace if it still exists, with the
  *  saved output shown above the new prompt. The history entry is used up.
  * @param {HistoryEntry} entry
+ * @returns {Tab}
  */
 function reopen(entry) {
   for (const tag of entry.tags ?? []) ensureTag(tag);
@@ -809,6 +903,7 @@ function reopen(entry) {
   // Its earlier output comes along.
   if (entry.earlier) send(PAGE.earlierMove, { from: entry.earlier, to: tab.id });
   forget({ ...entry, earlier: null });
+  return tab;
 }
 
 /** @param {HistoryEntry} entry */
@@ -878,13 +973,18 @@ previewEl.addEventListener('click', e => {
   if (step) stepMatch(Number(step));
   const act = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-act]'))?.dataset.act;
   if (act === ACT.go) activate();
+  else if (act === ACT.openFile && results[selected]?.kind === KIND.files) {
+    closePalette();
+    openFile(/** @type {import('./palettefiles.js').FileResult} */ (results[selected]));
+  }
   else if (act === ACT.wrap) {
     toggleWrap();
     renderPreview();
     input.focus();
   }
-  else if (act === ACT.copy && results[selected]?.kind === KIND.ran) {
-    navigator.clipboard.writeText(/** @type {RanResult} */ (results[selected]).entry.command);
+  else if (act === ACT.copy && (results[selected]?.kind === KIND.ran || results[selected]?.kind === KIND.files)) {
+    const r = results[selected];
+    navigator.clipboard.writeText(r.kind === KIND.ran ? r.entry.command : /** @type {import('./palettefiles.js').FileResult} */ (r).path);
     input.focus();
   }
   else if (act === ACT.forget) {

@@ -3,7 +3,8 @@
 # escape sequence written to the terminal, since the pipe the local hook uses (Termilly.Agent) doesn't cross ssh.
 #   termilly-hook.sh hook 1 <Event>
 # Like the local hook it never gets in Claude's way: it prints nothing, always exits 0, and passes on only the few
-# payload fields Termilly shows (the same as Protocol.Message), never prompts, tool input or file contents.
+# payload fields Termilly shows (the same as Protocol.Message), never tool input or file contents. The prompt the user
+# sent (UserPromptSubmit) is passed on for My prompts, cut shorter than the local hook's to fit the report.
 
 [ "$1" = hook ] && [ "$2" = 1 ] && [ -n "$3" ] || exit 0
 event=$3
@@ -62,6 +63,8 @@ if event == "PreToolUse":
 if event == "SessionStart":
     # The folder the session belongs to: where `claude --resume` runs again after Termilly restarts.
     m["folder"] = text(p, "cwd", 1000, False)
+if event == "UserPromptSubmit":
+    m["prompt"] = text(p, "prompt", 1200)
 print(json.dumps({k: v for k, v in m.items() if v is not None}, separators=(",", ":")))
 ' "$event" 2>/dev/null)
 fi

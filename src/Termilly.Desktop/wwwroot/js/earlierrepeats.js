@@ -1,75 +1,73 @@
 // @ts-check
-// Leaving out what a program draws again (js/earlier.js): runs of lines found in what a terminal kept already.
-// They're compared by pieces of their text without the spaces, so a redraw at another width, wrapped differently,
-// still counts as the same; a short line that comes again is real output and stays.
+// Leaving out what a program draws again (js/earlier.js): runs of lines that are exactly what a terminal kept already.
+// They're compared without their spaces, so a redraw at another width, wrapped differently, still counts as the same;
+// a line that only looks like one kept (the same phrases, other words) is new and stays, and so does a short line
+// that comes again (real output).
 
-/** The pieces of text compared (characters, spaces left out); one in SAMPLE is kept, picked by its hash so the same text picks the same pieces. */
-const PIECE = 16;
-const SAMPLE = 4;
-/** A line counts as kept already when this share of its pieces is. */
-const FOUND_SHARE = 0.8;
-/** Only runs of kept lines this long (characters) are left out. */
+/** Only runs of kept lines this long (characters, spaces left out) are left out. */
 const LEAST_RUN = 300;
-/** Pieces remembered per terminal before it starts over. */
-const MOST_PIECES = 200_000;
-/** FNV-1a. */
-const FNV_OFFSET = 2166136261;
-const FNV_PRIME = 16777619;
-/** How a line compares with what's kept. */
-const LINE = Object.freeze({ blank: 0, found: 1, fresh: 2 });
+/** How much of what's kept is compared with (characters, spaces left out): the newest. */
+const MOST_TEXT = 500_000;
 
 /**
- * Calls back with each sampled piece of the lines' text (spaces left out, across line ends), and the line it lies
- * in: -1 for one across a line end (still a piece of the text, but it says nothing of either line).
- * @param {string[]} lines
- * @param {(hash: number, line: number) => void} each
- * @returns {string[]} The lines without their spaces.
+ * What a terminal kept, as one text without spaces (the newest MOST_TEXT characters).
+ * @typedef {{ text: string }} Kept
  */
-export function piecesOf(lines, each) {
-  const bare = lines.map(l => l.replace(/\s+/g, ''));
-  const text = bare.join('');
-  let line = 0, lineEnd = bare[0]?.length ?? 0;
-  for (let i = 0; i + PIECE <= text.length; i++) {
-    while (i >= lineEnd && line + 1 < bare.length) lineEnd += bare[++line].length;
-    let h = FNV_OFFSET;
-    for (let k = i; k < i + PIECE; k++) h = Math.imul(h ^ text.charCodeAt(k), FNV_PRIME) >>> 0;
-    if (h % SAMPLE === 0) each(h, i + PIECE <= lineEnd ? line : -1);
+
+/** @param {string} line */
+const bareOf = line => line.replace(/\s+/g, '');
+
+/**
+ * What's kept, from the lines the host has (its last ones, after a restart).
+ * @param {string[]} [lines]
+ * @returns {Kept}
+ */
+export const keptFrom = (lines = []) => ({ text: lines.map(bareOf).join('').slice(-MOST_TEXT) });
+
+/**
+ * How many lines from `from` make a run that is in what's kept, exactly and in order (blank lines go along).
+ * @param {string[]} bare the lines without their spaces
+ * @param {number} from
+ * @param {Kept} kept
+ * @returns {{ end: number, size: number }} the line after the run, and the run's length in characters
+ */
+function runFrom(bare, from, kept) {
+  let end = from, run = '', at = -1;
+  while (end < bare.length) {
+    const line = bare[end];
+    if (line) {
+      // Most often the run goes on right where it was found; else the longer text is looked for anew.
+      const found = at >= 0 && kept.text.startsWith(line, at + run.length) ? at : kept.text.indexOf(run + line);
+      if (found < 0) break;
+      at = found;
+      run += line;
+    }
+    end++;
   }
-  return bare;
+  return { end, size: run.length };
 }
 
 /**
- * The lines without the long runs already kept (a program drawing again what it drew before). The pieces learn the lines.
+ * The lines without the long runs kept already (a program drawing again what it drew before). What stays is kept.
  * @param {string[]} lines
- * @param {Set<number>} pieces
+ * @param {Kept} kept
  */
-export function leaveOutRepeats(lines, pieces) {
-  const total = new Array(lines.length).fill(0), found = new Array(lines.length).fill(0);
-  /** @type {number[]} */
-  const learnt = [];
-  const bare = piecesOf(lines, (h, line) => {
-    if (!pieces.has(h)) learnt.push(h);
-    if (line < 0) return;
-    total[line]++;
-    if (pieces.has(h)) found[line]++;
-  });
-  const kind = lines.map((_, i) => (!total[i] ? LINE.blank : found[i] / total[i] >= FOUND_SHARE ? LINE.found : LINE.fresh));
+export function leaveOutRepeats(lines, kept) {
+  const bare = lines.map(bareOf);
   /** @type {string[]} */
   const out = [];
+  /** @type {string[]} */
+  const fresh = [];
   for (let i = 0; i < lines.length;) {
-    if (kind[i] === LINE.fresh) {
-      out.push(lines[i++]);
+    const { end, size } = runFrom(bare, i, kept);
+    if (size >= LEAST_RUN) {
+      i = end;
       continue;
     }
-    let j = i, size = 0, anyFound = false;
-    for (; j < lines.length && kind[j] !== LINE.fresh; j++) {
-      size += bare[j].length;
-      anyFound ||= kind[j] === LINE.found;
-    }
-    if (!anyFound || size < LEAST_RUN) out.push(...lines.slice(i, j));
-    i = j;
+    out.push(lines[i]);
+    fresh.push(bare[i]);
+    i++;
   }
-  if (pieces.size + learnt.length > MOST_PIECES) pieces.clear();
-  for (const h of learnt) pieces.add(h);
+  kept.text = (kept.text + fresh.join('')).slice(-MOST_TEXT);
   return out;
 }

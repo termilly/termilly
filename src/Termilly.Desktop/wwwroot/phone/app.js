@@ -8,7 +8,7 @@
 import { terminalView, activityHtml, TEXT_SIZE } from './terminal.js';
 import { TAB, SETTING, SETTINGS_PAGE, PAGE_TITLE, STATE_LABEL, TEXT_SIZES, navHtml, notesHtml, settingsHtml, themesHtml } from './tabs.js';
 import { memosTab, MEMO_EDITOR } from './memos.js';
-import { SCROLLING } from './gestures.js';
+import { SCROLLING, GESTURE_START } from './gestures.js';
 import { manager } from './manage.js';
 import { COMPOSE_STYLE, composeStyle, DICTATION, dictation } from './compose.js';
 import { applyLook, chooseLook, chosenLook, looks } from './theme.js';
@@ -31,7 +31,7 @@ const HOME = 'home';
 /** The PC's answer to a phone that isn't paired. */
 const FORBIDDEN = 403;
 /** What the app's buttons do (data-do). */
-const DO = Object.freeze({ retry: 'retry', on: 'on', off: 'off', test: 'test', open: 'open', term: 'term', close: 'close', answer: 'answer', reply: 'reply', send: 'send' });
+const DO = Object.freeze({ retry: 'retry', on: 'on', off: 'off', test: 'test', open: 'open', term: 'term', close: 'close', answer: 'answer', reply: 'reply', send: 'send', clearNote: 'clearNote', clearNotes: 'clearNotes' });
 /** The answers to an agent (Features/Phone.cs checks them). */
 const CHOICE = Object.freeze({ approve: 'approve', always: 'always', reject: 'reject', reply: 'reply' });
 /** What a terminal waits for (js/phone.js). */
@@ -39,7 +39,9 @@ const WAITING = Object.freeze({ permission: 'permission', question: 'question', 
 /** Messages from the PC on the live connection (PhoneLive.Kinds). */
 const LIVE = Object.freeze({ state: 'state', answered: 'answered', screen: 'screen', output: 'output' });
 /** What the app asks of the live connection: an answer to an agent (Features/Phone.cs). */
-const OP = Object.freeze({ answer: 'answer', input: 'input', seen: 'seen', clipText: 'clipText' });
+const OP = Object.freeze({ answer: 'answer', input: 'input', seen: 'seen', clipText: 'clipText', manage: 'manage' });
+/** Clearing notifications, as the PC's Notification center does (js/phonemanage.js). */
+const CLEAR_NOTE = 'clearNote';
 /** The live connection is open (WebSocket.OPEN). */
 const OPEN = 1;
 /** The live connection tries again after this long, doubling up to the most. */
@@ -92,6 +94,19 @@ async function call(path, body) {
 
 /** @param {unknown} text */
 const esc = text => String(text ?? '').replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
+
+/**
+ * Clears a notification (its key), or all of them (null), on the PC: the list comes back without them.
+ * @param {string | null} key
+ */
+function clearNotes(key) {
+  if (!connected || !live) return toast('Not connected to your PC.');
+  live.send(JSON.stringify({ op: OP.manage, action: CLEAR_NOTE, key }));
+}
+
+// The page doesn't zoom: not by pinching (iOS Safari's own gesture) nor by tapping twice.
+document.addEventListener(GESTURE_START, e => e.preventDefault(), { passive: false });
+document.documentElement.style.touchAction = 'pan-x pan-y';
 
 /** The VAPID key as the push manager takes it. @param {string} key base64url */
 const keyBytes = key => Uint8Array.from(atob(key.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
@@ -201,7 +216,7 @@ const noteParts = {
   badge: (/** @type {string} */ id) => { const t = terminal(id); return t ? badge(t) : ''; },
   title: (/** @type {string} */ id) => terminal(id)?.title ?? 'Closed terminal',
   ws: (/** @type {string} */ id) => wsOf(terminal(id)?.ws ?? '')?.name ?? '',
-  age, waiting: (/** @type {string} */ id) => !!terminal(id)?.waiting, open: DO.open, term: DO.term,
+  age, waiting: (/** @type {string} */ id) => !!terminal(id)?.waiting, open: DO.open, term: DO.term, clear: DO.clearNote, clearAll: DO.clearNotes,
 };
 
 /** The Notes tab (memos.js): the PC's notes on its workspaces and terminals. */
@@ -530,6 +545,8 @@ app.addEventListener('click', e => {
       break;
     }
     case DO.close: openSheet(null); break;
+    case DO.clearNote: clearNotes(/** @type {HTMLElement} */ (target).dataset.key ?? null); break;
+    case DO.clearNotes: clearNotes(null); break;
     case DO.reply: openSheet(id, true); break;
     case DO.answer: answer(id, /** @type {string} */ (target.getAttribute('data-choice'))); break;
     case SETTING.smaller: stepText(-1); break;

@@ -58,7 +58,7 @@ const resolvedPaths = new Map();
  * @param {Tab} tab
  * @param {string} text
  */
-function resolvePath(tab, text) {
+export function resolvePath(tab, text) {
   const key = `${tab.id}\n${text}`;
   const known = resolvedPaths.get(key);
   if (known && Date.now() - known.at < RESOLVED_FOR_MS) return known.reply;

@@ -76,7 +76,8 @@ export const getSetting = path => {
 
 /**
  * The sidebar: open or closed (and what it shows then), its width, and whether its Remote section is folded.
- * @typedef {{ open: boolean, width?: number, remoteFolded?: boolean }} SidebarState
+ * and which of the Remote section's groups (Termilly computers, Discovered) are folded.
+ * @typedef {{ open: boolean, width?: number, remoteFolded?: boolean, remoteGroups?: Record<string, boolean> }} SidebarState
  */
 
 /**
@@ -110,6 +111,9 @@ export const getSetting = path => {
 export const state = {
   /** @type {Workspace[]} */
   workspaces: [],
+  /** Other Termilly computers' terminals open here, a workspace per computer (js/remotepc.js): not listed, never saved. */
+  /** @type {Workspace[]} */
+  remoteSpaces: [],
   /** @type {Map<string, Tab>} */
   tabs: new Map(),
   /** @type {Tag[]} */
@@ -169,6 +173,8 @@ export const EVENTS = Object.freeze({
   focus: 'focus',
   gitChanged: 'gitChanged',
   history: 'history',
+  /** The Notification center's list changed (cleared): the phones get it again. */
+  inbox: 'inbox',
   openAgentChanges: 'openAgentChanges',
   /** Files and folders dragged out of the Files panel were dropped on a terminal: { tab, x, y } (js/filepanel.js asks what to do). */
   panelDrop: 'panelDrop',
@@ -228,7 +234,7 @@ export function emit(event, arg) {
 // ---- Lookups ----
 
 /** @param {string | null | undefined} id */
-export const wsById = id => state.workspaces.find(w => w.id === id);
+export const wsById = id => state.workspaces.find(w => w.id === id) ?? state.remoteSpaces.find(w => w.id === id);
 export const activeWs = () => wsById(state.activeId);
 /**
  * A terminal's profile (the first one when its own is gone).
@@ -697,8 +703,8 @@ function serialize() {
     // tmux windows aren't saved: they're tmux's, and attaching again brings them back (tmux.js).
     workspaces: state.workspaces.filter(w => !w.tmux).map(({ id, name, color, cwd, focusId, root, note, snippets, collapsed, copyTo }) => ({ id, name, color, cwd, focusId, root: withoutPreview(root), note, snippets, collapsed: collapsed || undefined, copyTo })),
     tabs: [...state.tabs.values()].filter(t => !t.virtual).map(t => {
-      const { id, wsId, profile, name, tags, noHistory, startCwd, env, startCommand, worktree, note, agentRead, agentType } = t;
-      return { id, wsId, profile, name, tags, noHistory, startCwd, env, startCommand, worktree, note, agentRead, agentType, lastCwd: lastFolderOf(t) ?? undefined };
+      const { id, wsId, profile, name, tags, noHistory, startCwd, env, startCommand, worktree, note, agentRead, agentType, agentSessions, promptsClearedAt } = t;
+      return { id, wsId, profile, name, tags, noHistory, startCwd, env, startCommand, worktree, note, agentRead, agentType, agentSessions, promptsClearedAt: promptsClearedAt || undefined, lastCwd: lastFolderOf(t) ?? undefined };
     }),
   };
 }

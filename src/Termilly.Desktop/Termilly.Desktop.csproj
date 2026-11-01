@@ -72,6 +72,8 @@
 
   <ItemGroup>
     <None Include="wwwroot\**\*" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The logo the closing screen shows (js/closing.js), as the Linux build ships it for its loader. -->
+    <None Include="Assets\loader\mark-*.png" Link="wwwroot\assets\loader\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <!-- Shell integration scripts terminals load (see SessionProfiles.WithShellIntegration). -->
     <None Include="shell\**\*" CopyToOutputDirectory="PreserveNewest" />
     <!-- Loaded at run time for window icons at exactly the taskbar's size (see WindowInterop). -->

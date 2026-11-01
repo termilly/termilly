@@ -12,6 +12,9 @@ internal static class HookMessage
     /// <summary>The longest file path passed on: a cut path would name a different file, so a longer one is dropped.</summary>
     public const int MaxPath = 1000;
 
+    /// <summary>The longest prompt passed on (My prompts shows its start; the terminal has the rest).</summary>
+    public const int MaxPrompt = 4000;
+
     /// <summary>The most folders passed for one shell command.</summary>
     public const int MaxFolders = 10;
 
@@ -31,6 +34,8 @@ internal static class HookMessage
         public const string Dirs = "dirs";
         // SessionStart: the folder the session belongs to, as its shell sees it (also on a server), for resuming it.
         public const string Folder = "folder";
+        // UserPromptSubmit: what the user sent, for My prompts (kept in Termilly's own encrypted history).
+        public const string Prompt = "prompt";
 
         // A subagent's events, and an Agent call.
         public const string AgentId = "agentId";

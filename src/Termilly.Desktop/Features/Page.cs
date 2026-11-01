@@ -86,7 +86,7 @@ internal sealed class SettingsHandler(
 /// <summary>What the page keeps and the host stores: workspaces, the snapshot of the terminals, closed terminals and commands.</summary>
 internal sealed class HistoryHandler(
     PageChannel page, ISettingsStore settings, Vault vault, WorkspaceStore workspaces, SessionSnapshot snapshot, HistoryStore history,
-    CommandHistory commands, SyncHandler sync, LastSnapshot last) : IMessageHandler
+    CommandHistory commands, PromptHistory prompts, SyncHandler sync, LastSnapshot last) : IMessageHandler
 {
     private const string NoEntries = "[]";
 
@@ -114,6 +114,7 @@ internal sealed class HistoryHandler(
         {
             Storage.Try(history.Clear);
             Storage.Try(commands.Clear);
+            Storage.Try(prompts.Clear);
             SendHistory();
         });
     }

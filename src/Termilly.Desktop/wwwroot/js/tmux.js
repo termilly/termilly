@@ -397,4 +397,4 @@ export function attachTmux(command, label = TMUX) {
 
 export const tmuxClients = () => [...clients.values()];
 
-setVirtualInput(tmuxInput);
+setVirtualInput(TMUX, tmuxInput);

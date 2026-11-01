@@ -294,7 +294,7 @@ export const saveAsSnippet = command => editSnippet(null, { command });
  */
 const manage = options => setTimeout(() => emit(EVENTS.openSnippets, options));
 
-/** Every snippet, searchable: Enter or Run runs it, Edit and New open the snippets window. */
+/** Every snippet, searchable: Enter or Run runs it; Edit, New and Open snippet editor open the snippets window. */
 export function openSnippets() {
   return modal('snippet-list', `
     <h3>Snippets</h3>
@@ -302,6 +302,7 @@ export function openSnippets() {
     <div class="snippet-items" data-items></div>
     <div class="dialog-actions">
       <button class="btn" data-new>New snippet</button>
+      <button class="btn" data-editor title="Make and change snippets">Open snippet editor</button>
       <span class="spacer"></span>
       <button class="btn" data-cancel>Close</button>
     </div>`, (dialog, close) => {
@@ -327,6 +328,7 @@ export function openSnippets() {
     dialog.addEventListener('click', e => {
       const t = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-run], [data-edit], .snippet-item'));
       if (targetOf(e).closest('[data-new]')) { close(true); manage({ create: true }); return; }
+      if (targetOf(e).closest('[data-editor]')) { close(true); manage({}); return; }
       if (!t) return;
       if (t.dataset.edit) { const s = shown[Number(t.dataset.edit)]; close(true); manage({ id: s.id }); return; }
       run(Number(t.dataset.run ?? t.dataset.i));

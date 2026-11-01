@@ -173,8 +173,52 @@ export function showMenu(items, anchor, { side = SIDE.below, nested = false, cla
   });
 
   openPopover(menu, anchor, { side, nested, dynamic: true, refocus });
+  fitAndScroll(menu);
   if (!keepFocus) /** @type {HTMLButtonElement | null} */ (menu.querySelector('.menu-row:not(:disabled)'))?.focus();
   return menu;
+}
+
+/** How far a scroll arrow moves the menu per step while the mouse rests on it (px), and how often (ms). */
+const SCROLL_STEP = Object.freeze({ px: 6, ms: 16 });
+const CHEVRON_DOWN = '<svg viewBox="0 0 12 12"><path d="M3 4.5L6 7.5 9 4.5"/></svg>';
+const CHEVRON_UP = '<svg viewBox="0 0 12 12"><path d="M3 7.5L6 4.5 9 7.5"/></svg>';
+/** Where a scroll arrow sits, and its icon. */
+/** A scroll arrow at its end (nothing more that way): faded. */
+const ARROW_END = 'off';
+const SCROLL_ARROW = Object.freeze({ up: { cls: 'up', icon: CHEVRON_UP, dir: -1 }, down: { cls: 'down', icon: CHEVRON_DOWN, dir: 1 } });
+
+/**
+ * A menu taller than the window gets the window's height and scrolls: an arrow at its top and one at its bottom
+ * scroll it while the mouse rests on them (a click goes a page); the wheel and the arrow keys scroll it too.
+ * @param {HTMLElement} menu
+ */
+function fitAndScroll(menu) {
+  const room = innerHeight - 2 * EDGE;
+  if (menu.offsetHeight <= room) return;
+  menu.classList.add('scrolls');
+  menu.style.maxHeight = `${room}px`;
+  menu.style.top = `${EDGE}px`;
+  const arrows = [SCROLL_ARROW.up, SCROLL_ARROW.down].map(a => {
+    const el = document.createElement('div');
+    el.className = `menu-scroll ${a.cls}`;
+    el.ariaHidden = String(true);
+    el.innerHTML = a.icon;
+    let timer = 0;
+    const stop = () => clearInterval(timer);
+    el.addEventListener('mouseenter', () => { stop(); timer = setInterval(() => menu.scrollBy(0, a.dir * SCROLL_STEP.px), SCROLL_STEP.ms); });
+    el.addEventListener('mouseleave', stop);
+    el.addEventListener('mousedown', e => { e.preventDefault(); menu.scrollBy({ top: a.dir * (menu.clientHeight - 2 * el.offsetHeight), behavior: 'smooth' }); });
+    return el;
+  });
+  menu.prepend(arrows[0]);
+  menu.append(arrows[1]);
+  // An arrow fades at its end: nothing more to scroll that way.
+  const ends = () => {
+    arrows[0].classList.toggle(ARROW_END, menu.scrollTop <= 0);
+    arrows[1].classList.toggle(ARROW_END, menu.scrollTop + menu.clientHeight >= menu.scrollHeight - 1);
+  };
+  menu.addEventListener('scroll', ends);
+  ends();
 }
 
 /**
@@ -231,7 +275,6 @@ function closePopoverAt(row) {
 
 // ---- Dropdowns ----
 
-const CHEVRON_DOWN = '<svg viewBox="0 0 12 12"><path d="M3 4.5L6 7.5 9 4.5"/></svg>';
 
 /**
  * Shows `select` as a button that opens the app's own menu instead of Windows' list. The <select> stays in the page,

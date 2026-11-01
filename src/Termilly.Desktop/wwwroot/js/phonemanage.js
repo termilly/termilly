@@ -12,9 +12,10 @@ import { updateSettings } from './preferences.js';
 import { isProduction } from './environments.js';
 import { PROFILE_ID_PREFIX } from './constants.js';
 import { setNote, NOTE_KIND } from './notes.js';
+import { clear } from './inbox.js';
 
 /** What a phone may ask (the message's "action"). */
-const ACTION = Object.freeze({ open: 'open', close: 'close', rename: 'rename', move: 'move', addHost: 'addHost', note: 'note' });
+const ACTION = Object.freeze({ open: 'open', close: 'close', rename: 'rename', move: 'move', addHost: 'addHost', note: 'note', clearNote: 'clearNote' });
 /** The longest a terminal's name and a folder typed on the phone may be. */
 const MAX = Object.freeze({ name: 80, folder: 400 });
 /** How a phone's SSH host may sign in: the ones that need nothing typed on the phone. */
@@ -122,6 +123,8 @@ const DO = {
   [ACTION.move]: move,
   [ACTION.addHost]: addHost,
   [ACTION.note]: note,
+  // A notification cleared on the phone (its key), or all of them (no key), as the Notification center's ×.
+  [ACTION.clearNote]: m => { clear(m.key ? String(m.key) : null); return {}; },
 };
 
 onHost(HOST.phoneManage, m => {

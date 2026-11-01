@@ -80,10 +80,15 @@ panel.innerHTML = `
     </span>
   </div>
   <div class="pv-tabs np-tabs" role="tablist"></div>
-  <div class="np-editor"><textarea class="np-text" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off"></textarea></div>`;
+  <div class="np-editor"><textarea class="np-text" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off"></textarea>
+    <div class="np-empty" hidden><p>No pages</p><span class="np-empty-actions">
+      <button class="btn primary" data-np="${NOTEPAD_ACTION.newPage}">New page</button>
+      <button class="btn" data-np="${NOTEPAD_ACTION.open}">Open a file</button></span></div></div>`;
 byId(WORKSPACE_ID).append(panel);
 const tabsEl = find(panel, '.np-tabs');
 const area = /** @type {HTMLTextAreaElement} */ (find(panel, '.np-text'));
+/** What the Notepad shows with no pages: New page and Open a file. */
+const emptyEl = find(panel, '.np-empty');
 // < and > scroll the tabs when they don't fit, as a tab group's do.
 const tabBar = stripBar(tabsEl);
 tabBar.classList.add('np-tabbar');
@@ -133,6 +138,8 @@ function render() {
   const page = activePage();
   area.value = page?.text ?? '';
   area.disabled = !page;
+  area.hidden = !page;
+  emptyEl.hidden = !!page;
   applyView();
   if (page) {
     area.setSelectionRange(page.caret ?? 0, page.caretEnd ?? page.caret ?? 0);
@@ -163,8 +170,8 @@ function toggleView(what) {
 }
 
 /**
- * While the Notepad is closed, its button counts the pages it keeps: those with something in them (an empty page, as
- * closing the last one leaves, isn't counted).
+ * While the Notepad is closed, its button counts the pages it keeps: those with something in them (an empty page
+ * isn't counted).
  */
 function showCount() {
   const kept = pages().filter(p => p.path || p.text.trim()).length;
@@ -185,15 +192,14 @@ function setOpen(open) {
 }
 
 /**
- * Opens the Notepad on a page (a new one when there's none), with the caret in it unless `quiet`.
+ * Opens the Notepad on its page (New page and Open a file when it has none), with the caret in it unless `quiet`.
  * @param {{ quiet?: boolean }} [options]
  */
 function show({ quiet = false } = {}) {
-  if (!pages().length) newPage();
-  if (!activePage()) state.notepad.activeId = pages()[0].id;
+  if (!activePage()) state.notepad.activeId = pages()[0]?.id ?? null;
   setOpen(true);
   render();
-  if (!quiet) area.focus();
+  if (!quiet) (activePage() ? area : find(panel, `.np-empty [data-np="${NOTEPAD_ACTION.newPage}"]`)).focus();
 }
 
 /** The Notepad on or off (the title bar's button, Ctrl+Shift+M). */
@@ -236,11 +242,10 @@ async function closePage(id) {
   const at = pages().indexOf(page);
   pages().splice(at, 1);
   if (state.notepad.activeId === id) state.notepad.activeId = pages()[Math.min(at, pages().length - 1)]?.id ?? null;
-  // The last one gives way to an empty page: the Notepad stays open.
-  if (!pages().length) newPage();
+  // The last one leaves the Notepad open with no page: New page and Open a file show instead.
   persist();
   render();
-  area.focus();
+  if (activePage()) area.focus();
 }
 
 /**

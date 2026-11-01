@@ -152,7 +152,7 @@ const publish = debounce(() => {
   if (state.settings.phone?.enabled) send(PAGE.phoneState, { state: snapshot() });
 }, SEND_AFTER_MS);
 
-for (const event of [EVENTS.agent, EVENTS.tab, EVENTS.tabClosed, EVENTS.workspaces, EVENTS.settings, EVENTS.profiles, EVENTS.clips]) on(event, publish);
+for (const event of [EVENTS.agent, EVENTS.tab, EVENTS.tabClosed, EVENTS.workspaces, EVENTS.settings, EVENTS.profiles, EVENTS.clips, EVENTS.inbox]) on(event, publish);
 // Windows switched light and dark: the "system" theme is the other one now.
 onSystemThemeChange(publish);
 // A terminal resized on the PC: the phones draw it at its new size.
@@ -191,7 +191,7 @@ async function answer({ pane, choice, text }) {
 }
 
 // A phone shows a terminal: it takes the phone's size, so it fills the phone and what it prints fits it, drawn here in
-// a phone with that phone's name and address under it; it gets its pane's size back when no phone shows it. The phone
+// a phone with that phone's name and address under it (another Termilly computer: plainly, "Open on" its name); it gets its pane's size back when no phone shows it. The phone
 // keeps its full height when the phone's keyboard takes rows away: its tallest size while it shows the terminal.
 onHost(HOST.phoneSize, m => {
   const tab = state.tabs.get(m.id);
@@ -209,8 +209,9 @@ onHost(HOST.phoneSize, m => {
     ? { cols: m.cols, rows: m.rows, tallest: before?.cols === m.cols ? Math.max(before.tallest ?? 0, m.rows) : m.rows }
     : null;
   view.body.classList.toggle('phone-sized', !!tab.phoneSize);
+  view.body.classList.toggle('by-computer', !!tab.phoneSize && m.computer === true);
   if (tab.phoneSize) {
-    view.body.dataset.phone = [m.name ?? 'A phone', m.address].filter(Boolean).join(' · ');
+    view.body.dataset.phone = m.computer ? `Open on ${m.name ?? 'another computer'}` : [m.name ?? 'A phone', m.address].filter(Boolean).join(' · ');
     view.term.resize(tab.phoneSize.cols, tab.phoneSize.rows);
     phoneTabs.set(view.body, tab);
     resized.observe(view.body);

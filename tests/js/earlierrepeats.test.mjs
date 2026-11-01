@@ -2,7 +2,7 @@
 // Run with: node --test tests/js/earlierrepeats.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { leaveOutRepeats } from '../../src/Termilly.Desktop/wwwroot/js/earlierrepeats.js';
+import { leaveOutRepeats, keptFrom } from '../../src/Termilly.Desktop/wwwroot/js/earlierrepeats.js';
 
 const sentence = i => `Paragraph ${i}: the research web server runs at http://192.168.0.108:8790/ and serves every report and mockup.`;
 const paragraphs = Array.from({ length: 12 }, (_, i) => sentence(i));
@@ -22,19 +22,33 @@ const wrapped = (texts, width) => texts.flatMap(t => {
 
 test('what is kept the first time is kept whole', () => {
   const lines = wrapped(paragraphs, 120);
-  assert.deepEqual(leaveOutRepeats(lines, new Set()), lines);
+  assert.deepEqual(leaveOutRepeats(lines, keptFrom()), lines);
 });
 
 test('a redraw at another width is left out, and what is new after it stays', () => {
-  const pieces = new Set();
-  leaveOutRepeats(wrapped(paragraphs, 120), pieces);
+  const kept = keptFrom();
+  leaveOutRepeats(wrapped(paragraphs, 120), kept);
   const redraw = [...wrapped(paragraphs, 60), 'A new line Claude wrote after the redraw, about something else entirely.'];
-  assert.deepEqual(leaveOutRepeats(redraw, pieces), ['A new line Claude wrote after the redraw, about something else entirely.']);
+  assert.deepEqual(leaveOutRepeats(redraw, kept), ['A new line Claude wrote after the redraw, about something else entirely.']);
 });
 
 test('a short line that comes again is real output and stays', () => {
-  const pieces = new Set();
-  leaveOutRepeats(['PASS  tests/api.test.js (2.1 s)', 'Tests: 12 passed, 12 total'], pieces);
+  const kept = keptFrom();
+  leaveOutRepeats(['PASS  tests/api.test.js (2.1 s)', 'Tests: 12 passed, 12 total'], kept);
   const again = ['$ npm test', 'PASS  tests/api.test.js (2.1 s)', 'Tests: 12 passed, 12 total'];
-  assert.deepEqual(leaveOutRepeats(again, pieces), again);
+  assert.deepEqual(leaveOutRepeats(again, kept), again);
+});
+
+test('a new answer that repeats phrases of an older one is kept whole', () => {
+  const kept = keptFrom();
+  const older = ['The five ideas are ready.', ...paragraphs.slice(0, 6), 'I added this to the end of termilly-site/research/claude-output.txt.'];
+  leaveOutRepeats(older, kept);
+  const newer = ['The variations:', ...paragraphs.slice(0, 6).map(p => p.replace('serves every', 'shows each')),
+    'I also added this to the end of termilly-site/research/claude-output.txt.'];
+  assert.deepEqual(leaveOutRepeats(newer, kept), newer);
+});
+
+test('what was kept before a restart is still known', () => {
+  const kept = keptFrom(wrapped(paragraphs, 120));
+  assert.deepEqual(leaveOutRepeats(wrapped(paragraphs, 80), kept), []);
 });

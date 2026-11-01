@@ -53,6 +53,8 @@ internal static class Composition
         .AddSingleton<PhoneLive>()
         .AddSingleton<ClipStore>()
         .AddSingleton<PhoneClips>()
+        .AddSingleton<RemotePcStore>()
+        .AddSingleton<PromptHistory>()
         .AddStartable<ProfileCatalog>()
         .AddStartable<ActivityWatcher>()
         .AddStartable<HistoryWatch>()
@@ -71,6 +73,7 @@ internal static class Composition
         .AddHandler<SecurityHandler>()
         .AddHandler<RemoteHandler>()
         .AddHandler<ChangesHandler>()
+        .AddHandler<PromptsHandler>()
         .AddHandler<GitHandler>()
         .AddHandler<WorktreeHandler>()
         .AddHandler<LayoutHandler>()
@@ -86,6 +89,7 @@ internal static class Composition
         .AddHandler<UpdateHandler>()
         .AddHandler<PhoneHandler>()
         .AddHandler<SmartClipHandler>()
+        .AddHandler<RemotePcsHandler>()
         .AddSingleton<PageHost>();
 
     /// <summary>A service that's started once the window is up, as itself and as one of the <see cref="IStartable"/>s.</summary>
