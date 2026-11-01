@@ -16,6 +16,7 @@ import { confirmDialog } from './dialogs.js';
 import { showToast, TOAST } from './toasts.js';
 import { appendNote, NOTE_KIND } from './notes.js';
 import { padLinks } from './notepadlinks.js';
+import { isShortcut, KEY_ID } from './keymap.js';
 import { COPY_LABEL as COPY, PASTE_LABEL, MENU_KEYS } from './termclipboard.js';
 
 /** @typedef {import('./store.js').NotepadPage} NotepadPage */
@@ -35,7 +36,7 @@ const COPY_LABEL = 'Copy to Notepad';
 const COPY_TO_NOTE = 'Copy to note';
 const NEW_PAGE_LABEL = 'New page';
 /** Its keys while it has the focus; the toggle is Termilly's own shortcut too (main.js). */
-export const NOTEPAD_KEY = Object.freeze({ toggle: 'KeyM', save: 'KeyS', open: 'KeyO' });
+export const NOTEPAD_KEY = Object.freeze({ save: 'KeyS', open: 'KeyO' });
 /**
  * The header's tools, 16px at a 1px line on the pixel grid: a page with a +, an open folder, a disk (save), a disk
  * with a pen (save as), text going into a note, a chain (links on or off) and a line that wraps (word wrap).
@@ -487,7 +488,7 @@ panel.addEventListener('keydown', e => {
   const ctrl = e.ctrlKey && !e.altKey;
   if (ctrl && e.code === NOTEPAD_KEY.save) save(e.shiftKey);
   else if (ctrl && !e.shiftKey && e.code === NOTEPAD_KEY.open) openFile();
-  else if (ctrl && e.shiftKey && e.code === NOTEPAD_KEY.toggle) toggleNotepad();
+  else if (isShortcut(e, KEY_ID.notepad)) toggleNotepad();
   else if (e.key === 'Escape' && !e.ctrlKey && !e.shiftKey && !e.altKey) restoreFocus();
   else return;
   e.preventDefault();

@@ -25,8 +25,9 @@ import { toggleHints } from './hints.js';
 import { toggleScratch } from './scratch.js';
 import { openGitWindow, openAgentChanges, gitFolderOf, onServer, openRemoteGitNotice } from './gitwindow.js';
 import { toggleFiles, initFiles } from './filepanel.js';
-import { toggleNotepad, initNotepad, NOTEPAD_KEY } from './notepad.js';
-import { toggleClips, initClips, CLIPS_KEY } from './smartclip.js';
+import { toggleNotepad, initNotepad } from './notepad.js';
+import { toggleClips, initClips } from './smartclip.js';
+import { chordOf, commandOf, keyHint, KEY_ID } from './keymap.js';
 import { openNewWorktree } from './worktree.js';
 import { openChangedFiles } from './changes.js';
 import { openSnippetsWindow } from './snippetswindow.js';
@@ -146,24 +147,24 @@ reloadPlugins();
 
 setCommands(() => [
   ...pluginCommands(),
-  { label: 'New terminal', keywords: 'tab shell open', hint: keysHtml('Ctrl Shift T'), run: commands.newTerminal },
+  { label: 'New terminal', keywords: 'tab shell open', hint: keyHint(KEY_ID.newTerminal), run: commands.newTerminal },
   ...state.profiles.map((p, i) => ({
     label: `New ${p.name} terminal`, keywords: `${p.description} shell`, hint: i < NUMBERED_SHORTCUTS ? keysHtml(`Ctrl Shift ${i + 1}`) : '',
     run: () => newTab({ profile: p.id }),
   })),
-  { label: 'Split right', keywords: 'pane vertical', hint: keysHtml('Alt Shift ='), run: commands.splitRight },
-  { label: 'Split down', keywords: 'pane horizontal', hint: keysHtml('Alt Shift -'), run: commands.splitDown },
-  { label: 'Rename terminal', keywords: 'tab name title', hint: keysHtml('Ctrl Shift R'), run: commands.renameTerminal },
+  { label: 'Split right', keywords: 'pane vertical', hint: keyHint(KEY_ID.splitRight), run: commands.splitRight },
+  { label: 'Split down', keywords: 'pane horizontal', hint: keyHint(KEY_ID.splitDown), run: commands.splitDown },
+  { label: 'Rename terminal', keywords: 'tab name title', hint: keyHint(KEY_ID.renameTerminal), run: commands.renameTerminal },
   { label: 'Tag terminal', keywords: 'label tags', run: commands.tagTerminal },
-  { label: 'Close terminal', keywords: 'tab kill', hint: keysHtml('Ctrl Shift W'), run: commands.closeTerminal },
-  { label: 'New workspace', keywords: 'project group', hint: keysHtml('Ctrl Shift N'), run: commands.newWorkspace },
-  { label: 'Toggle workspace sidebar', keywords: 'navigator hide show rail', hint: keysHtml('Ctrl Shift B'), run: commands.toggleSidebar },
-  { label: 'Agents: next terminal that needs me', keywords: 'inbox waiting attention jump claude', hint: keysHtml('Ctrl Shift J'), run: () => setTimeout(commands.nextNeedingMe) },
-  { label: 'Open the notification center', keywords: 'inbox needs me waiting attention notifications agents', hint: keysHtml('Ctrl Shift A'), run: () => setTimeout(commands.inbox) },
-  { label: 'Broadcast input to this workspace (on / off)', keywords: 'multiple terminals send all sync', hint: keysHtml('Ctrl Shift I'), run: () => setTimeout(commands.broadcastWorkspace) },
+  { label: 'Close terminal', keywords: 'tab kill', hint: keyHint(KEY_ID.closeTerminal), run: commands.closeTerminal },
+  { label: 'New workspace', keywords: 'project group', hint: keyHint(KEY_ID.newWorkspace), run: commands.newWorkspace },
+  { label: 'Toggle workspace sidebar', keywords: 'navigator hide show rail', hint: keyHint(KEY_ID.toggleSidebar), run: commands.toggleSidebar },
+  { label: 'Agents: next terminal that needs me', keywords: 'inbox waiting attention jump claude', hint: keyHint(KEY_ID.nextNeedingMe), run: () => setTimeout(commands.nextNeedingMe) },
+  { label: 'Open the notification center', keywords: 'inbox needs me waiting attention notifications agents', hint: keyHint(KEY_ID.inbox), run: () => setTimeout(commands.inbox) },
+  { label: 'Broadcast input to this workspace (on / off)', keywords: 'multiple terminals send all sync', hint: keyHint(KEY_ID.broadcastWorkspace), run: () => setTimeout(commands.broadcastWorkspace) },
   { label: 'Broadcast: compose and send', keywords: 'multiple terminals send all multi-line', run: () => setTimeout(openCompose) },
-  { label: 'Go to workspace, folder or host', keywords: 'open project switch recent directory ssh fuzzy', hint: keysHtml('Ctrl Shift O'), run: () => setTimeout(commands.goTo) },
-  { label: 'Command history', keywords: 'commands ran failed exit code search', hint: keysHtml('Ctrl Shift H'), run: () => setTimeout(commands.commandHistory) },
+  { label: 'Go to workspace, folder or host', keywords: 'open project switch recent directory ssh fuzzy', hint: keyHint(KEY_ID.goTo), run: () => setTimeout(commands.goTo) },
+  { label: 'Command history', keywords: 'commands ran failed exit code search', hint: keyHint(KEY_ID.commandHistory), run: () => setTimeout(commands.commandHistory) },
   { label: 'Copy the last command’s output', keywords: 'clipboard result', run: commands.copyLastOutput },
   { label: 'Stop all agents in this workspace', keywords: 'interrupt escape claude codex halt', run: () => setTimeout(() => stopAllAgents()) },
   { label: 'Open the last command’s output in a viewer', keywords: 'output viewer filter follow log json grep tail', run: () => setTimeout(() => openViewer(focusedTab())) },
@@ -173,26 +174,26 @@ setCommands(() => [
   { label: 'Go to result', keywords: 'pull request pr issue running app url dev server push commit results', run: () => setTimeout(openAllResults) },
   { label: 'Run a snippet', keywords: 'snippets saved commands run snippet macro button bar', run: () => setTimeout(openSnippets) },
   { label: 'Manage snippets', keywords: 'snippets explorer window edit new delete saved commands', run: () => setTimeout(openSnippetsWindow) },
-  { label: 'Previous prompt', keywords: 'scroll jump command', hint: keysHtml('Ctrl Shift ↑'), run: commands.previousPrompt },
-  { label: 'Next prompt', keywords: 'scroll jump command', hint: keysHtml('Ctrl Shift ↓'), run: commands.nextPrompt },
+  { label: 'Previous prompt', keywords: 'scroll jump command', hint: keyHint(KEY_ID.previousPrompt), run: commands.previousPrompt },
+  { label: 'Next prompt', keywords: 'scroll jump command', hint: keyHint(KEY_ID.nextPrompt), run: commands.nextPrompt },
   { label: 'Export this workspace’s layout', keywords: 'save yaml file share project termilly.yml', run: () => exportLayout(state.workspaces.find(w => w.id === state.activeId)) },
   { label: 'Import a workspace layout', keywords: 'open yaml file project termilly.yml', run: importLayout },
-  { label: 'Keyboard hints: open links, copy paths and hashes', keywords: 'url link path hash copy open hints', hint: keysHtml('Ctrl Shift E'), run: () => setTimeout(toggleHints) },
-  { label: 'Scratch terminal (floating, on / off)', keywords: 'floating quick temporary popup', hint: keysHtml('Ctrl Shift `'), run: () => setTimeout(toggleScratch) },
-  { label: 'Git: changes and history', keywords: 'git status diff log commits branches repository staged', hint: keysHtml('Ctrl Shift G'), run: () => setTimeout(openGitHere) },
+  { label: 'Keyboard hints: open links, copy paths and hashes', keywords: 'url link path hash copy open hints', hint: keyHint(KEY_ID.hints), run: () => setTimeout(toggleHints) },
+  { label: 'Scratch terminal (floating, on / off)', keywords: 'floating quick temporary popup', hint: keyHint(KEY_ID.scratch), run: () => setTimeout(toggleScratch) },
+  { label: 'Git: changes and history', keywords: 'git status diff log commits branches repository staged', hint: keyHint(KEY_ID.git), run: () => setTimeout(openGitHere) },
   { label: 'Move this workspace’s terminals to tabs', keywords: 'tabs group stack stacked accordion collapse panes too many', run: () => moveAllToTabs(state.workspaces.find(w => w.id === state.activeId)) },
-  { label: 'Files of this terminal (on / off)', keywords: 'files folder explorer browse sftp upload download remote scp', hint: keysHtml('Ctrl Shift L'), run: () => setTimeout(() => toggleFiles()) },
-  { label: 'Notepad (on / off)', keywords: 'notes notepad write jot scratch text memo pad', hint: keysHtml('Ctrl Shift M'), run: () => setTimeout(toggleNotepad) },
+  { label: 'Files of this terminal (on / off)', keywords: 'files folder explorer browse sftp upload download remote scp', hint: keyHint(KEY_ID.files), run: () => setTimeout(() => toggleFiles()) },
+  { label: 'Notepad (on / off)', keywords: 'notes notepad write jot scratch text memo pad', hint: keyHint(KEY_ID.notepad), run: () => setTimeout(toggleNotepad) },
   { label: 'Take the tour', keywords: 'tour help guide introduction tutorial walkthrough start learn', run: () => setTimeout(startTour) },
   { label: 'Quit Termilly', keywords: 'exit close quit stop tray', run: () => send(PAGE.window, { action: WINDOW_ACTION.quit }) },
   ...(changeShortcutOn() ? [
-    { label: 'Show the files Claude changed here, in the Git window', keywords: 'change preview diff edits claude files last all tree folders agent changes search', hint: keysHtml('Ctrl Shift D'), run: () => setTimeout(() => openAgentChanges(focusedTab())) },
+    { label: 'Show the files Claude changed here, in the Git window', keywords: 'change preview diff edits claude files last all tree folders agent changes search', hint: keyHint(KEY_ID.agentChanges), run: () => setTimeout(() => openAgentChanges(focusedTab())) },
     { label: 'Show files Claude changed', keywords: 'change preview diff edits claude files list', run: () => setTimeout(() => openChangedFiles()) },
   ] : []),
   { label: 'New agent in worktree', keywords: 'git branch worktree agent claude isolate', run: () => setTimeout(openNewWorktree) },
   { label: 'Show captured lines', keywords: 'triggers errors matches alerts', run: () => setTimeout(() => toggleCaptures()) },
   { label: 'Show recently closed', keywords: 'history reopen restore', run: () => setTimeout(commands.recentlyClosed) },
-  { label: 'Settings', keywords: 'preferences options font theme privacy history security', hint: keysHtml('Ctrl ,'), run: () => setTimeout(toggleSettings) },
+  { label: 'Settings', keywords: 'preferences options font theme privacy history security', hint: keyHint(KEY_ID.settings), run: () => setTimeout(toggleSettings) },
   { label: 'Switch light / dark theme', keywords: 'appearance colour color mode', run: commands.toggleTheme },
   ...[{ id: theme.system, name: 'System' }, ...THEMES].map(t => ({ label: `Theme: ${t.name}`, keywords: 'appearance colour color look palette', run: () => updateSettings(GROUPS.interface, { theme: t.id }) })),
   { label: 'Bigger text', keywords: 'font zoom in', hint: keysHtml('Ctrl +'), run: commands.fontLarger },
@@ -297,10 +298,24 @@ function openGitHere() {
 }
 
 /**
- * The panels Ctrl+Shift and a key opens and closes: Files, the scratch terminal, the Notepad and Smart Clip.
- * @type {Readonly<Record<string, () => void>>}
+ * What each shortcut of the keymap does (keymap.js; its keys are Settings › Keyboard's). One answering false doesn't
+ * apply now, and its keys go on to the shell.
+ * @type {Record<string, () => unknown>}
  */
-const PANEL_KEYS = Object.freeze({ KeyL: () => toggleFiles(), Backquote: toggleScratch, [NOTEPAD_KEY.toggle]: toggleNotepad, [CLIPS_KEY]: toggleClips });
+const RUN = {
+  [KEY_ID.newTerminal]: commands.newTerminal, [KEY_ID.closeTerminal]: commands.closeTerminal, [KEY_ID.renameTerminal]: commands.renameTerminal,
+  [KEY_ID.splitRight]: commands.splitRight, [KEY_ID.splitDown]: commands.splitDown, [KEY_ID.broadcastWorkspace]: commands.broadcastWorkspace,
+  [KEY_ID.newWorkspace]: commands.newWorkspace, [KEY_ID.toggleSidebar]: commands.toggleSidebar, [KEY_ID.nextNeedingMe]: commands.nextNeedingMe,
+  [KEY_ID.inbox]: commands.inbox, [KEY_ID.search]: commands.search, [KEY_ID.commandHistory]: commands.commandHistory,
+  [KEY_ID.previousPrompt]: commands.previousPrompt, [KEY_ID.nextPrompt]: commands.nextPrompt, [KEY_ID.goTo]: commands.goTo,
+  [KEY_ID.settings]: commands.settings, [KEY_ID.hints]: toggleHints, [KEY_ID.scratch]: toggleScratch, [KEY_ID.notepad]: toggleNotepad,
+  [KEY_ID.clips]: toggleClips, [KEY_ID.files]: () => toggleFiles(), [KEY_ID.git]: openGitHere,
+  [KEY_ID.agentChanges]: () => {
+    if (!changeShortcutOn()) return false;
+    if (isPreviewOpen()) closePreview(); else openAgentChanges(focusedTab());
+    return true;
+  },
+};
 
 /**
  * Runs the shortcut for a keydown. Returns true when it handled the key.
@@ -313,28 +328,10 @@ function runShortcut(e) {
   const ctrlShift = e.ctrlKey && e.shiftKey && !e.altKey;
   const ctrlAlt = e.ctrlKey && e.altKey && !e.shiftKey && !altGr;
 
-  if (alt && e.shiftKey && PLUS_KEYS.includes(e.code)) commands.splitRight();
-  else if (alt && e.shiftKey && MINUS_KEYS.includes(e.code)) commands.splitDown();
-  else if (alt && !e.shiftKey && ARROWS[e.key]) moveFocus(ARROWS[e.key]);
-  else if (ctrlShift && e.code === 'KeyT') commands.newTerminal();
-  else if (ctrlShift && e.code === 'KeyW') commands.closeTerminal();
-  else if (ctrlShift && e.code === 'KeyR') commands.renameTerminal();
-  else if (ctrlShift && e.code === 'KeyF') commands.search();
-  else if (ctrlShift && e.code === 'KeyO') commands.goTo();
-  else if (ctrlShift && e.code === 'KeyE') toggleHints();
-  else if (ctrlShift && PANEL_KEYS[e.code]) PANEL_KEYS[e.code]();
-  else if (ctrlShift && e.code === 'KeyH') commands.commandHistory();
-  else if (ctrlShift && e.code === 'KeyG') openGitHere();
-  else if (ctrlShift && e.key === 'ArrowUp') commands.previousPrompt();
-  else if (ctrlShift && e.key === 'ArrowDown') commands.nextPrompt();
-  else if (ctrlShift && e.code === 'KeyB') commands.toggleSidebar();
-  else if (ctrlShift && e.code === 'KeyN') commands.newWorkspace();
-  else if (ctrlShift && e.code === 'KeyJ') commands.nextNeedingMe();
-  else if (ctrlShift && e.code === 'KeyA') commands.inbox();
-  else if (ctrlShift && e.code === 'KeyI') commands.broadcastWorkspace();
-  else if (ctrlShift && e.code === 'KeyD' && changeShortcutOn()) {
-    if (isPreviewOpen()) closePreview(); else openAgentChanges(focusedTab());
-  }
+  // The keymap's shortcuts first (Settings › Keyboard); AltGr types characters, so it runs none.
+  const id = altGr ? null : commandOf(chordOf(e));
+  if (id && RUN[id]?.() !== false) return true;
+  if (alt && !e.shiftKey && ARROWS[e.key]) moveFocus(ARROWS[e.key]);
   // The digit is text; subtracting makes it a number.
   else if (ctrlShift && /^Digit[1-9]$/.test(e.code) && state.profiles[/** @type {any} */ (e.code.slice(DIGIT_CODE.length)) - 1]) {
     newTab({ profile: state.profiles[/** @type {any} */ (e.code.slice(DIGIT_CODE.length)) - 1].id });

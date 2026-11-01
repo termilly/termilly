@@ -11,15 +11,14 @@ import { send, onHost } from '../host.js';
 import { PAGE, HOST } from '../protocol.js';
 import { confirmDialog, noticeDialog, saveDialog, SAVE_ANSWER } from '../dialogs.js';
 import { targetOf } from '../dom.js';
-import { chordOf, chordProblem, chordHtml } from '../actions.js';
+import { chordProblem, chordHtml } from '../actions.js';
+import { captureKeys as waitForKeys } from './keys.js';
 import { group } from './controls.js';
 import { SECTION, redraw, body, addCloseCheck } from './page.js';
 
 /** What a new action is, until the user types one. */
 const NEW_ACTION = { name: 'New action', target: 'https://', menu: false };
 const WEB_TARGET = /^\s*(https?:\/\/|\{repo\})/i;
-const CLEAR_KEYS = ['Backspace', 'Delete'];
-const CANCEL_KEY = 'Escape';
 /** The variables an action's address or arguments can use (Actions.cs fills them in). */
 const VARIABLES = '{selection} {url} {image} {file} {line} {folder} {repo} {branch} {port}';
 
@@ -210,36 +209,22 @@ function actionClick(e) {
  * @param {ActionSetting} action
  */
 function captureKeys(button, action) {
-  button.textContent = 'Press the keys';
-  button.classList.add('capturing');
-  const stop = () => {
-    window.removeEventListener('keydown', onKey, true);
-    button.removeEventListener('blur', cancel);
-  };
-  const cancel = () => { stop(); redraw(); };
-  /** @param {KeyboardEvent} e */
-  function onKey(e) {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.key === CANCEL_KEY) return cancel();
-    if (CLEAR_KEYS.includes(e.key) && !e.ctrlKey && !e.altKey) {
-      stop();
+  waitForKeys(button, {
+    cancelled: redraw,
+    cleared: () => {
       edit(action.id, { shortcut: null });
-      return redraw();
-    }
-    const chord = chordOf(e);
-    if (!chord) return; // a modifier on its own: wait for the key
-    const problem = chordProblem(chord, action.id);
-    stop();
-    if (problem) {
-      noticeDialog({ title: 'Choose other keys', body: problem }).then(redraw);
-      return;
-    }
-    edit(action.id, { shortcut: chord });
-    redraw();
-  }
-  window.addEventListener('keydown', onKey, true);
-  button.addEventListener('blur', cancel);
+      redraw();
+    },
+    chosen: chord => {
+      const problem = chordProblem(chord, action.id);
+      if (problem) {
+        noticeDialog({ title: 'Choose other keys', body: problem }).then(redraw);
+        return;
+      }
+      edit(action.id, { shortcut: chord });
+      redraw();
+    },
+  });
 }
 
 export default ACTIONS;

@@ -815,6 +815,10 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
 .act-menu { display: flex; flex: none; gap: 6px; align-items: center; color: var(--muted); font-size: 12px; white-space: nowrap; cursor: pointer; }
 .act-keys { flex: none; min-width: 96px; justify-content: center; }
 .act-keys.capturing { border-color: var(--accent); color: var(--accent); }
+/* Settings › Keyboard: a shortcut's keys (in the accent once changed) and its way back to the default. */
+.key-set { display: flex; flex: none; gap: 4px; align-items: center; }
+.act-keys.changed { border-color: color-mix(in srgb, var(--accent) 60%, transparent); }
+.key-reset svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.2; }
 /* An action with changes not saved: a mark on its left, and its Save button in the accent. */
 .act-row.unsaved { box-shadow: inset 2px 0 0 var(--accent); padding-left: 8px; }
 .act-save { color: var(--accent); }

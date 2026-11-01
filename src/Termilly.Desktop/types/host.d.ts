@@ -82,6 +82,8 @@ interface InterfaceSettings {
   closeAction: string;
   /** Quitting asks first while a command or an agent is still running (unless shells are kept running). */
   confirmQuit: boolean;
+  /** Termilly's shortcuts with keys of the user's own (js/keymap.js, Settings › Keyboard): a shortcut's id to its keys ("Ctrl+Shift+T"), "" for none. One not here has its default. */
+  shortcuts: Record<string, string> | null;
 }
 
 /** The shells on offer: the default, the user's own profiles and notes, shell integration, COM ports and consoles. */

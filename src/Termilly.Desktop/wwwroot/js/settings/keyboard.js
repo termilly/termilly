@@ -1,73 +1,106 @@
 // @ts-check
-// Settings › Keyboard: every shortcut, by what it's for.
+// Settings › Keyboard: every shortcut, by what it's for. Termilly's own can be given other keys (a click, then the
+// keys), have none (Ctrl+click, or Backspace while choosing) or go back to their default; Clear all and Reset to
+// defaults do it for every one. The families of keys (1-9, the arrows, text size) and the clipboard's stay as they are.
 
+import { state, GROUPS } from '../store.js';
 import { ICONS, keysHtml, escapeHtml } from '../ui.js';
+import { updateSettings } from '../preferences.js';
+import { confirmDialog, noticeDialog } from '../dialogs.js';
+import { targetOf } from '../dom.js';
 import { group } from './controls.js';
-import { SECTION } from './page.js';
+import { SECTION, redraw } from './page.js';
 import { enabledActions, chordHtml } from '../actions.js';
+import { KEYMAP, FIXED, keysOf, takenBy, needsModifier, defaultKeysOf } from '../keymap.js';
+import { captureKeys } from './keys.js';
+
+/** The groups of shortcuts, in order; the fixed keys come last, as their own group. */
+const GROUP_ORDER = ['Terminals', 'Workspaces', 'Agents', 'App'];
+
+/** @returns {Record<string, string>} */
+const overrides = () => ({ ...(state.settings.interface.shortcuts ?? {}) });
+/** @param {Record<string, string>} shortcuts */
+const save = shortcuts => updateSettings(GROUPS.interface, { shortcuts });
+
+const defaultOf = defaultKeysOf;
 
 /**
- * [heading, [what it does, its keys]].
- * @type {Array<[string, Array<[string, string]>]>}
+ * Gives a shortcut keys ('' for none); its default's are kept as no override at all.
+ * @param {string} id
+ * @param {string} chord
  */
-const SHORTCUTS = [
-  ['Terminals', [
-    ['New terminal', 'Ctrl Shift T'],
-    ['New terminal with shell 1–9', 'Ctrl Shift 1–9'],
-    ['Close terminal', 'Ctrl Shift W'],
-    ['Rename terminal', 'Ctrl Shift R'],
-    ['Split right', 'Alt Shift ='],
-    ['Split down', 'Alt Shift -'],
-    ['Move focus between panes', 'Alt ←↑→↓'],
-    ['Broadcast input to the workspace (on / off)', 'Ctrl Shift I'],
-  ]],
-  ['Workspaces', [
-    ['New workspace', 'Ctrl Shift N'],
-    ['Switch to workspace 1–9', 'Ctrl Alt 1–9'],
-    ['Next / previous workspace', 'Ctrl Tab / Ctrl Shift Tab'],
-    ['Show or hide the sidebar', 'Ctrl Shift B'],
-  ]],
-  ['Agents', [
-    ['Next terminal that needs you', 'Ctrl Shift J'],
-    ['Open the notification center', 'Ctrl Shift A'],
-    ['Next terminal that needs you, from any app (turn on in Notifications)', 'Ctrl Alt J'],
-    ['Show the last file Claude changed here (turn on in Change preview)', 'Ctrl Shift D'],
-  ]],
-  ['App', [
-    ['Search terminals, history and output', 'Ctrl Shift F'],
-    ['Command history (failed, in:folder)', 'Ctrl Shift H'],
-    ['Previous / next prompt', 'Ctrl Shift ↑ / Ctrl Shift ↓'],
-    ['Hints: open a link, copy a path or hash (Shift: copy link, show path)', 'Ctrl Shift E'],
-    ['Floating scratch terminal', 'Ctrl Shift `'],
-    ['Notepad', 'Ctrl Shift M'],
-    ['SFTP files of an SSH terminal', 'Ctrl Shift L'],
-    ['Go to a workspace, folder, closed terminal or SSH host', 'Ctrl Shift O'],
-    ['Settings', 'Ctrl ,'],
-    ['Bigger / smaller text', 'Ctrl + / Ctrl -'],
-    ['Reset text size', 'Ctrl 0'],
-    ['Zoom text with the mouse', 'Ctrl Wheel'],
-  ]],
-];
+function setKeys(id, chord) {
+  const next = overrides();
+  if (chord === defaultOf(id)) delete next[id]; else next[id] = chord;
+  save(next);
+  redraw();
+}
 
-/**
- * @param {string} label already escaped
- * @param {string} keys as keyboard keys
- */
-const keyRow = (label, keys) => `<div class="key-row"><span>${label}</span><span class="keys">${keys}</span></div>`;
+/** @param {string} id @param {string} label */
+function shortcutRow(id, label) {
+  const keys = keysOf(id);
+  const changed = keys !== defaultOf(id);
+  return `<div class="key-row" data-key-id="${id}"><span>${escapeHtml(label)}</span>
+    <span class="key-set">${changed ? `<button class="btn small key-reset" data-key-reset title="Back to ${escapeHtml(defaultOf(id).split('+').join(' '))}">${ICONS.history}</button>` : ''}
+    <button class="btn small act-keys${changed ? ' changed' : ''}" data-key-edit title="Click, then press the keys. Backspace, or Ctrl+click, removes them.">${keys ? chordHtml(keys) : 'None'}</button></span></div>`;
+}
+
+/** @param {string} label @param {string} keys */
+const fixedRow = (label, keys) => `<div class="key-row"><span>${escapeHtml(label)}</span><span class="keys">${keysHtml(keys)}</span></div>`;
 
 /** The keys the user gave their actions (Settings › Actions). */
 function actionKeys() {
   const withKeys = enabledActions().filter(a => a.shortcut);
-  return withKeys.length ? group('Your actions', withKeys.map(a => keyRow(escapeHtml(a.name), chordHtml(/** @type {string} */ (a.shortcut)))).join('')) : '';
+  return withKeys.length ? group('Your actions', withKeys.map(a => `<div class="key-row"><span>${escapeHtml(a.name)}</span><span class="keys">${chordHtml(/** @type {string} */ (a.shortcut))}</span></div>`).join('')) : '';
+}
+
+/**
+ * Keys chosen for a shortcut: kept unless something has them already, or they'd take a shell's keys.
+ * @param {string} id
+ * @param {string} chord
+ */
+function chosen(id, chord) {
+  const problem = needsModifier(chord) || (takenBy(chord, id) ? `“${takenBy(chord, id)}” has these keys.` : '')
+    || (enabledActions().find(a => a.shortcut === chord) ? `Your action “${enabledActions().find(a => a.shortcut === chord)?.name}” has these keys.` : '');
+  if (problem) noticeDialog({ title: 'Choose other keys', body: problem }).then(redraw);
+  else setKeys(id, chord);
 }
 
 /** @type {import('./page.js').Section} */
 const KEYBOARD = {
   id: SECTION.keyboard,
   label: 'Keyboard', icon: ICONS.keyboard,
-  html: () => SHORTCUTS.map(([heading, items]) => group(heading,
-    items.map(([label, keys]) => keyRow(label, keysHtml(keys))).join(''))).join('')
+  tools: () => `<button class="btn small" data-action="keysClearAll">Clear all</button>
+    <button class="btn small" data-action="keysReset">Reset to defaults</button>`,
+  html: () => GROUP_ORDER.map(heading => group(heading,
+    KEYMAP.filter(([, g]) => g === heading).map(([id, , label]) => shortcutRow(id, label)).join(''))).join('')
+    + group('Fixed keys', FIXED.map(([label, keys]) => fixedRow(label, keys)).join(''))
     + actionKeys(),
+  actions: {
+    keysClearAll: async () => {
+      if (!await confirmDialog({ title: 'Clear every shortcut?', body: 'Termilly’s shortcuts lose their keys (the fixed keys stay). Reset to defaults brings them back.', confirm: 'Clear all' })) return;
+      save(Object.fromEntries(KEYMAP.map(([id]) => [id, ''])));
+      redraw();
+    },
+    keysReset: async () => {
+      if (!await confirmDialog({ title: 'Reset every shortcut?', body: 'Each of Termilly’s shortcuts gets its default keys back.', confirm: 'Reset' })) return;
+      save({});
+      redraw();
+    },
+  },
+  click(e) {
+    const row = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-key-id]'));
+    const id = row?.dataset.keyId;
+    if (!id) return false;
+    if (targetOf(e).closest('[data-key-reset]')) setKeys(id, defaultOf(id));
+    else if (targetOf(e).closest('[data-key-edit]') && e.ctrlKey) setKeys(id, '');
+    else if (targetOf(e).closest('[data-key-edit]')) {
+      captureKeys(/** @type {HTMLButtonElement} */ (targetOf(e).closest('[data-key-edit]')), {
+        chosen: chord => chosen(id, chord), cleared: () => setKeys(id, ''), cancelled: redraw,
+      });
+    } else return false;
+    return true;
+  },
 };
 
 export default KEYBOARD;

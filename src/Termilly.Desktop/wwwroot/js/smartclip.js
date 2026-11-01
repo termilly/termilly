@@ -20,6 +20,7 @@ import { setClipHooks } from './termclipboard.js';
 import { CLIP_KIND, CLIP_FORM, PRODUCT } from './constants.js';
 import { updateSettings } from './preferences.js';
 import { fileSize } from './pictures.js';
+import { isShortcut, KEY_ID } from './keymap.js';
 import { pathActions } from './actions.js';
 import { copyToNotepadItem, copyToNoteItem } from './notepad.js';
 import { parentOf } from './filepaths.js';
@@ -41,8 +42,6 @@ const ROW_TIP = 'Double-click or Enter to paste, Del to delete';
 const MINUTE_MS = 60_000;
 const HOUR_MS = 60 * MINUTE_MS;
 const DAY_HOURS = 24;
-/** Its shortcut, here and on the title bar's button (main.js runs it). */
-export const CLIPS_KEY = 'KeyX';
 const KEYS_TEXT = 'Ctrl+Shift+X';
 const OPEN_LABEL = 'Open Smart Clip';
 const CLEAR_LABEL = 'Clear history';
@@ -513,7 +512,7 @@ panel.addEventListener('keydown', e => {
   else if (e.key === 'Enter' && !e.ctrlKey && !e.shiftKey && !e.altKey && chosen) pasteClip(chosen);
   // In the search box Delete deletes letters.
   else if (e.key === 'Delete' && !e.ctrlKey && !e.shiftKey && !e.altKey && selected && !targetOf(e).matches(SEARCH)) forgetSelected();
-  else if (e.ctrlKey && e.shiftKey && !e.altKey && e.code === CLIPS_KEY) toggleClips();
+  else if (isShortcut(e, KEY_ID.clips)) toggleClips();
   else return;
   e.preventDefault();
   e.stopPropagation();
