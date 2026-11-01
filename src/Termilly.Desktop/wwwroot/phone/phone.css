@@ -206,10 +206,13 @@ main.tabbed { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
 .tv-compose svg, .c-menu svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .m-plus { display: grid; flex: none; place-items: center; width: 34px; height: 34px; margin-bottom: 1px; padding: 0; border: 0; border-radius: 50%; background: var(--bg); color: var(--muted); }
 .m-pill { display: flex; flex: 1; gap: 6px; align-items: flex-end; min-width: 0; padding: 0 4px 0 14px; border: 1px solid var(--line); border-radius: 19px; background: var(--bg); }
-.m-mic, .m-go { display: grid; flex: none; place-items: center; width: 30px; height: 30px; margin: 0 0 3px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--muted); }
+/* 4px in from the pill's inside edge all round (the pill's right padding, this margin and the 34px box's 4px above), so
+   its circle follows the pill's rounded end. */
+.m-mic, .m-go { display: grid; flex: none; place-items: center; width: 26px; height: 26px; margin: 0 0 4px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--muted); }
 .m-mic.on { background: var(--danger); color: #fff; }
 .m-go { background: var(--accent); color: var(--on-accent); }
 .m-go svg, .b-go svg { width: 16px; height: 16px; stroke-width: 2.4; }
+.m-mic svg { width: 18px; height: 18px; }
 .m-mic[hidden], .m-go[hidden] { display: none; }
 .keybar.one-bar, .tv-compose.one-bar { align-items: center; gap: 4px; padding: 4px; }
 .keybar.one-bar { align-self: stretch; padding-bottom: max(4px, calc(env(safe-area-inset-bottom) - 16px)); }
