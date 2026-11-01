@@ -268,15 +268,7 @@ internal sealed class PhoneServer : IDisposable
         {
             throw new FormatException("bad request line");
         }
-        var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var line in head.Skip(1))
-        {
-            var colon = line.IndexOf(':');
-            if (colon > 0)
-            {
-                headers[line[..colon].Trim()] = line[(colon + 1)..].Trim();
-            }
-        }
+        var headers = HeadersOf(head.Skip(1));
         var path = start[1].Split('?')[0];
         if (path == PcFiles.Put)
         {
@@ -302,6 +294,21 @@ internal sealed class PhoneServer : IDisposable
             have += read;
         }
         return new PhoneRequest(start[0], path, headers, body);
+    }
+
+    /// <summary>A request's header lines as a dictionary (names in any case).</summary>
+    private static Dictionary<string, string> HeadersOf(IEnumerable<string> lines)
+    {
+        var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var line in lines)
+        {
+            var colon = line.IndexOf(':');
+            if (colon > 0)
+            {
+                headers[line[..colon].Trim()] = line[(colon + 1)..].Trim();
+            }
+        }
+        return headers;
     }
 
     private static async Task WriteResponse(Stream stream, PhoneReply reply, CancellationToken cancel)
