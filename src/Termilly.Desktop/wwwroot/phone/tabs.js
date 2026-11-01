@@ -86,15 +86,14 @@ const lookHtml = (l, chosen) => `<button class="row look${l.id === chosen ? ' on
  * @param {string} chosen
  */
 export function themesHtml(looks, chosen) {
-  return `${backRow(SETTINGS_PAGE.appearance)}
-    <div class="list looks">${looks.filter(l => !FIRST_LOOKS.includes(l.id)).map(l => lookHtml(l, chosen)).join('')}</div>`;
+  return `<div class="list looks">${looks.filter(l => !FIRST_LOOKS.includes(l.id)).map(l => lookHtml(l, chosen)).join('')}</div>`;
 }
 
 /**
- * Back to where a page opens from.
+ * Back to where a page opens from (in the header: app.js).
  * @param {string} to The page ('' for the list).
  */
-const backRow = to => `<button class="back-row" data-do="${SETTING.page}" data-page="${to}">‹ ${to ? /** @type {Record<string, string>} */ (PAGE_TITLE)[to] : 'Settings'}</button>`;
+export const backRow = to => `<button class="back-row" data-do="${SETTING.page}" data-page="${to}">‹ ${to ? /** @type {Record<string, string>} */ (PAGE_TITLE)[to] : 'Settings'}</button>`;
 
 /**
  * A row of the list: the setting, what it's set to, and its page.
@@ -125,22 +124,22 @@ const nameOf = (list, id) => list.find(c => c[0] === id)?.[1] ?? '';
  * @param {{ page: string, alerts: string, alertsOn: string, size: number, scrolling: string, compose: string, dictation: string, host: string, connected: boolean, look: string, looks: Look[] }} now
  */
 export function settingsHtml(now) {
-  const back = backRow(SETTINGS_PAGE.list);
+  // The way back is in the header (app.js), which stays at the top.
   switch (now.page) {
-    case SETTINGS_PAGE.alerts: return `${back}<div class="list pad">${now.alerts}</div>`;
+    case SETTINGS_PAGE.alerts: return `<div class="list pad">${now.alerts}</div>`;
     case SETTINGS_PAGE.appearance: {
       const other = FIRST_LOOKS.includes(now.look) ? null : now.looks.find(l => l.id === now.look);
-      return `${back}<div class="list looks">${now.looks.filter(l => FIRST_LOOKS.includes(l.id)).map(l => lookHtml(l, now.look)).join('')}
+      return `<div class="list looks">${now.looks.filter(l => FIRST_LOOKS.includes(l.id)).map(l => lookHtml(l, now.look)).join('')}
       ${pageRow(SETTINGS_PAGE.themes, other?.name ?? '')}</div>
       <p class="muted hint">Same as PC follows the desktop's theme as it changes; System, the phone's light or dark mode.</p>`;
     }
-    case SETTINGS_PAGE.text: return `${back}<div class="list pad stepper"><button class="btn" data-do="${SETTING.smaller}" aria-label="Smaller">A−</button>
+    case SETTINGS_PAGE.text: return `<div class="list pad stepper"><button class="btn" data-do="${SETTING.smaller}" aria-label="Smaller">A−</button>
       <span>${now.size} pt</span><button class="btn" data-do="${SETTING.bigger}" aria-label="Bigger">A+</button></div>`;
-    case SETTINGS_PAGE.scrolling: return back + choicesHtml(SCROLL_CHOICES, now.scrolling, SETTING.scrolling);
-    case SETTINGS_PAGE.compose: return `${back}${choicesHtml(COMPOSE_CHOICES, now.compose, SETTING.compose)}
+    case SETTINGS_PAGE.scrolling: return choicesHtml(SCROLL_CHOICES, now.scrolling, SETTING.scrolling);
+    case SETTINGS_PAGE.compose: return `${choicesHtml(COMPOSE_CHOICES, now.compose, SETTING.compose)}
       <p class="muted hint">Under a Claude terminal, for writing to Claude.</p>`;
-    case SETTINGS_PAGE.dictation: return back + choicesHtml(DICTATION_CHOICES, now.dictation, SETTING.dictation);
-    case SETTINGS_PAGE.pc: return `${back}<div class="list pad"><p class="mono">${esc(now.host)}</p>
+    case SETTINGS_PAGE.dictation: return choicesHtml(DICTATION_CHOICES, now.dictation, SETTING.dictation);
+    case SETTINGS_PAGE.pc: return `<div class="list pad"><p class="mono">${esc(now.host)}</p>
       <p class="muted">${now.connected ? 'Connected.' : 'Reconnecting.'}</p></div>
       <div class="section">Pairing</div><div class="list pad"><p class="muted">The PC forgets this phone; it needs a new code to come back.</p>
       <div class="w-actions"><button class="btn danger" data-do="${SETTING.unpair}">Unpair this phone</button></div></div>`;

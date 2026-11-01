@@ -6,7 +6,7 @@
 // between the terminals, the PC's notifications and this phone's settings (tabs.js).
 
 import { terminalView, activityHtml, TEXT_SIZE } from './terminal.js';
-import { TAB, SETTING, SETTINGS_PAGE, PAGE_TITLE, STATE_LABEL, TEXT_SIZES, navHtml, notesHtml, settingsHtml, themesHtml } from './tabs.js';
+import { TAB, SETTING, SETTINGS_PAGE, PAGE_TITLE, STATE_LABEL, TEXT_SIZES, navHtml, notesHtml, settingsHtml, themesHtml, backRow } from './tabs.js';
 import { memosTab, MEMO_EDITOR } from './memos.js';
 import { SCROLLING, GESTURE_START } from './gestures.js';
 import { manager } from './manage.js';
@@ -154,7 +154,7 @@ async function start() {
       <button class="button" type="submit">Pair</button></div></form>
       <p>A name this PC knows already means that phone again: its old pairing goes.</p><p class="error" data-error></p></div></div>`);
   }
-  show(`<header class="bar"><h1 data-title>Termilly</h1><span class="conn" data-conn></span><span data-add></span></header><main id="${HOME}" class="tabbed"></main><div id="nav"></div><div id="sheet"></div><div class="toast" data-toast hidden></div>`);
+  show(`<header class="bar"><span data-back></span><h1 data-title>Termilly</h1><span class="conn" data-conn></span><span data-add></span></header><main id="${HOME}" class="tabbed"></main><div id="nav"></div><div id="sheet"></div><div class="toast" data-toast hidden></div>`);
   manage.swipe(/** @type {HTMLElement} */ (document.getElementById(HOME)));
   connect();
   render();
@@ -246,6 +246,9 @@ function render() {
   const title = app.querySelector('[data-title]');
   const page = tab === TAB.settings ? settingsPage : SETTINGS_PAGE.list;
   if (title) title.textContent = page ? /** @type {Record<string, string>} */ (PAGE_TITLE)[page] : /** @type {Record<string, string>} */ (TITLE)[tab];
+  // A Settings page's way back sits in the header, above its title, so it stays when the page scrolls.
+  const back = app.querySelector('[data-back]');
+  if (back) back.innerHTML = page ? backRow(page === SETTINGS_PAGE.themes ? SETTINGS_PAGE.appearance : SETTINGS_PAGE.list) : '';
   const add = app.querySelector('[data-add]');
   if (add) add.innerHTML = tab === TAB.terminals ? manage.addButton() : '';
   // A note being written stays as it is while the PC's news comes in.

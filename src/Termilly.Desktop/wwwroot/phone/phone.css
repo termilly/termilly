@@ -7,7 +7,7 @@
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 /* The pages only scroll up and down: iOS would otherwise let a sideways drag pull the whole page, its header too. */
-html, body { overflow-x: hidden; overscroll-behavior-x: none; }
+html, body { overflow-x: clip; overscroll-behavior-x: none; }
 body { margin: 0; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); background: var(--bg); color: var(--text); font: 16px/1.4 -apple-system, "Segoe UI", Roboto, sans-serif; }
 button { font: inherit; color: inherit; }
 main { max-width: 600px; margin: 0 auto; padding: 4px 12px 40px; }
@@ -31,7 +31,12 @@ code { padding: 1px 5px; border-radius: 5px; background: var(--bg); font: 13.5px
 .steps li { margin: 0 0 6px; }
 
 /* ---- The app: header, setup steps, pairing ---- */
-.bar { display: flex; gap: 10px; align-items: center; max-width: 600px; margin: 0 auto; padding: 14px 20px 8px; }
+/* The header stays at the top as the page scrolls, over the status bar's strip too (the page scrolls under both). */
+.bar { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; max-width: 600px; margin: calc(-1 * env(safe-area-inset-top)) auto 0; padding: calc(env(safe-area-inset-top) + 14px) 20px 8px; background: var(--bg); }
+/* A Settings page's way back, above its title. */
+.bar [data-back] { flex-basis: 100%; margin: -8px 0 -6px -6px; }
+.bar [data-back]:empty { display: none; }
+.bar .back-row { margin: 0; }
 .bar h1 { flex: 1; }
 .conn { color: var(--attention); font-size: 13px; }
 .add-btn { display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 0; border-radius: 50%; background: var(--raised); color: var(--accent); }
@@ -265,9 +270,10 @@ button.row { width: 100%; border: 0; background: none; color: inherit; font: inh
 .form { overflow: hidden; border-radius: 12px; background: var(--raised); }
 /* New terminal and its Workspace and Folder pages: over the home, above the tab bar, scrolling up and down only; Open
    stays at the bottom of the page. */
-.m-page { position: fixed; inset: 0 0 var(--tabbar, 0px); z-index: 3; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; padding-top: calc(env(safe-area-inset-top) + 10px); background: var(--bg); }
+.m-page { position: fixed; inset: 0 0 var(--tabbar, 0px); z-index: 6; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; background: var(--bg); }
 .m-in { display: flex; flex-direction: column; min-height: 100%; max-width: 600px; margin: 0 auto; padding: 0 12px; }
-.m-in > .back-row { align-self: flex-start; }
+/* The page's back row and title stay at the top as it scrolls. */
+.page-head { position: sticky; top: 0; z-index: 1; margin: 0 -12px; padding: calc(env(safe-area-inset-top) + 10px) 12px 4px; background: var(--bg); }
 .page-title { margin: 0 8px 4px; font-size: 28px; letter-spacing: -.3px; }
 .opt.on .r-name { font-weight: 600; }
 .m-page .more-value .dot { width: 8px; height: 8px; margin-right: 2px; }

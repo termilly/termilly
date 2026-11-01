@@ -117,7 +117,7 @@ export function manager(app) {
     const opt = (/** @type {Place} */ p) => `<button class="row opt${p.id === chosen?.id ? ' on' : ''}" data-m="${M.pick}" data-p="${esc(p.id)}">${badgeHtml(p)}
       <div class="r-text"><div class="r-name">${esc(p.name)}${p.production ? ' <span class="prod">prod</span>' : ''}</div>${p.remote && p.description ? `<div class="r-line">${esc(p.description)}</div>` : ''}</div>
       <span class="tick">${p.id === chosen?.id ? '✓' : ''}</span></button>`;
-    return `${pageBack(M.cancel, 'Terminals')}<h1 class="page-title">New terminal</h1>
+    return `<div class="page-head">${pageBack(M.cancel, 'Terminals')}<h1 class="page-title">New terminal</h1></div>
       <div class="section">Shell</div><div class="list">${places().filter(p => !p.remote).map(opt).join('')}</div>
       <div class="section-row"><span class="section">Remote</span><button class="link" data-m="${M.host}">Add SSH host</button></div>
       ${remote.length ? `<div class="list">${remote.map(opt).join('')}</div>` : '<p class="muted hint">No SSH hosts, WSL or serial ports on the PC yet.</p>'}
@@ -129,12 +129,12 @@ export function manager(app) {
 
   function newWsHtml() {
     const ws = chosenWs();
-    return `${pageBack(M.toNew, 'New terminal')}<h1 class="page-title">Workspace</h1><div class="list">${snap().workspaces.map(w =>
+    return `<div class="page-head">${pageBack(M.toNew, 'New terminal')}<h1 class="page-title">Workspace</h1></div><div class="list">${snap().workspaces.map(w =>
       `<button class="row opt${w.id === ws?.id ? ' on' : ''}" data-m="${M.pickWs}" data-ws="${esc(w.id)}"><span class="dot" style="background:${esc(w.color)}"></span>
         <div class="r-text"><div class="r-name">${esc(w.name)}</div>${w.cwd ? `<div class="r-line">${esc(w.cwd)}</div>` : ''}</div><span class="tick">${w.id === ws?.id ? '✓' : ''}</span></button>`).join('')}</div>`;
   }
 
-  const newFolderHtml = () => `${pageBack(M.toNew, 'New terminal')}<h1 class="page-title">Folder</h1>
+  const newFolderHtml = () => `<div class="page-head">${pageBack(M.toNew, 'New terminal')}<h1 class="page-title">Folder</h1></div>
     <div class="form"><label class="f-row"><span>Folder</span><input name="${FIELD.cwd}" value="${esc(sheet?.cwd ?? '')}" placeholder="${esc(chosenWs()?.cwd ?? 'The workspace folder')}" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="done"></label></div>
     <p class="hint muted">Empty: the workspace's own folder.</p>`;
 
