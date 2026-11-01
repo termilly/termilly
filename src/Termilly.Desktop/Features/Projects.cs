@@ -69,12 +69,22 @@ internal sealed class ChangesHandler : IMessageHandler
         _page.Post(new ToPage.ChangesDiffed(m.RequestId, diff.Runs.Select(r => new[] { r.Kind, r.Count }).ToList(), diff.Added, diff.Removed));
     }
 
-    /// <summary>Which file or folder a path in a terminal means (for its link, and when it's Ctrl+clicked).</summary>
+    /// <summary>
+    /// Which file or folder a path in a terminal means (for its link, when it's Ctrl+clicked, and search's Files). Always
+    /// answered: text that can't be a path (characters a path can't have) is no path, not a question left open.
+    /// </summary>
     private void Resolve(FromPage.ChangesResolve m)
     {
-        var (path, line, error, folder) = string.IsNullOrWhiteSpace(m.Text)
-            ? ResolvedPath.NotAPath
-            : _preview.Resolve(m.Id, m.Text, m.Remote, m.Cwd, m.WsCwd);
+        ResolvedPath resolved;
+        try
+        {
+            resolved = string.IsNullOrWhiteSpace(m.Text) ? ResolvedPath.NotAPath : _preview.Resolve(m.Id, m.Text, m.Remote, m.Cwd, m.WsCwd);
+        }
+        catch (Exception e) when (e is ArgumentException or NotSupportedException or IOException or UnauthorizedAccessException)
+        {
+            resolved = ResolvedPath.NotAPath;
+        }
+        var (path, line, error, folder) = resolved;
         _page.Post(new ToPage.ChangeResolved(m.RequestId, path, line, error, folder));
     }
 

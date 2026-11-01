@@ -241,14 +241,21 @@ export function openTerminal(tab) {
   if (view) setTimeout(() => view.then(top => scrollRestored(term, top)), RESTORED_SCROLL_AFTER_MS);
 }
 
+/** A closed terminal reopened shows its old output, the new prompt on the view's last rows (this many). */
+const PROMPT_ROWS = 2;
+/** Where a reopened closed terminal's view goes: its old output's end, above the new prompt. */
+const SHOW_OLD_OUTPUT = -1;
+
 /**
  * Scrolls a restored terminal to the buffer row that was at the top of its view, or to the bottom (the new prompt)
- * when it was at the bottom or that isn't known (a closed terminal reopened).
+ * when it was at the bottom or that isn't known; a closed terminal reopened, to its old output, the prompt under it
+ * (the new shell starts at the screen's top, so the screen itself starts blank).
  * @param {any} term xterm
  * @param {number | null} top
  */
 function scrollRestored(term, top) {
   if (top === null) term.scrollToBottom();
+  else if (top === SHOW_OLD_OUTPUT) term.scrollToLine(Math.max(0, term.buffer.normal.baseY - (term.rows - PROMPT_ROWS)));
   else term.scrollToLine(top);
 }
 
@@ -969,7 +976,8 @@ export function disposeTerminal(tab) {
  * Shows a reopened session's saved output, dimmed, then scrolls it up out of the viewport so the new
  * shell starts on a clean screen with the old output in the scrollback above it. After a restart that's all: the
  * terminals coming back is what Termilly does, so nothing announces it. A closed terminal reopened says when it closed.
- * Resolves, once written, to the buffer row that was at the top of the view (null: the bottom, or not known).
+ * Resolves, once written, to the buffer row that was at the top of the view (null: the bottom, or not known;
+ * SHOW_OLD_OUTPUT: a closed terminal reopened).
  * @param {Tab} tab
  * @returns {Promise<number | null>}
  */
@@ -981,7 +989,7 @@ function writeRestoredOutput(tab) {
   /** @type {Promise<number | null>} */
   const top = new Promise(resolve => {
     term.write(`\x1b[2m${lines.join('\r\n')}\x1b[0m\r\n`, () => {
-      resolve(scroll ? rowOfLine(term.buffer.normal, Math.max(0, lines.length - scroll)) : null);
+      resolve(scroll ? rowOfLine(term.buffer.normal, Math.max(0, lines.length - scroll)) : resurrected ? null : SHOW_OLD_OUTPUT);
     });
   });
   if (!resurrected) {

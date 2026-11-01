@@ -8,7 +8,8 @@ import { findLinks, resolvePath, openChange } from './changes.js';
 import { findWebLinks } from './webaddress.js';
 import { send } from './host.js';
 import { PAGE } from './protocol.js';
-import { tabTitle } from './store.js';
+import { tabTitle, wsById } from './store.js';
+import { parentOf, joinPath } from './filepaths.js';
 import { escapeHtml, highlight, snippet, ICONS } from './ui.js';
 
 /** What a result is. */
@@ -31,14 +32,26 @@ const WILDCARD = /[*?]/;
  */
 /** @typedef {{ tab: Tab, lines: string[] }} FileSource */
 
+/** Lookups at a time, how long one may take (ms), and how often the list is drawn again as answers come (ms). */
+const AT_ONCE = 16;
+const WAIT_MS = 4000;
+const REDRAW_MS = 200;
+/** A whole path: a drive (C:\), Git Bash's drive (/d/), or a root. */
+const WHOLE_PATH = /^(?:[A-Za-z]:[\\/]|\/[A-Za-z]\/|[\\/])/;
+
 /** Where each printed path leads (by terminal and text): its real path and whether it's a folder, or null for nowhere. */
 /** @type {Map<string, { path: string, folder: boolean } | null>} */
 const looked = new Map();
+/** Lookups asked for or waiting their turn, by key. */
 /** @type {Set<string>} */
 const asking = new Set();
+/** @type {Array<() => Promise<void>>} */
+const waiting = [];
+let running = 0;
+let redrawTimer = 0;
 
-/** Whether printed paths are still being looked up (the list fills in as they are). */
-export const stillLooking = () => asking.size > 0;
+/** How many printed paths are still being looked up (the list fills in as they are). */
+export const stillLooking = () => asking.size;
 
 /** @param {string} path */
 const nameOf = path => path.split(/[\\/]/).filter(Boolean).pop() ?? path;
@@ -64,34 +77,65 @@ function* printed(sources) {
   for (const { tab, lines } of sources) {
     for (let i = lines.length - 1; i >= 0; i--) {
       const line = lines[i];
-      for (const w of findWebLinks(line)) yield { tab, line, text: w.text, web: true };
+      for (const w of findWebLinks(line)) yield { tab, line, text: w.text, web: true, dirs: /** @type {string[]} */ ([]) };
       const paths = findLinks(line);
-      for (const p of paths) yield { tab, line, text: p.text, web: false };
+      // Whole paths on the line: a name on it may be in one (cd /d/notes; cat >> todo.txt).
+      const dirs = paths.map(p => p.text).filter(t => WHOLE_PATH.test(t));
+      for (const p of paths) yield { tab, line, text: p.text, web: false, dirs };
       BARE_NAME.lastIndex = 0;
       for (let m; (m = BARE_NAME.exec(line));) {
-        if (!paths.some(p => m && m.index >= p.start && m.index < p.end)) yield { tab, line, text: m[1], web: false };
+        if (!paths.some(p => m && m.index >= p.start && m.index < p.end)) yield { tab, line, text: m[1], web: false, dirs };
       }
     }
   }
 }
 
 /**
- * Looks a printed path up (once), and draws the list again when it's known.
+ * Where a printed path leads: the host's answer, or nothing when it takes too long.
  * @param {Tab} tab
  * @param {string} text
+ * @returns {Promise<{ path: string, folder: boolean } | null>}
+ */
+async function leadsTo(tab, text) {
+  const late = new Promise(resolve => setTimeout(() => resolve(null), WAIT_MS));
+  const reply = /** @type {any} */ (await Promise.race([resolvePath(tab, text).catch(() => null), late]));
+  return reply?.path ? { path: reply.path, folder: !!reply.folder } : null;
+}
+
+/** Runs waiting lookups, a few at a time. */
+function next() {
+  while (running < AT_ONCE && waiting.length) {
+    const job = /** @type {() => Promise<void>} */ (waiting.shift());
+    running++;
+    job().finally(() => { running--; next(); });
+  }
+}
+
+/**
+ * Looks a printed path up (once): where the terminal works, else in a whole path printed on the same line, else one
+ * folder up. The list is drawn again shortly after each answer.
+ * @param {{ tab: Tab, text: string, dirs: string[] }} c
  * @param {string} key
  * @param {() => void} redraw
  */
-function lookUp(tab, text, key, redraw) {
+function lookUp(c, key, redraw) {
   if (asking.has(key)) return;
   asking.add(key);
   if (looked.size > MOST_REMEMBERED) looked.clear();
-  resolvePath(tab, text).then(reply => {
-    looked.set(key, reply.path ? { path: reply.path, folder: !!reply.folder } : null);
-  }).catch(() => looked.set(key, null)).finally(() => {
+  const home = c.tab.cwd ?? wsById(c.tab.wsId)?.cwd ?? null;
+  const others = WHOLE_PATH.test(c.text) ? [] : [...c.dirs.map(d => joinPath(d, c.text)), ...(home ? [joinPath(parentOf(home), c.text)] : [])];
+  waiting.push(async () => {
+    let real = null;
+    for (const text of [c.text, ...others]) {
+      real = await leadsTo(c.tab, text);
+      if (real) break;
+    }
+    looked.set(key, real);
     asking.delete(key);
-    if (!asking.size) redraw();
+    clearTimeout(redrawTimer);
+    redrawTimer = setTimeout(redraw, asking.size ? REDRAW_MS : 0);
   });
+  next();
 }
 
 /**
@@ -120,7 +164,7 @@ export function fileMatches(sources, text, redraw) {
     }
     const key = `${c.tab.id}\n${c.text}`;
     if (!looked.has(key)) {
-      if (match(c.text) && lookups++ < MOST_LOOKUPS) lookUp(c.tab, c.text, key, redraw);
+      if (match(c.text) && lookups++ < MOST_LOOKUPS) lookUp(c, key, redraw);
       continue;
     }
     const real = looked.get(key);

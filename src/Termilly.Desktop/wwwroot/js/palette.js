@@ -631,7 +631,8 @@ function run() {
   input.placeholder = PLACEHOLDERS[filter] ?? PLACEHOLDERS.default;
   const { q, groups } = search();
   results = [];
-  let html = q.text ? totalHtml(groups) : '';
+  const looking = filter === PALETTE_VIEW.files ? stillLooking() : 0;
+  let html = looking ? `<div class="res-total">Looking up ${looking} path${looking === 1 ? '' : 's'} the terminals printed</div>` : q.text ? totalHtml(groups) : '';
   for (const kind of Object.values(KIND)) {
     const list = groups[kind] ?? [];
     if (!list.length) continue;
@@ -644,7 +645,7 @@ function run() {
     }
   }
   if (!results.length) {
-    html = `<div class="res-empty">${filter === PALETTE_VIEW.files && stillLooking() ? 'Looking up the paths the terminals printed' : input.value.trim() ? 'Nothing matches' : 'Nothing here yet'}</div>`;
+    html += `<div class="res-empty">${looking ? '' : input.value.trim() ? 'Nothing matches' : 'Nothing here yet'}</div>`;
   }
   selected = Math.min(selected, Math.max(0, results.length - 1));
   resultsEl.innerHTML = html;
