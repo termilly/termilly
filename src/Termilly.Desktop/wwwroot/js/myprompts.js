@@ -108,14 +108,38 @@ pop.className = 'popover inbox prompts-pop';
 pop.setAttribute('aria-label', 'My prompts');
 pop.hidden = true;
 pop.innerHTML = `
-  <div class="inbox-head"><span class="section-head">My prompts</span><span class="prompts-count"></span></div>
+  <div class="inbox-head"><span class="section-head">My prompts</span><span class="prompts-count"></span>
+    <button class="btn small" data-clear title="Hides the prompts listed now. Nothing is deleted: Show them again brings them back.">Clear</button></div>
   <div class="prompts-filter"><input type="text" placeholder="Filter" spellcheck="false" aria-label="Filter prompts"></div>
-  <div class="inbox-list prompts-list" role="listbox"></div>`;
+  <div class="inbox-list prompts-list" role="listbox"></div>
+  <div class="inbox-foot prompts-cleared" hidden><span></span><button class="btn small" data-unclear>Show them again</button></div>`;
 const listEl = find(pop, '.prompts-list');
 const filterEl = /** @type {HTMLInputElement} */ (find(pop, 'input'));
 
 /** @type {{ tab: Tab, found: Found[], lines: string[] & { rows?: number[] } } | null} */
 let open = null;
+
+/**
+ * Where each terminal's output stood when its list was cleared: prompts read from the output (no times) above it
+ * stay hidden. Gone after a restart, when those show again.
+ * @type {WeakMap<Tab, { line: number, isDisposed: boolean, dispose: () => void }>}
+ */
+const clearMarks = new WeakMap();
+
+/**
+ * Whether a prompt was listed when the list was last cleared (it's hidden then).
+ * @param {Tab} tab
+ * @param {Found} f
+ * @param {number[] | undefined} rows
+ */
+function cleared(tab, f, rows) {
+  const at = tab.promptsClearedAt;
+  if (!at) return false;
+  if (f.prompt.at) return Date.parse(f.prompt.at) <= at;
+  const mark = clearMarks.get(tab);
+  const row = rows?.[f.line];
+  return !!mark && !mark.isDisposed && row !== undefined && row <= mark.line;
+}
 
 /** "Today", "Yesterday", or the day's date. @param {Date} d */
 function dayLabel(d) {
@@ -129,8 +153,15 @@ function dayLabel(d) {
 function render() {
   if (!open) return;
   const want = norm(filterEl.value);
-  const rows = open.found.map((f, i) => ({ ...f, i })).filter(f => !want || norm(f.prompt.text).includes(want)).reverse();
-  find(pop, '.prompts-count').textContent = open.found.length ? String(open.found.length) : '';
+  const { tab, lines } = open;
+  const listed = open.found.map((f, i) => ({ ...f, i })).filter(f => !cleared(tab, f, lines.rows));
+  const rows = listed.filter(f => !want || norm(f.prompt.text).includes(want)).reverse();
+  const hidden = open.found.length - listed.length;
+  find(pop, '.prompts-count').textContent = listed.length ? String(listed.length) : '';
+  find(pop, '[data-clear]').hidden = !listed.length;
+  const foot = find(pop, '.prompts-cleared');
+  foot.hidden = !hidden;
+  find(foot, 'span').textContent = hidden ? `${hidden} hidden` : '';
   let day = '';
   listEl.innerHTML = rows.map(({ prompt, line, i }) => {
     const when = prompt.at ? new Date(prompt.at) : null;
@@ -144,7 +175,7 @@ function render() {
       <span class="prompt-text">${want ? highlight(prompt.text, filterEl.value.trim()) : escapeHtml(prompt.text)}</span>
       <button class="prompt-copy" data-copy="${i}" title="Copy" aria-label="Copy">${ICONS.copy}</button>
     </div>`;
-  }).join('') || `<p class="change-empty">${open.found.length ? 'No prompt has that text.' : 'No prompts yet.'}</p>`;
+  }).join('') || `<p class="change-empty">${listed.length ? 'No prompt has that text.' : hidden ? 'Nothing since you cleared it.' : 'No prompts yet.'}</p>`;
 }
 
 /**
@@ -194,6 +225,21 @@ export async function openPrompts(tab, anchor) {
 }
 
 filterEl.addEventListener('input', render);
+pop.addEventListener('click', e => {
+  if (!open) return;
+  const { tab } = open;
+  if (targetOf(e).closest('[data-clear]')) {
+    tab.promptsClearedAt = Date.now();
+    const mark = tab.view?.term?.registerMarker(0);
+    if (mark) clearMarks.set(tab, mark);
+  } else if (targetOf(e).closest('[data-unclear]')) {
+    tab.promptsClearedAt = null;
+    clearMarks.get(tab)?.dispose();
+    clearMarks.delete(tab);
+  } else return;
+  persist();
+  render();
+});
 filterEl.addEventListener('keydown', e => {
   if (e.key !== 'Enter' || !open) return;
   const first = /** @type {HTMLElement | null} */ (listEl.querySelector('.prompt-row:not(.gone)'));

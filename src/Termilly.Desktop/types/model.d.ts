@@ -163,6 +163,8 @@ interface Tab {
   agentSeen?: boolean;
   /** The Claude Code sessions it ran, oldest first, for My prompts (js/myprompts.js). */
   agentSessions?: string[];
+  /** When My prompts was last cleared: prompts from before it are hidden (js/myprompts.js). Nothing is deleted. */
+  promptsClearedAt?: number | null;
   /** Its agent was ended, to resume (js/hibernate.js). */
   hibernated?: { session: string; at: number; folder?: string | null } | null;
   /**
