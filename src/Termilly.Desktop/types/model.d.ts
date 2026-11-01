@@ -161,6 +161,8 @@ interface Tab {
   agent?: AgentInfo | null;
   /** An agent has run in it. */
   agentSeen?: boolean;
+  /** The Claude Code sessions it ran, oldest first, for My prompts (js/myprompts.js). */
+  agentSessions?: string[];
   /** Its agent was ended, to resume (js/hibernate.js). */
   hibernated?: { session: string; at: number; folder?: string | null } | null;
   /**

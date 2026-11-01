@@ -67,6 +67,7 @@ import { updateSettings, DEFAULT_FONT_SIZE } from './preferences.js';
 import { openNewWorkspace } from './newworkspace.js';
 import { remoteGit } from './remotehost.js';
 import { AGENT_STATE, SETTING_VALUES, WINDOW_ACTION } from './constants.js';
+import { rememberSession } from './myprompts.js';
 import { byId, find, targetOf, WORKSPACE_ID } from './dom.js';
 
 /** @typedef {import('./protocol.js').Host_agent_1} Host_agent_1 */
@@ -476,6 +477,7 @@ onHost(HOST.agent, m => {
       // Where it resumes after a restart (snapshot.js): SessionStart says, the events after it don't.
       folder: /** @type {Partial<Host_agent_1>} */ (m).folder ?? tab.agent?.folder ?? null,
     };
+  rememberSession(tab);
   agentChanged(tab);
 });
 

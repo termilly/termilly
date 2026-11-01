@@ -19,6 +19,7 @@ import { beginRename, shownName, PANE_NAME } from './rename.js';
 import { openTagPicker } from './tagpicker.js';
 import { openTabMenu, TAG_BUTTON } from './tabmenu.js';
 import { find } from './dom.js';
+import { openPrompts, hasPrompts } from './myprompts.js';
 
 const CHEVRON_DOWN = '<svg class="chev" viewBox="0 0 16 16"><path d="M4 6l4 4 4-4"/></svg>';
 
@@ -32,6 +33,7 @@ const USAGE_BUTTON = '.claude-usage';
 const RESULTS_BUTTON = '.results-btn';
 const CHANGES_BUTTON = '.changes-btn';
 const NOTE_BUTTON = '.note-btn';
+const PROMPTS_BUTTON = '.prompts-btn';
 
 /** The results button's class while something new in them hasn't been looked at. */
 const UNREAD_CLASS = 'unread';
@@ -52,6 +54,7 @@ const HEADER_HTML = `
       <button class="pane-btn results-btn" title="What commands here produced: pull requests, running apps, pushes" hidden></button>
       <button class="pane-btn changes-btn" title="Files Claude changed in this terminal" hidden></button>
       <button class="pane-btn menu-btn" title="Terminal menu">${ICONS.more}</button>
+      <button class="pane-btn prompts-btn" title="My prompts: what you asked Claude here" hidden>${ICONS.prompts}</button>
       <button class="pane-btn note-btn" hidden>${ICONS.note}</button>
       <button class="pane-btn tag-btn" title="Tags">${ICONS.tag}</button>
       <button class="pane-btn close-btn" title="Close terminal (Ctrl+Shift+W)">${ICONS.close}</button>
@@ -109,6 +112,7 @@ function wireHeader(tab, header) {
   click(STOP_BUTTON, () => stopAgent(tab));
   click(RESULTS_BUTTON, e => openResults(tab, /** @type {HTMLElement} */ (e.currentTarget)));
   click(NOTE_BUTTON, () => editNoteOf(tab, notesFor(tab)[0]?.kind));
+  click(PROMPTS_BUTTON, e => openPrompts(tab, /** @type {HTMLElement} */ (e.currentTarget)));
   click(PINNED_NOTE, e => editNoteOf(tab, /** @type {HTMLElement} */ (e.currentTarget).dataset.kind));
   header.addEventListener('contextmenu', e => {
     e.preventDefault();
@@ -129,6 +133,7 @@ export function updateHeader(tab) {
   }
   find(header, '.pane-tags').innerHTML = tab.tags.map(t => tagChipHtml(t)).join('');
   find(header, STOP_BUTTON).hidden = !isAgentWorking(tab);
+  find(header, PROMPTS_BUTTON).hidden = !hasPrompts(tab);
   showChips(tab, header);
   showNotes(tab, header);
   showStatus(tab, header);
