@@ -234,7 +234,13 @@ on(EVENTS.workspaces, () => { closedHere(); renderRemote(); });
 // Which of its terminals is in front here: the tree marks it.
 on(EVENTS.focus, () => renderRemote());
 
-setVirtualInput(PC_KIND, (tab, data) => send(PAGE.pcInput, { tab: tab.id, data }));
+/**
+ * What a terminal sends by itself, not typed: answers to the shell's questions (where the cursor is, what terminal it
+ * is, what colours) and reports (focus, the mouse). The other computer's terminal answers those already; from here
+ * they'd reach its shell as junk ("3R[1;25R" typed at the prompt), so only typing goes through (as phone/terminal.js).
+ */
+const AUTOMATIC = /^\x1b(?:\[\??[\d;]*[cnRIO]|\[[<M]|\][\s\S]*(?:\x07|\x1b\\)$|P[\s\S]*\x1b\\$)/;
+setVirtualInput(PC_KIND, (tab, data) => { if (!AUTOMATIC.test(data)) send(PAGE.pcInput, { tab: tab.id, data }); });
 
 onHost(HOST.pcOutput, m => {
   const term = state.tabs.get(m.tab)?.view?.term;
