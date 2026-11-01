@@ -2,6 +2,15 @@
 
 What changed in each release. Termilly says in its title bar when a newer one is out.
 
+## 1.6.0 (unreleased)
+
+- **Termilly on your phone:** see your terminals and agents, answer them and type, with alerts when an agent needs you.
+- **Smart Clip:** every copy kept, text and images, to paste again from the right-click menu or its panel.
+- **History:** kept as long as you choose, earlier output searchable, and a page to see and clear it.
+- **Claude Code:** its own terminal type, and resumed sessions stay Claude after a restart.
+- **Right-click menu:** Copy to note, and icons on every item.
+- Faster scrolling, and links and paths broken across lines are found whole.
+
 ## 1.5.0 (2026-10-30)
 
 - **Notepad:** write down quick notes, save them to files or copy them to workspace and terminal notes.
