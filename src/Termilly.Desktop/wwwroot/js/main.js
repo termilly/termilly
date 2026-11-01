@@ -26,7 +26,7 @@ import { toggleHints } from './hints.js';
 import { toggleScratch } from './scratch.js';
 import { openGitWindow, openAgentChanges, gitFolderOf, onServer, openRemoteGitNotice } from './gitwindow.js';
 import { toggleFiles, initFiles } from './filepanel.js';
-import { toggleNotepad, initNotepad } from './notepad.js';
+import { toggleNotepad, toggleNotepadFromKeys, initNotepad } from './notepad.js';
 import { toggleClips, initClips } from './clipboard.js';
 import { chordOf, commandOf, keyHint, KEY_ID } from './keymap.js';
 import { openNewWorktree } from './worktree.js';
@@ -311,7 +311,7 @@ const RUN = {
   [KEY_ID.newWorkspace]: commands.newWorkspace, [KEY_ID.toggleSidebar]: commands.toggleSidebar, [KEY_ID.nextNeedingMe]: commands.nextNeedingMe,
   [KEY_ID.inbox]: commands.inbox, [KEY_ID.search]: commands.search, [KEY_ID.commandHistory]: commands.commandHistory,
   [KEY_ID.previousPrompt]: commands.previousPrompt, [KEY_ID.nextPrompt]: commands.nextPrompt, [KEY_ID.goTo]: commands.goTo,
-  [KEY_ID.settings]: commands.settings, [KEY_ID.hints]: toggleHints, [KEY_ID.scratch]: toggleScratch, [KEY_ID.notepad]: toggleNotepad,
+  [KEY_ID.settings]: commands.settings, [KEY_ID.hints]: toggleHints, [KEY_ID.scratch]: toggleScratch, [KEY_ID.notepad]: toggleNotepadFromKeys,
   [KEY_ID.clips]: toggleClips, [KEY_ID.files]: () => toggleFiles(), [KEY_ID.git]: openGitHere,
   [KEY_ID.agentChanges]: () => {
     if (!changeShortcutOn()) return false;

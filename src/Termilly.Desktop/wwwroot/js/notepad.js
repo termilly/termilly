@@ -202,12 +202,21 @@ function show({ quiet = false } = {}) {
   if (!quiet) (activePage() ? area : find(panel, `.np-empty [data-np="${NOTEPAD_ACTION.newPage}"]`)).focus();
 }
 
-/** The Notepad on or off (the title bar's button, Ctrl+Shift+M). */
+/** The Notepad on or off (the title bar's button, the palette). */
 export function toggleNotepad() {
   if (!panel.hidden) {
     setOpen(false);
     restoreFocus();
   } else show();
+}
+
+/** The Notepad on or off from its shortcut (Ctrl+Shift+M): opened with no pages, it starts one to type into at once. */
+export function toggleNotepadFromKeys() {
+  if (panel.hidden && !pages().length) {
+    newPage();
+    persist();
+  }
+  toggleNotepad();
 }
 
 /** Shows the Notepad as it was left (main.js, once the saved state is in). */
