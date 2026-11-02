@@ -19,6 +19,19 @@ export function atPrompt(term) {
 }
 
 /**
+ * Whether the cursor is on a shell's prompt line, with or without a command typed after it ('me@host:~$ ls'): not a
+ * question (a password, a username, a host key) nor a full-screen program.
+ * @param {any} term xterm
+ */
+export function onPromptLine(term) {
+  if (atPrompt(term)) return true;
+  const buffer = term.buffer.active;
+  if (buffer.type === 'alternate') return false;
+  const line = buffer.getLine(buffer.baseY + buffer.cursorY)?.translateToString(true) ?? '';
+  return /[$#%>] S/.test(line) && !NOT_A_PROMPT.test(line);
+}
+
+/**
  * The line that starts on buffer row `y`, with the rows it wrapped onto (up to row `end`) joined on, trimmed. Null
  * when row `y` isn't there or goes on a line that started above it.
  * @param {any} buffer xterm's buffer

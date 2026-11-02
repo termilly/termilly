@@ -17,7 +17,8 @@ import { PROFILE_SOURCE } from './constants.js';
 import { escapeHtml } from './ui.js';
 import { updateSettings } from './preferences.js';
 import { targetOf } from './dom.js';
-import { atPrompt } from './buffer.js';
+import { atPrompt, onPromptLine } from './buffer.js';
+import { showToast, TOAST } from './toasts.js';
 
 /** A repository as a prompt reported it (parseGit). */
 /**
@@ -29,7 +30,7 @@ import { atPrompt } from './buffer.js';
 /** What a server's integration told a terminal (tab.remote; see remoteOf). */
 /**
  * @typedef {{ integration: number | null, git: RemoteGit | null, gitReported: boolean, install: RemoteInstall | null,
- *   offer: number, bar?: string | null }} RemoteState
+ *   offer: number, bar?: string | null, barTimer?: number }} RemoteState
  */
 
 /** The integration version this Termilly brings (Settings' about); older hosts are offered an update. */
@@ -50,6 +51,8 @@ const remoteOf = tab => (tab.remote ??= { integration: null, git: null, gitRepor
 const OFFER_AFTER_MS = 6000;
 const OFFER_RECHECK_MS = 2000;
 const OFFER_GIVE_UP_MS = 10 * 60_000;
+/** How often an offered bar looks whether the shell is at its prompt. */
+const BAR_CHECK_MS = 1000;
 /** How long the install line has to say it's ready for the installer. */
 const READY_WAIT_MS = 15_000;
 /** The installer goes in pieces this big, this far apart, so no input buffer on the way overflows. */
@@ -218,6 +221,11 @@ export function watchRemote(tab) {
  * @param {Tab} tab
  */
 export function setUpHost(tab) {
+  // Only at the shell's prompt: anywhere else (a password, a host key question) the line would be typed into it.
+  if (tab.view?.term && !atPrompt(tab.view.term)) {
+    showToast({ text: 'Set up waits for the shell’s prompt: answer what it’s asking first.', state: TOAST.failed });
+    return;
+  }
   hideBar(tab);
   remoteOf(tab).install = { requested: Date.now() };
   send(PAGE.remoteInstall, { id: tab.id });
@@ -300,9 +308,24 @@ const setUpLabel = place => `Set up Termilly on this ${place}`;
  * @param {'setup' | 'update' | 'repair'} kind
  */
 function showBar(tab, kind) {
+  const remote = remoteOf(tab);
+  remote.bar = kind;
+  // Shown only while the shell waits at its prompt (checked every second): never over a question for a username,
+  // a password or a host key, where Set up would type the installer into the answer.
+  clearInterval(remote.barTimer);
+  remote.barTimer = setInterval(() => keepBar(tab), BAR_CHECK_MS);
+  keepBar(tab);
+}
+
+/**
+ * The bar's markup over the terminal's pane.
+ * @param {Tab} tab
+ * @param {'setup' | 'update' | 'repair'} kind
+ */
+function drawBar(tab, kind) {
   const pane = tab.view?.el;
   if (!pane) return;
-  hideBar(tab);
+  pane.querySelector(BAR)?.remove();
   const place = placeOf(tab) ?? SETUP_PLACES[PROFILE_SOURCE.ssh];
   const name = escapeHtml(profileOf(tab)?.name ?? `this ${place}`);
   const bar = document.createElement('div');
@@ -325,23 +348,33 @@ function showBar(tab, kind) {
     if (action === BAR_ACTION.never) { rememberSetup(tab, SETUP.never); hideBar(tab); }
   });
   pane.append(bar);
-  remoteOf(tab).bar = kind;
 }
 
 /** The bar goes: answered (a button), not needed any more (set up), or for another. @param {Tab} tab */
 function hideBar(tab) {
   tab.view?.el?.querySelector(BAR)?.remove();
-  if (tab.remote) tab.remote.bar = null;
+  if (!tab.remote) return;
+  tab.remote.bar = null;
+  clearInterval(tab.remote.barTimer);
 }
 
 /**
- * The bar offered over a terminal stays until it's answered: when the terminal comes in front again without it (its
- * pane was drawn again), it's put back.
+ * The bar offered over a terminal stays until it's answered, shown while the shell is at its prompt and hidden while
+ * it asks something else (or its pane lost it: put back).
  * @param {Tab | null | undefined} tab
  */
 function keepBar(tab) {
-  const kind = tab?.remote?.bar;
-  if (tab && kind && !tab.view?.el?.querySelector(BAR)) showBar(tab, /** @type {'setup' | 'update' | 'repair'} */ (kind));
+  const kind = /** @type {'setup' | 'update' | 'repair' | null | undefined} */ (tab?.remote?.bar);
+  if (!tab || !kind) return;
+  if (!state.tabs.has(tab.id) || tab.exited) {
+    hideBar(tab);
+    return;
+  }
+  const term = tab.view?.term;
+  const there = tab.view?.el?.querySelector(BAR);
+  const prompt = !!term && onPromptLine(term);
+  if (prompt && !there) drawBar(tab, kind);
+  else if (!prompt && there) there.remove();
 }
 on(EVENTS.focus, keepBar);
 on(EVENTS.workspaces, () => { for (const tab of state.tabs.values()) keepBar(tab); });
