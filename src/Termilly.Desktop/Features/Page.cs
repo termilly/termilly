@@ -90,25 +90,17 @@ internal sealed class HistoryHandler(
 {
     private const string NoEntries = "[]";
 
-    /// <summary>One snapshot written at a time.</summary>
-    private readonly SemaphoreSlim _snapshotSaving = new(1, 1);
+    /// <summary>The snapshot being written (one at a time).</summary>
+    private Task _snapshotWrite = Task.CompletedTask;
 
     /// <summary>
     /// The terminals' snapshot written (every half minute, and once more on closing), away from the window's thread: its
     /// whole scrollback is redacted, sealed and written, which took long enough to hold up typing behind it.
     /// </summary>
-    private async Task SaveSnapshotAsync(JsonElement saved, bool final)
+    private async Task SaveSnapshotAsync(Task before, JsonElement saved, bool redact, bool final)
     {
-        var redact = settings.Current.Session.RedactSecrets;
-        await _snapshotSaving.WaitAsync().ConfigureAwait(false);
-        try
-        {
-            await Task.Run(() => Storage.Try(() => snapshot.Save(saved, redact))).ConfigureAwait(false);
-        }
-        finally
-        {
-            _snapshotSaving.Release();
-        }
+        await before.ConfigureAwait(false);
+        await Task.Run(() => Storage.Try(() => snapshot.Save(saved, redact))).ConfigureAwait(false);
         if (final)
         {
             last.Arrived();
@@ -118,7 +110,8 @@ internal sealed class HistoryHandler(
     public void Register(MessageRouter router)
     {
         router.On<FromPage.StateSave>(m => Storage.Try(() => workspaces.Save(m.State)));
-        router.On<FromPage.SnapshotSave>(m => SaveSnapshotAsync(m.Snapshot.Clone(), m.Final));
+        // Messages arrive one at a time on the window's thread: each save goes after the one before.
+        router.On<FromPage.SnapshotSave>(m => _snapshotWrite = SaveSnapshotAsync(_snapshotWrite, m.Snapshot.Clone(), settings.Current.Session.RedactSecrets, m.Final));
         router.On<FromPage.HistoryAdd>(m => Storage.Try(() => history.Add(m.Entry, settings.Current.Session.RedactSecrets)));
         router.On<FromPage.HistoryList>(_ => SendHistory());
         router.On<FromPage.HistoryCommand>(m =>
