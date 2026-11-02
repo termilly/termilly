@@ -17,7 +17,7 @@ public sealed class DisposeTwiceTests
     [Fact]
     public void Remote_computers_can_be_disposed_twice()
     {
-        var handler = new RemotePcsHandler(new PageChannel(new Sink()), null!, null!);
+        var handler = new RemotePcsHandler(new PageChannel(new Sink()), null!, null!, null!);
 
         handler.Dispose();
         handler.Dispose();

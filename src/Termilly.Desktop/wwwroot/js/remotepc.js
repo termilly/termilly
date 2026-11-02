@@ -6,22 +6,23 @@
 
 import { PAGE, HOST } from './protocol.js';
 import { send, request, onHost } from './host.js';
-import { state, on, EVENTS, ACTIVITY, WORKSPACE_COLORS, tabsOf } from './store.js';
-import { newTab, focusTab, switchWorkspace, renderWorkspace, renderAll } from './panes.js';
+import { state, on, EVENTS, ACTIVITY, WORKSPACE_COLORS, tabsOf, activityChanged } from './store.js';
+import { newTab, focusTab, closeTab, switchWorkspace, renderWorkspace, renderAll } from './panes.js';
 import { setVirtualInput } from './terminals.js';
-import { escapeHtml, ICONS, activityHtml, MINI_ACTIVITY } from './ui.js';
+import { escapeHtml, ICONS, activityHtml, MINI_ACTIVITY, badgeHtml } from './ui.js';
 import { modal, FORM_DIALOG, DIALOG_ERROR, confirmDialog } from './dialogs.js';
 import { showMenu } from './popups.js';
 import { byId, targetOf } from './dom.js';
 import { renderRemote, setRemoteExtra, REMOTE_ID, REMOTE_GROUP, groupHead, isGroupFolded } from './remote.js';
 import { showToast, TOAST } from './toasts.js';
-import { FOLDER_PATH } from './constants.js';
+import { FOLDER_PATH, SETTING_VALUES } from './constants.js';
+import { showAtSize } from './phone.js';
 
 /** @typedef {import('./protocol.js').PcView} Pc */
 /** A computer's state, as its phone app gets it (js/phone.js snapshot): what the tree shows of it. */
 /** Where a terminal's files are there: an SSH host it reaches (by name) or its own disk, and its shell's folder. */
 /** @typedef {{ ssh: boolean, place: string | null, cwd: string }} PcFiles */
-/** @typedef {{ os?: string, workspaces: { id: string, name: string, color: string }[], terminals: { id: string, ws: string, title: string, badge?: string, icon?: string, cols?: number | null, rows?: number | null, activity?: string | null, hint?: string | null, files?: PcFiles | null }[] }} PcState */
+/** @typedef {{ os?: string, workspaces: { id: string, name: string, color: string }[], terminals: { id: string, ws: string, title: string, badge?: string, icon?: string, prompts?: boolean, sizedBy?: { label: string, computer: boolean } | null, cols?: number | null, rows?: number | null, activity?: string | null, hint?: string | null, files?: PcFiles | null }[] }} PcState */
 
 /** A virtual terminal's kind (tab.virtual): another computer's. */
 export const PC_KIND = 'pc';
@@ -152,7 +153,7 @@ function computerHtml(pc) {
     return `<button class="rm-row pc-ws" data-pc-workspace="${escapeHtml(key)}">${chev(key, `<span class="pc-wsdot" style="background:${escapeHtml(w.color)}"></span>`)}
       <span class="rm-name">${escapeHtml(w.name)}</span><span class="rm-chips"><span class="rm-count">${terms.length}</span></span></button>`
       + (folded.has(key) ? '' : terms.map(t => `<button class="rm-row pc-term${inFront(pc, t.id) ? ' on' : ''}" data-pc-terminal="${escapeHtml(pc.id)}" data-pane="${escapeHtml(t.id)}" title="Open ${escapeHtml(t.title)} from ${escapeHtml(pc.name)} here">
-        <span class="badge small" data-icon="${escapeHtml(t.icon ?? '')}"><span class="badge-text">${escapeHtml(t.badge ?? '')}</span></span><span class="rm-name">${escapeHtml(t.title)}</span><span class="rm-chips">${activityOfRemote(t)}</span></button>`).join(''));
+        ${badgeHtml({ icon: t.icon ?? '' })}<span class="rm-name">${escapeHtml(t.title)}</span><span class="rm-chips">${activityOfRemote(t)}</span></button>`).join(''));
   }).join('');
 }
 
@@ -198,18 +199,185 @@ function openTerminal(pc, pane) {
   const open = [...state.tabs.values()].find(t => t.virtual?.kind === PC_KIND && t.virtual.client === pc.id && t.virtual.pane === pane);
   if (open) return focusTab(open);
   const t = stateOf(pc).terminals.find(x => x.id === pane);
-  newTab({ wsId: ws.id, name: `${t?.title ?? 'Terminal'} · ${pc.name}`, virtual: { kind: PC_KIND, client: pc.id, pane, cols: t?.cols ?? START_SIZE.cols, rows: t?.rows ?? START_SIZE.rows } });
+  newTab({ wsId: ws.id, name: `${t?.title ?? 'Terminal'} · ${pc.name}`, virtual: { kind: PC_KIND, client: pc.id, pane, cols: t?.cols ?? START_SIZE.cols, rows: t?.rows ?? START_SIZE.rows, icon: t?.icon ?? null, prompts: !!t?.prompts } });
 }
 
-// Its terminal here is on screen: it starts watching there at its size, and tells its size as it changes.
+/**
+ * Its terminals open here take what runs in them there (Claude Code starting or exiting changes their badge) and
+ * whether their Prompt history may be opened, as each computer's new state comes.
+ */
+function followTerminals() {
+  for (const tab of state.tabs.values()) {
+    const v = tab.virtual;
+    const pc = v?.kind === PC_KIND ? pcs.find(p => p.id === v.client) : null;
+    const t = pc ? stateOf(pc).terminals.find(x => x.id === v?.pane) : null;
+    if (!v || !t) continue;
+    // Drawn at the size it has there: that size changed there.
+    if (tab.phoneSize && (keepsTheirs() || paused.has(tab.id))) drawAtTheirSize(tab);
+    const icon = t.icon || v.icon, prompts = !!t.prompts;
+    if (icon === v.icon && prompts === !!v.prompts) continue;
+    Object.assign(v, { icon, prompts });
+    activityChanged(tab, true);
+  }
+}
+
+// ---- Whose size: this computer's, or the other's ----
+//
+// Settings › Remote › Size of remote terminals says how they're drawn here. Fit local window: the one there takes this
+// one's size while it's on screen here (its tab in front, the window not minimized), and its own again when it isn't.
+// Keep remote size (the default): it's drawn here at the size it has there, smaller to fit. When that computer takes it back
+// (its Take back), it's drawn at its own size here under Paused, until Resume.
+
+/** Its terminals here the other computer took back: paused until Resume. */
+/** @type {Set<string>} */
+const paused = new Set();
+/** The size each last told the other computer ("cols x rows", "0 x 0" for none), so it isn't told twice. */
+/** @type {Map<string, string>} */
+const told = new Map();
+/** How long after it's drawn at another size its screen is asked for again (the program there has redrawn by then). */
+const REDRAWN_MS = 250;
+/** The paused screen over a terminal. */
+const PAUSED_CLASS = 'pc-paused';
+
+/** Settings › Remote keeps the other computer's size for its terminals here. */
+const keepsTheirs = () => state.settings.phone?.pcSize === SETTING_VALUES.pcSize.keep;
+
+/**
+ * The size its terminal here gives the one there: this one's, while it fits this computer, isn't paused and is on
+ * screen; none otherwise.
+ * @param {Tab} tab
+ */
+function sizeToGive(tab) {
+  const term = tab.view?.term;
+  const gives = !!term && !keepsTheirs() && !paused.has(tab.id) && onScreen(tab) && !document.hidden;
+  return gives && term ? { cols: term.cols, rows: term.rows } : { cols: 0, rows: 0 };
+}
+
+/**
+ * Draws its terminal here as it should be now (at this pane's size, or at the size it has there), and tells the other
+ * computer the size it gives, if that changed.
+ * @param {Tab} tab
+ */
+function settleSize(tab) {
+  const v = tab.virtual;
+  if (v?.kind !== PC_KIND || !tab.view?.term) return;
+  if (keepsTheirs() && paused.has(tab.id)) resume(tab); // it never gives its size: nothing to resume
+  if (keepsTheirs() || paused.has(tab.id)) drawAtTheirSize(tab);
+  else if (tab.phoneSize) showAtSize(tab, null);
+  const size = sizeToGive(tab), key = `${size.cols} x ${size.rows}`;
+  if (told.get(tab.id) === key) return;
+  told.set(tab.id, key);
+  send(PAGE.pcSize, { tab: tab.id, ...size });
+}
+
+/** Its terminal here at the size it has there, as that computer last said. @param {Tab} tab */
+function drawAtTheirSize(tab) {
+  const v = tab.virtual, pc = pcs.find(p => p.id === v?.client);
+  const t = pc ? stateOf(pc).terminals.find(x => x.id === v?.pane) : null;
+  if (!pc || !t?.cols || !t.rows) return;
+  // A phone (or another computer) has it there: drawn here as it's drawn there, in its phone, with who has it.
+  const who = t.sizedBy ?? { label: '', computer: true }; // its own size there: nothing to say
+  if (tab.phoneSize?.cols === t.cols && tab.phoneSize.rows === t.rows && tab.sizedBy?.label === who.label) return;
+  showAtSize(tab, { cols: t.cols, rows: t.rows }, { ...who, takeBack: false }); // taken back there, not here
+  // What it printed for that size came before it was drawn at it here: what it shows, again, once drawn.
+  setTimeout(() => send(PAGE.pcRefresh, { tab: tab.id }), REDRAWN_MS);
+}
+
+/**
+ * Whether its terminal here is on screen: its tab in front in its pane, its workspace the one shown (the others are
+ * hidden, not taken out).
+ * @param {Tab} tab
+ */
+function onScreen(tab) {
+  const body = tab.view?.body;
+  if (!body?.isConnected) return false;
+  return typeof body.checkVisibility === 'function' ? body.checkVisibility({ visibilityProperty: true }) : body.getClientRects().length > 0;
+}
+
+/** Tabs by the pane body they're drawn in, for the observer below. */
+/** @type {WeakMap<Element, Tab>} */
+const bodies = new WeakMap();
+// A terminal here comes on screen or goes off it (another tab in its pane in front, its pane resized away).
+const seen = new IntersectionObserver(entries => {
+  for (const e of entries) {
+    const tab = bodies.get(e.target);
+    if (tab) settleSize(tab);
+  }
+});
+/** Each of its terminals here, settled again (the window came or went, Settings changed). */
+const settleAll = () => { for (const id of watching.keys()) { const tab = state.tabs.get(id); if (tab) settleSize(tab); } };
+document.addEventListener('visibilitychange', settleAll);
+for (const event of [EVENTS.settings, EVENTS.workspaces, EVENTS.focus]) on(event, () => requestAnimationFrame(settleAll)); // once drawn
+
+/**
+ * Its terminal there has another size now (that computer took it back, or another phone or computer has it): paused
+ * here (drawn at the size it has there) until Resume, which gives it this computer's size again.
+ * @param {Tab} tab
+ * @param {string | null | undefined} by who has it now (none: that computer)
+ */
+function pause(tab, by) {
+  const body = tab.view?.body;
+  if (!body) return;
+  paused.add(tab.id);
+  told.delete(tab.id); // it has no size from here now
+  body.querySelector(`:scope > .${PAUSED_CLASS}`)?.remove();
+  const name = pcs.find(p => p.id === tab.virtual?.client)?.name ?? 'That computer';
+  const why = by ? `${escapeHtml(by)} now sets the size of this remote terminal.` : `${escapeHtml(name)} took back its local terminal.`;
+  body.insertAdjacentHTML('beforeend', `<div class="${PAUSED_CLASS}"><p><b>Paused.</b> ${why}</p><button class="btn small primary" title="The remote terminal follows this window again">Resume</button></div>`);
+  body.querySelector(`:scope > .${PAUSED_CLASS} button`)?.addEventListener('click', () => resume(tab));
+  settleSize(tab);
+}
+
+/** @param {Tab} tab */
+function resume(tab) {
+  paused.delete(tab.id);
+  tab.view?.body.querySelector(`:scope > .${PAUSED_CLASS}`)?.remove();
+  told.delete(tab.id);
+  settleSize(tab);
+}
+
+/** The cover over a remote terminal whose connection is gone. */
+const LOST_CLASS = 'pc-lost';
+
+/**
+ * A remote terminal lost its connection to its local terminal (or never had it): a message over it, with only Close
+ * terminal, so it doesn't look alive.
+ * @param {Tab} tab
+ * @param {string} error
+ */
+function lost(tab, error) {
+  const body = tab.view?.body;
+  if (!body) return;
+  for (const cover of body.querySelectorAll(`:scope > .${PAUSED_CLASS}, :scope > .${LOST_CLASS}`)) cover.remove();
+  paused.delete(tab.id);
+  body.insertAdjacentHTML('beforeend', `<div class="${LOST_CLASS}"><p>${escapeHtml(error)}</p><button class="btn small primary">Close terminal</button></div>`);
+  body.querySelector(`:scope > .${LOST_CLASS} button`)?.addEventListener('click', () => closeTab(tab));
+}
+
+onHost(HOST.pcLost, m => {
+  const tab = state.tabs.get(m.tab);
+  if (tab) lost(tab, m.error);
+});
+
+onHost(HOST.pcPaused, m => {
+  const tab = state.tabs.get(m.tab);
+  if (tab) pause(tab, m.by);
+});
+
+// Its terminal here is opened: it starts watching there (at no size yet: it gives its own once it's on screen), and
+// tells its size as it changes.
 on(EVENTS.terminalOpened, (/** @type {Tab} */ tab) => {
   const v = tab.virtual;
   const term = tab.view?.term;
-  if (v?.kind !== PC_KIND || !term) return;
+  if (v?.kind !== PC_KIND || !term || !tab.view) return;
   tab.noHistory = true;
   watching.set(tab.id, tab.wsId);
-  send(PAGE.pcWatch, { id: v.client, tab: tab.id, pane: v.pane, cols: term.cols, rows: term.rows });
-  term.onResize((/** @type {{ cols: number, rows: number }} */ { cols, rows }) => send(PAGE.pcSize, { tab: tab.id, cols, rows }));
+  told.set(tab.id, '0 x 0');
+  send(PAGE.pcWatch, { id: v.client, tab: tab.id, pane: v.pane, cols: 0, rows: 0 });
+  bodies.set(tab.view.body, tab);
+  seen.observe(tab.view.body);
+  term.onResize(() => settleSize(tab));
+  settleSize(tab);
 });
 /**
  * Its terminals closed here since: the other computer stops showing them at this one's size, and a computer whose
@@ -221,6 +389,7 @@ function closedHere() {
   const left = new Set();
   for (const [id, wsId] of [...watching].filter(([id]) => !state.tabs.has(id))) {
     watching.delete(id);
+    for (const kept of [paused, told]) kept.delete(id);
     left.add(wsId);
     send(PAGE.pcUnwatch, { tab: id });
   }
@@ -250,6 +419,7 @@ onHost(HOST.pcOutput, m => {
 onHost(HOST.pcRefused, m => showToast({ text: m.error, state: TOAST.failed }));
 onHost(HOST.pcList, m => {
   pcs = m.items;
+  followTerminals();
   renderRemote();
 });
 onHost(HOST.pcAdded, () => {});

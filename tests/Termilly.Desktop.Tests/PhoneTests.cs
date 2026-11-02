@@ -315,8 +315,21 @@ public sealed class PhoneTests : IDisposable
         _live.Output("t1", "not watched");
         _live.Output("t2", "new ");
         _live.Output("t2", "line");
-        var output = JsonNode.Parse(await ReceiveText(phone))!;
-        Assert.Equal(("output", "while drawing, new line"), (output["type"]!.GetValue<string>(), output["data"]!.GetValue<string>()));
+        // Output goes out every few milliseconds: it may come in more than one piece, but in order, after the screen.
+        var printed = "";
+        while (printed.Length < "while drawing, new line".Length)
+        {
+            var output = JsonNode.Parse(await ReceiveText(phone))!;
+            Assert.Equal("output", output["type"]!.GetValue<string>());
+            printed += output["data"]!.GetValue<string>();
+        }
+        Assert.Equal("while drawing, new line", printed);
+
+        // Drawn at another size there: what it shows, again.
+        _live.Screen = pane => Task.FromResult("redrawn");
+        await phone.SendAsync(Encoding.UTF8.GetBytes("""{"op":"refresh"}"""), WebSocketMessageType.Text, true, CancellationToken.None);
+        var again = JsonNode.Parse(await ReceiveText(phone))!;
+        Assert.Equal(("screen", "t2", "redrawn"), (again["type"]!.GetValue<string>(), again["pane"]!.GetValue<string>(), again["data"]!.GetValue<string>()));
 
         using var stranger = Socket(authority, "termilly=not-a-token");
         await Assert.ThrowsAnyAsync<WebSocketException>(() => stranger.ConnectAsync(new Uri(server.AppUrl.Replace("https", "wss") + "api/live"), CancellationToken.None));
@@ -375,6 +388,89 @@ public sealed class PhoneTests : IDisposable
         Assert.Equal(("t1", new PhoneLive.GridSize(400, 30), "127.0.0.1"), (sized[0].Pane, sized[0].Phone!.Size, sized[0].Phone!.Address));
         Assert.Equal(_store.List().Single().Id, sized[0].Phone!.Device);
         Assert.Equal(("t1", null), sized[1]);
+    }
+
+    [Fact]
+    public async Task A_computer_gives_its_size_up_and_the_PC_takes_a_terminal_back_telling_the_one_that_gave_it()
+    {
+        using var authority = _store.Authority("TESTPC");
+        using var server = Start(authority);
+        using var http = Https(authority);
+        var paired = await Post(http, server.AppUrl + "api/pair", $$"""{"code":"{{_store.OfferCode()}}"}""");
+        var cookie = paired.Headers.GetValues("Set-Cookie").First().Split(';')[0];
+        var sized = new List<PhoneLive.Viewer?>();
+        _live.Sized = (_, viewer) =>
+        {
+            lock (sized)
+            {
+                sized.Add(viewer);
+            }
+        };
+        using var phone = Socket(authority, cookie);
+        await phone.ConnectAsync(new Uri(server.AppUrl.Replace("https", "wss") + "api/live"), CancellationToken.None);
+        await ReceiveText(phone); // the terminals
+
+        await Send(phone, """{"op":"watch","pane":"t1","cols":0,"rows":0}"""); // keeps the terminal's own size
+        await ReceiveText(phone); // the screen
+        await Send(phone, """{"op":"size","pane":"t1","cols":100,"rows":30}""");
+        await Send(phone, """{"op":"size","pane":"t1","cols":0,"rows":0}"""); // its tab went off screen
+        await Send(phone, """{"op":"size","pane":"t1","cols":90,"rows":30}""");
+        await Until(() => { lock (sized) { return sized.Count == 3; } });
+        _live.TakeBack("t1");
+        var released = JsonNode.Parse(await ReceiveText(phone))!;
+        _live.TakeBack("t1"); // nobody gives it a size now: nothing to tell
+
+        Assert.Equal(("released", "t1", null), (released["type"]!.GetValue<string>(), released["pane"]!.GetValue<string>(), released["by"]?.GetValue<string>()));
+        Assert.Equal([new PhoneLive.GridSize(100, 30), null, new PhoneLive.GridSize(90, 30), null], sized.Select(v => v?.Size));
+    }
+
+    [Fact]
+    public async Task A_second_phone_giving_its_size_takes_the_terminal_and_the_first_is_told_who_has_it()
+    {
+        using var authority = _store.Authority("TESTPC");
+        using var server = Start(authority);
+        using var http = Https(authority);
+        var first = (await Post(http, server.AppUrl + "api/pair", $$"""{"code":"{{_store.OfferCode()}}","name":"Laptop"}""")).Headers.GetValues("Set-Cookie").First().Split(';')[0];
+        var second = (await Post(http, server.AppUrl + "api/pair", $$"""{"code":"{{_store.OfferCode()}}","name":"Phone"}""")).Headers.GetValues("Set-Cookie").First().Split(';')[0];
+        _live.NameOf = device => _store.List().FirstOrDefault(d => d.Id == device)?.Name;
+        var watchers = new List<string>();
+        _live.Watchers = (pane, names) =>
+        {
+            lock (watchers)
+            {
+                watchers.Add($"{pane}: {string.Join(", ", names)}");
+            }
+        };
+        var sized = new List<PhoneLive.GridSize?>();
+        _live.Sized = (_, viewer) =>
+        {
+            lock (sized)
+            {
+                sized.Add(viewer?.Size);
+            }
+        };
+        using var laptop = Socket(authority, first);
+        using var phone = Socket(authority, second);
+        foreach (var socket in new[] { laptop, phone })
+        {
+            await socket.ConnectAsync(new Uri(server.AppUrl.Replace("https", "wss") + "api/live"), CancellationToken.None);
+            await ReceiveText(socket); // the terminals
+            await Send(socket, """{"op":"watch","pane":"t1"}""");
+            await ReceiveText(socket); // the screen
+        }
+
+        await Send(laptop, """{"op":"size","pane":"t1","cols":120,"rows":40}""");
+        await Until(() => { lock (sized) { return sized.Count == 1; } });
+        await Send(phone, """{"op":"size","pane":"t1","cols":50,"rows":30}""");
+        var released = JsonNode.Parse(await ReceiveText(laptop))!;
+        await Until(() => { lock (sized) { return sized.Count == 2; } });
+        phone.Abort(); // the phone goes: nobody gives it a size now
+
+        await Until(() => { lock (sized) { return sized.Count == 3; } });
+        Assert.Equal(("released", "Phone"), (released["type"]!.GetValue<string>(), released["by"]!.GetValue<string>()));
+        Assert.Equal([new PhoneLive.GridSize(120, 40), new PhoneLive.GridSize(50, 30), null], sized);
+        await Until(() => { lock (watchers) { return watchers.Count == 3; } });
+        Assert.Equal(["t1: Laptop", "t1: Laptop, Phone", "t1: Laptop"], watchers);
     }
 
     [Fact]

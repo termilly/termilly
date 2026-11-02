@@ -12,7 +12,7 @@ import { createWorkspace, freeName } from './workspaces.js';
 import { environmentOf } from './environments.js';
 import { fuzzyMatch } from './fuzzy.js';
 import { updateSettings } from './preferences.js';
-import { byId, find, field, targetOf } from './dom.js';
+import { byId, find, field, targetOf, dragPointer } from './dom.js';
 
 /** The sidebar's state, with the Remote section's fold (kept with the sidebar's, store.js). */
 
@@ -114,6 +114,39 @@ let extraHtml = () => '';
  */
 export const setRemoteExtra = fn => { extraHtml = fn; };
 
+/** The Remote section's smallest and its largest share of the sidebar, when dragged to a size. */
+const MIN_HEIGHT = 80;
+const ROOM_LEFT = 120;
+
+/**
+ * The Remote section at a height the user dragged it to (its list scrolls inside), or as tall as it needs (null).
+ * @param {number | null} height
+ */
+function sizeSection(height) {
+  section.classList.toggle('sized', height !== null);
+  section.style.height = height === null ? '' : `${height}px`;
+}
+
+/** A height the section can have now: not under its least, leaving the workspaces room above it. @param {number} h */
+const fitHeight = h => Math.round(Math.max(MIN_HEIGHT, Math.min(h, (section.parentElement?.clientHeight ?? h) - ROOM_LEFT)));
+
+const grip = find(section, '.rm-grip');
+grip.addEventListener('pointerdown', e => {
+  e.preventDefault();
+  const startY = e.clientY, startHeight = section.offsetHeight;
+  grip.classList.add('dragging');
+  dragPointer(grip, e, ev => sizeSection(fitHeight(startHeight + startY - ev.clientY)), () => {
+    grip.classList.remove('dragging');
+    state.sidebar.remoteHeight = section.offsetHeight;
+    persist();
+  });
+});
+grip.addEventListener('dblclick', () => {
+  delete state.sidebar.remoteHeight;
+  sizeSection(null);
+  persist();
+});
+
 export function renderRemote() {
   const all = places();
   const extra = extraHtml();
@@ -121,6 +154,7 @@ export function renderRemote() {
   if (section.hidden) return;
   const folded = !!state.sidebar.remoteFolded;
   section.classList.toggle('folded', folded);
+  sizeSection(folded ? null : state.sidebar.remoteHeight ?? null);
   find(head, '.rm-count').textContent = String(all.length);
   const query = filter.hidden ? null : filter.value.trim();
   if (folded) {

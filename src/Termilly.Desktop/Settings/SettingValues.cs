@@ -50,6 +50,19 @@ internal static class SettingValues
         public static readonly IReadOnlyList<string> All = [Away, Always, Off];
     }
 
+    /// <summary>
+    /// How another computer's terminal opened here is drawn (Settings › Remote): it keeps that computer's size (the
+    /// default: nothing changes there, and every computer showing it shows the same), or fits this computer (the terminal
+    /// there takes this one's size while it's on screen here).
+    /// </summary>
+    public static class PcSize
+    {
+        public const string Fit = "fit";
+        public const string Keep = "keep";
+        public const string Default = Keep;
+        public static readonly IReadOnlyList<string> All = [Fit, Keep];
+    }
+
     /// <summary>A notification sound: off, or one of the pings in wwwroot/sounds (ping-1.mp3…), by its file name.</summary>
     public static class Sound
     {

@@ -121,6 +121,7 @@ function devicesHtml() {
       { keywords: 'phone alert push notification away idle' })
     + row('Allow typing', 'Paired phones and computers can type into the terminals they show, and computers can copy files into them. Answers to an agent work either way.', toggle('phone.allowTyping'), { keywords: 'phone computer type keyboard input remote copy files' })
     + row('Clipboard on the phone', 'With typing allowed, phones can paste your recent text clips. They get only each one’s first line, secrets masked; this PC pastes it.', toggle('phone.clips'), { keywords: 'phone clipboard paste' })
+    + row('Prompt history', 'Paired computers can open Prompt history for the terminals they show: what you asked Claude Code there, with times.', toggle('phone.sharePrompts'), { keywords: 'computer prompts history claude remote' })
     + row('Hide details in alerts', 'Only “An agent needs you” or “An agent finished”: no terminal, workspace or message on the lock screen.', toggle('phone.hideDetails'), { keywords: 'phone alert privacy lock screen' })
     + row('Test alert', tested ? escapeHtml(tested) : 'Sends an alert to each phone that has alerts on, even when it’s locked.',
       '<button class="btn small" data-action="testPhone">Send</button>', { keywords: 'phone alert push notification test' })
@@ -135,7 +136,10 @@ const PHONE = {
     'Your terminals and agents on your phone or another Termilly computer, served by this PC on your own network over HTTPS. Off by default: nothing listens while it’s off.',
     toggle('phone.enabled'), { keywords: 'remote phone mobile iphone android computer laptop lan wifi' })
     + (status.error ? `<p class="set-status">${escapeHtml(status.error)}</p>` : ''))
-    + (status.running ? computerHtml() + setupHtml() + devicesHtml() : ''),
+    + (status.running ? computerHtml() + setupHtml() + devicesHtml() : '')
+    + group('Remote terminals', row('Size of remote terminals',
+      'A remote terminal is one you open on this computer from another Termilly computer, where it’s a local terminal. Set this on each computer you open remote terminals on. Keep remote size: the local terminal is never resized, and this computer draws it smaller when its window is smaller. Fit local window: the remote terminal follows this window at your font size, and the local terminal takes that size while you have it in front.',
+      seg('phone.pcSize', [[SETTING_VALUES.pcSize.keep, 'Keep remote size'], [SETTING_VALUES.pcSize.fit, 'Fit local window']]), { keywords: 'remote local computer terminal size resolution columns rows fit keep' })),
   refresh: () => send(PAGE.phoneStatus),
   opened: () => send(PAGE.phoneStatus),
   drawn(body) {

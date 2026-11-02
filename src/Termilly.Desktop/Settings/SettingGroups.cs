@@ -250,11 +250,16 @@ internal sealed record PhoneSettings
     /// asks the PC to paste one, so a clip's text never goes to the phone.
     /// </summary>
     public bool Clips { get; init; } = true;
+    /// <summary>A paired computer may open Prompt history for a terminal of this PC it shows (Phone/PcPromptsApi.cs).</summary>
+    public bool SharePrompts { get; init; } = true;
+    /// <summary>How another computer's terminal opened here is drawn (SettingValues.PcSize).</summary>
+    public string PcSize { get; init; } = SettingValues.PcSize.Default;
 
     public PhoneSettings Normalize() => this with
     {
         Port = Port is >= MinPort and <= MaxPort ? Port : DefaultPort,
         Alerts = SettingChecks.OneOf(Alerts, SettingValues.PhoneAlerts.All, SettingValues.PhoneAlerts.Always),
+        PcSize = SettingChecks.OneOf(PcSize, SettingValues.PcSize.All, SettingValues.PcSize.Default),
     };
 }
 

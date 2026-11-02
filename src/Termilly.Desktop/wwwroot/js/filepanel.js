@@ -10,7 +10,7 @@
 
 import { PAGE, HOST } from './protocol.js';
 import { send, sendWithFiles, onHost, platform, droppedPaths, PLATFORM } from './host.js';
-import { state, on, persist, tabTitle, wsById, isSsh, isRemote, EVENTS } from './store.js';
+import { state, on, persist, tabTitle, wsById, isSsh, isRemote, profileOf, EVENTS } from './store.js';
 import { focusedTab, newTab } from './panes.js';
 import { scheduleFit, typePaths } from './terminals.js';
 import { escapeHtml, ICONS } from './ui.js';
@@ -19,8 +19,8 @@ import { byId, field, targetOf, dockRight, WORKSPACE_ID, PATH_DRAG, DOCK_GRIP } 
 import { showMenu, SEPARATOR } from './popups.js';
 import { showChange } from './preview.js';
 import { pathActions } from './actions.js';
-import { FILE_OP, FOLDER_PATH } from './constants.js';
-import { parentOf, isInside, DRIVE_ICON, DRIVES_NAME, folderName, sizeText, hasFiles, shellFolderOf, folderOf, placeOf, sameMachine } from './filepaths.js';
+import { FILE_OP, FOLDER_PATH, PROFILE_SOURCE } from './constants.js';
+import { parentOf, isInside, DRIVE_ICON, DRIVES_NAME, folderName, sizeText, hasFiles, shellFolderOf, folderOf, placeOf, sameMachine, isWsl, wslPath, wslDistroOf, shellPathOf } from './filepaths.js';
 import { rootOf, childPath, signHtml, indentRows, readFolders, pathDown } from './foldertree.js';
 import { planCopy, planInto } from './copyto.js';
 import { JOB_KIND, FILE_MANAGER, BIN, newRequestId, startJob, expectJob } from './filejobs.js';
@@ -212,9 +212,10 @@ function show(tab) {
 
 /** @param {Tab | null | undefined} [tab] */
 export function toggleFiles(tab = focusedTab()) {
-  if (!panel.hidden && (!tab || view?.tab === tab)) {
+  if (!panel.hidden && (!tab || view?.tab === tab || without === tab)) {
     panel.hidden = true;
     view = null;
+    without = null;
     views.clear(); // opened again, it starts where each terminal's shell is
     keep();
     return;
@@ -222,6 +223,46 @@ export function toggleFiles(tab = focusedTab()) {
   if (!tab || !hasFiles(tab)) return;
   panel.hidden = false;
   show(tab);
+}
+
+/** The terminal the open panel shows without files (it has none to show), else null. */
+/** @type {Tab | null} */
+let without = null;
+
+/**
+ * The open panel shows another terminal: its tree, or why it has none (a container, a serial port, a terminal of
+ * another computer that doesn't share its files). With no terminal left, it closes.
+ * @param {Tab | null | undefined} tab
+ */
+function follow(tab) {
+  if (panel.hidden) return;
+  if (!tab) {
+    toggleFiles(null);
+    return;
+  }
+  if (hasFiles(tab)) {
+    without = null;
+    show(tab);
+    return;
+  }
+  view = null;
+  without = tab;
+  panel.innerHTML = `
+    <div class="${DOCK_GRIP}" title="Drag to resize"></div>
+    <div class="files-head">
+      <span class="files-title">Files · ${escapeHtml(tabTitle(tab))}</span>
+      <span class="files-tools"><button class="pane-btn" data-files="${FILES_ACTION.close}" title="Close">${ICONS.close}</button></span>
+    </div>
+    <div class="files-none">${escapeHtml(whyNoFiles(tab))}</div>`;
+}
+
+/** Why a terminal's files can't be shown here. @param {Tab} tab */
+function whyNoFiles(tab) {
+  const source = profileOf(tab)?.source;
+  if (tab.virtual) return 'Its files show here while that computer allows typing (its Settings › Remote › Allow typing).';
+  if (source === PROFILE_SOURCE.serial) return 'A serial port has no files to show.';
+  if (source === PROFILE_SOURCE.docker || source === PROFILE_SOURCE.kubernetes) return 'A container’s files can’t be shown here.';
+  return 'This terminal’s files can’t be shown here.';
 }
 
 /** Keeps how the panel is (open, its terminal, the folders open, the scroll) for a restart. */
@@ -416,6 +457,7 @@ function render() {
       <input class="field files-search" type="search" placeholder="${escapeHtml(searchHint())}" title="Searches the folder selected (or the shell’s) and every folder in it. * and ? match any letters, or one" spellcheck="false" autocomplete="off" data-files-search value="${escapeHtml(view.query)}">
       ${server ? '<label class="btn small files-upload" title="Upload files into the folder selected">Upload<input type="file" multiple hidden data-files-pick></label>' : ''}
     </div>
+    ${isWsl(tab) && tab.remoteCwd == null ? `<div class="files-hint">Termilly isn’t set up in ${escapeHtml(wslDistroOf(tab) ?? '')} yet, so this can’t follow the shell’s folder. The bar over the terminal sets it up.</div>` : ''}
     <div class="files-list">${treeHtml(view)}</div>`;
   const drawn = /** @type {HTMLElement} */ (panel.querySelector(LIST));
   indentRows(drawn);
@@ -664,6 +706,7 @@ const rowOf = e => {
 };
 
 panel.addEventListener('click', e => {
+  if (without && /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-files]'))?.dataset.files === FILES_ACTION.close) return toggleFiles(without);
   if (!view) return;
   const action = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-files]'))?.dataset.files;
   const { i, r } = rowOf(e);
@@ -781,7 +824,7 @@ function itemMenu(v, r) {
   const drive = r.dir === FOLDER_PATH.drives;
   return [
     ...open, ...here, ...transferItems(v, [r]), SEPARATOR,
-    { label: 'Copy path', icon: ICONS.copy, action: () => copyText(r.path) },
+    { label: 'Copy path', icon: ICONS.copy, action: () => copyText(shellPathOf(v.tab, r.path)) },
     ...terminalItems(v.tab, [r]),
     .../** @type {import('./popups.js').MenuEntry[]} */ (actions.length ? [SEPARATOR, ...actions] : []),
     .../** @type {import('./popups.js').MenuEntry[]} */ (e.isDirectory ? [SEPARATOR, { label: 'New folder', icon: ICONS.plus, action: () => makeFolder(r.path) }] : []),
@@ -818,7 +861,7 @@ function selectionMenu(v, items) {
   const paths = items.map(r => r.path);
   return [
     ...transferItems(v, items), SEPARATOR,
-    { label: 'Copy paths', icon: ICONS.copy, action: () => copyText(paths.join('\n')) },
+    { label: 'Copy paths', icon: ICONS.copy, action: () => copyText(paths.map(p => shellPathOf(v.tab, p)).join('\n')) },
     ...terminalItems(v.tab, items),
     .../** @type {import('./popups.js').MenuEntry[]} */ (items.some(r => r.dir === FOLDER_PATH.drives) ? [] : [
       SEPARATOR,
@@ -841,7 +884,7 @@ function folderMenu(v) {
     refreshItem,
     ...(v.server ? [] : [{ label: `Show in ${FILE_MANAGER}`, action: () => send(PAGE.openPath, { path: dir }) }]),
     SEPARATOR,
-    { label: 'Copy path', icon: ICONS.copy, action: () => copyText(dir) },
+    { label: 'Copy path', icon: ICONS.copy, action: () => copyText(shellPathOf(v.tab, dir)) },
     { label: 'Insert path in the terminal', action: () => pasteNames(v.tab, [dir]) },
   ];
 }
@@ -985,11 +1028,24 @@ function followed(tab, path) {
   else v.moved = path;
 }
 
-on(EVENTS.remoteCwd, tab => { if (isSsh(tab)) followed(tab, tab.remoteCwd); });
-on(EVENTS.cwd, tab => { if (!isSsh(tab) && !isRemote(tab)) followed(tab, tab.cwd); });
-on(EVENTS.tabClosed, tab => views.delete(tab.id));
-
-on(EVENTS.focus, tab => {
-  // The panel follows the focused terminal while it has files to show.
-  if (!panel.hidden && view && tab !== view.tab && hasFiles(tab)) show(tab);
+on(EVENTS.remoteCwd, tab => {
+  if (isSsh(tab)) followed(tab, tab.remoteCwd);
+  else if (isWsl(tab)) followed(tab, wslPath(tab, tab.remoteCwd)); // in its distribution, as Windows reaches it
 });
+on(EVENTS.cwd, tab => { if (!isSsh(tab) && !isRemote(tab)) followed(tab, tab.cwd); });
+/**
+ * The open panel shows the terminal in front: after another is focused, the one it showed closed (closing a terminal
+ * focuses its neighbour without a focus event), or another workspace came in front. Trees of closed terminals go.
+ */
+function toFront() {
+  for (const id of views.keys()) if (!state.tabs.has(id)) views.delete(id);
+  if (panel.hidden) return;
+  const shown = view?.tab ?? without;
+  const front = focusedTab();
+  if (front === shown && (!shown || state.tabs.has(shown.id))) return;
+  follow(front && state.tabs.has(front.id) ? front : null);
+}
+on(EVENTS.workspaces, () => setTimeout(toFront)); // once focus has moved
+
+// The panel follows the focused terminal: its files, or why it has none.
+on(EVENTS.focus, toFront);

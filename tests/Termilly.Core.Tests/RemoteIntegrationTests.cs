@@ -194,6 +194,25 @@ public sealed class RemoteIntegrationTests : IDisposable
         Assert.Equal(original + "\n", File.ReadAllText(bashrc));
     }
 
+    [Fact]
+    public void A_bash_profile_loads_it_too_and_loses_the_line_on_removing()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+        // A login shell (WSL starts one) reads ~/.bash_profile instead of ~/.profile, which is what reads ~/.bashrc.
+        var profile = Path.Combine(_home, ".bash_profile");
+        const string original = "export EDITOR=vim\n";
+        File.WriteAllText(profile, original);
+
+        Assert.Equal(0, Run("/bin/sh", "-s", _home, RemoteIntegration.Installer(Scripts)).Code);
+        Assert.Single(File.ReadAllLines(profile), l => l.Contains(".termilly/termilly.sh"));
+
+        Assert.Equal(0, Run("/bin/sh", Path.Combine(_home, ".termilly", "uninstall.sh"), _home).Code);
+        Assert.Equal(original, File.ReadAllText(profile));
+    }
+
     /// <summary>Runs <paramref name="input"/> in an interactive bash with the integration installed, in a terminal.</summary>
     [System.Runtime.Versioning.SupportedOSPlatform("linux")]
     private async Task<string> InTerminal(string input, string until, string? cwd = null, bool termilly = true)

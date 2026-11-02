@@ -42,7 +42,9 @@ internal static partial class RemoteIntegration
 
     /// <summary>
     /// The installer, a sh script: writes the scripts and Claude Code's hook settings into ~/.termilly, and adds the
-    /// line that loads them to ~/.bashrc and ~/.zshrc (the ones the user has, or their login shell's).
+    /// line that loads them to ~/.bashrc and ~/.zshrc (the ones the user has, or their login shell's), and to
+    /// ~/.bash_profile when there is one: a login shell (WSL starts one) reads it instead of ~/.profile, which on most
+    /// systems is what reads ~/.bashrc. Loaded twice, the script returns the second time.
     /// </summary>
     public static string Installer(string? folder = null)
     {
@@ -66,7 +68,7 @@ internal static partial class RemoteIntegration
         text.Append("chmod +x \"$d/termilly-hook.sh\" \"$d/uninstall.sh\"\n");
         text.Append("""
             line='[ -f "$HOME/.termilly/termilly.sh" ] && . "$HOME/.termilly/termilly.sh"'
-            for rc in "$HOME/.bashrc" "$HOME/.zshrc"; do
+            for rc in "$HOME/.bashrc" "$HOME/.bash_profile" "$HOME/.zshrc"; do
               case "$rc:${SHELL-}" in
                 *.bashrc:*bash) ;;
                 *.zshrc:*zsh) ;;

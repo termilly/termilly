@@ -6,7 +6,7 @@
 import { PAGE } from './protocol.js';
 import { request, platform, PLATFORM } from './host.js';
 import { isSsh } from './store.js';
-import { joinPath, parentOf } from './filepaths.js';
+import { joinPath, parentOf, isWsl, wslRootOf } from './filepaths.js';
 import { FOLDER_PATH } from './constants.js';
 
 /** A file or folder, as the host lists it (Sftp.cs, LocalFiles.cs); a drive has its label. */
@@ -41,7 +41,7 @@ export const signHtml = (has, open) => `<span class="tree-twist" data-twist>${ha
  * Where a terminal's tree starts: this PC's drives, or the root of its server (or of this machine, on Linux).
  * @param {Tab} tab
  */
-export const rootOf = tab => (tab.pcFiles ? tab.pcFiles.root : isSsh(tab) || platform !== PLATFORM.windows ? '/' : FOLDER_PATH.drives);
+export const rootOf = tab => (tab.pcFiles ? tab.pcFiles.root : isWsl(tab) ? wslRootOf(tab) : isSsh(tab) || platform !== PLATFORM.windows ? '/' : FOLDER_PATH.drives);
 
 /**
  * A folder's path in a tree: a drive's is its root ("C:\").

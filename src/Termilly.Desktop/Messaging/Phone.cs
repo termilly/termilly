@@ -21,6 +21,12 @@ internal static partial class FromPage
         public static string Type => "phone:pair";
     }
 
+    /// <summary>The PC takes a terminal back from the phones and computers that gave it their size.</summary>
+    internal sealed record PhoneTakeBack(string Id = "") : IPageMessage
+    {
+        public static string Type => "phone:takeBack";
+    }
+
     internal sealed record PhoneRemove(string? Device = null) : IPageMessage
     {
         public static string Type => "phone:remove";
@@ -97,6 +103,12 @@ internal static partial class ToPage
     internal sealed record PhoneTyped(string Id, string Data) : IHostMessage
     {
         public static string Type => "phone:typed";
+    }
+
+    /// <summary>Who has this terminal open now: the paired phones' and computers' names (none: nobody).</summary>
+    internal sealed record PhoneViewers(string Id, IReadOnlyList<string> Names) : IHostMessage
+    {
+        public static string Type => "phone:viewers";
     }
 
     /// <summary>
