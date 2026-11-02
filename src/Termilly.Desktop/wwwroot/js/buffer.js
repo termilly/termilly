@@ -28,7 +28,7 @@ export function onPromptLine(term) {
   const buffer = term.buffer.active;
   if (buffer.type === 'alternate') return false;
   const line = buffer.getLine(buffer.baseY + buffer.cursorY)?.translateToString(true) ?? '';
-  return /[$#%>] S/.test(line) && !NOT_A_PROMPT.test(line);
+  return /[$#%>] \S/.test(line) && !NOT_A_PROMPT.test(line);
 }
 
 /**
