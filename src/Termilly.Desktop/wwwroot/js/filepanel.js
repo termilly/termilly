@@ -1033,16 +1033,19 @@ on(EVENTS.remoteCwd, tab => {
   else if (isWsl(tab)) followed(tab, wslPath(tab, tab.remoteCwd)); // in its distribution, as Windows reaches it
 });
 on(EVENTS.cwd, tab => { if (!isSsh(tab) && !isRemote(tab)) followed(tab, tab.cwd); });
-on(EVENTS.tabClosed, tab => {
-  views.delete(tab.id);
-  // The terminal it showed closed: the one in front now, once focus has moved there.
-  if (view?.tab === tab || without === tab) setTimeout(() => {
-    const next = focusedTab();
-    follow(next && state.tabs.has(next.id) ? next : null);
-  });
-});
+/**
+ * The open panel shows the terminal in front: after another is focused, the one it showed closed (closing a terminal
+ * focuses its neighbour without a focus event), or another workspace came in front. Trees of closed terminals go.
+ */
+function toFront() {
+  for (const id of views.keys()) if (!state.tabs.has(id)) views.delete(id);
+  if (panel.hidden) return;
+  const shown = view?.tab ?? without;
+  const front = focusedTab();
+  if (front === shown && (!shown || state.tabs.has(shown.id))) return;
+  follow(front && state.tabs.has(front.id) ? front : null);
+}
+on(EVENTS.workspaces, () => setTimeout(toFront)); // once focus has moved
 
-on(EVENTS.focus, tab => {
-  // The panel follows the focused terminal: its files, or why it has none.
-  if (!panel.hidden && tab !== (view?.tab ?? without)) follow(tab);
-});
+// The panel follows the focused terminal: its files, or why it has none.
+on(EVENTS.focus, toFront);
