@@ -195,6 +195,10 @@ interface Tab {
   phoneSize?: { cols: number, rows: number, tallest?: number } | null;
   /** Who gives it that size: a phone or another computer, as its label says (js/phone.js showAtSize). */
   sizedBy?: { label: string, computer: boolean } | null;
+  /** That size is another computer's: Take back shows (js/phone.js). */
+  takeBack?: boolean;
+  /** Who has it open: the paired phones' and computers' names (js/phone.js). */
+  viewers?: string[];
   /** Its Claude Code session is resuming after a restart, until it reports in (js/resuming.js). */
   resuming?: { session: string; command: string | null; retried: boolean; timer: number } | null;
   /** What it brings back and types as its shell starts (js/terminals.js). */

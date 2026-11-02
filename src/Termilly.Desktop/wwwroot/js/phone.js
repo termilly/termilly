@@ -223,8 +223,39 @@ onHost(HOST.phoneSize, m => {
   showAtSize(tab, m.cols && m.rows ? { cols: m.cols, rows: m.rows } : null, { label, computer: !!m.computer, takeBack: !!m.computer });
 });
 
-/** The label under a terminal drawn at another size: whose size it is, and Take back. */
+/** The label in a terminal's corner (or under its phone): who has it open, whose size it has, and Take back. */
 const WHO_CLASS = 'size-who';
+
+/**
+ * The label: who gives the terminal its size (with Take back when it's another computer), else who has it open.
+ * @param {Tab} tab
+ */
+function drawWho(tab) {
+  const body = tab.view?.body;
+  if (!body) return;
+  body.querySelector(`:scope > .${WHO_CLASS}`)?.remove();
+  const text = tab.phoneSize ? tab.sizedBy?.label : tab.viewers?.length ? `Open on ${tab.viewers.join(', ')}` : '';
+  if (!text && !tab.takeBack) return;
+  const label = document.createElement('div');
+  label.className = WHO_CLASS;
+  label.textContent = text ?? '';
+  if (tab.takeBack) {
+    const button = document.createElement('button');
+    button.textContent = 'Take back';
+    button.title = 'This terminal gets its own size here again. That computer shows it paused until it resumes.';
+    button.addEventListener('click', () => send(PAGE.phoneTakeBack, { id: tab.id }));
+    label.append(button);
+  }
+  body.append(label);
+}
+
+// Who has a terminal open changed: its label says so.
+onHost(HOST.phoneViewers, m => {
+  const tab = state.tabs.get(m.id);
+  if (!tab) return;
+  tab.viewers = m.names;
+  drawWho(tab);
+});
 
 /**
  * Draws a terminal at a size not its pane's (a phone's or another computer's), fitted into its pane with a label under
@@ -242,22 +273,10 @@ export function showAtSize(tab, size, who) {
     : null;
   // Who it is, for the other computers showing this terminal: they draw it as it's drawn here (js/remotepc.js).
   tab.sizedBy = tab.phoneSize ? { label: who?.label ?? '', computer: !!who?.computer } : null;
+  tab.takeBack = !!tab.phoneSize && !!who?.takeBack;
   view.body.classList.toggle('phone-sized', !!tab.phoneSize);
   view.body.classList.toggle(BY_COMPUTER, !!tab.phoneSize && !!who?.computer);
-  view.body.querySelector(`:scope > .${WHO_CLASS}`)?.remove();
-  if (tab.phoneSize && (who?.label || who?.takeBack)) {
-    const label = document.createElement('div');
-    label.className = WHO_CLASS;
-    label.textContent = who?.label ?? '';
-    if (who?.takeBack) {
-      const button = document.createElement('button');
-      button.textContent = 'Take back';
-      button.title = 'This terminal gets its own size here again. That computer shows it paused until it resumes.';
-      button.addEventListener('click', () => send(PAGE.phoneTakeBack, { id: tab.id }));
-      label.append(button);
-    }
-    view.body.append(label);
-  }
+  drawWho(tab);
   if (tab.phoneSize) {
     view.term.resize(tab.phoneSize.cols, tab.phoneSize.rows);
     phoneTabs.set(view.body, tab);

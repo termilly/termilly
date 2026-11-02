@@ -420,6 +420,14 @@ public sealed class PhoneTests : IDisposable
         var first = (await Post(http, server.AppUrl + "api/pair", $$"""{"code":"{{_store.OfferCode()}}","name":"Laptop"}""")).Headers.GetValues("Set-Cookie").First().Split(';')[0];
         var second = (await Post(http, server.AppUrl + "api/pair", $$"""{"code":"{{_store.OfferCode()}}","name":"Phone"}""")).Headers.GetValues("Set-Cookie").First().Split(';')[0];
         _live.NameOf = device => _store.List().FirstOrDefault(d => d.Id == device)?.Name;
+        var watchers = new List<string>();
+        _live.Watchers = (pane, names) =>
+        {
+            lock (watchers)
+            {
+                watchers.Add($"{pane}: {string.Join(", ", names)}");
+            }
+        };
         var sized = new List<PhoneLive.GridSize?>();
         _live.Sized = (_, viewer) =>
         {
@@ -448,6 +456,8 @@ public sealed class PhoneTests : IDisposable
         await Until(() => { lock (sized) { return sized.Count == 3; } });
         Assert.Equal(("released", "Phone"), (released["type"]!.GetValue<string>(), released["by"]!.GetValue<string>()));
         Assert.Equal([new PhoneLive.GridSize(120, 40), new PhoneLive.GridSize(50, 30), null], sized);
+        await Until(() => { lock (watchers) { return watchers.Count == 3; } });
+        Assert.Equal(["t1: Laptop", "t1: Laptop, Phone", "t1: Laptop"], watchers);
     }
 
     [Fact]

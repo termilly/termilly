@@ -22,7 +22,6 @@ internal sealed class PhoneLive : IDisposable
 {
     /// <summary>The longest message a phone may send: a reply to an agent.</summary>
     private const int MaxMessage = 16 * 1024;
-    private const int ReceiveChunk = 4096;
 
     /// <summary>What a message to a phone is (its "type").</summary>
     public static class Kinds
@@ -87,6 +86,9 @@ internal sealed class PhoneLive : IDisposable
 
     /// <summary>A terminal should take this phone's size, or (null) its own again: no phone watches it.</summary>
     public Action<string, Viewer?>? Sized { get; set; }
+
+    /// <summary>Who has a terminal open now (the phones' and computers' names), whenever that changes.</summary>
+    public Action<string, IReadOnlyList<string>>? Watchers { get; set; }
 
     /// <summary>A paired phone's or computer's name, by its device id: who has a terminal now.</summary>
     public Func<string, string?>? NameOf { get; set; }
@@ -191,12 +193,12 @@ internal sealed class PhoneLive : IDisposable
             await SendAsync(socket, StateMessage()).ConfigureAwait(false);
             while (socket.State == WebSocketState.Open && !stop.IsCancellationRequested)
             {
-                var text = await ReceiveAsync(socket, stop).ConfigureAwait(false);
+                var text = await LiveMessages.ReceiveAsync(socket, MaxMessage, stop).ConfigureAwait(false);
                 if (text is null)
                 {
                     break;
                 }
-                var message = Parse(text);
+                var message = LiveMessages.Parse(text);
                 var op = message?[OpField]?.GetValue<string>();
                 if (op is Ops.Watch or Ops.Unwatch)
                 {
@@ -225,6 +227,7 @@ internal sealed class PhoneLive : IDisposable
         {
             Leave(me);
             _phones.TryRemove(socket, out var gone);
+            Tell(me.Watching);
             gone?.Gate.Dispose();
             socket.Abort();
             socket.Dispose();
@@ -249,12 +252,18 @@ internal sealed class PhoneLive : IDisposable
     private async Task WatchAsync(WebSocket socket, Phone phone, JsonObject? watch)
     {
         var pane = watch?[PaneField]?.GetValue<string>();
-        if (phone.Watching != pane)
+        var was = phone.Watching;
+        if (was != pane)
         {
             Leave(phone);
         }
         phone.Ready = false;
         phone.Watching = pane;
+        if (was != pane)
+        {
+            Tell(was);
+            Tell(pane);
+        }
         if (pane is null)
         {
             return;
@@ -330,6 +339,16 @@ internal sealed class PhoneLive : IDisposable
         }
     }
 
+    /// <summary>Says who has a terminal open now (<see cref="Watchers"/>).</summary>
+    private void Tell(string? pane)
+    {
+        if (pane is null || Watchers is not { } watchers)
+        {
+            return;
+        }
+        watchers(pane, _phones.Values.Where(p => p.Watching == pane).Select(p => NameOf?.Invoke(p.Device) ?? SomeoneElse).Distinct().ToList());
+    }
+
     /// <summary>
     /// The phones and computers (but <paramref name="keeper"/>) that gave a terminal their size give it up, told who has
     /// it now (<paramref name="by"/>; none: the PC). Whether there were any.
@@ -381,38 +400,6 @@ internal sealed class PhoneLive : IDisposable
         }
         catch (Exception e) when (e is WebSocketException or ObjectDisposedException or IOException)
         {
-        }
-    }
-
-    /// <summary>One whole text message, or null when the phone went away or sent too much.</summary>
-    private static async Task<string?> ReceiveAsync(WebSocket socket, CancellationToken stop)
-    {
-        var buffer = new byte[ReceiveChunk];
-        using var message = new MemoryStream();
-        while (true)
-        {
-            var result = await socket.ReceiveAsync(buffer, stop).ConfigureAwait(false);
-            if (result.MessageType == WebSocketMessageType.Close || message.Length + result.Count > MaxMessage)
-            {
-                return null;
-            }
-            message.Write(buffer, 0, result.Count);
-            if (result.EndOfMessage)
-            {
-                return result.MessageType == WebSocketMessageType.Text ? Encoding.UTF8.GetString(message.ToArray()) : "";
-            }
-        }
-    }
-
-    private static JsonObject? Parse(string text)
-    {
-        try
-        {
-            return JsonNode.Parse(text) as JsonObject;
-        }
-        catch (JsonException)
-        {
-            return null;
         }
     }
 }

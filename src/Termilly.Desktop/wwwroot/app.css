@@ -1416,10 +1416,10 @@ body[data-sidebar="rail"] .side-rail { opacity: 1; pointer-events: auto; }
 /* Another Termilly computer shows it: no phone around it, only what it is and "Open on" under it. */
 .pane-body.phone-sized.by-computer { padding: 0; }
 .pane-body.phone-sized.by-computer > .xterm { padding: 0; border: 0; border-radius: 0; box-shadow: none; }
-.pane-body.phone-sized.by-computer > .size-who { position: absolute; right: 10px; bottom: 10px; z-index: 5; opacity: 0.92; }
+.pane-body:not(.phone-sized) > .size-who, .pane-body.phone-sized.by-computer > .size-who { position: absolute; right: 10px; bottom: 10px; z-index: 5; opacity: 0.92; }
 .pane-body.phone-sized.by-computer > .xterm::before, .pane-body.phone-sized.by-computer > .xterm::after { content: none; }
-.pane-body.phone-sized > .size-who { flex: none; display: flex; align-items: center; gap: 8px; padding: 3px 4px 3px 10px; border-radius: 999px; background: var(--accent); color: #fff; font-size: 12px; font-weight: 600; }
-.pane-body.phone-sized > .size-who:not(:has(button)) { padding-right: 10px; }
+.size-who { flex: none; display: flex; align-items: center; gap: 8px; padding: 3px 4px 3px 10px; border-radius: 999px; background: var(--accent); color: #fff; font-size: 12px; font-weight: 600; }
+.size-who:not(:has(button)) { padding-right: 10px; }
 .size-who button { height: 20px; padding: 0 8px; border-radius: 10px; background: rgba(0, 0, 0, 0.25); color: #fff; font-size: 11.5px; font-weight: 600; }
 .size-who button:hover { background: rgba(0, 0, 0, 0.4); }
 .pc-paused { position: absolute; inset: 0; z-index: 20; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: color-mix(in srgb, var(--bg) 70%, transparent); color: var(--text); font-size: 13px; text-align: center; }

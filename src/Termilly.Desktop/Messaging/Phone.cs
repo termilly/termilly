@@ -105,6 +105,12 @@ internal static partial class ToPage
         public static string Type => "phone:typed";
     }
 
+    /// <summary>Who has this terminal open now: the paired phones' and computers' names (none: nobody).</summary>
+    internal sealed record PhoneViewers(string Id, IReadOnlyList<string> Names) : IHostMessage
+    {
+        public static string Type => "phone:viewers";
+    }
+
     /// <summary>
     /// A phone has this terminal on its screen (opened there, or its news came while it was): the news there is seen,
     /// as when the terminal is focused on the PC (js/phone.js).

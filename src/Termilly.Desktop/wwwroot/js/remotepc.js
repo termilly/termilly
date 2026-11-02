@@ -276,7 +276,7 @@ function drawAtTheirSize(tab) {
   // A phone (or another computer) has it there: drawn here as it's drawn there, in its phone, with who has it.
   const who = t.sizedBy ?? { label: '', computer: true }; // its own size there: nothing to say
   if (tab.phoneSize?.cols === t.cols && tab.phoneSize.rows === t.rows && tab.sizedBy?.label === who.label) return;
-  showAtSize(tab, { cols: t.cols, rows: t.rows }, who);
+  showAtSize(tab, { cols: t.cols, rows: t.rows }, { ...who, takeBack: false }); // taken back there, not here
 }
 
 /**
