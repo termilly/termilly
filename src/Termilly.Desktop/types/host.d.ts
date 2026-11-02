@@ -135,6 +135,8 @@ interface PhoneSettings {
   clips: boolean;
   /** A paired computer may open Prompt history for a terminal of this PC it shows (Phone/PcPromptsApi.cs). */
   sharePrompts: boolean;
+  /** How another computer's terminal opened here is drawn (SettingValues.PcSize). */
+  pcSize: string;
 }
 
 interface NotificationSettings {

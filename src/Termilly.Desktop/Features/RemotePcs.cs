@@ -231,6 +231,10 @@ internal sealed class RemotePcsHandler(PageChannel page, RemotePcStore store, Ph
                 {
                     page.Post(new ToPage.PcOutput(tab, message[Fields.Data]?.GetValue<string>() ?? "", type == Kinds.Screen));
                 }
+                else if (type == Phone.PhoneLive.Kinds.Released && message[Fields.Pane]?.GetValue<string>() == watch.Pane)
+                {
+                    page.Post(new ToPage.PcPaused(tab));
+                }
                 else if (type == Kinds.Answered && message[Fields.Ok]?.GetValue<bool>() == false)
                 {
                     page.Post(new ToPage.PcRefused(tab, message[Fields.Error]?.GetValue<string>() ?? "That didn’t go through."));

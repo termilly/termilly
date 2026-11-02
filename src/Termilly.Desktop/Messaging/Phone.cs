@@ -21,6 +21,12 @@ internal static partial class FromPage
         public static string Type => "phone:pair";
     }
 
+    /// <summary>The PC takes a terminal back from the phones and computers that gave it their size.</summary>
+    internal sealed record PhoneTakeBack(string Id = "") : IPageMessage
+    {
+        public static string Type => "phone:takeBack";
+    }
+
     internal sealed record PhoneRemove(string? Device = null) : IPageMessage
     {
         public static string Type => "phone:remove";

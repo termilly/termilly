@@ -136,7 +136,10 @@ const PHONE = {
     'Your terminals and agents on your phone or another Termilly computer, served by this PC on your own network over HTTPS. Off by default: nothing listens while it’s off.',
     toggle('phone.enabled'), { keywords: 'remote phone mobile iphone android computer laptop lan wifi' })
     + (status.error ? `<p class="set-status">${escapeHtml(status.error)}</p>` : ''))
-    + (status.running ? computerHtml() + setupHtml() + devicesHtml() : ''),
+    + (status.running ? computerHtml() + setupHtml() + devicesHtml() : '')
+    + group('Other computers’ terminals', row('Their size here',
+      'Fit this computer: a terminal you open from another Termilly computer takes this screen’s size there while it’s in front here. Keep their size: it stays as it is there, drawn smaller here to fit.',
+      seg('phone.pcSize', [[SETTING_VALUES.pcSize.fit, 'Fit this computer'], [SETTING_VALUES.pcSize.keep, 'Keep their size']]), { keywords: 'remote computer size resolution columns rows fit' })),
   refresh: () => send(PAGE.phoneStatus),
   opened: () => send(PAGE.phoneStatus),
   drawn(body) {

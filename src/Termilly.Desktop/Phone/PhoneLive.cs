@@ -13,7 +13,9 @@ namespace Termilly.Desktop.Phone;
 /// answer to an agent) goes to <see cref="Received"/>, and its answer back to that phone alone. A phone may watch one
 /// terminal: it gets what that terminal shows (from the window), then what it prints, a few times a second. While
 /// a phone watches a terminal, the terminal takes the phone's size (<see cref="Sized"/>), so it fills the phone and
-/// its output fits it; it gets its own back when no phone watches it.
+/// its output fits it; it gets its own back when no phone watches it, when the phone gives its size up (a size of
+/// nothing: another computer's terminal that isn't on its screen), or when the PC takes it back (<see cref="TakeBack"/>:
+/// the phone is told, <see cref="Kinds.Released"/>, and has it again only by sending its size anew).
 /// </summary>
 internal sealed class PhoneLive : IDisposable
 {
@@ -28,6 +30,8 @@ internal sealed class PhoneLive : IDisposable
         public const string Answered = "answered";
         public const string Screen = "screen";
         public const string Output = "output";
+        /// <summary>The PC took the terminal back: it has its own size again until this phone sends its size anew.</summary>
+        public const string Released = "released";
     }
 
     /// <summary>What a phone asks of the connection itself: to watch a terminal, or stop.</summary>
@@ -267,12 +271,20 @@ internal sealed class PhoneLive : IDisposable
         phone.Ready = phone.Watching == pane;
     }
 
-    /// <summary>The phone's size for the terminal it watches (from the size of its screen and its font).</summary>
+    /// <summary>
+    /// The phone's size for the terminal it watches (from the size of its screen and its font); none (0) gives it up,
+    /// still watching.
+    /// </summary>
     private void Resize(Phone phone, JsonObject message)
     {
         if (phone.Watching is not { } pane || message[PaneField]?.GetValue<string>() != pane
             || message[ColsField]?.GetValue<int?>() is not { } cols || message[RowsField]?.GetValue<int?>() is not { } rows)
         {
+            return;
+        }
+        if (cols <= 0 || rows <= 0)
+        {
+            Leave(phone);
             return;
         }
         var size = new GridSize(Math.Clamp(cols, MinCols, MaxCols), Math.Clamp(rows, MinRows, MaxRows));
@@ -293,6 +305,26 @@ internal sealed class PhoneLive : IDisposable
         phone.Size = null;
         var other = _phones.Values.FirstOrDefault(p => p != phone && p.Watching == pane && p.Size is not null);
         Sized?.Invoke(pane, other?.Size is { } size ? new Viewer(size, other.Device, other.Address) : null);
+    }
+
+    /// <summary>
+    /// The PC takes a terminal back: the phones and computers that gave it their size are told, and it has its own size
+    /// again (until one of them sends its size anew).
+    /// </summary>
+    public void TakeBack(string pane)
+    {
+        var holders = _phones.Where(p => p.Value.Watching == pane && p.Value.Size is not null).ToList();
+        if (holders.Count == 0)
+        {
+            return;
+        }
+        var message = new JsonObject { [TypeField] = Kinds.Released, [PaneField] = pane }.ToJsonString();
+        foreach (var (socket, phone) in holders)
+        {
+            phone.Size = null;
+            _ = SendAsync(socket, message);
+        }
+        Sized?.Invoke(pane, null);
     }
 
     public void Dispose()

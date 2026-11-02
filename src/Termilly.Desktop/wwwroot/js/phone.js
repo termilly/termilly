@@ -201,8 +201,9 @@ async function answer({ pane, choice, text }) {
 }
 
 // A phone shows a terminal: it takes the phone's size, so it fills the phone and what it prints fits it, drawn here in
-// a phone with that phone's name and address under it (another Termilly computer: plainly, "Open on" its name); it gets its pane's size back when no phone shows it. The phone
-// keeps its full height when the phone's keyboard takes rows away: its tallest size while it shows the terminal.
+// a phone with that phone's name and address under it (another Termilly computer: plainly, "Open on" its name, with
+// Take back); it gets its pane's size back when no phone shows it. The phone keeps its full height when the phone's
+// keyboard takes rows away: its tallest size while it shows the terminal.
 onHost(HOST.phoneSize, m => {
   const tab = state.tabs.get(m.id);
   const view = tab?.view;
@@ -215,25 +216,53 @@ onHost(HOST.phoneSize, m => {
     if (view.term.rows !== m.rows) view.term.resize(m.cols, m.rows);
     return;
   }
-  tab.phoneSize = m.cols && m.rows
-    ? { cols: m.cols, rows: m.rows, tallest: before?.cols === m.cols ? Math.max(before.tallest ?? 0, m.rows) : m.rows }
+  const label = m.computer ? `Open on ${m.name ?? 'another computer'}` : [m.name ?? 'A phone', m.address].filter(Boolean).join(' · ');
+  showAtSize(tab, m.cols && m.rows ? { cols: m.cols, rows: m.rows } : null, { label, computer: !!m.computer, takeBack: !!m.computer });
+});
+
+/** The label under a terminal drawn at another size: whose size it is, and Take back. */
+const WHO_CLASS = 'size-who';
+
+/**
+ * Draws a terminal at a size not its pane's (a phone's or another computer's), fitted into its pane with a label under
+ * it (and Take back, which gives the terminal its own size again); no size gives it its pane's size again.
+ * @param {Tab} tab
+ * @param {{ cols: number, rows: number } | null} size
+ * @param {{ label: string, computer: boolean, takeBack?: boolean }} [who]
+ */
+export function showAtSize(tab, size, who) {
+  const view = tab.view;
+  if (!view?.term) return;
+  const before = tab.phoneSize;
+  tab.phoneSize = size
+    ? { cols: size.cols, rows: size.rows, tallest: before?.cols === size.cols ? Math.max(before.tallest ?? 0, size.rows) : size.rows }
     : null;
   view.body.classList.toggle('phone-sized', !!tab.phoneSize);
-  view.body.classList.toggle('by-computer', !!tab.phoneSize && m.computer === true);
+  view.body.classList.toggle('by-computer', !!tab.phoneSize && !!who?.computer);
+  view.body.querySelector(`:scope > .${WHO_CLASS}`)?.remove();
   if (tab.phoneSize) {
-    view.body.dataset.phone = m.computer ? `Open on ${m.name ?? 'another computer'}` : [m.name ?? 'A phone', m.address].filter(Boolean).join(' · ');
+    const label = document.createElement('div');
+    label.className = WHO_CLASS;
+    label.textContent = who?.label ?? '';
+    if (who?.takeBack) {
+      const button = document.createElement('button');
+      button.textContent = 'Take back';
+      button.title = 'This terminal gets its own size here again. That computer shows it paused until it resumes.';
+      button.addEventListener('click', () => send(PAGE.phoneTakeBack, { id: tab.id }));
+      label.append(button);
+    }
+    view.body.append(label);
     view.term.resize(tab.phoneSize.cols, tab.phoneSize.rows);
     phoneTabs.set(view.body, tab);
     resized.observe(view.body);
     requestAnimationFrame(() => fitPhone(tab)); // once the new size is drawn
   } else {
-    delete view.body.dataset.phone;
     resized.unobserve(view.body);
     if (view.term.element) view.term.element.style.minHeight = '';
     view.term.options.fontSize = state.settings.terminal.fontSize;
     view.fit?.fit();
   }
-});
+}
 
 /** Room in a phone-sized pane for its padding and the phone's name under the phone (app.css). */
 const PHONE_ROOM = Object.freeze({ width: 40, height: 84 });

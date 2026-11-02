@@ -143,6 +143,7 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
             }
         });
         router.On<FromPage.PhoneWithdraw>(m => _away.Drop(m.Id));
+        router.On<FromPage.PhoneTakeBack>(m => _live.TakeBack(m.Id));
         router.On<FromPage.PhoneTest>(async _ =>
         {
             var (sent, error) = await AlertAsync(null, TestAlert).ConfigureAwait(false);

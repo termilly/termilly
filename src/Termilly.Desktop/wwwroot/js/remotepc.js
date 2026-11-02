@@ -15,7 +15,8 @@ import { showMenu } from './popups.js';
 import { byId, targetOf } from './dom.js';
 import { renderRemote, setRemoteExtra, REMOTE_ID, REMOTE_GROUP, groupHead, isGroupFolded } from './remote.js';
 import { showToast, TOAST } from './toasts.js';
-import { FOLDER_PATH } from './constants.js';
+import { FOLDER_PATH, SETTING_VALUES } from './constants.js';
+import { showAtSize } from './phone.js';
 
 /** @typedef {import('./protocol.js').PcView} Pc */
 /** A computer's state, as its phone app gets it (js/phone.js snapshot): what the tree shows of it. */
@@ -211,6 +212,8 @@ function followTerminals() {
     const pc = v?.kind === PC_KIND ? pcs.find(p => p.id === v.client) : null;
     const t = pc ? stateOf(pc).terminals.find(x => x.id === v?.pane) : null;
     if (!v || !t) continue;
+    // Drawn at the size it has there: that size changed there.
+    if (tab.phoneSize && (keepsTheirs() || paused.has(tab.id))) drawAtTheirSize(tab);
     const icon = t.icon || v.icon, prompts = !!t.prompts;
     if (icon === v.icon && prompts === !!v.prompts) continue;
     Object.assign(v, { icon, prompts });
@@ -218,15 +221,126 @@ function followTerminals() {
   }
 }
 
-// Its terminal here is on screen: it starts watching there at its size, and tells its size as it changes.
+// ---- Whose size: this computer's, or the other's ----
+//
+// Settings › Remote says how its terminals are drawn here. Fit this computer (the default): the one there takes this
+// one's size while it's on screen here (its tab in front, the window not minimized), and its own again when it isn't.
+// Keep its size: it's drawn here at the size it has there, smaller to fit. Either way, when that computer takes it back
+// (its Take back), it's drawn at its own size here under Paused, until Resume.
+
+/** Its terminals here the other computer took back: paused until Resume. */
+/** @type {Set<string>} */
+const paused = new Set();
+/** Its terminals here on screen now. */
+/** @type {Set<string>} */
+const onScreen = new Set();
+/** The size each last told the other computer ("cols x rows", "0 x 0" for none), so it isn't told twice. */
+/** @type {Map<string, string>} */
+const told = new Map();
+/** The paused screen over a terminal. */
+const PAUSED_CLASS = 'pc-paused';
+
+/** Settings › Remote keeps the other computer's size for its terminals here. */
+const keepsTheirs = () => state.settings.phone?.pcSize === SETTING_VALUES.pcSize.keep;
+
+/**
+ * The size its terminal here gives the one there: this one's, while it fits this computer, isn't paused and is on
+ * screen; none otherwise.
+ * @param {Tab} tab
+ */
+function sizeToGive(tab) {
+  const term = tab.view?.term;
+  const gives = !!term && !keepsTheirs() && !paused.has(tab.id) && onScreen.has(tab.id) && !document.hidden;
+  return gives && term ? { cols: term.cols, rows: term.rows } : { cols: 0, rows: 0 };
+}
+
+/**
+ * Draws its terminal here as it should be now (at this pane's size, or at the size it has there), and tells the other
+ * computer the size it gives, if that changed.
+ * @param {Tab} tab
+ */
+function settleSize(tab) {
+  const v = tab.virtual;
+  if (v?.kind !== PC_KIND || !tab.view?.term) return;
+  if (keepsTheirs() || paused.has(tab.id)) drawAtTheirSize(tab);
+  else if (tab.phoneSize) showAtSize(tab, null);
+  const size = sizeToGive(tab), key = `${size.cols} x ${size.rows}`;
+  if (told.get(tab.id) === key) return;
+  told.set(tab.id, key);
+  send(PAGE.pcSize, { tab: tab.id, ...size });
+}
+
+/** Its terminal here at the size it has there, as that computer last said. @param {Tab} tab */
+function drawAtTheirSize(tab) {
+  const v = tab.virtual, pc = pcs.find(p => p.id === v?.client);
+  const t = pc ? stateOf(pc).terminals.find(x => x.id === v?.pane) : null;
+  if (!pc || !t?.cols || !t.rows) return;
+  if (tab.phoneSize?.cols === t.cols && tab.phoneSize.rows === t.rows) return;
+  showAtSize(tab, { cols: t.cols, rows: t.rows }, { label: `${pc.name}’s size`, computer: true });
+}
+
+/** Tabs by the pane body they're drawn in, for the observer below. */
+/** @type {WeakMap<Element, Tab>} */
+const bodies = new WeakMap();
+// A terminal here comes on screen or goes off it (another tab or workspace in front).
+const seen = new IntersectionObserver(entries => {
+  for (const e of entries) {
+    const tab = bodies.get(e.target);
+    if (!tab) continue;
+    if (e.isIntersecting) onScreen.add(tab.id);
+    else onScreen.delete(tab.id);
+    settleSize(tab);
+  }
+});
+/** Each of its terminals here, settled again (the window came or went, Settings changed). */
+const settleAll = () => { for (const id of watching.keys()) { const tab = state.tabs.get(id); if (tab) settleSize(tab); } };
+document.addEventListener('visibilitychange', settleAll);
+on(EVENTS.settings, settleAll);
+
+/**
+ * The other computer took its terminal back: paused here (drawn at the size it has there) until Resume, which gives
+ * it this computer's size again.
+ * @param {Tab} tab
+ */
+function pause(tab) {
+  const body = tab.view?.body;
+  if (!body) return;
+  paused.add(tab.id);
+  told.delete(tab.id); // it has no size from here now
+  body.querySelector(`:scope > .${PAUSED_CLASS}`)?.remove();
+  const name = pcs.find(p => p.id === tab.virtual?.client)?.name ?? 'That computer';
+  body.insertAdjacentHTML('beforeend', `<div class="${PAUSED_CLASS}"><p><b>Paused.</b> ${escapeHtml(name)} took this terminal back.</p><button class="btn small primary">Resume</button></div>`);
+  body.querySelector(`:scope > .${PAUSED_CLASS} button`)?.addEventListener('click', () => resume(tab));
+  settleSize(tab);
+}
+
+/** @param {Tab} tab */
+function resume(tab) {
+  paused.delete(tab.id);
+  tab.view?.body.querySelector(`:scope > .${PAUSED_CLASS}`)?.remove();
+  told.delete(tab.id);
+  settleSize(tab);
+}
+
+onHost(HOST.pcPaused, m => {
+  const tab = state.tabs.get(m.tab);
+  if (tab) pause(tab);
+});
+
+// Its terminal here is opened: it starts watching there (at no size yet: it gives its own once it's on screen), and
+// tells its size as it changes.
 on(EVENTS.terminalOpened, (/** @type {Tab} */ tab) => {
   const v = tab.virtual;
   const term = tab.view?.term;
-  if (v?.kind !== PC_KIND || !term) return;
+  if (v?.kind !== PC_KIND || !term || !tab.view) return;
   tab.noHistory = true;
   watching.set(tab.id, tab.wsId);
-  send(PAGE.pcWatch, { id: v.client, tab: tab.id, pane: v.pane, cols: term.cols, rows: term.rows });
-  term.onResize((/** @type {{ cols: number, rows: number }} */ { cols, rows }) => send(PAGE.pcSize, { tab: tab.id, cols, rows }));
+  told.set(tab.id, '0 x 0');
+  send(PAGE.pcWatch, { id: v.client, tab: tab.id, pane: v.pane, cols: 0, rows: 0 });
+  bodies.set(tab.view.body, tab);
+  seen.observe(tab.view.body);
+  term.onResize(() => settleSize(tab));
+  settleSize(tab);
 });
 /**
  * Its terminals closed here since: the other computer stops showing them at this one's size, and a computer whose
@@ -238,6 +352,7 @@ function closedHere() {
   const left = new Set();
   for (const [id, wsId] of [...watching].filter(([id]) => !state.tabs.has(id))) {
     watching.delete(id);
+    for (const kept of [paused, onScreen, told]) kept.delete(id);
     left.add(wsId);
     send(PAGE.pcUnwatch, { tab: id });
   }
