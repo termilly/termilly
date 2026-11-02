@@ -994,7 +994,12 @@ body[data-sidebar="rail"] .side-rail { opacity: 1; pointer-events: auto; }
 .side-list { flex: 1; padding: 0 6px 6px; overflow-y: auto; }
 
 /* ---- Remote (js/remote.js): SSH hosts, WSL, containers, pods and serial ports below the workspaces ---- */
-.remote { display: flex; flex: 0 1 auto; flex-direction: column; min-height: 0; max-height: 45%; border-top: 1px solid var(--border); }
+.remote { position: relative; display: flex; flex: 0 1 auto; flex-direction: column; min-height: 0; max-height: 45%; border-top: 1px solid var(--border); }
+/* Its top edge: drag to make it taller or shorter (js/remote.js); its list scrolls inside. */
+.remote.sized { flex: none; max-height: none; }
+.rm-grip { position: absolute; top: -3px; right: 0; left: 0; z-index: 2; height: 6px; cursor: row-resize; }
+.rm-grip:hover, .rm-grip.dragging { background: color-mix(in srgb, var(--accent) 45%, transparent); }
+.remote.folded .rm-grip { display: none; }
 .remote[hidden] { display: none; }
 .rm-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 8px 4px; }
 .rm-fold {
