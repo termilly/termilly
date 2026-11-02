@@ -223,9 +223,9 @@ function followTerminals() {
 
 // ---- Whose size: this computer's, or the other's ----
 //
-// Settings › Remote says how its terminals are drawn here. Fit this computer (the default): the one there takes this
+// Settings › Remote › Size of remote terminals says how they're drawn here. Fit local window: the one there takes this
 // one's size while it's on screen here (its tab in front, the window not minimized), and its own again when it isn't.
-// Keep its size: it's drawn here at the size it has there, smaller to fit. Either way, when that computer takes it back
+// Keep remote size (the default): it's drawn here at the size it has there, smaller to fit. When that computer takes it back
 // (its Take back), it's drawn at its own size here under Paused, until Resume.
 
 /** Its terminals here the other computer took back: paused until Resume. */
@@ -318,8 +318,8 @@ function pause(tab, by) {
   told.delete(tab.id); // it has no size from here now
   body.querySelector(`:scope > .${PAUSED_CLASS}`)?.remove();
   const name = pcs.find(p => p.id === tab.virtual?.client)?.name ?? 'That computer';
-  const why = by ? `${escapeHtml(by)} has this terminal now.` : `${escapeHtml(name)} took this terminal back.`;
-  body.insertAdjacentHTML('beforeend', `<div class="${PAUSED_CLASS}"><p><b>Paused.</b> ${why}</p><button class="btn small primary">Resume</button></div>`);
+  const why = by ? `${escapeHtml(by)} now sets the size of this remote terminal.` : `${escapeHtml(name)} took back its local terminal.`;
+  body.insertAdjacentHTML('beforeend', `<div class="${PAUSED_CLASS}"><p><b>Paused.</b> ${why}</p><button class="btn small primary" title="The remote terminal follows this window again">Resume</button></div>`);
   body.querySelector(`:scope > .${PAUSED_CLASS} button`)?.addEventListener('click', () => resume(tab));
   settleSize(tab);
 }

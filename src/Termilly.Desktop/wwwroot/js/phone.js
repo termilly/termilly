@@ -203,7 +203,7 @@ async function answer({ pane, choice, text }) {
 }
 
 // A phone shows a terminal: it takes the phone's size, so it fills the phone and what it prints fits it, drawn here in
-// a phone with that phone's name and address under it (another Termilly computer: plainly, "Open on" its name, with
+// a phone with that phone's name and address under it (another Termilly computer: plainly, "Open remotely on" its name, with
 // Take back); it gets its pane's size back when no phone shows it. The phone keeps its full height when the phone's
 // keyboard takes rows away: its tallest size while it shows the terminal. (Another computer has no keyboard to come
 // and go: its rows are its rows.)
@@ -219,7 +219,7 @@ onHost(HOST.phoneSize, m => {
     if (view.term.rows !== m.rows) view.term.resize(m.cols, m.rows);
     return;
   }
-  const label = m.computer ? `Open on ${m.name ?? 'another computer'}` : [m.name ?? 'A phone', m.address].filter(Boolean).join(' · ');
+  const label = m.computer ? `Open remotely on ${m.name ?? 'another computer'}` : [m.name ?? 'A phone', m.address].filter(Boolean).join(' · ');
   showAtSize(tab, m.cols && m.rows ? { cols: m.cols, rows: m.rows } : null, { label, computer: !!m.computer, takeBack: !!m.computer });
 });
 
@@ -234,7 +234,7 @@ function drawWho(tab) {
   const body = tab.view?.body;
   if (!body) return;
   body.querySelector(`:scope > .${WHO_CLASS}`)?.remove();
-  const text = tab.phoneSize ? tab.sizedBy?.label : tab.viewers?.length ? `Open on ${tab.viewers.join(', ')}` : '';
+  const text = tab.phoneSize ? tab.sizedBy?.label : tab.viewers?.length ? `Open remotely on ${tab.viewers.join(', ')}` : '';
   if (!text && !tab.takeBack) return;
   const label = document.createElement('div');
   label.className = WHO_CLASS;
@@ -242,7 +242,7 @@ function drawWho(tab) {
   if (tab.takeBack) {
     const button = document.createElement('button');
     button.textContent = 'Take back';
-    button.title = 'This terminal gets its own size here again. That computer shows it paused until it resumes.';
+    button.title = 'Back to this local terminal’s own size. The remote terminal on that computer pauses until it resumes.';
     button.addEventListener('click', () => send(PAGE.phoneTakeBack, { id: tab.id }));
     label.append(button);
   }

@@ -137,9 +137,9 @@ const PHONE = {
     toggle('phone.enabled'), { keywords: 'remote phone mobile iphone android computer laptop lan wifi' })
     + (status.error ? `<p class="set-status">${escapeHtml(status.error)}</p>` : ''))
     + (status.running ? computerHtml() + setupHtml() + devicesHtml() : '')
-    + group('Other computers’ terminals', row('Their size here',
-      'Fit this computer: a terminal you open from another Termilly computer takes this screen’s size there while it’s in front here. Keep their size: it stays as it is there, drawn smaller here to fit.',
-      seg('phone.pcSize', [[SETTING_VALUES.pcSize.fit, 'Fit this computer'], [SETTING_VALUES.pcSize.keep, 'Keep their size']]), { keywords: 'remote computer size resolution columns rows fit' })),
+    + group('Remote terminals', row('Size of remote terminals',
+      'A remote terminal is one you open on this computer from another Termilly computer, where it’s a local terminal. Set this on each computer you open remote terminals on. Keep remote size: the local terminal is never resized, and this computer draws it smaller when its window is smaller. Fit local window: the remote terminal follows this window at your font size, and the local terminal takes that size while you have it in front.',
+      seg('phone.pcSize', [[SETTING_VALUES.pcSize.keep, 'Keep remote size'], [SETTING_VALUES.pcSize.fit, 'Fit local window']]), { keywords: 'remote local computer terminal size resolution columns rows fit keep' })),
   refresh: () => send(PAGE.phoneStatus),
   opened: () => send(PAGE.phoneStatus),
   drawn(body) {
