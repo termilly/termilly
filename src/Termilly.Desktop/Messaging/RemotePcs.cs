@@ -56,8 +56,11 @@ internal static partial class ToPage
         public static string Type => "pc:list";
     }
 
-    /// <summary>The other computer took back the terminal this tab shows: it's paused here until Resume.</summary>
-    internal sealed record PcPaused(string Tab) : IHostMessage
+    /// <summary>
+    /// The terminal this tab shows has another size there now: that computer took it back (<see cref="By"/> none), or
+    /// another phone or computer has it. It's paused here until Resume.
+    /// </summary>
+    internal sealed record PcPaused(string Tab, string? By = null) : IHostMessage
     {
         public static string Type => "pc:paused";
     }

@@ -22,7 +22,7 @@ import { showAtSize } from './phone.js';
 /** A computer's state, as its phone app gets it (js/phone.js snapshot): what the tree shows of it. */
 /** Where a terminal's files are there: an SSH host it reaches (by name) or its own disk, and its shell's folder. */
 /** @typedef {{ ssh: boolean, place: string | null, cwd: string }} PcFiles */
-/** @typedef {{ os?: string, workspaces: { id: string, name: string, color: string }[], terminals: { id: string, ws: string, title: string, badge?: string, icon?: string, prompts?: boolean, cols?: number | null, rows?: number | null, activity?: string | null, hint?: string | null, files?: PcFiles | null }[] }} PcState */
+/** @typedef {{ os?: string, workspaces: { id: string, name: string, color: string }[], terminals: { id: string, ws: string, title: string, badge?: string, icon?: string, prompts?: boolean, sizedBy?: { label: string, computer: boolean } | null, cols?: number | null, rows?: number | null, activity?: string | null, hint?: string | null, files?: PcFiles | null }[] }} PcState */
 
 /** A virtual terminal's kind (tab.virtual): another computer's. */
 export const PC_KIND = 'pc';
@@ -272,8 +272,10 @@ function drawAtTheirSize(tab) {
   const v = tab.virtual, pc = pcs.find(p => p.id === v?.client);
   const t = pc ? stateOf(pc).terminals.find(x => x.id === v?.pane) : null;
   if (!pc || !t?.cols || !t.rows) return;
-  if (tab.phoneSize?.cols === t.cols && tab.phoneSize.rows === t.rows) return;
-  showAtSize(tab, { cols: t.cols, rows: t.rows }, { label: `${pc.name}’s size`, computer: true });
+  // A phone (or another computer) has it there: drawn here as it's drawn there, in its phone, with who has it.
+  const who = t.sizedBy ?? { label: '', computer: true }; // its own size there: nothing to say
+  if (tab.phoneSize?.cols === t.cols && tab.phoneSize.rows === t.rows && tab.sizedBy?.label === who.label) return;
+  showAtSize(tab, { cols: t.cols, rows: t.rows }, who);
 }
 
 /**
@@ -303,18 +305,20 @@ document.addEventListener('visibilitychange', settleAll);
 for (const event of [EVENTS.settings, EVENTS.workspaces, EVENTS.focus]) on(event, () => requestAnimationFrame(settleAll)); // once drawn
 
 /**
- * The other computer took its terminal back: paused here (drawn at the size it has there) until Resume, which gives
- * it this computer's size again.
+ * Its terminal there has another size now (that computer took it back, or another phone or computer has it): paused
+ * here (drawn at the size it has there) until Resume, which gives it this computer's size again.
  * @param {Tab} tab
+ * @param {string | null | undefined} by who has it now (none: that computer)
  */
-function pause(tab) {
+function pause(tab, by) {
   const body = tab.view?.body;
   if (!body) return;
   paused.add(tab.id);
   told.delete(tab.id); // it has no size from here now
   body.querySelector(`:scope > .${PAUSED_CLASS}`)?.remove();
   const name = pcs.find(p => p.id === tab.virtual?.client)?.name ?? 'That computer';
-  body.insertAdjacentHTML('beforeend', `<div class="${PAUSED_CLASS}"><p><b>Paused.</b> ${escapeHtml(name)} took this terminal back.</p><button class="btn small primary">Resume</button></div>`);
+  const why = by ? `${escapeHtml(by)} has this terminal now.` : `${escapeHtml(name)} took this terminal back.`;
+  body.insertAdjacentHTML('beforeend', `<div class="${PAUSED_CLASS}"><p><b>Paused.</b> ${why}</p><button class="btn small primary">Resume</button></div>`);
   body.querySelector(`:scope > .${PAUSED_CLASS} button`)?.addEventListener('click', () => resume(tab));
   settleSize(tab);
 }
@@ -329,7 +333,7 @@ function resume(tab) {
 
 onHost(HOST.pcPaused, m => {
   const tab = state.tabs.get(m.tab);
-  if (tab) pause(tab);
+  if (tab) pause(tab, m.by);
 });
 
 // Its terminal here is opened: it starts watching there (at no size yet: it gives its own once it's on screen), and

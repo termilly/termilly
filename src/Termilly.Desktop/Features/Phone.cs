@@ -74,6 +74,9 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
         live.Screen = ScreenAsync;
         live.Sized = (pane, phone) => _page.Post(SizeOf(pane, phone, phone is null ? null : store.List().FirstOrDefault(d => d.Id == phone.Device)?.Name));
         live.Opened = pane => _page.Post(new ToPage.PhoneSeen(pane));
+        live.NameOf = device => store.List().FirstOrDefault(d => d.Id == device)?.Name is { } name
+            ? name.EndsWith(PcConnection.ComputerMark, StringComparison.Ordinal) ? name[..^PcConnection.ComputerMark.Length] : name
+            : null;
         sessions.Output += Printed;
         _away = new PhoneAwayAlerts(alert => AlertAsync(null, alert), UserIdle.Since, AwayAfter);
     }

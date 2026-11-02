@@ -15,7 +15,8 @@ namespace Termilly.Desktop.Phone;
 /// a phone watches a terminal, the terminal takes the phone's size (<see cref="Sized"/>), so it fills the phone and
 /// its output fits it; it gets its own back when no phone watches it, when the phone gives its size up (a size of
 /// nothing: another computer's terminal that isn't on its screen), or when the PC takes it back (<see cref="TakeBack"/>:
-/// the phone is told, <see cref="Kinds.Released"/>, and has it again only by sending its size anew).
+/// the phone is told, <see cref="Kinds.Released"/>, and has it again only by sending its size anew). One phone gives
+/// it its size at a time: another sending its size takes it, and the one before is told the same way, with who has it.
 /// </summary>
 internal sealed class PhoneLive : IDisposable
 {
@@ -86,6 +87,12 @@ internal sealed class PhoneLive : IDisposable
 
     /// <summary>A terminal should take this phone's size, or (null) its own again: no phone watches it.</summary>
     public Action<string, Viewer?>? Sized { get; set; }
+
+    /// <summary>A paired phone's or computer's name, by its device id: who has a terminal now.</summary>
+    public Func<string, string?>? NameOf { get; set; }
+
+    /// <summary>The released message's field with who has the terminal now (none: the PC took it back).</summary>
+    public const string ByField = "by";
 
     private const string TypeField = "type";
     private const string StateField = "state";
@@ -288,6 +295,7 @@ internal sealed class PhoneLive : IDisposable
             return;
         }
         var size = new GridSize(Math.Clamp(cols, MinCols, MaxCols), Math.Clamp(rows, MinRows, MaxRows));
+        Release(pane, phone, NameOf?.Invoke(phone.Device));
         phone.Size = size;
         Sized?.Invoke(pane, new Viewer(size, phone.Device, phone.Address));
     }
@@ -313,18 +321,26 @@ internal sealed class PhoneLive : IDisposable
     /// </summary>
     public void TakeBack(string pane)
     {
-        var holders = _phones.Where(p => p.Value.Watching == pane && p.Value.Size is not null).ToList();
-        if (holders.Count == 0)
+        if (Release(pane, null, null))
         {
-            return;
+            Sized?.Invoke(pane, null);
         }
-        var message = new JsonObject { [TypeField] = Kinds.Released, [PaneField] = pane }.ToJsonString();
+    }
+
+    /// <summary>
+    /// The phones and computers (but <paramref name="keeper"/>) that gave a terminal their size give it up, told who has
+    /// it now (<paramref name="by"/>; none: the PC). Whether there were any.
+    /// </summary>
+    private bool Release(string pane, Phone? keeper, string? by)
+    {
+        var holders = _phones.Where(p => p.Value != keeper && p.Value.Watching == pane && p.Value.Size is not null).ToList();
+        var message = new JsonObject { [TypeField] = Kinds.Released, [PaneField] = pane, [ByField] = by }.ToJsonString();
         foreach (var (socket, phone) in holders)
         {
             phone.Size = null;
             _ = SendAsync(socket, message);
         }
-        Sized?.Invoke(pane, null);
+        return holders.Count > 0;
     }
 
     public void Dispose()

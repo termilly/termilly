@@ -490,7 +490,7 @@ export const HOST = Object.freeze({
 /** @typedef {{ requestId: string|null, error: string|null }} Host_pcAdded */
 /** @typedef {{ items: Array<PcView> }} Host_pcList */
 /** @typedef {{ tab: string, data: string, screen: boolean }} Host_pcOutput */
-/** @typedef {{ tab: string }} Host_pcPaused */
+/** @typedef {{ tab: string, by?: string|null }} Host_pcPaused */
 /** @typedef {{ tab: string, error: string }} Host_pcRefused */
 /** @typedef {{ requestId: string, method?: string, args?: any }} Host_pcSessions */
 /** @typedef {{ requestId: string, method?: string, args?: any }} Host_phoneAnswer */

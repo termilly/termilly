@@ -51,14 +51,15 @@ internal static class SettingValues
     }
 
     /// <summary>
-    /// How another computer's terminal opened here is drawn (Settings › Remote): it fits this computer (the terminal
-    /// there takes this one's size while it's on screen here), or keeps that computer's size, drawn smaller here to fit.
+    /// How another computer's terminal opened here is drawn (Settings › Remote): it keeps that computer's size (the
+    /// default: nothing changes there, and every computer showing it shows the same), or fits this computer (the terminal
+    /// there takes this one's size while it's on screen here).
     /// </summary>
     public static class PcSize
     {
         public const string Fit = "fit";
         public const string Keep = "keep";
-        public const string Default = Fit;
+        public const string Default = Keep;
         public static readonly IReadOnlyList<string> All = [Fit, Keep];
     }
 

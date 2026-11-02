@@ -223,7 +223,7 @@ export const SETTING_VALUES = Object.freeze({
   pcSize: Object.freeze({
     fit: 'fit',
     keep: 'keep',
-    default: 'fit',
+    default: 'keep',
     all: Object.freeze(['fit', 'keep']),
   }),
   sound: Object.freeze({

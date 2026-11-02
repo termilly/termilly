@@ -407,8 +407,47 @@ public sealed class PhoneTests : IDisposable
         var released = JsonNode.Parse(await ReceiveText(phone))!;
         _live.TakeBack("t1"); // nobody gives it a size now: nothing to tell
 
-        Assert.Equal(("released", "t1"), (released["type"]!.GetValue<string>(), released["pane"]!.GetValue<string>()));
+        Assert.Equal(("released", "t1", null), (released["type"]!.GetValue<string>(), released["pane"]!.GetValue<string>(), released["by"]?.GetValue<string>()));
         Assert.Equal([new PhoneLive.GridSize(100, 30), null, new PhoneLive.GridSize(90, 30), null], sized.Select(v => v?.Size));
+    }
+
+    [Fact]
+    public async Task A_second_phone_giving_its_size_takes_the_terminal_and_the_first_is_told_who_has_it()
+    {
+        using var authority = _store.Authority("TESTPC");
+        using var server = Start(authority);
+        using var http = Https(authority);
+        var first = (await Post(http, server.AppUrl + "api/pair", $$"""{"code":"{{_store.OfferCode()}}","name":"Laptop"}""")).Headers.GetValues("Set-Cookie").First().Split(';')[0];
+        var second = (await Post(http, server.AppUrl + "api/pair", $$"""{"code":"{{_store.OfferCode()}}","name":"Phone"}""")).Headers.GetValues("Set-Cookie").First().Split(';')[0];
+        _live.NameOf = device => _store.List().FirstOrDefault(d => d.Id == device)?.Name;
+        var sized = new List<PhoneLive.GridSize?>();
+        _live.Sized = (_, viewer) =>
+        {
+            lock (sized)
+            {
+                sized.Add(viewer?.Size);
+            }
+        };
+        using var laptop = Socket(authority, first);
+        using var phone = Socket(authority, second);
+        foreach (var socket in new[] { laptop, phone })
+        {
+            await socket.ConnectAsync(new Uri(server.AppUrl.Replace("https", "wss") + "api/live"), CancellationToken.None);
+            await ReceiveText(socket); // the terminals
+            await Send(socket, """{"op":"watch","pane":"t1"}""");
+            await ReceiveText(socket); // the screen
+        }
+
+        await Send(laptop, """{"op":"size","pane":"t1","cols":120,"rows":40}""");
+        await Until(() => { lock (sized) { return sized.Count == 1; } });
+        await Send(phone, """{"op":"size","pane":"t1","cols":50,"rows":30}""");
+        var released = JsonNode.Parse(await ReceiveText(laptop))!;
+        await Until(() => { lock (sized) { return sized.Count == 2; } });
+        phone.Abort(); // the phone goes: nobody gives it a size now
+
+        await Until(() => { lock (sized) { return sized.Count == 3; } });
+        Assert.Equal(("released", "Phone"), (released["type"]!.GetValue<string>(), released["by"]!.GetValue<string>()));
+        Assert.Equal([new PhoneLive.GridSize(120, 40), new PhoneLive.GridSize(50, 30), null], sized);
     }
 
     [Fact]

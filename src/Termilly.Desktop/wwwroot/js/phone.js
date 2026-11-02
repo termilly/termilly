@@ -95,6 +95,8 @@ function terminalOf(tab) {
   const activity = activityOf(tab);
   return {
     id: tab.id, ws: tab.wsId, title: tabTitle(tab), icon, note: tab.note ?? null,
+    // A phone or another computer gives it its size: who (another computer showing it draws it the same).
+    sizedBy: tab.sizedBy ?? null,
     badge: badgeOf(icon),
     // Another Termilly computer showing it may open its Prompt history (Settings › Remote › Prompt history).
     prompts: !!state.settings.phone?.sharePrompts && hasPrompts(tab),
@@ -238,10 +240,12 @@ export function showAtSize(tab, size, who) {
   tab.phoneSize = size
     ? { cols: size.cols, rows: size.rows, tallest: !who?.computer && before?.cols === size.cols ? Math.max(before.tallest ?? 0, size.rows) : size.rows }
     : null;
+  // Who it is, for the other computers showing this terminal: they draw it as it's drawn here (js/remotepc.js).
+  tab.sizedBy = tab.phoneSize ? { label: who?.label ?? '', computer: !!who?.computer } : null;
   view.body.classList.toggle('phone-sized', !!tab.phoneSize);
   view.body.classList.toggle(BY_COMPUTER, !!tab.phoneSize && !!who?.computer);
   view.body.querySelector(`:scope > .${WHO_CLASS}`)?.remove();
-  if (tab.phoneSize) {
+  if (tab.phoneSize && (who?.label || who?.takeBack)) {
     const label = document.createElement('div');
     label.className = WHO_CLASS;
     label.textContent = who?.label ?? '';
@@ -253,6 +257,8 @@ export function showAtSize(tab, size, who) {
       label.append(button);
     }
     view.body.append(label);
+  }
+  if (tab.phoneSize) {
     view.term.resize(tab.phoneSize.cols, tab.phoneSize.rows);
     phoneTabs.set(view.body, tab);
     resized.observe(view.body);

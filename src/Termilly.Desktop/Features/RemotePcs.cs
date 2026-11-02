@@ -233,7 +233,7 @@ internal sealed class RemotePcsHandler(PageChannel page, RemotePcStore store, Ph
                 }
                 else if (type == Phone.PhoneLive.Kinds.Released && message[Fields.Pane]?.GetValue<string>() == watch.Pane)
                 {
-                    page.Post(new ToPage.PcPaused(tab));
+                    page.Post(new ToPage.PcPaused(tab, message[Phone.PhoneLive.ByField]?.GetValue<string>()));
                 }
                 else if (type == Kinds.Answered && message[Fields.Ok]?.GetValue<bool>() == false)
                 {
