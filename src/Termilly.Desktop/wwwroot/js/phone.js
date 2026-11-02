@@ -203,7 +203,8 @@ async function answer({ pane, choice, text }) {
 // A phone shows a terminal: it takes the phone's size, so it fills the phone and what it prints fits it, drawn here in
 // a phone with that phone's name and address under it (another Termilly computer: plainly, "Open on" its name, with
 // Take back); it gets its pane's size back when no phone shows it. The phone keeps its full height when the phone's
-// keyboard takes rows away: its tallest size while it shows the terminal.
+// keyboard takes rows away: its tallest size while it shows the terminal. (Another computer has no keyboard to come
+// and go: its rows are its rows.)
 onHost(HOST.phoneSize, m => {
   const tab = state.tabs.get(m.id);
   const view = tab?.view;
@@ -211,7 +212,7 @@ onHost(HOST.phoneSize, m => {
   const before = tab.phoneSize;
   // The phone's keyboard came or went: the same columns, rows no more than its tallest. The phone keeps its size and
   // font; only its rows change (fitting again drew it at Settings' font for a frame, and the pane's scrollbar blinked).
-  if (before && m.cols === before.cols && m.rows && m.rows <= (before.tallest ?? 0)) {
+  if (!m.computer && before && m.cols === before.cols && m.rows && m.rows <= (before.tallest ?? 0)) {
     tab.phoneSize = { ...before, rows: m.rows };
     if (view.term.rows !== m.rows) view.term.resize(m.cols, m.rows);
     return;
@@ -235,7 +236,7 @@ export function showAtSize(tab, size, who) {
   if (!view?.term) return;
   const before = tab.phoneSize;
   tab.phoneSize = size
-    ? { cols: size.cols, rows: size.rows, tallest: before?.cols === size.cols ? Math.max(before.tallest ?? 0, size.rows) : size.rows }
+    ? { cols: size.cols, rows: size.rows, tallest: !who?.computer && before?.cols === size.cols ? Math.max(before.tallest ?? 0, size.rows) : size.rows }
     : null;
   view.body.classList.toggle('phone-sized', !!tab.phoneSize);
   view.body.classList.toggle(BY_COMPUTER, !!tab.phoneSize && !!who?.computer);
@@ -326,6 +327,10 @@ const tallestOf = tab => Math.max(tab.phoneSize?.tallest ?? 0, tab.view?.term?.r
 function holdHeight(tab) {
   const term = tab.view?.term, screen = term?.element?.querySelector(TERM_SCREEN);
   if (!tab.phoneSize || !term?.element || !screen) return;
+  if (tab.view?.body.classList.contains(BY_COMPUTER)) { // only a phone keeps a height of its own
+    term.element.style.minHeight = '';
+    return;
+  }
   const tall = screen.getBoundingClientRect().height * tallestOf(tab) / term.rows;
   term.element.style.minHeight = `${Math.ceil(tall + phoneFrame(term.element).height)}px`;
 }
