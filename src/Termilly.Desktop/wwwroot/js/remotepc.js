@@ -231,9 +231,6 @@ function followTerminals() {
 /** Its terminals here the other computer took back: paused until Resume. */
 /** @type {Set<string>} */
 const paused = new Set();
-/** Its terminals here on screen now. */
-/** @type {Set<string>} */
-const onScreen = new Set();
 /** The size each last told the other computer ("cols x rows", "0 x 0" for none), so it isn't told twice. */
 /** @type {Map<string, string>} */
 const told = new Map();
@@ -250,7 +247,7 @@ const keepsTheirs = () => state.settings.phone?.pcSize === SETTING_VALUES.pcSize
  */
 function sizeToGive(tab) {
   const term = tab.view?.term;
-  const gives = !!term && !keepsTheirs() && !paused.has(tab.id) && onScreen.has(tab.id) && !document.hidden;
+  const gives = !!term && !keepsTheirs() && !paused.has(tab.id) && onScreen(tab) && !document.hidden;
   return gives && term ? { cols: term.cols, rows: term.rows } : { cols: 0, rows: 0 };
 }
 
@@ -279,23 +276,31 @@ function drawAtTheirSize(tab) {
   showAtSize(tab, { cols: t.cols, rows: t.rows }, { label: `${pc.name}’s size`, computer: true });
 }
 
+/**
+ * Whether its terminal here is on screen: its tab in front in its pane, its workspace the one shown (the others are
+ * hidden, not taken out).
+ * @param {Tab} tab
+ */
+function onScreen(tab) {
+  const body = tab.view?.body;
+  if (!body?.isConnected) return false;
+  return typeof body.checkVisibility === 'function' ? body.checkVisibility({ visibilityProperty: true }) : body.getClientRects().length > 0;
+}
+
 /** Tabs by the pane body they're drawn in, for the observer below. */
 /** @type {WeakMap<Element, Tab>} */
 const bodies = new WeakMap();
-// A terminal here comes on screen or goes off it (another tab or workspace in front).
+// A terminal here comes on screen or goes off it (another tab in its pane in front, its pane resized away).
 const seen = new IntersectionObserver(entries => {
   for (const e of entries) {
     const tab = bodies.get(e.target);
-    if (!tab) continue;
-    if (e.isIntersecting) onScreen.add(tab.id);
-    else onScreen.delete(tab.id);
-    settleSize(tab);
+    if (tab) settleSize(tab);
   }
 });
 /** Each of its terminals here, settled again (the window came or went, Settings changed). */
 const settleAll = () => { for (const id of watching.keys()) { const tab = state.tabs.get(id); if (tab) settleSize(tab); } };
 document.addEventListener('visibilitychange', settleAll);
-on(EVENTS.settings, settleAll);
+for (const event of [EVENTS.settings, EVENTS.workspaces, EVENTS.focus]) on(event, () => requestAnimationFrame(settleAll)); // once drawn
 
 /**
  * The other computer took its terminal back: paused here (drawn at the size it has there) until Resume, which gives
@@ -352,7 +357,7 @@ function closedHere() {
   const left = new Set();
   for (const [id, wsId] of [...watching].filter(([id]) => !state.tabs.has(id))) {
     watching.delete(id);
-    for (const kept of [paused, onScreen, told]) kept.delete(id);
+    for (const kept of [paused, told]) kept.delete(id);
     left.add(wsId);
     send(PAGE.pcUnwatch, { tab: id });
   }
