@@ -193,6 +193,8 @@ interface Tab {
   phoneAlerted?: string | null;
   /** The size a phone showing it asked for; it keeps that size until no phone shows it (js/phone.js). */
   phoneSize?: { cols: number, rows: number, tallest?: number } | null;
+  /** The WSL distribution its shell said it runs in (js/remotehost.js), for the Files panel. */
+  wslDistro?: string | null;
   /** Who gives it that size: a phone or another computer, as its label says (js/phone.js showAtSize). */
   sizedBy?: { label: string, computer: boolean } | null;
   /** That size is another computer's: Take back shows (js/phone.js). */

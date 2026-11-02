@@ -3,7 +3,9 @@
 // (Windows' backslashes, the drives above a drive's root) or on an SSH terminal's server (slashes).
 
 import { profileOf, isSsh, isRemote, wsById } from './store.js';
-import { FOLDER_PATH } from './constants.js';
+import { FOLDER_PATH, PROFILE_SOURCE } from './constants.js';
+import { platform, PLATFORM } from './host.js';
+import { wslLinuxPath } from './quoting.js';
 
 /** Bytes in a kilobyte and in a megabyte, for sizes. */
 const KB = 1024;
@@ -43,12 +45,55 @@ export const folderName = /** @param {string} path */ path => (path === FOLDER_P
 
 export const sizeText = /** @param {number} n */ n => (n < KB ? `${n} B` : n < MB ? `${(n / KB).toFixed(1)} KB` : `${(n / MB).toFixed(1)} MB`);
 
-/** Whether a terminal's files can be shown: its server's over SFTP, or this machine's (not WSL, a container or serial). */
-export const hasFiles = /** @param {Tab} tab */ tab => !!tab.pcFiles || isSsh(tab) || !isRemote(tab);
+/**
+ * Which WSL distribution a terminal's shell runs in, on Windows: as the shell said (its integration reports
+ * $WSL_DISTRO_NAME, also for `wsl` typed in another shell), else as its profile starts it (wsl -d <name>); null
+ * for any other terminal.
+ * @param {Tab} tab
+ */
+export function wslDistroOf(tab) {
+  if (platform !== PLATFORM.windows) return null;
+  if (tab.wslDistro) return tab.wslDistro;
+  const profile = profileOf(tab);
+  if (profile?.source !== PROFILE_SOURCE.wsl) return null;
+  return /(?:^|\s)(?:-d|--distribution)\s+("?)([^\s"]+)\1/.exec(profile.commandLine)?.[2] ?? null;
+}
 
-/** The folder a terminal's shell is in (on its server, for SSH), or its workspace's, or home. */
+/** A terminal whose shell runs in WSL (its distribution known). @param {Tab} tab */
+export const isWsl = tab => !!wslDistroOf(tab);
+
+/** Where Windows reaches a WSL terminal's distribution: \\wsl.localhost\<distribution>. @param {Tab} tab */
+export const wslRootOf = tab => '\\\\wsl.localhost\\' + wslDistroOf(tab);
+
+/**
+ * A Linux path of a WSL terminal (/home/me/x) as Windows reaches it (\\wsl.localhost\Ubuntu\home\me\x); its
+ * distribution's root for anything else.
+ * @param {Tab} tab
+ * @param {string | null | undefined} linuxPath
+ */
+export const wslPath = (tab, linuxPath) =>
+  wslRootOf(tab) + (linuxPath?.startsWith('/') ? linuxPath.replace(/\/+$/, '').replace(/\//g, '\\') : '');
+
+/**
+ * A path as the terminal's shell types it: Linux's for a WSL terminal's files, else as it is.
+ * @param {Tab} tab
+ * @param {string} path
+ */
+export const shellPathOf = (tab, path) => (isWsl(tab) ? wslLinuxPath(path) ?? path : path);
+
+/**
+ * Whether a terminal's files can be shown: its server's over SFTP, its WSL distribution's, or this machine's (not a
+ * container or serial).
+ */
+export const hasFiles = /** @param {Tab} tab */ tab => !!tab.pcFiles || isSsh(tab) || isWsl(tab) || !isRemote(tab);
+
+/**
+ * The folder a terminal's shell is in (on its server, for SSH; in its distribution, as Windows reaches it, for WSL),
+ * or its workspace's, or home.
+ */
 export const shellFolderOf = /** @param {Tab} tab */ tab =>
-  (tab.pcFiles ? tab.pcFiles.cwd : isSsh(tab) ? tab.remoteCwd ?? '~' : tab.cwd ?? wsById(tab.wsId)?.cwd ?? '~');
+  (tab.pcFiles ? tab.pcFiles.cwd : isSsh(tab) ? tab.remoteCwd ?? '~' : isWsl(tab) ? wslPath(tab, tab.remoteCwd)
+    : tab.cwd ?? wsById(tab.wsId)?.cwd ?? '~');
 
 /** Where a terminal's files are: its SSH host's name, or this computer. */
 export const placeOf = /** @param {Tab} tab */ tab => (tab.pcFiles ? tab.pcFiles.place : isSsh(tab) ? profileOf(tab)?.name ?? '' : DRIVES_NAME);

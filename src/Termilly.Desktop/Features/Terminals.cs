@@ -66,7 +66,9 @@ internal sealed class TerminalHandler(
         {
             // A profile's own folder wins over the workspace's. A folder deleted since (outside Termilly) gives way to the
             // next one, else the home folder, and the page says so above the prompt.
-            var requested = profile.WorkingDirectory ?? cwd;
+            // A WSL terminal's Linux folder goes to wsl.exe (--cd), not to Windows (WslFolders).
+            var linuxFolder = profile.Source == ProfileSources.Wsl && profile.WorkingDirectory is null ? WslFolders.LinuxFolder(cwd) : null;
+            var requested = profile.WorkingDirectory ?? (linuxFolder is null ? cwd : null);
             var (folder, missing) = AppPaths.StartFolder(requested, profile.WorkingDirectory is null ? fallbackCwd : null);
             if (missing)
             {
@@ -74,6 +76,10 @@ internal sealed class TerminalHandler(
             }
             var environment = agents.WithAgent(WithVariables(SessionLaunch.EnvironmentFor(profile, AppVersion.Current), variables), id);
             (var commandLine, environment) = SessionLaunch.Launch(profile, environment, settings.Current);
+            if (linuxFolder is not null)
+            {
+                commandLine = WslFolders.StartingIn(commandLine, linuxFolder);
+            }
             void Output(string data)
             {
                 page.Post(new ToPage.Output(id, data));

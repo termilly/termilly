@@ -20,7 +20,7 @@ import { showMenu, SEPARATOR } from './popups.js';
 import { showChange } from './preview.js';
 import { pathActions } from './actions.js';
 import { FILE_OP, FOLDER_PATH } from './constants.js';
-import { parentOf, isInside, DRIVE_ICON, DRIVES_NAME, folderName, sizeText, hasFiles, shellFolderOf, folderOf, placeOf, sameMachine } from './filepaths.js';
+import { parentOf, isInside, DRIVE_ICON, DRIVES_NAME, folderName, sizeText, hasFiles, shellFolderOf, folderOf, placeOf, sameMachine, isWsl, wslPath, shellPathOf } from './filepaths.js';
 import { rootOf, childPath, signHtml, indentRows, readFolders, pathDown } from './foldertree.js';
 import { planCopy, planInto } from './copyto.js';
 import { JOB_KIND, FILE_MANAGER, BIN, newRequestId, startJob, expectJob } from './filejobs.js';
@@ -781,7 +781,7 @@ function itemMenu(v, r) {
   const drive = r.dir === FOLDER_PATH.drives;
   return [
     ...open, ...here, ...transferItems(v, [r]), SEPARATOR,
-    { label: 'Copy path', icon: ICONS.copy, action: () => copyText(r.path) },
+    { label: 'Copy path', icon: ICONS.copy, action: () => copyText(shellPathOf(v.tab, r.path)) },
     ...terminalItems(v.tab, [r]),
     .../** @type {import('./popups.js').MenuEntry[]} */ (actions.length ? [SEPARATOR, ...actions] : []),
     .../** @type {import('./popups.js').MenuEntry[]} */ (e.isDirectory ? [SEPARATOR, { label: 'New folder', icon: ICONS.plus, action: () => makeFolder(r.path) }] : []),
@@ -818,7 +818,7 @@ function selectionMenu(v, items) {
   const paths = items.map(r => r.path);
   return [
     ...transferItems(v, items), SEPARATOR,
-    { label: 'Copy paths', icon: ICONS.copy, action: () => copyText(paths.join('\n')) },
+    { label: 'Copy paths', icon: ICONS.copy, action: () => copyText(paths.map(p => shellPathOf(v.tab, p)).join('\n')) },
     ...terminalItems(v.tab, items),
     .../** @type {import('./popups.js').MenuEntry[]} */ (items.some(r => r.dir === FOLDER_PATH.drives) ? [] : [
       SEPARATOR,
@@ -841,7 +841,7 @@ function folderMenu(v) {
     refreshItem,
     ...(v.server ? [] : [{ label: `Show in ${FILE_MANAGER}`, action: () => send(PAGE.openPath, { path: dir }) }]),
     SEPARATOR,
-    { label: 'Copy path', icon: ICONS.copy, action: () => copyText(dir) },
+    { label: 'Copy path', icon: ICONS.copy, action: () => copyText(shellPathOf(v.tab, dir)) },
     { label: 'Insert path in the terminal', action: () => pasteNames(v.tab, [dir]) },
   ];
 }
@@ -985,7 +985,10 @@ function followed(tab, path) {
   else v.moved = path;
 }
 
-on(EVENTS.remoteCwd, tab => { if (isSsh(tab)) followed(tab, tab.remoteCwd); });
+on(EVENTS.remoteCwd, tab => {
+  if (isSsh(tab)) followed(tab, tab.remoteCwd);
+  else if (isWsl(tab)) followed(tab, wslPath(tab, tab.remoteCwd)); // in its distribution, as Windows reaches it
+});
 on(EVENTS.cwd, tab => { if (!isSsh(tab) && !isRemote(tab)) followed(tab, tab.cwd); });
 on(EVENTS.tabClosed, tab => views.delete(tab.id));
 

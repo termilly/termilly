@@ -3,6 +3,7 @@
 // RemoteIntegration.cs) reports through the terminal what local shells and Claude Code's hooks report to Termilly
 // directly, so SSH and WSL terminals show their repository, prompt marks and Claude the same way local ones do.
 //   OSC 633;P;TermillyRemote=<version>   the integration runs in this shell
+//   OSC 633;P;TermillyWsl=<distribution>   it runs in WSL, in that distribution (the Files panel opens its files)
 //   OSC 633;P;TermillyGit=<branch>|<changed>|<ahead>|<behind>|<upstream>|<root>   at each prompt ('' outside a repo)
 //   OSC 633;P;TermillyReady              the install line is waiting for the installer
 //   OSC 1337;TermillyHook=1;<event>;<base64 message>   a Claude Code hook
@@ -56,7 +57,7 @@ const INSTALL_CHUNK = 2048;
 const INSTALL_CHUNK_GAP_MS = 15;
 
 /** The reports a server's integration sends (OSC 633;P;Termilly<report>). */
-const REPORT = Object.freeze({ remote: 'Remote', git: 'Git', ready: 'Ready' });
+const REPORT = Object.freeze({ remote: 'Remote', git: 'Git', ready: 'Ready', wsl: 'Wsl' });
 /** What Settings remembers about a host (remote.setup): Termilly is on it, or the user declined it. */
 const SETUP = Object.freeze({ installed: 'installed', never: 'never' });
 /** What the bar offers: to set the host up, or to update what's on it. */
@@ -108,7 +109,7 @@ function rememberSetup(tab, value) {
  * @param {string} data
  */
 export function remoteReport(tab, data) {
-  const m = /^P;Termilly(Remote|Git|Ready)(?:=(.*))?$/s.exec(data);
+  const m = /^P;Termilly(Remote|Git|Ready|Wsl)(?:=(.*))?$/s.exec(data);
   if (!m) return false;
   const [, key, value = ''] = m;
   if (key === REPORT.remote) {
@@ -124,6 +125,9 @@ export function remoteReport(tab, data) {
     setRemoteGit(tab, parseGit(value));
   } else if (key === REPORT.ready) {
     sendInstaller(tab);
+  } else if (key === REPORT.wsl && value && tab.wslDistro !== value) {
+    tab.wslDistro = value;
+    if (tab.remoteCwd != null) emit(EVENTS.remoteCwd, tab); // the Files panel can follow it now
   }
   return true;
 }

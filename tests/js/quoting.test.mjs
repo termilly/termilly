@@ -3,7 +3,7 @@
 // Run with: node --test tests/js/quoting.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { commandLine } from '../../src/Termilly.Desktop/wwwroot/js/quoting.js';
+import { commandLine, quotePath, wslLinuxPath } from '../../src/Termilly.Desktop/wwwroot/js/quoting.js';
 
 // The prompt that broke: PowerShell read "(in a single message)" as code when it arrived unquoted.
 const prompt = 'Spawn 3 subagents in parallel (in a single message). Run: 1..10 | ForEach-Object { $_ }';
@@ -29,4 +29,18 @@ test('cmd gets double quotes, with inner quotes escaped for the program', () => 
 test('plain words and paths stay unquoted', () => {
   assert.equal(commandLine(['npm', 'run', 'dev'], 'powershell'), 'npm run dev');
   assert.equal(commandLine(['code', 'C:\\dev\\api', '--reuse-window'], 'cmd'), 'code C:\\dev\\api --reuse-window');
+});
+
+// A WSL distribution's files as Windows reaches them (the Files panel of a WSL terminal), as Linux has them.
+test('a \\\\wsl.localhost path is the Linux path in its distribution', () => {
+  assert.equal(wslLinuxPath(String.raw`\\wsl.localhost\Ubuntu\home\me\my dir`), '/home/me/my dir');
+  assert.equal(wslLinuxPath(String.raw`\\wsl$\Ubuntu-24.04\etc\ `.trim()), '/etc');
+  assert.equal(wslLinuxPath(String.raw`\\wsl.localhost\Ubuntu`), '/');
+  assert.equal(wslLinuxPath(String.raw`C:\Users\me`), null);
+  assert.equal(wslLinuxPath(String.raw`\\server\share\x`), null);
+});
+
+test('a WSL terminal gets a path in its distribution as Linux has it, a Windows path under /mnt', () => {
+  assert.equal(quotePath(String.raw`\\wsl.localhost\Ubuntu\home\me\x`, 'wsl'), "'/home/me/x'");
+  assert.equal(quotePath(String.raw`C:\dev\x`, 'wsl'), "'/mnt/c/dev/x'");
 });

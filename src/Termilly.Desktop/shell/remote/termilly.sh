@@ -7,7 +7,7 @@
 # It does nothing outside Termilly: only a terminal Termilly opened sets LC_TERMILLY, and ssh passes LC_* on.
 # A shell Termilly started on this machine (TERM_PROGRAM, which ssh doesn't pass) has its own integration.
 
-TERMILLY_REMOTE_VERSION=8
+TERMILLY_REMOTE_VERSION=9
 
 [ "${LC_TERMILLY-}" = 1 ] || return 0
 [ "${TERM_PROGRAM-}" != Termilly ] || return 0
@@ -63,6 +63,8 @@ __termilly_prompt() {
   if [ -z "${__termilly_reported-}" ]; then
     __termilly_reported=1
     __termilly_osc "633;P;TermillyRemote=$TERMILLY_REMOTE_VERSION"
+    # In WSL: which distribution, for the Files panel (\\wsl.localhost\<distribution> on Windows).
+    [ -n "${WSL_DISTRO_NAME-}" ] && __termilly_osc "633;P;TermillyWsl=$WSL_DISTRO_NAME"
   fi
   __termilly_osc "7;file://${HOSTNAME:-${HOST-}}$PWD"
   __termilly_git
