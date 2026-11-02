@@ -315,8 +315,15 @@ public sealed class PhoneTests : IDisposable
         _live.Output("t1", "not watched");
         _live.Output("t2", "new ");
         _live.Output("t2", "line");
-        var output = JsonNode.Parse(await ReceiveText(phone))!;
-        Assert.Equal(("output", "while drawing, new line"), (output["type"]!.GetValue<string>(), output["data"]!.GetValue<string>()));
+        // Output goes out every few milliseconds: it may come in more than one piece, but in order, after the screen.
+        var printed = "";
+        while (printed.Length < "while drawing, new line".Length)
+        {
+            var output = JsonNode.Parse(await ReceiveText(phone))!;
+            Assert.Equal("output", output["type"]!.GetValue<string>());
+            printed += output["data"]!.GetValue<string>();
+        }
+        Assert.Equal("while drawing, new line", printed);
 
         // Drawn at another size there: what it shows, again.
         _live.Screen = pane => Task.FromResult("redrawn");
