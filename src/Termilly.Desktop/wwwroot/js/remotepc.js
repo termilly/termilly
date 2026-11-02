@@ -9,7 +9,7 @@ import { send, request, onHost } from './host.js';
 import { state, on, EVENTS, ACTIVITY, WORKSPACE_COLORS, tabsOf, activityChanged } from './store.js';
 import { newTab, focusTab, switchWorkspace, renderWorkspace, renderAll } from './panes.js';
 import { setVirtualInput } from './terminals.js';
-import { escapeHtml, ICONS, activityHtml, MINI_ACTIVITY } from './ui.js';
+import { escapeHtml, ICONS, activityHtml, MINI_ACTIVITY, badgeHtml } from './ui.js';
 import { modal, FORM_DIALOG, DIALOG_ERROR, confirmDialog } from './dialogs.js';
 import { showMenu } from './popups.js';
 import { byId, targetOf } from './dom.js';
@@ -152,7 +152,7 @@ function computerHtml(pc) {
     return `<button class="rm-row pc-ws" data-pc-workspace="${escapeHtml(key)}">${chev(key, `<span class="pc-wsdot" style="background:${escapeHtml(w.color)}"></span>`)}
       <span class="rm-name">${escapeHtml(w.name)}</span><span class="rm-chips"><span class="rm-count">${terms.length}</span></span></button>`
       + (folded.has(key) ? '' : terms.map(t => `<button class="rm-row pc-term${inFront(pc, t.id) ? ' on' : ''}" data-pc-terminal="${escapeHtml(pc.id)}" data-pane="${escapeHtml(t.id)}" title="Open ${escapeHtml(t.title)} from ${escapeHtml(pc.name)} here">
-        <span class="badge small" data-icon="${escapeHtml(t.icon ?? '')}"><span class="badge-text">${escapeHtml(t.badge ?? '')}</span></span><span class="rm-name">${escapeHtml(t.title)}</span><span class="rm-chips">${activityOfRemote(t)}</span></button>`).join(''));
+        ${badgeHtml({ icon: t.icon ?? '' })}<span class="rm-name">${escapeHtml(t.title)}</span><span class="rm-chips">${activityOfRemote(t)}</span></button>`).join(''));
   }).join('');
 }
 
