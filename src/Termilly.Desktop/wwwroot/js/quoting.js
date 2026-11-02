@@ -24,10 +24,20 @@ export function quotePath(path, shell) {
     case PROFILE_ICON.bash:
       return single(toPosix(path, ''));
     case PROFILE_ICON.wsl:
-      return single(toPosix(path, '/mnt'));
+      return single(wslLinuxPath(path) ?? toPosix(path, '/mnt'));
     default:
       return `"${path}"`;
   }
+}
+
+/**
+ * A path in a WSL distribution as Windows reaches it (\\wsl.localhost\Ubuntu\home\me, or \\wsl$\Ubuntu\...), as
+ * Linux has it (/home/me); null for any other path.
+ * @param {string} path
+ */
+export function wslLinuxPath(path) {
+  const m = /^\\\\wsl(?:\.localhost|\$)\\[^\\]+((?:\\.*)?)$/i.exec(path);
+  return m ? m[1].replace(/\\/g, '/').replace(/(.)\/$/, '$1') || '/' : null;
 }
 
 /**

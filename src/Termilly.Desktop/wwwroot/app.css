@@ -635,6 +635,8 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
 .files-item.cwd > .files-name { color: var(--accent); font-weight: 600; }
 .files-item.drop-here { outline: 1px solid var(--accent); outline-offset: -1px; }
 .files-note { color: var(--faint); }
+.files-hint { margin: 2px 10px 6px 12px; padding: 6px 8px; border-radius: 6px; background: var(--surface); color: var(--muted); font-size: 12px; line-height: 1.4; }
+.files-none { margin: 24px 16px; color: var(--muted); font-size: 12.5px; line-height: 1.5; text-align: center; }
 .files-note:hover { background: none; }
 /* The search's line above what it found: one line, cut short; the folder's whole path is its tooltip. */
 .files-status { display: flex; gap: 8px; align-items: center; height: 26px; padding: 0 6px; overflow: hidden; color: var(--muted); font-size: 12px; white-space: nowrap; text-overflow: ellipsis; }

@@ -3,6 +3,7 @@
 // RemoteIntegration.cs) reports through the terminal what local shells and Claude Code's hooks report to Termilly
 // directly, so SSH and WSL terminals show their repository, prompt marks and Claude the same way local ones do.
 //   OSC 633;P;TermillyRemote=<version>   the integration runs in this shell
+//   OSC 633;P;TermillyWsl=<distribution>   it runs in WSL, in that distribution (the Files panel opens its files)
 //   OSC 633;P;TermillyGit=<branch>|<changed>|<ahead>|<behind>|<upstream>|<root>   at each prompt ('' outside a repo)
 //   OSC 633;P;TermillyReady              the install line is waiting for the installer
 //   OSC 1337;TermillyHook=1;<event>;<base64 message>   a Claude Code hook
@@ -11,12 +12,13 @@
 
 import { PAGE, HOST } from './protocol.js';
 import { send, onHost } from './host.js';
-import { state, emit, profileOf, GROUPS, EVENTS } from './store.js';
+import { state, on, emit, profileOf, GROUPS, EVENTS } from './store.js';
 import { PROFILE_SOURCE } from './constants.js';
 import { escapeHtml } from './ui.js';
 import { updateSettings } from './preferences.js';
 import { targetOf } from './dom.js';
-import { atPrompt } from './buffer.js';
+import { atPrompt, onPromptLine } from './buffer.js';
+import { showToast, TOAST } from './toasts.js';
 
 /** A repository as a prompt reported it (parseGit). */
 /**
@@ -28,7 +30,7 @@ import { atPrompt } from './buffer.js';
 /** What a server's integration told a terminal (tab.remote; see remoteOf). */
 /**
  * @typedef {{ integration: number | null, git: RemoteGit | null, gitReported: boolean, install: RemoteInstall | null,
- *   offer: number }} RemoteState
+ *   offer: number, bar?: string | null, barTimer?: number }} RemoteState
  */
 
 /** The integration version this Termilly brings (Settings' about); older hosts are offered an update. */
@@ -49,6 +51,8 @@ const remoteOf = tab => (tab.remote ??= { integration: null, git: null, gitRepor
 const OFFER_AFTER_MS = 6000;
 const OFFER_RECHECK_MS = 2000;
 const OFFER_GIVE_UP_MS = 10 * 60_000;
+/** How often an offered bar looks whether the shell is at its prompt. */
+const BAR_CHECK_MS = 1000;
 /** How long the install line has to say it's ready for the installer. */
 const READY_WAIT_MS = 15_000;
 /** The installer goes in pieces this big, this far apart, so no input buffer on the way overflows. */
@@ -56,11 +60,11 @@ const INSTALL_CHUNK = 2048;
 const INSTALL_CHUNK_GAP_MS = 15;
 
 /** The reports a server's integration sends (OSC 633;P;Termilly<report>). */
-const REPORT = Object.freeze({ remote: 'Remote', git: 'Git', ready: 'Ready' });
+const REPORT = Object.freeze({ remote: 'Remote', git: 'Git', ready: 'Ready', wsl: 'Wsl' });
 /** What Settings remembers about a host (remote.setup): Termilly is on it, or the user declined it. */
 const SETUP = Object.freeze({ installed: 'installed', never: 'never' });
 /** What the bar offers: to set the host up, or to update what's on it. */
-const BAR_KIND = Object.freeze({ setup: 'setup', update: 'update' });
+const BAR_KIND = Object.freeze({ setup: 'setup', update: 'update', repair: 'repair' });
 /** What the bar's buttons do (data-rb). */
 const BAR_ACTION = Object.freeze({ setup: 'setup', later: 'later', never: 'never' });
 /** The bar over a terminal on a host without the integration: its class and its selector. */
@@ -108,7 +112,7 @@ function rememberSetup(tab, value) {
  * @param {string} data
  */
 export function remoteReport(tab, data) {
-  const m = /^P;Termilly(Remote|Git|Ready)(?:=(.*))?$/s.exec(data);
+  const m = /^P;Termilly(Remote|Git|Ready|Wsl)(?:=(.*))?$/s.exec(data);
   if (!m) return false;
   const [, key, value = ''] = m;
   if (key === REPORT.remote) {
@@ -124,6 +128,9 @@ export function remoteReport(tab, data) {
     setRemoteGit(tab, parseGit(value));
   } else if (key === REPORT.ready) {
     sendInstaller(tab);
+  } else if (key === REPORT.wsl && value && tab.wslDistro !== value) {
+    tab.wslDistro = value;
+    if (tab.remoteCwd != null) emit(EVENTS.remoteCwd, tab); // the Files panel can follow it now
   }
   return true;
 }
@@ -185,7 +192,8 @@ export function remoteHook(tab, data) {
 
 /**
  * After an SSH or WSL terminal starts: when its shell hasn't reported the integration, offer to set the host or
- * distribution up.
+ * distribution up, or, when it was set up already, to set it up again: something keeps the shell from loading it (a
+ * ~/.bash_profile made since, which a login shell reads instead of the file that loaded it).
  * @param {Tab} tab
  */
 export function watchRemote(tab) {
@@ -196,13 +204,14 @@ export function watchRemote(tab) {
   if (!placeOf(tab) || tab.virtual || state.settings.shells.integration === false) return;
   const until = Date.now() + OFFER_GIVE_UP_MS;
   const look = () => {
-    if (!state.tabs.has(tab.id) || tab.exited || remote.integration || setupOf(tab)) return;
+    const setup = setupOf(tab);
+    if (!state.tabs.has(tab.id) || tab.exited || remote.integration || setup === SETUP.never) return;
     // Not signed in yet (a password, a host key question) or in a full-screen program: look again later.
     if (!tab.view?.term || !atPrompt(tab.view.term)) {
       if (Date.now() < until) remote.offer = setTimeout(look, OFFER_RECHECK_MS);
       return;
     }
-    showBar(tab, BAR_KIND.setup);
+    showBar(tab, setup === SETUP.installed ? BAR_KIND.repair : BAR_KIND.setup);
   };
   remote.offer = setTimeout(look, OFFER_AFTER_MS);
 }
@@ -212,6 +221,11 @@ export function watchRemote(tab) {
  * @param {Tab} tab
  */
 export function setUpHost(tab) {
+  // Only at the shell's prompt: anywhere else (a password, a host key question) the line would be typed into it.
+  if (tab.view?.term && !atPrompt(tab.view.term)) {
+    showToast({ text: 'Set up waits for the shell’s prompt: answer what it’s asking first.', state: TOAST.failed });
+    return;
+  }
   hideBar(tab);
   remoteOf(tab).install = { requested: Date.now() };
   send(PAGE.remoteInstall, { id: tab.id });
@@ -291,22 +305,42 @@ const setUpLabel = place => `Set up Termilly on this ${place}`;
 
 /**
  * @param {Tab} tab
- * @param {'setup' | 'update'} kind
+ * @param {'setup' | 'update' | 'repair'} kind
  */
 function showBar(tab, kind) {
+  const remote = remoteOf(tab);
+  remote.bar = kind;
+  // Shown only while the shell waits at its prompt (checked every second): never over a question for a username,
+  // a password or a host key, where Set up would type the installer into the answer.
+  clearInterval(remote.barTimer);
+  remote.barTimer = setInterval(() => keepBar(tab), BAR_CHECK_MS);
+  keepBar(tab);
+}
+
+/**
+ * The bar's markup over the terminal's pane.
+ * @param {Tab} tab
+ * @param {'setup' | 'update' | 'repair'} kind
+ */
+function drawBar(tab, kind) {
   const pane = tab.view?.el;
   if (!pane) return;
-  hideBar(tab);
+  pane.querySelector(BAR)?.remove();
   const place = placeOf(tab) ?? SETUP_PLACES[PROFILE_SOURCE.ssh];
   const name = escapeHtml(profileOf(tab)?.name ?? `this ${place}`);
   const bar = document.createElement('div');
   bar.className = BAR_CLASS;
+  const later = `<button class="btn small" data-rb="${BAR_ACTION.later}">Not now</button>`;
   bar.innerHTML = kind === BAR_KIND.update
     ? `<span class="rb-text">Termilly on ${name} is out of date.</span>
-       <button class="btn small primary" data-rb="${BAR_ACTION.setup}">Update</button><button class="btn small" data-rb="${BAR_ACTION.later}">Not now</button>`
-    : `<span class="rb-text">Show git, prompt marks and Claude for ${name} as for local terminals.</span>
+       <button class="btn small primary" data-rb="${BAR_ACTION.setup}">Update</button>${later}`
+    : kind === BAR_KIND.repair
+      ? `<span class="rb-text">Termilly doesn’t run in this shell on ${name}.</span>
+       <button class="btn small primary" data-rb="${BAR_ACTION.setup}" title="Sets Termilly up there again: it was set up before, but this shell doesn’t load it (a ~/.bash_profile made since), or the system was installed anew">Set up</button>${later}
+       <button class="btn small" data-rb="${BAR_ACTION.never}">Never for this ${place}</button>`
+      : `<span class="rb-text">Show git, prompt marks and Claude for ${name} as for local terminals.</span>
        <button class="btn small primary" data-rb="${BAR_ACTION.setup}">${setUpLabel(place)}</button>
-       <button class="btn small" data-rb="${BAR_ACTION.later}">Not now</button><button class="btn small" data-rb="${BAR_ACTION.never}">Never for this ${place}</button>`;
+       ${later}<button class="btn small" data-rb="${BAR_ACTION.never}">Never for this ${place}</button>`;
   bar.addEventListener('click', e => {
     const action = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-rb]'))?.dataset.rb;
     if (action === BAR_ACTION.setup) setUpHost(tab);
@@ -316,7 +350,31 @@ function showBar(tab, kind) {
   pane.append(bar);
 }
 
-/** @param {Tab} tab */
+/** The bar goes: answered (a button), not needed any more (set up), or for another. @param {Tab} tab */
 function hideBar(tab) {
   tab.view?.el?.querySelector(BAR)?.remove();
+  if (!tab.remote) return;
+  tab.remote.bar = null;
+  clearInterval(tab.remote.barTimer);
 }
+
+/**
+ * The bar offered over a terminal stays until it's answered, shown while the shell is at its prompt and hidden while
+ * it asks something else (or its pane lost it: put back).
+ * @param {Tab | null | undefined} tab
+ */
+function keepBar(tab) {
+  const kind = /** @type {'setup' | 'update' | 'repair' | null | undefined} */ (tab?.remote?.bar);
+  if (!tab || !kind) return;
+  if (!state.tabs.has(tab.id) || tab.exited) {
+    hideBar(tab);
+    return;
+  }
+  const term = tab.view?.term;
+  const there = tab.view?.el?.querySelector(BAR);
+  const prompt = !!term && onPromptLine(term);
+  if (prompt && !there) drawBar(tab, kind);
+  else if (!prompt && there) there.remove();
+}
+on(EVENTS.focus, keepBar);
+on(EVENTS.workspaces, () => { for (const tab of state.tabs.values()) keepBar(tab); });

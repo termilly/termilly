@@ -11,6 +11,7 @@ import { inputTargets } from './broadcast.js';
 import { promptStarted, inputStarted, commandStarted, commandEnded, commandReported } from './commands.js';
 import { scanOutput, scanFrom, screenCleared } from './triggers.js';
 import { quotePaths } from './quoting.js';
+import { isWsl } from './filepaths.js';
 import { remoteReport, remoteHook, remotePrompt, watchRemote } from './remotehost.js';
 import { modal } from './dialogs.js';
 import { escapeHtml } from './ui.js';
@@ -19,7 +20,7 @@ import { currentTheme, themeId, themeById, THEME_BASE } from './themes.js';
 import { updateSettings } from './preferences.js';
 import { resumeCommand, attachFor } from './resume.js';
 import { noteRemotePrompt, noteRemoteCwd, leftRemote } from './remotecwd.js';
-import { AGENT_STATE, AGENT_SOURCE } from './constants.js';
+import { AGENT_STATE, AGENT_SOURCE, PROFILE_ICON } from './constants.js';
 import { find, field, PATH_DRAG, CLIP_DRAG } from './dom.js';
 import { continuesOnNextRow, atPrompt } from './buffer.js';
 import { isResuming, resumeTyped, cancelResume, CANCEL_KEY } from './resuming.js';
@@ -912,7 +913,8 @@ function checkPaste(tab, text) {
 export async function typePaths(tab, paths) {
   if (!paths.length || tab.exited) return;
   const profile = state.profiles.find(p => p.id === tab.profile);
-  const text = `${quotePaths(paths, profile?.shellIcon ?? profile?.icon)} `;
+  // A shell in WSL (`wsl` typed in PowerShell, a profile of the user's) takes paths as Linux has them, whatever its badge.
+  const text = `${quotePaths(paths, isWsl(tab) ? PROFILE_ICON.wsl : profile?.shellIcon ?? profile?.icon)} `;
   if (!(await confirmProduction([tab], 'Drop files', text))) return;
   send(PAGE.input, { id: tab.id, data: text });
   /** @type {TabView} */ (tab.view).term.focus();

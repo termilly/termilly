@@ -36,5 +36,6 @@ export function noteRemoteCwd(tab, path) {
 export function leftRemote(tab) {
   if (tab.remoteCwd == null) return;
   tab.remoteCwd = null;
+  tab.wslDistro = null;
   persist();
 }
