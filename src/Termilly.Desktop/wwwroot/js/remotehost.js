@@ -12,7 +12,7 @@
 
 import { PAGE, HOST } from './protocol.js';
 import { send, onHost } from './host.js';
-import { state, emit, profileOf, GROUPS, EVENTS } from './store.js';
+import { state, on, emit, profileOf, GROUPS, EVENTS } from './store.js';
 import { PROFILE_SOURCE } from './constants.js';
 import { escapeHtml } from './ui.js';
 import { updateSettings } from './preferences.js';
@@ -29,7 +29,7 @@ import { atPrompt } from './buffer.js';
 /** What a server's integration told a terminal (tab.remote; see remoteOf). */
 /**
  * @typedef {{ integration: number | null, git: RemoteGit | null, gitReported: boolean, install: RemoteInstall | null,
- *   offer: number }} RemoteState
+ *   offer: number, bar?: string | null }} RemoteState
  */
 
 /** The integration version this Termilly brings (Settings' about); older hosts are offered an update. */
@@ -325,9 +325,23 @@ function showBar(tab, kind) {
     if (action === BAR_ACTION.never) { rememberSetup(tab, SETUP.never); hideBar(tab); }
   });
   pane.append(bar);
+  remoteOf(tab).bar = kind;
 }
 
-/** @param {Tab} tab */
+/** The bar goes: answered (a button), not needed any more (set up), or for another. @param {Tab} tab */
 function hideBar(tab) {
   tab.view?.el?.querySelector(BAR)?.remove();
+  if (tab.remote) tab.remote.bar = null;
 }
+
+/**
+ * The bar offered over a terminal stays until it's answered: when the terminal comes in front again without it (its
+ * pane was drawn again), it's put back.
+ * @param {Tab | null | undefined} tab
+ */
+function keepBar(tab) {
+  const kind = tab?.remote?.bar;
+  if (tab && kind && !tab.view?.el?.querySelector(BAR)) showBar(tab, /** @type {'setup' | 'update' | 'repair'} */ (kind));
+}
+on(EVENTS.focus, keepBar);
+on(EVENTS.workspaces, () => { for (const tab of state.tabs.values()) keepBar(tab); });
