@@ -90,17 +90,35 @@ internal sealed class HistoryHandler(
 {
     private const string NoEntries = "[]";
 
+    /// <summary>One snapshot written at a time.</summary>
+    private readonly SemaphoreSlim _snapshotSaving = new(1, 1);
+
+    /// <summary>
+    /// The terminals' snapshot written (every half minute, and once more on closing), away from the window's thread: its
+    /// whole scrollback is redacted, sealed and written, which took long enough to hold up typing behind it.
+    /// </summary>
+    private async Task SaveSnapshotAsync(JsonElement saved, bool final)
+    {
+        var redact = settings.Current.Session.RedactSecrets;
+        await _snapshotSaving.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            await Task.Run(() => Storage.Try(() => snapshot.Save(saved, redact))).ConfigureAwait(false);
+        }
+        finally
+        {
+            _snapshotSaving.Release();
+        }
+        if (final)
+        {
+            last.Arrived();
+        }
+    }
+
     public void Register(MessageRouter router)
     {
         router.On<FromPage.StateSave>(m => Storage.Try(() => workspaces.Save(m.State)));
-        router.On<FromPage.SnapshotSave>(m =>
-        {
-            Storage.Try(() => snapshot.Save(m.Snapshot, settings.Current.Session.RedactSecrets));
-            if (m.Final)
-            {
-                last.Arrived();
-            }
-        });
+        router.On<FromPage.SnapshotSave>(m => SaveSnapshotAsync(m.Snapshot.Clone(), m.Final));
         router.On<FromPage.HistoryAdd>(m => Storage.Try(() => history.Add(m.Entry, settings.Current.Session.RedactSecrets)));
         router.On<FromPage.HistoryList>(_ => SendHistory());
         router.On<FromPage.HistoryCommand>(m =>
