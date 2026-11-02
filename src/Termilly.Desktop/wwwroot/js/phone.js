@@ -238,7 +238,7 @@ export function showAtSize(tab, size, who) {
     ? { cols: size.cols, rows: size.rows, tallest: before?.cols === size.cols ? Math.max(before.tallest ?? 0, size.rows) : size.rows }
     : null;
   view.body.classList.toggle('phone-sized', !!tab.phoneSize);
-  view.body.classList.toggle('by-computer', !!tab.phoneSize && !!who?.computer);
+  view.body.classList.toggle(BY_COMPUTER, !!tab.phoneSize && !!who?.computer);
   view.body.querySelector(`:scope > .${WHO_CLASS}`)?.remove();
   if (tab.phoneSize) {
     const label = document.createElement('div');
@@ -266,6 +266,10 @@ export function showAtSize(tab, size, who) {
 
 /** Room in a phone-sized pane for its padding and the phone's name under the phone (app.css). */
 const PHONE_ROOM = Object.freeze({ width: 40, height: 84 });
+/** Another computer's size needs no room: no phone around it, and its label floats over its corner (app.css). */
+const NO_ROOM = Object.freeze({ width: 0, height: 0 });
+/** The pane's class while another computer's size is drawn in it. */
+const BY_COMPUTER = 'by-computer';
 /** Where xterm draws the characters: its size is the grid's. */
 const TERM_SCREEN = '.xterm-screen';
 /** The smallest font a phone's terminal gets here: it shows what the phone shows, smaller than one would type in. */
@@ -303,10 +307,11 @@ function fitPhone(tab) {
     return;
   }
   const inner = screen.getBoundingClientRect(), frame = phoneFrame(term.element);
+  const room = view.body.classList.contains(BY_COMPUTER) ? NO_ROOM : PHONE_ROOM;
   const tall = inner.height * tallestOf(tab) / term.rows;
   const scale = Math.min(1,
-    (view.body.clientWidth - PHONE_ROOM.width - frame.width) / inner.width,
-    (view.body.clientHeight - PHONE_ROOM.height - frame.height) / tall);
+    (view.body.clientWidth - room.width - frame.width) / inner.width,
+    (view.body.clientHeight - room.height - frame.height) / tall);
   if (scale < 1) term.options.fontSize = Math.max(PHONE_MIN_FONT, Math.floor(full * scale * 2) / 2);
   requestAnimationFrame(() => holdHeight(tab)); // at the new font, once drawn
 }

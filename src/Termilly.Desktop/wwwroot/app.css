@@ -1414,7 +1414,9 @@ body[data-sidebar="rail"] .side-rail { opacity: 1; pointer-events: auto; }
 .pane-body.phone-sized > .xterm::before { content: ''; position: absolute; top: 8px; left: 50%; z-index: 10; width: 84px; height: 22px; border-radius: 11px; background: #000; transform: translateX(-50%); pointer-events: none; }
 .pane-body.phone-sized > .xterm::after { content: ''; position: absolute; bottom: 8px; left: 50%; z-index: 10; width: 30%; height: 4px; border-radius: 2px; background: var(--muted); opacity: 0.7; transform: translateX(-50%); pointer-events: none; }
 /* Another Termilly computer shows it: no phone around it, only what it is and "Open on" under it. */
+.pane-body.phone-sized.by-computer { padding: 0; }
 .pane-body.phone-sized.by-computer > .xterm { padding: 0; border: 0; border-radius: 0; box-shadow: none; }
+.pane-body.phone-sized.by-computer > .size-who { position: absolute; right: 10px; bottom: 10px; z-index: 5; opacity: 0.92; }
 .pane-body.phone-sized.by-computer > .xterm::before, .pane-body.phone-sized.by-computer > .xterm::after { content: none; }
 .pane-body.phone-sized > .size-who { flex: none; display: flex; align-items: center; gap: 8px; padding: 3px 4px 3px 10px; border-radius: 999px; background: var(--accent); color: #fff; font-size: 12px; font-weight: 600; }
 .pane-body.phone-sized > .size-who:not(:has(button)) { padding-right: 10px; }
