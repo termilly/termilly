@@ -220,6 +220,12 @@ export const SETTING_VALUES = Object.freeze({
     off: 'off',
     all: Object.freeze(['away', 'always', 'off']),
   }),
+  pcSize: Object.freeze({
+    fit: 'fit',
+    keep: 'keep',
+    default: 'keep',
+    all: Object.freeze(['fit', 'keep']),
+  }),
   sound: Object.freeze({
     none: 'none',
     ping1: 'ping-1',

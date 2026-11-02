@@ -19,6 +19,7 @@ import { THEMES, THEME_BASE, themeId, onSystemThemeChange } from './themes.js';
 import { termTheme } from './terminals.js';
 import { placesForPhone } from './phonemanage.js';
 import { hasFiles, shellFolderOf, placeOf } from './filepaths.js';
+import { hasPrompts } from './myprompts.js';
 import { platform } from './host.js';
 
 /** How long changes settle before the phones hear of them. */
@@ -94,7 +95,11 @@ function terminalOf(tab) {
   const activity = activityOf(tab);
   return {
     id: tab.id, ws: tab.wsId, title: tabTitle(tab), icon, note: tab.note ?? null,
+    // A phone or another computer gives it its size: who (another computer showing it draws it the same).
+    sizedBy: tab.sizedBy ?? null,
     badge: badgeOf(icon),
+    // Another Termilly computer showing it may open its Prompt history (Settings › Remote › Prompt history).
+    prompts: !!state.settings.phone?.sharePrompts && hasPrompts(tab),
     agent: tab.agent?.state ?? null,
     activity: activity?.kind ?? (tab.exited ? 'exited' : null),
     percent: activity?.percent ?? null,
@@ -198,8 +203,10 @@ async function answer({ pane, choice, text }) {
 }
 
 // A phone shows a terminal: it takes the phone's size, so it fills the phone and what it prints fits it, drawn here in
-// a phone with that phone's name and address under it (another Termilly computer: plainly, "Open on" its name); it gets its pane's size back when no phone shows it. The phone
-// keeps its full height when the phone's keyboard takes rows away: its tallest size while it shows the terminal.
+// a phone with that phone's name and address under it (another Termilly computer: plainly, "Open remotely on" its name, with
+// Take back); it gets its pane's size back when no phone shows it. The phone keeps its full height when the phone's
+// keyboard takes rows away: its tallest size while it shows the terminal. (Another computer has no keyboard to come
+// and go: its rows are its rows.)
 onHost(HOST.phoneSize, m => {
   const tab = state.tabs.get(m.id);
   const view = tab?.view;
@@ -207,33 +214,88 @@ onHost(HOST.phoneSize, m => {
   const before = tab.phoneSize;
   // The phone's keyboard came or went: the same columns, rows no more than its tallest. The phone keeps its size and
   // font; only its rows change (fitting again drew it at Settings' font for a frame, and the pane's scrollbar blinked).
-  if (before && m.cols === before.cols && m.rows && m.rows <= (before.tallest ?? 0)) {
+  if (!m.computer && before && m.cols === before.cols && m.rows && m.rows <= (before.tallest ?? 0)) {
     tab.phoneSize = { ...before, rows: m.rows };
     if (view.term.rows !== m.rows) view.term.resize(m.cols, m.rows);
     return;
   }
-  tab.phoneSize = m.cols && m.rows
-    ? { cols: m.cols, rows: m.rows, tallest: before?.cols === m.cols ? Math.max(before.tallest ?? 0, m.rows) : m.rows }
+  const label = m.computer ? `Open remotely on ${m.name ?? 'another computer'}` : [m.name ?? 'A phone', m.address].filter(Boolean).join(' · ');
+  showAtSize(tab, m.cols && m.rows ? { cols: m.cols, rows: m.rows } : null, { label, computer: !!m.computer, takeBack: !!m.computer });
+});
+
+/** The label in a terminal's corner (or under its phone): who has it open, whose size it has, and Take back. */
+const WHO_CLASS = 'size-who';
+
+/**
+ * The label: who gives the terminal its size (with Take back when it's another computer), else who has it open.
+ * @param {Tab} tab
+ */
+function drawWho(tab) {
+  const body = tab.view?.body;
+  if (!body) return;
+  body.querySelector(`:scope > .${WHO_CLASS}`)?.remove();
+  const text = tab.phoneSize ? tab.sizedBy?.label : tab.viewers?.length ? `Open remotely on ${tab.viewers.join(', ')}` : '';
+  if (!text && !tab.takeBack) return;
+  const label = document.createElement('div');
+  label.className = WHO_CLASS;
+  label.textContent = text ?? '';
+  if (tab.takeBack) {
+    const button = document.createElement('button');
+    button.textContent = 'Take back';
+    button.title = 'Back to this local terminal’s own size. The remote terminal on that computer pauses until it resumes.';
+    button.addEventListener('click', () => send(PAGE.phoneTakeBack, { id: tab.id }));
+    label.append(button);
+  }
+  body.append(label);
+}
+
+// Who has a terminal open changed: its label says so.
+onHost(HOST.phoneViewers, m => {
+  const tab = state.tabs.get(m.id);
+  if (!tab) return;
+  tab.viewers = m.names;
+  drawWho(tab);
+});
+
+/**
+ * Draws a terminal at a size not its pane's (a phone's or another computer's), fitted into its pane with a label under
+ * it (and Take back, which gives the terminal its own size again); no size gives it its pane's size again.
+ * @param {Tab} tab
+ * @param {{ cols: number, rows: number } | null} size
+ * @param {{ label: string, computer: boolean, takeBack?: boolean }} [who]
+ */
+export function showAtSize(tab, size, who) {
+  const view = tab.view;
+  if (!view?.term) return;
+  const before = tab.phoneSize;
+  tab.phoneSize = size
+    ? { cols: size.cols, rows: size.rows, tallest: !who?.computer && before?.cols === size.cols ? Math.max(before.tallest ?? 0, size.rows) : size.rows }
     : null;
+  // Who it is, for the other computers showing this terminal: they draw it as it's drawn here (js/remotepc.js).
+  tab.sizedBy = tab.phoneSize ? { label: who?.label ?? '', computer: !!who?.computer } : null;
+  tab.takeBack = !!tab.phoneSize && !!who?.takeBack;
   view.body.classList.toggle('phone-sized', !!tab.phoneSize);
-  view.body.classList.toggle('by-computer', !!tab.phoneSize && m.computer === true);
+  view.body.classList.toggle(BY_COMPUTER, !!tab.phoneSize && !!who?.computer);
+  drawWho(tab);
   if (tab.phoneSize) {
-    view.body.dataset.phone = m.computer ? `Open on ${m.name ?? 'another computer'}` : [m.name ?? 'A phone', m.address].filter(Boolean).join(' · ');
     view.term.resize(tab.phoneSize.cols, tab.phoneSize.rows);
     phoneTabs.set(view.body, tab);
     resized.observe(view.body);
     requestAnimationFrame(() => fitPhone(tab)); // once the new size is drawn
   } else {
-    delete view.body.dataset.phone;
     resized.unobserve(view.body);
     if (view.term.element) view.term.element.style.minHeight = '';
     view.term.options.fontSize = state.settings.terminal.fontSize;
     view.fit?.fit();
   }
-});
+}
 
 /** Room in a phone-sized pane for its padding and the phone's name under the phone (app.css). */
 const PHONE_ROOM = Object.freeze({ width: 40, height: 84 });
+/** Another computer's size needs no room: no phone around it, and its label floats over its corner (app.css). */
+const NO_ROOM = Object.freeze({ width: 0, height: 0 });
+/** The pane's class while another computer's size is drawn in it. */
+const BY_COMPUTER = 'by-computer';
 /** Where xterm draws the characters: its size is the grid's. */
 const TERM_SCREEN = '.xterm-screen';
 /** The smallest font a phone's terminal gets here: it shows what the phone shows, smaller than one would type in. */
@@ -271,10 +333,11 @@ function fitPhone(tab) {
     return;
   }
   const inner = screen.getBoundingClientRect(), frame = phoneFrame(term.element);
+  const room = view.body.classList.contains(BY_COMPUTER) ? NO_ROOM : PHONE_ROOM;
   const tall = inner.height * tallestOf(tab) / term.rows;
   const scale = Math.min(1,
-    (view.body.clientWidth - PHONE_ROOM.width - frame.width) / inner.width,
-    (view.body.clientHeight - PHONE_ROOM.height - frame.height) / tall);
+    (view.body.clientWidth - room.width - frame.width) / inner.width,
+    (view.body.clientHeight - room.height - frame.height) / tall);
   if (scale < 1) term.options.fontSize = Math.max(PHONE_MIN_FONT, Math.floor(full * scale * 2) / 2);
   requestAnimationFrame(() => holdHeight(tab)); // at the new font, once drawn
 }
@@ -289,6 +352,10 @@ const tallestOf = tab => Math.max(tab.phoneSize?.tallest ?? 0, tab.view?.term?.r
 function holdHeight(tab) {
   const term = tab.view?.term, screen = term?.element?.querySelector(TERM_SCREEN);
   if (!tab.phoneSize || !term?.element || !screen) return;
+  if (tab.view?.body.classList.contains(BY_COMPUTER)) { // only a phone keeps a height of its own
+    term.element.style.minHeight = '';
+    return;
+  }
   const tall = screen.getBoundingClientRect().height * tallestOf(tab) / term.rows;
   term.element.style.minHeight = `${Math.ceil(tall + phoneFrame(term.element).height)}px`;
 }

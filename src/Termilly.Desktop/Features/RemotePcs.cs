@@ -13,7 +13,7 @@ namespace Termilly.Desktop.Features;
 /// what it shows, then what it prints, and typing and its size going back. The other computer decides what's allowed
 /// (Settings › Phone › Allow typing there).
 /// </summary>
-internal sealed class RemotePcsHandler(PageChannel page, RemotePcStore store, Phone.PhoneStore phones) : IMessageHandler, IStartable, IDisposable
+internal sealed class RemotePcsHandler(PageChannel page, RemotePcStore store, Phone.PhoneStore phones, RemotePcFiles ask) : IMessageHandler, IStartable, IDisposable
 {
     private static readonly TimeSpan RetryAfter = TimeSpan.FromSeconds(10);
     /// <summary>What a phone (or this computer) types at once (Features/Phone.cs takes up to 4096).</summary>
@@ -39,6 +39,7 @@ internal sealed class RemotePcsHandler(PageChannel page, RemotePcStore store, Ph
         public const string Watch = "watch";
         public const string Input = "input";
         public const string Size = "size";
+        public const string Refresh = "refresh";
     }
 
     /// <summary>A computer's state connection: online or not, why, and the last state it sent.</summary>
@@ -66,6 +67,8 @@ internal sealed class RemotePcsHandler(PageChannel page, RemotePcStore store, Ph
         router.On<FromPage.PcWatch>(WatchAsync);
         router.On<FromPage.PcUnwatch>(m => Unwatch(m.Tab));
         router.On<FromPage.PcInput>(InputAsync);
+        router.On<FromPage.PcPrompts>(PromptsAsync);
+        router.On<FromPage.PcRefresh>(m => SendTo(m.Tab, new JsonObject { [Fields.Op] = Kinds.Refresh }));
         router.On<FromPage.PcSize>(m => SendTo(m.Tab, new JsonObject { [Fields.Op] = Kinds.Size, [Fields.Cols] = m.Cols, [Fields.Rows] = m.Rows }));
     }
 
@@ -200,7 +203,7 @@ internal sealed class RemotePcsHandler(PageChannel page, RemotePcStore store, Ph
         Unwatch(m.Tab);
         if (store.List().FirstOrDefault(p => p.Id == m.Id) is not { } pc)
         {
-            page.Post(new ToPage.PcRefused(m.Tab, "That computer isn’t paired any more."));
+            page.Post(new ToPage.PcLost(m.Tab, "That computer isn’t paired any more."));
             return;
         }
         var stop = CancellationTokenSource.CreateLinkedTokenSource(_stop.Token);
@@ -215,7 +218,7 @@ internal sealed class RemotePcsHandler(PageChannel page, RemotePcStore store, Ph
         catch (Exception e) when (e is WebSocketException or IOException or OperationCanceledException or System.Security.Authentication.AuthenticationException)
         {
             stop.Dispose();
-            page.Post(new ToPage.PcRefused(m.Tab, $"{pc.Name} can’t be reached now."));
+            page.Post(new ToPage.PcLost(m.Tab, $"{pc.Name} can’t be reached now."));
         }
     }
 
@@ -230,6 +233,10 @@ internal sealed class RemotePcsHandler(PageChannel page, RemotePcStore store, Ph
                 {
                     page.Post(new ToPage.PcOutput(tab, message[Fields.Data]?.GetValue<string>() ?? "", type == Kinds.Screen));
                 }
+                else if (type == Phone.PhoneLive.Kinds.Released && message[Fields.Pane]?.GetValue<string>() == watch.Pane)
+                {
+                    page.Post(new ToPage.PcPaused(tab, message[Phone.PhoneLive.ByField]?.GetValue<string>()));
+                }
                 else if (type == Kinds.Answered && message[Fields.Ok]?.GetValue<bool>() == false)
                 {
                     page.Post(new ToPage.PcRefused(tab, message[Fields.Error]?.GetValue<string>() ?? "That didn’t go through."));
@@ -241,7 +248,7 @@ internal sealed class RemotePcsHandler(PageChannel page, RemotePcStore store, Ph
         }
         if (_watches.TryGetValue(tab, out var still) && still == watch)
         {
-            page.Post(new ToPage.PcRefused(tab, $"Lost the connection to {pc.Name}."));
+            page.Post(new ToPage.PcLost(tab, $"Lost the connection to {pc.Name}."));
             Unwatch(tab);
         }
     }
@@ -254,6 +261,25 @@ internal sealed class RemotePcsHandler(PageChannel page, RemotePcStore store, Ph
             watch.Socket.Abort();
             watch.Socket.Dispose();
             watch.Stop.Dispose();
+        }
+    }
+
+    /// <summary>Prompt history for a terminal here that shows another computer's: that computer's list of its prompts.</summary>
+    private async Task PromptsAsync(FromPage.PcPrompts m)
+    {
+        if (!_watches.TryGetValue(m.Tab, out var watch))
+        {
+            page.Post(new ToPage.PromptsListed(m.RequestId, [], "That terminal isn’t connected now."));
+            return;
+        }
+        try
+        {
+            var answer = await ask.AskAsync(RemotePcFiles.TerminalId(watch.Pc, watch.Pane), Phone.PcPrompts.Path, []).ConfigureAwait(false);
+            page.Post(new ToPage.PromptsListed(m.RequestId, Phone.PcPromptsApi.Read(answer)));
+        }
+        catch (IOException e)
+        {
+            page.Post(new ToPage.PromptsListed(m.RequestId, [], e.Message));
         }
     }
 

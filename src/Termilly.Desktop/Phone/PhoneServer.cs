@@ -92,11 +92,13 @@ internal sealed class PhoneServer : IDisposable
 
     /// <summary>Another Termilly computer's Copy to (PcFilesApi); null where nothing takes it.</summary>
     private readonly PcFilesApi? _files;
+    /// <summary>Another Termilly computer's Prompt history (PcPromptsApi); null where nothing takes it.</summary>
+    private readonly PcPromptsApi? _prompts;
 
     private PhoneServer(IPAddress address, int port, string webRoot, PhoneStore store, PhoneLive live, X509Certificate2 authority, string pushKey,
-        Func<string, Task> testAlert, PcFilesApi? files, Func<string, string?>? attachedTo)
+        Func<string, Task> testAlert, PcFilesApi? files, Func<string, string?>? attachedTo, PcPromptsApi? prompts)
     {
-        (_webRoot, _api, _live, _files) = (Path.GetFullPath(webRoot), new PhoneAppApi(store, pushKey, testAlert, BuildOf(webRoot), attachedTo), live, files);
+        (_webRoot, _api, _live, _files, _prompts) = (Path.GetFullPath(webRoot), new PhoneAppApi(store, pushKey, testAlert, BuildOf(webRoot), attachedTo), live, files, prompts);
         _certificate = store.ServerCertificate(authority, [address], HostName);
         _authorityFile = PhoneCertificates.AuthorityFile(authority);
         _listener = new TcpListener(address, port);
@@ -116,14 +118,14 @@ internal sealed class PhoneServer : IDisposable
         : "";
 
     public static PhoneServer Start(int port, string webRoot, PhoneStore store, PhoneLive live, X509Certificate2 authority, string pushKey, Func<string, Task> testAlert,
-        PcFilesApi? files = null, Func<string, string?>? attachedTo = null)
+        PcFilesApi? files = null, Func<string, string?>? attachedTo = null, PcPromptsApi? prompts = null)
     {
         var address = Environment.GetEnvironmentVariable("TERMILLY_PHONE_BIND") is { Length: > 0 } bind
             ? IPAddress.Parse(bind)
             : LocalNetworkAddress() ?? throw new IOException("This PC isn't on a local network (no 10.x, 172.16–31.x, 192.168.x or 100.64–127.x address).");
         try
         {
-            return new PhoneServer(address, port, webRoot, store, live, authority, pushKey, testAlert, files, attachedTo);
+            return new PhoneServer(address, port, webRoot, store, live, authority, pushKey, testAlert, files, attachedTo, prompts);
         }
         catch (SocketException e)
         {
@@ -347,6 +349,12 @@ internal sealed class PhoneServer : IDisposable
         {
             return _files is not null && request.Method == HttpMethod.Post.Method && _api.DeviceOf(request) is not null
                 ? await Task.Run(() => _files.Answer(request))
+                : Forbidden;
+        }
+        if (request.Path == PcPrompts.Path)
+        {
+            return _prompts is not null && request.Method == HttpMethod.Post.Method && _api.DeviceOf(request) is not null
+                ? await _prompts.AnswerAsync(request)
                 : Forbidden;
         }
         if (request.Path.StartsWith("/api/", StringComparison.Ordinal))

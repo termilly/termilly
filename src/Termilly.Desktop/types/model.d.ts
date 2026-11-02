@@ -174,9 +174,11 @@ interface Tab {
   hibernated?: { session: string; at: number; folder?: string | null } | null;
   /**
    * A terminal without a shell of its own: a tmux pane (js/tmux.js; client is its tmux client), or another Termilly
-   * computer's terminal (js/remotepc.js; client is the computer).
+   * computer's terminal (js/remotepc.js; client is the computer). icon: what that computer says runs in it (its
+   * shell's icon, or claude while Claude Code runs there), for its badge here. prompts: that computer lets this one
+   * open its Prompt history (Settings › Remote › Prompt history there) and Claude Code has run in it.
    */
-  virtual?: { kind: 'tmux' | 'pc'; client: string; pane: string; cols: number; rows: number } | null;
+  virtual?: { kind: 'tmux' | 'pc'; client: string; pane: string; cols: number; rows: number; icon?: string | null; prompts?: boolean } | null;
   /** An SSH connection that dropped, reconnecting (js/reconnect.js). */
   reconnect?: import('../wwwroot/js/reconnect.js').Reconnecting | null;
   /** A status set through the API (js/api.js). */
@@ -191,6 +193,12 @@ interface Tab {
   phoneAlerted?: string | null;
   /** The size a phone showing it asked for; it keeps that size until no phone shows it (js/phone.js). */
   phoneSize?: { cols: number, rows: number, tallest?: number } | null;
+  /** Who gives it that size: a phone or another computer, as its label says (js/phone.js showAtSize). */
+  sizedBy?: { label: string, computer: boolean } | null;
+  /** That size is another computer's: Take back shows (js/phone.js). */
+  takeBack?: boolean;
+  /** Who has it open: the paired phones' and computers' names (js/phone.js). */
+  viewers?: string[];
   /** Its Claude Code session is resuming after a restart, until it reports in (js/resuming.js). */
   resuming?: { session: string; command: string | null; retried: boolean; timer: number } | null;
   /** What it brings back and types as its shell starts (js/terminals.js). */

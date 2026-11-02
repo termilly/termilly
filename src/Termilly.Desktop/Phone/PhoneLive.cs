@@ -5,6 +5,8 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
+using Ops = Termilly.Desktop.Phone.LiveMessages.Ops;
+
 namespace Termilly.Desktop.Phone;
 
 /// <summary>
@@ -13,13 +15,15 @@ namespace Termilly.Desktop.Phone;
 /// answer to an agent) goes to <see cref="Received"/>, and its answer back to that phone alone. A phone may watch one
 /// terminal: it gets what that terminal shows (from the window), then what it prints, a few times a second. While
 /// a phone watches a terminal, the terminal takes the phone's size (<see cref="Sized"/>), so it fills the phone and
-/// its output fits it; it gets its own back when no phone watches it.
+/// its output fits it; it gets its own back when no phone watches it, when the phone gives its size up (a size of
+/// nothing: another computer's terminal that isn't on its screen), or when the PC takes it back (<see cref="TakeBack"/>:
+/// the phone is told, <see cref="Kinds.Released"/>, and has it again only by sending its size anew). One phone gives
+/// it its size at a time: another sending its size takes it, and the one before is told the same way, with who has it.
 /// </summary>
 internal sealed class PhoneLive : IDisposable
 {
     /// <summary>The longest message a phone may send: a reply to an agent.</summary>
     private const int MaxMessage = 16 * 1024;
-    private const int ReceiveChunk = 4096;
 
     /// <summary>What a message to a phone is (its "type").</summary>
     public static class Kinds
@@ -28,16 +32,8 @@ internal sealed class PhoneLive : IDisposable
         public const string Answered = "answered";
         public const string Screen = "screen";
         public const string Output = "output";
-    }
-
-    /// <summary>What a phone asks of the connection itself: to watch a terminal, or stop.</summary>
-    private static class Ops
-    {
-        public const string Watch = "watch";
-        public const string Unwatch = "unwatch";
-        public const string Size = "size";
-        /// <summary>The app came on screen or went to the background ({ shown }).</summary>
-        public const string Seen = "seen";
+        /// <summary>The PC took the terminal back: it has its own size again until this phone sends its size anew.</summary>
+        public const string Released = "released";
     }
 
     private const string ShownField = "shown";
@@ -82,6 +78,18 @@ internal sealed class PhoneLive : IDisposable
 
     /// <summary>A terminal should take this phone's size, or (null) its own again: no phone watches it.</summary>
     public Action<string, Viewer?>? Sized { get; set; }
+
+    /// <summary>Who has a terminal open now (the phones' and computers' names), whenever that changes.</summary>
+    public Action<string, IReadOnlyList<string>>? Watchers { get; set; }
+
+    /// <summary>A paired phone's or computer's name, by its device id: who has a terminal now.</summary>
+    public Func<string, string?>? NameOf { get; set; }
+
+    /// <summary>The released message's field with who has the terminal now (none: the PC took it back).</summary>
+    public const string ByField = "by";
+
+    /// <summary>Who has a terminal when the one that took it isn't paired by a name known here.</summary>
+    private const string SomeoneElse = "Another phone or computer";
 
     private const string TypeField = "type";
     private const string StateField = "state";
@@ -177,31 +185,12 @@ internal sealed class PhoneLive : IDisposable
             await SendAsync(socket, StateMessage()).ConfigureAwait(false);
             while (socket.State == WebSocketState.Open && !stop.IsCancellationRequested)
             {
-                var text = await ReceiveAsync(socket, stop).ConfigureAwait(false);
+                var text = await LiveMessages.ReceiveAsync(socket, MaxMessage, stop).ConfigureAwait(false);
                 if (text is null)
                 {
                     break;
                 }
-                var message = Parse(text);
-                var op = message?[OpField]?.GetValue<string>();
-                if (op is Ops.Watch or Ops.Unwatch)
-                {
-                    await WatchAsync(socket, me, op == Ops.Watch ? message : null).ConfigureAwait(false);
-                }
-                else if (op == Ops.Size)
-                {
-                    Resize(me, message!);
-                }
-                else if (op == Ops.Seen)
-                {
-                    Seen(me, message);
-                }
-                else if (Received is { } received && message is not null)
-                {
-                    var answer = await received(device, message).ConfigureAwait(false);
-                    answer[TypeField] = Kinds.Answered;
-                    await SendAsync(socket, answer.ToJsonString()).ConfigureAwait(false);
-                }
+                await HandleAsync(socket, me, LiveMessages.Parse(text)).ConfigureAwait(false);
             }
         }
         catch (Exception e) when (e is WebSocketException or OperationCanceledException or IOException or ObjectDisposedException)
@@ -211,9 +200,38 @@ internal sealed class PhoneLive : IDisposable
         {
             Leave(me);
             _phones.TryRemove(socket, out var gone);
+            Tell(me.Watching);
             gone?.Gate.Dispose();
             socket.Abort();
             socket.Dispose();
+        }
+    }
+
+    /// <summary>One message from a phone: about the connection itself (watch, size, seen, refresh), or for <see cref="Received"/>.</summary>
+    private async Task HandleAsync(WebSocket socket, Phone me, JsonObject? message)
+    {
+        var op = message?[OpField]?.GetValue<string>();
+        if (op is Ops.Watch or Ops.Unwatch)
+        {
+            await WatchAsync(socket, me, op == Ops.Watch ? message : null).ConfigureAwait(false);
+        }
+        else if (op == Ops.Size)
+        {
+            Resize(me, message!);
+        }
+        else if (op == Ops.Seen)
+        {
+            Seen(me, message);
+        }
+        else if (op == Ops.Refresh && me.Watching is { } watched)
+        {
+            await SendScreenAsync(socket, me, watched).ConfigureAwait(false);
+        }
+        else if (Received is { } received && message is not null)
+        {
+            var answer = await received(me.Device, message).ConfigureAwait(false);
+            answer[TypeField] = Kinds.Answered;
+            await SendAsync(socket, answer.ToJsonString()).ConfigureAwait(false);
         }
     }
 
@@ -235,12 +253,18 @@ internal sealed class PhoneLive : IDisposable
     private async Task WatchAsync(WebSocket socket, Phone phone, JsonObject? watch)
     {
         var pane = watch?[PaneField]?.GetValue<string>();
-        if (phone.Watching != pane)
+        var was = phone.Watching;
+        if (was != pane)
         {
             Leave(phone);
         }
         phone.Ready = false;
         phone.Watching = pane;
+        if (was != pane)
+        {
+            Tell(was);
+            Tell(pane);
+        }
         if (pane is null)
         {
             return;
@@ -250,6 +274,16 @@ internal sealed class PhoneLive : IDisposable
         {
             Opened?.Invoke(pane);
         }
+        await SendScreenAsync(socket, phone, pane).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// What a terminal shows now, to the phone watching it (when it starts watching, and when it asks again), then what
+    /// it prints from there.
+    /// </summary>
+    private async Task SendScreenAsync(WebSocket socket, Phone phone, string pane)
+    {
+        phone.Ready = false;
         lock (phone.Pending)
         {
             phone.Pending.Clear(); // what the screen below has already
@@ -267,7 +301,10 @@ internal sealed class PhoneLive : IDisposable
         phone.Ready = phone.Watching == pane;
     }
 
-    /// <summary>The phone's size for the terminal it watches (from the size of its screen and its font).</summary>
+    /// <summary>
+    /// The phone's size for the terminal it watches (from the size of its screen and its font); none (0) gives it up,
+    /// still watching.
+    /// </summary>
     private void Resize(Phone phone, JsonObject message)
     {
         if (phone.Watching is not { } pane || message[PaneField]?.GetValue<string>() != pane
@@ -275,7 +312,13 @@ internal sealed class PhoneLive : IDisposable
         {
             return;
         }
+        if (cols <= 0 || rows <= 0)
+        {
+            Leave(phone);
+            return;
+        }
         var size = new GridSize(Math.Clamp(cols, MinCols, MaxCols), Math.Clamp(rows, MinRows, MaxRows));
+        Release(pane, phone, NameOf?.Invoke(phone.Device) ?? SomeoneElse);
         phone.Size = size;
         Sized?.Invoke(pane, new Viewer(size, phone.Device, phone.Address));
     }
@@ -293,6 +336,44 @@ internal sealed class PhoneLive : IDisposable
         phone.Size = null;
         var other = _phones.Values.FirstOrDefault(p => p != phone && p.Watching == pane && p.Size is not null);
         Sized?.Invoke(pane, other?.Size is { } size ? new Viewer(size, other.Device, other.Address) : null);
+    }
+
+    /// <summary>
+    /// The PC takes a terminal back: the phones and computers that gave it their size are told, and it has its own size
+    /// again (until one of them sends its size anew).
+    /// </summary>
+    public void TakeBack(string pane)
+    {
+        if (Release(pane, null, null))
+        {
+            Sized?.Invoke(pane, null);
+        }
+    }
+
+    /// <summary>Says who has a terminal open now (<see cref="Watchers"/>).</summary>
+    private void Tell(string? pane)
+    {
+        if (pane is null || Watchers is not { } watchers)
+        {
+            return;
+        }
+        watchers(pane, _phones.Values.Where(p => p.Watching == pane).Select(p => NameOf?.Invoke(p.Device) ?? SomeoneElse).Distinct().Order(StringComparer.CurrentCultureIgnoreCase).ToList());
+    }
+
+    /// <summary>
+    /// The phones and computers (but <paramref name="keeper"/>) that gave a terminal their size give it up, told who has
+    /// it now (<paramref name="by"/>; none: the PC). Whether there were any.
+    /// </summary>
+    private bool Release(string pane, Phone? keeper, string? by)
+    {
+        var holders = _phones.Where(p => p.Value != keeper && p.Value.Watching == pane && p.Value.Size is not null).ToList();
+        var message = new JsonObject { [TypeField] = Kinds.Released, [PaneField] = pane, [ByField] = by }.ToJsonString();
+        foreach (var (socket, phone) in holders)
+        {
+            phone.Size = null;
+            _ = SendAsync(socket, message);
+        }
+        return holders.Count > 0;
     }
 
     public void Dispose()
@@ -330,38 +411,6 @@ internal sealed class PhoneLive : IDisposable
         }
         catch (Exception e) when (e is WebSocketException or ObjectDisposedException or IOException)
         {
-        }
-    }
-
-    /// <summary>One whole text message, or null when the phone went away or sent too much.</summary>
-    private static async Task<string?> ReceiveAsync(WebSocket socket, CancellationToken stop)
-    {
-        var buffer = new byte[ReceiveChunk];
-        using var message = new MemoryStream();
-        while (true)
-        {
-            var result = await socket.ReceiveAsync(buffer, stop).ConfigureAwait(false);
-            if (result.MessageType == WebSocketMessageType.Close || message.Length + result.Count > MaxMessage)
-            {
-                return null;
-            }
-            message.Write(buffer, 0, result.Count);
-            if (result.EndOfMessage)
-            {
-                return result.MessageType == WebSocketMessageType.Text ? Encoding.UTF8.GetString(message.ToArray()) : "";
-            }
-        }
-    }
-
-    private static JsonObject? Parse(string text)
-    {
-        try
-        {
-            return JsonNode.Parse(text) as JsonObject;
-        }
-        catch (JsonException)
-        {
-            return null;
         }
     }
 }

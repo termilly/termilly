@@ -12,7 +12,7 @@ namespace Termilly.Desktop.Features;
 /// <summary>
 /// Copy to a terminal of another Termilly computer (Phone/PcFilesApi.cs is its side). The page names such a terminal
 /// "pc:&lt;computer&gt;:&lt;its terminal&gt;"; its folders and listings come from the computer, and each item goes there
-/// as a zip of itself.
+/// as a zip of itself. Prompt history asks the computer through it too (Phone/PcPromptsApi.cs).
 /// </summary>
 internal sealed class RemotePcFiles(RemotePcStore store)
 {
@@ -22,6 +22,9 @@ internal sealed class RemotePcFiles(RemotePcStore store)
     private static readonly TimeSpan PutTimeout = TimeSpan.FromHours(2);
     private const string TempPrefix = "termilly-out-";
     private const string JsonType = "application/json";
+
+    /// <summary>The id the page gives a computer's terminal.</summary>
+    public static string TerminalId(string pc, string pane) => $"{Prefix}{pc}:{pane}";
 
     /// <summary>Whether a terminal id is another computer's.</summary>
     public static bool Is(string? terminal) => terminal?.StartsWith(Prefix, StringComparison.Ordinal) == true;

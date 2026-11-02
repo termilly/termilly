@@ -57,6 +57,7 @@ internal static class Composition
         .AddSingleton<PromptHistory>()
         .AddSingleton<RemotePcFiles>()
         .AddSingleton<PcFilesApi>()
+        .AddSingleton<PcPromptsApi>()
         .AddStartable<ProfileCatalog>()
         .AddStartable<ActivityWatcher>()
         .AddStartable<HistoryWatch>()

@@ -41,6 +41,12 @@ internal static partial class FromPage
         public static string Type => "pc:input";
     }
 
+    /// <summary>A terminal here that shows another computer's is drawn at another size now: what it shows, again.</summary>
+    internal sealed record PcRefresh(string Tab = "") : IPageMessage
+    {
+        public static string Type => "pc:refresh";
+    }
+
     /// <summary>A terminal here that shows another computer's changed size: that one takes it.</summary>
     internal sealed record PcSize(string Tab = "", int Cols = 0, int Rows = 0) : IPageMessage
     {
@@ -56,6 +62,15 @@ internal static partial class ToPage
         public static string Type => "pc:list";
     }
 
+    /// <summary>
+    /// The terminal this tab shows has another size there now: that computer took it back (<see cref="By"/> none), or
+    /// another phone or computer has it. It's paused here until Resume.
+    /// </summary>
+    internal sealed record PcPaused(string Tab, string? By = null) : IHostMessage
+    {
+        public static string Type => "pc:paused";
+    }
+
     /// <summary>How a pairing went: an error, or none.</summary>
     internal sealed record PcAdded(string? RequestId, string? Error) : IHostMessage
     {
@@ -66,6 +81,15 @@ internal static partial class ToPage
     internal sealed record PcOutput(string Tab, string Data, bool Screen) : IHostMessage
     {
         public static string Type => "pc:output";
+    }
+
+    /// <summary>
+    /// A remote terminal here has no connection to its local terminal (it went, or couldn't be made): it shows why, and
+    /// can only be closed.
+    /// </summary>
+    internal sealed record PcLost(string Tab, string Error) : IHostMessage
+    {
+        public static string Type => "pc:lost";
     }
 
     /// <summary>Something sent to another computer's terminal didn't go through (typing is off there, say).</summary>

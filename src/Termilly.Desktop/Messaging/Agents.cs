@@ -153,7 +153,9 @@ internal static partial class ToPage
         public const string PhoneScreen = "phone:screen";
         /// <summary>A paired phone opens, closes, renames or moves a terminal, or adds an SSH host (js/phonemanage.js).</summary>
         public const string PhoneManage = "phone:manage";
+        /// <summary>A terminal's Claude Code sessions, for another Termilly computer's Prompt history (Phone/PcPromptsApi.cs, js/myprompts.js).</summary>
+        public const string PcSessions = "pc:sessions";
 
-        public static readonly string[] All = [Api, PhoneAnswer, PhoneScreen, PhoneManage];
+        public static readonly string[] All = [Api, PhoneAnswer, PhoneScreen, PhoneManage, PcSessions];
     }
 }

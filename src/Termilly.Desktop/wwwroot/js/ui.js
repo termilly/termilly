@@ -154,10 +154,12 @@ const CLAUDE_MARK = '<svg viewBox="0 0 12 12"><g fill="currentColor" stroke="non
 
 /**
  * A terminal's badge: its shell's, or Claude's while Claude Code runs in it (back to the shell's when it exits).
+ * Another computer's terminal shows what that computer says runs in it.
  * @param {Tab} tab
  * @param {string} [extraClass]
  */
 export function tabBadgeHtml(tab, extraClass = BADGE_SIZE.small) {
+  if (tab.virtual?.icon) return badgeHtml({ icon: tab.virtual.icon }, extraClass);
   return runsClaude(tab) ? claudeBadge(extraClass, 'Claude Code is running here') : badgeHtml(profileOf(tab), extraClass);
 }
 
