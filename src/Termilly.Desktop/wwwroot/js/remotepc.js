@@ -6,7 +6,7 @@
 
 import { PAGE, HOST } from './protocol.js';
 import { send, request, onHost } from './host.js';
-import { state, on, EVENTS, ACTIVITY, WORKSPACE_COLORS, tabsOf } from './store.js';
+import { state, on, EVENTS, ACTIVITY, WORKSPACE_COLORS, tabsOf, activityChanged } from './store.js';
 import { newTab, focusTab, switchWorkspace, renderWorkspace, renderAll } from './panes.js';
 import { setVirtualInput } from './terminals.js';
 import { escapeHtml, ICONS, activityHtml, MINI_ACTIVITY } from './ui.js';
@@ -198,7 +198,22 @@ function openTerminal(pc, pane) {
   const open = [...state.tabs.values()].find(t => t.virtual?.kind === PC_KIND && t.virtual.client === pc.id && t.virtual.pane === pane);
   if (open) return focusTab(open);
   const t = stateOf(pc).terminals.find(x => x.id === pane);
-  newTab({ wsId: ws.id, name: `${t?.title ?? 'Terminal'} · ${pc.name}`, virtual: { kind: PC_KIND, client: pc.id, pane, cols: t?.cols ?? START_SIZE.cols, rows: t?.rows ?? START_SIZE.rows } });
+  newTab({ wsId: ws.id, name: `${t?.title ?? 'Terminal'} · ${pc.name}`, virtual: { kind: PC_KIND, client: pc.id, pane, cols: t?.cols ?? START_SIZE.cols, rows: t?.rows ?? START_SIZE.rows, icon: t?.icon ?? null } });
+}
+
+/**
+ * Its terminals open here take what runs in them there (Claude Code starting or exiting changes their badge), as
+ * each computer's new state comes.
+ */
+function followIcons() {
+  for (const tab of state.tabs.values()) {
+    const v = tab.virtual;
+    const pc = v?.kind === PC_KIND ? pcs.find(p => p.id === v.client) : null;
+    const icon = pc ? stateOf(pc).terminals.find(x => x.id === v?.pane)?.icon ?? null : null;
+    if (!v || !pc || !icon || icon === v.icon) continue;
+    v.icon = icon;
+    activityChanged(tab, true);
+  }
 }
 
 // Its terminal here is on screen: it starts watching there at its size, and tells its size as it changes.
@@ -250,6 +265,7 @@ onHost(HOST.pcOutput, m => {
 onHost(HOST.pcRefused, m => showToast({ text: m.error, state: TOAST.failed }));
 onHost(HOST.pcList, m => {
   pcs = m.items;
+  followIcons();
   renderRemote();
 });
 onHost(HOST.pcAdded, () => {});
