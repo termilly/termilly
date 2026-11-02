@@ -7,6 +7,8 @@ using System.Text.Json.Nodes;
 
 namespace Termilly.Desktop.Phone;
 
+using Ops = LiveMessages.Ops;
+
 /// <summary>
 /// The paired phones that have the app open (docs/phone.md): one WebSocket each. Every phone gets what the page last
 /// said about the terminals (js/phone.js) as soon as it connects and whenever it changes; what a phone sends (an
@@ -32,16 +34,6 @@ internal sealed class PhoneLive : IDisposable
         public const string Output = "output";
         /// <summary>The PC took the terminal back: it has its own size again until this phone sends its size anew.</summary>
         public const string Released = "released";
-    }
-
-    /// <summary>What a phone asks of the connection itself: to watch a terminal, or stop.</summary>
-    private static class Ops
-    {
-        public const string Watch = "watch";
-        public const string Unwatch = "unwatch";
-        public const string Size = "size";
-        /// <summary>The app came on screen or went to the background ({ shown }).</summary>
-        public const string Seen = "seen";
     }
 
     private const string ShownField = "shown";
@@ -198,26 +190,7 @@ internal sealed class PhoneLive : IDisposable
                 {
                     break;
                 }
-                var message = LiveMessages.Parse(text);
-                var op = message?[OpField]?.GetValue<string>();
-                if (op is Ops.Watch or Ops.Unwatch)
-                {
-                    await WatchAsync(socket, me, op == Ops.Watch ? message : null).ConfigureAwait(false);
-                }
-                else if (op == Ops.Size)
-                {
-                    Resize(me, message!);
-                }
-                else if (op == Ops.Seen)
-                {
-                    Seen(me, message);
-                }
-                else if (Received is { } received && message is not null)
-                {
-                    var answer = await received(device, message).ConfigureAwait(false);
-                    answer[TypeField] = Kinds.Answered;
-                    await SendAsync(socket, answer.ToJsonString()).ConfigureAwait(false);
-                }
+                await HandleAsync(socket, me, LiveMessages.Parse(text)).ConfigureAwait(false);
             }
         }
         catch (Exception e) when (e is WebSocketException or OperationCanceledException or IOException or ObjectDisposedException)
@@ -231,6 +204,34 @@ internal sealed class PhoneLive : IDisposable
             gone?.Gate.Dispose();
             socket.Abort();
             socket.Dispose();
+        }
+    }
+
+    /// <summary>One message from a phone: about the connection itself (watch, size, seen, refresh), or for <see cref="Received"/>.</summary>
+    private async Task HandleAsync(WebSocket socket, Phone me, JsonObject? message)
+    {
+        var op = message?[OpField]?.GetValue<string>();
+        if (op is Ops.Watch or Ops.Unwatch)
+        {
+            await WatchAsync(socket, me, op == Ops.Watch ? message : null).ConfigureAwait(false);
+        }
+        else if (op == Ops.Size)
+        {
+            Resize(me, message!);
+        }
+        else if (op == Ops.Seen)
+        {
+            Seen(me, message);
+        }
+        else if (op == Ops.Refresh && me.Watching is { } watched)
+        {
+            await SendScreenAsync(socket, me, watched).ConfigureAwait(false);
+        }
+        else if (Received is { } received && message is not null)
+        {
+            var answer = await received(me.Device, message).ConfigureAwait(false);
+            answer[TypeField] = Kinds.Answered;
+            await SendAsync(socket, answer.ToJsonString()).ConfigureAwait(false);
         }
     }
 
@@ -273,6 +274,16 @@ internal sealed class PhoneLive : IDisposable
         {
             Opened?.Invoke(pane);
         }
+        await SendScreenAsync(socket, phone, pane).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// What a terminal shows now, to the phone watching it (when it starts watching, and when it asks again), then what
+    /// it prints from there.
+    /// </summary>
+    private async Task SendScreenAsync(WebSocket socket, Phone phone, string pane)
+    {
+        phone.Ready = false;
         lock (phone.Pending)
         {
             phone.Pending.Clear(); // what the screen below has already

@@ -41,6 +41,12 @@ internal static partial class FromPage
         public static string Type => "pc:input";
     }
 
+    /// <summary>A terminal here that shows another computer's is drawn at another size now: what it shows, again.</summary>
+    internal sealed record PcRefresh(string Tab = "") : IPageMessage
+    {
+        public static string Type => "pc:refresh";
+    }
+
     /// <summary>A terminal here that shows another computer's changed size: that one takes it.</summary>
     internal sealed record PcSize(string Tab = "", int Cols = 0, int Rows = 0) : IPageMessage
     {

@@ -11,6 +11,18 @@ internal static class LiveMessages
 {
     private const int ReceiveChunk = 4096;
 
+    /// <summary>What a phone asks of the connection itself: to watch a terminal, or stop.</summary>
+    public static class Ops
+    {
+        public const string Watch = "watch";
+        public const string Unwatch = "unwatch";
+        public const string Size = "size";
+        /// <summary>The app came on screen or went to the background ({ shown }).</summary>
+        public const string Seen = "seen";
+        /// <summary>What the terminal it watches shows, again: it's drawn at another size there now.</summary>
+        public const string Refresh = "refresh";
+    }
+
     /// <summary>One whole text message, or null when the phone went away or sent too much.</summary>
     public static async Task<string?> ReceiveAsync(WebSocket socket, int maxMessage, CancellationToken stop)
     {

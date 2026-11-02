@@ -39,6 +39,7 @@ internal sealed class RemotePcsHandler(PageChannel page, RemotePcStore store, Ph
         public const string Watch = "watch";
         public const string Input = "input";
         public const string Size = "size";
+        public const string Refresh = "refresh";
     }
 
     /// <summary>A computer's state connection: online or not, why, and the last state it sent.</summary>
@@ -67,6 +68,7 @@ internal sealed class RemotePcsHandler(PageChannel page, RemotePcStore store, Ph
         router.On<FromPage.PcUnwatch>(m => Unwatch(m.Tab));
         router.On<FromPage.PcInput>(InputAsync);
         router.On<FromPage.PcPrompts>(PromptsAsync);
+        router.On<FromPage.PcRefresh>(m => SendTo(m.Tab, new JsonObject { [Fields.Op] = Kinds.Refresh }));
         router.On<FromPage.PcSize>(m => SendTo(m.Tab, new JsonObject { [Fields.Op] = Kinds.Size, [Fields.Cols] = m.Cols, [Fields.Rows] = m.Rows }));
     }
 

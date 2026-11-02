@@ -318,6 +318,12 @@ public sealed class PhoneTests : IDisposable
         var output = JsonNode.Parse(await ReceiveText(phone))!;
         Assert.Equal(("output", "while drawing, new line"), (output["type"]!.GetValue<string>(), output["data"]!.GetValue<string>()));
 
+        // Drawn at another size there: what it shows, again.
+        _live.Screen = pane => Task.FromResult("redrawn");
+        await phone.SendAsync(Encoding.UTF8.GetBytes("""{"op":"refresh"}"""), WebSocketMessageType.Text, true, CancellationToken.None);
+        var again = JsonNode.Parse(await ReceiveText(phone))!;
+        Assert.Equal(("screen", "t2", "redrawn"), (again["type"]!.GetValue<string>(), again["pane"]!.GetValue<string>(), again["data"]!.GetValue<string>()));
+
         using var stranger = Socket(authority, "termilly=not-a-token");
         await Assert.ThrowsAnyAsync<WebSocketException>(() => stranger.ConnectAsync(new Uri(server.AppUrl.Replace("https", "wss") + "api/live"), CancellationToken.None));
     }

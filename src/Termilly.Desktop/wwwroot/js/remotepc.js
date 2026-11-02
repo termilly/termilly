@@ -234,6 +234,8 @@ const paused = new Set();
 /** The size each last told the other computer ("cols x rows", "0 x 0" for none), so it isn't told twice. */
 /** @type {Map<string, string>} */
 const told = new Map();
+/** How long after it's drawn at another size its screen is asked for again (the program there has redrawn by then). */
+const REDRAWN_MS = 250;
 /** The paused screen over a terminal. */
 const PAUSED_CLASS = 'pc-paused';
 
@@ -277,6 +279,8 @@ function drawAtTheirSize(tab) {
   const who = t.sizedBy ?? { label: '', computer: true }; // its own size there: nothing to say
   if (tab.phoneSize?.cols === t.cols && tab.phoneSize.rows === t.rows && tab.sizedBy?.label === who.label) return;
   showAtSize(tab, { cols: t.cols, rows: t.rows }, { ...who, takeBack: false }); // taken back there, not here
+  // What it printed for that size came before it was drawn at it here: what it shows, again, once drawn.
+  setTimeout(() => send(PAGE.pcRefresh, { tab: tab.id }), REDRAWN_MS);
 }
 
 /**
