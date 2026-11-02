@@ -335,8 +335,8 @@ function drawBar(tab, kind) {
     ? `<span class="rb-text">Termilly on ${name} is out of date.</span>
        <button class="btn small primary" data-rb="${BAR_ACTION.setup}">Update</button>${later}`
     : kind === BAR_KIND.repair
-      ? `<span class="rb-text">Termilly is set up on ${name}, but this shell didn’t load it.</span>
-       <button class="btn small primary" data-rb="${BAR_ACTION.setup}">Set up again</button>${later}
+      ? `<span class="rb-text">Termilly doesn’t run in this shell on ${name}.</span>
+       <button class="btn small primary" data-rb="${BAR_ACTION.setup}" title="Sets Termilly up there again: it was set up before, but this shell doesn’t load it (a ~/.bash_profile made since), or the system was installed anew">Set up</button>${later}
        <button class="btn small" data-rb="${BAR_ACTION.never}">Never for this ${place}</button>`
       : `<span class="rb-text">Show git, prompt marks and Claude for ${name} as for local terminals.</span>
        <button class="btn small primary" data-rb="${BAR_ACTION.setup}">${setUpLabel(place)}</button>
