@@ -61,7 +61,7 @@ const REPORT = Object.freeze({ remote: 'Remote', git: 'Git', ready: 'Ready', wsl
 /** What Settings remembers about a host (remote.setup): Termilly is on it, or the user declined it. */
 const SETUP = Object.freeze({ installed: 'installed', never: 'never' });
 /** What the bar offers: to set the host up, or to update what's on it. */
-const BAR_KIND = Object.freeze({ setup: 'setup', update: 'update' });
+const BAR_KIND = Object.freeze({ setup: 'setup', update: 'update', repair: 'repair' });
 /** What the bar's buttons do (data-rb). */
 const BAR_ACTION = Object.freeze({ setup: 'setup', later: 'later', never: 'never' });
 /** The bar over a terminal on a host without the integration: its class and its selector. */
@@ -189,7 +189,8 @@ export function remoteHook(tab, data) {
 
 /**
  * After an SSH or WSL terminal starts: when its shell hasn't reported the integration, offer to set the host or
- * distribution up.
+ * distribution up, or, when it was set up already, to set it up again: something keeps the shell from loading it (a
+ * ~/.bash_profile made since, which a login shell reads instead of the file that loaded it).
  * @param {Tab} tab
  */
 export function watchRemote(tab) {
@@ -200,13 +201,14 @@ export function watchRemote(tab) {
   if (!placeOf(tab) || tab.virtual || state.settings.shells.integration === false) return;
   const until = Date.now() + OFFER_GIVE_UP_MS;
   const look = () => {
-    if (!state.tabs.has(tab.id) || tab.exited || remote.integration || setupOf(tab)) return;
+    const setup = setupOf(tab);
+    if (!state.tabs.has(tab.id) || tab.exited || remote.integration || setup === SETUP.never) return;
     // Not signed in yet (a password, a host key question) or in a full-screen program: look again later.
     if (!tab.view?.term || !atPrompt(tab.view.term)) {
       if (Date.now() < until) remote.offer = setTimeout(look, OFFER_RECHECK_MS);
       return;
     }
-    showBar(tab, BAR_KIND.setup);
+    showBar(tab, setup === SETUP.installed ? BAR_KIND.repair : BAR_KIND.setup);
   };
   remote.offer = setTimeout(look, OFFER_AFTER_MS);
 }
@@ -295,7 +297,7 @@ const setUpLabel = place => `Set up Termilly on this ${place}`;
 
 /**
  * @param {Tab} tab
- * @param {'setup' | 'update'} kind
+ * @param {'setup' | 'update' | 'repair'} kind
  */
 function showBar(tab, kind) {
   const pane = tab.view?.el;
@@ -305,12 +307,17 @@ function showBar(tab, kind) {
   const name = escapeHtml(profileOf(tab)?.name ?? `this ${place}`);
   const bar = document.createElement('div');
   bar.className = BAR_CLASS;
+  const later = `<button class="btn small" data-rb="${BAR_ACTION.later}">Not now</button>`;
   bar.innerHTML = kind === BAR_KIND.update
     ? `<span class="rb-text">Termilly on ${name} is out of date.</span>
-       <button class="btn small primary" data-rb="${BAR_ACTION.setup}">Update</button><button class="btn small" data-rb="${BAR_ACTION.later}">Not now</button>`
-    : `<span class="rb-text">Show git, prompt marks and Claude for ${name} as for local terminals.</span>
+       <button class="btn small primary" data-rb="${BAR_ACTION.setup}">Update</button>${later}`
+    : kind === BAR_KIND.repair
+      ? `<span class="rb-text">Termilly is set up on ${name}, but this shell didn’t load it.</span>
+       <button class="btn small primary" data-rb="${BAR_ACTION.setup}">Set up again</button>${later}
+       <button class="btn small" data-rb="${BAR_ACTION.never}">Never for this ${place}</button>`
+      : `<span class="rb-text">Show git, prompt marks and Claude for ${name} as for local terminals.</span>
        <button class="btn small primary" data-rb="${BAR_ACTION.setup}">${setUpLabel(place)}</button>
-       <button class="btn small" data-rb="${BAR_ACTION.later}">Not now</button><button class="btn small" data-rb="${BAR_ACTION.never}">Never for this ${place}</button>`;
+       ${later}<button class="btn small" data-rb="${BAR_ACTION.never}">Never for this ${place}</button>`;
   bar.addEventListener('click', e => {
     const action = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-rb]'))?.dataset.rb;
     if (action === BAR_ACTION.setup) setUpHost(tab);
