@@ -56,6 +56,8 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
 
     /// <summary>Another Termilly computer's Copy to, which the server takes too.</summary>
     private readonly PcFilesApi _files;
+    /// <summary>Another Termilly computer's Prompt history, which the server takes too.</summary>
+    private readonly PcPromptsApi _prompts;
     /// <summary>The computers this one shows (Remote › Termilly computers): none of them may show this one too.</summary>
     private readonly RemotePcStore _computers;
 
@@ -64,9 +66,9 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
         _computers.List().FirstOrDefault(pc => PcConnection.FingerprintOf(Convert.FromBase64String(pc.Authority)) == fingerprint)?.Name;
 
     public PhoneHandler(PageChannel page, ISettingsStore settings, PhoneStore store, PhoneLive live, PageApi api, TerminalSessions sessions, PhoneClips clips,
-        PcFilesApi files, RemotePcStore computers)
+        PcFilesApi files, RemotePcStore computers, PcPromptsApi prompts)
     {
-        (_page, _settings, _store, _live, _api, _sessions, _clips, _files, _computers) = (page, settings, store, live, api, sessions, clips, files, computers);
+        (_page, _settings, _store, _live, _api, _sessions, _clips, _files, _computers, _prompts) = (page, settings, store, live, api, sessions, clips, files, computers, prompts);
         settings.Saved += _ => Update();
         live.Received = ReceivedAsync;
         live.Screen = ScreenAsync;
@@ -316,7 +318,7 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
                     using var authority = _store.Authority(Environment.MachineName);
                     using var vapid = _store.Vapid();
                     _server = PhoneServer.Start(settings.Port, Path.Combine(AppPaths.WebRoot, PhoneFolder), _store, _live, authority, WebPush.PublicKey(vapid),
-                        device => AlertAsync(device, TestAlert), _files, ShownComputer);
+                        device => AlertAsync(device, TestAlert), _files, ShownComputer, _prompts);
                     _port = settings.Port;
                 }
                 catch (IOException e)

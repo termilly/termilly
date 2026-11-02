@@ -21,7 +21,7 @@ import { FOLDER_PATH } from './constants.js';
 /** A computer's state, as its phone app gets it (js/phone.js snapshot): what the tree shows of it. */
 /** Where a terminal's files are there: an SSH host it reaches (by name) or its own disk, and its shell's folder. */
 /** @typedef {{ ssh: boolean, place: string | null, cwd: string }} PcFiles */
-/** @typedef {{ os?: string, workspaces: { id: string, name: string, color: string }[], terminals: { id: string, ws: string, title: string, badge?: string, icon?: string, cols?: number | null, rows?: number | null, activity?: string | null, hint?: string | null, files?: PcFiles | null }[] }} PcState */
+/** @typedef {{ os?: string, workspaces: { id: string, name: string, color: string }[], terminals: { id: string, ws: string, title: string, badge?: string, icon?: string, prompts?: boolean, cols?: number | null, rows?: number | null, activity?: string | null, hint?: string | null, files?: PcFiles | null }[] }} PcState */
 
 /** A virtual terminal's kind (tab.virtual): another computer's. */
 export const PC_KIND = 'pc';
@@ -198,20 +198,22 @@ function openTerminal(pc, pane) {
   const open = [...state.tabs.values()].find(t => t.virtual?.kind === PC_KIND && t.virtual.client === pc.id && t.virtual.pane === pane);
   if (open) return focusTab(open);
   const t = stateOf(pc).terminals.find(x => x.id === pane);
-  newTab({ wsId: ws.id, name: `${t?.title ?? 'Terminal'} · ${pc.name}`, virtual: { kind: PC_KIND, client: pc.id, pane, cols: t?.cols ?? START_SIZE.cols, rows: t?.rows ?? START_SIZE.rows, icon: t?.icon ?? null } });
+  newTab({ wsId: ws.id, name: `${t?.title ?? 'Terminal'} · ${pc.name}`, virtual: { kind: PC_KIND, client: pc.id, pane, cols: t?.cols ?? START_SIZE.cols, rows: t?.rows ?? START_SIZE.rows, icon: t?.icon ?? null, prompts: !!t?.prompts } });
 }
 
 /**
- * Its terminals open here take what runs in them there (Claude Code starting or exiting changes their badge), as
- * each computer's new state comes.
+ * Its terminals open here take what runs in them there (Claude Code starting or exiting changes their badge) and
+ * whether their Prompt history may be opened, as each computer's new state comes.
  */
-function followIcons() {
+function followTerminals() {
   for (const tab of state.tabs.values()) {
     const v = tab.virtual;
     const pc = v?.kind === PC_KIND ? pcs.find(p => p.id === v.client) : null;
-    const icon = pc ? stateOf(pc).terminals.find(x => x.id === v?.pane)?.icon ?? null : null;
-    if (!v || !pc || !icon || icon === v.icon) continue;
-    v.icon = icon;
+    const t = pc ? stateOf(pc).terminals.find(x => x.id === v?.pane) : null;
+    if (!v || !t) continue;
+    const icon = t.icon || v.icon, prompts = !!t.prompts;
+    if (icon === v.icon && prompts === !!v.prompts) continue;
+    Object.assign(v, { icon, prompts });
     activityChanged(tab, true);
   }
 }
@@ -265,7 +267,7 @@ onHost(HOST.pcOutput, m => {
 onHost(HOST.pcRefused, m => showToast({ text: m.error, state: TOAST.failed }));
 onHost(HOST.pcList, m => {
   pcs = m.items;
-  followIcons();
+  followTerminals();
   renderRemote();
 });
 onHost(HOST.pcAdded, () => {});

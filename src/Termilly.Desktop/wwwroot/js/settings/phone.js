@@ -121,6 +121,7 @@ function devicesHtml() {
       { keywords: 'phone alert push notification away idle' })
     + row('Allow typing', 'Paired phones and computers can type into the terminals they show, and computers can copy files into them. Answers to an agent work either way.', toggle('phone.allowTyping'), { keywords: 'phone computer type keyboard input remote copy files' })
     + row('Clipboard on the phone', 'With typing allowed, phones can paste your recent text clips. They get only each one’s first line, secrets masked; this PC pastes it.', toggle('phone.clips'), { keywords: 'phone clipboard paste' })
+    + row('Prompt history', 'Paired computers can open Prompt history for the terminals they show: what you asked Claude Code there, with times.', toggle('phone.sharePrompts'), { keywords: 'computer prompts history claude remote' })
     + row('Hide details in alerts', 'Only “An agent needs you” or “An agent finished”: no terminal, workspace or message on the lock screen.', toggle('phone.hideDetails'), { keywords: 'phone alert privacy lock screen' })
     + row('Test alert', tested ? escapeHtml(tested) : 'Sends an alert to each phone that has alerts on, even when it’s locked.',
       '<button class="btn small" data-action="testPhone">Send</button>', { keywords: 'phone alert push notification test' })

@@ -2,10 +2,11 @@
 // Prompt history: what you asked Claude Code in a terminal, by day and time, from the header's button. Each one leads to
 // where it is in the terminal's output. The host has them (PromptsHandler): Termilly's own record, kept from the
 // prompt hook as history is, and the sessions' transcripts on this PC for older ones. With neither, they're read from
-// the prompts the output still shows (no times then).
+// the prompts the output still shows (no times then). Another Termilly computer's terminal shown here gets that
+// computer's list, when it allows it (Settings › Remote › Prompt history there; Phone/PcPromptsApi.cs).
 
-import { PAGE } from './protocol.js';
-import { request, send } from './host.js';
+import { PAGE, HOST } from './protocol.js';
+import { request, send, onHost } from './host.js';
 import { HOOK_EVENT } from './constants.js';
 import { state, persist } from './store.js';
 import { openPopover, closePopover, isOpen } from './popups.js';
@@ -13,6 +14,7 @@ import { escapeHtml, highlight, ICONS } from './ui.js';
 import { bufferLines } from './terminals.js';
 import { focusTab, switchWorkspace } from './panes.js';
 import { find, targetOf } from './dom.js';
+import { showToast, TOAST } from './toasts.js';
 
 /** A terminal keeps this many of its Claude Code sessions' ids (a /clear starts a new one). */
 const KEPT_SESSIONS = 20;
@@ -57,8 +59,18 @@ export function recordPrompt(tab, m) {
 const sessionsOf = tab => /** @type {string[]} */ ([...new Set([...(tab.agentSessions ?? []), tab.hibernated?.session, tab.agent?.session, tab.start?.resumeSession]
   .filter(s => typeof s === 'string' && SESSION_ID.test(s)))]);
 
-/** Whether the terminal has prompts to list: Claude Code has run in it. @param {Tab} tab */
-export const hasPrompts = tab => !!tab.agentSeen || !!tab.agentSessions?.length;
+/**
+ * Whether the terminal has prompts to list: Claude Code has run in it (another computer's terminal: that computer
+ * says so, and lets this one see them).
+ * @param {Tab} tab
+ */
+export const hasPrompts = tab => (tab.virtual ? !!tab.virtual.prompts : !!tab.agentSeen || !!tab.agentSessions?.length);
+
+// Another Termilly computer opens Prompt history for one of this PC's terminals: its sessions, for the host to read.
+onHost(HOST.pcSessions, m => {
+  const tab = state.tabs.get(m.args?.pane);
+  send(PAGE.apiResult, { requestId: m.requestId, result: { found: !!tab && !tab.virtual, sessions: tab ? sessionsOf(tab) : [] } });
+});
 
 /** @param {string} s */
 const norm = s => s.replace(/\s+/g, ' ').trim().toLowerCase();
@@ -201,7 +213,10 @@ function goTo(f) {
  * @returns {Promise<Prompt[]>}
  */
 async function promptsOf(tab, shown) {
-  const reply = await request(PAGE.promptsList, { id: tab.id, sessions: sessionsOf(tab) });
+  const reply = tab.virtual
+    ? await request(PAGE.pcPrompts, { tab: tab.id })
+    : await request(PAGE.promptsList, { id: tab.id, sessions: sessionsOf(tab) });
+  if (reply?.error) showToast({ text: reply.error, state: TOAST.failed });
   const listed = /** @type {Prompt[]} */ (reply?.prompts ?? []);
   return listed.length ? listed : shown.map(s => ({ text: s.text, at: null }));
 }

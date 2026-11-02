@@ -175,9 +175,10 @@ interface Tab {
   /**
    * A terminal without a shell of its own: a tmux pane (js/tmux.js; client is its tmux client), or another Termilly
    * computer's terminal (js/remotepc.js; client is the computer). icon: what that computer says runs in it (its
-   * shell's icon, or claude while Claude Code runs there), for its badge here.
+   * shell's icon, or claude while Claude Code runs there), for its badge here. prompts: that computer lets this one
+   * open its Prompt history (Settings › Remote › Prompt history there) and Claude Code has run in it.
    */
-  virtual?: { kind: 'tmux' | 'pc'; client: string; pane: string; cols: number; rows: number; icon?: string | null } | null;
+  virtual?: { kind: 'tmux' | 'pc'; client: string; pane: string; cols: number; rows: number; icon?: string | null; prompts?: boolean } | null;
   /** An SSH connection that dropped, reconnecting (js/reconnect.js). */
   reconnect?: import('../wwwroot/js/reconnect.js').Reconnecting | null;
   /** A status set through the API (js/api.js). */

@@ -25,13 +25,15 @@ internal sealed class PromptsHandler(PageChannel page, PromptHistory history, IS
             history.Add(m.Id, m.Session, m.Text ?? "", settings.Current.Session.RedactSecrets, settings.Current.Session.HistoryDays)));
     }
 
-    private void List(FromPage.PromptsList m)
+    private void List(FromPage.PromptsList m) => page.Post(new ToPage.PromptsListed(m.RequestId, Prompts(m.Id ?? "", m.Sessions ?? [])));
+
+    /// <summary>A terminal's prompts: Termilly's record of them and its sessions' transcripts on this PC.</summary>
+    public IReadOnlyList<AgentPrompt> Prompts(string id, IEnumerable<string> sessions)
     {
         IReadOnlyList<StoredPrompt> stored = [];
-        Storage.Try(() => stored = history.Of(m.Id, settings.Current.Session.HistoryDays));
+        Storage.Try(() => stored = history.Of(id, settings.Current.Session.HistoryDays));
         var projects = ClaudeUsageTracker.ProjectsDirectory();
-        var prompts = Merge(m.Sessions ?? [], session => ClaudeUsageTracker.FindTranscript(projects, session), stored);
-        page.Post(new ToPage.PromptsListed(m.RequestId, prompts));
+        return Merge(sessions, session => ClaudeUsageTracker.FindTranscript(projects, session), stored);
     }
 
     /// <summary>

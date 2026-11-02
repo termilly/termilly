@@ -11,6 +11,12 @@ internal static partial class FromPage
         public static string Type => "prompts:list";
     }
 
+    /// <summary>The prompts of another Termilly computer's terminal shown here (<see cref="Tab"/>), from that computer.</summary>
+    internal sealed record PcPrompts(string? RequestId = null, string Tab = "") : IPageMessage
+    {
+        public static string Type => "pc:prompts";
+    }
+
     /// <summary>A prompt sent in a terminal that keeps history, to keep (PromptHistory).</summary>
     internal sealed record PromptAdd(string Id = "", string? Session = null, string? Text = null) : IPageMessage
     {
@@ -23,8 +29,8 @@ internal sealed record AgentPrompt(string Text, string At);
 
 internal static partial class ToPage
 {
-    /// <summary>A terminal's prompts, oldest first.</summary>
-    internal sealed record PromptsListed(string? RequestId, IReadOnlyList<AgentPrompt> Prompts) : IHostMessage
+    /// <summary>A terminal's prompts, oldest first; for another computer's terminal, why they couldn't be had.</summary>
+    internal sealed record PromptsListed(string? RequestId, IReadOnlyList<AgentPrompt> Prompts, string? Error = null) : IHostMessage
     {
         public static string Type => "prompts:listed";
     }

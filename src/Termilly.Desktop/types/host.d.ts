@@ -133,6 +133,8 @@ interface PhoneSettings {
   allowTyping: boolean;
   /** While typing is allowed, a phone may paste Clipboard's text clips: it gets their first lines (secrets masked) and asks the PC to paste one, so a clip's text never goes to the phone. */
   clips: boolean;
+  /** A paired computer may open Prompt history for a terminal of this PC it shows (Phone/PcPromptsApi.cs). */
+  sharePrompts: boolean;
 }
 
 interface NotificationSettings {

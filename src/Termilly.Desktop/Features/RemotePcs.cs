@@ -13,7 +13,7 @@ namespace Termilly.Desktop.Features;
 /// what it shows, then what it prints, and typing and its size going back. The other computer decides what's allowed
 /// (Settings › Phone › Allow typing there).
 /// </summary>
-internal sealed class RemotePcsHandler(PageChannel page, RemotePcStore store, Phone.PhoneStore phones) : IMessageHandler, IStartable, IDisposable
+internal sealed class RemotePcsHandler(PageChannel page, RemotePcStore store, Phone.PhoneStore phones, RemotePcFiles ask) : IMessageHandler, IStartable, IDisposable
 {
     private static readonly TimeSpan RetryAfter = TimeSpan.FromSeconds(10);
     /// <summary>What a phone (or this computer) types at once (Features/Phone.cs takes up to 4096).</summary>
@@ -66,6 +66,7 @@ internal sealed class RemotePcsHandler(PageChannel page, RemotePcStore store, Ph
         router.On<FromPage.PcWatch>(WatchAsync);
         router.On<FromPage.PcUnwatch>(m => Unwatch(m.Tab));
         router.On<FromPage.PcInput>(InputAsync);
+        router.On<FromPage.PcPrompts>(PromptsAsync);
         router.On<FromPage.PcSize>(m => SendTo(m.Tab, new JsonObject { [Fields.Op] = Kinds.Size, [Fields.Cols] = m.Cols, [Fields.Rows] = m.Rows }));
     }
 
@@ -254,6 +255,25 @@ internal sealed class RemotePcsHandler(PageChannel page, RemotePcStore store, Ph
             watch.Socket.Abort();
             watch.Socket.Dispose();
             watch.Stop.Dispose();
+        }
+    }
+
+    /// <summary>Prompt history for a terminal here that shows another computer's: that computer's list of its prompts.</summary>
+    private async Task PromptsAsync(FromPage.PcPrompts m)
+    {
+        if (!_watches.TryGetValue(m.Tab, out var watch))
+        {
+            page.Post(new ToPage.PromptsListed(m.RequestId, [], "That terminal isn’t connected now."));
+            return;
+        }
+        try
+        {
+            var answer = await ask.AskAsync(RemotePcFiles.TerminalId(watch.Pc, watch.Pane), Phone.PcPrompts.Path, []).ConfigureAwait(false);
+            page.Post(new ToPage.PromptsListed(m.RequestId, Phone.PcPromptsApi.Read(answer)));
+        }
+        catch (IOException e)
+        {
+            page.Post(new ToPage.PromptsListed(m.RequestId, [], e.Message));
         }
     }
 

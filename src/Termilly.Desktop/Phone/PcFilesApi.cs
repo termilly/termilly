@@ -167,8 +167,8 @@ internal sealed class PcFilesApi(FilesHandler files, ISettingsStore settings)
         }
     }
 
-    private static PhoneReply Json(string json) => new(HttpStatusCode.OK, MediaTypes.Utf8(MediaTypes.Json), Encoding.UTF8.GetBytes(json));
+    internal static PhoneReply Json(string json) => new(HttpStatusCode.OK, MediaTypes.Utf8(MediaTypes.Json), Encoding.UTF8.GetBytes(json));
 
-    private static PhoneReply Error(string message) =>
+    internal static PhoneReply Error(string message) =>
         new(HttpStatusCode.Conflict, MediaTypes.Utf8(MediaTypes.Json), Encoding.UTF8.GetBytes(new JsonObject { [PcFiles.Fields.Error] = message }.ToJsonString()));
 }

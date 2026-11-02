@@ -19,6 +19,7 @@ import { THEMES, THEME_BASE, themeId, onSystemThemeChange } from './themes.js';
 import { termTheme } from './terminals.js';
 import { placesForPhone } from './phonemanage.js';
 import { hasFiles, shellFolderOf, placeOf } from './filepaths.js';
+import { hasPrompts } from './myprompts.js';
 import { platform } from './host.js';
 
 /** How long changes settle before the phones hear of them. */
@@ -95,6 +96,8 @@ function terminalOf(tab) {
   return {
     id: tab.id, ws: tab.wsId, title: tabTitle(tab), icon, note: tab.note ?? null,
     badge: badgeOf(icon),
+    // Another Termilly computer showing it may open its Prompt history (Settings › Remote › Prompt history).
+    prompts: !!state.settings.phone?.sharePrompts && hasPrompts(tab),
     agent: tab.agent?.state ?? null,
     activity: activity?.kind ?? (tab.exited ? 'exited' : null),
     percent: activity?.percent ?? null,
