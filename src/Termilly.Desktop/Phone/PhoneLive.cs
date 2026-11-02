@@ -5,9 +5,9 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
-namespace Termilly.Desktop.Phone;
+using Ops = Termilly.Desktop.Phone.LiveMessages.Ops;
 
-using Ops = LiveMessages.Ops;
+namespace Termilly.Desktop.Phone;
 
 /// <summary>
 /// The paired phones that have the app open (docs/phone.md): one WebSocket each. Every phone gets what the page last
