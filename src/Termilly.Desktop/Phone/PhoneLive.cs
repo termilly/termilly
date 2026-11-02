@@ -346,7 +346,7 @@ internal sealed class PhoneLive : IDisposable
         {
             return;
         }
-        watchers(pane, _phones.Values.Where(p => p.Watching == pane).Select(p => NameOf?.Invoke(p.Device) ?? SomeoneElse).Distinct().ToList());
+        watchers(pane, _phones.Values.Where(p => p.Watching == pane).Select(p => NameOf?.Invoke(p.Device) ?? SomeoneElse).Distinct().Order(StringComparer.CurrentCultureIgnoreCase).ToList());
     }
 
     /// <summary>
