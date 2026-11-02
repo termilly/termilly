@@ -47,16 +47,16 @@ export const sizeText = /** @param {number} n */ n => (n < KB ? `${n} B` : n < M
 
 /**
  * Which WSL distribution a terminal's shell runs in, on Windows: as the shell said (its integration reports
- * $WSL_DISTRO_NAME, also for `wsl` typed in another shell), else as its profile starts it (wsl -d <name>); null
- * for any other terminal.
+ * $WSL_DISTRO_NAME, also for `wsl` typed in another shell or a profile of the user's), else its WSL profile's,
+ * which Termilly names after the distribution as Windows registers it (SessionProfiles.cs); null for any other
+ * terminal.
  * @param {Tab} tab
  */
 export function wslDistroOf(tab) {
   if (platform !== PLATFORM.windows) return null;
   if (tab.wslDistro) return tab.wslDistro;
   const profile = profileOf(tab);
-  if (profile?.source !== PROFILE_SOURCE.wsl) return null;
-  return /(?:^|\s)(?:-d|--distribution)\s+("?)([^\s"]+)\1/.exec(profile.commandLine)?.[2] ?? null;
+  return profile?.source === PROFILE_SOURCE.wsl ? profile.name : null;
 }
 
 /** A terminal whose shell runs in WSL (its distribution known). @param {Tab} tab */
