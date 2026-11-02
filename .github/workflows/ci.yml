@@ -1,11 +1,12 @@
-# Checks every push to main and every pull request: the build and tests on Windows and Linux (the analyzers and code
-# style fail the build), and the page's JavaScript (lint, type check, tests, magic values, copies, import cycles).
+# Checks every push to develop and main, and every pull request: the build and tests on Windows and Linux (the
+# analyzers and code style fail the build), and the page's JavaScript (lint, type check, tests, magic values, copies,
+# import cycles).
 # Read-only: no secrets, nothing published. Releases are built by release.yml, which only runs by hand.
 name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [develop, main]
   pull_request:
 
 permissions:
