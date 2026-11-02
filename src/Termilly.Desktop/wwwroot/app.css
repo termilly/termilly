@@ -1422,8 +1422,8 @@ body[data-sidebar="rail"] .side-rail { opacity: 1; pointer-events: auto; }
 .size-who:not(:has(button)) { padding-right: 10px; }
 .size-who button { height: 20px; padding: 0 8px; border-radius: 10px; background: rgba(0, 0, 0, 0.25); color: #fff; font-size: 11.5px; font-weight: 600; }
 .size-who button:hover { background: rgba(0, 0, 0, 0.4); }
-.pc-paused { position: absolute; inset: 0; z-index: 20; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: color-mix(in srgb, var(--bg) 70%, transparent); color: var(--text); font-size: 13px; text-align: center; }
-.pc-paused p { margin: 0; }
+.pc-paused, .pc-lost { position: absolute; inset: 0; z-index: 20; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: color-mix(in srgb, var(--bg) 70%, transparent); color: var(--text); font-size: 13px; text-align: center; }
+.pc-paused p, .pc-lost p { margin: 0; }
 
 /* The padding sits on .xterm, not .pane-body: the fit addon measures the parent's full height and
    subtracts only .xterm's own padding, so padding on the parent makes the bottom row overflow. */

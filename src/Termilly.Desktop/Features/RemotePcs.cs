@@ -203,7 +203,7 @@ internal sealed class RemotePcsHandler(PageChannel page, RemotePcStore store, Ph
         Unwatch(m.Tab);
         if (store.List().FirstOrDefault(p => p.Id == m.Id) is not { } pc)
         {
-            page.Post(new ToPage.PcRefused(m.Tab, "That computer isn’t paired any more."));
+            page.Post(new ToPage.PcLost(m.Tab, "That computer isn’t paired any more."));
             return;
         }
         var stop = CancellationTokenSource.CreateLinkedTokenSource(_stop.Token);
@@ -218,7 +218,7 @@ internal sealed class RemotePcsHandler(PageChannel page, RemotePcStore store, Ph
         catch (Exception e) when (e is WebSocketException or IOException or OperationCanceledException or System.Security.Authentication.AuthenticationException)
         {
             stop.Dispose();
-            page.Post(new ToPage.PcRefused(m.Tab, $"{pc.Name} can’t be reached now."));
+            page.Post(new ToPage.PcLost(m.Tab, $"{pc.Name} can’t be reached now."));
         }
     }
 
@@ -248,7 +248,7 @@ internal sealed class RemotePcsHandler(PageChannel page, RemotePcStore store, Ph
         }
         if (_watches.TryGetValue(tab, out var still) && still == watch)
         {
-            page.Post(new ToPage.PcRefused(tab, $"Lost the connection to {pc.Name}."));
+            page.Post(new ToPage.PcLost(tab, $"Lost the connection to {pc.Name}."));
             Unwatch(tab);
         }
     }

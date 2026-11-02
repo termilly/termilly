@@ -7,7 +7,7 @@
 import { PAGE, HOST } from './protocol.js';
 import { send, request, onHost } from './host.js';
 import { state, on, EVENTS, ACTIVITY, WORKSPACE_COLORS, tabsOf, activityChanged } from './store.js';
-import { newTab, focusTab, switchWorkspace, renderWorkspace, renderAll } from './panes.js';
+import { newTab, focusTab, closeTab, switchWorkspace, renderWorkspace, renderAll } from './panes.js';
 import { setVirtualInput } from './terminals.js';
 import { escapeHtml, ICONS, activityHtml, MINI_ACTIVITY, badgeHtml } from './ui.js';
 import { modal, FORM_DIALOG, DIALOG_ERROR, confirmDialog } from './dialogs.js';
@@ -335,6 +335,29 @@ function resume(tab) {
   told.delete(tab.id);
   settleSize(tab);
 }
+
+/** The cover over a remote terminal whose connection is gone. */
+const LOST_CLASS = 'pc-lost';
+
+/**
+ * A remote terminal lost its connection to its local terminal (or never had it): a message over it, with only Close
+ * terminal, so it doesn't look alive.
+ * @param {Tab} tab
+ * @param {string} error
+ */
+function lost(tab, error) {
+  const body = tab.view?.body;
+  if (!body) return;
+  for (const cover of body.querySelectorAll(`:scope > .${PAUSED_CLASS}, :scope > .${LOST_CLASS}`)) cover.remove();
+  paused.delete(tab.id);
+  body.insertAdjacentHTML('beforeend', `<div class="${LOST_CLASS}"><p>${escapeHtml(error)}</p><button class="btn small primary">Close terminal</button></div>`);
+  body.querySelector(`:scope > .${LOST_CLASS} button`)?.addEventListener('click', () => closeTab(tab));
+}
+
+onHost(HOST.pcLost, m => {
+  const tab = state.tabs.get(m.tab);
+  if (tab) lost(tab, m.error);
+});
 
 onHost(HOST.pcPaused, m => {
   const tab = state.tabs.get(m.tab);

@@ -83,6 +83,15 @@ internal static partial class ToPage
         public static string Type => "pc:output";
     }
 
+    /// <summary>
+    /// A remote terminal here has no connection to its local terminal (it went, or couldn't be made): it shows why, and
+    /// can only be closed.
+    /// </summary>
+    internal sealed record PcLost(string Tab, string Error) : IHostMessage
+    {
+        public static string Type => "pc:lost";
+    }
+
     /// <summary>Something sent to another computer's terminal didn't go through (typing is off there, say).</summary>
     internal sealed record PcRefused(string Tab, string Error) : IHostMessage
     {
