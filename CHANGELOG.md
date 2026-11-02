@@ -2,6 +2,12 @@
 
 What changed in each release. Termilly says in its title bar when a newer one is out.
 
+## 1.6.1 (2026-11-02)
+
+- **Remote computers:** remote terminals now show the right badge and Prompt history, and notify you when the connection is lost.
+- **WSL:** fixed the Files panel in WSL terminals; it now follows the shell's folder.
+- **Typing:** fixed occasional short freezes in terminals with a long history.
+
 ## 1.6.0 (2026-11-01)
 
 - **Remote:** Access your workspaces, terminals, and agent sessions from your phone or another PC.
