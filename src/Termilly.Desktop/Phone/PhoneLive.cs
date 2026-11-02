@@ -94,6 +94,9 @@ internal sealed class PhoneLive : IDisposable
     /// <summary>The released message's field with who has the terminal now (none: the PC took it back).</summary>
     public const string ByField = "by";
 
+    /// <summary>Who has a terminal when the one that took it isn't paired by a name known here.</summary>
+    private const string SomeoneElse = "Another phone or computer";
+
     private const string TypeField = "type";
     private const string StateField = "state";
 
@@ -295,7 +298,7 @@ internal sealed class PhoneLive : IDisposable
             return;
         }
         var size = new GridSize(Math.Clamp(cols, MinCols, MaxCols), Math.Clamp(rows, MinRows, MaxRows));
-        Release(pane, phone, NameOf?.Invoke(phone.Device));
+        Release(pane, phone, NameOf?.Invoke(phone.Device) ?? SomeoneElse);
         phone.Size = size;
         Sized?.Invoke(pane, new Viewer(size, phone.Device, phone.Address));
     }

@@ -259,6 +259,7 @@ function sizeToGive(tab) {
 function settleSize(tab) {
   const v = tab.virtual;
   if (v?.kind !== PC_KIND || !tab.view?.term) return;
+  if (keepsTheirs() && paused.has(tab.id)) resume(tab); // it never gives its size: nothing to resume
   if (keepsTheirs() || paused.has(tab.id)) drawAtTheirSize(tab);
   else if (tab.phoneSize) showAtSize(tab, null);
   const size = sizeToGive(tab), key = `${size.cols} x ${size.rows}`;
