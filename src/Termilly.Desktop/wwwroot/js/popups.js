@@ -59,8 +59,43 @@ export function openPopover(el, anchor, { side = SIDE.below, nested = false, onC
   if (dynamic && !el.isConnected) (anchorEl?.ownerDocument ?? hereDoc()).body.append(el);
   el.hidden = false;
   anchorEl?.classList.add('open');
+  keepWheel(el);
   place(el, anchorEl ? anchorEl.getBoundingClientRect() : /** @type {DOMRect | { x: number, y: number }} */ (anchor), side);
   stack.push({ el, anchorEl, onClose, dynamic, refocus });
+}
+
+/** The popovers whose wheel is kept to them (keepWheel). */
+const wheelKept = new WeakSet();
+
+/**
+ * The wheel over a popover scrolls only what in it can scroll that way, never what's under it (the Files panel's
+ * list under a popover's filter box scrolled). Its own handler also makes the browser find the scroller on the page,
+ * not by where the pointer is.
+ * @param {HTMLElement} el
+ */
+function keepWheel(el) {
+  if (wheelKept.has(el)) return;
+  wheelKept.add(el);
+  el.addEventListener('wheel', e => {
+    if (e.ctrlKey || !e.deltaY) return;
+    for (let n = /** @type {Element | null} */ (e.target); n && n !== el.parentElement; n = n.parentElement) {
+      if (canScroll(n, e.deltaY)) return;
+      if (n === el) break;
+    }
+    e.preventDefault();
+  }, { passive: false });
+}
+
+/**
+ * Whether `n` can scroll further the way the wheel goes.
+ * @param {Element} n
+ * @param {number} deltaY
+ */
+function canScroll(n, deltaY) {
+  if (n.scrollHeight <= n.clientHeight) return false;
+  const { overflowY } = viewOf(n).getComputedStyle(n);
+  if (overflowY !== 'auto' && overflowY !== 'scroll') return false;
+  return deltaY < 0 ? n.scrollTop > 0 : n.scrollTop + n.clientHeight < n.scrollHeight - 1;
 }
 
 /**
