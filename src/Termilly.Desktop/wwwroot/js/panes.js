@@ -3,7 +3,7 @@
 // stay laid out so their terminals keep the right size), the split layout inside it, and tab actions.
 
 import { PAGE } from './protocol.js';
-import { send, request } from './host.js';
+import { send, request, platform, PLATFORM } from './host.js';
 import {
   state, on, emit, persist, newId, activeWs, wsById, tabsOf, tabTitle, defaultProfile, ensureTag, activityOf, leaves,
   replaceNode, findLeaf, detachLeaf, groupOf, firstTabOf, markSeen, findPreview, withoutPreview, EVENTS, NODE, SPLIT,
@@ -348,13 +348,14 @@ export const ATTACH_LABEL = 'Back to the workspace';
  * layout is kept (the layout is drawn without it), and closing the window puts it back there.
  * @param {Tab} tab
  * @param {{ x: number, y: number }} [at] where on the screen it opens (a drag's drop), else over where the pane is
+ * @param {boolean} [tearOff] dragged out of the main window: its window follows the pointer (js/windows.js)
  */
-export function detachTab(tab, at) {
+export function detachTab(tab, at, tearOff = false) {
   const ws = wsById(tab.wsId);
   if (!ws || !tab.view || tab.detached) return;
   const { el } = tab.view;
   detach(windowKey(tab), {
-    el, title: tabTitle(tab), at, onClosed: () => attachTab(tab), onMoved: () => moved(tab), onResize: scheduleFit,
+    el, title: tabTitle(tab), at, tearOff, onClosed: () => attachTab(tab), onMoved: () => moved(tab), onResize: scheduleFit,
     // Its title bar is the window's; Close there closes the terminal, and its name keeps its double click (rename).
     header: tab.view.header, close: () => closeTab(tab), keepDoubleClick: PANE_NAME,
     onDragged: (x, y, dropped) => dragBack(tab, x, y, dropped),
@@ -964,25 +965,40 @@ function wireDrag(tab, header) {
 function trackDrag(tab, header, e) {
   /** @type {Drop | null} */
   let drop = null;
+  let torn = false;
   followDrag(header, e, {
     // A lone terminal can go nowhere but out into a window of its own; that works too.
     begin: () => beginDrag(tab),
     move: (x, y) => {
+      // Out of the main window: the drag here ends, and the terminal goes on in a window of its own.
+      if (tearsOff(x, y)) return (torn = true);
       drop = findDropTarget(tab, x, y);
       showDrop(drop);
+      return false;
     },
     end: (commit, screen) => {
       endDrag(tab);
-      if (commit && drop) dropPane(tab, drop, screen);
+      if (torn) detachTab(tab, screen, true);
+      else if (commit && drop) dropPane(tab, drop, screen);
       else focusTab(tab);
     },
   });
 }
 
 /**
+ * Whether a terminal dragged by its title bar is out of the main window (the page still hears the pointer there, as
+ * it holds it): torn off into a window of its own that goes on moving with the pointer. Windows only for now (its host
+ * moves a window with the pointer); elsewhere a terminal still goes out by being let go at the window's edge.
+ * @param {number} x
+ * @param {number} y
+ */
+const tearsOff = (x, y) => platform === PLATFORM.windows && (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight);
+
+/**
  * What a drag does: when it starts (past the threshold), as the pointer moves (where it is in the page), and when it
  * ends: let go (commit) or not (Escape), and where the pointer was on the screen (a window opens there).
- * @typedef {{ begin: () => void, move: (x: number, y: number) => void,
+ * move may end the drag itself (true): end then runs as for Escape, and its owner knows why.
+ * @typedef {{ begin: () => void, move: (x: number, y: number) => boolean | void,
  *   end: (commit: boolean, screen: { x: number, y: number }) => void }} DragSteps
  */
 
@@ -1009,7 +1025,7 @@ function followDrag(header, e, { begin, move, end }) {
     }
     dragGhost.style.transform = `translate(${ev.clientX + GHOST_OFFSET.x}px, ${ev.clientY + GHOST_OFFSET.y}px)`;
     screen = { x: ev.screenX, y: ev.screenY };
-    move(ev.clientX, ev.clientY);
+    if (move(ev.clientX, ev.clientY) === true) finish(false);
   };
   /** @param {boolean} commit */
   const finish = commit => {

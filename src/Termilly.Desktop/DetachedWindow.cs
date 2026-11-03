@@ -144,15 +144,10 @@ internal sealed class DetachedWindow : Window
                 WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
                 break;
             case WindowActions.Drag:
-                // Windows moves it until the button is let go; its steps come to OnMessage. Started once this page
-                // message is handled: WebView2 holds the page's next messages until then, and the page answers the
-                // steps (shrinking the window over a place it would land) while it moves.
-                Dispatcher.BeginInvoke(() =>
-                {
-                    _moving = true;
-                    WindowInterop.BeginNonClientDrag(this, WindowInterop.HTCAPTION);
-                    _moving = false;
-                });
+                BeginMove();
+                break;
+            case WindowActions.TearOff:
+                TearOff(action.Width, action.Height);
                 break;
             case WindowActions.Fade:
             case WindowActions.Solid:
@@ -167,6 +162,72 @@ internal sealed class DetachedWindow : Window
                 BringToFront();
                 break;
         }
+    }
+
+    /// <summary>
+    /// Windows moves it with the pointer until the button is let go; its steps come to OnMessage. Started once this page
+    /// message is handled: WebView2 holds the page's next messages until then, and the page answers the steps
+    /// (shrinking the window over a place it would land) while it moves.
+    /// </summary>
+    private void BeginMove() => Dispatcher.BeginInvoke(() =>
+    {
+        _moving = true;
+        WindowInterop.BeginNonClientDrag(this, WindowInterop.HTCAPTION);
+        _moving = false;
+    });
+
+    /// <summary>
+    /// Torn off the main window (a terminal's title bar dragged out of it): under the pointer, its title bar there,
+    /// growing to <paramref name="width"/> by <paramref name="height"/> (its page's size), and moving with the pointer
+    /// while the button is still down, as if its own title bar had been pressed. Let go over the main window, it lands
+    /// there as any detached window moved by its title bar.
+    /// </summary>
+    private void TearOff(double? width, double? height)
+    {
+        var cursor = WindowInterop.CursorPosition();
+        if (!double.IsNaN(cursor.X))
+        {
+            var dpi = VisualTreeHelper.GetDpi(this);
+            Left = (cursor.X / dpi.DpiScaleX) - TearOffGrip.X;
+            Top = (cursor.Y / dpi.DpiScaleY) - TearOffGrip.Y;
+        }
+        if (width is > 0 && height is > 0)
+        {
+            Grow(width.Value + (2 * FrameWidth), height.Value + (2 * FrameWidth));
+        }
+        Activate();
+        if (WindowInterop.PrimaryButtonDown())
+        {
+            BeginMove();
+        }
+    }
+
+    /// <summary>Where the pointer holds a torn-off window: on its title bar, a little in from its left end.</summary>
+    private static readonly Point TearOffGrip = new(48, 16);
+    /// <summary>How long a torn-off window takes to grow to its size (js/windows.js waits as long before fitting).</summary>
+    private static readonly TimeSpan GrowTime = TimeSpan.FromMilliseconds(180);
+    private static readonly TimeSpan GrowStep = TimeSpan.FromMilliseconds(15);
+    /// <summary>How sharply the growing slows toward its end (a cubic ease-out).</summary>
+    private const double EaseOutPower = 3;
+
+    /// <summary>Grows (or shrinks) the window to a size, quickly slowing at the end; it may be moving meanwhile.</summary>
+    private void Grow(double width, double height)
+    {
+        var (fromWidth, fromHeight) = (ActualWidth, ActualHeight);
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var timer = new System.Windows.Threading.DispatcherTimer(System.Windows.Threading.DispatcherPriority.Render, Dispatcher) { Interval = GrowStep };
+        timer.Tick += (_, _) =>
+        {
+            var t = Math.Min(1, clock.Elapsed / GrowTime);
+            var eased = 1 - Math.Pow(1 - t, EaseOutPower);
+            Width = fromWidth + ((width - fromWidth) * eased);
+            Height = fromHeight + ((height - fromHeight) * eased);
+            if (t >= 1)
+            {
+                timer.Stop();
+            }
+        };
+        timer.Start();
     }
 
     /// <summary>The steps of a move its title bar started, and its end.</summary>

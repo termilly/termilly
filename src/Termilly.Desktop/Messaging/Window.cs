@@ -21,6 +21,11 @@ internal static class WindowActions
     public const string Fade = "fade";
     /// <summary>A detached window solid again.</summary>
     public const string Solid = "solid";
+    /// <summary>
+    /// A terminal torn off the main window by its title bar (the pointer left the window while dragging it): its new
+    /// window goes under the pointer, grows to the message's size and moves with the pointer until it's let go.
+    /// </summary>
+    public const string TearOff = "tearOff";
 }
 
 /// <summary>
@@ -61,7 +66,10 @@ internal static partial class FromPage
     /// A detached window's name (window.open's target, js/windows.js): the action is that window's (its title bar is the
     /// page's), not the main window's. Focus always names one.
     /// </param>
-    internal sealed record Window(string? Action = null, string? Edge = null, string? Name = null) : IPageMessage
+    /// <param name="Width">For a tear-off, the size its window grows to (its page's, in the page's pixels).</param>
+    /// <param name="Height">For a tear-off, the size its window grows to.</param>
+    internal sealed record Window(string? Action = null, string? Edge = null, string? Name = null, double? Width = null,
+        double? Height = null) : IPageMessage
     {
         public static string Type => "window";
     }

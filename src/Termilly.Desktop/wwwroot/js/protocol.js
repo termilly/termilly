@@ -425,7 +425,7 @@ export const HOST = Object.freeze({
 /** @typedef {{  }} Page_updateDownload */
 /** @typedef {{  }} Page_updateInstall */
 /** @typedef {{  }} Page_updateStatus */
-/** @typedef {{ action?: string|null, edge?: string|null, name?: string|null }} Page_window */
+/** @typedef {{ action?: string|null, edge?: string|null, name?: string|null, width?: number|null, height?: number|null }} Page_window */
 /** @typedef {{ requestId?: string|null }} Page_windowCapture */
 /** @typedef {{ requestId?: string|null, folder?: string|null, branch?: string|null }} Page_worktreeCreate */
 /** @typedef {{ requestId?: string|null, repo?: string|null, path?: string|null, branch?: string|null, deleteBranch?: boolean, force?: boolean }} Page_worktreeRemove */

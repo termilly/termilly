@@ -248,6 +248,22 @@ internal static class WindowInterop
     /// <summary>Where the pointer is on the screen, in pixels.</summary>
     public static Point CursorPosition() => GetCursorPos(out var p) ? new Point(p.X, p.Y) : new Point(double.NaN, double.NaN);
 
+    /// <summary>Whether the primary mouse button is held down now (the right one when the buttons are swapped).</summary>
+    public static bool PrimaryButtonDown() =>
+        (GetAsyncKeyState(GetSystemMetrics(SM_SWAPBUTTON) != 0 ? VK_RBUTTON : VK_LBUTTON) & KeyDownBit) != 0;
+
+    private const int SM_SWAPBUTTON = 23;
+    private const int VK_LBUTTON = 0x01;
+    private const int VK_RBUTTON = 0x02;
+    /// <summary>GetAsyncKeyState's high bit: the key is down.</summary>
+    private const int KeyDownBit = 0x8000;
+
+    [DllImport("user32.dll")]
+    private static extern short GetAsyncKeyState(int key);
+
+    [DllImport("user32.dll")]
+    private static extern int GetSystemMetrics(int index);
+
     [DllImport("user32.dll")]
     private static extern bool GetCursorPos(out POINT point);
 
