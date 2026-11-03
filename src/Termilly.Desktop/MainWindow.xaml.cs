@@ -237,6 +237,12 @@ public partial class MainWindow : Window
 
     internal void HandleWindowAction(FromPage.Window msg)
     {
+        // A detached window's title bar (the page names the window): that window does it.
+        if (msg.Name is not null)
+        {
+            _detached.FirstOrDefault(w => w.PageWindowName == msg.Name)?.Act(msg);
+            return;
+        }
         switch (msg.Action)
         {
             case WindowActions.Minimize:
@@ -260,9 +266,6 @@ public partial class MainWindow : Window
                 {
                     WindowInterop.BeginNonClientDrag(this, hitTest);
                 }
-                break;
-            case WindowActions.Focus:
-                _detached.FirstOrDefault(w => w.PageWindowName == msg.Name)?.BringToFront();
                 break;
         }
     }

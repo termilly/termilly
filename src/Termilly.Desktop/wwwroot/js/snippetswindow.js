@@ -33,12 +33,10 @@ const CLOSE = '<svg viewBox="0 0 12 12"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7"/></s
 const ACTION = Object.freeze({
   new: 'new', close: 'close', save: 'save', delete: 'delete', duplicate: 'duplicate', run: 'run', detach: 'detach',
 });
-/** Its window when it's in one of its own (js/windows.js), and the detach button's two looks. */
+/** Its window when it's in one of its own (js/windows.js). */
 const WINDOW_KEY = 'snippets';
-const DETACH_BUTTON = Object.freeze({
-  out: { icon: ICONS.detach, title: 'Detach to a window' },
-  back: { icon: ICONS.attach, title: 'Back to the main window' },
-});
+/** Its button that moves it into a window of its own (in that window, the window's Return takes it back). */
+const DETACH_BUTTON = Object.freeze({ icon: ICONS.detach, title: 'Detach to a window' });
 /** What the "Save the changes?" question can answer, besides Cancel. */
 const ANSWER = Object.freeze({ save: 'save', discard: 'discard' });
 /** The window's shortcuts with Ctrl (KeyboardEvent.code): save, and a new snippet. */
@@ -54,7 +52,7 @@ layer.innerHTML = `
       <span class="cw-sub sw-count"></span>
       <span class="spacer"></span>
       <button class="btn small" data-sw="${ACTION.new}">New snippet</button>
-      <button class="set-close sw-detach" data-sw="${ACTION.detach}" title="${DETACH_BUTTON.out.title}">${DETACH_BUTTON.out.icon}</button>
+      <button class="set-close sw-detach" data-sw="${ACTION.detach}" title="${DETACH_BUTTON.title}">${DETACH_BUTTON.icon}</button>
       <button class="set-close" data-sw="${ACTION.close}" title="Close (Esc)">${CLOSE}</button>
     </div>
     <div class="cw-main">
@@ -375,19 +373,17 @@ export async function closeSnippetsWindow({ force = false } = {}) {
 export const toggleSnippetsWindow = () => (isDetached(WINDOW_KEY) ? focusWindow(WINDOW_KEY)
   : isOpen() ? closeSnippetsWindow() : openSnippetsWindow());
 
-/** Into a window of its own, as it is (changes not saved too); back over the page from there. */
-function toggleDetached() {
-  if (isDetached(WINDOW_KEY)) {
-    closeWindow(WINDOW_KEY);
-    return;
-  }
-  // Its window's X asks about changes not saved, as Close does.
+/**
+ * Into a window of its own, as it is (changes not saved too); its header is the window's title bar. Close and Alt+F4
+ * ask about changes not saved, as its own Close does; Return puts it back over the page.
+ */
+function detachSnippets() {
+  const close = () => closeSnippetsWindow();
   detach(WINDOW_KEY, {
-    el: box, title: 'Snippets', onClosed: backOverPage, askClose: () => closeSnippetsWindow(),
+    el: box, title: 'Snippets', onClosed: backOverPage, askClose: close, close, header: $('.set-head'),
     // Over the page until it's in its window.
     onMoved: () => {
       layer.hidden = true;
-      showDetachButton(true);
       searchEl.focus();
     },
   });
@@ -403,15 +399,6 @@ function backOverPage() {
 /** Back in its place in the page, from its window. */
 function backInLayer() {
   layer.append(box);
-  showDetachButton(false);
-}
-
-/** @param {boolean} detached */
-function showDetachButton(detached) {
-  const look = detached ? DETACH_BUTTON.back : DETACH_BUTTON.out;
-  const el = $(`[data-sw="${ACTION.detach}"]`);
-  el.innerHTML = look.icon;
-  el.title = look.title;
 }
 
 // Snippets changed somewhere else (a workspace's layout file, Settings, an edit from the run form).
@@ -434,7 +421,7 @@ box.addEventListener('click', e => {
   if (action === ACTION.delete) remove();
   if (action === ACTION.duplicate) duplicate();
   if (action === ACTION.run) run();
-  if (action === ACTION.detach) toggleDetached();
+  if (action === ACTION.detach) detachSnippets();
 });
 layer.addEventListener('mousedown', e => {
   if (e.target === layer) closeSnippetsWindow();

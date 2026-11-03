@@ -3037,3 +3037,11 @@ body.detached-window > .pane.focused { box-shadow: none; }
 body.detached-window > .notepad-panel { position: static; width: auto !important; max-width: none; }
 body.detached-window > .notepad-panel > .files-grip { display: none; }
 body.detached-window > .snippets-win { width: auto; height: auto; }
+/* Its header is the window’s title bar (js/windows.js): Return, Minimize, Maximize and Close at its end, in place of
+   its own close and detach buttons; it moves the window, so no pane drag cursor. */
+body.detached-window .pane-header > .pane-actions > .close-btn,
+body.detached-window [data-np="detach"], body.detached-window [data-np="close"],
+body.detached-window [data-sw="detach"], body.detached-window [data-sw="close"] { display: none; }
+body.detached-window .pane-header { cursor: default; }
+.detached-controls { display: flex; flex: none; align-items: center; margin-left: 4px; }
+.detached-controls svg[viewBox="0 0 16 16"] { width: 16px; height: 16px; stroke-width: 1; }

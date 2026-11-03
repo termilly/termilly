@@ -3,12 +3,13 @@
 // the sidebar's row does (its menu there). The other place shows the name as it's typed.
 
 import { emit, persist, profileOf, tabTitle, EVENTS } from './store.js';
-import { restoreFocus } from './panes.js';
+import { restoreFocus, PANE_NAME } from './panes.js';
+
+/** The name in a pane's title bar (header.js finds it by this). */
+export { PANE_NAME };
 
 /** The longest name a terminal takes. */
 const MAX_NAME = 60;
-/** The header's name, which renaming swaps for a field (header.js shows it). */
-export const PANE_NAME = '.pane-name';
 /** The class of a name being edited in place (a terminal's here, a workspace's in the sidebar). */
 export const RENAME_INPUT_CLASS = 'rename-input';
 /** Where the name is renamed. */

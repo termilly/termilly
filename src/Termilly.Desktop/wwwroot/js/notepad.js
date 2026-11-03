@@ -31,6 +31,8 @@ const NOTEPAD_ACTION = Object.freeze({
 const PAGE_NAME = 'Note';
 /** The panel's narrowest width; its widest is half the terminals' area (app.css max-width). */
 const MIN_WIDTH_PX = 280;
+/** Its window's narrowest width when it opens: its header's tools, name and the window's buttons all fit. */
+const WINDOW_MIN_WIDTH_PX = 440;
 const LF = '\n';
 const CRLF = '\r\n';
 /** The menu entry that copies text here, on a terminal's right-click menu. */
@@ -60,12 +62,10 @@ const MENU_ICONS = Object.freeze({
   cut: '<svg viewBox="0 0 16 16"><circle cx="4.5" cy="11.5" r="2"/><circle cx="11.5" cy="11.5" r="2"/><path d="M5.7 9.8L11 1.5M10.3 9.8L5 1.5"/></svg>',
   pastePlain: '<svg viewBox="0 0 16 16"><rect x="3.5" y="3.5" width="9" height="11" rx="1"/><path d="M6.5 2.5h3v2h-3zM5.5 7.5h4M7.5 7.5v5"/></svg>',
 });
-/** Its window when it's in one of its own (js/windows.js), and the detach button's two looks. */
+/** Its window when it's in one of its own (js/windows.js). */
 const WINDOW_KEY = 'notepad';
-const DETACH_BUTTON = Object.freeze({
-  out: { icon: ICONS.detach, title: 'Detach to a window' },
-  back: { icon: ICONS.attach, title: 'Back to the main window' },
-});
+/** Its button that moves it into a window of its own (in that window, the window's Return takes it back). */
+const DETACH_BUTTON = Object.freeze({ icon: ICONS.detach, title: 'Detach to a window' });
 /** What its requests to the host start with. */
 const REQUEST = 'np';
 
@@ -84,7 +84,7 @@ panel.innerHTML = `
       <button class="pane-btn" data-np="${NOTEPAD_ACTION.move}" title="Copy the selection, or the whole page, to a workspace's or a terminal's note">${TOOL_ICONS.move}</button>
       <button class="pane-btn np-toggle" data-np="${NOTEPAD_ACTION.links}" title="Links: paths and web addresses, Ctrl+click to open (off: plain text)">${TOOL_ICONS.links}</button>
       <button class="pane-btn np-toggle" data-np="${NOTEPAD_ACTION.wrap}" title="Word wrap">${TOOL_ICONS.wrap}</button>
-      <button class="pane-btn" data-np="${NOTEPAD_ACTION.detach}" title="${DETACH_BUTTON.out.title}">${DETACH_BUTTON.out.icon}</button>
+      <button class="pane-btn" data-np="${NOTEPAD_ACTION.detach}" title="${DETACH_BUTTON.title}">${DETACH_BUTTON.icon}</button>
       <button class="pane-btn" data-np="${NOTEPAD_ACTION.close}" title="Close (Ctrl+Shift+M)">${ICONS.close}</button>
     </span>
   </div>
@@ -229,34 +229,22 @@ function hideNotepad() {
   restoreFocus();
 }
 
-/** Into a window of its own, opened first if it's closed; back to its dock from there. */
-function toggleDetached() {
-  if (isDetached(WINDOW_KEY)) {
-    closeWindow(WINDOW_KEY);
-    return;
-  }
+/** Into a window of its own, opened first if it's closed; its header is the window's title bar, Close closes it. */
+function detachNotepad() {
   if (panel.hidden) show({ quiet: true });
   // Its room here is given back once it's in its window, and as that window is resized.
   detach(WINDOW_KEY, {
-    el: panel, title: 'Notepad', onClosed: dockBack, onResize: refreshDock,
-    onMoved: () => { showDetachButton(true); area.focus(); },
+    el: panel, title: 'Notepad', onClosed: dockBack, onResize: refreshDock, onMoved: () => area.focus(),
+    minWidth: WINDOW_MIN_WIDTH_PX,
+    header: find(panel, '.files-head'), close: hideNotepad,
   });
 }
 
 /** Back in its place on the right, from its window, as it was. */
 function dockBack() {
   byId(WORKSPACE_ID).append(panel);
-  showDetachButton(false);
   refreshDock();
   if (!panel.hidden) render();
-}
-
-/** @param {boolean} detached */
-function showDetachButton(detached) {
-  const look = detached ? DETACH_BUTTON.back : DETACH_BUTTON.out;
-  const el = find(panel, `[data-np="${NOTEPAD_ACTION.detach}"]`);
-  el.innerHTML = look.icon;
-  el.title = look.title;
 }
 
 /** The Notepad on or off from its shortcut (Ctrl+Shift+M): opened with no pages, it starts one to type into at once. */
@@ -519,7 +507,7 @@ panel.addEventListener('click', e => {
     case NOTEPAD_ACTION.move: showMenu(noteChoices(), /** @type {HTMLElement} */ (action)); break;
     case NOTEPAD_ACTION.links: toggleView(NOTEPAD_ACTION.links); break;
     case NOTEPAD_ACTION.wrap: toggleView(NOTEPAD_ACTION.wrap); break;
-    case NOTEPAD_ACTION.detach: toggleDetached(); break;
+    case NOTEPAD_ACTION.detach: detachNotepad(); break;
     case NOTEPAD_ACTION.close: hideNotepad(); break;
     default: break;
   }

@@ -42,19 +42,19 @@ internal static class GtkWindow
         g_set_application_name(name);
     }
 
-    /// <summary>Starts moving the window with the pointer, until the button is let go.</summary>
-    public static void BeginMove()
+    /// <summary>Starts moving the window (Termilly's, or <paramref name="other"/>) with the pointer, until the button is let go.</summary>
+    public static void BeginMove(IntPtr? other = null)
     {
-        if (Find() is { } window && Pointer() is var (x, y))
+        if ((other ?? Find()) is { } window && Pointer() is var (x, y))
         {
             gtk_window_begin_move_drag(window, 1, x, y, gtk_get_current_event_time());
         }
     }
 
-    /// <summary>Starts resizing the window from one edge or corner, until the button is let go.</summary>
-    public static void BeginResize(string edge)
+    /// <summary>Starts resizing the window (Termilly's, or <paramref name="other"/>) from one edge or corner, until the button is let go.</summary>
+    public static void BeginResize(string edge, IntPtr? other = null)
     {
-        if (Edges.TryGetValue(edge, out var gdkEdge) && Find() is { } window && Pointer() is var (x, y))
+        if (Edges.TryGetValue(edge, out var gdkEdge) && (other ?? Find()) is { } window && Pointer() is var (x, y))
         {
             gtk_window_begin_resize_drag(window, gdkEdge, 1, x, y, gtk_get_current_event_time());
         }

@@ -45,17 +45,27 @@ internal static class WindowInterop
     /// Removes the native caption and control box (system menu) while keeping the thick frame and
     /// min/max styles, so snapping, taskbar minimize and maximize still work.
     /// </summary>
-    public static void UseCustomChrome(Window window)
+    /// <remarks>
+    /// <paramref name="sharpIcons"/>: the main window's own icons at the sizes they're drawn (one window only: they're
+    /// kept here, and a second window's would destroy the first's). A detached window keeps WPF's.
+    /// </remarks>
+    public static void UseCustomChrome(Window window, bool sharpIcons = true)
     {
         window.SourceInitialized += (_, _) =>
         {
             var hwnd = new WindowInteropHelper(window).Handle;
             _ = SetWindowLong(hwnd, GWL_STYLE, GetWindowLong(hwnd, GWL_STYLE) & ~(WS_SYSMENU | WS_CAPTION));
             HwndSource.FromHwnd(hwnd).AddHook(WndProc);
-            SetSharpIcons(hwnd);
+            if (sharpIcons)
+            {
+                SetSharpIcons(hwnd);
+            }
         };
         // WPF hands the window its own icons again when the display scale changes.
-        window.DpiChanged += (_, _) => SetSharpIcons(new WindowInteropHelper(window).Handle);
+        if (sharpIcons)
+        {
+            window.DpiChanged += (_, _) => SetSharpIcons(new WindowInteropHelper(window).Handle);
+        }
     }
 
     private static IntPtr _bigIcon;
@@ -189,37 +199,11 @@ internal static class WindowInterop
 
     private const int SW_RESTORE = 9;
 
-    private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
-    private const int DWMWA_CAPTION_COLOR = 35;
-    private const int DWMWA_TEXT_COLOR = 36;
-
-    /// <summary>
-    /// A window with Windows' own title bar (a detached window) in the theme's colours: dark or light, and on Windows
-    /// 11 the theme's background and text. Windows 10 knows only dark or light and ignores the colours.
-    /// </summary>
-    public static void ColorTitleBar(Window window, ThemeWindowColors colors)
-    {
-        var hwnd = new WindowInteropHelper(window).Handle;
-        if (hwnd == IntPtr.Zero)
-        {
-            return;
-        }
-        var dark = colors.Light ? 0 : 1;
-        _ = DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, ref dark, sizeof(int));
-        var caption = ColorRef(colors.Background);
-        _ = DwmSetWindowAttribute(hwnd, DWMWA_CAPTION_COLOR, ref caption, sizeof(int));
-        var text = ColorRef(colors.Text);
-        _ = DwmSetWindowAttribute(hwnd, DWMWA_TEXT_COLOR, ref text, sizeof(int));
-    }
-
     private static int ColorRef(string hex)
     {
         var c = System.Drawing.ColorTranslator.FromHtml(hex);
         return c.R | c.G << GreenShift | c.B << BlueShift;
     }
-
-    [DllImport("dwmapi.dll")]
-    private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
 
     [DllImport("user32.dll")]
     private static extern bool IsIconic(IntPtr hWnd);

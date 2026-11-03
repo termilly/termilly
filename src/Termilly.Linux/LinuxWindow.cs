@@ -94,7 +94,7 @@ internal sealed class LinuxWindow
             .SetDevToolsEnabled(Environment.GetEnvironmentVariable(DevToolsVariable) == "1")
             .SetContextMenuEnabled(false)
             .RegisterCustomSchemeHandler(AppScheme.Scheme, (object _, string _, string url, out string contentType) => AppScheme.Serve(url, theme.Palette, out contentType))
-            .RegisterWindowCreatedHandler((_, _) => OnCreated(window!, theme))
+            .RegisterWindowCreatedHandler((_, _) => OnCreated(window!))
             .RegisterWebMessageReceivedHandler((_, message) =>
             {
                 using var doc = JsonDocument.Parse(message);
@@ -128,14 +128,14 @@ internal sealed class LinuxWindow
     }
 
     /// <summary>The window exists: messages may go to it, and its page may open windows of its own (DetachedWindows).</summary>
-    private void OnCreated(PhotinoWindow window, WindowTheme theme)
+    private void OnCreated(PhotinoWindow window)
     {
         _created = true;
         window.Invoke(() =>
         {
             if (GtkWindow.Find() is { } main)
             {
-                DetachedWindows.Hook(main, () => theme.Palette.Light);
+                DetachedWindows.Hook(main);
             }
         });
     }
@@ -168,6 +168,12 @@ internal sealed class LinuxWindow
         });
         platform.WindowActionRequested += action => window.Invoke(() =>
         {
+            // A detached window's title bar (the page names the window): that window does it.
+            if (action.Name is not null)
+            {
+                DetachedWindows.Act(action.Name, action.Action, action.Edge);
+                return;
+            }
             switch (action.Action)
             {
                 case WindowActions.Minimize:
@@ -185,9 +191,6 @@ internal sealed class LinuxWindow
                     break;
                 case WindowActions.Resize when !window.Maximized && action.Edge is { } edge:
                     GtkWindow.BeginResize(edge);
-                    break;
-                case WindowActions.Focus:
-                    DetachedWindows.Focus(action.Name);
                     break;
             }
         });

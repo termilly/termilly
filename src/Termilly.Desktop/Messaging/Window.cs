@@ -41,7 +41,10 @@ internal static partial class FromPage
 {
     /// <param name="Action">One of <see cref="WindowActions"/>.</param>
     /// <param name="Edge">For a resize, which edge or corner is dragged (one of <see cref="ResizeEdges"/>).</param>
-    /// <param name="Name">For focus, which detached window: its name (window.open's target).</param>
+    /// <param name="Name">
+    /// A detached window's name (window.open's target, js/windows.js): the action is that window's (its title bar is the
+    /// page's), not the main window's. Focus always names one.
+    /// </param>
     internal sealed record Window(string? Action = null, string? Edge = null, string? Name = null) : IPageMessage
     {
         public static string Type => "window";

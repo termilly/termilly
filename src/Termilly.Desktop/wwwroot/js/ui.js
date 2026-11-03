@@ -4,6 +4,7 @@
 import { BADGES, PROFILE_SOURCES, state, tagColor, profileOf, runsClaude, sourceOf } from './store.js';
 import { DAY_MS, WEEK_DAYS } from './util.js';
 import { PROFILE_ICON } from './constants.js';
+import { RETURN_ICON } from './windows.js';
 
 /** The class of a badge at its usual size, in lists and headers. */
 /** A badge's sizes. */
@@ -241,7 +242,7 @@ export const ICONS = {
   rename: '<svg viewBox="0 0 16 16"><path d="M2.5 12.5H6l6.5-6.5-3-3-7 7z"/></svg>',
   // Into a window of its own (an arrow leaving a frame open at its corner), and back (an arrow going in).
   detach: '<svg viewBox="0 0 16 16"><path d="M7.5 2.5h-5v11h11v-5"/><path d="M10.5 2.5h3v3M13.5 2.5l-6 6"/></svg>',
-  attach: '<svg viewBox="0 0 16 16"><path d="M8.5 2.5h5v11h-11v-5"/><path d="M2.5 2.5l5 5M7.5 3.5v4h-4"/></svg>',
+  attach: RETURN_ICON,
   move: '<svg viewBox="0 0 16 16"><rect x="2.5" y="3.5" width="11" height="10" rx="2"/><path d="M5.5 8.5h6M9.5 6.5l2 2-2 2"/></svg>',
   history: '<svg viewBox="0 0 16 16"><path d="M3.5 8.5a5 5 0 1 0 1.46-3.54M3.5 4v2.5H6"/><path d="M8.5 6v2.5l2 1.5"/></svg>',
   plus: '<svg viewBox="0 0 16 16"><path d="M8.5 4v9M4 8.5h9"/></svg>',

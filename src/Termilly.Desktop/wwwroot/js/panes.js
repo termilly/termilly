@@ -321,6 +321,8 @@ export function moveTab(tab, targetWsId) {
 
 /** @param {Tab} tab */
 const windowKey = tab => `tab-${tab.id}`;
+/** A pane title bar's name, which a double click renames (js/rename.js). */
+export const PANE_NAME = '.pane-name';
 
 /** The menu entries that detach a terminal and bring it back (js/tabmenu.js). */
 export const DETACH_LABEL = 'Detach to a window';
@@ -336,7 +338,11 @@ export function detachTab(tab, at) {
   const ws = wsById(tab.wsId);
   if (!ws || !tab.view || tab.detached) return;
   const { el } = tab.view;
-  detach(windowKey(tab), { el, title: tabTitle(tab), at, onClosed: () => attachTab(tab), onMoved: () => moved(tab), onResize: scheduleFit });
+  detach(windowKey(tab), {
+    el, title: tabTitle(tab), at, onClosed: () => attachTab(tab), onMoved: () => moved(tab), onResize: scheduleFit,
+    // Its title bar is the window's; Close there closes the terminal, and its name keeps its double click (rename).
+    header: tab.view.header, close: () => closeTab(tab), keepDoubleClick: PANE_NAME,
+  });
 }
 
 /**
