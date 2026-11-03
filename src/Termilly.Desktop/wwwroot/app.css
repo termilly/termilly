@@ -1537,6 +1537,8 @@ body.dragging-pane, body.dragging-pane * { cursor: grabbing !important; }
   pointer-events: none;
 }
 body.dragging-pane #drag-ghost { display: flex; }
+/* On Windows the terminal itself follows the pointer, as a picture (js/panes.js): no label then. */
+body.dragging-pane.picture-drag #drag-ghost { display: none; }
 
 #drop-preview {
   position: fixed;
