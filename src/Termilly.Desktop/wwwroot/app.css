@@ -752,6 +752,16 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
 .np-editor.np-ctrl .np-link:hover { text-decoration: underline; }
 /* Links and word wrap: lit while on. */
 .files-tools .np-toggle[aria-pressed="true"] { background: var(--pressed); color: var(--text); }
+/* Clipboard's header switches (js/clipboard.js): a short label and a small switch, the Settings one made smaller. */
+.clips-switch {
+  display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 4px; margin-right: 2px;
+  border-radius: 4px; color: var(--muted); font-size: 11px; white-space: nowrap;
+}
+.clips-switch:hover { background: var(--hover); color: var(--text); }
+.clips-switch .switch { width: 24px; height: 14px; border-radius: 7px; }
+.clips-switch .switch span { top: 2px; left: 2px; width: 10px; height: 10px; }
+.clips-switch[aria-checked="true"] .switch { background: var(--accent); }
+.clips-switch[aria-checked="true"] .switch span { transform: translateX(10px); }
 
 /* "Copy to" (js/copyto.js): terminals on the left, the chosen one's folders on the right */
 .dialog.copyto-dialog { width: 920px; }
