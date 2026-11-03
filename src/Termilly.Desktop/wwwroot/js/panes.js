@@ -998,8 +998,8 @@ function endDrag(source) {
 }
 
 /**
- * Which pane is under the pointer, and which of its zones: a compass cell it's on, else its top or bottom third,
- * else its left or right half. Over a group's tab strip it's always the middle (join the group). A tab dragged within
+ * Which pane is under the pointer, and which of its zones: a compass cell it's on, its title bar (join as a tab),
+ * else its top or bottom third, else its left or right half. Over a group's tab strip it's always the middle (join the group). A tab dragged within
  * its own group can only leave it,
  * beside it. At the app window's edge it goes out into a window of its own.
  * @param {Tab} source
@@ -1056,9 +1056,11 @@ function paneZone(el, target, x, y) {
       return { target, zone: /** @type {Zone} */ (cell.dataset.zone), rect: r };
     }
   }
+  // Over its title bar it joins as a tab, as over a group's strip of tabs.
+  const head = el.querySelector(':scope > .pane-header')?.getBoundingClientRect();
+  if (head && y >= head.top && y <= head.bottom) return { target, zone: ZONE.center, rect: r };
   // Anywhere else splits it: above or below in its top and bottom thirds, else left or right by the half the pointer
-  // is in, so the outline shows as soon as the pointer is in and changes side right at the middle. Joining as a tab
-  // is the compass's middle (or a group's strip).
+  // is in, so the outline shows as soon as the pointer is in and changes side right at the middle.
   const strip = r.height * TOP_BOTTOM_SHARE;
   /** @type {Zone} */
   const zone = y < r.top + strip ? ZONE.top
