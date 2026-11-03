@@ -123,7 +123,8 @@ public sealed class UnixPtyTests
         }
         using var pty = PseudoTerminal.Start(new PtyOptions("/bin/sh", 80, 24));
         var seen = new StringBuilder();
-        await SendAsync(pty, "sleep 30; echo slept-$((1+1))\n");
+        // &&, not ;: bash (macOS's sh) goes on to the next command after an interrupted one, dash doesn't.
+        await SendAsync(pty, "sleep 30 && echo slept-$((1+1))\n");
         await Task.Delay(500);
         await SendAsync(pty, "\x03");
         await SendAsync(pty, "echo here-$((3+3))\n");
