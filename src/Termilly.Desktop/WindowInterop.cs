@@ -114,8 +114,7 @@ internal static class WindowInterop
     {
         if (msg == WM_ERASEBKGND)
         {
-            var c = System.Drawing.ColorTranslator.FromHtml(Background);
-            var brush = CreateSolidBrush(c.R | c.G << GreenShift | c.B << BlueShift);
+            var brush = CreateSolidBrush(ColorRef(Background));
             GetClientRect(hwnd, out var client);
             _ = FillRect(wParam, ref client, brush);
             DeleteObject(brush);
@@ -189,6 +188,38 @@ internal static class WindowInterop
     }
 
     private const int SW_RESTORE = 9;
+
+    private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
+    private const int DWMWA_CAPTION_COLOR = 35;
+    private const int DWMWA_TEXT_COLOR = 36;
+
+    /// <summary>
+    /// A window with Windows' own title bar (a detached window) in the theme's colours: dark or light, and on Windows
+    /// 11 the theme's background and text. Windows 10 knows only dark or light and ignores the colours.
+    /// </summary>
+    public static void ColorTitleBar(Window window, ThemeWindowColors colors)
+    {
+        var hwnd = new WindowInteropHelper(window).Handle;
+        if (hwnd == IntPtr.Zero)
+        {
+            return;
+        }
+        var dark = colors.Light ? 0 : 1;
+        _ = DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, ref dark, sizeof(int));
+        var caption = ColorRef(colors.Background);
+        _ = DwmSetWindowAttribute(hwnd, DWMWA_CAPTION_COLOR, ref caption, sizeof(int));
+        var text = ColorRef(colors.Text);
+        _ = DwmSetWindowAttribute(hwnd, DWMWA_TEXT_COLOR, ref text, sizeof(int));
+    }
+
+    private static int ColorRef(string hex)
+    {
+        var c = System.Drawing.ColorTranslator.FromHtml(hex);
+        return c.R | c.G << GreenShift | c.B << BlueShift;
+    }
+
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
 
     [DllImport("user32.dll")]
     private static extern bool IsIconic(IntPtr hWnd);

@@ -384,10 +384,12 @@ const NEWS = new Set([AGENT_STATE.done, AGENT_STATE.error, AGENT_STATE.attention
 
 /**
  * Whether the user can see a terminal now: its workspace is showing and the window is in front (the host's word,
- * js/windowshown.js, as well as the page's focus).
+ * js/windowshown.js, as well as the page's focus). One in a window of its own: that window has the focus.
  * @param {Tab} tab
  */
-export const isInView = tab => tab.wsId === state.activeId && windowInFront() && document.hasFocus();
+export const isInView = tab => (tab.detached
+  ? !!tab.view?.el.ownerDocument.hasFocus()
+  : tab.wsId === state.activeId && windowInFront() && document.hasFocus());
 
 /**
  * Whether Claude Code runs in this terminal now: its hooks or the `claude agents` poll reported it, and it hasn't

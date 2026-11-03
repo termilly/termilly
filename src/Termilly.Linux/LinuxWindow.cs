@@ -94,7 +94,18 @@ internal sealed class LinuxWindow
             .SetDevToolsEnabled(Environment.GetEnvironmentVariable(DevToolsVariable) == "1")
             .SetContextMenuEnabled(false)
             .RegisterCustomSchemeHandler(AppScheme.Scheme, (object _, string _, string url, out string contentType) => AppScheme.Serve(url, theme.Palette, out contentType))
-            .RegisterWindowCreatedHandler((_, _) => _created = true)
+            .RegisterWindowCreatedHandler((_, _) =>
+            {
+                _created = true;
+                // The page may open windows of its own (a terminal, the Notepad or the Snippets window detached).
+                window!.Invoke(() =>
+                {
+                    if (GtkWindow.Find() is { } main)
+                    {
+                        DetachedWindows.Hook(main, () => theme.Palette.Light);
+                    }
+                });
+            })
             .RegisterWebMessageReceivedHandler((_, message) =>
             {
                 using var doc = JsonDocument.Parse(message);
@@ -121,6 +132,7 @@ internal sealed class LinuxWindow
                     return true; // keep the window open for now
                 }
                 _closing = true;
+                DetachedWindows.CloseAll();
                 return false;
             });
         return window;
@@ -171,6 +183,9 @@ internal sealed class LinuxWindow
                     break;
                 case WindowActions.Resize when !window.Maximized && action.Edge is { } edge:
                     GtkWindow.BeginResize(edge);
+                    break;
+                case WindowActions.Focus:
+                    DetachedWindows.Focus(action.Name);
                     break;
             }
         });

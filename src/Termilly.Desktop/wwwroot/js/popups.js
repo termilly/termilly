@@ -1,6 +1,9 @@
 // @ts-check
 // Anchored popovers and context menus. One stack: opening a top-level popover closes the others; a
-// submenu opens on top of its parent. Clicking outside or pressing Escape closes from the top down.
+// submenu opens on top of its parent. Clicking outside or pressing Escape closes from the top down. A popover made
+// for the moment opens in the window it's for: its anchor's, else the one the user is in (js/windows.js).
+
+import { hereDoc, inEachDocument } from './windows.js';
 
 /**
  * Where a popover shows: next to an element, a rectangle, or a point.
@@ -51,9 +54,10 @@ export function setFocusRestorer(fn) {
  */
 export function openPopover(el, anchor, { side = SIDE.below, nested = false, onClose, dynamic = false, refocus } = {}) {
   if (!nested) closeAll();
-  if (dynamic && !el.isConnected) document.body.append(el);
+  // Not instanceof: an element made in a detached window is of that window's Element.
+  const anchorEl = 'nodeType' in anchor ? /** @type {Element} */ (anchor) : null;
+  if (dynamic && !el.isConnected) (anchorEl?.ownerDocument ?? hereDoc()).body.append(el);
   el.hidden = false;
-  const anchorEl = anchor instanceof Element ? anchor : null;
   anchorEl?.classList.add('open');
   place(el, anchorEl ? anchorEl.getBoundingClientRect() : /** @type {DOMRect | { x: number, y: number }} */ (anchor), side);
   stack.push({ el, anchorEl, onClose, dynamic, refocus });
@@ -101,6 +105,7 @@ function place(el, rect, side) {
   const r = RECT_EDGE in rect ? rect : { left: rect.x, right: rect.x, top: rect.y, bottom: rect.y };
   const w = el.offsetWidth;
   const h = el.offsetHeight;
+  const { innerWidth, innerHeight } = viewOf(el);
   let left;
   let top;
   if (side === SIDE.right) {
@@ -117,20 +122,28 @@ function place(el, rect, side) {
   el.style.top = `${Math.round(Math.max(EDGE, Math.min(top, innerHeight - h - EDGE)))}px`;
 }
 
-document.addEventListener('mousedown', e => {
-  if (!stack.length) return;
-  const top = stack[stack.length - 1];
-  const target = /** @type {Node | null} */ (e.target);
-  if (stack.some(entry => entry.el.contains(target)) || top.anchorEl?.contains(target)) return;
-  closeAll();
-}, true);
+/**
+ * The window an element is shown in (a detached one's, or the main page's).
+ * @param {Element} el
+ */
+const viewOf = el => /** @type {Window} */ (el.ownerDocument.defaultView ?? window);
 
-document.addEventListener('keydown', e => {
-  if (e.key !== 'Escape' || !stack.length) return;
-  e.preventDefault();
-  e.stopImmediatePropagation(); // a dialog under the menu stays open
-  closeFrom(stack.length - 1);
-}, true);
+inEachDocument(doc => {
+  doc.addEventListener('mousedown', e => {
+    if (!stack.length) return;
+    const top = stack[stack.length - 1];
+    const target = /** @type {Node | null} */ (e.target);
+    if (stack.some(entry => entry.el.contains(target)) || top.anchorEl?.contains(target)) return;
+    closeAll();
+  }, true);
+
+  doc.addEventListener('keydown', e => {
+    if (e.key !== 'Escape' || !stack.length) return;
+    e.preventDefault();
+    e.stopImmediatePropagation(); // a dialog under the menu stays open
+    closeFrom(stack.length - 1);
+  }, true);
+});
 
 // ---- Context menus ----
 
@@ -158,7 +171,7 @@ export function showMenu(items, anchor, { side = SIDE.below, nested = false, cla
 
   menu.addEventListener('keydown', e => {
     const rows = [.../** @type {NodeListOf<HTMLButtonElement>} */ (menu.querySelectorAll(':scope > .menu-row:not(:disabled)'))];
-    const i = rows.indexOf(/** @type {HTMLButtonElement} */ (document.activeElement));
+    const i = rows.indexOf(/** @type {HTMLButtonElement} */ (menu.ownerDocument.activeElement));
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       e.preventDefault();
       const step = e.key === 'ArrowDown' ? 1 : -1;
@@ -193,7 +206,7 @@ const SCROLL_ARROW = Object.freeze({ up: { cls: 'up', icon: CHEVRON_UP, dir: -1 
  * @param {HTMLElement} menu
  */
 function fitAndScroll(menu) {
-  const room = innerHeight - 2 * EDGE;
+  const room = viewOf(menu).innerHeight - 2 * EDGE;
   if (menu.offsetHeight <= room) return;
   menu.classList.add('scrolls');
   menu.style.maxHeight = `${room}px`;
@@ -284,7 +297,8 @@ function closePopoverAt(row) {
  */
 export function dropdown(select) {
   const next = select.nextElementSibling;
-  let button = next instanceof HTMLButtonElement && next.classList.contains('dropdown') ? next : null;
+  // By tag, not instanceof: a select in a detached window is of that window's elements.
+  let button = next?.tagName === 'BUTTON' && next.classList.contains('dropdown') ? /** @type {HTMLButtonElement} */ (next) : null;
   if (!button) {
     const made = document.createElement('button');
     button = made;

@@ -66,11 +66,7 @@ public partial class MainWindow : Window
         _page = _services.GetRequiredService<PageHost>();
         _theme = _services.GetRequiredService<WindowTheme>();
         _quit = _services.GetRequiredService<QuitGate>();
-        _settings.Saved += _ =>
-        {
-            ApplyTheme();
-            UpdateGlobalHotkeys();
-        };
+        _settings.Saved += _ => OnSettingsSaved();
         InitializeComponent();
         WindowInterop.UseCustomChrome(this);
         // Termilly opens where the window was last closed (maximized, if it was), on the start-up screen until the
@@ -101,6 +97,17 @@ public partial class MainWindow : Window
     }
 
     private AppSettings Settings => _settings.Current;
+
+    /// <summary>The theme and the hotkeys follow Settings, in the detached windows' title bars too.</summary>
+    private void OnSettingsSaved()
+    {
+        ApplyTheme();
+        foreach (var window in _detached)
+        {
+            window.Recolor(_theme.Palette);
+        }
+        UpdateGlobalHotkeys();
+    }
 
     /// <summary>
     /// Colours the window and start-up screen to match the page's theme, so a light theme doesn't start with a black
@@ -188,6 +195,7 @@ public partial class MainWindow : Window
             HostName, AppPaths.WebRoot, CoreWebView2HostResourceAccessKind.Deny);
         core.WebMessageReceived += OnWebMessage;
         core.PermissionRequested += OnPermissionRequested;
+        core.NewWindowRequested += OnNewWindowRequested;
         core.NavigationCompleted += (_, _) => PostWindowState();
         core.Navigate($"https://{HostName}/index.html");
     }
@@ -253,7 +261,31 @@ public partial class MainWindow : Window
                     WindowInterop.BeginNonClientDrag(this, hitTest);
                 }
                 break;
+            case WindowActions.Focus:
+                _detached.FirstOrDefault(w => w.PageWindowName == msg.Name)?.BringToFront();
+                break;
         }
+    }
+
+    /// <summary>The page's own windows (a terminal, the Notepad or the Snippets window detached), while they're open.</summary>
+    private readonly List<DetachedWindow> _detached = [];
+
+    /// <summary>
+    /// window.open: detached.html gets a window of its own (DetachedWindow), still the page's (window.opener), which
+    /// moves into it what it shows. Anything else is left to WebView2, as before.
+    /// </summary>
+    private async void OnNewWindowRequested(object? sender, CoreWebView2NewWindowRequestedEventArgs e)
+    {
+        if (!e.Uri.StartsWith($"https://{HostName}/{DetachedWindow.PageName}", StringComparison.OrdinalIgnoreCase) || _closing)
+        {
+            return;
+        }
+        using var deferral = e.GetDeferral();
+        var window = new DetachedWindow(e.Name, _theme.Palette, e.WindowFeatures);
+        _detached.Add(window);
+        window.Closed += (_, _) => _detached.Remove(window);
+        e.NewWindow = await window.StartAsync(Web.CoreWebView2.Environment, HostName);
+        e.Handled = true;
     }
 
     protected override void OnStateChanged(EventArgs e)
@@ -368,6 +400,10 @@ public partial class MainWindow : Window
             return;
         }
         _closing = true;
+        foreach (var window in _detached.ToList())
+        {
+            window.CloseNow();
+        }
         WindowPlacement.Save(this);
         _hotkeys?.Dispose();
         _tray?.Dispose();

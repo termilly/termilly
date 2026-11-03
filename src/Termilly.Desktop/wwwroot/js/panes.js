@@ -14,6 +14,7 @@ import { openTerminal, disposeTerminal, bufferLines, scheduleFit, prepareStart }
 import { wake } from './hibernate.js';
 import { byId, find, targetOf, WORKSPACE_ID, dragPointer, onMiddleClick } from './dom.js';
 import { ENV_CLASS, ENV_COLOR } from './environments.js';
+import { detach, closeWindow, focusWindow, setWindowTitle } from './windows.js';
 
 /** A pane's drop zones: beside it on a side, or in it as a tab (center). */
 const ZONE = Object.freeze({ left: 'left', right: 'right', top: 'top', bottom: 'bottom', center: 'center' });
@@ -229,6 +230,9 @@ export function splitFocused(dir, profile) {
  */
 export function closeTab(tab) {
   if (!state.tabs.has(tab.id)) return;
+  // Its window goes with it (one still opening too); the pane isn't wanted back.
+  tab.detached = false;
+  closeWindow(windowKey(tab), { quiet: true });
   const ws = wsById(tab.wsId);
   if (!ws) {
     // The scratch terminal (scratch.js): no workspace, no history.
@@ -305,6 +309,74 @@ export function moveTab(tab, targetWsId) {
   persist();
 }
 
+// ---- Terminals in windows of their own (js/windows.js) ----
+
+/** @param {Tab} tab */
+const windowKey = tab => `tab-${tab.id}`;
+
+/** The menu entries that detach a terminal and bring it back (js/tabmenu.js). */
+export const DETACH_LABEL = 'Detach to a window';
+export const ATTACH_LABEL = 'Back to the workspace';
+
+/**
+ * Moves a terminal into a window of its own. It stays where it is until the window is ready; then its place in the
+ * layout is kept (the layout is drawn without it), and closing the window puts it back there.
+ * @param {Tab} tab
+ */
+export function detachTab(tab) {
+  const ws = wsById(tab.wsId);
+  if (!ws || !tab.view || tab.detached) return;
+  const { el } = tab.view;
+  detach(windowKey(tab), { el, title: tabTitle(tab), onClosed: () => attachTab(tab), onMoved: () => moved(tab), onResize: scheduleFit });
+}
+
+/**
+ * A terminal now in its own window: the layout it left is drawn without it.
+ * @param {Tab} tab
+ */
+function moved(tab) {
+  const ws = wsById(tab.wsId);
+  const view = /** @type {TabView} */ (tab.view);
+  tab.detached = true;
+  takeBackHeader(tab);
+  view.el.classList.remove(TAB_HIDDEN);
+  view.term?.focus();
+  if (!ws) return;
+  // The workspace's focus moves to a terminal still in it.
+  if (ws.focusId === tab.id) ws.focusId = tabsOf(ws).find(t => !t.detached)?.id ?? null;
+  renderWorkspace(ws);
+  emit(EVENTS.tab, tab);
+  emit(EVENTS.workspaces);
+}
+
+/**
+ * A detached terminal back in its workspace, where it was (its window closed, or Back to the workspace).
+ * @param {Tab} tab
+ */
+export function attachTab(tab) {
+  if (!tab.detached) return;
+  tab.detached = false;
+  closeWindow(windowKey(tab), { quiet: true });
+  const ws = wsById(tab.wsId);
+  if (!ws || !state.tabs.has(tab.id)) return;
+  renderWorkspace(ws);
+  emit(EVENTS.tab, tab);
+  emit(EVENTS.workspaces);
+  if (ws.id === state.activeId) focusTab(tab); else ws.focusId = tab.id;
+}
+
+/**
+ * What a workspace shows while all its terminals are in windows of their own: a button that brings them back.
+ * @param {Workspace} ws
+ */
+function allDetachedNote(ws) {
+  const el = document.createElement('div');
+  el.className = 'empty';
+  el.innerHTML = '<p>This workspace’s terminals are in windows of their own</p><button>Bring them back</button>';
+  find(el, 'button').addEventListener('click', () => { for (const tab of tabsOf(ws)) attachTab(tab); });
+  return el;
+}
+
 // ---- Focus and workspaces ----
 
 /**
@@ -318,6 +390,18 @@ export function focusTab(tab) {
     // The scratch terminal (scratch.js) belongs to no workspace.
     markSeen(tab);
     tab.view?.term?.focus();
+    return;
+  }
+  if (tab.detached) {
+    // In a window of its own: that window comes to the front, and the workspace keeps its own focused terminal.
+    markSeen(tab);
+    wake(tab);
+    focusWindow(windowKey(tab));
+    tab.view?.term?.focus();
+    if (tab.attention) {
+      tab.attention = false;
+      emit(EVENTS.tab, tab);
+    }
     return;
   }
   const wsChanged = ws.id !== state.activeId;
@@ -393,7 +477,7 @@ export function moveFocus(direction) {
   let best = null;
   let bestDistance = Infinity;
   for (const t of tabsOf(/** @type {Workspace} */ (activeWs()))) {
-    if (t === current || /** @type {TabView} */ (t.view).el.classList.contains(TAB_HIDDEN)) continue;
+    if (t === current || t.detached || /** @type {TabView} */ (t.view).el.classList.contains(TAB_HIDDEN)) continue;
     const b = /** @type {TabView} */ (t.view).el.getBoundingClientRect();
     const overlapsY = b.top < a.bottom && b.bottom > a.top;
     const overlapsX = b.left < a.right && b.right > a.left;
@@ -438,7 +522,7 @@ export function renderWorkspace(ws) {
     takeBackHeader(tab);
   }
   drawing = ws;
-  layer.replaceChildren(renderNode(ws.root));
+  layer.replaceChildren(renderNode(ws.root) ?? allDetachedNote(ws));
   drawing = null;
   for (const tab of tabsOf(ws)) {
     /** @type {TabView} */ (tab.view).el.classList.toggle('focused', tab.id === ws.focusId);
@@ -520,13 +604,21 @@ function dropLonePreview(ws) {
 }
 
 /**
+ * A part of the layout; null when every terminal in it is in a window of its own (it's drawn without them, and a
+ * split with one side gone is just its other side).
  * @param {LayoutNode} node
- * @returns {HTMLElement}
+ * @returns {HTMLElement | null}
  */
 function renderNode(node) {
-  if (node.kind === NODE.leaf) return /** @type {TabView} */ (/** @type {Tab} */ (state.tabs.get(node.tabId)).view).el;
+  if (node.kind === NODE.leaf) {
+    const tab = /** @type {Tab} */ (state.tabs.get(node.tabId));
+    return tab.detached ? null : /** @type {TabView} */ (tab.view).el;
+  }
   if (node.kind === NODE.preview) return previewElement(drawing);
   if (node.kind === NODE.tabs) return renderGroup(node);
+  const a = renderNode(node.a);
+  const b = renderNode(node.b);
+  if (!a || !b) return a ?? b;
 
   const split = document.createElement('div');
   split.className = `split ${node.dir}`;
@@ -538,8 +630,8 @@ function renderNode(node) {
     cellB.style.flex = `${1 - node.ratio} 1 0`;
   };
   setSizes();
-  cellA.append(renderNode(node.a));
-  cellB.append(renderNode(node.b));
+  cellA.append(a);
+  cellB.append(b);
 
   const divider = document.createElement('div');
   divider.className = 'divider';
@@ -574,6 +666,10 @@ const groupElements = new WeakMap(); // a tabs node -> its element, while render
  * @param {TabsNode} node
  */
 function renderGroup(node) {
+  // Its terminals in windows of their own aren't in it while they're away; the group shows another as its tab.
+  const items = node.items.filter(item => !state.tabs.get(item.tabId)?.detached);
+  if (!items.length) return null;
+  if (!items.some(item => item.tabId === node.active)) node.active = items[0].tabId;
   const group = document.createElement('div');
   group.className = 'tab-group';
   const strip = document.createElement('div');
@@ -581,7 +677,7 @@ function renderGroup(node) {
   strip.setAttribute('role', 'tablist');
   const body = document.createElement('div');
   body.className = 'tab-group-body';
-  for (const item of node.items) {
+  for (const item of items) {
     const tab = /** @type {Tab} */ (state.tabs.get(item.tabId));
     strip.append(stripTab(tab));
     body.append(/** @type {TabView} */ (tab.view).el);
@@ -681,6 +777,7 @@ function updateStripTab(tab, el) {
 }
 
 on(EVENTS.tab, tab => {
+  if (tab.detached) setWindowTitle(windowKey(tab), tabTitle(tab));
   for (const el of /** @type {NodeListOf<HTMLElement>} */ (document.querySelectorAll(`.strip-tab[data-tab="${tab.id}"]`))) {
     updateStripTab(tab, el);
   }
@@ -747,6 +844,7 @@ function showGroupTab(node) {
   const group = groupElements.get(node);
   if (!group) return;
   for (const item of node.items) {
+    if (state.tabs.get(item.tabId)?.detached) continue;
     const shown = item.tabId === node.active;
     state.tabs.get(item.tabId)?.view?.el.classList.toggle(TAB_HIDDEN, !shown);
     const tabEl = /** @type {HTMLElement | null} */ (group.querySelector(`.tab-strip > [data-tab="${item.tabId}"]`));
@@ -791,7 +889,8 @@ const ZONE_LABELS = { left: 'Split left', right: 'Split right', top: 'Split up',
  */
 function wireDrag(tab, header) {
   header.addEventListener('pointerdown', e => {
-    if (e.button !== 0 || targetOf(e).closest('button, input')) return;
+    // A terminal in a window of its own has no layout to be dragged in.
+    if (e.button !== 0 || tab.detached || targetOf(e).closest('button, input')) return;
     // A tab holding its terminal's title bar: the title bar's own handler takes the drag.
     if (header.classList.contains(STRIP_TAB) && targetOf(e).closest('.pane-header')) return;
     e.preventDefault();
@@ -860,7 +959,7 @@ function beginDrag(source) {
   find(dragGhost, 'span').textContent = tabTitle(source);
   /** @type {TabView} */ (source.view).el.classList.add(DRAG_SOURCE);
   for (const t of tabsOf(/** @type {Workspace} */ (wsById(source.wsId)))) {
-    if (t !== source) {
+    if (t !== source && !t.detached) {
       /** @type {TabView} */ (t.view).el.append(/** @type {Element} */ (dockGuideTemplate.content.firstElementChild).cloneNode(true));
     }
   }

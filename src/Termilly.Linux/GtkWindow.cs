@@ -60,8 +60,11 @@ internal static class GtkWindow
         }
     }
 
-    /// <summary>Termilly's window: its one visible top-level window titled Termilly (Photino doesn't give out its handle on Linux).</summary>
-    private static IntPtr? Find()
+    /// <summary>
+    /// Termilly's window: its one visible top-level window titled Termilly that isn't a detached one (Photino doesn't
+    /// give out its handle on Linux).
+    /// </summary>
+    public static IntPtr? Find()
     {
         var list = gtk_window_list_toplevels();
         try
@@ -69,7 +72,8 @@ internal static class GtkWindow
             for (var node = list; node != IntPtr.Zero; node = Marshal.ReadIntPtr(node, IntPtr.Size))
             {
                 var window = Marshal.ReadIntPtr(node);
-                if (gtk_widget_get_visible(window) != 0 && Marshal.PtrToStringUTF8(gtk_window_get_title(window)) == Title)
+                if (gtk_widget_get_visible(window) != 0 && Marshal.PtrToStringUTF8(gtk_window_get_title(window)) == Title &&
+                    !DetachedWindows.Contains(window))
                 {
                     return window;
                 }

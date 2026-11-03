@@ -1,0 +1,216 @@
+using System.Runtime.InteropServices;
+
+namespace Termilly.Linux;
+
+/// <summary>
+/// A terminal, the Notepad or the Snippets window in a window of its own on Linux (js/windows.js), as DetachedWindow
+/// is on Windows. Photino doesn't let a page open windows, so this answers WebKitGTK's "create" signal itself: for
+/// detached.html only, a web view related to the page's (same process and context, so window.opener and the app://
+/// scheme work) in a GTK window with the desktop's own title bar. The page moves its element in and keeps running it;
+/// closing the window asks the page first (detached.html's termillyClose), which takes the element back and closes
+/// it. Everything here runs on GTK's thread.
+/// </summary>
+internal static class DetachedWindows
+{
+    private const string Gtk = "libgtk-3.so.0";
+    private const string GObject = "libgobject-2.0.so.0";
+    private const string WebKit = "libwebkit2gtk-4.1.so.0";
+    /// <summary>The only page a window may be opened for.</summary>
+    private const string PageUrl = $"{AppScheme.Scheme}://localhost/detached.html";
+    /// <summary>What detached.html runs when the user closes the window (it closes it once the page is ready).</summary>
+    private const string AskToClose = "window.termillyClose ? termillyClose() : window.close()";
+    private const int GtkWindowToplevel = 0;
+    /// <summary>GLib's G_TYPE_BOOLEAN (its fundamental type number, shifted as GLib stores it).</summary>
+    private static readonly IntPtr GTypeBoolean = 5 << 2;
+    private const int GValueSize = 24;
+
+    /// <summary>A window open: its GTK window, window.open's name for it, and whether the page has closed it.</summary>
+    private sealed class Opened(IntPtr window, string name)
+    {
+        public IntPtr Window { get; } = window;
+        public string Name { get; } = name;
+        public bool ClosedByPage { get; set; }
+    }
+
+    /// <summary>The windows by their web view.</summary>
+    private static readonly Dictionary<IntPtr, Opened> Open = [];
+    /// <summary>Names of windows asked for, by their web view, until they're ready to show.</summary>
+    private static readonly Dictionary<IntPtr, string> Pending = [];
+    private static Func<bool> _light = () => false;
+
+    // The callbacks GTK holds: kept here so they're never collected.
+    private static readonly CreateCallback OnCreate = Create;
+    private static readonly ViewCallback OnReadyToShow = ReadyToShow;
+    private static readonly ViewCallback OnClose = CloseFromPage;
+    private static readonly NotifyCallback OnTitle = TitleChanged;
+    private static readonly DeleteCallback OnDelete = DeleteRequested;
+
+    private delegate IntPtr CreateCallback(IntPtr view, IntPtr navigation, IntPtr data);
+    private delegate void ViewCallback(IntPtr view, IntPtr data);
+    private delegate void NotifyCallback(IntPtr view, IntPtr spec, IntPtr data);
+    private delegate int DeleteCallback(IntPtr window, IntPtr gdkEvent, IntPtr data);
+
+    /// <summary>
+    /// Lets the page in <paramref name="mainWindow"/> open its windows. <paramref name="light"/> says whether the theme
+    /// is light, for the windows' title bars. False when the window holds no web view to hook.
+    /// </summary>
+    public static bool Hook(IntPtr mainWindow, Func<bool> light)
+    {
+        _light = light;
+        var view = gtk_bin_get_child(mainWindow);
+        if (view == IntPtr.Zero)
+        {
+            return false;
+        }
+        g_signal_connect_data(view, "create", OnCreate, IntPtr.Zero, IntPtr.Zero, 0);
+        return true;
+    }
+
+    /// <summary>Whether a GTK window is one of these (GtkWindow.Find looks for the main one).</summary>
+    public static bool Contains(IntPtr window) => Open.Values.Any(o => o.Window == window);
+
+    /// <summary>The window window.open named <paramref name="name"/> to the front.</summary>
+    public static void Focus(string? name)
+    {
+        if (Open.Values.FirstOrDefault(o => o.Name == name) is { } opened)
+        {
+            gtk_window_present(opened.Window);
+        }
+    }
+
+    /// <summary>Closes them all, without asking the page: the main window is closing, and the page with it.</summary>
+    public static void CloseAll()
+    {
+        foreach (var opened in Open.Values.ToList())
+        {
+            opened.ClosedByPage = true;
+            gtk_widget_destroy(opened.Window);
+        }
+        Open.Clear();
+    }
+
+    /// <summary>window.open: a related web view for detached.html, nothing (no window) for anything else.</summary>
+    private static IntPtr Create(IntPtr view, IntPtr navigation, IntPtr data)
+    {
+        var request = webkit_navigation_action_get_request(navigation);
+        var url = request == IntPtr.Zero ? null : Marshal.PtrToStringUTF8(webkit_uri_request_get_uri(request));
+        if (url is null || !url.StartsWith(PageUrl, StringComparison.Ordinal))
+        {
+            return IntPtr.Zero;
+        }
+        var opened = webkit_web_view_new_with_related_view(view);
+        Pending[opened] = Marshal.PtrToStringUTF8(webkit_navigation_action_get_frame_name(navigation)) ?? "";
+        g_signal_connect_data(opened, "ready-to-show", OnReadyToShow, IntPtr.Zero, IntPtr.Zero, 0);
+        g_signal_connect_data(opened, "close", OnClose, IntPtr.Zero, IntPtr.Zero, 0);
+        g_signal_connect_data(opened, "notify::title", OnTitle, IntPtr.Zero, IntPtr.Zero, 0);
+        return opened;
+    }
+
+    /// <summary>The page in it is ready: a window at the size (and place) window.open asked for, in the theme.</summary>
+    private static void ReadyToShow(IntPtr view, IntPtr data)
+    {
+        if (!Pending.Remove(view, out var name))
+        {
+            return;
+        }
+        PreferDark(!_light());
+        var window = gtk_window_new(GtkWindowToplevel);
+        webkit_window_properties_get_geometry(webkit_web_view_get_window_properties(view), out var geometry);
+        if (geometry.Width > 0 && geometry.Height > 0)
+        {
+            gtk_window_set_default_size(window, geometry.Width, geometry.Height);
+        }
+        if (geometry.X > 0 || geometry.Y > 0)
+        {
+            gtk_window_move(window, geometry.X, geometry.Y); // X11 only: Wayland places windows itself
+        }
+        gtk_window_set_title(window, Marshal.PtrToStringUTF8(webkit_web_view_get_title(view)) ?? GtkWindow.Title);
+        gtk_container_add(window, view);
+        Open[view] = new Opened(window, name);
+        g_signal_connect_data(window, "delete-event", OnDelete, view, IntPtr.Zero, 0);
+        gtk_widget_show_all(window);
+    }
+
+    /// <summary>window.close() in its page (it has taken back what it showed): the window goes.</summary>
+    private static void CloseFromPage(IntPtr view, IntPtr data)
+    {
+        if (Open.Remove(view, out var opened))
+        {
+            opened.ClosedByPage = true;
+            gtk_widget_destroy(opened.Window);
+        }
+    }
+
+    private static void TitleChanged(IntPtr view, IntPtr spec, IntPtr data)
+    {
+        if (Open.TryGetValue(view, out var opened) && Marshal.PtrToStringUTF8(webkit_web_view_get_title(view)) is { Length: > 0 } title)
+        {
+            gtk_window_set_title(opened.Window, title);
+        }
+    }
+
+    /// <summary>The title bar's close: the page is asked, and closes the window itself (true keeps it for now).</summary>
+    private static int DeleteRequested(IntPtr window, IntPtr gdkEvent, IntPtr view)
+    {
+        if (!Open.TryGetValue(view, out var opened) || opened.ClosedByPage)
+        {
+            return 0;
+        }
+        webkit_web_view_run_javascript(view, AskToClose, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
+        return 1;
+    }
+
+    /// <summary>GTK's own parts (these windows' title bars) dark or light, as the theme is.</summary>
+    private static void PreferDark(bool dark)
+    {
+        var value = Marshal.AllocHGlobal(GValueSize);
+        try
+        {
+            for (var i = 0; i < GValueSize; i++)
+            {
+                Marshal.WriteByte(value, i, 0);
+            }
+            g_value_init(value, GTypeBoolean);
+            g_value_set_boolean(value, dark ? 1 : 0);
+            g_object_set_property(gtk_settings_get_default(), "gtk-application-prefer-dark-theme", value);
+            g_value_unset(value);
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(value);
+        }
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct GdkRectangle
+    {
+        public int X;
+        public int Y;
+        public int Width;
+        public int Height;
+    }
+
+    [DllImport(GObject)] private static extern ulong g_signal_connect_data(IntPtr instance, [MarshalAs(UnmanagedType.LPUTF8Str)] string signal, Delegate handler, IntPtr data, IntPtr destroy, int flags);
+    [DllImport(GObject)] private static extern IntPtr g_value_init(IntPtr value, IntPtr type);
+    [DllImport(GObject)] private static extern void g_value_set_boolean(IntPtr value, int boolean);
+    [DllImport(GObject)] private static extern void g_value_unset(IntPtr value);
+    [DllImport(GObject)] private static extern void g_object_set_property(IntPtr obj, [MarshalAs(UnmanagedType.LPUTF8Str)] string name, IntPtr value);
+    [DllImport(Gtk)] private static extern IntPtr gtk_bin_get_child(IntPtr bin);
+    [DllImport(Gtk)] private static extern IntPtr gtk_window_new(int type);
+    [DllImport(Gtk)] private static extern void gtk_window_set_default_size(IntPtr window, int width, int height);
+    [DllImport(Gtk)] private static extern void gtk_window_move(IntPtr window, int x, int y);
+    [DllImport(Gtk)] private static extern void gtk_window_set_title(IntPtr window, [MarshalAs(UnmanagedType.LPUTF8Str)] string title);
+    [DllImport(Gtk)] private static extern void gtk_window_present(IntPtr window);
+    [DllImport(Gtk)] private static extern void gtk_container_add(IntPtr container, IntPtr widget);
+    [DllImport(Gtk)] private static extern void gtk_widget_show_all(IntPtr widget);
+    [DllImport(Gtk)] private static extern void gtk_widget_destroy(IntPtr widget);
+    [DllImport(Gtk)] private static extern IntPtr gtk_settings_get_default();
+    [DllImport(WebKit)] private static extern IntPtr webkit_web_view_new_with_related_view(IntPtr view);
+    [DllImport(WebKit)] private static extern IntPtr webkit_web_view_get_title(IntPtr view);
+    [DllImport(WebKit)] private static extern IntPtr webkit_web_view_get_window_properties(IntPtr view);
+    [DllImport(WebKit)] private static extern void webkit_window_properties_get_geometry(IntPtr properties, out GdkRectangle geometry);
+    [DllImport(WebKit)] private static extern IntPtr webkit_navigation_action_get_request(IntPtr navigation);
+    [DllImport(WebKit)] private static extern IntPtr webkit_navigation_action_get_frame_name(IntPtr navigation);
+    [DllImport(WebKit)] private static extern IntPtr webkit_uri_request_get_uri(IntPtr request);
+    [DllImport(WebKit)] private static extern void webkit_web_view_run_javascript(IntPtr view, [MarshalAs(UnmanagedType.LPUTF8Str)] string script, IntPtr cancellable, IntPtr callback, IntPtr data);
+}

@@ -18,12 +18,14 @@ import { appendNote, NOTE_KIND } from './notes.js';
 import { padLinks } from './notepadlinks.js';
 import { isShortcut, KEY_ID } from './keymap.js';
 import { COPY_LABEL as COPY, PASTE_LABEL, MENU_KEYS } from './termclipboard.js';
+import { detach, closeWindow, focusWindow, isDetached } from './windows.js';
 
 /** @typedef {import('./store.js').NotepadPage} NotepadPage */
 
 /** What the Notepad's buttons do (data-np). */
 const NOTEPAD_ACTION = Object.freeze({
-  newPage: 'new', open: 'open', save: 'save', saveAs: 'saveAs', move: 'move', links: 'links', wrap: 'wrap', close: 'close',
+  newPage: 'new', open: 'open', save: 'save', saveAs: 'saveAs', move: 'move', links: 'links', wrap: 'wrap', detach: 'detach',
+  close: 'close',
 });
 /** The name a new page gets, numbered. */
 const PAGE_NAME = 'Note';
@@ -58,6 +60,12 @@ const MENU_ICONS = Object.freeze({
   cut: '<svg viewBox="0 0 16 16"><circle cx="4.5" cy="11.5" r="2"/><circle cx="11.5" cy="11.5" r="2"/><path d="M5.7 9.8L11 1.5M10.3 9.8L5 1.5"/></svg>',
   pastePlain: '<svg viewBox="0 0 16 16"><rect x="3.5" y="3.5" width="9" height="11" rx="1"/><path d="M6.5 2.5h3v2h-3zM5.5 7.5h4M7.5 7.5v5"/></svg>',
 });
+/** Its window when it's in one of its own (js/windows.js), and the detach button's two looks. */
+const WINDOW_KEY = 'notepad';
+const DETACH_BUTTON = Object.freeze({
+  out: { icon: ICONS.detach, title: 'Detach to a window' },
+  back: { icon: ICONS.attach, title: 'Back to the main window' },
+});
 /** What its requests to the host start with. */
 const REQUEST = 'np';
 
@@ -76,6 +84,7 @@ panel.innerHTML = `
       <button class="pane-btn" data-np="${NOTEPAD_ACTION.move}" title="Copy the selection, or the whole page, to a workspace's or a terminal's note">${TOOL_ICONS.move}</button>
       <button class="pane-btn np-toggle" data-np="${NOTEPAD_ACTION.links}" title="Links: paths and web addresses, Ctrl+click to open (off: plain text)">${TOOL_ICONS.links}</button>
       <button class="pane-btn np-toggle" data-np="${NOTEPAD_ACTION.wrap}" title="Word wrap">${TOOL_ICONS.wrap}</button>
+      <button class="pane-btn" data-np="${NOTEPAD_ACTION.detach}" title="${DETACH_BUTTON.out.title}">${DETACH_BUTTON.out.icon}</button>
       <button class="pane-btn" data-np="${NOTEPAD_ACTION.close}" title="Close (Ctrl+Shift+M)">${ICONS.close}</button>
     </span>
   </div>
@@ -202,12 +211,52 @@ function show({ quiet = false } = {}) {
   if (!quiet) (activePage() ? area : find(panel, `.np-empty [data-np="${NOTEPAD_ACTION.newPage}"]`)).focus();
 }
 
-/** The Notepad on or off (the title bar's button, the palette). */
+/** The Notepad on or off (the title bar's button, the palette); in a window of its own, that window to the front. */
 export function toggleNotepad() {
-  if (!panel.hidden) {
-    setOpen(false);
-    restoreFocus();
-  } else show();
+  if (isDetached(WINDOW_KEY)) {
+    focusWindow(WINDOW_KEY);
+    area.focus();
+  } else if (!panel.hidden) hideNotepad();
+  else show();
+}
+
+/** Closes the Notepad, and its window if it's in one. */
+function hideNotepad() {
+  const detached = isDetached(WINDOW_KEY);
+  if (detached) closeWindow(WINDOW_KEY, { quiet: true });
+  setOpen(false);
+  if (detached) dockBack();
+  restoreFocus();
+}
+
+/** Into a window of its own, opened first if it's closed; back to its dock from there. */
+function toggleDetached() {
+  if (isDetached(WINDOW_KEY)) {
+    closeWindow(WINDOW_KEY);
+    return;
+  }
+  if (panel.hidden) show({ quiet: true });
+  // Its room here is given back once it's in its window, and as that window is resized.
+  detach(WINDOW_KEY, {
+    el: panel, title: 'Notepad', onClosed: dockBack, onResize: refreshDock,
+    onMoved: () => { showDetachButton(true); area.focus(); },
+  });
+}
+
+/** Back in its place on the right, from its window, as it was. */
+function dockBack() {
+  byId(WORKSPACE_ID).append(panel);
+  showDetachButton(false);
+  refreshDock();
+  if (!panel.hidden) render();
+}
+
+/** @param {boolean} detached */
+function showDetachButton(detached) {
+  const look = detached ? DETACH_BUTTON.back : DETACH_BUTTON.out;
+  const el = find(panel, `[data-np="${NOTEPAD_ACTION.detach}"]`);
+  el.innerHTML = look.icon;
+  el.title = look.title;
 }
 
 /** The Notepad on or off from its shortcut (Ctrl+Shift+M): opened with no pages, it starts one to type into at once. */
@@ -360,7 +409,8 @@ const plainText = text => text
  */
 function insert(text) {
   area.focus();
-  document.execCommand('insertText', false, text);
+  // Its own window's document when it's detached: the command acts on the focus there.
+  area.ownerDocument.execCommand('insertText', false, text);
 }
 
 /** @param {(text: string) => string} [clean] */
@@ -469,7 +519,8 @@ panel.addEventListener('click', e => {
     case NOTEPAD_ACTION.move: showMenu(noteChoices(), /** @type {HTMLElement} */ (action)); break;
     case NOTEPAD_ACTION.links: toggleView(NOTEPAD_ACTION.links); break;
     case NOTEPAD_ACTION.wrap: toggleView(NOTEPAD_ACTION.wrap); break;
-    case NOTEPAD_ACTION.close: toggleNotepad(); break;
+    case NOTEPAD_ACTION.detach: toggleDetached(); break;
+    case NOTEPAD_ACTION.close: hideNotepad(); break;
     default: break;
   }
 });
@@ -502,8 +553,9 @@ panel.addEventListener('keydown', e => {
   const ctrl = e.ctrlKey && !e.altKey;
   if (ctrl && e.code === NOTEPAD_KEY.save) save(e.shiftKey);
   else if (ctrl && !e.shiftKey && e.code === NOTEPAD_KEY.open) openFile();
-  else if (isShortcut(e, KEY_ID.notepad)) toggleNotepad();
-  else if (e.key === 'Escape' && !e.ctrlKey && !e.shiftKey && !e.altKey) restoreFocus();
+  else if (isShortcut(e, KEY_ID.notepad)) hideNotepad();
+  // Escape goes back to the terminal, in the main window: not from a window of its own.
+  else if (e.key === 'Escape' && !e.ctrlKey && !e.shiftKey && !e.altKey && !isDetached(WINDOW_KEY)) restoreFocus();
   else return;
   e.preventDefault();
   e.stopPropagation();
@@ -513,7 +565,7 @@ button.addEventListener('click', () => toggleNotepad());
 
 // ---- Docked on the right: the terminals and the Files panel end where it starts ----
 
-dockRight(panel, {
+const refreshDock = dockRight(panel, {
   dockVar: '--notepad-dock', minWidth: MIN_WIDTH_PX, resized: scheduleFit,
   dragged: width => { state.notepad.width = width; persist(); },
 });

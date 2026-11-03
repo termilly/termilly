@@ -12,6 +12,8 @@ internal static class WindowActions
     public const string Quit = "quit";
     public const string Drag = "drag";
     public const string Resize = "resize";
+    /// <summary>One of the page's own windows (js/windows.js) to the front: the message's name says which.</summary>
+    public const string Focus = "focus";
 }
 
 /// <summary>The page's answer when the host asks whether it may quit (QuitGate): quit, stay, or it's asking the user.</summary>
@@ -39,7 +41,8 @@ internal static partial class FromPage
 {
     /// <param name="Action">One of <see cref="WindowActions"/>.</param>
     /// <param name="Edge">For a resize, which edge or corner is dragged (one of <see cref="ResizeEdges"/>).</param>
-    internal sealed record Window(string? Action = null, string? Edge = null) : IPageMessage
+    /// <param name="Name">For focus, which detached window: its name (window.open's target).</param>
+    internal sealed record Window(string? Action = null, string? Edge = null, string? Name = null) : IPageMessage
     {
         public static string Type => "window";
     }

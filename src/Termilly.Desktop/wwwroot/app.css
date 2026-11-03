@@ -3015,3 +3015,19 @@ textarea.field.note-text { flex: 1; width: 100%; min-height: 120px; resize: none
 .step-row.nested.step-is-reply.last .step-text { color: var(--text); }
 .step-more { align-self: flex-start; margin: 2px 0 2px 16px; padding: 2px 6px; border-radius: 5px; color: var(--muted); font-size: 11.5px; }
 .step-more:hover { background: var(--hover); color: var(--text); }
+
+
+/* ---- A window of its own (detached.html, js/windows.js): a terminal, the Notepad or the Snippets window moved in
+   fills it, with no frame of its own (the window has one). ---- */
+body.detached-window > * { flex: 1; min-width: 0; min-height: 0; }
+body.detached-window > .pane, body.detached-window > .notepad-panel, body.detached-window > .snippets-win {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  animation: none;
+}
+body.detached-window > .pane.focused { box-shadow: none; }
+/* Its docked width is set on the element (dragged with its grip): the window’s width wins. */
+body.detached-window > .notepad-panel { position: static; width: auto !important; max-width: none; }
+body.detached-window > .notepad-panel > .files-grip { display: none; }
+body.detached-window > .snippets-win { width: auto; height: auto; }

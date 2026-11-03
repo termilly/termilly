@@ -97,14 +97,18 @@ export const DOCK_GRIP = 'files-grip';
  * @param {HTMLElement} panel
  * @param {{ dockVar: string, minWidth: number, resized: () => void, dragged?: (width: number) => void }} how
  *   resized: after its width changed (it opened, closed, was dragged or squeezed); dragged: after a drag, its width
+ * @returns {() => void} what to call when it comes back from a window of its own (or leaves for one)
  */
 export function dockRight(panel, { dockVar, minWidth, resized, dragged }) {
   const workspace = byId(WORKSPACE_ID);
   const gap = () => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--gap')) || 0;
-  new ResizeObserver(() => {
-    workspace.style.setProperty(dockVar, `${panel.hidden ? 0 : panel.offsetWidth + gap()}px`);
+  // In a window of its own (js/windows.js), or hidden, it takes no room here.
+  const refresh = () => {
+    const docked = !panel.hidden && workspace.contains(panel);
+    workspace.style.setProperty(dockVar, `${docked ? panel.offsetWidth + gap() : 0}px`);
     resized();
-  }).observe(panel);
+  };
+  new ResizeObserver(refresh).observe(panel);
   panel.addEventListener('pointerdown', e => {
     if (!targetOf(e).classList.contains(DOCK_GRIP)) return;
     e.preventDefault();
@@ -114,6 +118,7 @@ export function dockRight(panel, { dockVar, minWidth, resized, dragged }) {
       panel.style.width = `${Math.round(Math.min(half, Math.max(minWidth, right - ev.clientX)))}px`;
     }, () => dragged?.(panel.offsetWidth));
   });
+  return refresh;
 }
 
 /**
