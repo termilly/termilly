@@ -268,6 +268,7 @@ export const HOST = Object.freeze({
 /** @typedef {{ id?: string, name?: string }} HistoryOpenTerminal */
 /** @typedef {{ id?: string, name?: string, paired?: number, lastSeen?: number, alerts?: boolean }} PhoneDevice */
 /** @typedef {{ text: string, at: string }} AgentPrompt */
+/** @typedef {{ kind: string, text: string, at: string, tool?: string|null, failed?: boolean }} AgentStep */
 /** @typedef {{ id: string, name: string, address: string, online: boolean, error: string|null, state: string|null }} PcView */
 /** @typedef {{ newRecoveryCode: string|null, archives: number }} SecurityInfo */
 /** @typedef {{ version: string|null, dataDir: string, remoteVersion: number, crashes: Array<any> }} AboutInfo */
@@ -513,7 +514,7 @@ export const HOST = Object.freeze({
 /** @typedef {{ ports: Object<string, Array<number>> }} Host_portsTerminals */
 /** @typedef {{ path: string, exists: boolean }} Host_previewFileChanged */
 /** @typedef {{ profiles: Array<ProfileSummary> }} Host_profiles */
-/** @typedef {{ requestId: string|null, prompts: Array<AgentPrompt>, error?: string|null }} Host_promptsListed */
+/** @typedef {{ requestId: string|null, prompts: Array<AgentPrompt>, error?: string|null, steps?: Array<AgentStep>|null }} Host_promptsListed */
 /** @typedef {{  }} Host_quitAsk */
 /** @typedef {{ path: string, name: string, text: string }} Host_recData_0 */
 /** @typedef {{ path: string|null, error: string }} Host_recData_1 */

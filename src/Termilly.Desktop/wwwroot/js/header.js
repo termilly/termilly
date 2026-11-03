@@ -19,7 +19,7 @@ import { beginRename, shownName, PANE_NAME } from './rename.js';
 import { openTagPicker } from './tagpicker.js';
 import { openTabMenu, TAG_BUTTON } from './tabmenu.js';
 import { find } from './dom.js';
-import { openPrompts, hasPrompts } from './myprompts.js';
+import { openPrompts, hasPrompts, PROMPTS_TITLE } from './myprompts.js';
 
 const CHEVRON_DOWN = '<svg class="chev" viewBox="0 0 16 16"><path d="M4 6l4 4 4-4"/></svg>';
 
@@ -54,7 +54,7 @@ const HEADER_HTML = `
       <button class="pane-btn results-btn" title="What commands here produced: pull requests, running apps, pushes" hidden></button>
       <button class="pane-btn changes-btn" title="Files Claude changed in this terminal" hidden></button>
       <button class="pane-btn menu-btn" title="Terminal menu">${ICONS.more}</button>
-      <button class="pane-btn prompts-btn" title="Prompt history" hidden>${ICONS.prompts}</button>
+      <button class="pane-btn prompts-btn" title="${PROMPTS_TITLE}" hidden>${ICONS.prompts}</button>
       <button class="pane-btn note-btn" hidden>${ICONS.note}</button>
       <button class="pane-btn tag-btn" title="Tags">${ICONS.tag}</button>
       <button class="pane-btn close-btn" title="Close terminal (Ctrl+Shift+W)">${ICONS.close}</button>

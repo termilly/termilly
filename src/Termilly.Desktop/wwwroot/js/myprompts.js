@@ -15,6 +15,8 @@ import { bufferLines } from './terminals.js';
 import { focusTab, switchWorkspace } from './panes.js';
 import { find, targetOf } from './dom.js';
 import { showToast, TOAST } from './toasts.js';
+import { AGENT_STEP } from './constants.js';
+import { shownSteps, placeSteps, stepRowHtml } from './agentsteps.js';
 
 /** A terminal keeps this many of its Claude Code sessions' ids (a /clear starts a new one). */
 const KEPT_SESSIONS = 20;
@@ -33,6 +35,17 @@ const DAY_MS = 86_400_000;
 
 /** @typedef {{ text: string, at: string | null }} Prompt */
 /** @typedef {{ prompt: Prompt, line: number }} Found */
+/** @typedef {import('./agentsteps.js').AgentStep} AgentStep */
+/** @typedef {import('./agentsteps.js').PlacedStep} PlacedStep */
+
+/** What the list shows: prompts (each with Claude's last reply under it), all replies, or all tool calls. */
+const MODE = Object.freeze({ prompts: 'prompts', replies: 'replies', tools: 'tools' });
+/** The list's title, and its button's on an agent terminal's header. */
+export const PROMPTS_TITLE = 'Prompts and replies';
+/** The list's count, its line about hidden prompts, and a row no longer in the output. */
+const COUNT = '.prompts-count';
+const CLEARED = '.prompts-cleared';
+const GONE = 'gone';
 
 /**
  * The terminal ran this Claude Code session: kept, so its prompts are listed even after a /clear or a restart.
@@ -117,18 +130,27 @@ function place(prompts, shown) {
 
 const pop = document.createElement('section');
 pop.className = 'popover inbox prompts-pop';
-pop.setAttribute('aria-label', 'Prompt history');
+pop.setAttribute('aria-label', PROMPTS_TITLE);
 pop.hidden = true;
 pop.innerHTML = `
-  <div class="inbox-head"><span class="section-head">Prompt history</span><span class="prompts-count"></span>
+  <div class="inbox-head"><span class="section-head">${PROMPTS_TITLE}</span><span class="prompts-count"></span>
     <button class="btn small" data-clear title="Hides the prompts listed now. Nothing is deleted: Show them again brings them back.">Clear</button></div>
-  <div class="prompts-filter"><input type="text" placeholder="Filter" spellcheck="false" aria-label="Filter prompts"></div>
+  <div class="prompts-modes"><span class="seg" role="tablist">
+    <button data-mode="${MODE.prompts}" role="tab" title="Each prompt, with Claude’s last reply to it">Prompts</button>
+    <button data-mode="${MODE.replies}" role="tab" title="Everything Claude wrote">Replies</button>
+    <button data-mode="${MODE.tools}" role="tab" title="The commands Claude ran and the files it read and changed">Tool calls</button></span></div>
+  <div class="prompts-filter"><input type="text" placeholder="Filter" spellcheck="false" aria-label="Filter"></div>
   <div class="inbox-list prompts-list" role="listbox"></div>
   <div class="inbox-foot prompts-cleared" hidden><span></span><button class="btn small" data-unclear>Show them again</button></div>`;
 const listEl = find(pop, '.prompts-list');
 const filterEl = /** @type {HTMLInputElement} */ (find(pop, 'input'));
 
-/** @type {{ tab: Tab, found: Found[], lines: string[] & { rows?: number[] } } | null} */
+/**
+ * The list open now: its terminal, its output, the prompts and Claude's steps found, what it shows, and the prompts
+ * whose every step is shown.
+ * @type {{ tab: Tab, found: Found[], steps: PlacedStep[], lines: string[] & { rows?: number[] }, mode: string,
+ *   expanded: Set<number> } | null}
+ */
 let open = null;
 
 /**
@@ -164,14 +186,54 @@ function dayLabel(d) {
 
 function render() {
   if (!open) return;
+  for (const b of /** @type {NodeListOf<HTMLElement>} */ (pop.querySelectorAll('[data-mode]'))) b.classList.toggle('on', b.dataset.mode === open.mode);
+  find(pop, '.prompts-modes').hidden = !open.steps.length;
+  if (open.mode === MODE.prompts) renderPrompts();
+  else renderSteps(open.mode === MODE.tools ? AGENT_STEP.tool : AGENT_STEP.reply);
+}
+
+/**
+ * All of Claude's replies, or all its tool calls, newest first (those of prompts hidden by Clear stay hidden).
+ * @param {string} kind
+ */
+function renderSteps(kind) {
+  const { tab, steps } = /** @type {NonNullable<typeof open>} */ (open);
   const want = norm(filterEl.value);
-  const { tab, lines } = open;
-  const listed = open.found.map((f, i) => ({ ...f, i })).filter(f => !cleared(tab, f, lines.rows));
+  const shown = steps.map((p, k) => ({ p, k }))
+    .filter(({ p }) => p.step.kind === kind && !(tab.promptsClearedAt && Date.parse(p.step.at) <= tab.promptsClearedAt))
+    .filter(({ p }) => !want || norm(`${p.step.tool ?? ''} ${p.step.text}`).includes(want)).reverse();
+  find(pop, COUNT).textContent = shown.length ? String(shown.length) : '';
+  find(pop, '[data-clear]').hidden = true;
+  find(pop, CLEARED).hidden = true;
+  listEl.innerHTML = shown.map(({ p, k }) => stepRowHtml(p, k, filterEl.value.trim())).join('')
+    || `<p class="change-empty">${want ? 'Nothing has that text.' : kind === AGENT_STEP.tool ? 'No tool calls yet.' : 'No replies yet.'}</p>`;
+}
+
+/**
+ * The steps of one prompt under it: its last reply, or (expanded) every reply and tool call, in order.
+ * @param {number} i the prompt's index
+ */
+function turnHtml(i) {
+  const { steps, expanded } = /** @type {NonNullable<typeof open>} */ (open);
+  const own = steps.map((p, k) => ({ p, k })).filter(({ p }) => p.turn === i);
+  if (!own.length) return '';
+  const all = expanded.has(i);
+  const rows = (all ? own : own.filter(({ p }) => p.last)).map(({ p, k }) => stepRowHtml(p, k, '', { nested: true })).join('');
+  const more = own.length - (all ? 0 : own.filter(({ p }) => p.last).length);
+  const toggle = all || more ? `<button class="step-more" data-turn="${i}">${all ? 'Show the last reply only' : `Show all ${own.length} steps`}</button>` : '';
+  return `<div class="turn-steps">${rows}${toggle}</div>`;
+}
+
+function renderPrompts() {
+  const want = norm(filterEl.value);
+  const { tab, lines } = /** @type {NonNullable<typeof open>} */ (open);
+  const { found } = /** @type {NonNullable<typeof open>} */ (open);
+  const listed = found.map((f, i) => ({ ...f, i })).filter(f => !cleared(tab, f, lines.rows));
   const rows = listed.filter(f => !want || norm(f.prompt.text).includes(want)).reverse();
-  const hidden = open.found.length - listed.length;
-  find(pop, '.prompts-count').textContent = listed.length ? String(listed.length) : '';
+  const hidden = found.length - listed.length;
+  find(pop, COUNT).textContent = listed.length ? String(listed.length) : '';
   find(pop, '[data-clear]').hidden = !listed.length;
-  const foot = find(pop, '.prompts-cleared');
+  const foot = find(pop, CLEARED);
   foot.hidden = !hidden;
   find(foot, 'span').textContent = hidden ? `${hidden} hidden` : '';
   let day = '';
@@ -186,13 +248,13 @@ function render() {
       <span class="prompt-time">${when ? escapeHtml(when.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })) : ''}</span>
       <span class="prompt-text">${want ? highlight(prompt.text, filterEl.value.trim()) : escapeHtml(prompt.text)}</span>
       <button class="prompt-copy" data-copy="${i}" title="Copy" aria-label="Copy">${ICONS.copy}</button>
-    </div>`;
+    </div>${turnHtml(i)}`;
   }).join('') || `<p class="change-empty">${listed.length ? 'No prompt has that text.' : hidden ? 'Nothing since you cleared it.' : 'No prompts yet.'}</p>`;
 }
 
 /**
- * Scrolls the terminal to a prompt and selects its first line.
- * @param {Found} f
+ * Scrolls the terminal to a prompt (or one of Claude's steps) and selects its first line.
+ * @param {{ line: number }} f
  */
 function goTo(f) {
   const { tab, lines } = /** @type {NonNullable<typeof open>} */ (open);
@@ -207,10 +269,11 @@ function goTo(f) {
 }
 
 /**
- * The prompts: Termilly's record and the transcripts on this PC, else (none of either) the ones the output shows.
+ * The prompts: Termilly's record and the transcripts on this PC, else (none of either) the ones the output shows; and
+ * what Claude did between them, from the transcripts.
  * @param {Tab} tab
  * @param {{ line: number, text: string }[]} shown
- * @returns {Promise<Prompt[]>}
+ * @returns {Promise<{ prompts: Prompt[], steps: AgentStep[] }>}
  */
 async function promptsOf(tab, shown) {
   const reply = tab.virtual
@@ -218,7 +281,7 @@ async function promptsOf(tab, shown) {
     : await request(PAGE.promptsList, { id: tab.id, sessions: sessionsOf(tab) });
   if (reply?.error) showToast({ text: reply.error, state: TOAST.failed });
   const listed = /** @type {Prompt[]} */ (reply?.prompts ?? []);
-  return listed.length ? listed : shown.map(s => ({ text: s.text, at: null }));
+  return { prompts: listed.length ? listed : shown.map(s => ({ text: s.text, at: null })), steps: reply?.steps ?? [] };
 }
 
 /**
@@ -230,9 +293,12 @@ export async function openPrompts(tab, anchor) {
   if (isOpen(pop) && open?.tab === tab) return closePopover(pop);
   const lines = bufferLines(tab);
   const shown = shownPrompts(lines);
-  const prompts = await promptsOf(tab, shown);
+  const { prompts, steps } = await promptsOf(tab, shown);
   const at = place(prompts, shown);
-  open = { tab, lines, found: prompts.map((prompt, i) => ({ prompt, line: at[i] })) };
+  open = {
+    tab, lines, found: prompts.map((prompt, i) => ({ prompt, line: at[i] })), steps: placeSteps(steps, prompts, shownSteps(lines)),
+    mode: open?.tab === tab ? open.mode : MODE.prompts, expanded: new Set(),
+  };
   filterEl.value = '';
   render();
   openPopover(pop, anchor, { dynamic: true, onClose: () => { open = null; } });
@@ -243,6 +309,13 @@ filterEl.addEventListener('input', render);
 pop.addEventListener('click', e => {
   if (!open) return;
   const { tab } = open;
+  const mode = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-mode]'));
+  if (mode) {
+    open.mode = /** @type {string} */ (mode.dataset.mode);
+    render();
+    filterEl.focus();
+    return;
+  }
   if (targetOf(e).closest('[data-clear]')) {
     tab.promptsClearedAt = Date.now();
     const mark = tab.view?.term?.registerMarker(0);
@@ -257,16 +330,42 @@ pop.addEventListener('click', e => {
 });
 filterEl.addEventListener('keydown', e => {
   if (e.key !== 'Enter' || !open) return;
-  const first = /** @type {HTMLElement | null} */ (listEl.querySelector('.prompt-row:not(.gone)'));
-  if (first) goTo(open.found[Number(first.dataset.i)]);
+  const first = /** @type {HTMLElement | null} */ (listEl.querySelector(':is(.prompt-row, .step-row):not(.gone)'));
+  if (first) goTo(first.dataset.s !== undefined ? open.steps[Number(first.dataset.s)] : open.found[Number(first.dataset.i)]);
 });
 listEl.addEventListener('click', e => {
   if (!open) return;
+  if (stepClick(e)) return;
   const copy = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-copy]'));
   if (copy) {
     navigator.clipboard.writeText(open.found[Number(copy.dataset.copy)].prompt.text);
     return;
   }
   const row = /** @type {HTMLElement | null} */ (targetOf(e).closest('.prompt-row'));
-  if (row && !row.classList.contains('gone')) goTo(open.found[Number(row.dataset.i)]);
+  if (row && !row.classList.contains(GONE)) goTo(open.found[Number(row.dataset.i)]);
 });
+
+/**
+ * A click on one of Claude's steps: every step of a prompt shown or not, one copied, or gone to. True when it was one.
+ * @param {MouseEvent} e
+ */
+function stepClick(e) {
+  const o = /** @type {NonNullable<typeof open>} */ (open);
+  const more = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-turn]'));
+  if (more) {
+    const i = Number(more.dataset.turn);
+    if (o.expanded.has(i)) o.expanded.delete(i); else o.expanded.add(i);
+    render();
+    return true;
+  }
+  const copy = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-copy-step]'));
+  if (copy) {
+    const { step } = o.steps[Number(copy.dataset.copyStep)];
+    navigator.clipboard.writeText(step.kind === AGENT_STEP.tool ? String(step.tool) + "(" + step.text + ")" : step.text);
+    return true;
+  }
+  const row = /** @type {HTMLElement | null} */ (targetOf(e).closest('.step-row'));
+  if (!row) return false;
+  if (!row.classList.contains(GONE)) goTo(o.steps[Number(row.dataset.s)]);
+  return true;
+}
