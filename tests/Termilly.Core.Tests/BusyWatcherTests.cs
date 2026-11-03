@@ -4,13 +4,13 @@ using Termilly.Desktop;
 
 namespace Termilly.Core.Tests;
 
-/// <summary>The activity spinner on Linux: what a terminal's shell runs, from /proc.</summary>
+/// <summary>The activity spinner on Linux and macOS: what a terminal's shell runs, from /proc or sysctl.</summary>
 public sealed class BusyWatcherTests
 {
     [Fact]
     public void The_snapshot_has_a_running_command_under_its_parent()
     {
-        if (!OperatingSystem.IsLinux())
+        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsMacOS())
         {
             return;
         }
@@ -28,12 +28,13 @@ public sealed class BusyWatcherTests
     }
 
     [SupportedOSPlatform("linux")]
+    [SupportedOSPlatform("macos")]
     private static ProcessEntry Find(List<ProcessEntry> all, int id) => Assert.Single(all, p => p.Id == id);
 
     [Fact]
     public void A_command_under_the_shell_is_busy_and_an_editor_is_not()
     {
-        if (!OperatingSystem.IsLinux())
+        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsMacOS())
         {
             return;
         }
