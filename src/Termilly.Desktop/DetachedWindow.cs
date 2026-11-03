@@ -26,8 +26,8 @@ internal sealed class DetachedWindow : Window
     private const double MinSize = 240;
     /// <summary>The frame around the page, as the main window's (MainWindow.xaml).</summary>
     private const double FrameWidth = 1;
-    /// <summary>A terminal's title bar, the page's header (app.css .pane-header), all a window dragged to land shows.</summary>
-    private const double TitleBarHeight = 30;
+    /// <summary>How see-through the window is while it's dragged over a place it would land in the main window.</summary>
+    private const double LandingOpacity = 0.5;
 
     private readonly WebView2 _web = new();
     private readonly Border _frame = new() { BorderThickness = new Thickness(FrameWidth) };
@@ -138,8 +138,8 @@ internal sealed class DetachedWindow : Window
                 break;
             case WindowActions.Fade:
             case WindowActions.Solid:
-                // Over a place it would land: only its title bar shows (the page's header and the frame above it).
-                WindowInterop.ShowOnlyTop(this, action.Action == WindowActions.Fade ? TitleBarHeight + FrameWidth : null);
+                // Over a place it would land: see-through, so the place shows under it.
+                WindowInterop.SeeThrough(this, action.Action == WindowActions.Fade ? LandingOpacity : null);
                 break;
             case WindowActions.Resize when WindowState == WindowState.Normal && action.Edge is { } edge
                 && WindowInterop.EdgeHitTests.TryGetValue(edge, out var hitTest):

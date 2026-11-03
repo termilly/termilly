@@ -32,7 +32,7 @@ import { WINDOW_ACTION, DETACHED_WINDOW } from './constants.js';
 
 /**
  * The window moved by its title bar, over the main window at x, y (its page's pixels; null when it isn't over it), and
- * let go there (dropped): whether it would land somewhere there (the window shrinks to its title bar, so that shows).
+ * let go there (dropped): whether it would land somewhere there (the window goes see-through, so that shows).
  * @typedef {(x: number | null, y: number | null, dropped: boolean) => boolean} Dragged
  */
 
@@ -329,7 +329,7 @@ function mirror(root) {
 }
 
 // A window moved by its title bar, over the main window: its owner shows where it would land (and lands it when it's
-// let go), and the window shrinks to its title bar while there's a place, so the main window shows under it.
+// let go), and the window goes see-through while there's a place, so the main window shows under it.
 onHost(HOST.windowDragged, m => {
   const d = [...open.values()].find(o => NAME_PREFIX + o.key === m.name);
   if (!d?.onDragged) return;

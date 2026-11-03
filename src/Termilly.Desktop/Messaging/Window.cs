@@ -15,11 +15,11 @@ internal static class WindowActions
     /// <summary>One of the page's own windows (js/windows.js) to the front: the message's name says which.</summary>
     public const string Focus = "focus";
     /// <summary>
-    /// A detached window shrunk to its title bar while it's dragged over a place it would land (the page sees there), so
-    /// that place shows.
+    /// A detached window see-through while it's dragged over a place it would land (the page sees there), so that place
+    /// shows under it.
     /// </summary>
     public const string Fade = "fade";
-    /// <summary>A detached window whole again.</summary>
+    /// <summary>A detached window solid again.</summary>
     public const string Solid = "solid";
 }
 
