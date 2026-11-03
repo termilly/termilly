@@ -42,6 +42,8 @@ const DAY_MS = 86_400_000;
 const MODE = Object.freeze({ prompts: 'prompts', replies: 'replies', tools: 'tools' });
 /** The list's title, and its button's on an agent terminal's header. */
 export const PROMPTS_TITLE = 'Prompts and replies';
+/** The kind of step each of the other lists shows. */
+const STEP_KIND = Object.freeze({ [MODE.replies]: AGENT_STEP.reply, [MODE.tools]: AGENT_STEP.tool });
 /** The list's count, its line about hidden prompts, and a row no longer in the output. */
 const COUNT = '.prompts-count';
 const CLEARED = '.prompts-cleared';
@@ -134,7 +136,7 @@ pop.setAttribute('aria-label', PROMPTS_TITLE);
 pop.hidden = true;
 pop.innerHTML = `
   <div class="inbox-head"><span class="section-head">${PROMPTS_TITLE}</span><span class="prompts-count"></span>
-    <button class="btn small" data-clear title="Hides the prompts listed now. Nothing is deleted: Show them again brings them back.">Clear</button></div>
+    <button class="btn small" data-clear title="Hides what this list shows now. Nothing is deleted: Show them again brings it back. Prompts, Replies and Tool calls each clear on their own.">Clear</button></div>
   <div class="prompts-modes"><span class="seg" role="tablist">
     <button data-mode="${MODE.prompts}" role="tab" title="Each prompt, with Claude’s last reply to it">Prompts</button>
     <button data-mode="${MODE.replies}" role="tab" title="Everything Claude wrote">Replies</button>
@@ -193,20 +195,21 @@ function render() {
 }
 
 /**
- * All of Claude's replies, or all its tool calls, newest first (those of prompts hidden by Clear stay hidden).
+ * All of Claude's replies, or all its tool calls, newest first. Each list has its own Clear: those from before it
+ * are hidden until Show them again.
  * @param {string} kind
  */
 function renderSteps(kind) {
   const { tab, steps } = /** @type {NonNullable<typeof open>} */ (open);
   const want = norm(filterEl.value);
-  const shown = steps.map((p, k) => ({ p, k }))
-    .filter(({ p }) => p.step.kind === kind && !(tab.promptsClearedAt && Date.parse(p.step.at) <= tab.promptsClearedAt))
-    .filter(({ p }) => !want || norm(`${p.step.tool ?? ''} ${p.step.text}`).includes(want)).reverse();
-  find(pop, COUNT).textContent = shown.length ? String(shown.length) : '';
-  find(pop, '[data-clear]').hidden = true;
-  find(pop, CLEARED).hidden = true;
-  listEl.innerHTML = shown.map(({ p, k }) => stepRowHtml(p, k, filterEl.value.trim())).join('')
-    || `<p class="change-empty">${want ? 'Nothing has that text.' : kind === AGENT_STEP.tool ? 'No tool calls yet.' : 'No replies yet.'}</p>`;
+  const clearedAt = tab.stepsClearedAt?.[kind] ?? 0;
+  const ofKind = steps.map((p, k) => ({ p, k })).filter(({ p }) => p.step.kind === kind);
+  const listed = ofKind.filter(({ p }) => Date.parse(p.step.at) > clearedAt);
+  const shown = listed.filter(({ p }) => !want || norm(`${p.step.tool ?? ''} ${p.step.text}`).includes(want)).reverse();
+  const hidden = ofKind.length - listed.length;
+  showCounts(listed.length, hidden);
+  const empty = want ? 'Nothing has that text.' : hidden ? 'Nothing since you cleared it.' : kind === AGENT_STEP.tool ? 'No tool calls yet.' : 'No replies yet.';
+  listEl.innerHTML = shown.map(({ p, k }) => stepRowHtml(p, k, filterEl.value.trim())).join('') || `<p class="change-empty">${empty}</p>`;
 }
 
 /**
@@ -224,6 +227,19 @@ function turnHtml(i) {
   return `<div class="turn-steps">${rows}${toggle}</div>`;
 }
 
+/**
+ * The head's count of what's listed and its Clear, and the line saying how many Clear hid.
+ * @param {number} listed
+ * @param {number} hidden
+ */
+function showCounts(listed, hidden) {
+  find(pop, COUNT).textContent = listed ? String(listed) : '';
+  find(pop, '[data-clear]').hidden = !listed;
+  const foot = find(pop, CLEARED);
+  foot.hidden = !hidden;
+  find(foot, 'span').textContent = hidden ? `${hidden} hidden` : '';
+}
+
 function renderPrompts() {
   const want = norm(filterEl.value);
   const { tab, lines } = /** @type {NonNullable<typeof open>} */ (open);
@@ -231,11 +247,7 @@ function renderPrompts() {
   const listed = found.map((f, i) => ({ ...f, i })).filter(f => !cleared(tab, f, lines.rows));
   const rows = listed.filter(f => !want || norm(f.prompt.text).includes(want)).reverse();
   const hidden = found.length - listed.length;
-  find(pop, COUNT).textContent = listed.length ? String(listed.length) : '';
-  find(pop, '[data-clear]').hidden = !listed.length;
-  const foot = find(pop, CLEARED);
-  foot.hidden = !hidden;
-  find(foot, 'span').textContent = hidden ? `${hidden} hidden` : '';
+  showCounts(listed.length, hidden);
   let day = '';
   listEl.innerHTML = rows.map(({ prompt, line, i }) => {
     const when = prompt.at ? new Date(prompt.at) : null;
@@ -316,7 +328,13 @@ pop.addEventListener('click', e => {
     filterEl.focus();
     return;
   }
-  if (targetOf(e).closest('[data-clear]')) {
+  const kind = STEP_KIND[/** @type {keyof typeof STEP_KIND} */ (open.mode)];
+  if (kind && targetOf(e).closest('[data-clear], [data-unclear]')) {
+    // Replies and Tool calls: each list is cleared on its own.
+    const clearedAt = { ...tab.stepsClearedAt };
+    if (targetOf(e).closest('[data-clear]')) clearedAt[kind] = Date.now(); else delete clearedAt[kind];
+    tab.stepsClearedAt = clearedAt;
+  } else if (targetOf(e).closest('[data-clear]')) {
     tab.promptsClearedAt = Date.now();
     const mark = tab.view?.term?.registerMarker(0);
     if (mark) clearMarks.set(tab, mark);
