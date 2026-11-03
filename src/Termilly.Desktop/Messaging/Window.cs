@@ -66,6 +66,15 @@ internal static partial class FromPage
         public static string Type => "window";
     }
 
+    /// <summary>
+    /// A picture of the page as it is now, for the outline of a terminal dragged out into a window of its own (it shows
+    /// the terminal, js/panes.js). Answered with <see cref="ToPage.WindowCaptured"/>.
+    /// </summary>
+    internal sealed record WindowCapture(string? RequestId = null) : IPageMessage
+    {
+        public static string Type => "window:capture";
+    }
+
     /// <summary>The page is up: its first terminal is on screen.</summary>
     internal sealed record Ready : IPageMessage
     {
@@ -152,6 +161,12 @@ internal static partial class ToPage
     internal sealed record WindowDragged(string Name, double? X, double? Y, bool Dropped) : IHostMessage
     {
         public static string Type => "window:dragged";
+    }
+
+    /// <summary>The page's picture (a JPEG, base64, at the screen's pixels); null where the system can't take one.</summary>
+    internal sealed record WindowCaptured(string? RequestId, string? Image) : IHostMessage
+    {
+        public static string Type => "window:captured";
     }
 
     /// <summary>A notification was clicked: that terminal comes forward.</summary>

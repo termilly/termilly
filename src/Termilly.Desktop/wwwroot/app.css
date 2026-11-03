@@ -1540,6 +1540,17 @@ body.dragging-pane #drag-ghost { display: flex; }
   transition: left 0.12s ease, top 0.12s ease, width 0.12s ease, height 0.12s ease, opacity 0.12s;
 }
 #drop-preview.visible { opacity: 1; }
+/* A terminal going out into a window of its own: its picture, faint (30%), under the label (js/panes.js). */
+#drop-preview.with-shot::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  /* Its own shape: a window wider than the terminal (the narrowest a window opens) shows it from the left. */
+  background: var(--shot) left top / contain no-repeat;
+  opacity: 0.3;
+}
+#drop-preview span { position: relative; }
 /* Shown afresh (js/panes.js): at its place at once, not sliding from where it was last. */
 #drop-preview.placing { transition: none; }
 #drop-preview span {

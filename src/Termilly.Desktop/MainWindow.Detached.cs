@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using Microsoft.Web.WebView2.Core;
 using Termilly.Desktop.Messaging;
@@ -32,6 +33,18 @@ public partial class MainWindow
         window.Moved += OnDetachedMoved;
         e.NewWindow = await window.StartAsync(Web.CoreWebView2.Environment, HostName);
         e.Handled = true;
+    }
+
+    /// <summary>A picture of the page as it is now, a JPEG in base64 (for a terminal dragged out, js/panes.js).</summary>
+    internal async Task<string?> CapturePageAsync()
+    {
+        if (Web.CoreWebView2 is not { } core)
+        {
+            return null;
+        }
+        using var picture = new MemoryStream();
+        await core.CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Jpeg, picture);
+        return Convert.ToBase64String(picture.ToArray());
     }
 
     /// <summary>

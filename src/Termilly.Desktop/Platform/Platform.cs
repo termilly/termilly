@@ -39,6 +39,9 @@ internal interface IAppWindow
     /// <summary>The page reported in (its first terminal is on screen).</summary>
     void PageReady();
 
+    /// <summary>A picture of the page as it is now (a JPEG, base64); null where none can be taken.</summary>
+    Task<string?> CapturePageAsync();
+
 }
 
 /// <summary>The system's file dialogs. Each answers null (or nothing) when cancelled.</summary>

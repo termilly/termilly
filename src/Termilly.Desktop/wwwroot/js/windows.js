@@ -41,7 +41,7 @@ const NAME_PREFIX = DETACHED_WINDOW.namePrefix;
 /** The main page's stylesheets, which each window takes too. */
 const STYLES = ['lib/xterm.css', 'app.css'];
 /** The narrowest a window opens: its header, with the window's buttons added, shows its name and tools. */
-const MIN_WIDTH_PX = 440;
+export const MIN_WIDTH_PX = 440;
 /** The body's class in a window (app.css: what's moved in fills it). */
 const WINDOW_BODY = 'detached-window';
 /** How often the windows are checked for one gone without saying so (closed with its page). */

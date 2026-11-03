@@ -3,7 +3,7 @@
 // stay laid out so their terminals keep the right size), the split layout inside it, and tab actions.
 
 import { PAGE } from './protocol.js';
-import { send } from './host.js';
+import { send, request } from './host.js';
 import {
   state, on, emit, persist, newId, activeWs, wsById, tabsOf, tabTitle, defaultProfile, ensureTag, activityOf, leaves,
   replaceNode, findLeaf, detachLeaf, groupOf, firstTabOf, markSeen, findPreview, withoutPreview, EVENTS, NODE, SPLIT,
@@ -14,7 +14,7 @@ import { openTerminal, disposeTerminal, bufferLines, scheduleFit, prepareStart }
 import { wake } from './hibernate.js';
 import { byId, find, targetOf, WORKSPACE_ID, dragPointer, onMiddleClick } from './dom.js';
 import { ENV_CLASS, ENV_COLOR } from './environments.js';
-import { detach, closeWindow, focusWindow, setWindowTitle, OFFSET_PX } from './windows.js';
+import { detach, closeWindow, focusWindow, setWindowTitle, OFFSET_PX, MIN_WIDTH_PX } from './windows.js';
 
 /** A pane's drop zones: beside it on a side, in it as a tab (center), or out into a window of its own. */
 const ZONE = Object.freeze({ left: 'left', right: 'right', top: 'top', bottom: 'bottom', center: 'center', window: 'window' });
@@ -63,6 +63,11 @@ const DETACH_ONLY = 'detach-only';
 /** A compass the pointer is at, and the cell it would drop on. */
 const HOVER = 'hover';
 const ACTIVE = 'active';
+/** The drop outline while it shows a terminal's picture (app.css), and the CSS variable that holds it. */
+const WITH_SHOT = 'with-shot';
+const SHOT_VAR = '--shot';
+/** The picture's kind: the host's (a JPEG), and the terminal's cut from it. */
+const JPEG = 'image/jpeg';
 
 /**
  * A pane's drop zone: beside it on a side, or in it as a tab (center).
@@ -1056,11 +1061,52 @@ function dropPane(tab, drop, screen) {
 
 /** @param {Tab} source */
 function beginDrag(source) {
-  document.body.classList.add(DRAGGING_PANE);
-  // The terminal's own badge, as its title bar shows it, and its name.
-  showGhost(tabBadgeHtml(source), tabTitle(source));
-  /** @type {TabView} */ (source.view).el.classList.add(DRAG_SOURCE);
   showGuides(/** @type {Workspace} */ (wsById(source.wsId)), source);
+  // The terminal's picture first (the outline of a window it would open in shows it), then the label and its pane
+  // dimmed, so neither is in the picture.
+  dragged = source;
+  takeShot(source).catch(() => {}).then(() => {
+    if (dragged !== source) return;
+    document.body.classList.add(DRAGGING_PANE);
+    // The terminal's own badge, as its title bar shows it, and its name.
+    showGhost(tabBadgeHtml(source), tabTitle(source));
+    /** @type {TabView} */ (source.view).el.classList.add(DRAG_SOURCE);
+  });
+}
+
+/** The drop shown now (showDrop), shown again once the dragged terminal's picture is in. */
+/** @type {Drop | null} */
+let shownDrop = null;
+/** The terminal being dragged in this window, while it is. */
+/** @type {Tab | null} */
+let dragged = null;
+/** Its picture as the drag began (a data URL), for the outline of a window it would open in; none where none was taken. */
+/** @type {string | null} */
+let shot = null;
+
+/**
+ * A picture of a terminal as it is now: the host's picture of the page (none on Linux), cut to its pane.
+ * @param {Tab} tab
+ * @returns {Promise<void>}
+ */
+async function takeShot(tab) {
+  shot = null;
+  const r = /** @type {TabView} */ (tab.view).el.getBoundingClientRect();
+  const reply = await request(PAGE.windowCapture, {});
+  if (!reply.image) return;
+  const page = new Image();
+  page.src = `data:${JPEG};base64,${reply.image}`;
+  await page.decode();
+  // The picture is at the screen's pixels.
+  const scale = page.naturalWidth / innerWidth;
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(r.width * scale);
+  canvas.height = Math.round(r.height * scale);
+  canvas.getContext('2d')?.drawImage(page, r.left * scale, r.top * scale, r.width * scale, r.height * scale, 0, 0, canvas.width, canvas.height);
+  if (dragged !== tab) return;
+  shot = canvas.toDataURL(JPEG);
+  // The pointer may already be where it would open, and still: the outline shows the picture now.
+  showDrop(shownDrop);
 }
 
 /**
@@ -1142,6 +1188,8 @@ function landBack(tab, drop) {
 
 /** @param {Tab} source */
 function endDrag(source) {
+  dragged = null;
+  shot = null;
   document.body.classList.remove(DRAGGING_PANE);
   /** @type {TabView} */ (source.view).el.classList.remove(DRAG_SOURCE);
   hideGuides();
@@ -1231,20 +1279,22 @@ function paneZone(el, target, x, y) {
  * @returns {Drop}
  */
 function windowDrop(source, x, y, over) {
-  return { target: source, zone: ZONE.window, rect: windowOutline(/** @type {TabView} */ (source.view).el, x, y), over };
+  // The terminal's own size, as its window opens (at least a window's narrowest), with its picture in it.
+  return { target: source, zone: ZONE.window, rect: windowOutline(/** @type {TabView} */ (source.view).el, x, y, true), over };
 }
 
 /**
- * The window something would open in, let go at x, y: its shape but smaller, its corner just before the pointer, where
- * the window will open (js/windows.js).
+ * The window something would open in, let go at x, y: its corner just before the pointer, where the window will open
+ * (js/windows.js); its shape but smaller, or (fullSize) the size the window opens at.
  * @param {HTMLElement} el
  * @param {number} x
  * @param {number} y
+ * @param {boolean} [fullSize]
  */
-function windowOutline(el, x, y) {
+function windowOutline(el, x, y, fullSize = false) {
   const shape = el.getBoundingClientRect();
-  const scale = Math.min(1, WINDOW_PREVIEW.w / shape.width, WINDOW_PREVIEW.h / shape.height);
-  const w = shape.width * scale, h = shape.height * scale;
+  const scale = fullSize ? 1 : Math.min(1, WINDOW_PREVIEW.w / shape.width, WINDOW_PREVIEW.h / shape.height);
+  const w = fullSize ? Math.max(shape.width, MIN_WIDTH_PX) : shape.width * scale, h = shape.height * scale;
   const left = Math.max(0, Math.min(innerWidth - w, x - OFFSET_PX));
   const top = Math.max(0, Math.min(innerHeight - h, y - OFFSET_PX));
   return new DOMRect(left, top, w, h);
@@ -1270,6 +1320,7 @@ function onCell(cell, x, y) {
 
 /** @param {Drop | null} drop */
 function showDrop(drop) {
+  shownDrop = drop;
   // Out into a window: the compass cell it's on lights up, or at the app window's edge every compass's.
   const outToWindow = drop?.zone === ZONE.window;
   const shownOn = outToWindow ? drop.over : drop?.target;
@@ -1282,7 +1333,8 @@ function showDrop(drop) {
       cell.classList.toggle(ACTIVE, lit && cell.dataset.zone === /** @type {Drop} */ (drop).zone);
     }
   }
-  showOutline(drop?.rect ?? null, drop?.zone ?? ZONE.center);
+  // A terminal going out into a window of its own shows its picture in the outline.
+  showOutline(drop?.rect ?? null, drop?.zone ?? ZONE.center, drop?.zone === ZONE.window && drop.target === dragged ? shot : null);
 }
 
 /**
@@ -1290,8 +1342,12 @@ function showDrop(drop) {
  * it for a tab or a window). None (null) takes it away.
  * @param {DOMRect | null} r
  * @param {Zone} zone
+ * @param {string | null} [picture] what it would show (a terminal's picture, as a data URL), faint under the label
  */
-function showOutline(r, zone) {
+function showOutline(r, zone, picture = null) {
+  dropPreview.classList.toggle(WITH_SHOT, !!picture && !!r);
+  if (picture) dropPreview.style.setProperty(SHOT_VAR, `url("${picture}")`);
+  else dropPreview.style.removeProperty(SHOT_VAR);
   if (!r) {
     dropPreview.classList.remove(VISIBLE);
     return;
