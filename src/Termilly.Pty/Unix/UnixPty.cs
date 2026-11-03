@@ -7,11 +7,12 @@ using static Termilly.Pty.Unix.Native;
 namespace Termilly.Pty.Unix;
 
 /// <summary>
-/// A pseudo terminal on Linux. The shell is started with posix_spawn in a session of its own, with the terminal's
+/// A pseudo terminal on Linux and macOS. The shell is started with posix_spawn in a session of its own, with the terminal's
 /// other end as its stdin, stdout and stderr, so the terminal becomes its controlling terminal (Ctrl+C, job control
 /// and window size work). posix_spawn rather than fork: forking a .NET process isn't safe.
 /// </summary>
 [SupportedOSPlatform("linux")]
+[SupportedOSPlatform("macos")]
 public sealed class UnixPty : IPty
 {
     /// <summary>Room for posix_spawn's opaque structures: file actions and signal sets, and its attributes.</summary>
@@ -221,7 +222,7 @@ public sealed class UnixPty : IPty
     private static void SetSize(int fd, int columns, int rows)
     {
         var size = new WinSize { Rows = (ushort)Math.Max(1, rows), Columns = (ushort)Math.Max(1, columns) };
-        _ = ioctl(fd, TIOCSWINSZ, ref size); // a pty that's gone has no size to set
+        _ = SetWindowSize(fd, ref size); // a pty that's gone has no size to set
     }
 
     private static void Check(int error)

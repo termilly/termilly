@@ -1,6 +1,6 @@
 namespace Termilly.Pty;
 
-/// <summary>Starts a process in a pseudo terminal: ConPTY on Windows, a Unix pseudo terminal on Linux.</summary>
+/// <summary>Starts a process in a pseudo terminal: ConPTY on Windows, a Unix pseudo terminal on Linux and macOS.</summary>
 public static class PseudoTerminal
 {
     public static IPty Start(PtyOptions options)
@@ -9,10 +9,10 @@ public static class PseudoTerminal
         {
             return Windows.ConPty.Start(options);
         }
-        if (OperatingSystem.IsLinux())
+        if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
         {
             return Unix.UnixPty.Start(options);
         }
-        throw new PlatformNotSupportedException("Termilly's terminals run on Windows and Linux.");
+        throw new PlatformNotSupportedException("Termilly's terminals run on Windows, Linux and macOS.");
     }
 }

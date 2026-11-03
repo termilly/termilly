@@ -18,7 +18,7 @@ public sealed class CommandLineTests
         Assert.Equal(args, CommandLine.Split(line));
 }
 
-/// <summary>The Linux pseudo terminal, for real (these do nothing on Windows; ConPTY has its own tests).</summary>
+/// <summary>The Unix pseudo terminal (Linux, macOS), for real (these do nothing on Windows; ConPTY has its own tests).</summary>
 public sealed class UnixPtyTests
 {
     private static async Task<string> ReadUntilAsync(IPty pty, string text, StringBuilder seen, int seconds = 10)
@@ -46,7 +46,7 @@ public sealed class UnixPtyTests
     [Fact]
     public async Task A_shell_runs_in_the_terminal_and_reports_its_exit_code()
     {
-        if (!OperatingSystem.IsLinux())
+        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsMacOS())
         {
             return;
         }
@@ -62,7 +62,7 @@ public sealed class UnixPtyTests
     [Fact]
     public async Task Variables_of_the_terminal_that_started_termilly_stay_out()
     {
-        if (!OperatingSystem.IsLinux())
+        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsMacOS())
         {
             return;
         }
@@ -86,7 +86,7 @@ public sealed class UnixPtyTests
     [Fact]
     public async Task Resizing_reaches_the_shell()
     {
-        if (!OperatingSystem.IsLinux())
+        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsMacOS())
         {
             return;
         }
@@ -100,9 +100,24 @@ public sealed class UnixPtyTests
     }
 
     [Fact]
+    public async Task The_terminal_is_the_shells_controlling_terminal()
+    {
+        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsMacOS())
+        {
+            return;
+        }
+        using var pty = PseudoTerminal.Start(new PtyOptions("/bin/sh", 80, 24));
+        var seen = new StringBuilder();
+        // /dev/tty opens only in a process that has a controlling terminal (job control and sudo need one).
+        await SendAsync(pty, "(exec 3</dev/tty) 2>/dev/null && echo ctty-$((4+4)) || echo no-ctty-$((4+4))\n");
+        Assert.Contains("ctty-8", await ReadUntilAsync(pty, "ctty-8", seen));
+        Assert.DoesNotContain("no-ctty-8", seen.ToString());
+    }
+
+    [Fact]
     public async Task Ctrl_c_interrupts_whats_running_not_the_shell()
     {
-        if (!OperatingSystem.IsLinux())
+        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsMacOS())
         {
             return;
         }
@@ -120,7 +135,7 @@ public sealed class UnixPtyTests
     [Fact]
     public async Task Closing_the_terminal_ends_the_shell_and_the_output()
     {
-        if (!OperatingSystem.IsLinux())
+        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsMacOS())
         {
             return;
         }
