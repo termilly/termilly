@@ -72,7 +72,7 @@ review. When the code and this page disagree, the code is usually right and this
   8. `main`.
   When a lower module needs a higher one, it emits an event (`EVENTS` in `store.js`) or takes a registration
   (`setHeaderBuilder`, `onApply`).
-- A terminal (`Tab`, `types/model.d.ts`) has its own fields, and a group per feature (`tab.log`, `tab.results`,
+- A terminal (`Tab`, `types/model.d.ts`) has its own fields, and a group per feature (`tab.log`,
   `tab.start`…) that only that feature's module writes, through an accessor of its own (`logOf(tab)`). Other modules
   read a group, or call the module.
 - Elements the markup always has are found with `dom.js` (`byId`, `find`, `field`, `targetOf`); where an element may

@@ -52,7 +52,6 @@ import './phone.js';
 import './snippetprompt.js';
 import './cost.js';
 import './quit.js';
-import { openAllResults } from './results.js';
 import './gitstatus.js';
 import { openViewer } from './viewer.js';
 import { openRecordings, openRewind } from './replay.js';
@@ -174,7 +173,6 @@ setCommands(() => [
   { label: 'Open a recording', keywords: 'replay asciicast cast asciinema recording play', run: () => setTimeout(openRecordings) },
   { label: 'Rewind this terminal', keywords: 'replay instant back history screen earlier', run: () => setTimeout(() => focusedTab() && openRewind(/** @type {Tab} */ (focusedTab()))) },
   { label: 'Attach tmux', keywords: 'tmux control mode -CC attach session server remote panes windows wsl ssh', run: () => setTimeout(openAttach) },
-  { label: 'Go to result', keywords: 'pull request pr issue running app url dev server push commit results', run: () => setTimeout(openAllResults) },
   { label: 'Run a snippet', keywords: 'snippets saved commands run snippet macro button bar', run: () => setTimeout(openSnippets) },
   { label: 'Manage snippets', keywords: 'snippets explorer window edit new delete saved commands', run: () => setTimeout(openSnippetsWindow) },
   { label: 'Previous prompt', keywords: 'scroll jump command', hint: keyHint(KEY_ID.previousPrompt), run: commands.previousPrompt },

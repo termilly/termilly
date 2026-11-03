@@ -221,8 +221,6 @@ interface Tab {
   recording?: import('../wwwroot/js/replay.js').Recording;
   /** Its recent output kept in memory (js/replay.js). */
   rewind?: import('../wwwroot/js/replay.js').RewindBuffer;
-  /** What its commands produced (js/results.js). */
-  results?: import('../wwwroot/js/results.js').TabResults;
   /** Its agent's subagents (js/subagents.js). */
   subagents?: import('../wwwroot/js/subagents.js').Subagents;
   /** Claude's usage and context figures (js/claudeusage.js). */

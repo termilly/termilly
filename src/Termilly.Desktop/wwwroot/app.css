@@ -2788,16 +2788,6 @@ textarea.field.note-text { flex: 1; width: 100%; min-height: 120px; resize: none
 .cu-cost { margin-right: 6px; color: var(--ok, #7ee787); font-weight: 600; font-variant-numeric: tabular-nums; }
 .cu-cost-rows { border-top: 1px solid var(--border); }
 
-/* Results per terminal (js/results.js). */
-.results-btn { display: inline-flex; align-items: center; gap: 4px; width: auto; height: 22px; padding: 0 7px; border: 1px solid var(--border-strong); color: var(--muted); font-size: 11px; font-weight: 600; opacity: 1; }
-.results-btn[hidden] { display: none; }
-.results-btn svg { width: 11px; height: 11px; stroke-width: 1.6; }
-.results-btn.unread { border-color: color-mix(in srgb, var(--ok, #7ee787) 50%, transparent); color: var(--ok, #7ee787); }
-.res-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ok, #7ee787); }
-.results-menu { min-width: 300px; max-width: 460px; }
-.res-hint { color: var(--muted); }
-.res-hint.on { color: var(--ok, #7ee787); }
-.dialog.results-all { width: 620px; }
 .results-all { display: flex; flex-direction: column; gap: 2px; max-height: 420px; overflow-y: auto; }
 .res-all-row { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 7px; text-align: left; }
 .res-all-row:hover { background: var(--hover); }
