@@ -28,9 +28,14 @@ internal sealed class PromptsHandler(PageChannel page, PromptHistory history, IS
     private void List(FromPage.PromptsList m)
     {
         var sessions = m.Sessions ?? [];
+        page.Post(new ToPage.PromptsListed(m.RequestId, Prompts(m.Id ?? "", sessions), Steps: Steps(sessions)));
+    }
+
+    /// <summary>What Claude did in a terminal's sessions, from their transcripts on this PC.</summary>
+    public static IReadOnlyList<AgentStep> Steps(IEnumerable<string> sessions)
+    {
         var projects = ClaudeUsageTracker.ProjectsDirectory();
-        var steps = Steps(sessions, session => ClaudeUsageTracker.FindTranscript(projects, session));
-        page.Post(new ToPage.PromptsListed(m.RequestId, Prompts(m.Id ?? "", sessions), Steps: steps));
+        return Steps(sessions, session => ClaudeUsageTracker.FindTranscript(projects, session));
     }
 
     /// <summary>

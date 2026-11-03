@@ -275,7 +275,7 @@ internal sealed class RemotePcsHandler(PageChannel page, RemotePcStore store, Ph
         try
         {
             var answer = await ask.AskAsync(RemotePcFiles.TerminalId(watch.Pc, watch.Pane), Phone.PcPrompts.Path, []).ConfigureAwait(false);
-            page.Post(new ToPage.PromptsListed(m.RequestId, Phone.PcPromptsApi.Read(answer)));
+            page.Post(new ToPage.PromptsListed(m.RequestId, Phone.PcPromptsApi.Read(answer), Steps: Phone.PcPromptsApi.ReadSteps(answer)));
         }
         catch (IOException e)
         {
