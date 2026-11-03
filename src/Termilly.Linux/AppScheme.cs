@@ -26,6 +26,9 @@ internal static class AppScheme
     /// already on it, so a light theme doesn't start with a dark loader (the Windows window colours its own): its
     /// light or dark base, and the loader's background, text and caret colours.
     /// </summary>
+    /// <summary>The page's root says its window's corners are its own to round (app.css).</summary>
+    private const string RoundCorners = "round";
+
     public static Stream? Serve(string url, ThemeWindowColors colors, out string contentType)
     {
         contentType = MediaTypes.PlainText;
@@ -38,7 +41,9 @@ internal static class AppScheme
         contentType = Types.GetValueOrDefault(Path.GetExtension(file), MediaTypes.Binary);
         if (file == Path.Combine(Root, IndexPage))
         {
-            var page = File.ReadAllText(file).Replace("<html>", $"<html data-theme=\"{(colors.Light ? "light" : "dark")}\" style=\"--bg:{colors.Background};--text:{colors.Text};--accent:{colors.Accent}\">");
+            // On Linux the window is see-through (LinuxWindow) and the page rounds its corners (app.css, data-corners).
+            var corners = OperatingSystem.IsLinux() ? $" data-corners=\"{RoundCorners}\"" : "";
+            var page = File.ReadAllText(file).Replace("<html>", $"<html data-theme=\"{(colors.Light ? "light" : "dark")}\"{corners} style=\"--bg:{colors.Background};--text:{colors.Text};--accent:{colors.Accent}\">");
             return new MemoryStream(Encoding.UTF8.GetBytes(page));
         }
         return File.OpenRead(file);

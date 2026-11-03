@@ -90,6 +90,8 @@ internal sealed class LinuxWindow
             .SetLocation(StartLocation)
             .SetResizable(true)
             .SetChromeless(true)
+            // Linux: see-through, so the page's rounded corners (app.css, data-corners) show the desktop behind them.
+            .SetTransparent(OperatingSystem.IsLinux())
             .SetMinSize(MinWidth, MinHeight)
             .SetDevToolsEnabled(Environment.GetEnvironmentVariable(DevToolsVariable) == "1")
             .SetContextMenuEnabled(false)

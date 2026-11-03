@@ -1539,6 +1539,8 @@ body.dragging-pane, body.dragging-pane * { cursor: grabbing !important; }
 body.dragging-pane #drag-ghost { display: flex; }
 /* On Windows the terminal itself follows the pointer, as a picture (js/panes.js): no label then. */
 body.dragging-pane.picture-drag #drag-ghost { display: none; }
+/* Linux: the label is the picture of a system drag (js/panes.js), shown only while the drag takes it. */
+#drag-ghost.drag-image { display: flex; }
 
 #drop-preview {
   position: fixed;
@@ -2627,6 +2629,12 @@ textarea.field { height: auto; padding: 7px 10px; line-height: 1.5; resize: vert
 }
 :root[data-platform="linux"][data-theme="light"] body:not(.maximized)::after { border-color: #d4d4da; }
 :root[data-platform="linux"] body.maximized .edge { display: none; }
+/* Linux: the window is see-through (LinuxWindow), and the page rounds its corners as the panes' (not when maximised,
+   nor in a detached window, whose window isn't see-through). */
+:root[data-corners="round"] { background: transparent; }
+/* contain: paint clips what's fixed over the whole window too (a dialog's dimmed layer, the loader) to the corners. */
+:root[data-corners="round"] body:not(.maximized):not(.detached-window) { border-radius: var(--radius); contain: paint; }
+:root[data-corners="round"] body:not(.maximized):not(.detached-window)::after { border-radius: var(--radius); }
 
 /* Start-up loader (Linux; js/loader.js). Matches the one the Windows window draws: the logo over a typed
    "Loading..." and a blinking caret, on the page's background. */

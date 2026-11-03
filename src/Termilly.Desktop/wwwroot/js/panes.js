@@ -366,6 +366,8 @@ export function detachTab(tab, at, place) {
     },
     // Its title bar is the window's; Close there closes the terminal, and its name keeps its double click (rename).
     header: tab.view.header, close: () => closeTab(tab), keepDoubleClick: PANE_NAME,
+    // Linux: its icon and name are dragged back into the main window (the system's drag and drop).
+    dragHandle: systemDrag ? DRAG_HANDLE : undefined,
     onDragged: (x, y, dropped) => dragBack(tab, x, y, dropped),
   });
   if (!opened && place) showDragPicture(null);
@@ -940,6 +942,165 @@ function showGroupTab(node) {
   }
 }
 
+// ---- Linux: terminals dragged with the system's drag and drop ----
+
+/**
+ * Linux: a terminal is dragged with the system's own drag and drop, as VS Code's tabs: a label with its icon and name
+ * follows the pointer anywhere, out of the window too (on Wayland nothing else can). Let go outside the main window,
+ * it opens in a window of its own; a detached one, dragged by its icon and name, lands back in the main window
+ * wherever it's let go (a drop zone, else where it was). Not on macOS, which has no windows of their own yet.
+ */
+const systemDrag = platform === PLATFORM.linux && !/Mac/.test(navigator.platform);
+/** What a dragged terminal carries (its id): only Termilly's own main window takes it. */
+const TAB_TYPE = 'application/x-termilly-tab';
+/** A detached terminal's handle in its window: its icon and name (the rest of its title bar moves the window). */
+export const DRAG_HANDLE = '.pane-title';
+/** A pane's title bar. */
+const PANE_HEADER = '.pane-header';
+/** What a dragged terminal does when it lands: it moves there. */
+const MOVE = 'move';
+/** The label's class while it's the drag's picture (app.css shows it then). */
+const DRAG_IMAGE = 'drag-image';
+/**
+ * A drag leaving one element of the main window enters another at once; this long after leaving with nothing entered,
+ * it has left the window.
+ */
+const LEFT_AFTER_MS = 100;
+
+/**
+ * The terminal dragged with the system's drag and drop, while it is: where it would land in the main window, whether
+ * it's over the main window, whether it was dropped there, and the check that it has left (leftTimer, while pending).
+ * @type {{ tab: Tab, drop: Drop | null, over: boolean, dropped: boolean, leftTimer: number } | null}
+ */
+let systemDragged = null;
+
+/**
+ * A pane's title bar (or its tab in a group) dragged with the system's drag and drop.
+ * @param {Tab} tab
+ * @param {HTMLElement} header
+ */
+function wireSystemDrag(tab, header) {
+  header.draggable = true;
+  header.addEventListener('dragstart', e => {
+    const at = targetOf(e);
+    const own = header.classList.contains(STRIP_TAB) && at.closest(PANE_HEADER); // the title bar's own drag
+    if (own) return;
+    if (at.closest('button, input') || (tab.detached && !at.closest(DRAG_HANDLE)) || !e.dataTransfer) return void e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.setData(TAB_TYPE, tab.id);
+    e.dataTransfer.effectAllowed = MOVE;
+    setDragLabel(tab, e);
+    systemDragged = { tab, drop: null, over: false, dropped: false, leftTimer: 0 };
+    // Not while the drag is starting: changing the page then can cancel it.
+    setTimeout(() => { if (systemDragged?.tab === tab && !tab.detached) enterMain(systemDragged); });
+  });
+  header.addEventListener('dragend', e => endSystemDrag(tab, e));
+}
+
+/**
+ * The drag's picture: the label with the terminal's icon and name, made in the document the drag starts in.
+ * @param {Tab} tab
+ * @param {DragEvent} e
+ */
+function setDragLabel(tab, e) {
+  const doc = /** @type {Document} */ (/** @type {HTMLElement} */ (e.currentTarget).ownerDocument);
+  showGhost(tabBadgeHtml(tab), tabTitle(tab));
+  const label = doc === document ? dragGhost : /** @type {HTMLElement} */ (doc.importNode(dragGhost, true));
+  if (label !== dragGhost) doc.body.append(label);
+  label.classList.add(DRAG_IMAGE);
+  label.style.transform = `translate(${e.clientX}px, ${e.clientY}px)`;
+  /** @type {DataTransfer} */ (e.dataTransfer).setDragImage(label, 0, 0);
+  setTimeout(() => {
+    label.classList.remove(DRAG_IMAGE);
+    if (label !== dragGhost) label.remove();
+  });
+}
+
+/**
+ * The drag is over the main window: what's there shows where it can land.
+ * @param {NonNullable<typeof systemDragged>} d
+ */
+function enterMain(d) {
+  clearTimeout(d.leftTimer);
+  d.leftTimer = 0;
+  if (d.over) return;
+  d.over = true;
+  const ws = activeWs();
+  if (ws) showGuides(ws, d.tab);
+  if (!d.tab.detached) /** @type {TabView} */ (d.tab.view).el.classList.add(DRAG_SOURCE);
+}
+
+/**
+ * The drag has left the main window (or ended): nothing shows where it would land.
+ * @param {NonNullable<typeof systemDragged>} d
+ */
+function leaveMain(d) {
+  clearTimeout(d.leftTimer);
+  d.leftTimer = 0;
+  d.over = false;
+  d.drop = null;
+  showDrop(null);
+  hideGuides();
+}
+
+// Over the main window: where it would land; a detached terminal lands somewhere wherever it's let go.
+document.addEventListener('dragover', e => {
+  const d = systemDragged;
+  if (!d || !e.dataTransfer?.types.includes(TAB_TYPE)) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = MOVE;
+  enterMain(d);
+  d.drop = findDropTarget(d.tab, e.clientX, e.clientY) ?? (d.tab.detached ? wholeWorkspaceDrop(d.tab) : null);
+  showDrop(d.drop);
+});
+
+// Left an element: unless another is entered (or the drag moves on over one) right away, the drag has left the window.
+document.addEventListener('dragleave', () => {
+  const d = systemDragged;
+  if (!d?.over) return;
+  clearTimeout(d.leftTimer);
+  d.leftTimer = window.setTimeout(() => leaveMain(d), LEFT_AFTER_MS);
+});
+
+document.addEventListener('drop', e => {
+  const d = systemDragged;
+  if (!d || !e.dataTransfer?.types.includes(TAB_TYPE)) return;
+  e.preventDefault();
+  d.dropped = true;
+  const drop = d.drop;
+  leaveMain(d);
+  if (d.tab.detached) landBack(d.tab, drop ?? wholeWorkspaceDrop(d.tab));
+  else if (drop) dropPane(d.tab, drop, { x: e.screenX, y: e.screenY });
+});
+
+/**
+ * The drag ended: dropped in the main window (done there), or let go anywhere else, where a terminal from the main
+ * window opens in a window of its own (on X11 where it was let go; Wayland places it itself).
+ * @param {Tab} tab
+ * @param {DragEvent} e
+ */
+function endSystemDrag(tab, e) {
+  const d = systemDragged;
+  if (!d || d.tab !== tab) return;
+  systemDragged = null;
+  const wasOver = d.over && !d.leftTimer; // leaving, if its check is pending
+  leaveMain(d);
+  /** @type {TabView} */ (tab.view).el.classList.remove(DRAG_SOURCE);
+  if (d.dropped || tab.detached || wasOver) return;
+  const at = e.screenX || e.screenY ? { x: e.screenX, y: e.screenY } : undefined;
+  detachTab(tab, at);
+}
+
+/**
+ * A detached terminal let go in the main window but on no drop zone: back in the shown workspace, where it was.
+ * @param {Tab} tab
+ * @returns {Drop}
+ */
+function wholeWorkspaceDrop(tab) {
+  const ws = activeWs();
+  return { target: tab, zone: ZONE.center, rect: (ws ? layerOf(ws) : container).getBoundingClientRect(), home: true };
+}
+
 // ---- Drag and drop within a workspace ----
 
 const DRAG_THRESHOLD = 5;
@@ -954,11 +1115,12 @@ const ZONE_LABELS = { left: 'Split left', right: 'Split right', top: 'Split up',
  * @param {HTMLElement} header
  */
 function wireDrag(tab, header) {
+  if (systemDrag) return wireSystemDrag(tab, header);
   header.addEventListener('pointerdown', e => {
     // A terminal in a window of its own has no layout to be dragged in.
     if (e.button !== 0 || tab.detached || targetOf(e).closest('button, input')) return;
     // A tab holding its terminal's title bar: the title bar's own handler takes the drag.
-    if (header.classList.contains(STRIP_TAB) && targetOf(e).closest('.pane-header')) return;
+    if (header.classList.contains(STRIP_TAB) && targetOf(e).closest(PANE_HEADER)) return;
     e.preventDefault();
     focusTab(tab);
     trackDrag(tab, header, e);
@@ -1316,7 +1478,7 @@ function findDropTarget(source, x, y) {
   // A detached terminal is already in a window of its own: the main window's edge and the compass's corner are nothing
   // to it. Otherwise, at the app window's very edge, or out of it: into a window of its own (not on Windows, where its
   // picture goes on past the edge and it opens wherever it's let go out there).
-  if (atAppEdge(x, y)) return source.detached || followsPicture ? null : windowDrop(source, x, y);
+  if (atAppEdge(x, y)) return source.detached || followsPicture || systemDrag ? null : windowDrop(source, x, y);
   const under = document.elementFromPoint(x, y);
   // A detached terminal lands in the workspace shown, whichever it came from.
   const lands = (/** @type {Tab} */ target) => target.wsId === source.wsId || !!source.detached;

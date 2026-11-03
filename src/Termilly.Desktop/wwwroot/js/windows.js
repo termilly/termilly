@@ -19,10 +19,11 @@ import { WINDOW_ACTION, DETACHED_WINDOW } from './constants.js';
  * (it's no longer in any page); askClose, when given, decides whether the title bar's X may close it (it closes it
  * itself). header is the element's title bar, where the window's buttons go and which moves the window; close is what
  * its Close does (what it shows closes; Return puts it back); keepDoubleClick, what in the header keeps its own
- * double click (else a double click maximizes the window).
+ * double click (else a double click maximizes the window); dragHandle, what in the header is dragged out of the
+ * window (the page's own drag and drop) rather than moving it.
  * @typedef {{ key: string, win: Window, el: HTMLElement, title: string, ready: boolean, onClosed: (el: HTMLElement) => void,
  *   onMoved?: () => void, onResize?: () => void, askClose?: () => unknown, header?: HTMLElement, close?: () => unknown,
- *   keepDoubleClick?: string, chrome?: AbortController, onDragged?: Dragged, faded?: boolean, remember?: boolean, placed?: boolean }} Detached
+ *   keepDoubleClick?: string, dragHandle?: string, chrome?: AbortController, onDragged?: Dragged, faded?: boolean, remember?: boolean, placed?: boolean }} Detached
  */
 
 /**
@@ -94,15 +95,15 @@ export const isDetached = key => open.has(key);
  * @param {string} key
  * @param {{ el: HTMLElement, title: string, onClosed: (el: HTMLElement) => void, onMoved?: () => void,
  *   onResize?: () => void, askClose?: () => unknown, at?: { x: number, y: number }, header?: HTMLElement,
- *   close?: () => unknown, keepDoubleClick?: string, minWidth?: number, onDragged?: Dragged, remember?: boolean,
- *   place?: { x: number, y: number } }} options
+ *   close?: () => unknown, keepDoubleClick?: string, dragHandle?: string, minWidth?: number, onDragged?: Dragged,
+ *   remember?: boolean, place?: { x: number, y: number } }} options
  *   at: the screen point the window's top left corner goes near (a drag's drop); else over where the element is.
  *   place: exactly where on the screen its page's top left corner goes (where a dragged picture of it was let go).
  *   minWidth: the window is at least this wide (by default its title bar's name, tools and buttons all fit).
  *   remember: it opens where it was last time (its size too; at still picks the place), kept when it goes (keepPlaces)
  */
 export function detach(key, options) {
-  const { el, title, onClosed, onMoved, onResize, askClose, at, place, header, close, keepDoubleClick, minWidth = MIN_WIDTH_PX, onDragged, remember = false } = options;
+  const { el, title, onClosed, onMoved, onResize, askClose, at, place, header, close, keepDoubleClick, dragHandle, minWidth = MIN_WIDTH_PX, onDragged, remember = false } = options;
   if (open.has(key)) return focusWindow(key), true;
   const r = el.getBoundingClientRect();
   const last = remember ? places.get(key) : null;
@@ -115,7 +116,7 @@ export function detach(key, options) {
   ].join(',');
   const win = window.open('', NAME_PREFIX + key, features);
   if (!win) return false;
-  open.set(key, { key, win, el, title, ready: false, onClosed, onMoved, onResize, askClose, header, close, keepDoubleClick, onDragged, remember });
+  open.set(key, { key, win, el, title, ready: false, onClosed, onMoved, onResize, askClose, header, close, keepDoubleClick, dragHandle, onDragged, remember });
   build(win);
   watch ||= window.setInterval(checkClosed, WATCH_MS);
   if (!themeWatch) {
@@ -266,6 +267,7 @@ function addChrome(d, doc) {
   d.header.addEventListener('mousedown', e => {
     const target = /** @type {HTMLElement} */ (e.target);
     if (e.button !== 0 || target.closest('button, input, textarea, select')) return;
+    if (e.detail === 1 && d.dragHandle && target.closest(d.dragHandle)) return;
     const keep = e.detail === 2 && d.keepDoubleClick && target.closest(d.keepDoubleClick);
     if (!keep) act(e.detail === 2 ? WINDOW_ACTION.maximize : WINDOW_ACTION.drag);
   }, { signal });
