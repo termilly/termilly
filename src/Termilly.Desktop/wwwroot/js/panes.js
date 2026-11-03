@@ -951,7 +951,10 @@ function showGroupTab(node) {
  * wherever it's let go (a drop zone, else where it was). Not on macOS, which has no windows of their own yet.
  */
 const systemDrag = platform === PLATFORM.linux && !/Mac/.test(navigator.platform);
-/** What a dragged terminal carries (its id): only Termilly's own main window takes it. */
+/**
+ * What a dragged terminal carries (its id). The main window knows the drag by systemDragged, not by this: between
+ * windows WebKitGTK doesn't pass a type of its own along.
+ */
 const TAB_TYPE = 'application/x-termilly-tab';
 /** A detached terminal's handle in its window: its icon and name (the rest of its title bar moves the window). */
 export const DRAG_HANDLE = '.pane-title';
@@ -959,8 +962,6 @@ export const DRAG_HANDLE = '.pane-title';
 const PANE_HEADER = '.pane-header';
 /** What a dragged terminal does when it lands: it moves there. */
 const MOVE = 'move';
-/** The label's class while it's the drag's picture (app.css shows it then). */
-const DRAG_IMAGE = 'drag-image';
 /**
  * A drag leaving one element of the main window enters another at once; this long after leaving with nothing entered,
  * it has left the window.
@@ -989,7 +990,7 @@ function wireSystemDrag(tab, header) {
     e.stopPropagation();
     e.dataTransfer.setData(TAB_TYPE, tab.id);
     e.dataTransfer.effectAllowed = MOVE;
-    setDragLabel(tab, e);
+    setDragLabel(header, e);
     systemDragged = { tab, drop: null, over: false, dropped: false, leftTimer: 0 };
     // Not while the drag is starting: changing the page then can cancel it.
     setTimeout(() => { if (systemDragged?.tab === tab && !tab.detached) enterMain(systemDragged); });
@@ -998,22 +999,15 @@ function wireSystemDrag(tab, header) {
 }
 
 /**
- * The drag's picture: the label with the terminal's icon and name, made in the document the drag starts in.
- * @param {Tab} tab
+ * The drag's picture: the piece of the title bar with the terminal's icon and name (a group's tab: all of it), as it
+ * shows, held where the pointer took it. One drawn for the drag alone wasn't taken by WebKitGTK.
+ * @param {HTMLElement} header
  * @param {DragEvent} e
  */
-function setDragLabel(tab, e) {
-  const doc = /** @type {Document} */ (/** @type {HTMLElement} */ (e.currentTarget).ownerDocument);
-  showGhost(tabBadgeHtml(tab), tabTitle(tab));
-  const label = doc === document ? dragGhost : /** @type {HTMLElement} */ (doc.importNode(dragGhost, true));
-  if (label !== dragGhost) doc.body.append(label);
-  label.classList.add(DRAG_IMAGE);
-  label.style.transform = `translate(${e.clientX}px, ${e.clientY}px)`;
-  /** @type {DataTransfer} */ (e.dataTransfer).setDragImage(label, 0, 0);
-  setTimeout(() => {
-    label.classList.remove(DRAG_IMAGE);
-    if (label !== dragGhost) label.remove();
-  });
+function setDragLabel(header, e) {
+  const piece = header.classList.contains(STRIP_TAB) ? header : header.querySelector(DRAG_HANDLE) ?? header;
+  const r = piece.getBoundingClientRect();
+  /** @type {DataTransfer} */ (e.dataTransfer).setDragImage(piece, e.clientX - r.left, e.clientY - r.top);
 }
 
 /**
@@ -1046,7 +1040,7 @@ function leaveMain(d) {
 // Over the main window: where it would land; a detached terminal lands somewhere wherever it's let go.
 document.addEventListener('dragover', e => {
   const d = systemDragged;
-  if (!d || !e.dataTransfer?.types.includes(TAB_TYPE)) return;
+  if (!d || !e.dataTransfer) return;
   e.preventDefault();
   e.dataTransfer.dropEffect = MOVE;
   enterMain(d);
@@ -1064,7 +1058,7 @@ document.addEventListener('dragleave', () => {
 
 document.addEventListener('drop', e => {
   const d = systemDragged;
-  if (!d || !e.dataTransfer?.types.includes(TAB_TYPE)) return;
+  if (!d) return;
   e.preventDefault();
   d.dropped = true;
   const drop = d.drop;

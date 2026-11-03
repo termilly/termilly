@@ -13,6 +13,7 @@ internal static class GtkWindow
     private const string Gtk = "libgtk-3.so.0";
     private const string Gdk = "libgdk-3.so.0";
     private const string GLib = "libglib-2.0.so.0";
+    private const string GObjectName = "libgobject-2.0.so.0";
     /// <summary>The window's title (LinuxWindow sets it), which finds it among GTK's top-level windows.</summary>
     public const string Title = "Termilly";
     /// <summary>The program's id: Wayland's app id and X11's window class, matched to termilly.desktop.</summary>
@@ -86,6 +87,24 @@ internal static class GtkWindow
         }
     }
 
+    /// <summary>
+    /// The window paints no background of its own: it's see-through (LinuxWindow), and the page rounds its corners
+    /// (app.css). Else GTK's theme colour (white in a light theme) shows in the corners until the page has drawn, and
+    /// again on some redraws, squaring them.
+    /// </summary>
+    public static void ClearBackground(IntPtr window)
+    {
+        gtk_widget_set_app_paintable(window, 1);
+        var provider = gtk_css_provider_new();
+        gtk_css_provider_load_from_data(provider, TransparentCss, -1, IntPtr.Zero);
+        gtk_style_context_add_provider(gtk_widget_get_style_context(window), provider, StyleProviderPriorityApplication);
+        g_object_unref(provider);
+    }
+
+    private const string TransparentCss = "window, window.background { background: transparent; }";
+    /// <summary>GTK_STYLE_PROVIDER_PRIORITY_APPLICATION: over the theme's own.</summary>
+    private const uint StyleProviderPriorityApplication = 600;
+
     /// <summary>Where the pointer is on screen (the window manager wants it; Wayland ignores it).</summary>
     private static (int X, int Y)? Pointer()
     {
@@ -109,6 +128,12 @@ internal static class GtkWindow
     [DllImport(Gdk)] private static extern IntPtr gdk_display_get_default_seat(IntPtr display);
     [DllImport(Gdk)] private static extern IntPtr gdk_seat_get_pointer(IntPtr seat);
     [DllImport(Gdk)] private static extern void gdk_device_get_position(IntPtr device, out IntPtr screen, out int x, out int y);
+    [DllImport(Gtk)] private static extern void gtk_widget_set_app_paintable(IntPtr widget, int paintable);
+    [DllImport(Gtk)] private static extern IntPtr gtk_css_provider_new();
+    [DllImport(Gtk)] private static extern int gtk_css_provider_load_from_data(IntPtr provider, [MarshalAs(UnmanagedType.LPUTF8Str)] string data, nint length, IntPtr error);
+    [DllImport(Gtk)] private static extern IntPtr gtk_widget_get_style_context(IntPtr widget);
+    [DllImport(Gtk)] private static extern void gtk_style_context_add_provider(IntPtr context, IntPtr provider, uint priority);
+    [DllImport(GObjectName)] private static extern void g_object_unref(IntPtr instance);
     [DllImport(GLib)] private static extern void g_list_free(IntPtr list);
     [DllImport(GLib)] private static extern void g_set_prgname([MarshalAs(UnmanagedType.LPUTF8Str)] string name);
     [DllImport(GLib)] private static extern void g_set_application_name([MarshalAs(UnmanagedType.LPUTF8Str)] string name);
