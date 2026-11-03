@@ -1525,7 +1525,6 @@ body.dragging-pane, body.dragging-pane * { cursor: grabbing !important; }
   font-weight: 500;
   pointer-events: none;
 }
-#drag-ghost svg { width: 16px; height: 16px; stroke-width: 1.3; color: var(--accent); }
 body.dragging-pane #drag-ghost { display: flex; }
 
 #drop-preview {

@@ -54,6 +54,11 @@ const STRIP_TAB_MARGIN_PX = 4;
 const WINDOW_EDGE_PX = 8;
 /** The size of a dragged pane's window outline at the most (it's the pane's size, smaller). */
 const WINDOW_PREVIEW = Object.freeze({ w: 360, h: 240 });
+/**
+ * How much of a pane's width, around its middle, splits it above or below: only there. Everywhere else the pointer
+ * splits it left or right, so the side it came in from shows at once.
+ */
+const TOP_BOTTOM_BAND = 0.3;
 
 /**
  * A pane's drop zone: beside it on a side, or in it as a tab (center).
@@ -976,7 +981,9 @@ function dropPane(tab, drop, screen) {
 /** @param {Tab} source */
 function beginDrag(source) {
   document.body.classList.add(DRAGGING_PANE);
-  find(dragGhost, 'span').textContent = tabTitle(source);
+  // The terminal's own badge, as its title bar shows it, and its name.
+  find(dragGhost, '.ghost-badge').innerHTML = tabBadgeHtml(source);
+  find(dragGhost, '.ghost-name').textContent = tabTitle(source);
   /** @type {TabView} */ (source.view).el.classList.add(DRAG_SOURCE);
   for (const t of tabsOf(/** @type {Workspace} */ (wsById(source.wsId)))) {
     if (t !== source && !t.detached) {
@@ -1051,12 +1058,14 @@ function paneZone(el, target, x, y) {
       return { target, zone: /** @type {Zone} */ (cell.dataset.zone), rect: r };
     }
   }
-  // Anywhere else in the pane splits it on the side the pointer is toward (the pane's diagonals divide it), so the
-  // outline shows as soon as the pointer is in; joining as a tab is the compass's middle (or a group's strip).
+  // Anywhere else in the pane splits it, so the outline shows as soon as the pointer is in: above or below in a narrow
+  // band down its middle (nearer the top or the bottom than the side), left or right everywhere else. Joining as a tab
+  // is the compass's middle (or a group's strip).
   const dx = (x - (r.left + r.width / 2)) / r.width;
   const dy = (y - (r.top + r.height / 2)) / r.height;
+  const upOrDown = Math.abs(dx) < TOP_BOTTOM_BAND / 2 && Math.abs(dy) > Math.abs(dx);
   /** @type {Zone} */
-  const zone = Math.abs(dx) >= Math.abs(dy) ? (dx < 0 ? ZONE.left : ZONE.right) : (dy < 0 ? ZONE.top : ZONE.bottom);
+  const zone = upOrDown ? (dy < 0 ? ZONE.top : ZONE.bottom) : (dx < 0 ? ZONE.left : ZONE.right);
   return { target, zone, rect: r };
 }
 
