@@ -10,7 +10,7 @@ namespace Termilly.Linux;
 
 /// <summary>
 /// The Photino window and its page: messages both ways, the window's state for the page, and what the page (through
-/// <see cref="LinuxPlatform"/>) asks of the window.
+/// <see cref="PhotinoPlatform"/>) asks of the window. Linux and macOS alike.
 /// </summary>
 [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA1001", Justification = "Lives as long as the app; the outbox thread may still be finishing at exit.")]
 internal sealed class LinuxWindow
@@ -53,7 +53,7 @@ internal sealed class LinuxWindow
     }
 
     /// <summary>Shows the window and returns when it has closed.</summary>
-    public void Run(LinuxPlatform platform, WindowTheme theme, PageChannel channel, PageHost host, QuitGate quit)
+    public void Run(PhotinoPlatform platform, WindowTheme theme, PageChannel channel, PageHost host, QuitGate quit)
     {
         var window = _window = Create(theme, channel, host, quit);
         var icon = Path.Combine(AppContext.BaseDirectory, "icons", "hicolor", "256x256", "apps", "termilly.png");
@@ -135,7 +135,7 @@ internal sealed class LinuxWindow
     }
 
     /// <summary>What the page asks of the window: close, come to the front, and the title bar's buttons and edges.</summary>
-    private static void Follow(LinuxPlatform platform, PhotinoWindow window, QuitGate quit)
+    private static void Follow(PhotinoPlatform platform, PhotinoWindow window, QuitGate quit)
     {
         platform.Attach(window);
         platform.CloseRequested += () =>
@@ -166,8 +166,14 @@ internal sealed class LinuxWindow
                 case WindowActions.Quit:
                     window.Close(); // asks first when something is running (the closing handler)
                     break;
+                case WindowActions.Drag when OperatingSystem.IsMacOS():
+                    MacWindowDrag.BeginMove(window);
+                    break;
                 case WindowActions.Drag:
                     GtkWindow.BeginMove();
+                    break;
+                case WindowActions.Resize when !window.Maximized && action.Edge is { } edge && OperatingSystem.IsMacOS():
+                    MacWindowDrag.BeginResize(window, edge, new Size(MinWidth, MinHeight));
                     break;
                 case WindowActions.Resize when !window.Maximized && action.Edge is { } edge:
                     GtkWindow.BeginResize(edge);
