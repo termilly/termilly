@@ -963,7 +963,6 @@ const PANE_HEADER = '.pane-header';
 /** The drag's picture (app.css), and where the pointer holds it. */
 const DRAG_CHIP = 'drag-chip';
 const CHIP_GRIP = Object.freeze({ x: 18, y: 15 });
-const PLAIN_TEXT = 'text/plain';
 /** The name in a drag's label or chip. */
 const GHOST_NAME = '.ghost-name';
 /** What a dragged terminal does when it lands: it moves there. */
@@ -988,15 +987,18 @@ let systemDragged = null;
  */
 function wireSystemDrag(tab, header) {
   header.draggable = true;
+  // What the press was on: a drag's own target is always the draggable title bar, never its icon or name.
+  /** @type {HTMLElement | null} */
+  let pressed = null;
+  header.addEventListener('mousedown', e => { pressed = targetOf(e); }, true);
   header.addEventListener('dragstart', e => {
-    const at = targetOf(e);
-    const own = header.classList.contains(STRIP_TAB) && at.closest(PANE_HEADER); // the title bar's own drag
+    const own = header.classList.contains(STRIP_TAB) && targetOf(e).closest(PANE_HEADER); // the title bar's own drag
     if (own) return;
+    const at = pressed ?? targetOf(e);
     if (at.closest('button, input') || (tab.detached && !at.closest(DRAG_HANDLE)) || !e.dataTransfer) return void e.preventDefault();
     e.stopPropagation();
+    // Only a type of its own (no text: the desktop would take that as a file).
     e.dataTransfer.setData(TAB_TYPE, tab.id);
-    // Plain text too: a drag carrying only a type of its own may not cross to the main window.
-    e.dataTransfer.setData(PLAIN_TEXT, tabTitle(tab));
     e.dataTransfer.effectAllowed = MOVE;
     setDragLabel(tab, header, e);
     systemDragged = { tab, drop: null, over: false, dropped: false, leftTimer: 0 };
