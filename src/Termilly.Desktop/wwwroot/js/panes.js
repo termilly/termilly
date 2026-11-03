@@ -63,8 +63,9 @@ const TOP_BOTTOM_SHARE = 1 / 3;
  */
 
 /**
- * Where a dragged pane would land: the pane it goes to, the zone, and the area the drop preview covers.
- * @typedef {{ target: Tab, zone: Zone, rect: DOMRect }} Drop
+ * Where a dragged pane would land: the pane it goes to, the zone, and the area the drop preview covers. Out into a
+ * window of its own, `over` is the pane whose compass cell it's on (none at the app window's edge).
+ * @typedef {{ target: Tab, zone: Zone, rect: DOMRect, over?: Tab }} Drop
  */
 
 /**
@@ -1028,7 +1029,7 @@ function findDropTarget(source, x, y) {
   const ownGroup = target === source && groupOf(ws, source.id);
   if (target === source && !ownGroup) return null;
   const drop = paneZone(/** @type {HTMLElement} */ (el), target, x, y);
-  if (drop.zone === ZONE.window) return windowDrop(source, x, y);
+  if (drop.zone === ZONE.window) return windowDrop(source, x, y, target);
   if (ownGroup) {
     // Out of its own group: beside the whole group.
     if (drop.zone === ZONE.center) return null;
@@ -1078,26 +1079,31 @@ function paneZone(el, target, x, y) {
  * @param {Tab} source
  * @param {number} x
  * @param {number} y
+ * @param {Tab} [over] the pane whose compass cell it's on
  * @returns {Drop}
  */
-function windowDrop(source, x, y) {
+function windowDrop(source, x, y, over) {
   const pane = /** @type {TabView} */ (source.view).el.getBoundingClientRect();
   const scale = Math.min(1, WINDOW_PREVIEW.w / pane.width, WINDOW_PREVIEW.h / pane.height);
   const w = pane.width * scale, h = pane.height * scale;
   // Where the window will open: its corner just before the pointer (js/windows.js).
   const left = Math.max(0, Math.min(innerWidth - w, x - OFFSET_PX));
   const top = Math.max(0, Math.min(innerHeight - h, y - OFFSET_PX));
-  return { target: source, zone: ZONE.window, rect: new DOMRect(left, top, w, h) };
+  return { target: source, zone: ZONE.window, rect: new DOMRect(left, top, w, h), over };
 }
 
 /** @param {Drop | null} drop */
 function showDrop(drop) {
+  // Out into a window: the compass cell it's on lights up, or at the app window's edge every compass's.
+  const outToWindow = drop?.zone === ZONE.window;
+  const shownOn = outToWindow ? drop.over : drop?.target;
   for (const guide of document.querySelectorAll('.pane > .dock-guide')) {
-    const isTarget = drop && guide.parentElement === /** @type {TabView} */ (drop.target.view).el;
-    guide.classList.toggle('hover', !!isTarget);
+    const isTarget = !!shownOn && guide.parentElement === /** @type {TabView} */ (shownOn.view).el;
+    const lit = isTarget || (outToWindow && !shownOn);
+    guide.classList.toggle('hover', lit);
     for (const cell of /** @type {HTMLCollectionOf<HTMLElement>} */ (guide.children)) {
-      // isTarget is only true with a drop.
-      cell.classList.toggle('active', !!isTarget && cell.dataset.zone === /** @type {Drop} */ (drop).zone);
+      // lit is only true with a drop.
+      cell.classList.toggle('active', lit && cell.dataset.zone === /** @type {Drop} */ (drop).zone);
     }
   }
   if (!drop) {
