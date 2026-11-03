@@ -62,6 +62,13 @@ export const AGENT_SOURCE = Object.freeze({
   alert: 'alert',
 });
 
+/** C#: AgentStepKind (Messaging/Prompts.cs). */
+export const AGENT_STEP = Object.freeze({
+  reply: 'reply',
+  tool: 'tool',
+  all: Object.freeze(['reply', 'tool']),
+});
+
 /** C#: ChangeSources (Changes/ChangeModel.cs). */
 export const CHANGE_SOURCE = Object.freeze({
   snapshot: 'snapshot',

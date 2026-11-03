@@ -21,6 +21,7 @@ const SOURCES = [
   { file: 'ProfileKinds.cs', cls: 'StreamCommands', js: 'STREAM_COMMAND' },
   { file: 'AgentStates.cs', cls: 'AgentStates', js: 'AGENT_STATE' },
   { file: 'Messaging/Agents.cs', cls: 'AgentSources', js: 'AGENT_SOURCE' },
+  { file: 'Messaging/Prompts.cs', cls: 'AgentStepKind', js: 'AGENT_STEP' },
   { file: 'Changes/ChangeModel.cs', cls: 'ChangeSources', js: 'CHANGE_SOURCE' },
   { file: 'Changes/ChangeModel.cs', cls: 'ChangeKinds', js: 'CHANGE_KIND' },
   { file: '../Shared/HookEvents.cs', cls: 'HookEvents', js: 'HOOK_EVENT' },

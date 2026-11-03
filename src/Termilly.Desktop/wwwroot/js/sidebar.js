@@ -25,7 +25,6 @@ import { costOf, costText, costTitle, workspaceCost, dollars, costMode } from '.
 import { tabProjectHtml, openPort, repoOf } from './gitstatus.js';
 import { remoteRailHtml, openRemoteMenu } from './remote.js';
 import { openNewWorkspace } from './newworkspace.js';
-import { hasUnreadResults } from './results.js';
 import { SETTING_VALUES } from './constants.js';
 import { byId, find, targetOf, dragPointer, showError, MOUSE_OVER } from './dom.js';
 import { RENAME_INPUT_CLASS, RENAME_IN, shownName } from './rename.js';
@@ -110,7 +109,7 @@ function tabRowHtml(tab, ws) {
   return `<button class="tab-row${focused ? ' focused' : ''}${isUnread(tab) ? ' unread' : ''}${env ? ' env' : ''}" data-tab="${escapeHtml(tab.id)}" title="${escapeHtml(tabTitle(tab))}${env ? ` · ${escapeHtml(env.label)}` : ''}"${env ? ` style="--env:${cssColor(env.color)}"` : ''}>
     ${tabBadgeHtml(tab)}<span class="name">${escapeHtml(shownName(tab))}</span>${notesFor(tab).length ? `<span class="note-mark" data-note-tab="${escapeHtml(tab.id)}" title="${escapeHtml(`${noteTitle(notesFor(tab))}\nClick to open`)}">${ICONS.note}</span>` : ''}
     <span class="chips">${tabProjectHtml(tab, ws)}${tab.tags.map(t => tagChipHtml(t, { mini: true })).join('')}${tab.tags.length > 1
-      ? `<span class="tag mini more-tags" data-more-tags title="Show all tags">+${tab.tags.length - 1}</span>` : ''}${activityHtml(activityOf(tab), MINI_ACTIVITY)}${tab.attention ? '<span class="attn"></span>' : ''}${hasUnreadResults(tab) ? '<span class="res-dot" title="New results: a pull request, a running app or a push"></span>' : ''}${costText(costOf(tab)) ? `<span class="cost-chip" title="${escapeHtml(costTitle(costOf(tab)))}">${escapeHtml(costText(costOf(tab)))}</span>` : ''}${runningSubagents(tab) ? `<span class="sub-badge" title="Subagents running">${runningSubagents(tab)} agent${runningSubagents(tab) === 1 ? '' : 's'}</span>` : ''}</span>
+      ? `<span class="tag mini more-tags" data-more-tags title="Show all tags">+${tab.tags.length - 1}</span>` : ''}${activityHtml(activityOf(tab), MINI_ACTIVITY)}${tab.attention ? '<span class="attn"></span>' : ''}${costText(costOf(tab)) ? `<span class="cost-chip" title="${escapeHtml(costTitle(costOf(tab)))}">${escapeHtml(costText(costOf(tab)))}</span>` : ''}${runningSubagents(tab) ? `<span class="sub-badge" title="Subagents running">${runningSubagents(tab)} agent${runningSubagents(tab) === 1 ? '' : 's'}</span>` : ''}</span>
     ${isAgentWorking(tab) ? `<span class="agent-stop" data-stop="${escapeHtml(tab.id)}" title="Stop the agent (Esc)" role="button"></span>` : ''}
   </button>${showsLine(tab) ? `<div class="agent-line ${escapeHtml(/** @type {AgentInfo} */ (tab.agent).state)}" data-tab="${escapeHtml(tab.id)}" title="${escapeHtml(/** @type {AgentInfo} */ (tab.agent).line)}">${escapeHtml(/** @type {AgentInfo} */ (tab.agent).line)}</div>` : ''}${subagentRowsHtml(tab)}`;
 }

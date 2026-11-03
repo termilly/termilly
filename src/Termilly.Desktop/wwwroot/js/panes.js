@@ -271,7 +271,6 @@ function recordHistory(tab) {
       tags: tab.tags,
       note: tab.note ?? null,
       cost: tab.cost?.usd ?? tab.claude?.usage?.estimatedUsd ?? null,
-      results: tab.results?.items.length ? tab.results.items.map((/** @type {any} */ { kind, url, title, at }) => ({ kind, url, title, at })) : undefined,
       wsId: ws?.id,
       wsName: ws?.name,
       cwd: ws?.cwd ?? null,

@@ -170,6 +170,8 @@ interface Tab {
   pcFiles?: { pcId: string; pc: string; machine: string; place: string; root: string; caseless: boolean; cwd: string };
   /** When My prompts was last cleared: prompts from before it are hidden (js/myprompts.js). Nothing is deleted. */
   promptsClearedAt?: number | null;
+  /** When its Replies and its Tool calls were last cleared, each on its own (by AgentStepKind): older ones are hidden. */
+  stepsClearedAt?: Record<string, number>;
   /** Its agent was ended, to resume (js/hibernate.js). */
   hibernated?: { session: string; at: number; folder?: string | null } | null;
   /**
@@ -219,8 +221,6 @@ interface Tab {
   recording?: import('../wwwroot/js/replay.js').Recording;
   /** Its recent output kept in memory (js/replay.js). */
   rewind?: import('../wwwroot/js/replay.js').RewindBuffer;
-  /** What its commands produced (js/results.js). */
-  results?: import('../wwwroot/js/results.js').TabResults;
   /** Its agent's subagents (js/subagents.js). */
   subagents?: import('../wwwroot/js/subagents.js').Subagents;
   /** Claude's usage and context figures (js/claudeusage.js). */

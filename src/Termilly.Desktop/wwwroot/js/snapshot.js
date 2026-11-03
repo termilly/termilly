@@ -13,7 +13,6 @@ import { markHibernated } from './hibernate.js';
 import { startResuming } from './resuming.js';
 import { SETTING_VALUES } from './constants.js';
 import { showClosing, painted } from './closing.js';
-import { savedResults, restoreResults } from './results.js';
 
 /** The choices of the settings used here (C#'s SettingValues). */
 const { restoreSession } = SETTING_VALUES;
@@ -49,7 +48,6 @@ function snapshot() {
       agentSession: session && SESSION_ID.test(session) ? session : null,
       agentFolder: tab.agent?.folder ?? tab.hibernated?.folder ?? null,
       hibernated: !tab.agent?.session && !!tab.hibernated,
-      results: savedResults(tab),
     };
   }
   return { savedAt: Date.now(), tabs };
@@ -93,7 +91,6 @@ export function applySnapshot(saved) {
   for (const tab of state.tabs.values()) {
     const s = saved.tabs[tab.id];
     if (!s) continue;
-    restoreResults(tab, s.results);
     if (Array.isArray(s.lines) && s.lines.length) prepareStart(tab, { output: { lines: s.lines, closedAt: saved.savedAt, resurrected: true, scroll: scrollOf(s) } });
     const session = s.agentSession && SESSION_ID.test(s.agentSession) ? s.agentSession : null;
     const folder = session ? folderOf(s) : null;

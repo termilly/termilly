@@ -12,14 +12,13 @@ import { editNote, notesFor, noteTitle, firstLine, NOTE_KIND } from './notes.js'
 import { environmentOf, ENV_CLASS, ENV_COLOR } from './environments.js';
 import { isLogging, openLogMenu, logFile } from './logging.js';
 import { isAgentWorking, stopAgent } from './agentline.js';
-import { openResults, resultCount, hasUnreadResults } from './results.js';
 import { accessMarkText } from './together.js';
 import { isRecording, toggleRecording, recordingFile } from './replay.js';
 import { beginRename, shownName, PANE_NAME } from './rename.js';
 import { openTagPicker } from './tagpicker.js';
 import { openTabMenu, TAG_BUTTON } from './tabmenu.js';
 import { find } from './dom.js';
-import { openPrompts, hasPrompts } from './myprompts.js';
+import { openPrompts, hasPrompts, PROMPTS_TITLE } from './myprompts.js';
 
 const CHEVRON_DOWN = '<svg class="chev" viewBox="0 0 16 16"><path d="M4 6l4 4 4-4"/></svg>';
 
@@ -30,13 +29,10 @@ const LOG_CHIP = '.log-chip';
 const BROADCAST_TOGGLE = '.bc-toggle';
 const STOP_BUTTON = '.agent-stop-btn';
 const USAGE_BUTTON = '.claude-usage';
-const RESULTS_BUTTON = '.results-btn';
 const CHANGES_BUTTON = '.changes-btn';
 const NOTE_BUTTON = '.note-btn';
 const PROMPTS_BUTTON = '.prompts-btn';
 
-/** The results button's class while something new in them hasn't been looked at. */
-const UNREAD_CLASS = 'unread';
 /** The pane's class while it receives a broadcast (its stripe). */
 const RECEIVING_CLASS = 'broadcast';
 
@@ -51,10 +47,9 @@ const HEADER_HTML = `
     <span class="pane-actions">
       <button class="pane-btn agent-stop-btn" title="Stop the agent (Esc)" hidden>${ICONS.stop}<span>Stop</span></button>
       <button class="pane-btn claude-usage" hidden></button>
-      <button class="pane-btn results-btn" title="What commands here produced: pull requests, running apps, pushes" hidden></button>
       <button class="pane-btn changes-btn" title="Files Claude changed in this terminal" hidden></button>
       <button class="pane-btn menu-btn" title="Terminal menu">${ICONS.more}</button>
-      <button class="pane-btn prompts-btn" title="Prompt history" hidden>${ICONS.prompts}</button>
+      <button class="pane-btn prompts-btn" title="${PROMPTS_TITLE}" hidden>${ICONS.prompts}</button>
       <button class="pane-btn note-btn" hidden>${ICONS.note}</button>
       <button class="pane-btn tag-btn" title="Tags">${ICONS.tag}</button>
       <button class="pane-btn close-btn" title="Close terminal (Ctrl+Shift+W)">${ICONS.close}</button>
@@ -110,7 +105,6 @@ function wireHeader(tab, header) {
   click(LOG_CHIP, e => openLogMenu(tab, /** @type {HTMLElement} */ (e.currentTarget)));
   click(CAST_CHIP, () => toggleRecording(tab));
   click(STOP_BUTTON, () => stopAgent(tab));
-  click(RESULTS_BUTTON, e => openResults(tab, /** @type {HTMLElement} */ (e.currentTarget)));
   click(NOTE_BUTTON, () => editNoteOf(tab, notesFor(tab)[0]?.kind));
   click(PROMPTS_BUTTON, e => openPrompts(tab, /** @type {HTMLElement} */ (e.currentTarget)));
   click(PINNED_NOTE, e => editNoteOf(tab, /** @type {HTMLElement} */ (e.currentTarget).dataset.kind));
@@ -170,12 +164,6 @@ function showEnvironment(tab, header) {
  * @param {HTMLElement} header
  */
 function showChips(tab, header) {
-  // What commands here produced (results.js): a count, lit while something new hasn't been looked at.
-  const results = find(header, RESULTS_BUTTON);
-  const n = resultCount(tab);
-  results.hidden = !n;
-  results.classList.toggle(UNREAD_CLASS, hasUnreadResults(tab));
-  results.innerHTML = `<svg viewBox="0 0 16 16"><path d="M3 3.5h10M3 8h10M3 12.5h6"/></svg><span>${n} result${n === 1 ? '' : 's'}</span>`;
   // Another terminal's agent reading or typing here just now (together.js).
   const access = find(header, '.access-mark');
   access.hidden = !tab.access?.mark;

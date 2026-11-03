@@ -27,10 +27,27 @@ internal static partial class FromPage
 /// <summary>A prompt the user sent: its text and when (ISO 8601).</summary>
 internal sealed record AgentPrompt(string Text, string At);
 
+/// <summary>
+/// What Claude did after a prompt (Features/TranscriptSteps.cs): a reply it wrote (<see cref="Text"/>), or a tool it used
+/// (<see cref="Tool"/>, and in <see cref="Text"/> what on: a command, a file, a pattern), and whether that failed.
+/// </summary>
+internal sealed record AgentStep(string Kind, string Text, string At, string? Tool = null, bool Failed = false);
+
+/// <summary>The kinds of <see cref="AgentStep"/>.</summary>
+internal static class AgentStepKind
+{
+    public const string Reply = "reply";
+    public const string Tool = "tool";
+    public static readonly IReadOnlyList<string> All = [Reply, Tool];
+}
+
 internal static partial class ToPage
 {
-    /// <summary>A terminal's prompts, oldest first; for another computer's terminal, why they couldn't be had.</summary>
-    internal sealed record PromptsListed(string? RequestId, IReadOnlyList<AgentPrompt> Prompts, string? Error = null) : IHostMessage
+    /// <summary>
+    /// A terminal's prompts, oldest first, and what Claude did between them (its replies and tools, from the
+    /// transcripts on this PC); for another computer's terminal, why they couldn't be had.
+    /// </summary>
+    internal sealed record PromptsListed(string? RequestId, IReadOnlyList<AgentPrompt> Prompts, string? Error = null, IReadOnlyList<AgentStep>? Steps = null) : IHostMessage
     {
         public static string Type => "prompts:listed";
     }
