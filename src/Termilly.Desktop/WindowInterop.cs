@@ -199,6 +199,38 @@ internal static class WindowInterop
 
     private const int SW_RESTORE = 9;
 
+    /// <summary>
+    /// Shows only the window's top <paramref name="top"/> (in its own units, from its top edge), or all of it again
+    /// (null): a detached window dragged over the main window shrinks to its title bar, so the place it would land
+    /// shows. A window region, which clips its browser too (a layered, see-through window would leave the browser
+    /// solid, the app declaring no Windows version in a manifest).
+    /// </summary>
+    public static void ShowOnlyTop(Window window, double? top)
+    {
+        var hwnd = new WindowInteropHelper(window).Handle;
+        if (top is not { } height)
+        {
+            _ = SetWindowRgn(hwnd, IntPtr.Zero, true);
+            return;
+        }
+        var scale = GetDpiForWindow(hwnd) / BaseDpi;
+        var width = (int)Math.Ceiling(window.ActualWidth * scale);
+        // The system owns the region once it's set: nothing to delete.
+        _ = SetWindowRgn(hwnd, CreateRectRgn(0, 0, width, (int)Math.Ceiling(height * scale)), true);
+    }
+
+    /// <summary>Where the pointer is on the screen, in pixels.</summary>
+    public static Point CursorPosition() => GetCursorPos(out var p) ? new Point(p.X, p.Y) : new Point(double.NaN, double.NaN);
+
+    [DllImport("user32.dll")]
+    private static extern int SetWindowRgn(IntPtr hwnd, IntPtr region, bool redraw);
+
+    [DllImport("gdi32.dll")]
+    private static extern IntPtr CreateRectRgn(int left, int top, int right, int bottom);
+
+    [DllImport("user32.dll")]
+    private static extern bool GetCursorPos(out POINT point);
+
     private static int ColorRef(string hex)
     {
         var c = System.Drawing.ColorTranslator.FromHtml(hex);

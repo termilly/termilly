@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Shell;
@@ -25,11 +26,24 @@ internal sealed class DetachedWindow : Window
     private const double MinSize = 240;
     /// <summary>The frame around the page, as the main window's (MainWindow.xaml).</summary>
     private const double FrameWidth = 1;
+    /// <summary>A terminal's title bar, the page's header (app.css .pane-header), all a window dragged to land shows.</summary>
+    private const double TitleBarHeight = 30;
 
     private readonly WebView2 _web = new();
     private readonly Border _frame = new() { BorderThickness = new Thickness(FrameWidth) };
     /// <summary>Set once the page has closed it (window.close()): this close goes through.</summary>
     private bool _closedByPage;
+    /// <summary>While a move its title bar started is under way (a resize isn't one): its steps are reported.</summary>
+    private bool _moving;
+
+    private const int WM_MOVING = 0x0216;
+    private const int WM_EXITSIZEMOVE = 0x0232;
+
+    /// <summary>
+    /// Moved by its title bar: each step of the move (false), and once more when it's let go (true). The main window
+    /// tells the page where the pointer is over it, so a terminal can be dropped back into its layout.
+    /// </summary>
+    public event Action<DetachedWindow, bool>? Moved;
 
     /// <summary>window.open's name for it (its target), which the page uses to act on it.</summary>
     public string PageWindowName { get; }
@@ -49,6 +63,7 @@ internal sealed class DetachedWindow : Window
             CornerRadius = new CornerRadius(0), UseAeroCaptionButtons = false,
         });
         WindowInterop.UseCustomChrome(this, sharpIcons: false);
+        SourceInitialized += (_, _) => HwndSource.FromHwnd(new WindowInteropHelper(this).Handle).AddHook(OnMessage);
         _frame.Child = _web;
         Content = _frame;
         Recolor(colors);
@@ -110,7 +125,20 @@ internal sealed class DetachedWindow : Window
                 WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
                 break;
             case WindowActions.Drag:
-                WindowInterop.BeginNonClientDrag(this, WindowInterop.HTCAPTION);
+                // Windows moves it until the button is let go; its steps come to OnMessage. Started once this page
+                // message is handled: WebView2 holds the page's next messages until then, and the page answers the
+                // steps (shrinking the window over a place it would land) while it moves.
+                Dispatcher.BeginInvoke(() =>
+                {
+                    _moving = true;
+                    WindowInterop.BeginNonClientDrag(this, WindowInterop.HTCAPTION);
+                    _moving = false;
+                });
+                break;
+            case WindowActions.Fade:
+            case WindowActions.Solid:
+                // Over a place it would land: only its title bar shows (the page's header and the frame above it).
+                WindowInterop.ShowOnlyTop(this, action.Action == WindowActions.Fade ? TitleBarHeight + FrameWidth : null);
                 break;
             case WindowActions.Resize when WindowState == WindowState.Normal && action.Edge is { } edge
                 && WindowInterop.EdgeHitTests.TryGetValue(edge, out var hitTest):
@@ -120,6 +148,21 @@ internal sealed class DetachedWindow : Window
                 BringToFront();
                 break;
         }
+    }
+
+    /// <summary>The steps of a move its title bar started, and its end.</summary>
+    private IntPtr OnMessage(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if (_moving && msg == WM_MOVING)
+        {
+            Moved?.Invoke(this, false);
+        }
+        else if (_moving && msg == WM_EXITSIZEMOVE)
+        {
+            _moving = false;
+            Moved?.Invoke(this, true);
+        }
+        return IntPtr.Zero;
     }
 
     /// <summary>To the front, out of the taskbar if it was minimized.</summary>

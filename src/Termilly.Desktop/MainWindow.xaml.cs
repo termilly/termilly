@@ -270,28 +270,6 @@ public partial class MainWindow : Window
         }
     }
 
-    /// <summary>The page's own windows (a terminal, the Notepad or the Snippets window detached), while they're open.</summary>
-    private readonly List<DetachedWindow> _detached = [];
-
-    /// <summary>
-    /// window.open of one of the page's own windows (named so, js/windows.js): a window of its own (DetachedWindow), still
-    /// the page's (window.opener), which builds its empty page and moves into it what it shows. Anything else is left
-    /// to WebView2, as before.
-    /// </summary>
-    private async void OnNewWindowRequested(object? sender, CoreWebView2NewWindowRequestedEventArgs e)
-    {
-        if (!e.Name.StartsWith(DetachedWindowNames.NamePrefix, StringComparison.Ordinal) || _closing)
-        {
-            return;
-        }
-        using var deferral = e.GetDeferral();
-        var window = new DetachedWindow(e.Name, _theme.Palette, e.WindowFeatures);
-        _detached.Add(window);
-        window.Closed += (_, _) => _detached.Remove(window);
-        e.NewWindow = await window.StartAsync(Web.CoreWebView2.Environment, HostName);
-        e.Handled = true;
-    }
-
     protected override void OnStateChanged(EventArgs e)
     {
         base.OnStateChanged(e);

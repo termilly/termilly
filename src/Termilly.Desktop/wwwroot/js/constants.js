@@ -183,6 +183,8 @@ export const WINDOW_ACTION = Object.freeze({
   drag: 'drag',
   resize: 'resize',
   focus: 'focus',
+  fade: 'fade',
+  solid: 'solid',
 });
 
 /** C#: QuitAnswers (Messaging/Window.cs). */

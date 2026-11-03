@@ -14,6 +14,13 @@ internal static class WindowActions
     public const string Resize = "resize";
     /// <summary>One of the page's own windows (js/windows.js) to the front: the message's name says which.</summary>
     public const string Focus = "focus";
+    /// <summary>
+    /// A detached window shrunk to its title bar while it's dragged over a place it would land (the page sees there), so
+    /// that place shows.
+    /// </summary>
+    public const string Fade = "fade";
+    /// <summary>A detached window whole again.</summary>
+    public const string Solid = "solid";
 }
 
 /// <summary>
@@ -135,6 +142,16 @@ internal static partial class ToPage
     internal sealed record WindowState(bool Maximized, bool Minimized, bool Active) : IHostMessage
     {
         public static string Type => "windowState";
+    }
+
+    /// <summary>
+    /// A detached window (<see cref="Name"/>) moved by its title bar: where the pointer is over the main window's page
+    /// (X and Y in its pixels; null when it isn't over it), and whether the window was just let go there. The page shows
+    /// where a terminal would land, and puts it there when it's let go (js/panes.js).
+    /// </summary>
+    internal sealed record WindowDragged(string Name, double? X, double? Y, bool Dropped) : IHostMessage
+    {
+        public static string Type => "window:dragged";
     }
 
     /// <summary>A notification was clicked: that terminal comes forward.</summary>

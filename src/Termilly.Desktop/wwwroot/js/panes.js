@@ -342,6 +342,7 @@ export function detachTab(tab, at) {
     el, title: tabTitle(tab), at, onClosed: () => attachTab(tab), onMoved: () => moved(tab), onResize: scheduleFit,
     // Its title bar is the window's; Close there closes the terminal, and its name keeps its double click (rename).
     header: tab.view.header, close: () => closeTab(tab), keepDoubleClick: PANE_NAME,
+    onDragged: (x, y, dropped) => dragBack(tab, x, y, dropped),
   });
 }
 
@@ -989,19 +990,81 @@ function beginDrag(source) {
   find(dragGhost, '.ghost-badge').innerHTML = tabBadgeHtml(source);
   find(dragGhost, '.ghost-name').textContent = tabTitle(source);
   /** @type {TabView} */ (source.view).el.classList.add(DRAG_SOURCE);
-  for (const t of tabsOf(/** @type {Workspace} */ (wsById(source.wsId)))) {
+  showGuides(/** @type {Workspace} */ (wsById(source.wsId)), source);
+}
+
+/**
+ * The docking compass on every pane of a workspace a dragged terminal can land on.
+ * @param {Workspace} ws
+ * @param {Tab} source
+ */
+function showGuides(ws, source) {
+  for (const t of tabsOf(ws)) {
     if (t !== source && !t.detached) {
       /** @type {TabView} */ (t.view).el.append(/** @type {Element} */ (dockGuideTemplate.content.firstElementChild).cloneNode(true));
     }
   }
 }
 
+/** The compasses and the drop outline gone. */
+function hideGuides() {
+  for (const guide of document.querySelectorAll('.pane > .dock-guide')) guide.remove();
+  showDrop(null);
+}
+
+/** A detached terminal's window being moved over the main window: where it would land there, while it is. */
+/** @type {{ tab: Tab, drop: Drop | null } | null} */
+let draggedBack = null;
+
+/**
+ * A detached terminal's window moved by its title bar, over the main window at x, y (null when it isn't over it):
+ * the compasses and the outline show where it would land in the workspace shown, as for a pane dragged there, and
+ * let go over one it goes there, its window closing. True while it would land somewhere (js/windows.js).
+ * @param {Tab} tab
+ * @param {number | null} x
+ * @param {number | null} y
+ * @param {boolean} dropped
+ */
+function dragBack(tab, x, y, dropped) {
+  const ws = activeWs();
+  const over = x !== null && y !== null && !!ws;
+  if (over && !draggedBack) {
+    draggedBack = { tab, drop: null };
+    showGuides(/** @type {Workspace} */ (ws), tab);
+  } else if (!over && draggedBack) {
+    draggedBack = null;
+    hideGuides();
+  }
+  if (draggedBack) {
+    draggedBack.drop = findDropTarget(tab, /** @type {number} */ (x), /** @type {number} */ (y));
+    showDrop(draggedBack.drop);
+  }
+  const drop = draggedBack?.drop ?? null;
+  if (dropped && draggedBack) {
+    draggedBack = null;
+    hideGuides();
+    if (drop) landBack(tab, drop);
+  }
+  return !!drop;
+}
+
+/**
+ * A detached terminal dropped into the main window: back in its workspace, moved to the shown one if that's another,
+ * then beside or into the pane it was dropped on.
+ * @param {Tab} tab
+ * @param {Drop} drop
+ */
+function landBack(tab, drop) {
+  attachTab(tab);
+  if (drop.target.wsId !== tab.wsId) moveTab(tab, drop.target.wsId);
+  movePane(tab, drop.target, drop.zone);
+}
+
 /** @param {Tab} source */
 function endDrag(source) {
   document.body.classList.remove(DRAGGING_PANE);
   /** @type {TabView} */ (source.view).el.classList.remove(DRAG_SOURCE);
-  for (const guide of document.querySelectorAll('.pane > .dock-guide')) guide.remove();
-  showDrop(null);
+  hideGuides();
 }
 
 /**
@@ -1015,27 +1078,30 @@ function endDrag(source) {
  * @returns {Drop | null}
  */
 function findDropTarget(source, x, y) {
-  // At the app window's very edge, or out of it: into a window of its own.
-  if (x <= WINDOW_EDGE_PX || y <= WINDOW_EDGE_PX || x >= innerWidth - WINDOW_EDGE_PX || y >= innerHeight - WINDOW_EDGE_PX) {
-    return windowDrop(source, x, y);
-  }
-  const ws = /** @type {Workspace} */ (wsById(source.wsId));
+  // A detached terminal is already in a window of its own: the main window's edge and the compass's corner are nothing
+  // to it. Otherwise, at the app window's very edge, or out of it: into a window of its own.
+  const atEdge = x <= WINDOW_EDGE_PX || y <= WINDOW_EDGE_PX || x >= innerWidth - WINDOW_EDGE_PX || y >= innerHeight - WINDOW_EDGE_PX;
+  if (atEdge) return source.detached ? null : windowDrop(source, x, y);
   const under = document.elementFromPoint(x, y);
+  // A detached terminal lands in the workspace shown, whichever it came from.
+  const lands = (/** @type {Tab} */ target) => target.wsId === source.wsId || !!source.detached;
   const strip = under?.closest('.tab-strip');
   if (strip) {
     const groupEl = /** @type {HTMLElement} */ (strip.closest('.tab-group'));
     const target = state.tabs.get(
       /** @type {string} */ (/** @type {HTMLElement | null} */ (groupEl.querySelector('.strip-tab.active'))?.dataset.tab));
-    if (!target || target.wsId !== source.wsId || groupOf(ws, target.id) === groupOf(ws, source.id)) return null;
+    const tws = target && /** @type {Workspace} */ (wsById(target.wsId));
+    if (!target || !tws || !lands(target) || groupOf(tws, target.id) === groupOf(tws, source.id)) return null;
     return { target, zone: ZONE.center, rect: strip.getBoundingClientRect() }; // the strip it joins, outlined
   }
   const el = /** @type {HTMLElement | null | undefined} */ (under?.closest('.pane'));
   const target = el && state.tabs.get(/** @type {string} */ (el.dataset.tab));
-  if (!target || target.wsId !== source.wsId) return null;
+  if (!target || !lands(target)) return null;
+  const ws = /** @type {Workspace} */ (wsById(target.wsId));
   const ownGroup = target === source && groupOf(ws, source.id);
   if (target === source && !ownGroup) return null;
   const drop = paneZone(/** @type {HTMLElement} */ (el), target, x, y);
-  if (drop.zone === ZONE.window) return windowDrop(source, x, y, target);
+  if (drop.zone === ZONE.window) return source.detached ? null : windowDrop(source, x, y, target);
   if (ownGroup) {
     // Out of its own group: beside the whole group.
     if (drop.zone === ZONE.center) return null;

@@ -9,8 +9,8 @@
 // their own: the element's header is it, with Return, Minimize, Maximize and Close added (the main window's own
 // buttons, copied), and the window's edges resize it, as the main window's do (the host moves and sizes it).
 
-import { PAGE } from './protocol.js';
-import { send } from './host.js';
+import { PAGE, HOST } from './protocol.js';
+import { send, onHost } from './host.js';
 import { WINDOW_ACTION, DETACHED_WINDOW } from './constants.js';
 
 /**
@@ -22,7 +22,13 @@ import { WINDOW_ACTION, DETACHED_WINDOW } from './constants.js';
  * double click (else a double click maximizes the window).
  * @typedef {{ key: string, win: Window, el: HTMLElement, title: string, ready: boolean, onClosed: (el: HTMLElement) => void,
  *   onMoved?: () => void, onResize?: () => void, askClose?: () => unknown, header?: HTMLElement, close?: () => unknown,
- *   keepDoubleClick?: string, chrome?: AbortController }} Detached
+ *   keepDoubleClick?: string, chrome?: AbortController, onDragged?: Dragged, faded?: boolean }} Detached
+ */
+
+/**
+ * The window moved by its title bar, over the main window at x, y (its page's pixels; null when it isn't over it), and
+ * let go there (dropped): whether it would land somewhere there (the window shrinks to its title bar, so that shows).
+ * @typedef {(x: number | null, y: number | null, dropped: boolean) => boolean} Dragged
  */
 
 /** What the windows' window.open names start with: the hosts know their windows by it. */
@@ -81,12 +87,12 @@ export const isDetached = key => open.has(key);
  * @param {string} key
  * @param {{ el: HTMLElement, title: string, onClosed: (el: HTMLElement) => void, onMoved?: () => void,
  *   onResize?: () => void, askClose?: () => unknown, at?: { x: number, y: number }, header?: HTMLElement,
- *   close?: () => unknown, keepDoubleClick?: string, minWidth?: number }} options
+ *   close?: () => unknown, keepDoubleClick?: string, minWidth?: number, onDragged?: Dragged }} options
  *   at: the screen point the window's top left corner goes near (a drag's drop); else over where the element is.
  *   minWidth: the window is at least this wide (the element's header with the window's buttons added fits)
  */
 export function detach(key, options) {
-  const { el, title, onClosed, onMoved, onResize, askClose, at, header, close, keepDoubleClick, minWidth = 0 } = options;
+  const { el, title, onClosed, onMoved, onResize, askClose, at, header, close, keepDoubleClick, minWidth = 0, onDragged } = options;
   if (open.has(key)) return focusWindow(key), true;
   const r = el.getBoundingClientRect();
   const left = at ? at.x - OFFSET_PX : screenX + r.left + OFFSET_PX;
@@ -97,7 +103,7 @@ export function detach(key, options) {
   ].join(',');
   const win = window.open('', NAME_PREFIX + key, features);
   if (!win) return false;
-  open.set(key, { key, win, el, title, ready: false, onClosed, onMoved, onResize, askClose, header, close, keepDoubleClick });
+  open.set(key, { key, win, el, title, ready: false, onClosed, onMoved, onResize, askClose, header, close, keepDoubleClick, onDragged });
   build(win);
   watch ||= window.setInterval(checkClosed, WATCH_MS);
   if (!themeWatch) {
@@ -282,6 +288,17 @@ function mirror(root) {
   for (const { name } of [...root.attributes]) if (!document.documentElement.hasAttribute(name)) root.removeAttribute(name);
   for (const { name, value } of document.documentElement.attributes) root.setAttribute(name, value);
 }
+
+// A window moved by its title bar, over the main window: its owner shows where it would land (and lands it when it's
+// let go), and the window shrinks to its title bar while there's a place, so the main window shows under it.
+onHost(HOST.windowDragged, m => {
+  const d = [...open.values()].find(o => NAME_PREFIX + o.key === m.name);
+  if (!d?.onDragged) return;
+  const lands = d.onDragged(m.x, m.y, m.dropped) && !m.dropped;
+  if (lands === !!d.faded || !open.has(d.key)) return;
+  d.faded = lands;
+  send(PAGE.window, { action: lands ? WINDOW_ACTION.fade : WINDOW_ACTION.solid, name: m.name });
+});
 
 window.addEventListener('focus', () => { here = document; });
 // The main page going (Termilly quitting, a reload): its windows go with it.
