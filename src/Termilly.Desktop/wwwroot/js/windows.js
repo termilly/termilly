@@ -23,8 +23,8 @@ const PAGE_URL = 'detached.html';
 const NAME_PREFIX = 'termilly-';
 /** How often the windows are checked for one gone without saying so (closed with its page). */
 const WATCH_MS = 1000;
-/** Where a new window opens from the place its element had, so the two don't line up exactly. */
-const OFFSET_PX = 24;
+/** Where a new window opens from the place its element had (the two don't line up exactly), or before a drop point. */
+export const OFFSET_PX = 24;
 /** A page going away: a detached window's closing, or the main page's. */
 const PAGE_GONE = 'pagehide';
 
@@ -61,14 +61,17 @@ export const isDetached = key => open.has(key);
  * be opened. Already detached: its window comes to the front.
  * @param {string} key
  * @param {{ el: HTMLElement, title: string, onClosed: (el: HTMLElement) => void, onMoved?: () => void,
- *   onResize?: () => void, askClose?: () => unknown }} options
+ *   onResize?: () => void, askClose?: () => unknown, at?: { x: number, y: number } }} options
+ *   at: the screen point the window's top left corner goes near (a drag's drop); else over where the element is
  */
-export function detach(key, { el, title, onClosed, onMoved, onResize, askClose }) {
+export function detach(key, { el, title, onClosed, onMoved, onResize, askClose, at }) {
   if (open.has(key)) return focusWindow(key), true;
   const r = el.getBoundingClientRect();
+  const left = at ? at.x - OFFSET_PX : screenX + r.left + OFFSET_PX;
+  const top = at ? at.y - OFFSET_PX : screenY + r.top + OFFSET_PX;
   const features = [
     'popup', `width=${Math.round(r.width)}`, `height=${Math.round(r.height)}`,
-    `left=${Math.round(screenX + r.left + OFFSET_PX)}`, `top=${Math.round(screenY + r.top + OFFSET_PX)}`,
+    `left=${Math.round(left)}`, `top=${Math.round(top)}`,
   ].join(',');
   const win = window.open(PAGE_URL, NAME_PREFIX + key, features);
   if (!win) return false;

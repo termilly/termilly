@@ -1541,6 +1541,8 @@ body.dragging-pane #drag-ghost { display: flex; }
   transition: left 0.12s ease, top 0.12s ease, width 0.12s ease, height 0.12s ease, opacity 0.12s;
 }
 #drop-preview.visible { opacity: 1; }
+/* Shown afresh (js/panes.js): at its place at once, not sliding from where it was last. */
+#drop-preview.placing { transition: none; }
 #drop-preview span {
   padding: 4px 10px;
   border-radius: 6px;
@@ -1606,6 +1608,11 @@ body.dragging-pane #drag-ghost { display: flex; }
 .dock-cell[data-zone="right"]::after { left: 50%; }
 .dock-cell.active { border-color: var(--accent); }
 .dock-cell.active::after { background: var(--accent); }
+/* The corner cell: out into a window of its own, the detach icon at its own 16px (whole pixels in a 28px cell). */
+.dock-cell[data-zone="window"] { display: grid; grid-area: 1 / 3; place-items: center; color: var(--muted); }
+.dock-cell[data-zone="window"]::after { content: none; }
+.dock-cell[data-zone="window"] svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1; }
+.dock-cell[data-zone="window"].active { color: var(--accent); }
 
 /* ---- Popovers ---- */
 

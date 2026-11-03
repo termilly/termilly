@@ -94,18 +94,7 @@ internal sealed class LinuxWindow
             .SetDevToolsEnabled(Environment.GetEnvironmentVariable(DevToolsVariable) == "1")
             .SetContextMenuEnabled(false)
             .RegisterCustomSchemeHandler(AppScheme.Scheme, (object _, string _, string url, out string contentType) => AppScheme.Serve(url, theme.Palette, out contentType))
-            .RegisterWindowCreatedHandler((_, _) =>
-            {
-                _created = true;
-                // The page may open windows of its own (a terminal, the Notepad or the Snippets window detached).
-                window!.Invoke(() =>
-                {
-                    if (GtkWindow.Find() is { } main)
-                    {
-                        DetachedWindows.Hook(main, () => theme.Palette.Light);
-                    }
-                });
-            })
+            .RegisterWindowCreatedHandler((_, _) => OnCreated(window!, theme))
             .RegisterWebMessageReceivedHandler((_, message) =>
             {
                 using var doc = JsonDocument.Parse(message);
@@ -136,6 +125,19 @@ internal sealed class LinuxWindow
                 return false;
             });
         return window;
+    }
+
+    /// <summary>The window exists: messages may go to it, and its page may open windows of its own (DetachedWindows).</summary>
+    private void OnCreated(PhotinoWindow window, WindowTheme theme)
+    {
+        _created = true;
+        window.Invoke(() =>
+        {
+            if (GtkWindow.Find() is { } main)
+            {
+                DetachedWindows.Hook(main, () => theme.Palette.Light);
+            }
+        });
     }
 
     /// <summary>Tells the page the window's state after a change to one part of it (the others stay as they were).</summary>
