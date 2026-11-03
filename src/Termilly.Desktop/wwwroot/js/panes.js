@@ -1068,6 +1068,8 @@ function paneZone(el, target, x, y) {
   const zone = y < below + strip ? ZONE.top
     : y > r.bottom - strip ? ZONE.bottom
       : x < r.left + r.width / 2 ? ZONE.left : ZONE.right;
+  // Above, the outline leaves the title bar out (that's where it would join as a tab).
+  if (zone === ZONE.top) return { target, zone, rect: new DOMRect(r.left, below, r.width, r.bottom - below) };
   return { target, zone, rect: r };
 }
 
