@@ -1020,7 +1020,7 @@ function findDropTarget(source, x, y) {
     const target = state.tabs.get(
       /** @type {string} */ (/** @type {HTMLElement | null} */ (groupEl.querySelector('.strip-tab.active'))?.dataset.tab));
     if (!target || target.wsId !== source.wsId || groupOf(ws, target.id) === groupOf(ws, source.id)) return null;
-    return { target, zone: ZONE.center, rect: groupEl.getBoundingClientRect() };
+    return { target, zone: ZONE.center, rect: strip.getBoundingClientRect() }; // the strip it joins, outlined
   }
   const el = /** @type {HTMLElement | null | undefined} */ (under?.closest('.pane'));
   const target = el && state.tabs.get(/** @type {string} */ (el.dataset.tab));
@@ -1056,9 +1056,9 @@ function paneZone(el, target, x, y) {
       return { target, zone: /** @type {Zone} */ (cell.dataset.zone), rect: r };
     }
   }
-  // Over its title bar it joins as a tab, as over a group's strip of tabs.
+  // Over its title bar it joins as a tab, as over a group's strip of tabs; the outline is the title bar alone.
   const head = el.querySelector(':scope > .pane-header')?.getBoundingClientRect();
-  if (head && y >= head.top && y <= head.bottom) return { target, zone: ZONE.center, rect: r };
+  if (head && y >= head.top && y <= head.bottom) return { target, zone: ZONE.center, rect: head };
   // Anywhere else splits it: above or below in its top and bottom thirds, else left or right by the half the pointer
   // is in, so the outline shows as soon as the pointer is in and changes side right at the middle.
   const strip = r.height * TOP_BOTTOM_SHARE;
