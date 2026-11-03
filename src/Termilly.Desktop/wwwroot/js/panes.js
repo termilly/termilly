@@ -79,8 +79,9 @@ const JPEG = 'image/jpeg';
 
 /**
  * Where a dragged pane would land: the pane it goes to, the zone, and the area the drop preview covers. Out into a
- * window of its own, `over` is the pane whose compass cell it's on (none at the app window's edge).
- * @typedef {{ target: Tab, zone: Zone, rect: DOMRect, over?: Tab }} Drop
+ * window of its own, `over` is the pane whose compass cell it's on (none at the app window's edge). home: a detached
+ * terminal back into a workspace with nothing on screen (target is itself).
+ * @typedef {{ target: Tab, zone: Zone, rect: DOMRect, over?: Tab, home?: boolean }} Drop
  */
 
 /**
@@ -338,6 +339,8 @@ export function moveTab(tab, targetWsId) {
 const windowKey = tab => `tab-${tab.id}`;
 /** A pane title bar's name, which a double click renames (js/rename.js). */
 export const PANE_NAME = '.pane-name';
+/** A terminal's pane (its view's element). */
+const PANE = '.pane';
 
 /** The menu entries that detach a terminal and bring it back (js/tabmenu.js). */
 export const DETACH_LABEL = 'Detach to a window';
@@ -1253,14 +1256,37 @@ function dragBack(tab, x, y, dropped) {
 
 /**
  * A detached terminal dropped into the main window: back in its workspace, moved to the shown one if that's another,
- * then beside or into the pane it was dropped on.
+ * then beside or into the pane it was dropped on; dropped on a workspace with nothing in it, it just goes there.
  * @param {Tab} tab
  * @param {Drop} drop
  */
 function landBack(tab, drop) {
   attachTab(tab);
+  if (drop.home) {
+    const ws = activeWs();
+    if (ws && ws.id !== tab.wsId) moveTab(tab, ws.id);
+    return;
+  }
   if (drop.target.wsId !== tab.wsId) moveTab(tab, drop.target.wsId);
   movePane(tab, drop.target, drop.zone);
+}
+
+/**
+ * A detached terminal over the shown workspace while nothing of it is on screen (all its terminals are in windows of
+ * their own, or it has none): the whole workspace is where it lands. Null anywhere else.
+ * @param {Tab} source
+ * @param {number} x
+ * @param {number} y
+ * @returns {Drop | null}
+ */
+function emptyWorkspaceDrop(source, x, y) {
+  const ws = activeWs();
+  if (!ws || !source.detached) return null;
+  const layer = layerOf(ws);
+  const r = layer.getBoundingClientRect();
+  const inside = x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+  if (!inside || layer.querySelector(PANE)) return null;
+  return { target: source, zone: ZONE.center, rect: r, home: true };
 }
 
 /**
@@ -1303,9 +1329,10 @@ function findDropTarget(source, x, y) {
     if (!target || !tws || !lands(target) || groupOf(tws, target.id) === groupOf(tws, source.id)) return null;
     return { target, zone: ZONE.center, rect: strip.getBoundingClientRect() }; // the strip it joins, outlined
   }
-  const el = /** @type {HTMLElement | null | undefined} */ (under?.closest('.pane'));
+  const el = /** @type {HTMLElement | null | undefined} */ (under?.closest(PANE));
   const target = el && state.tabs.get(/** @type {string} */ (el.dataset.tab));
-  if (!target || !lands(target)) return null;
+  if (!target) return emptyWorkspaceDrop(source, x, y);
+  if (!lands(target)) return null;
   const ws = /** @type {Workspace} */ (wsById(target.wsId));
   const ownGroup = target === source && groupOf(ws, source.id);
   if (target === source && !ownGroup) return null;
