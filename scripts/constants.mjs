@@ -34,6 +34,7 @@ const SOURCES = [
   { file: 'Messaging/Files.cs', cls: 'FolderPaths', js: 'FOLDER_PATH' },
   { file: 'Messaging/Window.cs', cls: 'WindowActions', js: 'WINDOW_ACTION' },
   { file: 'Messaging/Window.cs', cls: 'QuitAnswers', js: 'QUIT_ANSWER' },
+  { file: 'Messaging/Window.cs', cls: 'DetachedWindowNames', js: 'DETACHED_WINDOW' },
   { file: 'UpdateInstall.cs', cls: 'UpdateStates', js: 'UPDATE_STATE' },
   { file: 'Settings/SettingValues.cs', cls: 'SettingValues', js: 'SETTING_VALUES' },
   { file: 'Settings/SettingGroups.cs', cls: 'TerminalSettings', js: 'TERMINAL_SETTINGS' },

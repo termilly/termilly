@@ -3,7 +3,7 @@
 // stay laid out so their terminals keep the right size), the split layout inside it, and tab actions.
 
 import { PAGE } from './protocol.js';
-import { send } from './host.js';
+import { send, request } from './host.js';
 import {
   state, on, emit, persist, newId, activeWs, wsById, tabsOf, tabTitle, defaultProfile, ensureTag, activityOf, leaves,
   replaceNode, findLeaf, detachLeaf, groupOf, firstTabOf, markSeen, findPreview, withoutPreview, EVENTS, NODE, SPLIT,
@@ -14,9 +14,10 @@ import { openTerminal, disposeTerminal, bufferLines, scheduleFit, prepareStart }
 import { wake } from './hibernate.js';
 import { byId, find, targetOf, WORKSPACE_ID, dragPointer, onMiddleClick } from './dom.js';
 import { ENV_CLASS, ENV_COLOR } from './environments.js';
+import { detach, closeWindow, focusWindow, setWindowTitle, OFFSET_PX, MIN_WIDTH_PX } from './windows.js';
 
-/** A pane's drop zones: beside it on a side, or in it as a tab (center). */
-const ZONE = Object.freeze({ left: 'left', right: 'right', top: 'top', bottom: 'bottom', center: 'center' });
+/** A pane's drop zones: beside it on a side, in it as a tab (center), or out into a window of its own. */
+const ZONE = Object.freeze({ left: 'left', right: 'right', top: 'top', bottom: 'bottom', center: 'center', window: 'window' });
 
 /** Which way focus moves from the focused pane (and which way a tab strip scrolls). */
 export const DIRECTION = Object.freeze({ left: 'left', right: 'right', up: 'up', down: 'down' });
@@ -31,8 +32,9 @@ const STRIP_TAB = 'strip-tab';
 /** The body's class while a pane is dragged, and the dragged pane's own. */
 const DRAGGING_PANE = 'dragging-pane';
 const DRAG_SOURCE = 'drag-source';
-/** The drop preview while it's shown. */
+/** The drop preview while it's shown, and while it's put in place without sliding there. */
 const VISIBLE = 'visible';
+const PLACING = 'placing';
 /** A strip tab whose terminal wants attention. */
 const ATTENTION = 'attention';
 
@@ -48,8 +50,26 @@ const STRIP_SCROLL_SHARE = 0.7;
 const STRIP_SCROLL_MIN_PX = 80;
 /** Room left beside the shown tab when it's scrolled into the strip's view. */
 const STRIP_TAB_MARGIN_PX = 4;
-/** Further than this share of its size from every edge, the pointer is in a pane's middle (join as a tab). */
-const EDGE_ZONE = 0.3;
+/** This close to the app window's edge (or past it), a dragged pane is dropped into a window of its own. */
+const WINDOW_EDGE_PX = 8;
+/** The size of a dragged pane's window outline at the most (it's the pane's size, smaller). */
+const WINDOW_PREVIEW = Object.freeze({ w: 360, h: 240 });
+/** A terminal dragged out: its window's outline, and the picture in it, at this share of the window's size (70% smaller). */
+const WINDOW_SHOT_SCALE = 0.3;
+/** How much of a pane's height, along its top and its bottom, splits it above or below (left or right in between). */
+const TOP_BOTTOM_SHARE = 1 / 3;
+/** How far around a compass cell the pointer still counts as on it. */
+const CELL_SLACK_PX = 2;
+/** A compass that offers only the detach cell (a panel's, which has no layout to land in). */
+const DETACH_ONLY = 'detach-only';
+/** A compass the pointer is at, and the cell it would drop on. */
+const HOVER = 'hover';
+const ACTIVE = 'active';
+/** The drop outline while it shows a terminal's picture (app.css), and the CSS variable that holds it. */
+const WITH_SHOT = 'with-shot';
+const SHOT_VAR = '--shot';
+/** The picture's kind: the host's (a JPEG), and the terminal's cut from it. */
+const JPEG = 'image/jpeg';
 
 /**
  * A pane's drop zone: beside it on a side, or in it as a tab (center).
@@ -57,8 +77,9 @@ const EDGE_ZONE = 0.3;
  */
 
 /**
- * Where a dragged pane would land: the pane it goes to, the zone, and the area the drop preview covers.
- * @typedef {{ target: Tab, zone: Zone, rect: DOMRect }} Drop
+ * Where a dragged pane would land: the pane it goes to, the zone, and the area the drop preview covers. Out into a
+ * window of its own, `over` is the pane whose compass cell it's on (none at the app window's edge).
+ * @typedef {{ target: Tab, zone: Zone, rect: DOMRect, over?: Tab }} Drop
  */
 
 /**
@@ -98,6 +119,8 @@ on(EVENTS.dialogClosed, () => restoreFocus());
 const container = byId(WORKSPACE_ID);
 const emptyTemplate = /** @type {HTMLTemplateElement} */ (byId('empty-state'));
 const dockGuideTemplate = /** @type {HTMLTemplateElement} */ (byId('dock-guide'));
+// The compass's corner cell drops the pane into a window of its own: the same icon as its menu entry.
+find(dockGuideTemplate.content, '[data-zone="window"]').innerHTML = ICONS.detach;
 const dropPreview = byId('drop-preview');
 const dragGhost = byId('drag-ghost');
 /** @type {Map<string, HTMLElement>} */
@@ -229,6 +252,9 @@ export function splitFocused(dir, profile) {
  */
 export function closeTab(tab) {
   if (!state.tabs.has(tab.id)) return;
+  // Its window goes with it (one still opening too); the pane isn't wanted back.
+  tab.detached = false;
+  closeWindow(windowKey(tab), { quiet: true });
   const ws = wsById(tab.wsId);
   if (!ws) {
     // The scratch terminal (scratch.js): no workspace, no history.
@@ -305,6 +331,98 @@ export function moveTab(tab, targetWsId) {
   persist();
 }
 
+// ---- Terminals in windows of their own (js/windows.js) ----
+
+/** @param {Tab} tab */
+const windowKey = tab => `tab-${tab.id}`;
+/** A pane title bar's name, which a double click renames (js/rename.js). */
+export const PANE_NAME = '.pane-name';
+
+/** The menu entries that detach a terminal and bring it back (js/tabmenu.js). */
+export const DETACH_LABEL = 'Detach to a window';
+export const ATTACH_LABEL = 'Back to the workspace';
+
+/**
+ * Moves a terminal into a window of its own. It stays where it is until the window is ready; then its place in the
+ * layout is kept (the layout is drawn without it), and closing the window puts it back there.
+ * @param {Tab} tab
+ * @param {{ x: number, y: number }} [at] where on the screen it opens (a drag's drop), else over where the pane is
+ */
+export function detachTab(tab, at) {
+  const ws = wsById(tab.wsId);
+  if (!ws || !tab.view || tab.detached) return;
+  const { el } = tab.view;
+  detach(windowKey(tab), {
+    el, title: tabTitle(tab), at, onClosed: () => attachTab(tab), onMoved: () => moved(tab), onResize: scheduleFit,
+    // Its title bar is the window's; Close there closes the terminal, and its name keeps its double click (rename).
+    header: tab.view.header, close: () => closeTab(tab), keepDoubleClick: PANE_NAME,
+    onDragged: (x, y, dropped) => dragBack(tab, x, y, dropped),
+  });
+}
+
+/**
+ * A terminal now in its own window: the layout it left is drawn without it.
+ * @param {Tab} tab
+ */
+function moved(tab) {
+  const ws = wsById(tab.wsId);
+  const view = /** @type {TabView} */ (tab.view);
+  tab.detached = true;
+  takeBackHeader(tab);
+  view.el.classList.remove(TAB_HIDDEN);
+  rehome(view);
+  view.term?.focus();
+  if (!ws) return;
+  // The workspace's focus moves to a terminal still in it.
+  if (ws.focusId === tab.id) ws.focusId = tabsOf(ws).find(t => !t.detached)?.id ?? null;
+  renderWorkspace(ws);
+  emit(EVENTS.tab, tab);
+  emit(EVENTS.workspaces);
+}
+
+/**
+ * A detached terminal back in its workspace, where it was (its window closed, or Back to the workspace).
+ * @param {Tab} tab
+ */
+export function attachTab(tab) {
+  if (!tab.detached) return;
+  tab.detached = false;
+  closeWindow(windowKey(tab), { quiet: true });
+  const ws = wsById(tab.wsId);
+  if (!ws || !state.tabs.has(tab.id)) return;
+  renderWorkspace(ws);
+  rehome(/** @type {TabView} */ (tab.view));
+  emit(EVENTS.tab, tab);
+  emit(EVENTS.workspaces);
+  if (ws.id === state.activeId) focusTab(tab); else ws.focusId = tab.id;
+}
+
+/**
+ * A terminal moved into another window (its own, or the main one again): its terminal told so (open() again moves it
+ * there), fitted, and drawn again. Else it keeps watching whether it's on screen from the window it left (WebKitGTK's
+ * says it isn't, so it stays paused), and what it drew is gone with the move: blank until its next output.
+ * @param {TabView} view
+ */
+function rehome(view) {
+  const { term } = view;
+  if (!term) return;
+  term.open(view.body);
+  scheduleFit();
+  requestAnimationFrame(() => term.refresh(0, term.rows - 1));
+}
+
+/**
+ * What a workspace shows while all its terminals are in windows of their own: a button that brings them back.
+ * @param {Workspace} ws
+ */
+function allDetachedNote(ws) {
+  const el = document.createElement('div');
+  el.className = 'empty';
+  el.innerHTML = '<p>This workspace’s terminals are in windows of their own</p><button>Bring them back</button>';
+  find(el, 'button').addEventListener('click', () => { for (const tab of tabsOf(ws)) attachTab(tab); });
+  return el;
+}
+
 // ---- Focus and workspaces ----
 
 /**
@@ -318,6 +436,18 @@ export function focusTab(tab) {
     // The scratch terminal (scratch.js) belongs to no workspace.
     markSeen(tab);
     tab.view?.term?.focus();
+    return;
+  }
+  if (tab.detached) {
+    // In a window of its own: that window comes to the front, and the workspace keeps its own focused terminal.
+    markSeen(tab);
+    wake(tab);
+    focusWindow(windowKey(tab));
+    tab.view?.term?.focus();
+    if (tab.attention) {
+      tab.attention = false;
+      emit(EVENTS.tab, tab);
+    }
     return;
   }
   const wsChanged = ws.id !== state.activeId;
@@ -393,7 +523,7 @@ export function moveFocus(direction) {
   let best = null;
   let bestDistance = Infinity;
   for (const t of tabsOf(/** @type {Workspace} */ (activeWs()))) {
-    if (t === current || /** @type {TabView} */ (t.view).el.classList.contains(TAB_HIDDEN)) continue;
+    if (t === current || t.detached || /** @type {TabView} */ (t.view).el.classList.contains(TAB_HIDDEN)) continue;
     const b = /** @type {TabView} */ (t.view).el.getBoundingClientRect();
     const overlapsY = b.top < a.bottom && b.bottom > a.top;
     const overlapsX = b.left < a.right && b.right > a.left;
@@ -438,7 +568,7 @@ export function renderWorkspace(ws) {
     takeBackHeader(tab);
   }
   drawing = ws;
-  layer.replaceChildren(renderNode(ws.root));
+  layer.replaceChildren(renderNode(ws.root) ?? allDetachedNote(ws));
   drawing = null;
   for (const tab of tabsOf(ws)) {
     /** @type {TabView} */ (tab.view).el.classList.toggle('focused', tab.id === ws.focusId);
@@ -520,13 +650,21 @@ function dropLonePreview(ws) {
 }
 
 /**
+ * A part of the layout; null when every terminal in it is in a window of its own (it's drawn without them, and a
+ * split with one side gone is just its other side).
  * @param {LayoutNode} node
- * @returns {HTMLElement}
+ * @returns {HTMLElement | null}
  */
 function renderNode(node) {
-  if (node.kind === NODE.leaf) return /** @type {TabView} */ (/** @type {Tab} */ (state.tabs.get(node.tabId)).view).el;
+  if (node.kind === NODE.leaf) {
+    const tab = /** @type {Tab} */ (state.tabs.get(node.tabId));
+    return tab.detached ? null : /** @type {TabView} */ (tab.view).el;
+  }
   if (node.kind === NODE.preview) return previewElement(drawing);
   if (node.kind === NODE.tabs) return renderGroup(node);
+  const a = renderNode(node.a);
+  const b = renderNode(node.b);
+  if (!a || !b) return a ?? b;
 
   const split = document.createElement('div');
   split.className = `split ${node.dir}`;
@@ -538,8 +676,8 @@ function renderNode(node) {
     cellB.style.flex = `${1 - node.ratio} 1 0`;
   };
   setSizes();
-  cellA.append(renderNode(node.a));
-  cellB.append(renderNode(node.b));
+  cellA.append(a);
+  cellB.append(b);
 
   const divider = document.createElement('div');
   divider.className = 'divider';
@@ -574,6 +712,10 @@ const groupElements = new WeakMap(); // a tabs node -> its element, while render
  * @param {TabsNode} node
  */
 function renderGroup(node) {
+  // Its terminals in windows of their own aren't in it while they're away; the group shows another as its tab.
+  const items = node.items.filter(item => !state.tabs.get(item.tabId)?.detached);
+  if (!items.length) return null;
+  if (!items.some(item => item.tabId === node.active)) node.active = items[0].tabId;
   const group = document.createElement('div');
   group.className = 'tab-group';
   const strip = document.createElement('div');
@@ -581,7 +723,7 @@ function renderGroup(node) {
   strip.setAttribute('role', 'tablist');
   const body = document.createElement('div');
   body.className = 'tab-group-body';
-  for (const item of node.items) {
+  for (const item of items) {
     const tab = /** @type {Tab} */ (state.tabs.get(item.tabId));
     strip.append(stripTab(tab));
     body.append(/** @type {TabView} */ (tab.view).el);
@@ -681,6 +823,7 @@ function updateStripTab(tab, el) {
 }
 
 on(EVENTS.tab, tab => {
+  if (tab.detached) setWindowTitle(windowKey(tab), tabTitle(tab));
   for (const el of /** @type {NodeListOf<HTMLElement>} */ (document.querySelectorAll(`.strip-tab[data-tab="${tab.id}"]`))) {
     updateStripTab(tab, el);
   }
@@ -747,6 +890,7 @@ function showGroupTab(node) {
   const group = groupElements.get(node);
   if (!group) return;
   for (const item of node.items) {
+    if (state.tabs.get(item.tabId)?.detached) continue;
     const shown = item.tabId === node.active;
     state.tabs.get(item.tabId)?.view?.el.classList.toggle(TAB_HIDDEN, !shown);
     const tabEl = /** @type {HTMLElement | null} */ (group.querySelector(`.tab-strip > [data-tab="${item.tabId}"]`));
@@ -782,7 +926,7 @@ const DRAG_THRESHOLD = 5;
 /** Where the dragged pane's label floats, from the pointer. */
 const GHOST_OFFSET = Object.freeze({ x: 14, y: 12 });
 /** @type {Record<Zone, string>} */
-const ZONE_LABELS = { left: 'Split left', right: 'Split right', top: 'Split up', bottom: 'Split down', center: 'Add as a tab' };
+const ZONE_LABELS = { left: 'Split left', right: 'Split right', top: 'Split up', bottom: 'Split down', center: 'Add as a tab', window: DETACH_LABEL };
 
 /**
  * Drag a pane by its header (or its tab in a group); every other pane in the workspace shows where it can land.
@@ -791,7 +935,8 @@ const ZONE_LABELS = { left: 'Split left', right: 'Split right', top: 'Split up',
  */
 function wireDrag(tab, header) {
   header.addEventListener('pointerdown', e => {
-    if (e.button !== 0 || targetOf(e).closest('button, input')) return;
+    // A terminal in a window of its own has no layout to be dragged in.
+    if (e.button !== 0 || tab.detached || targetOf(e).closest('button, input')) return;
     // A tab holding its terminal's title bar: the title bar's own handler takes the drag.
     if (header.classList.contains(STRIP_TAB) && targetOf(e).closest('.pane-header')) return;
     e.preventDefault();
@@ -807,23 +952,54 @@ function wireDrag(tab, header) {
  * @param {PointerEvent} e
  */
 function trackDrag(tab, header, e) {
-  const start = { x: e.clientX, y: e.clientY };
-  let dragging = false;
   /** @type {Drop | null} */
   let drop = null;
+  followDrag(header, e, {
+    // A lone terminal can go nowhere but out into a window of its own; that works too.
+    begin: () => beginDrag(tab),
+    move: (x, y) => {
+      drop = findDropTarget(tab, x, y);
+      showDrop(drop);
+    },
+    end: (commit, screen) => {
+      endDrag(tab);
+      if (commit && drop) dropPane(tab, drop, screen);
+      else focusTab(tab);
+    },
+  });
+}
+
+/**
+ * What a drag does: when it starts (past the threshold), as the pointer moves (where it is in the page), and when it
+ * ends: let go (commit) or not (Escape), and where the pointer was on the screen (a window opens there).
+ * @typedef {{ begin: () => void, move: (x: number, y: number) => void,
+ *   end: (commit: boolean, screen: { x: number, y: number }) => void }} DragSteps
+ */
+
+/**
+ * Follows one press on a title bar, the pointer captured: past the threshold it's a drag (the label follows the
+ * pointer), until it's let go or Escape cancels it.
+ * @param {HTMLElement} header
+ * @param {PointerEvent} e
+ * @param {DragSteps} steps
+ */
+function followDrag(header, e, { begin, move, end }) {
+  const start = { x: e.clientX, y: e.clientY };
+  let dragging = false;
+  /** Where the pointer is on the screen: a window it's dropped into opens there. */
+  let screen = { x: e.screenX, y: e.screenY };
   header.setPointerCapture(e.pointerId);
 
   /** @param {PointerEvent} ev */
   const onMove = ev => {
     if (!dragging) {
       if (Math.hypot(ev.clientX - start.x, ev.clientY - start.y) < DRAG_THRESHOLD) return;
-      if (tabsOf(/** @type {Workspace} */ (wsById(tab.wsId))).length < 2) return; // nowhere to drop
       dragging = true;
-      beginDrag(tab);
+      begin();
     }
     dragGhost.style.transform = `translate(${ev.clientX + GHOST_OFFSET.x}px, ${ev.clientY + GHOST_OFFSET.y}px)`;
-    drop = findDropTarget(tab, ev.clientX, ev.clientY);
-    showDrop(drop);
+    screen = { x: ev.screenX, y: ev.screenY };
+    move(ev.clientX, ev.clientY);
   };
   /** @param {boolean} commit */
   const finish = commit => {
@@ -832,10 +1008,7 @@ function trackDrag(tab, header, e) {
     header.removeEventListener('pointercancel', onCancel);
     window.removeEventListener('keydown', onKey, true);
     if (header.hasPointerCapture(e.pointerId)) header.releasePointerCapture(e.pointerId);
-    if (!dragging) return;
-    endDrag(tab);
-    if (commit && drop) movePane(tab, drop.target, drop.zone);
-    else focusTab(tab);
+    if (dragging) end(commit, screen);
   };
   const onUp = () => finish(true);
   const onCancel = () => finish(false);
@@ -854,52 +1027,226 @@ function trackDrag(tab, header, e) {
   window.addEventListener('keydown', onKey, true);
 }
 
+/**
+ * A panel's title bar (the Notepad's, the Snippets window's) dragged toward the app window's edges: the panel stays
+ * where it is, and a compass in its middle with only its detach cell shows that letting go there, or at the app
+ * window's very edge, opens the panel in a window of its own where it's let go (detach). In a window of its own its
+ * title bar moves that window instead (js/windows.js).
+ * @param {HTMLElement} header
+ * @param {HTMLElement} panel
+ * @param {{ name: string, icon: string, detach: (at: { x: number, y: number }) => void }} options
+ */
+export function wireDragOut(header, panel, { name, icon, detach }) {
+  header.addEventListener('pointerdown', e => {
+    if (e.button !== 0 || panel.ownerDocument !== document || targetOf(e).closest('button, input, select, textarea')) return;
+    e.preventDefault();
+    const guide = /** @type {HTMLElement} */ (/** @type {Element} */ (dockGuideTemplate.content.firstElementChild).cloneNode(true));
+    guide.classList.add(DETACH_ONLY);
+    const cell = find(guide, `[data-zone="${ZONE.window}"]`);
+    let out = false;
+    followDrag(header, e, {
+      begin: () => {
+        showGhost(icon, name);
+        document.body.classList.add(DRAGGING_PANE);
+        panel.append(guide);
+      },
+      move: (x, y) => {
+        out = atAppEdge(x, y) || onCell(cell, x, y);
+        guide.classList.toggle(HOVER, out);
+        cell.classList.toggle(ACTIVE, out);
+        showOutline(out ? windowOutline(panel, x, y) : null, ZONE.window);
+      },
+      end: (commit, screen) => {
+        document.body.classList.remove(DRAGGING_PANE);
+        guide.remove();
+        showOutline(null, ZONE.window);
+        if (commit && out) detach(screen);
+      },
+    });
+  });
+}
+
+/**
+ * A dragged pane let go over a drop: beside or into another, or out into a window of its own where it was let go.
+ * @param {Tab} tab
+ * @param {Drop} drop
+ * @param {{ x: number, y: number }} screen
+ */
+function dropPane(tab, drop, screen) {
+  if (drop.zone === ZONE.window) detachTab(tab, screen);
+  else movePane(tab, drop.target, drop.zone);
+}
+
 /** @param {Tab} source */
 function beginDrag(source) {
-  document.body.classList.add(DRAGGING_PANE);
-  find(dragGhost, 'span').textContent = tabTitle(source);
-  /** @type {TabView} */ (source.view).el.classList.add(DRAG_SOURCE);
-  for (const t of tabsOf(/** @type {Workspace} */ (wsById(source.wsId)))) {
-    if (t !== source) {
+  showGuides(/** @type {Workspace} */ (wsById(source.wsId)), source);
+  // The terminal's picture first (the outline of a window it would open in shows it), then the label and its pane
+  // dimmed, so neither is in the picture.
+  dragged = source;
+  takeShot(source).catch(() => {}).then(() => {
+    if (dragged !== source) return;
+    document.body.classList.add(DRAGGING_PANE);
+    // The terminal's own badge, as its title bar shows it, and its name.
+    showGhost(tabBadgeHtml(source), tabTitle(source));
+    /** @type {TabView} */ (source.view).el.classList.add(DRAG_SOURCE);
+  });
+}
+
+/** The drop shown now (showDrop), shown again once the dragged terminal's picture is in. */
+/** @type {Drop | null} */
+let shownDrop = null;
+/** The terminal being dragged in this window, while it is. */
+/** @type {Tab | null} */
+let dragged = null;
+/** Its picture as the drag began (a data URL), for the outline of a window it would open in; none where none was taken. */
+/** @type {string | null} */
+let shot = null;
+
+/**
+ * A picture of a terminal as it is now: the host's picture of the page (none on Linux), cut to its pane.
+ * @param {Tab} tab
+ * @returns {Promise<void>}
+ */
+async function takeShot(tab) {
+  shot = null;
+  const r = /** @type {TabView} */ (tab.view).el.getBoundingClientRect();
+  const reply = await request(PAGE.windowCapture, {});
+  if (!reply.image) return;
+  const page = new Image();
+  page.src = `data:${JPEG};base64,${reply.image}`;
+  await page.decode();
+  // The picture is at the screen's pixels.
+  const scale = page.naturalWidth / innerWidth;
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(r.width * scale);
+  canvas.height = Math.round(r.height * scale);
+  canvas.getContext('2d')?.drawImage(page, r.left * scale, r.top * scale, r.width * scale, r.height * scale, 0, 0, canvas.width, canvas.height);
+  if (dragged !== tab) return;
+  shot = canvas.toDataURL(JPEG);
+  // The pointer may already be where it would open, and still: the outline shows the picture now.
+  showDrop(shownDrop);
+}
+
+/**
+ * The label that follows the pointer while something is dragged: its icon (markup) and name.
+ * @param {string} icon
+ * @param {string} name
+ */
+function showGhost(icon, name) {
+  find(dragGhost, '.ghost-badge').innerHTML = icon;
+  find(dragGhost, '.ghost-name').textContent = name;
+}
+
+/**
+ * The docking compass on every pane of a workspace a dragged terminal can land on.
+ * @param {Workspace} ws
+ * @param {Tab} source
+ */
+function showGuides(ws, source) {
+  for (const t of tabsOf(ws)) {
+    if (t !== source && !t.detached) {
       /** @type {TabView} */ (t.view).el.append(/** @type {Element} */ (dockGuideTemplate.content.firstElementChild).cloneNode(true));
     }
   }
 }
 
-/** @param {Tab} source */
-function endDrag(source) {
-  document.body.classList.remove(DRAGGING_PANE);
-  /** @type {TabView} */ (source.view).el.classList.remove(DRAG_SOURCE);
+/** The compasses and the drop outline gone. */
+function hideGuides() {
   for (const guide of document.querySelectorAll('.pane > .dock-guide')) guide.remove();
   showDrop(null);
 }
 
+/** A detached terminal's window being moved over the main window: where it would land there, while it is. */
+/** @type {{ tab: Tab, drop: Drop | null } | null} */
+let draggedBack = null;
+
 /**
- * Which pane is under the pointer, and which of its five zones: a compass cell it's on, else an edge strip or the
- * middle. Over a group's tab strip it's always the middle (join the group). A tab dragged within its own group can
- * only leave it, by an edge.
+ * A detached terminal's window moved by its title bar, over the main window at x, y (null when it isn't over it):
+ * the compasses and the outline show where it would land in the workspace shown, as for a pane dragged there, and
+ * let go over one it goes there, its window closing. True while it would land somewhere (js/windows.js).
+ * @param {Tab} tab
+ * @param {number | null} x
+ * @param {number | null} y
+ * @param {boolean} dropped
+ */
+function dragBack(tab, x, y, dropped) {
+  const ws = activeWs();
+  const over = x !== null && y !== null && !!ws;
+  if (over && !draggedBack) {
+    draggedBack = { tab, drop: null };
+    showGuides(/** @type {Workspace} */ (ws), tab);
+  } else if (!over && draggedBack) {
+    draggedBack = null;
+    hideGuides();
+  }
+  if (draggedBack) {
+    draggedBack.drop = findDropTarget(tab, /** @type {number} */ (x), /** @type {number} */ (y));
+    showDrop(draggedBack.drop);
+  }
+  const drop = draggedBack?.drop ?? null;
+  if (dropped && draggedBack) {
+    draggedBack = null;
+    hideGuides();
+    if (drop) landBack(tab, drop);
+  }
+  return !!drop;
+}
+
+/**
+ * A detached terminal dropped into the main window: back in its workspace, moved to the shown one if that's another,
+ * then beside or into the pane it was dropped on.
+ * @param {Tab} tab
+ * @param {Drop} drop
+ */
+function landBack(tab, drop) {
+  attachTab(tab);
+  if (drop.target.wsId !== tab.wsId) moveTab(tab, drop.target.wsId);
+  movePane(tab, drop.target, drop.zone);
+}
+
+/** @param {Tab} source */
+function endDrag(source) {
+  dragged = null;
+  shot = null;
+  document.body.classList.remove(DRAGGING_PANE);
+  /** @type {TabView} */ (source.view).el.classList.remove(DRAG_SOURCE);
+  hideGuides();
+}
+
+/**
+ * Which pane is under the pointer, and which of its zones: a compass cell it's on, its title bar (join as a tab),
+ * else its top or bottom third, else its left or right half. Over a group's tab strip it's always the middle (join the group). A tab dragged within
+ * its own group can only leave it,
+ * beside it. At the app window's edge it goes out into a window of its own.
  * @param {Tab} source
  * @param {number} x
  * @param {number} y
  * @returns {Drop | null}
  */
 function findDropTarget(source, x, y) {
-  const ws = /** @type {Workspace} */ (wsById(source.wsId));
+  // A detached terminal is already in a window of its own: the main window's edge and the compass's corner are nothing
+  // to it. Otherwise, at the app window's very edge, or out of it: into a window of its own.
+  if (atAppEdge(x, y)) return source.detached ? null : windowDrop(source, x, y);
   const under = document.elementFromPoint(x, y);
+  // A detached terminal lands in the workspace shown, whichever it came from.
+  const lands = (/** @type {Tab} */ target) => target.wsId === source.wsId || !!source.detached;
   const strip = under?.closest('.tab-strip');
   if (strip) {
     const groupEl = /** @type {HTMLElement} */ (strip.closest('.tab-group'));
     const target = state.tabs.get(
       /** @type {string} */ (/** @type {HTMLElement | null} */ (groupEl.querySelector('.strip-tab.active'))?.dataset.tab));
-    if (!target || target.wsId !== source.wsId || groupOf(ws, target.id) === groupOf(ws, source.id)) return null;
-    return { target, zone: ZONE.center, rect: groupEl.getBoundingClientRect() };
+    const tws = target && /** @type {Workspace} */ (wsById(target.wsId));
+    if (!target || !tws || !lands(target) || groupOf(tws, target.id) === groupOf(tws, source.id)) return null;
+    return { target, zone: ZONE.center, rect: strip.getBoundingClientRect() }; // the strip it joins, outlined
   }
   const el = /** @type {HTMLElement | null | undefined} */ (under?.closest('.pane'));
   const target = el && state.tabs.get(/** @type {string} */ (el.dataset.tab));
-  if (!target || target.wsId !== source.wsId) return null;
+  if (!target || !lands(target)) return null;
+  const ws = /** @type {Workspace} */ (wsById(target.wsId));
   const ownGroup = target === source && groupOf(ws, source.id);
   if (target === source && !ownGroup) return null;
   const drop = paneZone(/** @type {HTMLElement} */ (el), target, x, y);
+  if (drop.zone === ZONE.window) return source.detached ? null : windowDrop(source, x, y, target);
   if (ownGroup) {
     // Out of its own group: beside the whole group.
     if (drop.zone === ZONE.center) return null;
@@ -922,39 +1269,107 @@ function paneZone(el, target, x, y) {
   const r = el.getBoundingClientRect();
   // Over the docking compass in the middle, its cells pick the zone: no need to go to the pane's edge.
   for (const cell of /** @type {NodeListOf<HTMLElement>} */ (el.querySelectorAll(':scope > .dock-guide > .dock-cell'))) {
-    const c = cell.getBoundingClientRect();
-    if (x >= c.left - 2 && x <= c.right + 2 && y >= c.top - 2 && y <= c.bottom + 2) {
-      return { target, zone: /** @type {Zone} */ (cell.dataset.zone), rect: r };
-    }
+    if (onCell(cell, x, y)) return { target, zone: /** @type {Zone} */ (cell.dataset.zone), rect: r };
   }
-  const fx = (x - r.left) / r.width;
-  const fy = (y - r.top) / r.height;
-  const nearest = Math.min(fx, 1 - fx, fy, 1 - fy);
+  // Over its title bar it joins as a tab, as over a group's strip of tabs; the outline is the title bar alone.
+  const head = el.querySelector(':scope > .pane-header')?.getBoundingClientRect();
+  if (head && y >= head.top && y <= head.bottom) return { target, zone: ZONE.center, rect: head };
+  // Anywhere else splits it: above or below in the top and bottom thirds of what's under the title bar, else left or
+  // right by the half the pointer is in, so the outline shows as soon as the pointer is in and changes side right at
+  // the middle.
+  const below = head?.bottom ?? r.top;
+  const strip = (r.bottom - below) * TOP_BOTTOM_SHARE;
   /** @type {Zone} */
-  let zone;
-  if (nearest > EDGE_ZONE) zone = ZONE.center;
-  else if (nearest === fx) zone = ZONE.left;
-  else if (nearest === 1 - fx) zone = ZONE.right;
-  else if (nearest === fy) zone = ZONE.top;
-  else zone = ZONE.bottom;
+  const zone = y < below + strip ? ZONE.top
+    : y > r.bottom - strip ? ZONE.bottom
+      : x < r.left + r.width / 2 ? ZONE.left : ZONE.right;
+  // Above, the outline leaves the title bar out (that's where it would join as a tab).
+  if (zone === ZONE.top) return { target, zone, rect: new DOMRect(r.left, below, r.width, r.bottom - below) };
   return { target, zone, rect: r };
+}
+
+/**
+ * Dropping a pane into a window of its own: the outline is the window where it opens, the pane's shape but smaller.
+ * @param {Tab} source
+ * @param {number} x
+ * @param {number} y
+ * @param {Tab} [over] the pane whose compass cell it's on
+ * @returns {Drop}
+ */
+function windowDrop(source, x, y, over) {
+  // The terminal's own shape, as its window opens (at least a window's narrowest), smaller, with its picture in it.
+  return { target: source, zone: ZONE.window, rect: windowOutline(/** @type {TabView} */ (source.view).el, x, y, true), over };
+}
+
+/**
+ * The window something would open in, let go at x, y: its corner just before the pointer, where the window will open
+ * (js/windows.js); its shape but smaller, or (fullSize) the window as it opens, at WINDOW_SHOT_SCALE of its size.
+ * @param {HTMLElement} el
+ * @param {number} x
+ * @param {number} y
+ * @param {boolean} [fullSize]
+ */
+function windowOutline(el, x, y, fullSize = false) {
+  const shape = el.getBoundingClientRect();
+  const scale = fullSize ? WINDOW_SHOT_SCALE : Math.min(1, WINDOW_PREVIEW.w / shape.width, WINDOW_PREVIEW.h / shape.height);
+  const w = (fullSize ? Math.max(shape.width, MIN_WIDTH_PX) : shape.width) * scale, h = shape.height * scale;
+  const left = Math.max(0, Math.min(innerWidth - w, x - OFFSET_PX));
+  const top = Math.max(0, Math.min(innerHeight - h, y - OFFSET_PX));
+  return new DOMRect(left, top, w, h);
+}
+
+/**
+ * At the app window's very edge (or past it): where a dragged thing goes out into a window of its own.
+ * @param {number} x
+ * @param {number} y
+ */
+const atAppEdge = (x, y) => x <= WINDOW_EDGE_PX || y <= WINDOW_EDGE_PX || x >= innerWidth - WINDOW_EDGE_PX || y >= innerHeight - WINDOW_EDGE_PX;
+
+/**
+ * Whether the pointer is on a compass cell (a little around it counts).
+ * @param {HTMLElement} cell
+ * @param {number} x
+ * @param {number} y
+ */
+function onCell(cell, x, y) {
+  const c = cell.getBoundingClientRect();
+  return x >= c.left - CELL_SLACK_PX && x <= c.right + CELL_SLACK_PX && y >= c.top - CELL_SLACK_PX && y <= c.bottom + CELL_SLACK_PX;
 }
 
 /** @param {Drop | null} drop */
 function showDrop(drop) {
+  shownDrop = drop;
+  // Out into a window: the compass cell it's on lights up, or at the app window's edge every compass's.
+  const outToWindow = drop?.zone === ZONE.window;
+  const shownOn = outToWindow ? drop.over : drop?.target;
   for (const guide of document.querySelectorAll('.pane > .dock-guide')) {
-    const isTarget = drop && guide.parentElement === /** @type {TabView} */ (drop.target.view).el;
-    guide.classList.toggle('hover', !!isTarget);
+    const isTarget = !!shownOn && guide.parentElement === /** @type {TabView} */ (shownOn.view).el;
+    const lit = isTarget || (outToWindow && !shownOn);
+    guide.classList.toggle(HOVER, lit);
     for (const cell of /** @type {HTMLCollectionOf<HTMLElement>} */ (guide.children)) {
-      // isTarget is only true with a drop.
-      cell.classList.toggle('active', !!isTarget && cell.dataset.zone === /** @type {Drop} */ (drop).zone);
+      // lit is only true with a drop.
+      cell.classList.toggle(ACTIVE, lit && cell.dataset.zone === /** @type {Drop} */ (drop).zone);
     }
   }
-  if (!drop) {
+  // A terminal going out into a window of its own shows its picture in the outline.
+  showOutline(drop?.rect ?? null, drop?.zone ?? ZONE.center, drop?.zone === ZONE.window && drop.target === dragged ? shot : null);
+}
+
+/**
+ * The outline of where a dragged thing lands, with what it does: the part of `r` its zone takes (a side's half, all of
+ * it for a tab or a window). None (null) takes it away.
+ * @param {DOMRect | null} r
+ * @param {Zone} zone
+ * @param {string | null} [picture] what it would show (a terminal's picture, as a data URL), faint under the label
+ */
+function showOutline(r, zone, picture = null) {
+  dropPreview.classList.toggle(WITH_SHOT, !!picture && !!r);
+  if (picture) dropPreview.style.setProperty(SHOT_VAR, `url("${picture}")`);
+  else dropPreview.style.removeProperty(SHOT_VAR);
+  if (!r) {
     dropPreview.classList.remove(VISIBLE);
     return;
   }
-  const { rect: r, zone } = drop;
   const half = { w: r.width / 2, h: r.height / 2 };
   const box = {
     left: { x: r.left, y: r.top, w: half.w, h: r.height },
@@ -962,10 +1377,18 @@ function showDrop(drop) {
     top: { x: r.left, y: r.top, w: r.width, h: half.h },
     bottom: { x: r.left, y: r.top + half.h, w: r.width, h: half.h },
     center: { x: r.left, y: r.top, w: r.width, h: r.height },
+    window: { x: r.left, y: r.top, w: r.width, h: r.height },
   }[zone];
+  // Shown afresh, it's at its place at once rather than sliding from where it was last.
+  const appearing = !dropPreview.classList.contains(VISIBLE);
+  dropPreview.classList.toggle(PLACING, appearing);
   Object.assign(dropPreview.style, { left: `${box.x}px`, top: `${box.y}px`, width: `${box.w}px`, height: `${box.h}px` });
   /** @type {Element} */ (dropPreview.firstElementChild).textContent = ZONE_LABELS[zone];
   dropPreview.classList.add(VISIBLE);
+  if (appearing) {
+    void dropPreview.offsetWidth; // the place is taken before the sliding comes back
+    dropPreview.classList.remove(PLACING);
+  }
 }
 
 /**

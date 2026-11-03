@@ -7,7 +7,7 @@
 // (what agents such as Claude Code read). Secrets show masked and go after a while.
 
 import { PAGE, HOST } from './protocol.js';
-import { send, request, onHost } from './host.js';
+import { send, request, onHost, platform, PLATFORM } from './host.js';
 import { state, on, emit, tabTitle, wsById, persist, EVENTS, GROUPS } from './store.js';
 import { focusedTab, restoreFocus, newTab } from './panes.js';
 import { scheduleFit, pasteInto } from './terminals.js';
@@ -71,10 +71,9 @@ const KIND_LABELS = Object.freeze({
 });
 const TOOL_ICONS = Object.freeze({
   pin: '<svg viewBox="0 0 16 16"><path d="M5.5 2.5h6M6.5 2.5v4l-2 2.5h8l-2-2.5v-4M8.5 9v5"/></svg>',
-  pause: '<svg viewBox="0 0 16 16"><path d="M5.5 3.5v9M10.5 3.5v9"/></svg>',
 });
 /** What the panel's buttons do (data-clips), and what a clip's own buttons do (data-clip-act). */
-const PANEL_ACTION = Object.freeze({ pause: 'pause', clear: 'clear', close: 'close' });
+const PANEL_ACTION = Object.freeze({ keep: 'keep', focusOnly: 'focusOnly', clear: 'clear', close: 'close' });
 const CLIP_ACTION = Object.freeze({ expand: 'expand', open: 'open', run: 'run', pin: 'pin', forget: 'forget' });
 const SEARCH = '[data-clips-search]';
 const LIST = '.clips-list';
@@ -303,6 +302,28 @@ function listHtml() {
   return `<p class="clips-empty">${query ? 'No clip matches.' : 'Nothing copied yet. Every copy shows here, to paste again later.'}</p>`;
 }
 
+/**
+ * A small labelled switch in the panel's header (a data-clips action).
+ * @param {string} action
+ * @param {string} label
+ * @param {boolean} on
+ * @param {string} title
+ * @param {boolean} [disabled]
+ */
+const switchHtml = (action, label, on, title, disabled = false) =>
+  `<button class="clips-switch" role="switch" aria-checked="${on}" data-clips="${action}" title="${title}"${disabled ? ' disabled' : ''}>${label}<span class="switch"><span></span></span></button>`;
+
+/** Whether copies made in other apps are kept too (Windows tells about those): off, only Termilly's own. */
+const otherApps = () => state.settings.clips?.otherApps !== false;
+
+/**
+ * Only copies made while Termilly is in focus (its own), on Windows, where copies in other apps can be kept too. Off
+ * with Keep: nothing is kept then.
+ */
+const focusOnlySwitch = () => (platform === PLATFORM.windows
+  ? switchHtml(PANEL_ACTION.focusOnly, 'Termilly only', !otherApps(), 'Only inside Termilly application', !keeping)
+  : '');
+
 function render() {
   button.classList.toggle('paused', !keeping);
   if (panel.hidden) return;
@@ -310,9 +331,10 @@ function render() {
   panel.innerHTML = `
     <div class="${DOCK_GRIP}" title="Drag to resize"></div>
     <div class="files-head">
-      <span class="files-title">Clipboard <span class="files-ws">${clips.length === 1 ? '1 clip' : `${clips.length} clips`}${keeping ? '' : ' · paused'}</span></span>
+      <span class="files-title">Clipboard <span class="files-ws">${clips.length === 1 ? '1 clip' : `${clips.length} clips`}</span></span>
       <span class="files-tools">
-        <button class="pane-btn np-toggle" data-clips="${PANEL_ACTION.pause}" aria-pressed="${!keeping}" title="${keeping ? 'Pause: stop keeping copies (while sharing your screen)' : 'Paused: copies aren’t kept. Click to keep them again'}">${TOOL_ICONS.pause}</button>
+        ${switchHtml(PANEL_ACTION.keep, 'Keep', keeping, 'Watch Clipboard')}
+        ${focusOnlySwitch()}
         <button class="pane-btn" data-clips="${PANEL_ACTION.clear}" title="Clear history (pinned clips stay)"${clips.some(c => !c.pinned) ? '' : ' disabled'}>${ICONS.trash}</button>
         <button class="pane-btn" data-clips="${PANEL_ACTION.close}" title="Close (${KEYS_TEXT})">${ICONS.close}</button>
       </span>
@@ -448,7 +470,11 @@ panel.addEventListener('click', e => {
   const tool = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-clips]'))?.dataset.clips;
   if (tool === PANEL_ACTION.close) return toggleClips();
   if (tool === PANEL_ACTION.clear) return send(PAGE.clipClear);
-  if (tool === PANEL_ACTION.pause) return updateSettings(GROUPS.clips, { enabled: !keeping });
+  if (tool === PANEL_ACTION.keep) return updateSettings(GROUPS.clips, { enabled: !keeping });
+  if (tool === PANEL_ACTION.focusOnly) {
+    updateSettings(GROUPS.clips, { otherApps: !otherApps() });
+    return render();
+  }
   const el = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-clip]'));
   const c = el && clipById(/** @type {string} */ (el.dataset.clip));
   if (!c) return;

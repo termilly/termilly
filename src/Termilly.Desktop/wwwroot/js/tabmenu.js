@@ -4,7 +4,7 @@
 import { state, emit, persist, profileOf, isSsh, EVENTS } from './store.js';
 import { showMenu, SEPARATOR } from './popups.js';
 import { ICONS, keysHtml } from './ui.js';
-import { closeTab, moveTab } from './panes.js';
+import { closeTab, moveTab, detachTab, attachTab, DETACH_LABEL, ATTACH_LABEL } from './panes.js';
 import { isBroadcasting, startBroadcast, stopBroadcast, openCompose, BROADCAST_SCOPE } from './broadcast.js';
 import { copyLastOutput, commandLog } from './commands.js';
 import { setAlert, ALERT } from './triggers.js';
@@ -55,6 +55,9 @@ export function openTabMenu(tab, at, from = RENAME_IN.header) {
   showMenu([
     ...nameItems(tab, from),
     moveItem(tab),
+    tab.detached
+      ? { label: ATTACH_LABEL, icon: ICONS.attach, action: () => attachTab(tab) }
+      : { label: DETACH_LABEL, icon: ICONS.detach, action: () => detachTab(tab) },
     ...replayMenuItems(tab),
     ...keepingItems(tab),
     ...serialMenuItems(tab),

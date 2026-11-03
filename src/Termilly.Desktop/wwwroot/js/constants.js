@@ -182,6 +182,9 @@ export const WINDOW_ACTION = Object.freeze({
   quit: 'quit',
   drag: 'drag',
   resize: 'resize',
+  focus: 'focus',
+  fade: 'fade',
+  solid: 'solid',
 });
 
 /** C#: QuitAnswers (Messaging/Window.cs). */
@@ -189,6 +192,11 @@ export const QUIT_ANSWER = Object.freeze({
   quit: 'quit',
   stay: 'stay',
   asking: 'asking',
+});
+
+/** C#: DetachedWindowNames (Messaging/Window.cs). */
+export const DETACHED_WINDOW = Object.freeze({
+  namePrefix: 'termilly-',
 });
 
 /** C#: UpdateStates (UpdateInstall.cs). */

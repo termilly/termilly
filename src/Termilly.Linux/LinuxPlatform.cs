@@ -98,6 +98,9 @@ internal sealed class LinuxPlatform(Action<string> send, string? startFolder) :
     {
     }
 
+    /// <summary>No picture of the page on Linux yet: a terminal dragged out shows its outline alone.</summary>
+    public Task<string?> CapturePageAsync() => Task.FromResult<string?>(null);
+
     // ---- GTK's own dialogs, through Photino: they open on the window's thread; the answer comes back here ----
 
     private static string Home => Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);

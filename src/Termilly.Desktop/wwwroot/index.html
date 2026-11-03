@@ -232,14 +232,14 @@
       <div class="dock-cell" data-zone="center"></div>
       <div class="dock-cell" data-zone="right"></div>
       <div class="dock-cell" data-zone="bottom"></div>
+      <!-- Out into a window of its own (js/panes.js draws its icon). -->
+      <div class="dock-cell" data-zone="window"></div>
     </div>
   </template>
 
   <div id="drop-preview"><span></span></div>
-  <div id="drag-ghost">
-    <svg viewBox="0 0 16 16"><rect x="1.5" y="2.5" width="13" height="11" rx="2"/><path d="M4.5 6.5l2 1.5-2 1.5M8 10h3"/></svg>
-    <span>Terminal</span>
-  </div>
+  <!-- The dragged terminal's badge and name (js/panes.js fills them in). -->
+  <div id="drag-ghost"><span class="ghost-badge"></span><span class="ghost-name"></span></div>
 
   <div class="edge n" data-edge="n"></div>
   <div class="edge s" data-edge="s"></div>

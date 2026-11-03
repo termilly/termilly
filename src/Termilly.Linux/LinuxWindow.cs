@@ -94,7 +94,7 @@ internal sealed class LinuxWindow
             .SetDevToolsEnabled(Environment.GetEnvironmentVariable(DevToolsVariable) == "1")
             .SetContextMenuEnabled(false)
             .RegisterCustomSchemeHandler(AppScheme.Scheme, (object _, string _, string url, out string contentType) => AppScheme.Serve(url, theme.Palette, out contentType))
-            .RegisterWindowCreatedHandler((_, _) => _created = true)
+            .RegisterWindowCreatedHandler((_, _) => OnCreated(window!))
             .RegisterWebMessageReceivedHandler((_, message) =>
             {
                 using var doc = JsonDocument.Parse(message);
@@ -121,9 +121,23 @@ internal sealed class LinuxWindow
                     return true; // keep the window open for now
                 }
                 _closing = true;
+                DetachedWindows.CloseAll();
                 return false;
             });
         return window;
+    }
+
+    /// <summary>The window exists: messages may go to it, and its page may open windows of its own (DetachedWindows).</summary>
+    private void OnCreated(PhotinoWindow window)
+    {
+        _created = true;
+        window.Invoke(() =>
+        {
+            if (GtkWindow.Find() is { } main)
+            {
+                DetachedWindows.Hook(main);
+            }
+        });
     }
 
     /// <summary>Tells the page the window's state after a change to one part of it (the others stay as they were).</summary>
@@ -154,6 +168,12 @@ internal sealed class LinuxWindow
         });
         platform.WindowActionRequested += action => window.Invoke(() =>
         {
+            // A detached window's title bar (the page names the window): that window does it.
+            if (action.Name is not null)
+            {
+                DetachedWindows.Act(action.Name, action.Action, action.Edge);
+                return;
+            }
             switch (action.Action)
             {
                 case WindowActions.Minimize:

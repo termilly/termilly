@@ -42,26 +42,29 @@ internal static class GtkWindow
         g_set_application_name(name);
     }
 
-    /// <summary>Starts moving the window with the pointer, until the button is let go.</summary>
-    public static void BeginMove()
+    /// <summary>Starts moving the window (Termilly's, or <paramref name="other"/>) with the pointer, until the button is let go.</summary>
+    public static void BeginMove(IntPtr? other = null)
     {
-        if (Find() is { } window && Pointer() is var (x, y))
+        if ((other ?? Find()) is { } window && Pointer() is var (x, y))
         {
             gtk_window_begin_move_drag(window, 1, x, y, gtk_get_current_event_time());
         }
     }
 
-    /// <summary>Starts resizing the window from one edge or corner, until the button is let go.</summary>
-    public static void BeginResize(string edge)
+    /// <summary>Starts resizing the window (Termilly's, or <paramref name="other"/>) from one edge or corner, until the button is let go.</summary>
+    public static void BeginResize(string edge, IntPtr? other = null)
     {
-        if (Edges.TryGetValue(edge, out var gdkEdge) && Find() is { } window && Pointer() is var (x, y))
+        if (Edges.TryGetValue(edge, out var gdkEdge) && (other ?? Find()) is { } window && Pointer() is var (x, y))
         {
             gtk_window_begin_resize_drag(window, gdkEdge, 1, x, y, gtk_get_current_event_time());
         }
     }
 
-    /// <summary>Termilly's window: its one visible top-level window titled Termilly (Photino doesn't give out its handle on Linux).</summary>
-    private static IntPtr? Find()
+    /// <summary>
+    /// Termilly's window: its one visible top-level window titled Termilly that isn't a detached one (Photino doesn't
+    /// give out its handle on Linux).
+    /// </summary>
+    public static IntPtr? Find()
     {
         var list = gtk_window_list_toplevels();
         try
@@ -69,7 +72,8 @@ internal static class GtkWindow
             for (var node = list; node != IntPtr.Zero; node = Marshal.ReadIntPtr(node, IntPtr.Size))
             {
                 var window = Marshal.ReadIntPtr(node);
-                if (gtk_widget_get_visible(window) != 0 && Marshal.PtrToStringUTF8(gtk_window_get_title(window)) == Title)
+                if (gtk_widget_get_visible(window) != 0 && Marshal.PtrToStringUTF8(gtk_window_get_title(window)) == Title &&
+                    !DetachedWindows.Contains(window))
                 {
                     return window;
                 }

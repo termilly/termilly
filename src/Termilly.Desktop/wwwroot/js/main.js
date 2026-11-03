@@ -67,6 +67,7 @@ import { updateSettings, DEFAULT_FONT_SIZE } from './preferences.js';
 import { openNewWorkspace } from './newworkspace.js';
 import { remoteGit } from './remotehost.js';
 import { AGENT_STATE, SETTING_VALUES, WINDOW_ACTION } from './constants.js';
+import { inEachDocument } from './windows.js';
 import { rememberSession, recordPrompt } from './myprompts.js';
 import './tooltips.js';
 import { byId, find, targetOf, WORKSPACE_ID } from './dom.js';
@@ -367,12 +368,13 @@ setKeyHandler(e => {
   return !swallowKeypress;
 });
 
-// Shortcuts when no terminal has focus (e.g. an empty workspace), except while typing in a field.
-document.addEventListener('keydown', e => {
+// Shortcuts when no terminal has focus (e.g. an empty workspace), except while typing in a field; in a detached
+// window too.
+inEachDocument(doc => doc.addEventListener('keydown', e => {
   // The target may be the document itself, which has no closest().
   if (/** @type {HTMLElement} */ (e.target).closest?.('.xterm, input, select, textarea')) return;
   if (runShortcut(e)) e.preventDefault();
-});
+}));
 
 // Ctrl+wheel zooms the font, like most terminals.
 byId(WORKSPACE_ID).addEventListener('wheel', e => {

@@ -46,6 +46,8 @@ internal sealed class WindowsPlatform(MainWindow window) :
 
     public void PageReady() => window.RevealPage();
 
+    public Task<string?> CapturePageAsync() => window.Dispatcher.InvokeAsync(window.CapturePageAsync).Task.Unwrap();
+
     // ---- Dialogs: the page's messages arrive on the window's thread, so they open there and answer at once ----
 
     public Task<string?> PickFolderAsync(string title, string initial)

@@ -66,11 +66,7 @@ public partial class MainWindow : Window
         _page = _services.GetRequiredService<PageHost>();
         _theme = _services.GetRequiredService<WindowTheme>();
         _quit = _services.GetRequiredService<QuitGate>();
-        _settings.Saved += _ =>
-        {
-            ApplyTheme();
-            UpdateGlobalHotkeys();
-        };
+        _settings.Saved += _ => OnSettingsSaved();
         InitializeComponent();
         WindowInterop.UseCustomChrome(this);
         // Termilly opens where the window was last closed (maximized, if it was), on the start-up screen until the
@@ -101,6 +97,17 @@ public partial class MainWindow : Window
     }
 
     private AppSettings Settings => _settings.Current;
+
+    /// <summary>The theme and the hotkeys follow Settings, in the detached windows' title bars too.</summary>
+    private void OnSettingsSaved()
+    {
+        ApplyTheme();
+        foreach (var window in _detached)
+        {
+            window.Recolor(_theme.Palette);
+        }
+        UpdateGlobalHotkeys();
+    }
 
     /// <summary>
     /// Colours the window and start-up screen to match the page's theme, so a light theme doesn't start with a black
@@ -188,6 +195,7 @@ public partial class MainWindow : Window
             HostName, AppPaths.WebRoot, CoreWebView2HostResourceAccessKind.Deny);
         core.WebMessageReceived += OnWebMessage;
         core.PermissionRequested += OnPermissionRequested;
+        core.NewWindowRequested += OnNewWindowRequested;
         core.NavigationCompleted += (_, _) => PostWindowState();
         core.Navigate($"https://{HostName}/index.html");
     }
@@ -229,6 +237,12 @@ public partial class MainWindow : Window
 
     internal void HandleWindowAction(FromPage.Window msg)
     {
+        // A detached window's title bar (the page names the window): that window does it.
+        if (msg.Name is not null)
+        {
+            _detached.FirstOrDefault(w => w.PageWindowName == msg.Name)?.Act(msg);
+            return;
+        }
         switch (msg.Action)
         {
             case WindowActions.Minimize:
@@ -368,6 +382,10 @@ public partial class MainWindow : Window
             return;
         }
         _closing = true;
+        foreach (var window in _detached.ToList())
+        {
+            window.CloseNow();
+        }
         WindowPlacement.Save(this);
         _hotkeys?.Dispose();
         _tray?.Dispose();
