@@ -28,6 +28,7 @@ internal static class Program
         {
             return 0;
         }
+        PipeFiles.ClearDead(); // socket files of Termillys gone
 
         var window = new LinuxWindow();
         PhotinoPlatform platform;

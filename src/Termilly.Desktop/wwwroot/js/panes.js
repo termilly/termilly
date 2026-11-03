@@ -15,6 +15,7 @@ import { wake } from './hibernate.js';
 import { byId, find, targetOf, WORKSPACE_ID, dragPointer, onMiddleClick } from './dom.js';
 import { ENV_CLASS, ENV_COLOR } from './environments.js';
 import { detach, closeWindow, focusWindow, setWindowTitle, OFFSET_PX, MIN_WIDTH_PX } from './windows.js';
+import { followGpu } from './gpu.js';
 
 /** A pane's drop zones: beside it on a side, in it as a tab (center), or out into a window of its own. */
 const ZONE = Object.freeze({ left: 'left', right: 'right', top: 'top', bottom: 'bottom', center: 'center', window: 'window' });
@@ -370,7 +371,7 @@ function moved(tab) {
   tab.detached = true;
   takeBackHeader(tab);
   view.el.classList.remove(TAB_HIDDEN);
-  rehome(view);
+  rehome(tab);
   view.term?.focus();
   if (!ws) return;
   // The workspace's focus moves to a terminal still in it.
@@ -391,22 +392,31 @@ export function attachTab(tab) {
   const ws = wsById(tab.wsId);
   if (!ws || !state.tabs.has(tab.id)) return;
   renderWorkspace(ws);
-  rehome(/** @type {TabView} */ (tab.view));
+  rehome(tab);
   emit(EVENTS.tab, tab);
   emit(EVENTS.workspaces);
   if (ws.id === state.activeId) focusTab(tab); else ws.focusId = tab.id;
 }
 
 /**
- * A terminal moved into another window (its own, or the main one again): its terminal told so (open() again moves it
- * there), fitted, and drawn again. Else it keeps watching whether it's on screen from the window it left (WebKitGTK's
- * says it isn't, so it stays paused), and what it drew is gone with the move: blank until its next output.
- * @param {TabView} view
+ * A terminal moved into another window (its own, or the main one again): its terminal told so, fitted, and drawn
+ * again. Else it keeps watching whether it's on screen from the window it left (WebKitGTK's says it isn't, so it stays
+ * paused), and what it drew is gone with the move: blank until its next output. Its GPU drawing follows it too
+ * (js/gpu.js).
+ *
+ * Told the way open() tells an open terminal, not by open() itself: the image add-on hooks open() and wraps the
+ * renderer switch each time it runs, and wrapped twice the switch calls itself. The next switch (GPU drawing dropped
+ * or taken) then failed half done, and the terminal drew nothing, for good.
+ * @param {Tab} tab
  */
-function rehome(view) {
+function rehome(tab) {
+  const view = /** @type {TabView} */ (tab.view);
   const { term } = view;
   if (!term) return;
-  term.open(view.body);
+  const browser = term._core?._coreBrowserService;
+  const win = view.body.ownerDocument.defaultView;
+  if (browser && win && browser.window !== win) browser.window = win;
+  followGpu(tab);
   scheduleFit();
   requestAnimationFrame(() => term.refresh(0, term.rows - 1));
 }
@@ -1103,7 +1113,7 @@ let dragged = null;
 let shot = null;
 
 /**
- * A picture of a terminal as it is now: the host's picture of the page (none on Linux), cut to its pane.
+ * A picture of a terminal as it is now: the host's picture of the page (none on macOS yet), cut to its pane.
  * @param {Tab} tab
  * @returns {Promise<void>}
  */

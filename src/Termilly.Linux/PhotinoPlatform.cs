@@ -58,8 +58,30 @@ internal abstract class PhotinoPlatform(Action<string> send, string? startFolder
     {
     }
 
-    /// <summary>No picture of the page here yet: a terminal dragged out shows its outline alone.</summary>
-    public Task<string?> CapturePageAsync() => Task.FromResult<string?>(null);
+    /// <summary>
+    /// A picture of the page for a terminal dragged out (WebKitGTK's snapshot, PageSnapshot); none on macOS yet, where
+    /// it shows its outline alone.
+    /// </summary>
+    public Task<string?> CapturePageAsync()
+    {
+        if (!OperatingSystem.IsLinux() || _window is null)
+        {
+            return Task.FromResult<string?>(null);
+        }
+        var done = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _window.Invoke(() =>
+        {
+            if (GtkWindow.Find() is { } main)
+            {
+                PageSnapshot.Take(main, done);
+            }
+            else
+            {
+                done.TrySetResult(null);
+            }
+        });
+        return done.Task;
+    }
 
     // ---- The system's own dialogs, through Photino: they open on the window's thread; the answer comes back here ----
 

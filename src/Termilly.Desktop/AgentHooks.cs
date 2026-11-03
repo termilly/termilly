@@ -450,5 +450,9 @@ internal sealed class AgentHooks : IDisposable
     }
 
     // The token source isn't disposed: the accept loop may still be reading its token as it winds down.
-    public void Dispose() => _stop.Cancel();
+    public void Dispose()
+    {
+        _stop.Cancel();
+        PipeFiles.Remove(PipeName); // off Windows its socket file, which a quitting process may leave behind
+    }
 }
