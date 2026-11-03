@@ -55,7 +55,7 @@ const WINDOW_EDGE_PX = 8;
 /** The size of a dragged pane's window outline at the most (it's the pane's size, smaller). */
 const WINDOW_PREVIEW = Object.freeze({ w: 360, h: 240 });
 /** How far in from a pane's top and bottom edges a dragged pane splits it above or below (left or right elsewhere). */
-const TOP_BOTTOM_STRIP_PX = 50;
+const TOP_BOTTOM_STRIP_PX = 100;
 
 /**
  * A pane's drop zone: beside it on a side, or in it as a tab (center).
