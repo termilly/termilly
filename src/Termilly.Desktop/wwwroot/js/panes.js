@@ -1059,11 +1059,13 @@ function paneZone(el, target, x, y) {
   // Over its title bar it joins as a tab, as over a group's strip of tabs; the outline is the title bar alone.
   const head = el.querySelector(':scope > .pane-header')?.getBoundingClientRect();
   if (head && y >= head.top && y <= head.bottom) return { target, zone: ZONE.center, rect: head };
-  // Anywhere else splits it: above or below in its top and bottom thirds, else left or right by the half the pointer
-  // is in, so the outline shows as soon as the pointer is in and changes side right at the middle.
-  const strip = r.height * TOP_BOTTOM_SHARE;
+  // Anywhere else splits it: above or below in the top and bottom thirds of what's under the title bar, else left or
+  // right by the half the pointer is in, so the outline shows as soon as the pointer is in and changes side right at
+  // the middle.
+  const below = head?.bottom ?? r.top;
+  const strip = (r.bottom - below) * TOP_BOTTOM_SHARE;
   /** @type {Zone} */
-  const zone = y < r.top + strip ? ZONE.top
+  const zone = y < below + strip ? ZONE.top
     : y > r.bottom - strip ? ZONE.bottom
       : x < r.left + r.width / 2 ? ZONE.left : ZONE.right;
   return { target, zone, rect: r };
