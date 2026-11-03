@@ -5,7 +5,7 @@
 // button, the palette, and Edit or New in the snippets list (js/snippets.js).
 
 import { state, on, wsById, EVENTS } from './store.js';
-import { focusedTab, restoreFocus } from './panes.js';
+import { focusedTab, restoreFocus, wireDragOut } from './panes.js';
 import { closeAll, dropdown } from './popups.js';
 import { escapeHtml, ICONS } from './ui.js';
 import { modal, CONFIRM_DIALOG } from './dialogs.js';
@@ -35,6 +35,7 @@ const ACTION = Object.freeze({
 });
 /** Its window when it's in one of its own (js/windows.js). */
 const WINDOW_KEY = 'snippets';
+const NAME = 'Snippets';
 /** Its button that moves it into a window of its own (in that window, the window's Return takes it back). */
 const DETACH_BUTTON = Object.freeze({ icon: ICONS.detach, title: 'Detach to a window' });
 /** What the "Save the changes?" question can answer, besides Cancel. */
@@ -75,6 +76,10 @@ const $ = sel => /** @type {HTMLElement} */ (box.querySelector(sel));
 const searchEl = /** @type {HTMLInputElement} */ ($('[data-sw-search]'));
 const listEl = $('.sw-list');
 const editEl = $('.sw-edit');
+/** Its header: its title bar in a window of its own, and what drags it out into one. */
+const head = $('.set-head');
+/** The title bar's button that opens it. */
+const openButton = byId('snippets-button');
 
 /** @type {string | null} */
 let selectedId = null;
@@ -376,11 +381,12 @@ export const toggleSnippetsWindow = () => (isDetached(WINDOW_KEY) ? focusWindow(
 /**
  * Into a window of its own, as it is (changes not saved too); its header is the window's title bar. Close and Alt+F4
  * ask about changes not saved, as its own Close does; Return puts it back over the page.
+ * @param {{ x: number, y: number }} [at] where on the screen it opens (dragged out by its header), else over its place
  */
-function detachSnippets() {
+function detachSnippets(at) {
   const close = () => closeSnippetsWindow();
   detach(WINDOW_KEY, {
-    el: box, title: 'Snippets', onClosed: backOverPage, askClose: close, close, header: $('.set-head'),
+    el: box, title: NAME, onClosed: backOverPage, askClose: close, close, header: head, at,
     // Over the page until it's in its window.
     onMoved: () => {
       layer.hidden = true;
@@ -467,4 +473,10 @@ box.addEventListener('keydown', e => {
   e.stopPropagation();
 });
 
-byId('snippets-button').addEventListener('click', toggleSnippetsWindow);
+openButton.addEventListener('click', toggleSnippetsWindow);
+
+// Its header dragged toward the app window's edges takes it out into a window of its own (the title bar's icon on the
+// label that follows the pointer).
+wireDragOut(head, box, {
+  name: NAME, icon: /** @type {Element} */ (openButton.firstElementChild).outerHTML, detach: at => detachSnippets(at),
+});

@@ -7,7 +7,7 @@
 import { PAGE, HOST } from './protocol.js';
 import { send, onHost, platform, PLATFORM } from './host.js';
 import { state, persist, newId, tabTitle, wsById } from './store.js';
-import { restoreFocus, stripBar } from './panes.js';
+import { restoreFocus, stripBar, wireDragOut } from './panes.js';
 import { scheduleFit } from './terminals.js';
 import { escapeHtml, cssColor, tabBadgeHtml, countText, ICONS } from './ui.js';
 import { byId, find, targetOf, dockRight, onMiddleClick, WORKSPACE_ID, DOCK_GRIP } from './dom.js';
@@ -31,8 +31,6 @@ const NOTEPAD_ACTION = Object.freeze({
 const PAGE_NAME = 'Note';
 /** The panel's narrowest width; its widest is half the terminals' area (app.css max-width). */
 const MIN_WIDTH_PX = 280;
-/** Its window's narrowest width when it opens: its header's tools, name and the window's buttons all fit. */
-const WINDOW_MIN_WIDTH_PX = 440;
 const LF = '\n';
 const CRLF = '\r\n';
 /** The menu entry that copies text here, on a terminal's right-click menu. */
@@ -62,8 +60,9 @@ const MENU_ICONS = Object.freeze({
   cut: '<svg viewBox="0 0 16 16"><circle cx="4.5" cy="11.5" r="2"/><circle cx="11.5" cy="11.5" r="2"/><path d="M5.7 9.8L11 1.5M10.3 9.8L5 1.5"/></svg>',
   pastePlain: '<svg viewBox="0 0 16 16"><rect x="3.5" y="3.5" width="9" height="11" rx="1"/><path d="M6.5 2.5h3v2h-3zM5.5 7.5h4M7.5 7.5v5"/></svg>',
 });
-/** Its window when it's in one of its own (js/windows.js). */
+/** Its window when it's in one of its own (js/windows.js), and that window's title. */
 const WINDOW_KEY = 'notepad';
+const NAME = 'Notepad';
 /** Its button that moves it into a window of its own (in that window, the window's Return takes it back). */
 const DETACH_BUTTON = Object.freeze({ icon: ICONS.detach, title: 'Detach to a window' });
 /** What its requests to the host start with. */
@@ -95,6 +94,8 @@ panel.innerHTML = `
       <button class="btn" data-np="${NOTEPAD_ACTION.open}">Open a file</button></span></div></div>`;
 byId(WORKSPACE_ID).append(panel);
 const tabsEl = find(panel, '.np-tabs');
+/** Its header: its title bar in a window of its own, and what drags it out into one. */
+const head = find(panel, '.files-head');
 const area = /** @type {HTMLTextAreaElement} */ (find(panel, '.np-text'));
 /** What the Notepad shows with no pages: New page and Open a file. */
 const emptyEl = find(panel, '.np-empty');
@@ -229,14 +230,17 @@ function hideNotepad() {
   restoreFocus();
 }
 
-/** Into a window of its own, opened first if it's closed; its header is the window's title bar, Close closes it. */
-function detachNotepad() {
+/**
+ * Into a window of its own, opened first if it's closed; its header is the window's title bar, Close closes it.
+ * @param {{ x: number, y: number }} [at] where on the screen it opens (dragged out by its header), else over its place
+ */
+function detachNotepad(at) {
   if (panel.hidden) show({ quiet: true });
   // Its room here is given back once it's in its window, and as that window is resized.
   detach(WINDOW_KEY, {
-    el: panel, title: 'Notepad', onClosed: dockBack, onResize: refreshDock, onMoved: () => area.focus(),
-    minWidth: WINDOW_MIN_WIDTH_PX,
-    header: find(panel, '.files-head'), close: hideNotepad,
+    el: panel, title: NAME, onClosed: dockBack, onResize: refreshDock, onMoved: () => area.focus(),
+    at,
+    header: head, close: hideNotepad,
   });
 }
 
@@ -550,6 +554,12 @@ panel.addEventListener('keydown', e => {
 });
 
 button.addEventListener('click', () => toggleNotepad());
+
+// Its header dragged toward the app window's edges takes it out into a window of its own (the title bar's icon on the
+// label that follows the pointer).
+wireDragOut(head, panel, {
+  name: NAME, icon: /** @type {Element} */ (button.firstElementChild).outerHTML, detach: at => detachNotepad(at),
+});
 
 // ---- Docked on the right: the terminals and the Files panel end where it starts ----
 

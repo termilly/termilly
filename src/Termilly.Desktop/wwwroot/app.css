@@ -1612,6 +1612,14 @@ body.dragging-pane #drag-ghost { display: flex; }
 .dock-cell[data-zone="window"]::after { content: none; }
 .dock-cell[data-zone="window"] svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1; }
 .dock-cell[data-zone="window"].active { color: var(--accent); }
+/* A panel's compass (the Notepad's, the Snippets window's, js/panes.js wireDragOut): only out into a window. */
+.dock-guide.detach-only .dock-cell:not([data-zone="window"]) { visibility: hidden; }
+.snippets-win { position: relative; }
+/* While something is dragged, its outline and label show over the Snippets window too (a modal layer). */
+body.dragging-pane #drop-preview { z-index: 2600; }
+body.dragging-pane #drag-ghost { z-index: 2700; }
+/* A panel's label carries its title bar button's icon, at the size it's drawn there. */
+#drag-ghost .ghost-badge > svg { display: block; width: 16px; height: 16px; stroke-width: 1.3; color: var(--accent); }
 
 /* ---- Popovers ---- */
 
@@ -3043,5 +3051,7 @@ body.detached-window .pane-header > .pane-actions > .close-btn,
 body.detached-window [data-np="detach"], body.detached-window [data-np="close"],
 body.detached-window [data-sw="detach"], body.detached-window [data-sw="close"] { display: none; }
 body.detached-window .pane-header { cursor: default; }
+/* Its environment (a production tag’s chip) stays with its tags after the name, not again before it. */
+body.detached-window .pane-header .env-chip { display: none; }
 .detached-controls { display: flex; flex: none; align-items: center; margin-left: 4px; }
 .detached-controls svg[viewBox="0 0 16 16"] { width: 16px; height: 16px; stroke-width: 1; }

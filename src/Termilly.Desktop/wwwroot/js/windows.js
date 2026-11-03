@@ -35,6 +35,8 @@ import { WINDOW_ACTION, DETACHED_WINDOW } from './constants.js';
 const NAME_PREFIX = DETACHED_WINDOW.namePrefix;
 /** The main page's stylesheets, which each window takes too. */
 const STYLES = ['lib/xterm.css', 'app.css'];
+/** The narrowest a window opens: its header, with the window's buttons added, shows its name and tools. */
+const MIN_WIDTH_PX = 440;
 /** The body's class in a window (app.css: what's moved in fills it). */
 const WINDOW_BODY = 'detached-window';
 /** How often the windows are checked for one gone without saying so (closed with its page). */
@@ -89,10 +91,10 @@ export const isDetached = key => open.has(key);
  *   onResize?: () => void, askClose?: () => unknown, at?: { x: number, y: number }, header?: HTMLElement,
  *   close?: () => unknown, keepDoubleClick?: string, minWidth?: number, onDragged?: Dragged }} options
  *   at: the screen point the window's top left corner goes near (a drag's drop); else over where the element is.
- *   minWidth: the window is at least this wide (the element's header with the window's buttons added fits)
+ *   minWidth: the window is at least this wide (by default its title bar's name, tools and buttons all fit)
  */
 export function detach(key, options) {
-  const { el, title, onClosed, onMoved, onResize, askClose, at, header, close, keepDoubleClick, minWidth = 0, onDragged } = options;
+  const { el, title, onClosed, onMoved, onResize, askClose, at, header, close, keepDoubleClick, minWidth = MIN_WIDTH_PX, onDragged } = options;
   if (open.has(key)) return focusWindow(key), true;
   const r = el.getBoundingClientRect();
   const left = at ? at.x - OFFSET_PX : screenX + r.left + OFFSET_PX;
