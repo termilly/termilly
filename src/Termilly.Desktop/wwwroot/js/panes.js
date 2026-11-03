@@ -370,10 +370,8 @@ function moved(tab) {
   tab.detached = true;
   takeBackHeader(tab);
   view.el.classList.remove(TAB_HIDDEN);
+  rehome(view);
   view.term?.focus();
-  // Fitted to its window and drawn again there: WebKitGTK shows it blank until its next output otherwise.
-  scheduleFit();
-  requestAnimationFrame(() => view.term?.refresh(0, view.term.rows - 1));
   if (!ws) return;
   // The workspace's focus moves to a terminal still in it.
   if (ws.focusId === tab.id) ws.focusId = tabsOf(ws).find(t => !t.detached)?.id ?? null;
@@ -393,9 +391,24 @@ export function attachTab(tab) {
   const ws = wsById(tab.wsId);
   if (!ws || !state.tabs.has(tab.id)) return;
   renderWorkspace(ws);
+  rehome(/** @type {TabView} */ (tab.view));
   emit(EVENTS.tab, tab);
   emit(EVENTS.workspaces);
   if (ws.id === state.activeId) focusTab(tab); else ws.focusId = tab.id;
+}
+
+/**
+ * A terminal moved into another window (its own, or the main one again): its terminal told so (open() again moves it
+ * there), fitted, and drawn again. Else it keeps watching whether it's on screen from the window it left (WebKitGTK's
+ * says it isn't, so it stays paused), and what it drew is gone with the move: blank until its next output.
+ * @param {TabView} view
+ */
+function rehome(view) {
+  const { term } = view;
+  if (!term) return;
+  term.open(view.body);
+  scheduleFit();
+  requestAnimationFrame(() => term.refresh(0, term.rows - 1));
 }
 
 /**
