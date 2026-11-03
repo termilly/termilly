@@ -96,8 +96,10 @@ internal static class GtkWindow
     {
         gtk_widget_set_app_paintable(window, 1);
         var provider = gtk_css_provider_new();
-        gtk_css_provider_load_from_data(provider, TransparentCss, -1, IntPtr.Zero);
-        gtk_style_context_add_provider(gtk_widget_get_style_context(window), provider, StyleProviderPriorityApplication);
+        if (gtk_css_provider_load_from_data(provider, TransparentCss, -1, IntPtr.Zero) != 0)
+        {
+            gtk_style_context_add_provider(gtk_widget_get_style_context(window), provider, StyleProviderPriorityApplication);
+        }
         g_object_unref(provider);
     }
 
