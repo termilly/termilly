@@ -951,6 +951,10 @@ function showGroupTab(node) {
  * wherever it's let go (a drop zone, else where it was). Not on macOS, which has no windows of their own yet.
  */
 const systemDrag = platform === PLATFORM.linux && !/Mac/.test(navigator.platform);
+/** The root's data-tab-drag while terminals are dragged with the system's drag and drop (app.css). */
+const SYSTEM_DRAG = 'system';
+// The page's root says so (detached windows take it too): app.css marks the handle there.
+if (systemDrag) document.documentElement.dataset.tabDrag = SYSTEM_DRAG;
 /**
  * What a dragged terminal carries (its id). The main window knows the drag by systemDragged, not by this: between
  * windows WebKitGTK doesn't pass a type of its own along.

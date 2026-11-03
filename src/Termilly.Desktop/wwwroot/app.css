@@ -1548,6 +1548,12 @@ body.dragging-pane.picture-drag #drag-ghost { display: none; }
   background: var(--raised); color: var(--text);
   font-weight: 500; white-space: nowrap; pointer-events: none;
 }
+/* Linux: in a window of its own, a terminal's icon and name are what's dragged back into the main window (the rest of
+   the title bar moves the window): they look so. */
+:root[data-tab-drag="system"] body.detached-window .pane-header .pane-title {
+  margin-left: -6px; padding: 3px 6px; border-radius: 6px; cursor: grab;
+}
+:root[data-tab-drag="system"] body.detached-window .pane-header .pane-title:hover { background: var(--hover); color: var(--text); }
 .drag-chip .ghost-badge > svg { display: block; width: 16px; height: 16px; stroke-width: 1.3; color: var(--accent); }
 
 #drop-preview {
