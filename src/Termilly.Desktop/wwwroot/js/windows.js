@@ -22,7 +22,7 @@ import { WINDOW_ACTION, DETACHED_WINDOW } from './constants.js';
  * double click (else a double click maximizes the window).
  * @typedef {{ key: string, win: Window, el: HTMLElement, title: string, ready: boolean, onClosed: (el: HTMLElement) => void,
  *   onMoved?: () => void, onResize?: () => void, askClose?: () => unknown, header?: HTMLElement, close?: () => unknown,
- *   keepDoubleClick?: string, chrome?: AbortController, onDragged?: Dragged, faded?: boolean, remember?: boolean }} Detached
+ *   keepDoubleClick?: string, chrome?: AbortController, onDragged?: Dragged, faded?: boolean, remember?: boolean, placed?: boolean }} Detached
  */
 
 /**
@@ -289,14 +289,23 @@ function showMaximized(d) {
 
 /**
  * Where a window that remembers its place was, as it goes, for next time; not while maximized (it opens where it was
- * before that), nor once its page is gone.
+ * before that), nor once its page is gone. Only where its host doesn't say each time it moves or is resized
+ * (window:placed): the page's own screenX and size don't follow the host moving the window, so they'd keep the first.
  * @param {Detached} d
  */
 function rememberPlace(d) {
   const { win } = d;
-  if (!d.remember || !d.ready || win.closed || win.document.body.classList.contains(MAXIMIZED)) return;
+  if (!d.remember || d.placed || !d.ready || win.closed || win.document.body.classList.contains(MAXIMIZED)) return;
   places.set(d.key, { x: win.screenX, y: win.screenY, w: win.innerWidth, h: win.innerHeight });
 }
+
+// A window moved or resized (not maximized or minimized, its host says): a window that remembers its place keeps it.
+onHost(HOST.windowPlaced, m => {
+  const d = [...open.values()].find(o => NAME_PREFIX + o.key === m.name);
+  if (!d?.remember) return;
+  d.placed = true;
+  places.set(d.key, { x: m.x, y: m.y, w: m.w, h: m.h });
+});
 
 /** Where windows that remember their place were: kept with the page's state (store.js gives these). */
 let places = {

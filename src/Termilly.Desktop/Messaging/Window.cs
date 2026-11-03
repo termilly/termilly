@@ -163,6 +163,15 @@ internal static partial class ToPage
         public static string Type => "window:dragged";
     }
 
+    /// <summary>
+    /// A detached window (<see cref="Name"/>) moved or resized, not maximized or minimized: its page's place on the screen
+    /// and size, in the page's pixels (as window.open takes them), so it opens there again (js/windows.js).
+    /// </summary>
+    internal sealed record WindowPlaced(string Name, double X, double Y, double W, double H) : IHostMessage
+    {
+        public static string Type => "window:placed";
+    }
+
     /// <summary>The page's picture (a JPEG, base64, at the screen's pixels); null where the system can't take one.</summary>
     internal sealed record WindowCaptured(string? RequestId, string? Image) : IHostMessage
     {

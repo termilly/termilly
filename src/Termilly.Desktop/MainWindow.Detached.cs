@@ -31,6 +31,7 @@ public partial class MainWindow
         _detached.Add(window);
         window.Closed += (_, _) => _detached.Remove(window);
         window.Moved += OnDetachedMoved;
+        window.Placed += (w, r) => _channel.Post(new ToPage.WindowPlaced(w.PageWindowName, r.X, r.Y, r.Width, r.Height));
         e.NewWindow = await window.StartAsync(Web.CoreWebView2.Environment, HostName);
         e.Handled = true;
     }

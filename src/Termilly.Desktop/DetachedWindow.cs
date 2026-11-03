@@ -88,6 +88,8 @@ internal sealed class DetachedWindow : Window
     /// </summary>
     public async Task<CoreWebView2> StartAsync(CoreWebView2Environment environment, string hostName)
     {
+        LocationChanged += (_, _) => ReportPlace();
+        SizeChanged += (_, _) => ReportPlace();
         Show();
         await _web.EnsureCoreWebView2Async(environment);
         var core = _web.CoreWebView2;
@@ -102,6 +104,22 @@ internal sealed class DetachedWindow : Window
             Close();
         };
         return core;
+    }
+
+    /// <summary>
+    /// Moved or resized as a normal window (not maximized or minimized): its page's place and size, inside the frame,
+    /// in the page's pixels (the inverse of window.open's, in the constructor).
+    /// </summary>
+    public event Action<DetachedWindow, Rect>? Placed;
+
+    private void ReportPlace()
+    {
+        if (WindowState != WindowState.Normal || !IsVisible || double.IsNaN(Left) || double.IsNaN(Top))
+        {
+            return;
+        }
+        Placed?.Invoke(this, new Rect(Left + FrameWidth, Top + FrameWidth,
+            Math.Max(0, ActualWidth - (2 * FrameWidth)), Math.Max(0, ActualHeight - (2 * FrameWidth))));
     }
 
     /// <summary>The theme changed: the background and frame follow, as the main window's.</summary>
