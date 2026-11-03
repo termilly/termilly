@@ -752,6 +752,17 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
 .np-editor.np-ctrl .np-link:hover { text-decoration: underline; }
 /* Links and word wrap: lit while on. */
 .files-tools .np-toggle[aria-pressed="true"] { background: var(--pressed); color: var(--text); }
+/* Clipboard's header switches (js/clipboard.js): a short label and a small switch, the Settings one made smaller. */
+.clips-switch {
+  display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 4px; margin-right: 2px;
+  border-radius: 4px; color: var(--muted); font-size: 11px; white-space: nowrap;
+}
+.clips-switch:hover:not(:disabled) { background: var(--hover); color: var(--text); }
+.clips-switch:disabled { opacity: 0.4; cursor: default; }
+.clips-switch .switch { width: 24px; height: 14px; border-radius: 7px; }
+.clips-switch .switch span { top: 2px; left: 2px; width: 10px; height: 10px; }
+.clips-switch[aria-checked="true"] .switch { background: var(--accent); }
+.clips-switch[aria-checked="true"] .switch span { transform: translateX(10px); }
 
 /* "Copy to" (js/copyto.js): terminals on the left, the chosen one's folders on the right */
 .dialog.copyto-dialog { width: 920px; }
@@ -1525,7 +1536,6 @@ body.dragging-pane, body.dragging-pane * { cursor: grabbing !important; }
   font-weight: 500;
   pointer-events: none;
 }
-#drag-ghost svg { width: 16px; height: 16px; stroke-width: 1.3; color: var(--accent); }
 body.dragging-pane #drag-ghost { display: flex; }
 
 #drop-preview {
@@ -1541,6 +1551,19 @@ body.dragging-pane #drag-ghost { display: flex; }
   transition: left 0.12s ease, top 0.12s ease, width 0.12s ease, height 0.12s ease, opacity 0.12s;
 }
 #drop-preview.visible { opacity: 1; }
+/* A terminal going out into a window of its own: its picture, faint (30%), under the label (js/panes.js). */
+#drop-preview.with-shot::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  /* Its own shape: a window wider than the terminal (the narrowest a window opens) shows it from the left. */
+  background: var(--shot) left top / contain no-repeat;
+  opacity: 0.3;
+}
+#drop-preview span { position: relative; }
+/* Shown afresh (js/panes.js): at its place at once, not sliding from where it was last. */
+#drop-preview.placing { transition: none; }
 #drop-preview span {
   padding: 4px 10px;
   border-radius: 6px;
@@ -1606,6 +1629,19 @@ body.dragging-pane #drag-ghost { display: flex; }
 .dock-cell[data-zone="right"]::after { left: 50%; }
 .dock-cell.active { border-color: var(--accent); }
 .dock-cell.active::after { background: var(--accent); }
+/* The corner cell: out into a window of its own, the detach icon at its own 16px (whole pixels in a 28px cell). */
+.dock-cell[data-zone="window"] { display: grid; grid-area: 1 / 3; place-items: center; color: var(--muted); }
+.dock-cell[data-zone="window"]::after { content: none; }
+.dock-cell[data-zone="window"] svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1; }
+.dock-cell[data-zone="window"].active { color: var(--accent); }
+/* A panel's compass (the Notepad's, the Snippets window's, js/panes.js wireDragOut): only out into a window. */
+.dock-guide.detach-only .dock-cell:not([data-zone="window"]) { visibility: hidden; }
+.snippets-win { position: relative; }
+/* While something is dragged, its outline and label show over the Snippets window too (a modal layer). */
+body.dragging-pane #drop-preview { z-index: 2600; }
+body.dragging-pane #drag-ghost { z-index: 2700; }
+/* A panel's label carries its title bar button's icon, at the size it's drawn there. */
+#drag-ghost .ghost-badge > svg { display: block; width: 16px; height: 16px; stroke-width: 1.3; color: var(--accent); }
 
 /* ---- Popovers ---- */
 
@@ -3015,3 +3051,29 @@ textarea.field.note-text { flex: 1; width: 100%; min-height: 120px; resize: none
 .step-row.nested.step-is-reply.last .step-text { color: var(--text); }
 .step-more { align-self: flex-start; margin: 2px 0 2px 16px; padding: 2px 6px; border-radius: 5px; color: var(--muted); font-size: 11.5px; }
 .step-more:hover { background: var(--hover); color: var(--text); }
+
+
+/* ---- A window of its own (js/windows.js): a terminal, the Notepad or the Snippets window moved in
+   fills it, with no frame of its own (the window has one). ---- */
+body.detached-window > * { flex: 1; min-width: 0; min-height: 0; }
+body.detached-window > .pane, body.detached-window > .notepad-panel, body.detached-window > .snippets-win {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  animation: none;
+}
+body.detached-window > .pane.focused { box-shadow: none; }
+/* Its docked width is set on the element (dragged with its grip): the window’s width wins. */
+body.detached-window > .notepad-panel { position: static; width: auto !important; max-width: none; }
+body.detached-window > .notepad-panel > .files-grip { display: none; }
+body.detached-window > .snippets-win { width: auto; height: auto; }
+/* Its header is the window’s title bar (js/windows.js): Return, Minimize, Maximize and Close at its end, in place of
+   its own close and detach buttons; it moves the window, so no pane drag cursor. */
+body.detached-window .pane-header > .pane-actions > .close-btn,
+body.detached-window [data-np="detach"], body.detached-window [data-np="close"],
+body.detached-window [data-sw="detach"], body.detached-window [data-sw="close"] { display: none; }
+body.detached-window .pane-header { cursor: default; }
+/* Its environment (a production tag’s chip) stays with its tags after the name, not again before it. */
+body.detached-window .pane-header .env-chip { display: none; }
+.detached-controls { display: flex; flex: none; align-items: center; margin-left: 4px; }
+.detached-controls svg[viewBox="0 0 16 16"] { width: 16px; height: 16px; stroke-width: 1; }

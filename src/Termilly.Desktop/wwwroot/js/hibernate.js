@@ -51,7 +51,8 @@ export function enforceLimit() {
   let excess = running.length - limit;
   if (excess <= 0) return;
   const candidates = running
-    .filter(t => t.wsId !== state.activeId && idle(t) && resumable(t))
+    // One in a window of its own is in sight, whatever workspace is shown.
+    .filter(t => t.wsId !== state.activeId && !t.detached && idle(t) && resumable(t))
     .sort((a, b) => (/** @type {AgentInfo} */ (a.agent).at ?? 0) - (/** @type {AgentInfo} */ (b.agent).at ?? 0));
   for (const tab of candidates) {
     if (excess-- <= 0) break;

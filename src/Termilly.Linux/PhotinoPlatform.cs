@@ -58,6 +58,9 @@ internal abstract class PhotinoPlatform(Action<string> send, string? startFolder
     {
     }
 
+    /// <summary>No picture of the page here yet: a terminal dragged out shows its outline alone.</summary>
+    public Task<string?> CapturePageAsync() => Task.FromResult<string?>(null);
+
     // ---- The system's own dialogs, through Photino: they open on the window's thread; the answer comes back here ----
 
     protected static string Home => Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);

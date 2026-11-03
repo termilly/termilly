@@ -12,6 +12,24 @@ internal static class WindowActions
     public const string Quit = "quit";
     public const string Drag = "drag";
     public const string Resize = "resize";
+    /// <summary>One of the page's own windows (js/windows.js) to the front: the message's name says which.</summary>
+    public const string Focus = "focus";
+    /// <summary>
+    /// A detached window see-through while it's dragged over a place it would land (the page sees there), so that place
+    /// shows under it.
+    /// </summary>
+    public const string Fade = "fade";
+    /// <summary>A detached window solid again.</summary>
+    public const string Solid = "solid";
+}
+
+/// <summary>
+/// The page's own windows (js/windows.js): window.open names them with this prefix, and the hosts give a window of its
+/// own (DetachedWindow on Windows, DetachedWindows on Linux) only to a window.open so named.
+/// </summary>
+internal static class DetachedWindowNames
+{
+    public const string NamePrefix = "termilly-";
 }
 
 /// <summary>The page's answer when the host asks whether it may quit (QuitGate): quit, stay, or it's asking the user.</summary>
@@ -39,9 +57,22 @@ internal static partial class FromPage
 {
     /// <param name="Action">One of <see cref="WindowActions"/>.</param>
     /// <param name="Edge">For a resize, which edge or corner is dragged (one of <see cref="ResizeEdges"/>).</param>
-    internal sealed record Window(string? Action = null, string? Edge = null) : IPageMessage
+    /// <param name="Name">
+    /// A detached window's name (window.open's target, js/windows.js): the action is that window's (its title bar is the
+    /// page's), not the main window's. Focus always names one.
+    /// </param>
+    internal sealed record Window(string? Action = null, string? Edge = null, string? Name = null) : IPageMessage
     {
         public static string Type => "window";
+    }
+
+    /// <summary>
+    /// A picture of the page as it is now, for the outline of a terminal dragged out into a window of its own (it shows
+    /// the terminal, js/panes.js). Answered with <see cref="ToPage.WindowCaptured"/>.
+    /// </summary>
+    internal sealed record WindowCapture(string? RequestId = null) : IPageMessage
+    {
+        public static string Type => "window:capture";
     }
 
     /// <summary>The page is up: its first terminal is on screen.</summary>
@@ -120,6 +151,31 @@ internal static partial class ToPage
     internal sealed record WindowState(bool Maximized, bool Minimized, bool Active) : IHostMessage
     {
         public static string Type => "windowState";
+    }
+
+    /// <summary>
+    /// A detached window (<see cref="Name"/>) moved by its title bar: where the pointer is over the main window's page
+    /// (X and Y in its pixels; null when it isn't over it), and whether the window was just let go there. The page shows
+    /// where a terminal would land, and puts it there when it's let go (js/panes.js).
+    /// </summary>
+    internal sealed record WindowDragged(string Name, double? X, double? Y, bool Dropped) : IHostMessage
+    {
+        public static string Type => "window:dragged";
+    }
+
+    /// <summary>
+    /// A detached window (<see cref="Name"/>) moved or resized, not maximized or minimized: its page's place on the screen
+    /// and size, in the page's pixels (as window.open takes them), so it opens there again (js/windows.js).
+    /// </summary>
+    internal sealed record WindowPlaced(string Name, double X, double Y, double W, double H) : IHostMessage
+    {
+        public static string Type => "window:placed";
+    }
+
+    /// <summary>The page's picture (a JPEG, base64, at the screen's pixels); null where the system can't take one.</summary>
+    internal sealed record WindowCaptured(string? RequestId, string? Image) : IHostMessage
+    {
+        public static string Type => "window:captured";
     }
 
     /// <summary>A notification was clicked: that terminal comes forward.</summary>

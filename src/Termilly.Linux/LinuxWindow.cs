@@ -94,7 +94,7 @@ internal sealed class LinuxWindow
             .SetDevToolsEnabled(Environment.GetEnvironmentVariable(DevToolsVariable) == "1")
             .SetContextMenuEnabled(false)
             .RegisterCustomSchemeHandler(AppScheme.Scheme, (object _, string _, string url, out string contentType) => AppScheme.Serve(url, theme.Palette, out contentType))
-            .RegisterWindowCreatedHandler((_, _) => _created = true)
+            .RegisterWindowCreatedHandler((_, _) => OnCreated(window!))
             .RegisterWebMessageReceivedHandler((_, message) =>
             {
                 using var doc = JsonDocument.Parse(message);
@@ -121,9 +121,23 @@ internal sealed class LinuxWindow
                     return true; // keep the window open for now
                 }
                 _closing = true;
+                DetachedWindows.CloseAll();
                 return false;
             });
         return window;
+    }
+
+    /// <summary>The window exists: messages may go to it, and its page may open windows of its own (DetachedWindows).</summary>
+    private void OnCreated(PhotinoWindow window)
+    {
+        _created = true;
+        window.Invoke(() =>
+        {
+            if (OperatingSystem.IsLinux() && GtkWindow.Find() is { } main)
+            {
+                DetachedWindows.Hook(main);
+            }
+        });
     }
 
     /// <summary>Tells the page the window's state after a change to one part of it (the others stay as they were).</summary>
@@ -152,33 +166,42 @@ internal sealed class LinuxWindow
             window.SetTopMost(true);
             window.SetTopMost(false);
         });
-        platform.WindowActionRequested += action => window.Invoke(() =>
+        platform.WindowActionRequested += action => window.Invoke(() => Do(window, action));
+    }
+
+    /// <summary>One of the title bar's buttons or edges, on the window's thread.</summary>
+    private static void Do(PhotinoWindow window, FromPage.Window action)
+    {
+        // A detached window's title bar (the page names the window): that window does it.
+        if (action.Name is not null)
         {
-            switch (action.Action)
-            {
-                case WindowActions.Minimize:
-                    window.SetMinimized(true);
-                    break;
-                case WindowActions.Maximize:
-                    window.SetMaximized(!window.Maximized);
-                    break;
-                case WindowActions.Close:
-                case WindowActions.Quit:
-                    window.Close(); // asks first when something is running (the closing handler)
-                    break;
-                case WindowActions.Drag when OperatingSystem.IsMacOS():
-                    MacWindowDrag.BeginMove(window);
-                    break;
-                case WindowActions.Drag:
-                    GtkWindow.BeginMove();
-                    break;
-                case WindowActions.Resize when !window.Maximized && action.Edge is { } edge && OperatingSystem.IsMacOS():
-                    MacWindowDrag.BeginResize(window, edge, new Size(MinWidth, MinHeight));
-                    break;
-                case WindowActions.Resize when !window.Maximized && action.Edge is { } edge:
-                    GtkWindow.BeginResize(edge);
-                    break;
-            }
-        });
+            DetachedWindows.Act(action.Name, action.Action, action.Edge);
+            return;
+        }
+        switch (action.Action)
+        {
+            case WindowActions.Minimize:
+                window.SetMinimized(true);
+                break;
+            case WindowActions.Maximize:
+                window.SetMaximized(!window.Maximized);
+                break;
+            case WindowActions.Close:
+            case WindowActions.Quit:
+                window.Close(); // asks first when something is running (the closing handler)
+                break;
+            case WindowActions.Drag when OperatingSystem.IsMacOS():
+                MacWindowDrag.BeginMove(window);
+                break;
+            case WindowActions.Drag:
+                GtkWindow.BeginMove();
+                break;
+            case WindowActions.Resize when !window.Maximized && action.Edge is { } edge && OperatingSystem.IsMacOS():
+                MacWindowDrag.BeginResize(window, edge, new Size(MinWidth, MinHeight));
+                break;
+            case WindowActions.Resize when !window.Maximized && action.Edge is { } edge:
+                GtkWindow.BeginResize(edge);
+                break;
+        }
     }
 }

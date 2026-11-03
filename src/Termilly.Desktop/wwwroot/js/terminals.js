@@ -371,7 +371,9 @@ function wireNotifications(tab, term) {
     // Shells ring for typing (Tab with nothing to complete, Backspace at the start), and someone looking at the
     // terminal hears it anyway: only a bell nobody caused or saw is news.
     if (Date.now() - (tab.shell?.typedAt ?? 0) < TYPING_BELL_MS) return;
-    if (document.hasFocus() && tab.wsId === state.activeId && /** @type {TabView} */ (tab.view).el.classList.contains('focused')) return;
+    const { el } = /** @type {TabView} */ (tab.view);
+    // Seen: its own window has the focus (a detached one), or the main window does with it focused there.
+    if (tab.detached ? el.ownerDocument.hasFocus() : document.hasFocus() && tab.wsId === state.activeId && el.classList.contains('focused')) return;
     agentAlert(tab, '');
   });
 }
@@ -1090,7 +1092,7 @@ export function applyTerminalSettings() {
  */
 export function scrollbackFor(tab) {
   const budget = state.settings.session.hiddenScrollback;
-  return budget && tab.wsId !== state.activeId ? Math.min(budget, state.settings.terminal.scrollback) : state.settings.terminal.scrollback;
+  return budget && tab.wsId !== state.activeId && !tab.detached ? Math.min(budget, state.settings.terminal.scrollback) : state.settings.terminal.scrollback;
 }
 
 // Switching workspaces changes which terminals are out of sight.

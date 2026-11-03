@@ -195,6 +195,11 @@ interface Tab {
   phoneAlerted?: string | null;
   /** The size a phone showing it asked for; it keeps that size until no phone shows it (js/phone.js). */
   phoneSize?: { cols: number, rows: number, tallest?: number } | null;
+  /**
+   * True while its pane is in a window of its own (js/panes.js detachTab): it keeps its place in the layout, which
+   * is drawn without it until it comes back.
+   */
+  detached?: boolean;
   /** The WSL distribution its shell said it runs in (js/remotehost.js), for the Files panel. */
   wslDistro?: string | null;
   /** Who gives it that size: a phone or another computer, as its label says (js/phone.js showAtSize). */

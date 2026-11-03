@@ -5,15 +5,16 @@
 // button, the palette, and Edit or New in the snippets list (js/snippets.js).
 
 import { state, on, wsById, EVENTS } from './store.js';
-import { focusedTab, restoreFocus } from './panes.js';
+import { focusedTab, restoreFocus, wireDragOut } from './panes.js';
 import { closeAll, dropdown } from './popups.js';
-import { escapeHtml } from './ui.js';
+import { escapeHtml, ICONS } from './ui.js';
 import { modal, CONFIRM_DIALOG } from './dialogs.js';
 import { fuzzyMatch } from './fuzzy.js';
 import {
   placeholders, runSnippet, saveSnippet, newSnippetId, SNIPPET_SCOPE, SNIPPET_FIELD, NAME_WORDS, RUN_LABEL,
 } from './snippets.js';
 import { byId, find, targetOf } from './dom.js';
+import { detach, closeWindow, focusWindow, isDetached } from './windows.js';
 
 /**
  * A new snippet not saved yet, with where it's to be kept ('global' or a workspace's id).
@@ -30,8 +31,13 @@ const CLOSE = '<svg viewBox="0 0 12 12"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7"/></s
 
 /** The window's buttons (their data-sw). */
 const ACTION = Object.freeze({
-  new: 'new', close: 'close', save: 'save', delete: 'delete', duplicate: 'duplicate', run: 'run',
+  new: 'new', close: 'close', save: 'save', delete: 'delete', duplicate: 'duplicate', run: 'run', detach: 'detach',
 });
+/** Its window when it's in one of its own (js/windows.js). */
+const WINDOW_KEY = 'snippets';
+const NAME = 'Snippets';
+/** Its button that moves it into a window of its own (in that window, the window's Return takes it back). */
+const DETACH_BUTTON = Object.freeze({ icon: ICONS.detach, title: 'Detach to a window' });
 /** What the "Save the changes?" question can answer, besides Cancel. */
 const ANSWER = Object.freeze({ save: 'save', discard: 'discard' });
 /** The window's shortcuts with Ctrl (KeyboardEvent.code): save, and a new snippet. */
@@ -47,6 +53,7 @@ layer.innerHTML = `
       <span class="cw-sub sw-count"></span>
       <span class="spacer"></span>
       <button class="btn small" data-sw="${ACTION.new}">New snippet</button>
+      <button class="set-close sw-detach" data-sw="${ACTION.detach}" title="${DETACH_BUTTON.title}">${DETACH_BUTTON.icon}</button>
       <button class="set-close" data-sw="${ACTION.close}" title="Close (Esc)">${CLOSE}</button>
     </div>
     <div class="cw-main">
@@ -58,15 +65,21 @@ layer.innerHTML = `
     </div>
   </div>`;
 document.body.append(layer);
+/** The window itself: over the page, or moved into a window of its own. */
+const box = find(layer, '.snippets-win');
 
 /**
  * The window's element a selector finds (the markup above always has it).
  * @param {string} sel
  */
-const $ = sel => /** @type {HTMLElement} */ (layer.querySelector(sel));
+const $ = sel => /** @type {HTMLElement} */ (box.querySelector(sel));
 const searchEl = /** @type {HTMLInputElement} */ ($('[data-sw-search]'));
 const listEl = $('.sw-list');
 const editEl = $('.sw-edit');
+/** Its header: its title bar in a window of its own, and what drags it out into one. */
+const head = $('.set-head');
+/** The title bar's button that opens it. */
+const openButton = byId('snippets-button');
 
 /** @type {string | null} */
 let selectedId = null;
@@ -75,7 +88,7 @@ let draft = null; // a new snippet not saved yet: { id, name, command, descripti
 /** @type {Entry[]} */
 let shown = []; // the rows in the list's order
 
-const isOpen = () => !layer.hidden;
+const isOpen = () => !layer.hidden || isDetached(WINDOW_KEY);
 
 /**
  * Every snippet with where it's kept: the global ones, then each workspace's, the one on screen first.
@@ -328,6 +341,12 @@ on(EVENTS.openSnippets, options => openSnippetsWindow(options));
 /** @param {{ id?: string | null, create?: boolean }} [options] */
 export function openSnippetsWindow({ id = null, create = false } = {}) {
   closeAll();
+  if (isDetached(WINDOW_KEY)) {
+    // Already open in its own window: that comes to the front, on what was asked for (asking about changes first).
+    focusWindow(WINDOW_KEY);
+    if (create) newSnippet(); else if (id) go(id);
+    return;
+  }
   layer.hidden = false;
   searchEl.value = '';
   draft = null;
@@ -345,14 +364,48 @@ export function openSnippetsWindow({ id = null, create = false } = {}) {
  * @param {{ force?: boolean }} [options]
  */
 export async function closeSnippetsWindow({ force = false } = {}) {
-  if (layer.hidden || (!force && !(await leave()))) return;
+  if (!isOpen() || (!force && !(await leave()))) return;
+  if (isDetached(WINDOW_KEY)) {
+    closeWindow(WINDOW_KEY, { quiet: true });
+    backInLayer();
+  }
   layer.hidden = true;
   draft = null;
   editEl.innerHTML = '';
   restoreFocus();
 }
 
-export const toggleSnippetsWindow = () => (isOpen() ? closeSnippetsWindow() : openSnippetsWindow());
+export const toggleSnippetsWindow = () => (isDetached(WINDOW_KEY) ? focusWindow(WINDOW_KEY)
+  : isOpen() ? closeSnippetsWindow() : openSnippetsWindow());
+
+/**
+ * Into a window of its own, as it is (changes not saved too); its header is the window's title bar. Close and Alt+F4
+ * ask about changes not saved, as its own Close does; Return puts it back over the page.
+ * @param {{ x: number, y: number }} [at] where on the screen it opens (dragged out by its header), else over its place
+ */
+function detachSnippets(at) {
+  const close = () => closeSnippetsWindow();
+  detach(WINDOW_KEY, {
+    el: box, title: NAME, onClosed: backOverPage, askClose: close, close, header: head, at, remember: true,
+    // Over the page until it's in its window.
+    onMoved: () => {
+      layer.hidden = true;
+      searchEl.focus();
+    },
+  });
+}
+
+/** Back from its window, still open, over the page. */
+function backOverPage() {
+  backInLayer();
+  layer.hidden = false;
+  searchEl.focus();
+}
+
+/** Back in its place in the page, from its window. */
+function backInLayer() {
+  layer.append(box);
+}
 
 // Snippets changed somewhere else (a workspace's layout file, Settings, an edit from the run form).
 on(EVENTS.snippets, () => {
@@ -364,7 +417,7 @@ on(EVENTS.workspaces, () => { if (isOpen() && !saving) renderList(); });
 
 // ---- Mouse and keys ----
 
-layer.addEventListener('click', e => {
+box.addEventListener('click', e => {
   const row = /** @type {HTMLElement | null} */ (targetOf(e).closest('.sw-row'));
   if (row) { go(/** @type {string} */ (row.dataset.id), { focusList: true }); return; }
   const action = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-sw]'))?.dataset.sw;
@@ -374,6 +427,7 @@ layer.addEventListener('click', e => {
   if (action === ACTION.delete) remove();
   if (action === ACTION.duplicate) duplicate();
   if (action === ACTION.run) run();
+  if (action === ACTION.detach) detachSnippets();
 });
 layer.addEventListener('mousedown', e => {
   if (e.target === layer) closeSnippetsWindow();
@@ -405,7 +459,7 @@ listEl.addEventListener('keydown', e => {
 
 // Keys in the window stay in it (no app shortcuts, no terminal); Escape closes it, Ctrl+S saves, Ctrl+N makes a
 // snippet.
-layer.addEventListener('keydown', e => {
+box.addEventListener('keydown', e => {
   if (e.key === 'Escape' && !e.defaultPrevented) {
     e.preventDefault();
     closeSnippetsWindow();
@@ -419,4 +473,10 @@ layer.addEventListener('keydown', e => {
   e.stopPropagation();
 });
 
-byId('snippets-button').addEventListener('click', toggleSnippetsWindow);
+openButton.addEventListener('click', toggleSnippetsWindow);
+
+// Its header dragged toward the app window's edges takes it out into a window of its own (the title bar's icon on the
+// label that follows the pointer).
+wireDragOut(head, box, {
+  name: NAME, icon: /** @type {Element} */ (openButton.firstElementChild).outerHTML, detach: at => detachSnippets(at),
+});
