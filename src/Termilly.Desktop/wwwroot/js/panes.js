@@ -960,6 +960,12 @@ const TAB_TYPE = 'application/x-termilly-tab';
 export const DRAG_HANDLE = '.pane-title';
 /** A pane's title bar. */
 const PANE_HEADER = '.pane-header';
+/** The drag's picture (app.css), and where the pointer holds it. */
+const DRAG_CHIP = 'drag-chip';
+const CHIP_GRIP = Object.freeze({ x: 18, y: 15 });
+const PLAIN_TEXT = 'text/plain';
+/** The name in a drag's label or chip. */
+const GHOST_NAME = '.ghost-name';
 /** What a dragged terminal does when it lands: it moves there. */
 const MOVE = 'move';
 /**
@@ -989,8 +995,10 @@ function wireSystemDrag(tab, header) {
     if (at.closest('button, input') || (tab.detached && !at.closest(DRAG_HANDLE)) || !e.dataTransfer) return void e.preventDefault();
     e.stopPropagation();
     e.dataTransfer.setData(TAB_TYPE, tab.id);
+    // Plain text too: a drag carrying only a type of its own may not cross to the main window.
+    e.dataTransfer.setData(PLAIN_TEXT, tabTitle(tab));
     e.dataTransfer.effectAllowed = MOVE;
-    setDragLabel(header, e);
+    setDragLabel(tab, header, e);
     systemDragged = { tab, drop: null, over: false, dropped: false, leftTimer: 0 };
     // Not while the drag is starting: changing the page then can cancel it.
     setTimeout(() => { if (systemDragged?.tab === tab && !tab.detached) enterMain(systemDragged); });
@@ -999,15 +1007,26 @@ function wireSystemDrag(tab, header) {
 }
 
 /**
- * The drag's picture: the piece of the title bar with the terminal's icon and name (a group's tab: all of it), as it
- * shows, held where the pointer took it. One drawn for the drag alone wasn't taken by WebKitGTK.
+ * The drag's picture: a rounded chip with the terminal's icon and name, put under the pointer where the drag starts.
+ * It stays in the page until the drag is under way: WebKitGTK takes its picture after dragstart, and one taken away
+ * sooner left the drag without any.
+ * @param {Tab} tab
  * @param {HTMLElement} header
  * @param {DragEvent} e
  */
-function setDragLabel(header, e) {
-  const piece = header.classList.contains(STRIP_TAB) ? header : header.querySelector(DRAG_HANDLE) ?? header;
-  const r = piece.getBoundingClientRect();
-  /** @type {DataTransfer} */ (e.dataTransfer).setDragImage(piece, e.clientX - r.left, e.clientY - r.top);
+function setDragLabel(tab, header, e) {
+  const doc = /** @type {Document} */ (header.ownerDocument);
+  const chip = doc.createElement('div');
+  chip.className = DRAG_CHIP;
+  chip.innerHTML = `<span class="ghost-badge">${tabBadgeHtml(tab)}</span><span class="ghost-name"></span>`;
+  find(chip, GHOST_NAME).textContent = tabTitle(tab);
+  chip.style.left = `${e.clientX - CHIP_GRIP.x}px`;
+  chip.style.top = `${e.clientY - CHIP_GRIP.y}px`;
+  doc.body.append(chip);
+  /** @type {DataTransfer} */ (e.dataTransfer).setDragImage(chip, CHIP_GRIP.x, CHIP_GRIP.y);
+  const gone = () => chip.remove();
+  header.addEventListener('drag', gone, { once: true });
+  header.addEventListener('dragend', gone, { once: true });
 }
 
 /**
@@ -1352,7 +1371,7 @@ async function takeShot(tab) {
  */
 function showGhost(icon, name) {
   find(dragGhost, '.ghost-badge').innerHTML = icon;
-  find(dragGhost, '.ghost-name').textContent = name;
+  find(dragGhost, GHOST_NAME).textContent = name;
 }
 
 /**
