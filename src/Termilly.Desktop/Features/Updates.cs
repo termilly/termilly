@@ -88,9 +88,13 @@ internal sealed class UpdateHandler(
         }
     }
 
-    /// <summary>The newer version's installer for this system, if there's a newer version and it can be checked.</summary>
+    /// <summary>
+    /// The newer version's installer for this system, if there's a newer version and it can be checked. There's no
+    /// macOS package yet: there the page only says a newer version is out (the manifest's other package would be
+    /// Windows' setup).
+    /// </summary>
     private (UpdateManifest Latest, UpdatePackage Package)? Offered() =>
-        _latest is { } latest && UpdateCheck.IsNewer(latest.Version, AppVersion.Current) && UpdateCheck.Package(latest, OperatingSystem.IsLinux()) is { } package
+        !OperatingSystem.IsMacOS() && _latest is { } latest && UpdateCheck.IsNewer(latest.Version, AppVersion.Current) && UpdateCheck.Package(latest, OperatingSystem.IsLinux()) is { } package
             ? (latest, package)
             : null;
 

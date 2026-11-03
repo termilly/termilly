@@ -1,3 +1,4 @@
+using System.Runtime.Versioning;
 using Microsoft.Extensions.DependencyInjection;
 using Termilly.Desktop;
 using Termilly.Desktop.Platform;
@@ -6,7 +7,7 @@ using Termilly.Desktop.Services;
 namespace Termilly.Linux;
 
 /// <summary>
-/// Termilly on Linux: a Photino window (WebKitGTK, <see cref="LinuxWindow"/>) showing the same page as on Windows,
+/// Termilly on Linux and macOS: a Photino window (WebKitGTK, or WKWebView on macOS; <see cref="LinuxWindow"/>) showing the same page as on Windows,
 /// talking to <see cref="LinuxHost"/>. As on Windows the window has no title bar or frame of its own: the page draws
 /// them, and its title bar and edges move and resize the window (GtkWindow).
 /// </summary>
@@ -28,22 +29,57 @@ internal static class Program
             return 0;
         }
 
+        var window = new LinuxWindow();
+        PhotinoPlatform platform;
+        IServiceCollection services;
+        if (OperatingSystem.IsMacOS())
+        {
+            services = MacServices(window, folder, out platform);
+        }
+        else if (OperatingSystem.IsLinux())
+        {
+            services = LinuxServices(window, folder, out platform);
+        }
+        else
+        {
+            throw new PlatformNotSupportedException("This build of Termilly runs on Linux and macOS.");
+        }
+        using var provider = services.BuildServiceProvider();
+        window.Run(platform, provider.GetRequiredService<WindowTheme>(), provider.GetRequiredService<PageChannel>(), provider.GetRequiredService<PageHost>(),
+            provider.GetRequiredService<QuitGate>());
+        return 0;
+    }
+
+    /// <summary>The composition root on Linux: the shared services, and Linux's own (LinuxPlatform, the keyring).</summary>
+    [SupportedOSPlatform("linux")]
+    private static IServiceCollection LinuxServices(LinuxWindow window, string? folder, out PhotinoPlatform platform)
+    {
         // The window's app id (Wayland) and class (X11): desktops match it to termilly.desktop for the icon and name.
         GtkWindow.SetProgramName(GtkWindow.ProgramId, GtkWindow.Title);
-
-        var window = new LinuxWindow();
-        var platform = new LinuxPlatform(window.Send, folder);
-        // The composition root on Linux: the shared services, and Linux's own (LinuxPlatform, the keyring).
-        using var services = new ServiceCollection()
+        platform = new LinuxPlatform(window.Send, folder);
+        return new ServiceCollection()
             .AddTermilly()
             .AddPlatform(platform)
             .AddSingleton<ICredentialStore, LinuxKeyringStore>()
             .AddSingleton<IFontCatalog, LinuxFonts>()
             .AddSingleton<IAudioOutputs, LinuxAudio>()
-            .AddSingleton<IUpdateInstaller, LinuxUpdateInstaller>()
-            .BuildServiceProvider();
-        window.Run(platform, services.GetRequiredService<WindowTheme>(), services.GetRequiredService<PageChannel>(), services.GetRequiredService<PageHost>(),
-            services.GetRequiredService<QuitGate>());
-        return 0;
+            .AddSingleton<IUpdateInstaller, LinuxUpdateInstaller>();
+    }
+
+    /// <summary>
+    /// The composition root on macOS: the shared services, and macOS's own (MacPlatform, the keychain). No update
+    /// installer of its own yet: Updates offers none on macOS (there's no package), so the Linux one is never asked.
+    /// </summary>
+    [SupportedOSPlatform("macos")]
+    private static IServiceCollection MacServices(LinuxWindow window, string? folder, out PhotinoPlatform platform)
+    {
+        platform = new MacPlatform(window.Send, folder, new ProcessRunner());
+        return new ServiceCollection()
+            .AddTermilly()
+            .AddPlatform(platform)
+            .AddSingleton<ICredentialStore, MacKeychainStore>()
+            .AddSingleton<IFontCatalog, MacFonts>()
+            .AddSingleton<IAudioOutputs, MacAudio>()
+            .AddSingleton<IUpdateInstaller, LinuxUpdateInstaller>();
     }
 }
