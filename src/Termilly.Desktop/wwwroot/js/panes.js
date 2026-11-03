@@ -54,6 +54,8 @@ const STRIP_TAB_MARGIN_PX = 4;
 const WINDOW_EDGE_PX = 8;
 /** The size of a dragged pane's window outline at the most (it's the pane's size, smaller). */
 const WINDOW_PREVIEW = Object.freeze({ w: 360, h: 240 });
+/** A terminal dragged out: its window's outline, and the picture in it, at this share of the window's size (70% smaller). */
+const WINDOW_SHOT_SCALE = 0.3;
 /** How much of a pane's height, along its top and its bottom, splits it above or below (left or right in between). */
 const TOP_BOTTOM_SHARE = 1 / 3;
 /** How far around a compass cell the pointer still counts as on it. */
@@ -1279,13 +1281,13 @@ function paneZone(el, target, x, y) {
  * @returns {Drop}
  */
 function windowDrop(source, x, y, over) {
-  // The terminal's own size, as its window opens (at least a window's narrowest), with its picture in it.
+  // The terminal's own shape, as its window opens (at least a window's narrowest), smaller, with its picture in it.
   return { target: source, zone: ZONE.window, rect: windowOutline(/** @type {TabView} */ (source.view).el, x, y, true), over };
 }
 
 /**
  * The window something would open in, let go at x, y: its corner just before the pointer, where the window will open
- * (js/windows.js); its shape but smaller, or (fullSize) the size the window opens at.
+ * (js/windows.js); its shape but smaller, or (fullSize) the window as it opens, at WINDOW_SHOT_SCALE of its size.
  * @param {HTMLElement} el
  * @param {number} x
  * @param {number} y
@@ -1293,8 +1295,8 @@ function windowDrop(source, x, y, over) {
  */
 function windowOutline(el, x, y, fullSize = false) {
   const shape = el.getBoundingClientRect();
-  const scale = fullSize ? 1 : Math.min(1, WINDOW_PREVIEW.w / shape.width, WINDOW_PREVIEW.h / shape.height);
-  const w = fullSize ? Math.max(shape.width, MIN_WIDTH_PX) : shape.width * scale, h = shape.height * scale;
+  const scale = fullSize ? WINDOW_SHOT_SCALE : Math.min(1, WINDOW_PREVIEW.w / shape.width, WINDOW_PREVIEW.h / shape.height);
+  const w = (fullSize ? Math.max(shape.width, MIN_WIDTH_PX) : shape.width) * scale, h = shape.height * scale;
   const left = Math.max(0, Math.min(innerWidth - w, x - OFFSET_PX));
   const top = Math.max(0, Math.min(innerHeight - h, y - OFFSET_PX));
   return new DOMRect(left, top, w, h);
