@@ -12,6 +12,7 @@ import { send, platform, PLATFORM } from './host.js';
 import { PROFILE_SOURCE, AGENT_STATE, PROFILE_ICON, AGENT_SOURCE, CLAUDE_TOOL } from './constants.js';
 import { debounce } from './util.js';
 import { windowInFront } from './windowshown.js';
+import { keepPlaces } from './windows.js';
 
 /** The kinds of node in a workspace's layout tree (see the top of this file). */
 export const NODE = Object.freeze({ leaf: 'leaf', split: 'split', tabs: 'tabs', preview: 'preview' });
@@ -128,6 +129,11 @@ export const state = {
   clips: { open: false },
   /** @type {FilesState} */
   files: { open: false },
+  /**
+   * Where the Notepad's and the Snippets window's own windows were last, by window (js/windows.js), so they open there.
+   * @type {Record<string, import('./windows.js').WindowPlace>}
+   */
+  windowPlaces: {},
   /**
    * The terminal colours of the theme plugins that are on (plugins.js).
    * @type {PluginTheme[]}
@@ -687,6 +693,12 @@ const saveLater = debounce(() => saveNow(), SAVE_DELAY);
 /** Saves workspaces, layouts and tab metadata shortly after a change. */
 export const persist = () => saveLater();
 
+// A window that remembers its place (the Notepad's, the Snippets window's) keeps it here, saved with the rest.
+keepPlaces(key => state.windowPlaces[key] ?? null, (key, place) => {
+  state.windowPlaces[key] = place;
+  persist();
+});
+
 export function saveNow() {
   saveLater.cancel();
   send(PAGE.stateSave, { state: serialize() });
@@ -702,6 +714,7 @@ function serialize() {
     notepad: state.notepad,
     clips: state.clips,
     files: state.files,
+    windowPlaces: state.windowPlaces,
     // tmux windows aren't saved: they're tmux's, and attaching again brings them back (tmux.js).
     workspaces: state.workspaces.filter(w => !w.tmux).map(({ id, name, color, cwd, focusId, root, note, snippets, collapsed, copyTo }) => ({ id, name, color, cwd, focusId, root: withoutPreview(root), note, snippets, collapsed: collapsed || undefined, copyTo })),
     tabs: [...state.tabs.values()].filter(t => !t.virtual).map(t => {
@@ -742,6 +755,8 @@ export function restore(saved) {
   }
   if (saved.clips && typeof saved.clips === 'object') state.clips = { ...state.clips, ...saved.clips };
   if (saved.files && typeof saved.files === 'object') state.files = { ...state.files, ...saved.files };
+  state.windowPlaces = Object.fromEntries(Object.entries(saved.windowPlaces ?? {})
+    .filter(([, p]) => [p?.x, p?.y, p?.w, p?.h].every(n => Number.isFinite(n))));
   state.sidebar = { ...state.sidebar, ...saved.sidebar };
   state.recentDirs = Array.isArray(saved.recentDirs) ? saved.recentDirs.filter((/** @type {unknown} */ d) => typeof d === 'string').slice(0, MAX_RECENT_DIRS) : [];
   if (!Array.isArray(saved.workspaces) || !saved.workspaces.length) return false;

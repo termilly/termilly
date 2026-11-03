@@ -239,7 +239,7 @@ function detachNotepad(at) {
   // Its room here is given back once it's in its window, and as that window is resized.
   detach(WINDOW_KEY, {
     el: panel, title: NAME, onClosed: dockBack, onResize: refreshDock, onMoved: () => area.focus(),
-    at,
+    at, remember: true,
     header: head, close: hideNotepad,
   });
 }

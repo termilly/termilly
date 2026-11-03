@@ -386,7 +386,7 @@ export const toggleSnippetsWindow = () => (isDetached(WINDOW_KEY) ? focusWindow(
 function detachSnippets(at) {
   const close = () => closeSnippetsWindow();
   detach(WINDOW_KEY, {
-    el: box, title: NAME, onClosed: backOverPage, askClose: close, close, header: head, at,
+    el: box, title: NAME, onClosed: backOverPage, askClose: close, close, header: head, at, remember: true,
     // Over the page until it's in its window.
     onMoved: () => {
       layer.hidden = true;

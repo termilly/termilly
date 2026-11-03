@@ -22,7 +22,12 @@ import { WINDOW_ACTION, DETACHED_WINDOW } from './constants.js';
  * double click (else a double click maximizes the window).
  * @typedef {{ key: string, win: Window, el: HTMLElement, title: string, ready: boolean, onClosed: (el: HTMLElement) => void,
  *   onMoved?: () => void, onResize?: () => void, askClose?: () => unknown, header?: HTMLElement, close?: () => unknown,
- *   keepDoubleClick?: string, chrome?: AbortController, onDragged?: Dragged, faded?: boolean }} Detached
+ *   keepDoubleClick?: string, chrome?: AbortController, onDragged?: Dragged, faded?: boolean, remember?: boolean }} Detached
+ */
+
+/**
+ * Where a window was on the screen and its size (its page's, in the page's pixels), to open it there again.
+ * @typedef {{ x: number, y: number, w: number, h: number }} WindowPlace
  */
 
 /**
@@ -89,23 +94,26 @@ export const isDetached = key => open.has(key);
  * @param {string} key
  * @param {{ el: HTMLElement, title: string, onClosed: (el: HTMLElement) => void, onMoved?: () => void,
  *   onResize?: () => void, askClose?: () => unknown, at?: { x: number, y: number }, header?: HTMLElement,
- *   close?: () => unknown, keepDoubleClick?: string, minWidth?: number, onDragged?: Dragged }} options
+ *   close?: () => unknown, keepDoubleClick?: string, minWidth?: number, onDragged?: Dragged, remember?: boolean }} options
  *   at: the screen point the window's top left corner goes near (a drag's drop); else over where the element is.
- *   minWidth: the window is at least this wide (by default its title bar's name, tools and buttons all fit)
+ *   minWidth: the window is at least this wide (by default its title bar's name, tools and buttons all fit).
+ *   remember: it opens where it was last time (its size too; at still picks the place), kept when it goes (keepPlaces)
  */
 export function detach(key, options) {
-  const { el, title, onClosed, onMoved, onResize, askClose, at, header, close, keepDoubleClick, minWidth = MIN_WIDTH_PX, onDragged } = options;
+  const { el, title, onClosed, onMoved, onResize, askClose, at, header, close, keepDoubleClick, minWidth = MIN_WIDTH_PX, onDragged, remember = false } = options;
   if (open.has(key)) return focusWindow(key), true;
   const r = el.getBoundingClientRect();
-  const left = at ? at.x - OFFSET_PX : screenX + r.left + OFFSET_PX;
-  const top = at ? at.y - OFFSET_PX : screenY + r.top + OFFSET_PX;
+  const last = remember ? places.get(key) : null;
+  const left = at ? at.x - OFFSET_PX : last ? last.x : screenX + r.left + OFFSET_PX;
+  const top = at ? at.y - OFFSET_PX : last ? last.y : screenY + r.top + OFFSET_PX;
+  const width = last ? last.w : Math.max(r.width, minWidth);
+  const height = last ? last.h : r.height;
   const features = [
-    'popup', `width=${Math.round(Math.max(r.width, minWidth))}`, `height=${Math.round(r.height)}`,
-    `left=${Math.round(left)}`, `top=${Math.round(top)}`,
+    'popup', `width=${Math.round(width)}`, `height=${Math.round(height)}`, `left=${Math.round(left)}`, `top=${Math.round(top)}`,
   ].join(',');
   const win = window.open('', NAME_PREFIX + key, features);
   if (!win) return false;
-  open.set(key, { key, win, el, title, ready: false, onClosed, onMoved, onResize, askClose, header, close, keepDoubleClick, onDragged });
+  open.set(key, { key, win, el, title, ready: false, onClosed, onMoved, onResize, askClose, header, close, keepDoubleClick, onDragged, remember });
   build(win);
   watch ||= window.setInterval(checkClosed, WATCH_MS);
   if (!themeWatch) {
@@ -212,6 +220,7 @@ function askClose(name) {
 function gone(d, quiet) {
   if (open.get(d.key) !== d) return;
   open.delete(d.key);
+  rememberPlace(d);
   if (here.defaultView === d.win) here = document;
   if (!open.size) {
     clearInterval(watch);
@@ -276,6 +285,34 @@ function showMaximized(d) {
   const { availWidth, availHeight } = win.screen;
   const maximized = win.outerWidth >= availWidth - FRAME_SLACK_PX && win.outerHeight >= availHeight - FRAME_SLACK_PX;
   win.document.body.classList.toggle(MAXIMIZED, maximized);
+}
+
+/**
+ * Where a window that remembers its place was, as it goes, for next time; not while maximized (it opens where it was
+ * before that), nor once its page is gone.
+ * @param {Detached} d
+ */
+function rememberPlace(d) {
+  const { win } = d;
+  if (!d.remember || !d.ready || win.closed || win.document.body.classList.contains(MAXIMIZED)) return;
+  places.set(d.key, { x: win.screenX, y: win.screenY, w: win.innerWidth, h: win.innerHeight });
+}
+
+/** Where windows that remember their place were: kept with the page's state (store.js gives these). */
+let places = {
+  /** @type {(key: string) => WindowPlace | null} */
+  get: () => null,
+  /** @type {(key: string, place: WindowPlace) => void} */
+  set: () => {},
+};
+
+/**
+ * Where windows that remember their place keep it (store.js, saved with the page's state).
+ * @param {(key: string) => WindowPlace | null} get
+ * @param {(key: string, place: WindowPlace) => void} set
+ */
+export function keepPlaces(get, set) {
+  places = { get, set };
 }
 
 function checkClosed() {

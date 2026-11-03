@@ -73,11 +73,12 @@ internal sealed class DetachedWindow : Window
             Width = features.Width + (2 * FrameWidth);
             Height = features.Height + (2 * FrameWidth);
         }
+        // window.open's place is the page's too (where it says it is, window.screenX), inside the frame.
         if (features.HasPosition)
         {
             WindowStartupLocation = WindowStartupLocation.Manual;
-            Left = features.Left;
-            Top = features.Top;
+            Left = features.Left - FrameWidth;
+            Top = features.Top - FrameWidth;
         }
     }
 
