@@ -185,7 +185,6 @@ export const WINDOW_ACTION = Object.freeze({
   focus: 'focus',
   fade: 'fade',
   solid: 'solid',
-  tearOff: 'tearOff',
 });
 
 /** C#: QuitAnswers (Messaging/Window.cs). */

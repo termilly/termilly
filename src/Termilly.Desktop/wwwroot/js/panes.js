@@ -348,18 +348,24 @@ export const ATTACH_LABEL = 'Back to the workspace';
  * layout is kept (the layout is drawn without it), and closing the window puts it back there.
  * @param {Tab} tab
  * @param {{ x: number, y: number }} [at] where on the screen it opens (a drag's drop), else over where the pane is
- * @param {boolean} [tearOff] dragged out of the main window: its window follows the pointer (js/windows.js)
+ * @param {{ x: number, y: number }} [place] exactly where its picture was let go (its top left corner): it opens there,
+ *   and the picture goes once it's in its window
  */
-export function detachTab(tab, at, tearOff = false) {
+export function detachTab(tab, at, place) {
   const ws = wsById(tab.wsId);
   if (!ws || !tab.view || tab.detached) return;
   const { el } = tab.view;
-  detach(windowKey(tab), {
-    el, title: tabTitle(tab), at, tearOff, onClosed: () => attachTab(tab), onMoved: () => moved(tab), onResize: scheduleFit,
+  const opened = detach(windowKey(tab), {
+    el, title: tabTitle(tab), at, place, onClosed: () => attachTab(tab), onResize: scheduleFit,
+    onMoved: () => {
+      moved(tab);
+      if (place) showDragPicture(null);
+    },
     // Its title bar is the window's; Close there closes the terminal, and its name keeps its double click (rename).
     header: tab.view.header, close: () => closeTab(tab), keepDoubleClick: PANE_NAME,
     onDragged: (x, y, dropped) => dragBack(tab, x, y, dropped),
   });
+  if (!opened && place) showDragPicture(null);
 }
 
 /**
@@ -965,20 +971,22 @@ function wireDrag(tab, header) {
 function trackDrag(tab, header, e) {
   /** @type {Drop | null} */
   let drop = null;
-  let torn = false;
+  let outside = false;
   followDrag(header, e, {
     // A lone terminal can go nowhere but out into a window of its own; that works too.
-    begin: () => beginDrag(tab),
+    begin: () => beginDrag(tab, e),
     move: (x, y) => {
-      // Out of the main window: the drag here ends, and the terminal goes on in a window of its own.
-      if (tearsOff(x, y)) return (torn = true);
-      drop = findDropTarget(tab, x, y);
+      // Out of the main window (its picture follows the pointer there): let go, it opens in a window of its own.
+      outside = followsPicture && outOfWindow(x, y);
+      drop = outside ? null : findDropTarget(tab, x, y);
       showDrop(drop);
-      return false;
     },
     end: (commit, screen) => {
-      endDrag(tab);
-      if (torn) detachTab(tab, screen, true);
+      // Where its picture is: its window opens exactly there, and the picture stays until it has.
+      const place = followsPicture ? { x: screen.x - grip.x, y: screen.y - grip.y } : undefined;
+      const out = commit && (outside || drop?.zone === ZONE.window);
+      endDrag(tab, out && !!place);
+      if (out && place) detachTab(tab, undefined, place);
       else if (commit && drop) dropPane(tab, drop, screen);
       else focusTab(tab);
     },
@@ -986,19 +994,35 @@ function trackDrag(tab, header, e) {
 }
 
 /**
- * Whether a terminal dragged by its title bar is out of the main window (the page still hears the pointer there, as
- * it holds it): torn off into a window of its own that goes on moving with the pointer. Windows only for now (its host
- * moves a window with the pointer); elsewhere a terminal still goes out by being let go at the window's edge.
+ * Windows: a dragged terminal is a see-through picture of itself at its own size, following the pointer past the main
+ * window too (its host shows it, DragPictureWindow); let go outside the main window, its window opens right where the
+ * picture is. Elsewhere it shows a label, and goes out into a window of its own at the main window's edge.
+ */
+const followsPicture = platform === PLATFORM.windows;
+/** The body's class while a dragged terminal's picture follows the pointer (app.css: no label). */
+const PICTURE_DRAG = 'picture-drag';
+/** Where the pointer took the dragged terminal, from its top left corner. */
+let grip = { x: 0, y: 0 };
+
+/**
+ * Whether a point of the page is out of the main window (a drag holding the pointer still hears it there).
  * @param {number} x
  * @param {number} y
  */
-const tearsOff = (x, y) => platform === PLATFORM.windows && (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight);
+const outOfWindow = (x, y) => x < 0 || y < 0 || x >= innerWidth || y >= innerHeight;
+
+/**
+ * A dragged terminal's picture following the pointer from now on, or none (null): the one shown goes.
+ * @param {{ image: string, x: number, y: number, width: number, height: number } | null} picture
+ */
+function showDragPicture(picture) {
+  if (followsPicture) send(PAGE.windowDragPicture, picture ?? {});
+}
 
 /**
  * What a drag does: when it starts (past the threshold), as the pointer moves (where it is in the page), and when it
  * ends: let go (commit) or not (Escape), and where the pointer was on the screen (a window opens there).
- * move may end the drag itself (true): end then runs as for Escape, and its owner knows why.
- * @typedef {{ begin: () => void, move: (x: number, y: number) => boolean | void,
+ * @typedef {{ begin: () => void, move: (x: number, y: number) => void,
  *   end: (commit: boolean, screen: { x: number, y: number }) => void }} DragSteps
  */
 
@@ -1025,7 +1049,7 @@ function followDrag(header, e, { begin, move, end }) {
     }
     dragGhost.style.transform = `translate(${ev.clientX + GHOST_OFFSET.x}px, ${ev.clientY + GHOST_OFFSET.y}px)`;
     screen = { x: ev.screenX, y: ev.screenY };
-    if (move(ev.clientX, ev.clientY) === true) finish(false);
+    move(ev.clientX, ev.clientY);
   };
   /** @param {boolean} commit */
   const finish = commit => {
@@ -1103,15 +1127,24 @@ function dropPane(tab, drop, screen) {
   else movePane(tab, drop.target, drop.zone);
 }
 
-/** @param {Tab} source */
-function beginDrag(source) {
+/**
+ * @param {Tab} source
+ * @param {PointerEvent} e the press that started it
+ */
+function beginDrag(source, e) {
   showGuides(/** @type {Workspace} */ (wsById(source.wsId)), source);
-  // The terminal's picture first (the outline of a window it would open in shows it), then the label and its pane
-  // dimmed, so neither is in the picture.
+  const r = /** @type {TabView} */ (source.view).el.getBoundingClientRect();
+  grip = { x: e.clientX - r.left, y: e.clientY - r.top };
+  // The terminal's picture first (the outline of a window it would open in shows it, and on Windows it follows the
+  // pointer), then the label and its pane dimmed, so neither is in the picture.
   dragged = source;
   takeShot(source).catch(() => {}).then(() => {
     if (dragged !== source) return;
     document.body.classList.add(DRAGGING_PANE);
+    if (shot && followsPicture) {
+      document.body.classList.add(PICTURE_DRAG);
+      showDragPicture({ image: shot.slice(shot.indexOf(',') + 1), x: grip.x, y: grip.y, width: r.width, height: r.height });
+    }
     // The terminal's own badge, as its title bar shows it, and its name.
     showGhost(tabBadgeHtml(source), tabTitle(source));
     /** @type {TabView} */ (source.view).el.classList.add(DRAG_SOURCE);
@@ -1230,11 +1263,15 @@ function landBack(tab, drop) {
   movePane(tab, drop.target, drop.zone);
 }
 
-/** @param {Tab} source */
-function endDrag(source) {
+/**
+ * @param {Tab} source
+ * @param {boolean} [keepPicture] it opens in a window of its own where its picture is: the picture goes once it has
+ */
+function endDrag(source, keepPicture = false) {
   dragged = null;
   shot = null;
-  document.body.classList.remove(DRAGGING_PANE);
+  if (!keepPicture) showDragPicture(null);
+  document.body.classList.remove(DRAGGING_PANE, PICTURE_DRAG);
   /** @type {TabView} */ (source.view).el.classList.remove(DRAG_SOURCE);
   hideGuides();
 }
@@ -1251,8 +1288,9 @@ function endDrag(source) {
  */
 function findDropTarget(source, x, y) {
   // A detached terminal is already in a window of its own: the main window's edge and the compass's corner are nothing
-  // to it. Otherwise, at the app window's very edge, or out of it: into a window of its own.
-  if (atAppEdge(x, y)) return source.detached ? null : windowDrop(source, x, y);
+  // to it. Otherwise, at the app window's very edge, or out of it: into a window of its own (not on Windows, where its
+  // picture goes on past the edge and it opens wherever it's let go out there).
+  if (atAppEdge(x, y)) return source.detached || followsPicture ? null : windowDrop(source, x, y);
   const under = document.elementFromPoint(x, y);
   // A detached terminal lands in the workspace shown, whichever it came from.
   const lands = (/** @type {Tab} */ target) => target.wsId === source.wsId || !!source.detached;

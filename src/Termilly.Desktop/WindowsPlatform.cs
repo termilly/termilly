@@ -48,6 +48,8 @@ internal sealed class WindowsPlatform(MainWindow window) :
 
     public Task<string?> CapturePageAsync() => window.Dispatcher.InvokeAsync(window.CapturePageAsync).Task.Unwrap();
 
+    public void ShowDragPicture(FromPage.DragPicture picture) => window.Dispatcher.Invoke(() => window.ShowDragPicture(picture));
+
     // ---- Dialogs: the page's messages arrive on the window's thread, so they open there and answer at once ----
 
     public Task<string?> PickFolderAsync(string title, string initial)

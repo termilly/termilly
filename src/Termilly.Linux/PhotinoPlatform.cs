@@ -58,6 +58,11 @@ internal abstract class PhotinoPlatform(Action<string> send, string? startFolder
     {
     }
 
+    /// <summary>No picture following the pointer out of the window yet: a terminal goes out at the window's edge.</summary>
+    public void ShowDragPicture(FromPage.DragPicture picture)
+    {
+    }
+
     /// <summary>
     /// A picture of the page for a terminal dragged out (WebKitGTK's snapshot, PageSnapshot); none on macOS yet, where
     /// it shows its outline alone.

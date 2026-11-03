@@ -36,6 +36,21 @@ public partial class MainWindow
         e.Handled = true;
     }
 
+    /// <summary>A dragged terminal's picture following the pointer (DragPictureWindow), while there is one.</summary>
+    private DragPictureWindow? _dragPicture;
+
+    /// <summary>A dragged terminal's picture to follow the pointer from now on, or none (no image): the one shown goes.</summary>
+    internal void ShowDragPicture(FromPage.DragPicture picture)
+    {
+        _dragPicture?.Close();
+        _dragPicture = null;
+        if (picture.Image is { Length: > 0 } image && picture.Width > 0 && picture.Height > 0 && !_closing)
+        {
+            _dragPicture = new DragPictureWindow(picture, image);
+            _dragPicture.Show();
+        }
+    }
+
     /// <summary>A picture of the page as it is now, a JPEG in base64 (for a terminal dragged out, js/panes.js).</summary>
     internal async Task<string?> CapturePageAsync()
     {

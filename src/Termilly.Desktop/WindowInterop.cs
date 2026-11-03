@@ -231,8 +231,21 @@ internal static class WindowInterop
     /// <summary>The windows see-through now (SeeThrough), on the windows' thread.</summary>
     private static readonly HashSet<IntPtr> SeeThroughWindows = [];
 
+    /// <summary>
+    /// A window the pointer goes through (a dragged picture, DragPictureWindow): never under the pointer, never active,
+    /// not in the taskbar or Alt+Tab. Call once it has a handle (SourceInitialized).
+    /// </summary>
+    public static void ClickThrough(Window window)
+    {
+        var hwnd = new WindowInteropHelper(window).Handle;
+        _ = SetWindowLong(hwnd, GWL_EXSTYLE, GetWindowLong(hwnd, GWL_EXSTYLE) | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW);
+    }
+
     private const int GWL_EXSTYLE = -20;
     private const int WS_EX_LAYERED = 0x80000;
+    private const int WS_EX_TRANSPARENT = 0x20;
+    private const int WS_EX_NOACTIVATE = 0x8000000;
+    private const int WS_EX_TOOLWINDOW = 0x80;
     private const uint LWA_ALPHA = 0x2;
     private const int WM_STYLECHANGING = 0x007C;
 
@@ -247,22 +260,6 @@ internal static class WindowInterop
 
     /// <summary>Where the pointer is on the screen, in pixels.</summary>
     public static Point CursorPosition() => GetCursorPos(out var p) ? new Point(p.X, p.Y) : new Point(double.NaN, double.NaN);
-
-    /// <summary>Whether the primary mouse button is held down now (the right one when the buttons are swapped).</summary>
-    public static bool PrimaryButtonDown() =>
-        (GetAsyncKeyState(GetSystemMetrics(SM_SWAPBUTTON) != 0 ? VK_RBUTTON : VK_LBUTTON) & KeyDownBit) != 0;
-
-    private const int SM_SWAPBUTTON = 23;
-    private const int VK_LBUTTON = 0x01;
-    private const int VK_RBUTTON = 0x02;
-    /// <summary>GetAsyncKeyState's high bit: the key is down.</summary>
-    private const int KeyDownBit = 0x8000;
-
-    [DllImport("user32.dll")]
-    private static extern short GetAsyncKeyState(int key);
-
-    [DllImport("user32.dll")]
-    private static extern int GetSystemMetrics(int index);
 
     [DllImport("user32.dll")]
     private static extern bool GetCursorPos(out POINT point);

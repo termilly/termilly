@@ -22,8 +22,7 @@ import { WINDOW_ACTION, DETACHED_WINDOW } from './constants.js';
  * double click (else a double click maximizes the window).
  * @typedef {{ key: string, win: Window, el: HTMLElement, title: string, ready: boolean, onClosed: (el: HTMLElement) => void,
  *   onMoved?: () => void, onResize?: () => void, askClose?: () => unknown, header?: HTMLElement, close?: () => unknown,
- *   keepDoubleClick?: string, chrome?: AbortController, onDragged?: Dragged, faded?: boolean, remember?: boolean, placed?: boolean,
- *   tornOff?: { w: number, h: number }, growing?: boolean }} Detached
+ *   keepDoubleClick?: string, chrome?: AbortController, onDragged?: Dragged, faded?: boolean, remember?: boolean, placed?: boolean }} Detached
  */
 
 /**
@@ -58,14 +57,6 @@ export const RETURN_LABEL = 'Back to the main window';
 const CONTROLS = [WINDOW_ACTION.minimize, WINDOW_ACTION.maximize, WINDOW_ACTION.close];
 /** The body's class while the window is maximized (app.css: Restore's icon, no edges). */
 const MAXIMIZED = 'maximized';
-/**
- * A window torn off the main window (js/panes.js) opens this much of its size and grows to all of it under the pointer
- * (its host does that, in DetachedWindow.GrowTime); what it shows is fitted once it has grown, not at every step.
- */
-const TEAR_OFF_START_SCALE = 0.75;
-const TEAR_OFF_GROW_MS = 180;
-/** A little longer than the growing, so its last step is in before the fit. */
-const TEAR_OFF_SETTLE_MS = 60;
 /** How much less than the screen's room a maximized window's page may be: its frame. */
 const FRAME_SLACK_PX = 4;
 
@@ -104,30 +95,27 @@ export const isDetached = key => open.has(key);
  * @param {{ el: HTMLElement, title: string, onClosed: (el: HTMLElement) => void, onMoved?: () => void,
  *   onResize?: () => void, askClose?: () => unknown, at?: { x: number, y: number }, header?: HTMLElement,
  *   close?: () => unknown, keepDoubleClick?: string, minWidth?: number, onDragged?: Dragged, remember?: boolean,
- *   tearOff?: boolean }} options
+ *   place?: { x: number, y: number } }} options
  *   at: the screen point the window's top left corner goes near (a drag's drop); else over where the element is.
+ *   place: exactly where on the screen its page's top left corner goes (where a dragged picture of it was let go).
  *   minWidth: the window is at least this wide (by default its title bar's name, tools and buttons all fit).
  *   remember: it opens where it was last time (its size too; at still picks the place), kept when it goes (keepPlaces)
- *   tearOff: torn off the main window by a drag (at is the pointer): it opens smaller, then its host grows it under the
- *   pointer and moves it with the pointer while the button is down
  */
 export function detach(key, options) {
-  const { el, title, onClosed, onMoved, onResize, askClose, at, header, close, keepDoubleClick, minWidth = MIN_WIDTH_PX, onDragged, remember = false, tearOff = false } = options;
+  const { el, title, onClosed, onMoved, onResize, askClose, at, place, header, close, keepDoubleClick, minWidth = MIN_WIDTH_PX, onDragged, remember = false } = options;
   if (open.has(key)) return focusWindow(key), true;
   const r = el.getBoundingClientRect();
   const last = remember ? places.get(key) : null;
-  const left = at ? at.x - OFFSET_PX : last ? last.x : screenX + r.left + OFFSET_PX;
-  const top = at ? at.y - OFFSET_PX : last ? last.y : screenY + r.top + OFFSET_PX;
+  const left = place ? place.x : at ? at.x - OFFSET_PX : last ? last.x : screenX + r.left + OFFSET_PX;
+  const top = place ? place.y : at ? at.y - OFFSET_PX : last ? last.y : screenY + r.top + OFFSET_PX;
   const width = last ? last.w : Math.max(r.width, minWidth);
   const height = last ? last.h : r.height;
-  const scale = tearOff ? TEAR_OFF_START_SCALE : 1;
   const features = [
-    'popup', `width=${Math.round(width * scale)}`, `height=${Math.round(height * scale)}`, `left=${Math.round(left)}`, `top=${Math.round(top)}`,
+    'popup', `width=${Math.round(width)}`, `height=${Math.round(height)}`, `left=${Math.round(left)}`, `top=${Math.round(top)}`,
   ].join(',');
   const win = window.open('', NAME_PREFIX + key, features);
   if (!win) return false;
-  const tornOff = tearOff ? { w: width, h: height } : undefined;
-  open.set(key, { key, win, el, title, ready: false, onClosed, onMoved, onResize, askClose, header, close, keepDoubleClick, onDragged, remember, tornOff });
+  open.set(key, { key, win, el, title, ready: false, onClosed, onMoved, onResize, askClose, header, close, keepDoubleClick, onDragged, remember });
   build(win);
   watch ||= window.setInterval(checkClosed, WATCH_MS);
   if (!themeWatch) {
@@ -207,28 +195,12 @@ function ready(win) {
   win.addEventListener('focus', () => { here = doc; });
   win.addEventListener('resize', () => {
     showMaximized(d);
-    if (!d.growing) d.onResize?.();
+    d.onResize?.();
   });
   win.addEventListener(PAGE_GONE, () => gone(d, false));
   here = doc;
   d.onMoved?.();
-  if (d.tornOff) growUnderPointer(d, d.tornOff);
-  else d.onResize?.();
-}
-
-/**
- * A window torn off the main window, ready: its host puts it under the pointer, grows it to its size and moves it with
- * the pointer while the button is down. What it shows is fitted once, when it has grown.
- * @param {Detached} d
- * @param {{ w: number, h: number }} size
- */
-function growUnderPointer(d, size) {
-  d.growing = true;
-  send(PAGE.window, { action: WINDOW_ACTION.tearOff, name: NAME_PREFIX + d.key, width: Math.round(size.w), height: Math.round(size.h) });
-  setTimeout(() => {
-    d.growing = false;
-    if (open.get(d.key) === d) d.onResize?.();
-  }, TEAR_OFF_GROW_MS + TEAR_OFF_SETTLE_MS);
+  d.onResize?.();
 }
 
 /**
