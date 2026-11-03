@@ -371,6 +371,9 @@ function moved(tab) {
   takeBackHeader(tab);
   view.el.classList.remove(TAB_HIDDEN);
   view.term?.focus();
+  // Fitted to its window and drawn again there: WebKitGTK shows it blank until its next output otherwise.
+  scheduleFit();
+  requestAnimationFrame(() => view.term?.refresh(0, view.term.rows - 1));
   if (!ws) return;
   // The workspace's focus moves to a terminal still in it.
   if (ws.focusId === tab.id) ws.focusId = tabsOf(ws).find(t => !t.detached)?.id ?? null;

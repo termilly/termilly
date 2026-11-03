@@ -17,6 +17,8 @@ internal static class DetachedWindows
     private const string Gtk = "libgtk-3.so.0";
     private const string GObject = "libgobject-2.0.so.0";
     private const string WebKit = "libwebkit2gtk-4.1.so.0";
+    private const string JavaScriptCore = "libjavascriptcoregtk-4.1.so.0";
+    private const string GLibName = "libglib-2.0.so.0";
     /// <summary>What the window runs when the user closes it: the page closes it once it has taken back what it shows.</summary>
     private const string AskToClose = "window.termillyClose ? termillyClose() : window.close()";
     private const int GtkWindowToplevel = 0;
@@ -106,11 +108,17 @@ internal static class DetachedWindows
         Open.Clear();
     }
 
-    /// <summary>window.open: a related web view for one of the page's own windows, nothing (no window) for anything else.</summary>
+    /// <summary>
+    /// window.open: a related web view for one of the page's own windows, nothing (no window) for anything else. The
+    /// page's own open an empty page (js/windows.js builds it). WebKitGTK may not say the name window.open gave (the
+    /// navigation's frame name is empty), so an empty page with no name is let through too and named once it's ready
+    /// (<see cref="ReadyToShow"/>).
+    /// </summary>
     private static IntPtr Create(IntPtr view, IntPtr navigation, IntPtr data)
     {
-        var name = Marshal.PtrToStringUTF8(webkit_navigation_action_get_frame_name(navigation));
-        if (name is null || !name.StartsWith(DetachedWindowNames.NamePrefix, StringComparison.Ordinal))
+        var name = Marshal.PtrToStringUTF8(webkit_navigation_action_get_frame_name(navigation)) ?? "";
+        var named = name.StartsWith(DetachedWindowNames.NamePrefix, StringComparison.Ordinal);
+        if (!named && (name.Length > 0 || !OpensEmptyPage(navigation)))
         {
             return IntPtr.Zero;
         }
@@ -122,13 +130,69 @@ internal static class DetachedWindows
         return opened;
     }
 
-    /// <summary>The page in it is ready: a window at the size (and place) window.open asked for, in the theme.</summary>
+    /// <summary>Whether window.open opens an empty page (about:blank), as the page's own windows do.</summary>
+    private static bool OpensEmptyPage(IntPtr navigation)
+    {
+        var request = webkit_navigation_action_get_request(navigation);
+        var uri = request == IntPtr.Zero ? null : Marshal.PtrToStringUTF8(webkit_uri_request_get_uri(request));
+        return string.IsNullOrEmpty(uri) || uri == BlankPage;
+    }
+
+    private const string BlankPage = "about:blank";
+    /// <summary>The name window.open gave the window, read from its page when WebKitGTK didn't say it.</summary>
+    private const string NameScript = "window.name";
+
+    /// <summary>
+    /// The page in it is ready: shown in a window of its own, once its name says it's one of the page's (read from its
+    /// page when window.open's wasn't given).
+    /// </summary>
     private static void ReadyToShow(IntPtr view, IntPtr data)
     {
         if (!Pending.Remove(view, out var name))
         {
             return;
         }
+        if (name.Length > 0)
+        {
+            Show(view, name);
+            return;
+        }
+        webkit_web_view_evaluate_javascript(view, NameScript, -1, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, OnNamed, IntPtr.Zero);
+    }
+
+    private static readonly ScriptCallback OnNamed = Named;
+
+    private delegate void ScriptCallback(IntPtr source, IntPtr result, IntPtr data);
+
+    /// <summary>Its page's name: one of the page's own windows is shown, anything else goes.</summary>
+    private static void Named(IntPtr view, IntPtr result, IntPtr data)
+    {
+        var value = webkit_web_view_evaluate_javascript_finish(view, result, out var error);
+        string? name = null;
+        if (value != IntPtr.Zero)
+        {
+            var text = jsc_value_to_string(value);
+            name = Marshal.PtrToStringUTF8(text);
+            g_free(text);
+            g_object_unref(value);
+        }
+        if (error != IntPtr.Zero)
+        {
+            g_error_free(error);
+        }
+        if (name is not null && name.StartsWith(DetachedWindowNames.NamePrefix, StringComparison.Ordinal))
+        {
+            Show(view, name);
+        }
+        else
+        {
+            gtk_widget_destroy(view); // not one of ours: no window
+        }
+    }
+
+    /// <summary>A window at the size (and place) window.open asked for, in the theme, showing the page's view.</summary>
+    private static void Show(IntPtr view, string name)
+    {
         var window = gtk_window_new(GtkWindowToplevel);
         gtk_window_set_decorated(window, 0); // the page's header is its title bar
         webkit_window_properties_get_geometry(webkit_web_view_get_window_properties(view), out var geometry);
@@ -206,4 +270,12 @@ internal static class DetachedWindows
     [DllImport(WebKit)] private static extern void webkit_window_properties_get_geometry(IntPtr properties, out GdkRectangle geometry);
     [DllImport(WebKit)] private static extern IntPtr webkit_navigation_action_get_frame_name(IntPtr navigation);
     [DllImport(WebKit)] private static extern void webkit_web_view_run_javascript(IntPtr view, [MarshalAs(UnmanagedType.LPUTF8Str)] string script, IntPtr cancellable, IntPtr callback, IntPtr data);
+    [DllImport(WebKit)] private static extern void webkit_web_view_evaluate_javascript(IntPtr view, [MarshalAs(UnmanagedType.LPUTF8Str)] string script, nint length, IntPtr world, IntPtr sourceUri, IntPtr cancellable, ScriptCallback callback, IntPtr data);
+    [DllImport(WebKit)] private static extern IntPtr webkit_web_view_evaluate_javascript_finish(IntPtr view, IntPtr result, out IntPtr error);
+    [DllImport(WebKit)] private static extern IntPtr webkit_navigation_action_get_request(IntPtr navigation);
+    [DllImport(WebKit)] private static extern IntPtr webkit_uri_request_get_uri(IntPtr request);
+    [DllImport(JavaScriptCore)] private static extern IntPtr jsc_value_to_string(IntPtr value);
+    [DllImport(GLibName)] private static extern void g_free(IntPtr memory);
+    [DllImport(GLibName)] private static extern void g_error_free(IntPtr error);
+    [DllImport(GObject)] private static extern void g_object_unref(IntPtr instance);
 }
