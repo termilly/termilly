@@ -54,6 +54,8 @@ const STRIP_TAB_MARGIN_PX = 4;
 const WINDOW_EDGE_PX = 8;
 /** The size of a dragged pane's window outline at the most (it's the pane's size, smaller). */
 const WINDOW_PREVIEW = Object.freeze({ w: 360, h: 240 });
+/** How far in from a pane's top and bottom edges a dragged pane splits it above or below (left or right elsewhere). */
+const TOP_BOTTOM_STRIP_PX = 50;
 
 /**
  * A pane's drop zone: beside it on a side, or in it as a tab (center).
@@ -996,7 +998,8 @@ function endDrag(source) {
 }
 
 /**
- * Which pane is under the pointer, and which of its zones: a compass cell it's on, else its left or right half. Over a
+ * Which pane is under the pointer, and which of its zones: a compass cell it's on, else a strip along its top or
+ * bottom edge, else its left or right half. Over a
  * group's tab strip it's always the middle (join the group). A tab dragged within its own group can only leave it,
  * beside it. At the app window's edge it goes out into a window of its own.
  * @param {Tab} source
@@ -1053,11 +1056,13 @@ function paneZone(el, target, x, y) {
       return { target, zone: /** @type {Zone} */ (cell.dataset.zone), rect: r };
     }
   }
-  // Anywhere else splits it left or right, by the half the pointer is in, so the outline shows as soon as the pointer
-  // is in and changes side right at the middle. Above, below and joining as a tab are the compass's cells (or a
-  // group's strip for a tab).
+  // Anywhere else splits it: above or below in a strip along its top and bottom edges, else left or right by the half
+  // the pointer is in, so the outline shows as soon as the pointer is in and changes side right at the middle. Joining
+  // as a tab is the compass's middle (or a group's strip).
   /** @type {Zone} */
-  const zone = x < r.left + r.width / 2 ? ZONE.left : ZONE.right;
+  const zone = y < r.top + TOP_BOTTOM_STRIP_PX ? ZONE.top
+    : y > r.bottom - TOP_BOTTOM_STRIP_PX ? ZONE.bottom
+      : x < r.left + r.width / 2 ? ZONE.left : ZONE.right;
   return { target, zone, rect: r };
 }
 
