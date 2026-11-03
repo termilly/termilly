@@ -54,11 +54,6 @@ const STRIP_TAB_MARGIN_PX = 4;
 const WINDOW_EDGE_PX = 8;
 /** The size of a dragged pane's window outline at the most (it's the pane's size, smaller). */
 const WINDOW_PREVIEW = Object.freeze({ w: 360, h: 240 });
-/**
- * How much of a pane's width, around its middle, splits it above or below: only there. Everywhere else the pointer
- * splits it left or right, so the side it came in from shows at once.
- */
-const TOP_BOTTOM_BAND = 0.3;
 
 /**
  * A pane's drop zone: beside it on a side, or in it as a tab (center).
@@ -1001,9 +996,9 @@ function endDrag(source) {
 }
 
 /**
- * Which pane is under the pointer, and which of its five zones: a compass cell it's on, else an edge strip or the
- * middle. Over a group's tab strip it's always the middle (join the group). A tab dragged within its own group can
- * only leave it, by an edge.
+ * Which pane is under the pointer, and which of its zones: a compass cell it's on, else its left or right half. Over a
+ * group's tab strip it's always the middle (join the group). A tab dragged within its own group can only leave it,
+ * beside it. At the app window's edge it goes out into a window of its own.
  * @param {Tab} source
  * @param {number} x
  * @param {number} y
@@ -1058,14 +1053,11 @@ function paneZone(el, target, x, y) {
       return { target, zone: /** @type {Zone} */ (cell.dataset.zone), rect: r };
     }
   }
-  // Anywhere else in the pane splits it, so the outline shows as soon as the pointer is in: above or below in a narrow
-  // band down its middle (nearer the top or the bottom than the side), left or right everywhere else. Joining as a tab
-  // is the compass's middle (or a group's strip).
-  const dx = (x - (r.left + r.width / 2)) / r.width;
-  const dy = (y - (r.top + r.height / 2)) / r.height;
-  const upOrDown = Math.abs(dx) < TOP_BOTTOM_BAND / 2 && Math.abs(dy) > Math.abs(dx);
+  // Anywhere else splits it left or right, by the half the pointer is in, so the outline shows as soon as the pointer
+  // is in and changes side right at the middle. Above, below and joining as a tab are the compass's cells (or a
+  // group's strip for a tab).
   /** @type {Zone} */
-  const zone = upOrDown ? (dy < 0 ? ZONE.top : ZONE.bottom) : (dx < 0 ? ZONE.left : ZONE.right);
+  const zone = x < r.left + r.width / 2 ? ZONE.left : ZONE.right;
   return { target, zone, rect: r };
 }
 
