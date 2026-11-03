@@ -75,6 +75,10 @@ internal static class Native
     [DllImport(Libc, SetLastError = true)]
     private static extern int ioctl(int fd, ulong request, ref WinSize size);
 
+    /// <summary>open without a mode (its variadic part), which only creating a file needs.</summary>
+    [DllImport(Libc, SetLastError = true)]
+    public static extern int open([MarshalAs(UnmanagedType.LPUTF8Str)] string path, int flags);
+
     [DllImport(Libc, SetLastError = true)]
     public static extern int dup(int fd);
 

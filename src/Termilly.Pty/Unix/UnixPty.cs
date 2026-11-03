@@ -71,8 +71,15 @@ public sealed class UnixPty : IPty
         {
             throw new Win32Exception(Marshal.GetLastPInvokeError(), "Couldn't open a pseudo terminal.");
         }
+        var slavePath = SlaveName(master);
+        // macOS takes a size only once the other end has been opened (ENOTTY before); held open until the shell has it.
+        var slave = open(slavePath, O_RDWR | O_NOCTTY | O_CLOEXEC);
         SetSize(master, options.Columns, options.Rows);
-        var error = Spawn(argv, SlaveName(master), options, out var pid);
+        var error = Spawn(argv, slavePath, options, out var pid);
+        if (slave >= 0)
+        {
+            _ = close(slave);
+        }
         if (error != 0)
         {
             _ = close(master);

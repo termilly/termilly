@@ -50,12 +50,12 @@ public sealed class UnixPtyTests
         {
             return;
         }
-        using var pty = PseudoTerminal.Start(new PtyOptions("/bin/sh", 80, 24, "/tmp", new Dictionary<string, string> { ["TERMILLY_TEST"] = "yes" }));
+        using var pty = PseudoTerminal.Start(new PtyOptions("/bin/sh", 80, 24, "/usr", new Dictionary<string, string> { ["TERMILLY_TEST"] = "yes" }));
         var seen = new StringBuilder();
         // Markers like tty-$((1+1)) only appear once the shell has run them, not in the echo of what was typed.
         await SendAsync(pty, "echo \"[$TERMILLY_TEST $(pwd) $TERM]\"; tty -s && echo tty-$((1+1)); exit 7\n");
         var output = await ReadUntilAsync(pty, "tty-2", seen);
-        Assert.Contains("[yes /tmp xterm-256color]", output);
+        Assert.Contains("[yes /usr xterm-256color]", output); // /usr: macOS's /tmp is a link to /private/tmp
         Assert.Equal(7, await pty.Exited.WaitAsync(TimeSpan.FromSeconds(10)));
     }
 
