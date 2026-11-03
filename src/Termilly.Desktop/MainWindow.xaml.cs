@@ -274,12 +274,13 @@ public partial class MainWindow : Window
     private readonly List<DetachedWindow> _detached = [];
 
     /// <summary>
-    /// window.open: detached.html gets a window of its own (DetachedWindow), still the page's (window.opener), which
-    /// moves into it what it shows. Anything else is left to WebView2, as before.
+    /// window.open of one of the page's own windows (named so, js/windows.js): a window of its own (DetachedWindow), still
+    /// the page's (window.opener), which builds its empty page and moves into it what it shows. Anything else is left
+    /// to WebView2, as before.
     /// </summary>
     private async void OnNewWindowRequested(object? sender, CoreWebView2NewWindowRequestedEventArgs e)
     {
-        if (!e.Uri.StartsWith($"https://{HostName}/{DetachedWindow.PageName}", StringComparison.OrdinalIgnoreCase) || _closing)
+        if (!e.Name.StartsWith(DetachedWindowNames.NamePrefix, StringComparison.Ordinal) || _closing)
         {
             return;
         }

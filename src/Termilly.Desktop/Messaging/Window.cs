@@ -16,6 +16,15 @@ internal static class WindowActions
     public const string Focus = "focus";
 }
 
+/// <summary>
+/// The page's own windows (js/windows.js): window.open names them with this prefix, and the hosts give a window of its
+/// own (DetachedWindow on Windows, DetachedWindows on Linux) only to a window.open so named.
+/// </summary>
+internal static class DetachedWindowNames
+{
+    public const string NamePrefix = "termilly-";
+}
+
 /// <summary>The page's answer when the host asks whether it may quit (QuitGate): quit, stay, or it's asking the user.</summary>
 internal static class QuitAnswers
 {

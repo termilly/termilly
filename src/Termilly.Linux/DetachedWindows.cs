@@ -5,21 +5,19 @@ namespace Termilly.Linux;
 
 /// <summary>
 /// A terminal, the Notepad or the Snippets window in a window of its own on Linux (js/windows.js), as DetachedWindow
-/// is on Windows. Photino doesn't let a page open windows, so this answers WebKitGTK's "create" signal itself: for
-/// detached.html only, a web view related to the page's (same process and context, so window.opener and the app://
-/// scheme work) in a GTK window with no title bar of its own: the element's header is it, and the page asks for moves,
-/// sizes, minimize and maximize (<see cref="Act"/>). The page moves its element in and keeps running it; closing the
-/// window asks the page first (detached.html's termillyClose), which takes the element back and closes it. Everything
-/// here runs on GTK's thread.
+/// is on Windows. Photino doesn't let a page open windows, so this answers WebKitGTK's "create" signal itself: for the
+/// page's own windows only (named so), a web view related to the page's (same process and context, so window.opener and
+/// the app:// scheme work) in a GTK window with no title bar of its own: the element's header is it, and the page asks
+/// for moves, sizes, minimize and maximize (<see cref="Act"/>). The page builds the window's empty page, moves its
+/// element in and keeps running it; closing the window asks the page first (the termillyClose it gives the window),
+/// which takes the element back and closes it. Everything here runs on GTK's thread.
 /// </summary>
 internal static class DetachedWindows
 {
     private const string Gtk = "libgtk-3.so.0";
     private const string GObject = "libgobject-2.0.so.0";
     private const string WebKit = "libwebkit2gtk-4.1.so.0";
-    /// <summary>The only page a window may be opened for.</summary>
-    private const string PageUrl = $"{AppScheme.Scheme}://localhost/detached.html";
-    /// <summary>What detached.html runs when the user closes the window (it closes it once the page is ready).</summary>
+    /// <summary>What the window runs when the user closes it: the page closes it once it has taken back what it shows.</summary>
     private const string AskToClose = "window.termillyClose ? termillyClose() : window.close()";
     private const int GtkWindowToplevel = 0;
 
@@ -108,17 +106,16 @@ internal static class DetachedWindows
         Open.Clear();
     }
 
-    /// <summary>window.open: a related web view for detached.html, nothing (no window) for anything else.</summary>
+    /// <summary>window.open: a related web view for one of the page's own windows, nothing (no window) for anything else.</summary>
     private static IntPtr Create(IntPtr view, IntPtr navigation, IntPtr data)
     {
-        var request = webkit_navigation_action_get_request(navigation);
-        var url = request == IntPtr.Zero ? null : Marshal.PtrToStringUTF8(webkit_uri_request_get_uri(request));
-        if (url is null || !url.StartsWith(PageUrl, StringComparison.Ordinal))
+        var name = Marshal.PtrToStringUTF8(webkit_navigation_action_get_frame_name(navigation));
+        if (name is null || !name.StartsWith(DetachedWindowNames.NamePrefix, StringComparison.Ordinal))
         {
             return IntPtr.Zero;
         }
         var opened = webkit_web_view_new_with_related_view(view);
-        Pending[opened] = Marshal.PtrToStringUTF8(webkit_navigation_action_get_frame_name(navigation)) ?? "";
+        Pending[opened] = name;
         g_signal_connect_data(opened, "ready-to-show", OnReadyToShow, IntPtr.Zero, IntPtr.Zero, 0);
         g_signal_connect_data(opened, "close", OnClose, IntPtr.Zero, IntPtr.Zero, 0);
         g_signal_connect_data(opened, "notify::title", OnTitle, IntPtr.Zero, IntPtr.Zero, 0);
@@ -207,8 +204,6 @@ internal static class DetachedWindows
     [DllImport(WebKit)] private static extern IntPtr webkit_web_view_get_title(IntPtr view);
     [DllImport(WebKit)] private static extern IntPtr webkit_web_view_get_window_properties(IntPtr view);
     [DllImport(WebKit)] private static extern void webkit_window_properties_get_geometry(IntPtr properties, out GdkRectangle geometry);
-    [DllImport(WebKit)] private static extern IntPtr webkit_navigation_action_get_request(IntPtr navigation);
     [DllImport(WebKit)] private static extern IntPtr webkit_navigation_action_get_frame_name(IntPtr navigation);
-    [DllImport(WebKit)] private static extern IntPtr webkit_uri_request_get_uri(IntPtr request);
     [DllImport(WebKit)] private static extern void webkit_web_view_run_javascript(IntPtr view, [MarshalAs(UnmanagedType.LPUTF8Str)] string script, IntPtr cancellable, IntPtr callback, IntPtr data);
 }

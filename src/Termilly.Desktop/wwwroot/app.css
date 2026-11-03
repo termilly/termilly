@@ -3023,7 +3023,7 @@ textarea.field.note-text { flex: 1; width: 100%; min-height: 120px; resize: none
 .step-more:hover { background: var(--hover); color: var(--text); }
 
 
-/* ---- A window of its own (detached.html, js/windows.js): a terminal, the Notepad or the Snippets window moved in
+/* ---- A window of its own (js/windows.js): a terminal, the Notepad or the Snippets window moved in
    fills it, with no frame of its own (the window has one). ---- */
 body.detached-window > * { flex: 1; min-width: 0; min-height: 0; }
 body.detached-window > .pane, body.detached-window > .notepad-panel, body.detached-window > .snippets-win {

@@ -192,6 +192,11 @@ export const QUIT_ANSWER = Object.freeze({
   asking: 'asking',
 });
 
+/** C#: DetachedWindowNames (Messaging/Window.cs). */
+export const DETACHED_WINDOW = Object.freeze({
+  namePrefix: 'termilly-',
+});
+
 /** C#: UpdateStates (UpdateInstall.cs). */
 export const UPDATE_STATE = Object.freeze({
   downloading: 'downloading',

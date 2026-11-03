@@ -1,7 +1,9 @@
 // @ts-check
 // Termilly's own windows besides the main one: a terminal, the Notepad or the Snippets window detached into a window
-// of its own (detached.html). Everything keeps running in the main page; a detached window only shows the element
-// moved into it, in the main page's theme (its root's attributes mirrored), and closing it gives the element back.
+// of its own. Everything keeps running in the main page; a detached window only shows the element moved into it, in
+// the main page's styles and theme (its root's attributes mirrored), and closing it gives the element back. The window
+// opens empty (about:blank, the main page's own, so nothing loads) and the page builds it: navigating it to a page of
+// ours took WebView2 two seconds on the termilly.local address before anything showed.
 // Menus and dialogs open in the window the user is in (hereDoc), and what has to listen in every window (popups'
 // Escape and outside clicks, Termilly's shortcuts) registers once with inEachDocument. The windows have no title bar of
 // their own: the element's header is it, with Return, Minimize, Maximize and Close added (the main window's own
@@ -9,7 +11,7 @@
 
 import { PAGE } from './protocol.js';
 import { send } from './host.js';
-import { WINDOW_ACTION } from './constants.js';
+import { WINDOW_ACTION, DETACHED_WINDOW } from './constants.js';
 
 /**
  * A detached window: what it shows, its title, and what happens around it. onMoved runs once the element is in it
@@ -23,9 +25,12 @@ import { WINDOW_ACTION } from './constants.js';
  *   keepDoubleClick?: string, chrome?: AbortController }} Detached
  */
 
-/** The page the windows show, and what their window.open names start with. */
-const PAGE_URL = 'detached.html';
-const NAME_PREFIX = 'termilly-';
+/** What the windows' window.open names start with: the hosts know their windows by it. */
+const NAME_PREFIX = DETACHED_WINDOW.namePrefix;
+/** The main page's stylesheets, which each window takes too. */
+const STYLES = ['lib/xterm.css', 'app.css'];
+/** The body's class in a window (app.css: what's moved in fills it). */
+const WINDOW_BODY = 'detached-window';
 /** How often the windows are checked for one gone without saying so (closed with its page). */
 const WATCH_MS = 1000;
 /** Where a new window opens from the place its element had (the two don't line up exactly), or before a drop point. */
@@ -90,9 +95,10 @@ export function detach(key, options) {
     'popup', `width=${Math.round(Math.max(r.width, minWidth))}`, `height=${Math.round(r.height)}`,
     `left=${Math.round(left)}`, `top=${Math.round(top)}`,
   ].join(',');
-  const win = window.open(PAGE_URL, NAME_PREFIX + key, features);
+  const win = window.open('', NAME_PREFIX + key, features);
   if (!win) return false;
   open.set(key, { key, win, el, title, ready: false, onClosed, onMoved, onResize, askClose, header, close, keepDoubleClick });
+  build(win);
   watch ||= window.setInterval(checkClosed, WATCH_MS);
   if (!themeWatch) {
     themeWatch = new MutationObserver(() => {
@@ -136,7 +142,26 @@ export function setWindowTitle(key, title) {
 }
 
 /**
- * detached.html has loaded (it calls this on its opener): the element moves in, in the main page's theme.
+ * A window's empty page made Termilly's: its stylesheets and theme, its title, and what its host's close runs (asking
+ * here first). The element moves in once the styles are in, so it never shows unstyled.
+ * @param {Window} win
+ */
+function build(win) {
+  const doc = win.document;
+  doc.body.className = WINDOW_BODY;
+  mirror(doc.documentElement);
+  const links = STYLES.map(href => `<link rel="stylesheet" href="${new URL(href, location.href).href}">`);
+  doc.head.insertAdjacentHTML('beforeend', links.join(''));
+  const loaded = [...doc.head.children].map(link => new Promise(done => {
+    /** @type {HTMLLinkElement} */ (link).onload = /** @type {HTMLLinkElement} */ (link).onerror = done;
+  }));
+  // The host runs this when the window is closed (Alt+F4, the taskbar): the owner decides.
+  Object.assign(win, { termillyClose: () => askClose(win.name) });
+  Promise.all(loaded).then(() => ready(win));
+}
+
+/**
+ * Its styles are in: the element moves in.
  * @param {Window} win
  */
 function ready(win) {
@@ -161,7 +186,8 @@ function ready(win) {
 }
 
 /**
- * The title bar's X (detached.html asks here first): the owner may ask about changes not saved, else it closes.
+ * The window's close (Alt+F4, the taskbar; its host asks here first): the owner may ask about changes not saved, else
+ * it closes.
  * @param {string} name
  */
 function askClose(name) {
@@ -260,6 +286,3 @@ function mirror(root) {
 window.addEventListener('focus', () => { here = document; });
 // The main page going (Termilly quitting, a reload): its windows go with it.
 window.addEventListener(PAGE_GONE, () => { for (const d of open.values()) d.win.close(); });
-
-/** detached.html's calls on its opener. */
-Object.assign(window, { termillyWindowReady: ready, termillyWindowClose: askClose });

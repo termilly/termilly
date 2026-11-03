@@ -15,14 +15,12 @@ namespace Termilly.Desktop;
 /// with window.open and moves the element into it. Like the main window it has no title bar of its own: the element's
 /// header is it, with the window's buttons, and the page asks this window to move, size, minimize or maximize
 /// (<see cref="Act"/>). The main page keeps everything that happens in it, so closing this window (Alt+F4) asks the
-/// page (detached.html's termillyClose), which takes the element back and then closes it.
+/// page (the termillyClose it gives the window), which takes the element back and then closes it.
 /// </summary>
 [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA1001", Justification = "WPF never disposes a window: OnClosed disposes its browser.")]
 internal sealed class DetachedWindow : Window
 {
-    /// <summary>The page this window shows, the only one window.open may open as a window (MainWindow).</summary>
-    public const string PageName = "detached.html";
-    /// <summary>What detached.html runs when the user closes the window (it closes it once the page is ready).</summary>
+    /// <summary>What the window runs when the user closes it: the page closes it once it has taken back what it shows.</summary>
     private const string AskToClose = "window.termillyClose ? termillyClose() : window.close()";
     private const double MinSize = 240;
     /// <summary>The frame around the page, as the main window's (MainWindow.xaml).</summary>
