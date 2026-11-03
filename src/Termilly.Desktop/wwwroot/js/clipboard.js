@@ -308,18 +308,20 @@ function listHtml() {
  * @param {string} label
  * @param {boolean} on
  * @param {string} title
+ * @param {boolean} [disabled]
  */
-const switchHtml = (action, label, on, title) =>
-  `<button class="clips-switch" role="switch" aria-checked="${on}" data-clips="${action}" title="${title}">${label}<span class="switch"><span></span></span></button>`;
+const switchHtml = (action, label, on, title, disabled = false) =>
+  `<button class="clips-switch" role="switch" aria-checked="${on}" data-clips="${action}" title="${title}"${disabled ? ' disabled' : ''}>${label}<span class="switch"><span></span></span></button>`;
 
 /** Whether copies made in other apps are kept too (Windows tells about those): off, only Termilly's own. */
 const otherApps = () => state.settings.clips?.otherApps !== false;
 
-/** Only copies made while Termilly is in focus (its own), on Windows, where copies in other apps can be kept too. */
+/**
+ * Only copies made while Termilly is in focus (its own), on Windows, where copies in other apps can be kept too. Off
+ * with Keep: nothing is kept then.
+ */
 const focusOnlySwitch = () => (platform === PLATFORM.windows
-  ? switchHtml(PANEL_ACTION.focusOnly, 'Termilly only', !otherApps(), otherApps()
-    ? 'Copies from every app are kept. On: only copies made while Termilly is in focus'
-    : 'Only copies made while Termilly is in focus are kept. Off: copies from every app')
+  ? switchHtml(PANEL_ACTION.focusOnly, 'Termilly only', !otherApps(), 'Only inside Termilly application', !keeping)
   : '');
 
 function render() {
@@ -329,10 +331,10 @@ function render() {
   panel.innerHTML = `
     <div class="${DOCK_GRIP}" title="Drag to resize"></div>
     <div class="files-head">
-      <span class="files-title">Clipboard <span class="files-ws">${clips.length === 1 ? '1 clip' : `${clips.length} clips`}${keeping ? '' : ' · paused'}</span></span>
+      <span class="files-title">Clipboard <span class="files-ws">${clips.length === 1 ? '1 clip' : `${clips.length} clips`}</span></span>
       <span class="files-tools">
+        ${switchHtml(PANEL_ACTION.keep, 'Keep', keeping, 'Watch Clipboard')}
         ${focusOnlySwitch()}
-        ${switchHtml(PANEL_ACTION.keep, 'Keep', keeping, keeping ? 'Keeping copies. Off: none are kept (while sharing your screen)' : 'Copies aren’t kept. On: keep them again')}
         <button class="pane-btn" data-clips="${PANEL_ACTION.clear}" title="Clear history (pinned clips stay)"${clips.some(c => !c.pinned) ? '' : ' disabled'}>${ICONS.trash}</button>
         <button class="pane-btn" data-clips="${PANEL_ACTION.close}" title="Close (${KEYS_TEXT})">${ICONS.close}</button>
       </span>
