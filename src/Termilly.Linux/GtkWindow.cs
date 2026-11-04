@@ -137,6 +137,44 @@ internal static class GtkWindow
         }
     }
 
+    /// <summary>
+    /// Keeps the main window invisible until its page has loaded: until then WebKit shows a blank (white) page. Shown at
+    /// the latest after <see cref="RevealAfterMs"/>, whatever happens.
+    /// </summary>
+    public static void HideUntilLoaded(IntPtr window)
+    {
+        var view = gtk_bin_get_child(window);
+        if (view == IntPtr.Zero || webkit_web_view_is_loading(view) == 0)
+        {
+            return;
+        }
+        gtk_widget_set_opacity(window, 0);
+        g_signal_connect_data(view, "load-changed", OnLoadChanged, window, IntPtr.Zero, 0);
+        g_timeout_add(RevealAfterMs, OnRevealTimeout, window);
+    }
+
+    /// <summary>The longest the window stays invisible.</summary>
+    private const uint RevealAfterMs = 1500;
+    /// <summary>WEBKIT_LOAD_FINISHED.</summary>
+    private const int LoadFinished = 3;
+
+    private delegate void LoadChangedCallback(IntPtr view, int loadEvent, IntPtr window);
+    private delegate int TimeoutCallback(IntPtr window);
+
+    private static readonly LoadChangedCallback OnLoadChanged = (_, loadEvent, window) =>
+    {
+        if (loadEvent == LoadFinished)
+        {
+            gtk_widget_set_opacity(window, 1);
+        }
+    };
+
+    private static readonly TimeoutCallback OnRevealTimeout = window =>
+    {
+        gtk_widget_set_opacity(window, 1);
+        return 0; // once
+    };
+
     /// <summary>A GdkRGBA: red, green, blue and alpha, 0 to 1 (all 0: see-through).</summary>
     [StructLayout(LayoutKind.Sequential)]
     private struct GdkRgba
@@ -200,6 +238,10 @@ internal static class GtkWindow
     [DllImport(Gtk)] private static extern void gtk_widget_hide(IntPtr widget);
     [DllImport(Gtk)] private static extern void gtk_widget_show_all(IntPtr widget);
     [DllImport(Gtk)] private static extern void gtk_widget_unrealize(IntPtr widget);
+    [DllImport(Gtk)] private static extern void gtk_widget_set_opacity(IntPtr widget, double opacity);
+    [DllImport(WebKit)] private static extern int webkit_web_view_is_loading(IntPtr view);
+    [DllImport(GLib)] private static extern uint g_timeout_add(uint interval, TimeoutCallback callback, IntPtr data);
+    [DllImport(GObjectName)] private static extern ulong g_signal_connect_data(IntPtr instance, [MarshalAs(UnmanagedType.LPUTF8Str)] string signal, Delegate handler, IntPtr data, IntPtr destroy, int flags);
     [DllImport(Gdk)] private static extern IntPtr gdk_screen_get_rgba_visual(IntPtr screen);
     [DllImport(Gtk)] private static extern IntPtr gtk_bin_get_child(IntPtr bin);
     [DllImport(WebKit)] private static extern void webkit_web_view_set_background_color(IntPtr view, ref GdkRgba color);

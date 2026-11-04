@@ -137,6 +137,7 @@ internal sealed class LinuxWindow
         {
             if (OperatingSystem.IsLinux() && GtkWindow.Find() is { } main)
             {
+                GtkWindow.HideUntilLoaded(main);
                 GtkWindow.ClearBackground(main);
                 DetachedWindows.Hook(main);
             }
