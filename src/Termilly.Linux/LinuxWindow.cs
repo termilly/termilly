@@ -54,13 +54,14 @@ internal sealed class LinuxWindow
 
     private void ApplyZoom(PhotinoWindow window)
     {
-        window.SetZoom(_zoom);
         if (OperatingSystem.IsLinux())
         {
+            window.SetZoom(_zoom);
             DetachedWindows.SetZoom(_zoom / (double)InterfaceSettings.DefaultZoom);
         }
         else if (OperatingSystem.IsMacOS())
         {
+            // Not Photino's zoom: on macOS it magnifies the page past its window (MacWindows lays it out again).
             MacWindows.SetZoom(_zoom / (double)InterfaceSettings.DefaultZoom);
         }
     }
@@ -120,7 +121,7 @@ internal sealed class LinuxWindow
             .SetChromeless(true)
             // Linux: see-through, so the page's rounded corners (app.css, data-corners) show the desktop behind them.
             .SetTransparent(OperatingSystem.IsLinux())
-            .SetZoom(_zoom)
+            .SetZoom(OperatingSystem.IsMacOS() ? InterfaceSettings.DefaultZoom : _zoom)
             .SetMinSize(MinWidth, MinHeight)
             .SetDevToolsEnabled(Environment.GetEnvironmentVariable(DevToolsVariable) == "1")
             .SetContextMenuEnabled(false)

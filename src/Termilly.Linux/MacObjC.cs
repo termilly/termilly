@@ -26,6 +26,8 @@ internal static class MacObjC
         public const string ContentView = "contentView";
         public const string MakeKeyAndOrderFront = "makeKeyAndOrderFront:";
         public const string SetMagnification = "setMagnification:";
+        public const string SetPageZoom = "setPageZoom:";
+        public const string RespondsToSelector = "respondsToSelector:";
         public const string Application = "NSApplication";
         public const string SharedApplication = "sharedApplication";
         public const string Screen = "NSScreen";

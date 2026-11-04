@@ -63,8 +63,12 @@ internal static class MacWindows
 
     /// <summary>The main window (Photino's), once <see cref="Hook"/> found it.</summary>
     public static IntPtr Main { get; private set; }
+    /// <summary>The main window's web view.</summary>
+    private static IntPtr _mainView;
 
     private static double _zoom = 1;
+    /// <summary>A web view drawn at its own size (the app's size is its page zoom instead).</summary>
+    private const double NotMagnified = 1.0;
     private static Action<Action>? _onMain;
 
     /// <summary>
@@ -90,6 +94,8 @@ internal static class MacWindows
             if (WebViewIn(window) is var view && view != IntPtr.Zero)
             {
                 Main = window;
+                _mainView = view;
+                Zoom(view, _zoom);
                 Round(window, true);
                 var preferences = Send(Send(view, "configuration"), "preferences");
                 // The page reopens its windows as it starts (where they were before a restart): without a click first.
@@ -147,9 +153,31 @@ internal static class MacWindows
     public static void SetZoom(double factor)
     {
         _zoom = factor;
+        Zoom(_mainView, factor);
         foreach (var opened in Open)
         {
-            Send(opened.View, Cocoa.SetMagnification, factor);
+            Zoom(opened.View, factor);
+        }
+    }
+
+    /// <summary>
+    /// A web view at the app's size, laid out again as the browser's zoom does (pageZoom, macOS 11 and later), not
+    /// magnified: magnified, the page is drawn bigger than its window and runs off it.
+    /// </summary>
+    private static void Zoom(IntPtr view, double factor)
+    {
+        if (view == IntPtr.Zero)
+        {
+            return;
+        }
+        if (SendBool(view, Cocoa.RespondsToSelector, Sel(Cocoa.SetPageZoom)))
+        {
+            Send(view, Cocoa.SetMagnification, NotMagnified);
+            Send(view, Cocoa.SetPageZoom, factor);
+        }
+        else
+        {
+            Send(view, Cocoa.SetMagnification, factor);
         }
     }
 
@@ -211,7 +239,7 @@ internal static class MacWindows
             Send(content, "addSubview:", view);
             Send(view, SetUIDelegate, self);
             Send(view, "setNavigationDelegate:", Send(webView, "navigationDelegate"));
-            Send(view, Cocoa.SetMagnification, _zoom);
+            Zoom(view, _zoom);
             Round(window, true);
             Open.Add(new Opened(window, view));
             Send(window, Cocoa.MakeKeyAndOrderFront, IntPtr.Zero);
