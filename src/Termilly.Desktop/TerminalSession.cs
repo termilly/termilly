@@ -39,7 +39,7 @@ internal sealed class TerminalSession : IShellSession
             _pty.Input.Write(bytes);
             _pty.Input.Flush();
         }
-        catch (IOException)
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ObjectDisposedException)
         {
             // Process is gone; the exit notification follows.
         }

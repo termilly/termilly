@@ -242,7 +242,8 @@ public sealed class UnixPty : IPty
 
     /// <summary>
     /// The terminal's output. Once the shell has exited and nothing holds the terminal open, reading fails with
-    /// EIO: that's the end of the output, so it reads as 0 like the end of a file.
+    /// EIO: that's the end of the output, so it reads as 0 like the end of a file. On macOS a read still waiting when
+    /// the terminal is closed fails with EBADF, which .NET throws as UnauthorizedAccessException: the end too.
     /// </summary>
     private sealed class TerminalStream(Stream inner) : Stream
     {
@@ -258,7 +259,7 @@ public sealed class UnixPty : IPty
             {
                 return inner.Read(buffer, offset, count);
             }
-            catch (IOException)
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
             {
                 return 0;
             }
