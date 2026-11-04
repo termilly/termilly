@@ -120,7 +120,10 @@ internal static class GtkWindow
     private static void SeeThroughVisual(IntPtr window)
     {
         var visual = gdk_screen_get_rgba_visual(gtk_widget_get_screen(window));
-        if (visual == IntPtr.Zero || gtk_widget_get_visual(window) == visual)
+        // The window it already has, if any: GTK may say the RGBA visual while that was made with another (asked too late).
+        var made = gtk_widget_get_window(window);
+        var current = made != IntPtr.Zero ? gdk_window_get_visual(made) : gtk_widget_get_visual(window);
+        if (visual == IntPtr.Zero || current == visual)
         {
             return;
         }
@@ -237,6 +240,8 @@ internal static class GtkWindow
     [DllImport(Gtk)] private static extern void gtk_widget_set_app_paintable(IntPtr widget, int paintable);
     [DllImport(Gtk)] private static extern IntPtr gtk_widget_get_screen(IntPtr widget);
     [DllImport(Gtk)] private static extern IntPtr gtk_widget_get_visual(IntPtr widget);
+    [DllImport(Gtk)] private static extern IntPtr gtk_widget_get_window(IntPtr widget);
+    [DllImport(Gdk)] private static extern IntPtr gdk_window_get_visual(IntPtr window);
     [DllImport(Gtk)] private static extern void gtk_widget_set_visual(IntPtr widget, IntPtr visual);
     [DllImport(Gtk)] private static extern void gtk_widget_hide(IntPtr widget);
     [DllImport(Gtk)] private static extern void gtk_widget_show_all(IntPtr widget);
