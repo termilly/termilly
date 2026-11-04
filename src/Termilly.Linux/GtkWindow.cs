@@ -14,6 +14,7 @@ internal static class GtkWindow
     private const string Gdk = "libgdk-3.so.0";
     private const string GLib = "libglib-2.0.so.0";
     private const string GObjectName = "libgobject-2.0.so.0";
+    private const string WebKit = "libwebkit2gtk-4.1.so.0";
     /// <summary>The window's title (LinuxWindow sets it), which finds it among GTK's top-level windows.</summary>
     public const string Title = "Termilly";
     /// <summary>The program's id: Wayland's app id and X11's window class, matched to termilly.desktop.</summary>
@@ -94,13 +95,56 @@ internal static class GtkWindow
     /// </summary>
     public static void ClearBackground(IntPtr window)
     {
+        SeeThroughVisual(window);
         gtk_widget_set_app_paintable(window, 1);
+        // Its web view (the window's one child) draws nothing where the page draws nothing.
+        var view = gtk_bin_get_child(window);
+        if (view != IntPtr.Zero)
+        {
+            var clear = new GdkRgba();
+            webkit_web_view_set_background_color(view, ref clear);
+        }
         var provider = gtk_css_provider_new();
         if (gtk_css_provider_load_from_data(provider, TransparentCss, -1, IntPtr.Zero) != 0)
         {
             gtk_style_context_add_provider(gtk_widget_get_style_context(window), provider, StyleProviderPriorityApplication);
         }
         g_object_unref(provider);
+    }
+
+    /// <summary>
+    /// Gives the window an RGBA visual, so what's behind it shows through where the page draws nothing. Photino asks for one;
+    /// on X11 a window gets it only before it's first shown, which Photino's main window already is: it's taken down,
+    /// changed and shown again. Nothing where the screen has none (no compositor).
+    /// </summary>
+    private static void SeeThroughVisual(IntPtr window)
+    {
+        var visual = gdk_screen_get_rgba_visual(gtk_widget_get_screen(window));
+        if (visual == IntPtr.Zero || gtk_widget_get_visual(window) == visual)
+        {
+            return;
+        }
+        var shown = gtk_widget_get_visible(window) != 0;
+        if (shown)
+        {
+            gtk_widget_hide(window);
+        }
+        gtk_widget_unrealize(window);
+        gtk_widget_set_visual(window, visual);
+        if (shown)
+        {
+            gtk_widget_show_all(window);
+        }
+    }
+
+    /// <summary>A GdkRGBA: red, green, blue and alpha, 0 to 1 (all 0: see-through).</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    private struct GdkRgba
+    {
+        public double Red;
+        public double Green;
+        public double Blue;
+        public double Alpha;
     }
 
     private const string TransparentCss = "window, window.background { background: transparent; }";
@@ -150,6 +194,15 @@ internal static class GtkWindow
     [DllImport(Gdk)] private static extern IntPtr gdk_seat_get_pointer(IntPtr seat);
     [DllImport(Gdk)] private static extern void gdk_device_get_position(IntPtr device, out IntPtr screen, out int x, out int y);
     [DllImport(Gtk)] private static extern void gtk_widget_set_app_paintable(IntPtr widget, int paintable);
+    [DllImport(Gtk)] private static extern IntPtr gtk_widget_get_screen(IntPtr widget);
+    [DllImport(Gtk)] private static extern IntPtr gtk_widget_get_visual(IntPtr widget);
+    [DllImport(Gtk)] private static extern void gtk_widget_set_visual(IntPtr widget, IntPtr visual);
+    [DllImport(Gtk)] private static extern void gtk_widget_hide(IntPtr widget);
+    [DllImport(Gtk)] private static extern void gtk_widget_show_all(IntPtr widget);
+    [DllImport(Gtk)] private static extern void gtk_widget_unrealize(IntPtr widget);
+    [DllImport(Gdk)] private static extern IntPtr gdk_screen_get_rgba_visual(IntPtr screen);
+    [DllImport(Gtk)] private static extern IntPtr gtk_bin_get_child(IntPtr bin);
+    [DllImport(WebKit)] private static extern void webkit_web_view_set_background_color(IntPtr view, ref GdkRgba color);
     [DllImport(Gtk)] private static extern IntPtr gtk_css_provider_new();
     [DllImport(Gtk)] private static extern int gtk_css_provider_load_from_data(IntPtr provider, [MarshalAs(UnmanagedType.LPUTF8Str)] string data, nint length, IntPtr error);
     [DllImport(Gtk)] private static extern IntPtr gtk_widget_get_style_context(IntPtr widget);
