@@ -7,6 +7,8 @@ internal static class Native
 {
     internal const uint EXTENDED_STARTUPINFO_PRESENT = 0x00080000;
     internal const uint CREATE_UNICODE_ENVIRONMENT = 0x00000400;
+    /// <summary>The shell gets Windows' own error mode, not Termilly's quiet one (QuietErrors).</summary>
+    internal const uint CREATE_DEFAULT_ERROR_MODE = 0x04000000;
     internal const int STARTF_USESTDHANDLES = 0x00000100;
     internal static readonly IntPtr PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE = 0x00020016;
 

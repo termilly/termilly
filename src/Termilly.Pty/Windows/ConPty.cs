@@ -99,7 +99,7 @@ public sealed class ConPty : IPty
 
             // CreateProcessW may write into the command line, so it gets a buffer of its own, ending in a null.
             if (!CreateProcess(null, (options.CommandLine + '\0').ToCharArray(), IntPtr.Zero, IntPtr.Zero, false,
-                    EXTENDED_STARTUPINFO_PRESENT | CREATE_UNICODE_ENVIRONMENT, environment, options.WorkingDirectory,
+                    EXTENDED_STARTUPINFO_PRESENT | CREATE_UNICODE_ENVIRONMENT | CREATE_DEFAULT_ERROR_MODE, environment, options.WorkingDirectory,
                     ref si, out var pi))
             {
                 throw new Win32Exception();
