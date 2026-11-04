@@ -5,9 +5,9 @@
 // button, the palette, and Edit or New in the snippets list (js/snippets.js).
 
 import { state, on, wsById, EVENTS } from './store.js';
-import { focusedTab, restoreFocus, wireDragOut, systemDrag } from './panes.js';
+import { focusedTab, restoreFocus } from './panes.js';
 import { closeAll, dropdown } from './popups.js';
-import { escapeHtml, ICONS } from './ui.js';
+import { escapeHtml } from './ui.js';
 import { modal, CONFIRM_DIALOG } from './dialogs.js';
 import { fuzzyMatch } from './fuzzy.js';
 import {
@@ -31,13 +31,11 @@ const CLOSE = '<svg viewBox="0 0 12 12"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7"/></s
 
 /** The window's buttons (their data-sw). */
 const ACTION = Object.freeze({
-  new: 'new', close: 'close', save: 'save', delete: 'delete', duplicate: 'duplicate', run: 'run', detach: 'detach',
+  new: 'new', close: 'close', save: 'save', delete: 'delete', duplicate: 'duplicate', run: 'run',
 });
 /** Its window when it's in one of its own (js/windows.js). */
 const WINDOW_KEY = 'snippets';
 const NAME = 'Snippets';
-/** Its button that moves it into a window of its own (in that window, the window's Return takes it back). */
-const DETACH_BUTTON = Object.freeze({ icon: ICONS.detach, title: 'Detach to a window' });
 /** What the "Save the changes?" question can answer, besides Cancel. */
 const ANSWER = Object.freeze({ save: 'save', discard: 'discard' });
 /** The window's shortcuts with Ctrl (KeyboardEvent.code): save, and a new snippet. */
@@ -49,11 +47,11 @@ layer.hidden = true;
 layer.innerHTML = `
   <div class="settings snippets-win" role="dialog" aria-modal="true" aria-labelledby="sw-title">
     <div class="set-head">
+      <span class="title-icon sw-icon"></span>
       <h2 id="sw-title">Snippets</h2>
       <span class="cw-sub sw-count"></span>
       <span class="spacer"></span>
       <button class="btn small" data-sw="${ACTION.new}">New snippet</button>
-      <button class="set-close sw-detach" data-sw="${ACTION.detach}" title="${DETACH_BUTTON.title}">${DETACH_BUTTON.icon}</button>
       <button class="set-close" data-sw="${ACTION.close}" title="Close (Esc)">${CLOSE}</button>
     </div>
     <div class="cw-main">
@@ -325,12 +323,12 @@ async function duplicate() {
   /** @type {HTMLInputElement | null} */ (editEl.querySelector('[name="name"]'))?.select();
 }
 
+/** Runs the snippet shown in the terminal focused in the main window; the window stays open for the next one. */
 function run() {
   const e = current();
   const tab = focusedTab();
   if (!e || e.isDraft || isDirty() || !tab || !e.s.command) return;
-  closeSnippetsWindow({ force: true });
-  setTimeout(() => runSnippet(/** @type {SnippetSetting} */ (e.s), { tab }));
+  runSnippet(/** @type {SnippetSetting} */ (e.s), { tab });
 }
 
 // ---- Opening and closing ----
@@ -347,17 +345,34 @@ export function openSnippetsWindow({ id = null, create = false } = {}) {
     if (create) newSnippet(); else if (id) go(id);
     return;
   }
+  // Laid out over the page but not shown there: it opens in a window of its own, at that size (or its last place).
   layer.hidden = false;
+  layer.style.visibility = HIDDEN;
   searchEl.value = '';
   draft = null;
   selectedId = null;
   editEl.innerHTML = '';
   renderList();
-  if (create) return newSnippet();
-  select(id ?? shown[0]?.s.id ?? null);
-  if (!shown.length) renderEditor();
-  /** @type {HTMLElement | null} */ (id ? editEl.querySelector('[name="command"]') : searchEl)?.focus();
+  if (create) newSnippet();
+  else {
+    select(id ?? shown[0]?.s.id ?? null);
+    if (!shown.length) renderEditor();
+  }
+  // What has the keyboard once it's open: what's edited, else the search.
+  focusOnOpen = /** @type {HTMLElement | null} */ (id || create ? editEl.querySelector('[name="command"], [name="name"]') : null) ?? searchEl;
+  // Where there are no windows of its own (macOS for now), over the page as before.
+  if (!detachSnippets()) {
+    layer.style.visibility = '';
+    focusOnOpen.focus();
+  }
 }
+
+/** What gets the keyboard once the window has opened in its own window. */
+/** @type {HTMLElement | null} */
+let focusOnOpen = null;
+
+/** The layer's visibility while the window is laid out there on its way into a window of its own. */
+const HIDDEN = 'hidden';
 
 /**
  * Closes the window; changes not saved are asked about first.
@@ -369,7 +384,13 @@ export async function closeSnippetsWindow({ force = false } = {}) {
     closeWindow(WINDOW_KEY, { quiet: true });
     backInLayer();
   }
+  closed();
+}
+
+/** Shut, its window gone: back in its place in the page, hidden, nothing being edited. */
+function closed() {
   layer.hidden = true;
+  layer.style.visibility = '';
   draft = null;
   editEl.innerHTML = '';
   restoreFocus();
@@ -379,33 +400,25 @@ export const toggleSnippetsWindow = () => (isDetached(WINDOW_KEY) ? focusWindow(
   : isOpen() ? closeSnippetsWindow() : openSnippetsWindow());
 
 /**
- * Into a window of its own, as it is (changes not saved too); its header is the window's title bar. Close and Alt+F4
- * ask about changes not saved, as its own Close does; Return, or moving it back over the main window, puts it back
- * over the page. False when no window could be opened.
- * @param {{ x: number, y: number }} [at] where on the screen it opens (dragged out by its header), else over its place
- * @param {{ x: number, y: number }} [place] exactly where its picture was let go (its top left corner)
+ * Always in a window of its own, where it opened last (else where it's laid out over the page); its header is the
+ * window's title bar, with no Return: it's never back over the page. Close and Alt+F4 ask about changes not saved, as
+ * its own Close does. False when no window could be opened.
  */
-function detachSnippets(at, place) {
+function detachSnippets() {
   const close = () => closeSnippetsWindow();
   return detach(WINDOW_KEY, {
-    el: box, title: NAME, onClosed: backOverPage, askClose: close, close, header: head, at, place, remember: true,
-    dropBack: true, dragHandle: systemDrag ? SNIPPETS_HANDLE : undefined,
-    // Over the page until it's in its window.
+    el: box, title: NAME, askClose: close, close, header: head, remember: true, returnable: false,
+    // Its window gone without asking (Termilly closing): shut.
+    onClosed: () => {
+      backInLayer();
+      closed();
+    },
     onMoved: () => {
       layer.hidden = true;
-      searchEl.focus();
+      layer.style.visibility = '';
+      (focusOnOpen ?? searchEl).focus();
     },
   });
-}
-
-/** Its handle in a window of its own on Linux: its title, dragged back into the main window (js/panes.js). */
-const SNIPPETS_HANDLE = '#sw-title';
-
-/** Back from its window, still open, over the page. */
-function backOverPage() {
-  backInLayer();
-  layer.hidden = false;
-  searchEl.focus();
 }
 
 /** Back in its place in the page, from its window. */
@@ -433,7 +446,6 @@ box.addEventListener('click', e => {
   if (action === ACTION.delete) remove();
   if (action === ACTION.duplicate) duplicate();
   if (action === ACTION.run) run();
-  if (action === ACTION.detach) detachSnippets();
 });
 layer.addEventListener('mousedown', e => {
   if (e.target === layer) closeSnippetsWindow();
@@ -481,8 +493,5 @@ box.addEventListener('keydown', e => {
 
 openButton.addEventListener('click', toggleSnippetsWindow);
 
-// Its header dragged out of the app window takes it out into a window of its own, as a terminal's (js/panes.js).
-wireDragOut(head, box, {
-  name: NAME, icon: /** @type {Element} */ (openButton.firstElementChild).outerHTML, detach: detachSnippets,
-  back: () => closeWindow(WINDOW_KEY), isDetached: () => isDetached(WINDOW_KEY), handle: SNIPPETS_HANDLE,
-});
+// Its title bar starts with the toolbar button's icon, as a window's does.
+$('.sw-icon').innerHTML = /** @type {Element} */ (openButton.firstElementChild).outerHTML;

@@ -7,7 +7,7 @@
 import { PAGE, HOST } from './protocol.js';
 import { send, onHost, platform, PLATFORM } from './host.js';
 import { state, persist, newId, tabTitle, wsById } from './store.js';
-import { restoreFocus, stripBar, wireDragOut, systemDrag } from './panes.js';
+import { restoreFocus, stripBar, wireDragOut, systemDrag, dockDrop } from './panes.js';
 import { scheduleFit } from './terminals.js';
 import { escapeHtml, cssColor, tabBadgeHtml, countText, ICONS } from './ui.js';
 import { byId, find, targetOf, dockRight, onMiddleClick, WORKSPACE_ID, DOCK_GRIP } from './dom.js';
@@ -74,6 +74,7 @@ panel.hidden = true;
 panel.innerHTML = `
   <div class="${DOCK_GRIP}" title="Drag to resize"></div>
   <div class="files-head">
+    <span class="title-icon np-icon"></span>
     <span class="files-title">Notepad</span>
     <span class="files-tools">
       <button class="pane-btn" data-np="${NOTEPAD_ACTION.newPage}" title="New page">${TOOL_ICONS.newPage}</button>
@@ -109,6 +110,8 @@ const linksOn = () => state.notepad.links !== false;
 const wrapOn = () => state.notepad.wrap !== false;
 const links = padLinks(area, () => linksOn() && !panel.hidden);
 const button = byId('notepad-button');
+// Its title bar starts with the toolbar button's icon, as a window's does.
+find(panel, '.np-icon').innerHTML = /** @type {Element} */ (button.firstElementChild).outerHTML;
 const countEl = find(button, '.np-count');
 
 /** Saves waiting for the host: the page and the text sent, by request. */
@@ -232,23 +235,37 @@ function hideNotepad() {
 
 /**
  * Into a window of its own, opened first if it's closed; its header is the window's title bar, Close closes it, and
- * moved back over the main window it docks back there. False when no window could be opened.
+ * moved back over its dock on the right of the main window it docks there. False when no window could be opened.
  * @param {{ x: number, y: number }} [at] where on the screen it opens (dragged out by its header), else over its place
  * @param {{ x: number, y: number }} [place] exactly where its picture was let go (its top left corner)
  */
 function detachNotepad(at, place) {
   if (panel.hidden) show({ quiet: true });
+  if (!isDetached(WINDOW_KEY)) dockedWidth = panel.offsetWidth;
   // Its room here is given back once it's in its window, and as that window is resized.
   return detach(WINDOW_KEY, {
     el: panel, title: NAME, onClosed: dockBack, onResize: refreshDock, onMoved: () => area.focus(),
-    at, place, remember: true, dropBack: true,
+    at, place, remember: true,
     header: head, close: hideNotepad,
+    onDragged: dockDrop(dockZone, () => closeWindow(WINDOW_KEY)),
     dragHandle: systemDrag ? NOTEPAD_HANDLE : undefined,
   });
 }
 
 /** Its handle in a window of its own on Linux: its title, dragged back into the main window (js/panes.js). */
 const NOTEPAD_HANDLE = '.files-title';
+/** How wide it was docked when it went out into a window of its own (its width is kept only once it's dragged). */
+let dockedWidth = 0;
+
+/**
+ * Where it docks in the main window (in the page's pixels): the right of the terminals' area, as wide as it was docked
+ * (at most half). Dragged there it stays or docks back; anywhere else it goes out into a window of its own.
+ */
+function dockZone() {
+  const area = byId(WORKSPACE_ID).getBoundingClientRect();
+  const width = Math.min(area.width / 2, Math.max(MIN_WIDTH_PX, state.notepad.width ?? dockedWidth));
+  return new DOMRect(area.right - width, area.top, width, area.height);
+}
 
 /** Back in its place on the right, from its window, as it was. */
 function dockBack() {
@@ -564,7 +581,7 @@ button.addEventListener('click', () => toggleNotepad());
 // Its header dragged out of the app window takes it out into a window of its own, as a terminal's (js/panes.js).
 wireDragOut(head, panel, {
   name: NAME, icon: /** @type {Element} */ (button.firstElementChild).outerHTML, detach: detachNotepad,
-  back: () => closeWindow(WINDOW_KEY), isDetached: () => isDetached(WINDOW_KEY), handle: NOTEPAD_HANDLE,
+  back: () => closeWindow(WINDOW_KEY), isDetached: () => isDetached(WINDOW_KEY), handle: NOTEPAD_HANDLE, dock: dockZone,
 });
 
 // ---- Docked on the right: the terminals and the Files panel end where it starts ----

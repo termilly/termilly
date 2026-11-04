@@ -24,7 +24,7 @@ import { WINDOW_ACTION, DETACHED_WINDOW } from './constants.js';
  * @typedef {{ key: string, win: Window, el: HTMLElement, title: string, ready: boolean, onClosed: (el: HTMLElement) => void,
  *   onMoved?: () => void, onResize?: () => void, askClose?: () => unknown, header?: HTMLElement, close?: () => unknown,
  *   keepDoubleClick?: string, dragHandle?: string, chrome?: AbortController, onDragged?: Dragged, faded?: boolean, remember?: boolean, placed?: boolean,
- *   pictured?: boolean }} Detached
+ *   pictured?: boolean, returnable?: boolean }} Detached
  */
 
 /**
@@ -42,18 +42,6 @@ import { WINDOW_ACTION, DETACHED_WINDOW } from './constants.js';
 const NAME_PREFIX = DETACHED_WINDOW.namePrefix;
 /** A dragged thing's picture (DragPictureWindow, Windows) goes: its window is where it was. */
 const takePictureAway = () => send(PAGE.windowDragPicture, {});
-
-/**
- * What a window that goes back by being dropped over the main window does as it's moved: over the main window it
- * would land (see-through), and let go there it closes, back in its place.
- * @param {string} key
- * @returns {Dragged}
- */
-const droppedBack = key => (x, y, dropped) => {
-  const over = x !== null && y !== null;
-  if (over && dropped) closeWindow(key);
-  return over;
-};
 
 /** The main page's stylesheets, which each window takes too. */
 const STYLES = ['lib/xterm.css', 'app.css'];
@@ -112,17 +100,17 @@ export const isDetached = key => open.has(key);
  * @param {{ el: HTMLElement, title: string, onClosed: (el: HTMLElement) => void, onMoved?: () => void,
  *   onResize?: () => void, askClose?: () => unknown, at?: { x: number, y: number }, header?: HTMLElement,
  *   close?: () => unknown, keepDoubleClick?: string, dragHandle?: string, minWidth?: number, onDragged?: Dragged,
- *   remember?: boolean, place?: { x: number, y: number }, dropBack?: boolean }} options
+ *   remember?: boolean, place?: { x: number, y: number }, returnable?: boolean }} options
  *   at: the screen point the window's top left corner goes near (a drag's drop); else over where the element is.
  *   place: exactly where on the screen its page's top left corner goes (where a dragged picture of it was let go); the
  *   picture goes once the window shows.
- *   dropBack: moved by its title bar and let go over the main window, it goes back there (closes: onClosed), wherever.
+ *   returnable: whether its title bar has Return (back into the main window); not for what's always in a window of
+ *   its own (the Snippets window).
  *   minWidth: the window is at least this wide (by default its title bar's name, tools and buttons all fit).
  *   remember: it opens where it was last time (its size too; at still picks the place), kept when it goes (keepPlaces)
  */
 export function detach(key, options) {
-  const { el, title, onClosed, onMoved, onResize, askClose, at, place, header, close, keepDoubleClick, dragHandle, minWidth = MIN_WIDTH_PX, remember = false, dropBack = false } = options;
-  const onDragged = options.onDragged ?? (dropBack ? droppedBack(key) : undefined);
+  const { el, title, onClosed, onMoved, onResize, askClose, at, place, header, close, keepDoubleClick, dragHandle, minWidth = MIN_WIDTH_PX, onDragged, remember = false, returnable = true } = options;
   if (open.has(key)) return focusWindow(key), true;
   const r = el.getBoundingClientRect();
   const last = remember ? places.get(key) : null;
@@ -139,7 +127,7 @@ export function detach(key, options) {
     if (place) takePictureAway();
     return false;
   }
-  open.set(key, { key, win, el, title, ready: false, onClosed, onMoved, onResize, askClose, header, close, keepDoubleClick, dragHandle, onDragged, remember, pictured: !!place });
+  open.set(key, { key, win, el, title, ready: false, onClosed, onMoved, onResize, askClose, header, close, keepDoubleClick, dragHandle, onDragged, remember, pictured: !!place, returnable });
   build(win);
   watch ||= window.setInterval(checkClosed, WATCH_MS);
   if (!themeWatch) {
@@ -274,11 +262,13 @@ function addChrome(d, doc) {
     send(PAGE.window, { action, name: NAME_PREFIX + d.key, edge: edge || null });
   const controls = doc.createElement('div');
   controls.className = 'window-controls detached-controls';
-  const back = doc.createElement('button');
-  back.innerHTML = RETURN_ICON;
-  back.title = RETURN_LABEL;
-  back.addEventListener('click', () => closeWindow(d.key));
-  controls.append(back);
+  if (d.returnable !== false) {
+    const back = doc.createElement('button');
+    back.innerHTML = RETURN_ICON;
+    back.title = RETURN_LABEL;
+    back.addEventListener('click', () => closeWindow(d.key));
+    controls.append(back);
+  }
   for (const action of CONTROLS) {
     // The main window's own button (its icons and title), its clicks this window's.
     const button = /** @type {HTMLElement} */ (document.querySelector(`.window-controls [data-window="${action}"]`)?.cloneNode(true));

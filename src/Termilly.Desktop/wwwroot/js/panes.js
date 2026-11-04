@@ -61,8 +61,6 @@ const WINDOW_SHOT_SCALE = 0.3;
 const TOP_BOTTOM_SHARE = 1 / 3;
 /** How far around a compass cell the pointer still counts as on it. */
 const CELL_SLACK_PX = 2;
-/** A compass that offers only the detach cell (a panel's, which has no layout to land in). */
-const DETACH_ONLY = 'detach-only';
 /** A compass the pointer is at, and the cell it would drop on. */
 const HOVER = 'hover';
 const ACTIVE = 'active';
@@ -973,12 +971,13 @@ const MOVE = 'move';
 const LEFT_AFTER_MS = 100;
 
 /**
- * A panel (the Notepad, the Snippets window) dragged by its title bar as a terminal is: its name and icon (markup),
- * what opens it in a window of its own (near a screen point, or exactly at place, its top left corner) and whether it
- * did, what puts it back in its place, whether it's in a window of its own now, and its handle there (Linux: what's
- * dragged back; the rest of its title bar moves the window).
+ * A panel (the Notepad) dragged by its title bar as a terminal is: its name and icon (markup), what opens it in a
+ * window of its own (near a screen point, or exactly at place, its top left corner) and whether it did, what docks it
+ * back, whether it's in a window of its own now, its handle there (Linux: what's dragged back; the rest of its title
+ * bar moves the window), and where it docks in the main window: let go there it stays (or docks back), anywhere
+ * else it goes out into a window of its own.
  * @typedef {{ name: string, icon: string, detach: (at?: { x: number, y: number }, place?: { x: number, y: number }) => boolean,
- *   back: () => void, isDetached: () => boolean, handle: string }} PanelDrag
+ *   back: () => void, isDetached: () => boolean, handle: string, dock: () => DOMRect }} PanelDrag
  */
 
 /**
@@ -1100,7 +1099,7 @@ document.addEventListener('dragover', e => {
   e.preventDefault();
   e.dataTransfer.dropEffect = MOVE;
   enterMain(d);
-  if (!d.tab) return void (d.over = true);
+  if (d.panel || !d.tab) return void panelOver(d, e);
   d.drop = findDropTarget(d.tab, e.clientX, e.clientY) ?? (d.tab.detached ? wholeWorkspaceDrop(d.tab) : null);
   showDrop(d.drop);
 });
@@ -1120,9 +1119,8 @@ document.addEventListener('drop', e => {
   d.dropped = true;
   const drop = d.drop;
   leaveMain(d);
-  if (d.panel) {
-    if (d.panel.isDetached()) d.panel.back();
-  } else if (d.tab?.detached) landBack(d.tab, drop ?? wholeWorkspaceDrop(d.tab));
+  if (d.panel) panelDropped(d.panel, e);
+  else if (d.tab?.detached) landBack(d.tab, drop ?? wholeWorkspaceDrop(d.tab));
   else if (d.tab && drop) dropPane(d.tab, drop, { x: e.screenX, y: e.screenY });
 });
 
@@ -1144,6 +1142,62 @@ function endSystemDrag(e) {
   if (d.tab) detachTab(d.tab, at);
   else d.panel?.detach(at);
 }
+
+/**
+ * A panel dragged over the main window: from its window, its dock is outlined while it's over it (and only there can
+ * it be let go); from its dock, it can be let go anywhere.
+ * @param {NonNullable<typeof systemDragged>} d
+ * @param {DragEvent} e
+ */
+function panelOver(d, e) {
+  d.over = true;
+  const panel = /** @type {PanelDrag} */ (d.panel);
+  if (!panel.isDetached()) return;
+  const zone = panel.dock();
+  const onDock = inRect(zone, e.clientX, e.clientY);
+  showOutline(onDock ? zone : null, ZONE.window, null, DOCK_LABEL);
+  /** @type {DataTransfer} */ (e.dataTransfer).dropEffect = onDock ? MOVE : NONE;
+}
+
+/**
+ * A panel let go in the main window: from its window, on its dock it docks back; from its dock, anywhere but there it
+ * goes out into a window of its own (where it's let go).
+ * @param {PanelDrag} panel
+ * @param {DragEvent} e
+ */
+function panelDropped(panel, e) {
+  const onDock = inRect(panel.dock(), e.clientX, e.clientY);
+  if (panel.isDetached()) {
+    if (onDock) panel.back();
+  } else if (!onDock) panel.detach({ x: e.screenX, y: e.screenY });
+}
+
+/**
+ * A panel's window moved by its title bar (Windows), back over the main window: over its dock the dock is outlined and
+ * the window goes see-through; let go there, it docks back. Anywhere else it's only moved.
+ * @param {() => DOMRect} dock
+ * @param {() => void} back
+ * @returns {(x: number | null, y: number | null, dropped: boolean) => boolean}
+ */
+export const dockDrop = (dock, back) => (x, y, dropped) => {
+  const zone = dock();
+  const over = x !== null && y !== null && inRect(zone, x, y);
+  showOutline(over && !dropped ? zone : null, ZONE.window, null, DOCK_LABEL);
+  if (over && dropped) back();
+  return over;
+};
+
+/** What a panel's dock says while one would dock there. */
+const DOCK_LABEL = 'Dock on the right';
+/** A drop that does nothing (the pointer says so). */
+const NONE = 'none';
+
+/**
+ * @param {DOMRect} r
+ * @param {number} x
+ * @param {number} y
+ */
+const inRect = (r, x, y) => x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
 
 /**
  * A detached terminal let go in the main window but on no drop zone: back in the shown workspace, where it was.
@@ -1297,12 +1351,11 @@ function followDrag(header, e, { begin, move, end }) {
 }
 
 /**
- * A panel's title bar (the Notepad's, the Snippets window's) dragged as a terminal's is. On Windows its see-through
- * picture follows the pointer, and let go outside the main window it opens in a window of its own right there; on
- * Linux the system's drag (a chip with its icon and name), and let go outside, a window of its own. In the main window
- * the panel stays where it is, and a compass in its middle with only its detach cell opens it in a window of its own
- * too (elsewhere also the app window's very edge). In a window of its own its title bar moves that window (js/windows.js),
- * and dragged back over the main window it goes back to its place (on Linux by its name, its handle).
+ * A panel's title bar (the Notepad's) dragged as a terminal's is: let go anywhere but its dock, in any direction, it
+ * opens in a window of its own there. On Windows its see-through picture follows the pointer and the window opens
+ * right where the picture is; on Linux the system's drag (a chip with its icon and name). In a window of its own its
+ * title bar moves that window (js/windows.js), and dragged back over its dock (on Linux by its name, its handle) it
+ * docks there.
  * @param {HTMLElement} header
  * @param {HTMLElement} panel
  * @param {PanelDrag} drag
@@ -1324,31 +1377,23 @@ export function wireDragOut(header, panel, drag) {
  * @param {PointerEvent} e
  */
 function trackPanelDrag(header, panel, drag, e) {
-  const guide = /** @type {HTMLElement} */ (/** @type {Element} */ (dockGuideTemplate.content.firstElementChild).cloneNode(true));
-  guide.classList.add(DETACH_ONLY);
-  const cell = find(guide, `[data-zone="${ZONE.window}"]`);
   let out = false;
-  let outside = false;
   let live = false;
   followDrag(header, e, {
     begin: () => {
       live = true;
       showGhost(drag.icon, drag.name);
       document.body.classList.add(DRAGGING_PANE);
-      panel.append(guide);
       pickUp(panel, e, () => live);
     },
     move: (x, y) => {
-      outside = followsPicture && outOfWindow(x, y);
-      out = outside || onCell(cell, x, y) || (!followsPicture && atAppEdge(x, y));
-      guide.classList.toggle(HOVER, out);
-      cell.classList.toggle(ACTIVE, out);
-      showOutline(out && !outside ? windowOutline(panel, x, y) : null, ZONE.window);
+      // Anywhere but its dock: out into a window of its own (its picture shows where, on Windows; an outline elsewhere).
+      out = !inRect(drag.dock(), x, y);
+      showOutline(out && !followsPicture && !outOfWindow(x, y) ? windowOutline(panel, x, y) : null, ZONE.window);
     },
     end: (commit, screen) => {
       live = false;
       document.body.classList.remove(DRAGGING_PANE, PICTURE_DRAG);
-      guide.remove();
       showOutline(null, ZONE.window);
       // Where its picture is: its window opens exactly there, and takes the picture away once it shows (js/windows.js).
       const place = followsPicture ? { x: screen.x - grip.x, y: screen.y - grip.y } : undefined;
@@ -1719,8 +1764,9 @@ function showDrop(drop) {
  * @param {DOMRect | null} r
  * @param {Zone} zone
  * @param {string | null} [picture] what it would show (a terminal's picture, as a data URL), faint under the label
+ * @param {string} [label] what it says, if not its zone's
  */
-function showOutline(r, zone, picture = null) {
+function showOutline(r, zone, picture = null, label = ZONE_LABELS[zone]) {
   dropPreview.classList.toggle(WITH_SHOT, !!picture && !!r);
   if (picture) dropPreview.style.setProperty(SHOT_VAR, `url("${picture}")`);
   else dropPreview.style.removeProperty(SHOT_VAR);
@@ -1741,7 +1787,7 @@ function showOutline(r, zone, picture = null) {
   const appearing = !dropPreview.classList.contains(VISIBLE);
   dropPreview.classList.toggle(PLACING, appearing);
   Object.assign(dropPreview.style, { left: `${box.x}px`, top: `${box.y}px`, width: `${box.w}px`, height: `${box.h}px` });
-  /** @type {Element} */ (dropPreview.firstElementChild).textContent = ZONE_LABELS[zone];
+  /** @type {Element} */ (dropPreview.firstElementChild).textContent = label;
   dropPreview.classList.add(VISIBLE);
   if (appearing) {
     void dropPreview.offsetWidth; // the place is taken before the sliding comes back

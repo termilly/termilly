@@ -610,6 +610,9 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
 .files-grip:hover { background: var(--accent); opacity: .5; }
 .files-panel.drop { outline: 2px dashed var(--accent); outline-offset: -6px; }
 .files-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px 4px 12px; }
+/* A panel's title bar starts with its toolbar button's icon (the Notepad's, the Snippets window's), as a window's does. */
+.title-icon { display: flex; flex: none; align-items: center; margin-right: 8px; color: var(--muted); }
+.title-icon > svg { display: block; width: 16px; height: 16px; }
 .files-title { overflow: hidden; color: var(--text); font-size: 12.5px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .files-ws { margin-left: 4px; color: var(--faint); font-weight: 400; }
 /* Refresh, New folder and Collapse before the ×: 16px icons at a 1px stroke, on the pixel grid. */
@@ -1550,13 +1553,11 @@ body.dragging-pane.picture-drag #drag-ghost { display: none; }
 /* Linux: in a window of its own, a terminal's icon and name are what's dragged back into the main window (the rest of
    the title bar moves the window): they light up under the pointer (the pointer itself stays as it is). */
 :root[data-tab-drag="system"] body.detached-window .pane-header .pane-title,
-:root[data-tab-drag="system"] body.detached-window .files-head .files-title,
-:root[data-tab-drag="system"] body.detached-window .set-head #sw-title {
+:root[data-tab-drag="system"] body.detached-window .files-head .files-title {
   margin-left: -6px; padding: 3px 6px; border-radius: 6px;
 }
 :root[data-tab-drag="system"] body.detached-window .pane-header .pane-title:hover,
-:root[data-tab-drag="system"] body.detached-window .files-head .files-title:hover,
-:root[data-tab-drag="system"] body.detached-window .set-head #sw-title:hover { background: var(--hover); color: var(--text); }
+:root[data-tab-drag="system"] body.detached-window .files-head .files-title:hover { background: var(--hover); color: var(--text); }
 .drag-chip .ghost-badge > svg { display: block; width: 16px; height: 16px; stroke-width: 1.3; color: var(--accent); }
 
 #drop-preview {
@@ -1656,7 +1657,6 @@ body.dragging-pane.picture-drag #drag-ghost { display: none; }
 .dock-cell[data-zone="window"] svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1; }
 .dock-cell[data-zone="window"].active { color: var(--accent); }
 /* A panel's compass (the Notepad's, the Snippets window's, js/panes.js wireDragOut): only out into a window. */
-.dock-guide.detach-only .dock-cell:not([data-zone="window"]) { visibility: hidden; }
 .snippets-win { position: relative; }
 /* While something is dragged, its outline and label show over the Snippets window too (a modal layer). */
 body.dragging-pane #drop-preview { z-index: 2600; }
