@@ -318,7 +318,10 @@ public sealed class SessionProfileTests : IDisposable
         // Quiet where Termilly's own integration is installed (a WSL distribution set up), which reports them itself.
         Assert.StartsWith("""$([ -n "$__termilly_loaded" ] || printf '\e]633;E;%s\a\e]133;C\a' "$(HISTTIMEFORMAT=""", vars["PS0"]);
         Assert.Contains("""[ -n "$__termilly_loaded" ] || { """, vars["PROMPT_COMMAND"]);
-        Assert.EndsWith("""printf '\033]133;D;%s\007\033]133;A\007' "$__termilly_status"; }""", vars["PROMPT_COMMAND"]);
+        Assert.Contains("""printf '\033]133;D;%s\007\033]133;A\007' "$__termilly_status"; }""", vars["PROMPT_COMMAND"]);
+        // bash before 4.4 has no PS0: the first prompt sets a DEBUG trap that marks commands instead; a prompt arms it.
+        Assert.Contains("-lt 404", vars["PROMPT_COMMAND"]);
+        Assert.EndsWith("__termilly_ready=1", vars["PROMPT_COMMAND"]);
 
         var wsl = new SessionProfile("wsl-ubuntu", "Ubuntu", "", "wsl", "wsl.exe -d Ubuntu", ProfileSources.Wsl);
         var (_, wslVars) = SessionLaunch.WithShellIntegration(wsl, new Dictionary<string, string> { ["WSLENV"] = "FOO/p:PS0/u" });
@@ -335,6 +338,31 @@ public sealed class SessionProfileTests : IDisposable
         Assert.Equal("/home/me/.config/zsh", vars["TERMILLY_USER_ZDOTDIR"]);
         Assert.False(vars.ContainsKey("PROMPT_COMMAND")); // zsh doesn't read bash's
         Assert.True(File.Exists(Path.Combine(SessionLaunch.ZshFolder, ".zshrc")));
+    }
+
+    [Theory]
+    [InlineData("tcsh")]
+    [InlineData("csh")]
+    public void Tcsh_starts_with_home_at_termillys_startup_file_and_gets_the_users_back(string id)
+    {
+        var tcsh = new SessionProfile(id, id, $"/bin/{id}", "bash", $"/bin/{id} -l", ProfileSources.Local);
+        var (commandLine, vars) = SessionLaunch.WithShellIntegration(tcsh, new Dictionary<string, string> { ["HOME"] = "/Users/me" });
+        Assert.Equal($"/bin/{id} -l", commandLine);
+        Assert.Equal(SessionLaunch.TcshFolder, vars["HOME"]);
+        Assert.Equal("/Users/me", vars["TERMILLY_USER_HOME"]);
+        Assert.False(vars.ContainsKey("PROMPT_COMMAND")); // tcsh doesn't read bash's
+        Assert.True(File.Exists(Path.Combine(SessionLaunch.TcshFolder, ".tcshrc")));
+    }
+
+    [Fact]
+    public void Ksh_starts_with_env_at_termillys_script_and_keeps_the_users()
+    {
+        var ksh = new SessionProfile("ksh", "ksh", "/bin/ksh", "bash", "/bin/ksh -l", ProfileSources.Local);
+        var (commandLine, vars) = SessionLaunch.WithShellIntegration(ksh, new Dictionary<string, string> { ["ENV"] = "/Users/me/.kshrc" });
+        Assert.Equal("/bin/ksh -l", commandLine);
+        Assert.Equal(SessionLaunch.KshScript, vars["ENV"]);
+        Assert.Equal("/Users/me/.kshrc", vars["TERMILLY_USER_ENV"]);
+        Assert.True(File.Exists(SessionLaunch.KshScript));
     }
 
     [Fact]

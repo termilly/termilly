@@ -31,6 +31,14 @@ internal static class SessionLaunch
         /// (shell/remote/termilly.sh) has loaded, since it reports them itself.
         /// </summary>
         public const string Unless = """[ -n "$__termilly_loaded" ] ||""";
+
+        /// <summary>
+        /// bash before 4.4 (macOS's own is 3.2) has no PS0: the first prompt sets a DEBUG trap instead (unless the
+        /// user has one), which sends what PS0 would before the first command after each prompt. Each prompt sets
+        /// __termilly_ready, and the trap skips the prompt's own first command, so an empty Enter marks nothing.
+        /// </summary>
+        public const string OldBashPreexec =
+            """[ -n "$__termilly_trap" ] || { __termilly_trap=1; [ "$((BASH_VERSINFO[0] * 100 + BASH_VERSINFO[1]))" -lt 404 ] && [ -z "$(trap -p DEBUG)" ] && trap 'if [ -n "$__termilly_ready" ]; then __termilly_ready=; [ "${BASH_COMMAND#__termilly_status=}" = "$BASH_COMMAND" ] && printf "\033]633;E;%s\007\033]133;C\007" "$(HISTTIMEFORMAT= history 1 | sed "s/^ *[0-9]* *//")"; fi' DEBUG; }; __termilly_ready=1""";
     }
 
     /// <summary>cmd's prompt variable and what it shows when nobody set it (<see cref="CmdPrompt"/>).</summary>
@@ -155,6 +163,12 @@ internal static class SessionLaunch
             case (ProfileSources.Local, ProfileIcons.Bash) when profile.Id == ZshMarks.Shell && Directory.Exists(ZshFolder):
                 AddZshMarks(withMarks, vars);
                 return (profile.CommandLine, withMarks);
+            case (ProfileSources.Local, ProfileIcons.Bash) when profile.Id is TcshMarks.Tcsh or TcshMarks.Csh && Directory.Exists(TcshFolder):
+                AddTcshMarks(withMarks, vars);
+                return (profile.CommandLine, withMarks);
+            case (ProfileSources.Local, ProfileIcons.Bash) when profile.Id == KshMarks.Shell && File.Exists(KshScript):
+                AddKshMarks(withMarks, vars);
+                return (profile.CommandLine, withMarks);
             case (ProfileSources.Local, ProfileIcons.Bash):
                 AddBashMarks(withMarks);
                 if (!OperatingSystem.IsWindows() && File.Exists(script))
@@ -220,7 +234,8 @@ internal static class SessionLaunch
                                  $$"""[[ -n "${{Variables.AgentDir}}" && "$PATH" != "${{Variables.AgentDir}}":* ]] && PATH="${{Variables.AgentDir}}:$PATH"; """ +
                                  $"{BashMarks.Unless} {{ " +
                                  (OperatingSystem.IsWindows() ? "" : @"printf '\033]7;file://%s%s\007' ""$HOSTNAME"" ""$PWD""; ") +
-                                 @"printf '\033]133;D;%s\007\033]133;A\007' ""$__termilly_status""; }";
+                                 @"printf '\033]133;D;%s\007\033]133;A\007' ""$__termilly_status""; }; " +
+                                 BashMarks.OldBashPreexec;
     }
 
     /// <summary>
@@ -246,6 +261,60 @@ internal static class SessionLaunch
         /// <summary>zsh's profile id (SessionProfiles.UnixShells names a shell's profile after its file).</summary>
         public const string Shell = "zsh";
     }
+
+    /// <summary>
+    /// tcsh (and csh, tcsh on macOS) reads no startup file a variable could name: it starts with HOME at shell/tcsh,
+    /// whose .tcshrc puts the user's HOME back, reads their .tcshrc (or .cshrc) and then shell/termilly.tcsh, which
+    /// marks prompts and commands as <see cref="AddBashMarks"/> does. The files read after .tcshrc (.history, .login)
+    /// come from the user's home. Without a HOME to go back to, tcsh starts as it is.
+    /// </summary>
+    private static void AddTcshMarks(Dictionary<string, string> withMarks, IReadOnlyDictionary<string, string> vars)
+    {
+        var home = vars.TryGetValue(TcshMarks.Home, out var set) ? set : System.Environment.GetEnvironmentVariable(TcshMarks.Home);
+        if (string.IsNullOrEmpty(home))
+        {
+            return;
+        }
+        withMarks[TcshMarks.UserHome] = home;
+        withMarks[TcshMarks.Home] = TcshFolder;
+    }
+
+    /// <summary>
+    /// ksh (ksh93) reads the file ENV names when it starts interactive: shell/termilly.ksh, which reads the user's own
+    /// ENV file (or ~/.kshrc) and then marks prompts and commands as <see cref="AddBashMarks"/> does.
+    /// </summary>
+    private static void AddKshMarks(Dictionary<string, string> withMarks, IReadOnlyDictionary<string, string> vars)
+    {
+        var own = vars.TryGetValue(KshMarks.Env, out var set) ? set : System.Environment.GetEnvironmentVariable(KshMarks.Env);
+        if (!string.IsNullOrEmpty(own))
+        {
+            withMarks[KshMarks.UserEnv] = own;
+        }
+        withMarks[KshMarks.Env] = KshScript;
+    }
+
+    /// <summary>The variables tcsh's start goes by (<see cref="AddTcshMarks"/>), and the profile ids it covers.</summary>
+    private static class TcshMarks
+    {
+        public const string Home = "HOME";
+        public const string UserHome = "TERMILLY_USER_HOME";
+        public const string Tcsh = "tcsh";
+        public const string Csh = "csh";
+    }
+
+    /// <summary>The variables ksh's start goes by (<see cref="AddKshMarks"/>), and its profile id.</summary>
+    private static class KshMarks
+    {
+        public const string Env = "ENV";
+        public const string UserEnv = "TERMILLY_USER_ENV";
+        public const string Shell = "ksh";
+    }
+
+    /// <summary>tcsh's startup file for Termilly's terminals (see shell/tcsh), next to the app.</summary>
+    internal static string TcshFolder { get; } = Path.Combine(AppPaths.ShellScripts, "tcsh");
+
+    /// <summary>ksh's integration (shell/termilly.ksh), next to the app.</summary>
+    internal static string KshScript { get; } = Path.Combine(AppPaths.ShellScripts, "termilly.ksh");
 
     /// <summary>zsh's startup files for Termilly's terminals (see shell/zsh), next to the app.</summary>
     internal static string ZshFolder { get; } = Path.Combine(AppPaths.ShellScripts, "zsh");
