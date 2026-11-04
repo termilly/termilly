@@ -764,6 +764,12 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
 .np-editor.with-numbers .np-text, .np-editor.with-numbers .np-layer, .np-editor.with-numbers .np-measure { padding-left: calc(var(--np-margin) + 4px); }
 .np-band { position: absolute; left: 0; right: 0; z-index: 4; background: var(--hover); pointer-events: none; }
 .np-band[hidden] { display: none; }
+/* macOS shows a box's own scroll bars only while it scrolls (overlay scroll bars): drawn ones stay, so a long line
+   (no word wrap) shows there's more to the right, as on Windows and Linux. */
+:root[data-os="mac"] .np-text::-webkit-scrollbar { width: 10px; height: 10px; }
+:root[data-os="mac"] .np-text::-webkit-scrollbar-thumb { border: 2px solid var(--raised); border-radius: 5px; background: var(--scroll-thumb); }
+:root[data-os="mac"] .np-text::-webkit-scrollbar-thumb:hover { background: var(--faint); }
+:root[data-os="mac"] .np-text::-webkit-scrollbar-corner { background: var(--raised); }
 .np-text:disabled { opacity: .5; }
 .np-text[hidden] { display: none; }
 /* No pages: New page and Open a file, in the middle of the panel. */
