@@ -48,6 +48,15 @@ internal static class DetachedWindows
     private delegate void NotifyCallback(IntPtr view, IntPtr spec, IntPtr data);
     private delegate int DeleteCallback(IntPtr window, IntPtr gdkEvent, IntPtr data);
 
+    private static readonly DeleteCallback OnMapped = Mapped;
+
+    /// <summary>On screen (placed over the main window): it no longer belongs to it.</summary>
+    private static int Mapped(IntPtr window, IntPtr gdkEvent, IntPtr data)
+    {
+        gtk_window_set_transient_for(window, IntPtr.Zero);
+        return 0;
+    }
+
     /// <summary>Lets the page in <paramref name="mainWindow"/> open its windows. False when it holds no web view to hook.</summary>
     public static bool Hook(IntPtr mainWindow)
     {
@@ -57,8 +66,20 @@ internal static class DetachedWindows
             return false;
         }
         g_signal_connect_data(view, "create", OnCreate, IntPtr.Zero, IntPtr.Zero, 0);
+        _main = mainWindow;
         return true;
     }
+
+    /// <summary>Termilly's main window, once hooked: Wayland opens the windows over it (<see cref="Show"/>).</summary>
+    private static IntPtr _main;
+
+    /// <summary>
+    /// GTK runs on Wayland (not X11): GDK_BACKEND doesn't ask for X11, and there's a Wayland display. Wayland places a
+    /// new window itself, whatever place it's given.
+    /// </summary>
+    private static bool OnWayland =>
+        Environment.GetEnvironmentVariable("GDK_BACKEND")?.StartsWith("x11", StringComparison.Ordinal) != true &&
+        !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY"));
 
     /// <summary>Whether a GTK window is one of these (GtkWindow.Find looks for the main one).</summary>
     public static bool Contains(IntPtr window) => Open.Values.Any(o => o.Window == window);
@@ -204,6 +225,14 @@ internal static class DetachedWindows
         {
             gtk_window_move(window, geometry.X, geometry.Y); // X11 only: Wayland places windows itself
         }
+        if (OnWayland && _main != IntPtr.Zero)
+        {
+            // Wayland ignores the place; GNOME opens a new window at the first free spot from the screen's top left. One
+            // that belongs to the main window opens over its middle instead: it does only until it's on screen, so it
+            // doesn't stay above the main window.
+            gtk_window_set_transient_for(window, _main);
+            g_signal_connect_data(window, "map-event", OnMapped, IntPtr.Zero, IntPtr.Zero, 0);
+        }
         gtk_window_set_title(window, Marshal.PtrToStringUTF8(webkit_web_view_get_title(view)) ?? GtkWindow.Title);
         gtk_container_add(window, view);
         Open[view] = new Opened(window, name);
@@ -260,6 +289,7 @@ internal static class DetachedWindows
     [DllImport(Gtk)] private static extern void gtk_widget_show_all(IntPtr widget);
     [DllImport(Gtk)] private static extern void gtk_widget_destroy(IntPtr widget);
     [DllImport(Gtk)] private static extern void gtk_window_set_decorated(IntPtr window, int decorated);
+    [DllImport(Gtk)] private static extern void gtk_window_set_transient_for(IntPtr window, IntPtr parent);
     [DllImport(Gtk)] private static extern void gtk_window_iconify(IntPtr window);
     [DllImport(Gtk)] private static extern void gtk_window_maximize(IntPtr window);
     [DllImport(Gtk)] private static extern void gtk_window_unmaximize(IntPtr window);
