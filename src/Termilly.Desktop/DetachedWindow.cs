@@ -166,6 +166,10 @@ internal sealed class DetachedWindow : Window
             case WindowActions.Focus:
                 BringToFront();
                 break;
+            case WindowActions.OnTop:
+            case WindowActions.NotOnTop:
+                Topmost = action.Action == WindowActions.OnTop;
+                break;
         }
     }
 

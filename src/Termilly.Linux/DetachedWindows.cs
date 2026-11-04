@@ -94,6 +94,10 @@ internal static class DetachedWindows
             case WindowActions.Focus:
                 gtk_window_present(window);
                 break;
+            case WindowActions.OnTop:
+            case WindowActions.NotOnTop:
+                gtk_window_set_keep_above(window, action == WindowActions.OnTop ? 1 : 0);
+                break;
         }
     }
 
@@ -262,6 +266,7 @@ internal static class DetachedWindows
     [DllImport(Gtk)] private static extern void gtk_widget_destroy(IntPtr widget);
     [DllImport(Gtk)] private static extern void gtk_window_set_decorated(IntPtr window, int decorated);
     [DllImport(Gtk)] private static extern void gtk_window_iconify(IntPtr window);
+    [DllImport(Gtk)] private static extern void gtk_window_set_keep_above(IntPtr window, int above);
     [DllImport(Gtk)] private static extern void gtk_window_maximize(IntPtr window);
     [DllImport(Gtk)] private static extern void gtk_window_unmaximize(IntPtr window);
     [DllImport(Gtk)] private static extern int gtk_window_is_maximized(IntPtr window);

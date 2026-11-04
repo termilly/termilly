@@ -609,7 +609,9 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
 .files-drive { width: 16px; height: 16px; margin-right: 6px; stroke-width: 1; vertical-align: -3px; }
 .files-grip:hover { background: var(--accent); opacity: .5; }
 .files-panel.drop { outline: 2px dashed var(--accent); outline-offset: -6px; }
-.files-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px 4px 12px; }
+/* Icon and title on the left, tools on the right (a window's buttons after them, in a window of its own). */
+.files-head { display: flex; align-items: center; padding: 8px 10px 4px 12px; }
+.files-head > .files-tools { margin-left: auto; }
 /* A panel's title bar starts with its toolbar button's icon (the Notepad's, the Snippets window's), as a window's does. */
 .title-icon { display: flex; flex: none; align-items: center; margin-right: 8px; color: var(--muted); }
 .title-icon > svg { display: block; width: 16px; height: 16px; }
@@ -3103,4 +3105,12 @@ body.detached-window .pane-header { cursor: default; }
 /* Its environment (a production tag’s chip) stays with its tags after the name, not again before it. */
 body.detached-window .pane-header .env-chip { display: none; }
 .detached-controls { display: flex; flex: none; align-items: center; margin-left: 4px; }
+.detached-controls > .separator { margin: 0 6px 0 2px; }
+/* The pin while the window is kept on top. */
+.detached-controls > button.on { background: var(--pressed); color: var(--accent); }
+/* The Snippets window's title bar as the Notepad's: icon and title on the left, the same height and type. */
+/* Its bottom line counts too: a pixel less below, the same 40px as the Notepad's. */
+.snippets-win > .set-head { height: auto; padding: 8px 10px 3px 12px; }
+.snippets-win > .set-head > h2 { overflow: hidden; color: var(--text); font-size: 12.5px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.snippets-win > .set-head > .sw-count { margin-left: 8px; }
 .detached-controls svg[viewBox="0 0 16 16"] { width: 16px; height: 16px; stroke-width: 1; }

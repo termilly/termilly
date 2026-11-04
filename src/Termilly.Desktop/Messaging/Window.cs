@@ -21,6 +21,9 @@ internal static class WindowActions
     public const string Fade = "fade";
     /// <summary>A detached window solid again.</summary>
     public const string Solid = "solid";
+    /// <summary>A detached window kept above every other window (its title bar's pin), and no longer.</summary>
+    public const string OnTop = "onTop";
+    public const string NotOnTop = "notOnTop";
 }
 
 /// <summary>

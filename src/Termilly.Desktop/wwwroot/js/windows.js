@@ -58,6 +58,11 @@ const PAGE_GONE = 'pagehide';
 /** Return's icon (back into the main window), 16px at a 1px line: an arrow going into a frame. ui.js's ICONS.attach. */
 export const RETURN_ICON = '<svg viewBox="0 0 16 16"><path d="M8.5 2.5h5v11h-11v-5"/><path d="M2.5 2.5l5 5M7.5 3.5v4h-4"/></svg>';
 export const RETURN_LABEL = 'Back to the main window';
+/** The pin that keeps a window above every other one: 16px at a 1px line, on the pixel grid. */
+const PIN_ICON = '<svg viewBox="0 0 16 16"><path d="M5.5 2.5h5M6.5 2.5v4l-2 2v1h7v-1l-2-2v-4M8 9.5v4"/></svg>';
+const PIN_LABEL = 'Always on top';
+/** The pin's class while the window is kept on top (app.css). */
+const PINNED = 'on';
 /** The window's buttons, in the main window's order after Return. */
 const CONTROLS = [WINDOW_ACTION.minimize, WINDOW_ACTION.maximize, WINDOW_ACTION.close];
 /** The body's class while the window is maximized (app.css: Restore's icon, no edges). */
@@ -262,6 +267,10 @@ function addChrome(d, doc) {
     send(PAGE.window, { action, name: NAME_PREFIX + d.key, edge: edge || null });
   const controls = doc.createElement('div');
   controls.className = 'window-controls detached-controls';
+  // A separator, then the pin that keeps the window above every other one, then Return and the window's own buttons.
+  const separator = doc.createElement('div');
+  separator.className = 'separator';
+  controls.append(separator, pinButton(doc, act));
   if (d.returnable !== false) {
     const back = doc.createElement('button');
     back.innerHTML = RETURN_ICON;
@@ -291,6 +300,26 @@ function addChrome(d, doc) {
     doc.body.append(copy);
   }
   showMaximized(d);
+}
+
+/**
+ * The title bar's pin: pressed, the window stays above every other window (its host keeps it so) until it's pressed
+ * again.
+ * @param {Document} doc
+ * @param {(action: string) => void} act
+ */
+function pinButton(doc, act) {
+  const pin = doc.createElement('button');
+  pin.innerHTML = PIN_ICON;
+  pin.title = PIN_LABEL;
+  pin.setAttribute('aria-pressed', 'false');
+  pin.addEventListener('click', () => {
+    const on = !pin.classList.contains(PINNED);
+    pin.classList.toggle(PINNED, on);
+    pin.setAttribute('aria-pressed', String(on));
+    act(on ? WINDOW_ACTION.onTop : WINDOW_ACTION.notOnTop);
+  });
+  return pin;
 }
 
 /**
