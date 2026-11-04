@@ -955,9 +955,9 @@ function showGroupTab(node) {
  * Linux: a terminal is dragged with the system's own drag and drop, as VS Code's tabs: a label with its icon and name
  * follows the pointer anywhere, out of the window too (on Wayland nothing else can). Let go outside the main window,
  * it opens in a window of its own; a detached one, dragged by its icon and name, lands back in the main window
- * wherever it's let go (a drop zone, else where it was). Not on macOS, which has no windows of their own yet.
+ * wherever it's let go (a drop zone, else where it was). macOS too (the same page, its windows MacWindows').
  */
-export const systemDrag = platform === PLATFORM.linux && !/Mac/.test(navigator.platform);
+export const systemDrag = platform === PLATFORM.linux;
 /** The root's data-tab-drag while terminals are dragged with the system's drag and drop (app.css). */
 const SYSTEM_DRAG = 'system';
 // The page's root says so (detached windows take it too): app.css marks the handle there.
