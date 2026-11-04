@@ -33,8 +33,19 @@ internal static class AppPaths
     /// <summary>Termilly's icon on Windows, every size it's shown at (the window, the tray), each drawn on whole pixels.</summary>
     public static string IconFile { get; } = Path.Combine(Assets, "termilly.ico");
 
-    /// <summary>Shell integration's scripts (PowerShell's, and those for servers), next to the app.</summary>
-    public static string ShellScripts { get; } = Path.Combine(AppContext.BaseDirectory, "shell");
+    /// <summary>
+    /// Shell integration's scripts (PowerShell's, zsh's, and those for servers), next to the app; for the background
+    /// host off Windows (in the app's host/ folder), the app's.
+    /// </summary>
+    public static string ShellScripts { get; } = FolderNextToApp("shell");
+
+    private static string FolderNextToApp(string name)
+    {
+        var own = Path.Combine(AppContext.BaseDirectory, name);
+        var parent = Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(AppContext.BaseDirectory));
+        var app = parent is null ? own : Path.Combine(parent, name);
+        return Directory.Exists(own) || !Directory.Exists(app) ? own : app;
+    }
 
     /// <summary>A program's file name on this system: "ssh.exe" on Windows, "ssh" elsewhere.</summary>
     public static string Exe(string name) => OperatingSystem.IsWindows() ? name + ".exe" : name;

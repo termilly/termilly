@@ -326,6 +326,18 @@ public sealed class SessionProfileTests : IDisposable
     }
 
     [Fact]
+    public void Zsh_starts_with_termillys_startup_files_and_keeps_the_users_folder()
+    {
+        var zsh = new SessionProfile("zsh", "zsh", "/bin/zsh", "bash", "/bin/zsh -l", ProfileSources.Local);
+        var (commandLine, vars) = SessionLaunch.WithShellIntegration(zsh, new Dictionary<string, string> { ["ZDOTDIR"] = "/home/me/.config/zsh" });
+        Assert.Equal("/bin/zsh -l", commandLine);
+        Assert.Equal(SessionLaunch.ZshFolder, vars["ZDOTDIR"]);
+        Assert.Equal("/home/me/.config/zsh", vars["TERMILLY_USER_ZDOTDIR"]);
+        Assert.False(vars.ContainsKey("PROMPT_COMMAND")); // zsh doesn't read bash's
+        Assert.True(File.Exists(Path.Combine(SessionLaunch.ZshFolder, ".zshrc")));
+    }
+
+    [Fact]
     public void Every_terminal_tells_wsl_it_is_in_termilly()
     {
         if (!OperatingSystem.IsWindows())

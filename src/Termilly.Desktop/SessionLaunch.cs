@@ -152,6 +152,9 @@ internal static class SessionLaunch
                 // The script's text runs as a script block rather than as a file: execution policy covers only
                 // script files, so this works on a clean Windows (Restricted) without loosening the user's policy.
                 return ($"{profile.CommandLine} -NoExit -Command \"{PowerShellIntegrationCommand(script)}\"", withMarks);
+            case (ProfileSources.Local, ProfileIcons.Bash) when profile.Id == ZshMarks.Shell && Directory.Exists(ZshFolder):
+                AddZshMarks(withMarks, vars);
+                return (profile.CommandLine, withMarks);
             case (ProfileSources.Local, ProfileIcons.Bash):
                 AddBashMarks(withMarks);
                 if (!OperatingSystem.IsWindows() && File.Exists(script))
@@ -219,6 +222,33 @@ internal static class SessionLaunch
                                  (OperatingSystem.IsWindows() ? "" : @"printf '\033]7;file://%s%s\007' ""$HOSTNAME"" ""$PWD""; ") +
                                  @"printf '\033]133;D;%s\007\033]133;A\007' ""$__termilly_status""; }";
     }
+
+    /// <summary>
+    /// zsh reads neither PS0 nor PROMPT_COMMAND: it starts with ZDOTDIR at shell/zsh, whose startup files read the
+    /// user's own (from their ZDOTDIR, else ~) and then shell/termilly.zsh, which marks prompts and commands as
+    /// <see cref="AddBashMarks"/> does. The user's ZDOTDIR is theirs again once the startup files have run.
+    /// </summary>
+    private static void AddZshMarks(Dictionary<string, string> withMarks, IReadOnlyDictionary<string, string> vars)
+    {
+        var own = vars.TryGetValue(ZshMarks.ZDotDir, out var set) ? set : System.Environment.GetEnvironmentVariable(ZshMarks.ZDotDir);
+        if (!string.IsNullOrEmpty(own))
+        {
+            withMarks[ZshMarks.UserZDotDir] = own;
+        }
+        withMarks[ZshMarks.ZDotDir] = ZshFolder;
+    }
+
+    /// <summary>The variables zsh's startup files go by (<see cref="AddZshMarks"/>).</summary>
+    private static class ZshMarks
+    {
+        public const string ZDotDir = "ZDOTDIR";
+        public const string UserZDotDir = "TERMILLY_USER_ZDOTDIR";
+        /// <summary>zsh's profile id (SessionProfiles.UnixShells names a shell's profile after its file).</summary>
+        public const string Shell = "zsh";
+    }
+
+    /// <summary>zsh's startup files for Termilly's terminals (see shell/zsh), next to the app.</summary>
+    internal static string ZshFolder { get; } = Path.Combine(AppPaths.ShellScripts, "zsh");
 
     /// <summary>
     /// cmd's PROMPT with the marks around <paramref name="own"/> (the user's PROMPT, or cmd's default): a prompt
