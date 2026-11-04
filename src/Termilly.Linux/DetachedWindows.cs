@@ -15,6 +15,7 @@ namespace Termilly.Linux;
 internal static class DetachedWindows
 {
     private const string Gtk = "libgtk-3.so.0";
+    private const string Gdk = "libgdk-3.so.0";
     private const string GObject = "libgobject-2.0.so.0";
     private const string WebKit = "libwebkit2gtk-4.1.so.0";
     private const string JavaScriptCore = "libjavascriptcoregtk-4.1.so.0";
@@ -195,6 +196,7 @@ internal static class DetachedWindows
     {
         var window = gtk_window_new(GtkWindowToplevel);
         gtk_window_set_decorated(window, 0); // the page's header is its title bar
+        SeeThrough(window, view);
         webkit_window_properties_get_geometry(webkit_web_view_get_window_properties(view), out var geometry);
         if (geometry.Width > 0 && geometry.Height > 0)
         {
@@ -209,6 +211,32 @@ internal static class DetachedWindows
         Open[view] = new Opened(window, name);
         g_signal_connect_data(window, "delete-event", OnDelete, view, IntPtr.Zero, 0);
         gtk_widget_show_all(window);
+    }
+
+    /// <summary>
+    /// See-through, as the main window (LinuxWindow): what shows in the corners the page rounds (app.css) is what's
+    /// behind the window, not GTK's or WebKit's own background.
+    /// </summary>
+    private static void SeeThrough(IntPtr window, IntPtr view)
+    {
+        var visual = gdk_screen_get_rgba_visual(gtk_widget_get_screen(window));
+        if (visual != IntPtr.Zero)
+        {
+            gtk_widget_set_visual(window, visual);
+        }
+        GtkWindow.ClearBackground(window);
+        var clear = new GdkRgba();
+        webkit_web_view_set_background_color(view, ref clear);
+    }
+
+    /// <summary>A GdkRGBA: red, green, blue and alpha, 0 to 1 (all 0: see-through).</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    private struct GdkRgba
+    {
+        public double Red;
+        public double Green;
+        public double Blue;
+        public double Alpha;
     }
 
     /// <summary>window.close() in its page (it has taken back what it showed): the window goes.</summary>
@@ -260,6 +288,10 @@ internal static class DetachedWindows
     [DllImport(Gtk)] private static extern void gtk_widget_show_all(IntPtr widget);
     [DllImport(Gtk)] private static extern void gtk_widget_destroy(IntPtr widget);
     [DllImport(Gtk)] private static extern void gtk_window_set_decorated(IntPtr window, int decorated);
+    [DllImport(Gtk)] private static extern IntPtr gtk_widget_get_screen(IntPtr widget);
+    [DllImport(Gtk)] private static extern void gtk_widget_set_visual(IntPtr widget, IntPtr visual);
+    [DllImport(Gdk)] private static extern IntPtr gdk_screen_get_rgba_visual(IntPtr screen);
+    [DllImport(WebKit)] private static extern void webkit_web_view_set_background_color(IntPtr view, ref GdkRgba color);
     [DllImport(Gtk)] private static extern void gtk_window_iconify(IntPtr window);
     [DllImport(Gtk)] private static extern void gtk_window_maximize(IntPtr window);
     [DllImport(Gtk)] private static extern void gtk_window_unmaximize(IntPtr window);
