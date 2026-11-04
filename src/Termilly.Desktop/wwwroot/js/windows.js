@@ -105,7 +105,8 @@ export const isDetached = key => open.has(key);
  * @param {{ el: HTMLElement, title: string, onClosed: (el: HTMLElement) => void, onMoved?: () => void,
  *   onResize?: () => void, askClose?: () => unknown, at?: { x: number, y: number }, header?: HTMLElement,
  *   close?: () => unknown, keepDoubleClick?: string, dragHandle?: string, minWidth?: number, onDragged?: Dragged,
- *   remember?: boolean, place?: { x: number, y: number }, returnable?: boolean }} options
+ *   remember?: boolean, place?: { x: number, y: number }, returnable?: boolean, firstPlace?: WindowPlace }} options
+ *   firstPlace: where it opens, and its size, while it remembers none yet (the first time ever).
  *   at: the screen point the window's top left corner goes near (a drag's drop); else over where the element is.
  *   place: exactly where on the screen its page's top left corner goes (where a dragged picture of it was let go); the
  *   picture goes once the window shows.
@@ -115,10 +116,10 @@ export const isDetached = key => open.has(key);
  *   remember: it opens where it was last time (its size too; at still picks the place), kept when it goes (keepPlaces)
  */
 export function detach(key, options) {
-  const { el, title, onClosed, onMoved, onResize, askClose, at, place, header, close, keepDoubleClick, dragHandle, minWidth = MIN_WIDTH_PX, onDragged, remember = false, returnable = true } = options;
+  const { el, title, onClosed, onMoved, onResize, askClose, at, place, header, close, keepDoubleClick, dragHandle, minWidth = MIN_WIDTH_PX, onDragged, remember = false, returnable = true, firstPlace } = options;
   if (open.has(key)) return focusWindow(key), true;
   const r = el.getBoundingClientRect();
-  const last = remember ? places.get(key) : null;
+  const last = (remember ? places.get(key) : null) ?? firstPlace ?? null;
   const left = place ? place.x : at ? at.x - OFFSET_PX : last ? last.x : screenX + r.left + OFFSET_PX;
   const top = place ? place.y : at ? at.y - OFFSET_PX : last ? last.y : screenY + r.top + OFFSET_PX;
   // Where its picture was let go: the very size the picture had, as the place.

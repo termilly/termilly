@@ -408,6 +408,8 @@ function detachSnippets() {
   const close = () => closeSnippetsWindow();
   return detach(WINDOW_KEY, {
     el: box, title: NAME, askClose: close, close, header: head, remember: true, returnable: false,
+    // The first time ever: over the main window's middle, most of its size (then wherever it was last).
+    firstPlace: overTheMiddle(),
     // Its window gone without asking (Termilly closing): shut.
     onClosed: () => {
       backInLayer();
@@ -419,6 +421,15 @@ function detachSnippets() {
       (focusOnOpen ?? searchEl).focus();
     },
   });
+}
+
+/** How much of the main window the Snippets window takes the first time it opens. */
+const FIRST_SHARE = 0.8;
+
+/** Over the main window's middle, FIRST_SHARE of its size (screen and page pixels, as window.open takes them). */
+function overTheMiddle() {
+  const w = Math.round(innerWidth * FIRST_SHARE), h = Math.round(innerHeight * FIRST_SHARE);
+  return { x: Math.round(screenX + (innerWidth - w) / 2), y: Math.round(screenY + (innerHeight - h) / 2), w, h };
 }
 
 /** Back in its place in the page, from its window. */

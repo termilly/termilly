@@ -205,13 +205,16 @@ function setOpen(open) {
 }
 
 /**
- * Opens the Notepad on its page (New page and Open a file when it has none), with the caret in it unless `quiet`.
- * @param {{ quiet?: boolean }} [options]
+ * Opens the Notepad on its page (New page and Open a file when it has none), with the caret in it unless `quiet`;
+ * in its own window if it was in one when it closed, unless `here` (on its way into one already).
+ * @param {{ quiet?: boolean, here?: boolean }} [options]
  */
-function show({ quiet = false } = {}) {
+function show({ quiet = false, here = false } = {}) {
   if (!activePage()) state.notepad.activeId = pages()[0]?.id ?? null;
   setOpen(true);
   render();
+  // Closed while in a window of its own: it opens in it again, where it was (not docked), unless it's on its way there.
+  if (!here && state.notepad.detached && !isDetached(WINDOW_KEY)) return void detachNotepad();
   if (!quiet) (activePage() ? area : find(panel, `.np-empty [data-np="${NOTEPAD_ACTION.newPage}"]`)).focus();
 }
 
@@ -229,7 +232,8 @@ function hideNotepad() {
   const detached = isDetached(WINDOW_KEY);
   if (detached) closeWindow(WINDOW_KEY, { quiet: true });
   setOpen(false);
-  if (detached) dockBack();
+  // Back in the page, hidden; still one that opens in its own window next time.
+  if (detached) dockBack({ keepWindowed: true });
   restoreFocus();
 }
 
@@ -240,11 +244,11 @@ function hideNotepad() {
  * @param {{ x: number, y: number }} [place] exactly where its picture was let go (its top left corner)
  */
 function detachNotepad(at, place) {
-  if (panel.hidden) show({ quiet: true });
+  if (panel.hidden) show({ quiet: true, here: true });
   if (!isDetached(WINDOW_KEY)) dockedWidth = panel.offsetWidth;
   // Its room here is given back once it's in its window, and as that window is resized.
   return detach(WINDOW_KEY, {
-    el: panel, title: NAME, onClosed: dockBack, onResize: refreshDock,
+    el: panel, title: NAME, onClosed: () => dockBack(), onResize: refreshDock,
     onMoved: () => {
       keepDetached(true);
       area.focus();
@@ -272,8 +276,11 @@ function dockZone() {
 }
 
 /** Back in its place on the right, from its window, as it was. */
-function dockBack() {
-  keepDetached(false);
+/**
+ * @param {{ keepWindowed?: boolean }} [options] keepWindowed: only closed, it opens in its own window again next time
+ */
+function dockBack({ keepWindowed = false } = {}) {
+  if (!keepWindowed) keepDetached(false);
   byId(WORKSPACE_ID).append(panel);
   refreshDock();
   if (!panel.hidden) render();
@@ -293,8 +300,6 @@ export function initNotepad() {
   showCount();
   if (state.notepad.width) panel.style.width = `${state.notepad.width}px`;
   if (state.notepad.open) show({ quiet: true });
-  // In its own window when Termilly closed: there again, where it was.
-  if (state.notepad.open && state.notepad.detached) detachNotepad();
 }
 
 /**
