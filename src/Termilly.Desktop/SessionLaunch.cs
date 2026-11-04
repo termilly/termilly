@@ -174,15 +174,7 @@ internal static class SessionLaunch
                 return (profile.CommandLine, withMarks);
             case (ProfileSources.Local, ProfileIcons.Bash):
                 AddBashMarks(withMarks);
-                if (!OperatingSystem.IsWindows() && File.Exists(script))
-                {
-                    // `pwsh` typed at bash's prompt gets PowerShell's integration too: an exported bash function (bash
-                    // reads BASH_FUNC_name%% from its environment) starts it with the script. Only plain `pwsh`:
-                    // scripts and `pwsh -c …` run as they are.
-                    withMarks["TERMILLY_PWSH_SCRIPT"] = script;
-                    withMarks["BASH_FUNC_pwsh%%"] =
-                        """() { if [ $# -eq 0 ] && [ -f "$TERMILLY_PWSH_SCRIPT" ]; then TERMILLY_SHELL_INTEGRATION=1 command pwsh -NoExit -Command '. $env:TERMILLY_PWSH_SCRIPT'; else command pwsh "$@"; fi; }""";
-                }
+                AddPwshFunction(withMarks, script);
                 return (profile.CommandLine, withMarks);
             case (ProfileSources.Wsl, _):
                 AddBashMarks(withMarks);
@@ -239,6 +231,22 @@ internal static class SessionLaunch
                                  (OperatingSystem.IsWindows() ? "" : @"printf '\033]7;file://%s%s\007' ""$HOSTNAME"" ""$PWD""; ") +
                                  @"printf '\033]133;D;%s\007\033]133;A\007' ""$__termilly_status""; }; " +
                                  BashMarks.OldBashPreexec;
+    }
+
+    /// <summary>
+    /// Off Windows, `pwsh` typed at bash's prompt gets PowerShell's integration too: an exported bash function (bash
+    /// reads BASH_FUNC_name%% from its environment) starts it with the script. Only plain `pwsh`: scripts and
+    /// `pwsh -c …` run as they are.
+    /// </summary>
+    private static void AddPwshFunction(Dictionary<string, string> withMarks, string script)
+    {
+        if (OperatingSystem.IsWindows() || !File.Exists(script))
+        {
+            return;
+        }
+        withMarks["TERMILLY_PWSH_SCRIPT"] = script;
+        withMarks["BASH_FUNC_pwsh%%"] =
+            """() { if [ $# -eq 0 ] && [ -f "$TERMILLY_PWSH_SCRIPT" ]; then TERMILLY_SHELL_INTEGRATION=1 command pwsh -NoExit -Command '. $env:TERMILLY_PWSH_SCRIPT'; else command pwsh "$@"; fi; }""";
     }
 
     /// <summary>
