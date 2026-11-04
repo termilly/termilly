@@ -16,7 +16,7 @@ internal static class QuietErrors
     {
         if (OperatingSystem.IsWindows())
         {
-            SetErrorMode(GetErrorMode() | Quiet);
+            _ = SetErrorMode(GetErrorMode() | Quiet); // the mode before: not needed
         }
     }
 
