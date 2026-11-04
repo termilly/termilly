@@ -58,6 +58,9 @@ internal static class MacObjC
     public static IntPtr Send(IntPtr target, string selector, IntPtr first, IntPtr second) =>
         target == IntPtr.Zero ? IntPtr.Zero : msgSend(target, Sel(selector), first, second);
 
+    public static IntPtr Send(IntPtr target, string selector, IntPtr first, IntPtr second, IntPtr third, IntPtr fourth) =>
+        target == IntPtr.Zero ? IntPtr.Zero : msgSend(target, Sel(selector), first, second, third, fourth);
+
     public static void Send(IntPtr target, string selector, bool value)
     {
         if (target != IntPtr.Zero)
@@ -145,6 +148,7 @@ internal static class MacObjC
     [DllImport(LibObjC, EntryPoint = "objc_msgSend")] private static extern IntPtr msgSend(IntPtr target, IntPtr selector);
     [DllImport(LibObjC, EntryPoint = "objc_msgSend")] private static extern IntPtr msgSend(IntPtr target, IntPtr selector, IntPtr argument);
     [DllImport(LibObjC, EntryPoint = "objc_msgSend")] private static extern IntPtr msgSend(IntPtr target, IntPtr selector, IntPtr first, IntPtr second);
+    [DllImport(LibObjC, EntryPoint = "objc_msgSend")] private static extern IntPtr msgSend(IntPtr target, IntPtr selector, IntPtr first, IntPtr second, IntPtr third, IntPtr fourth);
     [DllImport(LibObjC, EntryPoint = "objc_msgSend")] private static extern void msgSend_bool(IntPtr target, IntPtr selector, byte argument);
     [DllImport(LibObjC, EntryPoint = "objc_msgSend")] private static extern void msgSend_double(IntPtr target, IntPtr selector, double argument);
     [DllImport(LibObjC, EntryPoint = "objc_msgSend")] private static extern byte msgSend_getBool(IntPtr target, IntPtr selector);

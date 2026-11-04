@@ -57,9 +57,16 @@ internal static class MacWindows
     // The methods added to Photino's UI delegate: kept here so they're never collected.
     private static readonly CreateWebView OnCreate = Create;
     private static readonly WebViewClosed OnClose = Closed;
+    private static readonly WindowClosing OnMainClosing = MainClosing;
 
     private delegate IntPtr CreateWebView(IntPtr self, IntPtr selector, IntPtr webView, IntPtr configuration, IntPtr action, IntPtr features);
     private delegate void WebViewClosed(IntPtr self, IntPtr selector, IntPtr webView);
+    private delegate void WindowClosing(IntPtr self, IntPtr selector, IntPtr notification);
+
+    /// <summary>The method added to Photino's UI delegate that hears the main window close.</summary>
+    private const string MainClosingSelector = "termillyMainWindowWillClose:";
+    /// <summary>The types of a method that takes an object and returns nothing.</summary>
+    private const string VoidWithObject = "v@:@";
 
     /// <summary>The main window (Photino's), once <see cref="Hook"/> found it.</summary>
     public static IntPtr Main { get; private set; }
@@ -105,11 +112,16 @@ internal static class MacWindows
                 if (cls != IntPtr.Zero)
                 {
                     AddMethod(cls, "webView:createWebViewWithConfiguration:forNavigationAction:windowFeatures:", OnCreate, "@@:@@@@");
-                    AddMethod(cls, "webViewDidClose:", OnClose, "v@:@");
+                    AddMethod(cls, "webViewDidClose:", OnClose, VoidWithObject);
                     // WebKit looks at what its delegate answers only when it's set: set again, it sees the new methods.
                     // (The delegate stays alive: Photino's script message handler holds it.)
                     Send(view, SetUIDelegate, IntPtr.Zero);
                     Send(view, SetUIDelegate, uiDelegate);
+                    // However the main window goes (its Close, which may skip the closing handler, or the system's),
+                    // the page's windows go with it: else the app runs on, with them, after its window is gone.
+                    AddMethod(cls, MainClosingSelector, OnMainClosing, VoidWithObject);
+                    Send(Send(Class("NSNotificationCenter"), "defaultCenter"), "addObserver:selector:name:object:",
+                        uiDelegate, Sel(MainClosingSelector), NsString("NSWindowWillCloseNotification"), window);
                 }
             }
         }
@@ -314,6 +326,9 @@ internal static class MacWindows
             Send(opened.Window, Cocoa.Close);
         }
     }
+
+    /// <summary>The main window is closing (NSWindowWillCloseNotification): the page's windows close too.</summary>
+    private static void MainClosing(IntPtr self, IntPtr selector, IntPtr notification) => CloseAll();
 
     /// <summary>The page says what it named the window it opened last: the oldest one not named yet is it.</summary>
     public static void Named(string name)
