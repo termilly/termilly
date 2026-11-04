@@ -1,10 +1,12 @@
 // @ts-check
-// Termilly's own tooltips, for every element with a title. The browser's (WebView2's, WebKitGTK's) skip a hover that
+// Termilly's own tooltips, for every element with a title, in every window (the main one and the windows of its own a
+// terminal, the Notepad or the Snippets window opens in). The browser's (WebView2's, WebKitGTK's) skip a hover that
 // comes back quickly and look different on each system. As the mouse comes to an element its title moves to
 // data-tip, so the browser's never shows; a title set again later is taken the next time. Right after one shows, the
 // next shows at once, as moving along a toolbar expects.
 
 import { MOUSE_OVER } from './dom.js';
+import { inEachDocument } from './windows.js';
 
 /** How long the mouse rests before a tooltip shows, and how soon after one hid the next shows at once (ms). */
 const SHOW_MS = 450;
@@ -15,19 +17,12 @@ const EDGE = 8;
 const TIP_ATTR = 'title';
 const TITLED = '[title], [data-tip]';
 
-const tip = document.createElement('div');
-tip.className = 'tip';
-tip.setAttribute('role', 'tooltip');
-tip.hidden = true;
-document.body.append(tip);
-
-/** @type {HTMLElement | null} */
-let target = null;
-let timer = 0;
-let hiddenAt = 0;
-/** Where the mouse is: an element redrawn under it (a sidebar row) is found again there. */
-let mouseX = -1;
-let mouseY = -1;
+/**
+ * One window's tooltips: its document and window, its tooltip element, the element the mouse rests on, the timer that
+ * shows it, when the last one hid, where the mouse is, and what follows a title changing while it shows.
+ * @typedef {{ doc: Document, win: Window, tip: HTMLElement, target: HTMLElement | null, timer: number, hiddenAt: number,
+ *   mouseX: number, mouseY: number, watcher: MutationObserver }} Tips
+ */
 
 /**
  * An element's tooltip text: its title, moved to data-tip (and kept as its name for screen readers when it has no
@@ -45,71 +40,96 @@ function textOf(el) {
   return el.dataset.tip ?? '';
 }
 
-/** A title set while its tooltip shows: the tooltip follows it. */
-const watcher = new MutationObserver(() => {
-  if (!target) return;
-  const text = textOf(target);
-  if (text) tip.textContent = text;
-  else hide();
-});
-
-function place() {
-  if (!target) return;
-  const r = target.getBoundingClientRect();
-  const w = tip.offsetWidth;
-  const h = tip.offsetHeight;
-  const left = Math.max(EDGE, Math.min(window.innerWidth - w - EDGE, r.left + r.width / 2 - w / 2));
+/** @param {Tips} t */
+function place(t) {
+  if (!t.target) return;
+  const r = t.target.getBoundingClientRect();
+  const w = t.tip.offsetWidth;
+  const h = t.tip.offsetHeight;
+  const left = Math.max(EDGE, Math.min(t.win.innerWidth - w - EDGE, r.left + r.width / 2 - w / 2));
   const below = r.bottom + GAP;
-  const top = below + h + EDGE <= window.innerHeight ? below : Math.max(EDGE, r.top - GAP - h);
-  tip.style.left = `${Math.round(left)}px`;
-  tip.style.top = `${Math.round(top)}px`;
+  const top = below + h + EDGE <= t.win.innerHeight ? below : Math.max(EDGE, r.top - GAP - h);
+  t.tip.style.left = `${Math.round(left)}px`;
+  t.tip.style.top = `${Math.round(top)}px`;
 }
 
-function show() {
-  if (target && !target.isConnected) {
+/** @param {Tips} t */
+function show(t) {
+  if (t.target && !t.target.isConnected) {
     // Redrawn while the mouse rested on it: the one there now.
-    const now = /** @type {HTMLElement | null} */ (document.elementFromPoint(mouseX, mouseY)?.closest(TITLED) ?? null);
-    watcher.disconnect();
-    target = now;
-    if (now) watcher.observe(now, { attributes: true, attributeFilter: [TIP_ATTR] });
+    const now = /** @type {HTMLElement | null} */ (t.doc.elementFromPoint(t.mouseX, t.mouseY)?.closest(TITLED) ?? null);
+    t.watcher.disconnect();
+    t.target = now;
+    if (now) t.watcher.observe(now, { attributes: true, attributeFilter: [TIP_ATTR] });
   }
-  if (!target) return hide();
-  const text = textOf(target);
+  if (!t.target) return hide(t);
+  const text = textOf(t.target);
   if (!text) return;
-  tip.textContent = text;
-  tip.hidden = false;
-  place();
+  t.tip.textContent = text;
+  t.tip.hidden = false;
+  place(t);
 }
 
-function hide() {
-  clearTimeout(timer);
-  watcher.disconnect();
-  if (!tip.hidden) {
-    tip.hidden = true;
-    hiddenAt = Date.now();
+/** @param {Tips} t */
+function hide(t) {
+  t.win.clearTimeout(t.timer);
+  t.watcher.disconnect();
+  if (!t.tip.hidden) {
+    t.tip.hidden = true;
+    t.hiddenAt = Date.now();
   }
-  target = null;
+  t.target = null;
 }
 
-document.addEventListener('mousemove', e => { mouseX = e.clientX; mouseY = e.clientY; }, { capture: true, passive: true });
-document.addEventListener(MOUSE_OVER, e => {
+/**
+ * The mouse came to an element: its tooltip shows after a rest (at once right after another hid).
+ * @param {Tips} t
+ * @param {Event} e
+ */
+function over(t, e) {
   const el = /** @type {HTMLElement | null} */ (/** @type {Element} */ (e.target).closest?.(TITLED) ?? null);
-  if (el === target) return;
-  hide();
+  if (el === t.target) return;
+  hide(t);
   if (!el || !textOf(el)) return;
-  target = el;
-  watcher.observe(el, { attributes: true, attributeFilter: [TIP_ATTR] });
-  timer = window.setTimeout(show, Date.now() - hiddenAt < WARM_MS ? 0 : SHOW_MS);
-}, true);
-
-// Leaving the window, clicking, typing or scrolling puts it away (until the mouse comes to another element).
-document.documentElement.addEventListener('mouseleave', hide);
-for (const type of ['mousedown', 'keydown', 'wheel']) {
-  window.addEventListener(type, () => {
-    const el = target;
-    hide();
-    // Still over it: no tooltip again until the mouse leaves it.
-    target = el;
-  }, true);
+  t.target = el;
+  t.watcher.observe(el, { attributes: true, attributeFilter: [TIP_ATTR] });
+  t.timer = t.win.setTimeout(() => show(t), Date.now() - t.hiddenAt < WARM_MS ? 0 : SHOW_MS);
 }
-window.addEventListener('blur', hide);
+
+/**
+ * Tooltips in one window's document.
+ * @param {Document} doc
+ */
+function install(doc) {
+  const tip = doc.createElement('div');
+  tip.className = 'tip';
+  tip.setAttribute('role', 'tooltip');
+  tip.hidden = true;
+  doc.body.append(tip);
+  /** @type {Tips} */
+  const t = {
+    doc, win: /** @type {Window} */ (doc.defaultView), tip, target: null, timer: 0, hiddenAt: 0, mouseX: -1, mouseY: -1,
+    // A title set while its tooltip shows: the tooltip follows it.
+    watcher: new MutationObserver(() => {
+      if (!t.target) return;
+      const text = textOf(t.target);
+      if (text) t.tip.textContent = text;
+      else hide(t);
+    }),
+  };
+  doc.addEventListener('mousemove', e => { t.mouseX = e.clientX; t.mouseY = e.clientY; }, { capture: true, passive: true });
+  doc.addEventListener(MOUSE_OVER, e => over(t, e), true);
+  // Leaving the window, clicking, typing or scrolling puts it away (until the mouse comes to another element).
+  doc.documentElement.addEventListener('mouseleave', () => hide(t));
+  for (const type of ['mousedown', 'keydown', 'wheel']) {
+    t.win.addEventListener(type, () => {
+      const el = t.target;
+      hide(t);
+      // Still over it: no tooltip again until the mouse leaves it.
+      t.target = el;
+    }, true);
+  }
+  t.win.addEventListener('blur', () => hide(t));
+}
+
+inEachDocument(install);
