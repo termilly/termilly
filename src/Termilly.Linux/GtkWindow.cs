@@ -150,7 +150,10 @@ internal static class GtkWindow
         }
         gtk_widget_set_opacity(window, 0);
         g_signal_connect_data(view, "load-changed", OnLoadChanged, window, IntPtr.Zero, 0);
-        g_timeout_add(RevealAfterMs, OnRevealTimeout, window);
+        if (g_timeout_add(RevealAfterMs, OnRevealTimeout, window) == 0)
+        {
+            gtk_widget_set_opacity(window, 1); // no timer: not hidden at all, rather than maybe for good
+        }
     }
 
     /// <summary>The longest the window stays invisible.</summary>
