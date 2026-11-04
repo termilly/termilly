@@ -389,6 +389,15 @@ onHost(HOST.notepadOpened, m => {
 
 // ---- Copying text to a note ----
 
+/**
+ * Copies text from here, and tells Clipboard (it keeps it even when it keeps Termilly's own copies only).
+ * @param {string} text
+ */
+function copyOut(text) {
+  navigator.clipboard.writeText(text).catch(() => {});
+  send(PAGE.clipCopied, { text, source: NAME });
+}
+
 /** The selection in the page, else the whole page: what Copy to note takes. */
 function chosenText() {
   const { selectionStart: from, selectionEnd: to, value } = area;
@@ -460,8 +469,8 @@ function pageMenu(e) {
   const selected = start !== end;
   const selection = area.value.slice(start, end);
   showMenu([
-    { label: 'Cut', icon: MENU_ICONS.cut, hint: 'Ctrl+X', disabled: !selected, action: () => { navigator.clipboard.writeText(selection).catch(() => {}); insert(''); } },
-    { label: COPY, icon: ICONS.copy, hint: MENU_KEYS.copy, disabled: !selected, action: () => navigator.clipboard.writeText(selection).catch(() => {}) },
+    { label: 'Cut', icon: MENU_ICONS.cut, hint: 'Ctrl+X', disabled: !selected, action: () => { copyOut(selection); insert(''); } },
+    { label: COPY, icon: ICONS.copy, hint: MENU_KEYS.copy, disabled: !selected, action: () => copyOut(selection) },
     { label: PASTE_LABEL, icon: ICONS.paste, hint: MENU_KEYS.paste, action: () => paste() },
     { label: 'Paste as plain text', icon: MENU_ICONS.pastePlain, title: 'Without the colour codes, control characters and trailing spaces a terminal adds', action: () => paste(plainText) },
     SEPARATOR,
@@ -584,7 +593,7 @@ tabsEl.addEventListener('contextmenu', e => {
     {
       label: 'Copy path', icon: ICONS.copy, disabled: !path, title: path ? path : 'Not saved to a file yet',
       action: () => {
-        navigator.clipboard.writeText(/** @type {string} */ (path)).catch(() => {});
+        copyOut(/** @type {string} */ (path));
         showToast({ text: `Copied ${path}` });
       },
     },

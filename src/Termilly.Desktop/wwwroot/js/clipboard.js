@@ -24,6 +24,7 @@ import { isShortcut, KEY_ID } from './keymap.js';
 import { pathActions } from './actions.js';
 import { copyToNotepadItem, copyToNoteItem, PASTE_TO_NOTEPAD, PASTE_TO_NOTE } from './notepad.js';
 import { parentOf } from './filepaths.js';
+import { inEachDocument } from './windows.js';
 
 /** @typedef {import('./protocol.js').ClipView} Clip */
 
@@ -244,6 +245,34 @@ function noteCopy(text, body, link) {
 }
 
 setClipHooks(menuEntries, noteCopy);
+
+/** Where a copy made outside the terminals came from, by the part of the page it was made in, else Termilly. */
+const COPY_SOURCES = [['.notepad-panel', 'Notepad'], ['.snippets-win', 'Snippets']];
+/** A terminal's own copies are told by it (noteCopy), not here. */
+const IN_TERMINAL = '.xterm';
+
+/**
+ * A copy or cut anywhere else in Termilly (the Notepad, the Snippets window, any field), in any of its windows: told
+ * to Clipboard too, so it's kept even when Clipboard keeps Termilly's own copies only (the system's own watcher, off
+ * then, would have caught it).
+ * @param {ClipboardEvent} e
+ */
+function onCopy(e) {
+  const at = /** @type {HTMLElement | null} */ (e.target instanceof Node ? (e.target.nodeType === Node.ELEMENT_NODE ? e.target : e.target.parentElement) : null);
+  if (!at || at.closest(IN_TERMINAL)) return;
+  const field = /** @type {HTMLInputElement | HTMLTextAreaElement} */ (at);
+  const text = 'selectionStart' in field && typeof field.value === 'string' && field.selectionStart !== null
+    ? field.value.slice(field.selectionStart, field.selectionEnd ?? field.selectionStart)
+    : at.ownerDocument.getSelection()?.toString() ?? '';
+  if (!text) return;
+  const source = COPY_SOURCES.find(([part]) => at.closest(part))?.[1] ?? PRODUCT.name;
+  send(PAGE.clipCopied, { text, source });
+}
+
+inEachDocument(doc => {
+  doc.addEventListener('copy', onCopy, true);
+  doc.addEventListener('cut', onCopy, true);
+});
 
 // ---- The panel ----
 
