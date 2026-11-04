@@ -121,10 +121,7 @@ export function updateHeader(tab) {
   find(header, '.badge-slot').innerHTML = tabBadgeHtml(tab);
   showEnvironment(tab, header);
   const name = /** @type {HTMLElement | null} */ (header.querySelector(PANE_NAME));
-  if (name) {
-    name.textContent = shownName(tab);
-    name.title = 'Double-click to rename';
-  }
+  if (name) name.textContent = shownName(tab);
   find(header, '.pane-tags').innerHTML = tab.tags.map(t => tagChipHtml(t)).join('');
   find(header, STOP_BUTTON).hidden = !isAgentWorking(tab);
   find(header, PROMPTS_BUTTON).hidden = !hasPrompts(tab);
