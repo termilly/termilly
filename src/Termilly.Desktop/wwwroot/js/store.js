@@ -84,9 +84,11 @@ export const getSetting = path => {
 /**
  * A Notepad page (js/notepad.js): its name, text, the file it was opened from or saved to, and the text as that file
  * holds it (to tell unsaved changes), whether the file has Windows line ends, and where it was left: scrolled to and
- * the caret (or the selection), to come back there after a restart.
+ * the caret (or the selection), to come back there after a restart, and its view switches (js/notepad.js: links, word
+ * wrap, line numbers, the caret's line marked; unset, the Notepad's own or their defaults).
  * @typedef {{ id: string, name: string, text: string, path?: string | null, saved?: string | null, crlf?: boolean,
- *   scroll?: number, caret?: number, caretEnd?: number }} NotepadPage
+ *   scroll?: number, caret?: number, caretEnd?: number,
+ *   links?: boolean, wrap?: boolean, numbers?: boolean, highlight?: boolean }} NotepadPage
  */
 /**
  * The Clipboard panel (js/clipboard.js) as it was left: open or closed, its width, what its search box held, the
@@ -99,10 +101,10 @@ export const getSetting = path => {
  * @typedef {{ open: boolean, width?: number, tabId?: string | null, folders?: string[], scroll?: number }} FilesState
  */
 /**
- * The Notepad: open or closed, its pages, the one shown, its width, and whether it shows links and wraps words (both
- * unless turned off).
+ * The Notepad: open or closed, its pages, the one shown, its width, its text's size (Ctrl+wheel), and the view switches
+ * pages had before each had its own.
  * @typedef {{ open: boolean, pages: NotepadPage[], activeId: string | null, width?: number, links?: boolean, wrap?: boolean,
- *   detached?: boolean }} NotepadState
+ *   detached?: boolean, numbers?: boolean, highlight?: boolean, fontSize?: number }} NotepadState
  */
 
 /**
