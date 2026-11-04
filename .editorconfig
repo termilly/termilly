@@ -101,7 +101,7 @@ dotnet_naming_symbols.const_fields.required_modifiers = const
 # Test names are sentences (A_deleted_folder_gives_way_to_the_next_then_home).
 dotnet_diagnostic.CA1707.severity = none
 
-[{src/Termilly.Pty/Unix/Native.cs,src/Termilly.Linux/GtkWindow.cs,src/Termilly.Linux/DetachedWindows.cs,src/Termilly.Linux/MacWindowDrag.cs,src/Termilly.Linux/LinuxClipboard.cs,src/Termilly.Linux/MacClipboard.cs,src/Termilly.Desktop/LibSecret.cs}]
+[{src/Termilly.Pty/Unix/Native.cs,src/Termilly.Linux/GtkWindow.cs,src/Termilly.Linux/DetachedWindows.cs,src/Termilly.Linux/MacWindowDrag.cs,src/Termilly.Linux/MacObjC.cs,src/Termilly.Linux/LinuxClipboard.cs,src/Termilly.Linux/MacClipboard.cs,src/Termilly.Desktop/LibSecret.cs}]
 # CA2101 wants Windows' UTF-16 marshalling for P/Invoke strings. The Unix calls here (libc, GTK, WebKitGTK, libsecret, objc) take UTF-8
 # and say so with [MarshalAs(UnmanagedType.LPUTF8Str)], which the rule does not know about.
 dotnet_diagnostic.CA2101.severity = none

@@ -1,15 +1,15 @@
 using System.Drawing;
-using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
-using Photino.NET;
 using Termilly.Desktop.Messaging;
+using static Termilly.Linux.MacObjC;
 
 namespace Termilly.Linux;
 
 /// <summary>
-/// Moves and resizes the window from the page on macOS, as GtkWindow does on Linux. Cocoa has no "start a move with
+/// Moves and resizes a window from the page on macOS, as GtkWindow does on Linux. Cocoa has no "start a move with
 /// the pointer that's down" a page's message could still catch (the mouse-down event is long gone when the message
-/// comes), so the window follows the pointer itself until the left button is let go.
+/// comes), so the window follows the pointer itself until the left button is let go. The main window and the page's
+/// own (MacWindows) alike: their frames are Cocoa's, from the bottom left, as the pointer's place is.
 /// </summary>
 [SupportedOSPlatform("macos")]
 internal static class MacWindowDrag
@@ -18,59 +18,56 @@ internal static class MacWindowDrag
     private static readonly TimeSpan Step = TimeSpan.FromMilliseconds(8);
     /// <summary>pressedMouseButtons' bit for the left button.</summary>
     private const nuint LeftButton = 1;
-    private const string LibObjC = "/usr/lib/libobjc.A.dylib";
 
     private static int _following;
 
-    /// <summary>Moves the window with the pointer, until the button is let go.</summary>
-    public static void BeginMove(PhotinoWindow window) => Follow(window, (start, _, dx, dy) => (new Point(start.X + dx, start.Y + dy), null));
+    /// <summary>Moves the window with the pointer, until the button is let go; then <paramref name="done"/>.</summary>
+    public static void BeginMove(IntPtr window, Action<Action> onMain, Action? done = null) =>
+        Follow(window, onMain, done, (start, dx, dy) => start with { X = start.X + dx, Y = start.Y + dy });
 
-    /// <summary>Resizes the window from one edge or corner, until the button is let go; never below its minimum size.</summary>
-    public static void BeginResize(PhotinoWindow window, string edge, Size min)
+    /// <summary>Resizes the window from one edge or corner, until the button is let go; never below <paramref name="min"/>.</summary>
+    public static void BeginResize(IntPtr window, string edge, Size min, Action<Action> onMain, Action? done = null)
     {
         bool west = edge.Contains(ResizeEdges.West, StringComparison.Ordinal), east = edge.Contains(ResizeEdges.East, StringComparison.Ordinal);
         bool north = edge.StartsWith(ResizeEdges.North, StringComparison.Ordinal), south = edge.StartsWith(ResizeEdges.South, StringComparison.Ordinal);
-        Follow(window, (start, size, dx, dy) =>
+        Follow(window, onMain, done, (start, dx, dy) =>
         {
-            var width = Math.Max(min.Width, size.Width + (east ? dx : west ? -dx : 0));
-            var height = Math.Max(min.Height, size.Height + (south ? dy : north ? -dy : 0));
-            // The west and north edges move the window's corner by however much the size really changed.
-            var at = new Point(start.X + (west ? size.Width - width : 0), start.Y + (north ? size.Height - height : 0));
-            return (at, new Size(width, height));
+            // Cocoa's y grows upwards: the top edge follows the pointer up, the bottom one moves the frame's origin.
+            var width = Math.Max(min.Width, start.Width + (east ? dx : west ? -dx : 0));
+            var height = Math.Max(min.Height, start.Height + (north ? dy : south ? -dy : 0));
+            return new Rect(start.X + (west ? start.Width - width : 0), start.Y + (south ? start.Height - height : 0), width, height);
         });
     }
 
     /// <summary>
-    /// Follows the pointer on a thread of its own while the left button is down, placing the window (on its own
-    /// thread) by how far the pointer has gone. Cocoa's y grows upwards; the window's grows downwards.
+    /// Follows the pointer on a thread of its own while the left button is down, setting the window's frame (on the
+    /// main thread) by how far the pointer has gone.
     /// </summary>
-    private static void Follow(PhotinoWindow window, Func<Point, Size, int, int, (Point At, Size? Size)> place)
+    private static void Follow(IntPtr window, Action<Action> onMain, Action? done, Func<Rect, double, double, Rect> place)
     {
-        if (Interlocked.Exchange(ref _following, 1) == 1)
+        if (window == IntPtr.Zero || Interlocked.Exchange(ref _following, 1) == 1)
         {
             return;
         }
-        Point start = window.Location;
-        Size size = window.Size;
+        var start = SendRect(window, Cocoa.Frame);
         var from = Pointer();
         new Thread(() =>
         {
             try
             {
+                var last = start;
                 while ((PressedButtons() & LeftButton) != 0)
                 {
                     var now = Pointer();
-                    var (at, newSize) = place(start, size, (int)Math.Round(now.X - from.X), (int)Math.Round(from.Y - now.Y));
-                    window.Invoke(() =>
+                    var frame = place(start, Math.Round(now.X - from.X), Math.Round(now.Y - from.Y));
+                    if (frame != last)
                     {
-                        if (newSize is { } resized)
-                        {
-                            window.SetSize(resized);
-                        }
-                        window.SetLocation(at);
-                    });
+                        last = frame;
+                        onMain(() => SetFrame(window, frame));
+                    }
                     Thread.Sleep(Step);
                 }
+                done?.Invoke();
             }
             finally
             {
@@ -79,21 +76,17 @@ internal static class MacWindowDrag
         }) { IsBackground = true, Name = "window-drag" }.Start();
     }
 
-    private static readonly IntPtr NSEvent = objc_getClass("NSEvent");
-    private static readonly IntPtr MouseLocation = sel_registerName("mouseLocation");
-    private static readonly IntPtr PressedMouseButtons = sel_registerName("pressedMouseButtons");
+    private static readonly IntPtr NSEvent = Class("NSEvent");
 
     /// <summary>Where the pointer is, in Cocoa's screen points (from the bottom left).</summary>
-    private static CGPoint Pointer() => objc_msgSend_point(NSEvent, MouseLocation);
+    private static Point2 Pointer() => objc_msgSend_point(NSEvent, Sel("mouseLocation"));
 
-    private static nuint PressedButtons() => objc_msgSend_buttons(NSEvent, PressedMouseButtons);
+    private static nuint PressedButtons() => (nuint)Send(NSEvent, "pressedMouseButtons");
 
-    [StructLayout(LayoutKind.Sequential)]
-    private readonly record struct CGPoint(double X, double Y);
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private readonly record struct Point2(double X, double Y);
 
-    [DllImport(LibObjC)] private static extern IntPtr objc_getClass([MarshalAs(UnmanagedType.LPUTF8Str)] string name);
-    [DllImport(LibObjC)] private static extern IntPtr sel_registerName([MarshalAs(UnmanagedType.LPUTF8Str)] string name);
     // Two doubles come back in registers on arm64 and x86_64 alike, so plain objc_msgSend (not _stret) returns them.
-    [DllImport(LibObjC, EntryPoint = "objc_msgSend")] private static extern CGPoint objc_msgSend_point(IntPtr receiver, IntPtr selector);
-    [DllImport(LibObjC, EntryPoint = "objc_msgSend")] private static extern nuint objc_msgSend_buttons(IntPtr receiver, IntPtr selector);
+    [System.Runtime.InteropServices.DllImport("/usr/lib/libobjc.A.dylib", EntryPoint = "objc_msgSend")]
+    private static extern Point2 objc_msgSend_point(IntPtr receiver, IntPtr selector);
 }

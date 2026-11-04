@@ -3,6 +3,7 @@
 
 import { PAGE, HOST } from './protocol.js';
 import { send, onHost } from './host.js';
+import './macwindow.js';
 import {
   state, restore, newId, emit, saveNow, WORKSPACE_COLORS, PROFILE_SOURCES, agentChanged, markSeen, GROUPS, EVENTS, sourceOf, SPLIT,
 } from './store.js';
@@ -430,6 +431,7 @@ byId('search-button').addEventListener('click', () => openPalette());
 
 onHost(HOST.windowState, m => {
   document.body.classList.toggle('maximized', m.maximized);
+  document.body.classList.toggle('window-inactive', !m.active); // macOS's traffic lights go grey (app.css)
   find(document, '[data-window="maximize"]').title = m.maximized ? RESTORE_LABEL : 'Maximize';
   // Back from minimized: the page may never have lost focus, so the window's focus event below doesn't come.
   if (setWindowState(m)) seeFocused();

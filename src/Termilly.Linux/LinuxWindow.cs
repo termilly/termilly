@@ -59,6 +59,10 @@ internal sealed class LinuxWindow
         {
             DetachedWindows.SetZoom(_zoom / (double)InterfaceSettings.DefaultZoom);
         }
+        else if (OperatingSystem.IsMacOS())
+        {
+            MacWindows.SetZoom(_zoom / (double)InterfaceSettings.DefaultZoom);
+        }
     }
 
     public LinuxWindow() => new Thread(SendLoop) { IsBackground = true, Name = "page-outbox" }.Start();
@@ -85,7 +89,7 @@ internal sealed class LinuxWindow
         {
             window.SetIconFile(icon);
         }
-        Follow(platform, window, quit);
+        Follow(platform, window, channel, quit);
         host.Start();
         window.Load(StartPage);
         window.WaitForClose();
@@ -132,26 +136,36 @@ internal sealed class LinuxWindow
             .RegisterMinimizedHandler((_, _) => PostState(channel, window!, minimized: true))
             .RegisterFocusInHandler((_, _) => PostState(channel, window!, active: true))
             .RegisterFocusOutHandler((_, _) => PostState(channel, window!, active: false))
-            .RegisterWindowClosingHandler((_, _) =>
-            {
-                // As on Windows: Close asks before quitting while something runs (QuitGate)…
-                if (!quit.Quitting)
-                {
-                    quit.Ask(() => window!.Invoke(() => window.Close()));
-                    return true; // keep the window open for now
-                }
-                // …and with terminals to keep, the page first sends a last snapshot, then the window closes.
-                if (host.WantsLastSnapshot)
-                {
-                    host.RequestSnapshot();
-                    Task.Delay(SnapshotWait).ContinueWith(_ => window!.Invoke(() => window.Close()), TaskScheduler.Default);
-                    return true; // keep the window open for now
-                }
-                _closing = true;
-                DetachedWindows.CloseAll();
-                return false;
-            });
+            .RegisterWindowClosingHandler((_, _) => Closing(window!, host, quit));
         return window;
+    }
+
+    /// <summary>The window is asked to close: true keeps it open for now.</summary>
+    private bool Closing(PhotinoWindow window, PageHost host, QuitGate quit)
+    {
+        // As on Windows: Close asks before quitting while something runs (QuitGate)…
+        if (!quit.Quitting)
+        {
+            quit.Ask(() => window.Invoke(() => window.Close()));
+            return true; // keep the window open for now
+        }
+        // …and with terminals to keep, the page first sends a last snapshot, then the window closes.
+        if (host.WantsLastSnapshot)
+        {
+            host.RequestSnapshot();
+            Task.Delay(SnapshotWait).ContinueWith(_ => window.Invoke(() => window.Close()), TaskScheduler.Default);
+            return true; // keep the window open for now
+        }
+        _closing = true;
+        if (OperatingSystem.IsMacOS())
+        {
+            MacWindows.CloseAll();
+        }
+        else
+        {
+            DetachedWindows.CloseAll();
+        }
+        return false;
     }
 
     /// <summary>The window exists: messages may go to it, and its page may open windows of its own (DetachedWindows).</summary>
@@ -160,6 +174,10 @@ internal sealed class LinuxWindow
         // The page's own windows say where they are as they move and resize, to open there again (after a restart
         // too), as the Windows host's do.
         DetachedWindows.Placed = (name, x, y, w, h) => channel.Post(new ToPage.WindowPlaced(name, x, y, w, h));
+        if (OperatingSystem.IsMacOS())
+        {
+            MacWindows.Placed = DetachedWindows.Placed;
+        }
         _created = true;
         window.Invoke(() =>
         {
@@ -170,6 +188,11 @@ internal sealed class LinuxWindow
                 GtkWindow.ClearBackground(main);
                 DetachedWindows.Hook(main);
             }
+            else if (OperatingSystem.IsMacOS())
+            {
+                // Rounded corners, maximize, and the page's own windows (Photino does none of them on macOS).
+                MacWindows.Hook(action => window.Invoke(action), _zoom / (double)InterfaceSettings.DefaultZoom);
+            }
         });
     }
 
@@ -178,11 +201,14 @@ internal sealed class LinuxWindow
     {
         _minimized = minimized ?? _minimized;
         _active = active ?? _active;
-        channel.Post(new ToPage.WindowState(window.Maximized, _minimized, _active && !_minimized));
+        channel.Post(new ToPage.WindowState(IsMaximized(window), _minimized, _active && !_minimized));
     }
 
+    /// <summary>Photino on macOS fills the screen to maximize but never says it did (it asks for full screen): MacWindows knows.</summary>
+    private static bool IsMaximized(PhotinoWindow window) => OperatingSystem.IsMacOS() ? MacWindows.IsMaximized(MacWindows.Main) : window.Maximized;
+
     /// <summary>What the page asks of the window: close, come to the front, and the title bar's buttons and edges.</summary>
-    private static void Follow(PhotinoPlatform platform, PhotinoWindow window, QuitGate quit)
+    private void Follow(PhotinoPlatform platform, PhotinoWindow window, PageChannel channel, QuitGate quit)
     {
         platform.Attach(window);
         platform.CloseRequested += () =>
@@ -199,16 +225,29 @@ internal sealed class LinuxWindow
             window.SetTopMost(true);
             window.SetTopMost(false);
         });
-        platform.WindowActionRequested += action => window.Invoke(() => Do(window, action));
+        platform.WindowActionRequested += action => window.Invoke(() => Do(window, action, () => PostState(channel, window)));
     }
 
     /// <summary>One of the title bar's buttons or edges, on the window's thread.</summary>
-    private static void Do(PhotinoWindow window, FromPage.Window action)
+    /// <param name="changed">Tells the page the window's state, where Photino doesn't (macOS's maximize).</param>
+    private static void Do(PhotinoWindow window, FromPage.Window action, Action changed)
     {
         // A detached window's title bar (the page names the window): that window does it.
         if (action.Name is not null)
         {
-            DetachedWindows.Act(action.Name, action.Action, action.Edge);
+            if (OperatingSystem.IsMacOS())
+            {
+                MacWindows.Act(action.Name, action.Action, action.Edge);
+            }
+            else
+            {
+                DetachedWindows.Act(action.Name, action.Action, action.Edge);
+            }
+            return;
+        }
+        if (OperatingSystem.IsMacOS())
+        {
+            DoOnMac(window, action, changed);
             return;
         }
         switch (action.Action)
@@ -223,17 +262,44 @@ internal sealed class LinuxWindow
             case WindowActions.Quit:
                 window.Close(); // asks first when something is running (the closing handler)
                 break;
-            case WindowActions.Drag when OperatingSystem.IsMacOS():
-                MacWindowDrag.BeginMove(window);
-                break;
             case WindowActions.Drag:
                 GtkWindow.BeginMove();
                 break;
-            case WindowActions.Resize when !window.Maximized && action.Edge is { } edge && OperatingSystem.IsMacOS():
-                MacWindowDrag.BeginResize(window, edge, new Size(MinWidth, MinHeight));
-                break;
             case WindowActions.Resize when !window.Maximized && action.Edge is { } edge:
                 GtkWindow.BeginResize(edge);
+                break;
+        }
+    }
+
+    /// <summary>The main window's buttons and edges on macOS: maximize, moves and sizes are MacWindows'.</summary>
+    [System.Runtime.Versioning.SupportedOSPlatform("macos")]
+    private static void DoOnMac(PhotinoWindow window, FromPage.Window action, Action changed)
+    {
+        var main = MacWindows.Main;
+        void OnMain(Action run) => window.Invoke(run);
+        switch (action.Action)
+        {
+            case WindowActions.Minimize:
+                window.SetMinimized(true);
+                break;
+            case WindowActions.Maximize:
+                MacWindows.ToggleMaximized(main);
+                changed();
+                break;
+            case WindowActions.Close:
+            case WindowActions.Quit:
+                window.Close(); // asks first when something is running (the closing handler)
+                break;
+            case WindowActions.Drag:
+                if (MacWindows.IsMaximized(main))
+                {
+                    MacWindows.Unmaximized(main);
+                    changed();
+                }
+                MacWindowDrag.BeginMove(main, OnMain);
+                break;
+            case WindowActions.Resize when !MacWindows.IsMaximized(main) && action.Edge is { } edge:
+                MacWindowDrag.BeginResize(main, edge, new Size(MinWidth, MinHeight), OnMain);
                 break;
         }
     }

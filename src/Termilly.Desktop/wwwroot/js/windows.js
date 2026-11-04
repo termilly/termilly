@@ -10,7 +10,8 @@
 // buttons, copied), and the window's edges resize it, as the main window's do (the host moves and sizes it).
 
 import { PAGE, HOST } from './protocol.js';
-import { send, onHost } from './host.js';
+import { send, onHost, mac } from './host.js';
+import { MAC_LIGHTS, MAC_LIGHT_ORDER } from './macwindow.js';
 import { WINDOW_ACTION, DETACHED_WINDOW } from './constants.js';
 
 /**
@@ -133,6 +134,8 @@ export function detach(key, options) {
     if (place) takePictureAway();
     return false;
   }
+  // WebKit on macOS doesn't tell the host the name: the page does, before anything else about this window.
+  if (mac) send(PAGE.window, { action: WINDOW_ACTION.opened, name: NAME_PREFIX + key });
   open.set(key, { key, win, el, title, ready: false, onClosed, onMoved, onResize, askClose, header, close, keepDoubleClick, dragHandle, onDragged, remember, pictured: !!place, returnable });
   build(win);
   watch ||= window.setInterval(checkClosed, WATCH_MS);
@@ -249,7 +252,7 @@ function gone(d, quiet) {
   }
   // Its header goes back as it was; out of the closing window's page now, so it never goes down with it.
   d.chrome?.abort();
-  d.header?.querySelector(':scope > .detached-controls')?.remove();
+  for (const added of d.header?.querySelectorAll(`:scope > .detached-controls, :scope > .${MAC_LIGHTS}`) ?? []) added.remove();
   document.adoptNode(d.el);
   if (!quiet) d.onClosed(d.el);
 }
@@ -279,13 +282,20 @@ function addChrome(d, doc) {
     back.addEventListener('click', () => closeWindow(d.key));
     controls.append(back);
   }
-  for (const action of CONTROLS) {
+  // macOS: the traffic lights at the start of the header, as the main window's; Return and the pin stay at the end.
+  const lights = mac ? doc.createElement('div') : controls;
+  if (mac) {
+    lights.className = `window-controls ${MAC_LIGHTS}`;
+    d.header.prepend(lights);
+  }
+  for (const action of mac ? MAC_LIGHT_ORDER : CONTROLS) {
     // The main window's own button (its icons and title), its clicks this window's.
     const button = /** @type {HTMLElement} */ (document.querySelector(`.window-controls [data-window="${action}"]`)?.cloneNode(true));
     button.addEventListener('click', () => (action === WINDOW_ACTION.close ? (d.close ?? (() => closeWindow(d.key)))() : act(action)));
-    controls.append(button);
+    lights.append(button);
   }
   d.header.append(controls);
+  if (mac) lights.addEventListener('mousedown', e => e.preventDefault(), { signal });
   // Its buttons never take the keyboard from what the window shows.
   controls.addEventListener('mousedown', e => e.preventDefault());
   d.header.addEventListener('mousedown', e => {

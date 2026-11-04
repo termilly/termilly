@@ -187,6 +187,7 @@ export const WINDOW_ACTION = Object.freeze({
   solid: 'solid',
   onTop: 'onTop',
   notOnTop: 'notOnTop',
+  opened: 'opened',
 });
 
 /** C#: QuitAnswers (Messaging/Window.cs). */

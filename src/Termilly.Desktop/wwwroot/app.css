@@ -2657,6 +2657,32 @@ textarea.field { height: auto; padding: 7px 10px; line-height: 1.5; resize: vert
 :root[data-corners="round"] body:not(.maximized) { border-radius: var(--radius); contain: paint; }
 :root[data-corners="round"] body:not(.maximized)::after { border-radius: var(--radius); }
 
+/* macOS: the host rounds the windows' corners (MacWindows; square while maximized), and the 1px frame follows them. */
+:root[data-os="mac"] body:not(.maximized)::after { border-radius: var(--radius); }
+
+/* macOS: the traffic lights (js/macwindow.js) at the start of the title bar and of a detached window's header: red,
+   yellow and green circles whose signs show while the pointer is over them, grey while the window isn't in front. */
+:root[data-os="mac"] .mac-lights { align-items: center; gap: 8px; }
+:root[data-os="mac"] #titlebar .mac-lights { margin: 0 14px 0 12px; }
+:root[data-os="mac"] #titlebar .brand { margin-left: 0; }
+:root[data-os="mac"] #titlebar .tb-right > .separator:last-child { display: none; }
+:root[data-os="mac"] .detached-window .mac-lights { flex: none; margin: 0 10px 0 4px; }
+:root[data-os="mac"] .mac-lights button {
+  width: 12px; height: 12px; padding: 0; border-radius: 50%;
+  box-shadow: inset 0 0 0 0.5px rgb(0 0 0 / 0.2); color: transparent; transition: none;
+}
+:root[data-os="mac"] .mac-lights button[data-window="close"],
+:root[data-os="mac"] .mac-lights button[data-window="close"]:hover { background: #ff5f57; }
+:root[data-os="mac"] .mac-lights button[data-window="minimize"],
+:root[data-os="mac"] .mac-lights button[data-window="minimize"]:hover { background: #febc2e; }
+:root[data-os="mac"] .mac-lights button[data-window="maximize"],
+:root[data-os="mac"] .mac-lights button[data-window="maximize"]:hover { background: #28c840; }
+:root[data-os="mac"] .mac-lights:hover button { color: rgb(0 0 0 / 0.55); }
+:root[data-os="mac"] .mac-lights button:active { filter: brightness(0.82); }
+:root[data-os="mac"] body.window-inactive .mac-lights:not(:hover) button { background: var(--border-strong); box-shadow: none; }
+:root[data-os="mac"] .mac-lights svg { width: 12px; height: 12px; stroke-width: 1.2; }
+:root[data-os="mac"] .mac-lights svg .fill { fill: currentColor; stroke: none; }
+
 /* Start-up loader (Linux; js/loader.js). Matches the one the Windows window draws: the logo over a typed
    "Loading..." and a blinking caret, on the page's background. */
 #loader {

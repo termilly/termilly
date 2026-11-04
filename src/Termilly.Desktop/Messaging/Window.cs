@@ -24,6 +24,11 @@ internal static class WindowActions
     /// <summary>A detached window kept above every other window (its title bar's pin), and no longer.</summary>
     public const string OnTop = "onTop";
     public const string NotOnTop = "notOnTop";
+    /// <summary>
+    /// The page opened one of its windows, named as the message says (macOS: WebKit doesn't tell the host the name
+    /// window.open gave it).
+    /// </summary>
+    public const string Opened = "opened";
 }
 
 /// <summary>
