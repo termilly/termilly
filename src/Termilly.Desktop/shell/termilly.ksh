@@ -22,6 +22,7 @@ function PS1.get {
   typeset st=$?
   .sh.value=$'\e]7;file://'"${HOSTNAME:-$(hostname)}$PWD"$'\a\e]133;D;'"$st"$'\a\e]133;A\a'"${.sh.value}"
   __termilly_ready=1
+  return $st # $? stays the command's, for the prompt after an empty Enter too
 }
 # Before the first command after a prompt: its line, then the command starts (not for the prompt's own code, run
 # in PS1.get). Not when you have a DEBUG trap of your own (yours stays). ksh keeps $? for your command.
