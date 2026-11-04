@@ -42,7 +42,13 @@ internal sealed class LinuxClipboard : IClipboardWatch
     public event Action<ClipboardContent>? Changed;
 
     /// <summary>Listens from GTK's own loop (once it runs, whichever thread asks).</summary>
-    public void Start() => g_idle_add(_onStart, IntPtr.Zero);
+    public void Start()
+    {
+        if (g_idle_add(_onStart, IntPtr.Zero) == 0)
+        {
+            Listen(); // no loop to wait for: now
+        }
+    }
 
     private int Listen()
     {
