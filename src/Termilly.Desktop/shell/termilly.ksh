@@ -23,8 +23,8 @@ function PS1.get {
   .sh.value=$'\e]7;file://'"${HOSTNAME:-$(hostname)}$PWD"$'\a\e]133;D;'"$st"$'\a\e]133;A\a'"${.sh.value}"
   __termilly_ready=1
 }
-# Before the first command after a prompt: its line, then the command starts. Not when you have a DEBUG trap of
-# your own (yours stays).
+# Before the first command after a prompt: its line, then the command starts (not for the prompt's own code, run
+# in PS1.get). Not when you have a DEBUG trap of your own (yours stays). ksh keeps $? for your command.
 if [[ -z $(trap -p DEBUG) ]]; then
-  trap '[[ -n $__termilly_ready && ${.sh.command} != __termilly_ready=1 ]] && { __termilly_ready=; print -rn -- $'"'"'\e]633;E;'"'"'"${.sh.command}"$'"'"'\a\e]133;C\a'"'"'; }' DEBUG
+  trap '[[ ${.sh.fun-} != PS1.get && -n $__termilly_ready ]] && { __termilly_ready=; print -rn -- $'"'"'\e]633;E;'"'"'"${.sh.command}"$'"'"'\a\e]133;C\a'"'"'; }' DEBUG
 fi
