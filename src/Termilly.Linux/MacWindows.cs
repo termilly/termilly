@@ -102,8 +102,8 @@ internal static class MacWindows
                     AddMethod(cls, "webViewDidClose:", OnClose, "v@:@");
                     // WebKit looks at what its delegate answers only when it's set: set again, it sees the new methods.
                     // (The delegate stays alive: Photino's script message handler holds it.)
-                    Send(view, "setUIDelegate:", IntPtr.Zero);
-                    Send(view, "setUIDelegate:", uiDelegate);
+                    Send(view, SetUIDelegate, IntPtr.Zero);
+                    Send(view, SetUIDelegate, uiDelegate);
                 }
             }
         }
@@ -170,13 +170,8 @@ internal static class MacWindows
             Round(window, true);
             return;
         }
-        var screen = Send(window, "screen");
-        if (screen == IntPtr.Zero)
-        {
-            screen = Send(Class(Cocoa.Screen), "mainScreen");
-        }
         Restore[window] = SendRect(window, Cocoa.Frame);
-        SetFrame(window, SendRect(screen, "visibleFrame"));
+        SetFrame(window, UsableArea(window));
         Round(window, false);
     }
 
@@ -214,7 +209,7 @@ internal static class MacWindows
             var view = InitWithFrame(Send(Class(WebViewClass), Cocoa.Alloc), SendRect(content, "bounds"), configuration);
             Send(view, "setAutoresizingMask:", (nint)FillParent);
             Send(content, "addSubview:", view);
-            Send(view, "setUIDelegate:", self);
+            Send(view, SetUIDelegate, self);
             Send(view, "setNavigationDelegate:", Send(webView, "navigationDelegate"));
             Send(view, Cocoa.SetMagnification, _zoom);
             Round(window, true);
@@ -241,7 +236,44 @@ internal static class MacWindows
         var height = Feature(Features.Height, main.Height);
         var left = Feature("x", main.X);
         var top = Feature("y", screenHeight - main.Y - main.Height);
-        return new Rect(left, screenHeight - top - height, width, height);
+        return OnScreen(new Rect(left, screenHeight - top - height, width, height), main);
+    }
+
+    /// <summary>How far down from a window's top its title bar is looked for on a screen, in points.</summary>
+    private const double TitleBarDepth = 20;
+
+    /// <summary>
+    /// The frame, if its title bar is on one of the screens; else the same size (no bigger than the main window's
+    /// screen) over the main window's middle. WebKit on macOS tells the page no true window places (screenX and
+    /// screenY are 0 and the screen's height), so a place the page worked out from them may be off every screen.
+    /// </summary>
+    private static Rect OnScreen(Rect frame, Rect main)
+    {
+        var screens = Send(Class(Cocoa.Screen), Cocoa.Screens);
+        var count = (nint)Send(screens, Cocoa.Count);
+        double x = frame.X + frame.Width / 2, y = frame.Y + frame.Height - TitleBarDepth;
+        for (nint i = 0; i < count; i++)
+        {
+            var area = SendRect(Send(screens, Cocoa.ObjectAtIndex, i), VisibleFrame);
+            if (x >= area.X && x <= area.X + area.Width && y >= area.Y && y <= area.Y + area.Height)
+            {
+                return frame;
+            }
+        }
+        var screen = UsableArea(Main);
+        var width = Math.Min(frame.Width, screen.Width);
+        var height = Math.Min(frame.Height, screen.Height);
+        return new Rect(main.X + (main.Width - width) / 2, main.Y + (main.Height - height) / 2, width, height);
+    }
+
+    private const string VisibleFrame = "visibleFrame";
+    private const string SetUIDelegate = "setUIDelegate:";
+
+    /// <summary>The window's screen (else the main screen) but the Dock and the menu bar.</summary>
+    private static Rect UsableArea(IntPtr window)
+    {
+        var screen = Send(window, "screen");
+        return SendRect(screen != IntPtr.Zero ? screen : Send(Class(Cocoa.Screen), "mainScreen"), VisibleFrame);
     }
 
     /// <summary>window.close() in a window's page (it has given back what it showed): the window goes.</summary>
@@ -261,6 +293,7 @@ internal static class MacWindows
         if (Open.Find(o => o.Name is null) is { } opened)
         {
             opened.Name = name;
+            Report(opened); // its true place: the page's own (screenX) isn't (OnScreen)
         }
     }
 
