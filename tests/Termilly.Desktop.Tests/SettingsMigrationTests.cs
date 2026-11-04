@@ -29,9 +29,7 @@ public sealed class SettingsMigrationTests : IDisposable
     {
         var settings = SettingsFile.Load(Copy("v1-default.json"));
 
-        // Version 1's default theme was Dark, which its file says: a file from then keeps it (today's default is System).
-        var defaults = new AppSettings().Normalize();
-        Assert.Equal(Json(defaults with { Interface = defaults.Interface with { Theme = SettingValues.Theme.Dark } }), Json(settings));
+        Assert.Equal(Json(new AppSettings().Normalize()), Json(settings));
     }
 
     [Fact]

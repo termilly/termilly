@@ -14,7 +14,12 @@ internal static class SettingValues
         public const string Light = "light";
         /// <summary>Follow the system's light or dark mode.</summary>
         public const string System = "system";
-        public const string Default = System;
+        public const string Default = Dark;
+        /// <summary>
+        /// What a first start has: Dark on Windows, the system's light or dark mode on Linux and macOS (an invalid
+        /// saved theme becomes it too).
+        /// </summary>
+        public static string FirstStart => OperatingSystem.IsWindows() ? Dark : System;
     }
 
     public static class CursorStyle
