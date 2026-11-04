@@ -6,5 +6,7 @@ src/Termilly.Desktop/shell/zsh/.z* text eol=lf
 src/Termilly.Desktop/shell/tcsh/.tcshrc text eol=lf
 *.tcsh text eol=lf
 *.ksh  text eol=lf
+*.fish text eol=lf
+*.nu   text eol=lf
 # Batch files need CRLF: cmd.exe misreads some lines with LF only.
 *.cmd  text eol=crlf

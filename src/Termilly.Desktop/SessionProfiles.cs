@@ -155,42 +155,94 @@ internal static partial class SessionProfiles
     internal static string SshCommand => AppPaths.Exe(SshConnections.SshProgram);
 
     /// <summary>
+    /// Shells people install that /etc/shells seldom lists (it lists only those someone made a login shell).
+    /// </summary>
+    private static readonly string[] InstalledShells = ["bash", "zsh", "fish", "nu", Shells.Pwsh, "xonsh", "elvish", "ksh", "tcsh"];
+
+    /// <summary>Shells with no -l: elvish stops at a flag it doesn't know.</summary>
+    private static readonly string[] NoLoginFlag = ["elvish"];
+
+    /// <summary>The system's own folders: a shell there is the one that came with it (macOS's bash 3.2).</summary>
+    private static readonly string[] SystemFolders = ["/bin", "/usr/bin", "/sbin", "/usr/sbin"];
+
+    /// <summary>
+    /// Where package managers and installers put shells: Homebrew (Apple silicon, Intel, Linux), pkg installers and
+    /// MacPorts, Nix, snap, cargo and pip (~ is the user's home).
+    /// </summary>
+    private static readonly string[] PackageFolders =
+    [
+        "/opt/homebrew/bin", "/usr/local/bin", "/opt/local/bin", "/home/linuxbrew/.linuxbrew/bin",
+        "~/.nix-profile/bin", "/run/current-system/sw/bin", "/etc/profiles/per-user/{user}/bin", "/snap/bin",
+        "~/.cargo/bin", "~/.local/bin",
+    ];
+
+    /// <summary>
     /// Shells on Linux and other Unix systems: the login shell ($SHELL) first, then the others listed in /etc/shells
-    /// that exist, one per name (bash, zsh, fish…), started as login shells so the profile is read.
+    /// and those package managers installed (<see cref="PackageFolders"/>), started as login shells so the profile is
+    /// read. See <see cref="PickUnixShells"/>.
     /// </summary>
     private static IEnumerable<SessionProfile> UnixShells()
     {
-        var paths = new List<string>();
-        if (Environment.GetEnvironmentVariable("SHELL") is { Length: > 0 } login)
-        {
-            paths.Add(login);
-        }
+        var listed = new List<string>();
         try
         {
-            paths.AddRange(File.ReadAllLines("/etc/shells").Select(l => l.Trim()).Where(l => l.StartsWith('/')));
+            listed.AddRange(File.ReadAllLines("/etc/shells").Select(l => l.Trim()).Where(l => l.StartsWith('/')));
         }
         catch (Exception e) when (Storage.IsFileError(e))
         {
         }
-        var seen = new HashSet<string>();
-        foreach (var path in paths.Where(File.Exists))
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var installed = PackageFolders
+            .Select(f => f.Replace("~", home).Replace("{user}", Environment.UserName))
+            .SelectMany(f => InstalledShells.Select(n => $"{f}/{n}"));
+        return PickUnixShells(Environment.GetEnvironmentVariable("SHELL"), listed, installed, File.Exists);
+    }
+
+    /// <summary>
+    /// The shells to offer, one per name (bash, zsh, fish…), in the order first found: the login shell, those
+    /// <paramref name="listed"/> in /etc/shells, those <paramref name="installed"/>. Of two with a name, the login
+    /// shell wins, else one a package manager installed beats the system's own (Homebrew's bash 5 over macOS's 3.2):
+    /// it was installed to be used. Shells that aren't for people (nologin, rbash, the dash behind sh) are left out;
+    /// with none left, sh.
+    /// </summary>
+    internal static IEnumerable<SessionProfile> PickUnixShells(
+        string? login, IEnumerable<string> listed, IEnumerable<string> installed, Func<string, bool> exists)
+    {
+        var candidates = (string.IsNullOrEmpty(login) ? [] : new[] { login }).Concat(listed).Concat(installed).Where(exists);
+        var chosen = new List<string>();
+        foreach (var path in candidates)
         {
             var name = Path.GetFileName(path);
-            // Shells that aren't for people (nologin, rbash, the dash behind sh) are left out.
-            if (NotForPeople.Contains(name) || !seen.Add(name))
+            if (NotForPeople.Contains(name))
             {
                 continue;
             }
+            var at = chosen.FindIndex(c => Path.GetFileName(c) == name);
+            if (at < 0)
+            {
+                chosen.Add(path);
+            }
+            else if (chosen[at] != login && IsSystemShell(chosen[at]) && !IsSystemShell(path))
+            {
+                chosen[at] = path;
+            }
+        }
+        if (chosen.Count == 0)
+        {
+            yield return new SessionProfile(Shells.Sh, Shells.Sh, UnixSh, ProfileIcons.Bash, UnixSh, ProfileSources.Local);
+            yield break;
+        }
+        foreach (var path in chosen)
+        {
+            var name = Path.GetFileName(path);
             // PowerShell gets its own integration (shell/termilly.ps1); its -Login must come first.
             yield return name == Shells.Pwsh
                 ? new SessionProfile(name, Shells.PowerShellName, path, ProfileIcons.PowerShell, $"{path} -Login -NoLogo", ProfileSources.Local)
-                : new SessionProfile(name, name, path, ProfileIcons.Bash, $"{path} -l", ProfileSources.Local);
-        }
-        if (seen.Count == 0)
-        {
-            yield return new SessionProfile(Shells.Sh, Shells.Sh, UnixSh, ProfileIcons.Bash, UnixSh, ProfileSources.Local);
+                : new SessionProfile(name, name, path, ProfileIcons.Bash, NoLoginFlag.Contains(name) ? path : $"{path} -l", ProfileSources.Local);
         }
     }
+
+    private static bool IsSystemShell(string path) => SystemFolders.Contains(path[..Math.Max(path.LastIndexOf('/'), 0)]);
 
     private static IEnumerable<SessionProfile> WslShells()
     {

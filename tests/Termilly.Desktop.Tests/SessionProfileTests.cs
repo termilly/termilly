@@ -365,6 +365,49 @@ public sealed class SessionProfileTests : IDisposable
         Assert.True(File.Exists(SessionLaunch.KshScript));
     }
 
+    [Theory]
+    [InlineData("fish", "fish/vendor_conf.d/termilly.fish")]
+    [InlineData("nu", "nushell/vendor/autoload/termilly.nu")]
+    public void Fish_and_nu_start_with_termillys_data_folder_first_and_keep_the_users(string id, string file)
+    {
+        var shell = new SessionProfile(id, id, $"/opt/homebrew/bin/{id}", "bash", $"/opt/homebrew/bin/{id} -l", ProfileSources.Local);
+        var (commandLine, vars) = SessionLaunch.WithShellIntegration(shell, new Dictionary<string, string> { ["XDG_DATA_DIRS"] = "/my/share" });
+        Assert.Equal($"/opt/homebrew/bin/{id} -l", commandLine);
+        Assert.Equal($"{SessionLaunch.XdgFolder}:/my/share", vars["XDG_DATA_DIRS"]);
+        Assert.Equal("/my/share", vars["TERMILLY_USER_XDG_DATA_DIRS"]);
+        Assert.False(vars.ContainsKey("PROMPT_COMMAND"));
+        Assert.True(File.Exists(Path.Combine(SessionLaunch.XdgFolder, file)));
+        // Unset: what it means then (the XDG default) follows Termilly's folder, and there's nothing to put back.
+        var (_, unset) = SessionLaunch.WithShellIntegration(shell, new Dictionary<string, string> { ["XDG_DATA_DIRS"] = "" });
+        Assert.Equal($"{SessionLaunch.XdgFolder}:/usr/local/share:/usr/share", unset["XDG_DATA_DIRS"]);
+        Assert.False(unset.ContainsKey("TERMILLY_USER_XDG_DATA_DIRS"));
+    }
+
+    [Fact]
+    public void Shells_from_package_managers_are_offered_and_beat_the_systems_own()
+    {
+        var exists = new HashSet<string>
+        {
+            "/bin/zsh", "/bin/bash", "/bin/tcsh", "/bin/dash", "/opt/homebrew/bin/bash", "/opt/homebrew/bin/fish",
+            "/opt/homebrew/bin/zsh", "/usr/local/bin/pwsh", "/Users/me/.cargo/bin/nu", "/opt/homebrew/bin/elvish",
+        };
+        var profiles = SessionProfiles.PickUnixShells(
+            "/bin/zsh",
+            ["/bin/bash", "/bin/zsh", "/bin/tcsh", "/bin/dash", "/bin/ksh"],
+            ["/opt/homebrew/bin/bash", "/opt/homebrew/bin/zsh", "/opt/homebrew/bin/fish", "/usr/local/bin/pwsh", "/Users/me/.cargo/bin/nu", "/opt/homebrew/bin/elvish"],
+            exists.Contains).ToList();
+        Assert.Equal(["zsh", "bash", "tcsh", "fish", "pwsh", "nu", "elvish"], profiles.Select(p => p.Id));
+        Assert.Equal("/bin/zsh -l", profiles[0].CommandLine); // the login shell stays the one it is
+        Assert.Equal("/opt/homebrew/bin/bash -l", profiles[1].CommandLine); // Homebrew's bash 5 over macOS's 3.2
+        Assert.Equal("/usr/local/bin/pwsh -Login -NoLogo", profiles[4].CommandLine);
+        Assert.Equal("powershell", profiles[4].Icon);
+        Assert.Equal("/opt/homebrew/bin/elvish", profiles[6].CommandLine); // elvish has no -l
+    }
+
+    [Fact]
+    public void Without_shells_there_is_sh() =>
+        Assert.Equal("sh", Assert.Single(SessionProfiles.PickUnixShells(null, [], [], _ => false)).Id);
+
     [Fact]
     public void Every_terminal_tells_wsl_it_is_in_termilly()
     {

@@ -197,6 +197,9 @@ const OSC = Object.freeze({
   iterm: 1337,
 });
 
+/** The option of a command mark (133;C) that carries its line, percent-encoded. */
+const CMDLINE_URL = 'cmdline_url=';
+
 /** How much image data a terminal keeps for its inline images, in MB. */
 const IMAGE_STORAGE_MB = 64;
 /** When a restored terminal scrolls to where it was: once the new shell has cleared its screen. */
@@ -805,6 +808,13 @@ function shellMark(tab, data) {
   } else if (mark === 'B') {
     inputStarted(tab);
   } else if (mark === 'C' && tab.shellMarks) {
+    // fish 4 sends the command line with the mark (C;cmdline_url=<percent-encoded>), as kitty's marks do.
+    const line = data.split(';').find(o => o.startsWith(CMDLINE_URL));
+    if (line) {
+      try {
+        commandReported(tab, decodeURIComponent(line.slice(CMDLINE_URL.length)));
+      } catch { /* not percent-encoded after all: what was typed will do */ }
+    }
     tab.command = { startedAt: Date.now() };
     commandStarted(tab);
     const shell = shellOf(tab);

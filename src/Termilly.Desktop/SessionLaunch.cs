@@ -169,6 +169,9 @@ internal static class SessionLaunch
             case (ProfileSources.Local, ProfileIcons.Bash) when profile.Id == KshMarks.Shell && File.Exists(KshScript):
                 AddKshMarks(withMarks, vars);
                 return (profile.CommandLine, withMarks);
+            case (ProfileSources.Local, ProfileIcons.Bash) when profile.Id is XdgMarks.Fish or XdgMarks.Nu && Directory.Exists(XdgFolder):
+                AddXdgMarks(withMarks, vars);
+                return (profile.CommandLine, withMarks);
             case (ProfileSources.Local, ProfileIcons.Bash):
                 AddBashMarks(withMarks);
                 if (!OperatingSystem.IsWindows() && File.Exists(script))
@@ -292,6 +295,35 @@ internal static class SessionLaunch
         }
         withMarks[KshMarks.Env] = KshScript;
     }
+
+    /// <summary>
+    /// fish and nushell read startup files from each folder XDG_DATA_DIRS lists (fish/vendor_conf.d,
+    /// nushell/vendor/autoload): they start with shell/xdg first, whose files put the user's XDG_DATA_DIRS back and
+    /// mark prompts and commands as <see cref="AddBashMarks"/> does (fish 4 marks them itself: then only what it
+    /// doesn't). Unset, XDG_DATA_DIRS means /usr/local/share and /usr/share, so those follow Termilly's folder.
+    /// </summary>
+    private static void AddXdgMarks(Dictionary<string, string> withMarks, IReadOnlyDictionary<string, string> vars)
+    {
+        var own = vars.TryGetValue(XdgMarks.DataDirs, out var set) ? set : System.Environment.GetEnvironmentVariable(XdgMarks.DataDirs);
+        if (!string.IsNullOrEmpty(own))
+        {
+            withMarks[XdgMarks.UserDataDirs] = own;
+        }
+        withMarks[XdgMarks.DataDirs] = $"{XdgFolder}:{(string.IsNullOrEmpty(own) ? XdgMarks.Default : own)}";
+    }
+
+    /// <summary>The variables fish's and nushell's start goes by (<see cref="AddXdgMarks"/>), and their profile ids.</summary>
+    private static class XdgMarks
+    {
+        public const string DataDirs = "XDG_DATA_DIRS";
+        public const string UserDataDirs = "TERMILLY_USER_XDG_DATA_DIRS";
+        public const string Default = "/usr/local/share:/usr/share";
+        public const string Fish = "fish";
+        public const string Nu = "nu";
+    }
+
+    /// <summary>fish's and nushell's startup files for Termilly's terminals (see shell/xdg), next to the app.</summary>
+    internal static string XdgFolder { get; } = Path.Combine(AppPaths.ShellScripts, "xdg");
 
     /// <summary>The variables tcsh's start goes by (<see cref="AddTcshMarks"/>), and the profile ids it covers.</summary>
     private static class TcshMarks
