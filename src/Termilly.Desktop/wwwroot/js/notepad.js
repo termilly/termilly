@@ -7,7 +7,7 @@
 import { PAGE, HOST } from './protocol.js';
 import { send, onHost, platform, PLATFORM } from './host.js';
 import { state, persist, newId, tabTitle, wsById } from './store.js';
-import { restoreFocus, stripBar, wireDragOut } from './panes.js';
+import { restoreFocus, stripBar, wireDragOut, systemDrag } from './panes.js';
 import { scheduleFit } from './terminals.js';
 import { escapeHtml, cssColor, tabBadgeHtml, countText, ICONS } from './ui.js';
 import { byId, find, targetOf, dockRight, onMiddleClick, WORKSPACE_ID, DOCK_GRIP } from './dom.js';
@@ -231,18 +231,24 @@ function hideNotepad() {
 }
 
 /**
- * Into a window of its own, opened first if it's closed; its header is the window's title bar, Close closes it.
+ * Into a window of its own, opened first if it's closed; its header is the window's title bar, Close closes it, and
+ * moved back over the main window it docks back there. False when no window could be opened.
  * @param {{ x: number, y: number }} [at] where on the screen it opens (dragged out by its header), else over its place
+ * @param {{ x: number, y: number }} [place] exactly where its picture was let go (its top left corner)
  */
-function detachNotepad(at) {
+function detachNotepad(at, place) {
   if (panel.hidden) show({ quiet: true });
   // Its room here is given back once it's in its window, and as that window is resized.
-  detach(WINDOW_KEY, {
+  return detach(WINDOW_KEY, {
     el: panel, title: NAME, onClosed: dockBack, onResize: refreshDock, onMoved: () => area.focus(),
-    at, remember: true,
+    at, place, remember: true, dropBack: true,
     header: head, close: hideNotepad,
+    dragHandle: systemDrag ? NOTEPAD_HANDLE : undefined,
   });
 }
+
+/** Its handle in a window of its own on Linux: its title, dragged back into the main window (js/panes.js). */
+const NOTEPAD_HANDLE = '.files-title';
 
 /** Back in its place on the right, from its window, as it was. */
 function dockBack() {
@@ -555,10 +561,10 @@ panel.addEventListener('keydown', e => {
 
 button.addEventListener('click', () => toggleNotepad());
 
-// Its header dragged toward the app window's edges takes it out into a window of its own (the title bar's icon on the
-// label that follows the pointer).
+// Its header dragged out of the app window takes it out into a window of its own, as a terminal's (js/panes.js).
 wireDragOut(head, panel, {
-  name: NAME, icon: /** @type {Element} */ (button.firstElementChild).outerHTML, detach: at => detachNotepad(at),
+  name: NAME, icon: /** @type {Element} */ (button.firstElementChild).outerHTML, detach: detachNotepad,
+  back: () => closeWindow(WINDOW_KEY), isDetached: () => isDetached(WINDOW_KEY), handle: NOTEPAD_HANDLE,
 });
 
 // ---- Docked on the right: the terminals and the Files panel end where it starts ----

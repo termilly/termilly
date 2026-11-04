@@ -352,25 +352,20 @@ export const ATTACH_LABEL = 'Back to the workspace';
  * @param {Tab} tab
  * @param {{ x: number, y: number }} [at] where on the screen it opens (a drag's drop), else over where the pane is
  * @param {{ x: number, y: number }} [place] exactly where its picture was let go (its top left corner): it opens there,
- *   and the picture goes once it's in its window
+ *   and the picture goes once it shows (js/windows.js)
  */
 export function detachTab(tab, at, place) {
   const ws = wsById(tab.wsId);
   if (!ws || !tab.view || tab.detached) return;
   const { el } = tab.view;
-  const opened = detach(windowKey(tab), {
-    el, title: tabTitle(tab), at, place, onClosed: () => attachTab(tab), onResize: scheduleFit,
-    onMoved: () => {
-      moved(tab);
-      if (place) showDragPicture(null);
-    },
+  detach(windowKey(tab), {
+    el, title: tabTitle(tab), at, place, onClosed: () => attachTab(tab), onResize: scheduleFit, onMoved: () => moved(tab),
     // Its title bar is the window's; Close there closes the terminal, and its name keeps its double click (rename).
     header: tab.view.header, close: () => closeTab(tab), keepDoubleClick: PANE_NAME,
     // Linux: its icon and name are dragged back into the main window (the system's drag and drop).
     dragHandle: systemDrag ? DRAG_HANDLE : undefined,
     onDragged: (x, y, dropped) => dragBack(tab, x, y, dropped),
   });
-  if (!opened && place) showDragPicture(null);
 }
 
 /**
@@ -950,7 +945,7 @@ function showGroupTab(node) {
  * it opens in a window of its own; a detached one, dragged by its icon and name, lands back in the main window
  * wherever it's let go (a drop zone, else where it was). Not on macOS, which has no windows of their own yet.
  */
-const systemDrag = platform === PLATFORM.linux && !/Mac/.test(navigator.platform);
+export const systemDrag = platform === PLATFORM.linux && !/Mac/.test(navigator.platform);
 /** The root's data-tab-drag while terminals are dragged with the system's drag and drop (app.css). */
 const SYSTEM_DRAG = 'system';
 // The page's root says so (detached windows take it too): app.css marks the handle there.
@@ -978,9 +973,19 @@ const MOVE = 'move';
 const LEFT_AFTER_MS = 100;
 
 /**
- * The terminal dragged with the system's drag and drop, while it is: where it would land in the main window, whether
- * it's over the main window, whether it was dropped there, and the check that it has left (leftTimer, while pending).
- * @type {{ tab: Tab, drop: Drop | null, over: boolean, dropped: boolean, leftTimer: number } | null}
+ * A panel (the Notepad, the Snippets window) dragged by its title bar as a terminal is: its name and icon (markup),
+ * what opens it in a window of its own (near a screen point, or exactly at place, its top left corner) and whether it
+ * did, what puts it back in its place, whether it's in a window of its own now, and its handle there (Linux: what's
+ * dragged back; the rest of its title bar moves the window).
+ * @typedef {{ name: string, icon: string, detach: (at?: { x: number, y: number }, place?: { x: number, y: number }) => boolean,
+ *   back: () => void, isDetached: () => boolean, handle: string }} PanelDrag
+ */
+
+/**
+ * The terminal or panel dragged with the system's drag and drop, while it is: where a terminal would land in the main
+ * window, whether it's over the main window, whether it was dropped there, and the check that it has left (leftTimer,
+ * while pending).
+ * @type {{ tab: Tab | null, panel: PanelDrag | null, drop: Drop | null, over: boolean, dropped: boolean, leftTimer: number } | null}
  */
 let systemDragged = null;
 
@@ -1004,28 +1009,54 @@ function wireSystemDrag(tab, header) {
     // Only a type of its own (no text: the desktop would take that as a file).
     e.dataTransfer.setData(TAB_TYPE, tab.id);
     e.dataTransfer.effectAllowed = MOVE;
-    setDragLabel(tab, header, e);
-    systemDragged = { tab, drop: null, over: false, dropped: false, leftTimer: 0 };
+    setDragLabel(tabBadgeHtml(tab), tabTitle(tab), header, e);
+    systemDragged = { tab, panel: null, drop: null, over: false, dropped: false, leftTimer: 0 };
     // Not while the drag is starting: changing the page then can cancel it.
     setTimeout(() => { if (systemDragged?.tab === tab && !tab.detached) enterMain(systemDragged); });
   });
-  header.addEventListener('dragend', e => endSystemDrag(tab, e));
+  header.addEventListener('dragend', e => endSystemDrag(e));
 }
 
 /**
- * The drag's picture: a rounded chip with the terminal's icon and name, put under the pointer where the drag starts.
- * It stays in the page until the drag is under way: WebKitGTK takes its picture after dragstart, and one taken away
- * sooner left the drag without any.
- * @param {Tab} tab
+ * A panel's title bar dragged with the system's drag and drop (Linux): out of the main window into a window of its
+ * own, and back by its handle.
+ * @param {HTMLElement} header
+ * @param {PanelDrag} panel
+ */
+function wireSystemPanelDrag(header, panel) {
+  header.draggable = true;
+  /** @type {HTMLElement | null} */
+  let pressed = null;
+  header.addEventListener('mousedown', e => { pressed = targetOf(e); }, true);
+  header.addEventListener('dragstart', e => {
+    const at = pressed ?? targetOf(e);
+    if (at.closest(CONTROLS) || (panel.isDetached() && !at.closest(panel.handle)) || !e.dataTransfer) return void e.preventDefault();
+    e.dataTransfer.setData(TAB_TYPE, panel.name);
+    e.dataTransfer.effectAllowed = MOVE;
+    setDragLabel(panel.icon, panel.name, header, e);
+    systemDragged = { tab: null, panel, drop: null, over: false, dropped: false, leftTimer: 0 };
+  });
+  header.addEventListener('dragend', e => endSystemDrag(e));
+}
+
+/** What in a title bar is its own (pressed, it does what it does; never a drag). */
+const CONTROLS = 'button, input, select, textarea';
+
+/**
+ * The drag's picture: a rounded chip with the icon and name of what's dragged, put under the pointer where the drag
+ * starts. It stays in the page until the drag is under way: WebKitGTK takes its picture after dragstart, and one taken
+ * away sooner left the drag without any.
+ * @param {string} icon markup
+ * @param {string} name
  * @param {HTMLElement} header
  * @param {DragEvent} e
  */
-function setDragLabel(tab, header, e) {
+function setDragLabel(icon, name, header, e) {
   const doc = /** @type {Document} */ (header.ownerDocument);
   const chip = doc.createElement('div');
   chip.className = DRAG_CHIP;
-  chip.innerHTML = `<span class="ghost-badge">${tabBadgeHtml(tab)}</span><span class="ghost-name"></span>`;
-  find(chip, GHOST_NAME).textContent = tabTitle(tab);
+  chip.innerHTML = `<span class="ghost-badge">${icon}</span><span class="ghost-name"></span>`;
+  find(chip, GHOST_NAME).textContent = name;
   chip.style.left = `${e.clientX - CHIP_GRIP.x}px`;
   chip.style.top = `${e.clientY - CHIP_GRIP.y}px`;
   doc.body.append(chip);
@@ -1042,7 +1073,7 @@ function setDragLabel(tab, header, e) {
 function enterMain(d) {
   clearTimeout(d.leftTimer);
   d.leftTimer = 0;
-  if (d.over) return;
+  if (d.over || !d.tab) return; // a panel shows nothing: it goes back to its own place
   d.over = true;
   const ws = activeWs();
   if (ws) showGuides(ws, d.tab);
@@ -1069,6 +1100,7 @@ document.addEventListener('dragover', e => {
   e.preventDefault();
   e.dataTransfer.dropEffect = MOVE;
   enterMain(d);
+  if (!d.tab) return void (d.over = true);
   d.drop = findDropTarget(d.tab, e.clientX, e.clientY) ?? (d.tab.detached ? wholeWorkspaceDrop(d.tab) : null);
   showDrop(d.drop);
 });
@@ -1088,26 +1120,29 @@ document.addEventListener('drop', e => {
   d.dropped = true;
   const drop = d.drop;
   leaveMain(d);
-  if (d.tab.detached) landBack(d.tab, drop ?? wholeWorkspaceDrop(d.tab));
-  else if (drop) dropPane(d.tab, drop, { x: e.screenX, y: e.screenY });
+  if (d.panel) {
+    if (d.panel.isDetached()) d.panel.back();
+  } else if (d.tab?.detached) landBack(d.tab, drop ?? wholeWorkspaceDrop(d.tab));
+  else if (d.tab && drop) dropPane(d.tab, drop, { x: e.screenX, y: e.screenY });
 });
 
 /**
- * The drag ended: dropped in the main window (done there), or let go anywhere else, where a terminal from the main
- * window opens in a window of its own (on X11 where it was let go; Wayland places it itself).
- * @param {Tab} tab
+ * The drag ended: dropped in the main window (done there), or let go anywhere else, where a terminal or panel from the
+ * main window opens in a window of its own (on X11 where it was let go; Wayland places it itself).
  * @param {DragEvent} e
  */
-function endSystemDrag(tab, e) {
+function endSystemDrag(e) {
   const d = systemDragged;
-  if (!d || d.tab !== tab) return;
+  if (!d) return;
   systemDragged = null;
   const wasOver = d.over && !d.leftTimer; // leaving, if its check is pending
   leaveMain(d);
-  /** @type {TabView} */ (tab.view).el.classList.remove(DRAG_SOURCE);
-  if (d.dropped || tab.detached || wasOver) return;
+  if (d.tab) /** @type {TabView} */ (d.tab.view).el.classList.remove(DRAG_SOURCE);
+  const detached = d.tab ? d.tab.detached : !!d.panel?.isDetached();
+  if (d.dropped || detached || wasOver) return;
   const at = e.screenX || e.screenY ? { x: e.screenX, y: e.screenY } : undefined;
-  detachTab(tab, at);
+  if (d.tab) detachTab(d.tab, at);
+  else d.panel?.detach(at);
 }
 
 /**
@@ -1262,42 +1297,83 @@ function followDrag(header, e, { begin, move, end }) {
 }
 
 /**
- * A panel's title bar (the Notepad's, the Snippets window's) dragged toward the app window's edges: the panel stays
- * where it is, and a compass in its middle with only its detach cell shows that letting go there, or at the app
- * window's very edge, opens the panel in a window of its own where it's let go (detach). In a window of its own its
- * title bar moves that window instead (js/windows.js).
+ * A panel's title bar (the Notepad's, the Snippets window's) dragged as a terminal's is. On Windows its see-through
+ * picture follows the pointer, and let go outside the main window it opens in a window of its own right there; on
+ * Linux the system's drag (a chip with its icon and name), and let go outside, a window of its own. In the main window
+ * the panel stays where it is, and a compass in its middle with only its detach cell opens it in a window of its own
+ * too (elsewhere also the app window's very edge). In a window of its own its title bar moves that window (js/windows.js),
+ * and dragged back over the main window it goes back to its place (on Linux by its name, its handle).
  * @param {HTMLElement} header
  * @param {HTMLElement} panel
- * @param {{ name: string, icon: string, detach: (at: { x: number, y: number }) => void }} options
+ * @param {PanelDrag} drag
  */
-export function wireDragOut(header, panel, { name, icon, detach }) {
+export function wireDragOut(header, panel, drag) {
+  if (systemDrag) return wireSystemPanelDrag(header, drag);
   header.addEventListener('pointerdown', e => {
-    if (e.button !== 0 || panel.ownerDocument !== document || targetOf(e).closest('button, input, select, textarea')) return;
+    if (e.button !== 0 || panel.ownerDocument !== document || targetOf(e).closest(CONTROLS)) return;
     e.preventDefault();
-    const guide = /** @type {HTMLElement} */ (/** @type {Element} */ (dockGuideTemplate.content.firstElementChild).cloneNode(true));
-    guide.classList.add(DETACH_ONLY);
-    const cell = find(guide, `[data-zone="${ZONE.window}"]`);
-    let out = false;
-    followDrag(header, e, {
-      begin: () => {
-        showGhost(icon, name);
-        document.body.classList.add(DRAGGING_PANE);
-        panel.append(guide);
-      },
-      move: (x, y) => {
-        out = atAppEdge(x, y) || onCell(cell, x, y);
-        guide.classList.toggle(HOVER, out);
-        cell.classList.toggle(ACTIVE, out);
-        showOutline(out ? windowOutline(panel, x, y) : null, ZONE.window);
-      },
-      end: (commit, screen) => {
-        document.body.classList.remove(DRAGGING_PANE);
-        guide.remove();
-        showOutline(null, ZONE.window);
-        if (commit && out) detach(screen);
-      },
-    });
+    trackPanelDrag(header, panel, drag, e);
   });
+}
+
+/**
+ * Follows one press on a panel's title bar (pointer drag; Windows, macOS).
+ * @param {HTMLElement} header
+ * @param {HTMLElement} panel
+ * @param {PanelDrag} drag
+ * @param {PointerEvent} e
+ */
+function trackPanelDrag(header, panel, drag, e) {
+  const guide = /** @type {HTMLElement} */ (/** @type {Element} */ (dockGuideTemplate.content.firstElementChild).cloneNode(true));
+  guide.classList.add(DETACH_ONLY);
+  const cell = find(guide, `[data-zone="${ZONE.window}"]`);
+  let out = false;
+  let outside = false;
+  let live = false;
+  followDrag(header, e, {
+    begin: () => {
+      live = true;
+      showGhost(drag.icon, drag.name);
+      document.body.classList.add(DRAGGING_PANE);
+      panel.append(guide);
+      pickUp(panel, e, () => live);
+    },
+    move: (x, y) => {
+      outside = followsPicture && outOfWindow(x, y);
+      out = outside || onCell(cell, x, y) || (!followsPicture && atAppEdge(x, y));
+      guide.classList.toggle(HOVER, out);
+      cell.classList.toggle(ACTIVE, out);
+      showOutline(out && !outside ? windowOutline(panel, x, y) : null, ZONE.window);
+    },
+    end: (commit, screen) => {
+      live = false;
+      document.body.classList.remove(DRAGGING_PANE, PICTURE_DRAG);
+      guide.remove();
+      showOutline(null, ZONE.window);
+      // Where its picture is: its window opens exactly there, and takes the picture away once it shows (js/windows.js).
+      const place = followsPicture ? { x: screen.x - grip.x, y: screen.y - grip.y } : undefined;
+      if (commit && out && drag.detach(place ? undefined : screen, place) && place) return;
+      showDragPicture(null);
+    },
+  });
+}
+
+/**
+ * Windows: what's dragged, as a see-through picture at its own size, follows the pointer from now on (once it's taken,
+ * if the drag is still on), held where the pointer took it.
+ * @param {HTMLElement} el
+ * @param {PointerEvent} e the press that started the drag
+ * @param {() => boolean} still whether the drag is still on
+ */
+function pickUp(el, e, still) {
+  const r = el.getBoundingClientRect();
+  grip = { x: e.clientX - r.left, y: e.clientY - r.top };
+  if (!followsPicture) return;
+  pictureOf(r).then(url => {
+    if (!url || !still()) return;
+    document.body.classList.add(PICTURE_DRAG);
+    showDragPicture({ image: url.slice(url.indexOf(',') + 1), x: grip.x, y: grip.y, width: r.width, height: r.height });
+  }).catch(() => {});
 }
 
 /**
@@ -1352,9 +1428,22 @@ let shot = null;
  */
 async function takeShot(tab) {
   shot = null;
-  const r = /** @type {TabView} */ (tab.view).el.getBoundingClientRect();
+  const url = await pictureOf(/** @type {TabView} */ (tab.view).el.getBoundingClientRect());
+  if (!url || dragged !== tab) return;
+  shot = url;
+  // The pointer may already be where it would open, and still: the outline shows the picture now.
+  showDrop(shownDrop);
+}
+
+/**
+ * A picture of part of the page as it is now (a JPEG data URL): the host's picture of the page (none on macOS yet),
+ * cut to `r`.
+ * @param {DOMRect} r
+ * @returns {Promise<string | null>}
+ */
+async function pictureOf(r) {
   const reply = await request(PAGE.windowCapture, {});
-  if (!reply.image) return;
+  if (!reply.image) return null;
   const page = new Image();
   page.src = `data:${JPEG};base64,${reply.image}`;
   await page.decode();
@@ -1364,10 +1453,7 @@ async function takeShot(tab) {
   canvas.width = Math.round(r.width * scale);
   canvas.height = Math.round(r.height * scale);
   canvas.getContext('2d')?.drawImage(page, r.left * scale, r.top * scale, r.width * scale, r.height * scale, 0, 0, canvas.width, canvas.height);
-  if (dragged !== tab) return;
-  shot = canvas.toDataURL(JPEG);
-  // The pointer may already be where it would open, and still: the outline shows the picture now.
-  showDrop(shownDrop);
+  return canvas.toDataURL(JPEG);
 }
 
 /**

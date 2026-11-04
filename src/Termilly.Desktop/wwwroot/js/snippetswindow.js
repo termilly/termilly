@@ -5,7 +5,7 @@
 // button, the palette, and Edit or New in the snippets list (js/snippets.js).
 
 import { state, on, wsById, EVENTS } from './store.js';
-import { focusedTab, restoreFocus, wireDragOut } from './panes.js';
+import { focusedTab, restoreFocus, wireDragOut, systemDrag } from './panes.js';
 import { closeAll, dropdown } from './popups.js';
 import { escapeHtml, ICONS } from './ui.js';
 import { modal, CONFIRM_DIALOG } from './dialogs.js';
@@ -380,13 +380,16 @@ export const toggleSnippetsWindow = () => (isDetached(WINDOW_KEY) ? focusWindow(
 
 /**
  * Into a window of its own, as it is (changes not saved too); its header is the window's title bar. Close and Alt+F4
- * ask about changes not saved, as its own Close does; Return puts it back over the page.
+ * ask about changes not saved, as its own Close does; Return, or moving it back over the main window, puts it back
+ * over the page. False when no window could be opened.
  * @param {{ x: number, y: number }} [at] where on the screen it opens (dragged out by its header), else over its place
+ * @param {{ x: number, y: number }} [place] exactly where its picture was let go (its top left corner)
  */
-function detachSnippets(at) {
+function detachSnippets(at, place) {
   const close = () => closeSnippetsWindow();
-  detach(WINDOW_KEY, {
-    el: box, title: NAME, onClosed: backOverPage, askClose: close, close, header: head, at, remember: true,
+  return detach(WINDOW_KEY, {
+    el: box, title: NAME, onClosed: backOverPage, askClose: close, close, header: head, at, place, remember: true,
+    dropBack: true, dragHandle: systemDrag ? SNIPPETS_HANDLE : undefined,
     // Over the page until it's in its window.
     onMoved: () => {
       layer.hidden = true;
@@ -394,6 +397,9 @@ function detachSnippets(at) {
     },
   });
 }
+
+/** Its handle in a window of its own on Linux: its title, dragged back into the main window (js/panes.js). */
+const SNIPPETS_HANDLE = '#sw-title';
 
 /** Back from its window, still open, over the page. */
 function backOverPage() {
@@ -475,8 +481,8 @@ box.addEventListener('keydown', e => {
 
 openButton.addEventListener('click', toggleSnippetsWindow);
 
-// Its header dragged toward the app window's edges takes it out into a window of its own (the title bar's icon on the
-// label that follows the pointer).
+// Its header dragged out of the app window takes it out into a window of its own, as a terminal's (js/panes.js).
 wireDragOut(head, box, {
-  name: NAME, icon: /** @type {Element} */ (openButton.firstElementChild).outerHTML, detach: at => detachSnippets(at),
+  name: NAME, icon: /** @type {Element} */ (openButton.firstElementChild).outerHTML, detach: detachSnippets,
+  back: () => closeWindow(WINDOW_KEY), isDetached: () => isDetached(WINDOW_KEY), handle: SNIPPETS_HANDLE,
 });
