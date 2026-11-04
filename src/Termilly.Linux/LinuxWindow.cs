@@ -33,6 +33,8 @@ internal sealed class LinuxWindow
     // As on Windows, messages before the window (and its page) exist are dropped.
     private volatile bool _created;
     private volatile bool _closing;
+    /// <summary>The closing handler (<see cref="Closing"/>): true keeps the window open for now.</summary>
+    private Func<bool>? _keepOpen;
     // The window's state the page last heard (see PostState): it starts in front.
     private volatile bool _minimized;
     private volatile bool _active = true;
@@ -138,6 +140,7 @@ internal sealed class LinuxWindow
             .RegisterFocusInHandler((_, _) => PostState(channel, window!, active: true))
             .RegisterFocusOutHandler((_, _) => PostState(channel, window!, active: false))
             .RegisterWindowClosingHandler((_, _) => Closing(window!, host, quit));
+        _keepOpen = () => Closing(window, host, quit);
         return window;
     }
 
@@ -147,14 +150,14 @@ internal sealed class LinuxWindow
         // As on Windows: Close asks before quitting while something runs (QuitGate)…
         if (!quit.Quitting)
         {
-            quit.Ask(() => window.Invoke(() => window.Close()));
+            quit.Ask(() => window.Invoke(() => CloseMain(window)));
             return true; // keep the window open for now
         }
         // …and with terminals to keep, the page first sends a last snapshot, then the window closes.
         if (host.WantsLastSnapshot)
         {
             host.RequestSnapshot();
-            Task.Delay(SnapshotWait).ContinueWith(_ => window.Invoke(() => window.Close()), TaskScheduler.Default);
+            Task.Delay(SnapshotWait).ContinueWith(_ => window.Invoke(() => CloseMain(window)), TaskScheduler.Default);
             return true; // keep the window open for now
         }
         _closing = true;
@@ -167,6 +170,20 @@ internal sealed class LinuxWindow
             DetachedWindows.CloseAll();
         }
         return false;
+    }
+
+    /// <summary>
+    /// Closes the main window, through its closing handler: asks first while something runs, the last snapshot, the
+    /// page's windows. Photino's Close calls the handler on Linux, but on macOS it closes a window without a title bar
+    /// (Termilly's) outright, the handler skipped: there it's called here first.
+    /// </summary>
+    private void CloseMain(PhotinoWindow window)
+    {
+        if (OperatingSystem.IsMacOS() && _keepOpen?.Invoke() == true)
+        {
+            return;
+        }
+        window.Close();
     }
 
     /// <summary>The window exists: messages may go to it, and its page may open windows of its own (DetachedWindows).</summary>
@@ -193,6 +210,16 @@ internal sealed class LinuxWindow
             {
                 // Rounded corners, maximize, and the page's own windows (Photino does none of them on macOS).
                 MacWindows.Hook(action => window.Invoke(action), _zoom / (double)InterfaceSettings.DefaultZoom);
+                // Cmd+Q quits as Close does: asking first, after the last snapshot. Once the window has closed, it may.
+                MacQuit.Hook(() =>
+                {
+                    if (_closing)
+                    {
+                        return true;
+                    }
+                    Task.Run(() => window.Invoke(() => CloseMain(window)));
+                    return false;
+                });
             }
         });
     }
@@ -215,9 +242,9 @@ internal sealed class LinuxWindow
         platform.CloseRequested += () =>
         {
             quit.Allow();
-            window.Invoke(() => window.Close());
+            window.Invoke(() => CloseMain(window));
         };
-        platform.QuitRequested += () => window.Invoke(() => window.Close()); // asks first (the closing handler)
+        platform.QuitRequested += () => window.Invoke(() => CloseMain(window)); // asks first (the closing handler)
         // Photino has no "focus": un-minimise, and briefly keep it on top so it shows above other windows. Wayland
         // may still leave the focus where it is.
         platform.Activate += () => window.Invoke(() =>
@@ -231,7 +258,7 @@ internal sealed class LinuxWindow
 
     /// <summary>One of the title bar's buttons or edges, on the window's thread.</summary>
     /// <param name="changed">Tells the page the window's state, where Photino doesn't (macOS's maximize).</param>
-    private static void Do(PhotinoWindow window, FromPage.Window action, Action changed)
+    private void Do(PhotinoWindow window, FromPage.Window action, Action changed)
     {
         // A detached window's title bar (the page names the window): that window does it.
         if (action.Name is not null)
@@ -261,7 +288,7 @@ internal sealed class LinuxWindow
                 break;
             case WindowActions.Close:
             case WindowActions.Quit:
-                window.Close(); // asks first when something is running (the closing handler)
+                CloseMain(window); // asks first when something is running (the closing handler)
                 break;
             case WindowActions.Drag:
                 GtkWindow.BeginMove();
@@ -274,7 +301,7 @@ internal sealed class LinuxWindow
 
     /// <summary>The main window's buttons and edges on macOS: maximize, moves and sizes are MacWindows'.</summary>
     [System.Runtime.Versioning.SupportedOSPlatform("macos")]
-    private static void DoOnMac(PhotinoWindow window, FromPage.Window action, Action changed)
+    private void DoOnMac(PhotinoWindow window, FromPage.Window action, Action changed)
     {
         var main = MacWindows.Main;
         void OnMain(Action run) => window.Invoke(run);
@@ -289,7 +316,7 @@ internal sealed class LinuxWindow
                 break;
             case WindowActions.Close:
             case WindowActions.Quit:
-                window.Close(); // asks first when something is running (the closing handler)
+                CloseMain(window); // asks first when something is running (the closing handler)
                 break;
             case WindowActions.Drag:
                 if (MacWindows.IsMaximized(main))
