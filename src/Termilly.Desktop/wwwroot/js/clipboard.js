@@ -262,7 +262,7 @@ function rowHtml(c) {
     <span class="clip-kind k-${escapeHtml(c.kind)}">${iconOf(c)}</span>
     <span class="clip-body"><span class="clip-text${mono}">${escapeHtml(titleOf(c))}</span><span class="clip-meta">${escapeHtml(metaOf(c))}</span></span>
     <span class="clip-acts">${expandHtml(c)}${open ? `<button class="pane-btn" data-clip-act="${CLIP_ACTION.open}" title="${open.label}">${ICONS.launch}</button>` : ''}${runnable(c) ? `<button class="pane-btn" data-clip-act="${CLIP_ACTION.run}" title="Paste and run">${ICONS.play}</button>` : ''}
-      ${c.kind === CLIP_KIND.secret ? '' : `<button class="pane-btn${c.pinned ? ' on' : ''}" data-clip-act="${CLIP_ACTION.pin}" title="${c.pinned ? UNPIN_LABEL : 'Pin: kept at the top, never dropped'}">${TOOL_ICONS.pin}</button>`}
+      ${c.kind === CLIP_KIND.secret ? '' : `<button class="pane-btn${c.pinned ? ' on' : ''}" data-clip-act="${CLIP_ACTION.pin}" title="${c.pinned ? UNPIN_LABEL : 'Pin to top, won’t be deleted'}">${TOOL_ICONS.pin}</button>`}
       <button class="pane-btn" data-clip-act="${CLIP_ACTION.forget}" title="Delete (Del)">${ICONS.cross}</button></span>
   </div>${expanded.has(c.id) ? previewHtml(c) : ''}`;
 }
@@ -331,7 +331,7 @@ function render() {
     <div class="files-head">
       <span class="files-title">Clipboard <span class="files-ws">${clips.length === 1 ? '1 clip' : `${clips.length} clips`}</span></span>
       <span class="files-tools">
-        ${switchHtml(PANEL_ACTION.keep, 'Keep', keeping, 'Watch Clipboard')}
+        ${switchHtml(PANEL_ACTION.keep, 'Listen', keeping, 'Watch Clipboard')}
         ${focusOnlySwitch()}
         <button class="pane-btn" data-clips="${PANEL_ACTION.clear}" title="Clear history (pinned clips stay)"${clips.some(c => !c.pinned) ? '' : ' disabled'}>${ICONS.trash}</button>
         <button class="pane-btn" data-clips="${PANEL_ACTION.close}" title="Close (${KEYS_TEXT})">${ICONS.close}</button>

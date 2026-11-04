@@ -63,7 +63,7 @@ import { beginRename } from './rename.js';
 import { TAG_BUTTON } from './tabmenu.js';
 import { openTagPicker } from './tagpicker.js';
 import { badgeHtml, escapeHtml, keysHtml } from './ui.js';
-import { updateSettings, DEFAULT_FONT_SIZE } from './preferences.js';
+import { updateSettings, DEFAULT_FONT_SIZE, DEFAULT_ZOOM, MIN_ZOOM, MAX_ZOOM, ZOOM_STEP } from './preferences.js';
 import { openNewWorkspace } from './newworkspace.js';
 import { remoteGit } from './remotehost.js';
 import { AGENT_STATE, SETTING_VALUES, WINDOW_ACTION } from './constants.js';
@@ -90,11 +90,6 @@ const DIGIT_CODE = 'Digit';
 const PLUS_KEYS = ['Equal', 'NumpadAdd'];
 /** The keys that reset the size with Ctrl (and Shift): 0, and the keypad's. */
 const ZERO_KEYS = ['Digit0', 'Numpad0'];
-/** The whole app's size (Settings' zoom, C# InterfaceSettings): as designed, a step, and its range, in percent. */
-const DEFAULT_ZOOM = 100;
-const ZOOM_STEP = 10;
-const MIN_ZOOM = 50;
-const MAX_ZOOM = 200;
 
 /**
  * The whole app a step bigger or smaller, within its range.

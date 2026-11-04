@@ -38,6 +38,7 @@ const SOURCES = [
   { file: 'UpdateInstall.cs', cls: 'UpdateStates', js: 'UPDATE_STATE' },
   { file: 'Settings/SettingValues.cs', cls: 'SettingValues', js: 'SETTING_VALUES' },
   { file: 'Settings/SettingGroups.cs', cls: 'TerminalSettings', js: 'TERMINAL_SETTINGS' },
+  { file: 'Settings/SettingGroups.cs', cls: 'InterfaceSettings', js: 'INTERFACE_SETTINGS' },
   { file: 'Actions.cs', cls: 'ActionPlaceholders', js: 'ACTION_PLACEHOLDER' },
   { file: 'Clipboard.cs', cls: 'ClipKinds', js: 'CLIP_KIND' },
   { file: 'Messaging/Clipboard.cs', cls: 'ClipForms', js: 'CLIP_FORM' },

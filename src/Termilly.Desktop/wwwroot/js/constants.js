@@ -418,6 +418,14 @@ export const TERMINAL_SETTINGS = Object.freeze({
   maxScrollback: 50000,
 });
 
+/** C#: InterfaceSettings (Settings/SettingGroups.cs). */
+export const INTERFACE_SETTINGS = Object.freeze({
+  defaultZoom: 100,
+  minZoom: 50,
+  maxZoom: 200,
+  zoomStep: 10,
+});
+
 /** C#: ActionPlaceholders (Actions.cs). */
 export const ACTION_PLACEHOLDER = Object.freeze({
   selection: 'selection',

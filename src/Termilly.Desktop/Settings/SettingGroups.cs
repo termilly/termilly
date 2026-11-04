@@ -88,8 +88,10 @@ internal sealed record InterfaceSettings
     public int Zoom { get; init; } = DefaultZoom;
 
     public const int DefaultZoom = 100;
-    private const int MinZoom = 50;
-    private const int MaxZoom = 200;
+    public const int MinZoom = 50;
+    public const int MaxZoom = 200;
+    /// <summary>A step of Ctrl+Shift+= and - (and of Settings' App size), in percent.</summary>
+    public const int ZoomStep = 10;
     /// <summary>
     /// Termilly's shortcuts with keys of the user's own (js/keymap.js, Settings › Keyboard): a shortcut's id to its keys
     /// ("Ctrl+Shift+T"), "" for none. One not here has its default.
