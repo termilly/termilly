@@ -94,11 +94,16 @@ internal static class MacWindows
                 var preferences = Send(Send(view, "configuration"), "preferences");
                 // The page reopens its windows as it starts (where they were before a restart): without a click first.
                 Send(preferences, "setJavaScriptCanOpenWindowsAutomatically:", true);
-                var cls = ClassOf(Send(view, "UIDelegate"));
+                var uiDelegate = Send(view, "UIDelegate");
+                var cls = ClassOf(uiDelegate);
                 if (cls != IntPtr.Zero)
                 {
                     AddMethod(cls, "webView:createWebViewWithConfiguration:forNavigationAction:windowFeatures:", OnCreate, "@@:@@@@");
                     AddMethod(cls, "webViewDidClose:", OnClose, "v@:@");
+                    // WebKit looks at what its delegate answers only when it's set: set again, it sees the new methods.
+                    // (The delegate stays alive: Photino's script message handler holds it.)
+                    Send(view, "setUIDelegate:", IntPtr.Zero);
+                    Send(view, "setUIDelegate:", uiDelegate);
                 }
             }
         }
