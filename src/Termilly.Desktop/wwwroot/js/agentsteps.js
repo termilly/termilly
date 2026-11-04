@@ -19,13 +19,13 @@ import { escapeHtml, highlight, ICONS } from './ui.js';
 
 /** How Claude Code starts a reply or a tool's line: a dot (● on Windows and Linux, ⏺ on macOS), then the text. */
 const STEP_LINE = /^[●⏺]\s(.*)$/;
-/** Its next lines are indented by two spaces. */
-const MORE_LINE = /^ {2}\S/;
+/** Its next lines are indented: by two spaces, a wrapped tool line by more. */
+const MORE_LINE = /^ {2,}\S/;
 /** How many of a step's lines in the output are read to match it. */
 const MATCH_LINES = 3;
 /** A reply is matched by this many characters of its start; a tool by this many of what it was used on. */
 const REPLY_CHARS = 50;
-const TOOL_CHARS = 30;
+const TOOL_CHARS = 60;
 /** A shown line shorter than this can't stand for a reply that's longer (too many would match). */
 const MIN_PARTIAL = 16;
 /** A reply's row shows this many lines; a long one goes on in the terminal. */
@@ -54,6 +54,13 @@ export function shownSteps(lines) {
 }
 
 /**
+ * A tool's text as compared: without spaces, so a line Claude Code wrapped in the middle of a word still matches,
+ * and without the marks a shown line loses (plain).
+ * @param {string} s
+ */
+const bare = s => plain(s).replace(/\s/g, '');
+
+/**
  * What a tool's line in the output would hold: what it was used on, a path by its file name (Claude Code shortens
  * paths), cut to its start.
  * @param {AgentStep} step
@@ -61,7 +68,7 @@ export function shownSteps(lines) {
 function toolNeedle(step) {
   const subject = step.text.trim();
   const file = /[\\/]/.test(subject) && !/\s/.test(subject) ? subject.split(/[\\/]/).pop() ?? subject : subject;
-  return norm(file).slice(0, TOOL_CHARS);
+  return bare(file).slice(0, TOOL_CHARS);
 }
 
 /**
@@ -72,7 +79,7 @@ function toolNeedle(step) {
 function matches(step, shown) {
   if (step.kind === AGENT_STEP.tool) {
     const needle = toolNeedle(step);
-    return !!needle && shown.includes(needle);
+    return !!needle && shown.replace(/\s/g, '').includes(needle);
   }
   const want = plain(step.text).slice(0, REPLY_CHARS);
   return !!want && (shown.startsWith(want) || (shown.length >= MIN_PARTIAL && want.startsWith(shown)));
@@ -80,7 +87,10 @@ function matches(step, shown) {
 
 /**
  * Places the steps: which prompt each followed (by time), which reply was the last of its prompt, and where each is
- * in the output, matched newest first from the bottom up so a repeated line finds its own place.
+ * in the output. Replies first (their text is their own), newest first from the bottom up so a repeated line (a
+ * conversation Claude Code drew again after a resize) finds its own place. Then each tool, only between the replies
+ * placed around it: Claude Code folds many tool calls into one line ("Searched for 2 patterns, read 1 file") and
+ * commands often start alike, so a tool searched freely took another's line, and every step above it was lost.
  * @param {AgentStep[]} steps oldest first
  * @param {{ at: string | null }[]} prompts oldest first
  * @param {{ line: number, text: string }[]} shown
@@ -96,22 +106,45 @@ export function placeSteps(steps, prompts, shown) {
   });
   /** @type {Set<number>} */
   const seenTurns = new Set();
+  /** Each placed step's index in shown, by its index in placed. @type {number[]} */
+  const at = placed.map(() => -1);
   let below = shown.length;
   for (let i = placed.length - 1; i >= 0; i--) {
     const p = placed[i];
-    if (p.step.kind === AGENT_STEP.reply && !seenTurns.has(p.turn)) {
+    if (p.step.kind !== AGENT_STEP.reply) continue;
+    if (!seenTurns.has(p.turn)) {
       p.last = true;
       seenTurns.add(p.turn);
     }
-    for (let s = below - 1; s >= 0; s--) {
-      if (matches(p.step, shown[s].text)) {
-        p.line = shown[s].line;
-        below = s;
-        break;
-      }
-    }
+    const s = findAbove(p.step, shown, below, -1);
+    if (s >= 0) [at[i], below] = [s, s];
   }
+  // Each tool between the nearest placed replies before and after it, newest first, each above the one after it.
+  let after = shown.length;
+  for (let i = placed.length - 1; i >= 0; i--) {
+    if (placed[i].step.kind === AGENT_STEP.reply) {
+      if (at[i] >= 0) after = at[i];
+      continue;
+    }
+    let before = -1;
+    for (let j = i - 1; j >= 0 && before < 0; j--) if (placed[j].step.kind === AGENT_STEP.reply && at[j] >= 0) before = at[j];
+    const s = findAbove(placed[i].step, shown, after, before);
+    if (s >= 0) [at[i], after] = [s, s];
+  }
+  placed.forEach((p, i) => { if (at[i] >= 0) p.line = shown[at[i]].line; });
   return placed;
+}
+
+/**
+ * The nearest shown line above index `below` (and below `floor`) that is this step, or -1.
+ * @param {AgentStep} step
+ * @param {{ text: string }[]} shown
+ * @param {number} below
+ * @param {number} floor
+ */
+function findAbove(step, shown, below, floor) {
+  for (let s = below - 1; s > floor; s--) if (matches(step, shown[s].text)) return s;
+  return -1;
 }
 
 /**
