@@ -30,6 +30,7 @@ internal static class MacObjC
         public const string SharedApplication = "sharedApplication";
         public const string Screen = "NSScreen";
         public const string Screens = "screens";
+        public const string IsKindOfClass = "isKindOfClass:";
     }
 
     /// <summary>A rectangle as Cocoa gives and takes it (CGRect / NSRect).</summary>

@@ -95,8 +95,8 @@
     </PropertyGroup>
     <MakeDir Directories="$(MacApp)/MacOS;$(MacApp)/Resources;$(MacIconSet)" />
     <WriteLinesToFile File="$(MacApp)/Info.plist" Overwrite="true" WriteOnlyWhenDifferent="true" Lines="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;;&lt;!DOCTYPE plist PUBLIC &quot;-//Apple//DTD PLIST 1.0//EN&quot; &quot;http://www.apple.com/DTDs/PropertyList-1.0.dtd&quot;&gt;;&lt;plist version=&quot;1.0&quot;&gt;&lt;dict&gt;;&lt;key&gt;CFBundleName&lt;/key&gt;&lt;string&gt;Termilly $(Version)&lt;/string&gt;;&lt;key&gt;CFBundleDisplayName&lt;/key&gt;&lt;string&gt;Termilly&lt;/string&gt;;&lt;key&gt;CFBundleIdentifier&lt;/key&gt;&lt;string&gt;com.termilly.app&lt;/string&gt;;&lt;key&gt;CFBundleExecutable&lt;/key&gt;&lt;string&gt;termilly&lt;/string&gt;;&lt;key&gt;CFBundleIconFile&lt;/key&gt;&lt;string&gt;termilly&lt;/string&gt;;&lt;key&gt;CFBundlePackageType&lt;/key&gt;&lt;string&gt;APPL&lt;/string&gt;;&lt;key&gt;CFBundleShortVersionString&lt;/key&gt;&lt;string&gt;$(Version)&lt;/string&gt;;&lt;key&gt;CFBundleVersion&lt;/key&gt;&lt;string&gt;$(Version)&lt;/string&gt;;&lt;key&gt;NSHighResolutionCapable&lt;/key&gt;&lt;true/&gt;;&lt;/dict&gt;&lt;/plist&gt;" />
-    <!-- The bundle's program is a link to the termilly built beside it, so it runs as Termilly.app: the menu bar shows
-         Info.plist's name (with the version) instead of the bare program's. -->
+    <!-- The bundle's program is a link to the termilly built beside it (no shell in between). The menu bar's name with
+         the version is set by termilly itself (MacAppName.cs): macOS reads the bundle of the file the link points to. -->
     <Exec Command="ln -sfn ../../../termilly &quot;$(MacApp)/MacOS/termilly&quot;" />
     <!-- The bare program hidden in the Finder: opened from there, macOS runs it in a Terminal window that stays after
          Termilly quits. Termilly.app starts it without one. -->

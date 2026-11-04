@@ -35,6 +35,7 @@ internal static class Program
         IServiceCollection services;
         if (OperatingSystem.IsMacOS())
         {
+            MacAppName.Set($"{GtkWindow.Title} {AppVersion.Current}"); // the menu bar's name, before the window is made
             services = MacServices(window, folder, out platform);
         }
         else if (OperatingSystem.IsLinux())

@@ -118,7 +118,7 @@ internal static class MacWindows
         for (nint i = 0; i < count; i++)
         {
             var view = Send(subviews, Cocoa.ObjectAtIndex, i);
-            if (SendBool(view, "isKindOfClass:", webView))
+            if (SendBool(view, Cocoa.IsKindOfClass, webView))
             {
                 return view;
             }
