@@ -107,6 +107,24 @@ internal static class GtkWindow
     /// <summary>GTK_STYLE_PROVIDER_PRIORITY_APPLICATION: over the theme's own.</summary>
     private const uint StyleProviderPriorityApplication = 600;
 
+    /// <summary>
+    /// On Wayland, GTK uses XWayland (X11) for Termilly's windows, as VS Code does: X11 lets it place them (a terminal
+    /// dragged out opens where it's let go), Wayland doesn't. Termilly's own choice, not GDK_BACKEND's, so the shells it
+    /// starts keep the desktop's. Before GTK starts; nothing without Wayland (X11 already) or with GDK_BACKEND set.
+    /// </summary>
+    public static void UseX11()
+    {
+        if (Environment.GetEnvironmentVariable(BackendVariable) is null &&
+            !string.IsNullOrEmpty(Environment.GetEnvironmentVariable(WaylandVariable)))
+        {
+            gdk_set_allowed_backends(X11Backend);
+        }
+    }
+
+    private const string BackendVariable = "GDK_BACKEND";
+    private const string WaylandVariable = "WAYLAND_DISPLAY";
+    private const string X11Backend = "x11";
+
     /// <summary>Where the pointer is on screen (the window manager wants it; Wayland ignores it).</summary>
     private static (int X, int Y)? Pointer()
     {
@@ -127,6 +145,7 @@ internal static class GtkWindow
     [DllImport(Gtk)] private static extern void gtk_window_begin_move_drag(IntPtr window, int button, int rootX, int rootY, uint timestamp);
     [DllImport(Gtk)] private static extern void gtk_window_begin_resize_drag(IntPtr window, int edge, int button, int rootX, int rootY, uint timestamp);
     [DllImport(Gdk)] private static extern IntPtr gdk_display_get_default();
+    [DllImport(Gdk)] private static extern void gdk_set_allowed_backends([MarshalAs(UnmanagedType.LPUTF8Str)] string backends);
     [DllImport(Gdk)] private static extern IntPtr gdk_display_get_default_seat(IntPtr display);
     [DllImport(Gdk)] private static extern IntPtr gdk_seat_get_pointer(IntPtr seat);
     [DllImport(Gdk)] private static extern void gdk_device_get_position(IntPtr device, out IntPtr screen, out int x, out int y);

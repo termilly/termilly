@@ -156,6 +156,9 @@ function syncFonts(root) {
 /** A step of the size buttons, in pixels. */
 const FONT_STEP = 1;
 
+/** Linux, not macOS (the same build, and the same page's 'linux'). */
+const onLinux = sys.name === SYSTEM_NAME.linux && !/Mac/.test(navigator.platform);
+
 /** @type {import('./page.js').Section} */
 const APPEARANCE = {
   id: SECTION.appearance,
@@ -185,7 +188,11 @@ const APPEARANCE = {
       + row('Line height', '', seg('terminal.lineHeight', [['1', '1.0'], ['1.2', '1.2'], ['1.4', '1.4'], ['1.6', '1.6']])))
     + group('Cursor',
       row('Style', '', seg('terminal.cursorStyle', [[cursorStyle.bar, 'Bar'], [cursorStyle.block, 'Block'], [cursorStyle.underline, 'Underline']]))
-      + row('Blink', '', toggle('terminal.cursorBlink'))),
+      + row('Blink', '', toggle('terminal.cursorBlink')))
+    // Linux only (not macOS, which runs the same build): Wayland lets no app place its windows.
+    + (onLinux ? group('Windows',
+      row('Open windows where they’re dropped', 'Runs Termilly as an X11 app on Wayland, as VS Code does. Text can be a little soft at 125% or 150% scaling. From the next start.',
+        toggle('interface.runAsX11'), { keywords: 'x11 xwayland wayland window place drop detach position' })) : ''),
   opened: revealChosenFonts,
   drawn: renderFontLists,
   sync: syncFonts,

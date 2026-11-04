@@ -46,6 +46,10 @@ internal static class Program
             throw new PlatformNotSupportedException("This build of Termilly runs on Linux and macOS.");
         }
         using var provider = services.BuildServiceProvider();
+        if (OperatingSystem.IsLinux() && provider.GetRequiredService<ISettingsStore>().Current.Interface.RunAsX11)
+        {
+            GtkWindow.UseX11(); // before the window opens GTK
+        }
         window.Run(platform, provider.GetRequiredService<WindowTheme>(), provider.GetRequiredService<PageChannel>(), provider.GetRequiredService<PageHost>(),
             provider.GetRequiredService<QuitGate>());
         return 0;

@@ -78,6 +78,11 @@ internal sealed record InterfaceSettings
     /// <summary>Quitting asks first while a command or an agent is still running (unless shells are kept running).</summary>
     public bool ConfirmQuit { get; init; } = true;
     /// <summary>
+    /// Linux on Wayland: Termilly runs as an X11 app (XWayland), as VS Code does, so it may place its windows (a
+    /// terminal dragged out opens where it's let go). From the next start.
+    /// </summary>
+    public bool RunAsX11 { get; init; } = true;
+    /// <summary>
     /// Termilly's shortcuts with keys of the user's own (js/keymap.js, Settings › Keyboard): a shortcut's id to its keys
     /// ("Ctrl+Shift+T"), "" for none. One not here has its default.
     /// </summary>
