@@ -271,7 +271,7 @@ function addChrome(d, doc) {
   // A separator, then the pin that keeps the window above every other one, then Return and the window's own buttons.
   const separator = doc.createElement('div');
   separator.className = 'separator';
-  controls.append(separator, pinButton(doc, act));
+  controls.append(separator, pinButton(doc, d.key, act));
   if (d.returnable !== false) {
     const back = doc.createElement('button');
     back.innerHTML = RETURN_ICON;
@@ -307,20 +307,45 @@ function addChrome(d, doc) {
  * The title bar's pin: pressed, the window stays above every other window (its host keeps it so) until it's pressed
  * again.
  * @param {Document} doc
+ * @param {string} key the window it is in (its pin is kept by it)
  * @param {(action: string) => void} act
  */
-function pinButton(doc, act) {
+function pinButton(doc, key, act) {
   const pin = doc.createElement('button');
   pin.innerHTML = PIN_ICON;
   pin.title = PIN_LABEL;
-  pin.setAttribute('aria-pressed', 'false');
-  pin.addEventListener('click', () => {
-    const on = !pin.classList.contains(PINNED);
+  /** @param {boolean} on */
+  const set = on => {
     pin.classList.toggle(PINNED, on);
     pin.setAttribute('aria-pressed', String(on));
     act(on ? WINDOW_ACTION.onTop : WINDOW_ACTION.notOnTop);
+  };
+  pin.addEventListener('click', () => {
+    const on = !pin.classList.contains(PINNED);
+    set(on);
+    pins.set(key, on);
   });
+  // Kept on top when it was last open (after a restart too): so again.
+  if (pins.get(key)) set(true);
+  else pin.setAttribute('aria-pressed', 'false');
   return pin;
+}
+
+/** Which windows are kept on top (their pins): kept with the page's state (store.js gives these). */
+let pins = {
+  /** @type {(key: string) => boolean} */
+  get: () => false,
+  /** @type {(key: string, on: boolean) => void} */
+  set: () => {},
+};
+
+/**
+ * Where the windows' pins (Always on top) are kept (store.js, saved with the page's state).
+ * @param {(key: string) => boolean} get
+ * @param {(key: string, on: boolean) => void} set
+ */
+export function keepPins(get, set) {
+  pins = { get, set };
 }
 
 /**
