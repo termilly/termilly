@@ -2218,11 +2218,12 @@ textarea.field { height: auto; padding: 7px 10px; line-height: 1.5; resize: vert
 .dialog-actions .spacer { flex: 1; }
 
 /* Appearance › Font: one list, with a Terminal | App switch choosing which font it sets. */
-/* The Font group's first line: the Terminal/App switch, and the size of what it picks at the right; its keys under. */
+/* The Font group: its note with the size's keys at the right, then the Terminal/App switch and the size of what it picks. */
 .font-head { display: flex; align-items: center; gap: 12px; margin-bottom: 2px; }
 .font-head > .seg.font-target { margin-bottom: 0; }
 .font-head > .size-control { margin-left: auto; }
-.font-keys { align-self: flex-end; color: var(--faint); font-size: 11.5px; }
+.font-note-line { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; }
+.font-keys { color: var(--faint); font-size: 11.5px; }
 #font-target-note b { color: var(--text); font-weight: 600; }
 .set-row.stack .set-name:empty { display: none; }
 .set-desc .warn { color: var(--danger-text); }

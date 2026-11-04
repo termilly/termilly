@@ -152,8 +152,8 @@ function syncFonts(root) {
     const terminal = escapeHtml(state.settings.terminal.fontFamily);
     const app = escapeHtml(state.settings.interface.font ?? (sys.name === SYSTEM_NAME.linux ? 'System default' : 'Windows default'));
     note.innerHTML = fontTarget === TERMINAL_FONT
-      ? `Monospace fonts for terminals. Terminal: <b>${terminal}</b> · App: ${app}`
-      : `Any installed font, for menus, sidebar, headers and dialogs. App: <b>${app}</b> · Terminal: ${terminal}`;
+      ? `Terminal: <b>${terminal}</b> · App: ${app}`
+      : `App: <b>${app}</b> · Terminal: ${terminal}`;
   }
 }
 
@@ -195,8 +195,8 @@ const APPEARANCE = {
   html: () => group('', row('Theme', `Colours for the app and terminals. System follows ${sys.name === SYSTEM_NAME.linux ? 'the desktop' : 'Windows'}.`,
     themeCards(), { stack: true, keywords: 'colour color dark light system look palette' }))
     // One list for both fonts; the switch picks which one it sets, and the note shows both choices.
-    // The switch, with the size of what it picks on the same line (and its keys under it).
-    + group('Font', row('', '<span id="font-target-note"></span>', `
+    // The note's line has the size's keys at its right; under it the switch, with the size of what it picks.
+    + group('Font', row('', '<span class="font-note-line"><span id="font-target-note"></span><span class="font-keys" id="font-size-keys"></span></span>', `
         <div class="font-head">
           <span class="seg font-target" role="tablist" aria-label="Font for">
             <button data-font-target="${TERMINAL_FONT}" role="tab">${ICONS.terminal}Terminal</button>
@@ -209,7 +209,6 @@ const APPEARANCE = {
             <span id="font-size-value"></span>
           </div>
         </div>
-        <div class="font-keys" id="font-size-keys"></div>
         ${fontPicker(fontTarget)}`, { stack: true, keywords: 'font family typeface terminal app size zoom bigger smaller' }))
     + group('Terminal text',
       row('GPU rendering', 'Smoother scrolling and fast output, drawn by the graphics card. Its text is always greyscale.',
