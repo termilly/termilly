@@ -36,6 +36,30 @@ internal sealed class LinuxWindow
     // The window's state the page last heard (see PostState): it starts in front.
     private volatile bool _minimized;
     private volatile bool _active = true;
+    /// <summary>The whole app's size in percent (Settings' zoom), for the window and its page's own windows.</summary>
+    private volatile int _zoom = InterfaceSettings.DefaultZoom;
+
+    /// <summary>
+    /// The whole app's size changed (Settings' zoom, Ctrl+Shift+= and -): the page, and on Linux the page's own windows,
+    /// at that size. Before the window opens, it opens so.
+    /// </summary>
+    public void SetZoom(int percent)
+    {
+        _zoom = percent;
+        if (_window is { } window && _created)
+        {
+            window.Invoke(() => ApplyZoom(window));
+        }
+    }
+
+    private void ApplyZoom(PhotinoWindow window)
+    {
+        window.SetZoom(_zoom);
+        if (OperatingSystem.IsLinux())
+        {
+            DetachedWindows.SetZoom(_zoom / (double)InterfaceSettings.DefaultZoom);
+        }
+    }
 
     public LinuxWindow() => new Thread(SendLoop) { IsBackground = true, Name = "page-outbox" }.Start();
 
@@ -92,6 +116,7 @@ internal sealed class LinuxWindow
             .SetChromeless(true)
             // Linux: see-through, so the page's rounded corners (app.css, data-corners) show the desktop behind them.
             .SetTransparent(OperatingSystem.IsLinux())
+            .SetZoom(_zoom)
             .SetMinSize(MinWidth, MinHeight)
             .SetDevToolsEnabled(Environment.GetEnvironmentVariable(DevToolsVariable) == "1")
             .SetContextMenuEnabled(false)
@@ -138,6 +163,7 @@ internal sealed class LinuxWindow
             if (OperatingSystem.IsLinux() && GtkWindow.Find() is { } main)
             {
                 GtkWindow.HideUntilLoaded(main);
+                DetachedWindows.SetZoom(_zoom / (double)InterfaceSettings.DefaultZoom);
                 GtkWindow.ClearBackground(main);
                 DetachedWindows.Hook(main);
             }

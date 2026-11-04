@@ -7,7 +7,7 @@
 // (what agents such as Claude Code read). Secrets show masked and go after a while.
 
 import { PAGE, HOST } from './protocol.js';
-import { send, request, onHost, platform, PLATFORM } from './host.js';
+import { send, request, onHost } from './host.js';
 import { state, on, emit, tabTitle, wsById, persist, EVENTS, GROUPS } from './store.js';
 import { focusedTab, restoreFocus, newTab } from './panes.js';
 import { scheduleFit, pasteInto } from './terminals.js';
@@ -317,12 +317,10 @@ const switchHtml = (action, label, on, title, disabled = false) =>
 const otherApps = () => state.settings.clips?.otherApps !== false;
 
 /**
- * Only copies made while Termilly is in focus (its own), on Windows, where copies in other apps can be kept too. Off
- * with Keep: nothing is kept then.
+ * Only copies made while Termilly is in focus (its own), else copies made in other apps too (each system tells about
+ * those: Windows, Linux, macOS). Off with Keep: nothing is kept then.
  */
-const focusOnlySwitch = () => (platform === PLATFORM.windows
-  ? switchHtml(PANEL_ACTION.focusOnly, 'Termilly only', !otherApps(), 'Only inside Termilly application', !keeping)
-  : '');
+const focusOnlySwitch = () => switchHtml(PANEL_ACTION.focusOnly, 'Termilly only', !otherApps(), 'Only inside Termilly application', !keeping);
 
 function render() {
   button.classList.toggle('paused', !keeping);

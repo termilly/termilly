@@ -88,6 +88,21 @@ const NUMBERED_SHORTCUTS = 9;
 const DIGIT_CODE = 'Digit';
 /** The keys that zoom in and out with Ctrl, and split with Alt+Shift (by their codes: = and -, and the keypad's). */
 const PLUS_KEYS = ['Equal', 'NumpadAdd'];
+/** The keys that reset the size with Ctrl (and Shift): 0, and the keypad's. */
+const ZERO_KEYS = ['Digit0', 'Numpad0'];
+/** The whole app's size (Settings' zoom, C# InterfaceSettings): as designed, a step, and its range, in percent. */
+const DEFAULT_ZOOM = 100;
+const ZOOM_STEP = 10;
+const MIN_ZOOM = 50;
+const MAX_ZOOM = 200;
+
+/**
+ * The whole app a step bigger or smaller, within its range.
+ * @param {number} step
+ */
+const zoomBy = step => updateSettings(GROUPS.interface, {
+  zoom: Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, (state.settings.interface.zoom ?? DEFAULT_ZOOM) + step)),
+});
 const MINUS_KEYS = ['Minus', 'NumpadSubtract'];
 /**
  * The direction moveFocus takes for each arrow key (panes.js).
@@ -136,6 +151,10 @@ const commands = {
   fontLarger: () => updateSettings(GROUPS.terminal, { fontSize: state.settings.terminal.fontSize + 1 }),
   fontSmaller: () => updateSettings(GROUPS.terminal, { fontSize: state.settings.terminal.fontSize - 1 }),
   fontReset: () => updateSettings(GROUPS.terminal, { fontSize: DEFAULT_FONT_SIZE }),
+  // The whole app, text, icons and terminals together (its host zooms every window).
+  zoomIn: () => zoomBy(ZOOM_STEP),
+  zoomOut: () => zoomBy(-ZOOM_STEP),
+  zoomReset: () => updateSettings(GROUPS.interface, { zoom: DEFAULT_ZOOM }),
   settings: () => toggleSettings(),
   toggleTheme,
   inbox: () => toggleInbox(),
@@ -201,6 +220,9 @@ setCommands(() => [
   { label: 'Bigger text', keywords: 'font zoom in', hint: keysHtml('Ctrl +'), run: commands.fontLarger },
   { label: 'Smaller text', keywords: 'font zoom out', hint: keysHtml('Ctrl -'), run: commands.fontSmaller },
   { label: 'Reset text size', keywords: 'font zoom', hint: keysHtml('Ctrl 0'), run: commands.fontReset },
+  { label: 'Zoom in (app and terminals)', keywords: 'zoom bigger scale ui app font', hint: keysHtml('Ctrl Shift +'), run: commands.zoomIn },
+  { label: 'Zoom out (app and terminals)', keywords: 'zoom smaller scale ui app font', hint: keysHtml('Ctrl Shift -'), run: commands.zoomOut },
+  { label: 'Reset zoom', keywords: 'zoom scale ui app', hint: keysHtml('Ctrl Shift 0'), run: commands.zoomReset },
   ...snippetCommands(),
   ...actionCommands(),
   // Each setting, last so app commands come first.
@@ -344,9 +366,12 @@ function runShortcut(e) {
   else if (e.ctrlKey && !e.altKey && e.key === 'Tab') cycleWorkspace(e.shiftKey ? -1 : 1);
   // In a tab group, the next or previous tab; elsewhere the keys go to the shell.
   else if (ctrl && (e.key === 'PageDown' || e.key === 'PageUp') && cycleGroupTab(e.key === 'PageDown' ? 1 : -1)) { /* done */ }
+  else if (ctrlShift && PLUS_KEYS.includes(e.code)) commands.zoomIn();
+  else if (ctrlShift && MINUS_KEYS.includes(e.code)) commands.zoomOut();
+  else if (ctrlShift && ZERO_KEYS.includes(e.code)) commands.zoomReset();
   else if (ctrl && PLUS_KEYS.includes(e.code)) commands.fontLarger();
   else if (ctrl && MINUS_KEYS.includes(e.code)) commands.fontSmaller();
-  else if (ctrl && (e.code === 'Digit0' || e.code === 'Numpad0')) commands.fontReset();
+  else if (ctrl && ZERO_KEYS.includes(e.code)) commands.fontReset();
   else if (ctrl && e.code === 'Comma') commands.settings();
   // Last, so Termilly’s own keys win (Settings › Actions refuses them anyway).
   else if (runActionShortcut(e)) { /* done */ }

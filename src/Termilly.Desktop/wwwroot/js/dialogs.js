@@ -97,6 +97,25 @@ export function confirmDialog({ title, body, confirm = OK_LABEL }) {
 }
 
 /**
+ * Asks to confirm, with a choice to tick under the question (off at first): null when cancelled, else whether it was
+ * ticked.
+ * @param {{ title: string, body: string, confirm?: string, option: string }} question
+ * @returns {Promise<boolean | null>}
+ */
+export function confirmWithOption({ title, body, confirm = OK_LABEL, option }) {
+  return modal(CONFIRM_DIALOG, `
+    <h3>${escapeHtml(title)}</h3>
+    <p class="dialog-sub">${escapeHtml(body)}</p>
+    <label class="note-pin dialog-option"><input type="checkbox" data-option> ${escapeHtml(option)}</label>
+    <div class="dialog-actions">
+      <button class="btn" data-cancel>Cancel</button>
+      <button class="btn danger" data-ok autofocus>${escapeHtml(confirm)}</button>
+    </div>`, (dialog, close) => ({
+    submit: () => close({ ticked: !!(/** @type {HTMLInputElement | null} */ (dialog.querySelector('[data-option]')))?.checked }),
+  })).then(result => (result && typeof result === 'object' ? !!result.ticked : null));
+}
+
+/**
  * Tells the user something that needs no answer (why an action couldn't run): one OK button.
  * @param {{ title: string, body: string }} notice
  * @returns {Promise<void>}

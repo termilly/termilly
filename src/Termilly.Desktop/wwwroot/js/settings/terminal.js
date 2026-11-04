@@ -2,7 +2,7 @@
 // Settings › Terminal: the default shell, scrollback, agents, production safety, logs, recordings, triggers and the
 // shell profiles. Notifications and sounds have their own page (notifications.js).
 
-import { sys, SYSTEM_NAME, platform, PLATFORM } from '../host.js';
+import { sys, SYSTEM_NAME } from '../host.js';
 import { state, isSshProfile, activityChanged, GROUPS } from '../store.js';
 import { escapeHtml, ICONS, profileOptionsHtml } from '../ui.js';
 import { environments } from '../environments.js';
@@ -17,9 +17,9 @@ import { targetOf } from '../dom.js';
 /** The choices of the settings used here (C#'s SettingValues). */
 const { hiddenScrollback, costDisplay, agentLine, agentLimit, prodPaste, logFormat, linkClick, clipLimit } = SETTING_VALUES;
 
-/** Clipboard's rows: keeping copies, from other apps too (Windows tells about those), after a restart, how many. */
+/** Clipboard's rows: keeping copies, from other apps too, after a restart, how many. */
 const clipRows = () => row('Keep copies', 'Every copy kept, to paste again from a terminal’s right-click menu or the Clipboard panel (Ctrl+Shift+X).', toggle('clips.enabled'), { keywords: 'clipboard history copy paste' })
-  + (platform === PLATFORM.windows ? row('Copies from other apps', 'Also keep what you copy in other apps. Copies a password manager marks private are left out.', toggle('clips.otherApps'), { keywords: 'clipboard history other apps' }) : '')
+  + row('Copies from other apps', 'Also keep what you copy in other apps. Copies a password manager marks private are left out.', toggle('clips.otherApps'), { keywords: 'clipboard history other apps' })
   + row('Keep after a restart', 'Encrypted on this PC. Secrets are never written and go after 10 minutes.', toggle('clips.keep'), { keywords: 'clipboard history restart encrypted' })
   + row('Clips kept', 'The oldest go first. Pinned clips don’t count.', seg('clips.limit', choices(clipLimit.all, String)), { keywords: 'clipboard history limit' });
 

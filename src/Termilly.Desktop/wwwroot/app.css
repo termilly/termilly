@@ -1079,8 +1079,6 @@ body[data-sidebar="rail"] .side-rail { opacity: 1; pointer-events: auto; }
 .rm-pin.on { color: var(--accent); }
 .rm-pin:hover { background: var(--hover); color: var(--text); }
 .rm-pin svg { width: 16px; height: 16px; stroke-width: 1; }
-.rm-more { display: block; width: 100%; padding: 4px 8px; border-radius: 6px; color: var(--faint); font-size: 12px; text-align: left; }
-.rm-more:hover { background: var(--hover); color: var(--text); }
 .rm-empty { padding: 6px 8px; color: var(--faint); font-size: 12px; }
 .rail-remote { display: grid; flex: none; place-items: center; width: 34px; height: 34px; border-radius: 9px; color: var(--muted); }
 .rail-remote:hover, .rail-remote.open { background: var(--hover); color: var(--text); }
@@ -3112,5 +3110,7 @@ body.detached-window .pane-header .env-chip { display: none; }
 /* Its bottom line counts too: a pixel less below, the same 40px as the Notepad's. */
 .snippets-win > .set-head { height: auto; padding: 8px 10px 3px 12px; }
 .snippets-win > .set-head > h2 { overflow: hidden; color: var(--text); font-size: 12.5px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
-.snippets-win > .set-head > .sw-count { margin-left: 8px; }
+/* Items 8px apart, as the Notepad's icon and title: the gap does it here, not the icon's own margin. */
+.snippets-win > .set-head { gap: 8px; }
+.snippets-win > .set-head > .title-icon { margin-right: 0; }
 .detached-controls svg[viewBox="0 0 16 16"] { width: 16px; height: 16px; stroke-width: 1; }

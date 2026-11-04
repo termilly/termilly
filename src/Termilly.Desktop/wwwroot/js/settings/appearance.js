@@ -191,7 +191,7 @@ const APPEARANCE = {
       + row('Blink', '', toggle('terminal.cursorBlink')))
     // Linux only (not macOS, which runs the same build): Wayland lets no app place its windows.
     + (onLinux ? group('Windows',
-      row('Open windows where they’re dropped', 'Runs Termilly as an X11 app on Wayland, as VS Code does. Text can be a little soft at 125% or 150% scaling. From the next start.',
+      row('Windowing system', 'On: X11 (XWayland). Windows dragged out open where they’re dropped; text can be a little soft at 125% or 150% scaling. Off: Wayland. Sharp at any scaling; the desktop decides where new windows open. From the next start.',
         toggle('interface.runAsX11'), { keywords: 'x11 xwayland wayland window place drop detach position' })) : ''),
   opened: revealChosenFonts,
   drawn: renderFontLists,

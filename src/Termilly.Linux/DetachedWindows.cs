@@ -63,6 +63,19 @@ internal static class DetachedWindows
     /// <summary>Whether a GTK window is one of these (GtkWindow.Find looks for the main one).</summary>
     public static bool Contains(IntPtr window) => Open.Values.Any(o => o.Window == window);
 
+    /// <summary>The whole app's size (Settings' zoom; 1 is as designed), as the main window's.</summary>
+    private static double _zoom = 1;
+
+    /// <summary>The whole app's size changed: the windows open now and later at it.</summary>
+    public static void SetZoom(double factor)
+    {
+        _zoom = factor;
+        foreach (var view in Open.Keys)
+        {
+            webkit_web_view_set_zoom_level(view, factor);
+        }
+    }
+
     /// <summary>
     /// What a window's title bar (the page's header) asks, for the window window.open named <paramref name="name"/>:
     /// minimize, maximize or restore, move, resize from an edge, or come to the front.
@@ -211,6 +224,7 @@ internal static class DetachedWindows
         gtk_window_set_title(window, Marshal.PtrToStringUTF8(webkit_web_view_get_title(view)) ?? GtkWindow.Title);
         gtk_container_add(window, view);
         GtkWindow.ClearBackground(window); // see-through, as the main window: the page rounds its corners
+        webkit_web_view_set_zoom_level(view, _zoom);
         Open[view] = new Opened(window, name);
         g_signal_connect_data(window, "delete-event", OnDelete, view, IntPtr.Zero, 0);
         gtk_widget_show_all(window);
@@ -271,6 +285,7 @@ internal static class DetachedWindows
     [DllImport(Gtk)] private static extern void gtk_window_unmaximize(IntPtr window);
     [DllImport(Gtk)] private static extern int gtk_window_is_maximized(IntPtr window);
     [DllImport(WebKit)] private static extern IntPtr webkit_web_view_new_with_related_view(IntPtr view);
+    [DllImport(WebKit)] private static extern void webkit_web_view_set_zoom_level(IntPtr view, double level);
     [DllImport(WebKit)] private static extern IntPtr webkit_web_view_get_title(IntPtr view);
     [DllImport(WebKit)] private static extern IntPtr webkit_web_view_get_window_properties(IntPtr view);
     [DllImport(WebKit)] private static extern void webkit_window_properties_get_geometry(IntPtr properties, out GdkRectangle geometry);

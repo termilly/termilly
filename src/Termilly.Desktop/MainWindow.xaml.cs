@@ -98,13 +98,18 @@ public partial class MainWindow : Window
 
     private AppSettings Settings => _settings.Current;
 
+    /// <summary>The whole app's size (Settings' zoom) as WebView2 takes it: 1 is as designed.</summary>
+    private double Zoom => Settings.Interface.Zoom / (double)InterfaceSettings.DefaultZoom;
+
     /// <summary>The theme and the hotkeys follow Settings, in the detached windows' title bars too.</summary>
     private void OnSettingsSaved()
     {
         ApplyTheme();
+        Web.ZoomFactor = Zoom;
         foreach (var window in _detached)
         {
             window.Recolor(_theme.Palette);
+            window.Zoom(Zoom);
         }
         UpdateGlobalHotkeys();
     }
@@ -188,6 +193,7 @@ public partial class MainWindow : Window
         }
 
         var core = Web.CoreWebView2;
+        Web.ZoomFactor = Zoom;
         core.Settings.AreBrowserAcceleratorKeysEnabled = false; // let F5, Ctrl+F etc. reach the terminal
         core.Settings.IsStatusBarEnabled = false;
         core.Settings.IsZoomControlEnabled = false;

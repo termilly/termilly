@@ -46,7 +46,11 @@ internal static class Program
             throw new PlatformNotSupportedException("This build of Termilly runs on Linux and macOS.");
         }
         using var provider = services.BuildServiceProvider();
-        if (OperatingSystem.IsLinux() && provider.GetRequiredService<ISettingsStore>().Current.Interface.RunAsX11)
+        // The whole app's size (Settings' zoom), from the start and as it changes.
+        var settings = provider.GetRequiredService<ISettingsStore>();
+        window.SetZoom(settings.Current.Interface.Zoom);
+        settings.Saved += _ => window.SetZoom(settings.Current.Interface.Zoom);
+        if (OperatingSystem.IsLinux() && settings.Current.Interface.RunAsX11)
         {
             GtkWindow.UseX11(); // before the window opens GTK
         }
@@ -65,6 +69,7 @@ internal static class Program
         return new ServiceCollection()
             .AddTermilly()
             .AddPlatform(platform)
+            .AddSingleton<IClipboardWatch, LinuxClipboard>()
             .AddSingleton<ICredentialStore, LinuxKeyringStore>()
             .AddSingleton<IFontCatalog, LinuxFonts>()
             .AddSingleton<IAudioOutputs, LinuxAudio>()
@@ -79,9 +84,11 @@ internal static class Program
     private static IServiceCollection MacServices(LinuxWindow window, string? folder, out PhotinoPlatform platform)
     {
         platform = new MacPlatform(window.Send, folder, new ProcessRunner());
+        var onWindow = platform.OnWindowThread;
         return new ServiceCollection()
             .AddTermilly()
             .AddPlatform(platform)
+            .AddSingleton<IClipboardWatch>(new MacClipboard(onWindow))
             .AddSingleton<ICredentialStore, MacKeychainStore>()
             .AddSingleton<IFontCatalog, MacFonts>()
             .AddSingleton<IAudioOutputs, MacAudio>()

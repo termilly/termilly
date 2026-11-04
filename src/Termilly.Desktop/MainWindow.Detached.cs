@@ -33,6 +33,7 @@ public partial class MainWindow
         window.Moved += OnDetachedMoved;
         window.Placed += (w, r) => _channel.Post(new ToPage.WindowPlaced(w.PageWindowName, r.X, r.Y, r.Width, r.Height));
         e.NewWindow = await window.StartAsync(Web.CoreWebView2.Environment, HostName);
+        window.Zoom(Zoom);
         e.Handled = true;
     }
 
@@ -46,7 +47,7 @@ public partial class MainWindow
         _dragPicture = null;
         if (picture.Image is { Length: > 0 } image && picture.Width > 0 && picture.Height > 0 && !_closing)
         {
-            _dragPicture = new DragPictureWindow(picture, image);
+            _dragPicture = new DragPictureWindow(picture, image, Zoom);
             _dragPicture.Show();
         }
     }

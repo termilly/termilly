@@ -20,9 +20,10 @@ internal sealed class DragPictureWindow : Window
 
     private readonly Point _grip;
 
-    public DragPictureWindow(FromPage.DragPicture picture, string image)
+    /// <param name="zoom">The app's zoom: the page's pixels are that much bigger on the screen.</param>
+    public DragPictureWindow(FromPage.DragPicture picture, string image, double zoom)
     {
-        _grip = new Point(picture.X, picture.Y);
+        _grip = new Point(picture.X * zoom, picture.Y * zoom);
         WindowStyle = WindowStyle.None;
         AllowsTransparency = true;
         Background = Brushes.Transparent;
@@ -33,8 +34,8 @@ internal sealed class DragPictureWindow : Window
         IsHitTestVisible = false;
         Opacity = PictureOpacity;
         WindowStartupLocation = WindowStartupLocation.Manual;
-        Width = picture.Width;
-        Height = picture.Height;
+        Width = picture.Width * zoom;
+        Height = picture.Height * zoom;
         Content = new Image { Source = Decode(image), Stretch = Stretch.Fill };
         SourceInitialized += (_, _) => WindowInterop.ClickThrough(this);
         CompositionTarget.Rendering += Follow;

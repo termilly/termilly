@@ -84,6 +84,8 @@ interface InterfaceSettings {
   confirmQuit: boolean;
   /** Linux on Wayland: Termilly runs as an X11 app (XWayland), as VS Code does, so it may place its windows (a terminal dragged out opens where it's let go). From the next start. */
   runAsX11: boolean;
+  /** The whole app's size, in percent (Ctrl+Shift+= and -): its text, icons and terminals together, in every window. */
+  zoom: number;
   /** Termilly's shortcuts with keys of the user's own (js/keymap.js, Settings › Keyboard): a shortcut's id to its keys ("Ctrl+Shift+T"), "" for none. One not here has its default. */
   shortcuts: Record<string, string> | null;
 }

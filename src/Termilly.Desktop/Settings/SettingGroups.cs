@@ -83,6 +83,14 @@ internal sealed record InterfaceSettings
     /// </summary>
     public bool RunAsX11 { get; init; } = true;
     /// <summary>
+    /// The whole app's size, in percent (Ctrl+Shift+= and -): its text, icons and terminals together, in every window.
+    /// </summary>
+    public int Zoom { get; init; } = DefaultZoom;
+
+    public const int DefaultZoom = 100;
+    private const int MinZoom = 50;
+    private const int MaxZoom = 200;
+    /// <summary>
     /// Termilly's shortcuts with keys of the user's own (js/keymap.js, Settings › Keyboard): a shortcut's id to its keys
     /// ("Ctrl+Shift+T"), "" for none. One not here has its default.
     /// </summary>
@@ -94,6 +102,7 @@ internal sealed record InterfaceSettings
         MinimizeTo = SettingChecks.OneOf(MinimizeTo, SettingValues.MinimizeTo.All, SettingValues.MinimizeTo.Default),
         CloseAction = SettingChecks.OneOf(CloseAction, SettingValues.CloseAction.All, SettingValues.CloseAction.Default),
         Font = SettingChecks.Trimmed(Font),
+        Zoom = Math.Clamp(Zoom, MinZoom, MaxZoom),
         DisabledPlugins = (DisabledPlugins ?? []).Where(id => !string.IsNullOrWhiteSpace(id)).Distinct().Take(MaxDisabledPlugins).ToList(),
         Shortcuts = (Shortcuts ?? new Dictionary<string, string>())
             .Where(s => s.Key.Length is > 0 and <= MaxShortcutText && (s.Value ?? "").Length <= MaxShortcutText)

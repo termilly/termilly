@@ -44,6 +44,9 @@ internal abstract class PhotinoPlatform(Action<string> send, string? startFolder
 
     public void Act(FromPage.Window action) => WindowActionRequested?.Invoke(action);
 
+    /// <summary>Runs an action on the window's thread (dropped before the window exists).</summary>
+    public void OnWindowThread(Action action) => _window?.Invoke(action);
+
     public void CloseNow() => CloseRequested?.Invoke();
 
     public void Quit() => QuitRequested?.Invoke();
@@ -135,7 +138,7 @@ internal abstract class PhotinoPlatform(Action<string> send, string? startFolder
         _window is null
             ? null
             : (await _window.ShowOpenFileAsync("Open in the Notepad", Home, false,
-                [("Text files", ["*.txt", "*.md"]), ("All files", ["*"])]).ConfigureAwait(false))?.FirstOrDefault();
+                [("All files", ["*"]), ("Text files", ["*.txt", "*.md"])]).ConfigureAwait(false))?.FirstOrDefault(); // any file: the Notepad says when one isn't text
 
     public async Task<IReadOnlyList<string>> PickFilesAsync(string title) =>
         _window is null ? [] : await _window.ShowOpenFileAsync(title, Home, true).ConfigureAwait(false) ?? [];

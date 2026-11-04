@@ -122,6 +122,9 @@ internal sealed class DetachedWindow : Window
             Math.Max(0, ActualWidth - (2 * FrameWidth)), Math.Max(0, ActualHeight - (2 * FrameWidth))));
     }
 
+    /// <summary>The whole app's size (Settings' zoom; 1 is as designed), as the main window's.</summary>
+    public void Zoom(double factor) => _web.ZoomFactor = factor;
+
     /// <summary>The theme changed: the background and frame follow, as the main window's.</summary>
     public void Recolor(ThemeWindowColors colors)
     {
