@@ -214,7 +214,7 @@ function ready(win) {
     showMaximized(d);
     d.onResize?.();
   });
-  win.addEventListener(PAGE_GONE, () => gone(d, false));
+  win.addEventListener(PAGE_GONE, () => closedByHost(d));
   here = doc;
   d.onMoved?.();
   if (d.pictured) takePictureAway();
@@ -372,7 +372,30 @@ export function keepPlaces(get, set) {
 }
 
 function checkClosed() {
-  for (const d of [...open.values()]) if (d.win.closed) gone(d, false);
+  for (const d of [...open.values()]) if (d.win.closed) closedByHost(d);
+}
+
+/**
+ * A window gone without the page closing it: its host closed it, which it does only as Termilly closes (the user's
+ * Close and Alt+F4 go through the page). What's saved is saved first, as things are (whenHostCloses), so it opens in
+ * its window again next time; then its element goes back.
+ * @param {Detached} d
+ */
+function closedByHost(d) {
+  if (open.get(d.key) !== d) return; // the page closed it: gone already
+  hostCloses();
+  gone(d, false);
+}
+
+/** What runs as the host closes the windows (store.js: the last save). */
+let hostCloses = () => {};
+
+/**
+ * What runs once the host starts closing the windows, Termilly closing (store.js saves as things are, then stops).
+ * @param {() => void} run
+ */
+export function whenHostCloses(run) {
+  hostCloses = run;
 }
 
 /**

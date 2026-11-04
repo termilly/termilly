@@ -12,7 +12,7 @@ import { send, platform, PLATFORM } from './host.js';
 import { PROFILE_SOURCE, AGENT_STATE, PROFILE_ICON, AGENT_SOURCE, CLAUDE_TOOL } from './constants.js';
 import { debounce } from './util.js';
 import { windowInFront } from './windowshown.js';
-import { keepPlaces } from './windows.js';
+import { keepPlaces, whenHostCloses } from './windows.js';
 
 /** The kinds of node in a workspace's layout tree (see the top of this file). */
 export const NODE = Object.freeze({ leaf: 'leaf', split: 'split', tabs: 'tabs', preview: 'preview' });
@@ -101,7 +101,8 @@ export const getSetting = path => {
 /**
  * The Notepad: open or closed, its pages, the one shown, its width, and whether it shows links and wraps words (both
  * unless turned off).
- * @typedef {{ open: boolean, pages: NotepadPage[], activeId: string | null, width?: number, links?: boolean, wrap?: boolean }} NotepadState
+ * @typedef {{ open: boolean, pages: NotepadPage[], activeId: string | null, width?: number, links?: boolean, wrap?: boolean,
+ *   detached?: boolean }} NotepadState
  */
 
 /**
@@ -690,8 +691,27 @@ export function noteDir(path) {
 const SAVE_DELAY = 400;
 const saveLater = debounce(() => saveNow(), SAVE_DELAY);
 
-/** Saves workspaces, layouts and tab metadata shortly after a change. */
-export const persist = () => saveLater();
+/** What a terminal's window is called among the windows' places (panes.js windowKey), before its id. */
+export const TAB_WINDOW = 'tab-';
+
+/** Saves workspaces, layouts and tab metadata shortly after a change (not once Termilly is closing: finalSave). */
+export const persist = () => { if (!closing) saveLater(); };
+
+/** Termilly is closing: what's saved now is what the next start sees. */
+let closing = false;
+
+/**
+ * Termilly is closing: saves now, as things are, and nothing after. Its windows close next, and what they put back
+ * then (a detached terminal into its workspace) mustn't be saved, so they open in their windows again.
+ */
+export function finalSave() {
+  if (closing) return;
+  saveNow();
+  closing = true;
+}
+
+// The host closing the windows of their own: Termilly is closing, even when it asked for no last snapshot.
+whenHostCloses(finalSave);
 
 // A window that remembers its place (the Notepad's, the Snippets window's) keeps it here, saved with the rest.
 keepPlaces(key => state.windowPlaces[key] ?? null, (key, place) => {
@@ -719,7 +739,9 @@ function serialize() {
     workspaces: state.workspaces.filter(w => !w.tmux).map(({ id, name, color, cwd, focusId, root, note, snippets, collapsed, copyTo }) => ({ id, name, color, cwd, focusId, root: withoutPreview(root), note, snippets, collapsed: collapsed || undefined, copyTo })),
     tabs: [...state.tabs.values()].filter(t => !t.virtual).map(t => {
       const { id, wsId, profile, name, tags, noHistory, startCwd, env, startCommand, worktree, note, agentRead, agentType, agentSessions, promptsClearedAt, stepsClearedAt } = t;
-      return { id, wsId, profile, name, tags, noHistory, startCwd, env, startCommand, worktree, note, agentRead, agentType, agentSessions, promptsClearedAt: promptsClearedAt || undefined, stepsClearedAt: stepsClearedAt && Object.keys(stepsClearedAt).length ? stepsClearedAt : undefined, lastCwd: lastFolderOf(t) ?? undefined };
+      // In a window of its own: it opens in one again after a restart, where it was (windowPlaces).
+      const windowed = t.detached || t.windowed || undefined;
+      return { id, wsId, profile, name, tags, noHistory, startCwd, env, startCommand, worktree, note, agentRead, agentType, agentSessions, promptsClearedAt: promptsClearedAt || undefined, stepsClearedAt: stepsClearedAt && Object.keys(stepsClearedAt).length ? stepsClearedAt : undefined, lastCwd: lastFolderOf(t) ?? undefined, windowed };
     }),
   };
 }
@@ -756,7 +778,9 @@ export function restore(saved) {
   if (saved.clips && typeof saved.clips === 'object') state.clips = { ...state.clips, ...saved.clips };
   if (saved.files && typeof saved.files === 'object') state.files = { ...state.files, ...saved.files };
   state.windowPlaces = Object.fromEntries(Object.entries(saved.windowPlaces ?? {})
-    .filter(([, p]) => [p?.x, p?.y, p?.w, p?.h].every(n => Number.isFinite(n))));
+    .filter(([key, p]) => [p?.x, p?.y, p?.w, p?.h].every(n => Number.isFinite(n))
+      // A terminal's window's place goes with the terminal.
+      && (!key.startsWith(TAB_WINDOW) || (saved.tabs ?? []).some((/** @type {any} */ t) => TAB_WINDOW + t.id === key))));
   state.sidebar = { ...state.sidebar, ...saved.sidebar };
   state.recentDirs = Array.isArray(saved.recentDirs) ? saved.recentDirs.filter((/** @type {unknown} */ d) => typeof d === 'string').slice(0, MAX_RECENT_DIRS) : [];
   if (!Array.isArray(saved.workspaces) || !saved.workspaces.length) return false;

@@ -121,7 +121,7 @@ internal sealed class LinuxWindow
             .SetDevToolsEnabled(Environment.GetEnvironmentVariable(DevToolsVariable) == "1")
             .SetContextMenuEnabled(false)
             .RegisterCustomSchemeHandler(AppScheme.Scheme, (object _, string _, string url, out string contentType) => AppScheme.Serve(url, theme.Palette, out contentType))
-            .RegisterWindowCreatedHandler((_, _) => OnCreated(window!))
+            .RegisterWindowCreatedHandler((_, _) => OnCreated(window!, channel))
             .RegisterWebMessageReceivedHandler((_, message) =>
             {
                 using var doc = JsonDocument.Parse(message);
@@ -155,8 +155,11 @@ internal sealed class LinuxWindow
     }
 
     /// <summary>The window exists: messages may go to it, and its page may open windows of its own (DetachedWindows).</summary>
-    private void OnCreated(PhotinoWindow window)
+    private void OnCreated(PhotinoWindow window, PageChannel channel)
     {
+        // The page's own windows say where they are as they move and resize, to open there again (after a restart
+        // too), as the Windows host's do.
+        DetachedWindows.Placed = (name, x, y, w, h) => channel.Post(new ToPage.WindowPlaced(name, x, y, w, h));
         _created = true;
         window.Invoke(() =>
         {

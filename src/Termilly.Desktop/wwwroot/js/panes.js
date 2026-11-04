@@ -7,7 +7,7 @@ import { send, request, platform, PLATFORM } from './host.js';
 import {
   state, on, emit, persist, newId, activeWs, wsById, tabsOf, tabTitle, defaultProfile, ensureTag, activityOf, leaves,
   replaceNode, findLeaf, detachLeaf, groupOf, firstTabOf, markSeen, findPreview, withoutPreview, EVENTS, NODE, SPLIT,
-  SPLIT_EVEN,
+  SPLIT_EVEN, TAB_WINDOW,
 } from './store.js';
 import { ICONS, tabBadgeHtml, activityHtml } from './ui.js';
 import { openTerminal, disposeTerminal, bufferLines, scheduleFit, prepareStart } from './terminals.js';
@@ -334,7 +334,7 @@ export function moveTab(tab, targetWsId) {
 // ---- Terminals in windows of their own (js/windows.js) ----
 
 /** @param {Tab} tab */
-const windowKey = tab => `tab-${tab.id}`;
+const windowKey = tab => `${TAB_WINDOW}${tab.id}`;
 /** A pane title bar's name, which a double click renames (js/rename.js). */
 export const PANE_NAME = '.pane-name';
 /** A terminal's pane (its view's element). */
@@ -357,13 +357,25 @@ export function detachTab(tab, at, place) {
   if (!ws || !tab.view || tab.detached) return;
   const { el } = tab.view;
   detach(windowKey(tab), {
-    el, title: tabTitle(tab), at, place, onClosed: () => attachTab(tab), onResize: scheduleFit, onMoved: () => moved(tab),
+    // It remembers its place: it opens there again (after a restart too, reopenWindows).
+    el, title: tabTitle(tab), at, place, remember: true, onClosed: () => attachTab(tab), onResize: scheduleFit, onMoved: () => moved(tab),
     // Its title bar is the window's; Close there closes the terminal, and its name keeps its double click (rename).
     header: tab.view.header, close: () => closeTab(tab), keepDoubleClick: PANE_NAME,
     // Linux: its icon and name are dragged back into the main window (the system's drag and drop).
     dragHandle: systemDrag ? DRAG_HANDLE : undefined,
     onDragged: (x, y, dropped) => dragBack(tab, x, y, dropped),
   });
+}
+
+/**
+ * At start: the terminals that were in windows of their own when Termilly closed open in them again, where they were.
+ */
+export function reopenWindows() {
+  for (const tab of state.tabs.values()) {
+    if (!tab.windowed) continue;
+    delete tab.windowed;
+    detachTab(tab);
+  }
 }
 
 /**
@@ -384,6 +396,7 @@ function moved(tab) {
   renderWorkspace(ws);
   emit(EVENTS.tab, tab);
   emit(EVENTS.workspaces);
+  persist(); // in a window of its own after a restart too
 }
 
 /**
@@ -394,6 +407,7 @@ export function attachTab(tab) {
   if (!tab.detached) return;
   tab.detached = false;
   closeWindow(windowKey(tab), { quiet: true });
+  persist();
   const ws = wsById(tab.wsId);
   if (!ws || !state.tabs.has(tab.id)) return;
   renderWorkspace(ws);

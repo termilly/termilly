@@ -57,7 +57,28 @@ internal static class DetachedWindows
             return false;
         }
         g_signal_connect_data(view, "create", OnCreate, IntPtr.Zero, IntPtr.Zero, 0);
+        // The page reopens its windows as it starts (a restart brings back where they were): without a click first.
+        webkit_settings_set_javascript_can_open_windows_automatically(webkit_web_view_get_settings(view), 1);
         return true;
+    }
+
+    /// <summary>
+    /// Where a window is now and its size, as it moves or is resized (not maximized): its window.open name, its place
+    /// on the screen (X11; Wayland tells none) and size, in the page's pixels. LinuxWindow posts it to the page.
+    /// </summary>
+    public static Action<string, double, double, double, double>? Placed { get; set; }
+
+    private static readonly DeleteCallback OnConfigure = Configured;
+
+    private static int Configured(IntPtr window, IntPtr gdkEvent, IntPtr view)
+    {
+        if (Open.TryGetValue(view, out var opened) && gtk_window_is_maximized(window) == 0)
+        {
+            gtk_window_get_position(window, out var x, out var y);
+            gtk_window_get_size(window, out var width, out var height);
+            Placed?.Invoke(opened.Name, x, y, width, height);
+        }
+        return 0; // GTK goes on as always
     }
 
     /// <summary>Whether a GTK window is one of these (GtkWindow.Find looks for the main one).</summary>
@@ -227,6 +248,7 @@ internal static class DetachedWindows
         webkit_web_view_set_zoom_level(view, _zoom);
         Open[view] = new Opened(window, name);
         g_signal_connect_data(window, "delete-event", OnDelete, view, IntPtr.Zero, 0);
+        g_signal_connect_data(window, "configure-event", OnConfigure, view, IntPtr.Zero, 0);
         gtk_widget_show_all(window);
     }
 
@@ -279,6 +301,10 @@ internal static class DetachedWindows
     [DllImport(Gtk)] private static extern void gtk_widget_show_all(IntPtr widget);
     [DllImport(Gtk)] private static extern void gtk_widget_destroy(IntPtr widget);
     [DllImport(Gtk)] private static extern void gtk_window_set_decorated(IntPtr window, int decorated);
+    [DllImport(Gtk)] private static extern void gtk_window_get_position(IntPtr window, out int x, out int y);
+    [DllImport(Gtk)] private static extern void gtk_window_get_size(IntPtr window, out int width, out int height);
+    [DllImport(WebKit)] private static extern IntPtr webkit_web_view_get_settings(IntPtr view);
+    [DllImport(WebKit)] private static extern void webkit_settings_set_javascript_can_open_windows_automatically(IntPtr settings, int enabled);
     [DllImport(Gtk)] private static extern void gtk_window_iconify(IntPtr window);
     [DllImport(Gtk)] private static extern void gtk_window_set_keep_above(IntPtr window, int above);
     [DllImport(Gtk)] private static extern void gtk_window_maximize(IntPtr window);

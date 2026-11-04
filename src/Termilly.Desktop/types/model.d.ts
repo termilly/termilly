@@ -200,6 +200,11 @@ interface Tab {
    * is drawn without it until it comes back.
    */
   detached?: boolean;
+  /**
+   * Restored from a run where it was in a window of its own: it opens in one again once the page is up (panes.js
+   * reopenWindows), where it was.
+   */
+  windowed?: boolean;
   /** The WSL distribution its shell said it runs in (js/remotehost.js), for the Files panel. */
   wslDistro?: string | null;
   /** Who gives it that size: a phone or another computer, as its label says (js/phone.js showAtSize). */

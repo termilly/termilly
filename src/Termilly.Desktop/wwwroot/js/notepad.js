@@ -244,7 +244,11 @@ function detachNotepad(at, place) {
   if (!isDetached(WINDOW_KEY)) dockedWidth = panel.offsetWidth;
   // Its room here is given back once it's in its window, and as that window is resized.
   return detach(WINDOW_KEY, {
-    el: panel, title: NAME, onClosed: dockBack, onResize: refreshDock, onMoved: () => area.focus(),
+    el: panel, title: NAME, onClosed: dockBack, onResize: refreshDock,
+    onMoved: () => {
+      keepDetached(true);
+      area.focus();
+    },
     at, place, remember: true,
     header: head, close: hideNotepad,
     onDragged: dockDrop(dockZone, () => closeWindow(WINDOW_KEY)),
@@ -269,6 +273,7 @@ function dockZone() {
 
 /** Back in its place on the right, from its window, as it was. */
 function dockBack() {
+  keepDetached(false);
   byId(WORKSPACE_ID).append(panel);
   refreshDock();
   if (!panel.hidden) render();
@@ -288,6 +293,18 @@ export function initNotepad() {
   showCount();
   if (state.notepad.width) panel.style.width = `${state.notepad.width}px`;
   if (state.notepad.open) show({ quiet: true });
+  // In its own window when Termilly closed: there again, where it was.
+  if (state.notepad.open && state.notepad.detached) detachNotepad();
+}
+
+/**
+ * Whether it's in a window of its own, kept for the next start.
+ * @param {boolean} detached
+ */
+function keepDetached(detached) {
+  if (!!state.notepad.detached === detached) return;
+  state.notepad.detached = detached;
+  persist();
 }
 
 // ---- Pages ----
@@ -471,12 +488,13 @@ function copyHere(id, text) {
  * The right-click menu's Copy to Notepad for some text: straight into a new page when there's none, else a choice of
  * the pages (or a new one).
  * @param {string} text
+ * @param {string} [label] its wording (the Clipboard's says Paste: the text is already copied)
  * @returns {import('./popups.js').MenuItem}
  */
-export function copyToNotepadItem(text) {
-  if (!pages().length) return { label: COPY_LABEL, icon: ICONS.note, action: () => copyHere(null, text) };
+export function copyToNotepadItem(text, label = COPY_LABEL) {
+  if (!pages().length) return { label, icon: ICONS.note, action: () => copyHere(null, text) };
   return {
-    label: COPY_LABEL, icon: ICONS.note,
+    label, icon: ICONS.note,
     submenu: () => [...pages().map(p => ({ label: p.name, action: () => copyHere(p.id, text) })), SEPARATOR, { label: NEW_PAGE_LABEL, action: () => copyHere(null, text) }],
   };
 }
@@ -484,9 +502,14 @@ export function copyToNotepadItem(text) {
 /**
  * The right-click menu's Copy to note for some text (a terminal's selection): a workspace's note or a terminal's.
  * @param {string} text
+ * @param {string} [label] its wording (the Clipboard's says Paste: the text is already copied)
  * @returns {import('./popups.js').MenuItem}
  */
-export const copyToNoteItem = text => ({ label: COPY_TO_NOTE, icon: TOOL_ICONS.move, submenu: () => noteChoices(() => text) });
+export const copyToNoteItem = (text, label = COPY_TO_NOTE) => ({ label, icon: TOOL_ICONS.move, submenu: () => noteChoices(() => text) });
+
+/** The Clipboard's wording for the two: a clip is already copied, it's pasted there. */
+export const PASTE_TO_NOTEPAD = 'Paste to Notepad';
+export const PASTE_TO_NOTE = 'Paste to note';
 
 // ---- Wiring ----
 

@@ -22,7 +22,7 @@ import { updateSettings } from './preferences.js';
 import { fileSize } from './pictures.js';
 import { isShortcut, KEY_ID } from './keymap.js';
 import { pathActions } from './actions.js';
-import { copyToNotepadItem, copyToNoteItem } from './notepad.js';
+import { copyToNotepadItem, copyToNoteItem, PASTE_TO_NOTEPAD, PASTE_TO_NOTE } from './notepad.js';
 import { parentOf } from './filepaths.js';
 
 /** @typedef {import('./protocol.js').ClipView} Clip */
@@ -425,7 +425,7 @@ function kindEntries(c, text, image) {
     ...(c.kind === CLIP_KIND.path && c.folder == null ? [{ label: 'Not found on this PC', disabled: true }] : []),
     ...(folder ? [{ label: c.folder ? 'New terminal here' : 'New terminal in its folder', icon: ICONS.terminal, action: () => newTab({ cwd: folder }) }] : []),
     ...(c.kind === CLIP_KIND.command ? [{ label: 'Run in a new terminal', icon: ICONS.terminal, action: () => newTab({ command: text.trim() }) }] : []),
-    ...(c.kind === CLIP_KIND.text || c.kind === CLIP_KIND.command ? [copyToNotepadItem(text), copyToNoteItem(text)] : []),
+    ...(c.kind === CLIP_KIND.text || c.kind === CLIP_KIND.command ? [copyToNotepadItem(text, PASTE_TO_NOTEPAD), copyToNoteItem(text, PASTE_TO_NOTE)] : []),
     ...(tab && c.kind !== CLIP_KIND.secret ? pathActions(tab, text.trim(), folder ?? '', image).map(a => ({ ...a, icon: ICONS.play })) : []),
   ];
   return entries.length ? [...entries, SEPARATOR] : [];

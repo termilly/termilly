@@ -7,7 +7,7 @@
 
 import { PAGE, HOST } from './protocol.js';
 import { send, onHost } from './host.js';
-import { state } from './store.js';
+import { state, finalSave } from './store.js';
 import { bufferLines, scrolledBack, prepareStart } from './terminals.js';
 import { markHibernated } from './hibernate.js';
 import { startResuming } from './resuming.js';
@@ -68,6 +68,8 @@ setInterval(() => {
 
 // Termilly is closing: one last, current snapshot, then the host closes.
 onHost(HOST.snapshotRequest, async () => {
+  // Saved as things are, before the windows close (they'd put their terminals back otherwise).
+  finalSave();
   showClosing('Saving what your terminals show');
   await painted();
   send(PAGE.snapshotSave, { snapshot: snapshot(), final: true });

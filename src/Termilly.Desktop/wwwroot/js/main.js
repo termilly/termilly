@@ -12,7 +12,7 @@ import { setKeyHandler, scheduleFit, clearActivity, keptRunning } from './termin
 import { consoleDefaults } from './consolecolors.js';
 import {
   newTab, closeTab, focusedTab, splitFocused, moveFocus, renderAll, switchWorkspace, restoreFocus, noteOutput,
-  cycleGroupTab, moveAllToTabs, DIRECTION,
+  cycleGroupTab, moveAllToTabs, reopenWindows, DIRECTION,
 } from './panes.js';
 import { initSidebar, toggleSidebar } from './sidebar.js';
 import './remotepc.js';
@@ -562,6 +562,8 @@ function boot(saved, snapshot, liveSessions = []) {
   applySettings();
   if (state.activeId) switchWorkspace(state.activeId);
   initFiles();
+  // Terminals that were in windows of their own when Termilly closed open in them again.
+  if (restored) reopenWindows();
   if (!restored) newTab();
   keepEarlierOfOpen();
   // Show the page when the focused terminal prints its prompt (see 'output'); straight away if there is
