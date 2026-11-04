@@ -736,8 +736,27 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
    same font, padding and wrapping, so each character sits in the same place; with links on, the box's own text is
    clear and its caret and selection show over the layer. While Ctrl is held the layer takes the mouse. */
 .np-editor { position: relative; display: flex; flex: 1; min-height: 0; }
-.np-text, .np-layer { margin: 0; padding: 10px 12px; font: 13px/1.5 var(--mono); tab-size: 4; white-space: pre-wrap; overflow-wrap: break-word; }
-.np-text { position: relative; z-index: 1; flex: 1; min-width: 0; border: 0; border-radius: 0 0 var(--radius) var(--radius); outline: none; background: transparent; color: var(--text); resize: none; }
+.np-text, .np-layer, .np-measure { margin: 0; padding: 10px 12px; font: var(--np-size, 13px)/1.5 var(--mono); tab-size: 4; white-space: pre-wrap; overflow-wrap: break-word; }
+.np-text { position: relative; z-index: 1; flex: 1; min-width: 0; border: 0; outline: none; background: transparent; color: var(--text); resize: none; }
+/* The page's toolbar under the tabs (its file, copying to a note, its view switches) and its status bar at the foot. */
+.np-toolbar { padding: 3px 6px; border-bottom: 1px solid var(--border); }
+.np-toolbar .pane-btn:last-child svg { width: 16px; height: 16px; stroke-width: 1; }
+.np-toolbar[hidden], .np-status[hidden] { display: none; }
+.np-sep { flex: none; width: 1px; height: 16px; margin: 0 4px; background: var(--border-strong); }
+.np-status {
+  display: flex; flex-wrap: wrap; gap: 2px 14px; padding: 4px 12px; border-top: 1px solid var(--border);
+  border-radius: 0 0 var(--radius) var(--radius); color: var(--muted); font-size: 11.5px; font-variant-numeric: tabular-nums;
+}
+/* Where each line starts is measured in a hidden copy of the text (js/notepadview.js); line numbers show in a column
+   on the left, the text moved over for it, and the caret's line is marked behind the text. */
+.np-measure { position: absolute; top: 0; left: 0; box-sizing: border-box; visibility: hidden; pointer-events: none; }
+.np-gutter { position: absolute; top: 0; bottom: 0; left: 0; display: none; width: var(--np-gutter); overflow: hidden; z-index: 2; color: var(--faint); font: var(--np-size, 13px)/1.5 var(--mono); pointer-events: none; }
+.np-gutter span { position: absolute; right: 0; }
+.np-gutter span.on { color: var(--text); }
+.np-editor.with-numbers .np-gutter { display: block; }
+.np-editor.with-numbers .np-text, .np-editor.with-numbers .np-layer, .np-editor.with-numbers .np-measure { padding-left: calc(var(--np-gutter) + 8px); }
+.np-band { position: absolute; left: 0; right: 0; z-index: 0; background: var(--hover); pointer-events: none; }
+.np-band[hidden] { display: none; }
 .np-text:disabled { opacity: .5; }
 .np-text[hidden] { display: none; }
 /* No pages: New page and Open a file, in the middle of the panel. */
@@ -748,14 +767,14 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
 .np-layer { position: absolute; top: 0; left: 0; box-sizing: border-box; overflow: hidden; color: var(--text); pointer-events: none; }
 .np-editor:not(.with-links) .np-layer { display: none; }
 .np-editor.with-links .np-text { color: transparent; caret-color: var(--text); }
-.np-editor.nowrap .np-text, .np-editor.nowrap .np-layer { white-space: pre; overflow-wrap: normal; }
+.np-editor.nowrap .np-text, .np-editor.nowrap .np-layer, .np-editor.nowrap .np-measure { white-space: pre; overflow-wrap: normal; }
 .np-link { color: #76e3ea; }
 :root[data-theme="light"] .np-link { color: #1b7c83; }
 .np-editor.np-ctrl .np-text { pointer-events: none; }
 .np-editor.np-ctrl .np-layer { z-index: 2; }
 .np-editor.np-ctrl .np-link { pointer-events: auto; cursor: pointer; }
 .np-editor.np-ctrl .np-link:hover { text-decoration: underline; }
-/* Links and word wrap: lit while on. */
+/* The view switches (links, word wrap, line numbers, the caret's line): lit while on. */
 .files-tools .np-toggle[aria-pressed="true"] { background: var(--pressed); color: var(--text); }
 /* Clipboard's header switches (js/clipboard.js): a short label and a small switch, the Settings one made smaller. */
 .clips-switch {
@@ -3128,7 +3147,7 @@ body.detached-window > .snippets-win { width: auto; height: auto; }
 /* Its header is the window’s title bar (js/windows.js): Return, Minimize, Maximize and Close at its end, in place of
    its own close and detach buttons; it moves the window, so no pane drag cursor. */
 body.detached-window .pane-header > .pane-actions > .close-btn,
-body.detached-window [data-np="detach"], body.detached-window [data-np="close"],
+body.detached-window [data-np="detach"], body.detached-window [data-np="close"], body.detached-window .files-head .np-sep,
 body.detached-window [data-sw="detach"], body.detached-window [data-sw="close"] { display: none; }
 body.detached-window .pane-header { cursor: default; }
 /* Its environment (a production tag’s chip) stays with its tags after the name, not again before it. */

@@ -19,14 +19,18 @@ import { padLinks } from './notepadlinks.js';
 import { isShortcut, KEY_ID } from './keymap.js';
 import { COPY_LABEL as COPY, PASTE_LABEL, MENU_KEYS } from './termclipboard.js';
 import { detach, closeWindow, focusWindow, isDetached } from './windows.js';
+import { padView, NP_FONT } from './notepadview.js';
 
 /** @typedef {import('./store.js').NotepadPage} NotepadPage */
 
 /** What the Notepad's buttons do (data-np). */
 const NOTEPAD_ACTION = Object.freeze({
-  newPage: 'new', open: 'open', save: 'save', saveAs: 'saveAs', move: 'move', links: 'links', wrap: 'wrap', detach: 'detach',
-  close: 'close',
+  newPage: 'new', open: 'open', save: 'save', saveAs: 'saveAs', workspaceNote: 'workspaceNote', terminalNote: 'terminalNote',
+  links: 'links', wrap: 'wrap', numbers: 'numbers', highlight: 'highlight', detach: 'detach', close: 'close',
 });
+/** A page's view switches (its toolbar), and what each is while the page has never set it. */
+const VIEW_DEFAULTS = Object.freeze({ links: true, wrap: true, numbers: false, highlight: false });
+/** @typedef {keyof typeof VIEW_DEFAULTS} ViewSwitch */
 /** The name a new page gets, numbered. */
 const PAGE_NAME = 'Note';
 /** The panel's narrowest width; its widest is half the terminals' area (app.css max-width). */
@@ -41,7 +45,8 @@ const NEW_PAGE_LABEL = 'New page';
 export const NOTEPAD_KEY = Object.freeze({ save: 'KeyS', open: 'KeyO' });
 /**
  * The header's tools, 16px at a 1px line on the pixel grid: a page with a +, an open folder, a disk (save), a disk
- * with a pen (save as), text going into a note, a chain (links on or off) and a line that wraps (word wrap).
+ * with a pen (save as), text going into a note, a chain (links on or off), a line that wraps (word wrap), numbered
+ * lines (line numbers) and a marked line between two others (the caret's line).
  */
 const TOOL_ICONS = Object.freeze({
   newPage: '<svg viewBox="0 0 16 16"><path d="M9.5 1.5h-6v13h9v-10z"/><path d="M9.5 1.5v3h3M7.5 7v5M5 9.5h5"/></svg>',
@@ -51,6 +56,8 @@ const TOOL_ICONS = Object.freeze({
   move: '<svg viewBox="0 0 16 16"><rect x="7.5" y="2.5" width="7" height="11" rx="1"/><path d="M9.5 5.5h3M9.5 8.5h3M9.5 11.5h3M1.5 8.5h4M3.5 6.5l2 2-2 2"/></svg>',
   links: ICONS.link,
   wrap: '<svg viewBox="0 0 16 16"><path d="M1.5 3.5h13M1.5 7.5h10a2 2 0 0 1 0 4h-3M1.5 11.5h4"/><path d="M10 9.5l-2 2 2 2"/></svg>',
+  numbers: '<svg viewBox="0 0 16 16"><path d="M2.5 2.5h1v4M2 6.5h2M1.5 9.5h2v1.5h-2v1.5h2M6.5 4.5h8M6.5 8.5h8M6.5 12.5h8"/></svg>',
+  highlight: '<svg viewBox="0 0 16 16"><path d="M1.5 2.5h13M1.5 13.5h13"/><rect x="1.5" y="6.5" width="13" height="3"/></svg>',
 });
 /**
  * The page's right-click menu, 16px at a 1px line: scissors (cut) and a clipboard with a T (paste as plain text); paste
@@ -78,21 +85,30 @@ panel.innerHTML = `
     <span class="files-title">Notepad</span>
     <span class="files-tools">
       <button class="pane-btn" data-np="${NOTEPAD_ACTION.newPage}" title="New page">${TOOL_ICONS.newPage}</button>
-      <button class="pane-btn" data-np="${NOTEPAD_ACTION.open}" title="Open a text file (Ctrl+O)">${TOOL_ICONS.open}</button>
-      <button class="pane-btn" data-np="${NOTEPAD_ACTION.save}" title="Save (Ctrl+S)">${TOOL_ICONS.save}</button>
-      <button class="pane-btn" data-np="${NOTEPAD_ACTION.saveAs}" title="Save as (Ctrl+Shift+S)">${TOOL_ICONS.saveAs}</button>
-      <button class="pane-btn" data-np="${NOTEPAD_ACTION.move}" title="Copy the selection, or the whole page, to a workspace's or a terminal's note">${TOOL_ICONS.move}</button>
-      <button class="pane-btn np-toggle" data-np="${NOTEPAD_ACTION.links}" title="Links: paths and web addresses, Ctrl+click to open (off: plain text)">${TOOL_ICONS.links}</button>
-      <button class="pane-btn np-toggle" data-np="${NOTEPAD_ACTION.wrap}" title="Word wrap">${TOOL_ICONS.wrap}</button>
+      <span class="np-sep"></span>
       <button class="pane-btn" data-np="${NOTEPAD_ACTION.detach}" title="${DETACH_BUTTON.title}">${DETACH_BUTTON.icon}</button>
       <button class="pane-btn" data-np="${NOTEPAD_ACTION.close}" title="Close (Ctrl+Shift+M)">${ICONS.close}</button>
     </span>
   </div>
   <div class="pv-tabs np-tabs" role="tablist"></div>
+  <div class="np-toolbar files-tools">
+    <button class="pane-btn" data-np="${NOTEPAD_ACTION.open}" title="Open a text file (Ctrl+O)">${TOOL_ICONS.open}</button>
+    <button class="pane-btn" data-np="${NOTEPAD_ACTION.save}" title="Save (Ctrl+S)">${TOOL_ICONS.save}</button>
+    <button class="pane-btn" data-np="${NOTEPAD_ACTION.saveAs}" title="Save as (Ctrl+Shift+S)">${TOOL_ICONS.saveAs}</button>
+    <span class="np-sep"></span>
+    <button class="pane-btn" data-np="${NOTEPAD_ACTION.workspaceNote}" title="Copy the selection, or the whole page, to a workspace's note">${ICONS.workspaces}</button>
+    <button class="pane-btn" data-np="${NOTEPAD_ACTION.terminalNote}" title="Copy the selection, or the whole page, to a terminal's note">${ICONS.terminal}</button>
+    <span class="np-sep"></span>
+    <button class="pane-btn np-toggle" data-np="${NOTEPAD_ACTION.links}" title="Links: paths and web addresses, Ctrl+click to open (off: plain text)">${TOOL_ICONS.links}</button>
+    <button class="pane-btn np-toggle" data-np="${NOTEPAD_ACTION.wrap}" title="Word wrap">${TOOL_ICONS.wrap}</button>
+    <button class="pane-btn np-toggle" data-np="${NOTEPAD_ACTION.numbers}" title="Line numbers">${TOOL_ICONS.numbers}</button>
+    <button class="pane-btn np-toggle" data-np="${NOTEPAD_ACTION.highlight}" title="Highlight the caret's line">${TOOL_ICONS.highlight}</button>
+  </div>
   <div class="np-editor"><textarea class="np-text" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off"></textarea>
     <div class="np-empty" hidden><p>No pages</p><span class="np-empty-actions">
       <button class="btn primary" data-np="${NOTEPAD_ACTION.newPage}">New page</button>
-      <button class="btn" data-np="${NOTEPAD_ACTION.open}">Open a file</button></span></div></div>`;
+      <button class="btn" data-np="${NOTEPAD_ACTION.open}">Open a file</button></span></div></div>
+  <div class="np-status" hidden></div>`;
 byId(WORKSPACE_ID).append(panel);
 const tabsEl = find(panel, '.np-tabs');
 /** Its header: its title bar in a window of its own, and what drags it out into one. */
@@ -104,11 +120,24 @@ const emptyEl = find(panel, '.np-empty');
 const tabBar = stripBar(tabsEl);
 tabBar.classList.add('np-tabbar');
 const editor = find(panel, '.np-editor');
-editor.before(tabBar);
-/** Links (Ctrl+click) or plain text, and word wrap: both on unless turned off. */
-const linksOn = () => state.notepad.links !== false;
-const wrapOn = () => state.notepad.wrap !== false;
+/** The page's own toolbar, under the tabs: its file, copying to a note, and how it shows. */
+const toolbar = find(panel, '.np-toolbar');
+toolbar.before(tabBar);
+/**
+ * One of the page's view switches (links, word wrap, line numbers, the caret's line): as the page set it, else as the
+ * Notepad had it before pages had their own (links and wrap), else its default.
+ * @param {ViewSwitch} what
+ */
+const viewOn = what => activePage()?.[what] ?? state.notepad[what] ?? VIEW_DEFAULTS[what];
+const linksOn = () => viewOn(NOTEPAD_ACTION.links);
+const wrapOn = () => viewOn(NOTEPAD_ACTION.wrap);
 const links = padLinks(area, () => linksOn() && !panel.hidden);
+const view = padView(area, find(panel, '.np-status'), {
+  size: () => state.notepad.fontSize ?? NP_FONT.default,
+  setSize: px => { state.notepad.fontSize = px; persist(); },
+  numbers: () => viewOn(NOTEPAD_ACTION.numbers),
+  highlight: () => viewOn(NOTEPAD_ACTION.highlight),
+});
 const button = byId('notepad-button');
 // Its title bar starts with the toolbar button's icon, as a window's does.
 find(panel, '.np-icon').innerHTML = /** @type {Element} */ (button.firstElementChild).outerHTML;
@@ -152,31 +181,40 @@ function render() {
   area.value = page?.text ?? '';
   area.disabled = !page;
   area.hidden = !page;
+  toolbar.hidden = !page;
   emptyEl.hidden = !!page;
   applyView();
   if (page) {
     area.setSelectionRange(page.caret ?? 0, page.caretEnd ?? page.caret ?? 0);
     area.scrollTop = page.scroll ?? 0;
   }
+  view.refresh();
   tabsEl.querySelector('.on')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 }
 
-/** Links or plain text, and word wrap, as they're set: the buttons pressed or not, the page drawn again. */
+/**
+ * The page's view as it's set (links or plain text, word wrap, line numbers, its caret's line): the switches pressed
+ * or not, the page drawn again.
+ */
 function applyView() {
   editor.classList.toggle('with-links', linksOn());
   area.wrap = wrapOn() ? 'soft' : 'off';
   editor.classList.toggle('nowrap', !wrapOn());
-  find(panel, `[data-np="${NOTEPAD_ACTION.links}"]`).setAttribute('aria-pressed', String(linksOn()));
-  find(panel, `[data-np="${NOTEPAD_ACTION.wrap}"]`).setAttribute('aria-pressed', String(wrapOn()));
+  for (const what of /** @type {ViewSwitch[]} */ (Object.keys(VIEW_DEFAULTS))) {
+    find(panel, `[data-np="${what}"]`).setAttribute('aria-pressed', String(viewOn(what)));
+  }
   links.refresh();
+  view.refresh();
 }
 
 /**
- * Turns links or word wrap on or off.
- * @param {'links' | 'wrap'} what
+ * Turns one of the page's view switches on or off, for that page.
+ * @param {ViewSwitch} what
  */
 function toggleView(what) {
-  state.notepad[what] = !(state.notepad[what] !== false);
+  const page = activePage();
+  if (!page) return;
+  page[what] = !viewOn(what);
   persist();
   applyView();
   area.focus();
@@ -435,6 +473,17 @@ function noteChoices(textOf = chosenText) {
   ];
 }
 
+/**
+ * The toolbar's Copy to a workspace's note (0) or a terminal's (1): the workspaces or terminals to choose from.
+ * @param {number} which
+ * @param {HTMLElement} at
+ */
+function noteMenu(which, at) {
+  const choice = noteChoices()[which];
+  if (choice.disabled) return void showToast({ text: 'No terminals to copy to', state: TOAST.failed });
+  showMenu(/** @type {() => import('./popups.js').MenuItem[]} */ (choice.submenu)(), at);
+}
+
 // ---- The page's right-click menu ----
 
 /**
@@ -568,9 +617,12 @@ panel.addEventListener('click', e => {
     case NOTEPAD_ACTION.open: openFile(); break;
     case NOTEPAD_ACTION.save: save(false); break;
     case NOTEPAD_ACTION.saveAs: save(true); break;
-    case NOTEPAD_ACTION.move: showMenu(noteChoices(), /** @type {HTMLElement} */ (action)); break;
-    case NOTEPAD_ACTION.links: toggleView(NOTEPAD_ACTION.links); break;
-    case NOTEPAD_ACTION.wrap: toggleView(NOTEPAD_ACTION.wrap); break;
+    case NOTEPAD_ACTION.workspaceNote: noteMenu(0, /** @type {HTMLElement} */ (action)); break;
+    case NOTEPAD_ACTION.terminalNote: noteMenu(1, /** @type {HTMLElement} */ (action)); break;
+    case NOTEPAD_ACTION.links:
+    case NOTEPAD_ACTION.wrap:
+    case NOTEPAD_ACTION.numbers:
+    case NOTEPAD_ACTION.highlight: toggleView(/** @type {ViewSwitch} */ (action?.dataset.np)); break;
     case NOTEPAD_ACTION.detach: detachNotepad(); break;
     case NOTEPAD_ACTION.close: hideNotepad(); break;
     default: break;
@@ -603,7 +655,8 @@ tabsEl.addEventListener('contextmenu', e => {
 // Its own keys while it has the focus (Termilly's shortcuts leave text boxes alone): save, open, back to the terminal.
 panel.addEventListener('keydown', e => {
   const ctrl = e.ctrlKey && !e.altKey;
-  if (ctrl && e.code === NOTEPAD_KEY.save) save(e.shiftKey);
+  if (view.sizeKey(e)) { /* the text's size: Ctrl+= - 0 */ }
+  else if (ctrl && e.code === NOTEPAD_KEY.save) save(e.shiftKey);
   else if (ctrl && !e.shiftKey && e.code === NOTEPAD_KEY.open) openFile();
   else if (isShortcut(e, KEY_ID.notepad)) hideNotepad();
   // Escape goes back to the terminal, in the main window: not from a window of its own.

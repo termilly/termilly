@@ -399,7 +399,7 @@ inEachDocument(doc => doc.addEventListener('keydown', e => {
 
 // Ctrl+wheel zooms the font, like most terminals.
 byId(WORKSPACE_ID).addEventListener('wheel', e => {
-  if (!e.ctrlKey) return;
+  if (!e.ctrlKey || /** @type {HTMLElement} */ (e.target).closest?.('.notepad-panel')) return; // the Notepad sizes its own text
   e.preventDefault();
   e.stopPropagation(); // keep xterm from also scrolling
   if (e.deltaY < 0) commands.fontLarger(); else commands.fontSmaller();
