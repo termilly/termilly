@@ -754,14 +754,14 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
 .np-gutter span { position: absolute; right: 0; }
 .np-gutter span.on { color: var(--text); }
 .np-editor.with-numbers .np-gutter { display: block; }
-/* The numbers are the text's left margin: the box starts after them, so a long line scrolled sideways (no word wrap)
-   never runs under them. The link layer sits over the box the same way. */
+/* The numbers are the text's left margin: their column is painted over the text (the box still spans the panel, so
+   its scroll bar does too), and a long line scrolled sideways (no word wrap) goes under it, 8px after the numbers.
+   The column stops above the box's scroll bar (js/notepadview.js), and the caret's line is marked over both. */
 .np-editor.with-numbers { --np-margin: calc(var(--np-gutter) + 8px); }
-.np-editor.with-numbers .np-gutter { width: var(--np-margin); }
+.np-editor.with-numbers .np-gutter { width: var(--np-margin); z-index: 3; background: var(--raised); }
 .np-editor.with-numbers .np-gutter span { right: 8px; }
-.np-editor.with-numbers .np-text, .np-editor.with-numbers .np-layer { margin-left: var(--np-margin); }
-.np-editor.with-numbers .np-text, .np-editor.with-numbers .np-layer, .np-editor.with-numbers .np-measure { padding-left: 4px; }
-.np-band { position: absolute; left: 0; right: 0; z-index: 0; background: var(--hover); pointer-events: none; }
+.np-editor.with-numbers .np-text, .np-editor.with-numbers .np-layer, .np-editor.with-numbers .np-measure { padding-left: calc(var(--np-margin) + 4px); }
+.np-band { position: absolute; left: 0; right: 0; z-index: 4; background: var(--hover); pointer-events: none; }
 .np-band[hidden] { display: none; }
 .np-text:disabled { opacity: .5; }
 .np-text[hidden] { display: none; }

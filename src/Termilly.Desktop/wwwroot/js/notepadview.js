@@ -78,6 +78,9 @@ function layout(v) {
     measure.textContent = '';
   }
   editor.style.setProperty('--np-gutter', `${String(lines.length).length + GUTTER_EXTRA_CH}ch`);
+  // The numbers' column and the caret's mark are drawn over the box, but not over its scroll bars.
+  v.gutter.style.bottom = `${area.offsetHeight - area.clientHeight}px`;
+  v.band.style.right = `${area.offsetWidth - area.clientWidth}px`;
   place(v);
 }
 
