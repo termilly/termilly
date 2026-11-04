@@ -31,7 +31,7 @@ import { toggleClips, initClips } from './clipboard.js';
 import { chordOf, commandOf, keyHint, KEY_ID } from './keymap.js';
 import { openNewWorktree } from './worktree.js';
 import { openChangedFiles } from './changes.js';
-import { openSnippetsWindow } from './snippetswindow.js';
+import { openSnippetsWindow, initSnippetsWindow } from './snippetswindow.js';
 import { THEMES } from './themes.js';
 import { isPreviewOpen, closePreview } from './preview.js';
 import { pluginCommands, reloadPlugins } from './plugins.js';
@@ -557,8 +557,9 @@ function boot(saved, snapshot, liveSessions = []) {
   applySettings();
   if (state.activeId) switchWorkspace(state.activeId);
   initFiles();
-  // Terminals that were in windows of their own when Termilly closed open in them again.
+  // Terminals that were in windows of their own when Termilly closed open in them again; the Snippets window too.
   if (restored) reopenWindows();
+  initSnippetsWindow();
   if (!restored) newTab();
   keepEarlierOfOpen();
   // Show the page when the focused terminal prints its prompt (see 'output'); straight away if there is

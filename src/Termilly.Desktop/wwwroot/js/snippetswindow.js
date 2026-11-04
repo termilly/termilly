@@ -4,7 +4,7 @@
 // with Save (leaving a snippet with changes not saved asks about them). It opens from the titlebar's snippets
 // button, the palette, and Edit or New in the snippets list (js/snippets.js).
 
-import { state, on, wsById, EVENTS } from './store.js';
+import { state, on, wsById, persist, EVENTS } from './store.js';
 import { focusedTab, restoreFocus } from './panes.js';
 import { closeAll, dropdown } from './popups.js';
 import { escapeHtml } from './ui.js';
@@ -358,6 +358,7 @@ export function openSnippetsWindow({ id = null, create = false } = {}) {
     select(id ?? shown[0]?.s.id ?? null);
     if (!shown.length) renderEditor();
   }
+  keepOpen(true);
   // What has the keyboard once it's open: what's edited, else the search.
   focusOnOpen = /** @type {HTMLElement | null} */ (id || create ? editEl.querySelector('[name="command"], [name="name"]') : null) ?? searchEl;
   // Where there are no windows of its own (macOS for now), over the page as before.
@@ -387,8 +388,24 @@ export async function closeSnippetsWindow({ force = false } = {}) {
   closed();
 }
 
+/**
+ * Whether it's open, kept for the next start (it opens again after a restart).
+ * @param {boolean} open
+ */
+function keepOpen(open) {
+  if (state.snippetsWindow.open === open) return;
+  state.snippetsWindow.open = open;
+  persist();
+}
+
+/** At start: open again if it was open when Termilly closed. */
+export function initSnippetsWindow() {
+  if (state.snippetsWindow.open) openSnippetsWindow();
+}
+
 /** Shut, its window gone: back in its place in the page, hidden, nothing being edited. */
 function closed() {
+  keepOpen(false);
   layer.hidden = true;
   layer.style.visibility = '';
   draft = null;

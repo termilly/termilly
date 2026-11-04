@@ -130,6 +130,8 @@ export const state = {
   clips: { open: false },
   /** @type {FilesState} */
   files: { open: false },
+  /** Whether the Snippets window is open (it opens again after a restart). */
+  snippetsWindow: { open: false },
   /**
    * Where the Notepad's and the Snippets window's own windows were last, by window (js/windows.js), so they open there.
    * @type {Record<string, import('./windows.js').WindowPlace>}
@@ -732,6 +734,7 @@ function serialize() {
     tags: state.tags,
     recentDirs: state.recentDirs,
     notepad: state.notepad,
+    snippetsWindow: state.snippetsWindow,
     clips: state.clips,
     files: state.files,
     windowPlaces: state.windowPlaces,
@@ -777,6 +780,7 @@ export function restore(saved) {
   }
   if (saved.clips && typeof saved.clips === 'object') state.clips = { ...state.clips, ...saved.clips };
   if (saved.files && typeof saved.files === 'object') state.files = { ...state.files, ...saved.files };
+  state.snippetsWindow = { open: saved.snippetsWindow?.open === true };
   state.windowPlaces = Object.fromEntries(Object.entries(saved.windowPlaces ?? {})
     .filter(([key, p]) => [p?.x, p?.y, p?.w, p?.h].every(n => Number.isFinite(n))
       // A terminal's window's place goes with the terminal.
