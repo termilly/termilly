@@ -82,6 +82,31 @@
     <Exec Command="gio set &quot;$(FullOutDir)termilly&quot; metadata::custom-icon &quot;file://$(FullOutDir)icons/hicolor/256x256/apps/termilly.png&quot;" ContinueOnError="true" StandardOutputImportance="low" />
   </Target>
 
+  <!--
+    macOS: Termilly.app next to the build, so the Finder shows Termilly with its icon and version (Get Info, the
+    Version column) and it opens like any app. It starts the termilly built beside it. The icon is made from the
+    hicolor PNGs at their own sizes (none scaled, so each stays crisp).
+  -->
+  <Target Name="MacAppBundle" AfterTargets="Build" Condition="$([MSBuild]::IsOSPlatform('OSX'))">
+    <PropertyGroup>
+      <MacApp>$([System.IO.Path]::GetFullPath('$(OutDir)'))Termilly.app/Contents</MacApp>
+      <MacIconSet>$(IntermediateOutputPath)termilly.iconset</MacIconSet>
+      <MacIcons>$(OutDir)icons/hicolor</MacIcons>
+    </PropertyGroup>
+    <MakeDir Directories="$(MacApp)/MacOS;$(MacApp)/Resources;$(MacIconSet)" />
+    <WriteLinesToFile File="$(MacApp)/Info.plist" Overwrite="true" WriteOnlyWhenDifferent="true" Lines="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;;&lt;!DOCTYPE plist PUBLIC &quot;-//Apple//DTD PLIST 1.0//EN&quot; &quot;http://www.apple.com/DTDs/PropertyList-1.0.dtd&quot;&gt;;&lt;plist version=&quot;1.0&quot;&gt;&lt;dict&gt;;&lt;key&gt;CFBundleName&lt;/key&gt;&lt;string&gt;Termilly&lt;/string&gt;;&lt;key&gt;CFBundleDisplayName&lt;/key&gt;&lt;string&gt;Termilly&lt;/string&gt;;&lt;key&gt;CFBundleIdentifier&lt;/key&gt;&lt;string&gt;com.termilly.app&lt;/string&gt;;&lt;key&gt;CFBundleExecutable&lt;/key&gt;&lt;string&gt;termilly&lt;/string&gt;;&lt;key&gt;CFBundleIconFile&lt;/key&gt;&lt;string&gt;termilly&lt;/string&gt;;&lt;key&gt;CFBundlePackageType&lt;/key&gt;&lt;string&gt;APPL&lt;/string&gt;;&lt;key&gt;CFBundleShortVersionString&lt;/key&gt;&lt;string&gt;$(Version)&lt;/string&gt;;&lt;key&gt;CFBundleVersion&lt;/key&gt;&lt;string&gt;$(Version)&lt;/string&gt;;&lt;key&gt;NSHighResolutionCapable&lt;/key&gt;&lt;true/&gt;;&lt;/dict&gt;&lt;/plist&gt;" />
+    <WriteLinesToFile File="$(MacApp)/MacOS/termilly" Overwrite="true" WriteOnlyWhenDifferent="true" Lines="#!/bin/bash;exec &quot;%24(dirname &quot;$0&quot;)/../../../termilly&quot; &quot;$@&quot;" />
+    <Exec Command="chmod +x &quot;$(MacApp)/MacOS/termilly&quot;" />
+    <Copy SourceFiles="$(MacIcons)/16x16/apps/termilly.png" DestinationFiles="$(MacIconSet)/icon_16x16.png" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(MacIcons)/32x32/apps/termilly.png" DestinationFiles="$(MacIconSet)/icon_16x16@2x.png" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(MacIcons)/32x32/apps/termilly.png" DestinationFiles="$(MacIconSet)/icon_32x32.png" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(MacIcons)/64x64/apps/termilly.png" DestinationFiles="$(MacIconSet)/icon_32x32@2x.png" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(MacIcons)/128x128/apps/termilly.png" DestinationFiles="$(MacIconSet)/icon_128x128.png" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(MacIcons)/256x256/apps/termilly.png" DestinationFiles="$(MacIconSet)/icon_128x128@2x.png" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(MacIcons)/256x256/apps/termilly.png" DestinationFiles="$(MacIconSet)/icon_256x256.png" SkipUnchangedFiles="true" />
+    <Exec Command="iconutil -c icns &quot;$(MacIconSet)&quot; -o &quot;$(MacApp)/Resources/termilly.icns&quot;" ContinueOnError="true" StandardOutputImportance="low" />
+  </Target>
+
   <!-- Shell integration scripts (PowerShell's termilly.ps1), next to the app as on Windows. -->
   <ItemGroup>
     <None Include="..\Termilly.Desktop\shell\**\*" LinkBase="shell" CopyToOutputDirectory="PreserveNewest" />

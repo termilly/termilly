@@ -2684,7 +2684,7 @@ textarea.field { height: auto; padding: 7px 10px; line-height: 1.5; resize: vert
    yellow and green circles whose signs show while the pointer is over them, grey while the window isn't in front. */
 :root[data-os="mac"] .mac-lights { align-items: center; gap: 8px; }
 :root[data-os="mac"] #titlebar .mac-lights { margin: 0 14px 0 12px; }
-:root[data-os="mac"] #titlebar .brand { margin-left: 0; }
+:root[data-os="mac"] #titlebar .brand { display: none; } /* no icon, name or version: the Finder shows them (Termilly.app) */
 :root[data-os="mac"] #titlebar .tb-right > .separator:last-child { display: none; }
 :root[data-os="mac"] .detached-window .mac-lights { flex: none; margin: 0 10px 0 4px; }
 :root[data-os="mac"] .mac-lights button {
