@@ -14,7 +14,7 @@ internal static class SettingValues
         public const string Light = "light";
         /// <summary>Follow the system's light or dark mode.</summary>
         public const string System = "system";
-        public const string Default = Dark;
+        public const string Default = System;
     }
 
     public static class CursorStyle

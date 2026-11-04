@@ -216,7 +216,7 @@ export const SETTING_VALUES = Object.freeze({
     dark: 'dark',
     light: 'light',
     system: 'system',
-    default: 'dark',
+    default: 'system',
   }),
   cursorStyle: Object.freeze({
     bar: 'bar',
