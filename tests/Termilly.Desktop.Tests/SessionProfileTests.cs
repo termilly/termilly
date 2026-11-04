@@ -405,6 +405,14 @@ public sealed class SessionProfileTests : IDisposable
     }
 
     [Fact]
+    public void Macs_own_bash_doesnt_say_zsh_is_the_default_at_each_start()
+    {
+        var bash = new SessionProfile("bash", "bash", "/bin/bash", "bash", "/bin/bash -l", ProfileSources.Local);
+        var vars = SessionLaunch.EnvironmentFor(bash, "0.1.0");
+        Assert.Equal(OperatingSystem.IsMacOS(), vars.TryGetValue("BASH_SILENCE_DEPRECATION_WARNING", out var quiet) && quiet == "1");
+    }
+
+    [Fact]
     public void Without_shells_there_is_sh() =>
         Assert.Equal("sh", Assert.Single(SessionProfiles.PickUnixShells(null, [], [], _ => false)).Id);
 

@@ -18,6 +18,8 @@ internal static class SessionLaunch
         public const string AgentDir = "TERMILLY_AGENT_DIR";
         /// <summary>Tells shell\termilly.ps1 to load: without it the script does nothing.</summary>
         public const string ShellIntegration = "TERMILLY_SHELL_INTEGRATION";
+        /// <summary>macOS's bash: without it, each start says zsh is the default shell now.</summary>
+        public const string QuietBash = "BASH_SILENCE_DEPRECATION_WARNING";
     }
 
     /// <summary>The variables bash reads its prompt marks from (<see cref="AddBashMarks"/>).</summary>
@@ -98,6 +100,12 @@ internal static class SessionLaunch
         if (OperatingSystem.IsWindows())
         {
             vars[Variables.WslEnv] = WithWslVariables(System.Environment.GetEnvironmentVariable(Variables.WslEnv), $"{RemoteIntegration.Variable}{WslToLinux}");
+        }
+        if (OperatingSystem.IsMacOS())
+        {
+            // macOS's own bash (3.2) says at each start that zsh is the default now: in every terminal and restart.
+            // Only that bash reads this, so a bash typed in zsh stays quiet too.
+            vars[Variables.QuietBash] = "1";
         }
         foreach (var (name, value) in profile.Environment ?? new Dictionary<string, string>())
         {
