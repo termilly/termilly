@@ -5,6 +5,7 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Shell;
+using System.Windows.Threading;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
 using Termilly.Desktop.Messaging;
@@ -36,6 +37,7 @@ internal sealed class DetachedWindow : Window
     /// <summary>While a move its title bar started is under way (a resize isn't one): its steps are reported.</summary>
     private bool _moving;
 
+    private const int WM_DISPLAYCHANGE = 0x007E;
     private const int WM_MOVING = 0x0216;
     private const int WM_EXITSIZEMOVE = 0x0232;
 
@@ -91,6 +93,7 @@ internal sealed class DetachedWindow : Window
         LocationChanged += (_, _) => ReportPlace();
         SizeChanged += (_, _) => ReportPlace();
         Show();
+        WindowPlacement.KeepOnScreen(this); // the place it remembers may be on a monitor that's gone
         await _web.EnsureCoreWebView2Async(environment);
         var core = _web.CoreWebView2;
         core.SetVirtualHostNameToFolderMapping(hostName, AppPaths.WebRoot, CoreWebView2HostResourceAccessKind.Deny);
@@ -179,7 +182,12 @@ internal sealed class DetachedWindow : Window
     /// <summary>The steps of a move its title bar started, and its end.</summary>
     private IntPtr OnMessage(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
-        if (_moving && msg == WM_MOVING)
+        if (msg == WM_DISPLAYCHANGE)
+        {
+            // A monitor went (a remote desktop session has fewer): after Windows has moved what it moves itself.
+            Dispatcher.BeginInvoke(DispatcherPriority.Background, () => WindowPlacement.KeepOnScreen(this));
+        }
+        else if (_moving && msg == WM_MOVING)
         {
             Moved?.Invoke(this, false);
         }
@@ -194,6 +202,7 @@ internal sealed class DetachedWindow : Window
     /// <summary>To the front, out of the taskbar if it was minimized.</summary>
     public void BringToFront()
     {
+        WindowPlacement.KeepOnScreen(this);
         if (WindowState == WindowState.Minimized)
         {
             WindowState = WindowState.Normal;

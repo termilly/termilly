@@ -16,9 +16,12 @@ namespace Termilly.Desktop;
 internal static class WindowPlacement
 {
     private const int SW_HIDE = 0;
+    private const int SW_SHOWNORMAL = 1;
     private const int SW_SHOWMINIMIZED = 2;
     private const int SW_SHOWMAXIMIZED = 3;
+    private const int SW_SHOWNOACTIVATE = 4;
     private const int WPF_RESTORETOMAXIMIZED = 2;
+    private const int MONITOR_DEFAULTTONULL = 0;
     private const int MONITOR_DEFAULTTONEAREST = 2;
     private const int MONITOR_DEFAULTTOPRIMARY = 1;
     /// <summary>A first start's size, in pixels at 100%.</summary>
@@ -27,6 +30,8 @@ internal static class WindowPlacement
     /// <summary>A saved place smaller than this is ignored (a damaged file, or a window too small to use).</summary>
     private const int MinSavedWidth = 200;
     private const int MinSavedHeight = 150;
+    /// <summary>How far in from a window's top corners its title bar is looked for on the monitors, in pixels.</summary>
+    private const int TitleBarInset = 12;
     /// <summary>Windows' DPI at 100%, and the scale when a monitor's isn't known.</summary>
     private const double NoScale = 1.0;
 
@@ -72,9 +77,46 @@ internal static class WindowPlacement
     {
         var width = Math.Min(Math.Max(r.Right - r.Left, (int)Math.Ceiling(minimum.Width * scale)), work.Width);
         var height = Math.Min(Math.Max(r.Bottom - r.Top, (int)Math.Ceiling(minimum.Height * scale)), work.Height);
-        var left = Math.Clamp(r.Left, work.X, work.X + work.Width - width);
-        var top = Math.Clamp(r.Top, work.Y, work.Y + work.Height - height);
-        return new Int32Rect(left, top, width, height);
+        return Within(new Int32Rect(r.Left, r.Top, width, height), work);
+    }
+
+    /// <summary>A place moved (and shrunk, if need be) to lie within the work area.</summary>
+    internal static Int32Rect Within(Int32Rect place, Int32Rect work)
+    {
+        var width = Math.Min(place.Width, work.Width);
+        var height = Math.Min(place.Height, work.Height);
+        return new Int32Rect(Math.Clamp(place.X, work.X, work.X + work.Width - width), Math.Clamp(place.Y, work.Y, work.Y + work.Height - height), width, height);
+    }
+
+    /// <summary>
+    /// A window whose title bar is on no monitor (the one it was on is gone: unplugged, or a remote desktop session with
+    /// fewer) comes back to the nearest one, keeping maximized or minimized. It can't be reached or moved otherwise.
+    /// </summary>
+    public static void KeepOnScreen(Window window)
+    {
+        var hwnd = new WindowInteropHelper(window).Handle;
+        var placement = new WINDOWPLACEMENT { length = Marshal.SizeOf<WINDOWPLACEMENT>() };
+        if (hwnd == IntPtr.Zero || !GetWindowPlacement(hwnd, ref placement) || TitleBarShows(placement.rcNormalPosition))
+        {
+            return;
+        }
+        var r = placement.rcNormalPosition;
+        var (work, _) = Monitor(MonitorFromRect(ref r, MONITOR_DEFAULTTONEAREST));
+        var place = Within(new Int32Rect(r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top), work);
+        placement.rcNormalPosition = new RECT { Left = place.X, Top = place.Y, Right = place.X + place.Width, Bottom = place.Y + place.Height };
+        if (placement.showCmd == SW_SHOWNORMAL)
+        {
+            placement.showCmd = SW_SHOWNOACTIVATE; // it moves; the focus stays where it is
+        }
+        SetWindowPlacement(hwnd, ref placement);
+    }
+
+    /// <summary>Whether either end of a window's title bar is on a monitor.</summary>
+    private static bool TitleBarShows(RECT r)
+    {
+        var y = r.Top + TitleBarInset;
+        return MonitorFromPoint(new POINT { X = r.Left + TitleBarInset, Y = y }, MONITOR_DEFAULTTONULL) != IntPtr.Zero
+            || MonitorFromPoint(new POINT { X = r.Right - TitleBarInset, Y = y }, MONITOR_DEFAULTTONULL) != IntPtr.Zero;
     }
 
     /// <summary>

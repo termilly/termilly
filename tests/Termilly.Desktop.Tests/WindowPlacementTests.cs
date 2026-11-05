@@ -20,6 +20,18 @@ public sealed class WindowPlacementTests : IDisposable
     }
 
     [Theory]
+    [InlineData(1950, 100, 800, 600, 1120, 100, 800, 600)] // on the second monitor, gone: to the right edge of the first
+    [InlineData(-900, -50, 800, 600, 0, 0, 800, 600)] // left of and above it
+    [InlineData(2500, 900, 3000, 2000, 0, 0, 1920, 1040)] // bigger than the monitor: shrunk to it
+    [InlineData(100, 100, 800, 600, 100, 100, 800, 600)] // already there
+    public void A_place_on_a_monitor_thats_gone_comes_within_the_one_left(int x, int y, int width, int height, int toX, int toY, int toWidth, int toHeight)
+    {
+        var work = new System.Windows.Int32Rect(0, 0, 1920, 1040);
+
+        Assert.Equal(new System.Windows.Int32Rect(toX, toY, toWidth, toHeight), WindowPlacement.Within(new System.Windows.Int32Rect(x, y, width, height), work));
+    }
+
+    [Theory]
     [InlineData("")]
     [InlineData("not json")]
     [InlineData("""{"Left":10,"Top":10,"Right":60,"Bottom":40,"Maximized":false}""")]

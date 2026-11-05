@@ -15,6 +15,9 @@ namespace Termilly.Linux;
 internal static class DetachedWindows
 {
     private const string Gtk = "libgtk-3.so.0";
+    private const string Gdk = "libgdk-3.so.0";
+    /// <summary>How far in from a window's corner its title bar is looked for on the monitors, in pixels.</summary>
+    private const int TitleBarInset = 12;
     private const string GObject = "libgobject-2.0.so.0";
     private const string WebKit = "libwebkit2gtk-4.1.so.0";
     private const string JavaScriptCore = "libjavascriptcoregtk-4.1.so.0";
@@ -238,7 +241,8 @@ internal static class DetachedWindows
         {
             gtk_window_set_default_size(window, geometry.Width, geometry.Height);
         }
-        if (geometry.X > 0 || geometry.Y > 0)
+        // A place on a monitor that's gone is left to the window manager.
+        if ((geometry.X > 0 || geometry.Y > 0) && OnAMonitor(geometry.X + TitleBarInset, geometry.Y + TitleBarInset))
         {
             gtk_window_move(window, geometry.X, geometry.Y); // X11 only: Wayland places windows itself
         }
@@ -281,6 +285,20 @@ internal static class DetachedWindows
         return 1;
     }
 
+    private static bool OnAMonitor(int x, int y)
+    {
+        var display = gdk_display_get_default();
+        for (var i = gdk_display_get_n_monitors(display) - 1; i >= 0; i--)
+        {
+            gdk_monitor_get_geometry(gdk_display_get_monitor(display, i), out var area);
+            if (x >= area.X && y >= area.Y && x < area.X + area.Width && y < area.Y + area.Height)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
     [StructLayout(LayoutKind.Sequential)]
     private struct GdkRectangle
     {
@@ -295,6 +313,10 @@ internal static class DetachedWindows
     [DllImport(Gtk)] private static extern IntPtr gtk_window_new(int type);
     [DllImport(Gtk)] private static extern void gtk_window_set_default_size(IntPtr window, int width, int height);
     [DllImport(Gtk)] private static extern void gtk_window_move(IntPtr window, int x, int y);
+    [DllImport(Gdk)] private static extern IntPtr gdk_display_get_default();
+    [DllImport(Gdk)] private static extern int gdk_display_get_n_monitors(IntPtr display);
+    [DllImport(Gdk)] private static extern IntPtr gdk_display_get_monitor(IntPtr display, int index);
+    [DllImport(Gdk)] private static extern void gdk_monitor_get_geometry(IntPtr monitor, out GdkRectangle area);
     [DllImport(Gtk)] private static extern void gtk_window_set_title(IntPtr window, [MarshalAs(UnmanagedType.LPUTF8Str)] string title);
     [DllImport(Gtk)] private static extern void gtk_window_present(IntPtr window);
     [DllImport(Gtk)] private static extern void gtk_container_add(IntPtr container, IntPtr widget);
