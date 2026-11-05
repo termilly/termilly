@@ -40,6 +40,12 @@ export function onMiddleClick(el, fn) {
 export const byId = id => /** @type {HTMLElement} */ (document.getElementById(id));
 
 /**
+ * The start of a panel's title: its title bar button's icon.
+ * @param {HTMLElement} button
+ */
+export const titleIconHtml = button => `<span class="title-icon">${/** @type {Element} */ (button.firstElementChild).outerHTML}</span>`;
+
+/**
  * The element a selector finds in `root`.
  * @param {ParentNode} root
  * @param {string} selector

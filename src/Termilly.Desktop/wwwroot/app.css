@@ -613,7 +613,7 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
 .files-head { display: flex; align-items: center; padding: 8px 10px 4px 12px; }
 .files-head > .files-tools { margin-left: auto; }
 /* A panel's title bar starts with its toolbar button's icon (the Notepad's, the Snippets window's), as a window's does. */
-.title-icon { display: flex; flex: none; align-items: center; margin-right: 8px; color: var(--muted); }
+.title-icon { display: flex; flex: none; align-items: center; margin-right: 8px; color: var(--accent); }
 .title-icon > svg { display: block; width: 16px; height: 16px; }
 .files-title { overflow: hidden; color: var(--text); font-size: 12.5px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .files-ws { margin-left: 4px; color: var(--faint); font-weight: 400; }

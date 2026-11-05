@@ -12,7 +12,7 @@ import { state, on, emit, tabTitle, wsById, persist, EVENTS, GROUPS } from './st
 import { focusedTab, restoreFocus, newTab } from './panes.js';
 import { scheduleFit, pasteInto } from './terminals.js';
 import { escapeHtml, formatWhen, ICONS } from './ui.js';
-import { byId, targetOf, dockRight, WORKSPACE_ID, DOCK_GRIP, CLIP_DRAG } from './dom.js';
+import { byId, targetOf, dockRight, titleIconHtml, WORKSPACE_ID, DOCK_GRIP, CLIP_DRAG } from './dom.js';
 import { showMenu, SEPARATOR } from './popups.js';
 import { showToast, TOAST } from './toasts.js';
 import { quotePaths } from './quoting.js';
@@ -358,6 +358,7 @@ function render() {
   panel.innerHTML = `
     <div class="${DOCK_GRIP}" title="Drag to resize"></div>
     <div class="files-head">
+      ${titleIconHtml(button)}
       <span class="files-title">Clipboard <span class="files-ws">${clips.length === 1 ? '1 clip' : `${clips.length} clips`}</span></span>
       <span class="files-tools">
         ${switchHtml(PANEL_ACTION.keep, 'Listen', keeping, 'Watch Clipboard')}
