@@ -3162,9 +3162,9 @@ body.detached-window > .snippets-win { width: auto; height: auto; }
 body.detached-window .pane-header > .pane-actions > .close-btn,
 body.detached-window [data-np="detach"], body.detached-window [data-np="close"], body.detached-window .files-head .np-sep,
 body.detached-window [data-sw="detach"], body.detached-window [data-sw="close"] { display: none; }
-body.detached-window .pane-header { padding-right: 2px; cursor: default; }
-/* A window's title bar: its controls close to the corner, as on the main window. */
-body.detached-window > .notepad-panel > .files-head, body.detached-window > .snippets-win > .set-head { padding-top: 4px; padding-right: 2px; }
+body.detached-window .pane-header { cursor: default; }
+/* A window's title bar: less space above it than a docked panel's. */
+body.detached-window > .notepad-panel > .files-head, body.detached-window > .snippets-win > .set-head { padding-top: 4px; }
 /* Its environment (a production tag’s chip) stays with its tags after the name, not again before it. */
 body.detached-window .pane-header .env-chip { display: none; }
 .detached-controls { display: flex; flex: none; align-items: center; margin-left: 4px; }
