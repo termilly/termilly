@@ -40,6 +40,12 @@ interface TodoTask {
   done?: boolean;
   created: number;
   issue?: { repo: string; number: number; url: string };
+  /** In progress or Review; a task with neither is Open, or Done with `done`. */
+  status?: string;
+  /** The terminal working on it (Implement). */
+  terminal?: string;
+  /** What the agent that finished it said. */
+  review?: { summary: string; by: string };
 }
 
 /** A note pinned to a terminal, a host or a workspace (js/notes.js). */

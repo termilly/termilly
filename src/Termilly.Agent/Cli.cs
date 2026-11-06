@@ -17,6 +17,11 @@ internal static class Cli
           termilly open [--profile P] [--cwd DIR] [--name N] [--workspace W] [-- command...]
                                                        a new terminal, optionally running a command
           termilly send <text> [--pane ID] [--enter]   type into a terminal (allow it in Settings first)
+          termilly tasks [--json]                      To do tasks of this terminal and its workspace
+          termilly tasks show <id>                     one task in full
+          termilly tasks tick <id> <numbers>           tick its steps (1,3)
+          termilly tasks done <id> --summary TEXT [--step N]
+                                                       say you finished it (the user reviews it)
           termilly snippet list [--json]               saved commands (Termilly's snippets) and their variables
           termilly snippet run <name> [--pane ID] [--var NAME=VALUE]...
                                                        run a snippet in a terminal (allow typing in Settings first)
@@ -35,6 +40,9 @@ internal static class Cli
         public const string Mcp = "mcp";
         public const string List = "list";
         public const string Run = "run";
+        public const string Show = "show";
+        public const string Tick = "tick";
+        public const string Done = "done";
     }
 
     /// <summary>The command's options.</summary>
@@ -56,6 +64,8 @@ internal static class Cli
         public const string Cwd = "--cwd";
         public const string Name = "--name";
         public const string Workspace = "--workspace";
+        public const string Summary = "--summary";
+        public const string Step = "--step";
         /// <summary>What every option starts with.</summary>
         public const string Prefix = "--";
         /// <summary>What follows is the command to run.</summary>
@@ -88,6 +98,7 @@ internal static class Cli
                 [ApiMethods.History, .. var rest] => History(rest),
                 [ApiMethods.Read, .. var rest] => Output(Api.Call(ApiMethods.Read, ReadArguments(rest))),
                 [ApiMethods.Wait, .. var rest] => Output(Api.Call(ApiMethods.Wait, WaitArguments(rest))),
+                [ApiMethods.Tasks, .. var rest] => Tasks(rest),
                 [ApiMethods.Snippet, Commands.List, .. var rest] => Snippets(rest),
                 [ApiMethods.Snippet, Commands.Run, var name, .. var rest] => Print(Api.Call(ApiMethods.Snippet, new JsonObject { [ApiFields.Name] = name, [ApiFields.Pane] = Pane(rest), [ApiFields.Vars] = Vars(rest) })?[ApiFields.Command]?.ToString() ?? ""),
                 _ => Fail($"Unknown command. {Help}"),
@@ -134,6 +145,29 @@ internal static class Cli
     }
 
     /// <summary>A read or wait result for a script: the command and its exit code on top, then the lines.</summary>
+    /// <summary>termilly tasks: the To do tasks of this terminal and its workspace, one in full, sub-items ticked, or a finish.</summary>
+    private static int Tasks(string[] args) => args switch
+    {
+        [Commands.Show, var id, ..] => Print(Api.Pretty(Api.Call(ApiMethods.Task, new JsonObject { [ApiFields.Task] = id }))),
+        [Commands.Tick, var id, var numbers, ..] => Done(Api.Call(ApiMethods.TaskTick, new JsonObject { [ApiFields.Task] = id, [ApiFields.Tick] = numbers })),
+        [Commands.Done, var id, .. var rest] => Done(Api.Call(ApiMethods.TaskDone, new JsonObject { [ApiFields.Task] = id, [ApiFields.Summary] = Option(rest, Options.Summary) ?? "", [ApiFields.Step] = Option(rest, Options.Step) })),
+        _ => TaskList(args),
+    };
+
+    private static int TaskList(string[] args)
+    {
+        var tasks = Api.Call(ApiMethods.Tasks, [])?[ApiFields.Tasks]?.AsArray() ?? [];
+        if (args.Contains(Options.Json))
+        {
+            return Print(Api.Pretty(tasks));
+        }
+        foreach (var task in tasks)
+        {
+            Console.WriteLine($"{task?[ApiFields.Id],IdWidth} {task?[ApiFields.TaskStatus],StateWidth} {task?[ApiFields.Title]}");
+        }
+        return 0;
+    }
+
     private static int Output(JsonNode? result)
     {
         if (result?[ApiFields.TimedOut]?.GetValue<bool>() == true)

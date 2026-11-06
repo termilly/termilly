@@ -29,6 +29,7 @@ import { openGitWindow, openAgentChanges, gitFolderOf, onServer, openRemoteGitNo
 import { toggleFiles, initFiles } from './filepanel.js';
 import { toggleNotepad, toggleNotepadFromKeys, initNotepad } from './notepad.js';
 import { toggleTodo, initTodo } from './todopanel.js';
+import './todoagent.js';
 import { toggleClips, initClips } from './clipboard.js';
 import { chordOf, commandOf, keyHint, KEY_ID } from './keymap.js';
 import { openNewWorktree } from './worktree.js';

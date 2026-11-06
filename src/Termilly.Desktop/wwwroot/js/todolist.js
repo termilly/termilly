@@ -2,6 +2,9 @@
 // What To do's lists are made of, with nothing of the page in it: text turned into tasks (typed, pasted, or a note's
 // lines), and what a list counts. js/todo.js keeps the lists; js/todopanel.js shows them.
 
+/** A task's statuses. */
+export const TASK_STATUS = Object.freeze({ open: 'open', progress: 'progress', review: 'review', done: 'done' });
+
 /** How many of a list's open tasks a hover shows. */
 export const HOVER_TASKS = 5;
 /** The longest tag: a `#` in a line of text isn't a tag past this. */
@@ -217,6 +220,19 @@ export function detailLines(details) {
   });
 }
 
+/** @param {TodoTask} task */
+export const statusOf = task => (task.done ? TASK_STATUS.done : task.status ?? TASK_STATUS.open);
+
+/**
+ * The details with a sub-item ticked, by its number among the sub-items, from 1. Unchanged when there's no such one.
+ * @param {string} details
+ * @param {number} number
+ */
+export function tickByNumber(details, number) {
+  const line = detailLines(details).filter(l => l.sub)[number - 1];
+  return line ? tickSub(details, line.at, true) : details;
+}
+
 /**
  * The details with one sub-item ticked or not.
  * @param {string} details
@@ -260,11 +276,14 @@ const oneLine = text => text.replace(/\s+/g, ' ').trim();
  * @param {DetailLine} [sub]
  */
 export function implementPrompt(task, sub) {
-  if (sub) return `Work on this step from my Termilly To do list: '${oneLine(sub.text)}'. It is part of the task '${oneLine(task.text)}'. Tell me when it is done.`;
   const lines = detailLines(task.details);
+  if (sub) {
+    const step = lines.filter(line => line.sub).findIndex(line => line.at === sub.at) + 1;
+    return `Work on this step from my Termilly To do list: '${oneLine(sub.text)}'. It is step ${step} of task ${task.id}, '${oneLine(task.text)}'. When you finish, call the termilly MCP tool finish_task with that task, step ${step} and a one-line summary, or run: termilly tasks done ${task.id} --step ${step} --summary 'what you did'`;
+  }
   const notes = oneLine(lines.filter(line => !line.sub).map(line => line.text).join(' '));
   const steps = lines.filter(line => line.sub && !line.done).map((line, i) => `${i + 1}) ${oneLine(line.text)}`);
-  return `Work on this task from my Termilly To do list: '${oneLine(task.text)}'.${notes ? ` Details: ${notes}` : ''}${steps.length ? ` Steps: ${steps.join(' ')}` : ''} Tell me when it is done.`;
+  return `Work on this task from my Termilly To do list: '${oneLine(task.text)}'.${notes ? ` Details: ${notes}` : ''}${steps.length ? ` Steps: ${steps.join(' ')}. Tick each with the termilly MCP tool tick_task, or run: termilly tasks tick ${task.id} N` : ''} This is task ${task.id}. When you finish, call the termilly MCP tool finish_task with a one-line summary, or run: termilly tasks done ${task.id} --summary 'what you did'`;
 }
 
 /**

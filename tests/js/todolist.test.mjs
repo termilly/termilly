@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   parseTask, tasksFromLines, tasksFromNote, tagOfHeading, selectedLines, withoutLines, openCount, tagsIn, allTags, withTags, moveBefore,
-  labelsForTags, hoverLines, treeRows, detailLines, tickSub, linkSub, subProgress, implementPrompt, HOVER_TASKS,
+  labelsForTags, hoverLines, treeRows, detailLines, tickSub, tickByNumber, linkSub, subProgress, implementPrompt, statusOf, TASK_STATUS, HOVER_TASKS,
 } from '../../src/Termilly.Desktop/wwwroot/js/todolist.js';
 
 const task = (id, more = {}) => ({ id, text: id, created: 0, ...more });
@@ -176,13 +176,24 @@ test('progress counts sub-items', () => {
 
 test('Implement asks for the task, its details and the steps left', () => {
   assert.equal(implementPrompt(task('t', { text: 'Fix  login', details: 'See the log\n[x] done step\n[] step one\n[] step two' })),
-    "Work on this task from my Termilly To do list: 'Fix login'. Details: See the log Steps: 1) step one 2) step two Tell me when it is done.");
+    "Work on this task from my Termilly To do list: 'Fix login'. Details: See the log Steps: 1) step one 2) step two. Tick each with the termilly MCP tool tick_task, or run: termilly tasks tick t N This is task t. When you finish, call the termilly MCP tool finish_task with a one-line summary, or run: termilly tasks done t --summary 'what you did'");
 });
 
 test('Implement on a sub-item names its task', () => {
   const task_ = task('t', { text: 'Fix login', details: '[] step one' });
   assert.equal(implementPrompt(task_, detailLines(task_.details)[0]),
-    "Work on this step from my Termilly To do list: 'step one'. It is part of the task 'Fix login'. Tell me when it is done.");
+    "Work on this step from my Termilly To do list: 'step one'. It is step 1 of task t, 'Fix login'. When you finish, call the termilly MCP tool finish_task with that task, step 1 and a one-line summary, or run: termilly tasks done t --step 1 --summary 'what you did'");
+});
+
+test('a step is ticked by its number among the steps', () => {
+  assert.equal(tickByNumber('text\n[] one\n[] two', 2), 'text\n[] one\n[x] two');
+  assert.equal(tickByNumber('text\n[] one', 5), 'text\n[] one');
+});
+
+test('a task is Open until it says otherwise, and done wins', () => {
+  assert.equal(statusOf(task('a')), TASK_STATUS.open);
+  assert.equal(statusOf(task('a', { status: TASK_STATUS.review })), TASK_STATUS.review);
+  assert.equal(statusOf(task('a', { status: TASK_STATUS.review, done: true })), TASK_STATUS.done);
 });
 
 test('labels match tags in any case', () => {

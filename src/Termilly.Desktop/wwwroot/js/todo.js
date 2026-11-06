@@ -5,7 +5,7 @@
 
 import { state, emit, persist, newId, wsById, tabTitle, EVENTS, TAG_COLORS } from './store.js';
 import { NOTE_KIND, noteTitle, notesFor } from './notes.js';
-import { openCount, hoverLines, allTags, tagHash } from './todolist.js';
+import { openCount, hoverLines, allTags, tagHash, TASK_STATUS } from './todolist.js';
 
 /** Which list: a terminal's or a workspace's, by its id. */
 export const LIST_KIND = Object.freeze({ terminal: NOTE_KIND.terminal, workspace: NOTE_KIND.workspace });
@@ -243,6 +243,60 @@ export function updateTask(ref, id, change) {
 export function removeTask(ref, id) {
   setTasks(ref, tasksOf(ref).filter(task => task.id !== id));
   changed(ref);
+}
+
+/** Every list there is. */
+function allLists() {
+  return [...[...state.tabs.values()].map(terminalList), ...state.workspaces.map(workspaceList)];
+}
+
+/**
+ * A task, wherever it is, and its list.
+ * @param {string} id
+ * @returns {{ ref: ListRef, task: TodoTask } | null}
+ */
+export function findTask(id) {
+  for (const ref of allLists()) {
+    const task = tasksOf(ref).find(t => t.id === id);
+    if (task) return { ref, task };
+  }
+  return null;
+}
+
+/**
+ * The lists an agent sees: its terminal's and its workspace's; every list when it isn't in a terminal.
+ * @param {string | undefined} from the terminal that asks
+ * @returns {TodoList[]}
+ */
+export function listsOfAsker(from) {
+  const tab = from ? state.tabs.get(from) : null;
+  const ws = tab ? wsById(tab.wsId) : null;
+  const refs = tab ? [terminalList(tab), ...(ws ? [workspaceList(ws)] : [])] : allLists();
+  return refs.flatMap(ref => listOf(ref) ?? []);
+}
+
+/**
+ * Moves a task to a status. What only one status has goes with it: its terminal, and what its agent said.
+ * @param {ListRef} ref
+ * @param {string} id
+ * @param {string} status
+ * @param {{ terminal?: string, review?: TodoTask['review'] }} [with_]
+ */
+export function setStatus(ref, id, status, { terminal, review } = {}) {
+  const middle = status === TASK_STATUS.progress || status === TASK_STATUS.review;
+  updateTask(ref, id, {
+    done: status === TASK_STATUS.done ? true : undefined, status: middle ? status : undefined,
+    terminal: status === TASK_STATUS.progress ? terminal : undefined, review: status === TASK_STATUS.review ? review : undefined,
+  });
+}
+
+/** A task whose terminal closed before its agent finished goes back to Open: nobody works on it now. */
+export function releaseClosed() {
+  for (const ref of allLists()) {
+    for (const task of tasksOf(ref)) {
+      if (task.terminal && !state.tabs.has(task.terminal)) setStatus(ref, task.id, TASK_STATUS.open);
+    }
+  }
 }
 
 /**
