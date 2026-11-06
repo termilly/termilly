@@ -3168,7 +3168,7 @@ body.detached-window > .snippets-win { width: auto; height: auto; }
 /* Its header is the window’s title bar (js/windows.js): Return, Minimize, Maximize and Close at its end, in place of
    its own close and detach buttons; it moves the window, so no pane drag cursor. */
 body.detached-window .pane-header > .pane-actions > .close-btn,
-body.detached-window [data-np="dock"], body.detached-window [data-np="detach"], body.detached-window [data-np="close"], body.detached-window .files-head .np-sep,
+body.detached-window [data-np="dock"], body.detached-window [data-np="detach"], body.detached-window [data-np="close"],
 body.detached-window [data-sw="detach"], body.detached-window [data-sw="close"] { display: none; }
 body.detached-window .pane-header { cursor: default; }
 /* Its environment (a production tag’s chip) stays with its tags after the name, not again before it. */
@@ -3176,6 +3176,8 @@ body.detached-window .pane-header .env-chip { display: none; }
 .detached-controls { display: flex; flex: none; gap: 2px; align-items: center; margin-left: -6px; padding-bottom: 1px; }
 /* As a terminal's buttons: 22px, so a hovered or lit one has the same room above and below in the 30px title bar. */
 .detached-controls > button { width: 22px; height: 22px; padding: 0; border-radius: 6px; }
+/* The Notepad's divider after New page, as the one before the window's buttons. */
+body.detached-window .files-head .np-sep { height: 18px; margin: 0 0 0 1px; background: var(--border-strong); }
 /* As far from the icon on each side: Return's reaches 2px nearer its button's edge than Minimize's. */
 .detached-controls > .separator { margin: 0 0 0 2px; }
 /* The pin while the window is kept on top. */
