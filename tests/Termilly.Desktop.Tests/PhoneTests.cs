@@ -252,8 +252,8 @@ public sealed class PhoneTests : IDisposable
 
     [Theory]
     [InlineData("open", false, true, false, null)]
-    [InlineData("open", true, false, true, "Allow opening")]
-    [InlineData("newWorkspace", true, false, true, "Allow opening")]
+    [InlineData("open", true, false, true, "Allow creating")]
+    [InlineData("newWorkspace", true, false, true, "Allow creating")]
     [InlineData("close", false, false, true, null)]
     [InlineData("close", true, true, false, "Allow closing")]
     [InlineData("closeWorkspace", true, true, false, "Allow closing")]

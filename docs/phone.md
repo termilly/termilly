@@ -73,7 +73,7 @@ iPhone: Settings › Safari › Clear History and Website Data) and finish step 
 
 ## Settings
 
-- **Allow opening, Allow closing:** paired phones and computers can open and close workspaces and terminals here. Each change reaches connected devices at once. What they open or close shows here as a note that stays, and in Recently closed.
+- **Allow creating, Allow closing:** paired phones and computers can create and close workspaces and terminals here. Each change reaches connected devices at once. What they open or close shows here as a note that stays, and in Recently closed.
 - **Termilly on your phone:** off / on. The server listens only while it's on. Windows asks once whether to allow it on private
   networks.
 - **Port:** 8765 by default.

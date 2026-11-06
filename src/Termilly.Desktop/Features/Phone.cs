@@ -232,7 +232,7 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
     private const string ActionField = "action";
 
     /// <summary>
-    /// A phone or another computer opens or closes workspaces and terminals (Settings › Remote › Allow opening, Allow
+    /// A phone or another computer opens or closes workspaces and terminals (Settings › Remote › Allow creating, Allow
     /// closing), renames or moves a terminal or adds an SSH host (Allow typing). The page does it and says how it went
     /// (js/phonemanage.js).
     /// </summary>
@@ -262,7 +262,7 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
     internal static string? Refused(string? action, PhoneSettings phone) => action switch
     {
         ClearNoteAction => null,
-        OpenAction or NewWorkspaceAction => phone.AllowOpening == true ? null : "Allow opening",
+        OpenAction or NewWorkspaceAction => phone.AllowOpening == true ? null : "Allow creating",
         CloseAction or CloseWorkspaceAction => phone.AllowClosing == true ? null : "Allow closing",
         _ => phone.AllowTyping ? null : "Allow typing",
     };
