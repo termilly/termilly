@@ -476,18 +476,17 @@ async function closeThere(pc, name, terminals, args) {
 }
 
 /**
- * New terminal on a computer (in a workspace there, else the one in front there) and New workspace: greyed, saying
- * why, when it doesn't allow them.
+ * New terminal on a computer (in the workspace in front there) and New workspace: greyed, saying why, when it doesn't
+ * allow them.
  * @param {Pc} pc
- * @param {string} [wsId]
  * @returns {MenuEntry[]}
  */
-function createItems(pc, wsId) {
+function createItems(pc) {
   const s = stateOf(pc);
   const why = refusal(pc, s.opening);
   return [
     { label: `New terminal on ${pc.name}`, icon: ICONS.plus, disabled: !!why, title: why,
-      submenu: why ? undefined : () => (s.places ?? []).map(p => ({ label: p.name, action: () => { manage(pc, { action: MANAGE.open, profile: p.id, ws: wsId }); } })) },
+      submenu: why ? undefined : () => (s.places ?? []).map(p => ({ label: p.name, action: () => { manage(pc, { action: MANAGE.open, profile: p.id }); } })) },
     { label: `New workspace on ${pc.name}`, icon: ICONS.workspaces, disabled: !!why, title: why, action: () => { newWorkspaceThere(pc); } },
   ];
 }
@@ -544,7 +543,7 @@ section.addEventListener('contextmenu', e => {
   else if (pcWorkspace) {
     const id = pcWorkspace.slice(pc.id.length + 1);
     const ws = s.workspaces.find(w => w.id === id);
-    if (ws) showMenu([...createItems(pc, id), SEPARATOR, closeItem(pc, 'workspace', () => closeThere(pc, ws.name, s.terminals.filter(t => t.ws === id), { action: MANAGE.closeWorkspace, ws: id }))], at);
+    if (ws) showMenu([closeItem(pc, 'workspace', () => closeThere(pc, ws.name, s.terminals.filter(t => t.ws === id), { action: MANAGE.closeWorkspace, ws: id }))], at);
   } else {
     const t = s.terminals.find(x => x.id === pane);
     if (t) showMenu([closeItem(pc, 'terminal', () => closeThere(pc, t.title, [t], { action: MANAGE.close, pane: t.id }))], at);
