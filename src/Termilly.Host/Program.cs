@@ -5,7 +5,7 @@ using Termilly.Host;
 // Started by the window when needed (or at sign-in, if chosen); one per user.
 CrashLog.Install(CrashLog.HostFileName);
 QuietErrors.Install();
-if (OperatingSystem.IsLinux())
+if (!OperatingSystem.IsWindows())
 {
     // Its own session, away from the window's: closing the terminal Termilly was started from (SIGHUP to its
     // session) or the window itself mustn't take the shells down.
