@@ -180,6 +180,69 @@ export const labelsForTags = (labels, tags) => labels.filter(label => tags.inclu
 export const issueBody = task => task.details?.trim() ?? '';
 
 /**
+ * A list as the picker's tree sees it.
+ * @typedef {{ ref: { kind: string, id: string }, name: string, tasks: TodoTask[], note: string }} TreeList
+ */
+/**
+ * A workspace in the picker's tree: its own list, and its terminals, each with the host it's on, if any.
+ * @typedef {{ list: TreeList, color: string, terms: { list: TreeList, badge: string, host: TreeList | null }[] }} TreeGroup
+ */
+/**
+ * A row of the picker's tree. A workspace (depth 0) counts its terminals' tasks too.
+ * @typedef {{ list: TreeList, depth: number, count: number, color?: string, badge?: string, open?: boolean, foldable?: boolean }} TreeRow
+ */
+
+/** @param {TreeList | null} list */
+const filled = list => !!list && (!!list.note || openCount(list.tasks) > 0);
+
+/**
+ * Whether a list is found by what's typed: by its name, or the text of an open task.
+ * @param {TreeList | null} list
+ * @param {string} query in lower case
+ */
+export const found = (list, query) => !!list && (list.name.toLowerCase().includes(query)
+  || list.tasks.some(task => !task.done && task.text.toLowerCase().includes(query)));
+
+/**
+ * Whether a row stays with these choices.
+ * @param {TreeList | null} list
+ * @param {{ query: string, only: boolean, isCurrent: (list: TreeList) => boolean }} choices
+ */
+const stays = (list, { query, only, isCurrent }) => !!list
+  && (query ? found(list, query) : !only || filled(list) || isCurrent(list));
+
+/**
+ * The picker's rows: workspaces with their terminals under them and each host under its terminal. Typing finds lists
+ * and opens what it finds; a workspace found by name keeps all its terminals. With `only`, what has nothing in it goes,
+ * but never the list shown.
+ * @param {TreeGroup[]} groups
+ * @param {{ query?: string, only?: boolean, isOpen: (group: TreeGroup) => boolean, isCurrent: (list: TreeList) => boolean }} options
+ * @returns {TreeRow[]}
+ */
+export function treeRows(groups, { query = '', only = false, isOpen, isCurrent }) {
+  const q = query.trim().toLowerCase();
+  const choices = { query: q, only, isCurrent };
+  /** @type {TreeRow[]} */
+  const rows = [];
+  for (const group of groups) {
+    const named = !!q && group.list.name.toLowerCase().includes(q);
+    const kept = group.terms.filter(t => named || stays(t.list, choices) || stays(t.host, choices));
+    if (!stays(group.list, choices) && !kept.length && !named) continue;
+    const open = q ? true : isOpen(group);
+    const count = openCount(group.list.tasks) + group.terms.reduce((sum, t) => sum + openCount(t.list.tasks), 0);
+    rows.push({ list: group.list, depth: 0, count, color: group.color, open, foldable: !q && group.terms.length > 0 });
+    if (!open) continue;
+    for (const t of kept) {
+      rows.push({ list: t.list, depth: 1, count: openCount(t.list.tasks), badge: t.badge });
+      if (t.host && (named || stays(t.host, choices))) {
+        rows.push({ list: t.host, depth: 2, count: openCount(t.host.tasks) });
+      }
+    }
+  }
+  return rows;
+}
+
+/**
  * A hover's lines for a list: the first open tasks, and how many more there are.
  * @param {TodoTask[] | null | undefined} tasks
  */

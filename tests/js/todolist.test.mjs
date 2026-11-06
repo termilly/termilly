@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   parseTask, tasksFromLines, tasksFromNote, tagOfHeading, selectedLines, withoutLines, openCount, tagsIn, allTags, withTags, moveBefore,
-  labelsForTags, hoverLines, HOVER_TASKS,
+  labelsForTags, hoverLines, treeRows, HOVER_TASKS,
 } from '../../src/Termilly.Desktop/wwwroot/js/todolist.js';
 
 const task = (id, more = {}) => ({ id, text: id, created: 0, ...more });
@@ -96,6 +96,56 @@ test('a task moves to where another is', () => {
   assert.deepEqual(tasks.map(t => t.id), ['a', 'c', 'b']);
   moveBefore(tasks, 'nobody', 'a');
   assert.deepEqual(tasks.map(t => t.id), ['a', 'c', 'b']);
+});
+
+const list = (name, tasks = [], note = '') => ({ ref: { kind: 'x', id: name }, name, tasks: tasks.map(t => task(t, { text: t })), note });
+const groups = [
+  { list: list('acme', ['Move invoices']), color: 'blue', terms: [
+    { list: list('api', ['Rotate webhook secret']), badge: 'b', host: null },
+    { list: list('logs'), badge: 'b', host: null },
+    { list: list('db'), badge: 'b', host: list('prod-db', [], 'Ask ops first') },
+  ] },
+  { list: list('web'), color: 'green', terms: [{ list: list('dev', ['Fix login']), badge: 'b', host: null }] },
+  { list: list('idle'), color: 'red', terms: [{ list: list('shell'), badge: 'b', host: null }] },
+];
+const tree = (options = {}) => treeRows(groups, { isOpen: g => g.list.name === 'acme', isCurrent: l => l.name === 'acme', ...options }).map(r => `${'-'.repeat(r.depth)}${r.list.name}`);
+
+test('the tree nests terminals under workspaces and hosts under terminals, folded ones closed', () => {
+  assert.deepEqual(tree(), ['acme', '-api', '-logs', '-db', '--prod-db', 'web', 'idle']);
+});
+
+test('a workspace counts its own tasks and its terminals', () => {
+  const rows = treeRows(groups, { isOpen: () => false, isCurrent: () => false });
+  assert.equal(rows[0].count, 2);
+  assert.equal(rows[1].count, 1);
+});
+
+test('only with tasks hides what has nothing in it, but a host with a note stays', () => {
+  assert.deepEqual(tree({ only: true }), ['acme', '-api', '-db', '--prod-db', 'web']);
+});
+
+test('only with tasks never hides the list shown', () => {
+  assert.ok(tree({ only: true, isCurrent: l => l.name === 'idle' }).includes('idle'));
+});
+
+test('typing finds a terminal and opens its folded workspace', () => {
+  assert.deepEqual(tree({ query: 'DEV' }), ['web', '-dev']);
+});
+
+test('typing finds the text of an open task', () => {
+  assert.deepEqual(tree({ query: 'webhook' }), ['acme', '-api']);
+});
+
+test('typing finds a host, under its terminal', () => {
+  assert.deepEqual(tree({ query: 'prod' }), ['acme', '-db', '--prod-db']);
+});
+
+test('a workspace found by name keeps its terminals', () => {
+  assert.deepEqual(tree({ query: 'idle' }), ['idle', '-shell']);
+});
+
+test('nothing found gives no rows', () => {
+  assert.deepEqual(tree({ query: 'nothing' }), []);
 });
 
 test('labels match tags in any case', () => {

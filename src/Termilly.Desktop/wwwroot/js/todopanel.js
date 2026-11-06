@@ -6,10 +6,10 @@
 
 import { PAGE, HOST } from './protocol.js';
 import { send, onHost } from './host.js';
-import { state, on, persist, newId, lastFolderOf, wsById, tabsOf, tabTitle, isSsh, profileOf, EVENTS } from './store.js';
+import { state, on, persist, newId, lastFolderOf, wsById, tabsOf, tabTitle, isSsh, EVENTS } from './store.js';
 import { escapeHtml, cssColor, tabBadgeHtml, countText, ICONS } from './ui.js';
 import { byId, find, targetOf, WORKSPACE_ID, DOCK_GRIP, PANEL_HEAD, TOOL_COUNT } from './dom.js';
-import { showMenu, openPopover, SEPARATOR } from './popups.js';
+import { showMenu, openPopover, closeAll, SEPARATOR } from './popups.js';
 import { showToast, TOAST } from './toasts.js';
 import { setNote } from './notes.js';
 import { KEY_ID } from './keymap.js';
@@ -18,7 +18,7 @@ import { COPY_LABEL } from './termclipboard.js';
 import { dockPanel, NOTEPAD_DOCK } from './dockpanel.js';
 import { TAG_LIST } from './tagpicker.js';
 import {
-  parseTask, tasksFromLines, tasksFromNote, tagOfHeading, selectedLines, withoutLines, openCount, tagsIn, withTags, moveBefore, labelsForTags, issueBody,
+  parseTask, tasksFromLines, tasksFromNote, tagOfHeading, selectedLines, withoutLines, openCount, tagsIn, withTags, moveBefore, labelsForTags, issueBody, treeRows, found,
 } from './todolist.js';
 import {
   LIST_KIND, listOf, noteTarget, sameList, listInFront, openInFront, terminalList, workspaceList, hostList, addTasks, updateTask,
@@ -62,7 +62,7 @@ panel.innerHTML = `
   <div class="files-head">
     <span class="title-icon td-icon"></span>
     <span class="files-title">${NAME}</span>
-    <button class="td-pick" data-td="${ACTION.pick}" title="Pick a list"><span class="td-pick-name"></span>${ICONS.chevronDown}</button>
+    <button class="td-pick" data-td="${ACTION.pick}" title="Pick a list"><span class="td-pick-icon"></span><span class="td-pick-name"></span><span class="td-pick-sub"></span>${ICONS.chevronDown}</button>
     <span class="files-tools">
       <button class="pane-btn" data-td="${ACTION.note}" title="Show or hide this list’s note">${ICONS.note}</button>
       <span class="np-sep"></span>
@@ -86,7 +86,9 @@ const button = byId('todo-button');
 const countEl = find(button, TOOL_COUNT);
 find(panel, '.td-icon').innerHTML = /** @type {Element} */ (button.firstElementChild).outerHTML;
 const head = find(panel, PANEL_HEAD);
+const pickIcon = find(panel, '.td-pick-icon');
 const pickName = find(panel, '.td-pick-name');
+const pickSub = find(panel, '.td-pick-sub');
 const view = find(panel, '.td-view');
 const noteBox = find(panel, '.td-note');
 const noteArea = /** @type {HTMLTextAreaElement} */ (find(panel, '.td-note-text'));
@@ -192,6 +194,21 @@ function renderNote(list) {
   if (!noteBox.hidden) fitNote();
 }
 
+/**
+ * What the picker's button says: the list, with its icon, and the workspace a terminal or host is in.
+ * @param {TodoList} list
+ */
+function showPick(list) {
+  const tab = list.ref.kind === LIST_KIND.terminal ? state.tabs.get(list.ref.id) : null;
+  const ws = list.ref.kind === LIST_KIND.workspace ? wsById(list.ref.id) : null;
+  pickName.textContent = list.name;
+  pickSub.textContent = tab ? wsById(tab.wsId)?.name ?? '' : '';
+  pickIcon.innerHTML = ws ? dotHtml(ws.color) : tab ? tabBadgeHtml(tab) : ICONS.ssh;
+}
+
+/** @param {string} color */
+const dotHtml = color => `<span class="ws-dot" style="background:${cssColor(color)}"></span>`;
+
 /** Draws the list shown; the first list in front when what it was on has gone. */
 function render() {
   if (!shown()) {
@@ -203,10 +220,12 @@ function render() {
   issueForm.hidden = !issue;
   if (!list) {
     pickName.textContent = '';
+    pickSub.textContent = '';
+    pickIcon.innerHTML = '';
     listEl.innerHTML = '';
     return;
   }
-  pickName.textContent = list.name;
+  showPick(list);
   addField.placeholder = `Add a task to ${list.name}`;
   renderNote(list);
   const tags = tagsIn(list.tasks);
@@ -331,24 +350,123 @@ function noteMenu(e) {
 
 // ---- Picking a list ----
 
-/** @param {ListRef} ref */
-function countHint(ref) {
-  const open = openCount(listOf(ref)?.tasks);
-  return open ? String(open) : '';
+/** The workspaces in the tree, each with its lists; a host shows once, under its first terminal in a workspace. */
+function treeGroups() {
+  return state.workspaces.map(ws => {
+    /** @type {Set<string>} */
+    const hosts = new Set();
+    const terms = tabsOf(ws).filter(t => !t.virtual).map(t => {
+      const first = isSsh(t) && !hosts.has(t.profile);
+      hosts.add(t.profile);
+      return { list: /** @type {TodoList} */ (listOf(terminalList(t))), badge: tabBadgeHtml(t), host: first ? listOf(hostList(t.profile)) : null };
+    });
+    return { list: /** @type {TodoList} */ (listOf(workspaceList(ws))), color: ws.color, terms };
+  });
+}
+
+/** Workspaces folded or opened by hand; the others start open only when they hold the list shown or are in front. */
+/** @type {Map<string, boolean>} */
+const foldedByHand = new Map();
+
+/** @param {import('./todolist.js').TreeGroup} group */
+function isOpenInTree(group) {
+  const hand = foldedByHand.get(group.list.ref.id);
+  if (hand !== undefined) return hand;
+  const shownNow = current;
+  const holdsShown = !!shownNow && (sameList(group.list.ref, shownNow) || group.terms.some(t => sameList(t.list.ref, shownNow) || (!!t.host && sameList(t.host.ref, shownNow))));
+  return holdsShown || group.list.ref.id === state.activeId;
+}
+
+/** @param {import('./todolist.js').TreeRow} row @param {number} at */
+function treeRowHtml(row, at) {
+  const { ref, name, note, tasks } = row.list;
+  const icon = row.depth === 0 ? dotHtml(row.color ?? '') : row.badge ?? ICONS.ssh;
+  const on = current && sameList(ref, current) ? ' on' : '';
+  const empty = note || openCount(tasks) || row.depth === 0 ? '' : ' dim';
+  const fold = row.foldable ? `<span class="td-fold-mark" data-fold="${escapeHtml(ref.id)}">${row.open ? ICONS.chevronDown : ICONS.chevronRight}</span>` : row.depth === 0 ? '<span class="td-fold-mark"></span>' : '';
+  return `<button class="td-tree-row depth${row.depth}${on}${empty}" data-row="${at}" role="option" aria-selected="${!!on}">${fold}${icon}<span class="td-tree-name">${escapeHtml(name)}</span>${row.count ? `<span class="tp-count">${row.count}</span>` : ''}</button>`;
 }
 
 /**
- * The picker's entries for a workspace: its own list, its terminals', and the hosts they're on.
- * @param {Workspace} ws
+ * The picker while it's open: its search box and list, the rows shown and the one Enter opens.
+ * @typedef {{ input: HTMLInputElement, body: HTMLElement, rows: import('./todolist.js').TreeRow[], active: number }} TreeView
  */
-function listsOf(ws) {
-  const tabs = tabsOf(ws).filter(t => !t.virtual);
-  const hosts = [...new Map(tabs.filter(isSsh).map(t => [t.profile, profileOf(t)])).values()];
-  return [
-    { label: WORKSPACE_LIST, icon: ICONS.workspaces, hint: countHint(workspaceList(ws)), action: () => openList(workspaceList(ws)) },
-    ...tabs.map(t => ({ label: tabTitle(t), icon: tabBadgeHtml(t), hint: countHint(terminalList(t)), action: () => openList(terminalList(t)) })),
-    ...hosts.map(p => ({ label: `Host ${p?.name ?? ''}`, icon: ICONS.link, hint: countHint(hostList(p?.id ?? '')), action: () => openList(hostList(p?.id ?? '')) })),
-  ];
+
+/** @param {TreeView} tree */
+function markTree(tree) {
+  for (const [i, row] of [...tree.body.children].entries()) row.classList.toggle('active', i === tree.active);
+  tree.body.children[tree.active]?.scrollIntoView({ block: 'nearest' });
+}
+
+/** @param {TreeView} tree */
+function drawTree(tree) {
+  tree.rows = treeRows(treeGroups(), {
+    query: tree.input.value, only: !!state.todo.onlyWithTasks, isOpen: isOpenInTree, isCurrent: list => !!current && sameList(list.ref, current),
+  });
+  // Typing, Enter opens the first list that was itself found, not one only shown as the way to it.
+  const query = tree.input.value.trim().toLowerCase();
+  tree.active = tree.rows.findIndex(r => (query ? found(r.list, query) : !!current && sameList(r.list.ref, current)));
+  tree.body.innerHTML = tree.rows.map(treeRowHtml).join('') || '<div class="tp-empty">Nothing found</div>';
+  markTree(tree);
+}
+
+/**
+ * @param {TreeView} tree
+ * @param {number} at
+ */
+function chooseRow(tree, at) {
+  const row = tree.rows[at];
+  if (!row) return;
+  closeAll();
+  openList(row.list.ref);
+}
+
+/** @param {TreeView} tree */
+function wireTree(tree) {
+  const { input, body } = tree;
+  input.addEventListener('input', () => drawTree(tree));
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') chooseRow(tree, tree.active < 0 ? 0 : tree.active);
+    else if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && tree.rows.length) {
+      tree.active = (tree.active + (e.key === 'ArrowDown' ? 1 : tree.rows.length - 1)) % tree.rows.length;
+      markTree(tree);
+    } else return;
+    e.preventDefault();
+  });
+  body.addEventListener('mousedown', e => e.preventDefault());
+  body.addEventListener('click', e => {
+    const fold = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-fold]'));
+    if (fold) {
+      const group = treeGroups().find(g => g.list.ref.id === fold.dataset.fold);
+      if (group) foldedByHand.set(group.list.ref.id, !isOpenInTree(group));
+      return drawTree(tree);
+    }
+    const row = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-row]'));
+    if (row) chooseRow(tree, Number(row.dataset.row));
+  });
+}
+
+/**
+ * The picker: a search box over a tree shaped like the sidebar. Arrow keys and Enter work from the search box.
+ * @param {HTMLElement} at
+ */
+function openTree(at) {
+  const picker = at.ownerDocument.createElement('div');
+  picker.className = 'popover td-tree';
+  picker.hidden = true;
+  picker.innerHTML = `<input class="field" placeholder="Find a list or task" spellcheck="false" aria-label="Find a list or task"><div class="tp-list" role="listbox"></div><label class="td-only"><input type="checkbox" ${state.todo.onlyWithTasks ? 'checked' : ''}> Only with tasks</label>`;
+  /** @type {TreeView} */
+  const tree = { input: /** @type {HTMLInputElement} */ (find(picker, 'input')), body: find(picker, TAG_LIST), rows: [], active: -1 };
+  wireTree(tree);
+  find(picker, '.td-only input').addEventListener('change', e => {
+    state.todo.onlyWithTasks = /** @type {HTMLInputElement} */ (e.target).checked;
+    persist();
+    drawTree(tree);
+    tree.input.focus();
+  });
+  drawTree(tree);
+  openPopover(picker, at, { dynamic: true, refocus: () => addField.focus() });
+  tree.input.focus();
 }
 
 /**
@@ -362,13 +480,13 @@ function perWorkspace(entriesOf) {
   return /** @type {import('./popups.js').MenuEntry[]} */ ([
     ...(active ? entriesOf(active) : []),
     ...(others.length ? [SEPARATOR] : []),
-    ...others.map(w => ({ label: w.name, icon: `<span class="ws-dot" style="background:${cssColor(w.color)}"></span>`, submenu: () => entriesOf(w) })),
+    ...others.map(w => ({ label: w.name, icon: dotHtml(w.color), submenu: () => entriesOf(w) })),
   ]);
 }
 
 /** @param {HTMLElement} at */
 function pickList(at) {
-  showMenu(perWorkspace(listsOf), at);
+  openTree(at);
 }
 
 // ---- A task ----
@@ -749,6 +867,6 @@ for (const event of [EVENTS.focus, EVENTS.workspaces, EVENTS.tab]) {
   on(event, () => {
     showCount();
     if (!panel.hidden && !shown()) render();
-    else if (!panel.hidden) pickName.textContent = shown()?.name ?? '';
+    else if (!panel.hidden) showPick(/** @type {TodoList} */ (shown()));
   });
 }

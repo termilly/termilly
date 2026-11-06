@@ -3226,6 +3226,26 @@ body.detached-window .files-head .np-sep { height: 18px; margin: 0 0 0 1px; back
 .td-pick:hover { background: var(--hover); }
 .td-pick svg { flex: none; width: 12px; height: 12px; fill: none; stroke: currentColor; }
 .td-pick-name { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.td-pick-icon { display: inline-flex; flex: none; align-items: center; margin-right: 4px; }
+.td-pick-icon:empty { display: none; }
+.td-pick-icon svg { width: 14px; height: 14px; fill: none; stroke: var(--muted); }
+.td-pick-sub { flex: 0 100 auto; min-width: 0; margin-left: 5px; overflow: hidden; color: var(--muted); white-space: nowrap; text-overflow: ellipsis; }
+.td-pick-sub:empty { display: none; }
+.td-tree { width: 300px; }
+.td-tree .field { width: 100%; }
+.td-tree-row { display: flex; align-items: center; gap: 7px; width: 100%; min-height: 28px; padding: 3px 8px 3px 4px; border: 0; border-radius: 6px; background: none; color: var(--text); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.td-tree-row:hover, .td-tree-row.active { background: var(--hover); }
+.td-tree-row.on { background: color-mix(in srgb, var(--accent) 25%, transparent); }
+.td-tree-row.dim { color: var(--muted); }
+.td-tree-row.depth0 { font-weight: 600; }
+.td-tree-row.depth1 { padding-left: 24px; }
+.td-tree-row.depth2 { padding-left: 44px; font-size: 12.5px; }
+.td-tree-row.depth2 > svg { flex: none; width: 14px; height: 14px; fill: none; stroke: var(--muted); }
+.td-tree-name { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.td-fold-mark { display: inline-flex; flex: none; justify-content: center; width: 14px; color: var(--muted); }
+.td-fold-mark svg { width: 12px; height: 12px; fill: none; stroke: currentColor; }
+.td-only { display: flex; align-items: center; gap: 6px; margin-top: 6px; padding: 6px 8px 2px; border-top: 1px solid var(--border); color: var(--muted); font-size: 12px; cursor: pointer; }
+.td-only input { accent-color: var(--accent); }
 .td-view { display: flex; flex: 1; flex-direction: column; min-height: 0; }
 .td-view[hidden], .td-note[hidden], .td-tags[hidden], .td-issue[hidden] { display: none; }
 .td-note { position: relative; flex: none; padding: 8px 10px 0; }
