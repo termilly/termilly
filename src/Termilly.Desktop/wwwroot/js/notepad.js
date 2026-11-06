@@ -258,7 +258,7 @@ function show({ quiet = false, here = false } = {}) {
   if (!activePage()) state.notepad.activeId = pages()[0]?.id ?? null;
   // Closed while in a window of its own: it opens in it again, where it was, unless it's on its way there. Never seen
   // docked meanwhile: its window can take a second to open (Linux).
-  const reopens = !here && state.notepad.detached && !isDetached(WINDOW_KEY);
+  const reopens = !here && !!state.notepad.detached && !isDetached(WINDOW_KEY);
   panel.classList.toggle(DOCK_AWAY, reopens);
   setOpen(true);
   render();
