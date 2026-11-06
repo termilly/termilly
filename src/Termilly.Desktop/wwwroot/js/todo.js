@@ -5,7 +5,7 @@
 
 import { state, emit, persist, newId, wsById, tabTitle, EVENTS, TAG_COLORS } from './store.js';
 import { NOTE_KIND, noteTitle, notesFor } from './notes.js';
-import { openCount, hoverLines, allTags, tagHash, TASK_STATUS } from './todolist.js';
+import { openCount, hoverLines, allTags, tagHash, retag, TASK_STATUS } from './todolist.js';
 
 /** Which list: a terminal's or a workspace's, by its id. */
 export const LIST_KIND = Object.freeze({ terminal: NOTE_KIND.terminal, workspace: NOTE_KIND.workspace });
@@ -50,12 +50,23 @@ function tasksOf(ref) {
 }
 
 /**
+ * Tags outlive their tasks: what's on a task is kept, for picking again and for Manage tags.
+ * @param {TodoTask[]} tasks
+ */
+function keepTags(tasks) {
+  const kept = new Set(state.todo.tags);
+  for (const task of tasks) for (const tag of task.tags ?? []) kept.add(tag);
+  if (kept.size !== state.todo.tags?.length) state.todo.tags = [...kept];
+}
+
+/**
  * Puts a list's tasks back; an empty list keeps nothing.
  * @param {ListRef} ref
  * @param {TodoTask[]} tasks
  */
 function setTasks(ref, tasks) {
   const owner = /** @type {Tab | Workspace} */ (ownerOf(ref));
+  keepTags([...(owner.tasks ?? []), ...tasks]);
   if (tasks.length) owner.tasks = tasks;
   else delete owner.tasks;
 }
@@ -149,11 +160,14 @@ export function tabHover(tab) {
   return [...(notesFor(tab).length ? [noteTitle(notesFor(tab))] : []), ...hoverLines(tab.tasks)].join('\n');
 }
 
-/** To do's tags, from every list there is: a closed terminal's stay with it until it's reopened. */
+/** To do's tags with how many tasks have each: the kept ones, a coloured one, and any on a list there is. */
 export const todoTags = () => allTags([
   ...[...state.tabs.values()].map(tab => tab.tasks),
   ...state.workspaces.map(ws => ws.tasks),
-]);
+], [...(state.todo.tags ?? []), ...Object.keys(state.todo.tagColors ?? {})]);
+
+/** The colour a new tag starts with: the next one round the palette. */
+export const nextTagColor = () => TAG_COLORS[todoTags().length % TAG_COLORS.length];
 
 /**
  * A tag's colour: the one picked for it, else one of the palette's from its name.
@@ -168,6 +182,70 @@ export const tagColor = tag => state.todo.tagColors?.[tag] ?? TAG_COLORS[tagHash
  */
 export function setTagColor(tag, color) {
   state.todo.tagColors = { ...state.todo.tagColors, [tag]: color };
+  persist();
+}
+
+/**
+ * Makes a tag no task has yet.
+ * @param {string} tag
+ * @param {string} color
+ */
+export function addTag(tag, color) {
+  state.todo.tags = [...new Set([...(state.todo.tags ?? []), tag])];
+  if (!state.todo.tagColors?.[tag]) setTagColor(tag, color);
+  emit(EVENTS.todo);
+}
+
+/**
+ * Changes a tag on every task.
+ * @param {string} from
+ * @param {string | null} to null takes it off
+ */
+function retagEverywhere(from, to) {
+  for (const ref of allLists()) {
+    const tasks = tasksOf(ref);
+    if (!tasks.some(task => task.tags?.includes(from))) continue;
+    setTasks(ref, tasks.map(task => {
+      if (!task.tags?.includes(from)) return task;
+      const { tags, ...rest } = task;
+      const left = retag(tags ?? [], from, to);
+      return left.length ? { ...rest, tags: left } : rest;
+    }));
+    changed(ref);
+  }
+}
+
+/**
+ * Takes a tag out of what's kept, with its colour.
+ * @param {string} tag
+ */
+function forgetTag(tag) {
+  state.todo.tags = state.todo.tags?.filter(name => name !== tag);
+  const { [tag]: color, ...colors } = state.todo.tagColors ?? {};
+  state.todo.tagColors = colors;
+  return color;
+}
+
+/**
+ * Renames a tag on every task, with its colour. To a tag there is, they become one, which keeps its own colour.
+ * @param {string} from
+ * @param {string} to
+ */
+export function renameTag(from, to) {
+  retagEverywhere(from, to);
+  const color = forgetTag(from);
+  addTag(to, color ?? tagColor(from));
+  persist();
+}
+
+/**
+ * Deletes a tag: it comes off every task, and is gone from the lists to pick from.
+ * @param {string} tag
+ */
+export function deleteTag(tag) {
+  retagEverywhere(tag, null);
+  forgetTag(tag);
+  emit(EVENTS.todo);
   persist();
 }
 

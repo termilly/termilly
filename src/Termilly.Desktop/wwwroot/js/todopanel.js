@@ -6,8 +6,9 @@
 
 import { PAGE, HOST } from './protocol.js';
 import { send, onHost } from './host.js';
-import { state, on, persist, newId, lastFolderOf, wsById, tabsOf, tabTitle, isSsh, defaultProfile, EVENTS, TAG_COLORS } from './store.js';
+import { state, on, persist, newId, lastFolderOf, wsById, tabsOf, tabTitle, isSsh, defaultProfile, EVENTS } from './store.js';
 import { newTab, focusTab } from './panes.js';
+import { openTagManager } from './todotags.js';
 import { commandLine } from './quoting.js';
 import { escapeHtml, cssColor, tabBadgeHtml, countText, ICONS } from './ui.js';
 import { byId, find, targetOf, WORKSPACE_ID, DOCK_GRIP, PANEL_HEAD, TOOL_COUNT } from './dom.js';
@@ -20,12 +21,12 @@ import { COPY_LABEL } from './termclipboard.js';
 import { dockPanel, NOTEPAD_DOCK } from './dockpanel.js';
 import { TAG_LIST, swatchesHtml } from './tagpicker.js';
 import {
-  parseTask, tasksFromLines, tasksFromNote, tagOfHeading, selectedLines, withoutLines, openCount, tagsIn, withTags, moveBefore, labelsForTags, issueBody, treeRows, found,
+  parseTask, tasksFromLines, tasksFromNote, tagOfHeading, selectedLines, withoutLines, openCount, tagsIn, withTags, retag, moveBefore, labelsForTags, issueBody, treeRows, found,
   detailLines, tickSub, linkSub, subProgress, implementPrompt, statusOf, TASK_STATUS,
 } from './todolist.js';
 import {
   LIST_KIND, listOf, noteTarget, sameList, listInFront, openInFront, terminalList, workspaceList, addTasks, updateTask,
-  removeTask, moveTask, reorderTasks, todoTags, tagColor, setTagColor, moveHostTasks, setStatus,
+  removeTask, moveTask, reorderTasks, todoTags, tagColor, setTagColor, nextTagColor, moveHostTasks, setStatus,
 } from './todo.js';
 
 /** @typedef {import('./todo.js').ListRef} ListRef */
@@ -55,7 +56,7 @@ const WINDOW_KEY = 'todo';
 /** What its controls do (data-td). */
 const ACTION = Object.freeze({
   pick: 'pick', note: 'note', pin: 'pin', detach: 'detach', close: 'close', fold: 'fold', tag: 'tag', more: 'more', save: 'save',
-  cancel: 'cancel', label: 'label', create: 'create', backToList: 'backToList', pickTags: 'pickTags', dropTag: 'dropTag',
+  cancel: 'cancel', label: 'label', create: 'create', backToList: 'backToList', pickTags: 'pickTags', dropTag: 'dropTag', manageTags: 'manageTags',
   implement: 'implement', issue: 'issue', openIssue: 'openIssue', status: 'status', agentTerminal: 'agentTerminal', accept: 'accept', reopen: 'reopen',
 });
 /** How long after the last key a note is saved. */
@@ -78,6 +79,7 @@ panel.innerHTML = `
     <button class="td-pick" data-td="${ACTION.pick}" title="Pick a list"><span class="td-pick-icon"></span><span class="td-pick-name"></span><span class="td-pick-sub"></span>${ICONS.chevronDown}</button>
     <span class="files-tools">
       <button class="pane-btn" data-td="${ACTION.note}" title="Show or hide this list’s note">${ICONS.note}</button>
+      <button class="pane-btn" data-td="${ACTION.manageTags}" title="Manage tags">${ICONS.tag}</button>
       <span class="np-sep"></span>
       <button class="pane-btn" data-td="${ACTION.detach}" title="Detach to a window">${ICONS.detach}</button>
       <button class="pane-btn" data-td="${ACTION.close}" title="Close (Ctrl+Shift+K)">${ICONS.close}</button>
@@ -667,8 +669,16 @@ function wireTagList(list, pick, { draw, choose, focus }) {
   });
 }
 
-/** The colour a new tag starts with: the next one round the palette. */
-const nextColor = () => TAG_COLORS[todoTags().length % TAG_COLORS.length];
+/**
+ * A tag was renamed or deleted: the picked tags and the open editor follow, so it doesn't come back with a Save.
+ * @param {string} tag
+ * @param {string | null} to null when it's deleted
+ */
+function retagged(tag, to) {
+  picked = retag(picked, tag, to);
+  editTags = retag(editTags, tag, to);
+  showEditTags();
+}
 
 /** @param {string} tag */
 function toggleEditTag(tag) {
@@ -690,13 +700,13 @@ function pickTags(at) {
   const list = find(picker, TAG_LIST);
   const query = () => tagOfHeading(input.value.replace(/^#/, ''));
   /** @type {TagPick} */
-  const pick = { color: nextColor(), recolor: null };
+  const pick = { color: nextTagColor(), recolor: null };
   const draw = () => { list.innerHTML = tagRowsHtml(query(), pick); };
   /** @param {string} tag @param {boolean} isNew */
   const choose = (tag, isNew) => {
     if (isNew) {
       setTagColor(tag, pick.color);
-      pick.color = nextColor();
+      pick.color = nextTagColor();
     }
     toggleEditTag(tag);
     input.value = '';
@@ -984,6 +994,7 @@ function act(control) {
       editing = null;
       return render();
     case ACTION.pickTags: return pickTags(control);
+    case ACTION.manageTags: return openTagManager(control, retagged);
     case ACTION.dropTag: return toggleEditTag(/** @type {string} */ (control.dataset.tag));
     case ACTION.label: return toggleLabel(/** @type {string} */ (control.dataset.label));
     case ACTION.create: return createIssue();

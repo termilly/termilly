@@ -103,7 +103,7 @@ export const getSetting = path => {
 /**
  * To do's panel: open or closed, the list it shows, where it docks, and the SSH hosts' tasks by profile (js/todo.js).
  * @typedef {{ open: boolean, list?: { kind: string, id: string } | null, width?: number, height?: number, side?: string,
- *   detached?: boolean, hosts?: Record<string, TodoTask[]>, onlyWithTasks?: boolean, tagColors?: Record<string, string>, showDone?: boolean }} TodoState
+ *   detached?: boolean, hosts?: Record<string, TodoTask[]>, onlyWithTasks?: boolean, tags?: string[], tagColors?: Record<string, string>, showDone?: boolean }} TodoState
  */
 
 /**

@@ -143,15 +143,26 @@ export function tagsIn(tasks) {
 /**
  * Every tag in these lists, done tasks' too, most used first and then by name: what a task's tags are picked from.
  * @param {(TodoTask[] | null | undefined)[]} lists
+ * @param {string[]} [kept] tags that stay with no task on them
  * @returns {[string, number][]}
  */
-export function allTags(lists) {
+export function allTags(lists, kept = []) {
   /** @type {Map<string, number>} */
-  const tags = new Map();
+  const tags = new Map(kept.map(tag => [tag, 0]));
   for (const task of lists.flatMap(list => list ?? [])) {
     for (const tag of task.tags ?? []) tags.set(tag, (tags.get(tag) ?? 0) + 1);
   }
   return [...tags].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+}
+
+/**
+ * A task's tags with one renamed (to one it has already: they become one), or taken off (to is null).
+ * @param {string[]} tags
+ * @param {string} from
+ * @param {string | null} to
+ */
+export function retag(tags, from, to) {
+  return [...new Set(tags.flatMap(tag => (tag === from ? to ?? [] : tag)))];
 }
 
 /**

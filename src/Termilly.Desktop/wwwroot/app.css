@@ -1901,6 +1901,14 @@ body.dragging-pane #drag-ghost { z-index: 2700; }
 .tp-sep { height: 1px; margin: 5px 4px; background: var(--border); }
 .tp-empty { padding: 8px; color: var(--faint); }
 .tag-picker .swatches { padding: 4px 8px 8px; }
+.tm-row { display: flex; align-items: center; gap: 6px; padding: 2px 4px 2px 8px; border-radius: 6px; }
+.tm-row:hover { background: var(--hover); }
+.tm-row .td-tag-color { margin-left: 0; }
+.tm-row .tp-count { margin-left: 0; }
+.tm-name { flex: 1; min-width: 0; padding: 2px 4px; border: 1px solid transparent; border-radius: 4px; outline: none; background: none; color: var(--text); font: inherit; font-size: 12.5px; }
+.tm-name:hover { border-color: var(--border-strong); }
+.tm-name:focus { border-color: var(--accent); }
+.tm-row .pane-btn svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1; }
 .check {
   display: grid;
   flex: none;

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   parseTask, tasksFromLines, tasksFromNote, tagOfHeading, selectedLines, withoutLines, openCount, tagsIn, allTags, withTags, moveBefore,
-  labelsForTags, hoverLines, treeRows, detailLines, tickSub, tickByNumber, linkSub, subProgress, implementPrompt, statusOf, TASK_STATUS, HOVER_TASKS,
+  labelsForTags, retag, hoverLines, treeRows, detailLines, tickSub, tickByNumber, linkSub, subProgress, implementPrompt, statusOf, TASK_STATUS, HOVER_TASKS,
 } from '../../src/Termilly.Desktop/wwwroot/js/todolist.js';
 
 const task = (id, more = {}) => ({ id, text: id, created: 0, ...more });
@@ -80,6 +80,16 @@ test('tags come from open tasks, with how many', () => {
 test('all tags come from every list, done tasks too, most used first', () => {
   assert.deepEqual(allTags([[task('a', { tags: ['z', 'y'] }), task('b', { tags: ['y'], done: true })], undefined, [task('c', { tags: ['x'] })]]),
     [['y', 2], ['x', 1], ['z', 1]]);
+});
+
+test('kept tags stay with no task on them', () => {
+  assert.deepEqual(allTags([[task('a', { tags: ['x'] })]], ['x', 'old']), [['x', 1], ['old', 0]]);
+});
+
+test('a tag is renamed, merged or taken off', () => {
+  assert.deepEqual(retag(['a', 'b'], 'a', 'c'), ['c', 'b']);
+  assert.deepEqual(retag(['a', 'b'], 'a', 'b'), ['b']);
+  assert.deepEqual(retag(['a', 'b'], 'a', null), ['b']);
 });
 
 test('picked tags show any of them', () => {
