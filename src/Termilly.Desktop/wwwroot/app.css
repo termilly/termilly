@@ -750,7 +750,7 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
 /* The page's toolbar under the tabs (its file, copying to a note, its view switches) and its status bar at the foot. */
 .np-toolbar { padding: 3px 6px; border-bottom: 1px solid var(--border); }
 .np-toolbar .pane-btn:last-child svg { width: 16px; height: 16px; stroke-width: 1; }
-.np-toolbar[hidden], .np-status[hidden] { display: none; }
+.np-toolbar[hidden], .np-tabbar[hidden], .np-status[hidden] { display: none; }
 .np-sep { flex: none; width: 1px; height: 16px; margin: 0 4px; background: var(--border-strong); }
 .np-status {
   display: flex; flex-wrap: wrap; gap: 2px 14px; padding: 4px 12px; border-top: 1px solid var(--border);

@@ -190,6 +190,7 @@ function render() {
   area.disabled = !page;
   area.hidden = !page;
   toolbar.hidden = !page;
+  tabBar.hidden = !page;
   emptyEl.hidden = !!page;
   applyView();
   if (page) {
