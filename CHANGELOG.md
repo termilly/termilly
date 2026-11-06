@@ -15,8 +15,7 @@ What changed in each release. Termilly says in its title bar when a newer one is
 Fixes:
 
 - **Linux:** no white flash at start, rounded windows, and the first start follows your light or dark mode.
-- **Windows:** no more message boxes from background programs that can't start.
-- **Remote:** now turns on with any network address, such as on cloud machines.
+- **Remote:** no longer limited to private network ranges, so it works on any subnet.
 - **Detached windows:** a window on a monitor that's gone comes back.
 - Various smaller improvements and bug fixes.
 
