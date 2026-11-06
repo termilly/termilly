@@ -271,10 +271,8 @@ function addChrome(d, doc) {
     send(PAGE.window, { action, name: NAME_PREFIX + d.key, edge: edge || null });
   const controls = doc.createElement('div');
   controls.className = 'window-controls detached-controls';
-  // A separator, then the pin that keeps the window above every other one, then Return and the window's own buttons.
-  const separator = doc.createElement('div');
-  separator.className = 'separator';
-  controls.append(separator, pinButton(doc, d.key, act));
+  // The pin that keeps the window above every other one, Return, a separator, then the window's own buttons.
+  controls.append(pinButton(doc, d.key, act));
   if (d.returnable !== false) {
     const back = doc.createElement('button');
     back.innerHTML = RETURN_ICON;
@@ -282,6 +280,9 @@ function addChrome(d, doc) {
     back.addEventListener('click', () => closeWindow(d.key));
     controls.append(back);
   }
+  const separator = doc.createElement('div');
+  separator.className = 'separator';
+  if (!mac) controls.append(separator);
   // macOS: the traffic lights at the start of the header, as the main window's; Return and the pin stay at the end.
   const lights = mac ? doc.createElement('div') : controls;
   if (mac) {
