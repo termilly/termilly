@@ -4,9 +4,9 @@
 // encrypted with the rest, and a closed terminal keeps its own; a host's are saved in state.todo. js/todopanel.js shows
 // a list; anything else opens one with openTodo.
 
-import { state, emit, persist, newId, wsById, tabTitle, isSsh, EVENTS } from './store.js';
+import { state, emit, persist, newId, wsById, tabTitle, isSsh, EVENTS, TAG_COLORS } from './store.js';
 import { NOTE_KIND, profileNote, noteTitle, notesFor } from './notes.js';
-import { openCount, hoverLines, allTags } from './todolist.js';
+import { openCount, hoverLines, allTags, tagHash } from './todolist.js';
 
 /** Which list: a terminal's, a workspace's or a host's, by its id. */
 export const LIST_KIND = NOTE_KIND;
@@ -171,6 +171,22 @@ export const todoTags = () => allTags([
   ...state.workspaces.map(ws => ws.tasks),
   ...Object.values(state.todo.hosts ?? {}),
 ]);
+
+/**
+ * A tag's colour: the one picked for it, else one of the palette's from its name.
+ * @param {string} tag
+ */
+export const tagColor = tag => state.todo.tagColors?.[tag] ?? TAG_COLORS[tagHash(tag) % TAG_COLORS.length];
+
+/**
+ * Picks a tag's colour, for every task that has it.
+ * @param {string} tag
+ * @param {string} color
+ */
+export function setTagColor(tag, color) {
+  state.todo.tagColors = { ...state.todo.tagColors, [tag]: color };
+  persist();
+}
 
 /**
  * Asks for a list to be shown, in the panel.

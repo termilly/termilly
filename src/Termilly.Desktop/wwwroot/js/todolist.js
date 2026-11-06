@@ -13,6 +13,8 @@ const BOX_ONLY = /^\s*\[( |x|X)\]\s+/;
 const HEADING = /^\s*#{1,6}\s+(.+?)\s*#*\s*$/;
 const LINE_BREAK = /\r?\n/;
 const TICKED = 'xX';
+const TAG_HASH_BASE = 31;
+const TAG_HASH_LIMIT = 1000003;
 
 /**
  * A heading as a tag: `## Deploy now` is `deploy-now`.
@@ -143,6 +145,16 @@ export function allTags(lists) {
     for (const tag of task.tags ?? []) tags.set(tag, (tags.get(tag) ?? 0) + 1);
   }
   return [...tags].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+}
+
+/**
+ * A number from a tag's name: a tag nobody coloured looks the same in every list.
+ * @param {string} tag
+ */
+export function tagHash(tag) {
+  let hash = 0;
+  for (const c of tag) hash = (hash * TAG_HASH_BASE + /** @type {number} */ (c.codePointAt(0))) % TAG_HASH_LIMIT;
+  return hash;
 }
 
 /**

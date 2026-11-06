@@ -6,7 +6,7 @@
 
 import { PAGE, HOST } from './protocol.js';
 import { send, onHost } from './host.js';
-import { state, on, persist, newId, lastFolderOf, wsById, tabsOf, tabTitle, isSsh, EVENTS } from './store.js';
+import { state, on, persist, newId, lastFolderOf, wsById, tabsOf, tabTitle, isSsh, EVENTS, TAG_COLORS } from './store.js';
 import { escapeHtml, cssColor, tabBadgeHtml, countText, ICONS } from './ui.js';
 import { byId, find, targetOf, WORKSPACE_ID, DOCK_GRIP, PANEL_HEAD, TOOL_COUNT } from './dom.js';
 import { showMenu, openPopover, closeAll, SEPARATOR } from './popups.js';
@@ -16,18 +16,20 @@ import { KEY_ID } from './keymap.js';
 import { copyOut, textBoxMenu } from './textmenu.js';
 import { COPY_LABEL } from './termclipboard.js';
 import { dockPanel, NOTEPAD_DOCK } from './dockpanel.js';
-import { TAG_LIST } from './tagpicker.js';
+import { TAG_LIST, swatchesHtml } from './tagpicker.js';
 import {
   parseTask, tasksFromLines, tasksFromNote, tagOfHeading, selectedLines, withoutLines, openCount, tagsIn, withTags, moveBefore, labelsForTags, issueBody, treeRows, found,
 } from './todolist.js';
 import {
   LIST_KIND, listOf, noteTarget, sameList, listInFront, openInFront, terminalList, workspaceList, hostList, addTasks, updateTask,
-  removeTask, moveTask, reorderTasks, todoTags,
+  removeTask, moveTask, reorderTasks, todoTags, tagColor, setTagColor,
 } from './todo.js';
 
 /** @typedef {import('./todo.js').ListRef} ListRef */
 
 const NAME = 'To do';
+/** A tag picker's colour field. */
+const COLOR_INPUT = 'color';
 /** A workspace's own list, in the picker. */
 const WORKSPACE_LIST = 'Workspace list';
 /** What the code finds in the panel. */
@@ -50,9 +52,6 @@ const NOTE_LINE_PX = 20;
 const NOTE_PADDING_PX = 12;
 /** Where a task's tags show while it's edited. */
 const EDIT_TAGS = '.td-edit-tags';
-/** A list's tag chip gets one of the theme's colours, always the same for a tag. */
-const TAG_HUES = 8;
-const TAG_HASH = 31;
 
 const panel = document.createElement('aside');
 panel.className = 'notepad-panel todo-panel';
@@ -125,17 +124,13 @@ const shown = () => listOf(current);
 // ---- Drawing ----
 
 /**
- * The chip of a tag: its colour comes from its name, so a tag looks the same in every list.
+ * What gives a tag's chip its colour.
  * @param {string} tag
  */
-function tagHue(tag) {
-  let hash = 0;
-  for (const c of tag) hash = (hash * TAG_HASH + /** @type {number} */ (c.codePointAt(0))) % TAG_HUES;
-  return hash;
-}
+const chipStyle = tag => `style="--td-hue:${cssColor(tagColor(tag))}"`;
 
 /** @param {string} tag @param {boolean} [on] */
-const chip = (tag, on = false) => `<button type="button" class="td-chip hue${tagHue(tag)}${on ? ' on' : ''}" data-td="${ACTION.tag}" data-tag="${escapeHtml(tag)}">${escapeHtml(tag)}</button>`;
+const chip = (tag, on = false) => `<button type="button" class="td-chip${on ? ' on' : ''}" ${chipStyle(tag)} data-td="${ACTION.tag}" data-tag="${escapeHtml(tag)}">${escapeHtml(tag)}</button>`;
 
 /** @param {TodoTask} task */
 function rowHtml(task) {
@@ -163,7 +158,7 @@ function editorHtml(task) {
 
 /** The tags of the task being edited, each with its × and the button that adds more. */
 function editTagsHtml() {
-  const tags = editTags.map(tag => `<span class="td-chip hue${tagHue(tag)}">${escapeHtml(tag)}<button type="button" class="td-chip-drop" data-td="${ACTION.dropTag}" data-tag="${escapeHtml(tag)}" title="Remove" aria-label="Remove ${escapeHtml(tag)}">${ICONS.close}</button></span>`);
+  const tags = editTags.map(tag => `<span class="td-chip" ${chipStyle(tag)} data-tag="${escapeHtml(tag)}">${escapeHtml(tag)}<button type="button" class="td-chip-drop" data-td="${ACTION.dropTag}" data-tag="${escapeHtml(tag)}" title="Remove" aria-label="Remove ${escapeHtml(tag)}">${ICONS.close}</button></span>`);
   return `${tags.join('')}<button type="button" class="td-add-tag" data-td="${ACTION.pickTags}">${ICONS.plus}Tag</button>`;
 }
 
@@ -521,22 +516,84 @@ function showEditTags() {
 }
 
 /**
- * The list a task's tags are picked from: To do's tags, ticked when the task has them, and a new one from what's typed.
- * @param {string} query
+ * The tag picker while it's open: the colour a new tag gets, and the existing tag whose colours show.
+ * @typedef {{ color: string, recolor: string | null }} TagPick
  */
-function tagRowsHtml(query) {
+
+/**
+ * The list a task's tags are picked from: To do's tags, ticked when the task has them, each with its colour, and a new
+ * one from what's typed.
+ * @param {string} query
+ * @param {TagPick} pick
+ */
+function tagRowsHtml(query, pick) {
   const known = todoTags().map(([tag, count]) => /** @type {[string, number]} */ ([tag, count]));
   for (const tag of editTags) if (!known.some(([name]) => name === tag)) known.push([tag, 0]);
   const rows = known.filter(([tag]) => tag.includes(query)).map(([tag, count]) => `
     <button class="tp-row" data-tag="${escapeHtml(tag)}" role="option" aria-selected="${editTags.includes(tag)}">
       <span class="check${editTags.includes(tag) ? ' on' : ''}"><svg viewBox="0 0 12 12"><path d="M2.5 6.5l2.5 2.5 4.5-5.5"/></svg></span>
-      <span class="td-chip hue${tagHue(tag)}">${escapeHtml(tag)}</span><span class="tp-count">${count || ''}</span>
-    </button>`);
+      <span class="td-chip" ${chipStyle(tag)}>${escapeHtml(tag)}</span><span class="tp-count">${count || ''}</span>
+      <span class="td-tag-color" data-recolor="${escapeHtml(tag)}" style="background:${cssColor(tagColor(tag))}" title="Change the colour"></span>
+    </button>${pick.recolor === tag ? swatchesHtml(tagColor(tag)) : ''}`);
   if (query && !known.some(([tag]) => tag === query)) {
-    rows.push(`<button class="tp-row tp-create" data-tag="${escapeHtml(query)}"><span class="menu-icon">${ICONS.plus}</span>Create<span class="td-chip hue${tagHue(query)}">${escapeHtml(query)}</span></button>`);
+    rows.push(`<button class="tp-row tp-create" data-tag="${escapeHtml(query)}" data-new><span class="menu-icon">${ICONS.plus}</span>Create<span class="td-chip" style="--td-hue:${cssColor(pick.color)}">${escapeHtml(query)}</span></button>${swatchesHtml(pick.color)}`);
   }
   return rows.join('') || '<div class="tp-empty">Type a name to create a tag</div>';
 }
+
+/**
+ * Picks a colour: the existing tag's whose colours show, everywhere it's shown now, else the new tag's.
+ * @param {TagPick} pick
+ * @param {string} color
+ */
+function pickColor(pick, color) {
+  if (!pick.recolor) {
+    pick.color = color;
+    return;
+  }
+  setTagColor(pick.recolor, color);
+  for (const chipEl of /** @type {NodeListOf<HTMLElement>} */ (panel.querySelectorAll('.td-chip'))) {
+    if (chipEl.dataset.tag === pick.recolor) chipEl.style.setProperty('--td-hue', color);
+  }
+}
+
+/**
+ * The list's clicks (a tag, its colour, Create, a swatch) and the colour field.
+ * @param {HTMLElement} list
+ * @param {TagPick} pick
+ * @param {{ draw: () => void, choose: (tag: string, isNew: boolean) => void, focus: () => void }} handlers
+ */
+function wireTagList(list, pick, { draw, choose, focus }) {
+  // The focus stays in the search field while tags are ticked; the colour field needs it.
+  list.addEventListener('mousedown', e => {
+    if (/** @type {HTMLInputElement} */ (e.target).type !== COLOR_INPUT) e.preventDefault();
+  });
+  list.addEventListener('click', e => {
+    const swatch = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-color]'));
+    const recolor = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-recolor]'));
+    const row = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-tag]'));
+    if (swatch) pickColor(pick, /** @type {string} */ (swatch.dataset.color));
+    else if (recolor) pick.recolor = pick.recolor === recolor.dataset.recolor ? null : recolor.dataset.recolor ?? null;
+    else if (row) return choose(/** @type {string} */ (row.dataset.tag), 'new' in row.dataset);
+    else return;
+    draw();
+  });
+  // While the colour picker is open the chips follow it; choosing draws the swatches again.
+  list.addEventListener('input', e => {
+    const box = /** @type {HTMLInputElement} */ (e.target);
+    if (box.type !== COLOR_INPUT) return;
+    pickColor(pick, box.value);
+    list.querySelector('.tp-create .td-chip')?.setAttribute('style', `--td-hue:${cssColor(box.value)}`);
+  });
+  list.addEventListener('change', e => {
+    if (/** @type {HTMLInputElement} */ (e.target).type !== COLOR_INPUT) return;
+    draw();
+    focus();
+  });
+}
+
+/** The colour a new tag starts with: the next one round the palette. */
+const nextColor = () => TAG_COLORS[todoTags().length % TAG_COLORS.length];
 
 /** @param {string} tag */
 function toggleEditTag(tag) {
@@ -557,24 +614,30 @@ function pickTags(at) {
   const input = /** @type {HTMLInputElement} */ (find(picker, 'input'));
   const list = find(picker, TAG_LIST);
   const query = () => tagOfHeading(input.value.replace(/^#/, ''));
-  const draw = () => { list.innerHTML = tagRowsHtml(query()); };
-  input.addEventListener('input', draw);
+  /** @type {TagPick} */
+  const pick = { color: nextColor(), recolor: null };
+  const draw = () => { list.innerHTML = tagRowsHtml(query(), pick); };
+  /** @param {string} tag @param {boolean} isNew */
+  const choose = (tag, isNew) => {
+    if (isNew) {
+      setTagColor(tag, pick.color);
+      pick.color = nextColor();
+    }
+    toggleEditTag(tag);
+    input.value = '';
+    draw();
+  };
+  // Typing leaves a tag's colours: a swatch then is for the tag being typed.
+  input.addEventListener('input', () => {
+    pick.recolor = null;
+    draw();
+  });
   input.addEventListener('keydown', e => {
     if (e.key !== 'Enter' || !query()) return;
     e.preventDefault();
-    toggleEditTag(query());
-    input.value = '';
-    draw();
+    choose(query(), !todoTags().some(([tag]) => tag === query()) && !editTags.includes(query()));
   });
-  // The focus stays in the field while tags are ticked.
-  list.addEventListener('mousedown', e => e.preventDefault());
-  list.addEventListener('click', e => {
-    const row = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-tag]'));
-    if (!row) return;
-    toggleEditTag(/** @type {string} */ (row.dataset.tag));
-    input.value = '';
-    draw();
-  });
+  wireTagList(list, pick, { draw, choose, focus: () => input.focus() });
   draw();
   openPopover(picker, at, { dynamic: true, refocus: () => /** @type {HTMLElement | null} */ (panel.querySelector(EDIT_TEXT))?.focus() });
   input.focus();
