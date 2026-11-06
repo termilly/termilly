@@ -159,8 +159,8 @@ function rowHtml(task) {
     <div class="td-body"><div class="td-text">${escapeHtml(task.text)}</div>
       ${notes ? `<div class="td-details">${escapeHtml(notes)}</div>` : ''}
       ${agentHtml(task)}
-      ${hasMeta ? `<div class="td-meta">${subs ? `<span class="td-progress">${doneSubs}/${subs}</span>` : ''}${(task.tags ?? []).map(t => chip(t, picked.includes(t))).join('')}${issueChip(task.issue)}</div>` : ''}</div>
-    ${actsHtml(task.issue, true)}<button class="pane-btn td-more" data-td="${ACTION.more}" title="More">${ICONS.more}</button>
+      ${hasMeta ? `<div class="td-meta">${subs ? `<span class="td-progress">${doneSubs}/${subs}</span>` : ''}${(task.tags ?? []).map(t => chip(t, picked.includes(t))).join('')}${issueChip(task.issue)}</div>` : ''}
+      ${actsHtml(task.issue, true)}</div>
     ${lines.filter(line => line.sub).map(subHtml).join('')}
     ${reviewHtml(task)}
   </div>`;
@@ -195,8 +195,7 @@ const issueChip = issue => (issue ? `<button type="button" class="td-gh" data-td
 function subHtml(line) {
   return `<div class="td-sub${line.done ? ' done' : ''}" data-sub="${line.at}">
     <input class="td-check td-sub-check" type="checkbox" ${line.done ? 'checked' : ''} aria-label="Done">
-    <span class="td-text">${escapeHtml(line.text)}${issueChip(line.issue)}</span>
-    ${actsHtml(line.issue, false)}
+    <span class="td-body"><span class="td-text">${escapeHtml(line.text)}${issueChip(line.issue)}</span>${actsHtml(line.issue, false)}</span>
   </div>`;
 }
 
@@ -207,15 +206,16 @@ const agentInstalled = () => state.profiles.some(p => p.startCommand === AGENT_C
  * Implement when Claude Code is installed, and Create GitHub issue when the folder's repository is on GitHub and there's
  * no issue yet.
  * @param {{ url: string, number: number } | undefined} issue
- * @param {boolean} hasStatus a task's status can be picked here; a sub-item has none
+ * @param {boolean} isTask a task has a status and a menu too; a sub-item has neither
  */
-function actsHtml(issue, hasStatus) {
+function actsHtml(issue, isTask) {
   const folder = folderOfList();
   const canIssue = !issue && !!folder && onGitHub.get(folder);
   return `<span class="td-acts">
-    ${hasStatus ? `<button class="pane-btn" data-td="${ACTION.status}" title="Status">${ICONS.chevronDown}</button>` : ''}
+    ${isTask ? `<button class="pane-btn" data-td="${ACTION.status}" title="Status">${ICONS.chevronDown}</button>` : ''}
     ${agentInstalled() ? `<button class="pane-btn" data-td="${ACTION.implement}" ${folder ? '' : 'disabled'} title="${folder ? 'Implement: start Claude Code on this in a new terminal' : 'Implement needs a folder on this computer'}">${ICONS.play}</button>` : ''}
     ${canIssue ? `<button class="pane-btn" data-td="${ACTION.issue}" title="Create GitHub issue">${ICONS.git}</button>` : ''}
+    ${isTask ? `<button class="pane-btn" data-td="${ACTION.more}" title="More">${ICONS.more}</button>` : ''}
   </span>`;
 }
 
