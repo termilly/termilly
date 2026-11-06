@@ -729,6 +729,7 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
   background: var(--surface);
 }
 .notepad-panel[hidden] { display: none; }
+.notepad-panel.dock-away { visibility: hidden; }
 .notepad-panel[data-side="left"] { right: auto; left: 0; }
 .notepad-panel[data-side="top"], .notepad-panel[data-side="bottom"] { left: 0; width: auto !important; height: 260px; min-width: 0; min-height: 180px; max-width: none; max-height: 50%; }
 .notepad-panel[data-side="top"] { bottom: auto; }

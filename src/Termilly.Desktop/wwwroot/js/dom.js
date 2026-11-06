@@ -96,6 +96,9 @@ export function dragPointer(el, e, move, done) {
 /** The class of a docked panel's grip, on its left edge. */
 export const DOCK_GRIP = 'files-grip';
 
+/** A panel's class while it's on its way into a window of its own: not seen here, and it takes no room (app.css). */
+export const DOCK_AWAY = 'dock-away';
+
 /** The workspace's edges a panel can dock on. */
 export const DOCK_SIDE = Object.freeze({ right: 'right', left: 'left', top: 'top', bottom: 'bottom' });
 /** @param {string} side */
@@ -132,7 +135,7 @@ export function dockRight(panel, { dockVar, minWidth, minHeight = minWidth, side
   const gap = () => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--gap')) || 0;
   // In a window of its own (js/windows.js), or hidden, it takes no room here.
   const refresh = () => {
-    const docked = !panel.hidden && workspace.contains(panel);
+    const docked = !panel.hidden && !panel.classList.contains(DOCK_AWAY) && workspace.contains(panel);
     const now = side();
     const room = docked ? (isAcross(now) ? panel.offsetHeight : panel.offsetWidth) + gap() : 0;
     for (const edge of Object.values(DOCK_SIDE)) {

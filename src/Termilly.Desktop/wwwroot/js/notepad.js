@@ -10,7 +10,7 @@ import { state, persist, newId, tabTitle, wsById } from './store.js';
 import { restoreFocus, stripBar, wireDragOut, systemDrag, dockDrop } from './panes.js';
 import { scheduleFit } from './terminals.js';
 import { escapeHtml, cssColor, tabBadgeHtml, countText, ICONS } from './ui.js';
-import { byId, find, targetOf, dockRight, isAcross, edgeAt, onMiddleClick, DOCK_SIDE, WORKSPACE_ID, DOCK_GRIP } from './dom.js';
+import { byId, find, targetOf, dockRight, isAcross, edgeAt, onMiddleClick, DOCK_AWAY, DOCK_SIDE, WORKSPACE_ID, DOCK_GRIP } from './dom.js';
 import { showMenu, SEPARATOR } from './popups.js';
 import { confirmDialog } from './dialogs.js';
 import { showToast, TOAST } from './toasts.js';
@@ -258,10 +258,16 @@ function setOpen(open) {
  */
 function show({ quiet = false, here = false } = {}) {
   if (!activePage()) state.notepad.activeId = pages()[0]?.id ?? null;
+  // Closed while in a window of its own: it opens in it again, where it was, unless it's on its way there. Never seen
+  // docked meanwhile: its window can take a second to open (Linux).
+  const reopens = !here && state.notepad.detached && !isDetached(WINDOW_KEY);
+  panel.classList.toggle(DOCK_AWAY, reopens);
   setOpen(true);
   render();
-  // Closed while in a window of its own: it opens in it again, where it was (not docked), unless it's on its way there.
-  if (!here && state.notepad.detached && !isDetached(WINDOW_KEY)) return void detachNotepad();
+  if (reopens) {
+    if (!detachNotepad()) dockHere();
+    return;
+  }
   if (!quiet) (activePage() ? area : find(panel, `.np-empty [data-np="${NOTEPAD_ACTION.newPage}"]`)).focus();
 }
 
@@ -297,6 +303,7 @@ function detachNotepad(at, place) {
   return detach(WINDOW_KEY, {
     el: panel, title: NAME, onClosed: () => dockBack(), onResize: refreshDock,
     onMoved: () => {
+      panel.classList.remove(DOCK_AWAY);
       keepDetached(true);
       area.focus();
     },
@@ -305,6 +312,12 @@ function detachNotepad(at, place) {
     onDragged: dockDrop(dockAt, dockTo),
     dragHandle: systemDrag ? NOTEPAD_HANDLE : undefined,
   });
+}
+
+/** Seen docked again: its window couldn't open, or went before it got there. */
+function dockHere() {
+  panel.classList.remove(DOCK_AWAY);
+  refreshDock();
 }
 
 /** Its handle in a window of its own on Linux: its title, dragged back into the main window (js/panes.js). */
@@ -384,7 +397,7 @@ function dockMenu() {
 function dockBack({ keepWindowed = false } = {}) {
   if (!keepWindowed) keepDetached(false);
   byId(WORKSPACE_ID).append(panel);
-  refreshDock();
+  dockHere();
   if (!panel.hidden) render();
 }
 
