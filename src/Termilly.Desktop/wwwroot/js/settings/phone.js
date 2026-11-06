@@ -100,7 +100,7 @@ function phonesHtml() {
  */
 async function removeDevice(id) {
   const name = status.devices.find(d => d.id === id)?.name ?? 'this device';
-  const confirmed = await confirmDialog({ title: `Remove ${name}?`, body: 'It can’t connect again until it’s paired anew.', confirm: 'Remove' });
+  const confirmed = await confirmDialog({ title: `Remove ${name}?`, body: 'It can’t connect again until it’s paired anew.', confirm: 'Remove device' });
   if (confirmed) send(PAGE.phoneRemove, { device: id });
   if (!phonesList?.isConnected) openPhones();
 }
