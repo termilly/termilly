@@ -75,3 +75,20 @@ internal sealed class LinuxKeyringStore : ICredentialStore
 
     public string? Read(string target) => LibSecret.Lookup(target);
 }
+
+/// <summary>The macOS login keychain (<see cref="MacKeychain"/>) as Termilly's credential store.</summary>
+[SupportedOSPlatform("macos")]
+internal sealed class MacKeychainStore : ICredentialStore
+{
+    public string Name => "the keychain";
+
+    public bool IsAvailable => true;
+
+    public void Save(string target, string user, string secret, string comment) => MacKeychain.Store(target, user, secret);
+
+    public bool Exists(string target) => MacKeychain.Lookup(target) is not null;
+
+    public void Delete(string target) => MacKeychain.Clear(target);
+
+    public string? Read(string target) => MacKeychain.Lookup(target);
+}

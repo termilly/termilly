@@ -3,6 +3,7 @@
 
 import { PAGE, HOST } from './protocol.js';
 import { send, onHost } from './host.js';
+import './macwindow.js';
 import {
   state, restore, newId, emit, saveNow, WORKSPACE_COLORS, PROFILE_SOURCES, agentChanged, markSeen, GROUPS, EVENTS, sourceOf, SPLIT,
 } from './store.js';
@@ -12,7 +13,7 @@ import { setKeyHandler, scheduleFit, clearActivity, keptRunning } from './termin
 import { consoleDefaults } from './consolecolors.js';
 import {
   newTab, closeTab, focusedTab, splitFocused, moveFocus, renderAll, switchWorkspace, restoreFocus, noteOutput,
-  cycleGroupTab, moveAllToTabs, DIRECTION,
+  cycleGroupTab, moveAllToTabs, reopenWindows, DIRECTION,
 } from './panes.js';
 import { initSidebar, toggleSidebar } from './sidebar.js';
 import './remotepc.js';
@@ -31,7 +32,7 @@ import { toggleClips, initClips } from './clipboard.js';
 import { chordOf, commandOf, keyHint, KEY_ID } from './keymap.js';
 import { openNewWorktree } from './worktree.js';
 import { openChangedFiles } from './changes.js';
-import { openSnippetsWindow } from './snippetswindow.js';
+import { openSnippetsWindow, initSnippetsWindow } from './snippetswindow.js';
 import { THEMES } from './themes.js';
 import { isPreviewOpen, closePreview } from './preview.js';
 import { pluginCommands, reloadPlugins } from './plugins.js';
@@ -52,7 +53,6 @@ import './phone.js';
 import './snippetprompt.js';
 import './cost.js';
 import './quit.js';
-import { openAllResults } from './results.js';
 import './gitstatus.js';
 import { openViewer } from './viewer.js';
 import { openRecordings, openRewind } from './replay.js';
@@ -64,10 +64,11 @@ import { beginRename } from './rename.js';
 import { TAG_BUTTON } from './tabmenu.js';
 import { openTagPicker } from './tagpicker.js';
 import { badgeHtml, escapeHtml, keysHtml } from './ui.js';
-import { updateSettings, DEFAULT_FONT_SIZE } from './preferences.js';
+import { updateSettings, DEFAULT_FONT_SIZE, DEFAULT_ZOOM, MIN_ZOOM, MAX_ZOOM, ZOOM_STEP } from './preferences.js';
 import { openNewWorkspace } from './newworkspace.js';
 import { remoteGit } from './remotehost.js';
 import { AGENT_STATE, SETTING_VALUES, WINDOW_ACTION } from './constants.js';
+import { inEachDocument } from './windows.js';
 import { rememberSession, recordPrompt } from './myprompts.js';
 import './tooltips.js';
 import { byId, find, targetOf, WORKSPACE_ID } from './dom.js';
@@ -88,6 +89,16 @@ const NUMBERED_SHORTCUTS = 9;
 const DIGIT_CODE = 'Digit';
 /** The keys that zoom in and out with Ctrl, and split with Alt+Shift (by their codes: = and -, and the keypad's). */
 const PLUS_KEYS = ['Equal', 'NumpadAdd'];
+/** The keys that reset the size with Ctrl (and Shift): 0, and the keypad's. */
+const ZERO_KEYS = ['Digit0', 'Numpad0'];
+
+/**
+ * The whole app a step bigger or smaller, within its range.
+ * @param {number} step
+ */
+const zoomBy = step => updateSettings(GROUPS.interface, {
+  zoom: Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, (state.settings.interface.zoom ?? DEFAULT_ZOOM) + step)),
+});
 const MINUS_KEYS = ['Minus', 'NumpadSubtract'];
 /**
  * The direction moveFocus takes for each arrow key (panes.js).
@@ -136,6 +147,10 @@ const commands = {
   fontLarger: () => updateSettings(GROUPS.terminal, { fontSize: state.settings.terminal.fontSize + 1 }),
   fontSmaller: () => updateSettings(GROUPS.terminal, { fontSize: state.settings.terminal.fontSize - 1 }),
   fontReset: () => updateSettings(GROUPS.terminal, { fontSize: DEFAULT_FONT_SIZE }),
+  // The whole app, text, icons and terminals together (its host zooms every window).
+  zoomIn: () => zoomBy(ZOOM_STEP),
+  zoomOut: () => zoomBy(-ZOOM_STEP),
+  zoomReset: () => updateSettings(GROUPS.interface, { zoom: DEFAULT_ZOOM }),
   settings: () => toggleSettings(),
   toggleTheme,
   inbox: () => toggleInbox(),
@@ -174,7 +189,6 @@ setCommands(() => [
   { label: 'Open a recording', keywords: 'replay asciicast cast asciinema recording play', run: () => setTimeout(openRecordings) },
   { label: 'Rewind this terminal', keywords: 'replay instant back history screen earlier', run: () => setTimeout(() => focusedTab() && openRewind(/** @type {Tab} */ (focusedTab()))) },
   { label: 'Attach tmux', keywords: 'tmux control mode -CC attach session server remote panes windows wsl ssh', run: () => setTimeout(openAttach) },
-  { label: 'Go to result', keywords: 'pull request pr issue running app url dev server push commit results', run: () => setTimeout(openAllResults) },
   { label: 'Run a snippet', keywords: 'snippets saved commands run snippet macro button bar', run: () => setTimeout(openSnippets) },
   { label: 'Manage snippets', keywords: 'snippets explorer window edit new delete saved commands', run: () => setTimeout(openSnippetsWindow) },
   { label: 'Previous prompt', keywords: 'scroll jump command', hint: keyHint(KEY_ID.previousPrompt), run: commands.previousPrompt },
@@ -202,6 +216,9 @@ setCommands(() => [
   { label: 'Bigger text', keywords: 'font zoom in', hint: keysHtml('Ctrl +'), run: commands.fontLarger },
   { label: 'Smaller text', keywords: 'font zoom out', hint: keysHtml('Ctrl -'), run: commands.fontSmaller },
   { label: 'Reset text size', keywords: 'font zoom', hint: keysHtml('Ctrl 0'), run: commands.fontReset },
+  { label: 'Zoom in (app and terminals)', keywords: 'zoom bigger scale ui app font', hint: keysHtml('Ctrl Shift +'), run: commands.zoomIn },
+  { label: 'Zoom out (app and terminals)', keywords: 'zoom smaller scale ui app font', hint: keysHtml('Ctrl Shift -'), run: commands.zoomOut },
+  { label: 'Reset zoom', keywords: 'zoom scale ui app', hint: keysHtml('Ctrl Shift 0'), run: commands.zoomReset },
   ...snippetCommands(),
   ...actionCommands(),
   // Each setting, last so app commands come first.
@@ -345,9 +362,12 @@ function runShortcut(e) {
   else if (e.ctrlKey && !e.altKey && e.key === 'Tab') cycleWorkspace(e.shiftKey ? -1 : 1);
   // In a tab group, the next or previous tab; elsewhere the keys go to the shell.
   else if (ctrl && (e.key === 'PageDown' || e.key === 'PageUp') && cycleGroupTab(e.key === 'PageDown' ? 1 : -1)) { /* done */ }
+  else if (ctrlShift && PLUS_KEYS.includes(e.code)) commands.zoomIn();
+  else if (ctrlShift && MINUS_KEYS.includes(e.code)) commands.zoomOut();
+  else if (ctrlShift && ZERO_KEYS.includes(e.code)) commands.zoomReset();
   else if (ctrl && PLUS_KEYS.includes(e.code)) commands.fontLarger();
   else if (ctrl && MINUS_KEYS.includes(e.code)) commands.fontSmaller();
-  else if (ctrl && (e.code === 'Digit0' || e.code === 'Numpad0')) commands.fontReset();
+  else if (ctrl && ZERO_KEYS.includes(e.code)) commands.fontReset();
   else if (ctrl && e.code === 'Comma') commands.settings();
   // Last, so Termilly’s own keys win (Settings › Actions refuses them anyway).
   else if (runActionShortcut(e)) { /* done */ }
@@ -369,16 +389,17 @@ setKeyHandler(e => {
   return !swallowKeypress;
 });
 
-// Shortcuts when no terminal has focus (e.g. an empty workspace), except while typing in a field.
-document.addEventListener('keydown', e => {
+// Shortcuts when no terminal has focus (e.g. an empty workspace), except while typing in a field; in a detached
+// window too.
+inEachDocument(doc => doc.addEventListener('keydown', e => {
   // The target may be the document itself, which has no closest().
   if (/** @type {HTMLElement} */ (e.target).closest?.('.xterm, input, select, textarea')) return;
   if (runShortcut(e)) e.preventDefault();
-});
+}));
 
 // Ctrl+wheel zooms the font, like most terminals.
 byId(WORKSPACE_ID).addEventListener('wheel', e => {
-  if (!e.ctrlKey) return;
+  if (!e.ctrlKey || /** @type {HTMLElement} */ (e.target).closest?.('.notepad-panel')) return; // the Notepad sizes its own text
   e.preventDefault();
   e.stopPropagation(); // keep xterm from also scrolling
   if (e.deltaY < 0) commands.fontLarger(); else commands.fontSmaller();
@@ -410,6 +431,7 @@ byId('search-button').addEventListener('click', () => openPalette());
 
 onHost(HOST.windowState, m => {
   document.body.classList.toggle('maximized', m.maximized);
+  document.body.classList.toggle('window-inactive', !m.active); // macOS's traffic lights go grey (app.css)
   find(document, '[data-window="maximize"]').title = m.maximized ? RESTORE_LABEL : 'Maximize';
   // Back from minimized: the page may never have lost focus, so the window's focus event below doesn't come.
   if (setWindowState(m)) seeFocused();
@@ -537,6 +559,9 @@ function boot(saved, snapshot, liveSessions = []) {
   applySettings();
   if (state.activeId) switchWorkspace(state.activeId);
   initFiles();
+  // Terminals that were in windows of their own when Termilly closed open in them again; the Snippets window too.
+  if (restored) reopenWindows();
+  initSnippetsWindow();
   if (!restored) newTab();
   keepEarlierOfOpen();
   // Show the page when the focused terminal prints its prompt (see 'output'); straight away if there is

@@ -2,6 +2,24 @@
 
 What changed in each release. Termilly says in its title bar when a newer one is out.
 
+## 1.6.2 (2026-11-06)
+
+- **Detachable windows:** move terminals, the Notepad and Snippets into their own windows.
+- **Prompts and replies:** Prompt history now shows Claude Code's replies and tool calls.
+- **Notepad:** toolbar, status bar, line numbers, text size, and docking on any edge.
+- **More shells:** shell integration for zsh, fish, nushell, tcsh and ksh, and shells from package managers.
+- **Clipboard:** a Termilly only switch keeps just what you copy in Termilly.
+- **Remote control:** create and close workspaces and terminals from a phone or another computer, when Allow creating and Allow closing are on there.
+- **Zoom:** Ctrl+Shift+= and - resize the whole app.
+- **Dragging:** drop a terminal on another's title bar to add it as a tab.
+
+Fixes:
+
+- **Linux:** no white flash at start, rounded windows, and the first start follows your light or dark mode. On Wayland, Termilly now runs as an X11 app so windows open where they're dropped; turn this off in Settings > Appearance > Windowing system.
+- **Remote:** works on any network, including cloud machines with only a public address. Only paired devices get in, over HTTPS.
+- **Windows:** a background program that can't start no longer leaves a message box.
+- Various smaller improvements and bug fixes.
+
 ## 1.6.1 (2026-11-02)
 
 - **Remote computers:** remote terminals now show the right badge and Prompt history, and notify you when the connection is lost.

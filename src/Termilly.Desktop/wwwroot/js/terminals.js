@@ -197,6 +197,9 @@ const OSC = Object.freeze({
   iterm: 1337,
 });
 
+/** The option of a command mark (133;C) that carries its line, percent-encoded. */
+const CMDLINE_URL = 'cmdline_url=';
+
 /** How much image data a terminal keeps for its inline images, in MB. */
 const IMAGE_STORAGE_MB = 64;
 /** When a restored terminal scrolls to where it was: once the new shell has cleared its screen. */
@@ -371,7 +374,9 @@ function wireNotifications(tab, term) {
     // Shells ring for typing (Tab with nothing to complete, Backspace at the start), and someone looking at the
     // terminal hears it anyway: only a bell nobody caused or saw is news.
     if (Date.now() - (tab.shell?.typedAt ?? 0) < TYPING_BELL_MS) return;
-    if (document.hasFocus() && tab.wsId === state.activeId && /** @type {TabView} */ (tab.view).el.classList.contains('focused')) return;
+    const { el } = /** @type {TabView} */ (tab.view);
+    // Seen: its own window has the focus (a detached one), or the main window does with it focused there.
+    if (tab.detached ? el.ownerDocument.hasFocus() : document.hasFocus() && tab.wsId === state.activeId && el.classList.contains('focused')) return;
     agentAlert(tab, '');
   });
 }
@@ -803,6 +808,13 @@ function shellMark(tab, data) {
   } else if (mark === 'B') {
     inputStarted(tab);
   } else if (mark === 'C' && tab.shellMarks) {
+    // fish 4 sends the command line with the mark (C;cmdline_url=<percent-encoded>), as kitty's marks do.
+    const line = data.split(';').find(o => o.startsWith(CMDLINE_URL));
+    if (line) {
+      try {
+        commandReported(tab, decodeURIComponent(line.slice(CMDLINE_URL.length)));
+      } catch { /* not percent-encoded after all: what was typed will do */ }
+    }
     tab.command = { startedAt: Date.now() };
     commandStarted(tab);
     const shell = shellOf(tab);
@@ -1090,7 +1102,7 @@ export function applyTerminalSettings() {
  */
 export function scrollbackFor(tab) {
   const budget = state.settings.session.hiddenScrollback;
-  return budget && tab.wsId !== state.activeId ? Math.min(budget, state.settings.terminal.scrollback) : state.settings.terminal.scrollback;
+  return budget && tab.wsId !== state.activeId && !tab.detached ? Math.min(budget, state.settings.terminal.scrollback) : state.settings.terminal.scrollback;
 }
 
 // Switching workspaces changes which terminals are out of sight.

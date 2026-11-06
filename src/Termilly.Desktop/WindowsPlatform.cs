@@ -46,6 +46,10 @@ internal sealed class WindowsPlatform(MainWindow window) :
 
     public void PageReady() => window.RevealPage();
 
+    public Task<string?> CapturePageAsync() => window.Dispatcher.InvokeAsync(window.CapturePageAsync).Task.Unwrap();
+
+    public void ShowDragPicture(FromPage.DragPicture picture) => window.Dispatcher.Invoke(() => window.ShowDragPicture(picture));
+
     // ---- Dialogs: the page's messages arrive on the window's thread, so they open there and answer at once ----
 
     public Task<string?> PickFolderAsync(string title, string initial)
@@ -106,11 +110,13 @@ internal sealed class WindowsPlatform(MainWindow window) :
 
     public Task<string?> PickTextToOpenAsync()
     {
-        var dialog = new Microsoft.Win32.OpenFileDialog { Title = "Open in the Notepad", Filter = TextFilter };
+        // Any file: the Notepad says so when one isn't text (Features/Notepad.cs).
+        var dialog = new Microsoft.Win32.OpenFileDialog { Title = "Open in the Notepad", Filter = OpenFilter };
         return Task.FromResult(dialog.ShowDialog(window) == true ? dialog.FileName : null);
     }
 
     private const string TextFilter = "Text files (*.txt;*.md)|*.txt;*.md|All files (*.*)|*.*";
+    private const string OpenFilter = "All files (*.*)|*.*|Text files (*.txt;*.md)|*.txt;*.md";
 
     /// <summary>Never asked on Windows: the page's file input gives the files' paths.</summary>
     public Task<IReadOnlyList<string>> PickFilesAsync(string title) => Task.FromResult<IReadOnlyList<string>>([]);

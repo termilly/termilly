@@ -59,3 +59,22 @@ does what DPAPI does on Windows. `TERMILLY_DEVTOOLS=1` turns on WebKit's inspect
 - Global hotkeys.
 - Shell integration for zsh and fish (bash and PowerShell have it).
 - An AppImage (for distributions without a .deb).
+
+## macOS (work in progress)
+
+The same project builds and runs on macOS (arm64 and x86_64): Photino shows the page in WKWebView, and
+`MacPlatform` stands in for `LinuxPlatform`. Run it from source with
+`dotnet build src/Termilly.Linux && src/Termilly.Linux/bin/Debug/net10.0/termilly`.
+
+What macOS does differently:
+
+- Processes come from `sysctl(KERN_PROC_ALL)` (`MacProcesses`) and listening ports from `lsof` (`MacPorts`); there's no /proc.
+- Saved passwords are in the login keychain (`MacKeychain`); macOS asks before `termilly-askpass` first reads one.
+- Fonts come from CoreText (`MacFonts`); notification sounds play with `afplay`, on the default output only.
+- Finder and links through `open`, the Trash through `/usr/bin/trash` (macOS 15 and later), notifications through `osascript`.
+- The background host starts at sign-in from a launch agent (`~/Library/LaunchAgents/com.termilly.host.plist`).
+- The page's title bar and edges move and resize the window by following the pointer (`MacWindowDrag`).
+
+Not yet on macOS: an app bundle (.app, with its icon and a signed build), updates (Termilly says when one is out but
+doesn't install it), clicking a notification, the dock badge, and the browser engine's memory in Settings › About
+(WebKit's processes run under launchd, not under Termilly).

@@ -15,9 +15,10 @@
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
   </PropertyGroup>
 
-  <!-- The Linux keyring, shared with the app: askpass reads saved passwords from it there. -->
+  <!-- The Linux keyring and the macOS keychain, shared with the app: askpass reads saved passwords from them. -->
   <ItemGroup>
     <Compile Include="..\Termilly.Desktop\LibSecret.cs" Link="LibSecret.cs" />
+    <Compile Include="..\Termilly.Desktop\MacKeychain.cs" Link="MacKeychain.cs" />
   </ItemGroup>
 
   <ItemGroup>

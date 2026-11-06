@@ -128,6 +128,9 @@ interface Tab {
   agentRead?: boolean;
   /** Whether agents may type into it (js/together.js). */
   agentType?: boolean;
+  /** The paired device that opened or closed it, for the trace here (js/phonemanage.js). */
+  openedBy?: string;
+  closedBy?: string;
   /** Brought back from the saved workspaces at start. */
   restored?: boolean;
   /** It wants attention (the amber dot; js/panes.js). */
@@ -170,6 +173,8 @@ interface Tab {
   pcFiles?: { pcId: string; pc: string; machine: string; place: string; root: string; caseless: boolean; cwd: string };
   /** When My prompts was last cleared: prompts from before it are hidden (js/myprompts.js). Nothing is deleted. */
   promptsClearedAt?: number | null;
+  /** When its Replies and its Tool calls were last cleared, each on its own (by AgentStepKind): older ones are hidden. */
+  stepsClearedAt?: Record<string, number>;
   /** Its agent was ended, to resume (js/hibernate.js). */
   hibernated?: { session: string; at: number; folder?: string | null } | null;
   /**
@@ -193,6 +198,16 @@ interface Tab {
   phoneAlerted?: string | null;
   /** The size a phone showing it asked for; it keeps that size until no phone shows it (js/phone.js). */
   phoneSize?: { cols: number, rows: number, tallest?: number } | null;
+  /**
+   * True while its pane is in a window of its own (js/panes.js detachTab): it keeps its place in the layout, which
+   * is drawn without it until it comes back.
+   */
+  detached?: boolean;
+  /**
+   * Restored from a run where it was in a window of its own: it opens in one again once the page is up (panes.js
+   * reopenWindows), where it was.
+   */
+  windowed?: boolean;
   /** The WSL distribution its shell said it runs in (js/remotehost.js), for the Files panel. */
   wslDistro?: string | null;
   /** Who gives it that size: a phone or another computer, as its label says (js/phone.js showAtSize). */
@@ -219,8 +234,6 @@ interface Tab {
   recording?: import('../wwwroot/js/replay.js').Recording;
   /** Its recent output kept in memory (js/replay.js). */
   rewind?: import('../wwwroot/js/replay.js').RewindBuffer;
-  /** What its commands produced (js/results.js). */
-  results?: import('../wwwroot/js/results.js').TabResults;
   /** Its agent's subagents (js/subagents.js). */
   subagents?: import('../wwwroot/js/subagents.js').Subagents;
   /** Claude's usage and context figures (js/claudeusage.js). */

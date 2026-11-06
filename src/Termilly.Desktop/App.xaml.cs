@@ -17,6 +17,7 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         CrashLog.Install();
+        QuietErrors.Install(); // before anything starts a program in the background
         base.OnStartup(e);
         var folder = OpenFolder.Argument(e.Args);
         _instance = OpenFolder.ClaimInstance(out var first);

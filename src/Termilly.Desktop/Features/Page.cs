@@ -271,6 +271,8 @@ internal sealed class WindowHandler : IMessageHandler
     {
         router.On<FromPage.Window>(_window.Act);
         router.On<FromPage.Ready>(_ => Ready());
+        router.On<FromPage.WindowCapture>(async m => _page.Post(new ToPage.WindowCaptured(m.RequestId, await _window.CapturePageAsync())));
+        router.On<FromPage.DragPicture>(_window.ShowDragPicture);
         router.On<FromPage.QuitAnswer>(m =>
         {
             // The page asks the user what to do: the window has to be on screen for it (it may be in the tray).

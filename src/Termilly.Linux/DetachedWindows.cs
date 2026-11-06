@@ -1,0 +1,350 @@
+using System.Runtime.InteropServices;
+using Termilly.Desktop.Messaging;
+
+namespace Termilly.Linux;
+
+/// <summary>
+/// A terminal, the Notepad or the Snippets window in a window of its own on Linux (js/windows.js), as DetachedWindow
+/// is on Windows. Photino doesn't let a page open windows, so this answers WebKitGTK's "create" signal itself: for the
+/// page's own windows only (named so), a web view related to the page's (same process and context, so window.opener and
+/// the app:// scheme work) in a GTK window with no title bar of its own: the element's header is it, and the page asks
+/// for moves, sizes, minimize and maximize (<see cref="Act"/>). The page builds the window's empty page, moves its
+/// element in and keeps running it; closing the window asks the page first (the termillyClose it gives the window),
+/// which takes the element back and closes it. Everything here runs on GTK's thread.
+/// </summary>
+internal static class DetachedWindows
+{
+    private const string Gtk = "libgtk-3.so.0";
+    private const string Gdk = "libgdk-3.so.0";
+    /// <summary>How far in from a window's corner its title bar is looked for on the monitors, in pixels.</summary>
+    private const int TitleBarInset = 12;
+    private const string GObject = "libgobject-2.0.so.0";
+    private const string WebKit = "libwebkit2gtk-4.1.so.0";
+    private const string JavaScriptCore = "libjavascriptcoregtk-4.1.so.0";
+    private const string GLibName = "libglib-2.0.so.0";
+    /// <summary>What the window runs when the user closes it: the page closes it once it has taken back what it shows.</summary>
+    private const string AskToClose = "window.termillyClose ? termillyClose() : window.close()";
+    private const int GtkWindowToplevel = 0;
+
+    /// <summary>A window open: its GTK window, window.open's name for it, and whether the page has closed it.</summary>
+    private sealed class Opened(IntPtr window, string name)
+    {
+        public IntPtr Window { get; } = window;
+        public string Name { get; } = name;
+        public bool ClosedByPage { get; set; }
+    }
+
+    /// <summary>The windows by their web view.</summary>
+    private static readonly Dictionary<IntPtr, Opened> Open = [];
+    /// <summary>Names of windows asked for, by their web view, until they're ready to show.</summary>
+    private static readonly Dictionary<IntPtr, string> Pending = [];
+
+    // The callbacks GTK holds: kept here so they're never collected.
+    private static readonly CreateCallback OnCreate = Create;
+    private static readonly ViewCallback OnReadyToShow = ReadyToShow;
+    private static readonly ViewCallback OnClose = CloseFromPage;
+    private static readonly NotifyCallback OnTitle = TitleChanged;
+    private static readonly DeleteCallback OnDelete = DeleteRequested;
+
+    private delegate IntPtr CreateCallback(IntPtr view, IntPtr navigation, IntPtr data);
+    private delegate void ViewCallback(IntPtr view, IntPtr data);
+    private delegate void NotifyCallback(IntPtr view, IntPtr spec, IntPtr data);
+    private delegate int DeleteCallback(IntPtr window, IntPtr gdkEvent, IntPtr data);
+
+    /// <summary>Lets the page in <paramref name="mainWindow"/> open its windows. False when it holds no web view to hook.</summary>
+    public static bool Hook(IntPtr mainWindow)
+    {
+        var view = gtk_bin_get_child(mainWindow);
+        if (view == IntPtr.Zero)
+        {
+            return false;
+        }
+        g_signal_connect_data(view, "create", OnCreate, IntPtr.Zero, IntPtr.Zero, 0);
+        // The page reopens its windows as it starts (a restart brings back where they were): without a click first.
+        webkit_settings_set_javascript_can_open_windows_automatically(webkit_web_view_get_settings(view), 1);
+        return true;
+    }
+
+    /// <summary>
+    /// Where a window is now and its size, as it moves or is resized (not maximized): its window.open name, its place
+    /// on the screen (X11; Wayland tells none) and size, in the page's pixels. LinuxWindow posts it to the page.
+    /// </summary>
+    public static Action<string, double, double, double, double>? Placed { get; set; }
+
+    private static readonly DeleteCallback OnConfigure = Configured;
+
+    private static int Configured(IntPtr window, IntPtr gdkEvent, IntPtr view)
+    {
+        if (Open.TryGetValue(view, out var opened) && gtk_window_is_maximized(window) == 0)
+        {
+            gtk_window_get_position(window, out var x, out var y);
+            gtk_window_get_size(window, out var width, out var height);
+            Placed?.Invoke(opened.Name, x, y, width, height);
+        }
+        return 0; // GTK goes on as always
+    }
+
+    /// <summary>Whether a GTK window is one of these (GtkWindow.Find looks for the main one).</summary>
+    public static bool Contains(IntPtr window) => Open.Values.Any(o => o.Window == window);
+
+    /// <summary>The whole app's size (Settings' zoom; 1 is as designed), as the main window's.</summary>
+    private static double _zoom = 1;
+
+    /// <summary>The whole app's size changed: the windows open now and later at it.</summary>
+    public static void SetZoom(double factor)
+    {
+        _zoom = factor;
+        foreach (var view in Open.Keys)
+        {
+            webkit_web_view_set_zoom_level(view, factor);
+        }
+    }
+
+    /// <summary>
+    /// What a window's title bar (the page's header) asks, for the window window.open named <paramref name="name"/>:
+    /// minimize, maximize or restore, move, resize from an edge, or come to the front.
+    /// </summary>
+    public static void Act(string? name, string? action, string? edge)
+    {
+        if (Open.Values.FirstOrDefault(o => o.Name == name) is not { } opened)
+        {
+            return;
+        }
+        var window = opened.Window;
+        switch (action)
+        {
+            case WindowActions.Minimize:
+                gtk_window_iconify(window);
+                break;
+            case WindowActions.Maximize when gtk_window_is_maximized(window) != 0:
+                gtk_window_unmaximize(window);
+                break;
+            case WindowActions.Maximize:
+                gtk_window_maximize(window);
+                break;
+            case WindowActions.Drag:
+                GtkWindow.BeginMove(window);
+                break;
+            case WindowActions.Resize when edge is not null && gtk_window_is_maximized(window) == 0:
+                GtkWindow.BeginResize(edge, window);
+                break;
+            case WindowActions.Focus:
+                gtk_window_present(window);
+                break;
+            case WindowActions.OnTop:
+            case WindowActions.NotOnTop:
+                gtk_window_set_keep_above(window, action == WindowActions.OnTop ? 1 : 0);
+                break;
+        }
+    }
+
+    /// <summary>Closes them all, without asking the page: the main window is closing, and the page with it.</summary>
+    public static void CloseAll()
+    {
+        foreach (var opened in Open.Values.ToList())
+        {
+            opened.ClosedByPage = true;
+            gtk_widget_destroy(opened.Window);
+        }
+        Open.Clear();
+    }
+
+    /// <summary>
+    /// window.open: a related web view for one of the page's own windows, nothing (no window) for anything else. The
+    /// page's own open an empty page (js/windows.js builds it). WebKitGTK may not say the name window.open gave (the
+    /// navigation's frame name is empty), so an empty page with no name is let through too and named once it's ready
+    /// (<see cref="ReadyToShow"/>).
+    /// </summary>
+    private static IntPtr Create(IntPtr view, IntPtr navigation, IntPtr data)
+    {
+        var name = Marshal.PtrToStringUTF8(webkit_navigation_action_get_frame_name(navigation)) ?? "";
+        var named = name.StartsWith(DetachedWindowNames.NamePrefix, StringComparison.Ordinal);
+        if (!named && (name.Length > 0 || !OpensEmptyPage(navigation)))
+        {
+            return IntPtr.Zero;
+        }
+        var opened = webkit_web_view_new_with_related_view(view);
+        Pending[opened] = name;
+        g_signal_connect_data(opened, "ready-to-show", OnReadyToShow, IntPtr.Zero, IntPtr.Zero, 0);
+        g_signal_connect_data(opened, "close", OnClose, IntPtr.Zero, IntPtr.Zero, 0);
+        g_signal_connect_data(opened, "notify::title", OnTitle, IntPtr.Zero, IntPtr.Zero, 0);
+        return opened;
+    }
+
+    /// <summary>Whether window.open opens an empty page (about:blank), as the page's own windows do.</summary>
+    private static bool OpensEmptyPage(IntPtr navigation)
+    {
+        var request = webkit_navigation_action_get_request(navigation);
+        var uri = request == IntPtr.Zero ? null : Marshal.PtrToStringUTF8(webkit_uri_request_get_uri(request));
+        return string.IsNullOrEmpty(uri) || uri == BlankPage;
+    }
+
+    private const string BlankPage = "about:blank";
+    /// <summary>The name window.open gave the window, read from its page when WebKitGTK didn't say it.</summary>
+    private const string NameScript = "window.name";
+
+    /// <summary>
+    /// The page in it is ready: shown in a window of its own, once its name says it's one of the page's (read from its
+    /// page when window.open's wasn't given).
+    /// </summary>
+    private static void ReadyToShow(IntPtr view, IntPtr data)
+    {
+        if (!Pending.Remove(view, out var name))
+        {
+            return;
+        }
+        if (name.Length > 0)
+        {
+            Show(view, name);
+            return;
+        }
+        webkit_web_view_evaluate_javascript(view, NameScript, -1, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, OnNamed, IntPtr.Zero);
+    }
+
+    private static readonly ScriptCallback OnNamed = Named;
+
+    private delegate void ScriptCallback(IntPtr source, IntPtr result, IntPtr data);
+
+    /// <summary>Its page's name: one of the page's own windows is shown, anything else goes.</summary>
+    private static void Named(IntPtr view, IntPtr result, IntPtr data)
+    {
+        var value = webkit_web_view_evaluate_javascript_finish(view, result, out var error);
+        string? name = null;
+        if (value != IntPtr.Zero)
+        {
+            var text = jsc_value_to_string(value);
+            name = Marshal.PtrToStringUTF8(text);
+            g_free(text);
+            g_object_unref(value);
+        }
+        if (error != IntPtr.Zero)
+        {
+            g_error_free(error);
+        }
+        if (name is not null && name.StartsWith(DetachedWindowNames.NamePrefix, StringComparison.Ordinal))
+        {
+            Show(view, name);
+        }
+        else
+        {
+            gtk_widget_destroy(view); // not one of ours: no window
+        }
+    }
+
+    /// <summary>A window at the size (and place) window.open asked for, in the theme, showing the page's view.</summary>
+    private static void Show(IntPtr view, string name)
+    {
+        var window = gtk_window_new(GtkWindowToplevel);
+        gtk_window_set_decorated(window, 0); // the page's header is its title bar
+        webkit_window_properties_get_geometry(webkit_web_view_get_window_properties(view), out var geometry);
+        if (geometry.Width > 0 && geometry.Height > 0)
+        {
+            gtk_window_set_default_size(window, geometry.Width, geometry.Height);
+        }
+        // A place on a monitor that's gone is left to the window manager.
+        if ((geometry.X > 0 || geometry.Y > 0) && OnAMonitor(geometry.X + TitleBarInset, geometry.Y + TitleBarInset))
+        {
+            gtk_window_move(window, geometry.X, geometry.Y); // X11 only: Wayland places windows itself
+        }
+        gtk_window_set_title(window, Marshal.PtrToStringUTF8(webkit_web_view_get_title(view)) ?? GtkWindow.Title);
+        gtk_container_add(window, view);
+        GtkWindow.ClearBackground(window); // see-through, as the main window: the page rounds its corners
+        webkit_web_view_set_zoom_level(view, _zoom);
+        Open[view] = new Opened(window, name);
+        g_signal_connect_data(window, "delete-event", OnDelete, view, IntPtr.Zero, 0);
+        g_signal_connect_data(window, "configure-event", OnConfigure, view, IntPtr.Zero, 0);
+        gtk_widget_show_all(window);
+    }
+
+    /// <summary>window.close() in its page (it has taken back what it showed): the window goes.</summary>
+    private static void CloseFromPage(IntPtr view, IntPtr data)
+    {
+        if (Open.Remove(view, out var opened))
+        {
+            opened.ClosedByPage = true;
+            gtk_widget_destroy(opened.Window);
+        }
+    }
+
+    private static void TitleChanged(IntPtr view, IntPtr spec, IntPtr data)
+    {
+        if (Open.TryGetValue(view, out var opened) && Marshal.PtrToStringUTF8(webkit_web_view_get_title(view)) is { Length: > 0 } title)
+        {
+            gtk_window_set_title(opened.Window, title);
+        }
+    }
+
+    /// <summary>The title bar's close: the page is asked, and closes the window itself (true keeps it for now).</summary>
+    private static int DeleteRequested(IntPtr window, IntPtr gdkEvent, IntPtr view)
+    {
+        if (!Open.TryGetValue(view, out var opened) || opened.ClosedByPage)
+        {
+            return 0;
+        }
+        webkit_web_view_run_javascript(view, AskToClose, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
+        return 1;
+    }
+
+    private static bool OnAMonitor(int x, int y)
+    {
+        var display = gdk_display_get_default();
+        for (var i = gdk_display_get_n_monitors(display) - 1; i >= 0; i--)
+        {
+            gdk_monitor_get_geometry(gdk_display_get_monitor(display, i), out var area);
+            if (x >= area.X && y >= area.Y && x < area.X + area.Width && y < area.Y + area.Height)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct GdkRectangle
+    {
+        public int X;
+        public int Y;
+        public int Width;
+        public int Height;
+    }
+
+    [DllImport(GObject)] private static extern ulong g_signal_connect_data(IntPtr instance, [MarshalAs(UnmanagedType.LPUTF8Str)] string signal, Delegate handler, IntPtr data, IntPtr destroy, int flags);
+    [DllImport(Gtk)] private static extern IntPtr gtk_bin_get_child(IntPtr bin);
+    [DllImport(Gtk)] private static extern IntPtr gtk_window_new(int type);
+    [DllImport(Gtk)] private static extern void gtk_window_set_default_size(IntPtr window, int width, int height);
+    [DllImport(Gtk)] private static extern void gtk_window_move(IntPtr window, int x, int y);
+    [DllImport(Gdk)] private static extern IntPtr gdk_display_get_default();
+    [DllImport(Gdk)] private static extern int gdk_display_get_n_monitors(IntPtr display);
+    [DllImport(Gdk)] private static extern IntPtr gdk_display_get_monitor(IntPtr display, int index);
+    [DllImport(Gdk)] private static extern void gdk_monitor_get_geometry(IntPtr monitor, out GdkRectangle area);
+    [DllImport(Gtk)] private static extern void gtk_window_set_title(IntPtr window, [MarshalAs(UnmanagedType.LPUTF8Str)] string title);
+    [DllImport(Gtk)] private static extern void gtk_window_present(IntPtr window);
+    [DllImport(Gtk)] private static extern void gtk_container_add(IntPtr container, IntPtr widget);
+    [DllImport(Gtk)] private static extern void gtk_widget_show_all(IntPtr widget);
+    [DllImport(Gtk)] private static extern void gtk_widget_destroy(IntPtr widget);
+    [DllImport(Gtk)] private static extern void gtk_window_set_decorated(IntPtr window, int decorated);
+    [DllImport(Gtk)] private static extern void gtk_window_get_position(IntPtr window, out int x, out int y);
+    [DllImport(Gtk)] private static extern void gtk_window_get_size(IntPtr window, out int width, out int height);
+    [DllImport(WebKit)] private static extern IntPtr webkit_web_view_get_settings(IntPtr view);
+    [DllImport(WebKit)] private static extern void webkit_settings_set_javascript_can_open_windows_automatically(IntPtr settings, int enabled);
+    [DllImport(Gtk)] private static extern void gtk_window_iconify(IntPtr window);
+    [DllImport(Gtk)] private static extern void gtk_window_set_keep_above(IntPtr window, int above);
+    [DllImport(Gtk)] private static extern void gtk_window_maximize(IntPtr window);
+    [DllImport(Gtk)] private static extern void gtk_window_unmaximize(IntPtr window);
+    [DllImport(Gtk)] private static extern int gtk_window_is_maximized(IntPtr window);
+    [DllImport(WebKit)] private static extern IntPtr webkit_web_view_new_with_related_view(IntPtr view);
+    [DllImport(WebKit)] private static extern void webkit_web_view_set_zoom_level(IntPtr view, double level);
+    [DllImport(WebKit)] private static extern IntPtr webkit_web_view_get_title(IntPtr view);
+    [DllImport(WebKit)] private static extern IntPtr webkit_web_view_get_window_properties(IntPtr view);
+    [DllImport(WebKit)] private static extern void webkit_window_properties_get_geometry(IntPtr properties, out GdkRectangle geometry);
+    [DllImport(WebKit)] private static extern IntPtr webkit_navigation_action_get_frame_name(IntPtr navigation);
+    [DllImport(WebKit)] private static extern void webkit_web_view_run_javascript(IntPtr view, [MarshalAs(UnmanagedType.LPUTF8Str)] string script, IntPtr cancellable, IntPtr callback, IntPtr data);
+    [DllImport(WebKit)] private static extern void webkit_web_view_evaluate_javascript(IntPtr view, [MarshalAs(UnmanagedType.LPUTF8Str)] string script, nint length, IntPtr world, IntPtr sourceUri, IntPtr cancellable, ScriptCallback callback, IntPtr data);
+    [DllImport(WebKit)] private static extern IntPtr webkit_web_view_evaluate_javascript_finish(IntPtr view, IntPtr result, out IntPtr error);
+    [DllImport(WebKit)] private static extern IntPtr webkit_navigation_action_get_request(IntPtr navigation);
+    [DllImport(WebKit)] private static extern IntPtr webkit_uri_request_get_uri(IntPtr request);
+    [DllImport(JavaScriptCore)] private static extern IntPtr jsc_value_to_string(IntPtr value);
+    [DllImport(GLibName)] private static extern void g_free(IntPtr memory);
+    [DllImport(GLibName)] private static extern void g_error_free(IntPtr error);
+    [DllImport(GObject)] private static extern void g_object_unref(IntPtr instance);
+}

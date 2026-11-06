@@ -1,0 +1,17 @@
+# Termilly starts tcsh (and csh, which is tcsh on macOS) with HOME here, so tcsh reads this file instead of yours:
+# HOME goes back to yours first, then your .tcshrc (or .cshrc) runs, then Termilly's integration (../termilly.tcsh).
+# Your .history, .login and .cshdirs are read from your home as usual, since they come after this file.
+set __termilly_dir = "$home"
+if ($?TERMILLY_USER_HOME) then
+  setenv HOME "$TERMILLY_USER_HOME"
+  set home = "$TERMILLY_USER_HOME"
+  unsetenv TERMILLY_USER_HOME
+endif
+if (-r "$home/.tcshrc") then
+  source "$home/.tcshrc"
+else if (-r "$home/.cshrc") then
+  source "$home/.cshrc"
+endif
+# Only an interactive tcsh: the BSD csh of some Linux systems has no precmd or postcmd.
+if ($?prompt && $?tcsh && -r "$__termilly_dir/../termilly.tcsh") source "$__termilly_dir/../termilly.tcsh"
+unset __termilly_dir

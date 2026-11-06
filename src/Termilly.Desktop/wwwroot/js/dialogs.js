@@ -9,6 +9,7 @@ import { closeAll, anyOpen, dropdown } from './popups.js';
 import { escapeHtml, badgeHtml } from './ui.js';
 import { SETTING_VALUES } from './constants.js';
 import { find, field as fieldIn, targetOf, showError } from './dom.js';
+import { hereDoc } from './windows.js';
 
 /**
  * Asks the host for a folder (native picker). Resolves to the path, or null when cancelled.
@@ -36,14 +37,16 @@ export function modal(className, html, build, { dismissable = true } = {}) {
   const layer = document.createElement('div');
   layer.className = 'modal-layer';
   layer.innerHTML = `<div class="dialog ${className}" role="dialog" aria-modal="true">${html}</div>`;
-  document.body.append(layer);
+  // In the window the user is in: a detached window asks there (js/windows.js).
+  const doc = hereDoc();
+  doc.body.append(layer);
   const dialog = /** @type {HTMLElement} */ (layer.firstElementChild);
 
   return new Promise(resolve => {
     /** @param {T | null} result */
     const close = result => {
       layer.remove();
-      document.removeEventListener('keydown', onKey, true);
+      doc.removeEventListener('keydown', onKey, true);
       resolve(result);
       emit(EVENTS.dialogClosed);
     };
@@ -68,7 +71,7 @@ export function modal(className, html, build, { dismissable = true } = {}) {
         e.stopPropagation(); // typing in a dialog must not trigger app shortcuts
       }
     };
-    document.addEventListener('keydown', onKey, true);
+    doc.addEventListener('keydown', onKey, true);
     layer.addEventListener('mousedown', e => {
       if (dismissable && e.target === layer) close(null);
     });
@@ -91,6 +94,25 @@ export function confirmDialog({ title, body, confirm = OK_LABEL }) {
     </div>`, (dialog, close) => {
     return { submit: () => close(true) };
   }).then(result => result === true);
+}
+
+/**
+ * Asks to confirm, with a choice to tick under the question (off at first): null when cancelled, else whether it was
+ * ticked.
+ * @param {{ title: string, body: string, confirm?: string, option: string }} question
+ * @returns {Promise<boolean | null>}
+ */
+export function confirmWithOption({ title, body, confirm = OK_LABEL, option }) {
+  return modal(CONFIRM_DIALOG, `
+    <h3>${escapeHtml(title)}</h3>
+    <p class="dialog-sub">${escapeHtml(body)}</p>
+    <label class="note-pin dialog-option"><input type="checkbox" data-option> ${escapeHtml(option)}</label>
+    <div class="dialog-actions">
+      <button class="btn" data-cancel>Cancel</button>
+      <button class="btn danger" data-ok autofocus>${escapeHtml(confirm)}</button>
+    </div>`, (dialog, close) => ({
+    submit: () => close({ ticked: !!(/** @type {HTMLInputElement | null} */ (dialog.querySelector('[data-option]')))?.checked }),
+  })).then(result => (result && typeof result === 'object' ? !!result.ticked : null));
 }
 
 /**

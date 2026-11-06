@@ -19,6 +19,12 @@ export const PLATFORM = Object.freeze({ windows: 'windows', linux: 'linux' });
 /** Which host this page runs in (the Linux build has no WebView2). */
 export const platform = webview ? PLATFORM.windows : PLATFORM.linux;
 document.documentElement.dataset.platform = platform;
+/**
+ * macOS: the Linux host's page (Photino) in WKWebView. Its title bar has the system's traffic lights at the left
+ * (macwindow.js, app.css's data-os) and its windows say their names to the host (windows.js).
+ */
+export const mac = platform === PLATFORM.linux && /^Mac/.test(navigator.platform);
+if (mac) document.documentElement.dataset.os = 'mac';
 
 /**
  * The paths of files dropped from a file manager, on Linux: the drop carries their file:// URLs (WebKitGTK's File
@@ -38,7 +44,7 @@ export const SYSTEM_NAME = Object.freeze({ linux: 'Linux', windows: 'Windows' })
 /** What the page says differently on each system: where secrets are kept, what unlocks history, path examples. */
 export const sys = {
   name: linux ? SYSTEM_NAME.linux : SYSTEM_NAME.windows,
-  credentials: linux ? 'the system keyring' : 'Windows Credential Manager',
+  credentials: mac ? 'the keychain' : linux ? 'the system keyring' : 'Windows Credential Manager',
   /** How saved workspaces and history unlock without asking. */
   unlocks: linux ? 'with a key file only your user can read' : 'with your Windows account',
   /** When the recovery code is needed. */

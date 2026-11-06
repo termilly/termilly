@@ -45,17 +45,27 @@ internal static class WindowInterop
     /// Removes the native caption and control box (system menu) while keeping the thick frame and
     /// min/max styles, so snapping, taskbar minimize and maximize still work.
     /// </summary>
-    public static void UseCustomChrome(Window window)
+    /// <remarks>
+    /// <paramref name="sharpIcons"/>: the main window's own icons at the sizes they're drawn (one window only: they're
+    /// kept here, and a second window's would destroy the first's). A detached window keeps WPF's.
+    /// </remarks>
+    public static void UseCustomChrome(Window window, bool sharpIcons = true)
     {
         window.SourceInitialized += (_, _) =>
         {
             var hwnd = new WindowInteropHelper(window).Handle;
             _ = SetWindowLong(hwnd, GWL_STYLE, GetWindowLong(hwnd, GWL_STYLE) & ~(WS_SYSMENU | WS_CAPTION));
             HwndSource.FromHwnd(hwnd).AddHook(WndProc);
-            SetSharpIcons(hwnd);
+            if (sharpIcons)
+            {
+                SetSharpIcons(hwnd);
+            }
         };
         // WPF hands the window its own icons again when the display scale changes.
-        window.DpiChanged += (_, _) => SetSharpIcons(new WindowInteropHelper(window).Handle);
+        if (sharpIcons)
+        {
+            window.DpiChanged += (_, _) => SetSharpIcons(new WindowInteropHelper(window).Handle);
+        }
     }
 
     private static IntPtr _bigIcon;
@@ -112,10 +122,18 @@ internal static class WindowInterop
 
     private static IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
+        if (msg == WM_STYLECHANGING && wParam == GWL_EXSTYLE && SeeThroughWindows.Contains(hwnd))
+        {
+            // WPF takes WS_EX_LAYERED off a window that isn't AllowsTransparency's: a see-through one keeps it.
+            var change = Marshal.PtrToStructure<STYLESTRUCT>(lParam);
+            change.styleNew |= WS_EX_LAYERED;
+            Marshal.StructureToPtr(change, lParam, false);
+            handled = true;
+            return IntPtr.Zero;
+        }
         if (msg == WM_ERASEBKGND)
         {
-            var c = System.Drawing.ColorTranslator.FromHtml(Background);
-            var brush = CreateSolidBrush(c.R | c.G << GreenShift | c.B << BlueShift);
+            var brush = CreateSolidBrush(ColorRef(Background));
             GetClientRect(hwnd, out var client);
             _ = FillRect(wParam, ref client, brush);
             DeleteObject(brush);
@@ -189,6 +207,68 @@ internal static class WindowInterop
     }
 
     private const int SW_RESTORE = 9;
+
+    /// <summary>
+    /// Makes the window see-through at <paramref name="opacity"/> (0 to 1), or solid again (null): a detached window
+    /// dragged over the main window, so the place it would land shows under it and what it shows stays. A layered
+    /// window; its browser fades with it because the app's manifest declares Windows 10 (app.manifest).
+    /// </summary>
+    public static void SeeThrough(Window window, double? opacity)
+    {
+        var hwnd = new WindowInteropHelper(window).Handle;
+        var style = GetWindowLong(hwnd, GWL_EXSTYLE);
+        if (opacity is not { } alpha)
+        {
+            SeeThroughWindows.Remove(hwnd);
+            _ = SetWindowLong(hwnd, GWL_EXSTYLE, style & ~WS_EX_LAYERED);
+            return;
+        }
+        SeeThroughWindows.Add(hwnd);
+        _ = SetWindowLong(hwnd, GWL_EXSTYLE, style | WS_EX_LAYERED);
+        _ = SetLayeredWindowAttributes(hwnd, 0, (byte)Math.Round(alpha * byte.MaxValue), LWA_ALPHA);
+    }
+
+    /// <summary>The windows see-through now (SeeThrough), on the windows' thread.</summary>
+    private static readonly HashSet<IntPtr> SeeThroughWindows = [];
+
+    /// <summary>
+    /// A window the pointer goes through (a dragged picture, DragPictureWindow): never under the pointer, never active,
+    /// not in the taskbar or Alt+Tab. Call once it has a handle (SourceInitialized).
+    /// </summary>
+    public static void ClickThrough(Window window)
+    {
+        var hwnd = new WindowInteropHelper(window).Handle;
+        _ = SetWindowLong(hwnd, GWL_EXSTYLE, GetWindowLong(hwnd, GWL_EXSTYLE) | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW);
+    }
+
+    private const int GWL_EXSTYLE = -20;
+    private const int WS_EX_LAYERED = 0x80000;
+    private const int WS_EX_TRANSPARENT = 0x20;
+    private const int WS_EX_NOACTIVATE = 0x8000000;
+    private const int WS_EX_TOOLWINDOW = 0x80;
+    private const uint LWA_ALPHA = 0x2;
+    private const int WM_STYLECHANGING = 0x007C;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct STYLESTRUCT
+    {
+        public int styleOld, styleNew;
+    }
+
+    [DllImport("user32.dll")]
+    private static extern bool SetLayeredWindowAttributes(IntPtr hwnd, uint colorKey, byte alpha, uint flags);
+
+    /// <summary>Where the pointer is on the screen, in pixels.</summary>
+    public static Point CursorPosition() => GetCursorPos(out var p) ? new Point(p.X, p.Y) : new Point(double.NaN, double.NaN);
+
+    [DllImport("user32.dll")]
+    private static extern bool GetCursorPos(out POINT point);
+
+    private static int ColorRef(string hex)
+    {
+        var c = System.Drawing.ColorTranslator.FromHtml(hex);
+        return c.R | c.G << GreenShift | c.B << BlueShift;
+    }
 
     [DllImport("user32.dll")]
     private static extern bool IsIconic(IntPtr hWnd);

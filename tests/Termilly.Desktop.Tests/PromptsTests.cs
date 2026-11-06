@@ -161,4 +161,22 @@ public sealed class PromptHistoryTests : IDisposable
 
         Assert.Equal(["start", "yes", "yes"], merged.Select(p => p.Text));
     }
+
+    [Fact]
+    public void Another_computers_answer_carries_claudes_replies_and_tool_calls()
+    {
+        var answer = (System.Text.Json.Nodes.JsonObject)System.Text.Json.Nodes.JsonNode.Parse("""
+            {"prompts":[{"text":"fix it","at":"2026-11-01T10:00:00.000Z"}],"steps":[
+              {"kind":"tool","text":"dotnet build","at":"2026-11-01T10:00:05.000Z","tool":"Bash","failed":true},
+              {"kind":"reply","text":"Fixed.","at":"2026-11-01T10:00:09.000Z","tool":null,"failed":false},
+              {"kind":"other","text":"x","at":"2026-11-01T10:00:10.000Z"}]}
+            """)!;
+
+        var steps = Phone.PcPromptsApi.ReadSteps(answer);
+
+        Assert.Equal(
+            [new Messaging.AgentStep("tool", "dotnet build", "2026-11-01T10:00:05.000Z", "Bash", true), new Messaging.AgentStep("reply", "Fixed.", "2026-11-01T10:00:09.000Z")],
+            steps);
+        Assert.Empty(Phone.PcPromptsApi.ReadSteps([])); // an older Termilly sends none
+    }
 }

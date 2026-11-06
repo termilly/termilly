@@ -68,6 +68,9 @@ export function manager(app) {
 
   const snap = app.snap;
   const allowed = () => !!snap().typing;
+  /** What this PC allows now: it can change while the app is open. */
+  const canOpen = () => !!snap().opening;
+  const canClose = () => !!snap().closing;
   const places = () => snap().places ?? [];
   const term = (/** @type {string | undefined} */ id) => snap().terminals.find(t => t.id === id);
   const wsOf = (/** @type {string | undefined} */ id) => snap().workspaces.find(w => w.id === id);
@@ -76,14 +79,14 @@ export function manager(app) {
   // ---- The home's parts ----
 
   /** The + in the title: New terminal. */
-  const addButton = () => (allowed() ? `<button class="add-btn" data-m="${M.new}" aria-label="New terminal">${PLUS}</button>` : '');
+  const addButton = () => (canOpen() ? `<button class="add-btn" data-m="${M.new}" aria-label="New terminal">${PLUS}</button>` : '');
 
   /** @param {Place} p */
   const placeRow = p => `<button class="row" data-m="${M.place}" data-p="${esc(p.id)}">${badgeHtml(p)}<div class="r-text"><div class="r-name">${esc(p.name)}${p.production ? ' <span class="prod">prod</span>' : ''}</div>${p.description ? `<div class="r-line">${esc(p.description)}</div>` : ''}</div><span class="chev">›</span></button>`;
 
   /** The Remote section under the workspaces: WSL, SSH hosts, serial ports and the rest, as on the PC. */
   function remoteHtml() {
-    if (!allowed()) return '';
+    if (!canOpen()) return '';
     const list = places().filter(p => p.remote);
     const shown = showAll ? list : list.slice(0, REMOTE_SHOWN);
     return `<div class="section-row"><span class="section">Remote</span><button class="link" data-m="${M.host}">Add SSH host</button></div>
@@ -96,7 +99,7 @@ export function manager(app) {
    * @param {Term} t
    * @param {string} row
    */
-  const rowWrap = (t, row) => (allowed()
+  const rowWrap = (t, row) => (allowed() || canClose()
     ? `<div class="swipe${t.id === swiped ? ' open' : ''}" data-swipe="${esc(t.id)}"><div class="swipe-acts"><button data-m="${M.more}" data-id="${esc(t.id)}">More</button><button class="red" data-m="${M.close}" data-id="${esc(t.id)}">Close</button></div>${row}</div>`
     : row);
 
@@ -164,7 +167,7 @@ export function manager(app) {
     return `<div class="grabber"></div><div class="s-head">${badgeHtml(t)}<h2>${esc(t.title)}</h2></div>
       <button class="ibtn" data-m="${M.rename}" data-id="${esc(t.id)}">Rename</button>
       ${snap().workspaces.length > 1 ? `<button class="ibtn" data-m="${M.move}" data-id="${esc(t.id)}">Move to workspace</button>` : ''}
-      <button class="ibtn red" data-m="${M.close}" data-id="${esc(t.id)}">Close terminal</button>
+      ${canClose() ? `<button class="ibtn red" data-m="${M.close}" data-id="${esc(t.id)}">Close terminal</button>` : ''}
       <button class="ibtn" data-m="${M.cancel}">Cancel</button>`;
   }
 

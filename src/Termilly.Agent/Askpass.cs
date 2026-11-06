@@ -54,6 +54,17 @@ internal static class Askpass
                     return null; // no keyring: the user is asked
                 }
             }
+            if (OperatingSystem.IsMacOS())
+            {
+                try
+                {
+                    return Termilly.Desktop.MacKeychain.Lookup(target);
+                }
+                catch (InvalidOperationException)
+                {
+                    return null; // the keychain said no (locked, or access refused): the user is asked
+                }
+            }
             return WindowsCredentials.Read(target);
         }
         if (CredentialReference.Read(reference, SshIdentities.OnePassword) is { } secretRef)

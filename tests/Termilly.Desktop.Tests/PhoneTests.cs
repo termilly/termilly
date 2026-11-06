@@ -242,6 +242,47 @@ public sealed class PhoneTests : IDisposable
     public void Only_private_addresses_count_as_the_local_network(string address, bool isPrivate) =>
         Assert.Equal(isPrivate, PhoneServer.IsPrivate(IPAddress.Parse(address)));
 
+    [Theory]
+    [InlineData("192.168.0.5", "195.82.43.128,192.168.0.5")] // a private one first
+    [InlineData("195.82.43.128", "127.0.0.1,169.254.10.1,195.82.43.128")] // a cloud machine's public one
+    [InlineData("11.0.0.4", "::1,11.0.0.4")] // a cloud network on any subnet
+    [InlineData(null, "127.0.0.1,169.254.10.1,::1")]
+    public void The_address_to_listen_on_is_a_private_one_else_any_other(string? picked, string addresses) =>
+        Assert.Equal(picked, PhoneServer.Pick(addresses.Split(',').Select(a => IPAddress.Parse(a)))?.ToString());
+
+    [Theory]
+    [InlineData("open", false, true, false, null)]
+    [InlineData("open", true, false, true, "Allow creating")]
+    [InlineData("newWorkspace", true, false, true, "Allow creating")]
+    [InlineData("close", false, false, true, null)]
+    [InlineData("close", true, true, false, "Allow closing")]
+    [InlineData("closeWorkspace", true, true, false, "Allow closing")]
+    [InlineData("rename", false, true, true, "Allow typing")]
+    [InlineData("rename", true, false, false, null)]
+    [InlineData("clearNote", false, false, false, null)]
+    public void What_a_device_may_do_follows_its_own_setting(string action, bool typing, bool opening, bool closing, string? refused) =>
+        Assert.Equal(refused, Features.PhoneHandler.Refused(action, new PhoneSettings { AllowTyping = typing, AllowOpening = opening, AllowClosing = closing }));
+
+    [Theory]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    public void Opening_and_closing_start_as_typing_was_so_a_phone_keeps_what_it_could_do(bool typing, bool starts)
+    {
+        var phone = new PhoneSettings { AllowTyping = typing }.Normalize();
+
+        Assert.Equal(starts, phone.AllowOpening);
+        Assert.Equal(starts, phone.AllowClosing);
+    }
+
+    [Fact]
+    public void Turning_typing_on_later_doesnt_turn_opening_or_closing_on()
+    {
+        var phone = (new PhoneSettings().Normalize() with { AllowTyping = true }).Normalize();
+
+        Assert.False(phone.AllowOpening);
+        Assert.False(phone.AllowClosing);
+    }
+
     // ---- The server ----
 
     [Fact]

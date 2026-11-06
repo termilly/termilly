@@ -63,7 +63,7 @@ internal sealed record InterfaceSettings
     /// <summary>The longest theme id js/themes.js uses.</summary>
     private const int MaxThemeId = 40;
 
-    public string Theme { get; init; } = SettingValues.Theme.Default;
+    public string Theme { get; init; } = SettingValues.Theme.FirstStart;
     /// <summary>The app's font; null: the system's.</summary>
     public string? Font { get; init; }
     public bool ShowActivity { get; init; } = true;
@@ -78,6 +78,21 @@ internal sealed record InterfaceSettings
     /// <summary>Quitting asks first while a command or an agent is still running (unless shells are kept running).</summary>
     public bool ConfirmQuit { get; init; } = true;
     /// <summary>
+    /// Linux on Wayland: Termilly runs as an X11 app (XWayland), as VS Code does, so it may place its windows (a
+    /// terminal dragged out opens where it's let go). From the next start.
+    /// </summary>
+    public bool RunAsX11 { get; init; } = true;
+    /// <summary>
+    /// The whole app's size, in percent (Ctrl+Shift+= and -): its text, icons and terminals together, in every window.
+    /// </summary>
+    public int Zoom { get; init; } = DefaultZoom;
+
+    public const int DefaultZoom = 100;
+    public const int MinZoom = 50;
+    public const int MaxZoom = 200;
+    /// <summary>A step of Ctrl+Shift+= and - (and of Settings' App size), in percent.</summary>
+    public const int ZoomStep = 10;
+    /// <summary>
     /// Termilly's shortcuts with keys of the user's own (js/keymap.js, Settings › Keyboard): a shortcut's id to its keys
     /// ("Ctrl+Shift+T"), "" for none. One not here has its default.
     /// </summary>
@@ -85,10 +100,11 @@ internal sealed record InterfaceSettings
 
     public InterfaceSettings Normalize() => this with
     {
-        Theme = IsThemeId(Theme) ? Theme : SettingValues.Theme.Default,
+        Theme = IsThemeId(Theme) ? Theme : SettingValues.Theme.FirstStart,
         MinimizeTo = SettingChecks.OneOf(MinimizeTo, SettingValues.MinimizeTo.All, SettingValues.MinimizeTo.Default),
         CloseAction = SettingChecks.OneOf(CloseAction, SettingValues.CloseAction.All, SettingValues.CloseAction.Default),
         Font = SettingChecks.Trimmed(Font),
+        Zoom = Math.Clamp(Zoom, MinZoom, MaxZoom),
         DisabledPlugins = (DisabledPlugins ?? []).Where(id => !string.IsNullOrWhiteSpace(id)).Distinct().Take(MaxDisabledPlugins).ToList(),
         Shortcuts = (Shortcuts ?? new Dictionary<string, string>())
             .Where(s => s.Key.Length is > 0 and <= MaxShortcutText && (s.Value ?? "").Length <= MaxShortcutText)
@@ -246,6 +262,13 @@ internal sealed record PhoneSettings
     /// <summary>A paired phone may type into a terminal it shows (answers to an agent are always allowed).</summary>
     public bool AllowTyping { get; init; }
     /// <summary>
+    /// A paired phone or computer may open workspaces and terminals here. Unset (from before there was this setting), it
+    /// starts as Allow typing was, which is what let a phone do it.
+    /// </summary>
+    public bool? AllowOpening { get; init; }
+    /// <summary>A paired phone or computer may close workspaces and terminals here. Unset: as <see cref="AllowOpening"/>.</summary>
+    public bool? AllowClosing { get; init; }
+    /// <summary>
     /// While typing is allowed, a phone may paste Clipboard's text clips: it gets their first lines (secrets masked) and
     /// asks the PC to paste one, so a clip's text never goes to the phone.
     /// </summary>
@@ -258,6 +281,8 @@ internal sealed record PhoneSettings
     public PhoneSettings Normalize() => this with
     {
         Port = Port is >= MinPort and <= MaxPort ? Port : DefaultPort,
+        AllowOpening = AllowOpening ?? AllowTyping,
+        AllowClosing = AllowClosing ?? AllowTyping,
         Alerts = SettingChecks.OneOf(Alerts, SettingValues.PhoneAlerts.All, SettingValues.PhoneAlerts.Always),
         PcSize = SettingChecks.OneOf(PcSize, SettingValues.PcSize.All, SettingValues.PcSize.Default),
     };

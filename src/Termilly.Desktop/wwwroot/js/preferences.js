@@ -7,10 +7,12 @@ import { PAGE } from './protocol.js';
 import { send } from './host.js';
 import { state } from './store.js';
 import { debounce } from './util.js';
-import { TERMINAL_SETTINGS } from './constants.js';
+import { TERMINAL_SETTINGS, INTERFACE_SETTINGS } from './constants.js';
 
 /** The terminals' text size: the host's default and the sizes it accepts (C#: TerminalSettings). */
 export const { defaultFontSize: DEFAULT_FONT_SIZE, minFontSize: MIN_FONT_SIZE, maxFontSize: MAX_FONT_SIZE } = TERMINAL_SETTINGS;
+/** The whole app's size in percent (Ctrl+Shift+= and -, Settings › Appearance): as designed, its range and a step. */
+export const { defaultZoom: DEFAULT_ZOOM, minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM, zoomStep: ZOOM_STEP } = INTERFACE_SETTINGS;
 /** How long changes gather before they're saved. */
 const SAVE_DELAY = 300;
 

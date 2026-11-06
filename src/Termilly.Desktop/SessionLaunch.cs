@@ -18,6 +18,8 @@ internal static class SessionLaunch
         public const string AgentDir = "TERMILLY_AGENT_DIR";
         /// <summary>Tells shell\termilly.ps1 to load: without it the script does nothing.</summary>
         public const string ShellIntegration = "TERMILLY_SHELL_INTEGRATION";
+        /// <summary>macOS's bash: without it, each start says zsh is the default shell now.</summary>
+        public const string QuietBash = "BASH_SILENCE_DEPRECATION_WARNING";
     }
 
     /// <summary>The variables bash reads its prompt marks from (<see cref="AddBashMarks"/>).</summary>
@@ -31,6 +33,14 @@ internal static class SessionLaunch
         /// (shell/remote/termilly.sh) has loaded, since it reports them itself.
         /// </summary>
         public const string Unless = """[ -n "$__termilly_loaded" ] ||""";
+
+        /// <summary>
+        /// bash before 4.4 (macOS's own is 3.2) has no PS0: the first prompt sets a DEBUG trap instead (unless the
+        /// user has one), which sends what PS0 would before the first command after each prompt. Each prompt sets
+        /// __termilly_ready, and the trap skips the prompt's own first command, so an empty Enter marks nothing.
+        /// </summary>
+        public const string OldBashPreexec =
+            """[ -n "$__termilly_trap" ] || { __termilly_trap=1; [ "$((BASH_VERSINFO[0] * 100 + BASH_VERSINFO[1]))" -lt 404 ] && [ -z "$(trap -p DEBUG)" ] && trap 'if [ -n "$__termilly_ready" ]; then __termilly_ready=; [ "${BASH_COMMAND#__termilly_status=}" = "$BASH_COMMAND" ] && printf "\033]633;E;%s\007\033]133;C\007" "$(HISTTIMEFORMAT= history 1 | sed "s/^ *[0-9]* *//")"; fi' DEBUG; }; __termilly_ready=1""";
     }
 
     /// <summary>cmd's prompt variable and what it shows when nobody set it (<see cref="CmdPrompt"/>).</summary>
@@ -90,6 +100,12 @@ internal static class SessionLaunch
         if (OperatingSystem.IsWindows())
         {
             vars[Variables.WslEnv] = WithWslVariables(System.Environment.GetEnvironmentVariable(Variables.WslEnv), $"{RemoteIntegration.Variable}{WslToLinux}");
+        }
+        if (OperatingSystem.IsMacOS())
+        {
+            // macOS's own bash (3.2) says at each start that zsh is the default now: in every terminal and restart.
+            // Only that bash reads this, so a bash typed in zsh stays quiet too.
+            vars[Variables.QuietBash] = "1";
         }
         foreach (var (name, value) in profile.Environment ?? new Dictionary<string, string>())
         {
@@ -152,17 +168,21 @@ internal static class SessionLaunch
                 // The script's text runs as a script block rather than as a file: execution policy covers only
                 // script files, so this works on a clean Windows (Restricted) without loosening the user's policy.
                 return ($"{profile.CommandLine} -NoExit -Command \"{PowerShellIntegrationCommand(script)}\"", withMarks);
+            case (ProfileSources.Local, ProfileIcons.Bash) when profile.Id == ZshMarks.Shell && Directory.Exists(ZshFolder):
+                AddZshMarks(withMarks, vars);
+                return (profile.CommandLine, withMarks);
+            case (ProfileSources.Local, ProfileIcons.Bash) when profile.Id is TcshMarks.Tcsh or TcshMarks.Csh && Directory.Exists(TcshFolder):
+                AddTcshMarks(withMarks, vars);
+                return (profile.CommandLine, withMarks);
+            case (ProfileSources.Local, ProfileIcons.Bash) when profile.Id == KshMarks.Shell && File.Exists(KshScript):
+                AddKshMarks(withMarks, vars);
+                return (profile.CommandLine, withMarks);
+            case (ProfileSources.Local, ProfileIcons.Bash) when profile.Id is XdgMarks.Fish or XdgMarks.Nu && Directory.Exists(XdgFolder):
+                AddXdgMarks(withMarks, vars);
+                return (profile.CommandLine, withMarks);
             case (ProfileSources.Local, ProfileIcons.Bash):
                 AddBashMarks(withMarks);
-                if (!OperatingSystem.IsWindows() && File.Exists(script))
-                {
-                    // `pwsh` typed at bash's prompt gets PowerShell's integration too: an exported bash function (bash
-                    // reads BASH_FUNC_name%% from its environment) starts it with the script. Only plain `pwsh`:
-                    // scripts and `pwsh -c …` run as they are.
-                    withMarks["TERMILLY_PWSH_SCRIPT"] = script;
-                    withMarks["BASH_FUNC_pwsh%%"] =
-                        """() { if [ $# -eq 0 ] && [ -f "$TERMILLY_PWSH_SCRIPT" ]; then TERMILLY_SHELL_INTEGRATION=1 command pwsh -NoExit -Command '. $env:TERMILLY_PWSH_SCRIPT'; else command pwsh "$@"; fi; }""";
-                }
+                AddPwshFunction(withMarks, script);
                 return (profile.CommandLine, withMarks);
             case (ProfileSources.Wsl, _):
                 AddBashMarks(withMarks);
@@ -217,8 +237,135 @@ internal static class SessionLaunch
                                  $$"""[[ -n "${{Variables.AgentDir}}" && "$PATH" != "${{Variables.AgentDir}}":* ]] && PATH="${{Variables.AgentDir}}:$PATH"; """ +
                                  $"{BashMarks.Unless} {{ " +
                                  (OperatingSystem.IsWindows() ? "" : @"printf '\033]7;file://%s%s\007' ""$HOSTNAME"" ""$PWD""; ") +
-                                 @"printf '\033]133;D;%s\007\033]133;A\007' ""$__termilly_status""; }";
+                                 @"printf '\033]133;D;%s\007\033]133;A\007' ""$__termilly_status""; }; " +
+                                 BashMarks.OldBashPreexec;
     }
+
+    /// <summary>
+    /// Off Windows, `pwsh` typed at bash's prompt gets PowerShell's integration too: an exported bash function (bash
+    /// reads BASH_FUNC_name%% from its environment) starts it with the script. Only plain `pwsh`: scripts and
+    /// `pwsh -c …` run as they are.
+    /// </summary>
+    private static void AddPwshFunction(Dictionary<string, string> withMarks, string script)
+    {
+        if (OperatingSystem.IsWindows() || !File.Exists(script))
+        {
+            return;
+        }
+        withMarks["TERMILLY_PWSH_SCRIPT"] = script;
+        withMarks["BASH_FUNC_pwsh%%"] =
+            """() { if [ $# -eq 0 ] && [ -f "$TERMILLY_PWSH_SCRIPT" ]; then TERMILLY_SHELL_INTEGRATION=1 command pwsh -NoExit -Command '. $env:TERMILLY_PWSH_SCRIPT'; else command pwsh "$@"; fi; }""";
+    }
+
+    /// <summary>
+    /// zsh reads neither PS0 nor PROMPT_COMMAND: it starts with ZDOTDIR at shell/zsh, whose startup files read the
+    /// user's own (from their ZDOTDIR, else ~) and then shell/termilly.zsh, which marks prompts and commands as
+    /// <see cref="AddBashMarks"/> does. The user's ZDOTDIR is theirs again once the startup files have run.
+    /// </summary>
+    private static void AddZshMarks(Dictionary<string, string> withMarks, IReadOnlyDictionary<string, string> vars)
+    {
+        var own = vars.TryGetValue(ZshMarks.ZDotDir, out var set) ? set : System.Environment.GetEnvironmentVariable(ZshMarks.ZDotDir);
+        if (!string.IsNullOrEmpty(own))
+        {
+            withMarks[ZshMarks.UserZDotDir] = own;
+        }
+        withMarks[ZshMarks.ZDotDir] = ZshFolder;
+    }
+
+    /// <summary>The variables zsh's startup files go by (<see cref="AddZshMarks"/>).</summary>
+    private static class ZshMarks
+    {
+        public const string ZDotDir = "ZDOTDIR";
+        public const string UserZDotDir = "TERMILLY_USER_ZDOTDIR";
+        /// <summary>zsh's profile id (SessionProfiles.UnixShells names a shell's profile after its file).</summary>
+        public const string Shell = "zsh";
+    }
+
+    /// <summary>
+    /// tcsh (and csh, tcsh on macOS) reads no startup file a variable could name: it starts with HOME at shell/tcsh,
+    /// whose .tcshrc puts the user's HOME back, reads their .tcshrc (or .cshrc) and then shell/termilly.tcsh, which
+    /// marks prompts and commands as <see cref="AddBashMarks"/> does. The files read after .tcshrc (.history, .login)
+    /// come from the user's home. Without a HOME to go back to, tcsh starts as it is.
+    /// </summary>
+    private static void AddTcshMarks(Dictionary<string, string> withMarks, IReadOnlyDictionary<string, string> vars)
+    {
+        var home = vars.TryGetValue(TcshMarks.Home, out var set) ? set : System.Environment.GetEnvironmentVariable(TcshMarks.Home);
+        if (string.IsNullOrEmpty(home))
+        {
+            return;
+        }
+        withMarks[TcshMarks.UserHome] = home;
+        withMarks[TcshMarks.Home] = TcshFolder;
+    }
+
+    /// <summary>
+    /// ksh (ksh93) reads the file ENV names when it starts interactive: shell/termilly.ksh, which reads the user's own
+    /// ENV file (or ~/.kshrc) and then marks prompts and commands as <see cref="AddBashMarks"/> does.
+    /// </summary>
+    private static void AddKshMarks(Dictionary<string, string> withMarks, IReadOnlyDictionary<string, string> vars)
+    {
+        var own = vars.TryGetValue(KshMarks.Env, out var set) ? set : System.Environment.GetEnvironmentVariable(KshMarks.Env);
+        if (!string.IsNullOrEmpty(own))
+        {
+            withMarks[KshMarks.UserEnv] = own;
+        }
+        withMarks[KshMarks.Env] = KshScript;
+    }
+
+    /// <summary>
+    /// fish and nushell read startup files from each folder XDG_DATA_DIRS lists (fish/vendor_conf.d,
+    /// nushell/vendor/autoload): they start with shell/xdg first, whose files put the user's XDG_DATA_DIRS back and
+    /// mark prompts and commands as <see cref="AddBashMarks"/> does (fish 4 marks them itself: then only what it
+    /// doesn't). Unset, XDG_DATA_DIRS means /usr/local/share and /usr/share, so those follow Termilly's folder.
+    /// </summary>
+    private static void AddXdgMarks(Dictionary<string, string> withMarks, IReadOnlyDictionary<string, string> vars)
+    {
+        var own = vars.TryGetValue(XdgMarks.DataDirs, out var set) ? set : System.Environment.GetEnvironmentVariable(XdgMarks.DataDirs);
+        if (!string.IsNullOrEmpty(own))
+        {
+            withMarks[XdgMarks.UserDataDirs] = own;
+        }
+        withMarks[XdgMarks.DataDirs] = $"{XdgFolder}:{(string.IsNullOrEmpty(own) ? XdgMarks.Default : own)}";
+    }
+
+    /// <summary>The variables fish's and nushell's start goes by (<see cref="AddXdgMarks"/>), and their profile ids.</summary>
+    private static class XdgMarks
+    {
+        public const string DataDirs = "XDG_DATA_DIRS";
+        public const string UserDataDirs = "TERMILLY_USER_XDG_DATA_DIRS";
+        public const string Default = "/usr/local/share:/usr/share";
+        public const string Fish = "fish";
+        public const string Nu = "nu";
+    }
+
+    /// <summary>fish's and nushell's startup files for Termilly's terminals (see shell/xdg), next to the app.</summary>
+    internal static string XdgFolder { get; } = Path.Combine(AppPaths.ShellScripts, "xdg");
+
+    /// <summary>The variables tcsh's start goes by (<see cref="AddTcshMarks"/>), and the profile ids it covers.</summary>
+    private static class TcshMarks
+    {
+        public const string Home = "HOME";
+        public const string UserHome = "TERMILLY_USER_HOME";
+        public const string Tcsh = "tcsh";
+        public const string Csh = "csh";
+    }
+
+    /// <summary>The variables ksh's start goes by (<see cref="AddKshMarks"/>), and its profile id.</summary>
+    private static class KshMarks
+    {
+        public const string Env = "ENV";
+        public const string UserEnv = "TERMILLY_USER_ENV";
+        public const string Shell = "ksh";
+    }
+
+    /// <summary>tcsh's startup file for Termilly's terminals (see shell/tcsh), next to the app.</summary>
+    internal static string TcshFolder { get; } = Path.Combine(AppPaths.ShellScripts, "tcsh");
+
+    /// <summary>ksh's integration (shell/termilly.ksh), next to the app.</summary>
+    internal static string KshScript { get; } = Path.Combine(AppPaths.ShellScripts, "termilly.ksh");
+
+    /// <summary>zsh's startup files for Termilly's terminals (see shell/zsh), next to the app.</summary>
+    internal static string ZshFolder { get; } = Path.Combine(AppPaths.ShellScripts, "zsh");
 
     /// <summary>
     /// cmd's PROMPT with the marks around <paramref name="own"/> (the user's PROMPT, or cmd's default): a prompt

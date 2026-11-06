@@ -54,12 +54,49 @@ internal sealed class NotepadHandler(PageChannel page, IFileDialogs dialogs) : I
                 page.Post(new ToPage.NotepadOpened(requestId, null, Error: $"{Path.GetFileName(file)} is over 2 MB, too big for the Notepad."));
                 return;
             }
-            page.Post(new ToPage.NotepadOpened(requestId, file, await File.ReadAllTextAsync(file).ConfigureAwait(false)));
+            var bytes = await File.ReadAllBytesAsync(file).ConfigureAwait(false);
+            if (NotText(file, bytes) is { } why)
+            {
+                page.Post(new ToPage.NotepadOpened(requestId, null, Error: why));
+                return;
+            }
+            using var reader = new StreamReader(new MemoryStream(bytes), detectEncodingFromByteOrderMarks: true);
+            page.Post(new ToPage.NotepadOpened(requestId, file, await reader.ReadToEndAsync().ConfigureAwait(false)));
         }
         catch (Exception e) when (Storage.IsFileError(e))
         {
             page.Post(new ToPage.NotepadOpened(requestId, null, Error: e.Message));
         }
+    }
+
+    /// <summary>The extensions of pictures, said so when one is opened (the Notepad shows text only).</summary>
+    private static readonly HashSet<string> PictureExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".ico", ".tif", ".tiff", ".heic", ".avif", ".svgz",
+    };
+
+    /// <summary>UTF-16's byte order mark, its two bytes (FF FE little-endian, FE FF big-endian).</summary>
+    private const byte ByteOrderHigh = 0xFF;
+    private const byte ByteOrderLow = 0xFE;
+
+    /// <summary>How much of a file is looked at to tell text from anything else.</summary>
+    private const int SniffBytes = 8000;
+
+    /// <summary>
+    /// Why a file can't be opened as text (a picture, or anything with zero bytes in its start: binary), or null when it
+    /// can. A file marked UTF-16 has zero bytes in its text, and is text.
+    /// </summary>
+    private static string? NotText(string file, byte[] bytes)
+    {
+        var name = Path.GetFileName(file);
+        if (PictureExtensions.Contains(Path.GetExtension(file)))
+        {
+            return $"{name} is an image. The Notepad opens text files only.";
+        }
+        var utf16 = bytes.Length >= 2 && ((bytes[0] == ByteOrderHigh && bytes[1] == ByteOrderLow) || (bytes[0] == ByteOrderLow && bytes[1] == ByteOrderHigh));
+        return !utf16 && Array.IndexOf(bytes, (byte)0, 0, Math.Min(bytes.Length, SniffBytes)) >= 0
+            ? $"{name} isn't a text file. The Notepad opens text files only."
+            : null;
     }
 
     /// <summary>The name the save dialog offers: the file's own, else the page's (as a .txt file).</summary>

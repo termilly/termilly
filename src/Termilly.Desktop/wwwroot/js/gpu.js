@@ -116,7 +116,20 @@ export function wireGpu(tab, term, fit) {
   const body = /** @type {TabView} */ (tab.view).body;
   /** @type {Gpu} */
   const g = { term, fit, addon: null, visible: false, timer: 0, losses: 0, shownAt: 0, observer: /** @type {any} */ (null) };
-  g.observer = new IntersectionObserver(entries => {
+  watch(g, body);
+  gpus.set(tab.id, g);
+}
+
+/**
+ * Watches whether `body` is on screen, from the window it's in: another window's observer never sees it (a detached
+ * terminal would give its context up and, on WebKitGTK, draw nothing; back in the main window it never came back).
+ * @param {Gpu} g
+ * @param {HTMLElement} body
+ */
+function watch(g, body) {
+  g.observer?.disconnect();
+  const view = /** @type {typeof window} */ (body.ownerDocument.defaultView ?? window);
+  g.observer = new view.IntersectionObserver(entries => {
     const visible = entries.some(e => e.isIntersecting);
     g.visible = visible;
     clearTimeout(g.timer);
@@ -128,7 +141,19 @@ export function wireGpu(tab, term, fit) {
     }
   });
   g.observer.observe(body);
-  gpus.set(tab.id, g);
+}
+
+/**
+ * A terminal moved into another window (its own, or the main one again): it's watched from there, and draws on a
+ * context made afresh (one made for another window's page may not draw in this one).
+ * @param {Tab} tab
+ */
+export function followGpu(tab) {
+  const g = gpus.get(tab.id);
+  if (!g) return;
+  release(g);
+  g.losses = 0;
+  watch(g, /** @type {TabView} */ (tab.view).body);
 }
 
 /**

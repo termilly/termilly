@@ -39,6 +39,14 @@ internal interface IAppWindow
     /// <summary>The page reported in (its first terminal is on screen).</summary>
     void PageReady();
 
+    /// <summary>A picture of the page as it is now (a JPEG, base64); null where none can be taken.</summary>
+    Task<string?> CapturePageAsync();
+
+    /// <summary>
+    /// A dragged terminal's picture following the pointer, past the window too (none takes it away). Nothing where the
+    /// system can't show one (Linux and macOS for now: there a terminal goes out at the window's edge).
+    /// </summary>
+    void ShowDragPicture(FromPage.DragPicture picture);
 }
 
 /// <summary>The system's file dialogs. Each answers null (or nothing) when cancelled.</summary>

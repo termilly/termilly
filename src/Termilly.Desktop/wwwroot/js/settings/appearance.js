@@ -6,7 +6,7 @@ import { onHost, sys, SYSTEM_NAME } from '../host.js';
 import { state, getSetting, GROUPS } from '../store.js';
 import { THEMES } from '../themes.js';
 import { cssColor, cssString, escapeHtml, ICONS, keysHtml } from '../ui.js';
-import { setSetting, updateSettings, MIN_FONT_SIZE, MAX_FONT_SIZE } from '../preferences.js';
+import { setSetting, updateSettings, MIN_FONT_SIZE, MAX_FONT_SIZE, MIN_ZOOM, MAX_ZOOM, ZOOM_STEP, DEFAULT_ZOOM } from '../preferences.js';
 import { row, seg, toggle, group, setRange } from './controls.js';
 import { SECTION, body, layer, page } from './page.js';
 import { SETTING_VALUES } from '../constants.js';
@@ -108,6 +108,7 @@ function renderFontLists(root) {
  */
 function showFontTarget(key) {
   fontTarget = key;
+  syncFonts(body); // the size beside it is the one of what it picks now
   const picker = /** @type {HTMLElement | null} */ (body.querySelector(FONT_PICKER));
   if (!picker) return;
   picker.dataset.fontSetting = key;
@@ -130,9 +131,12 @@ function revealChosenFonts() {
 function syncFonts(root) {
   const range = /** @type {HTMLInputElement | null} */ (root.querySelector('#font-size-range'));
   if (range) {
-    const { fontSize } = state.settings.terminal;
-    setRange(range, fontSize);
-    find(root, '#font-size-value').textContent = `${fontSize}px`;
+    // The size of what the switch picks: the terminals' text in pixels, or the whole app (zoom) in percent.
+    const size = sizeOf();
+    Object.assign(range, { min: String(size.min), max: String(size.max), step: String(size.step) });
+    setRange(range, size.value);
+    find(root, '#font-size-value').textContent = size.text;
+    find(root, '#font-size-keys').innerHTML = size.keys;
   }
   for (const picker of /** @type {NodeListOf<HTMLElement>} */ (root.querySelectorAll(FONT_PICKER))) {
     const chosen = getSetting(/** @type {string} */ (picker.dataset.fontSetting)) ?? '';
@@ -148,13 +152,41 @@ function syncFonts(root) {
     const terminal = escapeHtml(state.settings.terminal.fontFamily);
     const app = escapeHtml(state.settings.interface.font ?? (sys.name === SYSTEM_NAME.linux ? 'System default' : 'Windows default'));
     note.innerHTML = fontTarget === TERMINAL_FONT
-      ? `Monospace fonts for terminals. Terminal: <b>${terminal}</b> · App: ${app}`
-      : `Any installed font, for menus, sidebar, headers and dialogs. App: <b>${app}</b> · Terminal: ${terminal}`;
+      ? `Terminal: <b>${terminal}</b> · App: ${app}`
+      : `App: <b>${app}</b> · Terminal: ${terminal}`;
   }
 }
 
-/** A step of the size buttons, in pixels. */
+/** A step of the size buttons for the terminals' text, in pixels. */
 const FONT_STEP = 1;
+
+/**
+ * The size the slider sets for what the switch picks: the terminals' text (pixels; Ctrl + and -), or the whole app,
+ * its text, icons and terminals together (zoom, percent; Ctrl Shift + and -).
+ * @returns {{ value: number, min: number, max: number, step: number, text: string, keys: string }}
+ */
+function sizeOf() {
+  if (fontTarget === TERMINAL_FONT) {
+    const { fontSize } = state.settings.terminal;
+    return { value: fontSize, min: MIN_FONT_SIZE, max: MAX_FONT_SIZE, step: FONT_STEP, text: `${fontSize}px`,
+      keys: `${keysHtml('Ctrl +')} ${keysHtml('Ctrl -')} ${keysHtml('Ctrl 0')}` };
+  }
+  const zoom = state.settings.interface.zoom ?? DEFAULT_ZOOM;
+  return { value: zoom, min: MIN_ZOOM, max: MAX_ZOOM, step: ZOOM_STEP, text: `${zoom}%`,
+    keys: `${keysHtml('Ctrl Shift +')} ${keysHtml('Ctrl Shift -')} ${keysHtml('Ctrl Shift 0')}` };
+}
+
+/**
+ * Sets the size of what the switch picks.
+ * @param {number} value
+ */
+function setSize(value) {
+  if (fontTarget === TERMINAL_FONT) updateSettings(GROUPS.terminal, { fontSize: value });
+  else updateSettings(GROUPS.interface, { zoom: Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value)) });
+}
+
+/** Linux, not macOS (the same build, and the same page's 'linux'). */
+const onLinux = sys.name === SYSTEM_NAME.linux && !/Mac/.test(navigator.platform);
 
 /** @type {import('./page.js').Section} */
 const APPEARANCE = {
@@ -163,29 +195,35 @@ const APPEARANCE = {
   html: () => group('', row('Theme', `Colours for the app and terminals. System follows ${sys.name === SYSTEM_NAME.linux ? 'the desktop' : 'Windows'}.`,
     themeCards(), { stack: true, keywords: 'colour color dark light system look palette' }))
     // One list for both fonts; the switch picks which one it sets, and the note shows both choices.
-    + group('Font', row('', '<span id="font-target-note"></span>', `
-        <span class="seg font-target" role="tablist" aria-label="Font for">
-          <button data-font-target="${TERMINAL_FONT}" role="tab">${ICONS.terminal}Terminal</button>
-          <button data-font-target="${APP_FONT}" role="tab">${ICONS.appearance}App</button>
-        </span>
-        ${fontPicker(fontTarget)}`, { stack: true, keywords: 'font family typeface terminal app' }))
+    // The note's line has the size's keys at its right; under it the switch, with the size of what it picks.
+    + group('Font', row('', '<span class="font-note-line"><span id="font-target-note"></span><span class="font-keys" id="font-size-keys"></span></span>', `
+        <div class="font-head">
+          <span class="seg font-target" role="tablist" aria-label="Font for">
+            <button data-font-target="${TERMINAL_FONT}" role="tab">${ICONS.terminal}Terminal</button>
+            <button data-font-target="${APP_FONT}" role="tab">${ICONS.appearance}App</button>
+          </span>
+          <div class="size-control">
+            <button id="font-smaller" title="Smaller"><svg viewBox="0 0 12 12"><path d="M2.5 6h7"/></svg></button>
+            <input id="font-size-range" type="range" aria-label="Size">
+            <button id="font-larger" title="Larger"><svg viewBox="0 0 12 12"><path d="M6 2.5v7M2.5 6h7"/></svg></button>
+            <span id="font-size-value"></span>
+          </div>
+        </div>
+        ${fontPicker(fontTarget)}`, { stack: true, keywords: 'font family typeface terminal app size zoom bigger smaller' }))
     + group('Terminal text',
       row('GPU rendering', 'Smoother scrolling and fast output, drawn by the graphics card. Its text is always greyscale.',
         toggle('terminal.gpuRendering'), { keywords: 'gpu webgl renderer performance frame rate fps smooth scroll' })
       // ClearType is Windows' own; on Linux the desktop's font settings decide.
       + (sys.name === SYSTEM_NAME.linux ? '' : row('Text smoothing', 'Greyscale keeps coloured text crisp; ClearType matches Windows. Without GPU rendering only.',
         seg('terminal.textSmoothing', [[textSmoothing.grayscale, 'Greyscale'], [textSmoothing.clearType, 'ClearType']])))
-      + row('Size', `${keysHtml('Ctrl +')} ${keysHtml('Ctrl -')} ${keysHtml('Ctrl 0')}`, `
-        <div class="size-control">
-          <button id="font-smaller" title="Smaller"><svg viewBox="0 0 12 12"><path d="M2.5 6h7"/></svg></button>
-          <input id="font-size-range" type="range" min="${MIN_FONT_SIZE}" max="${MAX_FONT_SIZE}" step="1">
-          <button id="font-larger" title="Larger"><svg viewBox="0 0 12 12"><path d="M6 2.5v7M2.5 6h7"/></svg></button>
-          <span id="font-size-value"></span>
-        </div>`, { keywords: 'font size zoom bigger smaller' })
       + row('Line height', '', seg('terminal.lineHeight', [['1', '1.0'], ['1.2', '1.2'], ['1.4', '1.4'], ['1.6', '1.6']])))
     + group('Cursor',
       row('Style', '', seg('terminal.cursorStyle', [[cursorStyle.bar, 'Bar'], [cursorStyle.block, 'Block'], [cursorStyle.underline, 'Underline']]))
-      + row('Blink', '', toggle('terminal.cursorBlink'))),
+      + row('Blink', '', toggle('terminal.cursorBlink')))
+    // Linux only (not macOS, which runs the same build): Wayland lets no app place its windows.
+    + (onLinux ? group('Windows',
+      row('Windowing system', 'On (X11): windows open where dropped, softer text when scaled. Off (Wayland): sharp text, the desktop places windows.',
+        toggle('interface.runAsX11'), { keywords: 'x11 xwayland wayland window place drop detach position' })) : ''),
   opened: revealChosenFonts,
   drawn: renderFontLists,
   sync: syncFonts,
@@ -201,15 +239,13 @@ const APPEARANCE = {
       showFontTarget(/** @type {string} */ (target.dataset.fontTarget));
       return true;
     }
-    const step = targetOf(e).closest('#font-larger') ? FONT_STEP : targetOf(e).closest('#font-smaller') ? -FONT_STEP : 0;
-    if (step) updateSettings(GROUPS.terminal, { fontSize: state.settings.terminal.fontSize + step });
-    return !!step;
+    const by = targetOf(e).closest('#font-larger') ? 1 : targetOf(e).closest('#font-smaller') ? -1 : 0;
+    if (by) setSize(sizeOf().value + by * sizeOf().step);
+    return !!by;
   },
   input(e) {
     if (targetOf(e).classList.contains('font-search')) renderFontLists(body);
-    if (targetOf(e).id === 'font-size-range') {
-      updateSettings(GROUPS.terminal, { fontSize: Number(/** @type {HTMLInputElement} */ (e.target).value) });
-    }
+    if (targetOf(e).id === 'font-size-range') setSize(Number(/** @type {HTMLInputElement} */ (e.target).value));
   },
 };
 

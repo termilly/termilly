@@ -12,7 +12,7 @@ import { state, on, emit, tabTitle, wsById, persist, EVENTS, GROUPS } from './st
 import { focusedTab, restoreFocus, newTab } from './panes.js';
 import { scheduleFit, pasteInto } from './terminals.js';
 import { escapeHtml, formatWhen, ICONS } from './ui.js';
-import { byId, targetOf, dockRight, WORKSPACE_ID, DOCK_GRIP, CLIP_DRAG } from './dom.js';
+import { byId, targetOf, dockRight, titleIconHtml, WORKSPACE_ID, DOCK_GRIP, CLIP_DRAG } from './dom.js';
 import { showMenu, SEPARATOR } from './popups.js';
 import { showToast, TOAST } from './toasts.js';
 import { quotePaths } from './quoting.js';
@@ -22,8 +22,9 @@ import { updateSettings } from './preferences.js';
 import { fileSize } from './pictures.js';
 import { isShortcut, KEY_ID } from './keymap.js';
 import { pathActions } from './actions.js';
-import { copyToNotepadItem, copyToNoteItem } from './notepad.js';
+import { copyToNotepadItem, copyToNoteItem, PASTE_TO_NOTEPAD, PASTE_TO_NOTE } from './notepad.js';
 import { parentOf } from './filepaths.js';
+import { inEachDocument } from './windows.js';
 
 /** @typedef {import('./protocol.js').ClipView} Clip */
 
@@ -71,10 +72,9 @@ const KIND_LABELS = Object.freeze({
 });
 const TOOL_ICONS = Object.freeze({
   pin: '<svg viewBox="0 0 16 16"><path d="M5.5 2.5h6M6.5 2.5v4l-2 2.5h8l-2-2.5v-4M8.5 9v5"/></svg>',
-  pause: '<svg viewBox="0 0 16 16"><path d="M5.5 3.5v9M10.5 3.5v9"/></svg>',
 });
 /** What the panel's buttons do (data-clips), and what a clip's own buttons do (data-clip-act). */
-const PANEL_ACTION = Object.freeze({ pause: 'pause', clear: 'clear', close: 'close' });
+const PANEL_ACTION = Object.freeze({ keep: 'keep', focusOnly: 'focusOnly', clear: 'clear', close: 'close' });
 const CLIP_ACTION = Object.freeze({ expand: 'expand', open: 'open', run: 'run', pin: 'pin', forget: 'forget' });
 const SEARCH = '[data-clips-search]';
 const LIST = '.clips-list';
@@ -246,6 +246,34 @@ function noteCopy(text, body, link) {
 
 setClipHooks(menuEntries, noteCopy);
 
+/** Where a copy made outside the terminals came from, by the part of the page it was made in, else Termilly. */
+const COPY_SOURCES = [['.notepad-panel', 'Notepad'], ['.snippets-win', 'Snippets']];
+/** A terminal's own copies are told by it (noteCopy), not here. */
+const IN_TERMINAL = '.xterm';
+
+/**
+ * A copy or cut anywhere else in Termilly (the Notepad, the Snippets window, any field), in any of its windows: told
+ * to Clipboard too, so it's kept even when Clipboard keeps Termilly's own copies only (the system's own watcher, off
+ * then, would have caught it).
+ * @param {ClipboardEvent} e
+ */
+function onCopy(e) {
+  const at = /** @type {HTMLElement | null} */ (e.target instanceof Node ? (e.target.nodeType === Node.ELEMENT_NODE ? e.target : e.target.parentElement) : null);
+  if (!at || at.closest(IN_TERMINAL)) return;
+  const field = /** @type {HTMLInputElement | HTMLTextAreaElement} */ (at);
+  const text = 'selectionStart' in field && typeof field.value === 'string' && field.selectionStart !== null
+    ? field.value.slice(field.selectionStart, field.selectionEnd ?? field.selectionStart)
+    : at.ownerDocument.getSelection()?.toString() ?? '';
+  if (!text) return;
+  const source = COPY_SOURCES.find(([part]) => at.closest(part))?.[1] ?? PRODUCT.name;
+  send(PAGE.clipCopied, { text, source });
+}
+
+inEachDocument(doc => {
+  doc.addEventListener('copy', onCopy, true);
+  doc.addEventListener('cut', onCopy, true);
+});
+
 // ---- The panel ----
 
 const panel = document.createElement('aside');
@@ -263,7 +291,7 @@ function rowHtml(c) {
     <span class="clip-kind k-${escapeHtml(c.kind)}">${iconOf(c)}</span>
     <span class="clip-body"><span class="clip-text${mono}">${escapeHtml(titleOf(c))}</span><span class="clip-meta">${escapeHtml(metaOf(c))}</span></span>
     <span class="clip-acts">${expandHtml(c)}${open ? `<button class="pane-btn" data-clip-act="${CLIP_ACTION.open}" title="${open.label}">${ICONS.launch}</button>` : ''}${runnable(c) ? `<button class="pane-btn" data-clip-act="${CLIP_ACTION.run}" title="Paste and run">${ICONS.play}</button>` : ''}
-      ${c.kind === CLIP_KIND.secret ? '' : `<button class="pane-btn${c.pinned ? ' on' : ''}" data-clip-act="${CLIP_ACTION.pin}" title="${c.pinned ? UNPIN_LABEL : 'Pin: kept at the top, never dropped'}">${TOOL_ICONS.pin}</button>`}
+      ${c.kind === CLIP_KIND.secret ? '' : `<button class="pane-btn${c.pinned ? ' on' : ''}" data-clip-act="${CLIP_ACTION.pin}" title="${c.pinned ? UNPIN_LABEL : 'Pin to top, won’t be deleted'}">${TOOL_ICONS.pin}</button>`}
       <button class="pane-btn" data-clip-act="${CLIP_ACTION.forget}" title="Delete (Del)">${ICONS.cross}</button></span>
   </div>${expanded.has(c.id) ? previewHtml(c) : ''}`;
 }
@@ -303,6 +331,26 @@ function listHtml() {
   return `<p class="clips-empty">${query ? 'No clip matches.' : 'Nothing copied yet. Every copy shows here, to paste again later.'}</p>`;
 }
 
+/**
+ * A small labelled switch in the panel's header (a data-clips action).
+ * @param {string} action
+ * @param {string} label
+ * @param {boolean} on
+ * @param {string} title
+ * @param {boolean} [disabled]
+ */
+const switchHtml = (action, label, on, title, disabled = false) =>
+  `<button class="clips-switch" role="switch" aria-checked="${on}" data-clips="${action}" title="${title}"${disabled ? ' disabled' : ''}>${label}<span class="switch"><span></span></span></button>`;
+
+/** Whether copies made in other apps are kept too (Windows tells about those): off, only Termilly's own. */
+const otherApps = () => state.settings.clips?.otherApps !== false;
+
+/**
+ * Only copies made while Termilly is in focus (its own), else copies made in other apps too (each system tells about
+ * those: Windows, Linux, macOS). Off with Keep: nothing is kept then.
+ */
+const focusOnlySwitch = () => switchHtml(PANEL_ACTION.focusOnly, 'Termilly only', !otherApps(), 'Only inside Termilly application', !keeping);
+
 function render() {
   button.classList.toggle('paused', !keeping);
   if (panel.hidden) return;
@@ -310,9 +358,11 @@ function render() {
   panel.innerHTML = `
     <div class="${DOCK_GRIP}" title="Drag to resize"></div>
     <div class="files-head">
-      <span class="files-title">Clipboard <span class="files-ws">${clips.length === 1 ? '1 clip' : `${clips.length} clips`}${keeping ? '' : ' · paused'}</span></span>
+      ${titleIconHtml(button)}
+      <span class="files-title">Clipboard <span class="files-ws">${clips.length === 1 ? '1 clip' : `${clips.length} clips`}</span></span>
       <span class="files-tools">
-        <button class="pane-btn np-toggle" data-clips="${PANEL_ACTION.pause}" aria-pressed="${!keeping}" title="${keeping ? 'Pause: stop keeping copies (while sharing your screen)' : 'Paused: copies aren’t kept. Click to keep them again'}">${TOOL_ICONS.pause}</button>
+        ${switchHtml(PANEL_ACTION.keep, 'Listen', keeping, 'Watch Clipboard')}
+        ${focusOnlySwitch()}
         <button class="pane-btn" data-clips="${PANEL_ACTION.clear}" title="Clear history (pinned clips stay)"${clips.some(c => !c.pinned) ? '' : ' disabled'}>${ICONS.trash}</button>
         <button class="pane-btn" data-clips="${PANEL_ACTION.close}" title="Close (${KEYS_TEXT})">${ICONS.close}</button>
       </span>
@@ -405,7 +455,7 @@ function kindEntries(c, text, image) {
     ...(c.kind === CLIP_KIND.path && c.folder == null ? [{ label: 'Not found on this PC', disabled: true }] : []),
     ...(folder ? [{ label: c.folder ? 'New terminal here' : 'New terminal in its folder', icon: ICONS.terminal, action: () => newTab({ cwd: folder }) }] : []),
     ...(c.kind === CLIP_KIND.command ? [{ label: 'Run in a new terminal', icon: ICONS.terminal, action: () => newTab({ command: text.trim() }) }] : []),
-    ...(c.kind === CLIP_KIND.text || c.kind === CLIP_KIND.command ? [copyToNotepadItem(text), copyToNoteItem(text)] : []),
+    ...(c.kind === CLIP_KIND.text || c.kind === CLIP_KIND.command ? [copyToNotepadItem(text, PASTE_TO_NOTEPAD), copyToNoteItem(text, PASTE_TO_NOTE)] : []),
     ...(tab && c.kind !== CLIP_KIND.secret ? pathActions(tab, text.trim(), folder ?? '', image).map(a => ({ ...a, icon: ICONS.play })) : []),
   ];
   return entries.length ? [...entries, SEPARATOR] : [];
@@ -448,7 +498,11 @@ panel.addEventListener('click', e => {
   const tool = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-clips]'))?.dataset.clips;
   if (tool === PANEL_ACTION.close) return toggleClips();
   if (tool === PANEL_ACTION.clear) return send(PAGE.clipClear);
-  if (tool === PANEL_ACTION.pause) return updateSettings(GROUPS.clips, { enabled: !keeping });
+  if (tool === PANEL_ACTION.keep) return updateSettings(GROUPS.clips, { enabled: !keeping });
+  if (tool === PANEL_ACTION.focusOnly) {
+    updateSettings(GROUPS.clips, { otherApps: !otherApps() });
+    return render();
+  }
   const el = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-clip]'));
   const c = el && clipById(/** @type {string} */ (el.dataset.clip));
   if (!c) return;

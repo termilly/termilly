@@ -24,7 +24,7 @@ import { fileMatches, fileRowHtml, filePreviewHtml, openFile, stillLooking } fro
 /**
  * A closed terminal the host keeps (Host_history's entries), as panes.js recordHistory sent it.
  * @typedef {{ id: string, name: string, customName?: string | null, profile: string, tags?: string[] | null,
- *   note?: Note | null, wsId?: string | null, wsName?: string | null, cwd?: string | null, closedAt: number, noHistory?: boolean,
+ *   note?: Note | null, wsId?: string | null, wsName?: string | null, cwd?: string | null, closedAt: number, closedBy?: string | null, noHistory?: boolean,
  *   lines?: string[] | null, earlier?: string | null }} HistoryEntry
  */
 /**
@@ -555,7 +555,7 @@ function terminalRowHtml(r, q) {
     : r.match.on ? `matched ${r.match.on}` : isOpen ? escapeHtml(profile?.name ?? '') : r.entry.noHistory ? 'output not kept' : `${r.lines.length} lines kept`;
   const right = isOpen
     ? `<span class="state">${RUNNING_LABEL}</span>${r.match.count ? `${r.match.count} match${r.match.count === 1 ? '' : 'es'}` : ''}`
-    : `<span class="state closed">closed</span>${escapeHtml(formatWhen(r.entry.closedAt))}`;
+    : `<span class="state closed">closed</span>${r.entry.closedBy ? `from ${escapeHtml(r.entry.closedBy)}, ` : ''}${escapeHtml(formatWhen(r.entry.closedAt))}`;
   return `${badgeHtml(profile, BADGE_SIZE.large)}
       <div class="res-main">
         <div class="res-line1"><span class="res-title">${highlight(title, r.match.on === MATCHED_ON.name ? q.text : '')}</span>

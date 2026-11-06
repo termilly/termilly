@@ -15,7 +15,8 @@ import { openTagPicker } from './tagpicker.js';
 import {
   renameWorkspace, setWorkspaceColor, closeWorkspace, nameTakenMessage, MAX_WORKSPACE_NAME,
 } from './workspaces.js';
-import { confirmDialog } from './dialogs.js';
+import { confirmWithOption } from './dialogs.js';
+import { removeHistory, HISTORY_KIND } from './historysize.js';
 import { openPalette, PALETTE_VIEW } from './palette.js';
 import { editNote, notesFor, noteTitle, firstLine, NOTE_KIND } from './notes.js';
 import { environmentOf } from './environments.js';
@@ -25,7 +26,6 @@ import { costOf, costText, costTitle, workspaceCost, dollars, costMode } from '.
 import { tabProjectHtml, openPort, repoOf } from './gitstatus.js';
 import { remoteRailHtml, openRemoteMenu } from './remote.js';
 import { openNewWorkspace } from './newworkspace.js';
-import { hasUnreadResults } from './results.js';
 import { SETTING_VALUES } from './constants.js';
 import { byId, find, targetOf, dragPointer, showError, MOUSE_OVER } from './dom.js';
 import { RENAME_INPUT_CLASS, RENAME_IN, shownName } from './rename.js';
@@ -110,7 +110,7 @@ function tabRowHtml(tab, ws) {
   return `<button class="tab-row${focused ? ' focused' : ''}${isUnread(tab) ? ' unread' : ''}${env ? ' env' : ''}" data-tab="${escapeHtml(tab.id)}" title="${escapeHtml(tabTitle(tab))}${env ? ` · ${escapeHtml(env.label)}` : ''}"${env ? ` style="--env:${cssColor(env.color)}"` : ''}>
     ${tabBadgeHtml(tab)}<span class="name">${escapeHtml(shownName(tab))}</span>${notesFor(tab).length ? `<span class="note-mark" data-note-tab="${escapeHtml(tab.id)}" title="${escapeHtml(`${noteTitle(notesFor(tab))}\nClick to open`)}">${ICONS.note}</span>` : ''}
     <span class="chips">${tabProjectHtml(tab, ws)}${tab.tags.map(t => tagChipHtml(t, { mini: true })).join('')}${tab.tags.length > 1
-      ? `<span class="tag mini more-tags" data-more-tags title="Show all tags">+${tab.tags.length - 1}</span>` : ''}${activityHtml(activityOf(tab), MINI_ACTIVITY)}${tab.attention ? '<span class="attn"></span>' : ''}${hasUnreadResults(tab) ? '<span class="res-dot" title="New results: a pull request, a running app or a push"></span>' : ''}${costText(costOf(tab)) ? `<span class="cost-chip" title="${escapeHtml(costTitle(costOf(tab)))}">${escapeHtml(costText(costOf(tab)))}</span>` : ''}${runningSubagents(tab) ? `<span class="sub-badge" title="Subagents running">${runningSubagents(tab)} agent${runningSubagents(tab) === 1 ? '' : 's'}</span>` : ''}</span>
+      ? `<span class="tag mini more-tags" data-more-tags title="Show all tags">+${tab.tags.length - 1}</span>` : ''}${activityHtml(activityOf(tab), MINI_ACTIVITY)}${tab.attention ? '<span class="attn"></span>' : ''}${costText(costOf(tab)) ? `<span class="cost-chip" title="${escapeHtml(costTitle(costOf(tab)))}">${escapeHtml(costText(costOf(tab)))}</span>` : ''}${runningSubagents(tab) ? `<span class="sub-badge" title="Subagents running">${runningSubagents(tab)} agent${runningSubagents(tab) === 1 ? '' : 's'}</span>` : ''}</span>
     ${isAgentWorking(tab) ? `<span class="agent-stop" data-stop="${escapeHtml(tab.id)}" title="Stop the agent (Esc)" role="button"></span>` : ''}
   </button>${showsLine(tab) ? `<div class="agent-line ${escapeHtml(/** @type {AgentInfo} */ (tab.agent).state)}" data-tab="${escapeHtml(tab.id)}" title="${escapeHtml(/** @type {AgentInfo} */ (tab.agent).line)}">${escapeHtml(/** @type {AgentInfo} */ (tab.agent).line)}</div>` : ''}${subagentRowsHtml(tab)}`;
 }
@@ -270,15 +270,32 @@ function openWorkspaceMenu(ws, at) {
       label: 'Close workspace', icon: ICONS.trash, danger: true,
       action: async () => {
         const n = tabsOf(ws).length;
-        if (n && state.settings.interface.confirmCloseWorkspace && !(await confirmDialog({
+        // Asked: whether its history goes too (its terminals, their output and commands), else they're in Recently closed.
+        const erase = n && state.settings.interface.confirmCloseWorkspace ? await confirmWithOption({
           title: `Close “${ws.name}”?`,
           body: `Its ${n} terminal${n === 1 ? '' : 's'} will be closed. You can reopen them from Recently closed.${state.workspaces.length === 1 ? ' This is your last workspace.' : ''}`,
           confirm: 'Close workspace',
-        }))) return;
+          option: 'Also erase its history: these terminals, their output and their commands',
+        }) : false;
+        if (erase === null) return;
         closeWorkspace(ws);
+        if (erase) eraseWorkspaceHistory(ws.name);
       },
     },
   ], at);
+}
+
+/** How long after a workspace closes its history is erased: its terminals' last output is written as they close. */
+const ERASE_AFTER_MS = 1500;
+
+/**
+ * A closed workspace's history goes: its closed terminals with their output, and the commands run in them.
+ * @param {string} name
+ */
+function eraseWorkspaceHistory(name) {
+  setTimeout(() => {
+    removeHistory({ kinds: [HISTORY_KIND.closed, HISTORY_KIND.commands], workspaces: [name] }, false).catch(() => {});
+  }, ERASE_AFTER_MS);
 }
 
 /** @param {Workspace} ws */

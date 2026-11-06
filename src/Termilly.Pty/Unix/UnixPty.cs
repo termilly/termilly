@@ -7,11 +7,12 @@ using static Termilly.Pty.Unix.Native;
 namespace Termilly.Pty.Unix;
 
 /// <summary>
-/// A pseudo terminal on Linux. The shell is started with posix_spawn in a session of its own, with the terminal's
+/// A pseudo terminal on Linux and macOS. The shell is started with posix_spawn in a session of its own, with the terminal's
 /// other end as its stdin, stdout and stderr, so the terminal becomes its controlling terminal (Ctrl+C, job control
 /// and window size work). posix_spawn rather than fork: forking a .NET process isn't safe.
 /// </summary>
 [SupportedOSPlatform("linux")]
+[SupportedOSPlatform("macos")]
 public sealed class UnixPty : IPty
 {
     /// <summary>Room for posix_spawn's opaque structures: file actions and signal sets, and its attributes.</summary>
@@ -70,8 +71,15 @@ public sealed class UnixPty : IPty
         {
             throw new Win32Exception(Marshal.GetLastPInvokeError(), "Couldn't open a pseudo terminal.");
         }
+        var slavePath = SlaveName(master);
+        // macOS takes a size only once the other end has been opened (ENOTTY before); held open until the shell has it.
+        var slave = open(slavePath, O_RDWR | O_NOCTTY | O_CLOEXEC);
         SetSize(master, options.Columns, options.Rows);
-        var error = Spawn(argv, SlaveName(master), options, out var pid);
+        var error = Spawn(argv, slavePath, options, out var pid);
+        if (slave >= 0)
+        {
+            _ = close(slave);
+        }
         if (error != 0)
         {
             _ = close(master);
@@ -221,7 +229,7 @@ public sealed class UnixPty : IPty
     private static void SetSize(int fd, int columns, int rows)
     {
         var size = new WinSize { Rows = (ushort)Math.Max(1, rows), Columns = (ushort)Math.Max(1, columns) };
-        _ = ioctl(fd, TIOCSWINSZ, ref size); // a pty that's gone has no size to set
+        _ = SetWindowSize(fd, ref size); // a pty that's gone has no size to set
     }
 
     private static void Check(int error)
@@ -234,7 +242,8 @@ public sealed class UnixPty : IPty
 
     /// <summary>
     /// The terminal's output. Once the shell has exited and nothing holds the terminal open, reading fails with
-    /// EIO: that's the end of the output, so it reads as 0 like the end of a file.
+    /// EIO: that's the end of the output, so it reads as 0 like the end of a file. On macOS a read still waiting when
+    /// the terminal is closed fails with EBADF, which .NET throws as UnauthorizedAccessException: the end too.
     /// </summary>
     private sealed class TerminalStream(Stream inner) : Stream
     {
@@ -250,7 +259,7 @@ public sealed class UnixPty : IPty
             {
                 return inner.Read(buffer, offset, count);
             }
-            catch (IOException)
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
             {
                 return 0;
             }

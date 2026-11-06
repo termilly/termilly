@@ -16,6 +16,8 @@ namespace Termilly.Desktop.Features;
 internal sealed class RemotePcsHandler(PageChannel page, RemotePcStore store, Phone.PhoneStore phones, RemotePcFiles ask) : IMessageHandler, IStartable, IDisposable
 {
     private static readonly TimeSpan RetryAfter = TimeSpan.FromSeconds(10);
+    /// <summary>How long a computer gets to answer what's asked of it.</summary>
+    private static readonly TimeSpan AskFor = TimeSpan.FromSeconds(15);
     /// <summary>What a phone (or this computer) types at once (Features/Phone.cs takes up to 4096).</summary>
     private const int MaxInput = 4000;
     private static class Fields
@@ -40,6 +42,7 @@ internal sealed class RemotePcsHandler(PageChannel page, RemotePcStore store, Ph
         public const string Input = "input";
         public const string Size = "size";
         public const string Refresh = "refresh";
+        public const string Manage = "manage";
     }
 
     /// <summary>A computer's state connection: online or not, why, and the last state it sent.</summary>
@@ -49,6 +52,12 @@ internal sealed class RemotePcsHandler(PageChannel page, RemotePcStore store, Ph
         public volatile bool Online;
         public volatile string? Error;
         public volatile string? State;
+        /// <summary>The connection while it's up, and what writes to it one at a time.</summary>
+        public volatile ClientWebSocket? Socket;
+        public SemaphoreSlim Gate { get; } = new(1, 1);
+        /// <summary>One thing asked of the computer at a time, and its answer when it comes on the state connection.</summary>
+        public SemaphoreSlim Asking { get; } = new(1, 1);
+        public volatile TaskCompletionSource<JsonObject>? Answer;
     }
 
     /// <summary>A terminal here watching one there.</summary>
@@ -67,6 +76,7 @@ internal sealed class RemotePcsHandler(PageChannel page, RemotePcStore store, Ph
         router.On<FromPage.PcWatch>(WatchAsync);
         router.On<FromPage.PcUnwatch>(m => Unwatch(m.Tab));
         router.On<FromPage.PcInput>(InputAsync);
+        router.On<FromPage.PcManage>(ManageAsync);
         router.On<FromPage.PcPrompts>(PromptsAsync);
         router.On<FromPage.PcRefresh>(m => SendTo(m.Tab, new JsonObject { [Fields.Op] = Kinds.Refresh }));
         router.On<FromPage.PcSize>(m => SendTo(m.Tab, new JsonObject { [Fields.Op] = Kinds.Size, [Fields.Cols] = m.Cols, [Fields.Rows] = m.Rows }));
@@ -172,12 +182,18 @@ internal sealed class RemotePcsHandler(PageChannel page, RemotePcStore store, Ph
         try
         {
             using var socket = await PcConnection.ConnectAsync(pc, stop).ConfigureAwait(false);
+            live.Socket = socket;
             live.Online = true;
             live.Error = null;
             Post();
             while (await PcConnection.ReceiveAsync(socket, stop).ConfigureAwait(false) is { } message)
             {
-                if (message[Fields.Type]?.GetValue<string>() == Kinds.State && message[Fields.State] is { } state)
+                var type = message[Fields.Type]?.GetValue<string>();
+                if (type == Kinds.Answered && message[Fields.Op]?.GetValue<string>() == Kinds.Manage)
+                {
+                    live.Answer?.TrySetResult(message);
+                }
+                else if (type == Kinds.State && message[Fields.State] is { } state)
                 {
                     live.State = state.ToJsonString();
                     if (message[Phone.PhoneLive.ComputerField]?.GetValue<string>() is { Length: > 0 } name && name != pc.Name)
@@ -194,6 +210,45 @@ internal sealed class RemotePcsHandler(PageChannel page, RemotePcStore store, Ph
         catch (Exception e) when (e is WebSocketException or IOException or OperationCanceledException or System.Security.Authentication.AuthenticationException)
         {
             live.Error = stop.IsCancellationRequested ? null : "Can’t be reached now.";
+        }
+        finally
+        {
+            live.Socket = null;
+        }
+    }
+
+    /// <summary>Asks a computer to open or close something there. It says whether it may (its Settings › Remote).</summary>
+    private async Task ManageAsync(FromPage.PcManage m)
+    {
+        page.Post(new ToPage.PcManaged(m.RequestId, await AskAsync(m).ConfigureAwait(false)));
+    }
+
+    /// <summary>The computer's error, or null when it's done.</summary>
+    private async Task<string?> AskAsync(FromPage.PcManage m)
+    {
+        var name = store.List().FirstOrDefault(p => p.Id == m.Id)?.Name ?? "That computer";
+        if (!_live.TryGetValue(m.Id, out var live) || live.Socket is not { } socket || JsonNode.Parse(m.Args.GetRawText()) is not JsonObject message)
+        {
+            return $"{name} can’t be reached now.";
+        }
+        message[Fields.Op] = Kinds.Manage;
+        await live.Asking.WaitAsync(_stop.Token).ConfigureAwait(false);
+        var answer = new TaskCompletionSource<JsonObject>(TaskCreationOptions.RunContinuationsAsynchronously);
+        live.Answer = answer;
+        try
+        {
+            await PcConnection.SendAsync(socket, live.Gate, message, _stop.Token).ConfigureAwait(false);
+            var done = await answer.Task.WaitAsync(AskFor, _stop.Token).ConfigureAwait(false);
+            return done[Fields.Ok]?.GetValue<bool>() == false ? done[Fields.Error]?.GetValue<string>() ?? "That didn’t go through." : null;
+        }
+        catch (Exception e) when (e is WebSocketException or IOException or OperationCanceledException or TimeoutException or ObjectDisposedException)
+        {
+            return $"{name} didn’t answer.";
+        }
+        finally
+        {
+            live.Answer = null;
+            live.Asking.Release();
         }
     }
 
@@ -275,7 +330,7 @@ internal sealed class RemotePcsHandler(PageChannel page, RemotePcStore store, Ph
         try
         {
             var answer = await ask.AskAsync(RemotePcFiles.TerminalId(watch.Pc, watch.Pane), Phone.PcPrompts.Path, []).ConfigureAwait(false);
-            page.Post(new ToPage.PromptsListed(m.RequestId, Phone.PcPromptsApi.Read(answer)));
+            page.Post(new ToPage.PromptsListed(m.RequestId, Phone.PcPromptsApi.Read(answer), Steps: Phone.PcPromptsApi.ReadSteps(answer)));
         }
         catch (IOException e)
         {

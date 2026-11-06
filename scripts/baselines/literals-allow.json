@@ -1,9 +1,9 @@
 {
   "groups": [
     {
-      "reason": "Names the platform defines, not Termilly: .NET's name for Linux ([SupportedOSPlatform]), DOM event names, keyboard key names, element tags and typeof results. They mean the same everywhere and a constant would only rename them.",
+      "reason": "Names the platform defines, not Termilly: .NET's names for Linux and macOS ([SupportedOSPlatform]), DOM event names, keyboard key names, element tags and typeof results. They mean the same everywhere and a constant would only rename them.",
       "strings": [
-        "linux",
+        "linux", "macos",
         "click", "dblclick", "contextmenu", "input", "change", "keydown", "keyup", "focus", "blur",
         "focusin", "focusout", "mousedown", "mouseup", "mousemove", "mouseenter", "mouseleave",
         "pointerdown", "pointermove", "pointerup", "pointercancel", "wheel", "scroll", "resize",

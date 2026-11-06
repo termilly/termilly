@@ -27,7 +27,7 @@
 
   <!-- The Windows app's code, without its window (WPF) and the parts only Windows has. -->
   <ItemGroup>
-    <Compile Include="..\Termilly.Desktop\**\*.cs" Exclude="..\Termilly.Desktop\bin\**;..\Termilly.Desktop\obj\**;..\Termilly.Desktop\App.xaml.cs;..\Termilly.Desktop\AssemblyInfo.cs;..\Termilly.Desktop\MainWindow.xaml.cs;..\Termilly.Desktop\MainWindow.Tray.cs;..\Termilly.Desktop\WindowPlacement.cs;..\Termilly.Desktop\WindowInterop.cs;..\Termilly.Desktop\GlobalHotkeys.cs;..\Termilly.Desktop\Notifications.cs;..\Termilly.Desktop\Ports.cs;..\Termilly.Desktop\WindowsPlatform.cs;..\Termilly.Desktop\WindowsFonts.cs;..\Termilly.Desktop\StartupLoader.cs;..\Termilly.Desktop\TaskbarBadge.cs;..\Termilly.Desktop\TrayIcon.cs;..\Termilly.Desktop\WindowsUpdateInstaller.cs;..\Termilly.Desktop\WindowsAudio.cs;..\Termilly.Desktop\ShellFiles.cs;..\Termilly.Desktop\WindowsClipboard.cs" LinkBase="Shared" />
+    <Compile Include="..\Termilly.Desktop\**\*.cs" Exclude="..\Termilly.Desktop\bin\**;..\Termilly.Desktop\obj\**;..\Termilly.Desktop\App.xaml.cs;..\Termilly.Desktop\AssemblyInfo.cs;..\Termilly.Desktop\MainWindow.xaml.cs;..\Termilly.Desktop\MainWindow.Tray.cs;..\Termilly.Desktop\MainWindow.Detached.cs;..\Termilly.Desktop\WindowPlacement.cs;..\Termilly.Desktop\WindowInterop.cs;..\Termilly.Desktop\DetachedWindow.cs;..\Termilly.Desktop\DragPictureWindow.cs;..\Termilly.Desktop\GlobalHotkeys.cs;..\Termilly.Desktop\Notifications.cs;..\Termilly.Desktop\Ports.cs;..\Termilly.Desktop\WindowsPlatform.cs;..\Termilly.Desktop\WindowsFonts.cs;..\Termilly.Desktop\StartupLoader.cs;..\Termilly.Desktop\TaskbarBadge.cs;..\Termilly.Desktop\TrayIcon.cs;..\Termilly.Desktop\WindowsUpdateInstaller.cs;..\Termilly.Desktop\WindowsAudio.cs;..\Termilly.Desktop\ShellFiles.cs;..\Termilly.Desktop\WindowsClipboard.cs" LinkBase="Shared" />
   </ItemGroup>
 
   <!-- The page, served from next to the app, with the start-up loader's logo (drawn by the window on Windows). -->
@@ -80,6 +80,35 @@
       <FullOutDir>$([System.IO.Path]::GetFullPath('$(OutDir)'))</FullOutDir>
     </PropertyGroup>
     <Exec Command="gio set &quot;$(FullOutDir)termilly&quot; metadata::custom-icon &quot;file://$(FullOutDir)icons/hicolor/256x256/apps/termilly.png&quot;" ContinueOnError="true" StandardOutputImportance="low" />
+  </Target>
+
+  <!--
+    macOS: Termilly.app next to the build, so the Finder shows Termilly with its icon and version (Get Info, the
+    Version column) and it opens like any app. It starts the termilly built beside it. The icon is made from the
+    hicolor PNGs at their own sizes (none scaled, so each stays crisp).
+  -->
+  <Target Name="MacAppBundle" AfterTargets="Build" Condition="$([MSBuild]::IsOSPlatform('OSX'))">
+    <PropertyGroup>
+      <MacApp>$([System.IO.Path]::GetFullPath('$(OutDir)'))Termilly.app/Contents</MacApp>
+      <MacIconSet>$(IntermediateOutputPath)termilly.iconset</MacIconSet>
+      <MacIcons>$(OutDir)icons/hicolor</MacIcons>
+    </PropertyGroup>
+    <MakeDir Directories="$(MacApp)/MacOS;$(MacApp)/Resources;$(MacIconSet)" />
+    <WriteLinesToFile File="$(MacApp)/Info.plist" Overwrite="true" WriteOnlyWhenDifferent="true" Lines="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;;&lt;!DOCTYPE plist PUBLIC &quot;-//Apple//DTD PLIST 1.0//EN&quot; &quot;http://www.apple.com/DTDs/PropertyList-1.0.dtd&quot;&gt;;&lt;plist version=&quot;1.0&quot;&gt;&lt;dict&gt;;&lt;key&gt;CFBundleName&lt;/key&gt;&lt;string&gt;Termilly $(Version)&lt;/string&gt;;&lt;key&gt;CFBundleDisplayName&lt;/key&gt;&lt;string&gt;Termilly&lt;/string&gt;;&lt;key&gt;CFBundleIdentifier&lt;/key&gt;&lt;string&gt;com.termilly.app&lt;/string&gt;;&lt;key&gt;CFBundleExecutable&lt;/key&gt;&lt;string&gt;termilly&lt;/string&gt;;&lt;key&gt;CFBundleIconFile&lt;/key&gt;&lt;string&gt;termilly&lt;/string&gt;;&lt;key&gt;CFBundlePackageType&lt;/key&gt;&lt;string&gt;APPL&lt;/string&gt;;&lt;key&gt;CFBundleShortVersionString&lt;/key&gt;&lt;string&gt;$(Version)&lt;/string&gt;;&lt;key&gt;CFBundleVersion&lt;/key&gt;&lt;string&gt;$(Version)&lt;/string&gt;;&lt;key&gt;NSHighResolutionCapable&lt;/key&gt;&lt;true/&gt;;&lt;/dict&gt;&lt;/plist&gt;" />
+    <!-- The bundle's program is a link to the termilly built beside it (no shell in between). The menu bar's name with
+         the version is set by termilly itself (MacAppName.cs): macOS reads the bundle of the file the link points to. -->
+    <Exec Command="ln -sfn ../../../termilly &quot;$(MacApp)/MacOS/termilly&quot;" />
+    <!-- The bare program hidden in the Finder: opened from there, macOS runs it in a Terminal window that stays after
+         Termilly quits. Termilly.app starts it without one. -->
+    <Exec Command="chflags hidden &quot;$([System.IO.Path]::GetFullPath('$(OutDir)'))termilly&quot;" ContinueOnError="true" />
+    <Copy SourceFiles="$(MacIcons)/16x16/apps/termilly.png" DestinationFiles="$(MacIconSet)/icon_16x16.png" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(MacIcons)/32x32/apps/termilly.png" DestinationFiles="$(MacIconSet)/icon_16x16@2x.png" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(MacIcons)/32x32/apps/termilly.png" DestinationFiles="$(MacIconSet)/icon_32x32.png" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(MacIcons)/64x64/apps/termilly.png" DestinationFiles="$(MacIconSet)/icon_32x32@2x.png" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(MacIcons)/128x128/apps/termilly.png" DestinationFiles="$(MacIconSet)/icon_128x128.png" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(MacIcons)/256x256/apps/termilly.png" DestinationFiles="$(MacIconSet)/icon_128x128@2x.png" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(MacIcons)/256x256/apps/termilly.png" DestinationFiles="$(MacIconSet)/icon_256x256.png" SkipUnchangedFiles="true" />
+    <Exec Command="iconutil -c icns &quot;$(MacIconSet)&quot; -o &quot;$(MacApp)/Resources/termilly.icns&quot;" ContinueOnError="true" StandardOutputImportance="low" />
   </Target>
 
   <!-- Shell integration scripts (PowerShell's termilly.ps1), next to the app as on Windows. -->

@@ -591,9 +591,9 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
    wider it stays at most half the terminals' area, also when the window shrinks later. */
 .files-panel {
   position: absolute;
-  top: 0;
+  top: var(--notepad-dock-top, 0px);
   right: calc(var(--notepad-dock, 0px) + var(--clips-dock, 0px));
-  bottom: 0;
+  bottom: var(--notepad-dock-bottom, 0px);
   z-index: 5;
   display: flex;
   flex-direction: column;
@@ -609,7 +609,12 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
 .files-drive { width: 16px; height: 16px; margin-right: 6px; stroke-width: 1; vertical-align: -3px; }
 .files-grip:hover { background: var(--accent); opacity: .5; }
 .files-panel.drop { outline: 2px dashed var(--accent); outline-offset: -6px; }
-.files-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px 4px 12px; }
+/* Icon and title on the left, tools on the right (a window's buttons after them, in a window of its own). */
+.files-head { display: flex; align-items: center; padding: 8px 10px 4px 12px; }
+.files-head > .files-tools { margin-left: auto; }
+/* A panel's title bar starts with its toolbar button's icon (the Notepad's, the Snippets window's), as a window's does. */
+.title-icon { display: flex; flex: none; align-items: center; margin-right: 8px; color: var(--accent); }
+.title-icon > svg { display: block; width: 16px; height: 16px; }
 .files-title { overflow: hidden; color: var(--text); font-size: 12.5px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .files-ws { margin-left: 4px; color: var(--faint); font-weight: 400; }
 /* Refresh, New folder and Collapse before the ×: 16px icons at a 1px stroke, on the pixel grid. */
@@ -646,9 +651,9 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
    (--clips-dock on #workspace). It borrows the Files panel's head, grip and search box. ---- */
 .clips-panel {
   position: absolute;
-  top: 0;
+  top: var(--notepad-dock-top, 0px);
   right: var(--notepad-dock, 0px);
-  bottom: 0;
+  bottom: var(--notepad-dock-bottom, 0px);
   z-index: 5;
   display: flex;
   flex-direction: column;
@@ -706,8 +711,8 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
 .pair-url { overflow-wrap: anywhere; font-size: 11px; }
 .pair-code { padding: 1px 6px; border-radius: 4px; background: var(--hover); color: var(--text-strong); font-size: 14px; letter-spacing: .12em; }
 
-/* ---- The Notepad (js/notepad.js): docked on the right edge, the Files panel and the terminals left of it
-   (--notepad-dock on #workspace). It borrows the Files panel's head and grip, the File Explorer's tabs and a tab group's < and >. ---- */
+/* ---- The Notepad (js/notepad.js): docked on an edge, the right one at first, the Files panel and the terminals beside it
+   (--notepad-dock on #workspace, with -left, -top or -bottom). It borrows the Files panel's head and grip, the File Explorer's tabs and a tab group's < and >. ---- */
 .notepad-panel {
   position: absolute;
   top: 0;
@@ -721,9 +726,18 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
   max-width: 50%;
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  background: var(--raised);
+  background: var(--surface);
 }
 .notepad-panel[hidden] { display: none; }
+.notepad-panel.dock-away { visibility: hidden; }
+.notepad-panel[data-side="left"] { right: auto; left: 0; }
+.notepad-panel[data-side="top"], .notepad-panel[data-side="bottom"] { left: 0; width: auto !important; height: 260px; min-width: 0; min-height: 180px; max-width: none; max-height: 50%; }
+.notepad-panel[data-side="top"] { bottom: auto; }
+.notepad-panel[data-side="bottom"] { top: auto; }
+.notepad-panel[data-side="left"] > .files-grip { right: -3px; left: auto; }
+.notepad-panel[data-side="top"] > .files-grip, .notepad-panel[data-side="bottom"] > .files-grip { right: 0; left: 0; width: auto; height: 6px; cursor: ns-resize; }
+.notepad-panel[data-side="top"] > .files-grip { top: auto; bottom: -3px; }
+.notepad-panel[data-side="bottom"] > .files-grip { top: -3px; bottom: auto; }
 /* The tabs, with < and > when they don't fit (js/panes.js stripBar). */
 .np-tabbar { height: auto; padding: 0 4px; border-bottom: 1px solid var(--border); }
 .np-tabbar .np-tabs { flex: 1; min-width: 0; padding: 4px 2px 0; border-bottom: 0; }
@@ -731,8 +745,40 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
    same font, padding and wrapping, so each character sits in the same place; with links on, the box's own text is
    clear and its caret and selection show over the layer. While Ctrl is held the layer takes the mouse. */
 .np-editor { position: relative; display: flex; flex: 1; min-height: 0; }
-.np-text, .np-layer { margin: 0; padding: 10px 12px; font: 13px/1.5 var(--mono); tab-size: 4; white-space: pre-wrap; overflow-wrap: break-word; }
-.np-text { position: relative; z-index: 1; flex: 1; min-width: 0; border: 0; border-radius: 0 0 var(--radius) var(--radius); outline: none; background: transparent; color: var(--text); resize: none; }
+/* Close under the toolbar, as an editor's text is. */
+.np-text, .np-layer, .np-measure { margin: 0; padding: 8px 4px 8px 14px; font: var(--np-size, 13px)/1.5 var(--mono); tab-size: 4; white-space: pre-wrap; overflow-wrap: break-word; }
+.np-text { position: relative; z-index: 1; flex: 1; min-width: 0; border: 0; outline: none; background: transparent; color: var(--text); resize: none; }
+/* The page's toolbar under the tabs (its file, copying to a note, its view switches) and its status bar at the foot. */
+.np-toolbar { padding: 3px 6px; border-bottom: 1px solid var(--border); }
+.np-toolbar .pane-btn:last-child svg { width: 16px; height: 16px; stroke-width: 1; }
+.np-toolbar[hidden], .np-tabbar[hidden], .np-status[hidden] { display: none; }
+.np-sep { flex: none; width: 1px; height: 16px; margin: 0 4px; background: var(--border-strong); }
+.np-status {
+  display: flex; flex-wrap: wrap; gap: 2px 14px; padding: 4px 12px; border-top: 1px solid var(--border);
+  border-radius: 0 0 var(--radius) var(--radius); color: var(--muted); font-size: 11.5px; font-variant-numeric: tabular-nums;
+}
+/* Where each line starts is measured in a hidden copy of the text (js/notepadview.js); line numbers show in a column
+   on the left, the text moved over for it, and the caret's line is marked behind the text. */
+.np-measure { position: absolute; top: 0; left: 0; box-sizing: border-box; visibility: hidden; pointer-events: none; }
+.np-gutter { position: absolute; top: 0; bottom: 0; left: 0; display: none; width: var(--np-gutter); overflow: hidden; z-index: 2; color: var(--faint); font: var(--np-size, 13px)/1.5 var(--mono); pointer-events: none; }
+.np-gutter span { position: absolute; right: 0; }
+.np-gutter span.on { color: var(--text); }
+.np-editor.with-numbers .np-gutter { display: block; }
+/* The numbers are the text's left margin: their column is painted over the text (the box still spans the panel, so
+   its scroll bar does too), and a long line scrolled sideways (no word wrap) goes under it, 8px after the numbers.
+   The column stops above the box's scroll bar (js/notepadview.js), and the caret's line is marked over both. */
+.np-editor.with-numbers { --np-margin: calc(var(--np-gutter) + 8px); }
+.np-editor.with-numbers .np-gutter { width: var(--np-margin); z-index: 3; background: var(--surface); }
+.np-editor.with-numbers .np-gutter span { right: 8px; }
+.np-editor.with-numbers .np-text, .np-editor.with-numbers .np-layer, .np-editor.with-numbers .np-measure { padding-left: calc(var(--np-margin) + 4px); }
+.np-band { position: absolute; left: 0; right: 0; z-index: 4; background: var(--hover); pointer-events: none; }
+.np-band[hidden] { display: none; }
+/* macOS shows a box's own scroll bars only while it scrolls (overlay scroll bars): drawn ones stay, so a long line
+   (no word wrap) shows there's more to the right, as on Windows and Linux. */
+:root[data-os="mac"] .np-text::-webkit-scrollbar { width: 10px; height: 10px; }
+:root[data-os="mac"] .np-text::-webkit-scrollbar-thumb { border: 2px solid var(--surface); border-radius: 5px; background: var(--scroll-thumb); }
+:root[data-os="mac"] .np-text::-webkit-scrollbar-thumb:hover { background: var(--faint); }
+:root[data-os="mac"] .np-text::-webkit-scrollbar-corner { background: var(--surface); }
 .np-text:disabled { opacity: .5; }
 .np-text[hidden] { display: none; }
 /* No pages: New page and Open a file, in the middle of the panel. */
@@ -743,15 +789,26 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
 .np-layer { position: absolute; top: 0; left: 0; box-sizing: border-box; overflow: hidden; color: var(--text); pointer-events: none; }
 .np-editor:not(.with-links) .np-layer { display: none; }
 .np-editor.with-links .np-text { color: transparent; caret-color: var(--text); }
-.np-editor.nowrap .np-text, .np-editor.nowrap .np-layer { white-space: pre; overflow-wrap: normal; }
+.np-editor.nowrap .np-text, .np-editor.nowrap .np-layer, .np-editor.nowrap .np-measure { white-space: pre; overflow-wrap: normal; }
 .np-link { color: #76e3ea; }
 :root[data-theme="light"] .np-link { color: #1b7c83; }
 .np-editor.np-ctrl .np-text { pointer-events: none; }
 .np-editor.np-ctrl .np-layer { z-index: 2; }
 .np-editor.np-ctrl .np-link { pointer-events: auto; cursor: pointer; }
 .np-editor.np-ctrl .np-link:hover { text-decoration: underline; }
-/* Links and word wrap: lit while on. */
+/* The view switches (links, word wrap, line numbers, the caret's line): lit while on. */
 .files-tools .np-toggle[aria-pressed="true"] { background: var(--pressed); color: var(--text); }
+/* Clipboard's header switches (js/clipboard.js): a short label and a small switch, the Settings one made smaller. */
+.clips-switch {
+  display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 4px; margin-right: 2px;
+  border-radius: 4px; color: var(--muted); font-size: 11px; white-space: nowrap;
+}
+.clips-switch:hover:not(:disabled) { background: var(--hover); color: var(--text); }
+.clips-switch:disabled { opacity: 0.4; cursor: default; }
+.clips-switch .switch { width: 24px; height: 14px; border-radius: 7px; }
+.clips-switch .switch span { top: 2px; left: 2px; width: 10px; height: 10px; }
+.clips-switch[aria-checked="true"] .switch { background: var(--accent); }
+.clips-switch[aria-checked="true"] .switch span { transform: translateX(10px); }
 
 /* "Copy to" (js/copyto.js): terminals on the left, the chosen one's folders on the right */
 .dialog.copyto-dialog { width: 920px; }
@@ -1063,8 +1120,6 @@ body[data-sidebar="rail"] .side-rail { opacity: 1; pointer-events: auto; }
 .rm-pin.on { color: var(--accent); }
 .rm-pin:hover { background: var(--hover); color: var(--text); }
 .rm-pin svg { width: 16px; height: 16px; stroke-width: 1; }
-.rm-more { display: block; width: 100%; padding: 4px 8px; border-radius: 6px; color: var(--faint); font-size: 12px; text-align: left; }
-.rm-more:hover { background: var(--hover); color: var(--text); }
 .rm-empty { padding: 6px 8px; color: var(--faint); font-size: 12px; }
 .rail-remote { display: grid; flex: none; place-items: center; width: 34px; height: 34px; border-radius: 9px; color: var(--muted); }
 .rail-remote:hover, .rail-remote.open { background: var(--hover); color: var(--text); }
@@ -1229,7 +1284,7 @@ body[data-sidebar="rail"] .side-rail { opacity: 1; pointer-events: auto; }
 /* Every workspace stays laid out (so hidden terminals keep their size); only the active one shows. */
 .ws-layer {
   position: absolute;
-  inset: 0 calc(var(--files-dock, 0px) + var(--notepad-dock, 0px) + var(--clips-dock, 0px)) 0 0;
+  inset: var(--notepad-dock-top, 0px) calc(var(--files-dock, 0px) + var(--notepad-dock, 0px) + var(--clips-dock, 0px)) var(--notepad-dock-bottom, 0px) var(--notepad-dock-left, 0px);
   display: flex;
   visibility: hidden;
 }
@@ -1344,7 +1399,6 @@ body[data-sidebar="rail"] .side-rail { opacity: 1; pointer-events: auto; }
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  cursor: text;
 }
 
 .pane-tags { display: flex; gap: 4px; min-width: 0; overflow: hidden; }
@@ -1525,8 +1579,27 @@ body.dragging-pane, body.dragging-pane * { cursor: grabbing !important; }
   font-weight: 500;
   pointer-events: none;
 }
-#drag-ghost svg { width: 16px; height: 16px; stroke-width: 1.3; color: var(--accent); }
 body.dragging-pane #drag-ghost { display: flex; }
+/* On Windows the terminal itself follows the pointer, as a picture (js/panes.js): no label then. */
+body.dragging-pane.picture-drag #drag-ghost { display: none; }
+/* Linux: the picture a terminal's drag shows (js/panes.js), under the pointer where the drag starts: the label's look. */
+.drag-chip {
+  position: fixed; z-index: 3001;
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 12px 7px 10px;
+  border: 1px solid var(--border-strong); border-radius: 8px;
+  background: var(--raised); color: var(--text);
+  font-weight: 500; white-space: nowrap; pointer-events: none;
+}
+/* Linux: in a window of its own, a terminal's icon and name are what's dragged back into the main window (the rest of
+   the title bar moves the window): they light up under the pointer (the pointer itself stays as it is). */
+:root[data-tab-drag="system"] body.detached-window .pane-header .pane-title,
+:root[data-tab-drag="system"] body.detached-window .files-head .files-title {
+  margin-left: -6px; padding: 3px 6px; border-radius: 6px;
+}
+:root[data-tab-drag="system"] body.detached-window .pane-header .pane-title:hover,
+:root[data-tab-drag="system"] body.detached-window .files-head .files-title:hover { background: var(--hover); color: var(--text); }
+.drag-chip .ghost-badge > svg { display: block; width: 16px; height: 16px; stroke-width: 1.3; color: var(--accent); }
 
 #drop-preview {
   position: fixed;
@@ -1541,6 +1614,19 @@ body.dragging-pane #drag-ghost { display: flex; }
   transition: left 0.12s ease, top 0.12s ease, width 0.12s ease, height 0.12s ease, opacity 0.12s;
 }
 #drop-preview.visible { opacity: 1; }
+/* A terminal going out into a window of its own: its picture, faint (30%), under the label (js/panes.js). */
+#drop-preview.with-shot::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  /* Its own shape: a window wider than the terminal (the narrowest a window opens) shows it from the left. */
+  background: var(--shot) left top / contain no-repeat;
+  opacity: 0.3;
+}
+#drop-preview span { position: relative; }
+/* Shown afresh (js/panes.js): at its place at once, not sliding from where it was last. */
+#drop-preview.placing { transition: none; }
 #drop-preview span {
   padding: 4px 10px;
   border-radius: 6px;
@@ -1606,6 +1692,18 @@ body.dragging-pane #drag-ghost { display: flex; }
 .dock-cell[data-zone="right"]::after { left: 50%; }
 .dock-cell.active { border-color: var(--accent); }
 .dock-cell.active::after { background: var(--accent); }
+/* The corner cell: out into a window of its own, the detach icon at its own 16px (whole pixels in a 28px cell). */
+.dock-cell[data-zone="window"] { display: grid; grid-area: 1 / 3; place-items: center; color: var(--muted); }
+.dock-cell[data-zone="window"]::after { content: none; }
+.dock-cell[data-zone="window"] svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1; }
+.dock-cell[data-zone="window"].active { color: var(--accent); }
+/* A panel's compass (the Notepad's, the Snippets window's, js/panes.js wireDragOut): only out into a window. */
+.snippets-win { position: relative; }
+/* While something is dragged, its outline and label show over the Snippets window too (a modal layer). */
+body.dragging-pane #drop-preview { z-index: 2600; }
+body.dragging-pane #drag-ghost { z-index: 2700; }
+/* A panel's label carries its title bar button's icon, at the size it's drawn there. */
+#drag-ghost .ghost-badge > svg { display: block; width: 16px; height: 16px; stroke-width: 1.3; color: var(--accent); }
 
 /* ---- Popovers ---- */
 
@@ -2161,7 +2259,12 @@ textarea.field { height: auto; padding: 7px 10px; line-height: 1.5; resize: vert
 .dialog-actions .spacer { flex: 1; }
 
 /* Appearance › Font: one list, with a Terminal | App switch choosing which font it sets. */
-.seg.font-target { align-self: flex-start; margin-bottom: 2px; }
+/* The Font group: its note with the size's keys at the right, then the Terminal/App switch and the size of what it picks. */
+.font-head { display: flex; align-items: center; gap: 12px; margin-bottom: 2px; }
+.font-head > .seg.font-target { margin-bottom: 0; }
+.font-head > .size-control { margin-left: auto; }
+.font-note-line { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; }
+.font-keys { color: var(--faint); font-size: 11.5px; }
 #font-target-note b { color: var(--text); font-weight: 600; }
 .set-row.stack .set-name:empty { display: none; }
 .set-desc .warn { color: var(--danger-text); }
@@ -2589,6 +2692,38 @@ textarea.field { height: auto; padding: 7px 10px; line-height: 1.5; resize: vert
 }
 :root[data-platform="linux"][data-theme="light"] body:not(.maximized)::after { border-color: #d4d4da; }
 :root[data-platform="linux"] body.maximized .edge { display: none; }
+/* Linux: the windows are see-through (LinuxWindow, DetachedWindows), and the page rounds their corners as the panes'
+   (not when maximised). */
+:root[data-corners="round"] { background: transparent; }
+/* contain: paint clips what's fixed over the whole window too (a dialog's dimmed layer, the loader) to the corners. */
+:root[data-corners="round"] body:not(.maximized) { border-radius: var(--radius); contain: paint; }
+:root[data-corners="round"] body:not(.maximized)::after { border-radius: var(--radius); }
+
+/* macOS: the host rounds the windows' corners (MacWindows; square while maximized), and the 1px frame follows them. */
+:root[data-os="mac"] body:not(.maximized)::after { border-radius: var(--radius); }
+
+/* macOS: the traffic lights (js/macwindow.js) at the start of the title bar and of a detached window's header: red,
+   yellow and green circles whose signs show while the pointer is over them, grey while the window isn't in front. */
+:root[data-os="mac"] .mac-lights { align-items: center; gap: 8px; }
+:root[data-os="mac"] #titlebar .mac-lights { margin: 0 14px 0 12px; }
+:root[data-os="mac"] #titlebar .brand { display: none; } /* no icon, name or version: the Finder shows them (Termilly.app) */
+:root[data-os="mac"] #titlebar .tb-right > .separator:last-child { display: none; }
+:root[data-os="mac"] .detached-window .mac-lights { flex: none; margin: 0 10px 0 4px; }
+:root[data-os="mac"] .mac-lights button {
+  width: 12px; height: 12px; padding: 0; border-radius: 50%;
+  box-shadow: inset 0 0 0 0.5px rgb(0 0 0 / 0.2); color: transparent; transition: none;
+}
+:root[data-os="mac"] .mac-lights button[data-window="close"],
+:root[data-os="mac"] .mac-lights button[data-window="close"]:hover { background: #ff5f57; }
+:root[data-os="mac"] .mac-lights button[data-window="minimize"],
+:root[data-os="mac"] .mac-lights button[data-window="minimize"]:hover { background: #febc2e; }
+:root[data-os="mac"] .mac-lights button[data-window="maximize"],
+:root[data-os="mac"] .mac-lights button[data-window="maximize"]:hover { background: #28c840; }
+:root[data-os="mac"] .mac-lights:hover button { color: rgb(0 0 0 / 0.55); }
+:root[data-os="mac"] .mac-lights button:active { filter: brightness(0.82); }
+:root[data-os="mac"] body.window-inactive .mac-lights:not(:hover) button { background: var(--border-strong); box-shadow: none; }
+:root[data-os="mac"] .mac-lights svg { width: 12px; height: 12px; stroke-width: 1.2; }
+:root[data-os="mac"] .mac-lights svg .fill { fill: currentColor; stroke: none; }
 
 /* Start-up loader (Linux; js/loader.js). Matches the one the Windows window draws: the logo over a typed
    "Loading..." and a blinking caret, on the page's background. */
@@ -2788,16 +2923,6 @@ textarea.field.note-text { flex: 1; width: 100%; min-height: 120px; resize: none
 .cu-cost { margin-right: 6px; color: var(--ok, #7ee787); font-weight: 600; font-variant-numeric: tabular-nums; }
 .cu-cost-rows { border-top: 1px solid var(--border); }
 
-/* Results per terminal (js/results.js). */
-.results-btn { display: inline-flex; align-items: center; gap: 4px; width: auto; height: 22px; padding: 0 7px; border: 1px solid var(--border-strong); color: var(--muted); font-size: 11px; font-weight: 600; opacity: 1; }
-.results-btn[hidden] { display: none; }
-.results-btn svg { width: 11px; height: 11px; stroke-width: 1.6; }
-.results-btn.unread { border-color: color-mix(in srgb, var(--ok, #7ee787) 50%, transparent); color: var(--ok, #7ee787); }
-.res-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ok, #7ee787); }
-.results-menu { min-width: 300px; max-width: 460px; }
-.res-hint { color: var(--muted); }
-.res-hint.on { color: var(--ok, #7ee787); }
-.dialog.results-all { width: 620px; }
 .results-all { display: flex; flex-direction: column; gap: 2px; max-height: 420px; overflow-y: auto; }
 .res-all-row { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 7px; text-align: left; }
 .res-all-row:hover { background: var(--hover); }
@@ -2997,3 +3122,94 @@ textarea.field.note-text { flex: 1; width: 100%; min-height: 120px; resize: none
   -webkit-user-select: none; user-select: none;
 }
 .tip[hidden] { display: none; }
+
+/* ---- Prompts and replies (js/myprompts.js, js/agentsteps.js): Claude's replies and tool calls with the prompts ---- */
+
+.prompts-pop { width: 520px; }
+.prompts-modes { padding: 0 10px 8px; }
+.prompts-modes[hidden] { display: none; }
+.prompts-modes .seg { width: 100%; }
+.prompts-modes .seg button { flex: 1; }
+/* A step: its time, its dot (a reply's is plain; a tool's is green, red when it failed), its text and Copy. */
+.step-row { display: grid; align-self: stretch; grid-template-columns: auto 8px minmax(0, 1fr) 20px; align-items: start; gap: 8px; padding: 6px 6px 6px 8px; border-radius: 8px; cursor: pointer; outline: none; }
+.step-row:hover, .step-row:focus { background: var(--hover); }
+.step-row:hover .prompt-copy { opacity: 1; }
+.step-row.gone { cursor: default; }
+.step-row.gone .step-text { color: var(--faint); }
+.step-mark { width: 7px; height: 7px; margin-top: 5px; border-radius: 50%; background: var(--text); }
+.step-row.step-is-tool .step-mark { background: var(--ok); }
+.step-row.step-is-tool.failed .step-mark { background: var(--danger); }
+.step-text { display: -webkit-box; overflow: hidden; color: var(--text); font-size: 12.5px; line-height: 1.45; white-space: pre-wrap; word-break: break-word; -webkit-box-orient: vertical; -webkit-line-clamp: 8; }
+.step-row.step-is-tool .step-text { color: var(--muted); font: 12px/1.45 var(--mono); -webkit-line-clamp: 2; }
+.step-tool { color: var(--text); font-weight: 600; }
+.step-last { display: inline-block; margin-right: 6px; padding: 0 6px; border-radius: 9px; background: var(--accent-fill); color: var(--text); font: 600 10.5px/16px var(--ui-font); vertical-align: 1px; }
+/* Under a prompt: its steps, indented past the prompt's time. */
+.turn-steps { display: flex; flex-direction: column; margin: -2px 0 6px 34px; padding-left: 8px; border-left: 2px solid var(--border-strong); }
+.step-row.nested { grid-template-columns: 0 8px minmax(0, 1fr) 20px; padding-left: 4px; }
+.step-row.nested.step-is-reply .step-text { -webkit-line-clamp: 4; color: var(--muted); }
+.step-row.nested.step-is-reply.last .step-text { color: var(--text); }
+.step-more { align-self: flex-start; margin: 2px 0 2px 16px; padding: 2px 6px; border-radius: 5px; color: var(--muted); font-size: 11.5px; }
+.step-more:hover { background: var(--hover); color: var(--text); }
+
+
+/* ---- A window of its own (js/windows.js): a terminal, the Notepad or the Snippets window moved in
+   fills it, with no frame of its own (the window has one). ---- */
+body.detached-window > * { flex: 1; min-width: 0; min-height: 0; }
+body.detached-window > .pane, body.detached-window > .notepad-panel, body.detached-window > .snippets-win {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  animation: none;
+}
+body.detached-window > .pane.focused, body.detached-window > .notepad-panel { box-shadow: none; }
+/* Its docked width is set on the element (dragged with its grip): the window’s width wins. */
+body.detached-window > .notepad-panel { position: static; width: auto !important; height: auto !important; min-height: 0; max-width: none; max-height: none; }
+body.detached-window > .notepad-panel > .files-grip { display: none; }
+body.detached-window > .snippets-win { width: auto; height: auto; }
+/* Its header is the window’s title bar (js/windows.js): Return, Minimize, Maximize and Close at its end, in place of
+   its own close and detach buttons; it moves the window, so no pane drag cursor. */
+body.detached-window .pane-header > .pane-actions > .close-btn,
+body.detached-window [data-np="detach"], body.detached-window [data-np="close"],
+body.detached-window [data-sw="detach"], body.detached-window [data-sw="close"] { display: none; }
+body.detached-window .pane-header { cursor: default; }
+/* Its environment (a production tag’s chip) stays with its tags after the name, not again before it. */
+body.detached-window .pane-header .env-chip { display: none; }
+.detached-controls { display: flex; flex: none; gap: 2px; align-items: center; margin-left: -6px; padding-bottom: 1px; }
+/* As a terminal's buttons: 22px, so a hovered or lit one has the same room above and below in the 30px title bar. */
+.detached-controls > button { width: 22px; height: 22px; padding: 0; border-radius: 6px; }
+/* The Notepad's divider after New page, as the one before the window's buttons. */
+body.detached-window .files-head .np-sep { height: 18px; margin: 0 0 0 1px; background: var(--border-strong); }
+/* As far from the icon on each side: Return's reaches 2px nearer its button's edge than Minimize's. */
+.detached-controls > .separator { margin: 0 0 0 2px; }
+/* The pin while the window is kept on top. */
+.detached-controls > button.on { background: var(--pressed); color: var(--accent); }
+/* The Notepad's and the Snippets window's title bars are a terminal's (.pane-header, .pane-title, .pane-btn). */
+.notepad-panel > .files-head, .snippets-win > .set-head {
+  flex: none;
+  gap: 8px;
+  height: 30px;
+  padding: 0 6px 0 8px;
+  border-bottom: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0 0;
+  background: var(--header);
+}
+.notepad-panel > .files-head > .title-icon, .snippets-win > .set-head > .title-icon { margin-right: 0; }
+.notepad-panel > .files-head .files-title, .snippets-win > .set-head > h2 {
+  overflow: hidden;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color 0.15s;
+}
+.notepad-panel:focus-within .files-title, .snippets-win:focus-within > .set-head > h2 { color: var(--text); }
+.notepad-panel:focus-within { border-color: var(--border-strong); box-shadow: 0 0 0 1px var(--accent-soft); }
+.notepad-panel > .files-head > .files-tools { padding-bottom: 1px; }
+.snippets-win > .set-head > .cw-sub { font-size: 12px; }
+.snippets-win > .set-head > .btn.small { height: 22px; }
+.snippets-win > .set-head > .set-close { width: 22px; height: 22px; border-radius: 6px; }
+.snippets-win > .set-head > .set-close svg { width: 10px; height: 10px; }
+.snippets-win { background: var(--surface); }
+.detached-controls svg[viewBox="0 0 16 16"] { width: 16px; height: 16px; stroke-width: 1; }

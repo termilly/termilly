@@ -14,6 +14,7 @@ import { escapeHtml } from './ui.js';
 import { showToast } from './toasts.js';
 import { debounce } from './util.js';
 import { targetOf } from './dom.js';
+import { inEachDocument } from './windows.js';
 
 /** A link in the page: where it is, its text, whether it's a web address, its tooltip and what Ctrl+click does. */
 /** @typedef {{ start: number, end: number, text: string, web: boolean, title: string, open: () => void }} PadLink */
@@ -170,9 +171,13 @@ function wire() {
   new ResizeObserver(fit).observe(area);
   /** @param {KeyboardEvent} e */
   const ctrl = e => editor.classList.toggle(CTRL_CLASS, on() && e.ctrlKey);
-  window.addEventListener('keydown', ctrl, true);
-  window.addEventListener('keyup', ctrl, true);
-  window.addEventListener('blur', () => editor.classList.remove(CTRL_CLASS));
+  // In every window: the Notepad may be in one of its own (js/windows.js).
+  inEachDocument(doc => {
+    const win = /** @type {Window} */ (doc.defaultView);
+    win.addEventListener('keydown', ctrl, true);
+    win.addEventListener('keyup', ctrl, true);
+    win.addEventListener('blur', () => editor.classList.remove(CTRL_CLASS));
+  });
   layer.addEventListener('pointerover', e => { hovered = linkAt(e); });
   layer.addEventListener('mouseout', e => { if (!layer.contains(/** @type {Node | null} */ (e.relatedTarget))) hovered = null; });
   layer.addEventListener('mousedown', e => {

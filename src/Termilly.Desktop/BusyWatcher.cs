@@ -192,9 +192,13 @@ internal sealed class BusyWatcher : IDisposable
         }
     }
 
-    /// <summary>Every process on the machine, from one Toolhelp snapshot (on Linux, from /proc).</summary>
+    /// <summary>Every process on the machine, from one Toolhelp snapshot (on Linux from /proc, on macOS from sysctl).</summary>
     public static List<ProcessEntry> Snapshot()
     {
+        if (OperatingSystem.IsMacOS())
+        {
+            return MacProcesses.Snapshot();
+        }
         if (!OperatingSystem.IsWindows())
         {
             return ProcSnapshot();

@@ -15,7 +15,7 @@ import { focusedTab, newTab } from './panes.js';
 import { scheduleFit, typePaths } from './terminals.js';
 import { escapeHtml, ICONS } from './ui.js';
 import { modal, confirmDialog, CONFIRM_DIALOG } from './dialogs.js';
-import { byId, field, targetOf, dockRight, WORKSPACE_ID, PATH_DRAG, DOCK_GRIP } from './dom.js';
+import { byId, field, targetOf, dockRight, titleIconHtml, WORKSPACE_ID, PATH_DRAG, DOCK_GRIP } from './dom.js';
 import { showMenu, SEPARATOR } from './popups.js';
 import { showChange } from './preview.js';
 import { pathActions } from './actions.js';
@@ -74,6 +74,7 @@ panel.className = 'files-panel';
 panel.hidden = true;
 panel.tabIndex = -1; // focusable, for its keys (Ctrl+A, Delete, Escape, arrows)
 byId(WORKSPACE_ID).append(panel);
+const filesButton = byId('files-button');
 
 /** @type {FilesView | null} */
 let view = null;
@@ -250,6 +251,7 @@ function follow(tab) {
   panel.innerHTML = `
     <div class="${DOCK_GRIP}" title="Drag to resize"></div>
     <div class="files-head">
+      ${titleIconHtml(filesButton)}
       <span class="files-title">Files · ${escapeHtml(tabTitle(tab))}</span>
       <span class="files-tools"><button class="pane-btn" data-files="${FILES_ACTION.close}" title="Close">${ICONS.close}</button></span>
     </div>
@@ -303,7 +305,7 @@ export async function initFiles() {
 }
 
 // The title bar's File Explorer button.
-byId('files-button').addEventListener('click', () => toggleFiles());
+filesButton.addEventListener('click', () => toggleFiles());
 
 // ---- Drawing ----
 
@@ -445,6 +447,7 @@ function render() {
   panel.innerHTML = `
     <div class="${DOCK_GRIP}" title="Drag to resize"></div>
     <div class="files-head">
+      ${titleIconHtml(filesButton)}
       <span class="files-title">Files · ${escapeHtml(tabTitle(tab))}${ws ? ` <span class="files-ws">${escapeHtml(ws)}</span>` : ''}</span>
       <span class="files-tools">
         <button class="pane-btn" data-files="${FILES_ACTION.refresh}" title="Refresh">${REFRESH_ICON}</button>

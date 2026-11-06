@@ -1,7 +1,4 @@
-using System.Diagnostics;
-using Photino.NET;
 using Termilly.Desktop;
-using Termilly.Desktop.Messaging;
 using Termilly.Desktop.Platform;
 using Termilly.Desktop.Services;
 
@@ -10,16 +7,14 @@ namespace Termilly.Linux;
 /// <summary>
 /// What Linux does for the shared code (Platform/): GTK dialogs through Photino, xdg-open, the file manager over
 /// D-Bus, notify-send, the ports terminals listen on from /proc, and the background host started at sign-in by an
-/// XDG autostart entry. The window itself is Program's: what it has to do is raised as events.
+/// XDG autostart entry. The window and its dialogs are <see cref="PhotinoPlatform"/>'s.
 /// </summary>
-/// <param name="send">Sends a message to the page (Program's outbox, so sending never waits on the window's thread).</param>
 internal sealed class LinuxPlatform(Action<string> send, string? startFolder) :
-    IPageSink, IAppWindow, IFileDialogs, IDesktopShell, INotifier, ISystemProcesses, ISignInStart, ISystemTheme
+    PhotinoPlatform(send, startFolder), IDesktopShell, INotifier, ISystemProcesses, ISignInStart, ISystemTheme
 {
     /// <summary>What a dark colour scheme's name has in it ("prefer-dark").</summary>
     private const string DarkScheme = "dark";
-    /// <summary>How long gsettings may take.</summary>
-    private static readonly TimeSpan SystemQueryTimeout = TimeSpan.FromSeconds(5);
+    private static readonly string[] ColorSchemeQuery = ["get", "org.gnome.desktop.interface", "color-scheme"];
 
     private const string AutostartEntry = "termilly-host.desktop";
     private const string BrowserEngine = "WebKit";
@@ -31,38 +26,9 @@ internal sealed class LinuxPlatform(Action<string> send, string? startFolder) :
     /// <summary>Opens a folder or link with what the desktop chose for it.</summary>
     private const string XdgOpen = "xdg-open";
 
-    private PhotinoWindow? _window;
-
     /// <summary>GNOME's (and most desktops') colour scheme: "prefer-dark" or "default"/"prefer-light".</summary>
-    public bool PrefersLight => Query("gsettings", "get org.gnome.desktop.interface color-scheme") is { } scheme &&
+    public bool PrefersLight => Query("gsettings", ColorSchemeQuery) is { } scheme &&
                                 !scheme.Contains(DarkScheme, StringComparison.OrdinalIgnoreCase);
-
-    private static string? Query(string file, string arguments)
-    {
-        try
-        {
-            using var process = Process.Start(new ProcessStartInfo(file, arguments) { RedirectStandardOutput = true, UseShellExecute = false });
-            var output = process!.StandardOutput.ReadToEnd();
-            process.WaitForExit(SystemQueryTimeout);
-            return output;
-        }
-        catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException)
-        {
-            return null;
-        }
-    }
-
-    /// <summary>The window's title bar asks for a window action (minimize, maximize, close, drag, resize).</summary>
-    public event Action<FromPage.Window>? WindowActionRequested;
-
-    /// <summary>Termilly was started again while this one runs: the window should come to the front.</summary>
-    public event Action? Activate;
-
-    /// <summary>The window closes now, without asking: the page's last snapshot is in, or an update restarts Termilly.</summary>
-    public event Action? CloseRequested;
-
-    /// <summary>The user wants to quit: asks first when something is running (QuitGate).</summary>
-    public event Action? QuitRequested;
 
     /// <summary>notify-send's notifications can't be clicked through to a terminal, so this never fires.</summary>
     public event Action<string>? Clicked
@@ -71,88 +37,9 @@ internal sealed class LinuxPlatform(Action<string> send, string? startFolder) :
         remove { }
     }
 
-    /// <summary>The window, for its dialogs; set once it exists.</summary>
-    public void Attach(PhotinoWindow window) => _window = window;
-
-    public void Send(string json) => send(json);
-
-    // ---- The window ----
-
-    public string? StartFolder => startFolder;
-
-    public void BringToFront() => Activate?.Invoke();
-
-    public void Act(FromPage.Window action) => WindowActionRequested?.Invoke(action);
-
-    public void CloseNow() => CloseRequested?.Invoke();
-
-    public void Quit() => QuitRequested?.Invoke();
-
-    /// <summary>No dock badge on Linux yet (src/Termilly.Linux/README.md, "Not yet").</summary>
-    public void ShowBadge(int count)
-    {
-    }
-
-    /// <summary>The page shows its own start-up screen (js/loader.js): nothing to take away.</summary>
-    public void PageReady()
-    {
-    }
-
-    // ---- GTK's own dialogs, through Photino: they open on the window's thread; the answer comes back here ----
-
-    private static string Home => Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-
     /// <summary>Where the desktop's settings are: XDG_CONFIG_HOME, else ~/.config.</summary>
     private static string ConfigHome =>
         Environment.GetEnvironmentVariable("XDG_CONFIG_HOME") is { Length: > 0 } config ? config : Path.Combine(Home, ".config");
-
-    public async Task<string?> PickFolderAsync(string title, string initial) =>
-        _window is null ? null : (await _window.ShowOpenFolderAsync(title, initial, false).ConfigureAwait(false))?.FirstOrDefault();
-
-    public async Task<string?> PickLayoutToSaveAsync(string fileName)
-    {
-        if (_window is null)
-        {
-            return null;
-        }
-        var path = await _window.ShowSaveFileAsync("Export workspace layout", Path.Combine(Home, fileName), [("Termilly layout", ["*" + WorkspaceLayout.Extension])]).ConfigureAwait(false);
-        return string.IsNullOrEmpty(path) ? null : path;
-    }
-
-    public async Task<string?> PickZipToSaveAsync(string fileName)
-    {
-        if (_window is null)
-        {
-            return null;
-        }
-        var path = await _window.ShowSaveFileAsync("Export history", Path.Combine(Home, fileName), [("Zip archive", ["*.zip"])]).ConfigureAwait(false);
-        return string.IsNullOrEmpty(path) ? null : path;
-    }
-
-    public async Task<string?> PickLayoutToOpenAsync() =>
-        _window is null
-            ? null
-            : (await _window.ShowOpenFileAsync("Import workspace layout", Home, false,
-                [("Termilly layout", ["*" + WorkspaceLayout.Extension, "*.yaml"]), ("All files", ["*"])]).ConfigureAwait(false))?.FirstOrDefault();
-
-    public async Task<string?> PickTextToSaveAsync(string fileName, string? folder)
-    {
-        if (_window is null)
-        {
-            return null;
-        }
-        var path = await _window.ShowSaveFileAsync("Save note", Path.Combine(folder ?? Home, fileName), [("Text files", ["*.txt", "*.md"]), ("All files", ["*"])]).ConfigureAwait(false);
-        return string.IsNullOrEmpty(path) ? null : path;
-    }
-
-    public async Task<string?> PickTextToOpenAsync() =>
-        _window is null
-            ? null
-            : (await _window.ShowOpenFileAsync("Open in the Notepad", Home, false,
-                [("Text files", ["*.txt", "*.md"]), ("All files", ["*"])]).ConfigureAwait(false))?.FirstOrDefault();
-
-    public async Task<IReadOnlyList<string>> PickFilesAsync(string title) =>
-        _window is null ? [] : await _window.ShowOpenFileAsync(title, Home, true).ConfigureAwait(false) ?? [];
 
     // ---- The file manager and the browser ----
 
@@ -176,17 +63,7 @@ internal sealed class LinuxPlatform(Action<string> send, string? startFolder) :
     {
         try
         {
-            var start = new ProcessStartInfo("gio") { UseShellExecute = false, RedirectStandardError = true };
-            start.ArgumentList.Add("trash");
-            start.ArgumentList.Add("--");
-            start.ArgumentList.Add(path);
-            using var gio = Process.Start(start) ?? throw new IOException("gio didn't start.");
-            var error = gio.StandardError.ReadToEnd();
-            gio.WaitForExit();
-            if (gio.ExitCode != 0)
-            {
-                throw new IOException(error.Trim() is { Length: > 0 } message ? message : $"Couldn't move {Path.GetFileName(path)} to the trash.");
-            }
+            RunToEnd("gio", $"Couldn't move {Path.GetFileName(path)} to the trash.", "trash", "--", path);
         }
         catch (System.ComponentModel.Win32Exception)
         {
@@ -281,26 +158,6 @@ internal sealed class LinuxPlatform(Action<string> send, string? startFolder) :
         catch (Exception e) when (Storage.IsFileError(e))
         {
             // Left as it was; Settings still shows the choice.
-        }
-    }
-
-    /// <summary>Starts a program without waiting for it; false when it couldn't be started.</summary>
-    private static bool Run(string file, params string[] args)
-    {
-        try
-        {
-            var start = new ProcessStartInfo(file) { UseShellExecute = false };
-            foreach (var arg in args)
-            {
-                start.ArgumentList.Add(arg);
-            }
-            Process.Start(start)?.Dispose();
-            return true;
-        }
-        catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException)
-        {
-            Console.Error.WriteLine($"termilly: {file}: {e.Message}");
-            return false;
         }
     }
 }

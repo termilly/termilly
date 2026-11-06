@@ -12,6 +12,7 @@ import { send, platform, PLATFORM } from './host.js';
 import { PROFILE_SOURCE, AGENT_STATE, PROFILE_ICON, AGENT_SOURCE, CLAUDE_TOOL } from './constants.js';
 import { debounce } from './util.js';
 import { windowInFront } from './windowshown.js';
+import { keepPlaces, keepPins, whenHostCloses } from './windows.js';
 
 /** The kinds of node in a workspace's layout tree (see the top of this file). */
 export const NODE = Object.freeze({ leaf: 'leaf', split: 'split', tabs: 'tabs', preview: 'preview' });
@@ -83,9 +84,11 @@ export const getSetting = path => {
 /**
  * A Notepad page (js/notepad.js): its name, text, the file it was opened from or saved to, and the text as that file
  * holds it (to tell unsaved changes), whether the file has Windows line ends, and where it was left: scrolled to and
- * the caret (or the selection), to come back there after a restart.
+ * the caret (or the selection), to come back there after a restart, and its view switches (js/notepad.js: links, word
+ * wrap, line numbers, the caret's line marked; unset, the Notepad's own or their defaults).
  * @typedef {{ id: string, name: string, text: string, path?: string | null, saved?: string | null, crlf?: boolean,
- *   scroll?: number, caret?: number, caretEnd?: number }} NotepadPage
+ *   scroll?: number, caret?: number, caretEnd?: number,
+ *   links?: boolean, wrap?: boolean, numbers?: boolean, highlight?: boolean }} NotepadPage
  */
 /**
  * The Clipboard panel (js/clipboard.js) as it was left: open or closed, its width, what its search box held, the
@@ -98,9 +101,10 @@ export const getSetting = path => {
  * @typedef {{ open: boolean, width?: number, tabId?: string | null, folders?: string[], scroll?: number }} FilesState
  */
 /**
- * The Notepad: open or closed, its pages, the one shown, its width, and whether it shows links and wraps words (both
- * unless turned off).
- * @typedef {{ open: boolean, pages: NotepadPage[], activeId: string | null, width?: number, links?: boolean, wrap?: boolean }} NotepadState
+ * The Notepad: open or closed, its pages, the one shown, its width, its text's size (Ctrl+wheel), and the view switches
+ * pages had before each had its own.
+ * @typedef {{ open: boolean, pages: NotepadPage[], activeId: string | null, width?: number, links?: boolean, wrap?: boolean,
+ *   detached?: boolean, numbers?: boolean, highlight?: boolean, fontSize?: number, side?: string, height?: number }} NotepadState
  */
 
 /**
@@ -128,6 +132,18 @@ export const state = {
   clips: { open: false },
   /** @type {FilesState} */
   files: { open: false },
+  /** Whether the Snippets window is open (it opens again after a restart). */
+  snippetsWindow: { open: false },
+  /**
+   * Where the Notepad's and the Snippets window's own windows were last, by window (js/windows.js), so they open there.
+   * @type {Record<string, import('./windows.js').WindowPlace>}
+   */
+  windowPlaces: {},
+  /**
+   * The windows of their own kept on top of every other window (their pins), by window (js/windows.js).
+   * @type {Record<string, true>}
+   */
+  windowsOnTop: {},
   /**
    * The terminal colours of the theme plugins that are on (plugins.js).
    * @type {PluginTheme[]}
@@ -384,10 +400,12 @@ const NEWS = new Set([AGENT_STATE.done, AGENT_STATE.error, AGENT_STATE.attention
 
 /**
  * Whether the user can see a terminal now: its workspace is showing and the window is in front (the host's word,
- * js/windowshown.js, as well as the page's focus).
+ * js/windowshown.js, as well as the page's focus). One in a window of its own: that window has the focus.
  * @param {Tab} tab
  */
-export const isInView = tab => tab.wsId === state.activeId && windowInFront() && document.hasFocus();
+export const isInView = tab => (tab.detached
+  ? !!tab.view?.el.ownerDocument.hasFocus()
+  : tab.wsId === state.activeId && windowInFront() && document.hasFocus());
 
 /**
  * Whether Claude Code runs in this terminal now: its hooks or the `claude agents` poll reported it, and it hasn't
@@ -682,8 +700,40 @@ export function noteDir(path) {
 const SAVE_DELAY = 400;
 const saveLater = debounce(() => saveNow(), SAVE_DELAY);
 
-/** Saves workspaces, layouts and tab metadata shortly after a change. */
-export const persist = () => saveLater();
+/** What a terminal's window is called among the windows' places (panes.js windowKey), before its id. */
+export const TAB_WINDOW = 'tab-';
+
+/** Saves workspaces, layouts and tab metadata shortly after a change (not once Termilly is closing: finalSave). */
+export const persist = () => { if (!closing) saveLater(); };
+
+/** Termilly is closing: what's saved now is what the next start sees. */
+let closing = false;
+
+/**
+ * Termilly is closing: saves now, as things are, and nothing after. Its windows close next, and what they put back
+ * then (a detached terminal into its workspace) mustn't be saved, so they open in their windows again.
+ */
+export function finalSave() {
+  if (closing) return;
+  saveNow();
+  closing = true;
+}
+
+// The host closing the windows of their own: Termilly is closing, even when it asked for no last snapshot.
+whenHostCloses(finalSave);
+
+// A window that remembers its place (the Notepad's, the Snippets window's) keeps it here, saved with the rest.
+// A window's pin (Always on top), kept the same way.
+keepPins(key => state.windowsOnTop[key] === true, (key, on) => {
+  if (on) state.windowsOnTop[key] = true;
+  else delete state.windowsOnTop[key];
+  persist();
+});
+
+keepPlaces(key => state.windowPlaces[key] ?? null, (key, place) => {
+  state.windowPlaces[key] = place;
+  persist();
+});
 
 export function saveNow() {
   saveLater.cancel();
@@ -698,13 +748,18 @@ function serialize() {
     tags: state.tags,
     recentDirs: state.recentDirs,
     notepad: state.notepad,
+    snippetsWindow: state.snippetsWindow,
     clips: state.clips,
     files: state.files,
+    windowPlaces: state.windowPlaces,
+    windowsOnTop: state.windowsOnTop,
     // tmux windows aren't saved: they're tmux's, and attaching again brings them back (tmux.js).
     workspaces: state.workspaces.filter(w => !w.tmux).map(({ id, name, color, cwd, focusId, root, note, snippets, collapsed, copyTo }) => ({ id, name, color, cwd, focusId, root: withoutPreview(root), note, snippets, collapsed: collapsed || undefined, copyTo })),
     tabs: [...state.tabs.values()].filter(t => !t.virtual).map(t => {
-      const { id, wsId, profile, name, tags, noHistory, startCwd, env, startCommand, worktree, note, agentRead, agentType, agentSessions, promptsClearedAt } = t;
-      return { id, wsId, profile, name, tags, noHistory, startCwd, env, startCommand, worktree, note, agentRead, agentType, agentSessions, promptsClearedAt: promptsClearedAt || undefined, lastCwd: lastFolderOf(t) ?? undefined };
+      const { id, wsId, profile, name, tags, noHistory, startCwd, env, startCommand, worktree, note, agentRead, agentType, agentSessions, promptsClearedAt, stepsClearedAt } = t;
+      // In a window of its own: it opens in one again after a restart, where it was (windowPlaces).
+      const windowed = t.detached || t.windowed || undefined;
+      return { id, wsId, profile, name, tags, noHistory, startCwd, env, startCommand, worktree, note, agentRead, agentType, agentSessions, promptsClearedAt: promptsClearedAt || undefined, stepsClearedAt: stepsClearedAt && Object.keys(stepsClearedAt).length ? stepsClearedAt : undefined, lastCwd: lastFolderOf(t) ?? undefined, windowed };
     }),
   };
 }
@@ -740,6 +795,15 @@ export function restore(saved) {
   }
   if (saved.clips && typeof saved.clips === 'object') state.clips = { ...state.clips, ...saved.clips };
   if (saved.files && typeof saved.files === 'object') state.files = { ...state.files, ...saved.files };
+  state.snippetsWindow = { open: saved.snippetsWindow?.open === true };
+  state.windowPlaces = Object.fromEntries(Object.entries(saved.windowPlaces ?? {})
+    .filter(([key, p]) => [p?.x, p?.y, p?.w, p?.h].every(n => Number.isFinite(n))
+      // A terminal's window's place goes with the terminal.
+      && (!key.startsWith(TAB_WINDOW) || (saved.tabs ?? []).some((/** @type {any} */ t) => TAB_WINDOW + t.id === key))));
+  // A terminal's window's pin goes with the terminal, as its place.
+  state.windowsOnTop = Object.fromEntries(Object.keys(saved.windowsOnTop ?? {})
+    .filter(key => !key.startsWith(TAB_WINDOW) || (saved.tabs ?? []).some((/** @type {any} */ t) => TAB_WINDOW + t.id === key))
+    .map(key => [key, /** @type {true} */ (true)]));
   state.sidebar = { ...state.sidebar, ...saved.sidebar };
   state.recentDirs = Array.isArray(saved.recentDirs) ? saved.recentDirs.filter((/** @type {unknown} */ d) => typeof d === 'string').slice(0, MAX_RECENT_DIRS) : [];
   if (!Array.isArray(saved.workspaces) || !saved.workspaces.length) return false;

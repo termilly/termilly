@@ -32,7 +32,6 @@ const section = byId(REMOTE_ID);
 const head = find(section, '.rm-head');
 const filter = field(section, '.rm-filter');
 const body = find(section, '.rm-body');
-let showAll = false;
 
 const places = () => state.profiles.filter(isRemoteProfile);
 const pins = () => new Set(state.settings.uiState.remotePinned ?? []);
@@ -171,16 +170,12 @@ export function renderRemote() {
 }
 
 /**
- * The places, unfiltered: the short list (pinned and recent), or all of them grouped.
+ * The places, unfiltered: all of them, grouped (pinned ones show their pin). No shorter list to switch to: its
+ * "Show fewer" was more clutter than help.
  * @param {SessionProfile[]} all
  */
 function placesHtml(all) {
-  if (!all.length) return '';
-  const short = shortList();
-  // Nothing pinned or used yet: everything, grouped, so there's something to start from.
-  if (showAll || !short.length) return groupedHtml(all) + (short.length ? '<button class="rm-more" data-rm-all>Show fewer</button>' : '');
-  return short.map(rowHtml).join('')
-    + (all.length > short.length ? `<button class="rm-more" data-rm-all>All ${all.length} places</button>` : '');
+  return all.length ? groupedHtml(all) : '';
 }
 
 // ---- Actions ----
@@ -302,11 +297,6 @@ body.addEventListener('click', e => {
     const key = /** @type {string} */ (fold.dataset.rmGroup);
     state.sidebar.remoteGroups = { ...state.sidebar.remoteGroups, [key]: !isGroupFolded(key) };
     persist();
-    renderRemote();
-    return;
-  }
-  if (targetOf(e).closest('[data-rm-all]')) {
-    showAll = !showAll;
     renderRemote();
     return;
   }

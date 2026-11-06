@@ -318,12 +318,103 @@ public sealed class SessionProfileTests : IDisposable
         // Quiet where Termilly's own integration is installed (a WSL distribution set up), which reports them itself.
         Assert.StartsWith("""$([ -n "$__termilly_loaded" ] || printf '\e]633;E;%s\a\e]133;C\a' "$(HISTTIMEFORMAT=""", vars["PS0"]);
         Assert.Contains("""[ -n "$__termilly_loaded" ] || { """, vars["PROMPT_COMMAND"]);
-        Assert.EndsWith("""printf '\033]133;D;%s\007\033]133;A\007' "$__termilly_status"; }""", vars["PROMPT_COMMAND"]);
+        Assert.Contains("""printf '\033]133;D;%s\007\033]133;A\007' "$__termilly_status"; }""", vars["PROMPT_COMMAND"]);
+        // bash before 4.4 has no PS0: the first prompt sets a DEBUG trap that marks commands instead; a prompt arms it.
+        Assert.Contains("-lt 404", vars["PROMPT_COMMAND"]);
+        Assert.EndsWith("__termilly_ready=1", vars["PROMPT_COMMAND"]);
 
         var wsl = new SessionProfile("wsl-ubuntu", "Ubuntu", "", "wsl", "wsl.exe -d Ubuntu", ProfileSources.Wsl);
         var (_, wslVars) = SessionLaunch.WithShellIntegration(wsl, new Dictionary<string, string> { ["WSLENV"] = "FOO/p:PS0/u" });
         Assert.Equal("FOO/p:PS0/u:PROMPT_COMMAND/u", wslVars["WSLENV"]);
     }
+
+    [Fact]
+    public void Zsh_starts_with_termillys_startup_files_and_keeps_the_users_folder()
+    {
+        var zsh = new SessionProfile("zsh", "zsh", "/bin/zsh", "bash", "/bin/zsh -l", ProfileSources.Local);
+        var (commandLine, vars) = SessionLaunch.WithShellIntegration(zsh, new Dictionary<string, string> { ["ZDOTDIR"] = "/home/me/.config/zsh" });
+        Assert.Equal("/bin/zsh -l", commandLine);
+        Assert.Equal(SessionLaunch.ZshFolder, vars["ZDOTDIR"]);
+        Assert.Equal("/home/me/.config/zsh", vars["TERMILLY_USER_ZDOTDIR"]);
+        Assert.False(vars.ContainsKey("PROMPT_COMMAND")); // zsh doesn't read bash's
+        Assert.True(File.Exists(Path.Combine(SessionLaunch.ZshFolder, ".zshrc")));
+    }
+
+    [Theory]
+    [InlineData("tcsh")]
+    [InlineData("csh")]
+    public void Tcsh_starts_with_home_at_termillys_startup_file_and_gets_the_users_back(string id)
+    {
+        var tcsh = new SessionProfile(id, id, $"/bin/{id}", "bash", $"/bin/{id} -l", ProfileSources.Local);
+        var (commandLine, vars) = SessionLaunch.WithShellIntegration(tcsh, new Dictionary<string, string> { ["HOME"] = "/Users/me" });
+        Assert.Equal($"/bin/{id} -l", commandLine);
+        Assert.Equal(SessionLaunch.TcshFolder, vars["HOME"]);
+        Assert.Equal("/Users/me", vars["TERMILLY_USER_HOME"]);
+        Assert.False(vars.ContainsKey("PROMPT_COMMAND")); // tcsh doesn't read bash's
+        Assert.True(File.Exists(Path.Combine(SessionLaunch.TcshFolder, ".tcshrc")));
+    }
+
+    [Fact]
+    public void Ksh_starts_with_env_at_termillys_script_and_keeps_the_users()
+    {
+        var ksh = new SessionProfile("ksh", "ksh", "/bin/ksh", "bash", "/bin/ksh -l", ProfileSources.Local);
+        var (commandLine, vars) = SessionLaunch.WithShellIntegration(ksh, new Dictionary<string, string> { ["ENV"] = "/Users/me/.kshrc" });
+        Assert.Equal("/bin/ksh -l", commandLine);
+        Assert.Equal(SessionLaunch.KshScript, vars["ENV"]);
+        Assert.Equal("/Users/me/.kshrc", vars["TERMILLY_USER_ENV"]);
+        Assert.True(File.Exists(SessionLaunch.KshScript));
+    }
+
+    [Theory]
+    [InlineData("fish", "fish/vendor_conf.d/termilly.fish")]
+    [InlineData("nu", "nushell/vendor/autoload/termilly.nu")]
+    public void Fish_and_nu_start_with_termillys_data_folder_first_and_keep_the_users(string id, string file)
+    {
+        var shell = new SessionProfile(id, id, $"/opt/homebrew/bin/{id}", "bash", $"/opt/homebrew/bin/{id} -l", ProfileSources.Local);
+        var (commandLine, vars) = SessionLaunch.WithShellIntegration(shell, new Dictionary<string, string> { ["XDG_DATA_DIRS"] = "/my/share" });
+        Assert.Equal($"/opt/homebrew/bin/{id} -l", commandLine);
+        Assert.Equal($"{SessionLaunch.XdgFolder}:/my/share", vars["XDG_DATA_DIRS"]);
+        Assert.Equal("/my/share", vars["TERMILLY_USER_XDG_DATA_DIRS"]);
+        Assert.False(vars.ContainsKey("PROMPT_COMMAND"));
+        Assert.True(File.Exists(Path.Combine(SessionLaunch.XdgFolder, file)));
+        // Unset: what it means then (the XDG default) follows Termilly's folder, and there's nothing to put back.
+        var (_, unset) = SessionLaunch.WithShellIntegration(shell, new Dictionary<string, string> { ["XDG_DATA_DIRS"] = "" });
+        Assert.Equal($"{SessionLaunch.XdgFolder}:/usr/local/share:/usr/share", unset["XDG_DATA_DIRS"]);
+        Assert.False(unset.ContainsKey("TERMILLY_USER_XDG_DATA_DIRS"));
+    }
+
+    [Fact]
+    public void Shells_from_package_managers_are_offered_and_beat_the_systems_own()
+    {
+        var exists = new HashSet<string>
+        {
+            "/bin/zsh", "/bin/bash", "/bin/tcsh", "/bin/dash", "/opt/homebrew/bin/bash", "/opt/homebrew/bin/fish",
+            "/opt/homebrew/bin/zsh", "/usr/local/bin/pwsh", "/Users/me/.cargo/bin/nu", "/opt/homebrew/bin/elvish",
+        };
+        var profiles = SessionProfiles.PickUnixShells(
+            "/bin/zsh",
+            ["/bin/bash", "/bin/zsh", "/bin/tcsh", "/bin/dash", "/bin/ksh"],
+            ["/opt/homebrew/bin/bash", "/opt/homebrew/bin/zsh", "/opt/homebrew/bin/fish", "/usr/local/bin/pwsh", "/Users/me/.cargo/bin/nu", "/opt/homebrew/bin/elvish"],
+            exists.Contains).ToList();
+        Assert.Equal(["zsh", "bash", "tcsh", "fish", "pwsh", "nu", "elvish"], profiles.Select(p => p.Id));
+        Assert.Equal("/bin/zsh -l", profiles[0].CommandLine); // the login shell stays the one it is
+        Assert.Equal("/opt/homebrew/bin/bash -l", profiles[1].CommandLine); // Homebrew's bash 5 over macOS's 3.2
+        Assert.Equal("/usr/local/bin/pwsh -Login -NoLogo", profiles[4].CommandLine);
+        Assert.Equal("powershell", profiles[4].Icon);
+        Assert.Equal("/opt/homebrew/bin/elvish", profiles[6].CommandLine); // elvish has no -l
+    }
+
+    [Fact]
+    public void Macs_own_bash_doesnt_say_zsh_is_the_default_at_each_start()
+    {
+        var bash = new SessionProfile("bash", "bash", "/bin/bash", "bash", "/bin/bash -l", ProfileSources.Local);
+        var vars = SessionLaunch.EnvironmentFor(bash, "0.1.0");
+        Assert.Equal(OperatingSystem.IsMacOS(), vars.TryGetValue("BASH_SILENCE_DEPRECATION_WARNING", out var quiet) && quiet == "1");
+    }
+
+    [Fact]
+    public void Without_shells_there_is_sh() =>
+        Assert.Equal("sh", Assert.Single(SessionProfiles.PickUnixShells(null, [], [], _ => false)).Id);
 
     [Fact]
     public void Every_terminal_tells_wsl_it_is_in_termilly()

@@ -60,6 +60,9 @@ internal sealed class PhoneServer : IDisposable
         public const byte Shared = 100;
         public const byte SharedFrom = 64;
         public const byte SharedTo = 127;
+        /// <summary>169.254.x: an address a network adapter gave itself, reaching nothing.</summary>
+        public const byte LinkLocal = 169;
+        public const byte LinkLocalSecond = 254;
     }
 
     private static readonly Dictionary<string, string> Types = new(StringComparer.OrdinalIgnoreCase)
@@ -122,7 +125,7 @@ internal sealed class PhoneServer : IDisposable
     {
         var address = Environment.GetEnvironmentVariable("TERMILLY_PHONE_BIND") is { Length: > 0 } bind
             ? IPAddress.Parse(bind)
-            : LocalNetworkAddress() ?? throw new IOException("This PC isn't on a local network (no 10.x, 172.16–31.x, 192.168.x or 100.64–127.x address).");
+            : LocalNetworkAddress() ?? throw new IOException("This PC has no network address to listen on.");
         try
         {
             return new PhoneServer(address, port, webRoot, store, live, authority, pushKey, testAlert, files, attachedTo, prompts);
@@ -134,12 +137,31 @@ internal sealed class PhoneServer : IDisposable
     }
 
     /// <summary>The PC's private IPv4 address on a connected network (the one with a router first); never a public one.</summary>
-    public static IPAddress? LocalNetworkAddress() =>
+    public static IPAddress? LocalNetworkAddress() => Pick(
         NetworkInterface.GetAllNetworkInterfaces()
             .Where(n => n.OperationalStatus == OperationalStatus.Up && n.NetworkInterfaceType != NetworkInterfaceType.Loopback)
             .OrderBy(n => n.GetIPProperties().GatewayAddresses.Count == 0)
-            .SelectMany(n => n.GetIPProperties().UnicastAddresses.Select(a => a.Address))
-            .FirstOrDefault(IsPrivate);
+            .SelectMany(n => n.GetIPProperties().UnicastAddresses.Select(a => a.Address)));
+
+    /// <summary>
+    /// The address to listen on: the first private one, else the first of any other. A cloud machine's network can use
+    /// any subnet, or have a public address only.
+    /// </summary>
+    internal static IPAddress? Pick(IEnumerable<IPAddress> addresses)
+    {
+        var usable = addresses.Where(IsUsable).ToList();
+        return usable.Find(IsPrivate) ?? usable.FirstOrDefault();
+    }
+
+    private static bool IsUsable(IPAddress address)
+    {
+        if (address.AddressFamily != AddressFamily.InterNetwork || IPAddress.IsLoopback(address))
+        {
+            return false;
+        }
+        var b = address.GetAddressBytes();
+        return b[0] != PrivateRanges.LinkLocal || b[1] != PrivateRanges.LinkLocalSecond;
+    }
 
     public static bool IsPrivate(IPAddress address)
     {

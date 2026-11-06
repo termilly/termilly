@@ -82,6 +82,10 @@ interface InterfaceSettings {
   closeAction: string;
   /** Quitting asks first while a command or an agent is still running (unless shells are kept running). */
   confirmQuit: boolean;
+  /** Linux on Wayland: Termilly runs as an X11 app (XWayland), as VS Code does, so it may place its windows (a terminal dragged out opens where it's let go). From the next start. */
+  runAsX11: boolean;
+  /** The whole app's size, in percent (Ctrl+Shift+= and -): its text, icons and terminals together, in every window. */
+  zoom: number;
   /** Termilly's shortcuts with keys of the user's own (js/keymap.js, Settings › Keyboard): a shortcut's id to its keys ("Ctrl+Shift+T"), "" for none. One not here has its default. */
   shortcuts: Record<string, string> | null;
 }
@@ -131,6 +135,10 @@ interface PhoneSettings {
   hideDetails: boolean;
   /** A paired phone may type into a terminal it shows (answers to an agent are always allowed). */
   allowTyping: boolean;
+  /** A paired phone or computer may open workspaces and terminals here. Unset (from before there was this setting), it starts as Allow typing was, which is what let a phone do it. */
+  allowOpening: boolean | null;
+  /** A paired phone or computer may close workspaces and terminals here. Unset: as . */
+  allowClosing: boolean | null;
   /** While typing is allowed, a phone may paste Clipboard's text clips: it gets their first lines (secrets masked) and asks the PC to paste one, so a clip's text never goes to the phone. */
   clips: boolean;
   /** A paired computer may open Prompt history for a terminal of this PC it shows (Phone/PcPromptsApi.cs). */

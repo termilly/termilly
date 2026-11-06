@@ -119,7 +119,7 @@ internal sealed class Host
                     target.Pty.Input.Write(Encoding.UTF8.GetBytes(input.Data));
                     target.Pty.Input.Flush();
                 }
-                catch (IOException)
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException or ObjectDisposedException)
                 {
                 }
                 break;

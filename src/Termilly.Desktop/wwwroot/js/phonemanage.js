@@ -1,11 +1,12 @@
 // @ts-check
-// A paired phone manages terminals (Features/Phone.cs, op "manage"; only while Settings › Phone › Allow typing is on):
-// it opens one on a shell or a remote place in a workspace, closes, renames or moves one, and adds an SSH host, which
-// Settings keeps as on the PC's own dialog (ssh.js). The phone also gets the places to open (placesForPhone).
+// A paired phone or computer manages things here (Features/Phone.cs, op "manage"; what Settings › Remote allows): it
+// opens a terminal on a shell or a remote place in a workspace, opens or closes workspaces, closes, renames or moves a
+// terminal, and adds an SSH host, which Settings keeps as on the PC's own dialog (ssh.js). What's opened or closed from
+// elsewhere says so here: a note that stays, and in Recently closed. It also gets the places to open (placesForPhone).
 
 import { PAGE, HOST } from './protocol.js';
 import { send, onHost } from './host.js';
-import { state, emit, persist, wsById, isRemoteProfile, newId, GROUPS, EVENTS } from './store.js';
+import { state, emit, persist, wsById, tabsOf, tabTitle, isRemoteProfile, newId, GROUPS, EVENTS } from './store.js';
 import { newTab, closeTab, moveTab } from './panes.js';
 import { connections, connectionError, IDENTITY } from './ssh.js';
 import { updateSettings } from './preferences.js';
@@ -13,11 +14,15 @@ import { isProduction } from './environments.js';
 import { PROFILE_ID_PREFIX } from './constants.js';
 import { setNote, NOTE_KIND } from './notes.js';
 import { clear } from './inbox.js';
+import { createWorkspace, closeWorkspace, START_WITH } from './workspaces.js';
+import { showToast } from './toasts.js';
 
 /** What a phone may ask (the message's "action"). */
-const ACTION = Object.freeze({ open: 'open', close: 'close', rename: 'rename', move: 'move', addHost: 'addHost', note: 'note', clearNote: 'clearNote' });
+const ACTION = Object.freeze({ open: 'open', close: 'close', newWorkspace: 'newWorkspace', closeWorkspace: 'closeWorkspace', rename: 'rename', move: 'move', addHost: 'addHost', note: 'note', clearNote: 'clearNote' });
 /** The longest a terminal's name and a folder typed on the phone may be. */
 const MAX = Object.freeze({ name: 80, folder: 400 });
+/** Who asked (Features/Phone.cs adds it), for one that doesn't say. */
+const SOMEONE = 'Another device';
 /** How a phone's SSH host may sign in: the ones that need nothing typed on the phone. */
 const PHONE_IDENTITIES = [IDENTITY.agent, IDENTITY.key, IDENTITY.password];
 /** Ahead of any time a place was used: pinned places come first. */
@@ -62,7 +67,52 @@ function open(m) {
   if (!ws) throw new Error('That workspace is gone.');
   const cwd = typeof m.cwd === 'string' && m.cwd.trim() ? m.cwd.trim().slice(0, MAX.folder) : null;
   const tab = newTab({ profile: profile.id, wsId: ws.id, cwd });
+  tab.openedBy = whoAsked(m);
+  emit(EVENTS.tab, tab);
+  leaveTrace(`${whoAsked(m)} opened a terminal in ${ws.name}`);
   return { id: tab.id };
+}
+
+/** @param {Record<string, any>} m */
+const whoAsked = m => (typeof m.by === 'string' && m.by ? m.by : SOMEONE);
+
+/**
+ * What was done from elsewhere, with when: it stays until it's closed, so it's seen on coming back.
+ * @param {string} what
+ */
+function leaveTrace(what) {
+  const when = new Date().toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  showToast({ text: `${what}, ${when}`, stay: true });
+}
+
+/** @param {Record<string, any>} m */
+function closeTerminal(m) {
+  const tab = terminalOf(m);
+  const ws = wsById(tab.wsId);
+  tab.closedBy = whoAsked(m);
+  leaveTrace(`${whoAsked(m)} closed ${tabTitle(tab)} in ${ws?.name ?? ''}`);
+  closeTab(tab);
+  return {};
+}
+
+/**
+ * A new workspace with a terminal in it. The PC stays on the workspace it's on.
+ * @param {Record<string, any>} m
+ */
+function openWorkspace(m) {
+  const ws = createWorkspace({ name: String(m.name ?? '').trim().slice(0, MAX.name), stay: true, startWith: START_WITH.tab });
+  leaveTrace(`${whoAsked(m)} opened the workspace ${ws.name}`);
+  return { id: ws.id };
+}
+
+/** @param {Record<string, any>} m */
+function shutWorkspace(m) {
+  const ws = wsById(String(m.ws ?? ''));
+  if (!ws) throw new Error('That workspace is gone.');
+  for (const tab of tabsOf(ws)) tab.closedBy = whoAsked(m);
+  leaveTrace(`${whoAsked(m)} closed the workspace ${ws.name}`);
+  closeWorkspace(ws);
+  return {};
 }
 
 /** @param {Record<string, any>} m */
@@ -118,7 +168,9 @@ function note(m) {
 /** @type {Record<string, (m: Record<string, any>) => object>} */
 const DO = {
   [ACTION.open]: open,
-  [ACTION.close]: m => { closeTab(terminalOf(m)); return {}; },
+  [ACTION.close]: closeTerminal,
+  [ACTION.newWorkspace]: openWorkspace,
+  [ACTION.closeWorkspace]: shutWorkspace,
   [ACTION.rename]: rename,
   [ACTION.move]: move,
   [ACTION.addHost]: addHost,

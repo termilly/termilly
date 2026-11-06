@@ -25,7 +25,37 @@ internal sealed class PromptsHandler(PageChannel page, PromptHistory history, IS
             history.Add(m.Id, m.Session, m.Text ?? "", settings.Current.Session.RedactSecrets, settings.Current.Session.HistoryDays)));
     }
 
-    private void List(FromPage.PromptsList m) => page.Post(new ToPage.PromptsListed(m.RequestId, Prompts(m.Id ?? "", m.Sessions ?? [])));
+    private void List(FromPage.PromptsList m)
+    {
+        var sessions = m.Sessions ?? [];
+        page.Post(new ToPage.PromptsListed(m.RequestId, Prompts(m.Id ?? "", sessions), Steps: Steps(sessions)));
+    }
+
+    /// <summary>What Claude did in a terminal's sessions, from their transcripts on this PC.</summary>
+    public static IReadOnlyList<AgentStep> Steps(IEnumerable<string> sessions)
+    {
+        var projects = ClaudeUsageTracker.ProjectsDirectory();
+        return Steps(sessions, session => ClaudeUsageTracker.FindTranscript(projects, session));
+    }
+
+    /// <summary>
+    /// What Claude did in a terminal's sessions (its replies and tools), oldest first, from their transcripts. A step in
+    /// two transcripts (a resumed conversation copied into the new session's) shows once.
+    /// </summary>
+    public static IReadOnlyList<AgentStep> Steps(IEnumerable<string> sessions, Func<string, string?> transcriptOf)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var steps = new List<AgentStep>();
+        foreach (var session in sessions.Distinct().TakeLast(MaxSessions))
+        {
+            if (transcriptOf(session) is { } path)
+            {
+                steps.AddRange(TranscriptSteps.ReadKeyed(path).Where(s => seen.Add(s.Key)).Select(s => s.Step));
+            }
+        }
+        // Stable: the steps of one message share its time and keep their order.
+        return steps.OrderBy(s => s.At, StringComparer.Ordinal).TakeLast(TranscriptSteps.MaxSteps).ToList();
+    }
 
     /// <summary>A terminal's prompts: Termilly's record of them and its sessions' transcripts on this PC.</summary>
     public IReadOnlyList<AgentPrompt> Prompts(string id, IEnumerable<string> sessions)
@@ -111,23 +141,38 @@ internal static partial class TranscriptPrompts
     public static IReadOnlyList<(AgentPrompt Prompt, string Key)> ReadKeyed(string path)
     {
         var prompts = new List<(AgentPrompt, string)>();
+        EachLine(path, line =>
+        {
+            if (line.Contains("\"type\":\"user\"", StringComparison.Ordinal) && Keyed(line) is { } prompt)
+            {
+                prompts.Add(prompt);
+            }
+        });
+        return prompts;
+    }
+
+    /// <summary>
+    /// Each line of a transcript as it is now (Claude Code may still be writing it), past ones too long to be anything but
+    /// a file or an image; none when it went away or can't be read.
+    /// </summary>
+    public static void EachLine(string path, Action<string> read)
+    {
         try
         {
             using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
             using var reader = new StreamReader(stream, Encoding.UTF8);
             while (reader.ReadLine() is { } line)
             {
-                if (line.Length <= MaxLine && line.Contains("\"type\":\"user\"", StringComparison.Ordinal) && Keyed(line) is { } prompt)
+                if (line.Length <= MaxLine)
                 {
-                    prompts.Add(prompt);
+                    read(line);
                 }
             }
         }
         catch (Exception e) when (Storage.IsFileError(e))
         {
-            // A transcript that went away, or can't be read: no prompts from it.
+            // A transcript that went away, or can't be read: nothing from it.
         }
-        return prompts;
     }
 
     /// <summary>One transcript line's prompt; null for any other line.</summary>

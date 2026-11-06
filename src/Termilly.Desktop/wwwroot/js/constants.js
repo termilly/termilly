@@ -62,6 +62,13 @@ export const AGENT_SOURCE = Object.freeze({
   alert: 'alert',
 });
 
+/** C#: AgentStepKind (Messaging/Prompts.cs). */
+export const AGENT_STEP = Object.freeze({
+  reply: 'reply',
+  tool: 'tool',
+  all: Object.freeze(['reply', 'tool']),
+});
+
 /** C#: ChangeSources (Changes/ChangeModel.cs). */
 export const CHANGE_SOURCE = Object.freeze({
   snapshot: 'snapshot',
@@ -175,6 +182,12 @@ export const WINDOW_ACTION = Object.freeze({
   quit: 'quit',
   drag: 'drag',
   resize: 'resize',
+  focus: 'focus',
+  fade: 'fade',
+  solid: 'solid',
+  onTop: 'onTop',
+  notOnTop: 'notOnTop',
+  opened: 'opened',
 });
 
 /** C#: QuitAnswers (Messaging/Window.cs). */
@@ -182,6 +195,11 @@ export const QUIT_ANSWER = Object.freeze({
   quit: 'quit',
   stay: 'stay',
   asking: 'asking',
+});
+
+/** C#: DetachedWindowNames (Messaging/Window.cs). */
+export const DETACHED_WINDOW = Object.freeze({
+  namePrefix: 'termilly-',
 });
 
 /** C#: UpdateStates (UpdateInstall.cs). */
@@ -399,6 +417,14 @@ export const TERMINAL_SETTINGS = Object.freeze({
   defaultLineHeight: 1.2,
   defaultScrollback: 10000,
   maxScrollback: 50000,
+});
+
+/** C#: InterfaceSettings (Settings/SettingGroups.cs). */
+export const INTERFACE_SETTINGS = Object.freeze({
+  defaultZoom: 100,
+  minZoom: 50,
+  maxZoom: 200,
+  zoomStep: 10,
 });
 
 /** C#: ActionPlaceholders (Actions.cs). */

@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -29,7 +30,7 @@ internal static class Api
                 return Directory.GetFiles(Path.GetTempPath(), prefix + PipeNames.Prefix + "*")
                     .Select(file => Path.GetFileName(file)[prefix.Length..])
                     .FirstOrDefault(name => name == PipeNames.Main ||
-                                            int.TryParse(name[PipeNames.Prefix.Length..], out var pid) && Directory.Exists($"/proc/{pid}"));
+                                            int.TryParse(name[PipeNames.Prefix.Length..], out var pid) && IsRunning(pid));
             }
             return Directory.GetFiles(@"\\.\pipe\")
                 .Select(Path.GetFileName)
@@ -40,6 +41,15 @@ internal static class Api
             return null;
         }
     }
+
+    /// <summary>Whether a process is still running: kill with no signal only checks (Linux and macOS alike; macOS has no /proc).</summary>
+    private static bool IsRunning(int pid) => kill(pid, 0) == 0 || Marshal.GetLastPInvokeError() == EPERM;
+
+    /// <summary>kill's errno for a process that exists but belongs to someone else.</summary>
+    private const int EPERM = 1;
+
+    [DllImport("libc", SetLastError = true)]
+    private static extern int kill(int pid, int signal);
 
     /// <summary>Calls one method; throws <see cref="ApiException"/> with Termilly's message when it says no.</summary>
     public static JsonNode? Call(string method, JsonObject? arguments = null, string? pipe = null)
