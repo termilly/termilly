@@ -102,6 +102,22 @@ export const DOCK_SIDE = Object.freeze({ right: 'right', left: 'left', top: 'top
 export const isAcross = side => side === DOCK_SIDE.top || side === DOCK_SIDE.bottom;
 
 /**
+ * The edge of `area` a point is nearest, if it's within `band` of it; null in the middle or outside.
+ * @param {{ left: number, right: number, top: number, bottom: number }} area
+ * @param {number} x
+ * @param {number} y
+ * @param {number} band
+ * @returns {string | null}
+ */
+export function edgeAt(area, x, y, band) {
+  if (x < area.left || x > area.right || y < area.top || y > area.bottom) return null;
+  const [side, distance] = /** @type {[string, number][]} */ ([
+    [DOCK_SIDE.right, area.right - x], [DOCK_SIDE.left, x - area.left], [DOCK_SIDE.top, y - area.top], [DOCK_SIDE.bottom, area.bottom - y],
+  ]).reduce((near, edge) => (edge[1] < near[1] ? edge : near));
+  return distance <= band ? side : null;
+}
+
+/**
  * A panel docked on an edge of the workspace, the right one unless `side` says otherwise (the Files panel, the
  * Notepad): the terminals end where it starts (its size and the gap between panes, in the CSS variable `dockVar` on
  * the workspace, with -left, -top or -bottom after it on those edges), and its grip resizes it, up to half the workspace.

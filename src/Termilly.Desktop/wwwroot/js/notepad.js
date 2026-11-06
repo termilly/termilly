@@ -10,7 +10,7 @@ import { state, persist, newId, tabTitle, wsById } from './store.js';
 import { restoreFocus, stripBar, wireDragOut, systemDrag, dockDrop } from './panes.js';
 import { scheduleFit } from './terminals.js';
 import { escapeHtml, cssColor, tabBadgeHtml, countText, ICONS } from './ui.js';
-import { byId, find, targetOf, dockRight, isAcross, onMiddleClick, DOCK_SIDE, WORKSPACE_ID, DOCK_GRIP } from './dom.js';
+import { byId, find, targetOf, dockRight, isAcross, edgeAt, onMiddleClick, DOCK_SIDE, WORKSPACE_ID, DOCK_GRIP } from './dom.js';
 import { showMenu, SEPARATOR } from './popups.js';
 import { confirmDialog } from './dialogs.js';
 import { showToast, TOAST } from './toasts.js';
@@ -33,11 +33,14 @@ const VIEW_DEFAULTS = Object.freeze({ links: true, wrap: true, numbers: false, h
 /** @typedef {keyof typeof VIEW_DEFAULTS} ViewSwitch */
 /** The name a new page gets, numbered. */
 const PAGE_NAME = 'Note';
-/** The panel's narrowest width; its widest is half the terminals' area (app.css max-width). */
+/** The panel's narrowest width, and its width until it's dragged; its widest is half the terminals' area (app.css). */
 const MIN_WIDTH_PX = 280;
+const DEFAULT_WIDTH_PX = 360;
 /** On the top or bottom edge: its lowest height, and its height until it's dragged (app.css). */
 const MIN_HEIGHT_PX = 180;
 const DEFAULT_HEIGHT_PX = 260;
+/** How near an edge of the terminals' area a drag docks it there. */
+const EDGE_BAND_PX = 120;
 const LF = '\n';
 const CRLF = '\r\n';
 /** The menu entry that copies text here, on a terminal's right-click menu. */
@@ -298,7 +301,7 @@ function detachNotepad(at, place) {
     },
     at, place, remember: true,
     header: head, close: hideNotepad,
-    onDragged: dockDrop(dockZone, () => closeWindow(WINDOW_KEY)),
+    onDragged: dockDrop(dockAt, dockTo),
     dragHandle: systemDrag ? NOTEPAD_HANDLE : undefined,
   });
 }
@@ -309,18 +312,45 @@ const NOTEPAD_HANDLE = '.files-title';
 let dockedWidth = 0;
 
 /**
- * Where it docks in the main window (in the page's pixels): its edge of the terminals' area, as big as it was docked
- * (at most half). Dragged there it stays or docks back; anywhere else it goes out into a window of its own.
+ * Where it docks on an edge of the main window (in the page's pixels): that edge of the terminals' area, as big as it
+ * was docked (at most half).
+ * @param {string} side
  */
-function dockZone() {
+function dockZone(side) {
   const area = byId(WORKSPACE_ID).getBoundingClientRect();
-  const side = dockSide();
   if (isAcross(side)) {
     const height = Math.min(area.height / 2, Math.max(MIN_HEIGHT_PX, state.notepad.height ?? DEFAULT_HEIGHT_PX));
     return new DOMRect(area.left, side === DOCK_SIDE.top ? area.top : area.bottom - height, area.width, height);
   }
-  const width = Math.min(area.width / 2, Math.max(MIN_WIDTH_PX, state.notepad.width ?? dockedWidth));
+  const width = Math.min(area.width / 2, Math.max(MIN_WIDTH_PX, state.notepad.width ?? (dockedWidth || DEFAULT_WIDTH_PX)));
   return new DOMRect(side === DOCK_SIDE.left ? area.left : area.right - width, area.top, width, area.height);
+}
+
+/**
+ * Where a drag at this point would dock it: over where it docks now, or near any edge. Elsewhere, nowhere: it goes out
+ * into a window of its own.
+ * @param {number} x
+ * @param {number} y
+ * @returns {import('./panes.js').DockSpot | null}
+ */
+function dockAt(x, y) {
+  const now = dockSide();
+  const zone = dockZone(now);
+  const inZone = x >= zone.left && x <= zone.right && y >= zone.top && y <= zone.bottom;
+  const side = inZone ? now : edgeAt(byId(WORKSPACE_ID).getBoundingClientRect(), x, y, EDGE_BAND_PX);
+  return side ? { side, zone: dockZone(side), label: `Dock ${isAcross(side) ? 'at' : 'on'} the ${side}` } : null;
+}
+
+/**
+ * Docks it on an edge, back from its window if it's in one.
+ * @param {string} side
+ */
+function dockTo(side) {
+  state.notepad.side = side;
+  persist();
+  placeOnSide();
+  if (isDetached(WINDOW_KEY)) closeWindow(WINDOW_KEY);
+  else refreshDock();
 }
 
 /** The edge it docks on. */
@@ -342,12 +372,7 @@ function dockMenu() {
   showMenu(Object.values(DOCK_SIDE).map(side => ({
     label: side[0].toUpperCase() + side.slice(1),
     checked: side === dockSide(),
-    action: () => {
-      state.notepad.side = side;
-      persist();
-      placeOnSide();
-      refreshDock();
-    },
+    action: () => dockTo(side),
   })), { x: left, y: bottom });
 }
 
@@ -711,7 +736,7 @@ button.addEventListener('click', () => toggleNotepad());
 // Its header dragged out of the app window takes it out into a window of its own, as a terminal's (js/panes.js).
 wireDragOut(head, panel, {
   name: NAME, icon: /** @type {Element} */ (button.firstElementChild).outerHTML, detach: detachNotepad,
-  back: () => closeWindow(WINDOW_KEY), isDetached: () => isDetached(WINDOW_KEY), handle: NOTEPAD_HANDLE, dock: dockZone,
+  isDetached: () => isDetached(WINDOW_KEY), handle: NOTEPAD_HANDLE, side: dockSide, dockAt, dockTo,
 });
 
 // ---- Docked on an edge: the terminals end where it starts ----

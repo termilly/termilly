@@ -986,12 +986,17 @@ const LEFT_AFTER_MS = 100;
 
 /**
  * A panel (the Notepad) dragged by its title bar as a terminal is: its name and icon (markup), what opens it in a
- * window of its own (near a screen point, or exactly at place, its top left corner) and whether it did, what docks it
- * back, whether it's in a window of its own now, its handle there (Linux: what's dragged back; the rest of its title
- * bar moves the window), and where it docks in the main window: let go there it stays (or docks back), anywhere
- * else it goes out into a window of its own.
+ * window of its own (near a screen point, or exactly at place, its top left corner) and whether it did, whether it's in
+ * a window of its own now, its handle there (Linux: what's dragged back; the rest of its title bar moves the window),
+ * the edge it docks on now, where a point would dock it (let go there it docks on that edge), and what docks it there.
+ * Anywhere else it goes out into a window of its own.
  * @typedef {{ name: string, icon: string, detach: (at?: { x: number, y: number }, place?: { x: number, y: number }) => boolean,
- *   back: () => void, isDetached: () => boolean, handle: string, dock: () => DOMRect }} PanelDrag
+ *   isDetached: () => boolean, handle: string, side: () => string, dockAt: (x: number, y: number) => DockSpot | null,
+ *   dockTo: (side: string) => void }} PanelDrag
+ */
+/**
+ * Where a dragged panel would dock: the edge, the place it would take, and what its outline says.
+ * @typedef {{ side: string, zone: DOMRect, label: string }} DockSpot
  */
 
 /**
@@ -1158,60 +1163,49 @@ function endSystemDrag(e) {
 }
 
 /**
- * A panel dragged over the main window: from its window, its dock is outlined while it's over it (and only there can
- * it be let go); from its dock, it can be let go anywhere.
+ * A panel dragged over the main window: where it would dock is outlined (not where it already is); from its window it
+ * can be let go only there, from its dock anywhere.
  * @param {NonNullable<typeof systemDragged>} d
  * @param {DragEvent} e
  */
 function panelOver(d, e) {
   d.over = true;
   const panel = /** @type {PanelDrag} */ (d.panel);
-  if (!panel.isDetached()) return;
-  const zone = panel.dock();
-  const onDock = inRect(zone, e.clientX, e.clientY);
-  showOutline(onDock ? zone : null, ZONE.window, null, DOCK_LABEL);
-  /** @type {DataTransfer} */ (e.dataTransfer).dropEffect = onDock ? MOVE : NONE;
+  const spot = panel.dockAt(e.clientX, e.clientY);
+  const detached = panel.isDetached();
+  const moves = spot && (detached || spot.side !== panel.side());
+  showOutline(moves ? spot.zone : null, ZONE.window, null, spot?.label);
+  if (detached) /** @type {DataTransfer} */ (e.dataTransfer).dropEffect = spot ? MOVE : NONE;
 }
 
 /**
- * A panel let go in the main window: from its window, on its dock it docks back; from its dock, anywhere but there it
- * goes out into a window of its own (where it's let go).
+ * A panel let go in the main window: on an edge it docks there; from its dock, anywhere else it goes out into a window
+ * of its own (where it's let go).
  * @param {PanelDrag} panel
  * @param {DragEvent} e
  */
 function panelDropped(panel, e) {
-  const onDock = inRect(panel.dock(), e.clientX, e.clientY);
-  if (panel.isDetached()) {
-    if (onDock) panel.back();
-  } else if (!onDock) panel.detach({ x: e.screenX, y: e.screenY });
+  const spot = panel.dockAt(e.clientX, e.clientY);
+  if (spot) panel.dockTo(spot.side);
+  else if (!panel.isDetached()) panel.detach({ x: e.screenX, y: e.screenY });
 }
 
 /**
- * A panel's window moved by its title bar (Windows), back over the main window: over its dock the dock is outlined and
- * the window goes see-through; let go there, it docks back. Anywhere else it's only moved.
- * @param {() => DOMRect} dock
- * @param {() => void} back
+ * A panel's window moved by its title bar (Windows), back over the main window: where it would dock is outlined and
+ * the window goes see-through; let go there, it docks. Anywhere else it's only moved.
+ * @param {(x: number, y: number) => DockSpot | null} dockAt
+ * @param {(side: string) => void} dockTo
  * @returns {(x: number | null, y: number | null, dropped: boolean) => boolean}
  */
-export const dockDrop = (dock, back) => (x, y, dropped) => {
-  const zone = dock();
-  const over = x !== null && y !== null && inRect(zone, x, y);
-  showOutline(over && !dropped ? zone : null, ZONE.window, null, DOCK_LABEL);
-  if (over && dropped) back();
-  return over;
+export const dockDrop = (dockAt, dockTo) => (x, y, dropped) => {
+  const spot = x !== null && y !== null ? dockAt(x, y) : null;
+  showOutline(spot && !dropped ? spot.zone : null, ZONE.window, null, spot?.label);
+  if (spot && dropped) dockTo(spot.side);
+  return !!spot;
 };
 
-/** What a panel's dock says while one would dock there. */
-const DOCK_LABEL = 'Dock on the right';
 /** A drop that does nothing (the pointer says so). */
 const NONE = 'none';
-
-/**
- * @param {DOMRect} r
- * @param {number} x
- * @param {number} y
- */
-const inRect = (r, x, y) => x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
 
 /**
  * A detached terminal let go in the main window but on no drop zone: back in the shown workspace, where it was.
@@ -1393,6 +1387,8 @@ export function wireDragOut(header, panel, drag) {
 function trackPanelDrag(header, panel, drag, e) {
   let out = false;
   let live = false;
+  /** @type {DockSpot | null} */
+  let spot = null;
   followDrag(header, e, {
     begin: () => {
       live = true;
@@ -1401,9 +1397,12 @@ function trackPanelDrag(header, panel, drag, e) {
       pickUp(panel, e, () => live);
     },
     move: (x, y) => {
-      // Anywhere but its dock: out into a window of its own (its picture shows where, on Windows; an outline elsewhere).
-      out = !inRect(drag.dock(), x, y);
-      showOutline(out && !followsPicture && !outOfWindow(x, y) ? windowOutline(panel, x, y) : null, ZONE.window);
+      // Near an edge it docks there, outlined. Anywhere else: out into a window of its own (its picture shows where, on
+      // Windows; an outline elsewhere).
+      spot = drag.dockAt(x, y);
+      out = !spot;
+      if (spot && spot.side !== drag.side()) showOutline(spot.zone, ZONE.window, null, spot.label);
+      else showOutline(out && !followsPicture && !outOfWindow(x, y) ? windowOutline(panel, x, y) : null, ZONE.window);
     },
     end: (commit, screen) => {
       live = false;
@@ -1412,6 +1411,7 @@ function trackPanelDrag(header, panel, drag, e) {
       // Where its picture is: its window opens exactly there, and takes the picture away once it shows (js/windows.js).
       const place = followsPicture ? { x: screen.x - grip.x, y: screen.y - grip.y } : undefined;
       if (commit && out && drag.detach(place ? undefined : screen, place) && place) return;
+      if (commit && spot) drag.dockTo(spot.side);
       showDragPicture(null);
     },
   });
