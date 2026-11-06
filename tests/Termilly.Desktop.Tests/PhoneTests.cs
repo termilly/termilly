@@ -260,8 +260,13 @@ public sealed class PhoneTests : IDisposable
     [InlineData("rename", false, true, true, "Allow typing")]
     [InlineData("rename", true, false, false, null)]
     [InlineData("clearNote", false, false, false, null)]
+    [InlineData("taskAdd", false, true, true, "Allow typing")]
+    [InlineData("taskAdd", true, false, false, null)]
+    [InlineData("taskImplement", true, false, false, "Allow creating")]
+    [InlineData("taskImplement", false, true, false, "Allow typing")]
+    [InlineData("taskImplement", true, true, false, null)]
     public void What_a_device_may_do_follows_its_own_setting(string action, bool typing, bool opening, bool closing, string? refused) =>
-        Assert.Equal(refused, Features.PhoneHandler.Refused(action, new PhoneSettings { AllowTyping = typing, AllowOpening = opening, AllowClosing = closing }));
+        Assert.Equal(refused, Termilly.Desktop.Phone.PhoneManage.Refused(action, new PhoneSettings { AllowTyping = typing, AllowOpening = opening, AllowClosing = closing }));
 
     [Theory]
     [InlineData(true, true)]

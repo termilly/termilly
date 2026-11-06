@@ -4,6 +4,8 @@
 // and a closed terminal keeps its own. js/todopanel.js shows a list; anything else opens one with openTodo.
 
 import { state, emit, persist, newId, wsById, tabTitle, EVENTS, TAG_COLORS } from './store.js';
+import { PAGE } from './protocol.js';
+import { send } from './host.js';
 import { NOTE_KIND, noteTitle, notesFor } from './notes.js';
 import { openCount, hoverLines, allTags, tagHash, retag, TASK_STATUS } from './todolist.js';
 
@@ -362,6 +364,8 @@ export function listsOfAsker(from) {
  */
 export function setStatus(ref, id, status, { terminal, review } = {}) {
   const middle = status === TASK_STATUS.progress || status === TASK_STATUS.review;
+  // An alert about it may wait for the user to leave the PC.
+  if (status !== TASK_STATUS.review) send(PAGE.phoneWithdraw, { id });
   updateTask(ref, id, {
     done: status === TASK_STATUS.done ? true : undefined, status: middle ? status : undefined,
     terminal: status === TASK_STATUS.progress ? terminal : undefined, review: status === TASK_STATUS.review ? review : undefined,

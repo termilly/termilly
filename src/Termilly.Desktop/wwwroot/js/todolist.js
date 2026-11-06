@@ -156,6 +156,17 @@ export function allTags(lists, kept = []) {
 }
 
 /**
+ * The selected lines of a note, or all of it, as tasks, and the note without them.
+ * @param {string} text
+ * @param {number} start
+ * @param {number} end
+ */
+export function splitNote(text, start, end) {
+  const { from, to } = selectedLines(text, start, end);
+  return { tasks: tasksFromNote(text.slice(from, to)), rest: withoutLines(text, from, to) };
+}
+
+/**
  * A task's tags with one renamed (to one it has already: they become one), or taken off (to is null).
  * @param {string[]} tags
  * @param {string} from

@@ -7,6 +7,7 @@ import { state, on, tabTitle, EVENTS } from './store.js';
 import { addApiMethods } from './api.js';
 import { findTask, listsOfAsker, updateTask, setStatus, releaseClosed } from './todo.js';
 import { TASK_STATUS, detailLines, statusOf, subProgress, tickByNumber } from './todolist.js';
+import { alertReview } from './notify.js';
 
 /**
  * How the API names a task's statuses.
@@ -66,7 +67,9 @@ addApiMethods({
     const now = /** @type {TodoTask} */ (findTask(task.id)?.task);
     const [done, all] = subProgress(now.details);
     if (step && done < all) return { ...describeTask(now), note: `Step ${step} is ticked. The task stays in progress: ${all - done} left.` };
-    setStatus(ref, task.id, TASK_STATUS.review, { review: { summary: String(summary ?? '').trim(), by: whoIs(from) } });
+    const said = String(summary ?? '').trim();
+    setStatus(ref, task.id, TASK_STATUS.review, { review: { summary: said, by: whoIs(from) } });
+    alertReview(now, said, from ? state.tabs.get(from) ?? null : null);
     return { ...describeTask(/** @type {TodoTask} */ (findTask(task.id)?.task)), note: 'It waits in Review for the user.' };
   },
 });

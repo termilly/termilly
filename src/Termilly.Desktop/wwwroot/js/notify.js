@@ -22,6 +22,18 @@ const KINDS = {
   [AGENT_STATE.done]: ['notifications.done', 'Finished'],
 };
 
+/**
+ * A task an agent finished waits for review: the phones hear it by the task's name, and a tap opens the task.
+ * @param {TodoTask} task
+ * @param {string} summary what the agent said
+ * @param {Tab | null} tab the terminal it finished in
+ */
+export function alertReview(task, summary, tab) {
+  if (!getSetting('notifications.done')) return;
+  if (tab) tab.taskAlerted = true;
+  send(PAGE.phoneAlert, { id: task.id, state: AGENT_STATE.done, title: `Waiting for review: ${task.text}`, body: summary, inFront: windowInFront() });
+}
+
 on(EVENTS.agent, tab => {
   const agent = tab.agent;
   const kind = agent && KINDS[agent.state];
@@ -42,7 +54,10 @@ on(EVENTS.agent, tab => {
   // The phone, even when the terminal is in view here: the PC may be showing it to nobody (the host checks).
   if (tab.phoneAlerted !== key) {
     tab.phoneAlerted = key;
-    send(PAGE.phoneAlert, { id: tab.id, state: agent.state, title, body: entryDetail(tab), inFront: windowInFront() });
+    // The task it finished said so already, by name.
+    const said = agent.state === AGENT_STATE.done && tab.taskAlerted;
+    tab.taskAlerted = false;
+    if (!said) send(PAGE.phoneAlert, { id: tab.id, state: agent.state, title, body: entryDetail(tab), inFront: windowInFront() });
   }
   if (isInView(tab) || tab.notified === key) return;
   tab.notified = key;

@@ -215,6 +215,8 @@ interface Tab {
   notified?: string | null;
   /** The last news sent to the phones for it (js/notify.js). */
   phoneAlerted?: string | null;
+  /** A task it finished alerted the phones by name, so its own "Finished" doesn't follow. */
+  taskAlerted?: boolean;
   /** The size a phone showing it asked for; it keeps that size until no phone shows it (js/phone.js). */
   phoneSize?: { cols: number, rows: number, tallest?: number } | null;
   /**

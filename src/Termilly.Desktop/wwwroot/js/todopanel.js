@@ -6,10 +6,10 @@
 
 import { PAGE, HOST } from './protocol.js';
 import { send, onHost } from './host.js';
-import { state, on, persist, newId, lastFolderOf, wsById, tabsOf, tabTitle, isSsh, defaultProfile, EVENTS } from './store.js';
-import { newTab, focusTab } from './panes.js';
+import { state, on, persist, newId, wsById, tabsOf, tabTitle, EVENTS } from './store.js';
+import { focusTab } from './panes.js';
+import { AGENT_COMMAND, agentInstalled, folderOfList as folderOf, isOnGitHub, checkRepo, implementTask, keepIssue } from './todoactions.js';
 import { openTagManager } from './todotags.js';
-import { commandLine } from './quoting.js';
 import { escapeHtml, cssColor, tabBadgeHtml, countText, ICONS } from './ui.js';
 import { byId, find, targetOf, WORKSPACE_ID, DOCK_GRIP, PANEL_HEAD, TOOL_COUNT } from './dom.js';
 import { showMenu, openPopover, closeAll, SEPARATOR } from './popups.js';
@@ -21,8 +21,8 @@ import { COPY_LABEL } from './termclipboard.js';
 import { dockPanel, NOTEPAD_DOCK } from './dockpanel.js';
 import { TAG_LIST, swatchesHtml } from './tagpicker.js';
 import {
-  parseTask, tasksFromLines, tasksFromNote, tagOfHeading, selectedLines, withoutLines, openCount, tagsIn, withTags, retag, moveBefore, labelsForTags, issueBody, treeRows, found,
-  detailLines, tickSub, linkSub, subProgress, implementPrompt, statusOf, TASK_STATUS,
+  parseTask, tasksFromLines, splitNote, tagOfHeading, openCount, tagsIn, withTags, retag, moveBefore, labelsForTags, issueBody, treeRows, found,
+  detailLines, tickSub, subProgress, statusOf, TASK_STATUS,
 } from './todolist.js';
 import {
   LIST_KIND, listOf, noteTarget, sameList, listInFront, openInFront, terminalList, workspaceList, addTasks, updateTask,
@@ -39,9 +39,6 @@ const NAME = 'To do';
 const STATUS_NAME = Object.freeze({
   [TASK_STATUS.open]: 'Open', [TASK_STATUS.progress]: 'In progress', [TASK_STATUS.review]: 'Review', [TASK_STATUS.done]: 'Done',
 });
-/** What Implement runs, and the longest name it gives its terminal. */
-const AGENT_COMMAND = 'claude';
-const MAX_AGENT_NAME = 32;
 /** A tag picker's colour field. */
 const COLOR_INPUT = 'color';
 /** A workspace's own list, in the picker. */
@@ -127,9 +124,6 @@ let hidingNote = false;
 let editing = null;
 /** @type {string[]} */
 let editTags = [];
-/** Whether each folder's repository is on GitHub, as far as the host said. */
-/** @type {Map<string, boolean>} */
-const onGitHub = new Map();
 /** The task (or its sub-item, by line) an issue is being made from, and what the host said about its repository. */
 /** @type {{ taskId: string, line?: number, title: string, body: string, requestId: string, repo?: string, labels: string[], ticked: string[], error?: string, busy?: boolean, folder: string | null } | null} */
 let issue = null;
@@ -201,9 +195,6 @@ function subHtml(line) {
   </div>`;
 }
 
-/** Whether Claude Code is installed here: the host offers its profile only then (SessionProfiles.cs). */
-const agentInstalled = () => state.profiles.some(p => p.startCommand === AGENT_COMMAND);
-
 /**
  * Implement when Claude Code is installed, and Create GitHub issue when the folder's repository is on GitHub and there's
  * no issue yet.
@@ -212,7 +203,7 @@ const agentInstalled = () => state.profiles.some(p => p.startCommand === AGENT_C
  */
 function actsHtml(issue, isTask) {
   const folder = folderOfList();
-  const canIssue = !issue && !!folder && onGitHub.get(folder);
+  const canIssue = !issue && !!folder && isOnGitHub(folder);
   return `<span class="td-acts">
     ${isTask ? `<button class="pane-btn" data-td="${ACTION.status}" title="Status">${ICONS.chevronDown}</button>` : ''}
     ${agentInstalled() ? `<button class="pane-btn" data-td="${ACTION.implement}" ${folder ? '' : 'disabled'} title="${folder ? 'Implement: start Claude Code on this in a new terminal' : 'Implement needs a folder on this computer'}">${ICONS.play}</button>` : ''}
@@ -292,7 +283,8 @@ function render() {
     picked = [];
   }
   const list = shown();
-  checkRepo();
+  const folder = folderOfList();
+  if (folder) checkRepo(folder);
   view.hidden = !!issue;
   issueForm.hidden = !issue;
   if (!list) {
@@ -401,13 +393,10 @@ function writeNote(list, text) {
 function noteToTasks() {
   const list = shown();
   if (!list) return;
-  const { value, selectionStart, selectionEnd } = noteArea;
-  const { from, to } = selectedLines(value, selectionStart, selectionEnd);
-  const tasks = tasksFromNote(value.slice(from, to));
+  const { tasks, rest } = splitNote(noteArea.value, noteArea.selectionStart, noteArea.selectionEnd);
   if (!tasks.length) return void showToast({ text: 'No text to turn into tasks here', state: TOAST.failed });
   if (noteTimer !== null) clearTimeout(noteTimer);
   noteTimer = null;
-  const rest = withoutLines(value, from, to);
   noteArea.value = rest;
   writeNote(list, rest);
   addTasks(list.ref, tasks);
@@ -732,7 +721,7 @@ function pickTags(at) {
 function issueItems(task) {
   if (!task.issue) {
     const folder = folderOfList();
-    return folder && onGitHub.get(folder) ? [{ label: 'Create GitHub issue', icon: ICONS.git, action: () => beginIssue(task) }] : [];
+    return folder && isOnGitHub(folder) ? [{ label: 'Create GitHub issue', icon: ICONS.git, action: () => beginIssue(task) }] : [];
   }
   const { url, number } = task.issue;
   return [
@@ -777,15 +766,8 @@ function taskMenu(task, at) {
 
 // ---- A GitHub issue from a task ----
 
-/** The folder an issue is made from: where the list's terminal or workspace is, on this computer. */
-function folderOfList() {
-  const ref = /** @type {ListRef} */ (current);
-  if (ref.kind === LIST_KIND.terminal) {
-    const tab = state.tabs.get(ref.id);
-    return tab && !isSsh(tab) ? lastFolderOf(tab) ?? wsById(tab.wsId)?.cwd ?? null : null;
-  }
-  return ref.kind === LIST_KIND.workspace ? wsById(ref.id)?.cwd ?? null : null;
-}
+/** The folder of the list shown. */
+const folderOfList = () => folderOf(/** @type {ListRef} */ (current));
 
 /**
  * Starts the form that makes an issue from a task or one of its sub-items.
@@ -803,25 +785,6 @@ function beginIssue(task, sub) {
 }
 
 /**
- * Starts Claude Code in a new terminal, in the list's folder, on a task or one of its sub-items.
- * @param {TodoTask} task
- * @param {import('./todolist.js').DetailLine} [sub]
- */
-function implement(task, sub) {
-  const folder = folderOfList();
-  if (!folder || !current || !agentInstalled()) return;
-  const tab = current.kind === LIST_KIND.terminal ? state.tabs.get(current.id) : null;
-  const wsId = tab?.wsId ?? current.id;
-  const profile = tab?.profile ?? defaultProfile();
-  const shell = state.profiles.find(p => p.id === profile);
-  // Windows PowerShell 5.1 breaks a program's argument at double quotes inside it: the prompt has none.
-  const prompt = implementPrompt(task, sub).replaceAll('"', "'");
-  const ref = current;
-  const agent = newTab({ wsId, profile, cwd: folder, name: (sub?.text ?? task.text).slice(0, MAX_AGENT_NAME).trimEnd(), command: commandLine([AGENT_COMMAND, prompt], shell?.shellIcon ?? shell?.icon) });
-  setStatus(ref, task.id, TASK_STATUS.progress, { terminal: agent.id });
-}
-
-/**
  * The statuses to pick from for a task, the one it has marked.
  * @param {TodoTask} task
  * @param {HTMLElement} at
@@ -832,20 +795,6 @@ function statusMenu(task, at) {
     action: () => setStatus(/** @type {ListRef} */ (current), task.id, status, { review: task.review, terminal: task.terminal }),
   })), at);
 }
-
-/** Asks the host once whether the folder shown is on GitHub: the issue buttons wait for the answer. */
-function checkRepo() {
-  const folder = folderOfList();
-  if (!folder || onGitHub.has(folder)) return;
-  onGitHub.set(folder, false);
-  send(PAGE.todoRepoCheck, { folder });
-}
-
-onHost(HOST.todoRepoChecked, m => {
-  if (!m.folder || !m.onGitHub) return;
-  onGitHub.set(m.folder, true);
-  if (!panel.hidden && !editing) render();
-});
 
 /** @param {TodoList} list */
 function renderIssue(list) {
@@ -908,8 +857,8 @@ onHost(HOST.todoIssueCreated, m => {
   }
   const { taskId, line, repo } = issue;
   issue = null;
-  const details = taskById(taskId)?.details ?? '';
-  updateTask(/** @type {ListRef} */ (current), taskId, line === undefined ? { issue: { repo: repo ?? '', number: m.number, url: m.url } } : { details: linkSub(details, line, m.url) });
+  const made = taskById(taskId);
+  if (made) keepIssue(/** @type {ListRef} */ (current), made, line, { repo: repo ?? '', number: m.number, url: m.url });
   showToast({ text: `Issue #${m.number} created in ${repo}`, state: TOAST.done });
 });
 
@@ -925,7 +874,7 @@ function rowAction(control) {
   if (!task) return;
   const sub = /** @type {HTMLElement | null} */ (control.closest('[data-sub]'));
   const line = sub ? detailLines(task.details).find(l => l.at === Number(sub.dataset.sub)) : undefined;
-  if (control.dataset.td === ACTION.implement) implement(task, line);
+  if (control.dataset.td === ACTION.implement) implementTask(/** @type {ListRef} */ (current), task, line);
   else beginIssue(task, line);
 }
 

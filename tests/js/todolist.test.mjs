@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   parseTask, tasksFromLines, tasksFromNote, tagOfHeading, selectedLines, withoutLines, openCount, tagsIn, allTags, withTags, moveBefore,
-  labelsForTags, retag, hoverLines, treeRows, detailLines, tickSub, tickByNumber, linkSub, subProgress, implementPrompt, statusOf, TASK_STATUS, HOVER_TASKS,
+  labelsForTags, retag, splitNote, hoverLines, treeRows, detailLines, tickSub, tickByNumber, linkSub, subProgress, implementPrompt, statusOf, TASK_STATUS, HOVER_TASKS,
 } from '../../src/Termilly.Desktop/wwwroot/js/todolist.js';
 
 const task = (id, more = {}) => ({ id, text: id, created: 0, ...more });
@@ -66,6 +66,13 @@ test('no selection takes all the text', () => {
 test('taking lines out leaves no gap', () => {
   assert.equal(withoutLines('one\n\ntwo\n\nthree', 5, 8), 'one\n\nthree');
   assert.equal(withoutLines('one', 0, 3), '');
+});
+
+test('a note gives up its selected lines as tasks, or all of them', () => {
+  const note = '- one\n- two\n\nkeep';
+  assert.equal(splitNote(note, 0, 5).rest, '- two\n\nkeep');
+  assert.deepEqual(splitNote(note, 0, 5).tasks.map(x => x.text), ['one']);
+  assert.equal(splitNote('- one', 2, 2).rest, '');
 });
 
 test('counts open tasks, for no list too', () => {

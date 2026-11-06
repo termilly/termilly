@@ -7,7 +7,7 @@
 
 import { terminalView, activityHtml, TEXT_SIZE } from './terminal.js';
 import { TAB, SETTING, SETTINGS_PAGE, PAGE_TITLE, STATE_LABEL, TEXT_SIZES, navHtml, notesHtml, settingsHtml, themesHtml, backRow } from './tabs.js';
-import { memosTab, MEMO_EDITOR } from './memos.js';
+import { todoTab } from './todo.js';
 import { SCROLLING, GESTURE_START } from './gestures.js';
 import { manager } from './manage.js';
 import { COMPOSE_STYLE, composeStyle, DICTATION, dictation } from './compose.js';
@@ -80,7 +80,7 @@ let settingsPage = SETTINGS_PAGE.list;
 /** What Settings' list says of alerts. */
 const ALERTS_SET = Object.freeze({ none: 'Not here', on: 'On', off: 'Off' });
 /** The tabs' titles, at the top. */
-const TITLE = Object.freeze({ [TAB.terminals]: 'Termilly', [TAB.memos]: 'Notes', [TAB.notes]: 'Notifications', [TAB.settings]: 'Settings' });
+const TITLE = Object.freeze({ [TAB.terminals]: 'Termilly', [TAB.todo]: 'To do', [TAB.notes]: 'Notifications', [TAB.settings]: 'Settings' });
 
 /**
  * @param {string} path
@@ -154,7 +154,7 @@ async function start() {
       <button class="button" type="submit">Pair</button></div></form>
       <p>A name this PC knows already means that phone again: its old pairing goes.</p><p class="error" data-error></p></div></div>`);
   }
-  show(`<header class="bar"><span data-back></span><h1 data-title>Termilly</h1><span class="conn" data-conn></span><span data-add></span></header><main id="${HOME}" class="tabbed"></main><div id="nav"></div><div id="sheet"></div><div class="toast" data-toast hidden></div>`);
+  show(`<header class="bar"><span data-back></span><h1 data-title>Termilly</h1><span class="conn" data-conn></span><span data-add></span></header><main id="${HOME}" class="tabbed"></main><div id="nav"></div><div id="sheet"></div><div id="todo-sheet"></div><div class="toast" data-toast hidden></div>`);
   manage.swipe(/** @type {HTMLElement} */ (document.getElementById(HOME)));
   connect();
   render();
@@ -179,7 +179,7 @@ function cardHtml(t) {
 
 /** @param {Terminal} t */
 function rowHtml(t) {
-  return `<div class="row" data-do="${DO.term}" data-id="${t.id}">${badge(t)}<div class="r-text"><div class="r-name">${esc(t.title)}</div><div class="r-line">${esc(t.line ?? '')}</div></div><span class="activity-slot">${activityHtml(t)}</span></div>`;
+  return `<div class="row" data-do="${DO.term}" data-id="${t.id}">${badge(t)}<div class="r-text"><div class="r-name">${esc(t.title)}</div><div class="r-line">${esc(t.line ?? '')}</div></div>${todo.mark(t.id)}<span class="activity-slot">${activityHtml(t)}</span></div>`;
 }
 
 /** The phone's answer when it allows alerts. */
@@ -219,10 +219,15 @@ const noteParts = {
   age, waiting: (/** @type {string} */ id) => !!terminal(id)?.waiting, open: DO.open, term: DO.term, clear: DO.clearNote, clearAll: DO.clearNotes,
 };
 
-/** The Notes tab (memos.js): the PC's notes on its workspaces and terminals. */
-const memos = memosTab({
+/** The To do tab (todo.js): the PC's lists on its workspaces and terminals. */
+const todo = todoTab({
   snap: () => snap, badge: t => badge(t), redraw: () => render(), toast: text => toast(text),
   send: message => { if (live?.readyState === OPEN) live.send(JSON.stringify(message)); },
+  openTerminal: id => { const t = terminal(id); if (t) terminalShown.open(t, !!snap.typing); },
+  show: () => {
+    tab = TAB.todo;
+    render();
+  },
 });
 
 /** The Terminals tab: what waits for you, then each workspace's terminals. */
@@ -238,6 +243,12 @@ function terminalsHtml() {
     + manage.remoteHtml();
 }
 
+/** The Notifications tab: tasks waiting for review, then what agents said. */
+function notesPage() {
+  const reviews = todo.reviewNotes();
+  return reviews && !snap.notes?.length ? reviews : `${reviews}${notesHtml(snap.notes ?? [], noteParts)}`;
+}
+
 function render() {
   const home = document.getElementById(HOME);
   if (!home) return;
@@ -245,21 +256,22 @@ function render() {
   if (conn) conn.textContent = connected ? '' : 'Reconnecting';
   const title = app.querySelector('[data-title]');
   const page = tab === TAB.settings ? settingsPage : SETTINGS_PAGE.list;
-  if (title) title.textContent = page ? /** @type {Record<string, string>} */ (PAGE_TITLE)[page] : /** @type {Record<string, string>} */ (TITLE)[tab];
+  const todoTitle = tab === TAB.todo ? todo.title() : '';
+  if (title) title.textContent = page ? /** @type {Record<string, string>} */ (PAGE_TITLE)[page] : todoTitle || /** @type {Record<string, string>} */ (TITLE)[tab];
   // A Settings page's way back sits in the header, above its title, so it stays when the page scrolls.
   const back = app.querySelector('[data-back]');
-  if (back) back.innerHTML = page ? backRow(page === SETTINGS_PAGE.themes ? SETTINGS_PAGE.appearance : SETTINGS_PAGE.list) : '';
+  if (back) back.innerHTML = page ? backRow(page === SETTINGS_PAGE.themes ? SETTINGS_PAGE.appearance : SETTINGS_PAGE.list) : tab === TAB.todo ? todo.backHtml() : '';
   const add = app.querySelector('[data-add]');
-  if (add) add.innerHTML = tab === TAB.terminals ? manage.addButton() : '';
-  // A note being written stays as it is while the PC's news comes in.
-  if (tab === TAB.memos && memos.editing() && home.querySelector(MEMO_EDITOR)) { /* kept */ }
-  else home.innerHTML = tab === TAB.memos ? memos.html()
-    : tab === TAB.notes ? notesHtml(snap.notes ?? [], noteParts)
+  if (add) add.innerHTML = tab === TAB.terminals ? manage.addButton() : tab === TAB.todo ? todo.noteButton() : '';
+  // Its fields stay as they are while the PC's news comes in.
+  if (tab === TAB.todo) todo.fill(home);
+  else home.innerHTML = tab === TAB.notes ? notesPage()
     : page === SETTINGS_PAGE.themes ? themesHtml(looks(snap), chosenLook())
     : tab === TAB.settings ? settingsHtml({ page, alerts: alertsBody(), alertsOn: !canAlert() ? ALERTS_SET.none : me?.alerts ? ALERTS_SET.on : ALERTS_SET.off, size: textSize(), scrolling: localStorage.getItem(SCROLLING.key) ?? SCROLLING.smooth, compose: composeStyle(), dictation: dictation(), host: location.host, connected, look: chosenLook(), looks: looks(snap) })
     : terminalsHtml();
-  /** @type {HTMLElement} */ (document.getElementById('nav')).innerHTML = navHtml(tab, snap.notes?.length ?? 0);
+  /** @type {HTMLElement} */ (document.getElementById('nav')).innerHTML = navHtml(tab, snap.notes?.length ?? 0, todo.reviewCount());
   renderSheet();
+  todo.drawSheet();
 }
 
 // ---- The answer sheet (design D) ----
@@ -347,12 +359,15 @@ function connect() {
       render();
       if (terminalShown.viewing) terminalShown.update(terminal(terminalShown.viewing), !!snap.typing);
       manage.changed();
+      todo.changed();
       news(snap.terminals);
       openAsked();
     } else if (m.type === LIVE.screen || m.type === LIVE.output) {
       terminalShown.message(m);
     } else if (m.type === LIVE.answered && m.op === OP.clipText && m.ok) {
       terminalShown.fillBox(m.text ?? '');
+    } else if (m.type === LIVE.answered && todo.answered(m)) {
+      // To do (todo.js) said how it went.
     } else if (m.type === LIVE.answered && manage.answered(m)) {
       // Opening, closing and the rest (manage.js) said how it went.
     } else if (m.type === LIVE.answered) {
@@ -381,7 +396,7 @@ function answer(pane, choice, text = '') {
 
 // ---- A tapped alert opens its terminal ----
 
-/** The alert's terminal, in the address the app starts at (Features/Phone.cs OpenUrl). */
+/** The alert's terminal or task, in the address the app starts at (Features/Phone.cs OpenUrl). */
 const OPEN_PARAM = 'open';
 /** The terminal a tapped alert asked for, until the PC's state has it. */
 let openAsk = new URLSearchParams(location.search).get(OPEN_PARAM);
@@ -389,9 +404,9 @@ if (openAsk) history.replaceState(null, '', location.pathname); // once: a reloa
 
 function openAsked() {
   const t = openAsk ? terminal(openAsk) : null;
-  if (!t) return;
-  openAsk = null;
-  terminalShown.open(t, !!snap.typing);
+  if (t) terminalShown.open(t, !!snap.typing);
+  // A task's alert says a task, not a terminal.
+  if (t || (openAsk && todo.openTask(openAsk))) openAsk = null;
 }
 
 // The app was running already: the service worker says which terminal.
@@ -528,7 +543,10 @@ app.addEventListener('click', e => {
     document.getElementById(HOME)?.scrollTo(0, 0);
     return;
   }
-  if (tab === TAB.memos && memos.click(/** @type {HTMLElement} */ (e.target))) return;
+  if (todo.click(/** @type {HTMLElement} */ (e.target))) {
+    e.stopPropagation();
+    return;
+  }
   if (manage.click(/** @type {HTMLElement} */ (e.target))) {
     e.stopPropagation();
     return;
@@ -621,6 +639,9 @@ const manage = manager({
   openTerminal: id => { const t = terminal(id); if (t) terminalShown.open(t, !!snap.typing); },
   render,
 });
+
+app.addEventListener('input', e => todo.typed(e));
+app.addEventListener('keydown', e => todo.key(e));
 
 if (hasWorker) navigator.serviceWorker.register('/sw.js');
 start();
