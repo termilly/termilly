@@ -38,6 +38,18 @@ public class TodoIssuesTests
         Assert.Null(TodoIssues.ParseIssue(output));
     }
 
+    [Theory]
+    [InlineData("https://github.com/termilly/termilly.git\n", true)]
+    [InlineData("git@github.com:termilly/termilly.git", true)]
+    [InlineData("ssh://git@github.com/termilly/termilly", true)]
+    [InlineData("https://gitlab.com/a/b.git", false)]
+    [InlineData("https://notgithub.com/a/b.git", false)]
+    [InlineData("optiplex:Development/termilly", false)]
+    public void A_remote_is_on_github_only_when_it_says_so(string remote, bool onGitHub)
+    {
+        Assert.Equal(onGitHub, TodoIssues.IsGitHubRemote(remote));
+    }
+
     [Fact]
     public void Label_names_are_read_from_gh()
     {

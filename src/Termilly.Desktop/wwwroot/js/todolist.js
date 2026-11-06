@@ -13,6 +13,10 @@ const BOX_ONLY = /^\s*\[( |x|X)\]\s+/;
 const HEADING = /^\s*#{1,6}\s+(.+?)\s*#*\s*$/;
 const LINE_BREAK = /\r?\n/;
 const TICKED = 'xX';
+/** A line of a task's details that's a sub-item: `[] text`, `[ ] text`, `[x] text`, with a list mark or without. */
+const SUB_ITEM = /^\s*(?:[-*+]\s+)?\[( |x|X)?\]\s*(.*)$/;
+/** The issue a sub-item became: its address, at the end of its line. */
+const SUB_ISSUE = /\s+(https:\/\/\S+\/issues\/(\d+))\s*$/;
 const TAG_HASH_BASE = 31;
 const TAG_HASH_LIMIT = 1000003;
 
@@ -192,12 +196,84 @@ export const labelsForTags = (labels, tags) => labels.filter(label => tags.inclu
 export const issueBody = task => task.details?.trim() ?? '';
 
 /**
+ * A line of a task's details: plain text, or a sub-item with its tick and the issue made from it.
+ * @typedef {{ at: number, text: string, sub: boolean, done: boolean, issue?: { url: string, number: number } }} DetailLine
+ */
+
+/**
+ * The lines of a task's details, sub-items marked. A `[]` with nothing after it is only text.
+ * @param {string | undefined} details
+ * @returns {DetailLine[]}
+ */
+export function detailLines(details) {
+  return (details ?? '').split(LINE_BREAK).map((line, at) => {
+    const match = line.match(SUB_ITEM);
+    if (!match?.[2].trim()) return { at, text: line, sub: false, done: false };
+    const issue = match[2].match(SUB_ISSUE);
+    return {
+      at, sub: true, done: !!match[1] && TICKED.includes(match[1]), text: issue ? match[2].slice(0, issue.index).trim() : match[2].trim(),
+      ...(issue ? { issue: { url: issue[1], number: Number(issue[2]) } } : {}),
+    };
+  });
+}
+
+/**
+ * The details with one sub-item ticked or not.
+ * @param {string} details
+ * @param {number} at its line
+ * @param {boolean} done
+ */
+export function tickSub(details, at, done) {
+  const lines = details.split(LINE_BREAK);
+  lines[at] = lines[at].replace(/\[( |x|X)?\]/, done ? '[x]' : '[ ]');
+  return lines.join('\n');
+}
+
+/**
+ * The details with an issue's address at the end of a sub-item.
+ * @param {string} details
+ * @param {number} at its line
+ * @param {string} url
+ */
+export function linkSub(details, at, url) {
+  const lines = details.split(LINE_BREAK);
+  lines[at] = `${lines[at].trimEnd()} ${url}`;
+  return lines.join('\n');
+}
+
+/**
+ * How many of a task's sub-items are done, and how many it has.
+ * @param {string | undefined} details
+ * @returns {[number, number]}
+ */
+export function subProgress(details) {
+  const subs = detailLines(details).filter(line => line.sub);
+  return [subs.filter(line => line.done).length, subs.length];
+}
+
+/** @param {string} text */
+const oneLine = text => text.replace(/\s+/g, ' ').trim();
+
+/**
+ * What Implement asks an agent: a task, with what its details say and the sub-items still to do, or one sub-item of it.
+ * @param {TodoTask} task
+ * @param {DetailLine} [sub]
+ */
+export function implementPrompt(task, sub) {
+  if (sub) return `Work on this step from my Termilly To do list: '${oneLine(sub.text)}'. It is part of the task '${oneLine(task.text)}'. Tell me when it is done.`;
+  const lines = detailLines(task.details);
+  const notes = oneLine(lines.filter(line => !line.sub).map(line => line.text).join(' '));
+  const steps = lines.filter(line => line.sub && !line.done).map((line, i) => `${i + 1}) ${oneLine(line.text)}`);
+  return `Work on this task from my Termilly To do list: '${oneLine(task.text)}'.${notes ? ` Details: ${notes}` : ''}${steps.length ? ` Steps: ${steps.join(' ')}` : ''} Tell me when it is done.`;
+}
+
+/**
  * A list as the picker's tree sees it.
  * @typedef {{ ref: { kind: string, id: string }, name: string, tasks: TodoTask[], note: string }} TreeList
  */
 /**
- * A workspace in the picker's tree: its own list, and its terminals, each with the host it's on, if any.
- * @typedef {{ list: TreeList, color: string, terms: { list: TreeList, badge: string, host: TreeList | null }[] }} TreeGroup
+ * A workspace in the picker's tree: its own list, and its terminals.
+ * @typedef {{ list: TreeList, color: string, terms: { list: TreeList, badge: string }[] }} TreeGroup
  */
 /**
  * A row of the picker's tree. A workspace (depth 0) counts its terminals' tasks too.
@@ -224,7 +300,7 @@ const stays = (list, { query, only, isCurrent }) => !!list
   && (query ? found(list, query) : !only || filled(list) || isCurrent(list));
 
 /**
- * The picker's rows: workspaces with their terminals under them and each host under its terminal. Typing finds lists
+ * The picker's rows: workspaces with their terminals under them. Typing finds lists
  * and opens what it finds; a workspace found by name keeps all its terminals. With `only`, what has nothing in it goes,
  * but never the list shown.
  * @param {TreeGroup[]} groups
@@ -238,18 +314,13 @@ export function treeRows(groups, { query = '', only = false, isOpen, isCurrent }
   const rows = [];
   for (const group of groups) {
     const named = !!q && group.list.name.toLowerCase().includes(q);
-    const kept = group.terms.filter(t => named || stays(t.list, choices) || stays(t.host, choices));
+    const kept = group.terms.filter(t => named || stays(t.list, choices));
     if (!stays(group.list, choices) && !kept.length && !named) continue;
     const open = q ? true : isOpen(group);
     const count = openCount(group.list.tasks) + group.terms.reduce((sum, t) => sum + openCount(t.list.tasks), 0);
     rows.push({ list: group.list, depth: 0, count, color: group.color, open, foldable: !q && group.terms.length > 0 });
     if (!open) continue;
-    for (const t of kept) {
-      rows.push({ list: t.list, depth: 1, count: openCount(t.list.tasks), badge: t.badge });
-      if (t.host && (named || stays(t.host, choices))) {
-        rows.push({ list: t.host, depth: 2, count: openCount(t.host.tasks) });
-      }
-    }
+    for (const t of kept) rows.push({ list: t.list, depth: 1, count: openCount(t.list.tasks), badge: t.badge });
   }
   return rows;
 }

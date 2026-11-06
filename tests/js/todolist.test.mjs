@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   parseTask, tasksFromLines, tasksFromNote, tagOfHeading, selectedLines, withoutLines, openCount, tagsIn, allTags, withTags, moveBefore,
-  labelsForTags, hoverLines, treeRows, HOVER_TASKS,
+  labelsForTags, hoverLines, treeRows, detailLines, tickSub, linkSub, subProgress, implementPrompt, HOVER_TASKS,
 } from '../../src/Termilly.Desktop/wwwroot/js/todolist.js';
 
 const task = (id, more = {}) => ({ id, text: id, created: 0, ...more });
@@ -101,17 +101,16 @@ test('a task moves to where another is', () => {
 const list = (name, tasks = [], note = '') => ({ ref: { kind: 'x', id: name }, name, tasks: tasks.map(t => task(t, { text: t })), note });
 const groups = [
   { list: list('acme', ['Move invoices']), color: 'blue', terms: [
-    { list: list('api', ['Rotate webhook secret']), badge: 'b', host: null },
-    { list: list('logs'), badge: 'b', host: null },
-    { list: list('db'), badge: 'b', host: list('prod-db', [], 'Ask ops first') },
+    { list: list('api', ['Rotate webhook secret']), badge: 'b' },
+    { list: list('logs'), badge: 'b' },
   ] },
-  { list: list('web'), color: 'green', terms: [{ list: list('dev', ['Fix login']), badge: 'b', host: null }] },
-  { list: list('idle'), color: 'red', terms: [{ list: list('shell'), badge: 'b', host: null }] },
+  { list: list('web'), color: 'green', terms: [{ list: list('dev', ['Fix login']), badge: 'b' }] },
+  { list: list('idle'), color: 'red', terms: [{ list: list('shell'), badge: 'b' }] },
 ];
 const tree = (options = {}) => treeRows(groups, { isOpen: g => g.list.name === 'acme', isCurrent: l => l.name === 'acme', ...options }).map(r => `${'-'.repeat(r.depth)}${r.list.name}`);
 
-test('the tree nests terminals under workspaces and hosts under terminals, folded ones closed', () => {
-  assert.deepEqual(tree(), ['acme', '-api', '-logs', '-db', '--prod-db', 'web', 'idle']);
+test('the tree nests terminals under workspaces, folded ones closed', () => {
+  assert.deepEqual(tree(), ['acme', '-api', '-logs', 'web', 'idle']);
 });
 
 test('a workspace counts its own tasks and its terminals', () => {
@@ -120,8 +119,8 @@ test('a workspace counts its own tasks and its terminals', () => {
   assert.equal(rows[1].count, 1);
 });
 
-test('only with tasks hides what has nothing in it, but a host with a note stays', () => {
-  assert.deepEqual(tree({ only: true }), ['acme', '-api', '-db', '--prod-db', 'web']);
+test('only with tasks hides what has nothing in it', () => {
+  assert.deepEqual(tree({ only: true }), ['acme', '-api', 'web']);
 });
 
 test('only with tasks never hides the list shown', () => {
@@ -136,16 +135,54 @@ test('typing finds the text of an open task', () => {
   assert.deepEqual(tree({ query: 'webhook' }), ['acme', '-api']);
 });
 
-test('typing finds a host, under its terminal', () => {
-  assert.deepEqual(tree({ query: 'prod' }), ['acme', '-db', '--prod-db']);
-});
-
 test('a workspace found by name keeps its terminals', () => {
   assert.deepEqual(tree({ query: 'idle' }), ['idle', '-shell']);
 });
 
 test('nothing found gives no rows', () => {
   assert.deepEqual(tree({ query: 'nothing' }), []);
+});
+
+test('[] and [ ] and [x] in details are sub-items, with or without a list mark', () => {
+  assert.deepEqual(detailLines('Some text\n[] one\n[ ] two\n- [x] three\n* [X] four').map(l => [l.sub, l.done, l.text]), [
+    [false, false, 'Some text'], [true, false, 'one'], [true, false, 'two'], [true, true, 'three'], [true, true, 'four'],
+  ]);
+});
+
+test('[] with nothing after it is only text', () => {
+  assert.equal(detailLines('[]')[0].sub, false);
+  assert.equal(detailLines('a [] b')[0].sub, false);
+});
+
+test('no details, no sub-items', () => {
+  assert.deepEqual(subProgress(undefined), [0, 0]);
+});
+
+test('ticking a sub-item writes it back, and keeps its text', () => {
+  assert.equal(tickSub('a\n[] one', 1, true), 'a\n[x] one');
+  assert.equal(tickSub('- [x] one', 0, false), '- [ ] one');
+});
+
+test('a sub-item keeps the issue made from it, apart from its text', () => {
+  const line = detailLines(linkSub('[ ] one', 0, 'https://github.com/a/b/issues/41'))[0];
+  assert.equal(line.text, 'one');
+  assert.deepEqual(line.issue, { url: 'https://github.com/a/b/issues/41', number: 41 });
+  assert.equal(detailLines(tickSub(linkSub('[ ] one', 0, 'https://github.com/a/b/issues/41'), 0, true))[0].done, true);
+});
+
+test('progress counts sub-items', () => {
+  assert.deepEqual(subProgress('text\n[x] a\n[] b\n[ ] c'), [1, 3]);
+});
+
+test('Implement asks for the task, its details and the steps left', () => {
+  assert.equal(implementPrompt(task('t', { text: 'Fix  login', details: 'See the log\n[x] done step\n[] step one\n[] step two' })),
+    "Work on this task from my Termilly To do list: 'Fix login'. Details: See the log Steps: 1) step one 2) step two Tell me when it is done.");
+});
+
+test('Implement on a sub-item names its task', () => {
+  const task_ = task('t', { text: 'Fix login', details: '[] step one' });
+  assert.equal(implementPrompt(task_, detailLines(task_.details)[0]),
+    "Work on this step from my Termilly To do list: 'step one'. It is part of the task 'Fix login'. Tell me when it is done.");
 });
 
 test('labels match tags in any case', () => {

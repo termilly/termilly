@@ -3238,10 +3238,8 @@ body.detached-window .files-head .np-sep { height: 18px; margin: 0 0 0 1px; back
 .td-tree-row.on { background: color-mix(in srgb, var(--accent) 25%, transparent); }
 .td-tree-row.dim { color: var(--muted); }
 .td-tree-row.depth0 { font-weight: 600; }
-/* A terminal starts where its workspace's name does, and a host where its terminal's name does. */
+/* A terminal starts where its workspace's name does. */
 .td-tree-row.depth1 { padding-left: 41px; }
-.td-tree-row.depth2 { padding-left: 69px; font-size: 12.5px; }
-.td-tree-row.depth2 > svg { flex: none; width: 14px; height: 14px; fill: none; stroke: var(--muted); }
 .td-tree-name { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .td-fold-mark { display: inline-flex; flex: none; justify-content: center; width: 14px; color: var(--muted); }
 .td-fold-mark svg { width: 12px; height: 12px; fill: none; stroke: currentColor; }
@@ -3261,17 +3259,25 @@ body.detached-window .files-head .np-sep { height: 18px; margin: 0 0 0 1px; back
 .td-chip.on { border-color: currentColor; }
 .td-list { flex: 1; min-height: 0; overflow-y: auto; padding: 0 4px 8px; }
 .td-empty { margin: 16px 12px; color: var(--muted); font-size: 13px; }
-.td-task { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; gap: 8px; padding: 5px 6px; border-radius: 6px; font-size: 13px; }
+.td-task { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto auto; gap: 2px 8px; padding: 5px 6px; border-radius: 6px; font-size: 13px; }
 .td-task:hover { background: var(--hover); }
 .td-check { width: 14px; height: 14px; margin: 3px 0 0; accent-color: var(--accent); }
 .td-text { overflow-wrap: anywhere; line-height: 20px; }
 .td-task.done .td-text { color: var(--muted); text-decoration: line-through; }
 .td-details { color: var(--muted); font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .td-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 3px; }
-.td-gh { color: var(--muted); font: 11px var(--mono); }
-.td-more { visibility: hidden; }
-.td-task:hover .td-more, .td-more:focus-visible { visibility: visible; }
-.td-fold { display: block; margin: 6px; padding: 2px 6px; border: 0; background: none; color: var(--muted); font: inherit; font-size: 12px; cursor: pointer; }
+.td-gh { margin-left: 4px; padding: 0; border: 0; background: none; color: var(--muted); font: 11px var(--mono); cursor: pointer; }
+.td-gh:hover { color: var(--text); text-decoration: underline; }
+.td-more, .td-acts { visibility: hidden; }
+.td-task:hover > .td-more, .td-task:hover > .td-acts, .td-sub:hover > .td-acts, .td-more:focus-visible, .td-acts:focus-within { visibility: visible; }
+.td-acts { display: inline-flex; align-self: start; gap: 2px; }
+.td-acts .pane-btn:disabled { opacity: .4; cursor: default; }
+.td-sub { grid-column: 2 / -1; display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; gap: 8px; padding: 1px 0; }
+.td-sub.done .td-text { color: var(--muted); text-decoration: line-through; }
+.td-progress { color: var(--muted); font: 11px var(--mono); }
+.td-fold { display: flex; align-items: center; gap: 4px; width: 100%; margin-top: 8px; padding: 5px 6px; border: 0; border-top: 1px solid var(--border); background: none; color: var(--muted); font: inherit; font-size: 12px; font-weight: 600; text-align: left; cursor: pointer; }
+.td-fold svg { width: 12px; height: 12px; fill: none; stroke: currentColor; }
+.td-fold-count { font-weight: 400; }
 .td-fold:hover { color: var(--text); }
 .td-edit, .td-issue { display: flex; flex-direction: column; gap: 6px; }
 .td-edit { margin: 2px; padding: 8px; border: 1px solid var(--border); border-radius: 6px; }

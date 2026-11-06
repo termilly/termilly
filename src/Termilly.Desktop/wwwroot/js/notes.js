@@ -1,10 +1,12 @@
 // @ts-check
 // Notes on terminals, workspaces and SSH hosts ("staging DB is read-only until Friday", "this box needs sudo -u
 // deploy"). A terminal's or workspace's note is saved with the workspace (encrypted with the rest) and kept in
-// the closed-terminal history; a host's note lives in Settings and shows on every terminal opened to it. They're
-// written in To do (js/todopanel.js), above the tasks of the same terminal, workspace or host.
+// the closed-terminal history, and written in To do (js/todopanel.js), above their tasks. A host's note lives in
+// Settings, shows on every terminal opened to it, and has its own editor here.
 
 import { state, emit, persist, profileOf, wsById, GROUPS, isSshProfile, EVENTS } from './store.js';
+import { modal } from './dialogs.js';
+import { escapeHtml } from './ui.js';
 import { updateSettings } from './preferences.js';
 
 /**
@@ -49,6 +51,33 @@ export function notesFor(tab) {
  */
 export function noteTitle(notes) {
   return notes.map(n => `${n.kind === NOTE_KIND.terminal ? 'Note' : n.kind === NOTE_KIND.host ? 'Host note' : 'Workspace note'}: ${firstLine(n.text)}`).join('\n');
+}
+
+/**
+ * Edits a host's note: saving empty text removes it.
+ * @param {string} profile
+ */
+export function editHostNote(profile) {
+  const text = state.settings.shells.notes?.[profile] ?? '';
+  return modal('note-editor', `
+    <h3>Note on ${escapeHtml(state.profiles.find(p => p.id === profile)?.name ?? 'this host')}</h3>
+    <p class="dialog-sub">Shows on every terminal opened to this host: runbook links, who to ask, what not to do.</p>
+    <textarea class="field note-text" rows="16" spellcheck="false" autocapitalize="off" autocorrect="off">${escapeHtml(text)}</textarea>
+    <div class="dialog-actions">
+      <span class="spacer"></span>
+      <button class="btn" data-cancel>Cancel</button>
+      <button class="btn primary" data-ok>Save</button>
+    </div>`, (dialog, close) => {
+    const area = /** @type {HTMLTextAreaElement} */ (dialog.querySelector('.note-text'));
+    setTimeout(() => area.focus());
+    // Enter makes new lines; Ctrl+Enter saves (modal()).
+    return {
+      submit: () => {
+        setNote(NOTE_KIND.host, profile, area.value.trim(), true);
+        close(true);
+      },
+    };
+  });
 }
 
 /**

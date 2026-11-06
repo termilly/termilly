@@ -6,7 +6,9 @@
 
 import { PAGE, HOST } from './protocol.js';
 import { send, onHost } from './host.js';
-import { state, on, persist, newId, lastFolderOf, wsById, tabsOf, tabTitle, isSsh, EVENTS, TAG_COLORS } from './store.js';
+import { state, on, persist, newId, lastFolderOf, wsById, tabsOf, tabTitle, isSsh, defaultProfile, EVENTS, TAG_COLORS } from './store.js';
+import { newTab } from './panes.js';
+import { commandLine } from './quoting.js';
 import { escapeHtml, cssColor, tabBadgeHtml, countText, ICONS } from './ui.js';
 import { byId, find, targetOf, WORKSPACE_ID, DOCK_GRIP, PANEL_HEAD, TOOL_COUNT } from './dom.js';
 import { showMenu, openPopover, closeAll, SEPARATOR } from './popups.js';
@@ -19,15 +21,19 @@ import { dockPanel, NOTEPAD_DOCK } from './dockpanel.js';
 import { TAG_LIST, swatchesHtml } from './tagpicker.js';
 import {
   parseTask, tasksFromLines, tasksFromNote, tagOfHeading, selectedLines, withoutLines, openCount, tagsIn, withTags, moveBefore, labelsForTags, issueBody, treeRows, found,
+  detailLines, tickSub, linkSub, subProgress, implementPrompt,
 } from './todolist.js';
 import {
-  LIST_KIND, listOf, noteTarget, sameList, listInFront, openInFront, terminalList, workspaceList, hostList, addTasks, updateTask,
-  removeTask, moveTask, reorderTasks, todoTags, tagColor, setTagColor,
+  LIST_KIND, listOf, noteTarget, sameList, listInFront, openInFront, terminalList, workspaceList, addTasks, updateTask,
+  removeTask, moveTask, reorderTasks, todoTags, tagColor, setTagColor, moveHostTasks,
 } from './todo.js';
 
 /** @typedef {import('./todo.js').ListRef} ListRef */
 
 const NAME = 'To do';
+/** What Implement runs, and the longest name it gives its terminal. */
+const AGENT_COMMAND = 'claude';
+const MAX_AGENT_NAME = 32;
 /** A tag picker's colour field. */
 const COLOR_INPUT = 'color';
 /** A workspace's own list, in the picker. */
@@ -43,6 +49,7 @@ const WINDOW_KEY = 'todo';
 const ACTION = Object.freeze({
   pick: 'pick', note: 'note', pin: 'pin', detach: 'detach', close: 'close', fold: 'fold', tag: 'tag', more: 'more', save: 'save',
   cancel: 'cancel', label: 'label', create: 'create', backToList: 'backToList', pickTags: 'pickTags', dropTag: 'dropTag',
+  implement: 'implement', issue: 'issue', openIssue: 'openIssue',
 });
 /** How long after the last key a note is saved. */
 const NOTE_SAVE_MS = 400;
@@ -106,15 +113,16 @@ let picked = [];
 /** Whether the note's box shows though the list has no note, and whether it's hidden though it has one. */
 let writingNote = false;
 let hidingNote = false;
-/** Whether done tasks show. */
-let showDone = false;
 /** The task being edited, in its row, and its tags so far. */
 /** @type {string | null} */
 let editing = null;
 /** @type {string[]} */
 let editTags = [];
-/** The task an issue is being made from, and what the host said about its repository. */
-/** @type {{ taskId: string, requestId: string, repo?: string, labels: string[], ticked: string[], error?: string, busy?: boolean, folder: string | null } | null} */
+/** Whether each folder's repository is on GitHub, as far as the host said. */
+/** @type {Map<string, boolean>} */
+const onGitHub = new Map();
+/** The task (or its sub-item, by line) an issue is being made from, and what the host said about its repository. */
+/** @type {{ taskId: string, line?: number, title: string, body: string, requestId: string, repo?: string, labels: string[], ticked: string[], error?: string, busy?: boolean, folder: string | null } | null} */
 let issue = null;
 /** @type {ReturnType<typeof setTimeout> | null} */
 let noteTimer = null;
@@ -135,15 +143,46 @@ const chip = (tag, on = false) => `<button type="button" class="td-chip${on ? ' 
 /** @param {TodoTask} task */
 function rowHtml(task) {
   if (task.id === editing) return editorHtml(task);
-  const issueChip = task.issue ? `<span class="td-gh" title="${escapeHtml(task.issue.url)}">#${task.issue.number}</span>` : '';
-  const hasMeta = !!(task.tags?.length || task.issue);
+  const lines = detailLines(task.details);
+  const notes = lines.filter(line => !line.sub).map(line => line.text).join('\n').trim();
+  const [doneSubs, subs] = subProgress(task.details);
+  const hasMeta = !!(task.tags?.length || task.issue || subs);
   return `<div class="td-task${task.done ? ' done' : ''}" data-task="${escapeHtml(task.id)}" draggable="true">
     <input class="td-check" type="checkbox" ${task.done ? 'checked' : ''} aria-label="Done">
     <div class="td-body"><div class="td-text">${escapeHtml(task.text)}</div>
-      ${task.details ? `<div class="td-details">${escapeHtml(task.details)}</div>` : ''}
-      ${hasMeta ? `<div class="td-meta">${(task.tags ?? []).map(t => chip(t, picked.includes(t))).join('')}${issueChip}</div>` : ''}</div>
-    <button class="pane-btn td-more" data-td="${ACTION.more}" title="More">${ICONS.more}</button>
+      ${notes ? `<div class="td-details">${escapeHtml(notes)}</div>` : ''}
+      ${hasMeta ? `<div class="td-meta">${subs ? `<span class="td-progress">${doneSubs}/${subs}</span>` : ''}${(task.tags ?? []).map(t => chip(t, picked.includes(t))).join('')}${issueChip(task.issue)}</div>` : ''}</div>
+    ${actsHtml(task.issue)}<button class="pane-btn td-more" data-td="${ACTION.more}" title="More">${ICONS.more}</button>
+    ${lines.filter(line => line.sub).map(subHtml).join('')}
   </div>`;
+}
+
+/** @param {{ url: string, number: number } | undefined} issue */
+const issueChip = issue => (issue ? `<button type="button" class="td-gh" data-td="${ACTION.openIssue}" data-url="${escapeHtml(issue.url)}" title="Open issue #${issue.number} on GitHub">#${issue.number}</button>` : '');
+
+/**
+ * What a sub-item shows: its tick, its text, and the same actions as its task.
+ * @param {import('./todolist.js').DetailLine} line
+ */
+function subHtml(line) {
+  return `<div class="td-sub${line.done ? ' done' : ''}" data-sub="${line.at}">
+    <input class="td-check td-sub-check" type="checkbox" ${line.done ? 'checked' : ''} aria-label="Done">
+    <span class="td-text">${escapeHtml(line.text)}${issueChip(line.issue)}</span>
+    ${actsHtml(line.issue)}
+  </div>`;
+}
+
+/**
+ * Implement, and Create GitHub issue when the folder's repository is on GitHub and there's no issue yet.
+ * @param {{ url: string, number: number } | undefined} issue
+ */
+function actsHtml(issue) {
+  const folder = folderOfList();
+  const canIssue = !issue && !!folder && onGitHub.get(folder);
+  return `<span class="td-acts">
+    <button class="pane-btn" data-td="${ACTION.implement}" ${folder ? '' : 'disabled'} title="${folder ? 'Implement: start Claude Code on this in a new terminal' : 'Implement needs a folder on this computer'}">${ICONS.play}</button>
+    ${canIssue ? `<button class="pane-btn" data-td="${ACTION.issue}" title="Create GitHub issue">${ICONS.git}</button>` : ''}
+  </span>`;
 }
 
 /** @param {TodoTask} task */
@@ -168,7 +207,7 @@ function listHtml(list) {
   const open = tasks.filter(t => !t.done);
   const done = tasks.filter(t => t.done);
   const empty = !list.tasks.length ? `<p class="td-empty">${list.note ? 'No tasks. Right-click the note to turn its lines into tasks.' : 'Nothing here yet.'}</p>` : '';
-  return `${empty}${open.map(rowHtml).join('')}${done.length ? `<button class="td-fold" data-td="${ACTION.fold}" aria-expanded="${showDone}">${done.length} done</button>` : ''}${showDone ? done.map(rowHtml).join('') : ''}`;
+  return `${empty}${open.map(rowHtml).join('')}${done.length ? `<button class="td-fold" data-td="${ACTION.fold}" aria-expanded="${!!state.todo.showDone}">${state.todo.showDone ? ICONS.chevronDown : ICONS.chevronRight}Done<span class="td-fold-count">${done.length}</span></button>` : ''}${state.todo.showDone ? done.map(rowHtml).join('') : ''}`;
 }
 
 /** @typedef {import('./todo.js').TodoList} TodoList */
@@ -182,7 +221,6 @@ function fitNote() {
 /** @param {TodoList} list */
 function renderNote(list) {
   noteBox.hidden = hidingNote || (!list.note && !writingNote);
-  pinButton.hidden = list.ref.kind === LIST_KIND.host;
   pinButton.setAttribute('aria-pressed', String(list.pinned));
   // The text being typed stays as it is: a save comes back here.
   if (noteArea.ownerDocument.activeElement !== noteArea) noteArea.value = list.note;
@@ -198,7 +236,7 @@ function showPick(list) {
   const ws = list.ref.kind === LIST_KIND.workspace ? wsById(list.ref.id) : null;
   pickName.textContent = list.name;
   pickSub.textContent = tab ? wsById(tab.wsId)?.name ?? '' : '';
-  pickIcon.innerHTML = ws ? dotHtml(ws.color) : tab ? tabBadgeHtml(tab) : ICONS.ssh;
+  pickIcon.innerHTML = ws ? dotHtml(ws.color) : tab ? tabBadgeHtml(tab) : '';
 }
 
 /** @param {string} color */
@@ -211,6 +249,7 @@ function render() {
     picked = [];
   }
   const list = shown();
+  checkRepo();
   view.hidden = !!issue;
   issueForm.hidden = !issue;
   if (!list) {
@@ -293,6 +332,7 @@ export function toggleTodo() {
 
 /** Shows To do as it was left (main.js, once the saved state is in). */
 export function initTodo() {
+  moveHostTasks();
   current = state.todo.list ?? null;
   dock.restorePlace();
   showCount();
@@ -345,18 +385,12 @@ function noteMenu(e) {
 
 // ---- Picking a list ----
 
-/** The workspaces in the tree, each with its lists; a host shows once, under its first terminal in a workspace. */
+/** The workspaces in the tree, each with its terminals. */
 function treeGroups() {
-  return state.workspaces.map(ws => {
-    /** @type {Set<string>} */
-    const hosts = new Set();
-    const terms = tabsOf(ws).filter(t => !t.virtual).map(t => {
-      const first = isSsh(t) && !hosts.has(t.profile);
-      hosts.add(t.profile);
-      return { list: /** @type {TodoList} */ (listOf(terminalList(t))), badge: tabBadgeHtml(t), host: first ? listOf(hostList(t.profile)) : null };
-    });
-    return { list: /** @type {TodoList} */ (listOf(workspaceList(ws))), color: ws.color, terms };
-  });
+  return state.workspaces.map(ws => ({
+    list: /** @type {TodoList} */ (listOf(workspaceList(ws))), color: ws.color,
+    terms: tabsOf(ws).filter(t => !t.virtual).map(t => ({ list: /** @type {TodoList} */ (listOf(terminalList(t))), badge: tabBadgeHtml(t) })),
+  }));
 }
 
 /** Workspaces folded or opened by hand; the others start open only when they hold the list shown or are in front. */
@@ -368,14 +402,14 @@ function isOpenInTree(group) {
   const hand = foldedByHand.get(group.list.ref.id);
   if (hand !== undefined) return hand;
   const shownNow = current;
-  const holdsShown = !!shownNow && (sameList(group.list.ref, shownNow) || group.terms.some(t => sameList(t.list.ref, shownNow) || (!!t.host && sameList(t.host.ref, shownNow))));
+  const holdsShown = !!shownNow && (sameList(group.list.ref, shownNow) || group.terms.some(t => sameList(t.list.ref, shownNow)));
   return holdsShown || group.list.ref.id === state.activeId;
 }
 
 /** @param {import('./todolist.js').TreeRow} row @param {number} at */
 function treeRowHtml(row, at) {
   const { ref, name, note, tasks } = row.list;
-  const icon = row.depth === 0 ? dotHtml(row.color ?? '') : row.badge ?? ICONS.ssh;
+  const icon = row.depth === 0 ? dotHtml(row.color ?? '') : row.badge ?? '';
   const on = current && sameList(ref, current) ? ' on' : '';
   const empty = note || openCount(tasks) || row.depth === 0 ? '' : ' dim';
   const fold = row.foldable ? `<span class="td-fold-mark" data-fold="${escapeHtml(ref.id)}">${row.open ? ICONS.chevronDown : ICONS.chevronRight}</span>` : row.depth === 0 ? '<span class="td-fold-mark"></span>' : '';
@@ -645,7 +679,10 @@ function pickTags(at) {
 
 /** @param {TodoTask} task */
 function issueItems(task) {
-  if (!task.issue) return [{ label: 'Create GitHub issue', icon: ICONS.git, action: () => beginIssue(task) }];
+  if (!task.issue) {
+    const folder = folderOfList();
+    return folder && onGitHub.get(folder) ? [{ label: 'Create GitHub issue', icon: ICONS.git, action: () => beginIssue(task) }] : [];
+  }
   const { url, number } = task.issue;
   return [
     { label: `Open issue #${number} on GitHub`, icon: ICONS.link, action: () => send(PAGE.openUrl, { url }) },
@@ -699,13 +736,51 @@ function folderOfList() {
   return ref.kind === LIST_KIND.workspace ? wsById(ref.id)?.cwd ?? null : null;
 }
 
-/** @param {TodoTask} task */
-function beginIssue(task) {
+/**
+ * Starts the form that makes an issue from a task or one of its sub-items.
+ * @param {TodoTask} task
+ * @param {import('./todolist.js').DetailLine} [sub]
+ */
+function beginIssue(task, sub) {
   const folder = folderOfList();
-  issue = { taskId: task.id, requestId: newId('i'), labels: [], ticked: [], folder, error: folder ? undefined : 'This list has no folder on this computer, so there’s no repository to use.' };
+  issue = {
+    taskId: task.id, line: sub?.at, title: sub?.text ?? task.text, body: sub ? `Part of: ${task.text}` : issueBody(task),
+    requestId: newId('i'), labels: [], ticked: [], folder, error: folder ? undefined : 'This list has no folder on this computer, so there’s no repository to use.',
+  };
   render();
   if (folder) send(PAGE.todoIssueInfo, { requestId: issue.requestId, folder });
 }
+
+/**
+ * Starts Claude Code in a new terminal, in the list's folder, on a task or one of its sub-items.
+ * @param {TodoTask} task
+ * @param {import('./todolist.js').DetailLine} [sub]
+ */
+function implement(task, sub) {
+  const folder = folderOfList();
+  if (!folder || !current) return;
+  const tab = current.kind === LIST_KIND.terminal ? state.tabs.get(current.id) : null;
+  const wsId = tab?.wsId ?? current.id;
+  const profile = tab?.profile ?? defaultProfile();
+  const shell = state.profiles.find(p => p.id === profile);
+  // Windows PowerShell 5.1 breaks a program's argument at double quotes inside it: the prompt has none.
+  const prompt = implementPrompt(task, sub).replaceAll('"', "'");
+  newTab({ wsId, profile, cwd: folder, name: (sub?.text ?? task.text).slice(0, MAX_AGENT_NAME).trimEnd(), command: commandLine([AGENT_COMMAND, prompt], shell?.shellIcon ?? shell?.icon) });
+}
+
+/** Asks the host once whether the folder shown is on GitHub: the issue buttons wait for the answer. */
+function checkRepo() {
+  const folder = folderOfList();
+  if (!folder || onGitHub.has(folder)) return;
+  onGitHub.set(folder, false);
+  send(PAGE.todoRepoCheck, { folder });
+}
+
+onHost(HOST.todoRepoChecked, m => {
+  if (!m.folder || !m.onGitHub) return;
+  onGitHub.set(m.folder, true);
+  if (!panel.hidden && !editing) render();
+});
 
 /** @param {TodoList} list */
 function renderIssue(list) {
@@ -719,8 +794,8 @@ function renderIssue(list) {
     <h3>Create a GitHub issue</h3>
     <p class="td-issue-repo">${issue.repo ? escapeHtml(issue.repo) : issue.error ? '' : 'Finding the repository'}</p>
     ${issue.error ? `<p class="td-issue-error">${escapeHtml(issue.error)}</p>` : ''}
-    <input class="field td-issue-title" value="${escapeHtml(task.text)}" spellcheck="false" autocomplete="off" aria-label="Title">
-    <textarea class="field td-issue-body" rows="8" spellcheck="false" placeholder="Body" aria-label="Body">${escapeHtml(issueBody(task))}</textarea>
+    <input class="field td-issue-title" value="${escapeHtml(issue.title)}" spellcheck="false" autocomplete="off" aria-label="Title">
+    <textarea class="field td-issue-body" rows="8" spellcheck="false" placeholder="Body" aria-label="Body">${escapeHtml(issue.body)}</textarea>
     ${issue.labels.length ? `<div class="td-labels">${issue.labels.map(l => `<button type="button" class="td-label${issue?.ticked.includes(l) ? ' on' : ''}" data-td="${ACTION.label}" data-label="${escapeHtml(l)}" aria-pressed="${issue?.ticked.includes(l)}">${escapeHtml(l)}</button>`).join('')}</div>` : ''}
     <span class="td-edit-actions"><button type="button" class="btn small" data-td="${ACTION.backToList}">Cancel</button><button type="button" class="btn small primary" data-td="${ACTION.create}" ${ready ? '' : 'disabled'}>${issue.busy ? 'Creating' : 'Create issue'}</button></span>`;
 }
@@ -766,13 +841,28 @@ onHost(HOST.todoIssueCreated, m => {
     issue = { ...issue, busy: false, error: m.error ?? 'GitHub didn’t say where the issue is.' };
     return redrawIssue();
   }
-  const { taskId, repo } = issue;
+  const { taskId, line, repo } = issue;
   issue = null;
-  updateTask(/** @type {ListRef} */ (current), taskId, { issue: { repo: repo ?? '', number: m.number, url: m.url } });
+  const details = taskById(taskId)?.details ?? '';
+  updateTask(/** @type {ListRef} */ (current), taskId, line === undefined ? { issue: { repo: repo ?? '', number: m.number, url: m.url } } : { details: linkSub(details, line, m.url) });
   showToast({ text: `Issue #${m.number} created in ${repo}`, state: TOAST.done });
 });
 
 // ---- Wiring ----
+
+/**
+ * Implement or Create GitHub issue, on the task or sub-item the button is in.
+ * @param {HTMLElement} control
+ */
+function rowAction(control) {
+  const row = /** @type {HTMLElement | null} */ (control.closest('[data-task]'));
+  const task = row && taskById(/** @type {string} */ (row.dataset.task));
+  if (!task) return;
+  const sub = /** @type {HTMLElement | null} */ (control.closest('[data-sub]'));
+  const line = sub ? detailLines(task.details).find(l => l.at === Number(sub.dataset.sub)) : undefined;
+  if (control.dataset.td === ACTION.implement) implement(task, line);
+  else beginIssue(task, line);
+}
 
 /** @param {HTMLElement} control */
 function act(control) {
@@ -793,8 +883,12 @@ function act(control) {
     case ACTION.detach: return void dock.detach();
     case ACTION.close: return dock.hide();
     case ACTION.fold:
-      showDone = !showDone;
+      state.todo.showDone = !state.todo.showDone;
+      persist();
       return render();
+    case ACTION.implement:
+    case ACTION.issue: return rowAction(control);
+    case ACTION.openIssue: return send(PAGE.openUrl, { url: control.dataset.url });
     case ACTION.tag: {
       const tag = /** @type {string} */ (control.dataset.tag);
       picked = picked.includes(tag) ? picked.filter(t => t !== tag) : [...picked, tag];
@@ -829,6 +923,11 @@ panel.addEventListener('change', e => {
   const box = targetOf(e);
   if (!box.classList.contains('td-check')) return;
   const row = /** @type {HTMLElement} */ (box.closest('[data-task]'));
+  const sub = /** @type {HTMLElement | null} */ (box.closest('[data-sub]'));
+  if (sub) {
+    const details = taskById(/** @type {string} */ (row.dataset.task))?.details ?? '';
+    return updateTask(/** @type {ListRef} */ (current), /** @type {string} */ (row.dataset.task), { details: tickSub(details, Number(sub.dataset.sub), /** @type {HTMLInputElement} */ (box).checked) });
+  }
   updateTask(/** @type {ListRef} */ (current), /** @type {string} */ (row.dataset.task), { done: /** @type {HTMLInputElement} */ (box).checked ? true : undefined });
 });
 

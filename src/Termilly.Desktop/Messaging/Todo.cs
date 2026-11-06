@@ -4,6 +4,12 @@ namespace Termilly.Desktop.Messaging;
 
 internal static partial class FromPage
 {
+    /// <summary>Whether a folder's repository is on GitHub, so an issue can be made from it.</summary>
+    internal sealed record TodoRepoCheck(string? Folder = null) : IPageMessage
+    {
+        public static string Type => "todo:repoCheck";
+    }
+
     /// <summary>The repository of a folder and its labels, for the form that creates an issue.</summary>
     internal sealed record TodoIssueInfo(string? RequestId = null, string? Folder = null) : IPageMessage
     {
@@ -20,6 +26,12 @@ internal static partial class FromPage
 
 internal static partial class ToPage
 {
+    /// <summary>Whether <see cref="Folder"/>'s repository is on GitHub.</summary>
+    internal sealed record TodoRepoChecked(string? Folder, bool OnGitHub) : IHostMessage
+    {
+        public static string Type => "todo:repoChecked";
+    }
+
     /// <summary>The repository and its labels, or why there's none to use.</summary>
     internal sealed record TodoIssueInfo(string? RequestId, string? Repo, IReadOnlyList<string> Labels, string? Error = null) : IHostMessage
     {

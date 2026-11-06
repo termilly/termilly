@@ -27,9 +27,31 @@ internal sealed partial class TodoIssues(PageChannel page, IProcessRunner runner
 
     public void Register(MessageRouter router)
     {
+        router.On<FromPage.TodoRepoCheck>(RepoCheckAsync);
         router.On<FromPage.TodoIssueInfo>(InfoAsync);
         router.On<FromPage.TodoIssueCreate>(CreateAsync);
     }
+
+    private async Task RepoCheckAsync(FromPage.TodoRepoCheck message)
+    {
+        var onGitHub = false;
+        if (FolderExists(message.Folder))
+        {
+            try
+            {
+                var remote = await runner.RunAsync(new ProcessRequest("git", ["remote", "get-url", "origin"]) { WorkingDirectory = message.Folder }).ConfigureAwait(false);
+                onGitHub = remote.Succeeded && IsGitHubRemote(remote.Text);
+            }
+            catch (Exception e) when (e is ProgramMissingException or ProcessTimeoutException)
+            {
+                onGitHub = false;
+            }
+        }
+        page.Post(new ToPage.TodoRepoChecked(message.Folder, onGitHub));
+    }
+
+    /// <summary>Whether a remote's address is on GitHub: https://github.com/a/b.git or git@github.com:a/b.git.</summary>
+    internal static bool IsGitHubRemote(string remote) => GitHubRemote().IsMatch(remote.Trim());
 
     private async Task InfoAsync(FromPage.TodoIssueInfo message)
     {
@@ -121,6 +143,9 @@ internal sealed partial class TodoIssues(PageChannel page, IProcessRunner runner
 
     private Task<ProcessResult> RunAsync(string folder, IReadOnlyList<string> arguments) =>
         runner.RunAsync(new ProcessRequest(Gh, arguments) { WorkingDirectory = folder });
+
+    [GeneratedRegex(@"^(https://|ssh://git@|git@)github\.com[/:]", RegexOptions.IgnoreCase)]
+    private static partial Regex GitHubRemote();
 
     [GeneratedRegex(@"https://\S+/issues/(\d+)")]
     private static partial Regex IssueUrl();

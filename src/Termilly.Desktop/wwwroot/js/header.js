@@ -3,13 +3,13 @@
 // environment, notes, recording, results, changed files, its Claude session, broadcast), and its buttons. The tag
 // picker, the menu and renaming are modules of their own.
 
-import { state, emit, on, activityOf, EVENTS } from './store.js';
+import { state, emit, on, activityOf, EVENTS, wsById } from './store.js';
 import { tabBadgeHtml, tagChipHtml, escapeHtml, ICONS, activityHtml } from './ui.js';
 import { closeTab, setHeaderBuilder } from './panes.js';
 import { isCandidate, isReceiving, toggleReceiver } from './broadcast.js';
 import { usageOf, usageChipHtml, usageTitle, openUsage } from './claudeusage.js';
-import { notesFor, noteTitle, firstLine } from './notes.js';
-import { openTodo, markedList, tabHover, terminalList, LIST_KIND } from './todo.js';
+import { notesFor, noteTitle, firstLine, editHostNote, NOTE_KIND } from './notes.js';
+import { openTodo, markedList, tabHover, terminalList, workspaceList } from './todo.js';
 import { environmentOf, ENV_CLASS, ENV_COLOR } from './environments.js';
 import { isLogging, openLogMenu, logFile } from './logging.js';
 import { isAgentWorking, stopAgent } from './agentline.js';
@@ -168,7 +168,8 @@ function showChips(tab, header) {
  * @param {string} kind
  */
 function openPinned(tab, kind) {
-  openTodo({ kind, id: kind === LIST_KIND.host ? tab.profile : kind === LIST_KIND.workspace ? tab.wsId : tab.id });
+  if (kind === NOTE_KIND.host) editHostNote(tab.profile);
+  else openTodo(kind === NOTE_KIND.workspace ? workspaceList(/** @type {Workspace} */ (wsById(tab.wsId))) : terminalList(tab));
 }
 
 /**

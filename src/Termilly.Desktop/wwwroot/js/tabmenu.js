@@ -12,7 +12,8 @@ import { serialMenuItems } from './serial.js';
 import { toggleFiles } from './filepanel.js';
 import { hasFiles } from './filepaths.js';
 import { openCleanup } from './worktree.js';
-import { openTodo, terminalList, hostList } from './todo.js';
+import { openTodo, terminalList } from './todo.js';
+import { editHostNote, profileNote } from './notes.js';
 import { isLogging, toggleLog, toggleProfileLogging } from './logging.js';
 import { openSnippets, saveAsSnippet } from './snippets.js';
 import { portsOf, openPort, repoOf } from './gitstatus.js';
@@ -105,7 +106,7 @@ function nameItems(tab, from) {
     },
     { label: NOTE_LABEL, icon: ICONS.todo, action: () => openTodo(terminalList(tab)) },
     ...(isSsh(tab)
-      ? [{ label: `${NOTE_LABEL} on ${/** @type {SessionProfile} */ (profileOf(tab)).name}`, icon: ICONS.ssh, action: () => openTodo(hostList(tab.profile)) }] : []),
+      ? [{ label: `${profileNote(tab) ? 'Edit note' : 'Note'} on ${/** @type {SessionProfile} */ (profileOf(tab)).name}`, icon: ICONS.ssh, action: () => editHostNote(tab.profile) }] : []),
   ];
 }
 

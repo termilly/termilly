@@ -1,15 +1,14 @@
 // @ts-check
-// To do's lists: one on each terminal, each workspace and each SSH host, with its note above its tasks. A note stays as
-// it always was (js/notes.js); here it's only read and shown. A terminal's and a workspace's tasks are saved with them,
-// encrypted with the rest, and a closed terminal keeps its own; a host's are saved in state.todo. js/todopanel.js shows
-// a list; anything else opens one with openTodo.
+// To do's lists: one on each terminal and each workspace, with its note above its tasks. A note stays as it always was
+// (js/notes.js); here it's only read and shown. Tasks are saved with their terminal or workspace, encrypted with the rest,
+// and a closed terminal keeps its own. js/todopanel.js shows a list; anything else opens one with openTodo.
 
-import { state, emit, persist, newId, wsById, tabTitle, isSsh, EVENTS, TAG_COLORS } from './store.js';
-import { NOTE_KIND, profileNote, noteTitle, notesFor } from './notes.js';
+import { state, emit, persist, newId, wsById, tabTitle, EVENTS, TAG_COLORS } from './store.js';
+import { NOTE_KIND, noteTitle, notesFor } from './notes.js';
 import { openCount, hoverLines, allTags, tagHash } from './todolist.js';
 
-/** Which list: a terminal's, a workspace's or a host's, by its id. */
-export const LIST_KIND = NOTE_KIND;
+/** Which list: a terminal's or a workspace's, by its id. */
+export const LIST_KIND = Object.freeze({ terminal: NOTE_KIND.terminal, workspace: NOTE_KIND.workspace });
 /** @typedef {{ kind: string, id: string }} ListRef */
 
 /**
@@ -25,12 +24,11 @@ export const LIST_KIND = NOTE_KIND;
 /**
  * What holds a list's tasks and note, or null when it's gone.
  * @param {ListRef} ref
- * @returns {Tab | Workspace | { id: string } | null}
+ * @returns {Tab | Workspace | null}
  */
 function ownerOf(ref) {
   if (ref.kind === LIST_KIND.terminal) return state.tabs.get(ref.id) ?? null;
-  if (ref.kind === LIST_KIND.workspace) return wsById(ref.id) ?? null;
-  return state.profiles.some(p => p.id === ref.id) ? { id: ref.id } : null;
+  return ref.kind === LIST_KIND.workspace ? wsById(ref.id) ?? null : null;
 }
 
 /**
@@ -39,8 +37,7 @@ function ownerOf(ref) {
  */
 function nameOf(ref) {
   if (ref.kind === LIST_KIND.terminal) return tabTitle(/** @type {Tab} */ (state.tabs.get(ref.id)));
-  if (ref.kind === LIST_KIND.workspace) return /** @type {Workspace} */ (wsById(ref.id)).name;
-  return state.profiles.find(p => p.id === ref.id)?.name ?? '';
+  return /** @type {Workspace} */ (wsById(ref.id)).name;
 }
 
 /**
@@ -49,8 +46,7 @@ function nameOf(ref) {
  * @returns {TodoTask[]}
  */
 function tasksOf(ref) {
-  if (ref.kind === LIST_KIND.host) return state.todo.hosts?.[ref.id] ?? [];
-  return /** @type {Tab | Workspace | null} */ (ownerOf(ref))?.tasks ?? [];
+  return ownerOf(ref)?.tasks ?? [];
 }
 
 /**
@@ -59,12 +55,6 @@ function tasksOf(ref) {
  * @param {TodoTask[]} tasks
  */
 function setTasks(ref, tasks) {
-  if (ref.kind === LIST_KIND.host) {
-    state.todo.hosts ??= {};
-    if (tasks.length) state.todo.hosts[ref.id] = tasks;
-    else delete state.todo.hosts[ref.id];
-    return;
-  }
   const owner = /** @type {Tab | Workspace} */ (ownerOf(ref));
   if (tasks.length) owner.tasks = tasks;
   else delete owner.tasks;
@@ -78,18 +68,14 @@ function setTasks(ref, tasks) {
 export function listOf(ref) {
   const owner = ref && ownerOf(ref);
   if (!ref || !owner) return null;
-  const note = ref.kind === LIST_KIND.host ? state.settings.shells.notes?.[ref.id] ?? ''
-    : /** @type {Tab | Workspace} */ (owner).note?.text ?? '';
-  const pinned = ref.kind === LIST_KIND.host || !!/** @type {Tab | Workspace} */ (owner).note?.pinned;
-  return { ref, name: nameOf(ref), tasks: tasksOf(ref), note, pinned };
+  return { ref, name: nameOf(ref), tasks: tasksOf(ref), note: owner.note?.text ?? '', pinned: !!owner.note?.pinned };
 }
 
 /**
- * What a list's note is on, as js/notes.js wants it: a terminal, a workspace or a host's id.
+ * What a list's note is on, as js/notes.js wants it.
  * @param {ListRef} ref
- * @returns {Tab | Workspace | string}
  */
-export const noteTarget = ref => (ref.kind === LIST_KIND.host ? ref.id : /** @type {Tab | Workspace} */ (ownerOf(ref)));
+export const noteTarget = ref => /** @type {Tab | Workspace} */ (ownerOf(ref));
 
 /** @param {ListRef} a @param {ListRef} b */
 export const sameList = (a, b) => a.kind === b.kind && a.id === b.id;
@@ -98,8 +84,6 @@ export const sameList = (a, b) => a.kind === b.kind && a.id === b.id;
 export const terminalList = tab => ({ kind: LIST_KIND.terminal, id: tab.id });
 /** @param {Workspace} ws */
 export const workspaceList = ws => ({ kind: LIST_KIND.workspace, id: ws.id });
-/** @param {string} profile */
-export const hostList = profile => ({ kind: LIST_KIND.host, id: profile });
 
 /**
  * Whether a list has anything to show: a note or an open task.
@@ -116,7 +100,7 @@ function hasContent(ref) {
  */
 function listsOfTab(tab) {
   const ws = wsById(tab.wsId);
-  return [terminalList(tab), ...(isSsh(tab) ? [hostList(tab.profile)] : []), ...(ws ? [workspaceList(ws)] : [])].filter(hasContent);
+  return [terminalList(tab), ...(ws ? [workspaceList(ws)] : [])].filter(hasContent);
 }
 
 /** The terminal in front, if there is one. */
@@ -126,8 +110,8 @@ function frontTab() {
 }
 
 /**
- * The list the title bar's button opens: the terminal in front's, else its host's or workspace's if only they have
- * something, else the terminal's empty one, ready for a first task.
+ * The list the title bar's button opens: the terminal in front's, else its workspace's if only that has something, else
+ * the terminal's empty one, ready for a first task.
  * @returns {ListRef | null}
  */
 export function listInFront() {
@@ -145,15 +129,16 @@ export function openInFront() {
 }
 
 /**
- * What a terminal's mark opens, or null with nothing on it (no mark then). Pinned workspace notes count, as they show
- * on the terminal; an unpinned workspace's list is marked on the workspace's own row.
+ * What a terminal's mark opens, or null with nothing on it (no mark then). A pinned workspace note counts, as it shows
+ * on the terminal, and so does a host's note, opening the terminal's list.
  * @param {Tab} tab
  * @returns {ListRef | null}
  */
 export function markedList(tab) {
   if (hasContent(terminalList(tab))) return terminalList(tab);
-  if (isSsh(tab) && hasContent(hostList(tab.profile))) return hostList(tab.profile);
-  return notesFor(tab).length && wsById(tab.wsId) ? workspaceList(/** @type {Workspace} */ (wsById(tab.wsId))) : null;
+  const ws = wsById(tab.wsId);
+  if (ws && notesFor(tab).some(n => n.kind === NOTE_KIND.workspace)) return workspaceList(ws);
+  return notesFor(tab).length ? terminalList(tab) : null;
 }
 
 /**
@@ -161,15 +146,13 @@ export function markedList(tab) {
  * @param {Tab} tab
  */
 export function tabHover(tab) {
-  const host = isSsh(tab) && !profileNote(tab) ? state.todo.hosts?.[tab.profile] : null;
-  return [...(notesFor(tab).length ? [noteTitle(notesFor(tab))] : []), ...hoverLines(tab.tasks), ...hoverLines(host)].join('\n');
+  return [...(notesFor(tab).length ? [noteTitle(notesFor(tab))] : []), ...hoverLines(tab.tasks)].join('\n');
 }
 
 /** To do's tags, from every list there is: a closed terminal's stay with it until it's reopened. */
 export const todoTags = () => allTags([
   ...[...state.tabs.values()].map(tab => tab.tasks),
   ...state.workspaces.map(ws => ws.tasks),
-  ...Object.values(state.todo.hosts ?? {}),
 ]);
 
 /**
@@ -188,6 +171,17 @@ export function setTagColor(tag, color) {
   persist();
 }
 
+/** Tasks from when SSH hosts had lists go to the host's first terminal; a host with no terminal keeps them until it has. */
+export function moveHostTasks() {
+  for (const [profile, tasks] of Object.entries(state.todo.hosts ?? {})) {
+    const tab = [...state.tabs.values()].find(t => t.profile === profile);
+    if (!tab) continue;
+    tab.tasks = [...(tab.tasks ?? []), ...tasks];
+    delete state.todo.hosts?.[profile];
+    persist();
+  }
+}
+
 /**
  * Asks for a list to be shown, in the panel.
  * @param {ListRef} ref
@@ -199,13 +193,10 @@ export const openTodo = ref => emit(EVENTS.openTodo, ref);
  * @param {ListRef} ref
  */
 function changed(ref) {
-  if (ref.kind === LIST_KIND.terminal) {
+  if (ref.kind === LIST_KIND.workspace) emit(EVENTS.workspaces);
+  else {
     const tab = state.tabs.get(ref.id);
     if (tab) emit(EVENTS.tab, tab);
-  } else if (ref.kind === LIST_KIND.workspace) {
-    emit(EVENTS.workspaces);
-  } else {
-    for (const tab of state.tabs.values()) if (tab.profile === ref.id) emit(EVENTS.tab, tab);
   }
   emit(EVENTS.todo);
   persist();
