@@ -9,7 +9,7 @@ import { escapeHtml, ICONS } from '../ui.js';
 import { row, toggle, group, seg } from './controls.js';
 import { SETTING_VALUES } from '../constants.js';
 import { SECTION, redrawIfShowing } from './page.js';
-import { modal } from '../dialogs.js';
+import { modal, confirmDialog } from '../dialogs.js';
 
 /** The QR codes: the size of their cells and their quiet margin, in cells of the qrcode library. */
 const QR_CELL = 5;
@@ -94,6 +94,17 @@ function phonesHtml() {
     : '<p class="set-desc">None. A removed device can’t connect again until it’s paired anew.</p>';
 }
 
+/**
+ * Removes a paired device, once it's confirmed; the list comes back either way.
+ * @param {string} id
+ */
+async function removeDevice(id) {
+  const name = status.devices.find(d => d.id === id)?.name ?? 'this device';
+  const confirmed = await confirmDialog({ title: `Remove ${name}?`, body: 'It can’t connect again until it’s paired anew.', confirm: 'Remove' });
+  if (confirmed) send(PAGE.phoneRemove, { device: id });
+  if (!phonesList?.isConnected) openPhones();
+}
+
 /** The paired devices' own window. */
 function openPhones() {
   modal('phone-devices', `<h3>Paired devices</h3>
@@ -102,8 +113,8 @@ function openPhones() {
     <div class="dialog-actions"><button class="btn primary" data-ok autofocus>Done</button></div>`, (dialog, close) => {
     phonesList = /** @type {HTMLElement} */ (dialog.querySelector('[data-phone-list]'));
     phonesList.addEventListener('click', e => {
-      const device = /** @type {HTMLElement} */ (e.target).closest('[data-remove]')?.closest('[data-device]');
-      if (device) send(PAGE.phoneRemove, { device: /** @type {HTMLElement} */ (device).dataset.device });
+      const row = /** @type {HTMLElement | null | undefined} */ (/** @type {HTMLElement} */ (e.target).closest('[data-remove]')?.closest('[data-device]'));
+      if (row) removeDevice(/** @type {string} */ (row.dataset.device));
     });
     return { submit: () => close(true) };
   }).finally(() => { phonesList = null; });
