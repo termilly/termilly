@@ -7,7 +7,7 @@ and no cloud service of ours. It is **off by default** (Settings › Phone).
 
 ## How it fits together
 
-- **The server** (`Phone/PhoneServer.cs`) listens on one port (8765 by default), on this PC's private network address
+- **The server** (`Phone/PhoneServer.cs`) listens on one port (8765 by default), on this PC's network address (a private one if it has one, else any other, such as a cloud machine's)
   only. It speaks HTTPS to the app, and plain HTTP for one thing only: the setup page and Termilly's certificate,
   which a new phone needs before it can trust HTTPS.
 - **The certificate.** Termilly makes its own certificate authority (ECDSA P-256) once, and from it a server
@@ -36,7 +36,7 @@ nothing.
 
 | Adversary | Defence |
 |---|---|
-| Anyone on the internet | Nothing listens until you turn it on, and then only on a private network address (10/8, 172.16/12, 192.168/16, and 100.64/10 for Tailscale). There's no relay, no port forwarding and no UPnP. |
+| Anyone on the internet | Nothing listens until you turn it on, and then on a private network address if the PC has one (10/8, 172.16/12, 192.168/16, and 100.64/10 for Tailscale). A PC with a public address only (a cloud machine) listens on that, so it can be reached from the internet: only paired devices get in, over HTTPS. There's no relay, no port forwarding and no UPnP. |
 | Someone on your network, listening or changing traffic | Everything but the setup page is HTTPS with Termilly's certificate. A phone that trusts Termilly's authority won't accept anyone else's certificate for the PC. |
 | A device on your network that isn't paired | Without a paired phone's token, the app gets nothing but "pair first". A pairing code expires after 5 minutes or 10 wrong tries. |
 | A web page in the phone's browser | The cookie is `SameSite=Strict`, so another site can't use it, and the app's pages forbid scripts from elsewhere (CSP). |

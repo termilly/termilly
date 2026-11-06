@@ -242,6 +242,14 @@ public sealed class PhoneTests : IDisposable
     public void Only_private_addresses_count_as_the_local_network(string address, bool isPrivate) =>
         Assert.Equal(isPrivate, PhoneServer.IsPrivate(IPAddress.Parse(address)));
 
+    [Theory]
+    [InlineData("192.168.0.5", "195.82.43.128,192.168.0.5")] // a private one first
+    [InlineData("195.82.43.128", "127.0.0.1,169.254.10.1,195.82.43.128")] // a cloud machine's public one
+    [InlineData("11.0.0.4", "::1,11.0.0.4")] // a cloud network on any subnet
+    [InlineData(null, "127.0.0.1,169.254.10.1,::1")]
+    public void The_address_to_listen_on_is_a_private_one_else_any_other(string? picked, string addresses) =>
+        Assert.Equal(picked, PhoneServer.Pick(addresses.Split(',').Select(a => IPAddress.Parse(a)))?.ToString());
+
     // ---- The server ----
 
     [Fact]
