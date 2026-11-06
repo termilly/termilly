@@ -2,6 +2,23 @@
 
 What changed in each release. Termilly says in its title bar when a newer one is out.
 
+## 1.6.2 (2026-11-06)
+
+- **Detachable windows:** move terminals, the Notepad and Snippets into their own windows.
+- **Prompts and replies:** extended view now displays your prompts, responses and tool calls.
+- **Notepad:** toolbar, status bar, line numbers, text size, and docking on any edge.
+- **More shells:** shell integration for zsh, fish, nushell, tcsh and ksh, and shells from package managers.
+- **Clipboard:** new switches to pause it, or to keep only what you copy in Termilly.
+- **Zoom:** use keyboard shortcuts to zoom the whole app, or just terminal fonts.
+
+Fixes:
+
+- **Linux:** no white flash at start, rounded windows, and the first start follows your light or dark mode.
+- **Windows:** no more message boxes from background programs that can't start.
+- **Remote:** now turns on with any network address, such as on cloud machines.
+- **Detached windows:** a window on a monitor that's gone comes back.
+- Various smaller improvements and bug fixes.
+
 ## 1.6.1 (2026-11-02)
 
 - **Remote computers:** remote terminals now show the right badge and Prompt history, and notify you when the connection is lost.
