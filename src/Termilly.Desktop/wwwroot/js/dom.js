@@ -95,6 +95,9 @@ export function dragPointer(el, e, move, done) {
 
 /** The class of a docked panel's grip, on its left edge. */
 export const DOCK_GRIP = 'files-grip';
+/** A docked panel's header, and the count on a title bar button. */
+export const PANEL_HEAD = '.files-head';
+export const TOOL_COUNT = '.tool-count';
 
 /** A panel's class while it's on its way into a window of its own: not seen here, and it takes no room (app.css). */
 export const DOCK_AWAY = 'dock-away';

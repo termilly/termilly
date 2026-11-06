@@ -28,6 +28,7 @@ import { toggleScratch } from './scratch.js';
 import { openGitWindow, openAgentChanges, gitFolderOf, onServer, openRemoteGitNotice } from './gitwindow.js';
 import { toggleFiles, initFiles } from './filepanel.js';
 import { toggleNotepad, toggleNotepadFromKeys, initNotepad } from './notepad.js';
+import { toggleTodo, initTodo } from './todopanel.js';
 import { toggleClips, initClips } from './clipboard.js';
 import { chordOf, commandOf, keyHint, KEY_ID } from './keymap.js';
 import { openNewWorktree } from './worktree.js';
@@ -201,6 +202,7 @@ setCommands(() => [
   { label: 'Move this workspace’s terminals to tabs', keywords: 'tabs group stack stacked accordion collapse panes too many', run: () => moveAllToTabs(state.workspaces.find(w => w.id === state.activeId)) },
   { label: 'Files of this terminal (on / off)', keywords: 'files folder explorer browse sftp upload download remote scp', hint: keyHint(KEY_ID.files), run: () => setTimeout(() => toggleFiles()) },
   { label: 'Notepad (on / off)', keywords: 'notes notepad write jot scratch text memo pad', hint: keyHint(KEY_ID.notepad), run: () => setTimeout(toggleNotepad) },
+  { label: 'To do (on / off)', keywords: 'todo tasks task list notes checklist work issue', hint: keyHint(KEY_ID.todo), run: () => setTimeout(toggleTodo) },
   { label: 'Take the tour', keywords: 'tour help guide introduction tutorial walkthrough start learn', run: () => setTimeout(startTour) },
   { label: 'Quit Termilly', keywords: 'exit close quit stop tray', run: () => send(PAGE.window, { action: WINDOW_ACTION.quit }) },
   ...(changeShortcutOn() ? [
@@ -328,7 +330,7 @@ const RUN = {
   [KEY_ID.newWorkspace]: commands.newWorkspace, [KEY_ID.toggleSidebar]: commands.toggleSidebar, [KEY_ID.nextNeedingMe]: commands.nextNeedingMe,
   [KEY_ID.inbox]: commands.inbox, [KEY_ID.search]: commands.search, [KEY_ID.commandHistory]: commands.commandHistory,
   [KEY_ID.previousPrompt]: commands.previousPrompt, [KEY_ID.nextPrompt]: commands.nextPrompt, [KEY_ID.goTo]: commands.goTo,
-  [KEY_ID.settings]: commands.settings, [KEY_ID.hints]: toggleHints, [KEY_ID.scratch]: toggleScratch, [KEY_ID.notepad]: toggleNotepadFromKeys,
+  [KEY_ID.settings]: commands.settings, [KEY_ID.hints]: toggleHints, [KEY_ID.scratch]: toggleScratch, [KEY_ID.notepad]: toggleNotepadFromKeys, [KEY_ID.todo]: toggleTodo,
   [KEY_ID.clips]: toggleClips, [KEY_ID.files]: () => toggleFiles(), [KEY_ID.git]: openGitHere,
   [KEY_ID.agentChanges]: () => {
     if (!changeShortcutOn()) return false;
@@ -555,6 +557,7 @@ function boot(saved, snapshot, liveSessions = []) {
   renderAll();
   initSidebar();
   initNotepad();
+  initTodo();
   initClips();
   applySettings();
   if (state.activeId) switchWorkspace(state.activeId);

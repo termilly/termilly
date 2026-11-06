@@ -7,18 +7,17 @@
 import { PAGE, HOST } from './protocol.js';
 import { send, onHost, platform, PLATFORM } from './host.js';
 import { state, persist, newId, tabTitle, wsById } from './store.js';
-import { restoreFocus, stripBar, wireDragOut, systemDrag, dockDrop } from './panes.js';
-import { scheduleFit } from './terminals.js';
+import { stripBar } from './panes.js';
 import { escapeHtml, cssColor, tabBadgeHtml, countText, ICONS } from './ui.js';
-import { byId, find, targetOf, dockRight, isAcross, edgeAt, onMiddleClick, DOCK_AWAY, DOCK_SIDE, WORKSPACE_ID, DOCK_GRIP } from './dom.js';
+import { byId, find, targetOf, onMiddleClick, WORKSPACE_ID, DOCK_GRIP, PANEL_HEAD } from './dom.js';
 import { showMenu, SEPARATOR } from './popups.js';
 import { confirmDialog } from './dialogs.js';
 import { showToast, TOAST } from './toasts.js';
 import { appendNote, NOTE_KIND } from './notes.js';
 import { padLinks } from './notepadlinks.js';
-import { isShortcut, KEY_ID } from './keymap.js';
-import { COPY_LABEL as COPY, PASTE_LABEL, MENU_KEYS } from './termclipboard.js';
-import { detach, closeWindow, focusWindow, isDetached } from './windows.js';
+import { KEY_ID } from './keymap.js';
+import { copyOut as copyFrom, textBoxMenu } from './textmenu.js';
+import { dockPanel } from './dockpanel.js';
 import { padView, NP_FONT } from './notepadview.js';
 
 /** @typedef {import('./store.js').NotepadPage} NotepadPage */
@@ -33,14 +32,6 @@ const VIEW_DEFAULTS = Object.freeze({ links: true, wrap: true, numbers: false, h
 /** @typedef {keyof typeof VIEW_DEFAULTS} ViewSwitch */
 /** The name a new page gets, numbered. */
 const PAGE_NAME = 'Note';
-/** The panel's narrowest width, and its width until it's dragged; its widest is half the terminals' area (app.css). */
-const MIN_WIDTH_PX = 280;
-const DEFAULT_WIDTH_PX = 360;
-/** On the top or bottom edge: its lowest height, and its height until it's dragged (app.css). */
-const MIN_HEIGHT_PX = 180;
-const DEFAULT_HEIGHT_PX = 260;
-/** How near an edge of the terminals' area a drag docks it there. */
-const EDGE_BAND_PX = 120;
 const LF = '\n';
 const CRLF = '\r\n';
 /** The menu entry that copies text here, on a terminal's right-click menu. */
@@ -64,14 +55,6 @@ const TOOL_ICONS = Object.freeze({
   wrap: '<svg viewBox="0 0 16 16"><path d="M1.5 3.5h13M1.5 7.5h10a2 2 0 0 1 0 4h-3M1.5 11.5h4"/><path d="M10 9.5l-2 2 2 2"/></svg>',
   numbers: '<svg viewBox="0 0 16 16"><path d="M2.5 2.5h1v4M2 6.5h2M1.5 9.5h2v1.5h-2v1.5h2M6.5 4.5h8M6.5 8.5h8M6.5 12.5h8"/></svg>',
   highlight: '<svg viewBox="0 0 16 16"><path d="M1.5 2.5h13M1.5 13.5h13"/><rect x="1.5" y="6.5" width="13" height="3"/></svg>',
-});
-/**
- * The page's right-click menu, 16px at a 1px line: scissors (cut) and a clipboard with a T (paste as plain text); paste
- * is ICONS.paste.
- */
-const MENU_ICONS = Object.freeze({
-  cut: '<svg viewBox="0 0 16 16"><circle cx="4.5" cy="11.5" r="2"/><circle cx="11.5" cy="11.5" r="2"/><path d="M5.7 9.8L11 1.5M10.3 9.8L5 1.5"/></svg>',
-  pastePlain: '<svg viewBox="0 0 16 16"><rect x="3.5" y="3.5" width="9" height="11" rx="1"/><path d="M6.5 2.5h3v2h-3zM5.5 7.5h4M7.5 7.5v5"/></svg>',
 });
 /** Its window when it's in one of its own (js/windows.js), and that window's title. */
 const WINDOW_KEY = 'notepad';
@@ -118,7 +101,7 @@ panel.innerHTML = `
 byId(WORKSPACE_ID).append(panel);
 const tabsEl = find(panel, '.np-tabs');
 /** Its header: its title bar in a window of its own, and what drags it out into one. */
-const head = find(panel, '.files-head');
+const head = find(panel, PANEL_HEAD);
 const area = /** @type {HTMLTextAreaElement} */ (find(panel, '.np-text'));
 /** What the Notepad shows with no pages: New page and Open a file. */
 const emptyEl = find(panel, '.np-empty');
@@ -238,17 +221,6 @@ function showCount() {
   button.title = `Notepad (Ctrl+Shift+M)${countEl.hidden ? '' : `: ${kept} ${kept === 1 ? 'page' : 'pages'}`}`;
 }
 
-/** @param {boolean} open */
-function setOpen(open) {
-  panel.hidden = !open;
-  button.classList.toggle('open', open);
-  showCount();
-  if (state.notepad.open !== open) {
-    state.notepad.open = open;
-    persist();
-  }
-}
-
 /**
  * Opens the Notepad on its page (New page and Open a file when it has none), with the caret in it unless `quiet`;
  * in its own window if it was in one when it closed, unless `here` (on its way into one already).
@@ -256,138 +228,23 @@ function setOpen(open) {
  */
 function show({ quiet = false, here = false } = {}) {
   if (!activePage()) state.notepad.activeId = pages()[0]?.id ?? null;
-  // Closed while in a window of its own: it opens in it again, where it was, unless it's on its way there. Never seen
-  // docked meanwhile: its window can take a second to open (Linux).
-  const reopens = !here && !!state.notepad.detached && !isDetached(WINDOW_KEY);
-  panel.classList.toggle(DOCK_AWAY, reopens);
-  setOpen(true);
+  const reopens = dock.reopensWindowed(here);
+  dock.setOpen(true);
   render();
-  if (reopens) {
-    if (!detachNotepad()) dockHere();
-    return;
-  }
+  if (reopens) return dock.reopenWindow();
   if (!quiet) (activePage() ? area : find(panel, `.np-empty [data-np="${NOTEPAD_ACTION.newPage}"]`)).focus();
 }
 
 /** The Notepad on or off (the title bar's button, the palette); in a window of its own, that window to the front. */
-export function toggleNotepad() {
-  if (isDetached(WINDOW_KEY)) {
-    focusWindow(WINDOW_KEY);
-    area.focus();
-  } else if (!panel.hidden) hideNotepad();
-  else show();
-}
-
-/** Closes the Notepad, and its window if it's in one. */
-function hideNotepad() {
-  const detached = isDetached(WINDOW_KEY);
-  if (detached) closeWindow(WINDOW_KEY, { quiet: true });
-  setOpen(false);
-  // Back in the page, hidden; still one that opens in its own window next time.
-  if (detached) dockBack({ keepWindowed: true });
-  restoreFocus();
-}
-
-/**
- * Into a window of its own, opened first if it's closed; its header is the window's title bar, Close closes it, and
- * moved back over its dock on the right of the main window it docks there. False when no window could be opened.
- * @param {{ x: number, y: number }} [at] where on the screen it opens (dragged out by its header), else over its place
- * @param {{ x: number, y: number }} [place] exactly where its picture was let go (its top left corner)
- */
-function detachNotepad(at, place) {
-  if (panel.hidden) show({ quiet: true, here: true });
-  if (!isDetached(WINDOW_KEY) && !isAcross(dockSide())) dockedWidth = panel.offsetWidth;
-  // Its room here is given back once it's in its window, and as that window is resized.
-  return detach(WINDOW_KEY, {
-    el: panel, title: NAME, onClosed: () => dockBack(), onResize: refreshDock,
-    onMoved: () => {
-      panel.classList.remove(DOCK_AWAY);
-      keepDetached(true);
-      area.focus();
-    },
-    at, place, remember: true,
-    header: head, close: hideNotepad,
-    onDragged: dockDrop(dockAt, dockTo),
-    dragHandle: systemDrag ? NOTEPAD_HANDLE : undefined,
-  });
-}
-
-/** Seen docked again: its window couldn't open, or went before it got there. */
-function dockHere() {
-  panel.classList.remove(DOCK_AWAY);
-  refreshDock();
-}
+export const toggleNotepad = () => dock.toggle();
 
 /** Its handle in a window of its own on Linux: its title, dragged back into the main window (js/panes.js). */
 const NOTEPAD_HANDLE = '.files-title';
-/** How wide it was docked when it went out into a window of its own (its width is kept only once it's dragged). */
-let dockedWidth = 0;
 
-/**
- * Where it docks on an edge of the main window (in the page's pixels): that edge of the terminals' area, as big as it
- * was docked (at most half).
- * @param {string} side
- */
-function dockZone(side) {
-  const area = byId(WORKSPACE_ID).getBoundingClientRect();
-  if (isAcross(side)) {
-    const height = Math.min(area.height / 2, Math.max(MIN_HEIGHT_PX, state.notepad.height ?? DEFAULT_HEIGHT_PX));
-    return new DOMRect(area.left, side === DOCK_SIDE.top ? area.top : area.bottom - height, area.width, height);
-  }
-  const width = Math.min(area.width / 2, Math.max(MIN_WIDTH_PX, state.notepad.width ?? (dockedWidth || DEFAULT_WIDTH_PX)));
-  return new DOMRect(side === DOCK_SIDE.left ? area.left : area.right - width, area.top, width, area.height);
-}
-
-/**
- * Where a drag at this point would dock it: over where it docks now, or near any edge. Elsewhere, nowhere: it goes out
- * into a window of its own.
- * @param {number} x
- * @param {number} y
- * @returns {import('./panes.js').DockSpot | null}
- */
-function dockAt(x, y) {
-  const now = dockSide();
-  const zone = dockZone(now);
-  const inZone = x >= zone.left && x <= zone.right && y >= zone.top && y <= zone.bottom;
-  const side = inZone ? now : edgeAt(byId(WORKSPACE_ID).getBoundingClientRect(), x, y, EDGE_BAND_PX);
-  return side ? { side, zone: dockZone(side), label: `Dock ${isAcross(side) ? 'at' : 'on'} the ${side}` } : null;
-}
-
-/**
- * Docks it on an edge, back from its window if it's in one.
- * @param {string} side
- */
-function dockTo(side) {
-  state.notepad.side = side;
-  persist();
-  placeOnSide();
-  if (isDetached(WINDOW_KEY)) closeWindow(WINDOW_KEY);
-  else refreshDock();
-}
-
-/** The edge it docks on. */
-function dockSide() {
-  const side = state.notepad.side;
-  return side && /** @type {string[]} */ (Object.values(DOCK_SIDE)).includes(side) ? side : DOCK_SIDE.right;
-}
-
-/** Its panel on its edge: a height of its own on the top or bottom one. */
-function placeOnSide() {
-  const side = dockSide();
-  panel.dataset.side = side;
-  panel.style.height = isAcross(side) && state.notepad.height ? `${state.notepad.height}px` : '';
-}
-
-/** Back in its place on the right, from its window, as it was. */
-/**
- * @param {{ keepWindowed?: boolean }} [options] keepWindowed: only closed, it opens in its own window again next time
- */
-function dockBack({ keepWindowed = false } = {}) {
-  if (!keepWindowed) keepDetached(false);
-  byId(WORKSPACE_ID).append(panel);
-  dockHere();
-  if (!panel.hidden) render();
-}
+const dock = dockPanel({
+  panel, head, key: WINDOW_KEY, name: NAME, icon: /** @type {Element} */ (button.firstElementChild).outerHTML, handle: NOTEPAD_HANDLE,
+  dockVar: '--notepad-dock', stored: () => state.notepad, button, showCount, show, render, focus: () => area.focus(),
+});
 
 /** The Notepad on or off from its shortcut (Ctrl+Shift+M): opened with no pages, it starts one to type into at once. */
 export function toggleNotepadFromKeys() {
@@ -401,19 +258,8 @@ export function toggleNotepadFromKeys() {
 /** Shows the Notepad as it was left (main.js, once the saved state is in). */
 export function initNotepad() {
   showCount();
-  if (state.notepad.width) panel.style.width = `${state.notepad.width}px`;
-  placeOnSide();
+  dock.restorePlace();
   if (state.notepad.open) show({ quiet: true });
-}
-
-/**
- * Whether it's in a window of its own, kept for the next start.
- * @param {boolean} detached
- */
-function keepDetached(detached) {
-  if (!!state.notepad.detached === detached) return;
-  state.notepad.detached = detached;
-  persist();
 }
 
 // ---- Pages ----
@@ -497,14 +343,8 @@ onHost(HOST.notepadOpened, m => {
 
 // ---- Copying text to a note ----
 
-/**
- * Copies text from here, and tells Clipboard (it keeps it even when it keeps Termilly's own copies only).
- * @param {string} text
- */
-function copyOut(text) {
-  navigator.clipboard.writeText(text).catch(() => {});
-  send(PAGE.clipCopied, { text, source: NAME });
-}
+/** @param {string} text */
+const copyOut = text => copyFrom(text, NAME);
 
 /** The selection in the page, else the whole page: what Copy to note takes. */
 function chosenText() {
@@ -556,49 +396,11 @@ function noteMenu(which, at) {
 
 // ---- The page's right-click menu ----
 
-/**
- * Text as it reads, without what a terminal adds: colour and cursor codes, other control characters, Windows line
- * ends and spaces at the ends of lines.
- * @param {string} text
- */
-const plainText = text => text
-  .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '')
-  .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '')
-  .replaceAll(CRLF, LF)
-  .replace(/[^\n\t\P{Cc}]/gu, '')
-  .replace(/[ \t]+$/gm, '');
-
-/**
- * Types text where the caret is (over the selection), so Ctrl+Z takes it back.
- * @param {string} text
- */
-function insert(text) {
-  area.focus();
-  // Its own window's document when it's detached: the command acts on the focus there.
-  area.ownerDocument.execCommand('insertText', false, text);
-}
-
-/** @param {(text: string) => string} [clean] */
-const paste = (clean = t => t) => navigator.clipboard.readText().then(text => { if (text) insert(clean(text)); }).catch(() => {});
-
 /** @param {MouseEvent} e */
 function pageMenu(e) {
-  e.preventDefault();
-  const { selectionStart: start, selectionEnd: end } = area;
-  const selected = start !== end;
-  const selection = area.value.slice(start, end);
-  showMenu([
-    { label: 'Cut', icon: MENU_ICONS.cut, hint: 'Ctrl+X', disabled: !selected, action: () => { copyOut(selection); insert(''); } },
-    { label: COPY, icon: ICONS.copy, hint: MENU_KEYS.copy, disabled: !selected, action: () => copyOut(selection) },
-    { label: PASTE_LABEL, icon: ICONS.paste, hint: MENU_KEYS.paste, action: () => paste() },
-    { label: 'Paste as plain text', icon: MENU_ICONS.pastePlain, title: 'Without the colour codes, control characters and trailing spaces a terminal adds', action: () => paste(plainText) },
-    SEPARATOR,
-    { label: COPY_TO_NOTE, icon: TOOL_ICONS.move, disabled: !area.value.trim(), title: selected ? undefined : 'With nothing selected, the whole page', submenu: () => noteChoices() },
-  ], { x: e.clientX, y: e.clientY }, {
-    // The text box keeps the focus while the menu shows, so its selection stays lit; closing, it gets it back.
-    keepFocus: true,
-    refocus: () => { area.focus(); area.setSelectionRange(start, end); },
-  });
+  textBoxMenu(e, area, NAME, [
+    { label: COPY_TO_NOTE, icon: TOOL_ICONS.move, disabled: !area.value.trim(), title: area.selectionStart !== area.selectionEnd ? undefined : 'With nothing selected, the whole page', submenu: () => noteChoices() },
+  ]);
 }
 
 // ---- Copying text here (a terminal's right-click menu) ----
@@ -693,8 +495,8 @@ panel.addEventListener('click', e => {
     case NOTEPAD_ACTION.wrap:
     case NOTEPAD_ACTION.numbers:
     case NOTEPAD_ACTION.highlight: toggleView(/** @type {ViewSwitch} */ (action?.dataset.np)); break;
-    case NOTEPAD_ACTION.detach: detachNotepad(); break;
-    case NOTEPAD_ACTION.close: hideNotepad(); break;
+    case NOTEPAD_ACTION.detach: dock.detach(); break;
+    case NOTEPAD_ACTION.close: dock.hide(); break;
     default: break;
   }
 });
@@ -728,29 +530,9 @@ panel.addEventListener('keydown', e => {
   if (view.sizeKey(e)) { /* the text's size: Ctrl+= - 0 */ }
   else if (ctrl && e.code === NOTEPAD_KEY.save) save(e.shiftKey);
   else if (ctrl && !e.shiftKey && e.code === NOTEPAD_KEY.open) openFile();
-  else if (isShortcut(e, KEY_ID.notepad)) hideNotepad();
-  // Escape goes back to the terminal, in the main window: not from a window of its own.
-  else if (e.key === 'Escape' && !e.ctrlKey && !e.shiftKey && !e.altKey && !isDetached(WINDOW_KEY)) restoreFocus();
-  else return;
+  else if (!dock.closeKeys(e, KEY_ID.notepad)) return;
   e.preventDefault();
   e.stopPropagation();
 });
 
 button.addEventListener('click', () => toggleNotepad());
-
-// Its header dragged out of the app window takes it out into a window of its own, as a terminal's (js/panes.js).
-wireDragOut(head, panel, {
-  name: NAME, icon: /** @type {Element} */ (button.firstElementChild).outerHTML, detach: detachNotepad,
-  isDetached: () => isDetached(WINDOW_KEY), handle: NOTEPAD_HANDLE, side: dockSide, dockAt, dockTo,
-});
-
-// ---- Docked on an edge: the terminals end where it starts ----
-
-const refreshDock = dockRight(panel, {
-  dockVar: '--notepad-dock', minWidth: MIN_WIDTH_PX, minHeight: MIN_HEIGHT_PX, side: dockSide, resized: scheduleFit,
-  dragged: size => {
-    if (isAcross(dockSide())) state.notepad.height = size;
-    else state.notepad.width = size;
-    persist();
-  },
-});

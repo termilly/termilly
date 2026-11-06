@@ -81,6 +81,7 @@ internal static class Composition
         .AddHandler<WorktreeHandler>()
         .AddHandler<LayoutHandler>()
         .AddHandler<NotepadHandler>()
+        .AddHandler<TodoIssues>()
         .AddHandler<SshHandler>()
         .AddHandler<FilesHandler>()
         .AddHandler<PreviewWatchHandler>()

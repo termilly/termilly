@@ -1,11 +1,10 @@
 // @ts-check
 // Notes on terminals, workspaces and SSH hosts ("staging DB is read-only until Friday", "this box needs sudo -u
 // deploy"). A terminal's or workspace's note is saved with the workspace (encrypted with the rest) and kept in
-// the closed-terminal history; a host's note lives in Settings and shows on every terminal opened to it.
+// the closed-terminal history; a host's note lives in Settings and shows on every terminal opened to it. They're
+// written in To do (js/todopanel.js), above the tasks of the same terminal, workspace or host.
 
 import { state, emit, persist, profileOf, wsById, GROUPS, isSshProfile, EVENTS } from './store.js';
-import { modal, confirmDialog } from './dialogs.js';
-import { escapeHtml } from './ui.js';
 import { updateSettings } from './preferences.js';
 
 /**
@@ -53,49 +52,6 @@ export function noteTitle(notes) {
 }
 
 /**
- * Edits a note. `kind` is 'terminal' (target a tab), 'workspace' (a workspace) or 'host' (a profile id).
- * Saving empty text removes the note.
- * @param {string} kind
- * @param {Tab | Workspace | string} target
- */
-export function editNote(kind, target) {
-  const current = kind === NOTE_KIND.host
-    ? { text: state.settings.shells.notes?.[/** @type {string} */ (target)] ?? '', pinned: true }
-    : /** @type {Tab | Workspace} */ (target).note ?? { text: '', pinned: false };
-  const what = kind === NOTE_KIND.terminal ? 'this terminal'
-    : kind === NOTE_KIND.workspace ? `“${escapeHtml(/** @type {Workspace} */ (target).name)}”`
-    : `${escapeHtml(state.profiles.find(p => p.id === target)?.name ?? 'this host')}`;
-  return modal('note-editor', `
-    <h3>Note on ${what}</h3>
-    <p class="dialog-sub">${kind === NOTE_KIND.host ? 'Shows on every terminal opened to this host: runbook links, who to ask, what not to do.'
-      : 'Markdown is fine. The first line shows when you hover its row in the sidebar.'}</p>
-    <textarea class="field note-text" rows="16" spellcheck="false" autocapitalize="off" autocorrect="off" placeholder="e.g. staging DB is read-only until Friday">${escapeHtml(current.text)}</textarea>
-    ${kind === NOTE_KIND.host ? '' : `<label class="note-pin"><input type="checkbox" data-pin ${current.pinned ? 'checked' : ''}> Pin the first line to ${kind === NOTE_KIND.terminal ? 'the terminal’s header' : 'the header of its terminals'}</label>`}
-    <div class="dialog-actions">
-      ${current.text ? '<button class="btn" data-remove>Remove note</button>' : ''}
-      <span class="spacer"></span>
-      <button class="btn" data-cancel>Cancel</button>
-      <button class="btn primary" data-ok>Save</button>
-    </div>`, (dialog, close) => {
-    const area = /** @type {HTMLTextAreaElement} */ (dialog.querySelector('.note-text'));
-    setTimeout(() => { area.focus(); area.setSelectionRange(area.value.length, area.value.length); });
-    /** @param {string} text */
-    const save = text => {
-      setNote(kind, target, text.trim(),
-        !!(/** @type {HTMLInputElement | null} */ (dialog.querySelector('[data-pin]')))?.checked);
-      close(true);
-    };
-    dialog.querySelector('[data-remove]')?.addEventListener('click', () => {
-      // Dialogs don't stack: the editor closes for the question, and comes back if the note stays.
-      close(null);
-      confirmRemove(kind, target, current);
-    });
-    // Enter makes new lines; Ctrl+Enter saves (modal()).
-    return { submit: () => save(area.value) };
-  });
-}
-
-/**
  * Adds text to the end of a terminal's or workspace's note, as a new paragraph (the Notepad's Copy to note).
  * @param {string} kind 'terminal' or 'workspace'
  * @param {Tab | Workspace} target
@@ -105,18 +61,6 @@ export function appendNote(kind, target, text) {
   const note = target.note;
   const joined = note?.text ? `${note.text}\n\n${text.trim()}` : text.trim();
   setNote(kind, target, joined, !!note?.pinned);
-}
-
-/**
- * Asks before removing a note; no brings its editor back.
- * @param {string} kind
- * @param {Tab | Workspace | string} target
- * @param {{ text: string, pinned?: boolean }} note
- */
-async function confirmRemove(kind, target, note) {
-  if (await confirmDialog({ title: 'Remove this note?', body: firstLine(note.text), confirm: 'Remove note' })) {
-    setNote(kind, target, '', !!note.pinned);
-  } else editNote(kind, target);
 }
 
 /**
@@ -131,6 +75,7 @@ export function setNote(kind, target, text, pinned) {
     const notes = { ...(state.settings.shells.notes ?? {}) };
     if (text) notes[/** @type {string} */ (target)] = text; else delete notes[/** @type {string} */ (target)];
     updateSettings(GROUPS.shells, { notes });
+    emit(EVENTS.todo);
     return;
   }
   /** @type {Tab | Workspace} */ (target).note = text ? { text, pinned } : null;
@@ -139,5 +84,6 @@ export function setNote(kind, target, text, pinned) {
     for (const tab of state.tabs.values()) if (tab.wsId === /** @type {Workspace} */ (target).id) emit(EVENTS.tab, tab);
     emit(EVENTS.workspaces);
   }
+  emit(EVENTS.todo);
   persist();
 }

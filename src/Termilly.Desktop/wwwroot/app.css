@@ -591,9 +591,9 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
    wider it stays at most half the terminals' area, also when the window shrinks later. */
 .files-panel {
   position: absolute;
-  top: var(--notepad-dock-top, 0px);
-  right: calc(var(--notepad-dock, 0px) + var(--clips-dock, 0px));
-  bottom: var(--notepad-dock-bottom, 0px);
+  top: calc(var(--notepad-dock-top, 0px) + var(--todo-dock-top, 0px));
+  right: calc(var(--notepad-dock, 0px) + var(--todo-dock, 0px) + var(--clips-dock, 0px));
+  bottom: calc(var(--notepad-dock-bottom, 0px) + var(--todo-dock-bottom, 0px));
   z-index: 5;
   display: flex;
   flex-direction: column;
@@ -651,9 +651,9 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
    (--clips-dock on #workspace). It borrows the Files panel's head, grip and search box. ---- */
 .clips-panel {
   position: absolute;
-  top: var(--notepad-dock-top, 0px);
-  right: var(--notepad-dock, 0px);
-  bottom: var(--notepad-dock-bottom, 0px);
+  top: calc(var(--notepad-dock-top, 0px) + var(--todo-dock-top, 0px));
+  right: calc(var(--notepad-dock, 0px) + var(--todo-dock, 0px));
+  bottom: calc(var(--notepad-dock-bottom, 0px) + var(--todo-dock-bottom, 0px));
   z-index: 5;
   display: flex;
   flex-direction: column;
@@ -1284,7 +1284,7 @@ body[data-sidebar="rail"] .side-rail { opacity: 1; pointer-events: auto; }
 /* Every workspace stays laid out (so hidden terminals keep their size); only the active one shows. */
 .ws-layer {
   position: absolute;
-  inset: var(--notepad-dock-top, 0px) calc(var(--files-dock, 0px) + var(--notepad-dock, 0px) + var(--clips-dock, 0px)) var(--notepad-dock-bottom, 0px) var(--notepad-dock-left, 0px);
+  inset: calc(var(--notepad-dock-top, 0px) + var(--todo-dock-top, 0px)) calc(var(--files-dock, 0px) + var(--notepad-dock, 0px) + var(--todo-dock, 0px) + var(--clips-dock, 0px)) calc(var(--notepad-dock-bottom, 0px) + var(--todo-dock-bottom, 0px)) calc(var(--notepad-dock-left, 0px) + var(--todo-dock-left, 0px));
   display: flex;
   visibility: hidden;
 }
@@ -2772,6 +2772,7 @@ mark.set-hit { border-radius: 2px; background: var(--accent-soft); color: inheri
 .note-mark { display: inline-flex; flex: none; margin-left: 4px; color: var(--muted); cursor: pointer; }
 .note-mark:hover { color: var(--text); }
 .note-mark svg { width: 12px; height: 12px; stroke-width: 1.4; }
+.note-mark span { margin-left: 2px; font-size: 10px; line-height: 12px; }
 .pane-note { display: inline-flex; align-items: center; gap: 5px; min-width: 0; max-width: 40%; height: 20px; margin-left: 6px; padding: 0 8px;
   border: 1px solid color-mix(in srgb, var(--attention, #f2cc60) 40%, transparent); border-radius: 10px;
   background: color-mix(in srgb, var(--attention, #f2cc60) 10%, transparent); color: var(--text); font-size: 11.5px; }
@@ -3213,3 +3214,54 @@ body.detached-window .files-head .np-sep { height: 18px; margin: 0 0 0 1px; back
 .snippets-win > .set-head > .set-close svg { width: 10px; height: 10px; }
 .snippets-win { background: var(--surface); }
 .detached-controls svg[viewBox="0 0 16 16"] { width: 16px; height: 16px; stroke-width: 1; }
+
+/* ---- To do (js/todopanel.js): built like the Notepad, and docked just inside it on the same edge. ---- */
+.todo-panel { top: var(--notepad-dock-top, 0px); right: var(--notepad-dock, 0px); bottom: var(--notepad-dock-bottom, 0px); }
+.todo-panel[data-side="left"] { right: auto; left: var(--notepad-dock-left, 0px); }
+.todo-panel[data-side="top"], .todo-panel[data-side="bottom"] { right: var(--notepad-dock, 0px); left: var(--notepad-dock-left, 0px); }
+.todo-panel[data-side="top"] { bottom: auto; }
+.todo-panel[data-side="bottom"] { top: auto; }
+.todo-panel .files-title { flex: none; }
+.td-pick { display: inline-flex; align-items: center; gap: 2px; min-width: 0; height: 22px; margin-left: 6px; padding: 0 4px 0 8px; border: 1px solid var(--border); border-radius: 6px; background: none; color: var(--text); font: inherit; font-size: 12px; cursor: pointer; }
+.td-pick:hover { background: var(--hover); }
+.td-pick svg { flex: none; width: 12px; height: 12px; fill: none; stroke: currentColor; }
+.td-pick-name { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.td-view { display: flex; flex: 1; flex-direction: column; min-height: 0; }
+.td-view[hidden], .td-note[hidden], .td-tags[hidden], .td-issue[hidden] { display: none; }
+.td-note { position: relative; flex: none; padding: 8px 10px 0; }
+.td-note-text { display: block; box-sizing: border-box; width: 100%; padding: 6px 30px 6px 8px; border: 1px solid var(--border); border-radius: 6px; outline: none; resize: none; background: var(--bg); color: var(--text); font: 13px/20px var(--mono); }
+.td-note-text:focus { border-color: var(--accent); }
+.td-pin { position: absolute; top: 12px; right: 14px; }
+.td-pin[hidden] { display: none; }
+.td-pin[aria-pressed="true"] { color: var(--accent); }
+.td-add { flex: none; box-sizing: border-box; width: auto; margin: 8px 10px 6px; }
+.td-tags { display: flex; flex: none; flex-wrap: wrap; gap: 4px; padding: 0 10px 6px; }
+.td-chip { height: 18px; padding: 0 7px; border: 1px solid transparent; border-radius: 999px; background: color-mix(in srgb, var(--td-hue) 18%, transparent); color: var(--td-hue); font: inherit; font-size: 11px; line-height: 16px; cursor: pointer; }
+.td-chip.on { border-color: currentColor; }
+.td-chip.hue0 { --td-hue: #7aa2f7; } .td-chip.hue1 { --td-hue: #f7768e; } .td-chip.hue2 { --td-hue: #3fcf8e; } .td-chip.hue3 { --td-hue: #e0af68; }
+.td-chip.hue4 { --td-hue: #bb9af7; } .td-chip.hue5 { --td-hue: #7dcfff; } .td-chip.hue6 { --td-hue: #ff9e64; } .td-chip.hue7 { --td-hue: #9ece6a; }
+.td-list { flex: 1; min-height: 0; overflow-y: auto; padding: 0 4px 8px; }
+.td-empty { margin: 16px 12px; color: var(--muted); font-size: 13px; }
+.td-task { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; gap: 8px; padding: 5px 6px; border-radius: 6px; font-size: 13px; }
+.td-task:hover { background: var(--hover); }
+.td-check { width: 14px; height: 14px; margin: 3px 0 0; accent-color: var(--accent); }
+.td-text { overflow-wrap: anywhere; line-height: 20px; }
+.td-task.done .td-text { color: var(--muted); text-decoration: line-through; }
+.td-details { color: var(--muted); font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.td-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 3px; }
+.td-gh { color: var(--muted); font: 11px var(--mono); }
+.td-more { visibility: hidden; }
+.td-task:hover .td-more, .td-more:focus-visible { visibility: visible; }
+.td-fold { display: block; margin: 6px; padding: 2px 6px; border: 0; background: none; color: var(--muted); font: inherit; font-size: 12px; cursor: pointer; }
+.td-fold:hover { color: var(--text); }
+.td-edit, .td-issue { display: flex; flex-direction: column; gap: 6px; }
+.td-edit { margin: 2px; padding: 8px; border: 1px solid var(--border); border-radius: 6px; }
+.td-issue { flex: 1; min-height: 0; overflow-y: auto; padding: 10px; }
+.td-issue h3 { margin: 0; font-size: 14px; }
+.td-issue-repo { margin: 0; color: var(--muted); font: 12px var(--mono); }
+.td-issue-repo:empty { display: none; }
+.td-issue-error { margin: 0; color: var(--danger, #ff6b6b); font-size: 12.5px; }
+.td-edit-actions { display: flex; justify-content: flex-end; gap: 6px; }
+.td-labels { display: flex; flex-wrap: wrap; gap: 4px; }
+.td-label { height: 22px; padding: 0 9px; border: 1px solid var(--border); border-radius: 999px; background: none; color: var(--muted); font: inherit; font-size: 12px; cursor: pointer; }
+.td-label.on { border-color: var(--accent); color: var(--text); }

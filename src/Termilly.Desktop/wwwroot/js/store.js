@@ -101,6 +101,12 @@ export const getSetting = path => {
  * @typedef {{ open: boolean, width?: number, tabId?: string | null, folders?: string[], scroll?: number }} FilesState
  */
 /**
+ * To do's panel: open or closed, the list it shows, where it docks, and the SSH hosts' tasks by profile (js/todo.js).
+ * @typedef {{ open: boolean, list?: { kind: string, id: string } | null, width?: number, height?: number, side?: string,
+ *   detached?: boolean, hosts?: Record<string, TodoTask[]> }} TodoState
+ */
+
+/**
  * The Notepad: open or closed, its pages, the one shown, its width, its text's size (Ctrl+wheel), and the view switches
  * pages had before each had its own.
  * @typedef {{ open: boolean, pages: NotepadPage[], activeId: string | null, width?: number, links?: boolean, wrap?: boolean,
@@ -128,6 +134,8 @@ export const state = {
   sidebar: { open: true },
   /** @type {NotepadState} */
   notepad: { open: false, pages: [], activeId: null },
+  /** @type {TodoState} */
+  todo: { open: false },
   /** @type {ClipsState} */
   clips: { open: false },
   /** @type {FilesState} */
@@ -192,6 +200,8 @@ export const EVENTS = Object.freeze({
   /** The Notification center's list changed (cleared): the phones get it again. */
   inbox: 'inbox',
   openAgentChanges: 'openAgentChanges',
+  /** A list to show in To do: { kind, id } (js/todo.js). */
+  openTodo: 'openTodo',
   /** Files and folders dragged out of the Files panel were dropped on a terminal: { tab, x, y } (js/filepanel.js asks what to do). */
   panelDrop: 'panelDrop',
   /** A clip dragged from Clipboard onto a terminal: { tab, id } (js/clipboard.js pastes it). */
@@ -221,6 +231,8 @@ export const EVENTS = Object.freeze({
   tabClosed: 'tabClosed',
   tags: 'tags',
   terminalOpened: 'terminalOpened',
+  /** A To do list or a note changed: what shows it draws it again (js/todopanel.js). */
+  todo: 'todo',
   workspaces: 'workspaces',
   workspaceClosed: 'workspaceClosed',
 });
@@ -748,18 +760,19 @@ function serialize() {
     tags: state.tags,
     recentDirs: state.recentDirs,
     notepad: state.notepad,
+    todo: state.todo,
     snippetsWindow: state.snippetsWindow,
     clips: state.clips,
     files: state.files,
     windowPlaces: state.windowPlaces,
     windowsOnTop: state.windowsOnTop,
     // tmux windows aren't saved: they're tmux's, and attaching again brings them back (tmux.js).
-    workspaces: state.workspaces.filter(w => !w.tmux).map(({ id, name, color, cwd, focusId, root, note, snippets, collapsed, copyTo }) => ({ id, name, color, cwd, focusId, root: withoutPreview(root), note, snippets, collapsed: collapsed || undefined, copyTo })),
+    workspaces: state.workspaces.filter(w => !w.tmux).map(({ id, name, color, cwd, focusId, root, note, tasks, snippets, collapsed, copyTo }) => ({ id, name, color, cwd, focusId, tasks, root: withoutPreview(root), note, snippets, collapsed: collapsed || undefined, copyTo })),
     tabs: [...state.tabs.values()].filter(t => !t.virtual).map(t => {
-      const { id, wsId, profile, name, tags, noHistory, startCwd, env, startCommand, worktree, note, agentRead, agentType, agentSessions, promptsClearedAt, stepsClearedAt } = t;
+      const { id, wsId, profile, name, tags, noHistory, startCwd, env, startCommand, worktree, note, tasks, agentRead, agentType, agentSessions, promptsClearedAt, stepsClearedAt } = t;
       // In a window of its own: it opens in one again after a restart, where it was (windowPlaces).
       const windowed = t.detached || t.windowed || undefined;
-      return { id, wsId, profile, name, tags, noHistory, startCwd, env, startCommand, worktree, note, agentRead, agentType, agentSessions, promptsClearedAt: promptsClearedAt || undefined, stepsClearedAt: stepsClearedAt && Object.keys(stepsClearedAt).length ? stepsClearedAt : undefined, lastCwd: lastFolderOf(t) ?? undefined, windowed };
+      return { id, wsId, profile, name, tags, noHistory, startCwd, env, startCommand, worktree, note, tasks, agentRead, agentType, agentSessions, promptsClearedAt: promptsClearedAt || undefined, stepsClearedAt: stepsClearedAt && Object.keys(stepsClearedAt).length ? stepsClearedAt : undefined, lastCwd: lastFolderOf(t) ?? undefined, windowed };
     }),
   };
 }
@@ -793,6 +806,7 @@ export function restore(saved) {
     const pages = saved.notepad.pages.filter((/** @type {any} */ p) => typeof p?.id === 'string' && typeof p.text === 'string');
     state.notepad = { ...saved.notepad, pages, activeId: pages.some((/** @type {NotepadPage} */ p) => p.id === saved.notepad.activeId) ? saved.notepad.activeId : pages[0]?.id ?? null };
   }
+  if (saved.todo && typeof saved.todo === 'object') state.todo = { ...state.todo, ...saved.todo };
   if (saved.clips && typeof saved.clips === 'object') state.clips = { ...state.clips, ...saved.clips };
   if (saved.files && typeof saved.files === 'object') state.files = { ...state.files, ...saved.files };
   state.snippetsWindow = { open: saved.snippetsWindow?.open === true };

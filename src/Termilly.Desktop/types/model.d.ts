@@ -31,6 +31,17 @@ interface PreviewNode {
 /** A node of a workspace's layout tree. Trees hold only plain data, so they're saved as they are. */
 type LayoutNode = LeafNode | SplitNode | TabsNode | PreviewNode;
 
+/** A task in a To do list (js/todo.js). Tags are To do's own; an issue is one made from it on GitHub. */
+interface TodoTask {
+  id: string;
+  text: string;
+  details?: string;
+  tags?: string[];
+  done?: boolean;
+  created: number;
+  issue?: { repo: string; number: number; url: string };
+}
+
 /** A note pinned to a terminal, a host or a workspace (js/notes.js). */
 interface Note {
   text: string;
@@ -46,6 +57,7 @@ interface Workspace {
   focusId: string | null;
   root: LayoutNode | null;
   note?: Note | null;
+  tasks?: TodoTask[];
   /** Its own snippets (js/snippets.js). */
   snippets?: SnippetSetting[];
   /** Folded in the sidebar. */
@@ -116,6 +128,7 @@ interface Tab {
   /** Nothing of it is kept in history. */
   noHistory: boolean;
   note?: Note | null;
+  tasks?: TodoTask[];
   /** The folder it was opened in (a layout's, the API's). */
   startCwd?: string | null;
   /** A layout's variables for its shell. */

@@ -11,7 +11,7 @@ import { tabBadgeHtml, escapeHtml, activityHtml, countText, ICONS } from './ui.j
 import { activityOf } from './store.js';
 import { focusTab, focusedTab } from './panes.js';
 import { AGENT_STATE, CLAUDE_TOOL } from './constants.js';
-import { byId, find, targetOf } from './dom.js';
+import { byId, find, targetOf, TOOL_COUNT } from './dom.js';
 import { SECOND_MS, DAY_S, MINUTE_S, HOUR_S } from './util.js';
 
 /** The inbox's filters (their data-filter). */
@@ -55,7 +55,7 @@ const panel = byId('inbox');
 const list = byId('inbox-list');
 const filtersEl = byId('inbox-filters');
 const button = byId('inbox-button');
-const count = find(button, '.tool-count');
+const count = find(button, TOOL_COUNT);
 const totalEl = byId('inbox-total');
 const clearAll = byId('inbox-clear');
 

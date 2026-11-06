@@ -16,7 +16,7 @@ import { byId, targetOf, dockRight, titleIconHtml, WORKSPACE_ID, DOCK_GRIP, CLIP
 import { showMenu, SEPARATOR } from './popups.js';
 import { showToast, TOAST } from './toasts.js';
 import { quotePaths } from './quoting.js';
-import { setClipHooks } from './termclipboard.js';
+import { setClipHooks, COPY_LABEL } from './termclipboard.js';
 import { CLIP_KIND, CLIP_FORM, PRODUCT } from './constants.js';
 import { updateSettings } from './preferences.js';
 import { fileSize } from './pictures.js';
@@ -247,7 +247,7 @@ function noteCopy(text, body, link) {
 setClipHooks(menuEntries, noteCopy);
 
 /** Where a copy made outside the terminals came from, by the part of the page it was made in, else Termilly. */
-const COPY_SOURCES = [['.notepad-panel', 'Notepad'], ['.snippets-win', 'Snippets']];
+const COPY_SOURCES = [['.todo-panel', 'To do'], ['.notepad-panel', 'Notepad'], ['.snippets-win', 'Snippets']];
 /** A terminal's own copies are told by it (noteCopy), not here. */
 const IN_TERMINAL = '.xterm';
 
@@ -475,7 +475,7 @@ async function clipMenu(c, e) {
     ...kindEntries(c, text, image),
     { label: isImage ? 'Paste the file path' : 'Paste', icon: ICONS.paste, action: () => pasteClip(c) },
     ...(runnable(c) ? [{ label: 'Paste and run', icon: ICONS.play, action: () => pasteClip(c, focusedTab(), true) }] : []),
-    { label: isImage ? 'Copy the image' : 'Copy', icon: ICONS.copy, action: () => copyClip(c) },
+    { label: isImage ? 'Copy the image' : COPY_LABEL, icon: ICONS.copy, action: () => copyClip(c) },
     SEPARATOR,
     ...(c.kind === CLIP_KIND.secret ? [] : [{ label: c.pinned ? UNPIN_LABEL : 'Pin', icon: TOOL_ICONS.pin, action: () => send(PAGE.clipPin, { id: c.id, pinned: !c.pinned }) }]),
     { label: 'Delete', icon: ICONS.trash, hint: 'Del', action: () => send(PAGE.clipForget, { id: c.id }) },
