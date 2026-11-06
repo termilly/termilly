@@ -128,6 +128,9 @@ interface Tab {
   agentRead?: boolean;
   /** Whether agents may type into it (js/together.js). */
   agentType?: boolean;
+  /** The paired device that opened or closed it, for the trace here (js/phonemanage.js). */
+  openedBy?: string;
+  closedBy?: string;
   /** Brought back from the saved workspaces at start. */
   restored?: boolean;
   /** It wants attention (the amber dot; js/panes.js). */

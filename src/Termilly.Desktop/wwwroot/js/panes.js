@@ -302,6 +302,7 @@ function recordHistory(tab) {
       cwd: ws?.cwd ?? null,
       startedAt: tab.startedAt,
       closedAt: Date.now(),
+      closedBy: tab.closedBy ?? null,
       noHistory: !keepsOutput,
       lines,
       earlier: keepsOutput ? tab.id : null,

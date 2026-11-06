@@ -17,11 +17,11 @@ export const MAX_WORKSPACE_NAME = 40;
 const MAX_MADE_NAME = 36;
 
 /**
- * Creates a workspace and switches to it. startWith: 'tab' opens one terminal, 'empty' none.
- * @param {{ name?: string, color?: string, cwd?: string | null, startWith?: string, profile?: string }} [options]
+ * Creates a workspace and switches to it (unless `stay`). startWith: 'tab' opens one terminal, 'empty' none.
+ * @param {{ name?: string, color?: string, cwd?: string | null, startWith?: string, profile?: string, stay?: boolean }} [options]
  * @returns {Workspace}
  */
-export function createWorkspace({ name, color, cwd = null, startWith = START_WITH.tab, profile } = {}) {
+export function createWorkspace({ name, color, cwd = null, startWith = START_WITH.tab, profile, stay = false } = {}) {
   const ws = {
     id: newId('w'),
     name: name?.trim() || nextName(),
@@ -33,7 +33,7 @@ export function createWorkspace({ name, color, cwd = null, startWith = START_WIT
   state.workspaces.push(ws);
   if (ws.cwd) noteDir(ws.cwd);
   renderWorkspace(ws);
-  switchWorkspace(ws.id);
+  if (!stay) switchWorkspace(ws.id);
   if (startWith === START_WITH.tab) newTab({ wsId: ws.id, profile });
   emit(EVENTS.workspaces);
   persist();

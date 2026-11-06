@@ -143,8 +143,11 @@ const PHONE_THEMES = THEMES.map(phoneTheme);
 /** What the phones show: this PC's workspaces, in order, their terminals, and whether a phone may type into them. */
 function snapshot() {
   const typing = !!state.settings.phone?.allowTyping;
+  const opening = !!state.settings.phone?.allowOpening;
   return {
     typing,
+    // What it allows from elsewhere. Sent with every change, Settings' too, so a device connected now follows at once.
+    opening, closing: !!state.settings.phone?.allowClosing,
     // Which system it runs on: another computer's Copy to draws its folders from drives (Windows) or from /.
     os: platform,
     snippets: typing ? snippetsForPhone() : [],
@@ -155,7 +158,7 @@ function snapshot() {
     themes: PHONE_THEMES, pcTheme: themeId(), pcTerminal: termTheme(),
     workspaces: state.workspaces.map(w => ({ id: w.id, name: w.name, color: w.color, cwd: w.cwd ?? null, note: w.note ?? null })),
     // What a phone may open a terminal on, and where it opens by default (only while it may type: js/phonemanage.js).
-    places: typing ? placesForPhone(badgeOf) : [], activeWs: state.activeId,
+    places: opening ? placesForPhone(badgeOf) : [], activeWs: state.activeId,
     terminals: [...state.tabs.values()].filter(t => t.wsId && wsById(t.wsId) && !t.virtual).map(terminalOf),
   };
 }

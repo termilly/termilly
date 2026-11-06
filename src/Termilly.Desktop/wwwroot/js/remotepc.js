@@ -11,7 +11,7 @@ import { newTab, focusTab, closeTab, switchWorkspace, renderWorkspace, renderAll
 import { setVirtualInput } from './terminals.js';
 import { escapeHtml, ICONS, activityHtml, MINI_ACTIVITY, badgeHtml } from './ui.js';
 import { modal, FORM_DIALOG, DIALOG_ERROR, confirmDialog } from './dialogs.js';
-import { showMenu } from './popups.js';
+import { showMenu, SEPARATOR } from './popups.js';
 import { byId, targetOf } from './dom.js';
 import { renderRemote, setRemoteExtra, REMOTE_ID, REMOTE_GROUP, groupHead, isGroupFolded } from './remote.js';
 import { showToast, TOAST } from './toasts.js';
@@ -19,10 +19,11 @@ import { FOLDER_PATH, SETTING_VALUES } from './constants.js';
 import { showAtSize } from './phone.js';
 
 /** @typedef {import('./protocol.js').PcView} Pc */
+/** @typedef {import('./popups.js').MenuEntry} MenuEntry */
 /** A computer's state, as its phone app gets it (js/phone.js snapshot): what the tree shows of it. */
 /** Where a terminal's files are there: an SSH host it reaches (by name) or its own disk, and its shell's folder. */
 /** @typedef {{ ssh: boolean, place: string | null, cwd: string }} PcFiles */
-/** @typedef {{ os?: string, workspaces: { id: string, name: string, color: string }[], terminals: { id: string, ws: string, title: string, badge?: string, icon?: string, prompts?: boolean, sizedBy?: { label: string, computer: boolean } | null, cols?: number | null, rows?: number | null, activity?: string | null, hint?: string | null, files?: PcFiles | null }[] }} PcState */
+/** @typedef {{ opening?: boolean, closing?: boolean, places?: { id: string, name: string }[], os?: string, workspaces: { id: string, name: string, color: string }[], terminals: { id: string, ws: string, title: string, badge?: string, icon?: string, prompts?: boolean, sizedBy?: { label: string, computer: boolean } | null, cols?: number | null, rows?: number | null, activity?: string | null, hint?: string | null, files?: PcFiles | null }[] }} PcState */
 
 /** A virtual terminal's kind (tab.virtual): another computer's. */
 export const PC_KIND = 'pc';
@@ -30,6 +31,8 @@ export const PC_KIND = 'pc';
 const COMPUTER_ICON = '<svg viewBox="0 0 16 16"><rect x="1.5" y="2.5" width="13" height="9" rx="1.5"/><path d="M5.5 14.5h5M8.5 11.5v3"/></svg>';
 /** What the tree's rows do (data-pc-*). */
 const ROW = Object.freeze({ computer: 'pcComputer', workspace: 'pcWorkspace', terminal: 'pcTerminal', add: 'pcAdd' });
+/** What's asked of a computer (js/phonemanage.js there). */
+const MANAGE = Object.freeze({ open: 'open', close: 'close', newWorkspace: 'newWorkspace', closeWorkspace: 'closeWorkspace' });
 /** A terminal's size before it's been fitted. */
 const START_SIZE = Object.freeze({ cols: 120, rows: 30 });
 
@@ -424,9 +427,77 @@ onHost(HOST.pcList, m => {
 });
 onHost(HOST.pcAdded, () => {});
 
+/**
+ * Asks a computer to do something there; what it answers shows only when it refused.
+ * @param {Pc} pc
+ * @param {Record<string, unknown>} args
+ */
+async function manage(pc, args) {
+  const answer = await request(PAGE.pcManage, { id: pc.id, args });
+  if (answer?.error) showToast({ text: answer.error, state: TOAST.failed });
+}
+
+/**
+ * Why a computer won't: it's too old to say, or its Settings › Remote doesn't allow it. Asked anew each time, and its
+ * state follows its settings live, so this needs no reconnecting.
+ * @param {Pc} pc
+ * @param {boolean | undefined} allowed
+ */
+const refusal = (pc, allowed) => (allowed ? undefined : allowed === undefined
+  ? `Update ${pc.name} to do this from here.` : `${pc.name} doesn’t allow this: Settings › Remote there.`);
+
+/**
+ * Asks for a new workspace's name, then opens it there.
+ * @param {Pc} pc
+ */
+function newWorkspaceThere(pc) {
+  return modal(FORM_DIALOG, `
+    <h3>New workspace on ${escapeHtml(pc.name)}</h3>
+    <label class="dialog-field">Name<input class="field" data-pc-ws-name spellcheck="false" autocomplete="off"></label>
+    <div class="dialog-actions"><button class="btn" data-cancel>Cancel</button><button class="btn primary" data-ok>Create</button></div>`, (dialog, close) => ({
+    submit: () => {
+      manage(pc, { action: MANAGE.newWorkspace, name: /** @type {HTMLInputElement} */ (dialog.querySelector('[data-pc-ws-name]')).value });
+      close(true);
+    },
+  }));
+}
+
+/**
+ * Closes a workspace or a terminal there, first saying what still runs in it.
+ * @param {Pc} pc
+ * @param {string} name
+ * @param {PcState['terminals']} terminals what closes with it
+ * @param {Record<string, unknown>} args
+ */
+async function closeThere(pc, name, terminals, args) {
+  const running = terminals.filter(t => t.activity).map(t => t.title);
+  const body = `${running.length ? `Still running: ${running.join(', ')}. ` : ''}${pc.name} keeps it in Recently closed, with its output.`;
+  if (await confirmDialog({ title: `Close ${name} on ${pc.name}?`, body, confirm: `Close on ${pc.name}` })) manage(pc, args);
+}
+
+/**
+ * What can be done on a computer from one of its rows here: entries are greyed, saying why, when it doesn't allow them.
+ * @param {Pc} pc
+ * @param {string | undefined} wsId the workspace of the row
+ * @param {(() => void) | null} [close] the row's own Close on it, if it has one
+ * @returns {MenuEntry[]}
+ */
+function controlItems(pc, wsId, close = null) {
+  const s = stateOf(pc);
+  const open = refusal(pc, s.opening);
+  const shut = refusal(pc, s.closing);
+  return [
+    { label: `New terminal on ${pc.name}`, icon: ICONS.plus, disabled: !!open, title: open,
+      submenu: open ? undefined : () => (s.places ?? []).map(p => ({ label: p.name, action: () => { manage(pc, { action: MANAGE.open, profile: p.id, ws: wsId }); } })) },
+    { label: `New workspace on ${pc.name}`, icon: ICONS.workspaces, disabled: !!open, title: open, action: () => { newWorkspaceThere(pc); } },
+    ...(close ? /** @type {MenuEntry[]} */ ([SEPARATOR, { label: `Close on ${pc.name}`, icon: ICONS.trash, danger: true, disabled: !!shut, title: shut, action: close }]) : []),
+  ];
+}
+
 /** @param {Pc} pc @param {MouseEvent} e */
 function computerMenu(pc, e) {
   showMenu([
+    ...(pc.online ? /** @type {MenuEntry[]} */ ([...controlItems(pc, undefined), SEPARATOR]) : []),
     { label: 'Forget this computer', icon: ICONS.trash, danger: true, action: async () => {
       if (await confirmDialog({ title: `Forget ${pc.name}?`, body: 'Its terminals open here close. Pair it again with a new code.', confirm: 'Forget' })) send(PAGE.pcRemove, { id: pc.id });
     } },
@@ -450,12 +521,24 @@ section.addEventListener('click', e => {
   }
 }, true);
 section.addEventListener('contextmenu', e => {
-  const el = /** @type {HTMLElement | null} */ (targetOf(e).closest(`[data-pc-computer]`));
-  const pc = el && pcs.find(p => p.id === el.dataset[ROW.computer]);
+  const el = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-pc-computer], [data-pc-workspace], [data-pc-terminal]'));
+  if (!el) return;
+  const { pcComputer, pcWorkspace, pcTerminal, pane } = el.dataset;
+  const pc = pcs.find(p => p.id === (pcComputer ?? pcTerminal ?? pcWorkspace?.split('/')[0]));
   if (!pc) return;
   e.preventDefault();
   e.stopPropagation();
-  computerMenu(pc, e);
+  const at = { x: e.clientX, y: e.clientY };
+  const s = stateOf(pc);
+  if (pcComputer) computerMenu(pc, e);
+  else if (pcWorkspace) {
+    const id = pcWorkspace.slice(pc.id.length + 1);
+    const ws = s.workspaces.find(w => w.id === id);
+    if (ws) showMenu(controlItems(pc, id, () => closeThere(pc, ws.name, s.terminals.filter(t => t.ws === id), { action: MANAGE.closeWorkspace, ws: id })), at);
+  } else {
+    const t = s.terminals.find(x => x.id === pane);
+    if (t) showMenu(controlItems(pc, t.ws, () => closeThere(pc, t.title, [t], { action: MANAGE.close, pane: t.id })), at);
+  }
 }, true);
 
 send(PAGE.pcList);

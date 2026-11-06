@@ -120,6 +120,8 @@ function devicesHtml() {
       seg('phone.alerts', [[SETTING_VALUES.phoneAlerts.always, 'Always'], [SETTING_VALUES.phoneAlerts.away, 'When I’m away'], [SETTING_VALUES.phoneAlerts.off, 'Off']]),
       { keywords: 'phone alert push notification away idle' })
     + row('Allow typing', 'Paired phones and computers can type into the terminals they show, and computers can copy files into them. Answers to an agent work either way.', toggle('phone.allowTyping'), { keywords: 'phone computer type keyboard input remote copy files' })
+    + row('Allow opening', 'Paired phones and computers can open workspaces and terminals here. A new terminal runs whatever its shell runs.', toggle('phone.allowOpening'), { keywords: 'phone computer remote open new terminal workspace control' })
+    + row('Allow closing', 'Paired phones and computers can close workspaces and terminals here, with what runs in them.', toggle('phone.allowClosing'), { keywords: 'phone computer remote close terminal workspace control' })
     + row('Clipboard on the phone', 'With typing allowed, phones can paste your recent text clips. They get only each one’s first line, secrets masked; this PC pastes it.', toggle('phone.clips'), { keywords: 'phone clipboard paste' })
     + row('Prompt history', 'Paired computers can open Prompt history for the terminals they show: what you asked Claude Code there, with times.', toggle('phone.sharePrompts'), { keywords: 'computer prompts history claude remote' })
     + row('Hide details in alerts', 'Only “An agent needs you” or “An agent finished”: no terminal, workspace or message on the lock screen.', toggle('phone.hideDetails'), { keywords: 'phone alert privacy lock screen' })

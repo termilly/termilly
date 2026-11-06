@@ -201,6 +201,7 @@ function showNotes(tab, header) {
  * @param {HTMLElement} header
  */
 function showStatus(tab, header) {
+  find(header, '.pane-title').title = tab.openedBy ? `Opened from ${tab.openedBy}` : '';
   const status = find(header, '.pane-status');
   status.hidden = !tab.status;
   status.textContent = tab.status ?? '';

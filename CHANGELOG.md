@@ -9,6 +9,7 @@ What changed in each release. Termilly says in its title bar when a newer one is
 - **Notepad:** toolbar, status bar, line numbers, text size, and docking on any edge.
 - **More shells:** shell integration for zsh, fish, nushell, tcsh and ksh, and shells from package managers.
 - **Clipboard:** new switches to pause it, or to keep only what you copy in Termilly.
+- **Remote control:** open and close workspaces and terminals from another computer, when its Settings allow it.
 - **Zoom:** use keyboard shortcuts to zoom the whole app, or just terminal fonts.
 
 Fixes:

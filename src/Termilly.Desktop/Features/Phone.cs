@@ -216,28 +216,37 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
         InputOp => Task.FromResult(Type(message)),
         PhoneClips.PasteOp => Task.FromResult(_clips.Paste(message)),
         PhoneClips.TextOp => Task.FromResult(_clips.Text(message)),
-        ManageOp => ManageAsync(message),
+        ManageOp => ManageAsync(device, message),
         _ => AnswerAsync(device, message),
     };
 
     private const string ManageOp = "manage";
     /// <summary>The manage action that clears notifications (js/phonemanage.js): allowed with typing off too.</summary>
     private const string ClearNoteAction = "clearNote";
+    private const string OpenAction = "open";
+    private const string NewWorkspaceAction = "newWorkspace";
+    private const string CloseAction = "close";
+    private const string CloseWorkspaceAction = "closeWorkspace";
+    /// <summary>Who asked, by name, added here: what's sent can't say it's someone else.</summary>
+    private const string ByField = "by";
     private const string ActionField = "action";
 
     /// <summary>
-    /// A phone opens, closes, renames or moves a terminal, or adds an SSH host: only while Settings › Remote allows typing
-    /// (a new terminal runs whatever its shell does). The page does it and says how it went (js/phonemanage.js).
+    /// A phone or another computer opens or closes workspaces and terminals (Settings › Remote › Allow opening, Allow
+    /// closing), renames or moves a terminal or adds an SSH host (Allow typing). The page does it and says how it went
+    /// (js/phonemanage.js).
     /// </summary>
-    private async Task<JsonObject> ManageAsync(JsonObject message)
+    private async Task<JsonObject> ManageAsync(string device, JsonObject message)
     {
-        if (!_settings.Current.Phone.AllowTyping && message[ActionField]?.GetValue<string>() != ClearNoteAction)
+        if (Refused(message[ActionField]?.GetValue<string>(), _settings.Current.Phone) is { } setting)
         {
-            return new JsonObject { [Answer.Ok] = false, [OpField] = ManageOp, [Answer.Error] = "Managing terminals from the phone is off: Settings › Remote › Allow typing." };
+            return new JsonObject { [Answer.Ok] = false, [OpField] = ManageOp, [Answer.Error] = $"That's off on this PC: Settings › Remote › {setting}." };
         }
         try
         {
-            var done = await _api.AskPageAsync(ToPage.Calls.PhoneManage, new JsonObject { [PageApi.CallFields.Args] = message.DeepClone() }).ConfigureAwait(false);
+            var args = (JsonObject)message.DeepClone();
+            args[ByField] = _live.NameOf?.Invoke(device);
+            var done = await _api.AskPageAsync(ToPage.Calls.PhoneManage, new JsonObject { [PageApi.CallFields.Args] = args }).ConfigureAwait(false);
             var answer = done?.DeepClone() as JsonObject ?? [];
             answer[Answer.Ok] = true;
             answer[OpField] = ManageOp;
@@ -248,6 +257,15 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
             return new JsonObject { [Answer.Ok] = false, [OpField] = ManageOp, [Answer.Error] = e.Message };
         }
     }
+
+    /// <summary>The setting that's off and keeps an action from being done, or null. Opening and closing have their own.</summary>
+    internal static string? Refused(string? action, PhoneSettings phone) => action switch
+    {
+        ClearNoteAction => null,
+        OpenAction or NewWorkspaceAction => phone.AllowOpening == true ? null : "Allow opening",
+        CloseAction or CloseWorkspaceAction => phone.AllowClosing == true ? null : "Allow closing",
+        _ => phone.AllowTyping ? null : "Allow typing",
+    };
 
     /// <summary>Keys from a phone, typed into the terminal: only while Settings › Remote allows typing.</summary>
     private JsonObject Type(JsonObject message)

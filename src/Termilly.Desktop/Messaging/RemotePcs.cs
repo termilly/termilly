@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace Termilly.Desktop.Messaging;
 
 // Other Termilly computers (js/remotepc.js, Features/RemotePcs.cs): paired once by the code their Settings › Phone
@@ -15,6 +17,12 @@ internal static partial class FromPage
     internal sealed record PcAdd(string? RequestId = null, string Address = "", string Code = "") : IPageMessage
     {
         public static string Type => "pc:add";
+    }
+
+    /// <summary>Asks a computer to open or close something there, as a phone asks (js/phonemanage.js, what <see cref="Args"/> holds).</summary>
+    internal sealed record PcManage(string? RequestId = null, string Id = "", JsonElement Args = default) : IPageMessage
+    {
+        public static string Type => "pc:manage";
     }
 
     /// <summary>Forgets a computer (it can be paired again).</summary>
@@ -69,6 +77,12 @@ internal static partial class ToPage
     internal sealed record PcPaused(string Tab, string? By = null) : IHostMessage
     {
         public static string Type => "pc:paused";
+    }
+
+    /// <summary>How something asked of a computer went: an error, or none.</summary>
+    internal sealed record PcManaged(string? RequestId, string? Error) : IHostMessage
+    {
+        public static string Type => "pc:managed";
     }
 
     /// <summary>How a pairing went: an error, or none.</summary>

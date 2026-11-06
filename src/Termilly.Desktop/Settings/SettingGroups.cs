@@ -262,6 +262,13 @@ internal sealed record PhoneSettings
     /// <summary>A paired phone may type into a terminal it shows (answers to an agent are always allowed).</summary>
     public bool AllowTyping { get; init; }
     /// <summary>
+    /// A paired phone or computer may open workspaces and terminals here. Unset (from before there was this setting), it
+    /// starts as Allow typing was, which is what let a phone do it.
+    /// </summary>
+    public bool? AllowOpening { get; init; }
+    /// <summary>A paired phone or computer may close workspaces and terminals here. Unset: as <see cref="AllowOpening"/>.</summary>
+    public bool? AllowClosing { get; init; }
+    /// <summary>
     /// While typing is allowed, a phone may paste Clipboard's text clips: it gets their first lines (secrets masked) and
     /// asks the PC to paste one, so a clip's text never goes to the phone.
     /// </summary>
@@ -274,6 +281,8 @@ internal sealed record PhoneSettings
     public PhoneSettings Normalize() => this with
     {
         Port = Port is >= MinPort and <= MaxPort ? Port : DefaultPort,
+        AllowOpening = AllowOpening ?? AllowTyping,
+        AllowClosing = AllowClosing ?? AllowTyping,
         Alerts = SettingChecks.OneOf(Alerts, SettingValues.PhoneAlerts.All, SettingValues.PhoneAlerts.Always),
         PcSize = SettingChecks.OneOf(PcSize, SettingValues.PcSize.All, SettingValues.PcSize.Default),
     };

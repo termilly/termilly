@@ -135,6 +135,10 @@ interface PhoneSettings {
   hideDetails: boolean;
   /** A paired phone may type into a terminal it shows (answers to an agent are always allowed). */
   allowTyping: boolean;
+  /** A paired phone or computer may open workspaces and terminals here. Unset (from before there was this setting), it starts as Allow typing was, which is what let a phone do it. */
+  allowOpening: boolean | null;
+  /** A paired phone or computer may close workspaces and terminals here. Unset: as . */
+  allowClosing: boolean | null;
   /** While typing is allowed, a phone may paste Clipboard's text clips: it gets their first lines (secrets masked) and asks the PC to paste one, so a clip's text never goes to the phone. */
   clips: boolean;
   /** A paired computer may open Prompt history for a terminal of this PC it shows (Phone/PcPromptsApi.cs). */
