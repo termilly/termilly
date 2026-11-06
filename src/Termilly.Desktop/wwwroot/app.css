@@ -3261,6 +3261,15 @@ body.detached-window .files-head .np-sep { height: 18px; margin: 0 0 0 1px; back
 .td-issue-repo { margin: 0; color: var(--muted); font: 12px var(--mono); }
 .td-issue-repo:empty { display: none; }
 .td-issue-error { margin: 0; color: var(--danger, #ff6b6b); font-size: 12.5px; }
+.td-edit-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.td-edit-tags .td-chip { display: inline-flex; align-items: center; gap: 3px; cursor: default; }
+.td-chip-drop { display: inline-flex; padding: 0; border: 0; background: none; color: inherit; cursor: pointer; opacity: .7; }
+.td-chip-drop:hover { opacity: 1; }
+.td-chip-drop svg { width: 8px; height: 8px; fill: none; stroke: currentColor; stroke-width: 1.5; }
+.td-add-tag { display: inline-flex; align-items: center; gap: 3px; height: 18px; padding: 0 7px 0 5px; border: 1px dashed var(--border-strong); border-radius: 999px; background: none; color: var(--muted); font: inherit; font-size: 11px; cursor: pointer; }
+.td-add-tag:hover { border-color: var(--accent); color: var(--text); }
+.td-add-tag svg { width: 10px; height: 10px; fill: none; stroke: currentColor; }
+.tag-picker .td-chip { cursor: inherit; }
 .td-edit-actions { display: flex; justify-content: flex-end; gap: 6px; }
 .td-labels { display: flex; flex-wrap: wrap; gap: 4px; }
 .td-label { height: 22px; padding: 0 9px; border: 1px solid var(--border); border-radius: 999px; background: none; color: var(--muted); font: inherit; font-size: 12px; cursor: pointer; }

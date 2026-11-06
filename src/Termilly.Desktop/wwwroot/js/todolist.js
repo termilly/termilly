@@ -132,6 +132,20 @@ export function tagsIn(tasks) {
 }
 
 /**
+ * Every tag in these lists, done tasks' too, most used first and then by name: what a task's tags are picked from.
+ * @param {(TodoTask[] | null | undefined)[]} lists
+ * @returns {[string, number][]}
+ */
+export function allTags(lists) {
+  /** @type {Map<string, number>} */
+  const tags = new Map();
+  for (const task of lists.flatMap(list => list ?? [])) {
+    for (const tag of task.tags ?? []) tags.set(tag, (tags.get(tag) ?? 0) + 1);
+  }
+  return [...tags].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+}
+
+/**
  * The tasks a list shows with these tags picked: any of them, or all with none picked.
  * @param {TodoTask[]} tasks
  * @param {string[]} picked

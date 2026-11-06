@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  parseTask, tasksFromLines, tasksFromNote, tagOfHeading, selectedLines, withoutLines, openCount, tagsIn, withTags, moveBefore,
+  parseTask, tasksFromLines, tasksFromNote, tagOfHeading, selectedLines, withoutLines, openCount, tagsIn, allTags, withTags, moveBefore,
   labelsForTags, hoverLines, HOVER_TASKS,
 } from '../../src/Termilly.Desktop/wwwroot/js/todolist.js';
 
@@ -75,6 +75,11 @@ test('counts open tasks, for no list too', () => {
 
 test('tags come from open tasks, with how many', () => {
   assert.deepEqual(tagsIn([task('a', { tags: ['x', 'y'] }), task('b', { tags: ['x'] }), task('c', { tags: ['z'], done: true })]), [['x', 2], ['y', 1]]);
+});
+
+test('all tags come from every list, done tasks too, most used first', () => {
+  assert.deepEqual(allTags([[task('a', { tags: ['z', 'y'] }), task('b', { tags: ['y'], done: true })], undefined, [task('c', { tags: ['x'] })]]),
+    [['y', 2], ['x', 1], ['z', 1]]);
 });
 
 test('picked tags show any of them', () => {

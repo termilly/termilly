@@ -9,19 +9,20 @@ import { send, onHost } from './host.js';
 import { state, on, persist, newId, lastFolderOf, wsById, tabsOf, tabTitle, isSsh, profileOf, EVENTS } from './store.js';
 import { escapeHtml, cssColor, tabBadgeHtml, countText, ICONS } from './ui.js';
 import { byId, find, targetOf, WORKSPACE_ID, DOCK_GRIP, PANEL_HEAD, TOOL_COUNT } from './dom.js';
-import { showMenu, SEPARATOR } from './popups.js';
+import { showMenu, openPopover, SEPARATOR } from './popups.js';
 import { showToast, TOAST } from './toasts.js';
 import { setNote } from './notes.js';
 import { KEY_ID } from './keymap.js';
 import { copyOut, textBoxMenu } from './textmenu.js';
 import { COPY_LABEL } from './termclipboard.js';
 import { dockPanel, NOTEPAD_DOCK } from './dockpanel.js';
+import { TAG_LIST } from './tagpicker.js';
 import {
-  parseTask, tasksFromLines, tasksFromNote, selectedLines, withoutLines, openCount, tagsIn, withTags, moveBefore, labelsForTags, issueBody,
+  parseTask, tasksFromLines, tasksFromNote, tagOfHeading, selectedLines, withoutLines, openCount, tagsIn, withTags, moveBefore, labelsForTags, issueBody,
 } from './todolist.js';
 import {
   LIST_KIND, listOf, noteTarget, sameList, listInFront, openInFront, terminalList, workspaceList, hostList, addTasks, updateTask,
-  removeTask, moveTask, reorderTasks,
+  removeTask, moveTask, reorderTasks, todoTags,
 } from './todo.js';
 
 /** @typedef {import('./todo.js').ListRef} ListRef */
@@ -39,7 +40,7 @@ const WINDOW_KEY = 'todo';
 /** What its controls do (data-td). */
 const ACTION = Object.freeze({
   pick: 'pick', note: 'note', pin: 'pin', detach: 'detach', close: 'close', fold: 'fold', tag: 'tag', more: 'more', save: 'save',
-  cancel: 'cancel', label: 'label', create: 'create', backToList: 'backToList',
+  cancel: 'cancel', label: 'label', create: 'create', backToList: 'backToList', pickTags: 'pickTags', dropTag: 'dropTag',
 });
 /** How long after the last key a note is saved. */
 const NOTE_SAVE_MS = 400;
@@ -47,8 +48,8 @@ const NOTE_SAVE_MS = 400;
 const NOTE_MAX_ROWS = 12;
 const NOTE_LINE_PX = 20;
 const NOTE_PADDING_PX = 12;
-/** The tags field splits on these. */
-const TAG_SPLIT = /[\s,]+/;
+/** Where a task's tags show while it's edited. */
+const EDIT_TAGS = '.td-edit-tags';
 /** A list's tag chip gets one of the theme's colours, always the same for a tag. */
 const TAG_HUES = 8;
 const TAG_HASH = 31;
@@ -106,9 +107,11 @@ let writingNote = false;
 let hidingNote = false;
 /** Whether done tasks show. */
 let showDone = false;
-/** The task being edited, in its row. */
+/** The task being edited, in its row, and its tags so far. */
 /** @type {string | null} */
 let editing = null;
+/** @type {string[]} */
+let editTags = [];
 /** The task an issue is being made from, and what the host said about its repository. */
 /** @type {{ taskId: string, requestId: string, repo?: string, labels: string[], ticked: string[], error?: string, busy?: boolean, folder: string | null } | null} */
 let issue = null;
@@ -151,9 +154,15 @@ function editorHtml(task) {
   return `<div class="td-edit" data-task="${escapeHtml(task.id)}">
     <input class="field td-edit-text" value="${escapeHtml(task.text)}" spellcheck="false" autocomplete="off" aria-label="Task">
     <textarea class="field td-edit-details" rows="3" spellcheck="false" placeholder="Details" aria-label="Details">${escapeHtml(task.details ?? '')}</textarea>
-    <input class="field td-edit-tags" value="${escapeHtml((task.tags ?? []).join(' '))}" spellcheck="false" autocomplete="off" placeholder="Tags" aria-label="Tags">
+    <div class="td-edit-tags">${editTagsHtml()}</div>
     <span class="td-edit-actions"><button type="button" class="btn small" data-td="${ACTION.cancel}">Cancel</button><button type="button" class="btn small primary" data-td="${ACTION.save}">Save</button></span>
   </div>`;
+}
+
+/** The tags of the task being edited, each with its × and the button that adds more. */
+function editTagsHtml() {
+  const tags = editTags.map(tag => `<span class="td-chip hue${tagHue(tag)}">${escapeHtml(tag)}<button type="button" class="td-chip-drop" data-td="${ACTION.dropTag}" data-tag="${escapeHtml(tag)}" title="Remove" aria-label="Remove ${escapeHtml(tag)}">${ICONS.close}</button></span>`);
+  return `${tags.join('')}<button type="button" class="td-add-tag" data-td="${ACTION.pickTags}">${ICONS.plus}Tag</button>`;
 }
 
 /** @param {TodoList} list */
@@ -374,17 +383,83 @@ function saveEdit() {
   const text = /** @type {HTMLInputElement} */ (find(row, EDIT_TEXT)).value.trim();
   if (!text) return;
   const details = /** @type {HTMLTextAreaElement} */ (find(row, '.td-edit-details')).value.trim();
-  const tags = /** @type {HTMLInputElement} */ (find(row, '.td-edit-tags')).value.split(TAG_SPLIT).map(t => t.replace(/^#/, '').toLowerCase()).filter(Boolean);
   const id = editing;
   editing = null;
-  updateTask(list.ref, id, { text, details: details || undefined, tags: tags.length ? [...new Set(tags)] : undefined });
+  updateTask(list.ref, id, { text, details: details || undefined, tags: editTags.length ? [...editTags] : undefined });
 }
 
 /** @param {string} id */
 function beginEdit(id) {
   editing = id;
+  editTags = [...(taskById(id)?.tags ?? [])];
   render();
   /** @type {HTMLInputElement | null} */ (listEl.querySelector(EDIT_TEXT))?.focus();
+}
+
+/** Draws the edited task's tags again; the rest of its form stays as typed. */
+function showEditTags() {
+  const tags = panel.querySelector(EDIT_TAGS);
+  if (tags) tags.innerHTML = editTagsHtml();
+}
+
+/**
+ * The list a task's tags are picked from: To do's tags, ticked when the task has them, and a new one from what's typed.
+ * @param {string} query
+ */
+function tagRowsHtml(query) {
+  const known = todoTags().map(([tag, count]) => /** @type {[string, number]} */ ([tag, count]));
+  for (const tag of editTags) if (!known.some(([name]) => name === tag)) known.push([tag, 0]);
+  const rows = known.filter(([tag]) => tag.includes(query)).map(([tag, count]) => `
+    <button class="tp-row" data-tag="${escapeHtml(tag)}" role="option" aria-selected="${editTags.includes(tag)}">
+      <span class="check${editTags.includes(tag) ? ' on' : ''}"><svg viewBox="0 0 12 12"><path d="M2.5 6.5l2.5 2.5 4.5-5.5"/></svg></span>
+      <span class="td-chip hue${tagHue(tag)}">${escapeHtml(tag)}</span><span class="tp-count">${count || ''}</span>
+    </button>`);
+  if (query && !known.some(([tag]) => tag === query)) {
+    rows.push(`<button class="tp-row tp-create" data-tag="${escapeHtml(query)}"><span class="menu-icon">${ICONS.plus}</span>Create<span class="td-chip hue${tagHue(query)}">${escapeHtml(query)}</span></button>`);
+  }
+  return rows.join('') || '<div class="tp-empty">Type a name to create a tag</div>';
+}
+
+/** @param {string} tag */
+function toggleEditTag(tag) {
+  editTags = editTags.includes(tag) ? editTags.filter(t => t !== tag) : [...editTags, tag];
+  showEditTags();
+}
+
+/**
+ * The picker of a task's tags, under its Tag button: tick existing tags, or type a new name and press Enter.
+ * @param {HTMLElement} at
+ */
+function pickTags(at) {
+  const doc = at.ownerDocument;
+  const picker = doc.createElement('div');
+  picker.className = 'popover tag-picker';
+  picker.hidden = true;
+  picker.innerHTML = `<input class="field" placeholder="Find or create a tag" spellcheck="false" aria-label="Tag"><div class="tp-list" role="listbox"></div>`;
+  const input = /** @type {HTMLInputElement} */ (find(picker, 'input'));
+  const list = find(picker, TAG_LIST);
+  const query = () => tagOfHeading(input.value.replace(/^#/, ''));
+  const draw = () => { list.innerHTML = tagRowsHtml(query()); };
+  input.addEventListener('input', draw);
+  input.addEventListener('keydown', e => {
+    if (e.key !== 'Enter' || !query()) return;
+    e.preventDefault();
+    toggleEditTag(query());
+    input.value = '';
+    draw();
+  });
+  // The focus stays in the field while tags are ticked.
+  list.addEventListener('mousedown', e => e.preventDefault());
+  list.addEventListener('click', e => {
+    const row = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-tag]'));
+    if (!row) return;
+    toggleEditTag(/** @type {string} */ (row.dataset.tag));
+    input.value = '';
+    draw();
+  });
+  draw();
+  openPopover(picker, at, { dynamic: true, refocus: () => /** @type {HTMLElement | null} */ (panel.querySelector(EDIT_TEXT))?.focus() });
+  input.focus();
 }
 
 /** @param {TodoTask} task */
@@ -553,6 +628,8 @@ function act(control) {
     case ACTION.cancel:
       editing = null;
       return render();
+    case ACTION.pickTags: return pickTags(control);
+    case ACTION.dropTag: return toggleEditTag(/** @type {string} */ (control.dataset.tag));
     case ACTION.label: return toggleLabel(/** @type {string} */ (control.dataset.label));
     case ACTION.create: return createIssue();
     case ACTION.backToList:

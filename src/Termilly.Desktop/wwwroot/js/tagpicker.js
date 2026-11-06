@@ -7,6 +7,8 @@ import { openPopover } from './popups.js';
 import { tagChipHtml, escapeHtml, ICONS } from './ui.js';
 import { field, find, targetOf } from './dom.js';
 
+/** The list of a tag picker (To do's too). */
+export const TAG_LIST = '.tp-list';
 /** The longest tag name. */
 const MAX_TAG = 24;
 
@@ -82,7 +84,7 @@ export function openTagPicker(tab, anchor) {
     <input class="field" placeholder="Find or create a tag" spellcheck="false" maxlength="${MAX_TAG}" aria-label="Tag">
     <div class="tp-list" role="listbox"></div>`;
   const input = field(picker, 'input');
-  const list = find(picker, '.tp-list');
+  const list = find(picker, TAG_LIST);
   const picking = { newColor: nextColor() };
   const render = () => { list.innerHTML = tagListHtml(tab, normalizeTag(input.value), picking.newColor); };
   const toggle = (/** @type {string} */ name) => {

@@ -6,7 +6,7 @@
 
 import { state, emit, persist, newId, wsById, tabTitle, isSsh, EVENTS } from './store.js';
 import { NOTE_KIND, profileNote, noteTitle, notesFor } from './notes.js';
-import { openCount, hoverLines } from './todolist.js';
+import { openCount, hoverLines, allTags } from './todolist.js';
 
 /** Which list: a terminal's, a workspace's or a host's, by its id. */
 export const LIST_KIND = NOTE_KIND;
@@ -164,6 +164,13 @@ export function tabHover(tab) {
   const host = isSsh(tab) && !profileNote(tab) ? state.todo.hosts?.[tab.profile] : null;
   return [...(notesFor(tab).length ? [noteTitle(notesFor(tab))] : []), ...hoverLines(tab.tasks), ...hoverLines(host)].join('\n');
 }
+
+/** To do's tags, from every list there is: a closed terminal's stay with it until it's reopened. */
+export const todoTags = () => allTags([
+  ...[...state.tabs.values()].map(tab => tab.tasks),
+  ...state.workspaces.map(ws => ws.tasks),
+  ...Object.values(state.todo.hosts ?? {}),
+]);
 
 /**
  * Asks for a list to be shown, in the panel.
