@@ -3173,7 +3173,9 @@ body.detached-window [data-sw="detach"], body.detached-window [data-sw="close"] 
 body.detached-window .pane-header { cursor: default; }
 /* Its environment (a production tag’s chip) stays with its tags after the name, not again before it. */
 body.detached-window .pane-header .env-chip { display: none; }
-.detached-controls { display: flex; flex: none; align-items: center; margin-left: 4px; }
+.detached-controls { display: flex; flex: none; align-items: center; margin-left: 4px; padding-bottom: 1px; }
+/* As a terminal's buttons: 22px, so a hovered or lit one has the same room above and below in the 30px title bar. */
+.detached-controls > button { height: 22px; border-radius: 6px; }
 .detached-controls > .separator { margin: 0 6px 0 2px; }
 /* The pin while the window is kept on top. */
 .detached-controls > button.on { background: var(--pressed); color: var(--accent); }
