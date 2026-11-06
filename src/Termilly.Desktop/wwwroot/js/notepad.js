@@ -26,7 +26,7 @@ import { padView, NP_FONT } from './notepadview.js';
 /** What the Notepad's buttons do (data-np). */
 const NOTEPAD_ACTION = Object.freeze({
   newPage: 'new', open: 'open', save: 'save', saveAs: 'saveAs', workspaceNote: 'workspaceNote', terminalNote: 'terminalNote',
-  links: 'links', wrap: 'wrap', numbers: 'numbers', highlight: 'highlight', dock: 'dock', detach: 'detach', close: 'close',
+  links: 'links', wrap: 'wrap', numbers: 'numbers', highlight: 'highlight', detach: 'detach', close: 'close',
 });
 /** A page's view switches (its toolbar), and what each is while the page has never set it. */
 const VIEW_DEFAULTS = Object.freeze({ links: true, wrap: true, numbers: false, highlight: false });
@@ -64,7 +64,6 @@ const TOOL_ICONS = Object.freeze({
   wrap: '<svg viewBox="0 0 16 16"><path d="M1.5 3.5h13M1.5 7.5h10a2 2 0 0 1 0 4h-3M1.5 11.5h4"/><path d="M10 9.5l-2 2 2 2"/></svg>',
   numbers: '<svg viewBox="0 0 16 16"><path d="M2.5 2.5h1v4M2 6.5h2M1.5 9.5h2v1.5h-2v1.5h2M6.5 4.5h8M6.5 8.5h8M6.5 12.5h8"/></svg>',
   highlight: '<svg viewBox="0 0 16 16"><path d="M1.5 2.5h13M1.5 13.5h13"/><rect x="1.5" y="6.5" width="13" height="3"/></svg>',
-  dock: '<svg viewBox="0 0 16 16"><rect x="1.5" y="2.5" width="13" height="11" rx="1"/><path d="M10.5 2.5v11"/></svg>',
 });
 /**
  * The page's right-click menu, 16px at a 1px line: scissors (cut) and a clipboard with a T (paste as plain text); paste
@@ -93,7 +92,6 @@ panel.innerHTML = `
     <span class="files-tools">
       <button class="pane-btn" data-np="${NOTEPAD_ACTION.newPage}" title="New page">${TOOL_ICONS.newPage}</button>
       <span class="np-sep"></span>
-      <button class="pane-btn" data-np="${NOTEPAD_ACTION.dock}" title="Dock on an edge">${TOOL_ICONS.dock}</button>
       <button class="pane-btn" data-np="${NOTEPAD_ACTION.detach}" title="${DETACH_BUTTON.title}">${DETACH_BUTTON.icon}</button>
       <button class="pane-btn" data-np="${NOTEPAD_ACTION.close}" title="Close (Ctrl+Shift+M)">${ICONS.close}</button>
     </span>
@@ -378,16 +376,6 @@ function placeOnSide() {
   const side = dockSide();
   panel.dataset.side = side;
   panel.style.height = isAcross(side) && state.notepad.height ? `${state.notepad.height}px` : '';
-}
-
-/** The edge it docks on, chosen from its header's menu. */
-function dockMenu() {
-  const { left, bottom } = find(panel, `[data-np="${NOTEPAD_ACTION.dock}"]`).getBoundingClientRect();
-  showMenu(Object.values(DOCK_SIDE).map(side => ({
-    label: side[0].toUpperCase() + side.slice(1),
-    checked: side === dockSide(),
-    action: () => dockTo(side),
-  })), { x: left, y: bottom });
 }
 
 /** Back in its place on the right, from its window, as it was. */
@@ -705,7 +693,6 @@ panel.addEventListener('click', e => {
     case NOTEPAD_ACTION.wrap:
     case NOTEPAD_ACTION.numbers:
     case NOTEPAD_ACTION.highlight: toggleView(/** @type {ViewSwitch} */ (action?.dataset.np)); break;
-    case NOTEPAD_ACTION.dock: dockMenu(); break;
     case NOTEPAD_ACTION.detach: detachNotepad(); break;
     case NOTEPAD_ACTION.close: hideNotepad(); break;
     default: break;

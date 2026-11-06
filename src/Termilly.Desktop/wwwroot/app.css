@@ -3169,7 +3169,7 @@ body.detached-window > .snippets-win { width: auto; height: auto; }
 /* Its header is the window’s title bar (js/windows.js): Return, Minimize, Maximize and Close at its end, in place of
    its own close and detach buttons; it moves the window, so no pane drag cursor. */
 body.detached-window .pane-header > .pane-actions > .close-btn,
-body.detached-window [data-np="dock"], body.detached-window [data-np="detach"], body.detached-window [data-np="close"],
+body.detached-window [data-np="detach"], body.detached-window [data-np="close"],
 body.detached-window [data-sw="detach"], body.detached-window [data-sw="close"] { display: none; }
 body.detached-window .pane-header { cursor: default; }
 /* Its environment (a production tag’s chip) stays with its tags after the name, not again before it. */
