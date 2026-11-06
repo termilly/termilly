@@ -104,7 +104,7 @@ export const getSetting = path => {
  * The Notepad: open or closed, its pages, the one shown, its width, its text's size (Ctrl+wheel), and the view switches
  * pages had before each had its own.
  * @typedef {{ open: boolean, pages: NotepadPage[], activeId: string | null, width?: number, links?: boolean, wrap?: boolean,
- *   detached?: boolean, numbers?: boolean, highlight?: boolean, fontSize?: number }} NotepadState
+ *   detached?: boolean, numbers?: boolean, highlight?: boolean, fontSize?: number, side?: string, height?: number }} NotepadState
  */
 
 /**

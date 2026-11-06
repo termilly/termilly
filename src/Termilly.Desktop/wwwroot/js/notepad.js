@@ -10,7 +10,7 @@ import { state, persist, newId, tabTitle, wsById } from './store.js';
 import { restoreFocus, stripBar, wireDragOut, systemDrag, dockDrop } from './panes.js';
 import { scheduleFit } from './terminals.js';
 import { escapeHtml, cssColor, tabBadgeHtml, countText, ICONS } from './ui.js';
-import { byId, find, targetOf, dockRight, onMiddleClick, WORKSPACE_ID, DOCK_GRIP } from './dom.js';
+import { byId, find, targetOf, dockRight, isAcross, onMiddleClick, DOCK_SIDE, WORKSPACE_ID, DOCK_GRIP } from './dom.js';
 import { showMenu, SEPARATOR } from './popups.js';
 import { confirmDialog } from './dialogs.js';
 import { showToast, TOAST } from './toasts.js';
@@ -26,7 +26,7 @@ import { padView, NP_FONT } from './notepadview.js';
 /** What the Notepad's buttons do (data-np). */
 const NOTEPAD_ACTION = Object.freeze({
   newPage: 'new', open: 'open', save: 'save', saveAs: 'saveAs', workspaceNote: 'workspaceNote', terminalNote: 'terminalNote',
-  links: 'links', wrap: 'wrap', numbers: 'numbers', highlight: 'highlight', detach: 'detach', close: 'close',
+  links: 'links', wrap: 'wrap', numbers: 'numbers', highlight: 'highlight', dock: 'dock', detach: 'detach', close: 'close',
 });
 /** A page's view switches (its toolbar), and what each is while the page has never set it. */
 const VIEW_DEFAULTS = Object.freeze({ links: true, wrap: true, numbers: false, highlight: false });
@@ -35,6 +35,9 @@ const VIEW_DEFAULTS = Object.freeze({ links: true, wrap: true, numbers: false, h
 const PAGE_NAME = 'Note';
 /** The panel's narrowest width; its widest is half the terminals' area (app.css max-width). */
 const MIN_WIDTH_PX = 280;
+/** On the top or bottom edge: its lowest height, and its height until it's dragged (app.css). */
+const MIN_HEIGHT_PX = 180;
+const DEFAULT_HEIGHT_PX = 260;
 const LF = '\n';
 const CRLF = '\r\n';
 /** The menu entry that copies text here, on a terminal's right-click menu. */
@@ -58,6 +61,7 @@ const TOOL_ICONS = Object.freeze({
   wrap: '<svg viewBox="0 0 16 16"><path d="M1.5 3.5h13M1.5 7.5h10a2 2 0 0 1 0 4h-3M1.5 11.5h4"/><path d="M10 9.5l-2 2 2 2"/></svg>',
   numbers: '<svg viewBox="0 0 16 16"><path d="M2.5 2.5h1v4M2 6.5h2M1.5 9.5h2v1.5h-2v1.5h2M6.5 4.5h8M6.5 8.5h8M6.5 12.5h8"/></svg>',
   highlight: '<svg viewBox="0 0 16 16"><path d="M1.5 2.5h13M1.5 13.5h13"/><rect x="1.5" y="6.5" width="13" height="3"/></svg>',
+  dock: '<svg viewBox="0 0 16 16"><rect x="1.5" y="2.5" width="13" height="11" rx="1"/><path d="M10.5 2.5v11"/></svg>',
 });
 /**
  * The page's right-click menu, 16px at a 1px line: scissors (cut) and a clipboard with a T (paste as plain text); paste
@@ -86,6 +90,7 @@ panel.innerHTML = `
     <span class="files-tools">
       <button class="pane-btn" data-np="${NOTEPAD_ACTION.newPage}" title="New page">${TOOL_ICONS.newPage}</button>
       <span class="np-sep"></span>
+      <button class="pane-btn" data-np="${NOTEPAD_ACTION.dock}" title="Dock on an edge">${TOOL_ICONS.dock}</button>
       <button class="pane-btn" data-np="${NOTEPAD_ACTION.detach}" title="${DETACH_BUTTON.title}">${DETACH_BUTTON.icon}</button>
       <button class="pane-btn" data-np="${NOTEPAD_ACTION.close}" title="Close (Ctrl+Shift+M)">${ICONS.close}</button>
     </span>
@@ -283,7 +288,7 @@ function hideNotepad() {
  */
 function detachNotepad(at, place) {
   if (panel.hidden) show({ quiet: true, here: true });
-  if (!isDetached(WINDOW_KEY)) dockedWidth = panel.offsetWidth;
+  if (!isDetached(WINDOW_KEY) && !isAcross(dockSide())) dockedWidth = panel.offsetWidth;
   // Its room here is given back once it's in its window, and as that window is resized.
   return detach(WINDOW_KEY, {
     el: panel, title: NAME, onClosed: () => dockBack(), onResize: refreshDock,
@@ -304,13 +309,46 @@ const NOTEPAD_HANDLE = '.files-title';
 let dockedWidth = 0;
 
 /**
- * Where it docks in the main window (in the page's pixels): the right of the terminals' area, as wide as it was docked
+ * Where it docks in the main window (in the page's pixels): its edge of the terminals' area, as big as it was docked
  * (at most half). Dragged there it stays or docks back; anywhere else it goes out into a window of its own.
  */
 function dockZone() {
   const area = byId(WORKSPACE_ID).getBoundingClientRect();
+  const side = dockSide();
+  if (isAcross(side)) {
+    const height = Math.min(area.height / 2, Math.max(MIN_HEIGHT_PX, state.notepad.height ?? DEFAULT_HEIGHT_PX));
+    return new DOMRect(area.left, side === DOCK_SIDE.top ? area.top : area.bottom - height, area.width, height);
+  }
   const width = Math.min(area.width / 2, Math.max(MIN_WIDTH_PX, state.notepad.width ?? dockedWidth));
-  return new DOMRect(area.right - width, area.top, width, area.height);
+  return new DOMRect(side === DOCK_SIDE.left ? area.left : area.right - width, area.top, width, area.height);
+}
+
+/** The edge it docks on. */
+function dockSide() {
+  const side = state.notepad.side;
+  return side && /** @type {string[]} */ (Object.values(DOCK_SIDE)).includes(side) ? side : DOCK_SIDE.right;
+}
+
+/** Its panel on its edge: a height of its own on the top or bottom one. */
+function placeOnSide() {
+  const side = dockSide();
+  panel.dataset.side = side;
+  panel.style.height = isAcross(side) && state.notepad.height ? `${state.notepad.height}px` : '';
+}
+
+/** The edge it docks on, chosen from its header's menu. */
+function dockMenu() {
+  const { left, bottom } = find(panel, `[data-np="${NOTEPAD_ACTION.dock}"]`).getBoundingClientRect();
+  showMenu(Object.values(DOCK_SIDE).map(side => ({
+    label: side[0].toUpperCase() + side.slice(1),
+    checked: side === dockSide(),
+    action: () => {
+      state.notepad.side = side;
+      persist();
+      placeOnSide();
+      refreshDock();
+    },
+  })), { x: left, y: bottom });
 }
 
 /** Back in its place on the right, from its window, as it was. */
@@ -337,6 +375,7 @@ export function toggleNotepadFromKeys() {
 export function initNotepad() {
   showCount();
   if (state.notepad.width) panel.style.width = `${state.notepad.width}px`;
+  placeOnSide();
   if (state.notepad.open) show({ quiet: true });
 }
 
@@ -623,6 +662,7 @@ panel.addEventListener('click', e => {
     case NOTEPAD_ACTION.wrap:
     case NOTEPAD_ACTION.numbers:
     case NOTEPAD_ACTION.highlight: toggleView(/** @type {ViewSwitch} */ (action?.dataset.np)); break;
+    case NOTEPAD_ACTION.dock: dockMenu(); break;
     case NOTEPAD_ACTION.detach: detachNotepad(); break;
     case NOTEPAD_ACTION.close: hideNotepad(); break;
     default: break;
@@ -674,9 +714,13 @@ wireDragOut(head, panel, {
   back: () => closeWindow(WINDOW_KEY), isDetached: () => isDetached(WINDOW_KEY), handle: NOTEPAD_HANDLE, dock: dockZone,
 });
 
-// ---- Docked on the right: the terminals and the Files panel end where it starts ----
+// ---- Docked on an edge: the terminals end where it starts ----
 
 const refreshDock = dockRight(panel, {
-  dockVar: '--notepad-dock', minWidth: MIN_WIDTH_PX, resized: scheduleFit,
-  dragged: width => { state.notepad.width = width; persist(); },
+  dockVar: '--notepad-dock', minWidth: MIN_WIDTH_PX, minHeight: MIN_HEIGHT_PX, side: dockSide, resized: scheduleFit,
+  dragged: size => {
+    if (isAcross(dockSide())) state.notepad.height = size;
+    else state.notepad.width = size;
+    persist();
+  },
 });

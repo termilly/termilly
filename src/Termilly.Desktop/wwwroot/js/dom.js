@@ -96,33 +96,52 @@ export function dragPointer(el, e, move, done) {
 /** The class of a docked panel's grip, on its left edge. */
 export const DOCK_GRIP = 'files-grip';
 
+/** The workspace's edges a panel can dock on. */
+export const DOCK_SIDE = Object.freeze({ right: 'right', left: 'left', top: 'top', bottom: 'bottom' });
+/** @param {string} side */
+export const isAcross = side => side === DOCK_SIDE.top || side === DOCK_SIDE.bottom;
+
 /**
- * A panel docked on the workspace's right edge (the Files panel, the Notepad): what's left of it ends where it starts
- * (its width and the gap between panes, in the CSS variable `dockVar` on the workspace), and its grip resizes it, up
- * to half the workspace.
+ * A panel docked on an edge of the workspace, the right one unless `side` says otherwise (the Files panel, the
+ * Notepad): the terminals end where it starts (its size and the gap between panes, in the CSS variable `dockVar` on
+ * the workspace, with -left, -top or -bottom after it on those edges), and its grip resizes it, up to half the workspace.
  * @param {HTMLElement} panel
- * @param {{ dockVar: string, minWidth: number, resized: () => void, dragged?: (width: number) => void }} how
- *   resized: after its width changed (it opened, closed, was dragged or squeezed); dragged: after a drag, its width
- * @returns {() => void} what to call when it comes back from a window of its own (or leaves for one)
+ * @param {{ dockVar: string, minWidth: number, minHeight?: number, side?: () => string, resized: () => void, dragged?: (size: number) => void }} how
+ *   resized: after its size changed (it opened, closed, was dragged or squeezed); dragged: after a drag, its width
+ *   (its height on the top or bottom edge)
+ * @returns {() => void} what to call when it comes back from a window of its own (or leaves for one), or changes edge
  */
-export function dockRight(panel, { dockVar, minWidth, resized, dragged }) {
+export function dockRight(panel, { dockVar, minWidth, minHeight = minWidth, side = () => DOCK_SIDE.right, resized, dragged }) {
   const workspace = byId(WORKSPACE_ID);
   const gap = () => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--gap')) || 0;
   // In a window of its own (js/windows.js), or hidden, it takes no room here.
   const refresh = () => {
     const docked = !panel.hidden && workspace.contains(panel);
-    workspace.style.setProperty(dockVar, `${docked ? panel.offsetWidth + gap() : 0}px`);
+    const now = side();
+    const room = docked ? (isAcross(now) ? panel.offsetHeight : panel.offsetWidth) + gap() : 0;
+    for (const edge of Object.values(DOCK_SIDE)) {
+      workspace.style.setProperty(edge === DOCK_SIDE.right ? dockVar : `${dockVar}-${edge}`, `${edge === now ? room : 0}px`);
+    }
     resized();
   };
   new ResizeObserver(refresh).observe(panel);
   panel.addEventListener('pointerdown', e => {
     if (!targetOf(e).classList.contains(DOCK_GRIP)) return;
     e.preventDefault();
-    const half = workspace.getBoundingClientRect().width / 2;
-    const right = panel.getBoundingClientRect().right;
+    const now = side();
+    const across = isAcross(now);
+    const room = workspace.getBoundingClientRect();
+    const box = panel.getBoundingClientRect();
+    const half = (across ? room.height : room.width) / 2;
+    const least = across ? minHeight : minWidth;
+    /** @param {PointerEvent} ev */
+    const wanted = ev => (now === DOCK_SIDE.right ? box.right - ev.clientX : now === DOCK_SIDE.left ? ev.clientX - box.left
+      : now === DOCK_SIDE.top ? ev.clientY - box.top : box.bottom - ev.clientY);
     dragPointer(targetOf(e), e, ev => {
-      panel.style.width = `${Math.round(Math.min(half, Math.max(minWidth, right - ev.clientX)))}px`;
-    }, () => dragged?.(panel.offsetWidth));
+      const size = `${Math.round(Math.min(half, Math.max(least, wanted(ev))))}px`;
+      if (across) panel.style.height = size;
+      else panel.style.width = size;
+    }, () => dragged?.(across ? panel.offsetHeight : panel.offsetWidth));
   });
   return refresh;
 }

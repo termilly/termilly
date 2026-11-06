@@ -591,9 +591,9 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
    wider it stays at most half the terminals' area, also when the window shrinks later. */
 .files-panel {
   position: absolute;
-  top: 0;
+  top: var(--notepad-dock-top, 0px);
   right: calc(var(--notepad-dock, 0px) + var(--clips-dock, 0px));
-  bottom: 0;
+  bottom: var(--notepad-dock-bottom, 0px);
   z-index: 5;
   display: flex;
   flex-direction: column;
@@ -651,9 +651,9 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
    (--clips-dock on #workspace). It borrows the Files panel's head, grip and search box. ---- */
 .clips-panel {
   position: absolute;
-  top: 0;
+  top: var(--notepad-dock-top, 0px);
   right: var(--notepad-dock, 0px);
-  bottom: 0;
+  bottom: var(--notepad-dock-bottom, 0px);
   z-index: 5;
   display: flex;
   flex-direction: column;
@@ -711,8 +711,8 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
 .pair-url { overflow-wrap: anywhere; font-size: 11px; }
 .pair-code { padding: 1px 6px; border-radius: 4px; background: var(--hover); color: var(--text-strong); font-size: 14px; letter-spacing: .12em; }
 
-/* ---- The Notepad (js/notepad.js): docked on the right edge, the Files panel and the terminals left of it
-   (--notepad-dock on #workspace). It borrows the Files panel's head and grip, the File Explorer's tabs and a tab group's < and >. ---- */
+/* ---- The Notepad (js/notepad.js): docked on an edge, the right one at first, the Files panel and the terminals beside it
+   (--notepad-dock on #workspace, with -left, -top or -bottom). It borrows the Files panel's head and grip, the File Explorer's tabs and a tab group's < and >. ---- */
 .notepad-panel {
   position: absolute;
   top: 0;
@@ -729,6 +729,14 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
   background: var(--raised);
 }
 .notepad-panel[hidden] { display: none; }
+.notepad-panel[data-side="left"] { right: auto; left: 0; }
+.notepad-panel[data-side="top"], .notepad-panel[data-side="bottom"] { left: 0; width: auto !important; height: 260px; min-width: 0; min-height: 180px; max-width: none; max-height: 50%; }
+.notepad-panel[data-side="top"] { bottom: auto; }
+.notepad-panel[data-side="bottom"] { top: auto; }
+.notepad-panel[data-side="left"] > .files-grip { right: -3px; left: auto; }
+.notepad-panel[data-side="top"] > .files-grip, .notepad-panel[data-side="bottom"] > .files-grip { right: 0; left: 0; width: auto; height: 6px; cursor: ns-resize; }
+.notepad-panel[data-side="top"] > .files-grip { top: auto; bottom: -3px; }
+.notepad-panel[data-side="bottom"] > .files-grip { top: -3px; bottom: auto; }
 /* The tabs, with < and > when they don't fit (js/panes.js stripBar). */
 .np-tabbar { height: auto; padding: 0 4px; border-bottom: 1px solid var(--border); }
 .np-tabbar .np-tabs { flex: 1; min-width: 0; padding: 4px 2px 0; border-bottom: 0; }
@@ -1275,7 +1283,7 @@ body[data-sidebar="rail"] .side-rail { opacity: 1; pointer-events: auto; }
 /* Every workspace stays laid out (so hidden terminals keep their size); only the active one shows. */
 .ws-layer {
   position: absolute;
-  inset: 0 calc(var(--files-dock, 0px) + var(--notepad-dock, 0px) + var(--clips-dock, 0px)) 0 0;
+  inset: var(--notepad-dock-top, 0px) calc(var(--files-dock, 0px) + var(--notepad-dock, 0px) + var(--clips-dock, 0px)) var(--notepad-dock-bottom, 0px) var(--notepad-dock-left, 0px);
   display: flex;
   visibility: hidden;
 }
@@ -3154,13 +3162,13 @@ body.detached-window > .pane, body.detached-window > .notepad-panel, body.detach
 }
 body.detached-window > .pane.focused { box-shadow: none; }
 /* Its docked width is set on the element (dragged with its grip): the window’s width wins. */
-body.detached-window > .notepad-panel { position: static; width: auto !important; max-width: none; }
+body.detached-window > .notepad-panel { position: static; width: auto !important; height: auto !important; min-height: 0; max-width: none; max-height: none; }
 body.detached-window > .notepad-panel > .files-grip { display: none; }
 body.detached-window > .snippets-win { width: auto; height: auto; }
 /* Its header is the window’s title bar (js/windows.js): Return, Minimize, Maximize and Close at its end, in place of
    its own close and detach buttons; it moves the window, so no pane drag cursor. */
 body.detached-window .pane-header > .pane-actions > .close-btn,
-body.detached-window [data-np="detach"], body.detached-window [data-np="close"], body.detached-window .files-head .np-sep,
+body.detached-window [data-np="dock"], body.detached-window [data-np="detach"], body.detached-window [data-np="close"], body.detached-window .files-head .np-sep,
 body.detached-window [data-sw="detach"], body.detached-window [data-sw="close"] { display: none; }
 body.detached-window .pane-header { cursor: default; }
 /* A window's title bar: less space above it than a docked panel's. */
