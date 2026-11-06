@@ -10,6 +10,8 @@ import { byId, dockRight, isAcross, edgeAt, DOCK_AWAY, DOCK_SIDE, WORKSPACE_ID }
 import { detach, closeWindow, focusWindow, isDetached } from './windows.js';
 import { isShortcut } from './keymap.js';
 
+/** The room the Notepad takes: To do docks just inside it. */
+export const NOTEPAD_DOCK = '--notepad-dock';
 /** Its narrowest width, and its width until it's dragged; its widest is half the terminals' area (app.css). */
 const MIN_WIDTH_PX = 280;
 const DEFAULT_WIDTH_PX = 360;
@@ -33,6 +35,7 @@ const EDGE_BAND_PX = 120;
  * @property {string} icon its icon, for the drag's picture (markup)
  * @property {string} handle its handle in a window of its own on Linux: dragged back into the main window (js/panes.js)
  * @property {string} dockVar the CSS variable with the room it takes (dockRight)
+ * @property {string} [inside] the CSS variable of a panel it docks just inside of: it lands past that one's room
  * @property {() => DockKept} stored
  * @property {HTMLElement} button its title bar button
  * @property {() => void} showCount shows what its button counts
@@ -107,13 +110,26 @@ class DockPanel {
     if (!this.o.panel.hidden) this.o.render();
   }
 
+  /** The terminals' area, less the room of a panel it docks inside of. */
+  dockArea() {
+    const workspace = byId(WORKSPACE_ID);
+    const { left, top, right, bottom } = workspace.getBoundingClientRect();
+    /** @param {string} [edge] */
+    const room = edge => {
+      const { inside } = this.o;
+      return inside ? parseFloat(workspace.style.getPropertyValue(edge ? `${inside}-${edge}` : inside)) || 0 : 0;
+    };
+    const [x, y] = [left + room(DOCK_SIDE.left), top + room(DOCK_SIDE.top)];
+    return new DOMRect(x, y, right - room() - x, bottom - room(DOCK_SIDE.bottom) - y);
+  }
+
   /**
    * Where it docks on an edge of the main window (in the page's pixels): that edge of the terminals' area, as big as it
    * was docked (at most half).
    * @param {string} side
    */
   dockZone(side) {
-    const area = byId(WORKSPACE_ID).getBoundingClientRect();
+    const area = this.dockArea();
     const kept = this.o.stored();
     if (isAcross(side)) {
       const height = Math.min(area.height / 2, Math.max(MIN_HEIGHT_PX, kept.height ?? DEFAULT_HEIGHT_PX));
@@ -132,7 +148,8 @@ class DockPanel {
    */
   dockAt(x, y) {
     const now = this.side();
-    const zone = this.dockZone(now);
+    // Docked, its dock is where it is: another panel can be between it and the edge.
+    const zone = this.isDetached() ? this.dockZone(now) : this.o.panel.getBoundingClientRect();
     const inZone = x >= zone.left && x <= zone.right && y >= zone.top && y <= zone.bottom;
     const side = inZone ? now : edgeAt(byId(WORKSPACE_ID).getBoundingClientRect(), x, y, EDGE_BAND_PX);
     return side ? { side, zone: this.dockZone(side), label: `Dock ${isAcross(side) ? 'at' : 'on'} the ${side}` } : null;

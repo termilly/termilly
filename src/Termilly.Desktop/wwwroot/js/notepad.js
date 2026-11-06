@@ -17,7 +17,7 @@ import { appendNote, NOTE_KIND } from './notes.js';
 import { padLinks } from './notepadlinks.js';
 import { KEY_ID } from './keymap.js';
 import { copyOut as copyFrom, textBoxMenu } from './textmenu.js';
-import { dockPanel } from './dockpanel.js';
+import { dockPanel, NOTEPAD_DOCK } from './dockpanel.js';
 import { padView, NP_FONT } from './notepadview.js';
 
 /** @typedef {import('./store.js').NotepadPage} NotepadPage */
@@ -243,7 +243,7 @@ const NOTEPAD_HANDLE = '.files-title';
 
 const dock = dockPanel({
   panel, head, key: WINDOW_KEY, name: NAME, icon: /** @type {Element} */ (button.firstElementChild).outerHTML, handle: NOTEPAD_HANDLE,
-  dockVar: '--notepad-dock', stored: () => state.notepad, button, showCount, show, render, focus: () => area.focus(),
+  dockVar: NOTEPAD_DOCK, stored: () => state.notepad, button, showCount, show, render, focus: () => area.focus(),
 });
 
 /** The Notepad on or off from its shortcut (Ctrl+Shift+M): opened with no pages, it starts one to type into at once. */

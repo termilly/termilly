@@ -15,7 +15,7 @@ import { setNote } from './notes.js';
 import { KEY_ID } from './keymap.js';
 import { copyOut, textBoxMenu } from './textmenu.js';
 import { COPY_LABEL } from './termclipboard.js';
-import { dockPanel } from './dockpanel.js';
+import { dockPanel, NOTEPAD_DOCK } from './dockpanel.js';
 import {
   parseTask, tasksFromLines, tasksFromNote, selectedLines, withoutLines, openCount, tagsIn, withTags, moveBefore, labelsForTags, issueBody,
 } from './todolist.js';
@@ -233,7 +233,7 @@ const HANDLE = '.files-title';
 
 const dock = dockPanel({
   panel, head, key: WINDOW_KEY, name: NAME, icon: /** @type {Element} */ (button.firstElementChild).outerHTML, handle: HANDLE,
-  dockVar: '--todo-dock', stored: () => state.todo, button, showCount, show, render, focus: () => addField.focus(),
+  dockVar: '--todo-dock', inside: NOTEPAD_DOCK, stored: () => state.todo, button, showCount, show, render, focus: () => addField.focus(),
 });
 
 /**
