@@ -172,15 +172,19 @@ function subHtml(line) {
   </div>`;
 }
 
+/** Whether Claude Code is installed here: the host offers its profile only then (SessionProfiles.cs). */
+const agentInstalled = () => state.profiles.some(p => p.startCommand === AGENT_COMMAND);
+
 /**
- * Implement, and Create GitHub issue when the folder's repository is on GitHub and there's no issue yet.
+ * Implement when Claude Code is installed, and Create GitHub issue when the folder's repository is on GitHub and there's
+ * no issue yet.
  * @param {{ url: string, number: number } | undefined} issue
  */
 function actsHtml(issue) {
   const folder = folderOfList();
   const canIssue = !issue && !!folder && onGitHub.get(folder);
   return `<span class="td-acts">
-    <button class="pane-btn" data-td="${ACTION.implement}" ${folder ? '' : 'disabled'} title="${folder ? 'Implement: start Claude Code on this in a new terminal' : 'Implement needs a folder on this computer'}">${ICONS.play}</button>
+    ${agentInstalled() ? `<button class="pane-btn" data-td="${ACTION.implement}" ${folder ? '' : 'disabled'} title="${folder ? 'Implement: start Claude Code on this in a new terminal' : 'Implement needs a folder on this computer'}">${ICONS.play}</button>` : ''}
     ${canIssue ? `<button class="pane-btn" data-td="${ACTION.issue}" title="Create GitHub issue">${ICONS.git}</button>` : ''}
   </span>`;
 }
@@ -758,7 +762,7 @@ function beginIssue(task, sub) {
  */
 function implement(task, sub) {
   const folder = folderOfList();
-  if (!folder || !current) return;
+  if (!folder || !current || !agentInstalled()) return;
   const tab = current.kind === LIST_KIND.terminal ? state.tabs.get(current.id) : null;
   const wsId = tab?.wsId ?? current.id;
   const profile = tab?.profile ?? defaultProfile();
@@ -1025,6 +1029,9 @@ on(EVENTS.todo, () => {
   if (!panel.hidden) render();
 });
 // A terminal or workspace in front changed, or closed: its count, and the list shown when what it's on has gone.
+on(EVENTS.profiles, () => {
+  if (!panel.hidden && !editing) render();
+});
 for (const event of [EVENTS.focus, EVENTS.workspaces, EVENTS.tab]) {
   on(event, () => {
     showCount();
