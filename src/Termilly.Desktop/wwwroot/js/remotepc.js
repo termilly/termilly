@@ -476,28 +476,38 @@ async function closeThere(pc, name, terminals, args) {
 }
 
 /**
- * What can be done on a computer from one of its rows here: entries are greyed, saying why, when it doesn't allow them.
+ * New terminal on a computer (in a workspace there, else the one in front there) and New workspace: greyed, saying
+ * why, when it doesn't allow them.
  * @param {Pc} pc
- * @param {string | undefined} wsId the workspace of the row
- * @param {(() => void) | null} [close] the row's own Close on it, if it has one
+ * @param {string} [wsId]
  * @returns {MenuEntry[]}
  */
-function controlItems(pc, wsId, close = null) {
+function createItems(pc, wsId) {
   const s = stateOf(pc);
-  const open = refusal(pc, s.opening);
-  const shut = refusal(pc, s.closing);
+  const why = refusal(pc, s.opening);
   return [
-    { label: `New terminal on ${pc.name}`, icon: ICONS.plus, disabled: !!open, title: open,
-      submenu: open ? undefined : () => (s.places ?? []).map(p => ({ label: p.name, action: () => { manage(pc, { action: MANAGE.open, profile: p.id, ws: wsId }); } })) },
-    { label: `New workspace on ${pc.name}`, icon: ICONS.workspaces, disabled: !!open, title: open, action: () => { newWorkspaceThere(pc); } },
-    ...(close ? /** @type {MenuEntry[]} */ ([SEPARATOR, { label: `Close on ${pc.name}`, icon: ICONS.trash, danger: true, disabled: !!shut, title: shut, action: close }]) : []),
+    { label: `New terminal on ${pc.name}`, icon: ICONS.plus, disabled: !!why, title: why,
+      submenu: why ? undefined : () => (s.places ?? []).map(p => ({ label: p.name, action: () => { manage(pc, { action: MANAGE.open, profile: p.id, ws: wsId }); } })) },
+    { label: `New workspace on ${pc.name}`, icon: ICONS.workspaces, disabled: !!why, title: why, action: () => { newWorkspaceThere(pc); } },
   ];
+}
+
+/**
+ * Close on a computer: greyed, saying why, when it doesn't allow it.
+ * @param {Pc} pc
+ * @param {string} what
+ * @param {() => void} action
+ * @returns {MenuEntry}
+ */
+function closeItem(pc, what, action) {
+  const why = refusal(pc, stateOf(pc).closing);
+  return { label: `Close ${what} on ${pc.name}`, icon: ICONS.trash, danger: true, disabled: !!why, title: why, action };
 }
 
 /** @param {Pc} pc @param {MouseEvent} e */
 function computerMenu(pc, e) {
   showMenu([
-    ...(pc.online ? /** @type {MenuEntry[]} */ ([...controlItems(pc, undefined), SEPARATOR]) : []),
+    ...(pc.online ? /** @type {MenuEntry[]} */ ([...createItems(pc), SEPARATOR]) : []),
     { label: 'Forget this computer', icon: ICONS.trash, danger: true, action: async () => {
       if (await confirmDialog({ title: `Forget ${pc.name}?`, body: 'Its terminals open here close. Pair it again with a new code.', confirm: 'Forget' })) send(PAGE.pcRemove, { id: pc.id });
     } },
@@ -534,10 +544,10 @@ section.addEventListener('contextmenu', e => {
   else if (pcWorkspace) {
     const id = pcWorkspace.slice(pc.id.length + 1);
     const ws = s.workspaces.find(w => w.id === id);
-    if (ws) showMenu(controlItems(pc, id, () => closeThere(pc, ws.name, s.terminals.filter(t => t.ws === id), { action: MANAGE.closeWorkspace, ws: id })), at);
+    if (ws) showMenu([...createItems(pc, id), SEPARATOR, closeItem(pc, 'workspace', () => closeThere(pc, ws.name, s.terminals.filter(t => t.ws === id), { action: MANAGE.closeWorkspace, ws: id }))], at);
   } else {
     const t = s.terminals.find(x => x.id === pane);
-    if (t) showMenu(controlItems(pc, t.ws, () => closeThere(pc, t.title, [t], { action: MANAGE.close, pane: t.id })), at);
+    if (t) showMenu([closeItem(pc, 'terminal', () => closeThere(pc, t.title, [t], { action: MANAGE.close, pane: t.id }))], at);
   }
 }, true);
 
