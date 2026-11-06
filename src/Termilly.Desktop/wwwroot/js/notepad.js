@@ -438,6 +438,10 @@ async function closePage(id) {
     confirm: 'Close page',
   })) return;
   const at = pages().indexOf(page);
+  // The last one's view switches stay: the next new page starts with them.
+  if (pages().length === 1) {
+    for (const what of /** @type {ViewSwitch[]} */ (Object.keys(VIEW_DEFAULTS))) state.notepad[what] = viewOn(what);
+  }
   pages().splice(at, 1);
   if (state.notepad.activeId === id) state.notepad.activeId = pages()[Math.min(at, pages().length - 1)]?.id ?? null;
   // The last one leaves the Notepad open with no page: New page and Open a file show instead.
