@@ -3365,8 +3365,7 @@ button.td-agent:hover { text-decoration: underline; }
 .td-sub.done .td-text { color: var(--muted); text-decoration: line-through; }
 .td-progress { color: var(--muted); font: 11px var(--mono); }
 /* Under a task's text: its description's first line, opened out to all of it, its steps and what the agent said. */
-.td-about { display: flex; align-items: flex-start; gap: 2px; min-width: 0; color: var(--muted); font-size: 12.5px; line-height: 18px; }
-.td-about.more { margin-left: -18px; }
+.td-about { display: flex; align-items: flex-start; gap: 2px; min-width: 0; margin-left: -18px; color: var(--muted); font-size: 12.5px; line-height: 18px; }
 .td-expand { display: inline-flex; flex: none; align-items: center; justify-content: center; width: 16px; height: 18px; padding: 0; border: 0; border-radius: 4px; background: none; color: var(--muted); cursor: pointer; }
 .td-expand:hover { background: color-mix(in srgb, currentColor 16%, transparent); color: var(--text); }
 .td-expand svg { width: 12px; height: 12px; fill: none; stroke: currentColor; }

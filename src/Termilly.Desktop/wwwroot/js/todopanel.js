@@ -236,8 +236,9 @@ function reviewHtml(task) {
 }
 
 /**
- * Under a task's text: the first line of its description (else of what the agent said), and the button that opens it
- * out, when there's more: all of its description, its steps, and what the agent said (its implementation's result).
+ * Under a task's text, when it has a description or the agent said something: the first line of it (cut short to fit),
+ * and the button that opens it out to all of its description, its steps, and what the agent said (its implementation's
+ * result).
  * @param {TodoTask} task
  */
 function aboutHtml(task) {
@@ -248,11 +249,10 @@ function aboutHtml(task) {
   const first = notes.split('\n')[0] || steps[0]?.text || '';
   const firstHtml = first ? escapeHtml(first) : said.split('\n')[0];
   if (!firstHtml) return '';
-  const more = notes.includes('\n') || steps.length > (notes ? 0 : 1) || (!!said && (!!first || said.includes('\n')));
-  const open = more && expanded.has(task.id);
-  const toggle = more ? `<button type="button" class="td-expand" data-td="${ACTION.expand}" aria-expanded="${open}" title="${open ? 'Show less' : 'Show all of it'}">${open ? ICONS.chevronDown : ICONS.chevronRight}</button>` : '';
-  if (!open) return `<div class="td-about${more ? ' more' : ''}">${toggle}<span class="td-about-line">${firstHtml}</span></div>`;
-  return `<div class="td-about more open">${toggle}<div class="td-about-all">
+  const open = expanded.has(task.id);
+  const toggle = `<button type="button" class="td-expand" data-td="${ACTION.expand}" aria-expanded="${open}" title="${open ? 'Show less' : 'Show all of it'}">${open ? ICONS.chevronDown : ICONS.chevronRight}</button>`;
+  if (!open) return `<div class="td-about">${toggle}<span class="td-about-line">${firstHtml}</span></div>`;
+  return `<div class="td-about open">${toggle}<div class="td-about-all">
     ${notes ? `<div class="td-details">${escapeHtml(notes)}</div>` : ''}
     ${steps.map(stepHtml).join('')}
     ${said ? `<div class="td-result">${said}</div>` : ''}
