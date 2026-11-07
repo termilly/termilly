@@ -3,6 +3,7 @@ using Termilly.Desktop.Features;
 using Termilly.Desktop.Messaging;
 using Termilly.Desktop.Phone;
 using Termilly.Desktop.Security;
+using Termilly.Pty;
 
 namespace Termilly.Desktop.Services;
 
@@ -54,6 +55,8 @@ internal static class Composition
         .AddSingleton<ClipStore>()
         .AddSingleton<PhoneClips>()
         .AddSingleton<RemotePcStore>()
+        .AddSingleton<ScheduleReports>()
+        .AddSingleton(_ => new ScheduleRunner(PseudoTerminal.Start))
         .AddSingleton<PromptHistory>()
         .AddSingleton<RemotePcFiles>()
         .AddSingleton<PcFilesApi>()
@@ -81,6 +84,7 @@ internal static class Composition
         .AddHandler<WorktreeHandler>()
         .AddHandler<LayoutHandler>()
         .AddHandler<NotepadHandler>()
+        .AddHandler<ScheduleHandler>()
         .AddHandler<TodoIssues>()
         .AddHandler<SshHandler>()
         .AddHandler<FilesHandler>()

@@ -266,3 +266,70 @@ interface Tab {
   /** A serial port's view (js/serial.js). */
   serial?: import('../wwwroot/js/serial.js').SerialView;
 }
+
+/** When a schedule runs (js/schedulerules.js). */
+interface ScheduleWhen {
+  kind: string;
+  /** "20:00", for a time. */
+  at: string;
+  /** Date's day numbers; none means every day. */
+  days: number[];
+  every: number;
+  unit: string;
+  /** Hours "every" keeps within: "9:00", or empty. */
+  from: string;
+  to: string;
+}
+
+/** A command or snippet that runs on time (js/schedules.js). */
+interface Schedule {
+  id: string;
+  name: string;
+  on: boolean;
+  what: string;
+  command: string;
+  /** A snippet's name: it runs as it is at the time. */
+  snippet: string;
+  where: string;
+  profile: string | null;
+  cwd: string;
+  wsId: string | null;
+  /** A terminal's name, or a #tag. */
+  terminal: string;
+  after: string;
+  busy: string;
+  closed: string;
+  when: ScheduleWhen;
+  missed: string;
+  limitMinutes: number;
+  notify: string;
+  phone: boolean;
+  keepDays: number;
+  nextAt: number | null;
+}
+
+/** A schedule's run. Its output is kept by the app, encrypted (Features/Schedules.cs). */
+interface ScheduleRunRecord {
+  id: string;
+  scheduleId: string;
+  name: string;
+  at: number;
+  ms: number;
+  status: string;
+  code: number | null;
+  summary: string;
+}
+
+interface SchedulesState {
+  open: boolean;
+  list: Schedule[];
+  runs: ScheduleRunRecord[];
+}
+
+/** A run going on: its record, its schedule, and its terminal if it has one. */
+interface ActiveScheduleRun {
+  run: ScheduleRunRecord;
+  schedule: Schedule;
+  tab?: Tab | null;
+  command: string;
+}

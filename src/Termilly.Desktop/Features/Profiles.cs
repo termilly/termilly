@@ -36,6 +36,9 @@ internal sealed class ProfileCatalog : IStartable
     /// <summary>The profile with this id, or the first (the default shell).</summary>
     public SessionProfile Find(string? id) => _profiles.FirstOrDefault(p => p.Id == id) ?? _profiles[0];
 
+    /// <summary>Whether a profile is still there: <see cref="Find"/> gives the default one when it isn't.</summary>
+    public bool Has(string id) => _profiles.Any(p => p.Id == id);
+
     public void Start() => RefreshContainers();
 
     /// <summary>Re-reads the shells, WSL distributions, custom profiles and ~/.ssh/config.</summary>

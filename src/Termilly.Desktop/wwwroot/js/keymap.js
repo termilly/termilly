@@ -47,6 +47,7 @@ export const KEYMAP = Object.freeze([
   ['scratch', 'App', 'Floating scratch terminal', 'Ctrl+Shift+`'],
   ['notepad', 'App', 'Notepad', 'Ctrl+Shift+M'],
   ['todo', 'App', 'To do', 'Ctrl+Shift+K'],
+  ['schedules', 'App', 'Schedules', 'Ctrl+Shift+Y'],
   ['clips', 'App', 'Clipboard', 'Ctrl+Shift+X'],
   ['files', 'App', 'File Explorer', 'Ctrl+Shift+L'],
   ['git', 'App', 'Git: changes and history', 'Ctrl+Shift+G'],

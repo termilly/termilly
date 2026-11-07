@@ -55,6 +55,8 @@ internal static partial class SshConnections
 {
     /// <summary>The OpenSSH programs Termilly runs.</summary>
     public const string SshProgram = "ssh";
+    /// <summary>The variable that names the program ssh asks for a password.</summary>
+    public const string AskPassProgram = "SSH_ASKPASS";
     public const string SftpProgram = "sftp";
     /// <summary>Where Windows keeps its OpenSSH client, under the system folder.</summary>
     private const string WindowsOpenSshFolder = "OpenSSH";
@@ -121,7 +123,7 @@ internal static partial class SshConnections
 
     private static Dictionary<string, string> Askpass(string agentDirectory, string reference) => new()
     {
-        ["SSH_ASKPASS"] = Path.Combine(agentDirectory, AppPaths.Exe(AgentExecutables.Askpass)),
+        [AskPassProgram] = Path.Combine(agentDirectory, AppPaths.Exe(AgentExecutables.Askpass)),
         ["SSH_ASKPASS_REQUIRE"] = "force",
         [TerminalEnvironment.Credential] = reference,
     };

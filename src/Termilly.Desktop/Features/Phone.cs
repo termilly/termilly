@@ -166,6 +166,8 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
 
     /// <summary>An alert's title when it isn't about one terminal.</summary>
     private const string AlertTitle = "Termilly";
+    /// <summary>The state a schedule's alert comes with (js/schedules.js): no agent is involved.</summary>
+    private const string ScheduleAlert = "schedule";
 
     /// <summary>Whether an agent's news goes to the phones: never, always, or while the user is away from the PC.</summary>
     public static bool ShouldAlert(string mode, bool inFront, TimeSpan? idle) => mode switch
@@ -183,7 +185,7 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
     {
         if (hideDetails)
         {
-            return new JsonObject { [Alert.Title] = AlertTitle, [Alert.Body] = Finished.Contains(m.State) ? "An agent finished." : "An agent needs you.", [Alert.Tag] = m.Id, [Alert.Url] = OpenUrl(m.Id) };
+            return new JsonObject { [Alert.Title] = AlertTitle, [Alert.Body] = m.State == ScheduleAlert ? "A schedule ran." : Finished.Contains(m.State) ? "An agent finished." : "An agent needs you.", [Alert.Tag] = m.Id, [Alert.Url] = OpenUrl(m.Id) };
         }
         var body = SecretRedactor.Redact(m.Body ?? "");
         return new JsonObject

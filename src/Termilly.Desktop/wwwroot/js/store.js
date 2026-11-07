@@ -140,6 +140,11 @@ export const state = {
   clips: { open: false },
   /** @type {FilesState} */
   files: { open: false },
+  /**
+   * Schedules, their runs, and whether their window is open (js/schedules.js).
+   * @type {SchedulesState}
+   */
+  schedules: { open: false, list: [], runs: [] },
   /** Whether the Snippets window is open (it opens again after a restart). */
   snippetsWindow: { open: false },
   /**
@@ -211,6 +216,8 @@ export const EVENTS = Object.freeze({
   openChangedFiles: 'openChangedFiles',
   openGit: 'openGit',
   openSettings: 'openSettings',
+  schedules: 'schedules',
+  openSchedules: 'openSchedules',
   openSnippets: 'openSnippets',
   opened: 'opened',
   planChanged: 'planChanged',
@@ -762,6 +769,7 @@ function serialize() {
     notepad: state.notepad,
     todo: state.todo,
     snippetsWindow: state.snippetsWindow,
+    schedules: state.schedules,
     clips: state.clips,
     files: state.files,
     windowPlaces: state.windowPlaces,
@@ -791,6 +799,19 @@ export function lastFolderOf(tab) {
 }
 
 /**
+ * To do, the Clipboard, the Files panel, the Snippets window and schedules, as serialize wrote them; an older file may have none.
+ * @param {any} saved
+ */
+function restorePanels(saved) {
+  if (saved.todo && typeof saved.todo === 'object') state.todo = { ...state.todo, ...saved.todo };
+  if (saved.clips && typeof saved.clips === 'object') state.clips = { ...state.clips, ...saved.clips };
+  if (saved.files && typeof saved.files === 'object') state.files = { ...state.files, ...saved.files };
+  state.snippetsWindow = { open: saved.snippetsWindow?.open === true };
+  const schedules = saved.schedules;
+  if (Array.isArray(schedules?.list)) state.schedules = { open: schedules.open === true, list: schedules.list, runs: schedules.runs ?? [] };
+}
+
+/**
  * Restores saved state (workspaces.json, as serialize wrote it). Returns false when there was nothing usable, so the
  * caller creates a default.
  * @param {any} saved
@@ -806,10 +827,7 @@ export function restore(saved) {
     const pages = saved.notepad.pages.filter((/** @type {any} */ p) => typeof p?.id === 'string' && typeof p.text === 'string');
     state.notepad = { ...saved.notepad, pages, activeId: pages.some((/** @type {NotepadPage} */ p) => p.id === saved.notepad.activeId) ? saved.notepad.activeId : pages[0]?.id ?? null };
   }
-  if (saved.todo && typeof saved.todo === 'object') state.todo = { ...state.todo, ...saved.todo };
-  if (saved.clips && typeof saved.clips === 'object') state.clips = { ...state.clips, ...saved.clips };
-  if (saved.files && typeof saved.files === 'object') state.files = { ...state.files, ...saved.files };
-  state.snippetsWindow = { open: saved.snippetsWindow?.open === true };
+  restorePanels(saved);
   state.windowPlaces = Object.fromEntries(Object.entries(saved.windowPlaces ?? {})
     .filter(([key, p]) => [p?.x, p?.y, p?.w, p?.h].every(n => Number.isFinite(n))
       // A terminal's window's place goes with the terminal.

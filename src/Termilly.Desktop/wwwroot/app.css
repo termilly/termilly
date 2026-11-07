@@ -892,10 +892,10 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
 
 /* ---- "Needs me" inbox (js/inbox.js) ---- */
 
-.inbox-button, #todo-button { position: relative; }
+.inbox-button, #todo-button, #schedules-button { position: relative; }
 /* To do's open tasks while it's closed: the notification centre's count, in the accent (news, not a call for
    attention). */
-#todo-button .tool-count { background: var(--accent); }
+#todo-button .tool-count, #schedules-button .tool-count { background: var(--accent); }
 .inbox-button.has-items { color: var(--attention); }
 .tool-count {
   position: absolute;
@@ -2877,6 +2877,44 @@ textarea.field.note-text { flex: 1; width: 100%; min-height: 120px; resize: none
 .sw-var { padding: 1px 6px; border-radius: 4px; background: var(--hover); font: 11.5px var(--term-font); }
 .sw-vars-head { margin-right: 4px; color: var(--muted); font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
 .snippets-win code { font-family: var(--term-font); }
+
+/* Schedules (js/scheduleswindow.js): built on the Snippets window. */
+.sch-main { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; }
+.sch-tabs { display: flex; flex: none; align-items: center; gap: 10px; padding: 12px 24px 0; }
+.sch-tabs[hidden] { display: none; }
+.sch-tabs .spacer { flex: 1; }
+.sch-on { margin-top: 0; }
+.sch-on[hidden] { display: none; }
+.sch-edit { flex: 1; min-height: 0; }
+.sch-edit .seg { align-self: flex-start; flex-wrap: wrap; margin-top: 4px; }
+.sch-edit .dialog-sub { margin: 4px 0 0; }
+.sch-edit .snippet-command { min-height: 64px; margin-top: 8px; }
+.sch-head { margin: 16px 0 4px; color: var(--text-strong); font-size: 12.5px; font-weight: 600; }
+.sch-row { display: flex; gap: 10px; }
+.sch-row .dialog-field { flex: 1; min-width: 0; }
+.sch-days button { padding: 4px 9px; }
+.sch-foot { margin-top: auto; padding-top: 14px; }
+.sch-foot .dialog-actions { padding-top: 8px; }
+.sch-problem { color: var(--attention); }
+.sch-problem:empty, .sch-next:empty { display: none; }
+.sw-row.sch-off .sw-name { color: var(--muted); }
+.sch-squares { display: flex; gap: 3px; min-height: 8px; margin-top: 3px; }
+.sch-square { flex: none; width: 8px; height: 8px; border-radius: 2px; background: var(--muted); }
+.sch-square.worked { background: #7ee787; }
+.sch-square.failed, .sch-square.stopped { background: #ff7b72; }
+.sch-square.running, .sch-square.waiting { background: var(--accent); }
+.sch-runs { display: flex; flex-direction: column; gap: 2px; min-height: 0; }
+.sch-run { display: flex; flex: none; align-items: center; gap: 10px; width: 100%; padding: 6px 8px; border-radius: 6px; color: var(--text); font-size: 12.5px; text-align: left; }
+.sch-run:hover { background: var(--hover); }
+.sch-run.selected { background: var(--accent-fill); }
+.sch-run-when, .sch-run-status { flex: none; }
+.sch-run-status { color: var(--muted); }
+.sch-run-text { overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
+.sch-report { display: flex; flex: none; flex-direction: column; gap: 8px; margin: 4px 0 10px 26px; }
+.sch-report-head { display: flex; align-items: center; gap: 6px; }
+.sch-report-head .spacer { flex: 1; }
+.sch-report-title { font-size: 12.5px; font-weight: 600; }
+.sch-output { max-height: 320px; margin: 0; padding: 10px; overflow: auto; border-radius: 6px; background: var(--surface-2, var(--hover)); color: var(--text); font: 12px/1.45 var(--term-font); white-space: pre-wrap; word-break: break-word; }
 
 /* The notification center's title, and under it how many there are. */
 .inbox-heading { display: flex; flex-direction: column; gap: 2px; min-width: 0; }

@@ -35,6 +35,14 @@ const REDRAW_MS = 30 * SECOND_MS;
 
 /** @type {Note[]} */
 let notes = [];
+/**
+ * What schedules said (js/schedules.js): a run needs no terminal, so these have none. A click opens its report.
+ * @typedef {{ id: string, title: string, detail: string, failed: boolean, at: number }} ScheduleNote
+ */
+/** @type {ScheduleNote[]} */
+let scheduleNotes = [];
+/** How many of them are kept. */
+const MAX_SCHEDULE_NOTES = 30;
 /** Notes the user cleared (their keys): a terminal that still says the same isn't taken in again. */
 const cleared = new Set();
 
@@ -106,6 +114,18 @@ export const notesForPhone = () => notes.map(n => ({ id: n.tabId, key: n.key, st
 
 /** @param {Note} n */
 const matches = n => filter === FILTER.all || (filter === FILTER.unread ? isLive(n) : n.state === AGENT_STATE.error);
+/** @param {ScheduleNote} n */
+const scheduleMatches = n => filter !== FILTER.errors || n.failed;
+
+/**
+ * A schedule's run, for the notification center.
+ * @param {ScheduleNote} note
+ */
+export function addScheduleNote(note) {
+  scheduleNotes = [note, ...scheduleNotes].slice(0, MAX_SCHEDULE_NOTES);
+  render();
+  emit(EVENTS.inbox);
+}
 
 /**
  * "now", "4m", "2h", "3d": how long it has been waiting.
@@ -149,30 +169,44 @@ function take(tab) {
 export function clear(key) {
   for (const n of notes) if (key === null || n.key === key) cleared.add(n.key);
   notes = notes.filter(n => !cleared.has(n.key));
+  scheduleNotes = key === null ? [] : scheduleNotes.filter(n => n.id !== key);
   render();
   emit(EVENTS.inbox);
 }
 
 function render() {
   for (const tab of state.tabs.values()) take(tab);
-  const all = notes;
-  count.textContent = countText(all.length);
-  count.hidden = !all.length;
-  updateBadge(all.length);
-  button.classList.toggle('has-items', all.length > 0);
-  const total = `${all.length} notification${all.length === 1 ? '' : 's'}`;
+  const size = notes.length + scheduleNotes.length;
+  count.textContent = countText(size);
+  count.hidden = !size;
+  updateBadge(size);
+  button.classList.toggle('has-items', size > 0);
+  const total = `${size} notification${size === 1 ? '' : 's'}`;
   button.title = `Notification center: ${total} (Ctrl+Shift+A)`;
   totalEl.textContent = total;
   if (panel.hidden) return;
 
   filtersEl.innerHTML = FILTERS.map(([id, label]) =>
     `<button class="seg-btn${id === filter ? ' on' : ''}" data-filter="${id}">${label}</button>`).join('');
-  clearAll.hidden = !all.length;
-  const shown = all.filter(matches);
-  list.innerHTML = shown.length ? shown.map(n => {
-    const tab = /** @type {Tab} */ (state.tabs.get(n.tabId));
-    const ws = wsById(tab.wsId);
-    return `<div class="inbox-row"><button class="inbox-item${isLive(n) ? ' unread' : ''}" data-tab="${tab.id}">
+  clearAll.hidden = !size;
+  const rows = [...notes.filter(matches).map(n => ({ at: n.at, html: noteHtml(n) })), ...scheduleNotes.filter(scheduleMatches).map(n => ({ at: n.at, html: scheduleNoteHtml(n) }))];
+  list.innerHTML = rows.length ? rows.sort((a, b) => b.at - a.at).map(r => r.html).join('')
+    : `<div class="inbox-empty">${size ? 'Nothing in this view.' : 'No notifications.'}</div>`;
+}
+
+/** @param {ScheduleNote} n */
+const scheduleNoteHtml = n => `<div class="inbox-row"><button class="inbox-item unread" data-run="${escapeHtml(n.id)}">
+  <span class="inbox-text">
+    <span class="inbox-title"><span class="name">${escapeHtml(n.title)}</span><span class="inbox-age">${age(n.at)}</span></span>
+    <span class="inbox-detail">${escapeHtml(n.detail)}</span>
+  </span>
+</button><button class="pane-btn inbox-clear" data-clear="${escapeHtml(n.id)}" title="Clear" aria-label="Clear">${ICONS.close}</button></div>`;
+
+/** @param {Note} n */
+function noteHtml(n) {
+  const tab = /** @type {Tab} */ (state.tabs.get(n.tabId));
+  const ws = wsById(tab.wsId);
+  return `<div class="inbox-row"><button class="inbox-item${isLive(n) ? ' unread' : ''}" data-tab="${tab.id}">
       ${activityHtml(n.activity, 'inbox-state')}
       <span class="inbox-text">
         <span class="inbox-title">${tabBadgeHtml(tab)}<span class="name">${escapeHtml(tabTitle(tab))}</span>
@@ -182,7 +216,6 @@ function render() {
         <span class="inbox-detail">${escapeHtml(n.detail)}</span>
       </span>
     </button><button class="pane-btn inbox-clear" data-clear="${escapeHtml(n.key)}" title="Clear" aria-label="Clear">${ICONS.close}</button></div>`;
-  }).join('') : `<div class="inbox-empty">${all.length ? 'Nothing in this view.' : 'No notifications.'}</div>`;
 }
 
 export function toggleInbox() {
@@ -215,6 +248,12 @@ list.addEventListener('click', e => {
   const x = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-clear]'));
   if (x) {
     clear(/** @type {string} */ (x.dataset.clear));
+    return;
+  }
+  const run = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-run]'));
+  if (run) {
+    closePopover(panel);
+    emit(EVENTS.openSchedules, { runId: run.dataset.run });
     return;
   }
   const item = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-tab]'));

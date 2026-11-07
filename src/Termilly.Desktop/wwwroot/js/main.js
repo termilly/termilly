@@ -35,6 +35,8 @@ import { chordOf, commandOf, keyHint, KEY_ID } from './keymap.js';
 import { openNewWorktree } from './worktree.js';
 import { openChangedFiles } from './changes.js';
 import { openSnippetsWindow, initSnippetsWindow } from './snippetswindow.js';
+import { initSchedules } from './schedules.js';
+import { toggleSchedules, initSchedulesWindow } from './scheduleswindow.js';
 import { THEMES } from './themes.js';
 import { isPreviewOpen, closePreview } from './preview.js';
 import { pluginCommands, reloadPlugins } from './plugins.js';
@@ -192,6 +194,7 @@ setCommands(() => [
   { label: 'Rewind this terminal', keywords: 'replay instant back history screen earlier', run: () => setTimeout(() => focusedTab() && openRewind(/** @type {Tab} */ (focusedTab()))) },
   { label: 'Attach tmux', keywords: 'tmux control mode -CC attach session server remote panes windows wsl ssh', run: () => setTimeout(openAttach) },
   { label: 'Run a snippet', keywords: 'snippets saved commands run snippet macro button bar', run: () => setTimeout(openSnippets) },
+  { label: 'Schedules', keywords: 'schedule cron timer run on time report recurring nightly', hint: keyHint(KEY_ID.schedules), run: () => setTimeout(toggleSchedules) },
   { label: 'Manage snippets', keywords: 'snippets explorer window edit new delete saved commands', run: () => setTimeout(openSnippetsWindow) },
   { label: 'Previous prompt', keywords: 'scroll jump command', hint: keyHint(KEY_ID.previousPrompt), run: commands.previousPrompt },
   { label: 'Next prompt', keywords: 'scroll jump command', hint: keyHint(KEY_ID.nextPrompt), run: commands.nextPrompt },
@@ -332,7 +335,7 @@ const RUN = {
   [KEY_ID.inbox]: commands.inbox, [KEY_ID.search]: commands.search, [KEY_ID.commandHistory]: commands.commandHistory,
   [KEY_ID.previousPrompt]: commands.previousPrompt, [KEY_ID.nextPrompt]: commands.nextPrompt, [KEY_ID.goTo]: commands.goTo,
   [KEY_ID.settings]: commands.settings, [KEY_ID.hints]: toggleHints, [KEY_ID.scratch]: toggleScratch, [KEY_ID.notepad]: toggleNotepadFromKeys, [KEY_ID.todo]: toggleTodo,
-  [KEY_ID.clips]: toggleClips, [KEY_ID.files]: () => toggleFiles(), [KEY_ID.git]: openGitHere,
+  [KEY_ID.schedules]: toggleSchedules, [KEY_ID.clips]: toggleClips, [KEY_ID.files]: () => toggleFiles(), [KEY_ID.git]: openGitHere,
   [KEY_ID.agentChanges]: () => {
     if (!changeShortcutOn()) return false;
     if (isPreviewOpen()) closePreview(); else openAgentChanges(focusedTab());
@@ -566,6 +569,8 @@ function boot(saved, snapshot, liveSessions = []) {
   // Terminals that were in windows of their own when Termilly closed open in them again; the Snippets window too.
   if (restored) reopenWindows();
   initSnippetsWindow();
+  initSchedules();
+  initSchedulesWindow();
   if (!restored) newTab();
   keepEarlierOfOpen();
   // Show the page when the focused terminal prints its prompt (see 'output'); straight away if there is
