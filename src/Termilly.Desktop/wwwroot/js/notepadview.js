@@ -153,7 +153,9 @@ function wire(v) {
     status(v);
   });
   area.addEventListener('scroll', () => place(v), { passive: true });
-  for (const kind of ['keydown', 'mousedown', 'mouseup', 'select', 'focus']) area.addEventListener(kind, moved);
+  // selectionchange too: on macOS WebKit moves the caret for a key in a step of its own after keydown, sometimes after
+  // the next frame, and the mark stayed on the line the caret left. keyup is there for a WebKitGTK too old to send it.
+  for (const kind of ['keydown', 'keyup', 'selectionchange', 'mousedown', 'mouseup', 'select', 'focus']) area.addEventListener(kind, moved);
   area.addEventListener('mousemove', e => { if (e.buttons) moved(); });
   new ResizeObserver(() => layout(v)).observe(area);
   // Ctrl+wheel: the text bigger or smaller, as in terminals (the page doesn't zoom).
