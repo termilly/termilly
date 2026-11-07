@@ -15,6 +15,7 @@ import { allSnippets, NAME_WORDS } from './snippets.js';
 import { byId, find, targetOf, TOOL_COUNT } from './dom.js';
 import { detach, closeWindow, focusWindow, isDetached } from './windows.js';
 import { plainText } from './schedulereport.js';
+import { readResult } from './agentcli.js';
 import {
   schedules, scheduleById, runsOf, saveSchedule, removeSchedule, setScheduleOn, runNow, stopRun, runningNow,
 } from './schedules.js';
@@ -105,7 +106,9 @@ function choices() {
  */
 function problemOf(s) {
   const { when } = s;
-  if (s.what === WHAT.command ? !s.command.trim() : !s.snippet) return s.what === WHAT.command ? 'It needs a command.' : 'It needs a snippet.';
+  if (s.what === WHAT.command && !s.command.trim()) return 'It needs a command.';
+  if (s.what === WHAT.snippet && !s.snippet) return 'It needs a snippet.';
+  if (s.what === WHAT.agent && !s.prompt.trim()) return 'It needs a prompt.';
   if (s.where === WHERE.server && !s.profile) return 'It needs a server.';
   if (s.where === WHERE.terminal && !s.terminal.trim()) return 'It needs a terminal’s name or a #tag.';
   if (when.kind === WHEN.time && minutesOf(when.at) === null) return 'The time should look like 20:00.';
@@ -161,6 +164,15 @@ function renderState() {
   run.disabled = isNew || isDirty();
 }
 
+/**
+ * What a report shows: an agent's reply, or the output as text.
+ * @param {{ output: string, columns: number }} report
+ */
+async function shownText(report) {
+  const text = await plainText(report.output, report.columns);
+  return readResult(text)?.reply || text;
+}
+
 async function renderRuns() {
   const runs = runsOf(/** @type {Schedule} */ (editing).id);
   const open = runs.find(r => r.id === openRunId) ?? null;
@@ -169,7 +181,7 @@ async function renderRuns() {
   const asked = open.id;
   const report = await readReport(asked);
   if (openRunId !== asked || view !== VIEW.runs) return;
-  const text = report === null ? null : await plainText(report.output, report.columns);
+  const text = report === null ? null : await shownText(report);
   if (openRunId !== asked || view !== VIEW.runs) return;
   find(editEl, `[data-run="${asked}"]`).insertAdjacentHTML('afterend', reportHtml(open, text));
 }
@@ -291,7 +303,7 @@ async function save() {
   if (!s || problemOf(s) || !isDirty()) return;
   if (reachesProduction() && !(await confirmProduction())) return;
   if (s !== editing) return;
-  s.name = s.name.trim() || (s.what === WHAT.snippet ? s.snippet : s.command.trim().split(/\s+/).slice(0, NAME_WORDS).join(' '));
+  s.name = s.name.trim() || (s.what === WHAT.snippet ? s.snippet : (s.what === WHAT.agent ? s.prompt : s.command).trim().split(/\s+/).slice(0, NAME_WORDS).join(' '));
   saveSchedule(s);
   select(s.id);
 }
@@ -331,7 +343,7 @@ async function openAsTerminal() {
   const s = /** @type {Schedule} */ (editing);
   const report = openRunId ? await readReport(openRunId) : null;
   if (!report) return;
-  const text = await plainText(report.output, report.columns);
+  const text = await shownText(report);
   const shell = s.where === WHERE.server || s.where === WHERE.hidden ? s.profile ?? undefined : undefined;
   newTab({ profile: shell, wsId: state.activeId, cwd: s.cwd || null, name: s.name, restore: { lines: text.split('\n'), closedAt: Date.now() } });
 }

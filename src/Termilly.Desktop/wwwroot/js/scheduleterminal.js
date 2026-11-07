@@ -36,7 +36,7 @@ export function runInNewTerminal(schedule, command, noMarks) {
 }
 
 /** @param {Schedule} schedule */
-function terminalsFor(schedule) {
+export function terminalsFor(schedule) {
   const wanted = schedule.terminal.trim();
   const open = [...state.tabs.values()].filter(t => !t.exited && !t.virtual && t.wsId);
   if (wanted.startsWith(TAG_MARK)) return open.filter(t => t.tags.includes(wanted.slice(TAG_MARK.length)));

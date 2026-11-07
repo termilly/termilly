@@ -11,11 +11,12 @@ import { state, emit, on, persist, newId, EVENTS } from './store.js';
 import { allSnippets, fill } from './snippets.js';
 import { windowInFront } from './windowshown.js';
 import { lastOutput } from './commands.js';
+import { agentCommand, readResult, noticeOf } from './agentcli.js';
 import { addScheduleNote } from './inbox.js';
 import { plainText } from './schedulereport.js';
-import { runInNewTerminal, runInTerminal, stopInTerminal, finishTerminal, TERMINAL_TURN } from './scheduleterminal.js';
+import { runInNewTerminal, runInTerminal, stopInTerminal, finishTerminal, terminalsFor, TERMINAL_TURN } from './scheduleterminal.js';
 import {
-  nextRun, statusOf, summaryOf, shouldTell, sortRuns, RUN, RUN_LABEL, WHAT, WHERE, WHEN, MISSED, GRACE_MS,
+  nextRun, newSchedule, statusOf, summaryOf, shouldTell, sortRuns, RUN, RUN_LABEL, WHAT, WHERE, WHEN, MISSED, GRACE_MS,
 } from './schedulerules.js';
 
 const MINUTE_S = 60;
@@ -97,8 +98,22 @@ function tidyRuns() {
  */
 function commandOf(schedule) {
   if (schedule.what === WHAT.command) return schedule.command;
+  if (schedule.what === WHAT.agent) return agentCommand(schedule.prompt, { shell: shellOf(schedule), changes: schedule.allowChanges, json: isOutOfSight(schedule) });
   const found = [undefined, ...state.workspaces].flatMap(ws => allSnippets(ws)).find(s => s.name === schedule.snippet);
   return found ? fill(found.command, {}) : null;
+}
+
+/** @param {Schedule} schedule */
+const isOutOfSight = schedule => schedule.where === WHERE.hidden || schedule.where === WHERE.server;
+
+/**
+ * Which shell reads what a run sends: a prompt has to be written for it.
+ * @param {Schedule} schedule
+ */
+function shellOf(schedule) {
+  const profile = schedule.where === WHERE.terminal ? terminalsFor(schedule)[0]?.profile : schedule.profile;
+  const found = state.profiles.find(p => p.id === profile) ?? state.profiles[0];
+  return found?.shellIcon ?? found?.icon;
 }
 
 /**
@@ -155,7 +170,7 @@ function begin(schedule) {
 /** @param {ActiveRun} going */
 function place(going) {
   const { run, schedule, command } = going;
-  if (schedule.where === WHERE.hidden || schedule.where === WHERE.server) {
+  if (isOutOfSight(schedule)) {
     const cwd = schedule.cwd || null;
     send(PAGE.scheduleRun, { runId: run.id, profile: schedule.profile, cwd, command, limitSeconds: schedule.limitMinutes * MINUTE_S });
   } else if (schedule.where === WHERE.fresh) {
@@ -220,17 +235,18 @@ export function stopRun(runId) {
  * Ends a run: what it came to, the user told if they asked, and its terminal dealt with.
  * @param {ScheduleRunRecord} run
  * @param {Schedule} schedule
- * @param {{ code?: number | null, stopped?: boolean, error?: string | null, sent?: boolean, summary?: string }} how
+ * @param {{ code?: number | null, stopped?: boolean, error?: string | null, sent?: boolean, summary?: string, costUsd?: number | null, notice?: string }} how
  */
 function end(run, schedule, how) {
   const going = active.get(run.id);
   active.delete(run.id);
   run.ms = Date.now() - run.at;
   run.code = how.code ?? null;
+  run.costUsd = how.costUsd ?? null;
   run.status = how.sent ? RUN.sent : statusOf(how);
   run.summary = how.error ?? how.summary ?? (how.stopped ? `Stopped after ${Math.round(run.ms / SECOND_MS)} s.` : '');
   if (going?.tab) finishTerminal(going.tab, schedule, run);
-  tell(schedule, run);
+  tell(schedule, run, how.notice);
   tidyRuns();
   changed();
 }
@@ -239,11 +255,12 @@ function end(run, schedule, how) {
  * Tells the user about a run, if the schedule asks for it: a notification, the notification center, and the phones.
  * @param {Schedule} schedule
  * @param {ScheduleRunRecord} run
+ * @param {string} [notice] what it says, in place of the run's summary
  */
-function tell(schedule, run) {
+function tell(schedule, run, notice) {
   if (!shouldTell(schedule.notify, run.status)) return;
   const title = `${schedule.name}: ${RUN_LABEL[run.status].toLowerCase()}`;
-  const body = run.summary;
+  const body = notice ?? run.summary;
   send(PAGE.notify, { id: run.id, title, body });
   addScheduleNote({ id: run.id, title, detail: body, failed: run.status !== RUN.worked, at: Date.now() });
   if (schedule.phone) send(PAGE.phoneAlert, { id: run.id, state: PHONE_STATE, title, body, inFront: windowInFront() });
@@ -288,9 +305,24 @@ onHost(HOST.scheduleTick, tick);
 onHost(HOST.scheduleEnded, async m => {
   const going = active.get(m.runId);
   if (!going) return;
-  const summary = summaryOf(await plainText(m.tail ?? ''));
-  end(going.run, going.schedule, { code: m.exitCode, stopped: m.stopped, error: m.error, summary });
+  const text = await plainText(m.tail ?? '');
+  const agent = going.schedule.what === WHAT.agent ? readResult(text) : null;
+  if (agent && !m.stopped) endAgent(going, m.exitCode ?? null, agent);
+  else end(going.run, going.schedule, { code: m.exitCode, stopped: m.stopped, error: m.error, summary: summaryOf(text) });
 });
+
+/**
+ * An agent's run ended with its result. A run refused something failed, whatever it says: what it was asked isn't done.
+ * @param {ActiveRun} going
+ * @param {number | null} code
+ * @param {NonNullable<ReturnType<typeof readResult>>} agent
+ */
+function endAgent({ run, schedule }, code, agent) {
+  const headline = agent.reply.split(/\r?\n/).map(line => line.trim()).find(Boolean) ?? '';
+  const notice = schedule.replyInNotice ? noticeOf(agent.reply) : undefined;
+  const how = agent.failed ? { error: agent.why, code } : { code, summary: summaryOf(headline) };
+  end(run, schedule, { ...how, costUsd: agent.costUsd, notice: agent.failed ? undefined : notice });
+}
 
 /**
  * A run in a terminal ended; a terminal closed takes its run with it.
@@ -324,6 +356,8 @@ onHost(HOST.focusTerminal, m => {
 
 /** At start: what was going when Termilly closed ended there, and what runs at start runs, once. */
 export function initSchedules() {
+  // Saved before schedules had some of what they have now.
+  state.schedules.list = schedules().map(s => ({ ...newSchedule(s.id), ...s }));
   for (const run of runs()) {
     if (run.status !== RUN.running && run.status !== RUN.waiting) continue;
     run.status = RUN.failed;

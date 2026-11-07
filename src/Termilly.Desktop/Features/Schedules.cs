@@ -59,8 +59,8 @@ internal sealed class ScheduleHandler(PageChannel page, ProfileCatalog profiles,
 {
     /// <summary>How often the page looks for what's due. Schedules go by the minute, so this is well under one.</summary>
     private static readonly TimeSpan TickEvery = TimeSpan.FromSeconds(15);
-    /// <summary>How much of a run's end the page gets for its summary.</summary>
-    private const int TailChars = 16 * 1024;
+    /// <summary>How much of a run's end the page gets: enough for an agent's whole answer, which it reads for its reply.</summary>
+    private const int TailChars = 256 * 1024;
 
     private Timer? _clock;
 

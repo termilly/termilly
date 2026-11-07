@@ -13,7 +13,7 @@ const WEEK = Object.freeze([1, 2, 3, 4, 5, 6, 0]);
 
 /** What the form's segments are called (their data-seg), with each one's choices. */
 const SEGMENTS = Object.freeze({
-  what: [[WHAT.command, 'Command'], [WHAT.snippet, 'Snippet']],
+  what: [[WHAT.command, 'Command'], [WHAT.snippet, 'Snippet'], [WHAT.agent, 'Agent prompt']],
   where: [[WHERE.hidden, 'Out of sight'], [WHERE.server, 'On a server'], [WHERE.fresh, 'New terminal'], [WHERE.terminal, 'A terminal you have']],
   whenKind: [[WHEN.time, 'At a time'], [WHEN.every, 'Every'], [WHEN.start, 'When Termilly starts']],
   after: [[AFTER.close, 'Close it'], [AFTER.closeIfWorked, 'Close it if it worked'], [AFTER.leave, 'Leave it open']],
@@ -69,11 +69,20 @@ const inputHtml = (name, value, placeholder = '', type = 'text') =>
 /** @param {SessionProfile[]} profiles */
 const profileOptions = profiles => profiles.map(p => /** @type {const} */ ([p.id, p.name]));
 
+/** @param {Schedule} s */
+const agentHtml = s => `<textarea class="field snippet-command sch-prompt" name="prompt" rows="5" spellcheck="false" placeholder="Summarize what changed in this repository today">${escapeHtml(s.prompt)}</textarea>
+  <label class="note-pin"><input type="checkbox" name="allowChanges"${s.allowChanges ? ' checked' : ''}> Let it change files</label>
+  <p class="dialog-sub${s.allowChanges ? ' sch-warn' : ''}">${s.allowChanges
+    ? 'With nobody watching, it edits files without asking, and runs the commands your Claude Code settings allow. Anything else it asks for fails the run.'
+    : 'Read only: it can read files in its folder and fetch pages, but can’t change files or run commands. Your Claude Code settings aren’t used.'}</p>
+  <label class="note-pin"><input type="checkbox" name="replyInNotice"${s.replyInNotice ? ' checked' : ''}> Put its reply in the notification</label>`;
+
 /**
  * @param {Schedule} s
  * @param {Choices} choices
  */
 function whatHtml(s, choices) {
+  if (s.what === WHAT.agent) return `<h3 class="sch-head">What it runs</h3>${segmentHtml('what', s.what)}${agentHtml(s)}`;
   const body = s.what === WHAT.command
     ? `<textarea class="field snippet-command" name="command" rows="3" spellcheck="false" placeholder="git pull && npm test">${escapeHtml(s.command)}</textarea>`
     : choices.snippets.length
@@ -207,12 +216,13 @@ export function reportHtml(run, text) {
   const empty = going ? 'It’s still running.' : 'No output was kept for this run.';
   return `<div class="sch-report">
     <div class="sch-report-head">
-      <span class="sch-report-title">${escapeHtml(RUN_LABEL[run.status])}${run.code === null ? '' : `, exit code ${run.code}`}</span>
+      <span class="sch-report-title">${escapeHtml(RUN_LABEL[run.status])}${run.code === null ? '' : `, exit code ${run.code}`}${run.costUsd ? `, $${run.costUsd.toFixed(2)}` : ''}</span>
       <span class="spacer"></span>
       ${going ? `<button class="btn small" data-sch="stop">Stop</button>` : ''}
       ${text === null ? '' : `<button class="btn small" data-sch="copy">Copy</button><button class="btn small" data-sch="terminal">Open as a terminal</button>`}
       <button class="btn small" data-sch="run">Run again</button>
     </div>
+    ${run.summary && run.status !== RUN.worked ? `<p class="sch-why">${escapeHtml(run.summary)}</p>` : ''}
     ${text === null ? `<p class="set-desc">${empty}</p>` : `<pre class="sch-output">${escapeHtml(text)}</pre>`}
   </div>`;
 }

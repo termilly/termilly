@@ -3,7 +3,7 @@
 // (js/schedules.js runs them, js/scheduleswindow.js edits them).
 
 /** What a schedule runs. */
-export const WHAT = Object.freeze({ command: 'command', snippet: 'snippet' });
+export const WHAT = Object.freeze({ command: 'command', snippet: 'snippet', agent: 'agent' });
 /** Where it runs: a hidden shell here or on a server, a new terminal, or one that's open. */
 export const WHERE = Object.freeze({ hidden: 'hidden', server: 'server', fresh: 'new', terminal: 'terminal' });
 /** How its time is set. */
@@ -184,7 +184,7 @@ export function statusOf({ code, stopped, error }) {
 }
 
 /**
- * The line a run is known by: the last one with something on it.
+ * The line a run is known by: the last one with something on it, where programs say how it went.
  * @param {string} text
  */
 export function summaryOf(text) {
@@ -232,7 +232,7 @@ export function sortRuns(runs, schedules, now) {
  */
 export function newSchedule(id) {
   return {
-    id, name: '', on: true, what: WHAT.command, command: '', snippet: '', where: WHERE.hidden, profile: null, cwd: '', wsId: null,
+    id, name: '', on: true, what: WHAT.command, command: '', snippet: '', prompt: '', allowChanges: false, replyInNotice: true, where: WHERE.hidden, profile: null, cwd: '', wsId: null,
     terminal: '', after: AFTER.closeIfWorked, busy: BUSY.wait, closed: CLOSED.open,
     when: { kind: WHEN.time, at: '20:00', days: [], every: 1, unit: UNIT.hours, from: '', to: '' },
     missed: MISSED.run, notify: NOTIFY.failed, phone: false, nextAt: null, ...START,

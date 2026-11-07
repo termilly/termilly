@@ -23,7 +23,8 @@ export function plainText(output, columns = COLUMNS) {
       for (let y = 0; y < buffer.length; y++) {
         const line = buffer.getLine(y);
         if (!line) continue;
-        const text = line.translateToString(true);
+        // A line that goes on in the next row keeps what ends this one: a space there is part of the text.
+        const text = line.translateToString(!buffer.getLine(y + 1)?.isWrapped);
         if (line.isWrapped && rows.length) rows[rows.length - 1] += text;
         else rows.push(text);
       }

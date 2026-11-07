@@ -290,6 +290,12 @@ interface Schedule {
   command: string;
   /** A snippet's name: it runs as it is at the time. */
   snippet: string;
+  /** What an agent is asked (js/agentcli.js). */
+  prompt: string;
+  /** An agent may change files; by default it only reads. */
+  allowChanges: boolean;
+  /** An agent's reply goes in the notification. */
+  replyInNotice: boolean;
   where: string;
   profile: string | null;
   cwd: string;
@@ -318,6 +324,8 @@ interface ScheduleRunRecord {
   status: string;
   code: number | null;
   summary: string;
+  /** What an agent's run cost, as it said. */
+  costUsd?: number | null;
 }
 
 interface SchedulesState {

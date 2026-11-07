@@ -2895,7 +2895,9 @@ textarea.field.note-text { flex: 1; width: 100%; min-height: 120px; resize: none
 .sch-days button { padding: 4px 9px; }
 .sch-foot { margin-top: auto; padding-top: 14px; }
 .sch-foot .dialog-actions { padding-top: 8px; }
-.sch-problem { color: var(--attention); }
+.sch-problem, .sch-warn, .sch-why { color: var(--attention); }
+.sch-why { margin: 0; font-size: 12.5px; }
+.sch-edit .sch-prompt { min-height: 110px; }
 .sch-problem:empty, .sch-next:empty { display: none; }
 .sw-row.sch-off .sw-name { color: var(--muted); }
 .sch-squares { display: flex; gap: 3px; min-height: 8px; margin-top: 3px; }

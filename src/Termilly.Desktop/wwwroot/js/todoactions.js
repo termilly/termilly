@@ -7,13 +7,15 @@ import { send, onHost } from './host.js';
 import { state, emit, lastFolderOf, wsById, isSsh, defaultProfile, EVENTS } from './store.js';
 import { newTab } from './panes.js';
 import { commandLine } from './quoting.js';
+import { AGENT_COMMAND } from './agentcli.js';
 import { LIST_KIND, setStatus, updateTask } from './todo.js';
 import { implementPrompt, linkSub, TASK_STATUS } from './todolist.js';
 
 /** @typedef {import('./todo.js').ListRef} ListRef */
 
-/** What Implement runs, and the longest name it gives its terminal. */
-export const AGENT_COMMAND = 'claude';
+export { AGENT_COMMAND };
+
+/** The longest name Implement gives its terminal. */
 const MAX_AGENT_NAME = 32;
 
 /** Folders asked about, and whether their repository is on GitHub. */
