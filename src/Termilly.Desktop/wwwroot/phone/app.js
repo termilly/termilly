@@ -8,6 +8,7 @@
 import { terminalView, activityHtml, TEXT_SIZE } from './terminal.js';
 import { TAB, SETTING, SETTINGS_PAGE, PAGE_TITLE, STATE_LABEL, TEXT_SIZES, navHtml, notesHtml, settingsHtml, themesHtml, backRow } from './tabs.js';
 import { todoTab } from './todo.js';
+import { schedulesTab } from './schedules.js';
 import { SCROLLING, GESTURE_START } from './gestures.js';
 import { manager } from './manage.js';
 import { COMPOSE_STYLE, composeStyle, DICTATION, dictation } from './compose.js';
@@ -80,7 +81,7 @@ let settingsPage = SETTINGS_PAGE.list;
 /** What Settings' list says of alerts. */
 const ALERTS_SET = Object.freeze({ none: 'Not here', on: 'On', off: 'Off' });
 /** The tabs' titles, at the top. */
-const TITLE = Object.freeze({ [TAB.terminals]: 'Termilly', [TAB.todo]: 'To do', [TAB.notes]: 'Notifications', [TAB.settings]: 'Settings' });
+const TITLE = Object.freeze({ [TAB.terminals]: 'Termilly', [TAB.todo]: 'To do', [TAB.schedules]: 'Schedules', [TAB.notes]: 'Notifications', [TAB.settings]: 'Settings' });
 
 /**
  * @param {string} path
@@ -230,6 +231,16 @@ const todo = todoTab({
   },
 });
 
+/** The Schedules tab (schedules.js): the PC's schedules and their reports. */
+const schedulesShown = schedulesTab({
+  snap: () => snap, redraw: () => render(), toast: text => toast(text),
+  send: message => { if (live?.readyState === OPEN) live.send(JSON.stringify(message)); },
+  show: () => {
+    tab = TAB.schedules;
+    render();
+  },
+});
+
 /** The Terminals tab: what waits for you, then each workspace's terminals. */
 function terminalsHtml() {
   const waiting = snap.terminals.filter(t => t.waiting).sort((a, b) => (b.waiting?.at ?? 0) - (a.waiting?.at ?? 0));
@@ -256,16 +267,17 @@ function render() {
   if (conn) conn.textContent = connected ? '' : 'Reconnecting';
   const title = app.querySelector('[data-title]');
   const page = tab === TAB.settings ? settingsPage : SETTINGS_PAGE.list;
-  const todoTitle = tab === TAB.todo ? todo.title() : '';
+  const todoTitle = tab === TAB.todo ? todo.title() : tab === TAB.schedules ? schedulesShown.title() : '';
   if (title) title.textContent = page ? /** @type {Record<string, string>} */ (PAGE_TITLE)[page] : todoTitle || /** @type {Record<string, string>} */ (TITLE)[tab];
   // A Settings page's way back sits in the header, above its title, so it stays when the page scrolls.
   const back = app.querySelector('[data-back]');
-  if (back) back.innerHTML = page ? backRow(page === SETTINGS_PAGE.themes ? SETTINGS_PAGE.appearance : SETTINGS_PAGE.list) : tab === TAB.todo ? todo.backHtml() : '';
+  if (back) back.innerHTML = page ? backRow(page === SETTINGS_PAGE.themes ? SETTINGS_PAGE.appearance : SETTINGS_PAGE.list) : tab === TAB.todo ? todo.backHtml() : tab === TAB.schedules ? schedulesShown.backHtml() : '';
   const add = app.querySelector('[data-add]');
   if (add) add.innerHTML = tab === TAB.terminals ? manage.addButton() : tab === TAB.todo ? todo.noteButton() : '';
   // Its fields stay as they are while the PC's news comes in.
   if (tab === TAB.todo) todo.fill(home);
   else home.innerHTML = tab === TAB.notes ? notesPage()
+    : tab === TAB.schedules ? schedulesShown.html()
     : page === SETTINGS_PAGE.themes ? themesHtml(looks(snap), chosenLook())
     : tab === TAB.settings ? settingsHtml({ page, alerts: alertsBody(), alertsOn: !canAlert() ? ALERTS_SET.none : me?.alerts ? ALERTS_SET.on : ALERTS_SET.off, size: textSize(), scrolling: localStorage.getItem(SCROLLING.key) ?? SCROLLING.smooth, compose: composeStyle(), dictation: dictation(), host: location.host, connected, look: chosenLook(), looks: looks(snap) })
     : terminalsHtml();
@@ -366,6 +378,8 @@ function connect() {
       terminalShown.message(m);
     } else if (m.type === LIVE.answered && m.op === OP.clipText && m.ok) {
       terminalShown.fillBox(m.text ?? '');
+    } else if (m.type === LIVE.answered && schedulesShown.answered(m)) {
+      // Schedules (schedules.js) said how it went.
     } else if (m.type === LIVE.answered && todo.answered(m)) {
       // To do (todo.js) said how it went.
     } else if (m.type === LIVE.answered && manage.answered(m)) {
@@ -405,8 +419,8 @@ if (openAsk) history.replaceState(null, '', location.pathname); // once: a reloa
 function openAsked() {
   const t = openAsk ? terminal(openAsk) : null;
   if (t) terminalShown.open(t, !!snap.typing);
-  // A task's alert says a task, not a terminal.
-  if (t || (openAsk && todo.openTask(openAsk))) openAsk = null;
+  // A task's alert says a task, and a schedule's a run.
+  if (t || (openAsk && (todo.openTask(openAsk) || schedulesShown.openRun(openAsk)))) openAsk = null;
 }
 
 // The app was running already: the service worker says which terminal.
@@ -541,6 +555,10 @@ app.addEventListener('click', e => {
     settingsPage = SETTINGS_PAGE.list;
     render();
     document.getElementById(HOME)?.scrollTo(0, 0);
+    return;
+  }
+  if (schedulesShown.click(/** @type {HTMLElement} */ (e.target))) {
+    e.stopPropagation();
     return;
   }
   if (todo.click(/** @type {HTMLElement} */ (e.target))) {

@@ -2,6 +2,11 @@
 // A run's report as text. What's kept is what the terminal printed, colours and cursor moves and all: a hidden terminal plays
 // it back and its screen is read, which is the only way to see what a pseudo console's repainting really left there.
 
+import { PAGE, HOST } from './protocol.js';
+import { send, onHost } from './host.js';
+import { newId } from './store.js';
+import { readResult } from './agentcli.js';
+
 /** The size it's played at: wide enough for a hidden shell's lines (ScheduleRunner.Columns). */
 const COLUMNS = 160;
 const ROWS = 50;
@@ -33,4 +38,44 @@ export function plainText(output, columns = COLUMNS) {
       resolve(rows.join('\n'));
     });
   });
+}
+
+/** Reports asked for and not here yet, by request. */
+/** @type {Map<string, (m: { output: string | null, columns: number }) => void>} */
+const reading = new Map();
+
+/**
+ * A run's kept output, as the terminal printed it; null when none was kept.
+ * @param {string} runId
+ * @returns {Promise<{ output: string, columns: number } | null>}
+ */
+export function readReport(runId) {
+  const requestId = newId('q');
+  return new Promise(resolve => {
+    reading.set(requestId, m => resolve(m.output === null ? null : /** @type {{ output: string, columns: number }} */ (m)));
+    send(PAGE.scheduleReportRead, { requestId, runId });
+  });
+}
+
+onHost(HOST.scheduleReport, m => {
+  reading.get(m.requestId ?? '')?.({ output: m.output ?? null, columns: m.columns });
+  reading.delete(m.requestId ?? '');
+});
+
+/**
+ * What a report shows: an agent's reply, or the output as text.
+ * @param {{ output: string, columns: number }} report
+ */
+export async function shownText(report) {
+  const text = await plainText(report.output, report.columns);
+  return readResult(text)?.reply || text;
+}
+
+/**
+ * A run's report as it's read, or null when none was kept.
+ * @param {string} runId
+ */
+export async function reportText(runId) {
+  const report = await readReport(runId);
+  return report === null ? null : shownText(report);
 }

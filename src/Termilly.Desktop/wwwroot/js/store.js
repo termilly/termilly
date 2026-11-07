@@ -217,6 +217,8 @@ export const EVENTS = Object.freeze({
   openGit: 'openGit',
   openSettings: 'openSettings',
   schedules: 'schedules',
+  /** The schedules' clock ticked: when things run next reads differently, though nothing changed. */
+  scheduleClock: 'scheduleClock',
   openSchedules: 'openSchedules',
   openSnippets: 'openSnippets',
   opened: 'opened',

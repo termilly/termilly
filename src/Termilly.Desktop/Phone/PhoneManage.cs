@@ -8,6 +8,8 @@ internal static class PhoneManage
 {
     /// <summary>Clears notifications: allowed with typing off too.</summary>
     private const string ClearNoteAction = "clearNote";
+    /// <summary>Reads a schedule's report: a phone sees terminals with typing off too.</summary>
+    private const string ScheduleReportAction = "scheduleReport";
     private const string OpenAction = "open";
     private const string NewWorkspaceAction = "newWorkspace";
     private const string CloseAction = "close";
@@ -21,7 +23,7 @@ internal static class PhoneManage
     /// <summary>The setting that's off and keeps an action from being done, or null. Opening and closing have their own.</summary>
     internal static string? Refused(string? action, PhoneSettings phone) => action switch
     {
-        ClearNoteAction => null,
+        ClearNoteAction or ScheduleReportAction => null,
         OpenAction or NewWorkspaceAction => phone.AllowOpening == true ? null : "Allow creating",
         CloseAction or CloseWorkspaceAction => phone.AllowClosing == true ? null : "Allow closing",
         ImplementAction when phone.AllowOpening != true => "Allow creating",

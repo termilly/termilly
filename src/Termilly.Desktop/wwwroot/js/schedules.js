@@ -300,7 +300,7 @@ function tick() {
   const now = Date.now();
   for (const schedule of [...schedules()]) look(schedule, now);
   lookAtActive(now);
-  emit(EVENTS.schedules);
+  emit(EVENTS.scheduleClock);
 }
 
 onHost(HOST.scheduleTick, tick);

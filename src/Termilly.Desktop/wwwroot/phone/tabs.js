@@ -4,7 +4,7 @@
 // Terminals tab is the home (app.js).
 
 /** The tabs (data-tab). */
-export const TAB = Object.freeze({ terminals: 'terminals', todo: 'todo', notes: 'notes', settings: 'settings' });
+export const TAB = Object.freeze({ terminals: 'terminals', todo: 'todo', schedules: 'schedules', notes: 'notes', settings: 'settings' });
 /** What a note says about its terminal's agent (AgentStates.cs). */
 export const STATE_LABEL = Object.freeze({ 'needs-input': 'Needs you', attention: 'Needs you', error: 'Error', done: 'Done' });
 /** What the Settings tab's buttons do (data-do). */
@@ -29,11 +29,13 @@ const ICON = Object.freeze({
   terminals: '<rect x="3" y="4" width="18" height="16" rx="3"/><path d="M7 9l3 3-3 3M12 15h5"/>',
   // Ticks beside lines: To do.
   todo: '<path d="M3 6l2 2 3-3M3 12l2 2 3-3M3 18l2 2 3-3M12 6h9M12 12h9M12 18h9"/>',
+  // A clock: Schedules.
+  schedules: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5h4"/>',
   notes: '<path d="M6 16V11a6 6 0 0112 0v5l2 2H4z"/><path d="M10 20h4"/>',
   // The desktop's Settings button (index.html), on this grid.
   settings: '<path d="M4 7h6M16 7h4M4 17h3M13 17h7"/><circle cx="13" cy="7" r="2.75"/><circle cx="10" cy="17" r="2.75"/>',
 });
-const LABEL = Object.freeze({ terminals: 'Terminals', todo: 'To do', notes: 'Notifications', settings: 'Settings' });
+const LABEL = Object.freeze({ terminals: 'Terminals', todo: 'To do', schedules: 'Schedules', notes: 'Notifications', settings: 'Settings' });
 
 /** @param {unknown} text */
 const esc = text => String(text ?? '').replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);

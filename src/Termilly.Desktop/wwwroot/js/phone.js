@@ -19,6 +19,7 @@ import { THEMES, THEME_BASE, themeId, onSystemThemeChange } from './themes.js';
 import { termTheme } from './terminals.js';
 import { placesForPhone } from './phonemanage.js';
 import { listForPhone, tagsForPhone } from './phonetodo.js';
+import { schedulesForPhone } from './phoneschedules.js';
 import { terminalList, workspaceList } from './todo.js';
 import { hasFiles, shellFolderOf, placeOf } from './filepaths.js';
 import { hasPrompts } from './myprompts.js';
@@ -158,6 +159,8 @@ function snapshot() {
     notes: notesForPhone(),
     // To do's tags to pick from; each terminal and workspace has its own list.
     tags: tagsForPhone(),
+    // Schedules and their last runs; a report is read when it's opened.
+    schedules: schedulesForPhone(),
     // Its themes, the one it shows now and its terminals' colours then (a theme plugin's, if one is chosen).
     themes: PHONE_THEMES, pcTheme: themeId(), pcTerminal: termTheme(),
     workspaces: state.workspaces.map(w => ({ id: w.id, name: w.name, color: w.color, cwd: w.cwd ?? null, note: w.note ?? null, todo: listForPhone(workspaceList(w)) })),
@@ -171,7 +174,7 @@ const publish = debounce(() => {
   if (state.settings.phone?.enabled) send(PAGE.phoneState, { state: snapshot() });
 }, SEND_AFTER_MS);
 
-for (const event of [EVENTS.agent, EVENTS.tab, EVENTS.tabClosed, EVENTS.workspaces, EVENTS.settings, EVENTS.profiles, EVENTS.clips, EVENTS.inbox, EVENTS.todo]) on(event, publish);
+for (const event of [EVENTS.agent, EVENTS.tab, EVENTS.tabClosed, EVENTS.workspaces, EVENTS.settings, EVENTS.profiles, EVENTS.clips, EVENTS.inbox, EVENTS.todo, EVENTS.schedules]) on(event, publish);
 // Windows switched light and dark: the "system" theme is the other one now.
 onSystemThemeChange(publish);
 // A terminal resized on the PC: the phones draw it at its new size.

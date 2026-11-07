@@ -3,8 +3,8 @@
 // form or its runs. It opens from the title bar's clock, the palette, Ctrl+Shift+Y and a run's notification, and is always in a
 // window of its own where the system has them, as the Snippets window is.
 
-import { PAGE, HOST } from './protocol.js';
-import { send, onHost } from './host.js';
+import { PAGE } from './protocol.js';
+import { send } from './host.js';
 import { state, on, emit, persist, newId, EVENTS } from './store.js';
 import { restoreFocus, newTab } from './panes.js';
 import { closeAll, dropdown } from './popups.js';
@@ -14,8 +14,7 @@ import { fuzzyMatch } from './fuzzy.js';
 import { allSnippets, NAME_WORDS } from './snippets.js';
 import { byId, find, targetOf, TOOL_COUNT } from './dom.js';
 import { detach, closeWindow, focusWindow, isDetached } from './windows.js';
-import { plainText } from './schedulereport.js';
-import { readResult } from './agentcli.js';
+import { readReport, shownText } from './schedulereport.js';
 import {
   schedules, scheduleById, runsOf, saveSchedule, removeSchedule, setScheduleOn, runNow, stopRun, runningNow,
 } from './schedules.js';
@@ -168,15 +167,6 @@ function renderState() {
   run.disabled = isNew || isDirty();
 }
 
-/**
- * What a report shows: an agent's reply, or the output as text.
- * @param {{ output: string, columns: number }} report
- */
-async function shownText(report) {
-  const text = await plainText(report.output, report.columns);
-  return readResult(text)?.reply || text;
-}
-
 async function renderRuns() {
   const runs = runsOf(/** @type {Schedule} */ (editing).id);
   const open = runs.find(r => r.id === openRunId) ?? null;
@@ -203,26 +193,6 @@ function render() {
   if (view === VIEW.form) renderForm();
   else renderRuns();
 }
-
-/** @type {Map<string, (m: { output: string | null, columns: number }) => void>} */
-const reading = new Map();
-
-/**
- * @param {string} runId
- * @returns {Promise<{ output: string, columns: number } | null>}
- */
-function readReport(runId) {
-  const requestId = newId('q');
-  return new Promise(resolve => {
-    reading.set(requestId, m => resolve(m.output === null ? null : /** @type {{ output: string, columns: number }} */ (m)));
-    send(PAGE.scheduleReportRead, { requestId, runId });
-  });
-}
-
-onHost(HOST.scheduleReport, m => {
-  reading.get(m.requestId ?? '')?.({ output: m.output ?? null, columns: m.columns });
-  reading.delete(m.requestId ?? '');
-});
 
 /**
  * Selects a schedule, on a view.
@@ -491,15 +461,17 @@ export function initSchedulesWindow() {
 
 on(EVENTS.openSchedules, options => openSchedules(options));
 
-// A run's news: what's being edited stays as it is, and the rest shows it.
-on(EVENTS.schedules, () => {
+// A run's news, or the clock's: what's being edited stays as it is, and the rest shows it.
+const newsCame = () => {
   const count = runningNow().length;
   runningCount.textContent = String(count);
   runningCount.hidden = !count;
   if (!isOpen()) return;
   renderList();
   if (editing && view === VIEW.runs) render();
-});
+};
+on(EVENTS.schedules, newsCame);
+on(EVENTS.scheduleClock, newsCame);
 
 openButton.addEventListener('click', toggleSchedules);
 find(box, '.sch-icon').innerHTML = /** @type {Element} */ (openButton.firstElementChild).outerHTML;
