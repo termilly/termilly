@@ -104,6 +104,7 @@ internal static class MacWindows
                 _mainView = view;
                 Zoom(view, _zoom);
                 Round(window, true);
+                MacPlacement.Restore(window);
                 var preferences = Send(Send(view, "configuration"), "preferences");
                 // The page reopens its windows as it starts (where they were before a restart): without a click first.
                 Send(preferences, "setJavaScriptCanOpenWindowsAutomatically:", true);
@@ -280,8 +281,6 @@ internal static class MacWindows
     }
 
     /// <summary>How far down from a window's top its title bar is looked for on a screen, in points.</summary>
-    private const double TitleBarDepth = 20;
-
     /// <summary>
     /// The frame, if its title bar is on one of the screens; else the same size (no bigger than the main window's
     /// screen) over the main window's middle. WebKit on macOS tells the page no true window places (screenX and
@@ -289,16 +288,9 @@ internal static class MacWindows
     /// </summary>
     private static Rect OnScreen(Rect frame, Rect main)
     {
-        var screens = Send(Class(Cocoa.Screen), Cocoa.Screens);
-        var count = (nint)Send(screens, Cocoa.Count);
-        double x = frame.X + frame.Width / 2, y = frame.Y + frame.Height - TitleBarDepth;
-        for (nint i = 0; i < count; i++)
+        if (MacPlacement.TitleBarShows(frame))
         {
-            var area = SendRect(Send(screens, Cocoa.ObjectAtIndex, i), VisibleFrame);
-            if (x >= area.X && x <= area.X + area.Width && y >= area.Y && y <= area.Y + area.Height)
-            {
-                return frame;
-            }
+            return frame;
         }
         var screen = UsableArea(Main);
         var width = Math.Min(frame.Width, screen.Width);
@@ -327,8 +319,15 @@ internal static class MacWindows
         }
     }
 
-    /// <summary>The main window is closing (NSWindowWillCloseNotification): the page's windows close too.</summary>
-    private static void MainClosing(IntPtr self, IntPtr selector, IntPtr notification) => CloseAll();
+    /// <summary>
+    /// The main window is closing (NSWindowWillCloseNotification): where it is is remembered (MacPlacement), and the
+    /// page's windows close too.
+    /// </summary>
+    private static void MainClosing(IntPtr self, IntPtr selector, IntPtr notification)
+    {
+        MacPlacement.Save(Main, Restore.TryGetValue(Main, out var before) ? before : null);
+        CloseAll();
+    }
 
     /// <summary>The page says what it named the window it opened last: the oldest one not named yet is it.</summary>
     public static void Named(string name)

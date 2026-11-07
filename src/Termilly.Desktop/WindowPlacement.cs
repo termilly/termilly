@@ -35,7 +35,7 @@ internal static class WindowPlacement
     /// <summary>Windows' DPI at 100%, and the scale when a monitor's isn't known.</summary>
     private const double NoScale = 1.0;
 
-    public static string File { get; } = Path.Combine(AppPaths.DataDirectory, "window.json");
+    public static string File => AppPaths.WindowFile;
 
     /// <summary>The saved place, as stored.</summary>
     public sealed record Saved(int Left, int Top, int Right, int Bottom, bool Maximized);
