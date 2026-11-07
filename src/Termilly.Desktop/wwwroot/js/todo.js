@@ -108,6 +108,15 @@ function hasContent(ref) {
 }
 
 /**
+ * Whether a list gets a mark in the sidebar: a note or any task, even when all of them are done.
+ * @param {ListRef} ref
+ */
+export function isMarked(ref) {
+  const list = listOf(ref);
+  return !!list && (!!list.note || list.tasks.length > 0);
+}
+
+/**
  * The terminal's lists with something in them, its own first: what its mark opens and counts.
  * @param {Tab} tab
  */
@@ -148,7 +157,7 @@ export function openInFront() {
  * @returns {ListRef | null}
  */
 export function markedList(tab) {
-  if (hasContent(terminalList(tab))) return terminalList(tab);
+  if (isMarked(terminalList(tab))) return terminalList(tab);
   const ws = wsById(tab.wsId);
   if (ws && notesFor(tab).some(n => n.kind === NOTE_KIND.workspace)) return workspaceList(ws);
   return notesFor(tab).length ? terminalList(tab) : null;

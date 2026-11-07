@@ -4,8 +4,8 @@
 // that goes through the manage op (js/phonetodo.js). The note is the one js/notes.js keeps.
 
 import {
-  STATUS, TD, FIELD, esc, openTasks, listHtml, listHeadHtml, homeHtml, findHtml, taskSheetHtml, editSheetHtml, moveSheetHtml, tagsSheetHtml,
-  removeSheetHtml, issueSheetHtml, noteHtml, markHtml, reviewNotesHtml,
+  STATUS, TD, FIELD, esc, openTasks, listHtml, listHeadHtml, homeHtml, findHtml, taskSheetHtml, addSheetHtml, editSheetHtml, moveSheetHtml,
+  tagsSheetHtml, removeSheetHtml, issueSheetHtml, noteHtml, markHtml, reviewNotesHtml,
 } from './todoviews.js';
 
 /** @typedef {import('./todoviews.js').PhoneList} PhoneList */
@@ -21,9 +21,9 @@ const OWN_ACTIONS = new Set(Object.values(ACTION));
 /** What a list can be on. */
 const KIND = Object.freeze({ workspace: 'workspace', terminal: 'terminal' });
 /** The sheets over a list. */
-const SHEET = Object.freeze({ task: 'task', edit: 'edit', move: 'move', tags: 'tags', remove: 'remove', issue: 'issue' });
+const SHEET = Object.freeze({ add: 'add', task: 'task', edit: 'edit', move: 'move', tags: 'tags', remove: 'remove', issue: 'issue' });
 /** The sheets with fields in them: what comes from the PC doesn't draw them again. */
-const FORMS = new Set([SHEET.edit, SHEET.issue]);
+const FORMS = new Set([SHEET.add, SHEET.edit, SHEET.issue]);
 const TODO_BODY = '[data-todo-body]';
 const THE_SHEET = 'todo-sheet';
 const TICKED = 'st-done';
@@ -81,6 +81,9 @@ export function todoTab(app) {
 
   const reviewing = () => lists().flatMap(list => list.tasks.filter(t => t.status === STATUS.review).map(task => ({ task, list })));
 
+  /** @param {string} kind @param {string} id */
+  const listOf = (kind, id) => lists().find(l => l.kind === kind && l.id === id);
+
   /** @param {PhoneList} list */
   const hasSomething = list => !!list.note?.text || openTasks(list).length > 0;
   /** @param {PhoneList} list */
@@ -106,10 +109,14 @@ export function todoTab(app) {
   /** @param {HTMLElement} el @param {string} name */
   const field = (el, name) => /** @type {HTMLInputElement | HTMLTextAreaElement | null} */ (el.querySelector(`[data-field="${name}"]`));
 
+  /** Whether the note's page shows: it leaves with the note, which then has no way back. */
+  const onNotePage = () => onNote && !!current()?.note?.text;
+
   /** Which page shows; the same one keeps its fields while the PC's news comes in. */
   function pageOf() {
     const list = current();
     if (open && !list) open = null;
+    onNote = onNotePage();
     return list ? `${onNote ? 'note' : 'list'}:${list.kind}:${list.id}:${allowed().typing}` : HOME;
   }
 
@@ -131,8 +138,13 @@ export function todoTab(app) {
     body.innerHTML = list ? listHtml(list, allowed(), showDone) : homeBody();
   }
 
+  /** Whether what the sheet is about is gone. */
+  const sheetGone = () => !!sheet && !(sheet.mode === SHEET.add ? current() : findTask(sheet.task));
+
   /** The sheet's insides. */
   function sheetBody() {
+    const newOn = sheet?.mode === SHEET.add ? current() : null;
+    if (newOn) return addSheetHtml(newOn);
     const found = sheet ? findTask(sheet.task) : null;
     if (!sheet || !found) return '';
     const { task, list } = found;
@@ -150,7 +162,7 @@ export function todoTab(app) {
   function drawSheet(force = false) {
     const layer = document.getElementById(THE_SHEET);
     if (!layer) return;
-    if (sheet && !findTask(sheet.task)) sheet = null;
+    if (sheetGone()) sheet = null;
     if (!sheet) {
       layer.innerHTML = '';
       return;
@@ -158,7 +170,10 @@ export function todoTab(app) {
     const was = layer.querySelector(SHEET_BOX);
     if (was && FORMS.has(sheet.mode) && !force) return;
     const top = was?.scrollTop ?? 0;
-    layer.innerHTML = `<div class="dim" data-td="${TD.close}"></div><div class="sheet td-sheet"><div class="grabber" data-td="${TD.close}"></div>${sheetBody()}</div>`;
+    // A new task isn't dropped by a tap beside it: that tap may only be meant to put the keyboard away.
+    layer.innerHTML = sheet.mode === SHEET.add
+      ? `<div class="dim"></div><div class="sheet td-sheet td-top">${sheetBody()}</div>`
+      : `<div class="dim" data-td="${TD.close}"></div><div class="sheet td-sheet"><div class="grabber" data-td="${TD.close}"></div>${sheetBody()}</div>`;
     /** @type {HTMLElement} */ (layer.querySelector(SHEET_BOX)).scrollTop = top;
   }
 
@@ -212,13 +227,21 @@ export function todoTab(app) {
     drawSheet(true);
   }
 
-  /** @param {HTMLElement} home */
-  function addTask(home) {
-    const box = field(home, FIELD.add);
+  /** @param {HTMLElement} layer */
+  function beginAdd(layer) {
+    sheet = { mode: SHEET.add, task: '' };
+    drawSheet(true);
+    field(layer, FIELD.add)?.focus();
+  }
+
+  /** @param {HTMLElement} layer */
+  function addTask(layer) {
+    const box = field(layer, FIELD.add);
     const list = current();
     if (!box?.value.trim() || !list) return;
-    ask({ action: ACTION.add, kind: list.kind, id: list.id, text: box.value });
-    box.value = '';
+    ask({ action: ACTION.add, kind: list.kind, id: list.id, text: box.value, details: field(layer, FIELD.details)?.value ?? '' });
+    sheet = null;
+    drawSheet();
   }
 
   /** The note's actions. @param {string} act @param {HTMLElement} home */
@@ -322,8 +345,9 @@ export function todoTab(app) {
    * @param {string | undefined} act
    * @param {HTMLElement} el
    * @param {HTMLElement} home
+   * @param {HTMLElement} layer
    */
-  function pageAction(act, el, home) {
+  function pageAction(act, el, home, layer) {
     const id = el.dataset.task ?? '';
     switch (act) {
       case TD.open:
@@ -335,7 +359,8 @@ export function todoTab(app) {
         if (onNote) onNote = false;
         else open = null;
         break;
-      case TD.add: return addTask(home);
+      case TD.add: return beginAdd(layer);
+      case TD.addSave: return addTask(layer);
       case TD.task: return void openTask(id);
       case TD.check: return pressBox(el);
       case TD.status: return void ask({ action: ACTION.status, task: id, status: el.dataset.status });
@@ -361,18 +386,18 @@ export function todoTab(app) {
     /** The page's title, and what's in the header beside it. */
     title: () => {
       const list = current();
-      return list ? (onNote ? 'Note' : list.name) : '';
+      return list ? (onNotePage() ? 'Note' : list.name) : '';
     },
-    backHtml: () => (current() ? `<button class="back-row" data-td="${TD.back}">‹ ${onNote ? esc(current()?.name) : 'To do'}</button>` : ''),
-    noteButton: () => (current() && !onNote ? `<button class="link" data-td="${TD.note}">Note</button>` : ''),
+    backHtml: () => (current() ? `<button class="back-row" data-td="${TD.back}">‹ ${onNotePage() ? esc(current()?.name) : 'To do'}</button>` : ''),
+    /** Only a list with a note has one: tasks took over from notes, so a new note can't be started here. */
+    noteButton: () => (current()?.note?.text && !onNotePage() ? `<button class="link" data-td="${TD.note}">Note</button>` : ''),
     /** How many tasks wait for review, for the tab's number. */
     reviewCount: () => reviewing().length,
     reviewNotes: () => reviewNotesHtml(reviewing()),
-    /** @param {string} id a terminal */
-    mark: id => {
-      const list = lists().find(l => l.kind === KIND.terminal && l.id === id);
-      return markHtml(id, list ? openTasks(list).length : 0);
-    },
+    /** @param {string} id */
+    mark: id => markHtml(listOf(KIND.terminal, id)),
+    /** @param {string} id */
+    workspaceMark: id => markHtml(listOf(KIND.workspace, id)),
     openTask,
     /**
      * A tap; false when it wasn't To do's.
@@ -385,7 +410,7 @@ export function todoTab(app) {
       if (!el || !layer || !home) return false;
       const act = el.dataset.td;
       if (sheetAction(act, el, layer)) drawSheet();
-      else pageAction(act, el, home);
+      else pageAction(act, el, home, layer);
       return true;
     },
     /** @param {Event} e */
@@ -398,10 +423,10 @@ export function todoTab(app) {
     /** @param {KeyboardEvent} e */
     key(e) {
       const box = /** @type {HTMLInputElement} */ (e.target);
-      const home = document.getElementById(HOME);
-      if (e.key !== 'Enter' || box.dataset.field !== FIELD.add || !home) return;
+      const layer = document.getElementById(THE_SHEET);
+      if (e.key !== 'Enter' || box.dataset.field !== FIELD.add || !layer) return;
       e.preventDefault();
-      addTask(home);
+      addTask(layer);
     },
     /**
      * The PC's answer to something asked.

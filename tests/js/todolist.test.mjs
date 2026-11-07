@@ -224,3 +224,8 @@ test('a hover shows the first open tasks and how many more', () => {
   assert.equal(lines[0], '- t0');
   assert.equal(lines.at(-1), '2 more');
 });
+
+test('a hover says so when every task is done', () => {
+  assert.deepEqual(hoverLines([task('gone', { done: true })]), ['All done']);
+  assert.deepEqual(hoverLines([]), []);
+});

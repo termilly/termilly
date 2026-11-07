@@ -238,7 +238,7 @@ function terminalsHtml() {
   return (canAlert() && !me?.alerts ? alertsHtml() : '')
     + (waiting.length ? `<div class="section">Waiting for you · ${waiting.length}</div>${waiting.map(cardHtml).join('')}` : '')
     + (!snap.terminals.length ? `<p class="muted center">${connected ? 'No terminals open on your PC.' : 'Connecting to your PC.'}</p>` : '')
-    + groups.map(({ w, list }) => `<div class="ws"><span class="dot" style="background:${esc(w.color || DEFAULT_COLOR)}"></span>${esc(w.name)}<span class="count">${list.length}</span></div>
+    + groups.map(({ w, list }) => `<div class="ws"><span class="dot" style="background:${esc(w.color || DEFAULT_COLOR)}"></span>${esc(w.name)}${todo.workspaceMark(w.id)}<span class="count">${list.length}</span></div>
       <div class="list">${list.map(t => manage.rowWrap(t, rowHtml(t))).join('')}</div>`).join('')
     + manage.remoteHtml();
 }

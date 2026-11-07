@@ -38,7 +38,7 @@ const EDGE_BAND_PX = 120;
  * @property {string} [inside] the CSS variable of a panel it docks just inside of: it lands past that one's room
  * @property {() => DockKept} stored
  * @property {HTMLElement} button its title bar button
- * @property {() => void} showCount shows what its button counts
+ * @property {() => void} [showCount] shows what its button counts, if it counts anything
  * @property {(options?: { quiet?: boolean, here?: boolean }) => void} show opens it
  * @property {() => void} render draws what it shows
  * @property {() => void} focus the focus into it
@@ -179,7 +179,7 @@ class DockPanel {
     const { panel, button, showCount, stored } = this.o;
     panel.hidden = !open;
     button.classList.toggle('open', open);
-    showCount();
+    showCount?.();
     if (stored().open !== open) {
       stored().open = open;
       persist();

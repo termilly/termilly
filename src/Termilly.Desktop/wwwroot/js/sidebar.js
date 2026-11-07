@@ -19,7 +19,7 @@ import { confirmWithOption } from './dialogs.js';
 import { removeHistory, HISTORY_KIND } from './historysize.js';
 import { openPalette, PALETTE_VIEW } from './palette.js';
 import { firstLine } from './notes.js';
-import { openTodo, markedList, tabHover, workspaceList } from './todo.js';
+import { openTodo, isMarked, markedList, tabHover, workspaceList } from './todo.js';
 import { openCount, hoverLines } from './todolist.js';
 import { environmentOf } from './environments.js';
 import { showsLine, isAgentWorking, stopAgent, stopAllAgents } from './agentline.js';
@@ -103,6 +103,15 @@ function applyMode() {
 // ---- Rendering ----
 
 /**
+ * To do's mark on a row: its icon, with how many tasks are left, if any.
+ * @param {string} attr what says whose it is
+ * @param {string} id
+ * @param {string} hover
+ * @param {TodoTask[] | undefined} tasks
+ */
+const markHtml = (attr, id, hover, tasks) => `<span class="note-mark" ${attr}="${escapeHtml(id)}" title="${escapeHtml(`${hover}\nClick to open`)}">${ICONS.todo}${openCount(tasks) ? `<span>${openCount(tasks)}</span>` : ''}</span>`;
+
+/**
  * @param {Tab} tab
  * @param {Workspace} ws
  */
@@ -110,7 +119,7 @@ function tabRowHtml(tab, ws) {
   const focused = ws.id === state.activeId && ws.focusId === tab.id;
   const env = environmentOf(tab);
   return `<button class="tab-row${focused ? ' focused' : ''}${isUnread(tab) ? ' unread' : ''}${env ? ' env' : ''}" data-tab="${escapeHtml(tab.id)}" title="${escapeHtml(tabTitle(tab))}${env ? ` · ${escapeHtml(env.label)}` : ''}"${env ? ` style="--env:${cssColor(env.color)}"` : ''}>
-    ${tabBadgeHtml(tab)}<span class="name">${escapeHtml(shownName(tab))}</span>${markedList(tab) ? `<span class="note-mark" data-note-tab="${escapeHtml(tab.id)}" title="${escapeHtml(`${tabHover(tab)}\nClick to open`)}">${ICONS.todo}${openCount(tab.tasks) ? `<span>${openCount(tab.tasks)}</span>` : ''}</span>` : ''}
+    ${tabBadgeHtml(tab)}<span class="name">${escapeHtml(shownName(tab))}</span>${markedList(tab) ? markHtml('data-note-tab', tab.id, tabHover(tab), tab.tasks) : ''}
     <span class="chips">${tabProjectHtml(tab, ws)}${tab.tags.map(t => tagChipHtml(t, { mini: true })).join('')}${tab.tags.length > 1
       ? `<span class="tag mini more-tags" data-more-tags title="Show all tags">+${tab.tags.length - 1}</span>` : ''}${activityHtml(activityOf(tab), MINI_ACTIVITY)}${tab.attention ? '<span class="attn"></span>' : ''}${costText(costOf(tab)) ? `<span class="cost-chip" title="${escapeHtml(costTitle(costOf(tab)))}">${escapeHtml(costText(costOf(tab)))}</span>` : ''}${runningSubagents(tab) ? `<span class="sub-badge" title="Subagents running">${runningSubagents(tab)} agent${runningSubagents(tab) === 1 ? '' : 's'}</span>` : ''}</span>
     ${isAgentWorking(tab) ? `<span class="agent-stop" data-stop="${escapeHtml(tab.id)}" title="Stop the agent (Esc)" role="button"></span>` : ''}
@@ -175,7 +184,7 @@ export function render() {
         <div class="ws-row${active ? ' active' : ''}${open ? ' open' : ''}${unread ? ' unread' : ''}" data-ws="${escapeHtml(ws.id)}" role="button" tabindex="-1">
           <button class="ws-chev" data-collapse="${escapeHtml(ws.id)}" title="${open ? 'Hide tabs' : 'Show tabs'}" tabindex="-1">${CHEVRON}</button>
           <span class="ws-dot" style="background:${cssColor(ws.color)}"></span>
-          <span class="ws-name">${escapeHtml(ws.name)}</span>${ws.note?.text || openCount(ws.tasks) ? `<span class="note-mark" data-note-ws="${escapeHtml(ws.id)}" title="${escapeHtml(`${workspaceHover(ws)}\nClick to open`)}">${ICONS.todo}${openCount(ws.tasks) ? `<span>${openCount(ws.tasks)}</span>` : ''}</span>` : ''}
+          <span class="ws-name">${escapeHtml(ws.name)}</span>${isMarked(workspaceList(ws)) ? markHtml('data-note-ws', ws.id, workspaceHover(ws), ws.tasks) : ''}
           ${!open ? wsActivityHtml(ws) : ''}${!open && hasAttention(ws) ? '<span class="attn"></span>' : ''}
           ${costMode() === costDisplay.cost && workspaceCost(ws) >= 0.005 ? `<span class="ws-cost" title="What this workspace’s agents have cost so far">${dollars(workspaceCost(ws))}</span>` : ''}<span class="ws-count">${tabs.length}</span>
           ${i < 9 ? `<span class="ws-key"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>${i + 1}</kbd></span>` : ''}

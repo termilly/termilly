@@ -1,19 +1,18 @@
 // @ts-check
 // The Notepad (the title bar's button, or Ctrl+Shift+M): pages for writing things down, in a panel docked on the
 // right that stays as workspaces change. Pages are kept with the workspaces (encrypted with them) until closed; Save
-// writes one to a text file and Open brings one in (Features/Notepad.cs). Copy to note adds the selection, or the
-// whole page, to a workspace's or a terminal's note; a terminal's right-click menu copies text here.
+// writes one to a text file and Open brings one in (Features/Notepad.cs). A terminal's right-click menu copies text
+// here.
 
 import { PAGE, HOST } from './protocol.js';
 import { send, onHost, platform, PLATFORM } from './host.js';
-import { state, persist, newId, tabTitle, wsById } from './store.js';
+import { state, persist, newId } from './store.js';
 import { stripBar } from './panes.js';
-import { escapeHtml, cssColor, tabBadgeHtml, countText, ICONS } from './ui.js';
+import { escapeHtml, ICONS } from './ui.js';
 import { byId, find, targetOf, onMiddleClick, WORKSPACE_ID, DOCK_GRIP, PANEL_HEAD } from './dom.js';
 import { showMenu, SEPARATOR } from './popups.js';
 import { confirmDialog } from './dialogs.js';
 import { showToast, TOAST } from './toasts.js';
-import { appendNote, NOTE_KIND } from './notes.js';
 import { padLinks } from './notepadlinks.js';
 import { KEY_ID } from './keymap.js';
 import { copyOut as copyFrom, textBoxMenu } from './textmenu.js';
@@ -24,7 +23,7 @@ import { padView, NP_FONT } from './notepadview.js';
 
 /** What the Notepad's buttons do (data-np). */
 const NOTEPAD_ACTION = Object.freeze({
-  newPage: 'new', open: 'open', save: 'save', saveAs: 'saveAs', workspaceNote: 'workspaceNote', terminalNote: 'terminalNote',
+  newPage: 'new', open: 'open', save: 'save', saveAs: 'saveAs',
   links: 'links', wrap: 'wrap', numbers: 'numbers', highlight: 'highlight', detach: 'detach', close: 'close',
 });
 /** A page's view switches (its toolbar), and what each is while the page has never set it. */
@@ -36,13 +35,12 @@ const LF = '\n';
 const CRLF = '\r\n';
 /** The menu entry that copies text here, on a terminal's right-click menu. */
 const COPY_LABEL = 'Copy to Notepad';
-const COPY_TO_NOTE = 'Copy to note';
 const NEW_PAGE_LABEL = 'New page';
 /** Its keys while it has the focus; the toggle is Termilly's own shortcut too (main.js). */
 export const NOTEPAD_KEY = Object.freeze({ save: 'KeyS', open: 'KeyO' });
 /**
  * The header's tools, 16px at a 1px line on the pixel grid: a page with a +, an open folder, a disk (save), a disk
- * with a pen (save as), text going into a note, a chain (links on or off), a line that wraps (word wrap), numbered
+ * with a pen (save as), a chain (links on or off), a line that wraps (word wrap), numbered
  * lines (line numbers) and a marked line between two others (the caret's line).
  */
 const TOOL_ICONS = Object.freeze({
@@ -50,7 +48,6 @@ const TOOL_ICONS = Object.freeze({
   open: '<svg viewBox="0 0 16 16"><path d="M1.5 13.5v-10h4l1.5 1.5h6.5v2"/><path d="M1.5 13.5l2-6h11.5l-2 6z"/></svg>',
   save: ICONS.save,
   saveAs: '<svg viewBox="0 0 16 16"><path d="M7.5 13.5h-5v-11h9l2 2v3"/><path d="M5.5 2.5v3h5v-3M4.5 13.5v-4h3"/><path d="M9.5 14.5v-2l4-4 2 2-4 4z"/></svg>',
-  move: '<svg viewBox="0 0 16 16"><rect x="7.5" y="2.5" width="7" height="11" rx="1"/><path d="M9.5 5.5h3M9.5 8.5h3M9.5 11.5h3M1.5 8.5h4M3.5 6.5l2 2-2 2"/></svg>',
   links: ICONS.link,
   wrap: '<svg viewBox="0 0 16 16"><path d="M1.5 3.5h13M1.5 7.5h10a2 2 0 0 1 0 4h-3M1.5 11.5h4"/><path d="M10 9.5l-2 2 2 2"/></svg>',
   numbers: '<svg viewBox="0 0 16 16"><path d="M2.5 2.5h1v4M2 6.5h2M1.5 9.5h2v1.5h-2v1.5h2M6.5 4.5h8M6.5 8.5h8M6.5 12.5h8"/></svg>',
@@ -85,9 +82,6 @@ panel.innerHTML = `
     <button class="pane-btn" data-np="${NOTEPAD_ACTION.save}" title="Save (Ctrl+S)">${TOOL_ICONS.save}</button>
     <button class="pane-btn" data-np="${NOTEPAD_ACTION.saveAs}" title="Save as (Ctrl+Shift+S)">${TOOL_ICONS.saveAs}</button>
     <span class="np-sep"></span>
-    <button class="pane-btn" data-np="${NOTEPAD_ACTION.workspaceNote}" title="Copy the selection, or the whole page, to a workspace's note">${ICONS.workspaces}</button>
-    <button class="pane-btn" data-np="${NOTEPAD_ACTION.terminalNote}" title="Copy the selection, or the whole page, to a terminal's note">${ICONS.terminal}</button>
-    <span class="np-sep"></span>
     <button class="pane-btn np-toggle" data-np="${NOTEPAD_ACTION.links}" title="Links: paths and web addresses, Ctrl+click to open (off: plain text)">${TOOL_ICONS.links}</button>
     <button class="pane-btn np-toggle" data-np="${NOTEPAD_ACTION.wrap}" title="Word wrap">${TOOL_ICONS.wrap}</button>
     <button class="pane-btn np-toggle" data-np="${NOTEPAD_ACTION.numbers}" title="Line numbers">${TOOL_ICONS.numbers}</button>
@@ -109,7 +103,7 @@ const emptyEl = find(panel, '.np-empty');
 const tabBar = stripBar(tabsEl);
 tabBar.classList.add('np-tabbar');
 const editor = find(panel, '.np-editor');
-/** The page's own toolbar, under the tabs: its file, copying to a note, and how it shows. */
+/** The page's own toolbar, under the tabs: its file, and how it shows. */
 const toolbar = find(panel, '.np-toolbar');
 toolbar.before(tabBar);
 /**
@@ -130,7 +124,6 @@ const view = padView(area, find(panel, '.np-status'), {
 const button = byId('notepad-button');
 // Its title bar starts with the toolbar button's icon, as a window's does.
 find(panel, '.np-icon').innerHTML = /** @type {Element} */ (button.firstElementChild).outerHTML;
-const countEl = find(button, '.np-count');
 
 /** Saves waiting for the host: the page and the text sent, by request. */
 /** @type {Map<string, { id: string, text: string }>} */
@@ -211,17 +204,6 @@ function toggleView(what) {
 }
 
 /**
- * While the Notepad is closed, its button counts the pages it keeps: those with something in them (an empty page
- * isn't counted).
- */
-function showCount() {
-  const kept = pages().filter(p => p.path || p.text.trim()).length;
-  countEl.hidden = !panel.hidden || !kept;
-  countEl.textContent = countText(kept);
-  button.title = `Notepad (Ctrl+Shift+M)${countEl.hidden ? '' : `: ${kept} ${kept === 1 ? 'page' : 'pages'}`}`;
-}
-
-/**
  * Opens the Notepad on its page (New page and Open a file when it has none), with the caret in it unless `quiet`;
  * in its own window if it was in one when it closed, unless `here` (on its way into one already).
  * @param {{ quiet?: boolean, here?: boolean }} [options]
@@ -243,7 +225,7 @@ const NOTEPAD_HANDLE = '.files-title';
 
 const dock = dockPanel({
   panel, head, key: WINDOW_KEY, name: NAME, icon: /** @type {Element} */ (button.firstElementChild).outerHTML, handle: NOTEPAD_HANDLE,
-  dockVar: NOTEPAD_DOCK, stored: () => state.notepad, button, showCount, show, render, focus: () => area.focus(),
+  dockVar: NOTEPAD_DOCK, stored: () => state.notepad, button, show, render, focus: () => area.focus(),
 });
 
 /** The Notepad on or off from its shortcut (Ctrl+Shift+M): opened with no pages, it starts one to type into at once. */
@@ -257,7 +239,6 @@ export function toggleNotepadFromKeys() {
 
 /** Shows the Notepad as it was left (main.js, once the saved state is in). */
 export function initNotepad() {
-  showCount();
   dock.restorePlace();
   if (state.notepad.open) show({ quiet: true });
 }
@@ -341,67 +322,8 @@ onHost(HOST.notepadOpened, m => {
   area.focus();
 });
 
-// ---- Copying text to a note ----
-
 /** @param {string} text */
 const copyOut = text => copyFrom(text, NAME);
-
-/** The selection in the page, else the whole page: what Copy to note takes. */
-function chosenText() {
-  const { selectionStart: from, selectionEnd: to, value } = area;
-  return from !== to ? value.slice(from, to) : value;
-}
-
-/**
- * Adds text to the end of a note: the page's selection (or the page), or what a terminal's menu gives.
- * @param {string} kind 'workspace' or 'terminal'
- * @param {Workspace | Tab} target
- * @param {string} name what the note is on, for the message
- * @param {() => string} [textOf]
- */
-function copyToNote(kind, target, name, textOf = chosenText) {
-  const text = textOf();
-  if (!text.trim()) return showToast({ text: 'Nothing to copy: there is no text', state: TOAST.failed });
-  appendNote(kind, target, text);
-  showToast({ text: `Copied to the note on ${name}`, state: TOAST.done });
-}
-
-/**
- * A workspace's note or a terminal's, each workspace with its colour and each terminal with its badge.
- * @param {() => string} [textOf] The text to copy: the page's selection (or the page) by default.
- */
-function noteChoices(textOf = chosenText) {
-  const terminals = [...state.tabs.values()].filter(t => t.wsId && wsById(t.wsId) && !t.virtual);
-  return [
-    {
-      label: 'Workspace note', icon: ICONS.workspaces, submenu: () => state.workspaces.map(w => ({ label: w.name, icon: `<span class="ws-dot" style="background:${cssColor(w.color)}"></span>`, action: () => copyToNote(NOTE_KIND.workspace, w, w.name, textOf) })),
-    },
-    {
-      label: 'Terminal note', icon: ICONS.terminal, disabled: !terminals.length,
-      submenu: () => terminals.map(t => ({ label: tabTitle(t), icon: tabBadgeHtml(t), hint: escapeHtml(wsById(t.wsId)?.name ?? ''), action: () => copyToNote(NOTE_KIND.terminal, t, tabTitle(t), textOf) })),
-    },
-  ];
-}
-
-/**
- * The toolbar's Copy to a workspace's note (0) or a terminal's (1): the workspaces or terminals to choose from.
- * @param {number} which
- * @param {HTMLElement} at
- */
-function noteMenu(which, at) {
-  const choice = noteChoices()[which];
-  if (choice.disabled) return void showToast({ text: 'No terminals to copy to', state: TOAST.failed });
-  showMenu(/** @type {() => import('./popups.js').MenuItem[]} */ (choice.submenu)(), at);
-}
-
-// ---- The page's right-click menu ----
-
-/** @param {MouseEvent} e */
-function pageMenu(e) {
-  textBoxMenu(e, area, NAME, [
-    { label: COPY_TO_NOTE, icon: TOOL_ICONS.move, disabled: !area.value.trim(), title: area.selectionStart !== area.selectionEnd ? undefined : 'With nothing selected, the whole page', submenu: () => noteChoices() },
-  ]);
-}
 
 // ---- Copying text here (a terminal's right-click menu) ----
 
@@ -434,21 +356,12 @@ export function copyToNotepadItem(text, label = COPY_LABEL) {
   };
 }
 
-/**
- * The right-click menu's Copy to note for some text (a terminal's selection): a workspace's note or a terminal's.
- * @param {string} text
- * @param {string} [label] its wording (the Clipboard's says Paste: the text is already copied)
- * @returns {import('./popups.js').MenuItem}
- */
-export const copyToNoteItem = (text, label = COPY_TO_NOTE) => ({ label, icon: TOOL_ICONS.move, submenu: () => noteChoices(() => text) });
-
-/** The Clipboard's wording for the two: a clip is already copied, it's pasted there. */
+/** The Clipboard's wording for it: a clip is already copied, it's pasted there. */
 export const PASTE_TO_NOTEPAD = 'Paste to Notepad';
-export const PASTE_TO_NOTE = 'Paste to note';
 
 // ---- Wiring ----
 
-area.addEventListener('contextmenu', pageMenu);
+area.addEventListener('contextmenu', e => textBoxMenu(e, area, NAME, []));
 
 // Where each page was left (scrolled to, the caret), kept with it so a restart comes back there.
 area.addEventListener('scroll', () => {
@@ -489,8 +402,6 @@ panel.addEventListener('click', e => {
     case NOTEPAD_ACTION.open: openFile(); break;
     case NOTEPAD_ACTION.save: save(false); break;
     case NOTEPAD_ACTION.saveAs: save(true); break;
-    case NOTEPAD_ACTION.workspaceNote: noteMenu(0, /** @type {HTMLElement} */ (action)); break;
-    case NOTEPAD_ACTION.terminalNote: noteMenu(1, /** @type {HTMLElement} */ (action)); break;
     case NOTEPAD_ACTION.links:
     case NOTEPAD_ACTION.wrap:
     case NOTEPAD_ACTION.numbers:

@@ -81,18 +81,6 @@ export function editHostNote(profile) {
 }
 
 /**
- * Adds text to the end of a terminal's or workspace's note, as a new paragraph (the Notepad's Copy to note).
- * @param {string} kind 'terminal' or 'workspace'
- * @param {Tab | Workspace} target
- * @param {string} text
- */
-export function appendNote(kind, target, text) {
-  const note = target.note;
-  const joined = note?.text ? `${note.text}\n\n${text.trim()}` : text.trim();
-  setNote(kind, target, joined, !!note?.pinned);
-}
-
-/**
  * @param {string} kind
  * @param {Tab | Workspace | string} target
  * @param {string} text

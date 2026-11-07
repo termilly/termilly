@@ -892,10 +892,10 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
 
 /* ---- "Needs me" inbox (js/inbox.js) ---- */
 
-.inbox-button, #notepad-button { position: relative; }
-/* The Notepad's pages while it's closed: the notification centre's count, in the accent (news, not a call for
+.inbox-button, #todo-button { position: relative; }
+/* To do's open tasks while it's closed: the notification centre's count, in the accent (news, not a call for
    attention). */
-.tool-count.np-count { background: var(--accent); }
+#todo-button .tool-count { background: var(--accent); }
 .inbox-button.has-items { color: var(--attention); }
 .tool-count {
   position: absolute;
@@ -1423,7 +1423,7 @@ body[data-sidebar="rail"] .side-rail { opacity: 1; pointer-events: auto; }
 .pane-btn svg { width: 10px; height: 10px; stroke-width: 1.4; }
 .pane-btn:is(.menu-btn, .note-btn, .tag-btn, .prompts-btn) svg { width: 16px; height: 16px; stroke-width: 1; }
 /* Only while the terminal has a note. */
-.pane-btn:is(.note-btn, .prompts-btn)[hidden] { display: none; }
+.pane-btn:is(.note-btn, .td-note-btn, .prompts-btn)[hidden] { display: none; }
 
 /* My prompts (js/myprompts.js): by day, newest first. */
 .prompts-pop { width: 440px; padding: 0; }

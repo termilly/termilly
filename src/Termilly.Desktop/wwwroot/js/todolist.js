@@ -367,11 +367,12 @@ export function treeRows(groups, { query = '', only = false, isOpen, isCurrent }
 }
 
 /**
- * A hover's lines for a list: the first open tasks, and how many more there are.
+ * A hover's lines for a list: the first open tasks and how many more there are, or that all of them are done.
  * @param {TodoTask[] | null | undefined} tasks
  */
 export function hoverLines(tasks) {
   const open = (tasks ?? []).filter(t => !t.done);
   const more = open.length - HOVER_TASKS;
+  if (!open.length && tasks?.length) return ['All done'];
   return [...open.slice(0, HOVER_TASKS).map(t => `- ${t.text}`), ...(more > 0 ? [`${more} more`] : [])];
 }

@@ -2,7 +2,8 @@
 // To do (the title bar's button, or Ctrl+Shift+K): one list at a time, in a panel docked on an edge or in a window of its
 // own. A list opens where it was asked for (a terminal's or workspace's mark, their menus), the title bar's button opens
 // the one in front, and the name in the panel's header picks another. It stays on its list as terminals change.
-// A list's note stays a note, in a text box above its tasks; its right-click menu turns lines of it into tasks.
+// A list's note stays a note, in a text box above its tasks; its right-click menu turns lines of it into tasks. Tasks
+// took over from notes, so only a list with a note shows it and its button: emptied, both go, and a new list has neither.
 
 import { PAGE, HOST } from './protocol.js';
 import { send, onHost } from './host.js';
@@ -46,6 +47,8 @@ const WORKSPACE_LIST = 'Workspace list';
 /** What the code finds in the panel. */
 const TASK = '.td-task';
 const TASK_TEXT = '.td-text';
+/** What in a task's row does something of its own, so a double click there doesn't open the editor. */
+const ROW_CONTROL = 'button, input, .td-acts';
 const EDIT_TEXT = '.td-edit-text';
 const ISSUE_TITLE = '.td-issue-title';
 const ISSUE_BODY = '.td-issue-body';
@@ -75,7 +78,7 @@ panel.innerHTML = `
     <span class="files-title">${NAME}</span>
     <button class="td-pick" data-td="${ACTION.pick}" title="Pick a list"><span class="td-pick-icon"></span><span class="td-pick-name"></span><span class="td-pick-sub"></span>${ICONS.chevronDown}</button>
     <span class="files-tools">
-      <button class="pane-btn" data-td="${ACTION.note}" title="Show or hide this list’s note">${ICONS.note}</button>
+      <button class="pane-btn td-note-btn" data-td="${ACTION.note}" title="Show or hide this list’s note" hidden>${ICONS.note}</button>
       <button class="pane-btn" data-td="${ACTION.manageTags}" title="Manage tags">${ICONS.tag}</button>
       <span class="np-sep"></span>
       <button class="pane-btn" data-td="${ACTION.detach}" title="Detach to a window">${ICONS.detach}</button>
@@ -102,6 +105,7 @@ const pickIcon = find(panel, '.td-pick-icon');
 const pickName = find(panel, '.td-pick-name');
 const pickSub = find(panel, '.td-pick-sub');
 const view = find(panel, '.td-view');
+const noteButton = find(panel, '.td-note-btn');
 const noteBox = find(panel, '.td-note');
 const noteArea = /** @type {HTMLTextAreaElement} */ (find(panel, '.td-note-text'));
 const pinButton = find(panel, '.td-pin');
@@ -116,7 +120,7 @@ let current = null;
 /** The tag chips picked, for the list shown. */
 /** @type {string[]} */
 let picked = [];
-/** Whether the note's box shows though the list has no note, and whether it's hidden though it has one. */
+/** Whether the caret is in the note's box (it stays until the caret leaves, even emptied), and whether it's hidden though the list has a note. */
 let writingNote = false;
 let hidingNote = false;
 /** The task being edited, in its row, and its tags so far. */
@@ -254,6 +258,7 @@ function fitNote() {
 
 /** @param {TodoList} list */
 function renderNote(list) {
+  noteButton.hidden = !list.note;
   noteBox.hidden = hidingNote || (!list.note && !writingNote);
   pinButton.setAttribute('aria-pressed', String(list.pinned));
   // The text being typed stays as it is: a save comes back here.
@@ -292,6 +297,7 @@ function render() {
     pickSub.textContent = '';
     pickIcon.innerHTML = '';
     listEl.innerHTML = '';
+    noteButton.hidden = true;
     return;
   }
   showPick(list);
@@ -893,7 +899,6 @@ function statusAction(control) {
 /** Shows or hides the note's box. */
 function toggleNote() {
   hidingNote = !noteBox.hidden;
-  writingNote = !hidingNote;
   render();
   if (!hidingNote) noteArea.focus();
 }
@@ -971,9 +976,15 @@ panel.addEventListener('change', e => {
   setStatus(/** @type {ListRef} */ (current), /** @type {string} */ (row.dataset.task), /** @type {HTMLInputElement} */ (box).checked ? TASK_STATUS.done : TASK_STATUS.open);
 });
 
+/** Whether a double click began on a control: its first click can redraw the row, so the second lands on what's under it. */
+let startedOnControl = false;
+listEl.addEventListener('mousedown', e => {
+  if (e.detail === 1) startedOnControl = !!targetOf(e).closest(ROW_CONTROL);
+});
+
 listEl.addEventListener('dblclick', e => {
   const row = /** @type {HTMLElement | null} */ (targetOf(e).closest(TASK));
-  if (row && targetOf(e).closest(TASK_TEXT)) beginEdit(/** @type {string} */ (row.dataset.task));
+  if (row && !startedOnControl && !targetOf(e).closest(ROW_CONTROL)) beginEdit(/** @type {string} */ (row.dataset.task));
 });
 
 listEl.addEventListener('contextmenu', e => {
@@ -1034,7 +1045,15 @@ noteArea.addEventListener('input', () => {
     if (list) writeNote(list, noteArea.value);
   }, NOTE_SAVE_MS);
 });
-noteArea.addEventListener('blur', saveNoteNow);
+noteArea.addEventListener('focus', () => {
+  writingNote = true;
+});
+noteArea.addEventListener('blur', () => {
+  writingNote = false;
+  saveNoteNow();
+  const list = shown();
+  if (list) renderNote(list);
+});
 noteArea.addEventListener('contextmenu', noteMenu);
 
 listEl.addEventListener('keydown', e => {

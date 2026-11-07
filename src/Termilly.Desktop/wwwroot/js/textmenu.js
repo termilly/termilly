@@ -45,7 +45,7 @@ export function copyOut(text, source) {
  * @param {MouseEvent} e
  * @param {HTMLTextAreaElement} area
  * @param {string} source who copies, as Clipboard shows it
- * @param {import('./popups.js').MenuEntry[]} own the box's own entries, after a separator
+ * @param {import('./popups.js').MenuEntry[]} own the box's own entries, if any, after a separator
  */
 export function textBoxMenu(e, area, source, own) {
   e.preventDefault();
@@ -66,7 +66,7 @@ export function textBoxMenu(e, area, source, own) {
     { label: COPY, icon: ICONS.copy, hint: MENU_KEYS.copy, disabled: !selected, action: () => copyOut(selection, source) },
     { label: PASTE_LABEL, icon: ICONS.paste, hint: MENU_KEYS.paste, action: () => paste() },
     { label: 'Paste as plain text', icon: MENU_ICONS.pastePlain, title: 'Without the colour codes, control characters and trailing spaces a terminal adds', action: () => paste(plainText) },
-    SEPARATOR,
+    ...(own.length ? /** @type {import('./popups.js').MenuEntry[]} */ ([SEPARATOR]) : []),
     ...own,
   ], { x: e.clientX, y: e.clientY }, {
     // The text box keeps the focus while the menu shows, so its selection stays lit; closing, it gets it back.

@@ -71,7 +71,7 @@ function add(m) {
   const ref = listNamed(m.kind, m.id);
   const task = parseTask(String(m.text ?? ''));
   if (!task.text) throw new Error('A task needs some text.');
-  addTasks(ref, [task]);
+  addTasks(ref, [{ ...task, details: String(m.details ?? '').trim() }]);
   return {};
 }
 

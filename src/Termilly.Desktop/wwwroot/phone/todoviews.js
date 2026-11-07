@@ -22,7 +22,7 @@ export const STATUS = Object.freeze({ open: 'open', progress: 'progress', review
 const STATUS_NAME = Object.freeze({ [STATUS.open]: 'Open', [STATUS.progress]: 'In progress', [STATUS.review]: 'Review', [STATUS.done]: 'Done' });
 /** What To do's buttons do (data-td). */
 export const TD = Object.freeze({
-  open: 'open', back: 'back', add: 'add', task: 'task', check: 'check', status: 'status', tick: 'tick', terminal: 'terminal',
+  open: 'open', back: 'back', add: 'add', addSave: 'addSave', task: 'task', check: 'check', status: 'status', tick: 'tick', terminal: 'terminal',
   implement: 'implement', issue: 'issue', tags: 'tags', tag: 'tag', edit: 'edit', save: 'save', move: 'move', moveTo: 'moveTo',
   remove: 'remove', removeYes: 'removeYes', close: 'close', toTask: 'toTask', note: 'note', noteSave: 'noteSave', noteRemove: 'noteRemove',
   noteTasks: 'noteTasks', showAll: 'showAll', showDone: 'showDone', label: 'label', create: 'create',
@@ -107,7 +107,7 @@ export function listHtml(list, ctx, showDone) {
  * @param {PhoneList} list
  * @param {boolean} typing
  */
-export const listHeadHtml = (list, typing) => (typing ? `<div class="td-add"><button class="td-plus" data-td="${TD.add}" aria-label="Add">+</button><input data-field="${FIELD.add}" placeholder="Add a task to ${esc(list.name)}" enterkeyhint="done" spellcheck="false" autocomplete="off" aria-label="Task"></div>` : '');
+export const listHeadHtml = (list, typing) => (typing ? `<button class="td-add" data-td="${TD.add}"><span class="td-plus">+</span>Add a task to ${esc(list.name)}</button>` : '');
 
 /**
  * A list's row in the tree.
@@ -209,13 +209,22 @@ export function taskSheetHtml(task, list, ctx) {
     ${typing ? `<div class="td-links"><button class="link" data-td="${TD.edit}">Edit</button><button class="link" data-td="${TD.move}">Move to another list</button><button class="link red" data-td="${TD.remove}">Delete</button></div>` : ''}`;
 }
 
-/** A sheet's own way back. @param {string} title */
-const headHtml = title => `<div class="td-sheet-head"><button class="link" data-td="${TD.toTask}">‹ Back</button><h2>${esc(title)}</h2><span></span></div>`;
+/** A sheet's own way back. @param {string} title @param {string} [back] where it goes @param {string} [label] */
+const headHtml = (title, back = TD.toTask, label = '‹ Back') => `<div class="td-sheet-head"><button class="link" data-td="${back}">${label}</button><h2>${esc(title)}</h2><span></span></div>`;
+
+/** The box for a task's details. @param {string} details */
+const detailsHtml = details => `<textarea class="td-input" data-field="${FIELD.details}" rows="6" spellcheck="false" placeholder="Details. A line starting [] is a step." aria-label="Details">${esc(details)}</textarea>`;
+
+/** A new task, at the top of the screen so the keyboard leaves it in view. @param {PhoneList} list */
+export const addSheetHtml = list => `${headHtml('New task', TD.close, 'Cancel')}
+  <input class="td-input" data-field="${FIELD.add}" placeholder="Add a task to ${esc(list.name)}" enterkeyhint="done" spellcheck="false" autocomplete="off" aria-label="Task">
+  ${detailsHtml('')}
+  <button class="ibtn fill" data-td="${TD.addSave}">Add</button>`;
 
 /** @param {PhoneTask} task */
 export const editSheetHtml = task => `${headHtml('Edit task')}
   <input class="td-input" data-field="${FIELD.text}" value="${esc(task.text)}" spellcheck="false" autocomplete="off" aria-label="Task">
-  <textarea class="td-input" data-field="${FIELD.details}" rows="6" spellcheck="false" placeholder="Details. A line starting [] is a step." aria-label="Details">${esc(task.details)}</textarea>
+  ${detailsHtml(task.details)}
   <button class="ibtn fill" data-td="${TD.save}">Save</button>`;
 
 /**
@@ -258,22 +267,24 @@ export function issueSheetHtml(issue) {
  * @param {boolean} typing
  */
 export function noteHtml(list, typing) {
-  const has = !!list.note?.text;
   const where = list.kind === 'terminal' ? 'the terminal’s header' : 'its terminals’ headers';
   return `<div class="td-note-page"><textarea class="memo-text" data-field="${FIELD.note}" rows="14" spellcheck="false" autocapitalize="sentences" placeholder="e.g. staging DB is read-only until Friday"${typing ? '' : ' readonly'}>${esc(list.note?.text ?? '')}</textarea>
     ${typing ? `<label class="memo-pinbox"><input type="checkbox" data-field="${FIELD.pin}"${list.note?.pinned ? ' checked' : ''}> Pin the first line to ${where}</label>
-    <div class="td-btns">${has ? `<button class="ibtn" data-td="${TD.noteRemove}">Remove</button>` : ''}<button class="ibtn fill" data-td="${TD.noteSave}">Save</button></div>
+    <div class="td-btns"><button class="ibtn" data-td="${TD.noteRemove}">Remove</button><button class="ibtn fill" data-td="${TD.noteSave}">Save</button></div>
     <button class="ibtn" data-td="${TD.noteTasks}">Turn into tasks</button>
     <p class="td-hint">Turns the selected lines into tasks, or the whole note with nothing selected.</p>`
     : '<p class="muted">To edit notes from this phone, turn on Allow typing in Termilly’s Settings › Remote on the PC.</p>'}</div>`;
 }
 
 /**
- * A terminal's mark on the Terminals tab: how many tasks are left. A tap opens its list.
- * @param {string} id
- * @param {number} count
+ * A list's mark on the Terminals tab, for a note or any task, even with all of them done: how many are left. A tap opens it.
+ * @param {PhoneList | undefined} list
  */
-export const markHtml = (id, count) => (count ? `<button class="td-mark" data-td="${TD.open}" data-kind="terminal" data-id="${esc(id)}" aria-label="To do, ${count} left">${LIST_ICON}${count}</button>` : '');
+export function markHtml(list) {
+  if (!list || (!list.tasks.length && !list.note?.text)) return '';
+  const left = openTasks(list).length;
+  return `<button class="td-mark" data-td="${TD.open}" data-kind="${esc(list.kind)}" data-id="${esc(list.id)}" aria-label="To do${left ? `, ${left} left` : ''}">${LIST_ICON}${left || ''}</button>`;
+}
 
 /**
  * Tasks waiting for review, on the Notifications tab.
