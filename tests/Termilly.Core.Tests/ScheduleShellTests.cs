@@ -1,9 +1,12 @@
+using System.Runtime.Versioning;
 using Termilly.Desktop;
 using Termilly.Pty;
 
 namespace Termilly.Core.Tests;
 
 /// <summary>A schedule's hidden shell on Linux and macOS: the words of a command reach the shell whole, and its exit code comes back.</summary>
+[SupportedOSPlatform("linux")]
+[SupportedOSPlatform("macos")]
 public sealed class ScheduleShellTests
 {
     private static async Task<ScheduleResult> Run(string command)
