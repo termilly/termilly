@@ -5,7 +5,7 @@
 
 import {
   STATUS, TD, FIELD, esc, openTasks, listHtml, listHeadHtml, homeHtml, findHtml, taskSheetHtml, addSheetHtml, editSheetHtml, moveSheetHtml,
-  tagsSheetHtml, removeSheetHtml, issueSheetHtml, noteHtml, markHtml, reviewNotesHtml,
+  tagsSheetHtml, removeSheetHtml, issueSheetHtml, noteHtml, markHtml, reviewNotesHtml, pickTagHtml,
 } from './todoviews.js';
 
 /** @typedef {import('./todoviews.js').PhoneList} PhoneList */
@@ -28,6 +28,11 @@ const TODO_BODY = '[data-todo-body]';
 const THE_SHEET = 'todo-sheet';
 const TICKED = 'st-done';
 const SHEET_BOX = '.sheet';
+/** A new task's tags (todoviews.js pickTagHtml), and how a picked one shows. */
+const PICK_TAG = '.td-pick-tag';
+const PICKED = 'on';
+/** A tag typed on the phone has no colour yet: the PC gives it one. */
+const NEW_TAG_COLOR = 'var(--accent)';
 const HOME = 'home';
 
 /** @param {string} lead @param {any} x @param {string} kind @param {PhoneList} [ws] @returns {PhoneList} */
@@ -144,7 +149,7 @@ export function todoTab(app) {
   /** The sheet's insides. */
   function sheetBody() {
     const newOn = sheet?.mode === SHEET.add ? current() : null;
-    if (newOn) return addSheetHtml(newOn);
+    if (newOn) return addSheetHtml(newOn, allowed());
     const found = sheet ? findTask(sheet.task) : null;
     if (!sheet || !found) return '';
     const { task, list } = found;
@@ -234,12 +239,38 @@ export function todoTab(app) {
     field(layer, FIELD.add)?.focus();
   }
 
+  /** A tag as To do keeps it; the PC checks it too (js/todolist.js parseTask). @param {string} text */
+  const tagName = text => text.trim().replace(/^#+/, '').replace(/\s+/g, '-').toLowerCase();
+
+  /** @param {Element} chip @param {boolean} on */
+  function setPicked(chip, on) {
+    chip.classList.toggle(PICKED, on);
+    chip.setAttribute('aria-pressed', String(on));
+  }
+
+  /** The tag typed for a new task goes on it, picked: one there already is picked instead. @param {HTMLElement} layer */
+  function typeTag(layer) {
+    const box = field(layer, FIELD.newTag);
+    const name = tagName(box?.value ?? '');
+    if (!box || !name) return;
+    box.value = '';
+    const had = [...layer.querySelectorAll(PICK_TAG)].find(chip => /** @type {HTMLElement} */ (chip).dataset.tag === name);
+    if (had) setPicked(had, true);
+    else box.insertAdjacentHTML('beforebegin', pickTagHtml(name, NEW_TAG_COLOR, true));
+  }
+
+  /** A new task's tags: those picked, and one still being typed. @param {HTMLElement} layer */
+  const pickedTags = layer => [...layer.querySelectorAll(`${PICK_TAG}.${PICKED}`)]
+    .map(chip => /** @type {HTMLElement} */ (chip).dataset.tag ?? '')
+    .concat(tagName(field(layer, FIELD.newTag)?.value ?? ''))
+    .filter(Boolean);
+
   /** @param {HTMLElement} layer */
   function addTask(layer) {
     const box = field(layer, FIELD.add);
     const list = current();
     if (!box?.value.trim() || !list) return;
-    ask({ action: ACTION.add, kind: list.kind, id: list.id, text: box.value, details: field(layer, FIELD.details)?.value ?? '' });
+    ask({ action: ACTION.add, kind: list.kind, id: list.id, text: box.value, details: field(layer, FIELD.details)?.value ?? '', tags: pickedTags(layer) });
     sheet = null;
     drawSheet();
   }
@@ -361,6 +392,7 @@ export function todoTab(app) {
         break;
       case TD.add: return beginAdd(layer);
       case TD.addSave: return addTask(layer);
+      case TD.pickTag: return setPicked(el, !el.classList.contains(PICKED));
       case TD.task: return void openTask(id);
       case TD.check: return pressBox(el);
       case TD.status: return void ask({ action: ACTION.status, task: id, status: el.dataset.status });
@@ -424,9 +456,14 @@ export function todoTab(app) {
     key(e) {
       const box = /** @type {HTMLInputElement} */ (e.target);
       const layer = document.getElementById(THE_SHEET);
-      if (e.key !== 'Enter' || box.dataset.field !== FIELD.add || !layer) return;
-      e.preventDefault();
-      addTask(layer);
+      if (e.key !== 'Enter' || !layer) return;
+      if (box.dataset.field === FIELD.newTag) {
+        e.preventDefault();
+        typeTag(layer);
+      } else if (box.dataset.field === FIELD.add) {
+        e.preventDefault();
+        addTask(layer);
+      }
     },
     /**
      * The PC's answer to something asked.

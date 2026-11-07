@@ -66,12 +66,22 @@ function listNamed(kind, id) {
   return ref;
 }
 
-/** @param {Record<string, any>} m */
+/**
+ * The tags a phone picked for a new task, each as a #tag in a task's text would be; what isn't one whole tag is left out.
+ * @param {unknown} tags
+ */
+const phoneTags = tags => (Array.isArray(tags) ? tags.flatMap(tag => {
+  const read = parseTask(`#${String(tag).replace(/^#+/, '')}`);
+  return read.text ? [] : read.tags;
+}) : []);
+
+/** @param {Record<string, any>} m its text, details and the tags picked for it */
 function add(m) {
   const ref = listNamed(m.kind, m.id);
   const task = parseTask(String(m.text ?? ''));
   if (!task.text) throw new Error('A task needs some text.');
-  addTasks(ref, [{ ...task, details: String(m.details ?? '').trim() }]);
+  const tags = [...new Set([...task.tags, ...phoneTags(m.tags)])];
+  addTasks(ref, [{ ...task, tags, details: String(m.details ?? '').trim() }]);
   return {};
 }
 

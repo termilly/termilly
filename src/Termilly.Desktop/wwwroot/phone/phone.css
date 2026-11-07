@@ -377,6 +377,11 @@ button.row { width: 100%; border: 0; background: none; color: inherit; font: inh
 .td-play svg { width: 16px; height: 16px; fill: currentColor; }
 .td-add-tag { padding: 0 8px; border: 1px dashed var(--line); border-radius: 99px; background: none; color: var(--muted); font-size: 12px; line-height: 19px; }
 .td-sheet .td-tags { margin: 10px 2px; }
+.td-sheet .td-new-tags { gap: 6px; margin: 0 2px 12px; }
+.td-pick-tag { padding: 0 10px; border: 1px solid var(--line); background: none; color: var(--muted); font-size: 13px; line-height: 26px; }
+.td-pick-tag.on { border-color: transparent; background: color-mix(in srgb, var(--hue) 18%, transparent); color: var(--hue); }
+.td-tag-input { flex: 1; min-width: 96px; padding: 0 10px; border: 1px dashed var(--line); border-radius: 99px; background: none; color: var(--text); font-family: inherit; font-size: 16px; line-height: 26px; }
+.td-tag-input:focus { border-color: var(--accent); border-style: solid; outline: none; }
 .td-issue { display: block; margin: 8px 2px; color: var(--accent); font-size: 15px; }
 .td-btns { display: flex; gap: 8px; }
 .td-btns .ibtn { flex: 1; margin-bottom: 0; }

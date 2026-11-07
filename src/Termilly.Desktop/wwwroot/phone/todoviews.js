@@ -25,10 +25,10 @@ export const TD = Object.freeze({
   open: 'open', back: 'back', add: 'add', addSave: 'addSave', task: 'task', check: 'check', status: 'status', tick: 'tick', terminal: 'terminal',
   implement: 'implement', issue: 'issue', tags: 'tags', tag: 'tag', edit: 'edit', save: 'save', move: 'move', moveTo: 'moveTo',
   remove: 'remove', removeYes: 'removeYes', close: 'close', toTask: 'toTask', note: 'note', noteSave: 'noteSave', noteRemove: 'noteRemove',
-  noteTasks: 'noteTasks', showAll: 'showAll', showDone: 'showDone', label: 'label', create: 'create',
+  noteTasks: 'noteTasks', showAll: 'showAll', showDone: 'showDone', label: 'label', create: 'create', pickTag: 'pickTag',
 });
 /** The fields that are read by name (data-field). */
-export const FIELD = Object.freeze({ add: 'add', find: 'find', text: 'text', details: 'details', note: 'note', pin: 'pin', title: 'title', body: 'body' });
+export const FIELD = Object.freeze({ add: 'add', find: 'find', text: 'text', details: 'details', note: 'note', pin: 'pin', title: 'title', body: 'body', newTag: 'newTag' });
 
 const TICK = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6.5l2.5 2.5 4.5-5.5"/></svg>';
 const PLAY = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3l8 5-8 5z"/></svg>';
@@ -215,10 +215,23 @@ const headHtml = (title, back = TD.toTask, label = '‹ Back') => `<div class="t
 /** The box for a task's details. @param {string} details */
 const detailsHtml = details => `<textarea class="td-input" data-field="${FIELD.details}" rows="6" spellcheck="false" placeholder="Details. A line starting [] is a step." aria-label="Details">${esc(details)}</textarea>`;
 
-/** A new task, at the top of the screen so the keyboard leaves it in view. @param {PhoneList} list */
-export const addSheetHtml = list => `${headHtml('New task', TD.close, 'Cancel')}
+/**
+ * A tag a new task can start with; a tap picks it (todo.js) without drawing the form again.
+ * @param {string} name
+ * @param {string} color
+ * @param {boolean} [on]
+ */
+export const pickTagHtml = (name, color, on = false) => `<button class="td-chip td-pick-tag${on ? ' on' : ''}" data-td="${TD.pickTag}" data-tag="${esc(name)}" aria-pressed="${on}" style="--hue:${esc(color)}">${esc(name)}</button>`;
+
+/**
+ * A new task, at the top of the screen so the keyboard leaves it in view. Its tags are picked from To do's, or typed new.
+ * @param {PhoneList} list
+ * @param {Allowed} ctx
+ */
+export const addSheetHtml = (list, ctx) => `${headHtml('New task', TD.close, 'Cancel')}
   <input class="td-input" data-field="${FIELD.add}" placeholder="Add a task to ${esc(list.name)}" enterkeyhint="done" spellcheck="false" autocomplete="off" aria-label="Task">
   ${detailsHtml('')}
+  <div class="td-tags td-new-tags">${ctx.tags.map(t => pickTagHtml(t.name, t.color)).join('')}<input class="td-tag-input" data-field="${FIELD.newTag}" placeholder="New tag" enterkeyhint="done" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="New tag"></div>
   <button class="ibtn fill" data-td="${TD.addSave}">Add</button>`;
 
 /** @param {PhoneTask} task */
@@ -241,7 +254,7 @@ export const moveSheetHtml = (task, list, lists) => `${headHtml('Move to')}<div 
  */
 export function tagsSheetHtml(task, ctx) {
   const rows = ctx.tags.map(t => `<button class="row" data-td="${TD.tag}" data-tag="${esc(t.name)}"><span class="td-tick">${task.tags.includes(t.name) ? TICK : ''}</span>${chip(t.name, ctx)}</button>`).join('');
-  return `${headHtml('Tags')}<div class="list td-pick">${rows || '<p class="muted center">No tags yet. Make them on the PC, or add #a-tag to a new task.</p>'}</div>`;
+  return `${headHtml('Tags')}<div class="list td-pick">${rows || '<p class="muted center">No tags yet. Make them on the PC, or give a new task one.</p>'}</div>`;
 }
 
 /** @param {PhoneTask} task */
