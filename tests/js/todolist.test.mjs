@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   parseTask, tasksFromLines, tasksFromNote, tagOfHeading, selectedLines, withoutLines, openCount, tagsIn, allTags, withTags, moveBefore,
   labelsForTags, retag, splitNote, hoverLines, treeRows, detailLines, tickSub, tickByNumber, linkSub, subProgress, implementPrompt, statusOf, TASK_STATUS, HOVER_TASKS,
+  taskMatches, inPlace, outOfSightPrompt,
 } from '../../src/Termilly.Desktop/wwwroot/js/todolist.js';
 
 const task = (id, more = {}) => ({ id, text: id, created: 0, ...more });
@@ -228,4 +229,30 @@ test('a hover shows the first open tasks and how many more', () => {
 test('a hover says so when every task is done', () => {
   assert.deepEqual(hoverLines([task('gone', { done: true })]), ['All done']);
   assert.deepEqual(hoverLines([]), []);
+});
+
+test('search finds a task by every word typed, in its text, details, steps, tags, issue and status', () => {
+  const t = task('Fix the login redirect', { details: 'Users land on /home.\n[] Reproduce it', tags: ['backend'], issue: { repo: 'a/b', number: 42, url: 'u' }, status: TASK_STATUS.review, review: { summary: 'Done in auth.ts', by: 'x' } });
+  for (const query of ['login', 'LOGIN redirect', '/home', 'reproduce', '#backend', 'backend', '#42', 'review', 'auth.ts']) assert.ok(taskMatches(t, query), query);
+  assert.ok(!taskMatches(t, 'login footer'));
+  assert.ok(taskMatches(t, '  '));
+});
+
+test('a task done while its list is shown stays in place; others done go to the end', () => {
+  const tasks = [task('a'), task('b', { done: true }), task('c'), task('d', { done: true })];
+  const { main, done } = inPlace(tasks, new Set(['b']));
+  assert.deepEqual(main.map(t => t.id), ['a', 'b', 'c']);
+  assert.deepEqual(done.map(t => t.id), ['d']);
+});
+
+test('out of sight asks for a summary and names no tools to call back', () => {
+  const t = task('Rotate the key', { details: 'Before Friday.\n[x] Find it\n[] Rotate it' });
+  const prompt = outOfSightPrompt(t);
+  assert.match(prompt, /Rotate the key/);
+  assert.match(prompt, /Before Friday/);
+  assert.match(prompt, /1\) Rotate it/);
+  assert.doesNotMatch(prompt, /Find it/);
+  assert.match(prompt, /reply with a short summary/);
+  assert.doesNotMatch(prompt, /finish_task|termilly tasks/);
+  assert.match(outOfSightPrompt(t, detailLines(t.details)[2]), /step of my task 'Rotate the key': 'Rotate it'/);
 });

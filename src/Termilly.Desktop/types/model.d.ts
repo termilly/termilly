@@ -44,6 +44,8 @@ interface TodoTask {
   status?: string;
   /** The terminal working on it (Implement). */
   terminal?: string;
+  /** Its run out of sight (Implement, Out of sight): the hidden shell's id. */
+  run?: string;
   /** What the agent that finished it said. */
   review?: { summary: string; by: string };
 }

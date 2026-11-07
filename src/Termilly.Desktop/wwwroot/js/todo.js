@@ -369,23 +369,29 @@ export function listsOfAsker(from) {
  * @param {ListRef} ref
  * @param {string} id
  * @param {string} status
- * @param {{ terminal?: string, review?: TodoTask['review'] }} [with_]
+ * @param {{ terminal?: string, run?: string, review?: TodoTask['review'] }} [with_]
  */
-export function setStatus(ref, id, status, { terminal, review } = {}) {
+export function setStatus(ref, id, status, { terminal, run, review } = {}) {
   const middle = status === TASK_STATUS.progress || status === TASK_STATUS.review;
   // An alert about it may wait for the user to leave the PC.
   if (status !== TASK_STATUS.review) send(PAGE.phoneWithdraw, { id });
   updateTask(ref, id, {
     done: status === TASK_STATUS.done ? true : undefined, status: middle ? status : undefined,
-    terminal: status === TASK_STATUS.progress ? terminal : undefined, review: status === TASK_STATUS.review ? review : undefined,
+    terminal: status === TASK_STATUS.progress ? terminal : undefined, run: status === TASK_STATUS.progress ? run : undefined,
+    review: status === TASK_STATUS.review ? review : undefined,
   });
 }
 
-/** A task whose terminal closed before its agent finished goes back to Open: nobody works on it now. */
-export function releaseClosed() {
+/**
+ * A task whose terminal closed before its agent finished goes back to Open: nobody works on it now. So does one whose run out
+ * of sight isn't going any more (Termilly was closed while it ran).
+ * @param {(run: string) => boolean} [running] whether a run out of sight is going; left out, those aren't looked at
+ */
+export function releaseClosed(running) {
   for (const ref of allLists()) {
     for (const task of tasksOf(ref)) {
-      if (task.terminal && !state.tabs.has(task.terminal)) setStatus(ref, task.id, TASK_STATUS.open);
+      const gone = (task.terminal && !state.tabs.has(task.terminal)) || (running && task.run && !running(task.run));
+      if (gone) setStatus(ref, task.id, TASK_STATUS.open);
     }
   }
 }

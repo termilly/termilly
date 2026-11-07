@@ -309,6 +309,53 @@ export function implementPrompt(task, sub) {
 }
 
 /**
+ * What Implement asks an agent working out of sight: the same task or step, with no tools to call back. Its reply is what
+ * Review shows, so it's asked to say what it did.
+ * @param {TodoTask} task
+ * @param {DetailLine} [sub]
+ */
+export function outOfSightPrompt(task, sub) {
+  const lines = detailLines(task.details);
+  const ask = ' Nobody is watching, so do not wait for answers. When you finish, reply with a short summary of what you did and what is left, first line first.';
+  if (sub) return `Work on this step of my task '${oneLine(task.text)}': '${oneLine(sub.text)}'.${ask}`;
+  const notes = oneLine(lines.filter(line => !line.sub).map(line => line.text).join(' '));
+  const steps = lines.filter(line => line.sub && !line.done).map((line, i) => `${i + 1}) ${oneLine(line.text)}`);
+  return `Work on this task from my To do list: '${oneLine(task.text)}'.${notes ? ` Details: ${notes}` : ''}${steps.length ? ` Steps: ${steps.join(' ')}.` : ''}${ask}`;
+}
+
+/**
+ * What a status is called.
+ * @type {Readonly<Record<string, string>>}
+ */
+export const STATUS_NAME = Object.freeze({
+  [TASK_STATUS.open]: 'Open', [TASK_STATUS.progress]: 'In progress', [TASK_STATUS.review]: 'Review', [TASK_STATUS.done]: 'Done',
+});
+
+/**
+ * Whether a task is found by what's typed: in its text, details, tags (with or without #), its issue's number, or its status.
+ * Every word typed has to be found.
+ * @param {TodoTask} task
+ * @param {string} query
+ */
+export function taskMatches(task, query) {
+  const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const issues = [task.issue?.number, ...detailLines(task.details).map(line => line.issue?.number)].filter(Boolean).map(n => `#${n}`);
+  const text = [task.text, task.details ?? '', ...(task.tags ?? []).map(tag => `#${tag}`), ...issues, STATUS_NAME[statusOf(task)], task.review?.summary ?? ''].join('\n').toLowerCase();
+  return words.every(word => text.includes(word));
+}
+
+/**
+ * A list in the order it shows: tasks where they are, done ones in their own part at the end, except those done while it was
+ * shown (`settled`), which stay in place until it's shown again.
+ * @param {TodoTask[]} tasks
+ * @param {Set<string>} settled
+ */
+export function inPlace(tasks, settled) {
+  const stays = (/** @type {TodoTask} */ task) => !task.done || settled.has(task.id);
+  return { main: tasks.filter(stays), done: tasks.filter(task => !stays(task)) };
+}
+
+/**
  * A list as the picker's tree sees it.
  * @typedef {{ ref: { kind: string, id: string }, name: string, tasks: TodoTask[], note: string }} TreeList
  */
