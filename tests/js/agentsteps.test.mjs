@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 
 // Just enough of a page for the modules to load (ui.js loads host.js).
 globalThis.window = /** @type {any} */ ({ addEventListener() {}, external: { receiveMessage() {}, sendMessage() {} } });
-globalThis.document = /** @type {any} */ ({ documentElement: { dataset: {} }, addEventListener() {}, querySelectorAll: () => [] });
+globalThis.document = /** @type {any} */ ({ documentElement: { dataset: {} }, addEventListener() {}, querySelector: () => null, querySelectorAll: () => [] });
 globalThis.localStorage = /** @type {any} */ ({ getItem: () => null, setItem() {} });
 globalThis.addEventListener = () => {};
 const { shownSteps, placeSteps } = await import('../../src/Termilly.Desktop/wwwroot/js/agentsteps.js');
