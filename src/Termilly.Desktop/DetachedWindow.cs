@@ -75,12 +75,14 @@ internal sealed class DetachedWindow : Window
             Width = features.Width + (2 * FrameWidth);
             Height = features.Height + (2 * FrameWidth);
         }
-        // window.open's place is the page's too (where it says it is, window.screenX), inside the frame.
+        // window.open's place is the page's too (where it says it is, window.screenX), inside the frame. WebView2 hands
+        // it over unsigned, though it can be left of or above the screen's corner (a monitor there, or a panel let go
+        // with its corner past the edge): read as it was meant, -172 rather than 4294967124, which WPF throws on.
         if (features.HasPosition)
         {
             WindowStartupLocation = WindowStartupLocation.Manual;
-            Left = features.Left - FrameWidth;
-            Top = features.Top - FrameWidth;
+            Left = unchecked((int)features.Left) - FrameWidth;
+            Top = unchecked((int)features.Top) - FrameWidth;
         }
     }
 
