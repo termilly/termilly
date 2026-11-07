@@ -66,7 +66,7 @@ const ACTION = Object.freeze({
   pick: 'pick', note: 'note', pin: 'pin', detach: 'detach', close: 'close', fold: 'fold', tag: 'tag', more: 'more', save: 'save',
   cancel: 'cancel', label: 'label', create: 'create', backToList: 'backToList', pickTags: 'pickTags', dropTag: 'dropTag', manageTags: 'manageTags',
   implement: 'implement', issue: 'issue', openIssue: 'openIssue', status: 'status', agentTerminal: 'agentTerminal', accept: 'accept', reopen: 'reopen',
-  edit: 'edit', remove: 'remove', stopRun: 'stopRun', scope: 'scope', clearSearch: 'clearSearch',
+  edit: 'edit', remove: 'remove', stopRun: 'stopRun', scope: 'scope', clearSearch: 'clearSearch', searchToggle: 'searchToggle',
 });
 /** How long after the last key a note is saved. */
 const NOTE_SAVE_MS = 400;
@@ -99,13 +99,15 @@ panel.innerHTML = `
       <textarea class="td-note-text" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off" placeholder="A note for this list"></textarea>
       <button class="pane-btn td-pin" data-td="${ACTION.pin}" title="Pin the first line to the terminal’s header">${ICONS.pin}</button>
     </div>
-    <div class="td-search">
-      <span class="td-search-icon">${ICONS.search}</span>
-      <input class="td-search-text" spellcheck="false" autocomplete="off" placeholder="Search tasks" aria-label="Search tasks" title="Search tasks (Ctrl+F)">
+    <div class="td-addbar">
+      <input class="field td-add" spellcheck="false" autocomplete="off">
+      <button type="button" class="pane-btn td-search-btn" data-td="${ACTION.searchToggle}" title="Search tasks (Ctrl+F)" aria-label="Search tasks" aria-expanded="false">${ICONS.search}</button>
+    </div>
+    <div class="td-search" hidden>
+      <input class="td-search-text" spellcheck="false" autocomplete="off" placeholder="Search tasks" aria-label="Search tasks">
       <button type="button" class="td-search-clear" data-td="${ACTION.clearSearch}" title="Clear the search" aria-label="Clear the search" hidden>${ICONS.close}</button>
       <button type="button" class="td-scope" data-td="${ACTION.scope}" title="Search every list, not only this one">All lists</button>
     </div>
-    <input class="field td-add" spellcheck="false" autocomplete="off">
     <div class="td-tags" hidden></div>
     <div class="td-list"></div>
   </div>
@@ -131,6 +133,8 @@ const issueForm = /** @type {HTMLFormElement} */ (find(panel, '.td-issue'));
 const searchField = /** @type {HTMLInputElement} */ (find(panel, '.td-search-text'));
 const searchClear = find(panel, '.td-search-clear');
 const scopeButton = find(panel, '.td-scope');
+const searchBox = find(panel, '.td-search');
+const searchButton = find(panel, '.td-search-btn');
 
 /** The list it shows. */
 /** @type {ListRef | null} */
@@ -151,8 +155,10 @@ let editTags = [];
 let issue = null;
 /** @type {ReturnType<typeof setTimeout> | null} */
 let noteTimer = null;
-/** What's searched for, and the tasks done while the list was shown: they stay where they were until it's shown again. */
+/** What's searched for, whether the search drops down under its icon (it does while there's a search: putting it away empties
+ * it), and the tasks done while the list was shown: they stay where they were until it's shown again. */
 let query = '';
+let searching = false;
 /** @type {Set<string>} */
 let settled = new Set();
 
@@ -422,9 +428,12 @@ function render() {
   if (issue) renderIssue(list);
 }
 
-/** The search bar as it is: its clear button while there's something in it, and whether it's searching every list. */
+/** The search as it is: dropped down or not, its clear button while there's something in it, and whether it's searching every list. */
 function showSearch() {
   if (searchField.value !== query && searchField.ownerDocument.activeElement !== searchField) searchField.value = query;
+  searchBox.hidden = !searching;
+  searchButton.classList.toggle('open', searching);
+  searchButton.setAttribute('aria-expanded', String(searching));
   searchClear.hidden = !query;
   scopeButton.setAttribute('aria-pressed', String(!!state.todo.searchAll));
 }
@@ -433,6 +442,27 @@ function showSearch() {
 function search(text) {
   query = text.trim();
   render();
+}
+
+/** The search drops down under its icon, with the caret in it. */
+function openSearch() {
+  searching = true;
+  showSearch();
+  searchField.focus();
+  searchField.select();
+}
+
+/**
+ * The search goes back into its icon, emptied, so no list is ever narrowed by a search out of sight.
+ * @param {boolean} [refocus] the caret goes to the icon
+ */
+function closeSearch(refocus) {
+  searching = false;
+  searchField.value = '';
+  if (refocus) searchButton.focus();
+  // Nothing was searched for: the list is as it was, and isn't drawn again under a click on it.
+  if (query) search('');
+  else showSearch();
 }
 
 /** The title bar button's count: open tasks where you're working, while the panel is closed. */
@@ -1110,6 +1140,7 @@ function act(control) {
  * @param {HTMLElement} control
  */
 function searchAct(control) {
+  if (control.dataset.td === ACTION.searchToggle) return searching ? closeSearch() : openSearch();
   if (control.dataset.td === ACTION.scope) {
     state.todo.searchAll = !state.todo.searchAll;
     persist();
@@ -1138,6 +1169,7 @@ function panelAct(control) {
       persist();
       return render();
     case ACTION.scope:
+    case ACTION.searchToggle:
     case ACTION.clearSearch: return searchAct(control);
     case ACTION.agentTerminal: return goToAgent(control);
     case ACTION.openIssue: return send(PAGE.openUrl, { url: control.dataset.url });
@@ -1311,23 +1343,30 @@ function rowKey(e, row) {
 
 searchField.addEventListener('input', () => search(searchField.value));
 searchField.addEventListener('keydown', e => {
-  if (e.key === 'Escape' && searchField.value) {
+  if (e.key === 'Escape') {
     e.preventDefault();
     e.stopPropagation();
-    searchField.value = '';
-    search('');
+    closeSearch(true);
   } else if (e.key === 'ArrowDown') {
     e.preventDefault();
     /** @type {HTMLElement | null} */ (listEl.querySelector(TASK))?.focus();
   }
 });
+/**
+ * Left empty, the search goes back into its icon once you're elsewhere in the panel; with something in it, it stays.
+ * @param {Node | null} to where the caret or the pointer went (none: a click that doesn't move the caret, as on a Mac)
+ */
+function leftSearch(to) {
+  if (to && !query && searching && !searchBox.contains(to) && !searchButton.contains(to)) closeSearch();
+}
+searchBox.addEventListener('focusout', e => leftSearch(/** @type {Node | null} */ (e.relatedTarget)));
+panel.addEventListener('pointerdown', e => leftSearch(/** @type {Node | null} */ (e.target)));
 
 panel.addEventListener('keydown', e => {
   if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'f') {
     e.preventDefault();
     e.stopPropagation();
-    searchField.focus();
-    searchField.select();
+    openSearch();
     return;
   }
   if (!dock.closeKeys(e, KEY_ID.todo)) return;
