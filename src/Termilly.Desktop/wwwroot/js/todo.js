@@ -375,10 +375,12 @@ export function setStatus(ref, id, status, { terminal, run, review } = {}) {
   const middle = status === TASK_STATUS.progress || status === TASK_STATUS.review;
   // An alert about it may wait for the user to leave the PC.
   if (status !== TASK_STATUS.review) send(PAGE.phoneWithdraw, { id });
+  // What the agent said stays with a task accepted (Done), to read again in its row; a new run or Back to open clears it.
+  const said = status === TASK_STATUS.done ? {} : { review: status === TASK_STATUS.review ? review : undefined };
   updateTask(ref, id, {
     done: status === TASK_STATUS.done ? true : undefined, status: middle ? status : undefined,
     terminal: status === TASK_STATUS.progress ? terminal : undefined, run: status === TASK_STATUS.progress ? run : undefined,
-    review: status === TASK_STATUS.review ? review : undefined,
+    ...said,
   });
 }
 

@@ -11,7 +11,6 @@ import { state, on, persist, newId, wsById, tabsOf, tabTitle, EVENTS } from './s
 import { focusTab } from './panes.js';
 import { AGENT_COMMAND, agentInstalled, folderOfList as folderOf, isOnGitHub, checkRepo, implementTask, keepIssue } from './todoactions.js';
 import { implementOutOfSight, stopRun } from './todorun.js';
-import { createPeek } from './todopeek.js';
 import { openTagManager } from './todotags.js';
 import { escapeHtml, cssColor, tabBadgeHtml, countText, ICONS } from './ui.js';
 import { byId, find, targetOf, WORKSPACE_ID, DOCK_GRIP, PANEL_HEAD, TOOL_COUNT } from './dom.js';
@@ -66,7 +65,7 @@ const ACTION = Object.freeze({
   pick: 'pick', note: 'note', pin: 'pin', detach: 'detach', close: 'close', fold: 'fold', tag: 'tag', more: 'more', save: 'save',
   cancel: 'cancel', label: 'label', create: 'create', backToList: 'backToList', pickTags: 'pickTags', dropTag: 'dropTag', manageTags: 'manageTags',
   implement: 'implement', issue: 'issue', openIssue: 'openIssue', status: 'status', agentTerminal: 'agentTerminal', accept: 'accept', reopen: 'reopen',
-  edit: 'edit', remove: 'remove', stopRun: 'stopRun', scope: 'scope', clearSearch: 'clearSearch', searchToggle: 'searchToggle',
+  edit: 'edit', remove: 'remove', expand: 'expand', stopRun: 'stopRun', scope: 'scope', clearSearch: 'clearSearch', searchToggle: 'searchToggle',
 });
 /** How long after the last key a note is saved. */
 const NOTE_SAVE_MS = 400;
@@ -162,17 +161,9 @@ let searching = false;
 /** @type {Set<string>} */
 let settled = new Set();
 
-/** Controls in the card that leave it: what they open takes the place of it. */
+/** The tasks opened out in their rows (all their details, steps and what the agent said), by id. */
 /** @type {Set<string>} */
-const LEAVES_CARD = new Set([ACTION.edit, ACTION.remove, ACTION.issue, ACTION.implement, ACTION.agentTerminal]);
-const peek = createPeek({
-  panel,
-  contentOf: peekHtml,
-  act: control => {
-    if (LEAVES_CARD.has(control.dataset.td ?? '')) peek.hide();
-    act(control);
-  },
-});
+const expanded = new Set();
 
 const shown = () => listOf(current);
 
@@ -220,7 +211,7 @@ function rowHtml(task, elsewhere) {
   const there = elsewhere ? ` data-elsewhere title="In ${escapeHtml(elsewhere)}. Click to open it there"` : ' draggable="true"';
   return `<div class="td-task st-${statusOf(task)}${task.done ? ' done' : ''}" data-task="${escapeHtml(task.id)}" tabindex="0"${there}>
     ${statusButtonHtml(task)}
-    <div class="td-body"><div class="td-text">${escapeHtml(task.text)}</div>${elsewhere ? `<div class="td-meta"><span class="td-where">${escapeHtml(elsewhere)}</span></div>` : metaHtml(task)}</div>
+    <div class="td-body"><div class="td-text">${escapeHtml(task.text)}</div>${elsewhere ? '' : aboutHtml(task)}${elsewhere ? `<div class="td-meta"><span class="td-where">${escapeHtml(elsewhere)}</span></div>` : metaHtml(task)}</div>
     ${elsewhere ? '' : actsHtml(task.issue, false)}
     ${elsewhere ? '' : reviewHtml(task)}
   </div>`;
@@ -238,28 +229,47 @@ function agentHtml(task) {
   return tab ? `<button type="button" class="td-agent" data-td="${ACTION.agentTerminal}" data-tab="${escapeHtml(tab.id)}" title="Go to its terminal">${AGENT_COMMAND} in ${escapeHtml(tabTitle(tab))}</button>` : '';
 }
 
-/**
- * What the agent said, and the two ways on from Review.
- * @param {TodoTask} task
- * @param {boolean} [whole] all it said (the card), not only its first lines
- */
-function reviewHtml(task, whole = false) {
+/** The two ways on from Review (what the agent said is in the task's details, aboutHtml). @param {TodoTask} task */
+function reviewHtml(task) {
   if (statusOf(task) !== TASK_STATUS.review) return '';
-  const said = task.review ? `<p class="td-review-said${whole ? ' whole' : ''}"><b>${escapeHtml(task.review.by)}:</b> ${escapeHtml(task.review.summary)}</p>` : '';
-  return `<div class="td-review">${said}<span class="td-edit-actions"><button type="button" class="btn small" data-td="${ACTION.reopen}">Back to open</button><button type="button" class="btn small primary" data-td="${ACTION.accept}">Accept</button></span></div>`;
+  return `<div class="td-review"><span class="td-edit-actions"><button type="button" class="btn small" data-td="${ACTION.reopen}">Back to open</button><button type="button" class="btn small primary" data-td="${ACTION.accept}">Accept</button></span></div>`;
+}
+
+/**
+ * Under a task's text: the first line of its description (else of what the agent said), and the button that opens it
+ * out, when there's more: all of its description, its steps, and what the agent said (its implementation's result).
+ * @param {TodoTask} task
+ */
+function aboutHtml(task) {
+  const lines = detailLines(task.details);
+  const notes = lines.filter(line => !line.sub).map(line => line.text).join('\n').trim();
+  const steps = lines.filter(line => line.sub);
+  const said = task.review ? `<b>${escapeHtml(task.review.by)}:</b> ${escapeHtml(task.review.summary.trim())}` : '';
+  const first = notes.split('\n')[0] || steps[0]?.text || '';
+  const firstHtml = first ? escapeHtml(first) : said.split('\n')[0];
+  if (!firstHtml) return '';
+  const more = notes.includes('\n') || steps.length > (notes ? 0 : 1) || (!!said && (!!first || said.includes('\n')));
+  const open = more && expanded.has(task.id);
+  const toggle = more ? `<button type="button" class="td-expand" data-td="${ACTION.expand}" aria-expanded="${open}" title="${open ? 'Show less' : 'Show all of it'}">${open ? ICONS.chevronDown : ICONS.chevronRight}</button>` : '';
+  if (!open) return `<div class="td-about${more ? ' more' : ''}">${toggle}<span class="td-about-line">${firstHtml}</span></div>`;
+  return `<div class="td-about more open">${toggle}<div class="td-about-all">
+    ${notes ? `<div class="td-details">${escapeHtml(notes)}</div>` : ''}
+    ${steps.map(stepHtml).join('')}
+    ${said ? `<div class="td-result">${said}</div>` : ''}
+  </div></div>`;
 }
 
 /** @param {{ url: string, number: number } | undefined} issue */
 const issueChip = issue => (issue ? `<button type="button" class="td-gh" data-td="${ACTION.openIssue}" data-url="${escapeHtml(issue.url)}" title="Open issue #${issue.number} on GitHub">#${issue.number}</button>` : '');
 
-/** The tick of a step done, and the ring of one to do, in the card. */
+/** The tick of a step done, and the ring of one to do, in a task opened out. */
 const STEP_MARK = Object.freeze({
   done: '<svg viewBox="0 0 16 16"><path d="M4 8.5l2.5 2.5 5.5-6"/></svg>',
   open: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="4.5"/></svg>',
 });
 
 /**
- * A step in the card: done or not (ticked by an agent, or in Edit), its text, and Implement and Create GitHub issue for it.
+ * A step in a task opened out: done or not (ticked by an agent, or in Edit), its text, and Implement and Create GitHub issue for it.
  * @param {import('./todolist.js').DetailLine} line
  */
 function stepHtml(line) {
@@ -338,29 +348,6 @@ function listHtml(list) {
   return `${empty}${main.map(t => rowHtml(t)).join('')}${fold}${state.todo.showDone ? done.map(t => rowHtml(t)).join('') : ''}`;
 }
 
-/**
- * The card a task shows on hover: everything about it, with its buttons.
- * @param {string} id
- */
-function peekHtml(id) {
-  const task = taskById(id);
-  if (!task || task.id === editing) return null;
-  const lines = detailLines(task.details);
-  const notes = lines.filter(line => !line.sub).map(line => line.text).join('\n').trim();
-  const steps = lines.filter(line => line.sub);
-  const [doneSubs] = subProgress(task.details);
-  const status = statusOf(task);
-  const meta = `${agentHtml(task)}${(task.tags ?? []).map(t => chip(t)).join('')}`;
-  return `<div class="td-peek-head">${statusButtonHtml(task)}<span class="td-peek-status st-${status}">${STATUS_NAME[status]}</span>${issueChip(task.issue)}${actsHtml(task.issue, false)}</div>
-    <div class="td-peek-title">${escapeHtml(task.text)}</div>
-    ${meta ? `<div class="td-meta">${meta}</div>` : ''}
-    ${notes ? `<div class="td-peek-details">${escapeHtml(notes)}</div>` : ''}
-    ${steps.length ? `<div class="td-peek-label">Steps<span class="td-fold-count">${doneSubs}/${steps.length}</span></div>${steps.map(stepHtml).join('')}` : ''}
-    ${reviewHtml(task, true)}
-    ${!notes && !steps.length && status !== TASK_STATUS.review ? '<p class="td-peek-none">No details. Edit adds some.</p>' : ''}
-    <div class="td-hint">Added ${new Date(task.created).toLocaleDateString()} · Space to close · drag the corner to resize</div>`;
-}
-
 /** @typedef {import('./todo.js').TodoList} TodoList */
 
 /** The note's box as tall as its text, up to a limit. */
@@ -411,7 +398,6 @@ function render() {
     pickIcon.innerHTML = '';
     listEl.innerHTML = '';
     noteButton.hidden = true;
-    peek.hide();
     return;
   }
   showPick(list);
@@ -423,7 +409,6 @@ function render() {
   tagsEl.innerHTML = tags.map(([tag]) => chip(tag, picked.includes(tag))).join('');
   listEl.innerHTML = listHtml(list);
   showSearch();
-  peek.refresh();
   find(panel, `[data-td="${ACTION.pick}"]`).title = `Pick a list. This one has ${openCount(list.tasks)} open`;
   if (issue) renderIssue(list);
 }
@@ -506,7 +491,6 @@ function openList(ref) {
     editing = null;
     issue = null;
     settled = new Set();
-    peek.hide();
   }
   current = ref;
   state.todo.list = ref;
@@ -731,7 +715,6 @@ function saveEdit() {
 
 /** @param {string} id */
 function beginEdit(id) {
-  peek.hide();
   editing = id;
   editTags = [...(taskById(id)?.tags ?? [])];
   render();
@@ -1079,7 +1062,7 @@ onHost(HOST.todoIssueCreated, m => {
 // ---- Wiring ----
 
 /**
- * The task a control is on: its row's, or the card's.
+ * The task a control is on: its row's.
  * @param {HTMLElement} control
  */
 function taskOfControl(control) {
@@ -1088,7 +1071,7 @@ function taskOfControl(control) {
 }
 
 /**
- * The step a control is on, in the card.
+ * The step a control is on, in a task opened out.
  * @param {HTMLElement} control
  * @param {TodoTask} task
  */
@@ -1098,7 +1081,7 @@ function stepOf(control, task) {
 }
 
 /**
- * What a control on a task does: in its row, in its card, or on one of its steps.
+ * What a control on a task does: in its row, or on one of its steps.
  * @type {Readonly<Record<string, (control: HTMLElement, task: TodoTask) => void>>}
  */
 const ON_TASK = Object.freeze({
@@ -1111,7 +1094,18 @@ const ON_TASK = Object.freeze({
   [ACTION.reopen]: (_control, task) => changeStatus(task, TASK_STATUS.open),
   [ACTION.stopRun]: (_control, task) => stopRun(task),
   [ACTION.more]: (control, task) => taskMenu(task, control),
+  [ACTION.expand]: (_control, task) => toggleExpanded(task),
 });
+
+/**
+ * Opens a task out in its row, or folds it to its first line.
+ * @param {TodoTask} task
+ */
+function toggleExpanded(task) {
+  if (!expanded.delete(task.id)) expanded.add(task.id);
+  render();
+  /** @type {HTMLElement | null} */ (listEl.querySelector(`[data-task="${CSS.escape(task.id)}"]`))?.focus();
+}
 
 /** Shows or hides the note's box. */
 function toggleNote() {
@@ -1227,23 +1221,7 @@ listEl.addEventListener('contextmenu', e => {
   const task = row && taskById(/** @type {string} */ (row.dataset.task));
   if (!task) return;
   e.preventDefault();
-  peek.hide();
   taskMenu(task, { x: e.clientX, y: e.clientY });
-});
-
-// The card of the task the pointer rests on.
-/** @type {Element | null} */
-let hovered = null;
-listEl.addEventListener('mouseover', e => {
-  const row = /** @type {HTMLElement | null} */ (targetOf(e).closest(TASK));
-  if (row === hovered) return;
-  hovered = row;
-  if (row && !editing && !row.matches(ELSEWHERE)) peek.entered(row);
-  else peek.left();
-});
-listEl.addEventListener('mouseleave', () => {
-  hovered = null;
-  peek.left();
 });
 
 /** The task being dragged to another place in its list. */
@@ -1324,14 +1302,14 @@ listEl.addEventListener('keydown', e => {
 issueForm.addEventListener('submit', e => e.preventDefault());
 
 /**
- * Keys on a task: Space shows its card or puts it away, Enter edits it, Delete deletes it, and the arrows go up and down.
+ * Keys on a task: Space opens it out or folds it, Enter edits it, Delete deletes it, and the arrows go up and down.
  * @param {KeyboardEvent} e
  * @param {HTMLElement} row
  */
 function rowKey(e, row) {
   const task = taskById(/** @type {string} */ (row.dataset.task));
   if (!task) return;
-  if (e.key === ' ') peek.toggle(row);
+  if (e.key === ' ') toggleExpanded(task);
   else if (e.key === 'Enter') beginEdit(task.id);
   else if (e.key === 'Delete') deleteTask(task);
   else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {

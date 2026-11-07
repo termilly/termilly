@@ -3334,7 +3334,7 @@ body.detached-window .files-head .np-sep { height: 18px; margin: 0 0 0 1px; back
 .st-progress { --status: var(--accent); }
 .st-review { --status: var(--attention); }
 .st-done { --status: var(--ok); }
-:is(.td-status, .td-st-name, .td-peek-status):is(.st-progress, .st-review, .st-done) { color: var(--status); }
+:is(.td-status, .td-st-name):is(.st-progress, .st-review, .st-done) { color: var(--status); }
 .menu-icon .td-tick { stroke: var(--raised); }
 .td-st-name { font-size: 11px; font-weight: 600; }
 .td-where { color: var(--muted); font-size: 11px; }
@@ -3351,38 +3351,36 @@ button.td-agent:hover { text-decoration: underline; }
 .td-hidden-run { cursor: default; }
 .td-stop { height: 16px; padding: 0 6px; border: 1px solid var(--border); border-radius: 4px; background: none; color: var(--muted); font: inherit; font-size: 10.5px; cursor: pointer; }
 .td-stop:hover { border-color: var(--danger); color: var(--text); }
-.td-review { grid-column: 2 / -1; display: flex; flex-direction: column; gap: 6px; margin-top: 4px; padding: 6px 8px; border-left: 2px solid var(--attention); }
-.td-review-said { display: -webkit-box; margin: 0; overflow: hidden; color: var(--muted); font-size: 12.5px; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
-.td-review-said.whole { display: block; white-space: pre-wrap; }
-.td-review-said b { color: var(--text); font-weight: 600; }
+.td-review { grid-column: 2 / -1; display: flex; margin-top: 4px; }
 .td-acts .pane-btn { opacity: 1; }
 .td-acts .pane-btn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1; }
 .td-body { position: relative; display: block; min-width: 0; }
 .td-acts { position: absolute; top: 3px; right: 4px; display: inline-flex; gap: 2px; border-radius: 4px; background: linear-gradient(var(--hover), var(--hover)), var(--surface); visibility: hidden; }
-.td-task:hover > .td-acts, .td-task:focus-within > .td-acts, .td-acts:focus-within { visibility: visible; }
-.td-peek .td-acts { position: static; margin-left: auto; background: none; visibility: visible; }
-.td-peek .td-step .td-acts { visibility: hidden; }
-.td-peek .td-step:hover .td-acts, .td-peek .td-step .td-acts:focus-within { visibility: visible; }
+/* Only while the pointer is on the task: a click (or the keyboard) on it doesn't keep them. */
+.td-task:hover > .td-acts { visibility: visible; }
+.td-step .td-acts { position: static; background: none; }
+.td-step:hover .td-acts { visibility: visible; }
 .td-acts .pane-btn:disabled { opacity: .4; cursor: default; }
 .td-sub { grid-column: 2 / -1; display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 8px; padding: 1px 0; }
 .td-sub.done .td-text { color: var(--muted); text-decoration: line-through; }
 .td-progress { color: var(--muted); font: 11px var(--mono); }
-.td-peek { position: fixed; z-index: 1700; display: flex; box-sizing: border-box; flex-direction: column; gap: 7px; min-width: 260px; min-height: 140px; padding: 10px 12px; overflow: auto; resize: both; border: 1px solid var(--border-strong); border-radius: 10px; outline: none; background: var(--raised); box-shadow: var(--shadow-pop); color: var(--text); font-size: 13px; }
-.td-peek[hidden] { display: none; }
-.td-peek-head { display: flex; align-items: center; gap: 6px; }
-.td-peek-status { color: var(--muted); font-size: 12px; font-weight: 600; }
-.td-peek-title { font-size: 14px; font-weight: 600; line-height: 20px; overflow-wrap: anywhere; }
-.td-peek-details { color: var(--text); font-size: 12.5px; line-height: 18px; white-space: pre-wrap; overflow-wrap: anywhere; }
-.td-peek-label { display: flex; align-items: center; gap: 4px; margin-top: 2px; color: var(--muted); font-size: 12px; font-weight: 600; }
-.td-peek-none { margin: 0; color: var(--muted); font-size: 12.5px; }
-.td-peek .td-review { margin: 0; }
-.td-step { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; align-items: start; gap: 6px; min-height: 22px; }
+/* Under a task's text: its description's first line, opened out to all of it, its steps and what the agent said. */
+.td-about { display: flex; align-items: flex-start; gap: 2px; min-width: 0; color: var(--muted); font-size: 12.5px; line-height: 18px; }
+.td-about.more { margin-left: -18px; }
+.td-expand { display: inline-flex; flex: none; align-items: center; justify-content: center; width: 16px; height: 18px; padding: 0; border: 0; border-radius: 4px; background: none; color: var(--muted); cursor: pointer; }
+.td-expand:hover { background: color-mix(in srgb, currentColor 16%, transparent); color: var(--text); }
+.td-expand svg { width: 12px; height: 12px; fill: none; stroke: currentColor; }
+.td-about-line { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.td-about-line b, .td-result b { color: var(--text); font-weight: 600; }
+.td-about-all { display: flex; flex: 1; flex-direction: column; gap: 4px; min-width: 0; padding-bottom: 2px; }
+.td-details { white-space: pre-wrap; overflow-wrap: anywhere; }
+.td-result { padding: 6px 8px; border-radius: 6px; background: color-mix(in srgb, var(--text) 6%, transparent); white-space: pre-wrap; overflow-wrap: anywhere; }
+.td-step { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; align-items: start; gap: 6px; min-height: 22px; color: var(--text); font-size: 13px; }
 .td-step-mark { display: inline-flex; height: 20px; align-items: center; color: var(--muted); }
 .td-step-mark svg { width: 16px; height: 16px; fill: none; stroke: currentColor; }
 .td-step.done .td-step-mark { color: var(--ok); }
 .td-step-text { line-height: 20px; overflow-wrap: anywhere; }
 .td-step.done .td-step-text { color: var(--muted); text-decoration: line-through; }
-.td-hint { margin-top: auto; padding-top: 4px; color: var(--muted); font-size: 11px; }
 .td-fold { display: flex; align-items: center; gap: 4px; width: 100%; margin-top: 8px; padding: 5px 6px; border: 0; border-top: 1px solid var(--border); background: none; color: var(--muted); font: inherit; font-size: 12px; font-weight: 600; text-align: left; cursor: pointer; }
 .td-fold svg { width: 12px; height: 12px; fill: none; stroke: currentColor; }
 .td-fold-count { font-weight: 400; }
