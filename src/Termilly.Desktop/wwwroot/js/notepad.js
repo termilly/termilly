@@ -356,6 +356,35 @@ export function copyToNotepadItem(text, label = COPY_LABEL) {
   };
 }
 
+/** The most a page that reports are added to keeps: the oldest go off its end. */
+const MAX_REPORT_PAGE = 200000;
+
+/**
+ * Adds text to the top of the page with this name (a new one when there's none), without taking the focus or moving the
+ * caret of someone typing in it. Schedules' reports come here.
+ * @param {string} name
+ * @param {string} text
+ */
+export function addToPage(name, text) {
+  let page = pages().find(p => p.name === name);
+  if (!page) {
+    const active = state.notepad.activeId;
+    page = newPage();
+    page.name = name;
+    state.notepad.activeId = active ?? page.id;
+  }
+  const shown = page === activePage();
+  const { selectionStart, selectionEnd, scrollTop } = area;
+  const added = page.text ? `${text}${LF}` : text;
+  page.text = `${added}${page.text}`.slice(0, MAX_REPORT_PAGE);
+  persist();
+  render();
+  if (shown) {
+    area.setSelectionRange(selectionStart + added.length, selectionEnd + added.length);
+    area.scrollTop = scrollTop;
+  }
+}
+
 /** The Clipboard's wording for it: a clip is already copied, it's pasted there. */
 export const PASTE_TO_NOTEPAD = 'Paste to Notepad';
 

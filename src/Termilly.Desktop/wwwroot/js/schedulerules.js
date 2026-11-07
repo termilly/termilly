@@ -54,6 +54,37 @@ const WHOLE_DAYS = Object.freeze(['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'T
 const MONTHS = Object.freeze(['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']);
 const WEEKDAYS = Object.freeze([1, 2, 3, 4, 5]);
 const DIGITS = 2;
+/** Where reports go when nothing else is said: a Notepad page, and a file per run in Documents\Termilly. */
+export const REPORTS_PAGE = 'Reports';
+export const REPORT_FILE = 'reports/{name}-{date}.md';
+/** What a file name can't have, on any of the systems. */
+const NOT_IN_FILE_NAMES = /[\\/:*?"<>|]+/g;
+
+/**
+ * A report's heading: what ran, when, and how it went.
+ * @param {string} name
+ * @param {number} at
+ * @param {string} status
+ */
+export function reportHeading(name, at, status) {
+  const d = new Date(at);
+  return `## ${name}, ${DAY_NAMES[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()} ${clock(d)}, ${RUN_LABEL[status].toLowerCase()}`;
+}
+
+/**
+ * A file's name for a run: {date} 2026-11-07, {time} 20-00 and {name}, the schedule's name as a file name can have it.
+ * @param {string} template
+ * @param {number} at
+ * @param {string} name
+ */
+export function fileFor(template, at, name) {
+  const d = new Date(at);
+  const date = `${d.getFullYear()}-${twoDigits(d.getMonth() + 1)}-${twoDigits(d.getDate())}`;
+  const time = `${twoDigits(d.getHours())}-${twoDigits(d.getMinutes())}`;
+  const safe = name.replace(NOT_IN_FILE_NAMES, '-').trim() || 'schedule';
+  return template.replaceAll('{date}', date).replaceAll('{time}', time).replaceAll('{name}', safe);
+}
+
 /** What a new schedule starts with. */
 const START = Object.freeze({ limitMinutes: 10, keepDays: 30 });
 
@@ -232,7 +263,8 @@ export function sortRuns(runs, schedules, now) {
  */
 export function newSchedule(id) {
   return {
-    id, name: '', on: true, what: WHAT.command, command: '', snippet: '', prompt: '', allowChanges: false, replyInNotice: true, where: WHERE.hidden, profile: null, cwd: '', wsId: null,
+    id, name: '', on: true, what: WHAT.command, command: '', snippet: '', prompt: '', allowChanges: false, replyInNotice: true,
+    toNotepad: false, notepadPage: REPORTS_PAGE, toFile: false, file: REPORT_FILE, where: WHERE.hidden, profile: null, cwd: '', wsId: null,
     terminal: '', after: AFTER.closeIfWorked, busy: BUSY.wait, closed: CLOSED.open,
     when: { kind: WHEN.time, at: '20:00', days: [], every: 1, unit: UNIT.hours, from: '', to: '' },
     missed: MISSED.run, notify: NOTIFY.failed, phone: false, nextAt: null, ...START,

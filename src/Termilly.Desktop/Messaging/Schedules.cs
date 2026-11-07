@@ -26,6 +26,14 @@ internal static partial class FromPage
         public static string Type => "schedule:keep";
     }
 
+    /// <summary>
+    /// Adds a run's report to a file: a new one, or at the end of one that's there. A name with no folder goes in Documents\Termilly.
+    /// </summary>
+    internal sealed record ScheduleSaveFile(string RunId = "", string Path = "", string Text = "") : IPageMessage
+    {
+        public static string Type => "schedule:save-file";
+    }
+
     /// <summary>Asks for a run's kept output.</summary>
     internal sealed record ScheduleReportRead(string? RequestId = null, string RunId = "") : IPageMessage
     {
@@ -57,6 +65,12 @@ internal static partial class ToPage
     internal sealed record ScheduleEnded(string RunId, int? ExitCode, string Tail, bool Stopped = false, string? Error = null) : IHostMessage
     {
         public static string Type => "schedule:ended";
+    }
+
+    /// <summary>Where a run's report was saved, or why it couldn't be.</summary>
+    internal sealed record ScheduleFileSaved(string RunId, string? Path, string? Error = null) : IHostMessage
+    {
+        public static string Type => "schedule:file-saved";
     }
 
     /// <summary>A run's kept output as the terminal printed it, and how wide that terminal was; null when it's gone.</summary>

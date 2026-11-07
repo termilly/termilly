@@ -12,6 +12,7 @@ import { allSnippets, fill } from './snippets.js';
 import { windowInFront } from './windowshown.js';
 import { lastOutput } from './commands.js';
 import { agentCommand, readResult, noticeOf } from './agentcli.js';
+import { saveReport } from './schedulesave.js';
 import { addScheduleNote } from './inbox.js';
 import { plainText } from './schedulereport.js';
 import { runInNewTerminal, runInTerminal, stopInTerminal, finishTerminal, terminalsFor, TERMINAL_TURN } from './scheduleterminal.js';
@@ -235,7 +236,8 @@ export function stopRun(runId) {
  * Ends a run: what it came to, the user told if they asked, and its terminal dealt with.
  * @param {ScheduleRunRecord} run
  * @param {Schedule} schedule
- * @param {{ code?: number | null, stopped?: boolean, error?: string | null, sent?: boolean, summary?: string, costUsd?: number | null, notice?: string }} how
+ * @param {{ code?: number | null, stopped?: boolean, error?: string | null, sent?: boolean, summary?: string, costUsd?: number | null, notice?: string, text?: string }} how
+ *   text: what it printed, or an agent's reply, to keep where the schedule says
  */
 function end(run, schedule, how) {
   const going = active.get(run.id);
@@ -247,6 +249,7 @@ function end(run, schedule, how) {
   run.summary = how.error ?? how.summary ?? (how.stopped ? `Stopped after ${Math.round(run.ms / SECOND_MS)} s.` : '');
   if (going?.tab) finishTerminal(going.tab, schedule, run);
   tell(schedule, run, how.notice);
+  if (how.text !== undefined) saveReport(schedule, run, how.text);
   tidyRuns();
   changed();
 }
@@ -308,7 +311,7 @@ onHost(HOST.scheduleEnded, async m => {
   const text = await plainText(m.tail ?? '');
   const agent = going.schedule.what === WHAT.agent ? readResult(text) : null;
   if (agent && !m.stopped) endAgent(going, m.exitCode ?? null, agent);
-  else end(going.run, going.schedule, { code: m.exitCode, stopped: m.stopped, error: m.error, summary: summaryOf(text) });
+  else end(going.run, going.schedule, { code: m.exitCode, stopped: m.stopped, error: m.error, summary: summaryOf(text), text });
 });
 
 /**
@@ -321,7 +324,7 @@ function endAgent({ run, schedule }, code, agent) {
   const headline = agent.reply.split(/\r?\n/).map(line => line.trim()).find(Boolean) ?? '';
   const notice = schedule.replyInNotice ? noticeOf(agent.reply) : undefined;
   const how = agent.failed ? { error: agent.why, code } : { code, summary: summaryOf(headline) };
-  end(run, schedule, { ...how, costUsd: agent.costUsd, notice: agent.failed ? undefined : notice });
+  end(run, schedule, { ...how, costUsd: agent.costUsd, notice: agent.failed ? undefined : notice, text: agent.reply });
 }
 
 /**
@@ -334,7 +337,7 @@ export function terminalRunEnded(tab, how, output) {
   const going = [...active.values()].find(a => a.tab === tab);
   if (!going) return;
   if (output !== undefined) send(PAGE.scheduleKeep, { runId: going.run.id, output });
-  end(going.run, going.schedule, how);
+  end(going.run, going.schedule, output === undefined ? how : { ...how, text: output });
 }
 
 on(EVENTS.tabClosed, tab => terminalRunEnded(tab, { error: 'Its terminal was closed.' }));

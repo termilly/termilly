@@ -218,3 +218,47 @@ public sealed class ScheduleReportTests : IDisposable
         Assert.Empty(Directory.GetFiles(_dir, "*.tmr", SearchOption.AllDirectories));
     }
 }
+
+/// <summary>Reports saved to files, as a schedule asks.</summary>
+public sealed class ReportFileTests : IDisposable
+{
+    private readonly string _dir = Path.Combine(Path.GetTempPath(), "termilly-tests", Guid.NewGuid().ToString("N"));
+
+    public void Dispose()
+    {
+        if (Directory.Exists(_dir))
+        {
+            Directory.Delete(_dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ANameWithoutAFolderGoesInTermillysDocuments()
+    {
+        Assert.Equal(Path.Combine(AppPaths.DocumentsFolder, "reports", "a.md"), ReportFiles.Resolve("reports/a.md"));
+    }
+
+    [Fact]
+    public void AFullPathStaysAsItIs()
+    {
+        var path = Path.Combine(_dir, "x.md");
+        Assert.Equal(path, ReportFiles.Resolve(path));
+    }
+
+    [Fact]
+    public void TheHomeFolderIsWrittenAsATilde()
+    {
+        Assert.Equal(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "r.md"), ReportFiles.Resolve("~/r.md"));
+    }
+
+    [Fact]
+    public void AFileIsMadeWithItsFolderThenGetsTheNextReportAtItsEnd()
+    {
+        var path = Path.Combine(_dir, "deep", "log.md");
+        ReportFiles.Save(path, "## first\n");
+        ReportFiles.Save(path, "## second\n");
+        var text = File.ReadAllText(path);
+        Assert.StartsWith("## first\n", text);
+        Assert.EndsWith("## second\n", text);
+    }
+}

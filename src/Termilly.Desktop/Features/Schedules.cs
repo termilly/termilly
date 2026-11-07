@@ -53,6 +53,32 @@ internal sealed class ScheduleReports(Vault vault)
     private static bool IsId(string id) => id.Length > 0 && id.All(char.IsAsciiLetterOrDigit);
 }
 
+/// <summary>Reports saved to files, as a schedule asks (js/schedulesave.js).</summary>
+internal static class ReportFiles
+{
+    /// <summary>Where a file goes: a name with no folder in Documents\Termilly, variables and ~ as a terminal would read them.</summary>
+    public static string Resolve(string path)
+    {
+        var expanded = Environment.ExpandEnvironmentVariables(path.Trim());
+        if (expanded == "~" || expanded.StartsWith("~/", StringComparison.Ordinal) || expanded.StartsWith("~\\", StringComparison.Ordinal))
+        {
+            expanded = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + expanded[1..];
+        }
+        return Path.GetFullPath(Path.IsPathRooted(expanded) ? expanded : Path.Combine(AppPaths.DocumentsFolder, expanded));
+    }
+
+    /// <summary>A new file, or the report at the end of the one there: a file without the date in its name collects them.</summary>
+    public static void Save(string path, string text)
+    {
+        if (File.Exists(path))
+        {
+            File.AppendAllText(path, Environment.NewLine + text);
+            return;
+        }
+        AppPaths.WriteAtomically(path, text);
+    }
+}
+
 /// <summary>Schedules (js/schedules.js): the clock, runs out of sight, and their reports.</summary>
 internal sealed class ScheduleHandler(PageChannel page, ProfileCatalog profiles, ScheduleReports reports, ScheduleRunner runner)
     : IMessageHandler, IStartable, IDisposable
@@ -70,6 +96,7 @@ internal sealed class ScheduleHandler(PageChannel page, ProfileCatalog profiles,
         router.On<FromPage.ScheduleRun>(m => { _ = RunAsync(m); });
         router.On<FromPage.ScheduleStop>(m => runner.Stop(m.RunId));
         router.On<FromPage.ScheduleKeep>(m => Guarded(() => reports.Save(m.RunId, m.Output)));
+        router.On<FromPage.ScheduleSaveFile>(SaveFile);
         router.On<FromPage.ScheduleReportRead>(m => page.Post(new ToPage.ScheduleReport(m.RequestId, reports.Read(m.RunId), ScheduleRunner.Columns)));
         router.On<FromPage.ScheduleForget>(m => Guarded(() => reports.Forget(m.RunIds ?? [])));
     }
@@ -101,6 +128,21 @@ internal sealed class ScheduleHandler(PageChannel page, ProfileCatalog profiles,
         catch (Exception e) when (e is InvalidOperationException or IOException or Win32Exception or NotSupportedException)
         {
             page.Post(new ToPage.ScheduleEnded(m.RunId, null, "", Error: e.Message));
+        }
+    }
+
+    private void SaveFile(FromPage.ScheduleSaveFile m)
+    {
+        string? path = null;
+        try
+        {
+            path = ReportFiles.Resolve(m.Path);
+            ReportFiles.Save(path, m.Text);
+            page.Post(new ToPage.ScheduleFileSaved(m.RunId, path));
+        }
+        catch (Exception e) when (Storage.IsFileError(e) || e is ArgumentException or NotSupportedException)
+        {
+            page.Post(new ToPage.ScheduleFileSaved(m.RunId, path ?? m.Path, e.Message));
         }
     }
 

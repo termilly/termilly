@@ -135,11 +135,22 @@ function whenHtml(s) {
   return `<h3 class="sch-head">When</h3>${segmentHtml(WHEN_KIND_SEGMENT, when.kind)}${body}`;
 }
 
+/**
+ * Where else each report goes.
+ * @param {Schedule} s
+ */
+const keepHtml = s => `<label class="note-pin"><input type="checkbox" name="toNotepad"${s.toNotepad ? ' checked' : ''}> Add each report to the top of a Notepad page</label>
+  ${s.toNotepad ? fieldHtml('Notepad page', inputHtml('notepadPage', s.notepadPage, 'Reports')) : ''}
+  <label class="note-pin"><input type="checkbox" name="toFile"${s.toFile ? ' checked' : ''}> Save each report to a file</label>
+  ${s.toFile ? `${fieldHtml('File', inputHtml('file', s.file, 'reports/{name}-{date}.md'))}
+    <p class="dialog-sub"><code>{date}</code>, <code>{time}</code> and <code>{name}</code> are filled in. A name without a folder goes in Documents\\Termilly. A file that’s there gets the report at its end.</p>` : ''}`;
+
 /** @param {Schedule} s */
 const afterHtml = s => `<h3 class="sch-head">After it runs</h3>
   <div class="sch-row">${fieldHtml('Stop it after (minutes)', inputHtml('limitMinutes', s.limitMinutes, '10', 'number'))}${fieldHtml('Keep reports (days)', inputHtml('keepDays', s.keepDays, '30', 'number'))}</div>
   ${fieldHtml('Notify me', segmentHtml('notify', s.notify))}
-  <label class="note-pin"><input type="checkbox" name="phone"${s.phone ? ' checked' : ''}> On my phone too</label>`;
+  <label class="note-pin"><input type="checkbox" name="phone"${s.phone ? ' checked' : ''}> On my phone too</label>
+  ${keepHtml(s)}`;
 
 /**
  * The form.
@@ -223,6 +234,8 @@ export function reportHtml(run, text) {
       <button class="btn small" data-sch="run">Run again</button>
     </div>
     ${run.summary && run.status !== RUN.worked ? `<p class="sch-why">${escapeHtml(run.summary)}</p>` : ''}
+    ${run.file ? `<p class="dialog-sub sch-saved">Saved to <button class="link" data-sch="file" title="Show it in its folder">${escapeHtml(run.file)}</button></p>` : ''}
+    ${run.fileError ? `<p class="sch-why">Couldn’t save it to a file: ${escapeHtml(run.fileError)}</p>` : ''}
     ${text === null ? `<p class="set-desc">${empty}</p>` : `<pre class="sch-output">${escapeHtml(text)}</pre>`}
   </div>`;
 }

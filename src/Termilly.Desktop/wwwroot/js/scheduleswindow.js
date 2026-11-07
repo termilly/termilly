@@ -26,7 +26,7 @@ const NAME = 'Schedules';
 const WINDOW_KEY = 'schedules';
 /** The window's buttons (their data-sch). */
 const ACTION = Object.freeze({
-  add: 'add', close: 'close', save: 'save', remove: 'delete', run: 'run', stop: 'stop', copy: 'copy', terminal: 'terminal', onOff: 'onOff',
+  add: 'add', close: 'close', save: 'save', remove: 'delete', run: 'run', stop: 'stop', copy: 'copy', terminal: 'terminal', onOff: 'onOff', file: 'file',
 });
 /** The two views of a schedule. */
 const VIEW = Object.freeze({ form: 'form', runs: 'runs' });
@@ -34,6 +34,8 @@ const VIEW = Object.freeze({ form: 'form', runs: 'runs' });
 const FIRST_SHARE = 0.8;
 const PROD_TAG = 'prod';
 const KEY_SAVE = 'KeyS';
+/** Boxes that show or hide more of the form. */
+const REDRAWS = new Set(['allowChanges', 'toNotepad', 'toFile']);
 /** Fields that hold numbers. */
 const NUMBERS = new Set(['limitMinutes', 'keepDays', 'every']);
 /** The biggest "every", so a day still has a run in it. */
@@ -118,6 +120,8 @@ function problemOf(s) {
     if ([when.from, when.to].filter(Boolean).length === 1) return 'Fill in both From and To, or neither.';
     if ([when.from, when.to].some(t => t && minutesOf(t) === null)) return 'From and To should look like 9:00.';
   }
+  if (s.toNotepad && !s.notepadPage.trim()) return 'It needs the Notepad page’s name.';
+  if (s.toFile && !s.file.trim()) return 'It needs a file name.';
   if (!(s.limitMinutes >= 1)) return 'Stop it after should be at least a minute.';
   return s.keepDays >= 1 ? '' : 'Keep reports should be at least a day.';
 }
@@ -362,6 +366,10 @@ async function act(action) {
   } else if (action === ACTION.stop && openRunId) stopRun(openRunId);
   else if (action === ACTION.copy) await navigator.clipboard.writeText(find(editEl, '.sch-output').textContent ?? '');
   else if (action === ACTION.terminal) await openAsTerminal();
+  else if (action === ACTION.file) {
+    const run = openRunId ? state.schedules.runs.find(r => r.id === openRunId) : null;
+    if (run?.file) send(PAGE.openPath, { path: run.file });
+  }
 }
 
 box.addEventListener('click', e => {
@@ -389,7 +397,8 @@ for (const event of ['input', 'change']) {
     const field = /** @type {HTMLInputElement} */ (targetOf(e));
     if (!editing || !field.name || !editEl.contains(field)) return;
     fieldChanged(field);
-    renderState();
+    if (REDRAWS.has(field.name)) renderForm();
+    else renderState();
   });
 }
 

@@ -296,6 +296,12 @@ interface Schedule {
   allowChanges: boolean;
   /** An agent's reply goes in the notification. */
   replyInNotice: boolean;
+  /** Each run's report goes to the top of a Notepad page, by its name (js/schedulesave.js). */
+  toNotepad: boolean;
+  notepadPage: string;
+  /** And to a file: {date}, {time} and {name} are filled in. */
+  toFile: boolean;
+  file: string;
   where: string;
   profile: string | null;
   cwd: string;
@@ -326,6 +332,9 @@ interface ScheduleRunRecord {
   summary: string;
   /** What an agent's run cost, as it said. */
   costUsd?: number | null;
+  /** The file its report was saved to, or why it couldn't be. */
+  file?: string | null;
+  fileError?: string | null;
 }
 
 interface SchedulesState {
