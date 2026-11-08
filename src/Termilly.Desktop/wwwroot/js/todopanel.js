@@ -15,8 +15,8 @@ import { answerAsk, allowWaiting, ASK } from './todoask.js';
 import { openTagManager } from './todotags.js';
 import { listItems, dotHtml } from './todomenu.js';
 import { tagCompletion } from './todotagcomplete.js';
-import { escapeHtml, cssColor, tabBadgeHtml, countText, ICONS } from './ui.js';
-import { byId, find, targetOf, WORKSPACE_ID, DOCK_GRIP, PANEL_HEAD, TOOL_COUNT } from './dom.js';
+import { escapeHtml, cssColor, tabBadgeHtml, ICONS } from './ui.js';
+import { byId, find, targetOf, WORKSPACE_ID, DOCK_GRIP, PANEL_HEAD } from './dom.js';
 import { showMenu, openPopover, closePopover, isOpen, closeAll, SEPARATOR } from './popups.js';
 import { showToast, TOAST } from './toasts.js';
 import { setNote } from './notes.js';
@@ -126,7 +126,6 @@ panel.innerHTML = `
 byId(WORKSPACE_ID).append(panel);
 
 const button = byId('todo-button');
-const countEl = find(button, TOOL_COUNT);
 find(panel, '.td-icon').innerHTML = /** @type {Element} */ (button.firstElementChild).outerHTML;
 const head = find(panel, PANEL_HEAD);
 const pickIcon = find(panel, '.td-pick-icon');
@@ -584,11 +583,9 @@ function openFilter(at) {
   /** @type {HTMLElement | null} */ (body.querySelector(FILTER_ROW))?.focus();
 }
 
-/** The title bar button's count: open tasks where you're working, while the panel is closed. */
+/** The title bar button's tooltip says how many tasks are open where you're working; the button shows no count. */
 function showCount() {
   const count = openInFront();
-  countEl.hidden = !panel.hidden || !count;
-  countEl.textContent = countText(count);
   button.title = `To do (Ctrl+Shift+K)${count ? `: ${count} open` : ''}`;
 }
 
