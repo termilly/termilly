@@ -324,12 +324,6 @@ body.moving-bar, body.moving-bar * { cursor: grabbing !important; -webkit-user-s
    hovered. A shadow, not a border, so nothing in the layout moves. */
 body.moving-bar .toolbar { border-radius: 8px; background: var(--accent-fill); box-shadow: 0 0 0 1px var(--accent); }
 body.moving-bar .toolbar .tool { background: none; color: var(--text); }
-/* And a see-through picture of it rides under the pointer (js/toolbar.js), so it's plain it's being carried. */
-body.moving-bar .toolbar.bar-ghost {
-  position: fixed; top: 0; left: 0; z-index: 3000;
-  padding: 2px; border-radius: 8px; background: var(--raised); box-shadow: 0 0 0 1px var(--accent), var(--shadow-pop);
-  opacity: 0.6; pointer-events: none;
-}
 
 .tool, .window-controls button {
   display: grid;

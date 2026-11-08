@@ -36,8 +36,6 @@ const PLACES = Object.freeze([
 ]);
 /** The body's class while the bar is dragged (app.css), and the attribute that says which edge it's on. */
 const MOVING = 'moving-bar';
-/** The see-through picture of the bar that follows the pointer while it's dragged (app.css). */
-const GHOST = 'bar-ghost';
 /** The title bar's class when it has no room for the app's name beside the bar (app.css). */
 const TIGHT = 'tight';
 
@@ -184,39 +182,6 @@ function follow(ev, grab) {
   slide();
 }
 
-/**
- * A see-through picture of the bar, carried under the pointer while the bar itself shows where it lands. A copy, so its
- * buttons look as they are now (counts too), without ids or titles, as it's only a picture.
- */
-function makeGhost() {
-  const ghost = /** @type {HTMLElement} */ (toolbar.cloneNode(true));
-  ghost.classList.add(GHOST);
-  ghost.style.transform = '';
-  for (const el of [ghost, ...ghost.querySelectorAll('[id], [title]')]) {
-    el.removeAttribute('id');
-    el.removeAttribute('title');
-  }
-  document.body.append(ghost);
-  return ghost;
-}
-
-/**
- * Lays the picture the way the bar lies on the edge it's on now, the grabbed point (a fraction of its length) under
- * the pointer and its middle across it, in whole pixels so its icons stay sharp.
- * @param {HTMLElement} ghost
- * @param {PointerEvent} ev
- * @param {number} grab
- */
-function carry(ghost, ev, grab) {
-  const side = sideNow();
-  if (ghost.dataset.side !== side) ghost.dataset.side = side;
-  const across = isAcross(side);
-  const { width, height } = ghost.getBoundingClientRect();
-  const x = across ? ev.clientX - grab * width : ev.clientX - width / 2;
-  const y = across ? ev.clientY - height / 2 : ev.clientY - grab * height;
-  ghost.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
-}
-
 /** The click that ends a drag on a button doesn't click it. */
 function swallowClick() {
   /** @param {MouseEvent} e */
@@ -234,27 +199,21 @@ toolbar.addEventListener('pointerdown', e => {
   const t = track();
   const grab = t.length ? ((t.across ? e.clientX : e.clientY) - (t.natural + shift)) / t.length : 0;
   const body = document.body;
-  /** @type {HTMLElement | null} */
-  let ghost = null;
   /** @param {PointerEvent} ev */
   const move = ev => {
     if (!body.classList.contains(MOVING)) {
       if (Math.hypot(ev.clientX - from.x, ev.clientY - from.y) < DRAG_START_PX) return;
       // Captured by the page, not the bar: the bar leaves its place in the page as it changes edge.
       body.setPointerCapture(e.pointerId);
-      closeAll();
-      // Copied before it lights up, so the picture looks like the bar did when it was picked up.
-      ghost = makeGhost();
       body.classList.add(MOVING);
+      closeAll();
     }
     follow(ev, grab);
-    if (ghost) carry(ghost, ev, grab);
   };
   const up = () => {
     window.removeEventListener('pointermove', move);
     window.removeEventListener('pointerup', up);
     window.removeEventListener('pointercancel', up);
-    ghost?.remove();
     if (!body.classList.contains(MOVING)) return;
     body.classList.remove(MOVING);
     swallowClick();
