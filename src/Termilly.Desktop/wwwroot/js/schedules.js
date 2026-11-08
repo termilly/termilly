@@ -321,7 +321,8 @@ onHost(HOST.scheduleEnded, async m => {
 });
 
 /**
- * An agent's run ended with its result. A run refused something failed, whatever it says: what it was asked isn't done.
+ * An agent's run ended with its result. One that was refused something still worked when it ended well: it went on without
+ * it, and its summary starts with what it was refused.
  * @param {ActiveRun} going
  * @param {number | null} code
  * @param {NonNullable<ReturnType<typeof readResult>>} agent
@@ -329,8 +330,8 @@ onHost(HOST.scheduleEnded, async m => {
 function endAgent({ run, schedule }, code, agent) {
   const headline = agent.reply.split(/\r?\n/).map(line => line.trim()).find(Boolean) ?? '';
   const notice = schedule.replyInNotice ? noticeOf(agent.reply) : undefined;
-  const how = agent.failed ? { error: agent.why, code } : { code, summary: summaryOf(headline) };
-  end(run, schedule, { ...how, costUsd: agent.costUsd, notice: agent.failed ? undefined : notice, text: agent.reply });
+  const how = agent.errored ? { error: agent.why, code } : { code, summary: summaryOf([agent.why, headline].filter(Boolean).join(' ')) };
+  end(run, schedule, { ...how, costUsd: agent.costUsd, notice: agent.errored ? undefined : notice, text: agent.reply });
 }
 
 /**

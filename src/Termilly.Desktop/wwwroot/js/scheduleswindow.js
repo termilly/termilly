@@ -8,7 +8,7 @@ import { send } from './host.js';
 import { state, on, emit, persist, newId, EVENTS } from './store.js';
 import { restoreFocus, newTab } from './panes.js';
 import { closeAll, dropdown } from './popups.js';
-import { modal, CONFIRM_DIALOG } from './dialogs.js';
+import { modal, pickFolder, CONFIRM_DIALOG } from './dialogs.js';
 import { escapeHtml } from './ui.js';
 import { fuzzyMatch } from './fuzzy.js';
 import { allSnippets, NAME_WORDS } from './snippets.js';
@@ -25,7 +25,7 @@ const NAME = 'Schedules';
 const WINDOW_KEY = 'schedules';
 /** The window's buttons (their data-sch). */
 const ACTION = Object.freeze({
-  add: 'add', close: 'close', save: 'save', remove: 'delete', run: 'run', stop: 'stop', copy: 'copy', terminal: 'terminal', onOff: 'onOff', file: 'file',
+  add: 'add', close: 'close', save: 'save', remove: 'delete', run: 'run', stop: 'stop', copy: 'copy', terminal: 'terminal', onOff: 'onOff', file: 'file', browse: 'browse',
 });
 /** The two views of a schedule. */
 const VIEW = Object.freeze({ form: 'form', runs: 'runs' });
@@ -322,6 +322,15 @@ async function openAsTerminal() {
   newTab({ profile: shell, wsId: state.activeId, cwd: s.cwd || null, name: s.name, restore: { lines: text.split('\n'), closedAt: Date.now() } });
 }
 
+/** Picks the run's folder on this computer: the picker gives it as it's spelled on disk. */
+async function browseFolder() {
+  const field = /** @type {HTMLInputElement} */ (find(editEl, '[name=cwd]'));
+  const path = await pickFolder(field.value || undefined);
+  if (!path || !editing) return;
+  field.value = path;
+  field.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
 /** @param {string} action */
 async function act(action) {
   if (action === ACTION.add) await add();
@@ -336,6 +345,7 @@ async function act(action) {
   } else if (action === ACTION.stop && openRunId) stopRun(openRunId);
   else if (action === ACTION.copy) await navigator.clipboard.writeText(find(editEl, '.sch-output').textContent ?? '');
   else if (action === ACTION.terminal) await openAsTerminal();
+  else if (action === ACTION.browse) await browseFolder();
   else if (action === ACTION.file) {
     const run = openRunId ? state.schedules.runs.find(r => r.id === openRunId) : null;
     if (run?.file) send(PAGE.openPath, { path: run.file });

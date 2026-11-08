@@ -26,6 +26,11 @@ const NOBODY_ASKS = Object.freeze(['--permission-prompts', 'none']);
 const READ_ONLY = Object.freeze(['--restricted', '--tools', READ_TOOLS, '--allowedTools', READ_TOOLS_ALLOWED]);
 /** Changes are allowed: files are edited without asking, and commands run as the user's own settings say. */
 const CHANGES = Object.freeze(['--permission-mode', 'acceptEdits']);
+/**
+ * Changes are allowed with nobody to ask: Claude Code's auto mode, as in a session, where a safety check lets safe commands
+ * run and refuses risky ones. The user's settings still allow what they allow.
+ */
+const CHANGES_UNASKED = Object.freeze(['--permission-mode', 'auto']);
 /** Everything is allowed: where nobody can be asked (on a server), and To do's Allow all in Silent runs is on. */
 const EVERYTHING = Object.freeze(['--permission-mode', 'bypassPermissions']);
 
@@ -50,7 +55,7 @@ function promptFor(prompt, shell, typed) {
  *   host. all: with changes, it may do anything without asking.
  */
 export function agentCommand(prompt, { shell, changes = false, all = false, json = false, ask = false }) {
-  const allowed = changes ? (all ? EVERYTHING : CHANGES) : READ_ONLY;
+  const allowed = !changes ? READ_ONLY : all ? EVERYTHING : ask ? CHANGES : CHANGES_UNASKED;
   const words = [AGENT_COMMAND, '--print', promptFor(prompt, shell, !json), ...(json ? ['--output-format', 'json'] : []), ...allowed, ...ALWAYS, ...(ask ? [] : NOBODY_ASKS)];
   return commandLine(words, shell);
 }
@@ -61,7 +66,7 @@ export function agentCommand(prompt, { shell, changes = false, all = false, json
  */
 function wanted(denied) {
   const names = [...new Set(denied.map(d => d.tool_name ?? 'a tool'))];
-  return `It needed permission for ${names.slice(0, MAX_NAMED).join(', ')}${names.length > MAX_NAMED ? ` and ${names.length - MAX_NAMED} more` : ''}.`;
+  return `Refused ${names.slice(0, MAX_NAMED).join(', ')}${names.length > MAX_NAMED ? ` and ${names.length - MAX_NAMED} more` : ''}.`;
 }
 
 /**
