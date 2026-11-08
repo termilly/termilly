@@ -296,6 +296,31 @@ body:not([data-sidebar="open"]) .crumb { opacity: 1; transform: none; }
 /* Between the terminal buttons (new, splits) and the rest. */
 .toolbar .separator { align-self: center; margin: 0 6px; }
 
+/* The title bar's buttons docked on another edge of the window (js/toolbar.js): a strip of their own there, beside the
+   sidebar and the terminals or under them. They slide along it (a transform, so the layout doesn't move). */
+.bar-dock { display: none; flex: none; align-items: center; min-width: 0; min-height: 0; }
+body[data-bar="left"] .bar-dock[data-side="left"],
+body[data-bar="right"] .bar-dock[data-side="right"],
+body[data-bar="bottom"] .bar-dock[data-side="bottom"] { display: flex; }
+.bar-dock[data-side="left"], .bar-dock[data-side="right"] { flex-direction: column; }
+.bar-dock[data-side="left"] { margin-right: var(--gap); }
+.bar-dock[data-side="right"] { margin-left: var(--gap); }
+.bar-dock[data-side="bottom"] { height: 28px; margin: 0 var(--gap) var(--gap); }
+.bar-dock .toolbar { flex: none; }
+.toolbar[data-side="left"], .toolbar[data-side="right"] { flex-direction: column; }
+.toolbar[data-side="left"] .separator, .toolbar[data-side="right"] .separator { width: 18px; height: 1px; margin: 6px 0; }
+/* Out of the title bar, or left of its search box, the divider between them and the window's buttons has nothing to divide. */
+body[data-bar]:not([data-bar="top"]) #titlebar .tb-right > .separator,
+body[data-bar-beside="left"] #titlebar .tb-right > .separator { display: none; }
+/* Left of the search box, the left column keeps their room and the search box moves right, as it moves left for them on
+   the right. */
+body[data-bar-beside="left"] #titlebar { grid-template-columns: minmax(max-content, 1fr) auto minmax(max-content, 1fr); }
+#titlebar .tb-left > .toolbar { flex: none; margin-left: 12px; }
+/* There the workspace's name takes no room while it's hidden (the sidebar is open), and in a narrow window the app's name
+   goes (js/toolbar.js). */
+body[data-bar-beside="left"][data-sidebar="open"] .crumb, #titlebar.tight .brand { display: none; }
+body.moving-bar, body.moving-bar * { cursor: grabbing !important; -webkit-user-select: none; user-select: none; }
+
 .tool, .window-controls button {
   display: grid;
   place-items: center;

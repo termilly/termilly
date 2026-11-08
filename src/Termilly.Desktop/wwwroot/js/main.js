@@ -16,6 +16,7 @@ import {
   cycleGroupTab, moveAllToTabs, reopenWindows, DIRECTION,
 } from './panes.js';
 import { initSidebar, toggleSidebar } from './sidebar.js';
+import { initToolbar } from './toolbar.js';
 import './remotepc.js';
 import { openPalette, setCommands, openGoTo, openCommandHistory, PALETTE_VIEW } from './palette.js';
 import { jumpToPrompt, copyLastOutput } from './commands.js';
@@ -560,6 +561,7 @@ function boot(saved, snapshot, liveSessions = []) {
   }
   renderAll();
   initSidebar();
+  initToolbar();
   initNotepad();
   initTodo();
   initClips();

@@ -115,6 +115,12 @@ export const getSetting = path => {
  */
 
 /**
+ * The title bar's buttons (js/toolbar.js): the edge of the window they're docked on (top unless moved), and where along
+ * it, from 0 at its start (left or top) to 1 at its end; on the top edge, which side of the search box (right unless moved).
+ * @typedef {{ side?: string, at?: number, beside?: string }} ToolbarState
+ */
+
+/**
  * A theme plugin's terminal colours (plugins.js), based on Light or Dark.
  * @typedef {{ id: string, name: string, light?: boolean, colors: Record<string, string> }} PluginTheme
  */
@@ -141,6 +147,8 @@ export const state = {
   clips: { open: false },
   /** @type {FilesState} */
   files: { open: false },
+  /** @type {ToolbarState} */
+  toolbar: {},
   /**
    * Schedules, their runs, and whether their window is open (js/schedules.js).
    * @type {SchedulesState}
@@ -775,6 +783,7 @@ function serialize() {
     schedules: state.schedules,
     clips: state.clips,
     files: state.files,
+    toolbar: state.toolbar,
     windowPlaces: state.windowPlaces,
     windowsOnTop: state.windowsOnTop,
     // tmux windows aren't saved: they're tmux's, and attaching again brings them back (tmux.js).
@@ -802,10 +811,12 @@ export function lastFolderOf(tab) {
 }
 
 /**
- * To do, the Clipboard, the Files panel, the Snippets window and schedules, as serialize wrote them; an older file may have none.
+ * To do, the Clipboard, the Files panel, the Snippets window, schedules and the title bar's buttons, as serialize wrote
+ * them; an older file may have none.
  * @param {any} saved
  */
 function restorePanels(saved) {
+  if (saved.toolbar && typeof saved.toolbar === 'object') state.toolbar = { ...saved.toolbar };
   if (saved.todo && typeof saved.todo === 'object') state.todo = { ...state.todo, ...saved.todo };
   if (saved.clips && typeof saved.clips === 'object') state.clips = { ...state.clips, ...saved.clips };
   if (saved.files && typeof saved.files === 'object') state.files = { ...state.files, ...saved.files };

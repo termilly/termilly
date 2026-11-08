@@ -107,6 +107,15 @@ export const DOCK_SIDE = Object.freeze({ right: 'right', left: 'left', top: 'top
 /** @param {string} side */
 export const isAcross = side => side === DOCK_SIDE.top || side === DOCK_SIDE.bottom;
 
+/** The title bar's buttons, New terminal to Settings (js/toolbar.js). */
+export const TOOLBAR = '.toolbar';
+/**
+ * The edge of the window the title bar's buttons are docked on, when `el` is one of them (else the top): what opens
+ * from one of them opens away from that edge.
+ * @param {Element} el
+ */
+export const barSideOf = el => /** @type {HTMLElement | null} */ (el.closest(TOOLBAR))?.dataset.side ?? DOCK_SIDE.top;
+
 /**
  * The edge of `area` a point is nearest, if it's within `band` of it; null in the middle or outside.
  * @param {{ left: number, right: number, top: number, bottom: number }} area

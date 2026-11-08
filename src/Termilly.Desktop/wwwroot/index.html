@@ -100,6 +100,8 @@
   </header>
 
   <div id="app-body">
+    <!-- Where the title bar's buttons dock on the other edges of the window, one strip per edge (js/toolbar.js). -->
+    <div class="bar-dock" data-side="left"></div>
     <aside id="sidebar" aria-label="Workspaces">
       <div class="side-open">
         <div class="side-head">
@@ -162,7 +164,9 @@
         </div>
       </div>
     </main>
+    <div class="bar-dock" data-side="right"></div>
   </div>
+  <div class="bar-dock" data-side="bottom"></div>
 
   <div class="ws-flyout" id="ws-flyout"></div>
 
