@@ -292,7 +292,7 @@ function changed(ref) {
 }
 
 /**
- * Adds tasks to the end of a list's open ones, or the start of its done ones: they show in the order given.
+ * Adds tasks on top of a list, under the field they're typed in (done ones go to its done part): they show in the order given.
  * @param {ListRef} ref
  * @param {{ text: string, tags?: string[], done?: boolean, details?: string }[]} tasks
  */
@@ -305,7 +305,7 @@ export function addTasks(ref, tasks) {
     ...(task.done ? { done: true } : {}),
     ...(task.details ? { details: task.details } : {}),
   }));
-  setTasks(ref, [...tasksOf(ref), ...added]);
+  setTasks(ref, [...added, ...tasksOf(ref)]);
   changed(ref);
 }
 
