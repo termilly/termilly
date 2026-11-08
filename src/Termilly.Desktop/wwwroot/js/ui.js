@@ -224,6 +224,9 @@ export const ICONS = {
   port: '<svg viewBox="0 0 16 16"><rect x="3.5" y="6.5" width="9" height="7" rx="1.5"/><path d="M5.5 6.5V3.5M10.5 6.5V3.5M6 9.5h4"/></svg>',
   disk: '<svg viewBox="0 0 16 16"><rect x="2.5" y="3.5" width="11" height="10" rx="1.5"/><path d="M2.5 9.5h11"/><rect x="10" y="11" width="2" height="1" fill="currentColor" stroke="none"/></svg>',
   stop: '<svg viewBox="0 0 16 16"><rect x="4.5" y="4.5" width="7" height="7" rx="1.5"/></svg>',
+  chevronDown: '<svg viewBox="0 0 16 16"><path d="M3.5 6L8 10.5 12.5 6"/></svg>',
+  pin: '<svg viewBox="0 0 16 16"><path d="M5.5 2.5h5M6.5 2.5v5l-2 2v1h7v-1l-2-2v-5M8 10.5v4"/></svg>',
+  todo: '<svg viewBox="0 0 16 16"><path d="M1.5 3.5l1 1 2-2M1.5 8.5l1 1 2-2M1.5 13.5l1 1 2-2M7.5 3.5h7M7.5 8.5h7M7.5 13.5h7"/></svg>',
   chevronLeft: '<svg viewBox="0 0 16 16"><path d="M10 3.5L5.5 8l4.5 4.5"/></svg>',
   chevronRight: '<svg viewBox="0 0 16 16"><path d="M6 3.5L10.5 8 6 12.5"/></svg>',
   folder: '<svg viewBox="0 0 16 16"><path d="M2.5 4.5a1 1 0 0 1 1-1h3l1 1h5a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1z"/></svg>',
@@ -272,6 +275,11 @@ export const ICONS = {
   note: '<svg viewBox="0 0 16 16"><path d="M3.5 2.5h6l3 3v8h-9z"/><path d="M9.5 2.5v3h3M5.5 8.5h5M5.5 10.5h3.5"/></svg>',
   // A play triangle: hear a sound.
   play: '<svg viewBox="0 0 16 16"><path d="M5.5 3.5v9l7-4.5z"/></svg>',
+  search: '<svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5l3 3"/></svg>',
+  /** A funnel: narrow a list down. */
+  filter: '<svg viewBox="0 0 16 16"><path d="M2.5 3.5h11l-4 5v4l-3 1.5v-5.5z"/></svg>',
+  /** Two sliders, as on the title bar's Settings: a panel's own settings. */
+  settings: '<svg viewBox="0 0 16 16"><path d="M2.5 4.5h4M10.5 4.5h3M2.5 11.5h2M8.5 11.5h5"/><circle cx="8.5" cy="4.5" r="1.8"/><circle cx="6.5" cy="11.5" r="1.8"/></svg>',
   // A box with an arrow out of its corner: open something outside Termilly.
   launch: '<svg viewBox="0 0 16 16"><path d="M7.5 3.5h-4v9h9v-4M9.5 3.5h3v3M12.5 3.5l-5 5"/></svg>',
   monitor: '<svg viewBox="0 0 16 16"><rect x="1.5" y="2.5" width="13" height="8.5" rx="1.5"/><path d="M5.5 13.5h5M8 11v2.5"/></svg>',

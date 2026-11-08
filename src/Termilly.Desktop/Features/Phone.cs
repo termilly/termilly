@@ -166,6 +166,8 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
 
     /// <summary>An alert's title when it isn't about one terminal.</summary>
     private const string AlertTitle = "Termilly";
+    /// <summary>The state a schedule's alert comes with (js/schedules.js): no agent is involved.</summary>
+    private const string ScheduleAlert = "schedule";
 
     /// <summary>Whether an agent's news goes to the phones: never, always, or while the user is away from the PC.</summary>
     public static bool ShouldAlert(string mode, bool inFront, TimeSpan? idle) => mode switch
@@ -183,7 +185,7 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
     {
         if (hideDetails)
         {
-            return new JsonObject { [Alert.Title] = AlertTitle, [Alert.Body] = Finished.Contains(m.State) ? "An agent finished." : "An agent needs you.", [Alert.Tag] = m.Id, [Alert.Url] = OpenUrl(m.Id) };
+            return new JsonObject { [Alert.Title] = AlertTitle, [Alert.Body] = m.State == ScheduleAlert ? "A schedule ran." : Finished.Contains(m.State) ? "An agent finished." : "An agent needs you.", [Alert.Tag] = m.Id, [Alert.Url] = OpenUrl(m.Id) };
         }
         var body = SecretRedactor.Redact(m.Body ?? "");
         return new JsonObject
@@ -221,12 +223,6 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
     };
 
     private const string ManageOp = "manage";
-    /// <summary>The manage action that clears notifications (js/phonemanage.js): allowed with typing off too.</summary>
-    private const string ClearNoteAction = "clearNote";
-    private const string OpenAction = "open";
-    private const string NewWorkspaceAction = "newWorkspace";
-    private const string CloseAction = "close";
-    private const string CloseWorkspaceAction = "closeWorkspace";
     /// <summary>Who asked, by name, added here: what's sent can't say it's someone else.</summary>
     private const string ByField = "by";
     private const string ActionField = "action";
@@ -238,15 +234,16 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
     /// </summary>
     private async Task<JsonObject> ManageAsync(string device, JsonObject message)
     {
-        if (Refused(message[ActionField]?.GetValue<string>(), _settings.Current.Phone) is { } setting)
+        var action = message[ActionField]?.GetValue<string>();
+        if (PhoneManage.Refused(action, _settings.Current.Phone) is { } setting)
         {
-            return new JsonObject { [Answer.Ok] = false, [OpField] = ManageOp, [Answer.Error] = $"That's off on this PC: Settings › Remote › {setting}." };
+            return new JsonObject { [Answer.Ok] = false, [OpField] = ManageOp, [ActionField] = action, [Answer.Error] = $"That's off on this PC: Settings › Remote › {setting}." };
         }
         try
         {
             var args = (JsonObject)message.DeepClone();
             args[ByField] = _live.NameOf?.Invoke(device);
-            var done = await _api.AskPageAsync(ToPage.Calls.PhoneManage, new JsonObject { [PageApi.CallFields.Args] = args }).ConfigureAwait(false);
+            var done = await _api.AskPageAsync(ToPage.Calls.PhoneManage, new JsonObject { [PageApi.CallFields.Args] = args }, PhoneManage.Wait(action)).ConfigureAwait(false);
             var answer = done?.DeepClone() as JsonObject ?? [];
             answer[Answer.Ok] = true;
             answer[OpField] = ManageOp;
@@ -254,18 +251,9 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
         }
         catch (InvalidOperationException e)
         {
-            return new JsonObject { [Answer.Ok] = false, [OpField] = ManageOp, [Answer.Error] = e.Message };
+            return new JsonObject { [Answer.Ok] = false, [OpField] = ManageOp, [ActionField] = action, [Answer.Error] = e.Message };
         }
     }
-
-    /// <summary>The setting that's off and keeps an action from being done, or null. Opening and closing have their own.</summary>
-    internal static string? Refused(string? action, PhoneSettings phone) => action switch
-    {
-        ClearNoteAction => null,
-        OpenAction or NewWorkspaceAction => phone.AllowOpening == true ? null : "Allow creating",
-        CloseAction or CloseWorkspaceAction => phone.AllowClosing == true ? null : "Allow closing",
-        _ => phone.AllowTyping ? null : "Allow typing",
-    };
 
     /// <summary>Keys from a phone, typed into the terminal: only while Settings › Remote allows typing.</summary>
     private JsonObject Type(JsonObject message)

@@ -16,13 +16,13 @@ import { byId, targetOf, dockRight, titleIconHtml, WORKSPACE_ID, DOCK_GRIP, CLIP
 import { showMenu, SEPARATOR } from './popups.js';
 import { showToast, TOAST } from './toasts.js';
 import { quotePaths } from './quoting.js';
-import { setClipHooks } from './termclipboard.js';
+import { setClipHooks, COPY_LABEL } from './termclipboard.js';
 import { CLIP_KIND, CLIP_FORM, PRODUCT } from './constants.js';
 import { updateSettings } from './preferences.js';
 import { fileSize } from './pictures.js';
 import { isShortcut, KEY_ID } from './keymap.js';
 import { pathActions } from './actions.js';
-import { copyToNotepadItem, copyToNoteItem, PASTE_TO_NOTEPAD, PASTE_TO_NOTE } from './notepad.js';
+import { copyToNotepadItem, PASTE_TO_NOTEPAD } from './notepad.js';
 import { parentOf } from './filepaths.js';
 import { inEachDocument } from './windows.js';
 
@@ -247,7 +247,7 @@ function noteCopy(text, body, link) {
 setClipHooks(menuEntries, noteCopy);
 
 /** Where a copy made outside the terminals came from, by the part of the page it was made in, else Termilly. */
-const COPY_SOURCES = [['.notepad-panel', 'Notepad'], ['.snippets-win', 'Snippets']];
+const COPY_SOURCES = [['.todo-panel', 'To do'], ['.notepad-panel', 'Notepad'], ['.snippets-win', 'Snippets']];
 /** A terminal's own copies are told by it (noteCopy), not here. */
 const IN_TERMINAL = '.xterm';
 
@@ -455,7 +455,7 @@ function kindEntries(c, text, image) {
     ...(c.kind === CLIP_KIND.path && c.folder == null ? [{ label: 'Not found on this PC', disabled: true }] : []),
     ...(folder ? [{ label: c.folder ? 'New terminal here' : 'New terminal in its folder', icon: ICONS.terminal, action: () => newTab({ cwd: folder }) }] : []),
     ...(c.kind === CLIP_KIND.command ? [{ label: 'Run in a new terminal', icon: ICONS.terminal, action: () => newTab({ command: text.trim() }) }] : []),
-    ...(c.kind === CLIP_KIND.text || c.kind === CLIP_KIND.command ? [copyToNotepadItem(text, PASTE_TO_NOTEPAD), copyToNoteItem(text, PASTE_TO_NOTE)] : []),
+    ...(c.kind === CLIP_KIND.text || c.kind === CLIP_KIND.command ? [copyToNotepadItem(text, PASTE_TO_NOTEPAD)] : []),
     ...(tab && c.kind !== CLIP_KIND.secret ? pathActions(tab, text.trim(), folder ?? '', image).map(a => ({ ...a, icon: ICONS.play })) : []),
   ];
   return entries.length ? [...entries, SEPARATOR] : [];
@@ -475,7 +475,7 @@ async function clipMenu(c, e) {
     ...kindEntries(c, text, image),
     { label: isImage ? 'Paste the file path' : 'Paste', icon: ICONS.paste, action: () => pasteClip(c) },
     ...(runnable(c) ? [{ label: 'Paste and run', icon: ICONS.play, action: () => pasteClip(c, focusedTab(), true) }] : []),
-    { label: isImage ? 'Copy the image' : 'Copy', icon: ICONS.copy, action: () => copyClip(c) },
+    { label: isImage ? 'Copy the image' : COPY_LABEL, icon: ICONS.copy, action: () => copyClip(c) },
     SEPARATOR,
     ...(c.kind === CLIP_KIND.secret ? [] : [{ label: c.pinned ? UNPIN_LABEL : 'Pin', icon: TOOL_ICONS.pin, action: () => send(PAGE.clipPin, { id: c.id, pinned: !c.pinned }) }]),
     { label: 'Delete', icon: ICONS.trash, hint: 'Del', action: () => send(PAGE.clipForget, { id: c.id }) },

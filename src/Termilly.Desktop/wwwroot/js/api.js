@@ -153,6 +153,12 @@ const METHODS = {
 };
 
 /**
+ * Adds a feature's methods (To do's, js/todoagent.js), which can't be listed here without importing a higher layer.
+ * @param {Record<string, (args: any) => unknown>} methods
+ */
+export const addApiMethods = methods => { Object.assign(METHODS, methods); };
+
+/**
  * Runs an API method (the host has checked what's allowed; plugins.js checks for plugins). Throws with the reason.
  * @param {string} name
  * @param {Record<string, any>} args

@@ -12,6 +12,8 @@ const SHOWN_MS = 5000;
 const MOST = 4;
 /** What a note is: under way, done, or failed (coloured). */
 export const TOAST = Object.freeze({ running: 'running', done: 'done', failed: 'failed' });
+/** A toast's button that shows what it's about: the files, the tasks. */
+export const SHOW = 'Show';
 
 /**
  * What a note says: its text, its state, and a button. One that stays waits for its button or its ×.

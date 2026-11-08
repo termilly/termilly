@@ -12,7 +12,8 @@ import { serialMenuItems } from './serial.js';
 import { toggleFiles } from './filepanel.js';
 import { hasFiles } from './filepaths.js';
 import { openCleanup } from './worktree.js';
-import { editNote, profileNote, NOTE_KIND } from './notes.js';
+import { openTodo, terminalList } from './todo.js';
+import { editHostNote, profileNote } from './notes.js';
 import { isLogging, toggleLog, toggleProfileLogging } from './logging.js';
 import { openSnippets, saveAsSnippet } from './snippets.js';
 import { portsOf, openPort, repoOf } from './gitstatus.js';
@@ -35,7 +36,7 @@ export const TAG_BUTTON = '.tag-btn';
 
 /** Menu labels written in more than one menu (the sidebar's workspace menu has its own). */
 export const RENAME_LABEL = 'Rename';
-export const NOTE_LABEL = 'Note';
+export const NOTE_LABEL = 'To do';
 export const GIT_LABEL = 'Git';
 
 
@@ -103,9 +104,9 @@ function nameItems(tab, from) {
       label: 'Tags', icon: ICONS.tag,
       action: () => openTagPicker(tab, /** @type {Element} */ (/** @type {TabView} */ (tab.view).header.querySelector(TAG_BUTTON))),
     },
-    { label: tab.note?.text ? 'Edit note' : NOTE_LABEL, icon: ICONS.note, action: () => editNote(NOTE_KIND.terminal, tab) },
+    { label: NOTE_LABEL, icon: ICONS.todo, action: () => openTodo(terminalList(tab)) },
     ...(isSsh(tab)
-      ? [{ label: profileNote(tab) ? `Edit note on ${/** @type {SessionProfile} */ (profileOf(tab)).name}` : `Note on ${/** @type {SessionProfile} */ (profileOf(tab)).name}`, icon: ICONS.ssh, action: () => editNote(NOTE_KIND.host, tab.profile) }] : []),
+      ? [{ label: `${profileNote(tab) ? 'Edit note' : 'Note'} on ${/** @type {SessionProfile} */ (profileOf(tab)).name}`, icon: ICONS.ssh, action: () => editHostNote(tab.profile) }] : []),
   ];
 }
 

@@ -31,6 +31,9 @@ internal abstract class PhotinoPlatform(Action<string> send, string? startFolder
     /// <summary>The user wants to quit: asks first when something is running (QuitGate).</summary>
     public event Action? QuitRequested;
 
+    /// <summary>The page has started and listens: it can be told the window's state (maximized, as it was left).</summary>
+    public event Action? Loaded;
+
     /// <summary>The window, for its dialogs; set once it exists.</summary>
     public void Attach(PhotinoWindow window) => _window = window;
 
@@ -56,10 +59,11 @@ internal abstract class PhotinoPlatform(Action<string> send, string? startFolder
     {
     }
 
-    /// <summary>The page shows its own start-up screen (js/loader.js): nothing to take away.</summary>
-    public void PageReady()
-    {
-    }
+    /// <summary>
+    /// The page shows its own start-up screen (js/loader.js): nothing to take away. It hears the window's state now,
+    /// which changed before it listened when the window opened maximized.
+    /// </summary>
+    public void PageReady() => Loaded?.Invoke();
 
     /// <summary>No picture following the pointer out of the window yet: a terminal goes out at the window's edge.</summary>
     public void ShowDragPicture(FromPage.DragPicture picture)

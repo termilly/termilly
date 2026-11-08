@@ -1,10 +1,10 @@
 // @ts-check
-// The app's bottom bar and two of its tabs (Notes is memos.js): Notifications (the PC's notification center: what agents said, newest
+// The app's bottom bar and two of its tabs (To do is todo.js): Notifications (the PC's notification center: what agents said, newest
 // first) and Settings (this phone's alerts, the terminal's text size, the PC it's paired with, unpairing). The
 // Terminals tab is the home (app.js).
 
 /** The tabs (data-tab). */
-export const TAB = Object.freeze({ terminals: 'terminals', memos: 'memos', notes: 'notes', settings: 'settings' });
+export const TAB = Object.freeze({ terminals: 'terminals', todo: 'todo', schedules: 'schedules', notes: 'notes', settings: 'settings' });
 /** What a note says about its terminal's agent (AgentStates.cs). */
 export const STATE_LABEL = Object.freeze({ 'needs-input': 'Needs you', attention: 'Needs you', error: 'Error', done: 'Done' });
 /** What the Settings tab's buttons do (data-do). */
@@ -27,26 +27,31 @@ export const TEXT_SIZES = [9, 10, 11, 12, 13, 14, 16, 18, 20];
 /** 24px line icons, drawn on whole pixels so they stay sharp. */
 const ICON = Object.freeze({
   terminals: '<rect x="3" y="4" width="18" height="16" rx="3"/><path d="M7 9l3 3-3 3M12 15h5"/>',
-  // A page with its corner turned and lines: the PC's notes.
-  memos: '<path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4M9 12h7M9 16h5"/>',
+  // Ticks beside lines: To do.
+  todo: '<path d="M3 6l2 2 3-3M3 12l2 2 3-3M3 18l2 2 3-3M12 6h9M12 12h9M12 18h9"/>',
+  // A clock: Schedules.
+  schedules: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5h4"/>',
   notes: '<path d="M6 16V11a6 6 0 0112 0v5l2 2H4z"/><path d="M10 20h4"/>',
   // The desktop's Settings button (index.html), on this grid.
   settings: '<path d="M4 7h6M16 7h4M4 17h3M13 17h7"/><circle cx="13" cy="7" r="2.75"/><circle cx="10" cy="17" r="2.75"/>',
 });
-const LABEL = Object.freeze({ terminals: 'Terminals', memos: 'Notes', notes: 'Notifications', settings: 'Settings' });
+/** Each tab's name in the bar. */
+export const LABEL = Object.freeze({ terminals: 'Terminals', todo: 'To do', schedules: 'Schedules', notes: 'Notifications', settings: 'Settings' });
 
 /** @param {unknown} text */
 const esc = text => String(text ?? '').replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
 
 /**
- * The bottom bar: each tab, the one shown marked, and how many notifications there are.
+ * The bottom bar: each tab, the one shown marked, how many notifications there are and how many tasks wait for review.
  * @param {string} current
  * @param {number} count
+ * @param {number} reviews
  */
-export function navHtml(current, count) {
+export function navHtml(current, count, reviews) {
+  const numbers = { [TAB.notes]: count, [TAB.todo]: reviews };
   return `<nav class="tabbar">${Object.values(TAB).map(t => `<button data-tab="${t}"${t === current ? ' class="on" aria-current="page"' : ''}>
     <svg viewBox="0 0 24 24" aria-hidden="true">${/** @type {Record<string, string>} */ (ICON)[t]}</svg>
-    <span>${/** @type {Record<string, string>} */ (LABEL)[t]}</span>${t === TAB.notes && count ? `<b class="tab-count">${count > 99 ? '99+' : count}</b>` : ''}</button>`).join('')}</nav>`;
+    <span>${/** @type {Record<string, string>} */ (LABEL)[t]}</span>${numbers[t] ? `<b class="tab-count">${numbers[t] > 99 ? '99+' : numbers[t]}</b>` : ''}</button>`).join('')}</nav>`;
 }
 
 /**

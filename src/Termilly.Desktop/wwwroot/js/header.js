@@ -3,12 +3,13 @@
 // environment, notes, recording, results, changed files, its Claude session, broadcast), and its buttons. The tag
 // picker, the menu and renaming are modules of their own.
 
-import { state, emit, on, activityOf, EVENTS } from './store.js';
+import { state, emit, on, activityOf, EVENTS, wsById } from './store.js';
 import { tabBadgeHtml, tagChipHtml, escapeHtml, ICONS, activityHtml } from './ui.js';
 import { closeTab, setHeaderBuilder } from './panes.js';
 import { isCandidate, isReceiving, toggleReceiver } from './broadcast.js';
 import { usageOf, usageChipHtml, usageTitle, openUsage } from './claudeusage.js';
-import { editNote, notesFor, noteTitle, firstLine, NOTE_KIND } from './notes.js';
+import { notesFor, noteTitle, firstLine, editHostNote, NOTE_KIND } from './notes.js';
+import { openTodo, markedList, tabHover, terminalList, workspaceList } from './todo.js';
 import { environmentOf, ENV_CLASS, ENV_COLOR } from './environments.js';
 import { isLogging, openLogMenu, logFile } from './logging.js';
 import { isAgentWorking, stopAgent } from './agentline.js';
@@ -50,7 +51,7 @@ const HEADER_HTML = `
       <button class="pane-btn changes-btn" title="Files Claude changed in this terminal" hidden></button>
       <button class="pane-btn menu-btn" title="Terminal menu">${ICONS.more}</button>
       <button class="pane-btn prompts-btn" title="${PROMPTS_TITLE}" hidden>${ICONS.prompts}</button>
-      <button class="pane-btn note-btn" hidden>${ICONS.note}</button>
+      <button class="pane-btn note-btn" hidden>${ICONS.todo}</button>
       <button class="pane-btn tag-btn" title="Tags">${ICONS.tag}</button>
       <button class="pane-btn close-btn" title="Close terminal (Ctrl+Shift+W)">${ICONS.close}</button>
     </span>`;
@@ -67,19 +68,6 @@ export function buildHeader(tab) {
   /** @type {TabView} */ (tab.view).header = header;
   updateHeader(tab);
   return header;
-}
-
-/**
- * Opens a note of the terminal's: its own, its SSH host's or its workspace's.
- * @param {Tab} tab
- * @param {string} [kind]
- */
-function editNoteOf(tab, kind) {
-  if (kind === NOTE_KIND.host) editNote(NOTE_KIND.host, tab.profile);
-  else if (kind === NOTE_KIND.workspace) {
-    editNote(NOTE_KIND.workspace, /** @type {Workspace} */ (state.workspaces.find(w => w.id === tab.wsId)));
-  }
-  else editNote(NOTE_KIND.terminal, tab);
 }
 
 /**
@@ -105,9 +93,9 @@ function wireHeader(tab, header) {
   click(LOG_CHIP, e => openLogMenu(tab, /** @type {HTMLElement} */ (e.currentTarget)));
   click(CAST_CHIP, () => toggleRecording(tab));
   click(STOP_BUTTON, () => stopAgent(tab));
-  click(NOTE_BUTTON, () => editNoteOf(tab, notesFor(tab)[0]?.kind));
+  click(NOTE_BUTTON, () => openTodo(markedList(tab) ?? terminalList(tab)));
   click(PROMPTS_BUTTON, e => openPrompts(tab, /** @type {HTMLElement} */ (e.currentTarget)));
-  click(PINNED_NOTE, e => editNoteOf(tab, /** @type {HTMLElement} */ (e.currentTarget).dataset.kind));
+  click(PINNED_NOTE, e => openPinned(tab, /** @type {string} */ (/** @type {HTMLElement} */ (e.currentTarget).dataset.kind)));
   header.addEventListener('contextmenu', e => {
     e.preventDefault();
     openTabMenu(tab, { x: e.clientX, y: e.clientY });
@@ -175,6 +163,16 @@ function showChips(tab, header) {
 }
 
 /**
+ * Opens the list a pinned note is on.
+ * @param {Tab} tab
+ * @param {string} kind
+ */
+function openPinned(tab, kind) {
+  if (kind === NOTE_KIND.host) editHostNote(tab.profile);
+  else openTodo(kind === NOTE_KIND.workspace ? workspaceList(/** @type {Workspace} */ (wsById(tab.wsId))) : terminalList(tab));
+}
+
+/**
  * @param {Tab} tab
  * @param {HTMLElement} header
  */
@@ -187,12 +185,12 @@ function showNotes(tab, header) {
   if (pinned) {
     noteEl.innerHTML = `${ICONS.note}<span>${escapeHtml(firstLine(pinned.text))}</span>`;
     noteEl.dataset.kind = pinned.kind;
-    noteEl.title = `${noteTitle(notes)}\nClick to edit`;
+    noteEl.title = `${noteTitle(notes)}\nClick to open`;
   }
-  // Any note at all (pinned or not): a note button beside the menu button, its lines on hover.
+  // Anything in its lists: a To do button beside the menu button, what's in them on hover.
   const noteBtn = find(header, NOTE_BUTTON);
-  noteBtn.hidden = !notes.length;
-  noteBtn.title = notes.length ? `${noteTitle(notes)}\nClick to edit` : '';
+  noteBtn.hidden = !markedList(tab);
+  noteBtn.title = noteBtn.hidden ? '' : `${tabHover(tab)}\nClick to open`;
 }
 
 /**

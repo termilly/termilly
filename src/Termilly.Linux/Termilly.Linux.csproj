@@ -33,6 +33,8 @@
   <!-- The page, served from next to the app, with the start-up loader's logo (drawn by the window on Windows). -->
   <ItemGroup>
     <Content Include="..\Termilly.Desktop\wwwroot\**\*" LinkBase="wwwroot" CopyToOutputDirectory="PreserveNewest" />
+    <!-- What's new reads the release notes (js/whatsnew.js). -->
+    <Content Include="..\..\CHANGELOG.md" Link="wwwroot\CHANGELOG.md" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\Termilly.Desktop\Assets\loader\*.png" LinkBase="wwwroot\assets\loader" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 

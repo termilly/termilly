@@ -19,6 +19,16 @@ internal static class ApiMethods
     public const string Capabilities = "capabilities";
     /// <summary>Termilly started again while one runs (OpenFolder.cs): that window comes to the front.</summary>
     public const string Activate = "activate";
+    /// <summary>To do: the tasks of a terminal's lists, one task, its sub-items ticked, and an agent's finish.</summary>
+    public const string Tasks = "tasks";
+    public const string Task = "task";
+    public const string TaskTick = "task_tick";
+    public const string TaskDone = "task_done";
+    /// <summary>
+    /// Claude Code working on a task out of sight asks the user for a permission it doesn't have (the MCP server's
+    /// ask_permission, its --permission-prompt-tool): it waits for Allow or Deny in the task's row.
+    /// </summary>
+    public const string TaskAsk = "task_ask";
 
     /// <summary>The methods that type into a terminal: they need Settings › Terminal › API, and may wait on the user.</summary>
     public static readonly IReadOnlyList<string> Typing = [Send, Snippet];
@@ -59,8 +69,19 @@ internal static class ApiFields
     /// <summary>"Open in Termilly": bring the window to the front, and reuse a terminal already in the folder.</summary>
     public const string Activate = ApiMethods.Activate;
     public const string Reuse = "reuse";
+    /// <summary>A task: its id, the sub-items ticked (numbers from 1), the step finished, and what the agent did.</summary>
+    public const string Task = ApiMethods.Task;
+    public const string Tick = "tick";
+    public const string Step = "step";
+    public const string Summary = "summary";
+    /// <summary>A permission asked for: the run out of sight that asks, and the tool and what it would do with it.</summary>
+    public const string Run = "run";
+    public const string ToolName = "tool_name";
+    public const string Input = "input";
 
     // Results.
+    public const string Tasks = ApiMethods.Tasks;
+    public const string TaskStatus = "status";
     public const string Id = "id";
     public const string Title = "title";
     public const string Agent = "agent";

@@ -16,6 +16,8 @@ import { setNote, NOTE_KIND } from './notes.js';
 import { clear } from './inbox.js';
 import { createWorkspace, closeWorkspace, START_WITH } from './workspaces.js';
 import { showToast } from './toasts.js';
+import { TODO_DO } from './phonetodo.js';
+import { SCHEDULE_DO } from './phoneschedules.js';
 
 /** What a phone may ask (the message's "action"). */
 const ACTION = Object.freeze({ open: 'open', close: 'close', newWorkspace: 'newWorkspace', closeWorkspace: 'closeWorkspace', rename: 'rename', move: 'move', addHost: 'addHost', note: 'note', clearNote: 'clearNote' });
@@ -165,8 +167,10 @@ function note(m) {
   return {};
 }
 
-/** @type {Record<string, (m: Record<string, any>) => object>} */
+/** @type {Record<string, (m: Record<string, any>) => object | Promise<object>>} */
 const DO = {
+  ...TODO_DO,
+  ...SCHEDULE_DO,
   [ACTION.open]: open,
   [ACTION.close]: closeTerminal,
   [ACTION.newWorkspace]: openWorkspace,
@@ -179,12 +183,12 @@ const DO = {
   [ACTION.clearNote]: m => { clear(m.key ? String(m.key) : null); return {}; },
 };
 
-onHost(HOST.phoneManage, m => {
+onHost(HOST.phoneManage, async m => {
   const args = m.args ?? {};
   try {
     const action = DO[String(args.action ?? '')];
     if (!action) throw new Error('Not something a phone can ask.');
-    send(PAGE.apiResult, { requestId: m.requestId, result: { action: args.action, ...action(args) } });
+    send(PAGE.apiResult, { requestId: m.requestId, result: { action: args.action, ...await action(args) } });
   } catch (e) {
     send(PAGE.apiResult, { requestId: m.requestId, error: /** @type {Error} */ (e).message });
   }

@@ -7,6 +7,8 @@
 export const WORKSPACE_ID = 'workspace';
 /** xterm's element the cells are drawn in: its size over the terminal's columns and rows is a cell's. */
 export const XTERM_SCREEN = '.xterm-screen';
+/** A canvas's flat drawing (getContext). */
+export const CANVAS_2D = '2d';
 /** The mouse coming over an element (it bubbles, unlike mouseenter). */
 export const MOUSE_OVER = 'mouseover';
 /** What a file or folder dragged from the Files panel carries: its path (a terminal types it where it's dropped). */
@@ -95,6 +97,9 @@ export function dragPointer(el, e, move, done) {
 
 /** The class of a docked panel's grip, on its left edge. */
 export const DOCK_GRIP = 'files-grip';
+/** A docked panel's header, and the count on a title bar button. */
+export const PANEL_HEAD = '.files-head';
+export const TOOL_COUNT = '.tool-count';
 
 /** A panel's class while it's on its way into a window of its own: not seen here, and it takes no room (app.css). */
 export const DOCK_AWAY = 'dock-away';
@@ -103,6 +108,15 @@ export const DOCK_AWAY = 'dock-away';
 export const DOCK_SIDE = Object.freeze({ right: 'right', left: 'left', top: 'top', bottom: 'bottom' });
 /** @param {string} side */
 export const isAcross = side => side === DOCK_SIDE.top || side === DOCK_SIDE.bottom;
+
+/** The title bar's buttons, New terminal to Settings (js/toolbar.js). */
+export const TOOLBAR = '.toolbar';
+/**
+ * The edge of the window the title bar's buttons are docked on, when `el` is one of them (else the top): what opens
+ * from one of them opens away from that edge.
+ * @param {Element} el
+ */
+export const barSideOf = el => /** @type {HTMLElement | null} */ (el.closest(TOOLBAR))?.dataset.side ?? DOCK_SIDE.top;
 
 /**
  * The edge of `area` a point is nearest, if it's within `band` of it; null in the middle or outside.

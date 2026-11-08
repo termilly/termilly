@@ -101,10 +101,24 @@ export const getSetting = path => {
  * @typedef {{ open: boolean, width?: number, tabId?: string | null, folders?: string[], scroll?: number }} FilesState
  */
 /**
+ * To do's panel: open or closed, the list it shows, where it docks, and the SSH hosts' tasks by profile (js/todo.js).
+ * Its settings: alwaysNotify, a task's news always reaches the user; allowAll, Silent runs get what they ask for.
+ * @typedef {{ open: boolean, list?: { kind: string, id: string } | null, width?: number, height?: number, side?: string,
+ *   detached?: boolean, hosts?: Record<string, TodoTask[]>, onlyWithTasks?: boolean, tags?: string[], tagColors?: Record<string, string>, showDone?: boolean,
+ *   hideActive?: boolean, searchAll?: boolean, alwaysNotify?: boolean, allowAll?: boolean }} TodoState
+ */
+
+/**
  * The Notepad: open or closed, its pages, the one shown, its width, its text's size (Ctrl+wheel), and the view switches
  * pages had before each had its own.
  * @typedef {{ open: boolean, pages: NotepadPage[], activeId: string | null, width?: number, links?: boolean, wrap?: boolean,
  *   detached?: boolean, numbers?: boolean, highlight?: boolean, fontSize?: number, side?: string, height?: number }} NotepadState
+ */
+
+/**
+ * The title bar's buttons (js/toolbar.js): the edge of the window they're docked on (top unless moved), and where along
+ * it, from 0 at its start (left or top) to 1 at its end; on the top edge, which side of the search box (right unless moved).
+ * @typedef {{ side?: string, at?: number, beside?: string }} ToolbarState
  */
 
 /**
@@ -128,10 +142,19 @@ export const state = {
   sidebar: { open: true },
   /** @type {NotepadState} */
   notepad: { open: false, pages: [], activeId: null },
+  /** @type {TodoState} */
+  todo: { open: false },
   /** @type {ClipsState} */
   clips: { open: false },
   /** @type {FilesState} */
   files: { open: false },
+  /** @type {ToolbarState} */
+  toolbar: {},
+  /**
+   * Schedules, their runs, and whether their window is open (js/schedules.js).
+   * @type {SchedulesState}
+   */
+  schedules: { open: false, list: [], runs: [] },
   /** Whether the Snippets window is open (it opens again after a restart). */
   snippetsWindow: { open: false },
   /**
@@ -192,6 +215,8 @@ export const EVENTS = Object.freeze({
   /** The Notification center's list changed (cleared): the phones get it again. */
   inbox: 'inbox',
   openAgentChanges: 'openAgentChanges',
+  /** A list to show in To do: { kind, id } (js/todo.js). */
+  openTodo: 'openTodo',
   /** Files and folders dragged out of the Files panel were dropped on a terminal: { tab, x, y } (js/filepanel.js asks what to do). */
   panelDrop: 'panelDrop',
   /** A clip dragged from Clipboard onto a terminal: { tab, id } (js/clipboard.js pastes it). */
@@ -201,6 +226,10 @@ export const EVENTS = Object.freeze({
   openChangedFiles: 'openChangedFiles',
   openGit: 'openGit',
   openSettings: 'openSettings',
+  schedules: 'schedules',
+  /** The schedules' clock ticked: when things run next reads differently, though nothing changed. */
+  scheduleClock: 'scheduleClock',
+  openSchedules: 'openSchedules',
   openSnippets: 'openSnippets',
   opened: 'opened',
   planChanged: 'planChanged',
@@ -221,6 +250,8 @@ export const EVENTS = Object.freeze({
   tabClosed: 'tabClosed',
   tags: 'tags',
   terminalOpened: 'terminalOpened',
+  /** A To do list or a note changed: what shows it draws it again (js/todopanel.js). */
+  todo: 'todo',
   workspaces: 'workspaces',
   workspaceClosed: 'workspaceClosed',
 });
@@ -748,18 +779,21 @@ function serialize() {
     tags: state.tags,
     recentDirs: state.recentDirs,
     notepad: state.notepad,
+    todo: state.todo,
     snippetsWindow: state.snippetsWindow,
+    schedules: state.schedules,
     clips: state.clips,
     files: state.files,
+    toolbar: state.toolbar,
     windowPlaces: state.windowPlaces,
     windowsOnTop: state.windowsOnTop,
     // tmux windows aren't saved: they're tmux's, and attaching again brings them back (tmux.js).
-    workspaces: state.workspaces.filter(w => !w.tmux).map(({ id, name, color, cwd, focusId, root, note, snippets, collapsed, copyTo }) => ({ id, name, color, cwd, focusId, root: withoutPreview(root), note, snippets, collapsed: collapsed || undefined, copyTo })),
+    workspaces: state.workspaces.filter(w => !w.tmux).map(({ id, name, color, cwd, focusId, root, note, tasks, snippets, collapsed, copyTo }) => ({ id, name, color, cwd, focusId, tasks, root: withoutPreview(root), note, snippets, collapsed: collapsed || undefined, copyTo })),
     tabs: [...state.tabs.values()].filter(t => !t.virtual).map(t => {
-      const { id, wsId, profile, name, tags, noHistory, startCwd, env, startCommand, worktree, note, agentRead, agentType, agentSessions, promptsClearedAt, stepsClearedAt } = t;
+      const { id, wsId, profile, name, tags, noHistory, startCwd, env, startCommand, worktree, note, tasks, agentRead, agentType, agentSessions, promptsClearedAt, stepsClearedAt } = t;
       // In a window of its own: it opens in one again after a restart, where it was (windowPlaces).
       const windowed = t.detached || t.windowed || undefined;
-      return { id, wsId, profile, name, tags, noHistory, startCwd, env, startCommand, worktree, note, agentRead, agentType, agentSessions, promptsClearedAt: promptsClearedAt || undefined, stepsClearedAt: stepsClearedAt && Object.keys(stepsClearedAt).length ? stepsClearedAt : undefined, lastCwd: lastFolderOf(t) ?? undefined, windowed };
+      return { id, wsId, profile, name, tags, noHistory, startCwd, env, startCommand, worktree, note, tasks, agentRead, agentType, agentSessions, promptsClearedAt: promptsClearedAt || undefined, stepsClearedAt: stepsClearedAt && Object.keys(stepsClearedAt).length ? stepsClearedAt : undefined, lastCwd: lastFolderOf(t) ?? undefined, windowed };
     }),
   };
 }
@@ -778,6 +812,21 @@ export function lastFolderOf(tab) {
 }
 
 /**
+ * To do, the Clipboard, the Files panel, the Snippets window, schedules and the title bar's buttons, as serialize wrote
+ * them; an older file may have none.
+ * @param {any} saved
+ */
+function restorePanels(saved) {
+  if (saved.toolbar && typeof saved.toolbar === 'object') state.toolbar = { ...saved.toolbar };
+  if (saved.todo && typeof saved.todo === 'object') state.todo = { ...state.todo, ...saved.todo };
+  if (saved.clips && typeof saved.clips === 'object') state.clips = { ...state.clips, ...saved.clips };
+  if (saved.files && typeof saved.files === 'object') state.files = { ...state.files, ...saved.files };
+  state.snippetsWindow = { open: saved.snippetsWindow?.open === true };
+  const schedules = saved.schedules;
+  if (Array.isArray(schedules?.list)) state.schedules = { open: schedules.open === true, list: schedules.list, runs: schedules.runs ?? [] };
+}
+
+/**
  * Restores saved state (workspaces.json, as serialize wrote it). Returns false when there was nothing usable, so the
  * caller creates a default.
  * @param {any} saved
@@ -793,9 +842,7 @@ export function restore(saved) {
     const pages = saved.notepad.pages.filter((/** @type {any} */ p) => typeof p?.id === 'string' && typeof p.text === 'string');
     state.notepad = { ...saved.notepad, pages, activeId: pages.some((/** @type {NotepadPage} */ p) => p.id === saved.notepad.activeId) ? saved.notepad.activeId : pages[0]?.id ?? null };
   }
-  if (saved.clips && typeof saved.clips === 'object') state.clips = { ...state.clips, ...saved.clips };
-  if (saved.files && typeof saved.files === 'object') state.files = { ...state.files, ...saved.files };
-  state.snippetsWindow = { open: saved.snippetsWindow?.open === true };
+  restorePanels(saved);
   state.windowPlaces = Object.fromEntries(Object.entries(saved.windowPlaces ?? {})
     .filter(([key, p]) => [p?.x, p?.y, p?.w, p?.h].every(n => Number.isFinite(n))
       // A terminal's window's place goes with the terminal.

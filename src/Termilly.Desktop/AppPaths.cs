@@ -33,6 +33,9 @@ internal static class AppPaths
     /// <summary>Termilly's icon on Windows, every size it's shown at (the window, the tray), each drawn on whole pixels.</summary>
     public static string IconFile { get; } = Path.Combine(Assets, "termilly.ico");
 
+    /// <summary>Where the main window was and whether it was maximized (WindowPlacement on Windows, MacPlacement on macOS).</summary>
+    public static string WindowFile => Path.Combine(DataDirectory, "window.json");
+
     /// <summary>
     /// Shell integration's scripts (PowerShell's, zsh's, and those for servers), next to the app; for the background
     /// host off Windows (in the app's host/ folder), the app's.

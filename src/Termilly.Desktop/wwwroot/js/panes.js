@@ -12,7 +12,7 @@ import {
 import { ICONS, tabBadgeHtml, activityHtml } from './ui.js';
 import { openTerminal, disposeTerminal, bufferLines, scheduleFit, prepareStart } from './terminals.js';
 import { wake } from './hibernate.js';
-import { byId, find, targetOf, WORKSPACE_ID, dragPointer, onMiddleClick } from './dom.js';
+import { byId, find, targetOf, WORKSPACE_ID, CANVAS_2D, dragPointer, onMiddleClick } from './dom.js';
 import { ENV_CLASS, ENV_COLOR } from './environments.js';
 import { detach, closeWindow, focusWindow, setWindowTitle, OFFSET_PX, MIN_WIDTH_PX } from './windows.js';
 import { followGpu } from './gpu.js';
@@ -86,7 +86,7 @@ const JPEG = 'image/jpeg';
  * What newTab is given: all of it optional. restore is a reopened terminal's saved output.
  * @typedef {{ profile?: string | null, wsId?: string | null, dir?: 'row' | 'column', name?: string | null,
  *   tags?: string[], restore?: { lines: string[], closedAt: number }, cwd?: string | null, command?: string | null,
- *   note?: Note | null, virtual?: Tab['virtual'] }} NewTabOptions
+ *   note?: Note | null, tasks?: TodoTask[], virtual?: Tab['virtual'] }} NewTabOptions
  */
 
 /**
@@ -171,13 +171,13 @@ export function createView(tab, { draggable = true } = {}) {
  * focused tab. dir 'row' puts it to the right, 'column' below; with no dir, it splits along the longer side.
  * @param {NewTabOptions} [options]
  */
-export function newTab({ profile = defaultProfile(), wsId = state.activeId, dir, name = null, tags = [], restore, cwd = null, command = null, note = null, virtual = null } = {}) {
+export function newTab({ profile = defaultProfile(), wsId = state.activeId, dir, name = null, tags = [], restore, cwd = null, command = null, note = null, tasks, virtual = null } = {}) {
   const ws = /** @type {Workspace} */ (wsById(wsId) ?? activeWorkspace());
   // A fresh terminal starts with its profile's tags (an SSH host to production gets "prod").
   if (!restore && !tags.length) tags = state.profiles.find(p => p.id === profile)?.tags ?? [];
   for (const tag of tags) ensureTag(tag);
   const tab = /** @type {Tab} */ ({
-    id: newId('t'), wsId: ws.id, profile, name, tags: [...tags], noHistory: !!virtual, attention: false, startedAt: Date.now(), view: null, note,
+    id: newId('t'), wsId: ws.id, profile, name, tags: [...tags], noHistory: !!virtual, attention: false, startedAt: Date.now(), view: null, note, ...(tasks?.length ? { tasks } : {}),
     startCwd: cwd, virtual,
   });
   // A reopened terminal's output; a command from the API (termilly open), or the profile's own (Claude Code: claude).
@@ -296,6 +296,7 @@ function recordHistory(tab) {
       profile: tab.profile,
       tags: tab.tags,
       note: tab.note ?? null,
+      tasks: tab.tasks,
       cost: tab.cost?.usd ?? tab.claude?.usage?.estimatedUsd ?? null,
       wsId: ws?.id,
       wsName: ws?.name,
@@ -1390,20 +1391,37 @@ function trackPanelDrag(header, panel, drag, e) {
   let live = false;
   /** @type {DockSpot | null} */
   let spot = null;
+  /** The picture is taken, so the label and outlines may show; where the pointer was until then. */
+  let pickedUp = false;
+  /** @type {{ x: number, y: number } | null} */
+  let last = null;
+  /**
+   * Near an edge it docks there, outlined. Anywhere else: out into a window of its own (its picture shows where, on
+   * Windows; an outline elsewhere).
+   * @param {number} x
+   * @param {number} y
+   */
+  const outline = (x, y) => {
+    if (spot && spot.side !== drag.side()) showOutline(spot.zone, ZONE.window, null, spot.label);
+    else showOutline(out && !followsPicture && !outOfWindow(x, y) ? windowOutline(panel, x, y) : null, ZONE.window);
+  };
   followDrag(header, e, {
     begin: () => {
       live = true;
       showGhost(drag.icon, drag.name);
-      document.body.classList.add(DRAGGING_PANE);
-      pickUp(panel, e, () => live);
+      // The picture first, as a terminal's: the label and an outline shown before it's taken would be in it.
+      pickUp(panel, e, () => live).then(() => {
+        if (!live) return;
+        pickedUp = true;
+        document.body.classList.add(DRAGGING_PANE);
+        if (last) outline(last.x, last.y);
+      });
     },
     move: (x, y) => {
-      // Near an edge it docks there, outlined. Anywhere else: out into a window of its own (its picture shows where, on
-      // Windows; an outline elsewhere).
       spot = drag.dockAt(x, y);
       out = !spot;
-      if (spot && spot.side !== drag.side()) showOutline(spot.zone, ZONE.window, null, spot.label);
-      else showOutline(out && !followsPicture && !outOfWindow(x, y) ? windowOutline(panel, x, y) : null, ZONE.window);
+      last = { x, y };
+      if (pickedUp) outline(x, y);
     },
     end: (commit, screen) => {
       live = false;
@@ -1424,16 +1442,16 @@ function trackPanelDrag(header, panel, drag, e) {
  * @param {HTMLElement} el
  * @param {PointerEvent} e the press that started the drag
  * @param {() => boolean} still whether the drag is still on
+ * @returns {Promise<void>} once the picture is taken, or there's none to take
  */
-function pickUp(el, e, still) {
+async function pickUp(el, e, still) {
   const r = el.getBoundingClientRect();
   grip = { x: e.clientX - r.left, y: e.clientY - r.top };
   if (!followsPicture) return;
-  pictureOf(r).then(url => {
-    if (!url || !still()) return;
-    document.body.classList.add(PICTURE_DRAG);
-    showDragPicture({ image: url.slice(url.indexOf(',') + 1), x: grip.x, y: grip.y, width: r.width, height: r.height });
-  }).catch(() => {});
+  const url = await pictureOf(r).catch(() => null);
+  if (!url || !still()) return;
+  document.body.classList.add(PICTURE_DRAG);
+  showDragPicture({ image: url.slice(url.indexOf(',') + 1), x: grip.x, y: grip.y, width: r.width, height: r.height });
 }
 
 /**
@@ -1512,7 +1530,7 @@ async function pictureOf(r) {
   const canvas = document.createElement('canvas');
   canvas.width = Math.round(r.width * scale);
   canvas.height = Math.round(r.height * scale);
-  canvas.getContext('2d')?.drawImage(page, r.left * scale, r.top * scale, r.width * scale, r.height * scale, 0, 0, canvas.width, canvas.height);
+  canvas.getContext(CANVAS_2D)?.drawImage(page, r.left * scale, r.top * scale, r.width * scale, r.height * scale, 0, 0, canvas.width, canvas.height);
   return canvas.toDataURL(JPEG);
 }
 

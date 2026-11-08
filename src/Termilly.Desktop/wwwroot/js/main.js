@@ -16,6 +16,7 @@ import {
   cycleGroupTab, moveAllToTabs, reopenWindows, DIRECTION,
 } from './panes.js';
 import { initSidebar, toggleSidebar } from './sidebar.js';
+import { initToolbar } from './toolbar.js';
 import './remotepc.js';
 import { openPalette, setCommands, openGoTo, openCommandHistory, PALETTE_VIEW } from './palette.js';
 import { jumpToPrompt, copyLastOutput } from './commands.js';
@@ -28,15 +29,20 @@ import { toggleScratch } from './scratch.js';
 import { openGitWindow, openAgentChanges, gitFolderOf, onServer, openRemoteGitNotice } from './gitwindow.js';
 import { toggleFiles, initFiles } from './filepanel.js';
 import { toggleNotepad, toggleNotepadFromKeys, initNotepad } from './notepad.js';
+import { toggleTodo, initTodo } from './todopanel.js';
+import './todoagent.js';
 import { toggleClips, initClips } from './clipboard.js';
 import { chordOf, commandOf, keyHint, KEY_ID } from './keymap.js';
 import { openNewWorktree } from './worktree.js';
 import { openChangedFiles } from './changes.js';
 import { openSnippetsWindow, initSnippetsWindow } from './snippetswindow.js';
+import { initSchedules } from './schedules.js';
+import { toggleSchedules, initSchedulesWindow } from './scheduleswindow.js';
 import { THEMES } from './themes.js';
 import { isPreviewOpen, closePreview } from './preview.js';
 import { pluginCommands, reloadPlugins } from './plugins.js';
 import { startTour, offerTourOnce } from './tour.js';
+import { showWhatsNew, offerWhatsNewOnce } from './whatsnew.js';
 import './api.js';
 import { exportLayout, importLayout } from './layouts.js';
 import { isBroadcasting, startBroadcast, stopBroadcast, openCompose, BROADCAST_SCOPE } from './broadcast.js';
@@ -190,6 +196,7 @@ setCommands(() => [
   { label: 'Rewind this terminal', keywords: 'replay instant back history screen earlier', run: () => setTimeout(() => focusedTab() && openRewind(/** @type {Tab} */ (focusedTab()))) },
   { label: 'Attach tmux', keywords: 'tmux control mode -CC attach session server remote panes windows wsl ssh', run: () => setTimeout(openAttach) },
   { label: 'Run a snippet', keywords: 'snippets saved commands run snippet macro button bar', run: () => setTimeout(openSnippets) },
+  { label: 'Schedules', keywords: 'schedule cron timer run on time report recurring nightly', hint: keyHint(KEY_ID.schedules), run: () => setTimeout(toggleSchedules) },
   { label: 'Manage snippets', keywords: 'snippets explorer window edit new delete saved commands', run: () => setTimeout(openSnippetsWindow) },
   { label: 'Previous prompt', keywords: 'scroll jump command', hint: keyHint(KEY_ID.previousPrompt), run: commands.previousPrompt },
   { label: 'Next prompt', keywords: 'scroll jump command', hint: keyHint(KEY_ID.nextPrompt), run: commands.nextPrompt },
@@ -201,7 +208,9 @@ setCommands(() => [
   { label: 'Move this workspace’s terminals to tabs', keywords: 'tabs group stack stacked accordion collapse panes too many', run: () => moveAllToTabs(state.workspaces.find(w => w.id === state.activeId)) },
   { label: 'Files of this terminal (on / off)', keywords: 'files folder explorer browse sftp upload download remote scp', hint: keyHint(KEY_ID.files), run: () => setTimeout(() => toggleFiles()) },
   { label: 'Notepad (on / off)', keywords: 'notes notepad write jot scratch text memo pad', hint: keyHint(KEY_ID.notepad), run: () => setTimeout(toggleNotepad) },
+  { label: 'To do (on / off)', keywords: 'todo tasks task list notes checklist work issue', hint: keyHint(KEY_ID.todo), run: () => setTimeout(toggleTodo) },
   { label: 'Take the tour', keywords: 'tour help guide introduction tutorial walkthrough start learn', run: () => setTimeout(startTour) },
+  { label: 'What’s new', keywords: 'whats new changelog release notes update version changes', run: () => setTimeout(showWhatsNew) },
   { label: 'Quit Termilly', keywords: 'exit close quit stop tray', run: () => send(PAGE.window, { action: WINDOW_ACTION.quit }) },
   ...(changeShortcutOn() ? [
     { label: 'Show the files Claude changed here, in the Git window', keywords: 'change preview diff edits claude files last all tree folders agent changes search', hint: keyHint(KEY_ID.agentChanges), run: () => setTimeout(() => openAgentChanges(focusedTab())) },
@@ -328,8 +337,8 @@ const RUN = {
   [KEY_ID.newWorkspace]: commands.newWorkspace, [KEY_ID.toggleSidebar]: commands.toggleSidebar, [KEY_ID.nextNeedingMe]: commands.nextNeedingMe,
   [KEY_ID.inbox]: commands.inbox, [KEY_ID.search]: commands.search, [KEY_ID.commandHistory]: commands.commandHistory,
   [KEY_ID.previousPrompt]: commands.previousPrompt, [KEY_ID.nextPrompt]: commands.nextPrompt, [KEY_ID.goTo]: commands.goTo,
-  [KEY_ID.settings]: commands.settings, [KEY_ID.hints]: toggleHints, [KEY_ID.scratch]: toggleScratch, [KEY_ID.notepad]: toggleNotepadFromKeys,
-  [KEY_ID.clips]: toggleClips, [KEY_ID.files]: () => toggleFiles(), [KEY_ID.git]: openGitHere,
+  [KEY_ID.settings]: commands.settings, [KEY_ID.hints]: toggleHints, [KEY_ID.scratch]: toggleScratch, [KEY_ID.notepad]: toggleNotepadFromKeys, [KEY_ID.todo]: toggleTodo,
+  [KEY_ID.schedules]: toggleSchedules, [KEY_ID.clips]: toggleClips, [KEY_ID.files]: () => toggleFiles(), [KEY_ID.git]: openGitHere,
   [KEY_ID.agentChanges]: () => {
     if (!changeShortcutOn()) return false;
     if (isPreviewOpen()) closePreview(); else openAgentChanges(focusedTab());
@@ -554,7 +563,9 @@ function boot(saved, snapshot, liveSessions = []) {
   }
   renderAll();
   initSidebar();
+  initToolbar();
   initNotepad();
+  initTodo();
   initClips();
   applySettings();
   if (state.activeId) switchWorkspace(state.activeId);
@@ -562,6 +573,8 @@ function boot(saved, snapshot, liveSessions = []) {
   // Terminals that were in windows of their own when Termilly closed open in them again; the Snippets window too.
   if (restored) reopenWindows();
   initSnippetsWindow();
+  initSchedules();
+  initSchedulesWindow();
   if (!restored) newTab();
   keepEarlierOfOpen();
   // Show the page when the focused terminal prints its prompt (see 'output'); straight away if there is
@@ -587,6 +600,7 @@ onHost(HOST.settings, m => {
   boot(m.workspaces, m.snapshot,
     /** @type {{ liveSessions?: string[] }} */ (/** @type {unknown} */ (m)).liveSessions ?? []);
   offerTourOnce();
+  offerWhatsNewOnce();
 });
 
 // Custom profiles were edited in Settings: the host re-detected everything and sent the new list.

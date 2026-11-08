@@ -2,6 +2,19 @@
 
 What changed in each release. Termilly says in its title bar when a newer one is out.
 
+## 1.7.0 (2026-11-08)
+
+- **To do:** task lists for workspaces, terminals and SSH hosts; Claude Code can implement a task and send it back for your review.
+- **Schedules:** run commands, snippets and agent prompts on a schedule, with reports and notifications.
+- **Remote:** To do and Schedules on your phone.
+- **Title bar:** move its buttons to any edge of the window.
+- **What's new:** see what changed after each update.
+
+Fixes:
+
+- **Windows:** a panel dropped past the screen's left or top edge no longer crashes Termilly.
+- Various smaller improvements and bug fixes.
+
 ## 1.6.2 (2026-11-06)
 
 - **Detachable windows:** move terminals, the Notepad and Snippets into their own windows.
