@@ -1075,6 +1075,20 @@ function statusMenu(task, at) {
 }
 
 /**
+ * Review's Accept: the task goes to Done at once, saying so, with Undo back to Review.
+ * @param {TodoTask} task
+ */
+function acceptTask(task) {
+  const ref = current;
+  if (!ref) return;
+  setStatus(ref, task.id, TASK_STATUS.done, { review: task.review });
+  showToast({
+    text: `“${task.text}” moved to Done`, state: TOAST.done,
+    action: { label: UNDO, run: () => void (listOf(ref) && setStatus(ref, task.id, TASK_STATUS.review, { review: task.review, terminal: task.terminal })) },
+  });
+}
+
+/**
  * A status picked. A task done here stays where it is until the list is shown again, and one taken off In progress while it
  * runs out of sight has its run stopped.
  * @param {TodoTask} task
@@ -1336,7 +1350,7 @@ const ON_TASK = Object.freeze({
   [ACTION.implement]: (control, task) => implementMenu(control, task, stepOf(control, task)),
   [ACTION.issue]: (control, task) => beginIssue(task, stepOf(control, task)),
   [ACTION.status]: (control, task) => statusMenu(task, control),
-  [ACTION.accept]: (_control, task) => changeStatus(task, TASK_STATUS.done),
+  [ACTION.accept]: (_control, task) => acceptTask(task),
   [ACTION.reopen]: (_control, task) => changeStatus(task, TASK_STATUS.open),
   [ACTION.stopRun]: (_control, task) => stopRun(task),
   [ACTION.allow]: (_control, task) => answerAsk(task, ASK.allow),
