@@ -6,7 +6,7 @@
 // between the terminals, the PC's notifications and this phone's settings (tabs.js).
 
 import { terminalView, activityHtml, TEXT_SIZE } from './terminal.js';
-import { TAB, SETTING, SETTINGS_PAGE, PAGE_TITLE, STATE_LABEL, TEXT_SIZES, navHtml, notesHtml, settingsHtml, themesHtml, backRow } from './tabs.js';
+import { TAB, LABEL, SETTING, SETTINGS_PAGE, PAGE_TITLE, STATE_LABEL, TEXT_SIZES, navHtml, notesHtml, settingsHtml, themesHtml, backRow } from './tabs.js';
 import { todoTab } from './todo.js';
 import { schedulesTab } from './schedules.js';
 import { SCROLLING, GESTURE_START } from './gestures.js';
@@ -77,6 +77,9 @@ let sheetFor = null;
 let replying = false;
 /** The tab shown (the bottom bar), and the Settings page shown ('' for its list). */
 let tab = TAB.terminals;
+/** The tab a To do list was opened from (a terminal's To do mark), for its Back; null when To do's own. */
+/** @type {string | null} */
+let todoFrom = null;
 let settingsPage = SETTINGS_PAGE.list;
 /** What Settings' list says of alerts. */
 const ALERTS_SET = Object.freeze({ none: 'Not here', on: 'On', off: 'Off' });
@@ -226,8 +229,17 @@ const todo = todoTab({
   send: message => { if (live?.readyState === OPEN) live.send(JSON.stringify(message)); },
   openTerminal: id => { const t = terminal(id); if (t) terminalShown.open(t, !!snap.typing); },
   show: () => {
+    todoFrom = tab === TAB.todo ? null : tab;
     tab = TAB.todo;
     render();
+  },
+  from: () => (todoFrom ? /** @type {Record<string, string>} */ (LABEL)[todoFrom] : null),
+  back: () => {
+    if (!todoFrom) return false;
+    tab = todoFrom;
+    todoFrom = null;
+    render();
+    return true;
   },
 });
 
@@ -552,6 +564,7 @@ app.addEventListener('click', e => {
   const to = /** @type {HTMLElement} */ (e.target).closest('[data-tab]')?.getAttribute('data-tab');
   if (to) {
     tab = to;
+    todoFrom = null;
     settingsPage = SETTINGS_PAGE.list;
     render();
     document.getElementById(HOME)?.scrollTo(0, 0);

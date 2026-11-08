@@ -9,7 +9,7 @@ function phone() {
   const snap = { workspaces: [workspace], terminals: [], typing: true, opening: true };
   /** @type {any[]} */
   const sent = [];
-  const tab = todoTab(/** @type {any} */ ({ snap: () => snap, send: (/** @type {any} */ m) => sent.push(m), toast: () => {}, show: () => {}, redraw: () => {}, badge: () => '', openTerminal: () => {} }));
+  const tab = todoTab(/** @type {any} */ ({ snap: () => snap, send: (/** @type {any} */ m) => sent.push(m), toast: () => {}, show: () => {}, redraw: () => {}, badge: () => '', openTerminal: () => {}, from: () => null, back: () => false }));
   const page = /** @type {any} */ ({ innerHTML: '', scrollTo: () => {}, querySelector: () => ({ scrollTop: 0 }) });
   globalThis.document = /** @type {any} */ ({ getElementById: () => page });
   const tap = (/** @type {Record<string, string>} */ dataset) => tab.click(/** @type {any} */ ({ closest: () => ({ dataset: { kind: 'workspace', id: 'w', ...dataset } }) }));
@@ -31,4 +31,27 @@ test('Silent asks the PC for a silent run, a new terminal for none', () => {
   tap({ td: 'implementHow', how: 'silent' });
   tap({ td: 'implementHow', how: 'terminal' });
   assert.deepEqual(sent.map(m => [m.action, m.task, !!m.silent]), [['taskImplement', 't1', true], ['taskImplement', 't1', false]]);
+});
+
+test('a list opened from another tab goes back to it, one opened in To do back to To do', () => {
+  const task = { id: 't1', text: 'Fix the login', status: 'open', tags: [], details: '' };
+  const snap = { workspaces: [{ id: 'w', name: 'Work', color: '#fff', note: null, todo: { tasks: [task] } }], terminals: [], typing: true };
+  let from = /** @type {string | null} */ ('Terminals');
+  let backs = 0;
+  const tab = todoTab(/** @type {any} */ ({
+    snap: () => snap, send: () => {}, toast: () => {}, show: () => {}, redraw: () => {}, badge: () => '', openTerminal: () => {},
+    from: () => from, back: () => { if (!from) return false; from = null; backs++; return true; },
+  }));
+  const page = /** @type {any} */ ({ innerHTML: '', scrollTo: () => {}, querySelector: () => ({ scrollTop: 0 }) });
+  globalThis.document = /** @type {any} */ ({ getElementById: () => page });
+  const tap = (/** @type {string} */ td) => tab.click(/** @type {any} */ ({ closest: () => ({ dataset: { td, kind: 'workspace', id: 'w' } }) }));
+  tap('open');
+  assert.match(tab.backHtml(), /Terminals/);
+  tap('back');
+  assert.equal(backs, 1);
+  tap('open');
+  assert.match(tab.backHtml(), /To do/);
+  tap('back');
+  assert.equal(backs, 1);
+  assert.equal(tab.backHtml(), '');
 });

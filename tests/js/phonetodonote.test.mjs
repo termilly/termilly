@@ -7,7 +7,7 @@ import { markHtml } from '../../src/Termilly.Desktop/wwwroot/phone/todoviews.js'
 function phone(text) {
   const workspace = { id: 'w', name: 'Work', color: '#fff', note: text === null ? null : { text, pinned: false }, todo: { tasks: [] } };
   const snap = { workspaces: [workspace], terminals: [], typing: true };
-  const tab = todoTab(/** @type {any} */ ({ snap: () => snap, send: () => {}, toast: () => {}, show: () => {}, redraw: () => {}, badge: () => '', openTerminal: () => {} }));
+  const tab = todoTab(/** @type {any} */ ({ snap: () => snap, send: () => {}, toast: () => {}, show: () => {}, redraw: () => {}, badge: () => '', openTerminal: () => {}, from: () => null, back: () => false }));
   const home = /** @type {any} */ ({ scrollTo: () => {} });
   const tap = (/** @type {string} */ td) => tab.click(/** @type {any} */ ({ closest: () => ({ dataset: { td, kind: 'workspace', id: 'w' } }) }));
   globalThis.document = /** @type {any} */ ({ getElementById: () => home });

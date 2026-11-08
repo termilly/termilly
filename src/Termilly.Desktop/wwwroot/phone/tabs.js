@@ -35,7 +35,8 @@ const ICON = Object.freeze({
   // The desktop's Settings button (index.html), on this grid.
   settings: '<path d="M4 7h6M16 7h4M4 17h3M13 17h7"/><circle cx="13" cy="7" r="2.75"/><circle cx="10" cy="17" r="2.75"/>',
 });
-const LABEL = Object.freeze({ terminals: 'Terminals', todo: 'To do', schedules: 'Schedules', notes: 'Notifications', settings: 'Settings' });
+/** Each tab's name in the bar. */
+export const LABEL = Object.freeze({ terminals: 'Terminals', todo: 'To do', schedules: 'Schedules', notes: 'Notifications', settings: 'Settings' });
 
 /** @param {unknown} text */
 const esc = text => String(text ?? '').replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);

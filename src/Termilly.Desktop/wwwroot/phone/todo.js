@@ -42,7 +42,8 @@ const listFrom = (lead, x, kind, ws) => ({
 
 /**
  * @param {{ snap: () => any, send: (m: object) => void, badge: (t: any) => string, redraw: () => void, toast: (text: string) => void,
- *   openTerminal: (id: string) => void, show: () => void }} app
+ *   openTerminal: (id: string) => void, show: () => void, from: () => string | null, back: () => boolean }} app
+ *   from: the tab a list was opened from (its name), when not To do's own; back: goes back there, if so
  */
 export function todoTab(app) {
   /** The list open, by its kind and id. */
@@ -398,7 +399,10 @@ export function todoTab(app) {
         break;
       case TD.back:
         if (onNote) onNote = false;
-        else open = null;
+        else {
+          open = null;
+          if (app.back()) return; // opened from another tab: back to it
+        }
         break;
       case TD.add: return beginAdd(layer);
       case TD.addSave: return addTask(layer);
@@ -430,7 +434,7 @@ export function todoTab(app) {
       const list = current();
       return list ? (onNotePage() ? 'Note' : list.name) : '';
     },
-    backHtml: () => (current() ? `<button class="back-row" data-td="${TD.back}">‹ ${onNotePage() ? esc(current()?.name) : 'To do'}</button>` : ''),
+    backHtml: () => (current() ? `<button class="back-row" data-td="${TD.back}">‹ ${onNotePage() ? esc(current()?.name) : esc(app.from() ?? 'To do')}</button>` : ''),
     /** Only a list with a note has one: tasks took over from notes, so a new note can't be started here. */
     noteButton: () => (current()?.note?.text && !onNotePage() ? `<button class="link" data-td="${TD.note}">Note</button>` : ''),
     /** How many tasks wait for review, for the tab's number. */
