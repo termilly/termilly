@@ -2809,7 +2809,7 @@ mark.set-hit { border-radius: 2px; background: var(--accent-soft); color: inheri
 .note-mark { display: inline-flex; flex: none; align-items: center; margin-left: 4px; color: var(--muted); cursor: pointer; }
 .note-mark:hover { color: var(--text); }
 .note-mark svg { width: 12px; height: 12px; stroke-width: 1.4; }
-.note-mark span { margin-left: 2px; font-size: 10px; line-height: 1; font-variant-numeric: tabular-nums; }
+.note-mark span { position: relative; top: 2px; margin-left: 2px; font-size: 10px; line-height: 1; font-variant-numeric: tabular-nums; }
 .pane-note { display: inline-flex; align-items: center; gap: 5px; min-width: 0; max-width: 40%; height: 20px; margin-left: 6px; padding: 0 8px;
   border: 1px solid color-mix(in srgb, var(--attention, #f2cc60) 40%, transparent); border-radius: 10px;
   background: color-mix(in srgb, var(--attention, #f2cc60) 10%, transparent); color: var(--text); font-size: 11.5px; }
