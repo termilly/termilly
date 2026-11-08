@@ -2,6 +2,19 @@
 
 What changed in each release. Termilly says in its title bar when a newer one is out.
 
+## 1.7.0 (2026-11-08)
+
+- **To do:** task lists on workspaces and terminals, with statuses; agents report back, also on the phone.
+- **Schedules:** run commands, snippets and agents on time, with or without a terminal.
+- **What's new:** after an update, see what changed since the version you last used.
+- **Title bar buttons:** dock them on any edge of the window.
+
+Fixes:
+
+- **Windows:** a panel dropped past the screen's left or top edge no longer crashes Termilly.
+- **macOS:** closing the terminal Termilly was started from no longer closes its shells; the window opens where you left it.
+- Various smaller improvements and bug fixes.
+
 ## 1.6.2 (2026-11-06)
 
 - **Detachable windows:** move terminals, the Notepad and Snippets into their own windows.
