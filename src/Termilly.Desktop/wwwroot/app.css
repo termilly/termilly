@@ -320,6 +320,10 @@ body[data-bar-beside="left"] #titlebar { grid-template-columns: minmax(max-conte
    goes (js/toolbar.js). */
 body[data-bar-beside="left"][data-sidebar="open"] .crumb, #titlebar.tight .brand { display: none; }
 body.moving-bar, body.moving-bar * { cursor: grabbing !important; -webkit-user-select: none; user-select: none; }
+/* While it's dragged the whole bar lights up, so it's plain what's moving and where it lands; no single button looks
+   hovered. A shadow, not a border, so nothing in the layout moves. */
+body.moving-bar .toolbar { border-radius: 8px; background: var(--accent-fill); box-shadow: 0 0 0 1px var(--accent); }
+body.moving-bar .toolbar .tool { background: none; color: var(--text); }
 
 .tool, .window-controls button {
   display: grid;
