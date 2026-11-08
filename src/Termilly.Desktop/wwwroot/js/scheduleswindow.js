@@ -322,10 +322,14 @@ async function openAsTerminal() {
   newTab({ profile: shell, wsId: state.activeId, cwd: s.cwd || null, name: s.name, restore: { lines: text.split('\n'), closedAt: Date.now() } });
 }
 
-/** Picks the run's folder on this computer: the picker gives it as it's spelled on disk. */
+/**
+ * Picks the run's folder on this computer: the picker gives it as it's spelled on disk. The picker belongs to the main
+ * window, which comes to the front when it closes: a window of its own is brought back over it.
+ */
 async function browseFolder() {
   const field = /** @type {HTMLInputElement} */ (find(editEl, '[name=cwd]'));
   const path = await pickFolder(field.value || undefined);
+  if (isDetached(WINDOW_KEY)) focusWindow(WINDOW_KEY);
   if (!path || !editing) return;
   field.value = path;
   field.dispatchEvent(new Event('input', { bubbles: true }));
