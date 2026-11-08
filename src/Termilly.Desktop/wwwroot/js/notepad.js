@@ -18,6 +18,7 @@ import { KEY_ID } from './keymap.js';
 import { copyOut as copyFrom, textBoxMenu } from './textmenu.js';
 import { dockPanel, NOTEPAD_DOCK } from './dockpanel.js';
 import { padView, NP_FONT } from './notepadview.js';
+import { addToTodoItem } from './todomenu.js';
 
 /** @typedef {import('./store.js').NotepadPage} NotepadPage */
 
@@ -388,9 +389,18 @@ export function addToPage(name, text) {
 /** The Clipboard's wording for it: a clip is already copied, it's pasted there. */
 export const PASTE_TO_NOTEPAD = 'Paste to Notepad';
 
+/** What Add to To do list takes from the page: the selection, or the line the caret is on. */
+function selectedOrLine() {
+  const { value, selectionStart: start, selectionEnd: end } = area;
+  if (start !== end) return value.slice(start, end);
+  const from = value.lastIndexOf(LF, start - 1) + 1;
+  const to = value.indexOf(LF, start);
+  return value.slice(from, to < 0 ? value.length : to);
+}
+
 // ---- Wiring ----
 
-area.addEventListener('contextmenu', e => textBoxMenu(e, area, NAME, []));
+area.addEventListener('contextmenu', e => textBoxMenu(e, area, NAME, [addToTodoItem(selectedOrLine())]));
 
 // Where each page was left (scrolled to, the caret), kept with it so a restart comes back there.
 area.addEventListener('scroll', () => {

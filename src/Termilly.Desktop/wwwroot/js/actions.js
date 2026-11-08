@@ -18,6 +18,7 @@ import { sendToAgent } from './together.js';
 import { setMenuExtras } from './termclipboard.js';
 import { linkUnderMouse } from './termlinks.js';
 import { copyToNotepadItem } from './notepad.js';
+import { addToTodoItem } from './todomenu.js';
 
 const { ctrl: CTRL, alt: ALT } = ACTION_MODIFIERS;
 /** Re-exported for Settings › Actions and Keyboard. */
@@ -185,7 +186,7 @@ function menuExtras(body) {
     ...(context.selection?.trim() ? [{
       label: 'Ask an agent about this', icon: ICONS.ask,
       action: () => sendToAgent(/** @type {string} */ (context.selection).slice(0, MAX_AGENT_TEXT), { title: tabTitle(tab) }, tab.view?.header, tab),
-    }, copyToNotepadItem(/** @type {string} */ (context.selection))] : []),
+    }, copyToNotepadItem(/** @type {string} */ (context.selection)), addToTodoItem(/** @type {string} */ (context.selection))] : []),
   ];
   return items.length ? [SEPARATOR, ...items] : [];
 }

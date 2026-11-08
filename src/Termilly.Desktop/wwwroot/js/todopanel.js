@@ -13,6 +13,7 @@ import { AGENT_COMMAND, agentInstalled, agentWorking, folderOfList as folderOf, 
 import { implementSilently, stopRun } from './todorun.js';
 import { answerAsk, allowWaiting, ASK } from './todoask.js';
 import { openTagManager } from './todotags.js';
+import { listItems, dotHtml } from './todomenu.js';
 import { tagCompletion } from './todotagcomplete.js';
 import { escapeHtml, cssColor, tabBadgeHtml, countText, ICONS } from './ui.js';
 import { byId, find, targetOf, WORKSPACE_ID, DOCK_GRIP, PANEL_HEAD, TOOL_COUNT } from './dom.js';
@@ -53,7 +54,6 @@ const WORKING_ICON = '<svg class="td-spinner" viewBox="0 0 16 16"><circle class=
 /** A tag picker's colour field. */
 const COLOR_INPUT = 'color';
 /** A workspace's own list, in the picker. */
-const WORKSPACE_LIST = 'Workspace list';
 /** What the code finds in the panel. */
 const TASK = '.td-task';
 const TASK_TEXT = '.td-text';
@@ -439,7 +439,6 @@ function showPick(list) {
 }
 
 /** @param {string} color */
-const dotHtml = color => `<span class="ws-dot" style="background:${cssColor(color)}"></span>`;
 
 /** Draws the list shown; the first list in front when what it was on has gone. */
 function render() {
@@ -811,20 +810,6 @@ function openTree(at) {
   tree.input.focus();
 }
 
-/**
- * A menu of lists: the workspace in front's, then each other workspace in a submenu of its own.
- * @param {(ws: Workspace) => import('./popups.js').MenuEntry[]} entriesOf
- * @returns {import('./popups.js').MenuEntry[]}
- */
-function perWorkspace(entriesOf) {
-  const active = wsById(state.activeId);
-  const others = state.workspaces.filter(w => w !== active);
-  return /** @type {import('./popups.js').MenuEntry[]} */ ([
-    ...(active ? entriesOf(active) : []),
-    ...(others.length ? [SEPARATOR] : []),
-    ...others.map(w => ({ label: w.name, icon: dotHtml(w.color), submenu: () => entriesOf(w) })),
-  ]);
-}
 
 /** @param {HTMLElement} at */
 function pickList(at) {
@@ -1018,14 +1003,7 @@ function issueItems(task) {
  */
 function moveItems(task) {
   const from = /** @type {ListRef} */ (current);
-  /** @param {ListRef} to @param {string} label @param {string} icon */
-  const entry = (to, label, icon) => (sameList(from, to) ? [] : [{ label, icon, action: () => moveTask(from, task.id, to) }]);
-  /** @param {Workspace} ws */
-  const lists = ws => [
-    ...entry(workspaceList(ws), WORKSPACE_LIST, ICONS.workspaces),
-    ...tabsOf(ws).filter(t => !t.virtual).flatMap(t => entry(terminalList(t), tabTitle(t), tabBadgeHtml(t))),
-  ];
-  return perWorkspace(lists);
+  return listItems(to => moveTask(from, task.id, to), from);
 }
 
 /**
