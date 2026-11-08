@@ -211,7 +211,7 @@ function saidHtml(task, typing) {
   if (task.status !== STATUS.review) return '';
   const said = task.review ? `<div class="td-review"><b>${esc(task.review.by)}</b>${esc(task.review.summary)}</div>` : '';
   if (!typing) return said;
-  return `${said}<div class="td-btns"><button class="ibtn" data-td="${TD.status}" data-status="${STATUS.open}" data-task="${esc(task.id)}">Back to open</button><button class="ibtn fill" data-td="${TD.status}" data-status="${STATUS.done}" data-task="${esc(task.id)}">Accept</button></div>`;
+  return `${said}<div class="td-btns"><button class="ibtn" data-td="${TD.status}" data-status="${STATUS.open}" data-task="${esc(task.id)}">Back to open</button><button class="ibtn fill" data-td="${TD.status}" data-status="${STATUS.done}" data-accept="1" data-task="${esc(task.id)}">Accept</button></div>`;
 }
 
 /**
@@ -222,7 +222,8 @@ function saidHtml(task, typing) {
  */
 function startsHtml(task, canImplement, canIssue) {
   const issue = canIssue && !task.issue ? `<button class="ibtn" data-td="${TD.issue}" data-task="${esc(task.id)}">GitHub issue</button>` : '';
-  const implement = canImplement && task.status !== STATUS.review ? `<button class="ibtn fill" data-td="${TD.implement}" data-task="${esc(task.id)}">Implement</button>` : '';
+  // Nothing to implement once it waits for review or is done.
+  const implement = canImplement && task.status !== STATUS.review && task.status !== STATUS.done ? `<button class="ibtn fill" data-td="${TD.implement}" data-task="${esc(task.id)}">Implement</button>` : '';
   return issue || implement ? `<div class="td-btns">${implement}${issue}</div>` : '';
 }
 
@@ -239,7 +240,7 @@ export function taskSheetHtml(task, list, ctx) {
   return `${whereHtml(list)}<h2 class="td-title">${esc(task.text)}</h2><div class="td-seg">${seg}</div>${saidHtml(task, typing)}
     ${task.agent ? `<button class="td-agent" data-td="${TD.terminal}" data-id="${esc(task.agent.id)}">${esc(task.agent.title)}</button>` : ''}
     ${task.notes ? `<div class="section td-section">Details</div><p class="td-details">${esc(task.notes)}</p>` : ''}
-    ${stepsHtml(task, typing, canImplement && task.status !== STATUS.review)}
+    ${stepsHtml(task, typing, canImplement && task.status !== STATUS.review && task.status !== STATUS.done)}
     <div class="td-tags">${task.tags.map(tag => chip(tag, ctx)).join('')}${typing ? `<button class="td-add-tag" data-td="${TD.tags}">+ Tag</button>` : ''}</div>
     ${task.issue ? `<a class="td-issue" href="${esc(task.issue.url)}" target="_blank" rel="noopener">Issue #${esc(task.issue.number)} on GitHub</a>` : ''}
     ${startsHtml(task, canImplement, typing && list.github)}

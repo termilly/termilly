@@ -4,7 +4,7 @@ import { todoTab } from '../../src/Termilly.Desktop/wwwroot/phone/todo.js';
 
 /** A phone with one task on a list that can Implement; what it asks the PC is kept. */
 function phone() {
-  const task = { id: 't1', text: 'Fix the login', status: 'open', tags: [], details: '' };
+  const task = { id: 't1', text: 'Fix the login', status: 'open', tags: [], details: '', notes: '', steps: [] };
   const workspace = { id: 'w', name: 'Work', color: '#fff', note: null, todo: { tasks: [task], implement: true } };
   const snap = { workspaces: [workspace], terminals: [], typing: true, opening: true };
   /** @type {any[]} */
@@ -63,4 +63,13 @@ test('a task\'s mark opens the statuses, and the one picked is asked of the PC',
   assert.match(page.innerHTML, /In progress/);
   tap({ td: 'pickStatus', status: 'review' });
   assert.deepEqual(sent.map(m => [m.action, m.task, m.status]), [['taskStatus', 't1', 'review']]);
+});
+
+test('Accept in a task\'s sheet closes it and says the task moved to Done', () => {
+  const { page, sent, tap } = phone();
+  tap({ td: 'task', task: 't1' });
+  assert.notEqual(page.innerHTML, '');
+  tap({ td: 'status', status: 'done', accept: '1', task: 't1' });
+  assert.deepEqual(sent.map(m => [m.action, m.status]), [['taskStatus', 'done']]);
+  assert.equal(page.innerHTML, '');
 });

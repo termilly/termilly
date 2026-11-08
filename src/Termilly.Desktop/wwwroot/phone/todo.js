@@ -388,6 +388,11 @@ export function todoTab(app) {
     const task = findTask(id)?.task;
     if (!task) return;
     ask({ action: ACTION.status, task: id, status: STATUS.done });
+    // Accepted from its sheet: the sheet closes, as the task leaves Review.
+    if (sheet?.task === id) {
+      sheet = null;
+      drawSheet();
+    }
     app.toast(`“${task.text}” moved to Done.`);
   }
 
