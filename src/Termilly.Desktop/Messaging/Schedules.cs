@@ -7,9 +7,10 @@ internal static partial class FromPage
 {
     /// <summary>
     /// Runs <see cref="Command"/> once, out of sight, in a shell of <see cref="Profile"/>. With a server's profile,
-    /// <see cref="Cwd"/> is a folder on that server. Stopped after <see cref="LimitSeconds"/>.
+    /// <see cref="Cwd"/> is a folder on that server. Stopped after <see cref="LimitSeconds"/>. With <see cref="Ask"/>, the
+    /// command is Claude Code's, and what it isn't allowed to do it asks the user, in the task's row, instead of being refused.
     /// </summary>
-    internal sealed record ScheduleRun(string RunId = "", string? Profile = null, string? Cwd = null, string Command = "", int LimitSeconds = 0) : IPageMessage
+    internal sealed record ScheduleRun(string RunId = "", string? Profile = null, string? Cwd = null, string Command = "", int LimitSeconds = 0, bool Ask = false) : IPageMessage
     {
         public static string Type => "schedule:run";
     }

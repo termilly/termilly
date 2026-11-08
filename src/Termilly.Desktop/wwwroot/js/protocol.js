@@ -412,7 +412,7 @@ export const HOST = Object.freeze({
 /** @typedef {{ runIds?: Array<string>|null }} Page_scheduleForget */
 /** @typedef {{ runId?: string, output?: string }} Page_scheduleKeep */
 /** @typedef {{ requestId?: string|null, runId?: string }} Page_scheduleReportRead */
-/** @typedef {{ runId?: string, profile?: string|null, cwd?: string|null, command?: string, limitSeconds?: number }} Page_scheduleRun */
+/** @typedef {{ runId?: string, profile?: string|null, cwd?: string|null, command?: string, limitSeconds?: number, ask?: boolean }} Page_scheduleRun */
 /** @typedef {{ runId?: string, path?: string, text?: string }} Page_scheduleSaveFile */
 /** @typedef {{ runId?: string }} Page_scheduleStop */
 /** @typedef {{  }} Page_securityCode */

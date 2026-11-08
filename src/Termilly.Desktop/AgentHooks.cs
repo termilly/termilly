@@ -322,9 +322,12 @@ internal sealed class AgentHooks : IDisposable
         _received = received;
         _api = api;
         _edit = edit;
-        PipeName = pipeName ?? PipeNames.ForProcess(Environment.ProcessId);
+        PipeName = PipeFor(pipeName);
         _ = Task.Run(AcceptAsync);
     }
+
+    /// <summary>The pipe a window's hooks listen on: the background host's when it keeps the shells, else the window's own.</summary>
+    public static string PipeFor(string? fixedName) => fixedName ?? PipeNames.ForProcess(Environment.ProcessId);
 
     /// <param name="received">Called on a pool thread for every event; returns whether the pane is one of this window's.</param>
     public AgentHooks(Func<AgentEvent, bool> received, string? pipeName = null, Func<JsonObject, Task<JsonObject>>? api = null)

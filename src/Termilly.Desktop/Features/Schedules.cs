@@ -80,7 +80,7 @@ internal static class ReportFiles
 }
 
 /// <summary>Schedules (js/schedules.js): the clock, runs out of sight, and their reports.</summary>
-internal sealed class ScheduleHandler(PageChannel page, ProfileCatalog profiles, ScheduleReports reports, ScheduleRunner runner)
+internal sealed class ScheduleHandler(PageChannel page, ProfileCatalog profiles, ScheduleReports reports, ScheduleRunner runner, BackgroundHost host)
     : IMessageHandler, IStartable, IDisposable
 {
     /// <summary>How often the page looks for what's due. Schedules go by the minute, so this is well under one.</summary>
@@ -125,9 +125,16 @@ internal sealed class ScheduleHandler(PageChannel page, ProfileCatalog profiles,
             Guarded(() => reports.Save(m.RunId, result.Output));
             page.Post(new ToPage.ScheduleEnded(m.RunId, result.ExitCode, SecretRedactor.Redact(Tail(result.Output)), result.Stopped));
         }
-        catch (Exception e) when (e is InvalidOperationException or IOException or Win32Exception or NotSupportedException)
+        catch (Exception e) when (e is InvalidOperationException or IOException or Win32Exception or NotSupportedException or UnauthorizedAccessException)
         {
             page.Post(new ToPage.ScheduleEnded(m.RunId, null, "", Error: e.Message));
+        }
+        finally
+        {
+            if (m.Ask)
+            {
+                AskingRun.Forget(m.RunId);
+            }
         }
     }
 
@@ -163,9 +170,14 @@ internal sealed class ScheduleHandler(PageChannel page, ProfileCatalog profiles,
         }
         var environment = SessionLaunch.EnvironmentFor(profile, AppVersion.Current);
         var limit = TimeSpan.FromSeconds(m.LimitSeconds);
+        var command = m.Command;
+        if (m.Ask)
+        {
+            (command, environment) = Asking(m, profile, environment, limit);
+        }
         if (profile.Source == ProfileSources.Ssh)
         {
-            var onServer = new PtyOptions(OneShot.CommandLine(profile, m.Command, m.Cwd), ScheduleRunner.Columns, ScheduleRunner.Rows, null, environment);
+            var onServer = new PtyOptions(OneShot.CommandLine(profile, command, m.Cwd), ScheduleRunner.Columns, ScheduleRunner.Rows, null, environment);
             return new ScheduleJob(m.RunId, onServer, limit);
         }
         var linuxFolder = profile.Source == ProfileSources.Wsl && profile.WorkingDirectory is null ? WslFolders.LinuxFolder(m.Cwd) : null;
@@ -176,6 +188,26 @@ internal sealed class ScheduleHandler(PageChannel page, ProfileCatalog profiles,
             throw new IOException($"The folder {requested} is gone.");
         }
         var startsIn = linuxFolder is null ? profile : profile with { CommandLine = WslFolders.StartingIn(profile.CommandLine, linuxFolder) };
-        return new ScheduleJob(m.RunId, new PtyOptions(OneShot.CommandLine(startsIn, m.Command), ScheduleRunner.Columns, ScheduleRunner.Rows, folder, environment), limit);
+        return new ScheduleJob(m.RunId, new PtyOptions(OneShot.CommandLine(startsIn, command), ScheduleRunner.Columns, ScheduleRunner.Rows, folder, environment), limit);
+    }
+
+    /// <summary>
+    /// Claude Code that asks the user for what it isn't allowed to do (AskingRun.cs): its command gets the flags, and its
+    /// environment lets an MCP call wait as long as the run may take. Only a shell on this computer reaches this window's
+    /// pipe; in WSL or on a server it's refused what it would ask for, as before.
+    /// </summary>
+    private (string Command, IReadOnlyDictionary<string, string> Environment) Asking(
+        FromPage.ScheduleRun m, SessionProfile profile, IReadOnlyDictionary<string, string> environment, TimeSpan limit)
+    {
+        if (profile.Source != ProfileSources.Local)
+        {
+            return (m.Command + AskingRun.NobodyAsks, environment);
+        }
+        var pipe = AgentHooks.PipeFor(host.PipeName);
+        var withWait = new Dictionary<string, string>(environment, StringComparer.OrdinalIgnoreCase)
+        {
+            [AskingRun.ToolTimeoutVariable] = ((long)limit.TotalMilliseconds).ToString(System.Globalization.CultureInfo.InvariantCulture),
+        };
+        return (m.Command + AskingRun.Prepare(m.RunId, profile.Shell, pipe), withWait);
     }
 }

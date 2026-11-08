@@ -3377,6 +3377,11 @@ button.td-agent:hover { text-decoration: underline; }
 .td-stop { height: 16px; padding: 0 6px; border: 1px solid var(--border); border-radius: 4px; background: none; color: var(--muted); font: inherit; font-size: 10.5px; cursor: pointer; }
 .td-stop:hover { border-color: var(--danger); color: var(--text); }
 .td-review { grid-column: 2 / -1; display: flex; margin-top: 4px; }
+/* What a run out of sight asks for (js/todoask.js), with its answers: it waits on the user, so it stands out. */
+.td-ask { grid-column: 2 / -1; display: flex; flex-direction: column; gap: 6px; margin-top: 4px; padding: 6px 8px; border: 1px solid color-mix(in srgb, var(--attention) 45%, transparent); border-radius: 6px; background: color-mix(in srgb, var(--attention) 8%, transparent); }
+.td-ask-text { color: var(--text); font-size: 12.5px; overflow-wrap: anywhere; }
+.td-ask-text code { padding: 0 3px; border-radius: 3px; background: color-mix(in srgb, var(--text) 8%, transparent); color: var(--text); font: 12px var(--mono); white-space: pre-wrap; }
+.td-ask .td-edit-actions { align-self: flex-end; }
 .td-acts .pane-btn { opacity: 1; }
 .td-acts .pane-btn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1; }
 .td-body { position: relative; display: block; min-width: 0; }

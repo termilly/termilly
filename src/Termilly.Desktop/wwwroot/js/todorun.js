@@ -1,11 +1,15 @@
 // @ts-check
 // Implement out of sight: Claude Code works on a task in a hidden shell, as a schedule's agent prompt does (the host's
-// ScheduleRunner), allowed to change files. The task is In progress while it runs, and goes to Review with its reply,
-// or back to Open, with why, when it fails or is stopped. A run outlives nothing: closing Termilly ends it.
+// ScheduleRunner), allowed to change files. What else it needs, it asks the user for in the task's row (js/todoask.js).
+// The task is In progress while it runs, and goes to Review with its reply, or back to Open, with why, when it fails or is
+// stopped. A run outlives nothing: closing Termilly ends it.
 
 import { PAGE, HOST } from './protocol.js';
 import { send, onHost } from './host.js';
-import { state, on, newId, isSsh, defaultProfile, EVENTS } from './store.js';
+import { state, on, newId, isSsh, defaultProfile, sourceOf, EVENTS } from './store.js';
+import { PROFILE_SOURCE } from './constants.js';
+import { addApiMethods } from './api.js';
+import { askUser, endAsking } from './todoask.js';
 import { agentCommand, readResult, AGENT_COMMAND } from './agentcli.js';
 import { plainText } from './schedulereport.js';
 import { showToast, TOAST } from './toasts.js';
@@ -54,10 +58,12 @@ export function implementOutOfSight(ref, task, sub) {
   const profile = profileFor(ref);
   if (!folder || !profile || !agentInstalled()) return false;
   const run = newId('t');
-  const command = agentCommand(outOfSightPrompt(task, sub), { shell: profile.shellIcon ?? profile.icon, changes: true, json: true });
+  // A shell on this computer reaches Termilly's pipe, so Claude Code there can ask the user.
+  const ask = sourceOf(profile) === PROFILE_SOURCE.local;
+  const command = agentCommand(outOfSightPrompt(task, sub), { shell: profile.shellIcon ?? profile.icon, changes: true, json: true, ask });
   going.set(run, { taskId: task.id, line: sub?.at });
   setStatus(ref, task.id, TASK_STATUS.progress, { run });
-  send(PAGE.scheduleRun, { runId: run, profile: profile.id, cwd: folder, command, limitSeconds: LIMIT_SECONDS });
+  send(PAGE.scheduleRun, { runId: run, profile: profile.id, cwd: folder, command, limitSeconds: LIMIT_SECONDS, ask });
   return true;
 }
 
@@ -84,6 +90,7 @@ async function ended(m) {
   const run = going.get(id);
   if (!run) return;
   going.delete(id);
+  endAsking(id);
   // The reply is kept with the task; the host's copy of the output isn't needed.
   send(PAGE.scheduleForget, { runIds: [id] });
   const found = findTask(run.taskId);
@@ -91,13 +98,14 @@ async function ended(m) {
   const text = await plainText(m.tail ?? '');
   const result = m.stopped || m.error ? null : readResult(text);
   const name = `“${found.task.text}”`;
-  if (!result || result.failed) {
+  // Refused a tool, it still did what it could: that goes to Review, saying what it wasn't let do.
+  if (!result || result.errored) {
     setStatus(found.ref, found.task.id, TASK_STATUS.open);
     const why = m.stopped ? 'It was stopped.' : m.error || result?.why || lastLine(text) || `${AGENT_COMMAND} didn’t answer.`;
     showToast({ text: `${name} is open again. ${why}`, state: m.stopped ? TOAST.done : TOAST.failed });
     return;
   }
-  const summary = result.reply.trim();
+  const summary = [result.reply.trim(), result.failed ? result.why : ''].filter(Boolean).join('\n\n');
   if (run.line !== undefined) updateTask(found.ref, found.task.id, { details: tickSub(found.task.details ?? '', run.line, true) });
   setStatus(found.ref, found.task.id, TASK_STATUS.review, { review: { summary, by: OUT_OF_SIGHT_BY } });
   alertReview(found.task, summary.split(/\r?\n/)[0] ?? '', null);
@@ -105,6 +113,17 @@ async function ended(m) {
 }
 
 onHost(HOST.scheduleEnded, m => void ended(m));
+
+// Claude Code out of sight asks for what it may not do (the termilly MCP server's ask_permission): the user answers in
+// the task's row, and the call waits for that.
+addApiMethods({
+  task_ask: ({ run, tool_name: tool, input }) => {
+    const asking = going.get(String(run ?? ''));
+    const found = asking ? findTask(asking.taskId) : null;
+    if (!found || found.task.run !== run) throw new Error('That run has ended.');
+    return askUser(String(run), found.task, String(tool ?? ''), input);
+  },
+});
 
 // Runs don't outlive Termilly: tasks still marked as running when it starts go back to Open.
 let looked = false;

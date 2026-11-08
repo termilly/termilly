@@ -15,8 +15,10 @@ const MAX_NAMED = 3;
 /** The first lines of a reply, for a notification. */
 const NOTICE_CHARS = 280;
 
-/** Every run: nothing waits for an answer, nothing keeps a session, and no MCP server can act for it. */
-const ALWAYS = Object.freeze(['--permission-prompts', 'none', '--strict-mcp-config', '--no-session-persistence']);
+/** Every run: nothing keeps a session, and no MCP server can act for it (one that asks the user is added by the host). */
+const ALWAYS = Object.freeze(['--strict-mcp-config', '--no-session-persistence']);
+/** A run nobody is asked in: what would ask is refused. One that asks gets its way of asking from the host (AskingRun.cs). */
+const NOBODY_ASKS = Object.freeze(['--permission-prompts', 'none']);
 /**
  * Read only leaves the user's settings out (--restricted), as their allow rules can let commands run, and gives it only tools
  * that read. Keeping it to that list is what makes it read only: refusing at a prompt wouldn't be enough.
@@ -41,11 +43,11 @@ function promptFor(prompt, shell, typed) {
 /**
  * The command for a prompt.
  * @param {string} prompt
- * @param {{ shell?: string, changes?: boolean, json?: boolean }} options json: the answer comes as one result, to read; else as
- *   text, for a terminal someone may look at.
+ * @param {{ shell?: string, changes?: boolean, json?: boolean, ask?: boolean }} options json: the answer comes as one result, to
+ *   read; else as text, for a terminal someone may look at. ask: what it may not do it asks the user, through the host.
  */
-export function agentCommand(prompt, { shell, changes = false, json = false }) {
-  const words = [AGENT_COMMAND, '--print', promptFor(prompt, shell, !json), ...(json ? ['--output-format', 'json'] : []), ...(changes ? CHANGES : READ_ONLY), ...ALWAYS];
+export function agentCommand(prompt, { shell, changes = false, json = false, ask = false }) {
+  const words = [AGENT_COMMAND, '--print', promptFor(prompt, shell, !json), ...(json ? ['--output-format', 'json'] : []), ...(changes ? CHANGES : READ_ONLY), ...ALWAYS, ...(ask ? [] : NOBODY_ASKS)];
   return commandLine(words, shell);
 }
 
@@ -71,7 +73,8 @@ export function noticeOf(reply) {
  * What a run's output says, when it's Claude Code's result: its reply, whether it failed, and why. Null for anything else: a shell
  * that couldn't find it, or an older one on a server.
  * @param {string} output as text
- * @returns {{ reply: string, failed: boolean, why: string, costUsd: number | null } | null}
+ * @returns {{ reply: string, failed: boolean, errored: boolean, why: string, costUsd: number | null } | null} failed: it ended
+ *   with an error or was refused a tool; errored: only the first.
  */
 export function readResult(output) {
   const start = output.lastIndexOf('{"');
@@ -84,7 +87,7 @@ export function readResult(output) {
       const denied = Array.isArray(result.permission_denials) ? result.permission_denials : [];
       const errors = Array.isArray(result.errors) ? result.errors.join(' ') : '';
       const why = denied.length ? wanted(denied) : result.is_error ? errors || String(result.subtype ?? 'It ended with an error.') : '';
-      return { reply: String(result.result ?? ''), failed: !!result.is_error || denied.length > 0, why, costUsd: typeof result.total_cost_usd === 'number' ? result.total_cost_usd : null };
+      return { reply: String(result.result ?? ''), failed: !!result.is_error || denied.length > 0, errored: !!result.is_error, why, costUsd: typeof result.total_cost_usd === 'number' ? result.total_cost_usd : null };
     } catch (e) {
       if (!(e instanceof SyntaxError)) throw e;
     }

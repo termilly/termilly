@@ -48,6 +48,8 @@ interface TodoTask {
   run?: string;
   /** What the agent that finished it said. */
   review?: { summary: string; by: string };
+  /** What its run out of sight asks the user for and waits on (js/todoask.js): what the tool would do, and with what. */
+  ask?: { verb: string; what: string };
 }
 
 /** A note pinned to a terminal, a host or a workspace (js/notes.js). */

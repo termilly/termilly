@@ -380,6 +380,8 @@ export function setStatus(ref, id, status, { terminal, run, review } = {}) {
   updateTask(ref, id, {
     done: status === TASK_STATUS.done ? true : undefined, status: middle ? status : undefined,
     terminal: status === TASK_STATUS.progress ? terminal : undefined, run: status === TASK_STATUS.progress ? run : undefined,
+    // Nothing is asked for once it's off In progress, and a new run hasn't asked yet.
+    ask: undefined,
     ...said,
   });
 }

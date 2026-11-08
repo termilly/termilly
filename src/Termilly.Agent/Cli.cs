@@ -37,7 +37,7 @@ internal static class Cli
     private static class Commands
     {
         public const string Help = "help";
-        public const string Mcp = "mcp";
+        public const string Mcp = AgentCommands.Mcp;
         public const string List = "list";
         public const string Run = "run";
         public const string Show = "show";

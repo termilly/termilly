@@ -11,6 +11,7 @@ import { state, on, persist, newId, wsById, tabsOf, tabTitle, EVENTS } from './s
 import { focusTab } from './panes.js';
 import { AGENT_COMMAND, agentInstalled, folderOfList as folderOf, isOnGitHub, checkRepo, implementTask, keepIssue } from './todoactions.js';
 import { implementOutOfSight, stopRun } from './todorun.js';
+import { answerAsk, ASK } from './todoask.js';
 import { openTagManager } from './todotags.js';
 import { escapeHtml, cssColor, tabBadgeHtml, countText, ICONS } from './ui.js';
 import { byId, find, targetOf, WORKSPACE_ID, DOCK_GRIP, PANEL_HEAD, TOOL_COUNT } from './dom.js';
@@ -66,6 +67,7 @@ const ACTION = Object.freeze({
   cancel: 'cancel', label: 'label', create: 'create', backToList: 'backToList', pickTags: 'pickTags', dropTag: 'dropTag', manageTags: 'manageTags',
   implement: 'implement', issue: 'issue', openIssue: 'openIssue', status: 'status', agentTerminal: 'agentTerminal', accept: 'accept', reopen: 'reopen',
   edit: 'edit', remove: 'remove', expand: 'expand', stopRun: 'stopRun', scope: 'scope', clearSearch: 'clearSearch', searchToggle: 'searchToggle',
+  allow: 'allow', allowAll: 'allowAll', deny: 'deny',
 });
 /** How long after the last key a note is saved. */
 const NOTE_SAVE_MS = 400;
@@ -214,6 +216,7 @@ function rowHtml(task, elsewhere) {
     <div class="td-body"><div class="td-text">${escapeHtml(task.text)}</div>${elsewhere ? '' : aboutHtml(task)}${elsewhere ? `<div class="td-meta"><span class="td-where">${escapeHtml(elsewhere)}</span></div>` : metaHtml(task)}</div>
     ${elsewhere ? '' : actsHtml(task.issue, false)}
     ${elsewhere ? '' : reviewHtml(task)}
+    ${elsewhere ? '' : askHtml(task)}
   </div>`;
 }
 
@@ -227,6 +230,18 @@ function agentHtml(task) {
   }
   const tab = task.terminal ? state.tabs.get(task.terminal) : null;
   return tab ? `<button type="button" class="td-agent" data-td="${ACTION.agentTerminal}" data-tab="${escapeHtml(tab.id)}" title="Go to its terminal">${AGENT_COMMAND} in ${escapeHtml(tabTitle(tab))}</button>` : '';
+}
+
+/**
+ * What its run out of sight asks for, waiting on the user: Deny, Allow all (this and the rest of the run), or Allow.
+ * @param {TodoTask} task
+ */
+function askHtml(task) {
+  if (!task.ask || statusOf(task) !== TASK_STATUS.progress) return '';
+  return `<div class="td-ask">
+    <div class="td-ask-text">${AGENT_COMMAND} ${escapeHtml(task.ask.verb)} <code>${escapeHtml(task.ask.what)}</code></div>
+    <span class="td-edit-actions"><button type="button" class="btn small" data-td="${ACTION.deny}" title="It goes on without it">Deny</button><button type="button" class="btn small" data-td="${ACTION.allowAll}" title="This, and anything else it asks for until it finishes">Allow all</button><button type="button" class="btn small primary" data-td="${ACTION.allow}">Allow</button></span>
+  </div>`;
 }
 
 /** The two ways on from Review (what the agent said is in the task's details, aboutHtml). @param {TodoTask} task */
@@ -1093,6 +1108,9 @@ const ON_TASK = Object.freeze({
   [ACTION.accept]: (_control, task) => changeStatus(task, TASK_STATUS.done),
   [ACTION.reopen]: (_control, task) => changeStatus(task, TASK_STATUS.open),
   [ACTION.stopRun]: (_control, task) => stopRun(task),
+  [ACTION.allow]: (_control, task) => answerAsk(task, ASK.allow),
+  [ACTION.allowAll]: (_control, task) => answerAsk(task, ASK.all),
+  [ACTION.deny]: (_control, task) => answerAsk(task, ASK.deny),
   [ACTION.more]: (control, task) => taskMenu(task, control),
   [ACTION.expand]: (_control, task) => toggleExpanded(task),
 });
