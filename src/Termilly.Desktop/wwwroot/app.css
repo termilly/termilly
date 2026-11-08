@@ -3321,7 +3321,7 @@ body.detached-window .files-head .np-sep { height: 18px; margin: 0 0 0 1px; back
 .td-only { display: flex; align-items: center; gap: 6px; margin-top: 6px; padding: 6px 8px 2px; border-top: 1px solid var(--border); color: var(--muted); font-size: 12px; cursor: pointer; }
 .td-only input { accent-color: var(--accent); }
 .td-view { display: flex; flex: 1; flex-direction: column; min-height: 0; }
-.td-view[hidden], .td-note[hidden], .td-tags[hidden], .td-issue[hidden] { display: none; }
+.td-view[hidden], .td-note[hidden], .td-issue[hidden] { display: none; }
 .td-note { position: relative; flex: none; padding: 8px 10px 0; }
 .td-note-text { display: block; box-sizing: border-box; width: 100%; padding: 6px 30px 6px 8px; border: 1px solid var(--border); border-radius: 6px; outline: none; resize: none; background: var(--bg); color: var(--text); font: 13px/20px var(--mono); }
 .td-note-text:focus { border-color: var(--accent); }
@@ -3343,7 +3343,13 @@ body.detached-window .files-head .np-sep { height: 18px; margin: 0 0 0 1px; back
 .td-scope { flex: none; height: 20px; padding: 0 7px; border: 1px solid var(--border); border-radius: 999px; background: none; color: var(--muted); font: inherit; font-size: 11px; white-space: nowrap; cursor: pointer; }
 .td-scope:hover { color: var(--text); }
 .td-scope[aria-pressed="true"] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--text); }
-.td-tags { display: flex; flex: none; flex-wrap: wrap; gap: 4px; padding: 0 10px 6px; }
+/* The filter by tag: its icon in the accent while it narrows the list, with how many tags are picked, and its list. */
+.pane-btn.td-filter-btn { position: relative; margin-left: -4px; }
+.pane-btn.td-filter-btn.on { color: var(--accent); }
+.td-filter-count { position: absolute; top: -3px; right: -5px; min-width: 12px; height: 12px; padding: 0 3px; box-sizing: border-box; border-radius: 6px; background: var(--accent); color: var(--on-accent); font-size: 9px; font-weight: 600; line-height: 12px; text-align: center; }
+.td-filter-count[hidden] { display: none; }
+.tag-picker.td-filter { width: 220px; }
+.td-filter .tp-list { margin-top: 0; }
 .td-chip { height: 18px; padding: 0 7px; border: 1px solid transparent; border-radius: 999px; background: color-mix(in srgb, var(--td-hue) 18%, transparent); color: var(--td-hue); font: inherit; font-size: 11px; line-height: 16px; cursor: pointer; }
 .td-chip.on { border-color: currentColor; }
 .td-list { flex: 1; min-height: 0; overflow-y: auto; padding: 0 4px 8px; }

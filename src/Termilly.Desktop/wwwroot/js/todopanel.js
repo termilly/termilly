@@ -15,7 +15,7 @@ import { answerAsk, ASK } from './todoask.js';
 import { openTagManager } from './todotags.js';
 import { escapeHtml, cssColor, tabBadgeHtml, countText, ICONS } from './ui.js';
 import { byId, find, targetOf, WORKSPACE_ID, DOCK_GRIP, PANEL_HEAD, TOOL_COUNT } from './dom.js';
-import { showMenu, openPopover, closeAll, SEPARATOR } from './popups.js';
+import { showMenu, openPopover, closePopover, isOpen, closeAll, SEPARATOR } from './popups.js';
 import { showToast, TOAST } from './toasts.js';
 import { setNote } from './notes.js';
 import { KEY_ID } from './keymap.js';
@@ -69,7 +69,7 @@ const ACTION = Object.freeze({
   cancel: 'cancel', label: 'label', create: 'create', backToList: 'backToList', pickTags: 'pickTags', dropTag: 'dropTag', manageTags: 'manageTags',
   implement: 'implement', issue: 'issue', openIssue: 'openIssue', status: 'status', agentTerminal: 'agentTerminal', accept: 'accept', reopen: 'reopen',
   edit: 'edit', remove: 'remove', expand: 'expand', stopRun: 'stopRun', scope: 'scope', clearSearch: 'clearSearch', searchToggle: 'searchToggle',
-  allow: 'allow', allowAll: 'allowAll', deny: 'deny',
+  allow: 'allow', allowAll: 'allowAll', deny: 'deny', filter: 'filter',
 });
 /** How long after the last key a note is saved. */
 const NOTE_SAVE_MS = 400;
@@ -105,13 +105,13 @@ panel.innerHTML = `
     <div class="td-addbar">
       <input class="field td-add" spellcheck="false" autocomplete="off" title="A word typed as #tag or :tag: tags the task">
       <button type="button" class="pane-btn td-search-btn" data-td="${ACTION.searchToggle}" title="Search tasks (Ctrl+F)" aria-label="Search tasks" aria-expanded="false">${ICONS.search}</button>
+      <button type="button" class="pane-btn td-search-btn td-filter-btn" data-td="${ACTION.filter}" title="Filter by tag" aria-label="Filter by tag" aria-haspopup="listbox">${ICONS.filter}<span class="td-filter-count" hidden></span></button>
     </div>
     <div class="td-search" hidden>
       <input class="td-search-text" spellcheck="false" autocomplete="off" placeholder="Search tasks" aria-label="Search tasks">
       <button type="button" class="td-search-clear" data-td="${ACTION.clearSearch}" title="Clear the search" aria-label="Clear the search" hidden>${ICONS.close}</button>
       <button type="button" class="td-scope" data-td="${ACTION.scope}" title="Search every list, not only this one">All lists</button>
     </div>
-    <div class="td-tags" hidden></div>
     <div class="td-list"></div>
   </div>
   <form class="td-issue" hidden></form>`;
@@ -130,7 +130,8 @@ const noteBox = find(panel, '.td-note');
 const noteArea = /** @type {HTMLTextAreaElement} */ (find(panel, '.td-note-text'));
 const pinButton = find(panel, '.td-pin');
 const addField = /** @type {HTMLInputElement} */ (find(panel, '.td-add'));
-const tagsEl = find(panel, '.td-tags');
+const filterButton = find(panel, '.td-filter-btn');
+const filterCount = find(panel, '.td-filter-count');
 const listEl = find(panel, '.td-list');
 const issueForm = /** @type {HTMLFormElement} */ (find(panel, '.td-issue'));
 const searchField = /** @type {HTMLInputElement} */ (find(panel, '.td-search-text'));
@@ -441,8 +442,7 @@ function render() {
   renderNote(list);
   const tags = tagsIn(list.tasks);
   picked = picked.filter(t => tags.some(([tag]) => tag === t));
-  tagsEl.hidden = !tags.length;
-  tagsEl.innerHTML = tags.map(([tag]) => chip(tag, picked.includes(tag))).join('');
+  showFilter();
   listEl.innerHTML = listHtml(list);
   showSearch();
   find(panel, `[data-td="${ACTION.pick}"]`).title = `Pick a list. This one has ${openCount(list.tasks)} open`;
@@ -484,6 +484,82 @@ function closeSearch(refocus) {
   // Nothing was searched for: the list is as it was, and isn't drawn again under a click on it.
   if (query) search('');
   else showSearch();
+}
+
+// ---- Filtering by tag ----
+
+/** A tag, or Show every task, in the filter's list. */
+const FILTER_ROW = '.tp-row';
+/** The filter's list of tags while it's open. */
+/** @type {HTMLElement | null} */
+let filterPopover = null;
+
+/** The filter's icon as it is: marked, with how many tags are picked, while it narrows the list. */
+function showFilter() {
+  filterButton.classList.toggle('on', picked.length > 0);
+  filterCount.hidden = !picked.length;
+  filterCount.textContent = String(picked.length);
+  filterButton.title = picked.length ? `Showing tasks tagged ${picked.join(', ')}. Click to change` : 'Filter by tag';
+  if (filterPopover && isOpen(filterPopover)) drawFilter(filterPopover);
+}
+
+/**
+ * The filter's list: the tags of this list's open tasks, ticked when picked, with how many tasks have each; and the way
+ * back to every task while some are picked.
+ * @param {HTMLElement} popover
+ */
+function drawFilter(popover) {
+  const body = find(popover, TAG_LIST);
+  const tags = tagsIn(shown()?.tasks ?? []);
+  const rows = tags.map(([tag, count]) => `<button type="button" class="tp-row" data-tag="${escapeHtml(tag)}" role="option" aria-selected="${picked.includes(tag)}">
+      <span class="check${picked.includes(tag) ? ' on' : ''}"><svg viewBox="0 0 12 12"><path d="M2.5 6.5l2.5 2.5 4.5-5.5"/></svg></span>
+      <span class="td-chip" ${chipStyle(tag)}>${escapeHtml(tag)}</span><span class="tp-count">${count}</span>
+    </button>`);
+  const clear = picked.length ? `<div class="tp-sep"></div><button type="button" class="tp-row" data-clear><span class="menu-icon">${ICONS.close}</span>Show every task</button>` : '';
+  body.innerHTML = rows.join('') + clear || '<div class="tp-empty">No open task in this list has a tag</div>';
+}
+
+/**
+ * Picks a tag to show only the tasks that have it, or drops it; no tag at all shows every task again.
+ * @param {string | undefined} tag
+ */
+function filterBy(tag) {
+  if (tag === undefined) picked = [];
+  else picked = picked.includes(tag) ? picked.filter(t => t !== tag) : [...picked, tag];
+  render();
+}
+
+/**
+ * The filter's tags, under its icon (clicked again, it closes). Arrow keys move, Enter or Space ticks.
+ * @param {HTMLElement} at
+ */
+function openFilter(at) {
+  if (filterPopover && isOpen(filterPopover)) return void closePopover(filterPopover);
+  const popover = at.ownerDocument.createElement('div');
+  popover.className = 'popover tag-picker td-filter';
+  popover.hidden = true;
+  popover.innerHTML = '<div class="tp-list" role="listbox" aria-label="Filter by tag"></div>';
+  const body = find(popover, TAG_LIST);
+  body.addEventListener('click', e => {
+    const row = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-tag], [data-clear]'));
+    if (!row) return;
+    const tag = row.dataset.tag;
+    filterBy(tag);
+    const again = tag === undefined ? null : body.querySelector(`[data-tag="${CSS.escape(tag)}"]`);
+    /** @type {HTMLElement | null} */ (again ?? body.querySelector(FILTER_ROW))?.focus();
+  });
+  body.addEventListener('keydown', e => {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    e.preventDefault();
+    const rows = /** @type {HTMLElement[]} */ ([...body.querySelectorAll(FILTER_ROW)]);
+    const now = rows.indexOf(/** @type {HTMLElement} */ (targetOf(e)));
+    const next = now < 0 ? 0 : (now + (e.key === 'ArrowDown' ? 1 : rows.length - 1)) % rows.length;
+    rows[next]?.focus();
+  });
+  filterPopover = popover;
+  drawFilter(popover);
+  openPopover(popover, at, { dynamic: true, refocus: () => filterButton.focus(), onClose: () => { filterPopover = null; } });
+  /** @type {HTMLElement | null} */ (body.querySelector(FILTER_ROW))?.focus();
 }
 
 /** The title bar button's count: open tasks where you're working, while the panel is closed. */
@@ -1206,11 +1282,8 @@ function panelAct(control) {
     case ACTION.clearSearch: return searchAct(control);
     case ACTION.agentTerminal: return goToAgent(control);
     case ACTION.openIssue: return send(PAGE.openUrl, { url: control.dataset.url });
-    case ACTION.tag: {
-      const tag = /** @type {string} */ (control.dataset.tag);
-      picked = picked.includes(tag) ? picked.filter(t => t !== tag) : [...picked, tag];
-      return render();
-    }
+    case ACTION.filter: return openFilter(control);
+    case ACTION.tag: return filterBy(/** @type {string} */ (control.dataset.tag));
     case ACTION.save: return saveEdit();
     case ACTION.cancel:
       editing = null;

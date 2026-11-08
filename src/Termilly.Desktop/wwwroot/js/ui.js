@@ -276,6 +276,8 @@ export const ICONS = {
   // A play triangle: hear a sound.
   play: '<svg viewBox="0 0 16 16"><path d="M5.5 3.5v9l7-4.5z"/></svg>',
   search: '<svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5l3 3"/></svg>',
+  /** A funnel: narrow a list down. */
+  filter: '<svg viewBox="0 0 16 16"><path d="M2.5 3.5h11l-4 5v4l-3 1.5v-5.5z"/></svg>',
   // A box with an arrow out of its corner: open something outside Termilly.
   launch: '<svg viewBox="0 0 16 16"><path d="M7.5 3.5h-4v9h9v-4M9.5 3.5h3v3M12.5 3.5l-5 5"/></svg>',
   monitor: '<svg viewBox="0 0 16 16"><rect x="1.5" y="2.5" width="13" height="8.5" rx="1.5"/><path d="M5.5 13.5h5M8 11v2.5"/></svg>',
