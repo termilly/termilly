@@ -279,6 +279,10 @@ interface UiState {
   stopAgentConfirmed: boolean;
   /** An update the user chose to skip. */
   skippedVersion: string | null;
+  /** The version whose What's new was last shown and closed (js/whatsnew.js); none before the first. */
+  whatsNewSeen: string | null;
+  /** What's new doesn't open by itself after an update (its Show this after updates, unticked). */
+  whatsNewOff: boolean;
 }
 
 /** Data the page keeps in the settings file: the agent cost ledger, and the values last used in snippets. */

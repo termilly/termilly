@@ -1999,6 +1999,34 @@ body.dragging-pane #drag-ghost { z-index: 2700; }
 .field-row .keep-count { flex: 0 0 76px; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
 
+/* What's new after an update (js/whatsnew.js): the newest version's topics, its fixes and older versions folded. */
+.dialog.whats-new { display: flex; flex-direction: column; width: 540px; max-height: calc(100vh - 64px); }
+.wn-head { display: flex; align-items: flex-start; gap: 12px; }
+.wn-head img { flex: none; border-radius: 8px; }
+.wn-head > div { flex: 1; min-width: 0; }
+.wn-head .dialog-sub { margin-bottom: 10px; }
+.wn-body { min-height: 0; margin: 0 -8px; padding: 0 8px; overflow-y: auto; }
+.wn-version { display: flex; align-items: baseline; gap: 8px; margin: 0 0 2px; font-size: 13px; }
+.wn-version span, .wn-older summary span { color: var(--faint); font-size: 12px; }
+.wn-topics { margin: 0; padding: 0; list-style: none; }
+.wn-topic { display: flex; align-items: flex-start; gap: 10px; padding: 8px; border-radius: 8px; }
+.wn-topic:hover { background: var(--hover); }
+.wn-icon { display: grid; flex: none; place-items: center; width: 28px; height: 28px; border-radius: 7px; background: var(--surface); color: var(--accent); }
+.wn-icon svg { width: 16px; height: 16px; fill: none; stroke: currentColor; }
+.wn-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.wn-what { flex: 1; min-width: 0; font-size: 12.5px; line-height: 1.45; }
+.wn-what b { display: block; color: var(--text); font-size: 13px; }
+.wn-what span { color: var(--muted); }
+.wn-topic .btn { flex: none; align-self: center; }
+.wn-fixes, .wn-older { margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--border); color: var(--muted); font-size: 12.5px; }
+.wn-fixes summary, .wn-older summary { display: flex; align-items: center; gap: 6px; color: var(--text); font-weight: 600; list-style: none; cursor: pointer; }
+.wn-fixes summary::-webkit-details-marker, .wn-older summary::-webkit-details-marker { display: none; }
+.wn-caret { display: inline-flex; color: var(--muted); transition: transform 0.12s; }
+.wn-caret svg { width: 12px; height: 12px; fill: none; stroke: currentColor; }
+details[open] > summary .wn-caret { transform: rotate(90deg); }
+.wn-fixes ul, .wn-older ul { margin: 6px 0 2px; padding-left: 18px; line-height: 1.5; }
+.wn-auto { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); font-size: 12.5px; cursor: pointer; }
+
 .dialog-icon { display: grid; place-items: center; width: 36px; height: 36px; margin-bottom: 12px; border-radius: 10px; background: var(--accent-fill); color: var(--accent); }
 .dialog-icon svg { width: 18px; height: 18px; stroke-width: 1.5; }
 .dialog-note { margin: 14px 0 0; color: var(--faint); font-size: 12px; line-height: 1.5; }

@@ -4,6 +4,7 @@ namespace Termilly.Desktop.Services;
 internal static class MediaTypes
 {
     public const string PlainText = "text/plain";
+    public const string Markdown = "text/markdown";
     public const string Html = "text/html";
     public const string JavaScript = "text/javascript";
     public const string Css = "text/css";
@@ -35,5 +36,6 @@ internal static class MediaTypes
         public const string Woff = ".woff";
         public const string Ttf = ".ttf";
         public const string Text = ".txt";
+        public const string Markdown = ".md";
     }
 }

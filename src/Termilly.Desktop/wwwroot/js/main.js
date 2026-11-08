@@ -42,6 +42,7 @@ import { THEMES } from './themes.js';
 import { isPreviewOpen, closePreview } from './preview.js';
 import { pluginCommands, reloadPlugins } from './plugins.js';
 import { startTour, offerTourOnce } from './tour.js';
+import { showWhatsNew, offerWhatsNewOnce } from './whatsnew.js';
 import './api.js';
 import { exportLayout, importLayout } from './layouts.js';
 import { isBroadcasting, startBroadcast, stopBroadcast, openCompose, BROADCAST_SCOPE } from './broadcast.js';
@@ -209,6 +210,7 @@ setCommands(() => [
   { label: 'Notepad (on / off)', keywords: 'notes notepad write jot scratch text memo pad', hint: keyHint(KEY_ID.notepad), run: () => setTimeout(toggleNotepad) },
   { label: 'To do (on / off)', keywords: 'todo tasks task list notes checklist work issue', hint: keyHint(KEY_ID.todo), run: () => setTimeout(toggleTodo) },
   { label: 'Take the tour', keywords: 'tour help guide introduction tutorial walkthrough start learn', run: () => setTimeout(startTour) },
+  { label: 'What’s new', keywords: 'whats new changelog release notes update version changes', run: () => setTimeout(showWhatsNew) },
   { label: 'Quit Termilly', keywords: 'exit close quit stop tray', run: () => send(PAGE.window, { action: WINDOW_ACTION.quit }) },
   ...(changeShortcutOn() ? [
     { label: 'Show the files Claude changed here, in the Git window', keywords: 'change preview diff edits claude files last all tree folders agent changes search', hint: keyHint(KEY_ID.agentChanges), run: () => setTimeout(() => openAgentChanges(focusedTab())) },
@@ -598,6 +600,7 @@ onHost(HOST.settings, m => {
   boot(m.workspaces, m.snapshot,
     /** @type {{ liveSessions?: string[] }} */ (/** @type {unknown} */ (m)).liveSessions ?? []);
   offerTourOnce();
+  offerWhatsNewOnce();
 });
 
 // Custom profiles were edited in Settings: the host re-detected everything and sent the new list.
