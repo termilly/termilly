@@ -9,7 +9,9 @@ export const TASK_STATUS = Object.freeze({ open: 'open', progress: 'progress', r
 export const HOVER_TASKS = 5;
 /** The longest tag: a `#` in a line of text isn't a tag past this. */
 const MAX_TAG_LENGTH = 32;
-const TAG_IN_TEXT = new RegExp(`(^|\\s)#([\\p{L}\\p{N}_-]{1,${MAX_TAG_LENGTH}})(?=\\s|$)`, 'gu');
+const TAG_NAME = `([\\p{L}\\p{N}_-]{1,${MAX_TAG_LENGTH}})`;
+/** A tag in a line of text, a word of its own: `#tag` or `:tag:`. */
+const TAG_IN_TEXT = new RegExp(`(^|\\s)(?:#${TAG_NAME}|:${TAG_NAME}:)(?=\\s|$)`, 'gu');
 /** A list mark at the start of a line: `- `, `* `, `1. `, each with an optional box. */
 const LIST_MARK = /^\s*(?:[-*+]|\d+[.)])\s+(?:\[( |x|X)\]\s+)?/;
 const BOX_ONLY = /^\s*\[( |x|X)\]\s+/;
@@ -30,15 +32,15 @@ const TAG_HASH_LIMIT = 1000003;
 export const tagOfHeading = heading => heading.trim().toLowerCase().replace(/[^\p{L}\p{N}_-]+/gu, '-').replace(/^-+|-+$/g, '').slice(0, MAX_TAG_LENGTH);
 
 /**
- * A line typed into the add field: its text, and the #tags in it taken out.
+ * A line typed into the add field: its text, and the tags in it (`#tag` or `:tag:`) taken out.
  * @param {string} line
  * @returns {{ text: string, tags: string[] }}
  */
 export function parseTask(line) {
   /** @type {string[]} */
   const tags = [];
-  const text = line.replace(TAG_IN_TEXT, (_, before, tag) => {
-    const name = tag.toLowerCase();
+  const text = line.replace(TAG_IN_TEXT, (_, before, hashed, colons) => {
+    const name = (hashed ?? colons).toLowerCase();
     if (!tags.includes(name)) tags.push(name);
     return before;
   }).replace(/\s+/g, ' ').trim();

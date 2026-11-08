@@ -14,6 +14,18 @@ test('a typed line keeps its text and gives up its tags', () => {
   assert.deepEqual(parseTask('Issue #41 is not a #42x tag'.replace('#42x', 'done')), { text: 'Issue is not a done tag', tags: ['41'] });
 });
 
+test('a word between colons is a tag too', () => {
+  assert.deepEqual(parseTask('Rotate the key :deploy: before Friday :Bug: #deploy'), { text: 'Rotate the key before Friday', tags: ['deploy', 'bug'] });
+  assert.deepEqual(parseTask(':ui-fix:'), { text: '', tags: ['ui-fix'] });
+  assert.deepEqual(tasksFromLines('- [ ] one :a:\ntwo'), [{ text: 'one', tags: ['a'], done: false }, { text: 'two', tags: [], done: false }]);
+});
+
+test('colons in times, paths, labels and inside words are not tags', () => {
+  for (const line of ['Meet at 12:30:00', 'Open C:\\x:y: now', 'Note: fix :it', 'a:b: c', ':x:y', ':: and :a b:', 'Call :a:, then']) {
+    assert.deepEqual(parseTask(line), { text: line.replace(/\s+/g, ' ').trim(), tags: [] }, line);
+  }
+});
+
 test('a hash inside a word or a URL is not a tag', () => {
   assert.deepEqual(parseTask('Read https://x.dev/a#b and C#'), { text: 'Read https://x.dev/a#b and C#', tags: [] });
 });

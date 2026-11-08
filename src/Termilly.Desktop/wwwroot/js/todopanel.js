@@ -101,7 +101,7 @@ panel.innerHTML = `
       <button class="pane-btn td-pin" data-td="${ACTION.pin}" title="Pin the first line to the terminal’s header">${ICONS.pin}</button>
     </div>
     <div class="td-addbar">
-      <input class="field td-add" spellcheck="false" autocomplete="off">
+      <input class="field td-add" spellcheck="false" autocomplete="off" title="A word typed as #tag or :tag: tags the task">
       <button type="button" class="pane-btn td-search-btn" data-td="${ACTION.searchToggle}" title="Search tasks (Ctrl+F)" aria-label="Search tasks" aria-expanded="false">${ICONS.search}</button>
     </div>
     <div class="td-search" hidden>
