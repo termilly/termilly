@@ -311,7 +311,7 @@ export function noteHtml(list, typing) {
 export function markHtml(list) {
   if (!list || (!list.tasks.length && !list.note?.text)) return '';
   const left = openTasks(list).length;
-  return `<button class="td-mark" data-td="${TD.open}" data-kind="${esc(list.kind)}" data-id="${esc(list.id)}" aria-label="To do${left ? `, ${left} left` : ''}">${LIST_ICON}${left || ''}</button>`;
+  return `<button class="td-mark" data-td="${TD.open}" data-kind="${esc(list.kind)}" data-id="${esc(list.id)}" aria-label="To do${left ? `, ${left} left` : ''}">${LIST_ICON}${left ? `<span>${left}</span>` : ''}</button>`;
 }
 
 /**

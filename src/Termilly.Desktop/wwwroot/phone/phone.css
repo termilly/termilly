@@ -337,7 +337,7 @@ button.row { width: 100%; border: 0; background: none; color: inherit; font: inh
 .td-tree .r-line { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .td-term { padding-left: 28px; }
 .list > .td-tree + .td-tree { border-top: 1px solid var(--line); }
-.td-count { position: relative; top: 3px; flex: none; min-width: 22px; padding: 0 6px; border-radius: 11px; background: var(--bg); color: var(--muted); font-size: 13px; line-height: 22px; text-align: center; }
+.td-count { flex: none; min-width: 22px; padding: 0 6px; border-radius: 11px; background: var(--bg); color: var(--muted); font-size: 13px; line-height: 22px; text-align: center; }
 .td-more { display: block; margin: 12px 8px; padding: 0; border: 0; background: none; color: var(--accent); font-size: 15px; }
 .td-accept { flex: none; align-self: center; padding: 6px 12px; border: 0; border-radius: 10px; background: var(--accent); color: var(--on-accent); font-size: 14px; font-weight: 600; }
 .td-mark { display: inline-flex; flex: none; gap: 3px; align-items: center; padding: 4px; border: 0; background: none; color: var(--muted); font-size: 12.5px; }
@@ -357,6 +357,7 @@ button.row { width: 100%; border: 0; background: none; color: inherit; font: inh
 .sc-why { margin: 0 8px 12px; color: var(--danger); font-size: 14px; }
 .sc-report { margin: 0; padding: 12px; overflow-x: auto; border-radius: 12px; background: var(--raised); color: var(--text); font: 12.5px/1.45 ui-monospace, Menlo, Consolas, monospace; white-space: pre-wrap; word-break: break-word; }
 .td-mark svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+.td-mark span { position: relative; top: 2px; }
 .td-hint { margin: 12px 8px; color: var(--muted); font-size: 13.5px; }
 .td-review-notes { margin-bottom: 12px; }
 .td-sheet { padding-top: 8px; }
