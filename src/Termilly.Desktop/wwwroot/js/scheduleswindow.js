@@ -13,7 +13,7 @@ import { escapeHtml } from './ui.js';
 import { fuzzyMatch } from './fuzzy.js';
 import { allSnippets, NAME_WORDS } from './snippets.js';
 import { byId, find, targetOf, TOOL_COUNT } from './dom.js';
-import { detach, closeWindow, focusWindow, isDetached } from './windows.js';
+import { detach, closeWindow, focusWindow, isDetached, windowName } from './windows.js';
 import { readReport, shownText } from './schedulereport.js';
 import {
   schedules, scheduleById, runsOf, saveSchedule, removeSchedule, setScheduleOn, runNow, stopRun, runningNow,
@@ -323,13 +323,12 @@ async function openAsTerminal() {
 }
 
 /**
- * Picks the run's folder on this computer: the picker gives it as it's spelled on disk. The picker belongs to the main
- * window, which comes to the front when it closes: a window of its own is brought back over it.
+ * Picks the run's folder on this computer: the picker gives it as it's spelled on disk. It's over this window: one owned
+ * by the main window would bring that up over a window of its own.
  */
 async function browseFolder() {
   const field = /** @type {HTMLInputElement} */ (find(editEl, '[name=cwd]'));
-  const path = await pickFolder(field.value || undefined);
-  if (isDetached(WINDOW_KEY)) focusWindow(WINDOW_KEY);
+  const path = await pickFolder(field.value || undefined, isDetached(WINDOW_KEY) ? windowName(WINDOW_KEY) : undefined);
   if (!path || !editing) return;
   field.value = path;
   field.dispatchEvent(new Event('input', { bubbles: true }));

@@ -15,6 +15,10 @@ public partial class MainWindow
     /// <summary>The page's own windows (a terminal, the Notepad or the Snippets window detached), while they're open.</summary>
     private readonly List<DetachedWindow> _detached = [];
 
+    /// <summary>The page's window by its name: a detached one, else (no name, or gone) this one.</summary>
+    internal System.Windows.Window WindowNamed(string? pageWindowName) =>
+        _detached.Find(w => w.PageWindowName == pageWindowName) is { } detached ? detached : this;
+
     /// <summary>
     /// window.open of one of the page's own windows (named so, js/windows.js): a window of its own (DetachedWindow), still
     /// the page's (window.opener), which builds its empty page and moves into it what it shows. Anything else is left

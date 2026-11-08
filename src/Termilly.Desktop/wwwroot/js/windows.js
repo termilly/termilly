@@ -162,6 +162,12 @@ export function closeWindow(key, { quiet = false } = {}) {
   d.win.close();
 }
 
+/**
+ * A detached window's name, as the host knows it.
+ * @param {string} key
+ */
+export const windowName = key => NAME_PREFIX + key;
+
 /** @param {string} key */
 export function focusWindow(key) {
   const d = open.get(key);
