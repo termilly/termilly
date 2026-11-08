@@ -45,6 +45,12 @@ export const scheduleById = id => schedules().find(s => s.id === id) ?? null;
 export const runsOf = scheduleId => runs().filter(r => r.scheduleId === scheduleId);
 /** @param {string} id */
 const isGoing = id => [...active.values()].some(a => a.schedule.id === id);
+/**
+ * Whether a schedule's prompt runs in a terminal now: nobody is asked there, so what Claude Code would ask for it refuses
+ * by itself (agentcli.js).
+ * @param {Tab} tab
+ */
+export const nobodyAsksIn = tab => [...active.values()].some(a => a.tab === tab && a.schedule.what === WHAT.agent);
 /** The runs going on now, for the sidebar. */
 export const runningNow = () => [...active.values()].filter(a => a.run.status === RUN.running || a.run.status === RUN.waiting);
 
