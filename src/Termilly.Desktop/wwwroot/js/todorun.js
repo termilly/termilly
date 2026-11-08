@@ -1,13 +1,14 @@
 // @ts-check
 // Implement's Silent: nobody is watching, so Claude Code works on a task in a hidden shell, as a schedule's agent prompt
 // does (the host's ScheduleRunner), allowed to change files. What else it needs, it asks the user for in the task's row
-// (js/todoask.js), unless To do's settings allow it all.
+// (js/todoask.js), unless To do's settings allow it all. On an SSH host (the list's terminal is there) it runs there, in the
+// folder that terminal is in; nobody can be asked from there, so it's refused what it would ask for, or with Allow all, gets it.
 // The task is In progress while it runs, and goes to Review with its reply, or back to Open, with why, when it fails or is
 // stopped. A run outlives nothing: closing Termilly ends it.
 
 import { PAGE, HOST } from './protocol.js';
 import { send, onHost } from './host.js';
-import { state, on, newId, isSsh, defaultProfile, sourceOf, EVENTS } from './store.js';
+import { state, on, newId, sourceOf, EVENTS } from './store.js';
 import { PROFILE_SOURCE, AGENT_STATE } from './constants.js';
 import { addApiMethods } from './api.js';
 import { askUser, endAsking } from './todoask.js';
@@ -15,8 +16,8 @@ import { agentCommand, readResult, AGENT_COMMAND } from './agentcli.js';
 import { plainText } from './schedulereport.js';
 import { showToast, TOAST } from './toasts.js';
 import { alertReview, alertTask } from './notify.js';
-import { folderOfList, agentInstalled } from './todoactions.js';
-import { LIST_KIND, findTask, setStatus, updateTask, releaseClosed } from './todo.js';
+import { implementPlace } from './todoactions.js';
+import { findTask, setStatus, updateTask, releaseClosed } from './todo.js';
 import { silentPrompt, tickSub, TASK_STATUS } from './todolist.js';
 
 /** @typedef {import('./todo.js').ListRef} ListRef */
@@ -38,16 +39,6 @@ const going = new Map();
 export const isRunning = run => going.has(run);
 
 /**
- * The shell a list's run goes in: its terminal's when that's on this computer, else the default one.
- * @param {ListRef} ref
- */
-function profileFor(ref) {
-  const tab = ref.kind === LIST_KIND.terminal ? state.tabs.get(ref.id) : null;
-  const id = tab && !isSsh(tab) ? tab.profile : defaultProfile();
-  return state.profiles.find(p => p.id === id) ?? null;
-}
-
-/**
  * Starts Claude Code silently on a task, or one of its sub-items, in the list's folder.
  * @param {ListRef} ref
  * @param {TodoTask} task
@@ -55,13 +46,14 @@ function profileFor(ref) {
  * @returns {boolean} whether it started
  */
 export function implementSilently(ref, task, sub) {
-  const folder = folderOfList(ref);
-  const profile = profileFor(ref);
-  if (!folder || !profile || !agentInstalled()) return false;
+  const place = implementPlace(ref);
+  if (!place) return false;
+  const { folder, profile } = place;
   const run = newId('t');
   // A shell on this computer reaches Termilly's pipe, so Claude Code there can ask the user.
   const ask = sourceOf(profile) === PROFILE_SOURCE.local;
-  const command = agentCommand(silentPrompt(task, sub), { shell: profile.shellIcon ?? profile.icon, changes: true, json: true, ask });
+  const all = !ask && state.todo.allowAll === true;
+  const command = agentCommand(silentPrompt(task, sub), { shell: profile.shellIcon ?? profile.icon, changes: true, all, json: true, ask });
   going.set(run, { taskId: task.id, line: sub?.at });
   setStatus(ref, task.id, TASK_STATUS.progress, { run });
   send(PAGE.scheduleRun, { runId: run, profile: profile.id, cwd: folder, command, limitSeconds: LIMIT_SECONDS, ask });

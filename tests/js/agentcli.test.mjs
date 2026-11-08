@@ -31,6 +31,14 @@ test('changes are only allowed when asked for', () => {
   assert.doesNotMatch(agentCommand('x', { shell: 'bash' }), /--permission-mode/);
 });
 
+test('everything is allowed only with changes and when asked for', () => {
+  const all = agentCommand('x', { shell: 'ssh', changes: true, all: true, json: true });
+  assert.match(all, /--permission-mode bypassPermissions/);
+  assert.doesNotMatch(all, /acceptEdits/);
+  assert.match(all, /--permission-prompts none/);
+  assert.doesNotMatch(agentCommand('x', { shell: 'ssh', all: true }), /bypassPermissions/);
+});
+
 test('its answer comes as JSON only when something reads it', () => {
   assert.match(agentCommand('x', { shell: 'bash', json: true }), /--output-format json/);
   assert.doesNotMatch(agentCommand('x', { shell: 'bash' }), /--output-format/);
