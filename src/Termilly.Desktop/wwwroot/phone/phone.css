@@ -317,6 +317,8 @@ button.row { width: 100%; border: 0; background: none; color: inherit; font: inh
 .td-box { flex: none; display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 1.5px solid var(--muted); border-radius: 6px; background: none; }
 .td-box svg { visibility: hidden; width: 14px; height: 14px; fill: none; stroke: var(--on-accent); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .td-box.st-progress { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 30%, transparent); }
+.td-box.working { background: none; }
+.td-box .activity { --size: 14px; }
 .td-box.st-review { border-color: var(--attention); background: color-mix(in srgb, var(--attention) 30%, transparent); }
 .td-box.st-done { border-color: var(--accent); background: var(--accent); }
 .td-box.st-done svg { visibility: visible; }

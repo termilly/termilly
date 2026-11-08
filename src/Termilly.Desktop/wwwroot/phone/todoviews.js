@@ -5,7 +5,7 @@
 /**
  * A task as the PC sends it (js/phonetodo.js).
  * @typedef {{ id: string, text: string, status: string, tags: string[], details: string, notes: string, steps: PhoneStep[],
- *   agent: { id: string, title: string } | null, review: { summary: string, by: string } | null,
+ *   agent: { id: string, title: string } | null, working?: boolean, review: { summary: string, by: string } | null,
  *   issue: { url: string, number: number } | null }} PhoneTask
  */
 /**
@@ -49,15 +49,22 @@ function chip(tag, ctx) {
   return `<span class="td-chip" style="--hue:${esc(color)}">${esc(tag)}</span>`;
 }
 
+/** In a task's box while an agent is at work on it: the spinner terminals have. */
+const SPINNER = '<span class="activity spin"></span>';
+
 /**
- * A task's box: it ticks the task where the phone may, and only shows it where it may not.
+ * A task's box: it ticks the task where the phone may, and only shows it where it may not. It spins while an agent is at
+ * work on the task.
  * @param {string} status
  * @param {string} action what a tap does
  * @param {string} data its data attributes
  * @param {boolean} typing
+ * @param {boolean} [working]
  */
-function boxHtml(status, action, data, typing) {
-  return typing ? `<button class="td-box st-${esc(status)}" data-td="${action}" ${data} aria-label="Done">${TICK}</button>` : `<span class="td-box st-${esc(status)}">${TICK}</span>`;
+function boxHtml(status, action, data, typing, working = false) {
+  const cls = `td-box st-${esc(status)}${working ? ' working' : ''}`;
+  const mark = working ? SPINNER : TICK;
+  return typing ? `<button class="${cls}" data-td="${action}" ${data} aria-label="Done">${mark}</button>` : `<span class="${cls}">${mark}</span>`;
 }
 
 /** @param {PhoneStep[]} steps */
@@ -71,7 +78,7 @@ const progress = steps => (steps.length ? `<span class="td-sub">${steps.filter(s
 function taskRow(task, ctx) {
   const data = `data-task="${esc(task.id)}"`;
   const meta = `${progress(task.steps)}${task.tags.map(tag => chip(tag, ctx)).join('')}${task.issue ? `<span class="td-sub">#${esc(task.issue.number)}</span>` : ''}`;
-  return `<div class="row td-row${task.status === STATUS.done ? ' td-done' : ''}" data-td="${TD.task}" ${data}>${boxHtml(task.status, TD.check, data, ctx.typing)}
+  return `<div class="row td-row${task.status === STATUS.done ? ' td-done' : ''}" data-td="${TD.task}" ${data}>${boxHtml(task.status, TD.check, data, ctx.typing, !!task.working)}
     <div class="r-text"><div class="r-name">${esc(task.text)}</div>
       ${task.agent ? `<div class="td-agent">${esc(task.agent.title)}</div>` : ''}
       ${task.review ? `<div class="td-said"><b>${esc(task.review.by)}:</b> ${esc(task.review.summary)}</div>` : ''}

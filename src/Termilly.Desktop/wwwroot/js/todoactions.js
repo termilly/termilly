@@ -4,12 +4,13 @@
 
 import { PAGE, HOST } from './protocol.js';
 import { send, onHost } from './host.js';
-import { state, emit, lastFolderOf, wsById, isSsh, defaultProfile, EVENTS } from './store.js';
+import { state, emit, lastFolderOf, wsById, isSsh, defaultProfile, activityOf, ACTIVITY, EVENTS } from './store.js';
 import { newTab } from './panes.js';
 import { commandLine } from './quoting.js';
 import { AGENT_COMMAND } from './agentcli.js';
+import { AGENT_STATE } from './constants.js';
 import { LIST_KIND, setStatus, updateTask } from './todo.js';
-import { implementPrompt, linkSub, TASK_STATUS } from './todolist.js';
+import { implementPrompt, linkSub, statusOf, TASK_STATUS } from './todolist.js';
 
 /** @typedef {import('./todo.js').ListRef} ListRef */
 
@@ -24,6 +25,21 @@ const onGitHub = new Map();
 
 /** Whether Claude Code is installed here: the host offers its profile only then (SessionProfiles.cs). */
 export const agentInstalled = () => state.profiles.some(p => p.startCommand === AGENT_COMMAND);
+
+/**
+ * Whether Implement's agent is at work on a task right now, so its mark spins: out of sight, unless it waits on the user's
+ * Allow; in a terminal, while Claude Code works there (its hooks say so, or progress it reports), not while it waits.
+ * @param {TodoTask} task
+ */
+export function agentWorking(task) {
+  if (statusOf(task) !== TASK_STATUS.progress) return false;
+  if (task.run) return !task.ask;
+  const tab = task.terminal ? state.tabs.get(task.terminal) : null;
+  if (!tab) return false;
+  if (tab.agent) return tab.agent.state === AGENT_STATE.working;
+  const kind = activityOf(tab)?.kind;
+  return kind === ACTIVITY.spin || kind === ACTIVITY.percent;
+}
 
 /**
  * The folder of a list on this computer: where its terminal or workspace is. A terminal on a server has none.

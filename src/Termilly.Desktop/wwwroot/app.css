@@ -3355,6 +3355,10 @@ body.detached-window .files-head .np-sep { height: 18px; margin: 0 0 0 1px; back
 .td-status { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 20px; padding: 0; border: 0; border-radius: 4px; background: none; color: var(--muted); cursor: pointer; }
 .td-status:hover { background: color-mix(in srgb, currentColor 16%, transparent); }
 .td-status svg { width: 16px; height: 16px; fill: none; stroke: currentColor; }
+/* An agent at work on the task: In progress's mark turns into a spinner (js/todopanel.js WORKING_ICON). */
+.td-spinner { stroke-width: 1.5; stroke-linecap: round; animation: activity-spin 0.9s linear infinite; }
+.td-spin-track { opacity: 0.3; }
+@media (prefers-reduced-motion: reduce) { .td-spinner { animation: activity-pulse 1.6s ease-in-out infinite; } }
 .td-tick { stroke: var(--surface); stroke-width: 1.5; }
 .st-progress { --status: var(--accent); }
 .st-review { --status: var(--attention); }

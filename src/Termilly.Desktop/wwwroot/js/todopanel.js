@@ -9,7 +9,7 @@ import { PAGE, HOST } from './protocol.js';
 import { send, onHost } from './host.js';
 import { state, on, persist, newId, wsById, tabsOf, tabTitle, EVENTS } from './store.js';
 import { focusTab } from './panes.js';
-import { AGENT_COMMAND, agentInstalled, folderOfList as folderOf, isOnGitHub, checkRepo, implementTask, keepIssue } from './todoactions.js';
+import { AGENT_COMMAND, agentInstalled, agentWorking, folderOfList as folderOf, isOnGitHub, checkRepo, implementTask, keepIssue } from './todoactions.js';
 import { implementOutOfSight, stopRun } from './todorun.js';
 import { answerAsk, ASK } from './todoask.js';
 import { openTagManager } from './todotags.js';
@@ -46,6 +46,8 @@ const STATUS_ICON = Object.freeze({
   [TASK_STATUS.review]: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><circle cx="8" cy="8" r="2.5" fill="currentColor" stroke="none"/></svg>',
   [TASK_STATUS.done]: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="currentColor" stroke="none"/><path class="td-tick" d="M5.25 8.25l1.75 1.75 3.75-4"/></svg>',
 });
+/** In progress's mark while an agent is at work on the task (agentWorking): a faint ring with an arc going round it. */
+const WORKING_ICON = '<svg class="td-spinner" viewBox="0 0 16 16"><circle class="td-spin-track" cx="8" cy="8" r="5.5"/><path d="M8 2.5a5.5 5.5 0 0 1 5.5 5.5"/></svg>';
 /** A tag picker's colour field. */
 const COLOR_INPUT = 'color';
 /** A workspace's own list, in the picker. */
@@ -180,10 +182,29 @@ const chipStyle = tag => `style="--td-hue:${cssColor(tagColor(tag))}"`;
 /** @param {string} tag @param {boolean} [on] */
 const chip = (tag, on = false) => `<button type="button" class="td-chip${on ? ' on' : ''}" ${chipStyle(tag)} data-td="${ACTION.tag}" data-tag="${escapeHtml(tag)}">${escapeHtml(tag)}</button>`;
 
-/** A task's status selector: its mark, which opens the statuses to pick from. @param {TodoTask} task */
+/**
+ * A task's status selector: its mark, which opens the statuses to pick from. It spins while an agent is at work on it.
+ * @param {TodoTask} task
+ */
 function statusButtonHtml(task) {
   const status = statusOf(task);
-  return `<button type="button" class="td-status st-${status}" data-td="${ACTION.status}" title="${STATUS_NAME[status]}. Click to change" aria-label="Status: ${STATUS_NAME[status]}">${STATUS_ICON[status]}</button>`;
+  const working = agentWorking(task);
+  const name = working ? `${STATUS_NAME[status]}: ${AGENT_COMMAND} is working on it` : STATUS_NAME[status];
+  return `<button type="button" class="td-status st-${status}${working ? ' working' : ''}" data-td="${ACTION.status}" title="${name}. Click to change" aria-label="Status: ${name}">${working ? WORKING_ICON : STATUS_ICON[status]}</button>`;
+}
+
+/**
+ * Starts or stops the spinners of the tasks shown, when an agent starts or stops working (in a terminal, its hooks say
+ * so without a change to the task): only the marks that changed are drawn again, so a hover or a field typed in stays.
+ */
+function showWorking() {
+  if (panel.hidden) return;
+  for (const row of listEl.querySelectorAll(TASK)) {
+    const mark = row.querySelector(`[data-td="${ACTION.status}"]`);
+    const task = findTask(/** @type {HTMLElement} */ (row).dataset.task ?? '')?.task;
+    if (!mark || !task || mark.classList.contains('working') === agentWorking(task)) continue;
+    mark.outerHTML = statusButtonHtml(task);
+  }
 }
 
 /**
@@ -1388,3 +1409,5 @@ for (const event of [EVENTS.focus, EVENTS.workspaces, EVENTS.tab]) {
     else if (!panel.hidden) showPick(/** @type {TodoList} */ (shown()));
   });
 }
+// Claude Code in a task's terminal started or stopped working: its mark spins or stops.
+for (const event of [EVENTS.agent, EVENTS.tab]) on(event, showWorking);

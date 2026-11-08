@@ -8,7 +8,7 @@ import { send, onHost } from './host.js';
 import { state, newId, tabTitle } from './store.js';
 import { setNote } from './notes.js';
 import { listOf, noteTarget, addTasks, updateTask, removeTask, moveTask, setStatus, findTask, todoTags, tagColor } from './todo.js';
-import { AGENT_COMMAND, agentInstalled, folderOfList, isOnGitHub, checkRepo, implementTask, keepIssue } from './todoactions.js';
+import { AGENT_COMMAND, agentInstalled, agentWorking, folderOfList, isOnGitHub, checkRepo, implementTask, keepIssue } from './todoactions.js';
 import { parseTask, detailLines, statusOf, splitNote, tickSub, issueBody, labelsForTags, TASK_STATUS } from './todolist.js';
 
 /** @typedef {import('./todo.js').ListRef} ListRef */
@@ -29,7 +29,7 @@ function taskForPhone(task) {
     id: task.id, text: task.text, status: statusOf(task), tags: task.tags ?? [], details: task.details ?? '',
     notes: lines.filter(line => !line.sub).map(line => line.text).join('\n').trim(),
     steps: lines.filter(line => line.sub).map(({ at, text, done }) => ({ at, text, done })),
-    agent: tab ? { id: tab.id, title: `${AGENT_COMMAND} in ${tabTitle(tab)}` } : null,
+    agent: tab ? { id: tab.id, title: `${AGENT_COMMAND} in ${tabTitle(tab)}` } : null, working: agentWorking(task),
     review: task.review ?? null, issue: task.issue ?? null,
   };
 }
