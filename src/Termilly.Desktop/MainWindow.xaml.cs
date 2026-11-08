@@ -157,6 +157,7 @@ public partial class MainWindow : Window
             Frame.BorderBrush = Brush(_theme.Palette.Frame);
             Activate();
             Web.Focus();
+            RaiseDetached();
         };
         LoaderBox.BeginAnimation(OpacityProperty, fade);
     }

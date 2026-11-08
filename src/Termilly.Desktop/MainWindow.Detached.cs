@@ -15,6 +15,23 @@ public partial class MainWindow
     /// <summary>The page's own windows (a terminal, the Notepad or the Snippets window detached), while they're open.</summary>
     private readonly List<DetachedWindow> _detached = [];
 
+    /// <summary>
+    /// Windows of their own come up over the main window, as they were when Termilly closed: they open with the page,
+    /// before the main window is shown and comes to the front. Raised, not activated, so the main window keeps the keys;
+    /// one kept on top already stays so.
+    /// </summary>
+    private void RaiseDetached()
+    {
+        foreach (var window in _detached)
+        {
+            if (window.IsVisible && window.WindowState != WindowState.Minimized && !window.Topmost)
+            {
+                window.Topmost = true;
+                window.Topmost = false;
+            }
+        }
+    }
+
     /// <summary>The page's window by its name: a detached one, else (no name, or gone) this one.</summary>
     internal System.Windows.Window WindowNamed(string? pageWindowName) =>
         _detached.Find(w => w.PageWindowName == pageWindowName) is { } detached ? detached : this;
