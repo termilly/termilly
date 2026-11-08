@@ -52,13 +52,14 @@ const CARET = `<span class="wn-caret">${ICONS.chevronRight}</span>`;
 
 /** @type {Release[] | null} */
 let releases = null;
-/** The release notes, read once. */
+/** The release notes, read once; null when they can't be read (then nothing counts as seen). */
 async function allReleases() {
   if (releases) return releases;
   try {
-    releases = parseChangelog(await (await fetch(CHANGELOG_URL)).text());
+    const response = await fetch(CHANGELOG_URL);
+    if (response.ok) releases = parseChangelog(await response.text());
   } catch {
-    releases = [];
+    // not there: tried again next time
   }
   return releases;
 }
@@ -136,7 +137,7 @@ const markSeen = version => updateSettings(GROUPS.uiState, { whatsNewSeen: versi
 /** What's new for the version you have, from Settings › About or the palette. */
 export async function showWhatsNew() {
   const version = updateStatus.current;
-  const shown = releasesSince(await allReleases(), null, version);
+  const shown = releasesSince(await allReleases() ?? [], null, version);
   if (shown.length) await openWindow(shown, null);
 }
 
@@ -153,7 +154,10 @@ async function offerFor(version) {
   const ui = state.settings.uiState;
   if (ui.whatsNewSeen === version) return;
   // A first start gets the tour, not news; turned off, or nothing in the notes for this version: only remembered.
-  const shown = ui.tourSeen && !ui.whatsNewOff ? releasesSince(await allReleases(), ui.whatsNewSeen ?? null, version) : [];
+  if (!ui.tourSeen || ui.whatsNewOff) return markSeen(version);
+  const all = await allReleases();
+  if (!all) return; // the notes couldn't be read: offered again at the next start
+  const shown = releasesSince(all, ui.whatsNewSeen ?? null, version);
   if (!shown.length) return markSeen(version);
   let quiet = 0;
   const wait = setInterval(() => {
