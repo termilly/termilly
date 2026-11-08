@@ -26,7 +26,10 @@ export const TD = Object.freeze({
   implement: 'implement', issue: 'issue', tags: 'tags', tag: 'tag', edit: 'edit', save: 'save', move: 'move', moveTo: 'moveTo',
   remove: 'remove', removeYes: 'removeYes', close: 'close', toTask: 'toTask', note: 'note', noteSave: 'noteSave', noteRemove: 'noteRemove',
   noteTasks: 'noteTasks', showAll: 'showAll', showDone: 'showDone', label: 'label', create: 'create', pickTag: 'pickTag',
+  implementHow: 'implementHow',
 });
+/** Implement's two ways, as the PC's Implement menu has them. */
+export const HOW = Object.freeze({ terminal: 'terminal', silent: 'silent' });
 /** The fields that are read by name (data-field). */
 export const FIELD = Object.freeze({ add: 'add', find: 'find', text: 'text', details: 'details', note: 'note', pin: 'pin', title: 'title', body: 'body', newTag: 'newTag' });
 
@@ -263,6 +266,11 @@ export function tagsSheetHtml(task, ctx) {
   const rows = ctx.tags.map(t => `<button class="row" data-td="${TD.tag}" data-tag="${esc(t.name)}"><span class="td-tick">${task.tags.includes(t.name) ? TICK : ''}</span>${chip(t.name, ctx)}</button>`).join('');
   return `${headHtml('Tags')}<div class="list td-pick">${rows || '<p class="muted center">No tags yet. Make them on the PC, or give a new task one.</p>'}</div>`;
 }
+
+/** Implement's two ways: in a new terminal, to watch and answer it, or Silent, in a hidden shell. @param {PhoneTask} task */
+export const implementSheetHtml = task => `${headHtml('Implement')}<p>${esc(task.text)}</p><div class="list td-pick">
+  <button class="row" data-td="${TD.implementHow}" data-how="${HOW.terminal}"><span class="r-text"><span class="r-name">In a new terminal</span><span class="r-meta">Claude Code works where you can watch it and answer it.</span></span></button>
+  <button class="row" data-td="${TD.implementHow}" data-how="${HOW.silent}"><span class="r-text"><span class="r-name">Silent</span><span class="r-meta">Claude Code works in a hidden shell. The task goes to Review with its reply.</span></span></button></div>`;
 
 /** @param {PhoneTask} task */
 export const removeSheetHtml = task => `${headHtml('Delete task')}<p>${esc(task.text)}</p><button class="ibtn red" data-td="${TD.removeYes}">Delete</button>`;

@@ -5,7 +5,7 @@
 
 import {
   STATUS, TD, FIELD, esc, openTasks, listHtml, listHeadHtml, homeHtml, findHtml, taskSheetHtml, addSheetHtml, editSheetHtml, moveSheetHtml,
-  tagsSheetHtml, removeSheetHtml, issueSheetHtml, noteHtml, markHtml, reviewNotesHtml, pickTagHtml,
+  tagsSheetHtml, removeSheetHtml, implementSheetHtml, issueSheetHtml, noteHtml, markHtml, reviewNotesHtml, pickTagHtml, HOW,
 } from './todoviews.js';
 
 /** @typedef {import('./todoviews.js').PhoneList} PhoneList */
@@ -21,7 +21,7 @@ const OWN_ACTIONS = new Set(Object.values(ACTION));
 /** What a list can be on. */
 const KIND = Object.freeze({ workspace: 'workspace', terminal: 'terminal' });
 /** The sheets over a list. */
-const SHEET = Object.freeze({ add: 'add', task: 'task', edit: 'edit', move: 'move', tags: 'tags', remove: 'remove', issue: 'issue' });
+const SHEET = Object.freeze({ add: 'add', task: 'task', edit: 'edit', move: 'move', tags: 'tags', remove: 'remove', issue: 'issue', implement: 'implement' });
 /** The sheets with fields in them: what comes from the PC doesn't draw them again. */
 const FORMS = new Set([SHEET.add, SHEET.edit, SHEET.issue]);
 const TODO_BODY = '[data-todo-body]';
@@ -49,7 +49,7 @@ export function todoTab(app) {
   /** @type {{ kind: string, id: string } | null} */
   let open = null;
   let onNote = false;
-  /** @type {{ mode: string, task: string, issue?: any } | null} */
+  /** @type {{ mode: string, task: string, issue?: any, at?: number } | null} */
   let sheet = null;
   let query = '';
   let showAll = false;
@@ -158,6 +158,7 @@ export function todoTab(app) {
       case SHEET.move: return moveSheetHtml(task, /** @type {PhoneList} */ (lists().find(l => l.id === list.id && l.kind === list.kind)), lists());
       case SHEET.tags: return tagsSheetHtml(task, allowed());
       case SHEET.remove: return removeSheetHtml(task);
+      case SHEET.implement: return implementSheetHtml(task);
       case SHEET.issue: return issueSheetHtml(sheet.issue ?? {});
       default: return taskSheetHtml(task, list, allowed());
     }
@@ -195,9 +196,17 @@ export function todoTab(app) {
     drawSheet(true);
   }
 
-  /** @param {string} id @param {number | undefined} [at] the step */
+  /** Implement asks how first: in a new terminal or Silent. @param {string} id @param {number | undefined} [at] the step */
   function implement(id, at) {
-    ask({ action: ACTION.implement, task: id, ...(at === undefined ? {} : { at }) });
+    sheet = { mode: SHEET.implement, task: id, ...(at === undefined ? {} : { at }) };
+    drawSheet(true);
+  }
+
+  /** @param {string} how one of HOW */
+  function implementHow(how) {
+    if (!sheet) return;
+    const { task, at } = sheet;
+    ask({ action: ACTION.implement, task, ...(at === undefined ? {} : { at }), ...(how === HOW.silent ? { silent: true } : {}) });
   }
 
   function beginIssue() {
@@ -322,6 +331,7 @@ export function todoTab(app) {
         return true;
       }
       case TD.remove: toSheet(SHEET.remove); return true;
+      case TD.implementHow: implementHow(el.dataset.how ?? ''); return true;
       case TD.removeYes: {
         ask({ action: ACTION.remove, task: task.id });
         sheet = null;
@@ -476,7 +486,11 @@ export function todoTab(app) {
         sheet = { ...sheet, issue: { ...sheet.issue, busy: false, error: m.error } };
         drawSheet(true);
       } else if (!m.ok) app.toast(m.error ?? 'That didn’t go through.');
-      else if (m.action === ACTION.implement) {
+      else if (m.action === ACTION.implement && m.silent) {
+        app.toast('Claude Code is working on it silently.');
+        sheet = null;
+        drawSheet();
+      } else if (m.action === ACTION.implement) {
         starting = m.id ?? '';
         sheet = null;
         drawSheet();

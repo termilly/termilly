@@ -9,6 +9,7 @@ import { state, newId, tabTitle } from './store.js';
 import { setNote } from './notes.js';
 import { listOf, noteTarget, addTasks, updateTask, removeTask, moveTask, setStatus, findTask, todoTags, tagColor } from './todo.js';
 import { AGENT_COMMAND, agentInstalled, agentWorking, folderOfList, isOnGitHub, checkRepo, implementTask, keepIssue } from './todoactions.js';
+import { implementSilently } from './todorun.js';
 import { parseTask, detailLines, statusOf, splitNote, tickSub, issueBody, labelsForTags, TASK_STATUS } from './todolist.js';
 
 /** @typedef {import('./todo.js').ListRef} ListRef */
@@ -127,12 +128,18 @@ function remove(m) {
   return {};
 }
 
+const NEEDS_FOLDER = 'Implement needs Claude Code and a folder on the PC.';
+
 /** @param {Record<string, any>} m */
 function implement(m) {
   const { ref, task } = taskOf(m);
   const sub = m.at === undefined ? undefined : detailLines(task.details).find(line => line.sub && line.at === Number(m.at));
+  if (m.silent) {
+    if (!implementSilently(ref, task, sub)) throw new Error(NEEDS_FOLDER);
+    return { silent: true };
+  }
   const agent = implementTask(ref, task, sub);
-  if (!agent) throw new Error('Implement needs Claude Code and a folder on the PC.');
+  if (!agent) throw new Error(NEEDS_FOLDER);
   return { id: agent.id };
 }
 
