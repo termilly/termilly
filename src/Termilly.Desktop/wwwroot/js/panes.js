@@ -12,7 +12,7 @@ import {
 import { ICONS, tabBadgeHtml, activityHtml } from './ui.js';
 import { openTerminal, disposeTerminal, bufferLines, scheduleFit, prepareStart } from './terminals.js';
 import { wake } from './hibernate.js';
-import { byId, find, targetOf, WORKSPACE_ID, dragPointer, onMiddleClick } from './dom.js';
+import { byId, find, targetOf, WORKSPACE_ID, CANVAS_2D, dragPointer, onMiddleClick } from './dom.js';
 import { ENV_CLASS, ENV_COLOR } from './environments.js';
 import { detach, closeWindow, focusWindow, setWindowTitle, OFFSET_PX, MIN_WIDTH_PX } from './windows.js';
 import { followGpu } from './gpu.js';
@@ -1530,7 +1530,7 @@ async function pictureOf(r) {
   const canvas = document.createElement('canvas');
   canvas.width = Math.round(r.width * scale);
   canvas.height = Math.round(r.height * scale);
-  canvas.getContext('2d')?.drawImage(page, r.left * scale, r.top * scale, r.width * scale, r.height * scale, 0, 0, canvas.width, canvas.height);
+  canvas.getContext(CANVAS_2D)?.drawImage(page, r.left * scale, r.top * scale, r.width * scale, r.height * scale, 0, 0, canvas.width, canvas.height);
   return canvas.toDataURL(JPEG);
 }
 

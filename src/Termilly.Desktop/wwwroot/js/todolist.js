@@ -47,6 +47,36 @@ export function parseTask(line) {
   return { text, tags };
 }
 
+/** A `:tag` being typed: a colon starting a word, and what's typed of the name, right before the caret. */
+const TAG_TYPED = new RegExp(`(^|\\s):([\\p{L}\\p{N}_-]{0,${MAX_TAG_LENGTH}})$`, 'u');
+/** How many tags the suggestions under a `:` show. */
+export const TAG_SUGGESTIONS = 8;
+
+/**
+ * The `:tag` typed right before the caret, if one is: where its colon is, and its name so far (lower case).
+ * @param {string} text
+ * @param {number} caret
+ * @returns {{ start: number, query: string } | null}
+ */
+export function tagTypedAt(text, caret) {
+  const match = text.slice(0, caret).match(TAG_TYPED);
+  if (!match || match.index === undefined) return null;
+  return { start: match.index + match[1].length, query: match[2].toLowerCase() };
+}
+
+/**
+ * The tags to suggest for what's typed: those starting with it first, then those with it inside; the most used first
+ * within each, and none already taken.
+ * @param {[string, number][]} known every tag and how many tasks have it
+ * @param {string} query
+ * @param {string[]} taken
+ */
+export function tagSuggestions(known, query, taken) {
+  const free = known.filter(([tag]) => !taken.includes(tag) && tag.includes(query));
+  const rank = (/** @type {string} */ tag) => (tag.startsWith(query) ? 0 : 1);
+  return free.sort((a, b) => rank(a[0]) - rank(b[0]) || b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, TAG_SUGGESTIONS);
+}
+
 /**
  * One line without its list mark, and whether its box was ticked.
  * @param {string} line

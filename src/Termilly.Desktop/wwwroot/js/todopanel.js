@@ -13,6 +13,7 @@ import { AGENT_COMMAND, agentInstalled, agentWorking, folderOfList as folderOf, 
 import { implementSilently, stopRun } from './todorun.js';
 import { answerAsk, allowWaiting, ASK } from './todoask.js';
 import { openTagManager } from './todotags.js';
+import { tagCompletion } from './todotagcomplete.js';
 import { escapeHtml, cssColor, tabBadgeHtml, countText, ICONS } from './ui.js';
 import { byId, find, targetOf, WORKSPACE_ID, DOCK_GRIP, PANEL_HEAD, TOOL_COUNT } from './dom.js';
 import { showMenu, openPopover, closePopover, isOpen, closeAll, SEPARATOR } from './popups.js';
@@ -1517,6 +1518,17 @@ listEl.addEventListener('drop', e => {
   const id = dragged;
   dragged = null;
   reorderTasks(current, tasks => moveBefore(tasks, id, /** @type {string} */ (over.dataset.task)));
+});
+
+// `:` starts a tag: the tags there are show under it. Wired first, so Enter picks one while they show.
+tagCompletion(addField, { taken: () => parseTask(addField.value).tags });
+/** The editors' task fields with tag suggestions; each edit draws a new one. */
+const completing = new WeakSet();
+listEl.addEventListener('focusin', e => {
+  const field = /** @type {HTMLInputElement} */ (e.target);
+  if (!field.matches(EDIT_TEXT) || completing.has(field)) return;
+  completing.add(field);
+  tagCompletion(field, { taken: () => editTags, chosen: tag => { if (!editTags.includes(tag)) toggleEditTag(tag); } });
 });
 
 addField.addEventListener('keydown', e => {

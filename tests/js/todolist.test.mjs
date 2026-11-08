@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   parseTask, tasksFromLines, tasksFromNote, tagOfHeading, selectedLines, withoutLines, openCount, tagsIn, allTags, withTags, moveBefore,
   labelsForTags, retag, splitNote, hoverLines, treeRows, detailLines, tickSub, tickByNumber, linkSub, subProgress, implementPrompt, statusOf, TASK_STATUS, HOVER_TASKS,
-  taskMatches, inPlace, silentPrompt,
+  taskMatches, inPlace, silentPrompt, tagTypedAt, tagSuggestions, TAG_SUGGESTIONS,
 } from '../../src/Termilly.Desktop/wwwroot/js/todolist.js';
 
 const task = (id, more = {}) => ({ id, text: id, created: 0, ...more });
@@ -24,6 +24,23 @@ test('colons in times, paths, labels and inside words are not tags', () => {
   for (const line of ['Meet at 12:30:00', 'Open C:\\x:y: now', 'Note: fix :it', 'a:b: c', ':x:y', ':: and :a b:', 'Call :a:, then']) {
     assert.deepEqual(parseTask(line), { text: line.replace(/\s+/g, ' ').trim(), tags: [] }, line);
   }
+});
+
+test('a colon starting a word before the caret is a tag being typed', () => {
+  assert.deepEqual(tagTypedAt(':', 1), { start: 0, query: '' });
+  assert.deepEqual(tagTypedAt('Fix it :De', 10), { start: 7, query: 'de' });
+  assert.deepEqual(tagTypedAt('Fix :de it', 7), { start: 4, query: 'de' });
+  for (const [text, caret] of [['12:3', 4], ['a:b', 3], [':done: ', 7], [':done:', 6], ['Fix :de it', 10], ['Note:', 5]]) {
+    assert.equal(tagTypedAt(text, caret), null, text);
+  }
+});
+
+test('tag suggestions start with what is typed first, then the most used, and leave out those taken', () => {
+  const known = [['ui', 1], ['build', 5], ['bug', 2], ['debug', 9], ['docs', 3]];
+  assert.deepEqual(tagSuggestions(known, 'bu', []).map(([tag]) => tag), ['build', 'bug', 'debug']);
+  assert.deepEqual(tagSuggestions(known, 'bu', ['build']).map(([tag]) => tag), ['bug', 'debug']);
+  assert.deepEqual(tagSuggestions(known, '', []).map(([tag]) => tag), ['debug', 'build', 'docs', 'bug', 'ui']);
+  assert.equal(tagSuggestions(Array.from({ length: 20 }, (_, i) => [`t${i}`, 0]), '', []).length, TAG_SUGGESTIONS);
 });
 
 test('a hash inside a word or a URL is not a tag', () => {

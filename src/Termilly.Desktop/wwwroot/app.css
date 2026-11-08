@@ -3353,6 +3353,11 @@ body.detached-window .files-head .np-sep { height: 18px; margin: 0 0 0 1px; back
 .td-filter-count { position: absolute; top: -3px; right: -5px; min-width: 12px; height: 12px; padding: 0 3px; box-sizing: border-box; border-radius: 6px; background: var(--accent); color: var(--on-accent); font-size: 9px; font-weight: 600; line-height: 12px; text-align: center; }
 .td-filter-count[hidden] { display: none; }
 .tag-picker.td-filter { width: 220px; }
+/* The tags suggested under a `:` typed in a task's field: the one Enter picks lit. */
+.tag-picker.td-complete { width: 200px; padding: 4px; }
+.td-complete .tp-list { margin-top: 0; }
+.td-complete .tp-row { padding: 4px 8px; }
+.td-complete .tp-row.on { background: var(--hover); }
 .td-filter .tp-list { margin-top: 0; }
 .td-chip { height: 18px; padding: 0 7px; border: 1px solid transparent; border-radius: 999px; background: color-mix(in srgb, var(--td-hue) 18%, transparent); color: var(--td-hue); font: inherit; font-size: 11px; line-height: 16px; cursor: pointer; }
 .td-chip.on { border-color: currentColor; }
