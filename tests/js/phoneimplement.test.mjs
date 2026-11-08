@@ -55,3 +55,12 @@ test('a list opened from another tab goes back to it, one opened in To do back t
   assert.equal(backs, 1);
   assert.equal(tab.backHtml(), '');
 });
+
+test('a task\'s mark opens the statuses, and the one picked is asked of the PC', () => {
+  const { page, sent, tap } = phone();
+  tap({ td: 'check', task: 't1' });
+  assert.equal(sent.length, 0);
+  assert.match(page.innerHTML, /In progress/);
+  tap({ td: 'pickStatus', status: 'review' });
+  assert.deepEqual(sent.map(m => [m.action, m.task, m.status]), [['taskStatus', 't1', 'review']]);
+});

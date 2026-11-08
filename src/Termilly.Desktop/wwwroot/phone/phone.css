@@ -314,14 +314,19 @@ button.row { width: 100%; border: 0; background: none; color: inherit; font: inh
 .td-row { align-items: flex-start; }
 .td-row .r-name { line-height: 22px; }
 .td-done .r-name, .td-step.td-done .r-text { color: var(--muted); text-decoration: line-through; }
-.td-box { flex: none; display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 1.5px solid var(--muted); border-radius: 6px; background: none; }
-.td-box svg { visibility: hidden; width: 14px; height: 14px; fill: none; stroke: var(--on-accent); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.td-box.st-progress { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 30%, transparent); }
-.td-box.working { background: none; }
-.td-box .activity { --size: 14px; }
-.td-box.st-review { border-color: var(--attention); background: color-mix(in srgb, var(--attention) 30%, transparent); }
-.td-box.st-done { border-color: var(--accent); background: var(--accent); }
-.td-box.st-done svg { visibility: visible; }
+/* A task's status mark and a step's, as the PC draws them (app.css .td-status, .td-step-mark). */
+.td-st { flex: none; display: grid; place-items: center; width: 28px; height: 28px; margin: -2px; padding: 0; border: 0; background: none; color: var(--muted); }
+.td-st svg { width: 22px; height: 22px; fill: none; stroke: currentColor; }
+.td-st.st-progress { color: var(--accent); }
+.td-st.st-review { color: var(--attention); }
+.td-st.st-done { color: var(--ok); }
+.st-tick { stroke: var(--raised); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.st-spinner { stroke-width: 1.5; stroke-linecap: round; animation: activity-spin 0.9s linear infinite; }
+.st-track { opacity: 0.3; }
+@media (prefers-reduced-motion: reduce) { .st-spinner { animation-duration: 2.4s; } }
+.td-step-mark { flex: none; display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 0; background: none; color: var(--muted); }
+.td-step-mark svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.td-step.td-done .td-step-mark { color: var(--ok); }
 .td-agent { display: block; padding: 0; border: 0; background: none; color: var(--accent); font-size: 13.5px; text-align: left; }
 .td-said { color: var(--muted); font-size: 13.5px; overflow-wrap: anywhere; }
 .td-said b { color: var(--text); font-weight: 600; }

@@ -5,7 +5,7 @@
 
 import {
   STATUS, TD, FIELD, esc, openTasks, listHtml, listHeadHtml, homeHtml, findHtml, taskSheetHtml, addSheetHtml, editSheetHtml, moveSheetHtml,
-  tagsSheetHtml, removeSheetHtml, implementSheetHtml, issueSheetHtml, noteHtml, markHtml, reviewNotesHtml, pickTagHtml, HOW,
+  tagsSheetHtml, removeSheetHtml, implementSheetHtml, statusSheetHtml, issueSheetHtml, noteHtml, markHtml, reviewNotesHtml, pickTagHtml, HOW,
 } from './todoviews.js';
 
 /** @typedef {import('./todoviews.js').PhoneList} PhoneList */
@@ -21,12 +21,13 @@ const OWN_ACTIONS = new Set(Object.values(ACTION));
 /** What a list can be on. */
 const KIND = Object.freeze({ workspace: 'workspace', terminal: 'terminal' });
 /** The sheets over a list. */
-const SHEET = Object.freeze({ add: 'add', task: 'task', edit: 'edit', move: 'move', tags: 'tags', remove: 'remove', issue: 'issue', implement: 'implement' });
+const SHEET = Object.freeze({ add: 'add', task: 'task', edit: 'edit', move: 'move', tags: 'tags', remove: 'remove', issue: 'issue', implement: 'implement', status: 'status' });
 /** The sheets with fields in them: what comes from the PC doesn't draw them again. */
 const FORMS = new Set([SHEET.add, SHEET.edit, SHEET.issue]);
 const TODO_BODY = '[data-todo-body]';
 const THE_SHEET = 'todo-sheet';
-const TICKED = 'st-done';
+/** A step's row once ticked. */
+const TICKED = 'td-done';
 const SHEET_BOX = '.sheet';
 /** A new task's tags (todoviews.js pickTagHtml), and how a picked one shows. */
 const PICK_TAG = '.td-pick-tag';
@@ -52,6 +53,9 @@ export function todoTab(app) {
   let onNote = false;
   /** @type {{ mode: string, task: string, issue?: any, at?: number } | null} */
   let sheet = null;
+  /** The tasks done while their list was shown, by the status they had: they stay in place until it's opened again. */
+  /** @type {Map<string, string>} */
+  let settled = new Map();
   let query = '';
   let showAll = false;
   let showDone = false;
@@ -141,7 +145,7 @@ export function todoTab(app) {
     }
     if (onNote && list) return;
     const body = /** @type {HTMLElement} */ (home.querySelector(TODO_BODY));
-    body.innerHTML = list ? listHtml(list, allowed(), showDone) : homeBody();
+    body.innerHTML = list ? listHtml(list, allowed(), showDone, settled) : homeBody();
   }
 
   /** Whether what the sheet is about is gone. */
@@ -160,6 +164,7 @@ export function todoTab(app) {
       case SHEET.tags: return tagsSheetHtml(task, allowed());
       case SHEET.remove: return removeSheetHtml(task);
       case SHEET.implement: return implementSheetHtml(task);
+      case SHEET.status: return statusSheetHtml(task);
       case SHEET.issue: return issueSheetHtml(sheet.issue ?? {});
       default: return taskSheetHtml(task, list, allowed());
     }
@@ -333,6 +338,11 @@ export function todoTab(app) {
       }
       case TD.remove: toSheet(SHEET.remove); return true;
       case TD.implementHow: implementHow(el.dataset.how ?? ''); return true;
+      case TD.pickStatus: {
+        changeStatus(task.id, el.dataset.status ?? '');
+        sheet = null;
+        return true;
+      }
       case TD.removeYes: {
         ask({ action: ACTION.remove, task: task.id });
         sheet = null;
@@ -350,15 +360,41 @@ export function todoTab(app) {
    * A box shows the tap at once; what the PC says next draws it for good.
    * @param {HTMLElement} box
    */
-  const showTap = box => box.classList.toggle(TICKED);
+  const showTap = box => box.closest('.td-step')?.classList.toggle(TICKED);
 
-  /** @param {HTMLElement} box */
-  function pressBox(box) {
-    const id = box.dataset.task ?? '';
+  /** A task's mark opens the statuses to pick from, as on the PC. @param {HTMLElement} mark */
+  function pressMark(mark) {
+    const id = mark.dataset.task ?? '';
+    if (!findTask(id)) return;
+    sheet = { mode: SHEET.status, task: id };
+    drawSheet(true);
+  }
+
+  /**
+   * A status picked: a task done here stays where it is until its list is opened again.
+   * @param {string} id
+   * @param {string} status
+   */
+  function changeStatus(id, status) {
     const task = findTask(id)?.task;
     if (!task) return;
-    showTap(box);
-    ask({ action: ACTION.status, task: id, status: task.status === STATUS.done ? STATUS.open : STATUS.done });
+    if (status === STATUS.done && task.status !== STATUS.done) settled.set(id, task.status);
+    else if (status !== STATUS.done) settled.delete(id);
+    ask({ action: ACTION.status, task: id, status });
+  }
+
+  /** Review's Accept: the task goes to Done at once, as on the PC, and says so. @param {string} id */
+  function accept(id) {
+    const task = findTask(id)?.task;
+    if (!task) return;
+    ask({ action: ACTION.status, task: id, status: STATUS.done });
+    app.toast(`“${task.text}” moved to Done.`);
+  }
+
+  /** Shows a list; another list's tasks done before are in their place now. @param {string} kind @param {string} id */
+  function openList(kind, id) {
+    if (open?.kind !== kind || open?.id !== id) settled = new Map();
+    open = { kind, id };
   }
 
   /** @param {HTMLElement} box */
@@ -375,7 +411,7 @@ export function todoTab(app) {
   function openTask(id) {
     const found = findTask(id);
     if (!found) return false;
-    open = { kind: found.list.kind, id: found.list.id };
+    openList(found.list.kind, found.list.id);
     onNote = false;
     app.show();
     openSheet(id);
@@ -393,7 +429,7 @@ export function todoTab(app) {
     const id = el.dataset.task ?? '';
     switch (act) {
       case TD.open:
-        open = { kind: el.dataset.kind ?? KIND.terminal, id: el.dataset.id ?? '' };
+        openList(el.dataset.kind ?? KIND.terminal, el.dataset.id ?? '');
         onNote = false;
         app.show();
         break;
@@ -401,6 +437,7 @@ export function todoTab(app) {
         if (onNote) onNote = false;
         else {
           open = null;
+          settled = new Map();
           if (app.back()) return; // opened from another tab: back to it
         }
         break;
@@ -408,8 +445,8 @@ export function todoTab(app) {
       case TD.addSave: return addTask(layer);
       case TD.pickTag: return setPicked(el, !el.classList.contains(PICKED));
       case TD.task: return void openTask(id);
-      case TD.check: return pressBox(el);
-      case TD.status: return void ask({ action: ACTION.status, task: id, status: el.dataset.status });
+      case TD.check: return pressMark(el);
+      case TD.status: return el.dataset.accept ? accept(id) : changeStatus(id, el.dataset.status ?? '');
       case TD.tick: return pressStep(el);
       case TD.terminal: return app.openTerminal(el.dataset.id ?? '');
       case TD.implement: return implement(id, el.dataset.at === undefined ? undefined : Number(el.dataset.at));

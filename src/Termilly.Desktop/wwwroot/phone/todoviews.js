@@ -26,7 +26,7 @@ export const TD = Object.freeze({
   implement: 'implement', issue: 'issue', tags: 'tags', tag: 'tag', edit: 'edit', save: 'save', move: 'move', moveTo: 'moveTo',
   remove: 'remove', removeYes: 'removeYes', close: 'close', toTask: 'toTask', note: 'note', noteSave: 'noteSave', noteRemove: 'noteRemove',
   noteTasks: 'noteTasks', showAll: 'showAll', showDone: 'showDone', label: 'label', create: 'create', pickTag: 'pickTag',
-  implementHow: 'implementHow',
+  implementHow: 'implementHow', pickStatus: 'pickStatus',
 });
 /** Implement's two ways, as the PC's Implement menu has them. */
 export const HOW = Object.freeze({ terminal: 'terminal', silent: 'silent' });
@@ -52,23 +52,45 @@ function chip(tag, ctx) {
   return `<span class="td-chip" style="--hue:${esc(color)}">${esc(tag)}</span>`;
 }
 
-/** In a task's box while an agent is at work on it: the spinner terminals have. */
-const SPINNER = '<span class="activity spin"></span>';
+/**
+ * Each status's mark, as the PC's (js/todopanel.js STATUS_ICON): a ring, half filled while it's worked on, with a dot when it
+ * waits for review, ticked when done.
+ * @type {Readonly<Record<string, string>>}
+ */
+const STATUS_ICON = Object.freeze({
+  [STATUS.open]: '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.5"/></svg>',
+  [STATUS.progress]: '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.5"/><path d="M8 2.5a5.5 5.5 0 0 1 0 11z" fill="currentColor"/></svg>',
+  [STATUS.review]: '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.5"/><circle cx="8" cy="8" r="2.5" fill="currentColor" stroke="none"/></svg>',
+  [STATUS.done]: '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="currentColor" stroke="none"/><path class="st-tick" d="M5.25 8.25l1.75 1.75 3.75-4"/></svg>',
+});
+/** In progress's mark while an agent is at work on the task: a faint ring with an arc going round it, as on the PC. */
+const WORKING_ICON = '<svg class="st-spinner" viewBox="0 0 16 16" aria-hidden="true"><circle class="st-track" cx="8" cy="8" r="5.5"/><path d="M8 2.5a5.5 5.5 0 0 1 5.5 5.5"/></svg>';
+/** A step's mark, as the PC's: a small ring, a tick once done. */
+const STEP_MARK = Object.freeze({
+  done: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 8.5l2.5 2.5 5.5-6"/></svg>',
+  open: '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="4.5"/></svg>',
+});
 
 /**
- * A task's box: it ticks the task where the phone may, and only shows it where it may not. It spins while an agent is at
- * work on the task.
+ * A task's status mark: where the phone may change tasks a tap opens the statuses to pick from (as on the PC), elsewhere it
+ * only shows. It spins while an agent is at work on the task.
  * @param {string} status
- * @param {string} action what a tap does
  * @param {string} data its data attributes
  * @param {boolean} typing
  * @param {boolean} [working]
  */
-function boxHtml(status, action, data, typing, working = false) {
-  const cls = `td-box st-${esc(status)}${working ? ' working' : ''}`;
-  const mark = working ? SPINNER : TICK;
-  return typing ? `<button class="${cls}" data-td="${action}" ${data} aria-label="Done">${mark}</button>` : `<span class="${cls}">${mark}</span>`;
+function statusMarkHtml(status, data, typing, working = false) {
+  const cls = `td-st st-${esc(status)}${working ? ' working' : ''}`;
+  const mark = working ? WORKING_ICON : STATUS_ICON[status] ?? STATUS_ICON[STATUS.open];
+  const name = STATUS_NAME[status] ?? '';
+  return typing ? `<button class="${cls}" data-td="${TD.check}" ${data} aria-label="Status: ${name}. Tap to change">${mark}</button>` : `<span class="${cls}" aria-label="${name}">${mark}</span>`;
 }
+
+/**
+ * The statuses to pick from for a task, the one it has ticked: the PC's status menu.
+ * @param {PhoneTask} task
+ */
+export const statusSheetHtml = task => `${headHtml('Status')}<p>${esc(task.text)}</p><div class="list td-pick">${Object.values(STATUS).map(s => `<button class="row" data-td="${TD.pickStatus}" data-status="${s}"><span class="td-st st-${s}">${STATUS_ICON[s]}</span><span class="r-text">${STATUS_NAME[s]}</span><span class="td-tick">${s === task.status ? TICK : ''}</span></button>`).join('')}</div>`;
 
 /** @param {PhoneStep[]} steps */
 const progress = steps => (steps.length ? `<span class="td-sub">${steps.filter(s => s.done).length}/${steps.length}</span>` : '');
@@ -81,7 +103,7 @@ const progress = steps => (steps.length ? `<span class="td-sub">${steps.filter(s
 function taskRow(task, ctx) {
   const data = `data-task="${esc(task.id)}"`;
   const meta = `${progress(task.steps)}${task.tags.map(tag => chip(tag, ctx)).join('')}${task.issue ? `<span class="td-sub">#${esc(task.issue.number)}</span>` : ''}`;
-  return `<div class="row td-row${task.status === STATUS.done ? ' td-done' : ''}" data-td="${TD.task}" ${data}>${boxHtml(task.status, TD.check, data, ctx.typing, !!task.working)}
+  return `<div class="row td-row${task.status === STATUS.done ? ' td-done' : ''}" data-td="${TD.task}" ${data}>${statusMarkHtml(task.status, data, ctx.typing, !!task.working)}
     <div class="r-text"><div class="r-name">${esc(task.text)}</div>
       ${task.agent ? `<div class="td-agent">${esc(task.agent.title)}</div>` : ''}
       ${task.review ? `<div class="td-said"><b>${esc(task.review.by)}:</b> ${esc(task.review.summary)}</div>` : ''}
@@ -100,9 +122,12 @@ const groupHtml = (name, tasks, ctx) => (tasks.length ? `<div class="section-row
  * @param {PhoneList} list
  * @param {Allowed} ctx
  * @param {boolean} showDone
+ * @param {Map<string, string>} [settled] the tasks done while the list was shown, by the status they had
  */
-export function listHtml(list, ctx, showDone) {
-  const of = (/** @type {string} */ status) => list.tasks.filter(t => t.status === status);
+export function listHtml(list, ctx, showDone, settled = new Map()) {
+  // A task done here stays where it was until the list is opened again, as on the PC.
+  const shownAs = (/** @type {PhoneTask} */ t) => (t.status === STATUS.done ? settled.get(t.id) ?? t.status : t.status);
+  const of = (/** @type {string} */ status) => list.tasks.filter(t => shownAs(t) === status);
   const done = of(STATUS.done);
   const note = list.note?.text ? `<button class="td-note" data-td="${TD.note}"><b>Note</b>${esc(firstLine(list.note.text))}</button>` : '';
   const empty = list.tasks.length ? '' : `<p class="muted center">${ctx.typing ? 'No tasks here yet.' : 'No tasks here.'}</p>`;
@@ -140,9 +165,9 @@ function treeRow(list, indented) {
  */
 function reviewHtml(tasks, where, typing) {
   if (!tasks.length) return '';
-  const rows = tasks.map(t => `<div class="row td-row" data-td="${TD.task}" data-task="${esc(t.id)}"><span class="td-box st-${STATUS.review}">${TICK}</span>
+  const rows = tasks.map(t => `<div class="row td-row" data-td="${TD.task}" data-task="${esc(t.id)}">${statusMarkHtml(STATUS.review, '', false)}
     <div class="r-text"><div class="r-name">${esc(t.text)}</div><div class="td-said">${esc(where(t))} · ${esc(t.review?.summary ?? '')}</div></div>
-    ${typing ? `<button class="td-accept" data-td="${TD.status}" data-status="${STATUS.done}" data-task="${esc(t.id)}">Accept</button>` : ''}</div>`).join('');
+    ${typing ? `<button class="td-accept" data-td="${TD.status}" data-status="${STATUS.done}" data-accept="1" data-task="${esc(t.id)}">Accept</button>` : ''}</div>`).join('');
   return `<div class="section-row"><span class="section td-section">Waiting for review <i>${tasks.length}</i></span></div><div class="list">${rows}</div>`;
 }
 
@@ -174,7 +199,9 @@ function stepsHtml(task, typing, canImplement) {
   const rows = task.steps.map(s => {
     const data = `data-task="${esc(task.id)}" data-at="${s.at}" data-done="${s.done ? '' : '1'}"`;
     const play = canImplement && !s.done ? `<button class="td-play" data-td="${TD.implement}" data-task="${esc(task.id)}" data-at="${s.at}" aria-label="Implement this step">${PLAY}</button>` : '';
-    return `<div class="row td-step${s.done ? ' td-done' : ''}">${boxHtml(s.done ? STATUS.done : STATUS.open, TD.tick, data, typing)}<div class="r-text">${esc(s.text)}</div>${play}</div>`;
+    const mark = s.done ? STEP_MARK.done : STEP_MARK.open;
+    const box = typing ? `<button class="td-step-mark" data-td="${TD.tick}" ${data} aria-label="${s.done ? 'Not done' : 'Done'}">${mark}</button>` : `<span class="td-step-mark">${mark}</span>`;
+    return `<div class="row td-step${s.done ? ' td-done' : ''}">${box}<div class="r-text">${esc(s.text)}</div>${play}</div>`;
   }).join('');
   return `<div class="section td-section">Steps</div><div class="list">${rows}</div>`;
 }

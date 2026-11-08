@@ -9,7 +9,7 @@ import { state, newId, tabTitle } from './store.js';
 import { setNote } from './notes.js';
 import { listOf, noteTarget, addTasks, updateTask, removeTask, moveTask, setStatus, findTask, todoTags, tagColor } from './todo.js';
 import { AGENT_COMMAND, agentInstalled, agentWorking, folderOfList, isOnGitHub, checkRepo, implementTask, keepIssue } from './todoactions.js';
-import { implementSilently } from './todorun.js';
+import { implementSilently, stopRun } from './todorun.js';
 import { parseTask, detailLines, statusOf, splitNote, tickSub, issueBody, labelsForTags, TASK_STATUS } from './todolist.js';
 
 /** @typedef {import('./todo.js').ListRef} ListRef */
@@ -90,7 +90,9 @@ function add(m) {
 function status(m) {
   const { ref, task } = taskOf(m);
   if (!Object.values(TASK_STATUS).includes(m.status)) throw new Error('That isn’t a status.');
-  setStatus(ref, task.id, m.status, { review: task.review, terminal: task.terminal });
+  // Taken off In progress while it runs silently: its run stops, as on the PC.
+  if (m.status !== TASK_STATUS.progress && task.run) stopRun(task);
+  setStatus(ref, task.id, m.status, { review: task.review, terminal: task.terminal, run: task.run });
   return {};
 }
 
