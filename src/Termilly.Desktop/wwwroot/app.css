@@ -924,7 +924,7 @@ body.moving-bar .toolbar .tool { background: none; color: var(--text); }
 .inbox-button, #todo-button, #schedules-button { position: relative; }
 /* To do's open tasks while it's closed: the notification centre's count, in the accent (news, not a call for
    attention). */
-#todo-button .tool-count, #schedules-button .tool-count { background: var(--accent); }
+#schedules-button .tool-count { background: var(--accent); }
 .inbox-button.has-items { color: var(--attention); }
 .tool-count {
   position: absolute;
