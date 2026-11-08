@@ -3364,7 +3364,8 @@ body.detached-window .files-head .np-sep { height: 18px; margin: 0 0 0 1px; back
 /* An agent at work on the task: In progress's mark turns into a spinner (js/todopanel.js WORKING_ICON). */
 .td-spinner { stroke-width: 1.5; stroke-linecap: round; animation: activity-spin 0.9s linear infinite; }
 .td-spin-track { opacity: 0.3; }
-@media (prefers-reduced-motion: reduce) { .td-spinner { animation: activity-pulse 1.6s ease-in-out infinite; } }
+/* Animations off in the OS: it still turns, only slower, so it reads as working rather than blinking. */
+@media (prefers-reduced-motion: reduce) { .td-spinner { animation-duration: 2.4s; } }
 .td-tick { stroke: var(--surface); stroke-width: 1.5; }
 .st-progress { --status: var(--accent); }
 .st-review { --status: var(--attention); }
