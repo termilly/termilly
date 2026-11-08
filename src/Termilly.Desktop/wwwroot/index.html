@@ -56,7 +56,13 @@
       </button>
       <button class="tool" id="notepad-button" title="Notepad (Ctrl+Shift+M)">
         <svg viewBox="0 0 16 16"><rect x="2.5" y="2.5" width="11" height="11" rx="1.5"/><path d="M5.5 6.5h5M5.5 9.5h5M5.5 4.5v-3M10.5 4.5v-3"/></svg>
-        <span class="tool-count np-count" hidden></span>
+      </button>
+      <button class="tool" id="todo-button" title="To do (Ctrl+Shift+K)">
+        <svg viewBox="0 0 16 16"><path d="M1.5 3.5l1 1 2-2M1.5 8.5l1 1 2-2M1.5 13.5l1 1 2-2M7.5 3.5h7M7.5 8.5h7M7.5 13.5h7"/></svg>
+      </button>
+      <button class="tool" id="schedules-button" title="Schedules (Ctrl+Shift+Y)">
+        <svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.5"/><path d="M7.5 4.5v4h3"/></svg>
+        <span class="tool-count" hidden></span>
       </button>
       <button class="tool" id="clips-button" title="Clipboard">
         <svg viewBox="0 0 16 16"><path d="M3.5 4.5h-1v10h8v-1"/><rect x="4.5" y="2.5" width="9" height="11" rx="1"/><path d="M7.5 1.5h3v2h-3zM6.5 6.5h5M6.5 9.5h4"/></svg>
@@ -93,6 +99,8 @@
   </header>
 
   <div id="app-body">
+    <!-- Where the title bar's buttons dock on the other edges of the window, one strip per edge (js/toolbar.js). -->
+    <div class="bar-dock" data-side="left"></div>
     <aside id="sidebar" aria-label="Workspaces">
       <div class="side-open">
         <div class="side-head">
@@ -155,7 +163,9 @@
         </div>
       </div>
     </main>
+    <div class="bar-dock" data-side="right"></div>
   </div>
+  <div class="bar-dock" data-side="bottom"></div>
 
   <div class="ws-flyout" id="ws-flyout"></div>
 

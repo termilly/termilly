@@ -5,7 +5,7 @@
 // data-tip, so the browser's never shows; a title set again later is taken the next time. Right after one shows, the
 // next shows at once, as moving along a toolbar expects.
 
-import { MOUSE_OVER } from './dom.js';
+import { MOUSE_OVER, DOCK_SIDE, barSideOf } from './dom.js';
 import { inEachDocument } from './windows.js';
 
 /** How long the mouse rests before a tooltip shows, and how soon after one hid the next shows at once (ms). */
@@ -46,9 +46,18 @@ function place(t) {
   const r = t.target.getBoundingClientRect();
   const w = t.tip.offsetWidth;
   const h = t.tip.offsetHeight;
-  const left = Math.max(EDGE, Math.min(t.win.innerWidth - w - EDGE, r.left + r.width / 2 - w / 2));
-  const below = r.bottom + GAP;
-  const top = below + h + EDGE <= t.win.innerHeight ? below : Math.max(EDGE, r.top - GAP - h);
+  const bar = barSideOf(t.target);
+  let left;
+  let top;
+  if (bar === DOCK_SIDE.left || bar === DOCK_SIDE.right) {
+    // A column of buttons: beside it, so it doesn't cover the next one down.
+    left = bar === DOCK_SIDE.left ? r.right + GAP : r.left - GAP - w;
+    top = Math.max(EDGE, Math.min(t.win.innerHeight - h - EDGE, r.top + r.height / 2 - h / 2));
+  } else {
+    left = Math.max(EDGE, Math.min(t.win.innerWidth - w - EDGE, r.left + r.width / 2 - w / 2));
+    const below = r.bottom + GAP;
+    top = below + h + EDGE <= t.win.innerHeight ? below : Math.max(EDGE, r.top - GAP - h);
+  }
   t.tip.style.left = `${Math.round(left)}px`;
   t.tip.style.top = `${Math.round(top)}px`;
 }

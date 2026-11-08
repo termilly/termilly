@@ -482,6 +482,10 @@ internal sealed record UiState
     public bool StopAgentConfirmed { get; init; }
     /// <summary>An update the user chose to skip.</summary>
     public string? SkippedVersion { get; init; }
+    /// <summary>The version whose What's new was last shown and closed (js/whatsnew.js); none before the first.</summary>
+    public string? WhatsNewSeen { get; init; }
+    /// <summary>What's new doesn't open by itself after an update (its Show this after updates, unticked).</summary>
+    public bool WhatsNewOff { get; init; }
 
     public UiState Normalize() => this with
     {

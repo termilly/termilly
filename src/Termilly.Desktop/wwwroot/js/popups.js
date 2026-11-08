@@ -4,6 +4,7 @@
 // for the moment opens in the window it's for: its anchor's, else the one the user is in (js/windows.js).
 
 import { hereDoc, inEachDocument } from './windows.js';
+import { barSideOf, DOCK_SIDE } from './dom.js';
 
 /**
  * Where a popover shows: next to an element, a rectangle, or a point.
@@ -21,8 +22,18 @@ import { hereDoc, inEachDocument } from './windows.js';
 /** A menu entry that draws a line between groups of entries. */
 export const SEPARATOR = 'separator';
 
-/** Which side of its anchor a popover opens on: below it, or to its right (a submenu). */
-export const SIDE = Object.freeze({ below: 'below', right: 'right' });
+/**
+ * Which side of its anchor a popover opens on: below it, or to its right (a submenu). Left and above are for the title
+ * bar's buttons docked on the right or the bottom edge (awayFromBar).
+ */
+export const SIDE = Object.freeze({ below: 'below', right: 'right', left: 'left', above: 'above' });
+/**
+ * A popover below one of the title bar's buttons opens away from the edge they're docked on instead.
+ * @type {Readonly<Record<string, string>>}
+ */
+const AWAY_FROM_BAR = Object.freeze({
+  [DOCK_SIDE.top]: SIDE.below, [DOCK_SIDE.left]: SIDE.right, [DOCK_SIDE.right]: SIDE.left, [DOCK_SIDE.bottom]: SIDE.above,
+});
 
 /** @type {Array<{ el: HTMLElement, anchorEl: Element | null, onClose?: () => void, dynamic: boolean, refocus?: () => void }>} */
 const stack = [];
@@ -60,7 +71,8 @@ export function openPopover(el, anchor, { side = SIDE.below, nested = false, onC
   el.hidden = false;
   anchorEl?.classList.add('open');
   keepWheel(el);
-  place(el, anchorEl ? anchorEl.getBoundingClientRect() : /** @type {DOMRect | { x: number, y: number }} */ (anchor), side);
+  const where = anchorEl && side === SIDE.below ? AWAY_FROM_BAR[barSideOf(anchorEl)] ?? side : side;
+  place(el, anchorEl ? anchorEl.getBoundingClientRect() : /** @type {DOMRect | { x: number, y: number }} */ (anchor), where);
   stack.push({ el, anchorEl, onClose, dynamic, refocus });
 }
 
@@ -134,7 +146,7 @@ function closeFrom(index) {
 /**
  * @param {HTMLElement} el
  * @param {DOMRect | { x: number, y: number }} rect
- * @param {'below' | 'right'} side
+ * @param {string} side one of SIDE; where there's no room on that side, the opposite one
  */
 function place(el, rect, side) {
   const r = RECT_EDGE in rect ? rect : { left: rect.x, right: rect.x, top: rect.y, bottom: rect.y };
@@ -143,14 +155,18 @@ function place(el, rect, side) {
   const { innerWidth, innerHeight } = viewOf(el);
   let left;
   let top;
-  if (side === SIDE.right) {
-    left = r.right + GAP_BESIDE;
-    if (left + w > innerWidth - EDGE) left = r.left - w - GAP_BESIDE;
+  if (side === SIDE.right || side === SIDE.left) {
+    const after = r.right + GAP_BESIDE;
+    const before = r.left - w - GAP_BESIDE;
+    if (side === SIDE.right) left = after + w > innerWidth - EDGE ? before : after;
+    else left = before < EDGE ? after : before;
     top = r.top - GAP_BELOW;
   } else {
     left = r.left;
-    top = r.bottom + GAP_BELOW;
-    if (top + h > innerHeight - EDGE) top = r.top - h - GAP_BELOW;
+    const below = r.bottom + GAP_BELOW;
+    const above = r.top - h - GAP_BELOW;
+    if (side === SIDE.below) top = below + h > innerHeight - EDGE ? above : below;
+    else top = above < EDGE ? below : above;
   }
   // Whole pixels: an anchor at a fractional position would otherwise blur every icon and line in the popover.
   el.style.left = `${Math.round(Math.max(EDGE, Math.min(left, innerWidth - w - EDGE)))}px`;

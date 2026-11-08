@@ -7,6 +7,7 @@ import { state, tabTitle } from '../store.js';
 import { escapeHtml, ICONS } from '../ui.js';
 import { updateAboutHtml, checkForUpdates, onUpdateStatus } from '../update.js';
 import { startTour } from '../tour.js';
+import { showWhatsNew } from '../whatsnew.js';
 import { row, toggle, group } from './controls.js';
 import { SECTION, closeSettings, redrawIfShowing } from './page.js';
 
@@ -34,7 +35,8 @@ const ABOUT = {
       <div><div class="about-name">Termilly</div><div class="set-desc">Version ${escapeHtml(about.version ?? '')}</div></div></div>`
     + group('Updates', row('Check for updates', 'Look for a newer version at start and twice a day.', toggle('interface.checkForUpdates'), { keywords: 'update version new release download' })
       + row('Check now', updateAboutHtml(), '<button class="btn small" data-action="checkUpdates">Check now</button>', { keywords: 'update version' }))
-    + group('', row('Guided tour', 'A short walk past the things you’ll use every day.', '<button class="btn small" data-action="startTour">Take the tour</button>'))
+    + group('', row('What’s new', 'What changed in this version, as it showed after the update.', '<button class="btn small" data-action="whatsNew">What’s new</button>', { keywords: 'changelog release notes version' })
+      + row('Guided tour', 'A short walk past the things you’ll use every day.', '<button class="btn small" data-action="startTour">Take the tour</button>'))
     + group('', row('Data folder', `<code class="path">${escapeHtml(about.dataDir ?? '')}</code>`,
       '<button class="btn small" data-action="openDataDir">Open folder</button>'))
     + crashesHtml()
@@ -48,6 +50,10 @@ const ABOUT = {
     startTour() {
       closeSettings();
       startTour();
+    },
+    whatsNew() {
+      closeSettings();
+      void showWhatsNew();
     },
   },
 };

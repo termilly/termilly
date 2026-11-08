@@ -31,6 +31,27 @@ interface PreviewNode {
 /** A node of a workspace's layout tree. Trees hold only plain data, so they're saved as they are. */
 type LayoutNode = LeafNode | SplitNode | TabsNode | PreviewNode;
 
+/** A task in a To do list (js/todo.js). Tags are To do's own; an issue is one made from it on GitHub. */
+interface TodoTask {
+  id: string;
+  text: string;
+  details?: string;
+  tags?: string[];
+  done?: boolean;
+  created: number;
+  issue?: { repo: string; number: number; url: string };
+  /** In progress or Review; a task with neither is Open, or Done with `done`. */
+  status?: string;
+  /** The terminal working on it (Implement). */
+  terminal?: string;
+  /** Its run out of sight (Implement, Out of sight): the hidden shell's id. */
+  run?: string;
+  /** What the agent that finished it said. */
+  review?: { summary: string; by: string };
+  /** What its run out of sight asks the user for and waits on (js/todoask.js): what the tool would do, and with what. */
+  ask?: { verb: string; what: string };
+}
+
 /** A note pinned to a terminal, a host or a workspace (js/notes.js). */
 interface Note {
   text: string;
@@ -46,6 +67,7 @@ interface Workspace {
   focusId: string | null;
   root: LayoutNode | null;
   note?: Note | null;
+  tasks?: TodoTask[];
   /** Its own snippets (js/snippets.js). */
   snippets?: SnippetSetting[];
   /** Folded in the sidebar. */
@@ -116,6 +138,7 @@ interface Tab {
   /** Nothing of it is kept in history. */
   noHistory: boolean;
   note?: Note | null;
+  tasks?: TodoTask[];
   /** The folder it was opened in (a layout's, the API's). */
   startCwd?: string | null;
   /** A layout's variables for its shell. */
@@ -196,6 +219,8 @@ interface Tab {
   notified?: string | null;
   /** The last news sent to the phones for it (js/notify.js). */
   phoneAlerted?: string | null;
+  /** A task it finished alerted the phones by name, so its own "Finished" doesn't follow. */
+  taskAlerted?: boolean;
   /** The size a phone showing it asked for; it keeps that size until no phone shows it (js/phone.js). */
   phoneSize?: { cols: number, rows: number, tallest?: number } | null;
   /**
@@ -244,4 +269,88 @@ interface Tab {
   remote?: import('../wwwroot/js/remotehost.js').RemoteState;
   /** A serial port's view (js/serial.js). */
   serial?: import('../wwwroot/js/serial.js').SerialView;
+}
+
+/** When a schedule runs (js/schedulerules.js). */
+interface ScheduleWhen {
+  kind: string;
+  /** "20:00", for a time. */
+  at: string;
+  /** Date's day numbers; none means every day. */
+  days: number[];
+  every: number;
+  unit: string;
+  /** Hours "every" keeps within: "9:00", or empty. */
+  from: string;
+  to: string;
+}
+
+/** A command or snippet that runs on time (js/schedules.js). */
+interface Schedule {
+  id: string;
+  name: string;
+  on: boolean;
+  what: string;
+  command: string;
+  /** A snippet's name: it runs as it is at the time. */
+  snippet: string;
+  /** What an agent is asked (js/agentcli.js). */
+  prompt: string;
+  /** An agent may change files; by default it only reads. */
+  allowChanges: boolean;
+  /** An agent's reply goes in the notification. */
+  replyInNotice: boolean;
+  /** Each run's report goes to the top of a Notepad page, by its name (js/schedulesave.js). */
+  toNotepad: boolean;
+  notepadPage: string;
+  /** And to a file: {date}, {time} and {name} are filled in. */
+  toFile: boolean;
+  file: string;
+  where: string;
+  profile: string | null;
+  cwd: string;
+  wsId: string | null;
+  /** A terminal's name, or a #tag. */
+  terminal: string;
+  after: string;
+  busy: string;
+  closed: string;
+  when: ScheduleWhen;
+  missed: string;
+  limitMinutes: number;
+  notify: string;
+  phone: boolean;
+  keepDays: number;
+  nextAt: number | null;
+}
+
+/** A schedule's run. Its output is kept by the app, encrypted (Features/Schedules.cs). */
+interface ScheduleRunRecord {
+  id: string;
+  scheduleId: string;
+  name: string;
+  at: number;
+  ms: number;
+  status: string;
+  code: number | null;
+  summary: string;
+  /** What an agent's run cost, as it said. */
+  costUsd?: number | null;
+  /** The file its report was saved to, or why it couldn't be. */
+  file?: string | null;
+  fileError?: string | null;
+}
+
+interface SchedulesState {
+  open: boolean;
+  list: Schedule[];
+  runs: ScheduleRunRecord[];
+}
+
+/** A run going on: its record, its schedule, and its terminal if it has one. */
+interface ActiveScheduleRun {
+  run: ScheduleRunRecord;
+  schedule: Schedule;
+  tab?: Tab | null;
+  command: string;
 }

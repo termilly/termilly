@@ -5,7 +5,7 @@
 
 import { PAGE, HOST } from './protocol.js';
 import { send, onHost, platform, PLATFORM } from './host.js';
-import { showToast, TOAST } from './toasts.js';
+import { showToast, TOAST, SHOW } from './toasts.js';
 import { parentOf } from './filepaths.js';
 
 /** What a job does. */
@@ -106,7 +106,7 @@ function finish(job) {
   const total = job.names.length;
   // A download can be shown where it went: the file, or the folder of several.
   const action = job.kind === JOB_KIND.get && job.locals.length
-    ? { label: 'Show', run: () => send(PAGE.openPath, { path: job.locals.length === 1 ? job.locals[0] : parentOf(job.locals[0]) }) }
+    ? { label: SHOW, run: () => send(PAGE.openPath, { path: job.locals.length === 1 ? job.locals[0] : parentOf(job.locals[0]) }) }
     : null;
   let text;
   if (!job.failed) text = `${words.done} ${what(job.names)}${to}`;

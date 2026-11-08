@@ -254,6 +254,7 @@ internal sealed class LinuxWindow
             window.SetTopMost(false);
         });
         platform.WindowActionRequested += action => window.Invoke(() => Do(window, action, () => PostState(channel, window)));
+        platform.Loaded += () => window.Invoke(() => PostState(channel, window));
     }
 
     /// <summary>One of the title bar's buttons or edges, on the window's thread.</summary>

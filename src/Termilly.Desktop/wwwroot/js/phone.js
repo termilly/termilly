@@ -18,6 +18,9 @@ import { clipsForPhone } from './clipboard.js';
 import { THEMES, THEME_BASE, themeId, onSystemThemeChange } from './themes.js';
 import { termTheme } from './terminals.js';
 import { placesForPhone } from './phonemanage.js';
+import { listForPhone, tagsForPhone } from './phonetodo.js';
+import { schedulesForPhone } from './phoneschedules.js';
+import { terminalList, workspaceList } from './todo.js';
 import { hasFiles, shellFolderOf, placeOf } from './filepaths.js';
 import { hasPrompts } from './myprompts.js';
 import { platform } from './host.js';
@@ -94,7 +97,7 @@ function terminalOf(tab) {
   const icon = runsClaude(tab) ? CLAUDE_BADGE : profile?.icon ?? '';
   const activity = activityOf(tab);
   return {
-    id: tab.id, ws: tab.wsId, title: tabTitle(tab), icon, note: tab.note ?? null,
+    id: tab.id, ws: tab.wsId, title: tabTitle(tab), icon, note: tab.note ?? null, todo: listForPhone(terminalList(tab)),
     // A phone or another computer gives it its size: who (another computer showing it draws it the same).
     sizedBy: tab.sizedBy ?? null,
     badge: badgeOf(icon),
@@ -154,9 +157,13 @@ function snapshot() {
     // Clipboard's text clips to paste (their first lines; the PC pastes the whole one): Settings › Phone.
     clips: typing && state.settings.phone?.clips !== false ? clipsForPhone() : [],
     notes: notesForPhone(),
+    // To do's tags to pick from; each terminal and workspace has its own list.
+    tags: tagsForPhone(),
+    // Schedules and their last runs; a report is read when it's opened.
+    schedules: schedulesForPhone(),
     // Its themes, the one it shows now and its terminals' colours then (a theme plugin's, if one is chosen).
     themes: PHONE_THEMES, pcTheme: themeId(), pcTerminal: termTheme(),
-    workspaces: state.workspaces.map(w => ({ id: w.id, name: w.name, color: w.color, cwd: w.cwd ?? null, note: w.note ?? null })),
+    workspaces: state.workspaces.map(w => ({ id: w.id, name: w.name, color: w.color, cwd: w.cwd ?? null, note: w.note ?? null, todo: listForPhone(workspaceList(w)) })),
     // What a phone may open a terminal on, and where it opens by default (only while it may type: js/phonemanage.js).
     places: opening ? placesForPhone(badgeOf) : [], activeWs: state.activeId,
     terminals: [...state.tabs.values()].filter(t => t.wsId && wsById(t.wsId) && !t.virtual).map(terminalOf),
@@ -167,7 +174,7 @@ const publish = debounce(() => {
   if (state.settings.phone?.enabled) send(PAGE.phoneState, { state: snapshot() });
 }, SEND_AFTER_MS);
 
-for (const event of [EVENTS.agent, EVENTS.tab, EVENTS.tabClosed, EVENTS.workspaces, EVENTS.settings, EVENTS.profiles, EVENTS.clips, EVENTS.inbox]) on(event, publish);
+for (const event of [EVENTS.agent, EVENTS.tab, EVENTS.tabClosed, EVENTS.workspaces, EVENTS.settings, EVENTS.profiles, EVENTS.clips, EVENTS.inbox, EVENTS.todo, EVENTS.schedules]) on(event, publish);
 // Windows switched light and dark: the "system" theme is the other one now.
 onSystemThemeChange(publish);
 // A terminal resized on the PC: the phones draw it at its new size.

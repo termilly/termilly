@@ -102,9 +102,16 @@ internal static class PipeTimeouts
     public static readonly TimeSpan Api = TimeSpan.FromSeconds(10);
     /// <summary>An API call that may wait on the user (typing into a terminal on production asks first) or on output.</summary>
     public static readonly TimeSpan ApiWaiting = TimeSpan.FromMinutes(2);
+    /// <summary>A permission asked for out of sight waits for the user as long as the run may take.</summary>
+    public static readonly TimeSpan Asking = TimeSpan.FromHours(1);
 
     /// <summary>How long a call to <paramref name="method"/> may take.</summary>
-    public static TimeSpan ForApi(string? method) => method is ApiMethods.Send or ApiMethods.Snippet or ApiMethods.Wait ? ApiWaiting : Api;
+    public static TimeSpan ForApi(string? method) => method switch
+    {
+        ApiMethods.Send or ApiMethods.Snippet or ApiMethods.Wait => ApiWaiting,
+        ApiMethods.TaskAsk => Asking,
+        _ => Api,
+    };
 }
 
 /// <summary>What Termilly puts in each terminal's environment for the helper and the claude shim to find it.</summary>
@@ -114,6 +121,8 @@ internal static class TerminalEnvironment
     public const string PaneId = "TERMILLY_PANE_ID";
     /// <summary>The named pipe of the Termilly window that owns the terminal.</summary>
     public const string Pipe = "TERMILLY_PIPE";
+    /// <summary>The run out of sight an MCP server serves: it offers only ask_permission, for that run (Termilly.Agent/Mcp.cs).</summary>
+    public const string Run = "TERMILLY_RUN";
     /// <summary>Claude Code settings file holding Termilly's hooks; the shim passes it with --settings.</summary>
     public const string AgentSettings = "TERMILLY_AGENT_SETTINGS";
     /// <summary>Set by the shim for the Claude Code it starts, so a claude started from inside it isn't hooked twice.</summary>
@@ -139,6 +148,19 @@ internal static class AgentExecutables
 }
 
 /// <summary>The names of a Termilly window's pipe (for hooks and the API): its own, or the fixed one.</summary>
+/// <summary>The termilly command's MCP server: how it's started, and the tool a run out of sight asks the user through.</summary>
+internal static class AgentCommands
+{
+    public const string Mcp = "mcp";
+}
+
+/// <summary>Tools of the termilly MCP server that Termilly itself names (AskingRun.cs).</summary>
+internal static class McpTools
+{
+    /// <summary>Claude Code's --permission-prompt-tool in a run out of sight: the user says Allow or Deny in the task's row.</summary>
+    public const string AskPermission = "ask_permission";
+}
+
 internal static class PipeNames
 {
     /// <summary>A window's pipe is this followed by its process id.</summary>

@@ -25,7 +25,7 @@ import { fileMatches, fileRowHtml, filePreviewHtml, openFile, stillLooking } fro
  * A closed terminal the host keeps (Host_history's entries), as panes.js recordHistory sent it.
  * @typedef {{ id: string, name: string, customName?: string | null, profile: string, tags?: string[] | null,
  *   note?: Note | null, wsId?: string | null, wsName?: string | null, cwd?: string | null, closedAt: number, closedBy?: string | null, noHistory?: boolean,
- *   lines?: string[] | null, earlier?: string | null }} HistoryEntry
+ *   lines?: string[] | null, earlier?: string | null, tasks?: TodoTask[] }} HistoryEntry
  */
 /**
  * A command a terminal ran (Host_historyCommands' entries), as commands.js sent it; host is the PC it ran on, when
@@ -898,6 +898,7 @@ function reopen(entry) {
     name: entry.customName ?? null,
     tags: entry.tags ?? [],
     note: entry.note ?? null,
+    tasks: entry.tasks,
     restore: entry.lines?.length ? { lines: entry.lines, closedAt: entry.closedAt } : undefined,
   });
   // Its earlier output comes along.

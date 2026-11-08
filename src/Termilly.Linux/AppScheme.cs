@@ -19,6 +19,7 @@ internal static class AppScheme
         [MediaTypes.Extensions.Png] = MediaTypes.Png, [MediaTypes.Extensions.Icon] = MediaTypes.Icon,
         [MediaTypes.Extensions.Woff2] = MediaTypes.Woff2, [MediaTypes.Extensions.Woff] = MediaTypes.Woff,
         [MediaTypes.Extensions.Ttf] = MediaTypes.Ttf, [MediaTypes.Extensions.Text] = MediaTypes.PlainText,
+        [MediaTypes.Extensions.Markdown] = MediaTypes.Markdown,
     };
 
     /// <summary>

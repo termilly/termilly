@@ -6,12 +6,13 @@ import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
 
 // Just enough of a page for the modules to load: the host's messages come through Photino's bridge (host.js).
+// querySelector too: on a Mac, Node says it is one, and macwindow.js looks for the title bar as it loads.
 /** @type {(text: string) => void} */
 let deliver = () => {};
 let focused = true;
 globalThis.window = { addEventListener() {}, external: { receiveMessage: cb => { deliver = cb; }, sendMessage() {} } };
 globalThis.document = {
-  documentElement: { dataset: {} }, hasFocus: () => focused, addEventListener() {}, querySelectorAll: () => [],
+  documentElement: { dataset: {} }, hasFocus: () => focused, addEventListener() {}, querySelector: () => null, querySelectorAll: () => [],
 };
 globalThis.localStorage = { getItem: () => null, setItem() {} };
 globalThis.requestAnimationFrame = () => 0;

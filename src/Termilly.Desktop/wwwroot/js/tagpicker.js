@@ -7,6 +7,8 @@ import { openPopover } from './popups.js';
 import { tagChipHtml, escapeHtml, ICONS } from './ui.js';
 import { field, find, targetOf } from './dom.js';
 
+/** The list of a tag picker (To do's too). */
+export const TAG_LIST = '.tp-list';
 /** The longest tag name. */
 const MAX_TAG = 24;
 
@@ -57,16 +59,24 @@ function tagListHtml(tab, query, newColor) {
  * @param {string} newColor
  */
 function createRowHtml(query, newColor) {
-  const custom = !TAG_COLORS.includes(newColor);
   return `
         <div class="tp-sep"></div>
         <button class="tp-row tp-create" data-create="${escapeHtml(query)}">
           <span class="menu-icon">${ICONS.plus}</span>Create
           <span class="tag" style="--c:${newColor}">${escapeHtml(query)}</span>
         </button>
-        <div class="swatches">${TAG_COLORS.map(c => `<button class="swatch${c === newColor ? ' on' : ''}" data-color="${c}" style="background:${c}" aria-label="Colour"></button>`).join('')}
-          <label class="swatch custom${custom ? ' on' : ''}" title="Pick any colour"${custom ? ` style="background:${newColor}"` : ''}>
-            <input type="color" value="${newColor}" aria-label="Pick any colour"></label></div>`;
+        ${swatchesHtml(newColor)}`;
+}
+
+/**
+ * The colours a tag can have: the palette's, or any (a colour picker).
+ * @param {string} color the one it has
+ */
+export function swatchesHtml(color) {
+  const custom = !TAG_COLORS.includes(color);
+  return `<div class="swatches">${TAG_COLORS.map(c => `<button class="swatch${c === color ? ' on' : ''}" data-color="${c}" style="background:${c}" aria-label="Colour"></button>`).join('')}
+          <label class="swatch custom${custom ? ' on' : ''}" title="Pick any colour"${custom ? ` style="background:${color}"` : ''}>
+            <input type="color" value="${color}" aria-label="Pick any colour"></label></div>`;
 }
 
 /**
@@ -82,7 +92,7 @@ export function openTagPicker(tab, anchor) {
     <input class="field" placeholder="Find or create a tag" spellcheck="false" maxlength="${MAX_TAG}" aria-label="Tag">
     <div class="tp-list" role="listbox"></div>`;
   const input = field(picker, 'input');
-  const list = find(picker, '.tp-list');
+  const list = find(picker, TAG_LIST);
   const picking = { newColor: nextColor() };
   const render = () => { list.innerHTML = tagListHtml(tab, normalizeTag(input.value), picking.newColor); };
   const toggle = (/** @type {string} */ name) => {

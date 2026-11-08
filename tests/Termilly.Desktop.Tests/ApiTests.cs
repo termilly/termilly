@@ -100,7 +100,7 @@ public sealed class ApiTests
         Assert.Equal("2025-03-26", init["result"]!["protocolVersion"]!.GetValue<string>());
 
         var tools = Mcp.Handle(Request("tools/list"), (m, a) => FakeTermilly(m, a))!["result"]!["tools"]!.AsArray().Select(t => t!["name"]!.GetValue<string>()).ToList();
-        Assert.Equal(["list_terminals", "terminal_state", "search_command_history", "set_status", "read_terminal_output", "wait_for_terminal", "list_snippets"], tools);
+        Assert.Equal(["list_terminals", "terminal_state", "search_command_history", "set_status", "read_terminal_output", "wait_for_terminal", "list_tasks", "get_task", "tick_task", "finish_task", "list_snippets"], tools);
 
         var withInput = Mcp.Handle(Request("tools/list"), (m, a) => FakeTermilly(m, a, allowInput: true))!["result"]!["tools"]!.AsArray();
         Assert.Contains(withInput, t => t!["name"]!.GetValue<string>() == "send_to_terminal");
@@ -120,5 +120,50 @@ public sealed class ApiTests
 
         Assert.Null(Mcp.Handle(new JsonObject { ["jsonrpc"] = "2.0", ["method"] = "notifications/initialized" }, (m, a) => FakeTermilly(m, a)));
         Assert.Equal(-32601, Mcp.Handle(Request("resources/list"), (m, a) => FakeTermilly(m, a))!["error"]!["code"]!.GetValue<int>());
+    }
+
+    // ---- A run out of sight asking the user (AskingRun.cs) ----
+
+    [Fact]
+    public void A_run_out_of_sight_gets_only_ask_permission_and_it_carries_the_users_answer()
+    {
+        var tools = Mcp.Handle(Request("tools/list"), (m, a) => FakeTermilly(m, a), run: "r1")!["result"]!["tools"]!.AsArray();
+        Assert.Equal(["ask_permission"], tools.Select(t => t!["name"]!.GetValue<string>()));
+
+        JsonObject? asked = null;
+        var call = Request("tools/call", new JsonObject
+        {
+            ["name"] = "ask_permission",
+            ["arguments"] = new JsonObject { ["tool_name"] = "PowerShell", ["input"] = new JsonObject { ["command"] = "npm run check" }, ["tool_use_id"] = "x" },
+        });
+        var answer = Mcp.Handle(call, (m, a) =>
+        {
+            Assert.Equal("task_ask", m);
+            asked = a;
+            return new JsonObject { ["behavior"] = "allow", ["updatedInput"] = a!["input"]!.DeepClone() };
+        }, run: "r1")!["result"]!;
+        Assert.Equal("r1", asked!["run"]!.GetValue<string>());
+        Assert.Equal("PowerShell", asked["tool_name"]!.GetValue<string>());
+        Assert.False(answer["isError"]!.GetValue<bool>());
+        var said = JsonNode.Parse(answer["content"]![0]!["text"]!.GetValue<string>())!;
+        Assert.Equal("allow", said["behavior"]!.GetValue<string>());
+        Assert.Equal("npm run check", said["updatedInput"]!["command"]!.GetValue<string>());
+
+        // Termilly gone or the run over: refused, saying why, so Claude Code goes on without it.
+        var refused = Mcp.Handle(call, (_, _) => throw new ApiException("That run has ended."), run: "r1")!["result"]!;
+        var no = JsonNode.Parse(refused["content"]![0]!["text"]!.GetValue<string>())!;
+        Assert.Equal("deny", no["behavior"]!.GetValue<string>());
+        Assert.Contains("That run has ended.", no["message"]!.GetValue<string>());
+
+        // The other tools aren't there for it.
+        Assert.Equal(-32602, Mcp.Handle(Request("tools/call", new JsonObject { ["name"] = "list_tasks" }), (m, a) => FakeTermilly(m, a), run: "r1")!["error"]!["code"]!.GetValue<int>());
+    }
+
+    [Fact]
+    public void A_runs_config_path_is_quoted_for_its_shell()
+    {
+        Assert.Equal("'C:\\Users\\o''neil\\x.json'", AskingRun.Quote("C:\\Users\\o'neil\\x.json", "powershell"));
+        Assert.Equal("\"C:\\Users\\me\\x.json\"", AskingRun.Quote("C:\\Users\\me\\x.json", "cmd"));
+        Assert.Equal("'/home/o'\\''neil/x.json'", AskingRun.Quote("/home/o'neil/x.json", "bash"));
     }
 }

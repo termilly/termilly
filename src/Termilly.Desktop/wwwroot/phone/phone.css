@@ -167,22 +167,11 @@ main.tabbed { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
 .tabbar { position: fixed; inset: auto 0 0; z-index: 4; display: flex; justify-content: center; gap: 8px; padding: max(6px, calc(env(safe-area-inset-bottom) - 18px)) 8px; border-top: 1px solid var(--line); background: color-mix(in srgb, var(--raised) 92%, transparent); backdrop-filter: blur(12px); }
 .tabbar button { position: relative; display: flex; flex: 0 1 96px; flex-direction: column; gap: 1px; align-items: center; padding: 2px 0; border: 0; background: none; color: var(--muted); font-size: 10px; font-weight: 600; }
 .tabbar button.on { color: var(--accent); }
-/* The Notes tab (memos.js): each workspace, its terminals under it, and a note's editor. */
-.memo { width: 100%; border: 0; background: none; color: var(--text); text-align: left; }
-.memo-term { padding-left: 28px; }
-.memo .r-text { display: flex; flex-direction: column; min-width: 0; }
-.memo .r-line { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.memo-pin { margin-left: 4px; color: var(--accent); font-size: 11px; font-weight: 500; }
-.memo-editor { display: flex; flex-direction: column; gap: 10px; }
-.memo-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.memo-head .link { padding: 4px 0; border: 0; background: none; color: var(--accent); font-size: 15px; }
+/* A note's editor (todoviews.js). */
 /* 16px: smaller text makes iOS zoom in on the field, and stay zoomed. */
 .memo-text { min-height: 40vh; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--raised); color: var(--text); font: 16px/1.45 ui-monospace, Menlo, Consolas, monospace; resize: vertical; }
 /* Each workspace with its terminals, apart from the next. */
-.memo-ws + .memo-ws { margin-top: 18px; }
 .memo-pinbox { display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: 14px; }
-.memo-actions { display: flex; gap: 8px; align-items: center; }
-.memo-actions .grow { flex: 1; }
 .tabbar svg { width: 25px; height: 25px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
 .tab-count { position: absolute; top: 0; left: calc(50% + 6px); min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--accent); color: var(--on-accent); font-size: 10px; font-weight: 700; line-height: 16px; text-align: center; }
 .tabbed ~ .toast { bottom: calc(64px + env(safe-area-inset-bottom)); }
@@ -311,3 +300,103 @@ button.row { width: 100%; border: 0; background: none; color: inherit; font: inh
 .news.n-error .news-state { color: var(--danger); }
 .news-text { min-width: 0; font-size: 14px; }
 .news-text span { display: block; overflow: hidden; color: var(--muted); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+
+/* The To do tab (todo.js). */
+.td-find, .td-input { display: block; width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--raised); color: var(--text); font: 16px/1.4 inherit; font-family: inherit; }
+.td-input { margin: 0 0 10px; background: var(--bg); }
+.td-find:focus, .td-input:focus { outline: none; border-color: var(--accent); }
+.td-add { display: flex; gap: 8px; align-items: center; width: 100%; height: 44px; padding: 0 12px; border: 0; border-radius: 12px; background: var(--raised); color: var(--muted); font-size: 16px; text-align: left; }
+.td-plus { padding: 0 2px; color: var(--accent); font-size: 22px; line-height: 1; }
+.td-section { text-transform: none; letter-spacing: 0; font-size: 13.5px; }
+.td-section i, .td-fold i { color: var(--muted); font-style: normal; font-weight: 400; }
+.td-note { display: block; width: 100%; margin: 10px 0 0; padding: 9px 12px; border: 0; border-radius: 12px; background: var(--raised); color: var(--text); font-size: 14px; text-align: left; }
+.td-note b { display: block; color: var(--muted); font-size: 12px; }
+.td-row { align-items: flex-start; }
+.td-row .r-name { line-height: 22px; }
+.td-done .r-name, .td-step.td-done .r-text { color: var(--muted); text-decoration: line-through; }
+.td-box { flex: none; display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 1.5px solid var(--muted); border-radius: 6px; background: none; }
+.td-box svg { visibility: hidden; width: 14px; height: 14px; fill: none; stroke: var(--on-accent); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.td-box.st-progress { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 30%, transparent); }
+.td-box.working { background: none; }
+.td-box .activity { --size: 14px; }
+.td-box.st-review { border-color: var(--attention); background: color-mix(in srgb, var(--attention) 30%, transparent); }
+.td-box.st-done { border-color: var(--accent); background: var(--accent); }
+.td-box.st-done svg { visibility: visible; }
+.td-agent { display: block; padding: 0; border: 0; background: none; color: var(--accent); font-size: 13.5px; text-align: left; }
+.td-said { color: var(--muted); font-size: 13.5px; overflow-wrap: anywhere; }
+.td-said b { color: var(--text); font-weight: 600; }
+.td-meta, .td-tags { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; margin-top: 4px; }
+.td-sub { color: var(--muted); font-size: 12.5px; }
+.td-chip { padding: 0 8px; border-radius: 99px; background: color-mix(in srgb, var(--hue) 18%, transparent); color: var(--hue); font-size: 12px; line-height: 19px; }
+.td-fold { display: flex; gap: 8px; align-items: center; margin: 14px 8px 8px; padding: 0; border: 0; background: none; color: var(--muted); font-size: 14px; font-weight: 600; }
+.td-chev { color: var(--muted); font-size: 18px; line-height: 1; }
+.td-chev.open { rotate: 90deg; }
+.td-group + .td-group { margin-top: 12px; }
+.td-tree { width: 100%; border: 0; background: none; color: var(--text); text-align: left; }
+.td-tree .r-text { display: flex; flex-direction: column; min-width: 0; }
+.td-tree .r-line { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.td-term { padding-left: 28px; }
+.list > .td-tree + .td-tree { border-top: 1px solid var(--line); }
+.td-count { flex: none; min-width: 22px; padding: 0 6px; border-radius: 11px; background: var(--bg); color: var(--muted); font-size: 13px; line-height: 22px; text-align: center; }
+.td-more { display: block; margin: 12px 8px; padding: 0; border: 0; background: none; color: var(--accent); font-size: 15px; }
+.td-accept { flex: none; align-self: center; padding: 6px 12px; border: 0; border-radius: 10px; background: var(--accent); color: var(--on-accent); font-size: 14px; font-weight: 600; }
+.td-mark { display: inline-flex; flex: none; gap: 3px; align-items: center; padding: 4px; border: 0; background: none; color: var(--muted); font-size: 12.5px; }
+.ws .td-mark { font-weight: 400; }
+/* Schedules (schedules.js) */
+.sc-squares { display: flex; gap: 3px; min-height: 8px; margin-top: 5px; }
+.sc-sq { flex: none; width: 9px; height: 9px; border-radius: 2px; background: var(--muted); }
+.sc-sq.worked { background: #7ee787; }
+.sc-sq.failed, .sc-sq.stopped { background: #ff7b72; }
+.sc-sq.running, .sc-sq.waiting { background: var(--accent); }
+.sc-off .r-name { color: var(--muted); }
+.sc-when { margin: 4px 8px 12px; font-size: 14px; }
+.sc-controls { display: flex; gap: 12px; align-items: center; margin: 0 0 6px; }
+.sc-controls .ibtn { flex: 1; margin: 0; }
+.sc-on { display: flex; gap: 8px; align-items: center; padding: 0 8px; font-size: 15px; }
+.sc-on input { width: 22px; height: 22px; accent-color: var(--accent); }
+.sc-why { margin: 0 8px 12px; color: var(--danger); font-size: 14px; }
+.sc-report { margin: 0; padding: 12px; overflow-x: auto; border-radius: 12px; background: var(--raised); color: var(--text); font: 12.5px/1.45 ui-monospace, Menlo, Consolas, monospace; white-space: pre-wrap; word-break: break-word; }
+.td-mark svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+.td-hint { margin: 12px 8px; color: var(--muted); font-size: 13.5px; }
+.td-review-notes { margin-bottom: 12px; }
+.td-sheet { padding-top: 8px; }
+/* A new task hangs from the top of the screen: the keyboard comes up from the bottom. */
+.td-top { inset: 0 0 auto; padding: calc(env(safe-area-inset-top) + 12px) 16px 16px; border-radius: 0 0 16px 16px; }
+.td-sheet .list { background: var(--bg); }
+.td-where { display: flex; gap: 6px; align-items: center; color: var(--muted); font-size: 13.5px; }
+.td-where .badge { width: 20px; height: 20px; border-radius: 5px; font-size: 7.5px; }
+.td-title { margin: 4px 0 10px; font-size: 20px; overflow-wrap: anywhere; }
+.td-seg { display: flex; margin: 0 0 12px; padding: 2px; border-radius: 10px; background: var(--bg); }
+.td-seg button { flex: 1; padding: 7px 0; border: 0; border-radius: 8px; background: none; color: var(--muted); font-size: 13px; font-weight: 600; }
+.td-seg button.on { background: var(--raised); color: var(--text); }
+.td-review { margin: 0 0 10px; padding: 8px 12px; border-left: 3px solid var(--attention); border-radius: 0 10px 10px 0; background: var(--bg); font-size: 14.5px; overflow-wrap: anywhere; }
+.td-review b { display: block; color: var(--muted); font-size: 12.5px; }
+.td-details { margin: 0 2px 8px; color: var(--muted); font-size: 14.5px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.td-sheet .td-section { margin: 12px 2px 4px; }
+.td-step { padding: 8px 12px; font-size: 15.5px; }
+.td-step .r-text { overflow-wrap: anywhere; }
+.td-play { flex: none; display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; background: none; color: var(--accent); }
+.td-play svg { width: 16px; height: 16px; fill: currentColor; }
+.td-add-tag { padding: 0 8px; border: 1px dashed var(--line); border-radius: 99px; background: none; color: var(--muted); font-size: 12px; line-height: 19px; }
+.td-sheet .td-tags { margin: 10px 2px; }
+.td-sheet .td-new-tags { gap: 6px; margin: 0 2px 12px; }
+.td-pick-tag { padding: 0 10px; border: 1px solid var(--line); background: none; color: var(--muted); font-size: 13px; line-height: 26px; }
+.td-pick-tag.on { border-color: transparent; background: color-mix(in srgb, var(--hue) 18%, transparent); color: var(--hue); }
+.td-tag-input { flex: 1; min-width: 96px; padding: 0 10px; border: 1px dashed var(--line); border-radius: 99px; background: none; color: var(--text); font-family: inherit; font-size: 16px; line-height: 26px; }
+.td-tag-input:focus { border-color: var(--accent); border-style: solid; outline: none; }
+.td-issue { display: block; margin: 8px 2px; color: var(--accent); font-size: 15px; }
+.td-btns { display: flex; gap: 8px; }
+.td-btns .ibtn { flex: 1; margin-bottom: 0; }
+.td-sheet .td-btns { margin-top: 10px; }
+.td-links { display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: space-between; margin: 14px 2px 0; }
+.link.red { color: var(--danger); }
+.td-sheet-head { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; margin-bottom: 12px; }
+.td-sheet-head h2 { margin: 0; }
+.td-sheet-head .link { justify-self: start; }
+.td-pick .row { width: 100%; border: 0; background: none; color: var(--text); text-align: left; }
+.td-tick { flex: none; display: grid; place-items: center; width: 20px; height: 20px; color: var(--accent); }
+.td-tick svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.td-label { padding: 2px 10px; border: 1px solid var(--line); border-radius: 99px; background: none; color: var(--muted); font-size: 13px; }
+.td-label.on { border-color: var(--accent); color: var(--text); }
+.td-note-page { display: flex; flex-direction: column; gap: 10px; }
+.td-note-page .td-hint { margin: 0 2px; }

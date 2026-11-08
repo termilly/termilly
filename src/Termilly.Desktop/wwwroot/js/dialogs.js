@@ -129,6 +129,29 @@ export function noticeDialog({ title, body }) {
     </div>`, (dialog, close) => ({ submit: () => close(true) })).then(() => {});
 }
 
+/**
+ * Asks which of two ways to go: `keep` (Enter, left out when it's not given) or the `danger` one; null is Cancel (Escape).
+ * @param {{ title: string, body: string, keep?: string, danger: string }} question
+ * @returns {Promise<string | null>} CHOICE.keep, CHOICE.danger, or null
+ */
+export function choiceDialog({ title, body, keep, danger }) {
+  const dangerButton = `<button class="btn danger" ${keep ? 'data-danger' : 'data-ok autofocus'}>${escapeHtml(danger)}</button>`;
+  return modal(CONFIRM_DIALOG, `
+    <h3>${escapeHtml(title)}</h3>
+    <p class="dialog-sub">${escapeHtml(body)}</p>
+    <div class="dialog-actions">
+      ${keep ? `${dangerButton}<span class="spacer"></span>` : ''}
+      <button class="btn" data-cancel>Cancel</button>
+      ${keep ? `<button class="btn primary" data-ok autofocus>${escapeHtml(keep)}</button>` : dangerButton}
+    </div>`, (dialog, close) => {
+    dialog.querySelector('[data-danger]')?.addEventListener('click', () => close(CHOICE.danger));
+    return { submit: () => close(keep ? CHOICE.keep : CHOICE.danger) };
+  });
+}
+
+/** What choiceDialog answers. */
+export const CHOICE = Object.freeze({ keep: 'keep', danger: 'danger' });
+
 /** What the save question answers: save, or drop the changes; null is Cancel (stay). */
 export const SAVE_ANSWER = Object.freeze({ save: 'save', discard: 'discard' });
 

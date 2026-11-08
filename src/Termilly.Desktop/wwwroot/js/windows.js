@@ -62,6 +62,8 @@ export const RETURN_LABEL = 'Back to the main window';
 /** The pin that keeps a window above every other one: 16px at a 1px line, on the pixel grid. */
 const PIN_ICON = '<svg viewBox="0 0 16 16"><path d="M5.5 2.5h5M6.5 2.5v4l-2 2v1h7v-1l-2-2v-4M8 9.5v4"/></svg>';
 const PIN_LABEL = 'Always on top';
+/** A window's own close in its header (a dialog's), moved after the pin while it's in a window. */
+const OWN_CLOSE = 'set-close';
 /** The pin's class while the window is kept on top (app.css). */
 const PINNED = 'on';
 /** The window's buttons, in the main window's order after Return. */
@@ -258,6 +260,21 @@ function gone(d, quiet) {
 }
 
 /**
+ * A header's own close (Schedules, Snippets) goes after the pin, with the window's buttons; back in its place when the
+ * window goes (its chrome's signal).
+ * @param {HTMLElement} header
+ * @param {HTMLElement} controls
+ * @param {AbortSignal} signal
+ */
+function takeOwnClose(header, controls, signal) {
+  const own = /** @type {HTMLElement | null} */ (header.querySelector(`:scope > .${OWN_CLOSE}`));
+  if (!own) return;
+  const before = own.previousElementSibling;
+  controls.append(own);
+  signal.addEventListener('abort', () => (before ? before.after(own) : header.prepend(own)));
+}
+
+/**
  * The window's title bar and edges: Return, Minimize, Maximize and Close at the end of the element's header, which
  * moves the window (a double click maximizes it), and the edges that resize it. All undone when the window goes.
  * @param {Detached} d
@@ -265,14 +282,14 @@ function gone(d, quiet) {
  */
 function addChrome(d, doc) {
   if (!d.header) return;
-  const chrome = d.chrome = new AbortController();
-  const { signal } = chrome;
+  const { signal } = (d.chrome = new AbortController());
   const act = (/** @type {string} */ action, /** @type {string} */ edge = '') =>
     send(PAGE.window, { action, name: NAME_PREFIX + d.key, edge: edge || null });
   const controls = doc.createElement('div');
   controls.className = 'window-controls detached-controls';
   // The pin that keeps the window above every other one, Return, a separator, then the window's own buttons.
   controls.append(pinButton(doc, d.key, act));
+  takeOwnClose(d.header, controls, signal);
   if (d.returnable !== false) {
     const back = doc.createElement('button');
     back.innerHTML = RETURN_ICON;

@@ -73,6 +73,8 @@
 
   <ItemGroup>
     <None Include="wwwroot\**\*" CopyToOutputDirectory="PreserveNewest" />
+    <!-- What's new reads the release notes (js/whatsnew.js). -->
+    <None Include="..\..\CHANGELOG.md" Link="wwwroot\CHANGELOG.md" CopyToOutputDirectory="PreserveNewest" />
     <!-- The logo the closing screen shows (js/closing.js), as the Linux build ships it for its loader. -->
     <None Include="Assets\loader\mark-*.png" Link="wwwroot\assets\loader\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <!-- Shell integration scripts terminals load (see SessionProfiles.WithShellIntegration). -->
