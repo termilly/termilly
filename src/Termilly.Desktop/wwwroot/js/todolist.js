@@ -48,13 +48,29 @@ export function parseTask(line) {
 }
 
 /**
- * A line typed into the add field with one of its tags taken out, wherever it's written (`#tag` or `:tag:`).
- * @param {string} line
- * @param {string} tag
+ * A tag finished in a line being typed, a word of its own: `#tag` once a space follows it, `:tag:` once its closing
+ * colon is in. The space after it goes with it.
  */
-export const withoutTag = (line, tag) => line
-  .replace(TAG_IN_TEXT, (match, before, hashed, colons) => ((hashed ?? colons).toLowerCase() === tag ? before : match))
-  .replace(/\s{2,}/g, ' ').replace(/^\s+/, '');
+const TAG_FINISHED = new RegExp(`(?<=^|\\s)(?:#${TAG_NAME}\\s|:${TAG_NAME}:(?:\\s|$))`, 'gu');
+
+/**
+ * The add field's line with the tags finished in it taken out (they show as chips under it), and where the caret goes.
+ * @param {string} line
+ * @param {number} caret
+ * @returns {{ text: string, tags: string[], caret: number }}
+ */
+export function takeTags(line, caret) {
+  /** @type {string[]} */
+  const tags = [];
+  let moved = 0;
+  const text = line.replace(TAG_FINISHED, (match, hashed, colons, at) => {
+    const name = (hashed ?? colons).toLowerCase();
+    if (!tags.includes(name)) tags.push(name);
+    if (at < caret) moved += Math.min(match.length, caret - at);
+    return '';
+  });
+  return { text, tags, caret: caret - moved };
+}
 
 /** A `:tag` being typed: a colon starting a word, and what's typed of the name, right before the caret. */
 const TAG_TYPED = new RegExp(`(^|\\s):([\\p{L}\\p{N}_-]{0,${MAX_TAG_LENGTH}})$`, 'u');

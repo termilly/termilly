@@ -26,7 +26,7 @@ import { COPY_LABEL } from './termclipboard.js';
 import { dockPanel, NOTEPAD_DOCK } from './dockpanel.js';
 import { TAG_LIST, swatchesHtml } from './tagpicker.js';
 import {
-  parseTask, withoutTag, tasksFromLines, splitNote, tagOfHeading, openCount, tagsIn, withTags, retag, moveBefore, labelsForTags, issueBody, treeRows, found,
+  parseTask, takeTags, tasksFromLines, splitNote, tagOfHeading, openCount, tagsIn, withTags, retag, moveBefore, labelsForTags, issueBody, treeRows, found,
   detailLines, subProgress, statusOf, taskMatches, inPlace, TASK_STATUS, STATUS_NAME,
 } from './todolist.js';
 import {
@@ -1524,8 +1524,11 @@ listEl.addEventListener('drop', e => {
   reorderTasks(current, tasks => moveBefore(tasks, id, /** @type {string} */ (over.dataset.task)));
 });
 
+/** The tags typed in the add field (`:tag:`, `#tag`, or picked from the suggestions), taken out of it as chips under it. */
+let addTags = /** @type {string[]} */ ([]);
+
 // `:` starts a tag: the tags there are show under it. Wired first, so Enter picks one while they show.
-tagCompletion(addField, { taken: () => parseTask(addField.value).tags });
+tagCompletion(addField, { taken: () => [...addTags, ...parseTask(addField.value).tags], chosen: tag => addTagChips([tag]) });
 /** The editors' task fields with tag suggestions; each edit draws a new one. */
 const completing = new WeakSet();
 listEl.addEventListener('focusin', e => {
@@ -1535,30 +1538,53 @@ listEl.addEventListener('focusin', e => {
   tagCompletion(field, { taken: () => editTags, chosen: tag => { if (!editTags.includes(tag)) toggleEditTag(tag); } });
 });
 
-/** The tags typed in the add field (`:tag:`, `#tag`, or picked from the suggestions), as chips under it. */
+/** The add field's tags, as chips under it. */
 function renderAddTags() {
-  const { tags } = parseTask(addField.value);
-  addTagsEl.hidden = !tags.length;
-  addTagsEl.innerHTML = tags.map(tag => `<span class="td-chip" ${chipStyle(tag)}>${escapeHtml(tag)}<button type="button" class="td-chip-drop" data-td="${ACTION.dropAddTag}" data-tag="${escapeHtml(tag)}" title="Remove" aria-label="Remove ${escapeHtml(tag)}">${ICONS.close}</button></span>`).join('');
+  addTagsEl.hidden = !addTags.length;
+  addTagsEl.innerHTML = addTags.map(tag => `<span class="td-chip" ${chipStyle(tag)}>${escapeHtml(tag)}<button type="button" class="td-chip-drop" data-td="${ACTION.dropAddTag}" data-tag="${escapeHtml(tag)}" title="Remove" aria-label="Remove ${escapeHtml(tag)}">${ICONS.close}</button></span>`).join('');
+}
+
+/** @param {string[]} tags */
+function addTagChips(tags) {
+  const fresh = tags.filter(tag => !addTags.includes(tag));
+  if (!fresh.length) return;
+  addTags = [...addTags, ...fresh];
+  renderAddTags();
 }
 
 /**
- * A chip's × under the add field: the tag goes from what's typed.
+ * A chip's × under the add field: the tag goes from the new task.
  * @param {string} tag
  */
 function dropAddTag(tag) {
-  addField.value = withoutTag(addField.value, tag);
+  addTags = addTags.filter(t => t !== tag);
   renderAddTags();
   addField.focus();
 }
 
-addField.addEventListener('input', renderAddTags);
+// A tag finished in the field (`#tag ` or `:tag:`) leaves it for a chip under it.
+addField.addEventListener('input', () => {
+  const taken = takeTags(addField.value, addField.selectionStart ?? addField.value.length);
+  if (!taken.tags.length) return;
+  addField.value = taken.text;
+  addField.setSelectionRange(taken.caret, taken.caret);
+  addTagChips(taken.tags);
+});
 addField.addEventListener('keydown', e => {
+  // Backspace in an empty field takes the last chip back off.
+  if (e.key === 'Backspace' && !addField.value && addTags.length) {
+    e.preventDefault();
+    addTags = addTags.slice(0, -1);
+    renderAddTags();
+    return;
+  }
   if (e.key !== 'Enter' || !addField.value.trim() || !current) return;
   e.preventDefault();
-  const task = parseTask(addField.value);
-  if (!task.text) return;
+  const typed = parseTask(addField.value);
+  if (!typed.text) return;
+  const task = { text: typed.text, tags: [...addTags, ...typed.tags.filter(tag => !addTags.includes(tag))] };
   addField.value = '';
+  addTags = [];
   renderAddTags();
   addTasks(current, [task]);
 });
