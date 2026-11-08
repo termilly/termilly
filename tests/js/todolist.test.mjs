@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   parseTask, tasksFromLines, tasksFromNote, tagOfHeading, selectedLines, withoutLines, openCount, tagsIn, allTags, withTags, moveBefore,
   labelsForTags, retag, splitNote, hoverLines, treeRows, detailLines, tickSub, tickByNumber, linkSub, subProgress, implementPrompt, statusOf, TASK_STATUS, HOVER_TASKS,
-  taskMatches, inPlace, outOfSightPrompt,
+  taskMatches, inPlace, silentPrompt,
 } from '../../src/Termilly.Desktop/wwwroot/js/todolist.js';
 
 const task = (id, more = {}) => ({ id, text: id, created: 0, ...more });
@@ -257,14 +257,14 @@ test('a task done while its list is shown stays in place; others done go to the 
   assert.deepEqual(done.map(t => t.id), ['d']);
 });
 
-test('out of sight asks for a summary and names no tools to call back', () => {
+test('Silent asks for a summary and names no tools to call back', () => {
   const t = task('Rotate the key', { details: 'Before Friday.\n[x] Find it\n[] Rotate it' });
-  const prompt = outOfSightPrompt(t);
+  const prompt = silentPrompt(t);
   assert.match(prompt, /Rotate the key/);
   assert.match(prompt, /Before Friday/);
   assert.match(prompt, /1\) Rotate it/);
   assert.doesNotMatch(prompt, /Find it/);
   assert.match(prompt, /reply with a short summary/);
   assert.doesNotMatch(prompt, /finish_task|termilly tasks/);
-  assert.match(outOfSightPrompt(t, detailLines(t.details)[2]), /step of my task 'Rotate the key': 'Rotate it'/);
+  assert.match(silentPrompt(t, detailLines(t.details)[2]), /step of my task 'Rotate the key': 'Rotate it'/);
 });

@@ -1,14 +1,13 @@
 // @ts-check
-// Claude Code working on a task out of sight asks the user for what it isn't allowed to do (the termilly MCP server's
-// ask_permission, as its --permission-prompt-tool: AskingRun.cs). The task's row shows what it wants, with Allow, Allow
-// all and Deny (js/todopanel.js), and the run waits for the answer. Asks that come while one is shown wait their turn.
+// Claude Code working on a task silently (Implement's Silent) asks the user for what it isn't allowed to do (the termilly
+// MCP server's ask_permission, as its --permission-prompt-tool: AskingRun.cs). The task's row shows what it wants, with
+// Allow, Allow all and Deny (js/todopanel.js), and the run waits for the answer. Asks that come while one is shown wait
+// their turn. With To do's Allow all in Silent runs on, nobody is asked: it gets what it asks for at once.
 
-import { send } from './host.js';
-import { PAGE } from './protocol.js';
-import { getSetting } from './store.js';
+import { state } from './store.js';
 import { AGENT_STATE } from './constants.js';
-import { windowInFront } from './windowshown.js';
 import { showToast, TOAST } from './toasts.js';
+import { alertTask, withdrawTask } from './notify.js';
 import { findTask, updateTask } from './todo.js';
 
 /** The user's answers. */
@@ -67,13 +66,11 @@ function show(taskId, run) {
  */
 function tell(task, ask) {
   showToast({ text: `“${task.text}” needs you: Allow or Deny in To do`, state: TOAST.done });
-  if (getSetting('notifications.needsInput')) {
-    send(PAGE.phoneAlert, { id: task.id, state: AGENT_STATE.needsInput, title: `Needs you: ${task.text}`, body: `${ask.verb} ${ask.what}`, inFront: windowInFront() });
-  }
+  alertTask(task, AGENT_STATE.needsInput, `${ask.verb} ${ask.what}`);
 }
 
 /**
- * Claude Code asks, out of sight, for a tool it may not use: the answer, once the user gives it.
+ * Claude Code asks, silently, for a tool it may not use: the answer, once the user gives it.
  * @param {string} run
  * @param {TodoTask} task
  * @param {string} tool
@@ -85,7 +82,7 @@ export function askUser(run, task, tool, input) {
   runs.set(run, asking);
   /** @type {Answer} */
   const allow = { behavior: ASK.allow, updatedInput: input ?? {} };
-  if (asking.allowAll) return Promise.resolve(allow);
+  if (asking.allowAll || state.todo.allowAll) return Promise.resolve(allow);
   return new Promise(resolve => {
     const ask = describeAsk(tool, input);
     asking.waiting.push({ taskId: task.id, ask, allow, resolve });
@@ -103,13 +100,27 @@ export function askUser(run, task, tool, input) {
 export function answerAsk(task, choice) {
   const asking = task.run ? runs.get(task.run) : null;
   if (!asking || !task.run) return;
-  send(PAGE.phoneWithdraw, { id: task.id });
+  withdrawTask(task);
   if (choice === ASK.all) asking.allowAll = true;
   const answered = choice === ASK.all ? asking.waiting.splice(0) : asking.waiting.splice(0, 1);
   for (const waiting of answered) waiting.resolve(choice === ASK.deny ? { behavior: ASK.deny, message: DENIED } : waiting.allow);
   show(task.id, task.run);
   const next = asking.waiting[0];
   if (next) tell(task, next.ask);
+}
+
+/**
+ * Allow all in Silent runs was turned on: what the runs ask now waits for nobody.
+ */
+export function allowWaiting() {
+  for (const [run, asking] of runs) {
+    const taskId = asking.waiting[0]?.taskId;
+    for (const waiting of asking.waiting.splice(0)) waiting.resolve(waiting.allow);
+    const found = taskId ? findTask(taskId) : null;
+    if (!found) continue;
+    withdrawTask(found.task);
+    show(found.task.id, run);
+  }
 }
 
 /**

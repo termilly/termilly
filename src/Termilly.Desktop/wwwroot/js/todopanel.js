@@ -10,8 +10,8 @@ import { send, onHost } from './host.js';
 import { state, on, persist, newId, wsById, tabsOf, tabTitle, EVENTS } from './store.js';
 import { focusTab } from './panes.js';
 import { AGENT_COMMAND, agentInstalled, agentWorking, folderOfList as folderOf, isOnGitHub, checkRepo, implementTask, keepIssue } from './todoactions.js';
-import { implementOutOfSight, stopRun } from './todorun.js';
-import { answerAsk, ASK } from './todoask.js';
+import { implementSilently, stopRun } from './todorun.js';
+import { answerAsk, allowWaiting, ASK } from './todoask.js';
 import { openTagManager } from './todotags.js';
 import { escapeHtml, cssColor, tabBadgeHtml, countText, ICONS } from './ui.js';
 import { byId, find, targetOf, WORKSPACE_ID, DOCK_GRIP, PANEL_HEAD, TOOL_COUNT } from './dom.js';
@@ -69,7 +69,7 @@ const ACTION = Object.freeze({
   cancel: 'cancel', label: 'label', create: 'create', backToList: 'backToList', pickTags: 'pickTags', dropTag: 'dropTag', manageTags: 'manageTags',
   implement: 'implement', issue: 'issue', openIssue: 'openIssue', status: 'status', agentTerminal: 'agentTerminal', accept: 'accept', reopen: 'reopen',
   edit: 'edit', remove: 'remove', expand: 'expand', stopRun: 'stopRun', scope: 'scope', clearSearch: 'clearSearch', searchToggle: 'searchToggle',
-  allow: 'allow', allowAll: 'allowAll', deny: 'deny', filter: 'filter',
+  allow: 'allow', allowAll: 'allowAll', deny: 'deny', filter: 'filter', settings: 'settings',
 });
 /** How long after the last key a note is saved. */
 const NOTE_SAVE_MS = 400;
@@ -92,6 +92,7 @@ panel.innerHTML = `
     <span class="files-tools">
       <button class="pane-btn td-note-btn" data-td="${ACTION.note}" title="Show or hide this list’s note" hidden>${ICONS.note}</button>
       <button class="pane-btn" data-td="${ACTION.manageTags}" title="Manage tags">${ICONS.tag}</button>
+      <button class="pane-btn" data-td="${ACTION.settings}" title="To do settings" aria-haspopup="menu">${ICONS.settings}</button>
       <span class="np-sep"></span>
       <button class="pane-btn" data-td="${ACTION.detach}" title="Detach to a window">${ICONS.detach}</button>
       <button class="pane-btn" data-td="${ACTION.close}" title="Close (Ctrl+Shift+K)">${ICONS.close}</button>
@@ -248,7 +249,7 @@ function rowHtml(task, elsewhere) {
  */
 function agentHtml(task) {
   if (task.run && statusOf(task) === TASK_STATUS.progress) {
-    return `<span class="td-agent td-hidden-run">${AGENT_COMMAND} out of sight<button type="button" class="td-stop" data-td="${ACTION.stopRun}" title="Stop it: the task goes back to Open">Stop</button></span>`;
+    return `<span class="td-agent td-hidden-run">${AGENT_COMMAND}, silently<button type="button" class="td-stop" data-td="${ACTION.stopRun}" title="Stop it: the task goes back to Open">Stop</button></span>`;
   }
   const tab = task.terminal ? state.tabs.get(task.terminal) : null;
   return tab ? `<button type="button" class="td-agent" data-td="${ACTION.agentTerminal}" data-tab="${escapeHtml(tab.id)}" title="Go to its terminal">${AGENT_COMMAND} in ${escapeHtml(tabTitle(tab))}</button>` : '';
@@ -326,7 +327,7 @@ function actsHtml(issue, isStep) {
   const folder = folderOfList();
   const canIssue = !issue && !!folder && isOnGitHub(folder);
   return `<span class="td-acts">
-    ${agentInstalled() ? `<button type="button" class="pane-btn" data-td="${ACTION.implement}" ${folder ? '' : 'disabled'} title="${folder ? 'Implement: Claude Code works on it, in a new terminal or out of sight' : 'Implement needs a folder on this computer'}">${ICONS.play}</button>` : ''}
+    ${agentInstalled() ? `<button type="button" class="pane-btn" data-td="${ACTION.implement}" ${folder ? '' : 'disabled'} title="${folder ? 'Implement: Claude Code works on it, in a new terminal or silently' : 'Implement needs a folder on this computer'}">${ICONS.play}</button>` : ''}
     ${isStep ? '' : `<button type="button" class="pane-btn" data-td="${ACTION.edit}" title="Edit">${ICONS.rename}</button>`}
     ${canIssue ? `<button type="button" class="pane-btn" data-td="${ACTION.issue}" title="Create GitHub issue">${ICONS.git}</button>` : ''}
     ${isStep ? '' : `<button type="button" class="pane-btn" data-td="${ACTION.remove}" title="Delete">${ICONS.trash}</button>`}
@@ -1067,7 +1068,7 @@ function changeStatus(task, status) {
 }
 
 /**
- * Implement's two ways: in a new terminal, where you can watch and answer it, or out of sight, as a schedule's agent runs.
+ * Implement's two ways: in a new terminal, where you can watch and answer it, or Silent, as a schedule's agent runs.
  * @param {HTMLElement} at
  * @param {TodoTask} task
  * @param {import('./todolist.js').DetailLine} [step]
@@ -1075,12 +1076,39 @@ function changeStatus(task, status) {
 function implementMenu(at, task, step) {
   const ref = current;
   if (!ref) return;
+  const asks = state.todo.allowAll ? 'gets whatever else it asks for (To do settings)' : 'asks in the task’s row for anything else';
   showMenu([
     { label: 'In a new terminal', icon: ICONS.terminal, title: 'Claude Code starts in a new terminal in this list’s folder, where you can watch it and answer it', action: () => implementTask(ref, task, step) },
     {
-      label: 'Out of sight', icon: ICONS.play, title: 'Claude Code works in a hidden shell, changing files without asking, as a schedule’s agent does. The task goes to Review with its reply',
+      label: 'Silent', icon: ICONS.play, title: `Nobody is watching: Claude Code works in a hidden shell, changes files without asking and ${asks}. The task goes to Review with its reply`,
       action: () => {
-        if (!implementOutOfSight(ref, task, step)) showToast({ text: 'Claude Code can’t start out of sight here: this list needs a folder on this computer', state: TOAST.failed });
+        if (!implementSilently(ref, task, step)) showToast({ text: 'Claude Code can’t start silently here: this list needs a folder on this computer', state: TOAST.failed });
+      },
+    },
+  ], at);
+}
+
+/**
+ * To do's settings, under its header's button: each is ticked while it's on.
+ * @param {HTMLElement} at
+ */
+function settingsMenu(at) {
+  showMenu([
+    {
+      label: 'Always notify', checked: !!state.todo.alwaysNotify,
+      title: 'When a task waits for review, needs you or its Silent run fails: a desktop notification, and the phones, even while you’re at the PC',
+      action: () => {
+        state.todo.alwaysNotify = !state.todo.alwaysNotify;
+        persist();
+      },
+    },
+    {
+      label: 'Allow all in Silent runs', checked: !!state.todo.allowAll,
+      title: 'Claude Code working silently gets whatever it asks for, without waiting for Allow',
+      action: () => {
+        state.todo.allowAll = !state.todo.allowAll;
+        persist();
+        if (state.todo.allowAll) allowWaiting();
       },
     },
   ], at);
@@ -1271,6 +1299,7 @@ function panelAct(control) {
       if (list) setNote(list.ref.kind, noteTarget(list.ref), noteArea.value.trim(), !list.pinned);
       return render();
     }
+    case ACTION.settings: return settingsMenu(control);
     case ACTION.detach: return void dock.detach();
     case ACTION.close: return dock.hide();
     case ACTION.fold:
@@ -1484,3 +1513,8 @@ for (const event of [EVENTS.focus, EVENTS.workspaces, EVENTS.tab]) {
 }
 // Claude Code in a task's terminal started or stopped working: its mark spins or stops.
 for (const event of [EVENTS.agent, EVENTS.tab]) on(event, showWorking);
+// A task's desktop notification was clicked (Always notify, js/notify.js): its list opens.
+onHost(HOST.focusTerminal, m => {
+  const found = findTask(m.id);
+  if (found) openList(found.ref);
+});

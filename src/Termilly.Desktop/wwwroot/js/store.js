@@ -102,9 +102,10 @@ export const getSetting = path => {
  */
 /**
  * To do's panel: open or closed, the list it shows, where it docks, and the SSH hosts' tasks by profile (js/todo.js).
+ * Its settings: alwaysNotify, a task's news always reaches the user; allowAll, Silent runs get what they ask for.
  * @typedef {{ open: boolean, list?: { kind: string, id: string } | null, width?: number, height?: number, side?: string,
  *   detached?: boolean, hosts?: Record<string, TodoTask[]>, onlyWithTasks?: boolean, tags?: string[], tagColors?: Record<string, string>, showDone?: boolean,
- *   searchAll?: boolean }} TodoState
+ *   searchAll?: boolean, alwaysNotify?: boolean, allowAll?: boolean }} TodoState
  */
 
 /**

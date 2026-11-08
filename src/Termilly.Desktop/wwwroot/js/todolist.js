@@ -311,12 +311,12 @@ export function implementPrompt(task, sub) {
 }
 
 /**
- * What Implement asks an agent working out of sight: the same task or step, with no tools to call back. Its reply is what
+ * What Implement asks an agent working silently (Silent): the same task or step, with no tools to call back. Its reply is what
  * Review shows, so it's asked to say what it did.
  * @param {TodoTask} task
  * @param {DetailLine} [sub]
  */
-export function outOfSightPrompt(task, sub) {
+export function silentPrompt(task, sub) {
   const lines = detailLines(task.details);
   const ask = ' Nobody is watching, so do not wait for answers. When you finish, reply with a short summary of what you did and what is left, first line first.';
   if (sub) return `Work on this step of my task '${oneLine(task.text)}': '${oneLine(sub.text)}'.${ask}`;
