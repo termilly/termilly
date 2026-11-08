@@ -114,6 +114,8 @@ function pick(c, tag) {
   const put = c.chosen ? '' : `:${tag}: `;
   field.value = before + put + after;
   field.setSelectionRange(before.length + put.length, before.length + put.length);
+  // What listens to the field sees the tag put in (the add field's chips).
+  field.dispatchEvent(new Event('input', { bubbles: true }));
   c.chosen?.(tag);
   field.focus();
 }

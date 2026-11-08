@@ -26,7 +26,7 @@ import { COPY_LABEL } from './termclipboard.js';
 import { dockPanel, NOTEPAD_DOCK } from './dockpanel.js';
 import { TAG_LIST, swatchesHtml } from './tagpicker.js';
 import {
-  parseTask, tasksFromLines, splitNote, tagOfHeading, openCount, tagsIn, withTags, retag, moveBefore, labelsForTags, issueBody, treeRows, found,
+  parseTask, withoutTag, tasksFromLines, splitNote, tagOfHeading, openCount, tagsIn, withTags, retag, moveBefore, labelsForTags, issueBody, treeRows, found,
   detailLines, subProgress, statusOf, taskMatches, inPlace, TASK_STATUS, STATUS_NAME,
 } from './todolist.js';
 import {
@@ -72,6 +72,7 @@ const WINDOW_KEY = 'todo';
 const ACTION = Object.freeze({
   pick: 'pick', note: 'note', pin: 'pin', detach: 'detach', close: 'close', fold: 'fold', tag: 'tag', more: 'more', save: 'save',
   cancel: 'cancel', label: 'label', create: 'create', backToList: 'backToList', pickTags: 'pickTags', dropTag: 'dropTag', manageTags: 'manageTags',
+  dropAddTag: 'dropAddTag',
   implement: 'implement', issue: 'issue', openIssue: 'openIssue', status: 'status', agentTerminal: 'agentTerminal', accept: 'accept', reopen: 'reopen',
   edit: 'edit', remove: 'remove', expand: 'expand', stopRun: 'stopRun', scope: 'scope', clearSearch: 'clearSearch', searchToggle: 'searchToggle',
   allow: 'allow', allowAll: 'allowAll', deny: 'deny', filter: 'filter', foldActive: 'foldActive', clearActive: 'clearActive', clearDone: 'clearDone', settings: 'settings',
@@ -113,6 +114,7 @@ panel.innerHTML = `
       <button type="button" class="pane-btn td-search-btn" data-td="${ACTION.searchToggle}" title="Search tasks (Ctrl+F)" aria-label="Search tasks" aria-expanded="false">${ICONS.search}</button>
       <button type="button" class="pane-btn td-search-btn td-filter-btn" data-td="${ACTION.filter}" title="Filter by tag" aria-label="Filter by tag" aria-haspopup="listbox">${ICONS.filter}<span class="td-filter-count" hidden></span></button>
     </div>
+    <div class="td-add-tags" hidden></div>
     <div class="td-search" hidden>
       <input class="td-search-text" spellcheck="false" autocomplete="off" placeholder="Search tasks" aria-label="Search tasks">
       <button type="button" class="td-search-clear" data-td="${ACTION.clearSearch}" title="Clear the search" aria-label="Clear the search" hidden>${ICONS.close}</button>
@@ -136,6 +138,7 @@ const noteBox = find(panel, '.td-note');
 const noteArea = /** @type {HTMLTextAreaElement} */ (find(panel, '.td-note-text'));
 const pinButton = find(panel, '.td-pin');
 const addField = /** @type {HTMLInputElement} */ (find(panel, '.td-add'));
+const addTagsEl = find(panel, '.td-add-tags');
 const filterButton = find(panel, '.td-filter-btn');
 const filterCount = find(panel, '.td-filter-count');
 const listEl = find(panel, '.td-list');
@@ -1447,6 +1450,7 @@ function panelAct(control) {
     case ACTION.pickTags: return pickTags(control);
     case ACTION.manageTags: return openTagManager(control, retagged);
     case ACTION.dropTag: return toggleEditTag(/** @type {string} */ (control.dataset.tag));
+    case ACTION.dropAddTag: return dropAddTag(/** @type {string} */ (control.dataset.tag));
     default: return issueAct(control);
   }
 }
@@ -1531,12 +1535,31 @@ listEl.addEventListener('focusin', e => {
   tagCompletion(field, { taken: () => editTags, chosen: tag => { if (!editTags.includes(tag)) toggleEditTag(tag); } });
 });
 
+/** The tags typed in the add field (`:tag:`, `#tag`, or picked from the suggestions), as chips under it. */
+function renderAddTags() {
+  const { tags } = parseTask(addField.value);
+  addTagsEl.hidden = !tags.length;
+  addTagsEl.innerHTML = tags.map(tag => `<span class="td-chip" ${chipStyle(tag)}>${escapeHtml(tag)}<button type="button" class="td-chip-drop" data-td="${ACTION.dropAddTag}" data-tag="${escapeHtml(tag)}" title="Remove" aria-label="Remove ${escapeHtml(tag)}">${ICONS.close}</button></span>`).join('');
+}
+
+/**
+ * A chip's × under the add field: the tag goes from what's typed.
+ * @param {string} tag
+ */
+function dropAddTag(tag) {
+  addField.value = withoutTag(addField.value, tag);
+  renderAddTags();
+  addField.focus();
+}
+
+addField.addEventListener('input', renderAddTags);
 addField.addEventListener('keydown', e => {
   if (e.key !== 'Enter' || !addField.value.trim() || !current) return;
   e.preventDefault();
   const task = parseTask(addField.value);
   if (!task.text) return;
   addField.value = '';
+  renderAddTags();
   addTasks(current, [task]);
 });
 

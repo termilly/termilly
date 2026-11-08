@@ -3340,6 +3340,10 @@ body.detached-window .files-head .np-sep { height: 18px; margin: 0 0 0 1px; back
 .td-pin[aria-pressed="true"] { color: var(--accent); }
 .td-addbar { display: flex; flex: none; align-items: center; gap: 4px; margin: 8px 10px 6px; }
 .td-add { flex: 1; box-sizing: border-box; width: auto; min-width: 0; margin: 0; }
+/* The tags typed in the add field, as chips under it. */
+.td-add-tags { display: flex; flex: none; flex-wrap: wrap; align-items: center; gap: 4px; margin: -2px 10px 6px; }
+.td-add-tags[hidden] { display: none; }
+.td-add-tags .td-chip { display: inline-flex; align-items: center; gap: 3px; cursor: default; }
 .pane-btn.td-search-btn { flex: none; width: 30px; height: 30px; border: 1px solid transparent; border-radius: 7px; opacity: 1; }
 .pane-btn.td-search-btn.open { border-color: var(--accent); }
 .pane-btn.td-search-btn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1; }

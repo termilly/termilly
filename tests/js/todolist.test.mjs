@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   parseTask, tasksFromLines, tasksFromNote, tagOfHeading, selectedLines, withoutLines, openCount, tagsIn, allTags, withTags, moveBefore,
   labelsForTags, retag, splitNote, hoverLines, treeRows, detailLines, tickSub, tickByNumber, linkSub, subProgress, implementPrompt, statusOf, TASK_STATUS, HOVER_TASKS,
-  taskMatches, inPlace, silentPrompt, tagTypedAt, tagSuggestions, TAG_SUGGESTIONS,
+  taskMatches, inPlace, silentPrompt, tagTypedAt, tagSuggestions, TAG_SUGGESTIONS, withoutTag,
 } from '../../src/Termilly.Desktop/wwwroot/js/todolist.js';
 
 const task = (id, more = {}) => ({ id, text: id, created: 0, ...more });
@@ -284,4 +284,12 @@ test('Silent asks for a summary and names no tools to call back', () => {
   assert.match(prompt, /reply with a short summary/);
   assert.doesNotMatch(prompt, /finish_task|termilly tasks/);
   assert.match(silentPrompt(t, detailLines(t.details)[2]), /step of my task 'Rotate the key': 'Rotate it'/);
+});
+
+test('a tag taken out of the add field goes wherever it is written, other tags and words stay', () => {
+  assert.equal(withoutTag('Fix :bug: the #UI now', 'bug'), 'Fix the #UI now');
+  assert.equal(withoutTag('Fix the #UI now', 'ui'), 'Fix the now');
+  assert.equal(withoutTag(':bug: fix #bug', 'bug'), 'fix ');
+  assert.equal(withoutTag('Fix :bug: ', 'bug'), 'Fix ');
+  assert.equal(withoutTag('12:30 :bugs:', 'bug'), '12:30 :bugs:');
 });

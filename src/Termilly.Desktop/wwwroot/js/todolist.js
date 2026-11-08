@@ -47,6 +47,15 @@ export function parseTask(line) {
   return { text, tags };
 }
 
+/**
+ * A line typed into the add field with one of its tags taken out, wherever it's written (`#tag` or `:tag:`).
+ * @param {string} line
+ * @param {string} tag
+ */
+export const withoutTag = (line, tag) => line
+  .replace(TAG_IN_TEXT, (match, before, hashed, colons) => ((hashed ?? colons).toLowerCase() === tag ? before : match))
+  .replace(/\s{2,}/g, ' ').replace(/^\s+/, '');
+
 /** A `:tag` being typed: a colon starting a word, and what's typed of the name, right before the caret. */
 const TAG_TYPED = new RegExp(`(^|\\s):([\\p{L}\\p{N}_-]{0,${MAX_TAG_LENGTH}})$`, 'u');
 /** How many tags the suggestions under a `:` show. */
