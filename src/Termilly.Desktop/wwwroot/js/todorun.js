@@ -9,7 +9,8 @@
 import { PAGE, HOST } from './protocol.js';
 import { send, onHost } from './host.js';
 import { state, on, newId, sourceOf, EVENTS } from './store.js';
-import { PROFILE_SOURCE, AGENT_STATE } from './constants.js';
+import { PROFILE_SOURCE, PROFILE_ICON, AGENT_STATE } from './constants.js';
+import { quoteArg } from './quoting.js';
 import { addApiMethods } from './api.js';
 import { askUser, endAsking } from './todoask.js';
 import { agentCommand, readResult, AGENT_COMMAND } from './agentcli.js';
@@ -39,6 +40,13 @@ const going = new Map();
 export const isRunning = run => going.has(run);
 
 /**
+ * A command for an SSH host, in its user's login shell: ssh runs one without the login files, and those are what put Claude Code
+ * on PATH (~/.local/bin, where its installer puts it). It reads nothing, so it doesn't wait for input that never comes.
+ * @param {string} command
+ */
+const loginShell = command => `"$SHELL" -l -c ${quoteArg(`${command} < /dev/null`, PROFILE_ICON.ssh)}`;
+
+/**
  * Starts Claude Code silently on a task, or one of its sub-items, in the list's folder.
  * @param {ListRef} ref
  * @param {TodoTask} task
@@ -53,7 +61,8 @@ export function implementSilently(ref, task, sub) {
   // A shell on this computer reaches Termilly's pipe, so Claude Code there can ask the user.
   const ask = sourceOf(profile) === PROFILE_SOURCE.local;
   const all = !ask && state.todo.allowAll === true;
-  const command = agentCommand(silentPrompt(task, sub), { shell: profile.shellIcon ?? profile.icon, changes: true, all, json: true, ask });
+  const agent = agentCommand(silentPrompt(task, sub), { shell: profile.shellIcon ?? profile.icon, changes: true, all, json: true, ask });
+  const command = place.server ? loginShell(agent) : agent;
   going.set(run, { taskId: task.id, line: sub?.at });
   setStatus(ref, task.id, TASK_STATUS.progress, { run });
   send(PAGE.scheduleRun, { runId: run, profile: profile.id, cwd: folder, command, limitSeconds: LIMIT_SECONDS, ask });
