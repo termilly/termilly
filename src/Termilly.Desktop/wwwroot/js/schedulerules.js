@@ -263,7 +263,7 @@ export function sortRuns(runs, schedules, now) {
  */
 export function newSchedule(id) {
   return {
-    id, name: '', on: true, what: WHAT.command, command: '', snippet: '', prompt: '', allowChanges: false, replyInNotice: true,
+    id, name: '', on: true, what: WHAT.command, command: '', snippet: '', prompt: '', allowChanges: false, allowAll: false, replyInNotice: true,
     toNotepad: false, notepadPage: REPORTS_PAGE, toFile: false, file: REPORT_FILE, where: WHERE.hidden, profile: null, cwd: '', wsId: null,
     terminal: '', after: AFTER.closeIfWorked, busy: BUSY.wait, closed: CLOSED.open,
     when: { kind: WHEN.time, at: '20:00', days: [], every: 1, unit: UNIT.hours, from: '', to: '' },

@@ -69,12 +69,21 @@ const inputHtml = (name, value, placeholder = '', type = 'text') =>
 /** @param {SessionProfile[]} profiles */
 const profileOptions = profiles => profiles.map(p => /** @type {const} */ ([p.id, p.name]));
 
+/**
+ * What a run may do, as its boxes say. Nobody is asked: what it may not do is refused, and the run goes on.
+ * @param {Schedule} s
+ */
+function permissionsText(s) {
+  if (!s.allowChanges) return 'Read only: it can read files in its folder and fetch pages, but can’t change files or run commands. Your Claude Code settings aren’t used.';
+  if (s.allowAll) return 'With nobody watching, it does anything it decides to, with no permission checks: any command, any file, any tool. Only for prompts and folders you trust.';
+  return 'With nobody watching, it edits files without asking, and runs the commands your Claude Code settings allow for its folder. Anything else is refused and it goes on without it.';
+}
+
 /** @param {Schedule} s */
 const agentHtml = s => `<textarea class="field snippet-command sch-prompt" name="prompt" rows="5" spellcheck="false" placeholder="Summarize what changed in this repository today">${escapeHtml(s.prompt)}</textarea>
   <label class="note-pin"><input type="checkbox" name="allowChanges"${s.allowChanges ? ' checked' : ''}> Let it change files</label>
-  <p class="dialog-sub${s.allowChanges ? ' sch-warn' : ''}">${s.allowChanges
-    ? 'With nobody watching, it edits files without asking, and runs the commands your Claude Code settings allow. Anything else it asks for fails the run.'
-    : 'Read only: it can read files in its folder and fetch pages, but can’t change files or run commands. Your Claude Code settings aren’t used.'}</p>
+  ${s.allowChanges ? `<label class="note-pin"><input type="checkbox" name="allowAll"${s.allowAll ? ' checked' : ''}> Allow everything</label>` : ''}
+  <p class="dialog-sub${s.allowChanges ? ' sch-warn' : ''}">${permissionsText(s)}</p>
   <label class="note-pin"><input type="checkbox" name="replyInNotice"${s.replyInNotice ? ' checked' : ''}> Put its reply in the notification</label>`;
 
 /**

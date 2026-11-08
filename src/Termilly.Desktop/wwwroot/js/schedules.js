@@ -105,7 +105,7 @@ function tidyRuns() {
  */
 function commandOf(schedule) {
   if (schedule.what === WHAT.command) return schedule.command;
-  if (schedule.what === WHAT.agent) return agentCommand(schedule.prompt, { shell: shellOf(schedule), changes: schedule.allowChanges, json: isOutOfSight(schedule) });
+  if (schedule.what === WHAT.agent) return agentCommand(schedule.prompt, { shell: shellOf(schedule), changes: schedule.allowChanges, all: !!schedule.allowAll, json: isOutOfSight(schedule) });
   const found = [undefined, ...state.workspaces].flatMap(ws => allSnippets(ws)).find(s => s.name === schedule.snippet);
   return found ? fill(found.command, {}) : null;
 }

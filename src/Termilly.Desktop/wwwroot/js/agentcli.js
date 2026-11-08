@@ -26,6 +26,8 @@ const NOBODY_ASKS = Object.freeze(['--permission-prompts', 'none']);
 const READ_ONLY = Object.freeze(['--restricted', '--tools', READ_TOOLS, '--allowedTools', READ_TOOLS_ALLOWED]);
 /** Changes are allowed: files are edited without asking, and commands run as the user's own settings say. */
 const CHANGES = Object.freeze(['--permission-mode', 'acceptEdits']);
+/** Everything is allowed: where nobody can be asked (on a server), and To do's Allow all in Silent runs is on. */
+const EVERYTHING = Object.freeze(['--permission-mode', 'bypassPermissions']);
 
 /**
  * A prompt as a shell can pass it on. Windows PowerShell 5.1 breaks a program's argument at a double quote inside it, and
@@ -43,11 +45,13 @@ function promptFor(prompt, shell, typed) {
 /**
  * The command for a prompt.
  * @param {string} prompt
- * @param {{ shell?: string, changes?: boolean, json?: boolean, ask?: boolean }} options json: the answer comes as one result, to
- *   read; else as text, for a terminal someone may look at. ask: what it may not do it asks the user, through the host.
+ * @param {{ shell?: string, changes?: boolean, all?: boolean, json?: boolean, ask?: boolean }} options json: the answer comes as
+ *   one result, to read; else as text, for a terminal someone may look at. ask: what it may not do it asks the user, through the
+ *   host. all: with changes, it may do anything without asking.
  */
-export function agentCommand(prompt, { shell, changes = false, json = false, ask = false }) {
-  const words = [AGENT_COMMAND, '--print', promptFor(prompt, shell, !json), ...(json ? ['--output-format', 'json'] : []), ...(changes ? CHANGES : READ_ONLY), ...ALWAYS, ...(ask ? [] : NOBODY_ASKS)];
+export function agentCommand(prompt, { shell, changes = false, all = false, json = false, ask = false }) {
+  const allowed = changes ? (all ? EVERYTHING : CHANGES) : READ_ONLY;
+  const words = [AGENT_COMMAND, '--print', promptFor(prompt, shell, !json), ...(json ? ['--output-format', 'json'] : []), ...allowed, ...ALWAYS, ...(ask ? [] : NOBODY_ASKS)];
   return commandLine(words, shell);
 }
 
