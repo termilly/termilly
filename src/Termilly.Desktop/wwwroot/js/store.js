@@ -105,7 +105,7 @@ export const getSetting = path => {
  * Its settings: alwaysNotify, a task's news always reaches the user; allowAll, Silent runs get what they ask for.
  * @typedef {{ open: boolean, list?: { kind: string, id: string } | null, width?: number, height?: number, side?: string,
  *   detached?: boolean, hosts?: Record<string, TodoTask[]>, onlyWithTasks?: boolean, tags?: string[], tagColors?: Record<string, string>, showDone?: boolean,
- *   searchAll?: boolean, alwaysNotify?: boolean, allowAll?: boolean }} TodoState
+ *   hideActive?: boolean, searchAll?: boolean, alwaysNotify?: boolean, allowAll?: boolean }} TodoState
  */
 
 /**

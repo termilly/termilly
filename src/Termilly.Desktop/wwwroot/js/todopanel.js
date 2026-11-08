@@ -18,6 +18,7 @@ import { byId, find, targetOf, WORKSPACE_ID, DOCK_GRIP, PANEL_HEAD, TOOL_COUNT }
 import { showMenu, openPopover, closePopover, isOpen, closeAll, SEPARATOR } from './popups.js';
 import { showToast, TOAST } from './toasts.js';
 import { setNote } from './notes.js';
+import { choiceDialog, CHOICE } from './dialogs.js';
 import { KEY_ID } from './keymap.js';
 import { copyOut, textBoxMenu } from './textmenu.js';
 import { COPY_LABEL } from './termclipboard.js';
@@ -59,7 +60,10 @@ const TASK_TEXT = '.td-text';
 const ROW_CONTROL = 'button, input, .td-acts';
 /** A task found in another list, while searching every list. */
 const ELSEWHERE = '[data-elsewhere]';
+const EDIT_ROW = '.td-edit';
 const EDIT_TEXT = '.td-edit-text';
+/** A deletion's toast button that brings the tasks back. */
+const UNDO = 'Undo';
 const ISSUE_TITLE = '.td-issue-title';
 const ISSUE_BODY = '.td-issue-body';
 const WINDOW_KEY = 'todo';
@@ -69,7 +73,7 @@ const ACTION = Object.freeze({
   cancel: 'cancel', label: 'label', create: 'create', backToList: 'backToList', pickTags: 'pickTags', dropTag: 'dropTag', manageTags: 'manageTags',
   implement: 'implement', issue: 'issue', openIssue: 'openIssue', status: 'status', agentTerminal: 'agentTerminal', accept: 'accept', reopen: 'reopen',
   edit: 'edit', remove: 'remove', expand: 'expand', stopRun: 'stopRun', scope: 'scope', clearSearch: 'clearSearch', searchToggle: 'searchToggle',
-  allow: 'allow', allowAll: 'allowAll', deny: 'deny', filter: 'filter', settings: 'settings',
+  allow: 'allow', allowAll: 'allowAll', deny: 'deny', filter: 'filter', foldActive: 'foldActive', clearActive: 'clearActive', clearDone: 'clearDone', settings: 'settings',
 });
 /** How long after the last key a note is saved. */
 const NOTE_SAVE_MS = 400;
@@ -382,8 +386,22 @@ function listHtml(list) {
   }
   const { main, done } = inPlace(tasks, settled);
   const empty = !list.tasks.length ? `<p class="td-empty">${list.note ? 'No tasks. Right-click the note to turn its lines into tasks.' : 'Nothing here yet.'}</p>` : '';
-  const fold = done.length ? `<button class="td-fold" data-td="${ACTION.fold}" aria-expanded="${!!state.todo.showDone}">${state.todo.showDone ? ICONS.chevronDown : ICONS.chevronRight}Done<span class="td-fold-count">${done.length}</span></button>` : '';
-  return `${empty}${main.map(t => rowHtml(t)).join('')}${fold}${state.todo.showDone ? done.map(t => rowHtml(t)).join('') : ''}`;
+  const showActive = !state.todo.hideActive;
+  // Active counts those not done; one done while the list is shown stays in it, ticked, until it's shown again.
+  const active = main.length ? foldHtml('Active', main.filter(task => !task.done).length, showActive, ACTION.foldActive, ACTION.clearActive, 'Clear active tasks') : '';
+  const fold = done.length ? foldHtml(STATUS_NAME[TASK_STATUS.done], done.length, !!state.todo.showDone, ACTION.fold, ACTION.clearDone, 'Clear done tasks') : '';
+  return `${empty}${active}${showActive ? main.map(t => rowHtml(t)).join('') : ''}${fold}${state.todo.showDone ? done.map(t => rowHtml(t)).join('') : ''}`;
+}
+
+/**
+ * A group's header (Active, Done): its fold, how many it has, and its clear button at the end on hover.
+ * @param {string} name @param {number} count @param {boolean} open @param {string} fold @param {string} clear @param {string} clearLabel
+ */
+function foldHtml(name, count, open, fold, clear, clearLabel) {
+  return `<div class="td-fold-row">
+    <button class="td-fold" data-td="${fold}" aria-expanded="${open}">${open ? ICONS.chevronDown : ICONS.chevronRight}${name}<span class="td-fold-count">${count}</span></button>
+    <button type="button" class="pane-btn td-fold-clear" data-td="${clear}" title="${clearLabel}" aria-label="${clearLabel}"${count ? '' : ' disabled'}>${ICONS.trash}</button>
+  </div>`;
 }
 
 /** @typedef {import('./todo.js').TodoList} TodoList */
@@ -815,7 +833,7 @@ function pickList(at) {
 const taskById = id => shown()?.tasks.find(t => t.id === id) ?? null;
 
 function saveEdit() {
-  const row = listEl.querySelector('.td-edit');
+  const row = listEl.querySelector(EDIT_ROW);
   const list = shown();
   if (!row || !list || !editing) return;
   const text = /** @type {HTMLInputElement} */ (find(row, EDIT_TEXT)).value.trim();
@@ -1019,6 +1037,8 @@ function taskMenu(task, at) {
     ...issueItems(task),
     SEPARATOR,
     { label: 'Delete', icon: ICONS.trash, action: () => deleteTask(task) },
+    SEPARATOR,
+    ...clearItems(),
   ], at);
 }
 
@@ -1129,7 +1149,93 @@ function deleteTask(task) {
   const back = task.run ? { ...task, run: undefined, status: undefined } : task;
   showToast({
     text: `Deleted “${task.text}”`, state: TOAST.done,
-    action: { label: 'Undo', run: () => void (listOf(ref) && reorderTasks(ref, tasks => void tasks.splice(Math.max(0, at), 0, back))) },
+    action: { label: UNDO, run: () => void (listOf(ref) && reorderTasks(ref, tasks => void tasks.splice(Math.max(0, at), 0, back))) },
+  });
+}
+
+/**
+ * This list's tasks as they're shown: only those with the picked tags, and only what the search finds.
+ * @param {TodoList} list
+ */
+const visibleTasks = list => withTags(list.tasks, picked).filter(task => !query || taskMatches(task, query));
+
+/**
+ * This list's active tasks (open, in progress, in review) or its done ones, of those shown.
+ * @param {boolean} done
+ */
+function clearable(done) {
+  const list = shown();
+  return list ? visibleTasks(list).filter(task => !!task.done === done) : [];
+}
+
+/**
+ * Clear active tasks and Clear done tasks, for the list's right-click menus: greyed out when there's none.
+ * @returns {import('./popups.js').MenuItem[]}
+ */
+function clearItems() {
+  const narrowed = picked.length > 0 || !!query;
+  /** @param {boolean} done @param {string} label */
+  const item = (done, label) => {
+    const count = clearable(done).length;
+    return {
+      label, icon: ICONS.trash, hint: count ? String(count) : '', disabled: !count,
+      title: `Deletes this list’s ${done ? 'done' : 'open, in progress and in review'} tasks${narrowed ? ' that are shown' : ''}, with Undo`,
+      action: () => void clearTasks(done),
+    };
+  };
+  return [item(false, 'Clear active tasks'), item(true, 'Clear done tasks')];
+}
+
+/**
+ * Which active tasks to clear: when some are in progress, the user says whether to keep those (the rest go) or clear them
+ * all. Null when cancelled.
+ * @param {TodoTask[]} tasks
+ * @returns {Promise<TodoTask[] | null>}
+ */
+async function activeToClear(tasks) {
+  const busy = tasks.filter(task => statusOf(task) === TASK_STATUS.progress);
+  if (!busy.length) return tasks;
+  const others = tasks.length - busy.length;
+  const one = busy.length === 1;
+  const working = busy.some(task => task.run || agentWorking(task));
+  const answer = await choiceDialog({
+    title: one ? 'A task is in progress' : `${busy.length} tasks are in progress`,
+    body: `${one ? `“${busy[0].text}” is` : 'They are'} in progress${working ? `, and ${AGENT_COMMAND} is working on ${one ? 'it' : 'some'}` : ''}. `
+      + (others ? `Keep ${one ? 'it' : 'them'} and clear the other ${others === 1 ? 'task' : `${others} tasks`}, or clear all ${tasks.length}?` : `Clear ${one ? 'it' : 'them'} too?`)
+      + (busy.some(task => task.run) ? ' A silent run is stopped.' : ''),
+    keep: others ? `Keep ${one ? 'it' : 'them'}` : undefined,
+    danger: others ? 'Clear all' : 'Clear',
+  });
+  if (answer === CHOICE.keep) return tasks.filter(task => !busy.includes(task));
+  return answer === CHOICE.danger ? tasks : null;
+}
+
+/**
+ * Deletes this list's active tasks, or its done ones (those shown), with Undo. Those running out of sight are stopped first.
+ * Clearing active ones asks first when some are in progress.
+ * @param {boolean} done
+ */
+async function clearTasks(done) {
+  const ref = current;
+  if (!ref || !shown()) return;
+  const chosen = done ? clearable(done) : await activeToClear(clearable(done));
+  // The list as it is now: it can change while the question is up.
+  const list = listOf(ref);
+  if (!chosen || !list) return;
+  const gone = new Set(chosen.map(task => task.id));
+  if (!gone.size) return;
+  // Each with where it was, to put it back there; one that was running comes back Open: its run is gone.
+  const kept = list.tasks.flatMap((task, at) => (gone.has(task.id) ? [{ at, task: task.run ? { ...task, run: undefined, status: undefined } : task }] : []));
+  for (const task of list.tasks) if (gone.has(task.id) && task.run) stopRun(task);
+  reorderTasks(ref, tasks => void tasks.splice(0, tasks.length, ...tasks.filter(task => !gone.has(task.id))));
+  showToast({
+    text: `Cleared ${gone.size} ${done ? 'done' : 'active'} ${gone.size === 1 ? 'task' : 'tasks'}`, state: TOAST.done,
+    action: {
+      label: UNDO,
+      run: () => void (listOf(ref) && reorderTasks(ref, tasks => {
+        for (const { at, task } of kept) if (!tasks.some(t => t.id === task.id)) tasks.splice(Math.min(at, tasks.length), 0, task);
+      })),
+    },
   });
 }
 
@@ -1306,6 +1412,12 @@ function panelAct(control) {
       state.todo.showDone = !state.todo.showDone;
       persist();
       return render();
+    case ACTION.foldActive:
+      state.todo.hideActive = !state.todo.hideActive;
+      persist();
+      return render();
+    case ACTION.clearDone: return void clearTasks(true);
+    case ACTION.clearActive: return void clearTasks(false);
     case ACTION.scope:
     case ACTION.searchToggle:
     case ACTION.clearSearch: return searchAct(control);
@@ -1360,7 +1472,12 @@ listEl.addEventListener('dblclick', e => {
 listEl.addEventListener('contextmenu', e => {
   const row = /** @type {HTMLElement | null} */ (targetOf(e).closest(TASK));
   const task = row && taskById(/** @type {string} */ (row.dataset.task));
-  if (!task) return;
+  // Off a task (the list's empty space, or Done): clearing the list's active or done tasks.
+  if (!task) {
+    if (row || !shown() || targetOf(e).closest(EDIT_ROW)) return;
+    e.preventDefault();
+    return void showMenu(clearItems(), { x: e.clientX, y: e.clientY });
+  }
   e.preventDefault();
   taskMenu(task, { x: e.clientX, y: e.clientY });
 });

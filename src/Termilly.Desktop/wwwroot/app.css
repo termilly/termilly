@@ -3421,7 +3421,13 @@ button.td-agent:hover { text-decoration: underline; }
 .td-step.done .td-step-mark { color: var(--ok); }
 .td-step-text { line-height: 20px; overflow-wrap: anywhere; }
 .td-step.done .td-step-text { color: var(--muted); text-decoration: line-through; }
-.td-fold { display: flex; align-items: center; gap: 4px; width: 100%; margin-top: 8px; padding: 5px 6px; border: 0; border-top: 1px solid var(--border); background: none; color: var(--muted); font: inherit; font-size: 12px; font-weight: 600; text-align: left; cursor: pointer; }
+/* A group's header (Active, Done), with its clear button at its end on hover. Active's, at the top, has no rule above it. */
+.td-fold-row { display: flex; align-items: center; margin-top: 8px; padding-right: 4px; border-top: 1px solid var(--border); }
+.td-fold-row:first-child { margin-top: 0; border-top: 0; }
+.td-fold-clear { flex: none; opacity: 1; visibility: hidden; }
+.td-fold-clear svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1; }
+.td-fold-row:hover .td-fold-clear, .td-fold-clear:focus-visible { visibility: visible; }
+.td-fold { display: flex; flex: 1; align-items: center; gap: 4px; min-width: 0; padding: 5px 6px; border: 0; background: none; color: var(--muted); font: inherit; font-size: 12px; font-weight: 600; text-align: left; cursor: pointer; }
 .td-fold svg { width: 12px; height: 12px; fill: none; stroke: currentColor; }
 .td-fold-count { font-weight: 400; }
 .td-fold:hover { color: var(--text); }
