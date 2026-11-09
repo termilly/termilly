@@ -42,13 +42,16 @@ runtime_file() {
     exit 1
 }
 
-# Signs one file or the app: hardened runtime, Termilly's entitlements, and a secure timestamp when it's for release.
+# Signs one file or the app, with a secure timestamp when it's for release. Programs (and the app) also get the hardened
+# runtime and Termilly's entitlements. Quiet unless it fails ("replacing existing signature" for each of Microsoft's).
 sign() {
-    if [ "$identity" = "-" ]; then
-        codesign --force --sign - --options runtime --entitlements "$here/entitlements.plist" "$1"
-    else
-        codesign --force --sign "$identity" --options runtime --timestamp --entitlements "$here/entitlements.plist" "$1"
-    fi
+    target=$1
+    shift
+    [ "$identity" = "-" ] || set -- --timestamp "$@"
+    out=$(codesign --force --sign "$identity" "$@" "$target" 2>&1) || { echo "$out" >&2; return 1; }
+}
+sign_program() {
+    sign "$1" --options runtime --entitlements "$here/entitlements.plist"
 }
 
 for arch in $archs; do
@@ -108,11 +111,13 @@ for arch in $archs; do
     plutil -lint -s "$app/Contents/Info.plist"
 
     echo "Termilly $version ($arch): signing ($([ "$identity" = "-" ] && echo "ad hoc" || echo "$identity"))"
-    # Inside out: every program and library first, the app last (it seals the rest).
-    find "$macos" -type f | while read -r file; do
-        case $(file -b "$file") in *Mach-O*) sign "$file" ;; esac
+    # Inside out: every file in Contents/MacOS first, the app last (it seals the rest). macOS counts everything in
+    # Contents/MacOS as code, so the .NET assemblies and the page get signatures too (kept in extended attributes,
+    # which the .dmg and ditto's .zip carry; anything unpacking an update must keep them as well).
+    find "$macos" -type f ! -path "$macos/termilly" | while read -r file; do
+        case $(file -b "$file") in *Mach-O*) sign_program "$file" ;; *) sign "$file" ;; esac
     done
-    sign "$app"
+    sign_program "$app"
     codesign --verify --deep --strict "$app"
 
     echo "Termilly $version ($arch): packing"
