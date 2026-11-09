@@ -1,0 +1,148 @@
+#!/bin/sh
+# Builds Termilly for macOS: dist/Termilly-<version>-<arch>.dmg (to install) and .zip (what updates download).
+#
+#   installer/mac/build-app.sh [arm64|x64 ...]     default: both
+#
+# Runs on a Mac (iconutil, hdiutil, codesign). Macs don't have .NET, so the app carries one copy of the .NET runtime in
+# Contents/Resources/dotnet, and every program in it (termilly, host/termilly-host, the agent helpers) is published to
+# look for .NET there (AppHostRelativeDotNet), not in a system install.
+#
+# Signing: with MAC_SIGN_IDENTITY set (a "Developer ID Application: ..." identity in the keychain) it signs for
+# release; without it, ad hoc ("-"), which macOS warns about when the app is opened but is enough to test the layout.
+set -eu
+repo=$(cd "$(dirname "$0")/../.." && pwd -P)  # -P: the real path, or the compiler and .editorconfig see two different ones
+here="$repo/installer/mac"
+cache="$repo/installer/.cache/mac"
+version=$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' "$repo/Directory.Build.props")
+identity=${MAC_SIGN_IDENTITY:--}
+archs=${*:-arm64 x64}
+mkdir -p "$cache" "$repo/dist"
+
+# The newest .NET 10 runtime for macOS, from Microsoft's release list; its SHA-512 is checked after downloading.
+releases="$cache/releases.json"
+curl -fsSL --retry 3 -o "$releases" https://builds.dotnet.microsoft.com/dotnet/release-metadata/10.0/releases.json
+runtime=$(plutil -extract latest-runtime raw -o - "$releases")
+
+# The download URL and hash of one runtime file (e.g. dotnet-runtime-osx-arm64.tar.gz) in the newest release.
+runtime_file() {
+    i=0
+    while name=$(plutil -extract "releases.0.runtime.files.$i.name" raw -o - "$releases" 2>/dev/null); do
+        if [ "$name" = "$1" ]; then
+            plutil -extract "releases.0.runtime.files.$i.url" raw -o - "$releases"
+            plutil -extract "releases.0.runtime.files.$i.hash" raw -o - "$releases"
+            return 0
+        fi
+        i=$((i + 1))
+    done
+    echo "$1 isn't in .NET's newest release" >&2
+    return 1
+}
+[ "$(plutil -extract releases.0.runtime.version raw -o - "$releases")" = "$runtime" ] || {
+    echo "The newest .NET release isn't runtime $runtime" >&2
+    exit 1
+}
+
+# Signs one file or the app, with a secure timestamp when it's for release. Programs (and the app) also get the hardened
+# runtime and Termilly's entitlements. Quiet unless it fails ("replacing existing signature" for each of Microsoft's).
+sign() {
+    target=$1
+    shift
+    [ "$identity" = "-" ] || set -- --timestamp "$@"
+    out=$(codesign --force --sign "$identity" "$@" "$target" 2>&1) || { echo "$out" >&2; return 1; }
+}
+sign_program() {
+    sign "$1" --options runtime --entitlements "$here/entitlements.plist"
+}
+
+for arch in $archs; do
+    case $arch in arm64 | x64) ;; *) echo "Unknown processor: $arch (arm64 or x64)" >&2; exit 1 ;; esac
+    rid="osx-$arch"
+    work=$(mktemp -d)
+    trap 'rm -rf "$work"' EXIT
+    app="$work/Termilly.app"
+    macos="$app/Contents/MacOS"
+    resources="$app/Contents/Resources"
+    mkdir -p "$macos" "$resources"
+
+    echo "Termilly $version ($arch): .NET runtime $runtime"
+    tarball="$cache/dotnet-runtime-$runtime-$rid.tar.gz"
+    set -- $(runtime_file "dotnet-runtime-$rid.tar.gz")
+    if [ ! -f "$tarball" ] || [ "$(shasum -a 512 "$tarball" | cut -d' ' -f1)" != "$2" ]; then
+        curl -fsSL --retry 3 -o "$tarball.part" "$1"
+        [ "$(shasum -a 512 "$tarball.part" | cut -d' ' -f1)" = "$2" ] || { echo "$1: wrong SHA-512" >&2; exit 1; }
+        mv "$tarball.part" "$tarball"
+    fi
+    mkdir "$resources/dotnet"
+    tar -xzf "$tarball" -C "$resources/dotnet"
+    # Only the runtime is used, through each program's own launcher: not the dotnet command.
+    rm -f "$resources/dotnet/dotnet"
+
+    echo "Termilly $version ($arch): publishing"
+    # Termilly as built, whole, in Contents/Resources/app: macOS counts every file in Contents/MacOS as code that must
+    # carry its own signature, and a folder there with a dot in its name (fish's vendor_conf.d) as a broken bundle.
+    # Each launcher finds .NET relative to its program's real folder, given through the environment (dotnet's -p:
+    # can't take a value with "../").
+    appdir="$resources/app"
+    AppHostRelativeDotNet=../dotnet dotnet publish "$repo/src/Termilly.Linux" -c Release -r "$rid" --self-contained false \
+        -o "$appdir" -v quiet -nologo
+    # The build's host and agent helper came along, looking for a system .NET: published again, looking for the app's.
+    rm -rf "$appdir/host" "$appdir/agent"
+    AppHostRelativeDotNet=../../dotnet dotnet publish "$repo/src/Termilly.Host" -c Release -r "$rid" --self-contained false \
+        -o "$appdir/host" -v quiet -nologo
+    AppHostRelativeDotNet=../../dotnet dotnet publish "$repo/src/Termilly.Agent" -c Release -r "$rid" --self-contained false \
+        -o "$appdir/agent" -v quiet -nologo
+    # The agent helper runs under four names (see Termilly.Linux.csproj, CopyAgentHelper).
+    for name in claude termilly termilly-askpass; do cp "$appdir/agent/termilly-hook" "$appdir/agent/$name"; done
+    # What a build folder has but an app doesn't need.
+    rm -rf "$appdir/conpty" "$appdir/install-desktop.sh" "$appdir/termilly.desktop"
+    find "$appdir" -name '*.pdb' -delete
+    # The app's program, where macOS starts it: a copy of termilly's launcher, with a link to termilly.dll. The launcher
+    # follows the link, so Termilly runs from Contents/Resources/app (its files, .NET, the host and agent helpers), as
+    # the program of Termilly.app (its name, icon, notifications and permissions).
+    cp "$appdir/termilly" "$macos/termilly"
+    ln -s ../Resources/app/termilly.dll "$macos/termilly.dll"
+
+    # The icon: the Linux sizes up to 256, and 512 and 1024 rendered for the Mac (branding/make-icon.ps1).
+    iconset="$work/termilly.iconset"
+    mkdir "$iconset"
+    icons="$appdir/icons/hicolor"
+    cp "$icons/16x16/apps/termilly.png" "$iconset/icon_16x16.png"
+    cp "$icons/32x32/apps/termilly.png" "$iconset/icon_16x16@2x.png"
+    cp "$icons/32x32/apps/termilly.png" "$iconset/icon_32x32.png"
+    cp "$icons/64x64/apps/termilly.png" "$iconset/icon_32x32@2x.png"
+    cp "$icons/128x128/apps/termilly.png" "$iconset/icon_128x128.png"
+    cp "$icons/256x256/apps/termilly.png" "$iconset/icon_128x128@2x.png"
+    cp "$icons/256x256/apps/termilly.png" "$iconset/icon_256x256.png"
+    cp "$here/icons/termilly-512.png" "$iconset/icon_256x256@2x.png"
+    cp "$here/icons/termilly-512.png" "$iconset/icon_512x512.png"
+    cp "$here/icons/termilly-1024.png" "$iconset/icon_512x512@2x.png"
+    iconutil -c icns "$iconset" -o "$app/Contents/Resources/termilly.icns"
+
+    sed -e "s/@VERSION@/$version/g" "$here/Info.plist" > "$app/Contents/Info.plist"
+    plutil -lint -s "$app/Contents/Info.plist"
+
+    echo "Termilly $version ($arch): signing ($([ "$identity" = "-" ] && echo "ad hoc" || echo "$identity"))"
+    # Inside out: every program and library first (in Contents/Resources: Termilly's and the .NET runtime's), the app
+    # last: it signs Contents/MacOS/termilly and seals the rest.
+    find "$resources" -type f | while read -r file; do
+        case $(file -b "$file") in *Mach-O*) sign_program "$file" ;; esac
+    done
+    sign_program "$app"
+    codesign --verify --deep --strict "$app"
+
+    echo "Termilly $version ($arch): packing"
+    base="$repo/dist/Termilly-$version-$arch"
+    rm -f "$base.zip" "$base.dmg"
+    ditto -c -k --keepParent "$app" "$base.zip"
+    staging="$work/dmg"
+    mkdir "$staging"
+    ditto "$app" "$staging/Termilly.app"
+    ln -s /Applications "$staging/Applications"
+    # makehybrid writes the image without mounting it (hdiutil create mounts one, which hangs on a Mac without a
+    # desktop session, such as a rented one over ssh); convert compresses it.
+    hdiutil makehybrid -quiet -hfs -hfs-volume-name "Termilly" -o "$work/raw.dmg" "$staging"
+    hdiutil convert -quiet "$work/raw.dmg" -format UDZO -o "$base.dmg"
+    [ "$identity" = "-" ] || codesign --force --sign "$identity" --timestamp "$base.dmg"
+    rm -rf "$work"
+    echo "$base.dmg ($(du -h "$base.dmg" | cut -f1)), $base.zip ($(du -h "$base.zip" | cut -f1))"
+done
