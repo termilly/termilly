@@ -300,3 +300,6 @@ export function formatWhen(ms) {
   if (days < WEEK_DAYS) return `${d.toLocaleDateString(undefined, { weekday: 'short' })} ${time}`;
   return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 }
+
+/** What a button or a toast says once something is on the clipboard. */
+export const COPIED = 'Copied';

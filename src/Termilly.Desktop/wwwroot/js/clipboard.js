@@ -11,7 +11,7 @@ import { send, request, onHost } from './host.js';
 import { state, on, emit, tabTitle, wsById, persist, EVENTS, GROUPS } from './store.js';
 import { focusedTab, restoreFocus, newTab } from './panes.js';
 import { scheduleFit, pasteInto } from './terminals.js';
-import { escapeHtml, formatWhen, ICONS } from './ui.js';
+import { escapeHtml, formatWhen, ICONS, COPIED } from './ui.js';
 import { byId, targetOf, dockRight, titleIconHtml, WORKSPACE_ID, DOCK_GRIP, CLIP_DRAG } from './dom.js';
 import { showMenu, SEPARATOR } from './popups.js';
 import { showToast, TOAST } from './toasts.js';
@@ -148,7 +148,7 @@ async function copyClip(clip) {
   try {
     if (isImage) await navigator.clipboard.write([new ClipboardItem({ 'image/png': await (await fetch(value)).blob() })]);
     else await navigator.clipboard.writeText(value);
-    showToast({ text: isImage ? 'Copied the image' : 'Copied' });
+    showToast({ text: isImage ? 'Copied the image' : COPIED });
   } catch {
     showToast({ text: 'Couldn’t copy to the clipboard', state: TOAST.failed });
   }
