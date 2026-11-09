@@ -4,7 +4,9 @@
 // line matches), through `termilly read` / `termilly wait` and the MCP server; and "Send to agent…" pastes a
 // command's output into an agent terminal's prompt. Each terminal says whether agents may read it (on by default
 // only for local terminals, not SSH, WSL, containers, production or ones tagged sensitive) and type into it (off
-// unless allowed for it). Every read and every typed text shows on the terminal for a while, and in its access log.
+// unless allowed for it). A terminal an agent opened itself is that agent's to read and type into, unless the user
+// said otherwise on it: it could have run the same in its own shell. Every read and every typed text shows on the
+// terminal for a while, and in its access log.
 // The host redacts secrets and marks what's read as untrusted (TerminalOutput.cs).
 
 import { PAGE } from './protocol.js';
@@ -19,6 +21,7 @@ import { noticeDialog } from './dialogs.js';
 import { PROFILE_SOURCE, AGENT_STATE } from './constants.js';
 import { agentKind } from './agentkinds.js';
 import { noteTyping, planWait, isOver, replyOf, waitDone } from './agentturns.js';
+import { showToast, TOAST } from './toasts.js';
 import { SECOND_MS } from './util.js';
 import { lineFrom } from './buffer.js';
 
@@ -61,15 +64,32 @@ function who(from) {
 }
 
 /**
+ * Whether a terminal is one agents may be let into without the user saying so: on this computer, not production, not tagged
+ * sensitive. Not SSH, WSL or a container.
+ * @param {Tab} tab
+ */
+function isPlain(tab) {
+  const source = sourceOf(profileOf(tab));
+  return /** @type {string[]} */ ([PROFILE_SOURCE.local, PROFILE_SOURCE.custom]).includes(source) && !environmentOf(tab) && !tab.tags.includes('sensitive');
+}
+
+/**
  * Whether agents may read this terminal: its own choice, else the default for its kind.
  * @param {Tab} tab
  */
 export function canRead(tab) {
   if (typeof tab.agentRead === 'boolean') return tab.agentRead;
   if (state.settings.agents.readDefault === false) return false;
-  const source = sourceOf(profileOf(tab));
-  return /** @type {string[]} */ ([PROFILE_SOURCE.local, PROFILE_SOURCE.custom]).includes(source) && !environmentOf(tab) && !tab.tags.includes('sensitive');
+  return isPlain(tab);
 }
+
+/**
+ * Whether the terminal that asks opened this one (the API's open, tab.openedBy) and is still there: then it may read it and
+ * type into it without the user turning that on. Only a plain terminal (isPlain): one on a server or on production still asks.
+ * @param {Tab} tab
+ * @param {string | null | undefined} from
+ */
+const isOpener = (tab, from) => !!from && tab.openedBy === from && state.tabs.has(from) && isPlain(tab);
 
 /**
  * Whether agents may type here: only when allowed for this terminal (and Settings allow typing at all).
@@ -118,6 +138,7 @@ function note(tab, from, what) {
  */
 function checkRead(tab, from) {
   if (from && from === tab.id) return; // a terminal reading itself
+  if (tab.agentRead === undefined && isOpener(tab, from)) return; // it opened this terminal
   if (!canRead(tab)) throw new Error(`${tabTitle(tab)} (the terminal) doesn't let scripts or agents read it. Turn it on in its menu: Scripts and agents › Can read this terminal.`);
 }
 
@@ -128,7 +149,9 @@ function checkRead(tab, from) {
  */
 export function checkType(tab, from) {
   if (from && from === tab.id) return; // an agent typing into its own terminal
-  if (!canType(tab)) throw new Error(`${tabTitle(tab)} (the terminal) doesn't let scripts or agents type into it. Turn it on in its menu: Scripts and agents › Can type here.`);
+  // Codex asking the user to review its hooks takes single keys ("t" trusts them all): nothing is typed into that but by the user.
+  if (hooksWaitForReview(tab)) throw new Error(`${reviewWords(tab)} Nothing can be typed there until then.`);
+  if (!canType(tab) && !(tab.agentType === undefined && isOpener(tab, from))) throw new Error(`${tabTitle(tab)} (the terminal) doesn't let scripts or agents type into it. Turn it on in its menu: Scripts and agents › Can type here.`);
   note(tab, from, 'typed into');
 }
 
@@ -231,14 +254,18 @@ export const noteTyped = tab => noteTyping(tab, accessOf(tab));
  * @param {Tab} tab
  * @param {number} limit in ms
  * @param {number | null | undefined} afterTurn wait for a turn after this many had started (a result's turn)
+ * @returns {Promise<object>}
  */
 function waitForTurn(tab, limit, afterTurn) {
   const plan = planWait(tab, tab.access, afterTurn);
   const agent = runningAgent(tab);
-  // An agent gone after answering is still answered; one that isn't there, or doesn't report, can't be waited on.
+  // An agent gone after answering is still answered; one that isn't there can't be waited on.
   if (!agent && !isOver(tab, plan)) return Promise.reject(new Error(`No coding agent runs in ${tabTitle(tab)} (the terminal).`));
+  // Its program runs but its hooks haven't reported yet (Codex's first comes with its first prompt, which may have just been
+  // typed): it's given a while to, then the wait goes on as for any agent.
   if (agent && !runsClaude(tab)) {
-    return Promise.reject(new Error(`${agentKind(agent).name} in ${tabTitle(tab)} doesn't tell Termilly when it works yet (its hooks are off, or not trusted yet in Codex): wait for an output line instead.`));
+    const started = Date.now();
+    return firstReport(tab, agent, Math.min(limit, FIRST_REPORT_MS)).then(() => waitForTurn(tab, Math.max(0, limit - (Date.now() - started)), afterTurn));
   }
   return new Promise(resolve => {
     /** @param {object} result */
@@ -261,6 +288,63 @@ function waitForTurn(tab, limit, afterTurn) {
 /** The waits on agents' turns, each checking its own terminal on every agent's change. @type {Set<() => void>} */
 const turnWaiters = new Set();
 on(EVENTS.agent, () => { for (const fn of [...turnWaiters]) fn(); });
+
+/** How long an agent whose program runs is given to report in for the first time, before a wait on its turn gives up. */
+const FIRST_REPORT_MS = 20_000;
+/**
+ * What Codex's screen says while hooks it hasn't seen (Termilly's, from another build of it) wait for the user's review: its
+ * notice, the choice it starts with ("1. Review hooks", "enter confirm · esc skip") or the list that opens ("t trust all ·
+ * enter review · esc close"). A narrow terminal breaks these over lines, so any white space may come between the words. Only
+ * the screen's last lines are looked at: the same words further up are a conversation about hooks, not the question.
+ */
+const HOOKS_NEED_REVIEW = /hooks?\s+needs?\s+review\s+before|Review\s+hooks[\s\S]{0,80}enter\s+confirm|trust\s+all\s*·\s*enter\s+review/i;
+const REVIEW_LINES = 30;
+/** Terminals whose user has been told its agent's hooks wait for review. @type {WeakSet<Tab>} */
+const toldOfReview = new WeakSet();
+
+/** Whether a terminal's screen shows Codex waiting for its hooks to be reviewed. @param {Tab} tab */
+const hooksWaitForReview = tab => HOOKS_NEED_REVIEW.test(bufferLines(tab, REVIEW_LINES).join('\n'));
+
+/**
+ * What an agent is told when another's hooks wait for review; the user is told too, once for the terminal: only they can
+ * review them.
+ * @param {Tab} tab
+ */
+function reviewWords(tab) {
+  const where = `${agentKind(runningAgent(tab)).name} in ${tabTitle(tab)}`;
+  if (!toldOfReview.has(tab)) showToast({ text: `${where} waits for you: review Termilly’s hooks there, once, so Termilly can tell when it’s done`, state: TOAST.failed });
+  toldOfReview.add(tab);
+  return `${where} is waiting for the user: its screen asks them to review its hooks before they can run. The user has been told; only they can answer it, in that terminal.`;
+}
+
+/**
+ * Waits for an agent's first report in a terminal (its hooks reaching Termilly). When none comes, says why as far as it can be
+ * told: Codex's screen saying its hooks need review (the user is told too, once: only they can review them), or else that its
+ * hooks are off.
+ * @param {Tab} tab
+ * @param {string} agent the agent whose program runs there (AGENT_KIND)
+ * @param {number} limit in ms
+ * @returns {Promise<void>}
+ */
+function firstReport(tab, agent, limit) {
+  return new Promise((resolve, reject) => {
+    const check = () => {
+      if (!runsClaude(tab) && runningAgent(tab)) return;
+      clearTimeout(timer);
+      turnWaiters.delete(check);
+      resolve(); // it reports now, or has exited: the wait on its turn says which
+    };
+    const timer = setTimeout(() => {
+      turnWaiters.delete(check);
+      // Gone meanwhile, or reporting after all: the wait on its turn says which.
+      if (runsClaude(tab) || !runningAgent(tab)) return void resolve();
+      const fallback = 'Wait for an output line instead (until = output_matches), or read its screen.';
+      if (hooksWaitForReview(tab)) reject(new Error(`${reviewWords(tab)} Until then it can't tell Termilly when its turn ends. ${fallback}`));
+      else reject(new Error(`${agentKind(agent).name} in ${tabTitle(tab)} hasn't told Termilly that it works (waited ${Math.round(limit / SECOND_MS)} seconds): its hooks are off. ${fallback}`));
+    }, limit);
+    turnWaiters.add(check);
+  });
+}
 
 // ---- Send to agent ----
 
@@ -329,6 +413,8 @@ export function togetherMenuItems(tab) {
     ...(tab.lastCommand ? [{ label: 'Send the last output to an agent', action: () => sendLastOutput(tab, tab.view?.header) }] : []),
     {
       label: 'Scripts and agents', submenu: () => [
+        // The terminal that opened this one may read it and type here by itself, until one of the two below is set.
+        ...(tab.openedBy && isOpener(tab, tab.openedBy) ? [{ label: `Opened by ${who(tab.openedBy)}: it reads and types here`, disabled: true, action: () => {} }] : []),
         { label: 'Can read this terminal', checked: canRead(tab), action: () => { tab.agentRead = !canRead(tab); emit(EVENTS.tab, tab); } },
         { label: 'Can type here', checked: canType(tab), action: () => { tab.agentType = !canType(tab); emit(EVENTS.tab, tab); } },
         ...(tab.access?.log.length ? /** @type {import('./popups.js').MenuEntry[]} */ (['separator', .../** @type {AccessEntry[]} */ (tab.access.log).slice(0, 12).map(e => ({

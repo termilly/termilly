@@ -110,7 +110,7 @@ internal static class PipeTimeouts
     /// <summary>How long a call to <paramref name="method"/> may take.</summary>
     public static TimeSpan ForApi(string? method) => method switch
     {
-        ApiMethods.Send or ApiMethods.Snippet or ApiMethods.Wait => ApiWaiting,
+        ApiMethods.Send or ApiMethods.Snippet or ApiMethods.Wait or ApiMethods.AgentAsk => ApiWaiting,
         ApiMethods.TaskAsk => Asking,
         _ => Api,
     };

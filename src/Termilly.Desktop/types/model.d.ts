@@ -163,6 +163,8 @@ interface Tab {
   worktree?: { repo: string; path: string; branch: string; copied?: number } | null;
   /** Whether agents may read it, when its menu says (js/together.js). */
   agentRead?: boolean;
+  /** The terminal whose agent or script opened this one (the API's open): it may read it and type into it (js/together.js). */
+  openedBy?: string;
   /** Whether agents may type into it (js/together.js). */
   agentType?: boolean;
   /** The paired device that opened or closed it, for the trace here (js/phonemanage.js). */

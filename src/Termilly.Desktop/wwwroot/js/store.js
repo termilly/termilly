@@ -811,10 +811,10 @@ function serialize() {
     // tmux windows aren't saved: they're tmux's, and attaching again brings them back (tmux.js).
     workspaces: state.workspaces.filter(w => !w.tmux).map(({ id, name, color, cwd, focusId, root, note, tasks, snippets, collapsed, copyTo }) => ({ id, name, color, cwd, focusId, tasks, root: withoutPreview(root), note, snippets, collapsed: collapsed || undefined, copyTo })),
     tabs: [...state.tabs.values()].filter(t => !t.virtual).map(t => {
-      const { id, wsId, profile, name, tags, noHistory, startCwd, env, startCommand, worktree, note, tasks, agentRead, agentType, agentSessions, promptsClearedAt, stepsClearedAt } = t;
+      const { id, wsId, profile, name, tags, noHistory, startCwd, env, startCommand, worktree, note, tasks, agentRead, agentType, openedBy, agentSessions, promptsClearedAt, stepsClearedAt } = t;
       // In a window of its own: it opens in one again after a restart, where it was (windowPlaces).
       const windowed = t.detached || t.windowed || undefined;
-      return { id, wsId, profile, name, tags, noHistory, startCwd, env, startCommand, worktree, note, tasks, agentRead, agentType, agentSessions, promptsClearedAt: promptsClearedAt || undefined, stepsClearedAt: stepsClearedAt && Object.keys(stepsClearedAt).length ? stepsClearedAt : undefined, lastCwd: lastFolderOf(t) ?? undefined, windowed };
+      return { id, wsId, profile, name, tags, noHistory, startCwd, env, startCommand, worktree, note, tasks, agentRead, agentType, openedBy, agentSessions, promptsClearedAt: promptsClearedAt || undefined, stepsClearedAt: stepsClearedAt && Object.keys(stepsClearedAt).length ? stepsClearedAt : undefined, lastCwd: lastFolderOf(t) ?? undefined, windowed };
     }),
   };
 }

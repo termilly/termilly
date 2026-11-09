@@ -29,6 +29,11 @@ internal static class ApiMethods
     /// ask_permission, its --permission-prompt-tool): it waits for Allow or Deny in the task's row.
     /// </summary>
     public const string TaskAsk = "task_ask";
+    /// <summary>
+    /// One agent asks another a question (the MCP server's ask_agent): the other runs once out of sight in the asking terminal's
+    /// folder, reading only, and its answer comes back. It waits for that answer.
+    /// </summary>
+    public const string AgentAsk = "agent_ask";
 
     /// <summary>The methods that type into a terminal: they need Settings › Terminal › API, and may wait on the user.</summary>
     public static readonly IReadOnlyList<string> Typing = [Send, Snippet];
@@ -64,6 +69,8 @@ internal static class ApiFields
     public const string TimeoutSeconds = "timeout_s";
     public const string AfterTurn = "after_turn";
     public const string Query = "query";
+    /// <summary>What ask_agent asks the other agent.</summary>
+    public const string Question = "question";
     public const string Failed = "failed";
     public const string In = "in";
     public const string Limit = "limit";

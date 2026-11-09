@@ -24,7 +24,7 @@ internal sealed class PageApi(PageChannel page, ISettingsStore settings, IAppWin
     private static readonly TimeSpan AskingWait = PipeTimeouts.Asking - TimeSpan.FromSeconds(5);
 
     /// <summary>The methods about terminals, which the page answers.</summary>
-    private static readonly string[] PageMethods = [ApiMethods.Tasks, ApiMethods.Task, ApiMethods.TaskTick, ApiMethods.TaskDone, ApiMethods.TaskAsk, ApiMethods.List, ApiMethods.State, ApiMethods.Status, ApiMethods.Open, ApiMethods.Send, ApiMethods.Snippets, ApiMethods.Snippet, ApiMethods.Read, ApiMethods.Wait];
+    private static readonly string[] PageMethods = [ApiMethods.Tasks, ApiMethods.Task, ApiMethods.TaskTick, ApiMethods.TaskDone, ApiMethods.TaskAsk, ApiMethods.List, ApiMethods.State, ApiMethods.Status, ApiMethods.Open, ApiMethods.Send, ApiMethods.Snippets, ApiMethods.Snippet, ApiMethods.Read, ApiMethods.Wait, ApiMethods.AgentAsk];
     /// <summary>The methods that return a terminal's output, which is redacted for an agent.</summary>
     private static readonly string[] OutputMethods = [ApiMethods.Read, ApiMethods.Wait];
 
@@ -93,7 +93,7 @@ internal sealed class PageApi(PageChannel page, ISettingsStore settings, IAppWin
             case var asked when PageMethods.Contains(asked):
                 try
                 {
-                    var wait = method == ApiMethods.TaskAsk ? AskingWait : ApiMethods.Typing.Contains(method) || method == ApiMethods.Wait ? TypingWait : PageWait;
+                    var wait = method == ApiMethods.TaskAsk ? AskingWait : ApiMethods.Typing.Contains(method) || method is ApiMethods.Wait or ApiMethods.AgentAsk ? TypingWait : PageWait;
                     var reply = await AskPageAsync(ToPage.Calls.Api, new JsonObject { [CallFields.Method] = method, [CallFields.Args] = request.DeepClone() }, wait).ConfigureAwait(false);
                     if (OutputMethods.Contains(method))
                     {

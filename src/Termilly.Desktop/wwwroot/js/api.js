@@ -142,7 +142,7 @@ const METHODS = {
     emit(EVENTS.tab, tab);
     return { id: tab.id, status: tab.status };
   },
-  open: ({ profile, cwd, name, workspace, command, argv, reuse }) => {
+  open: ({ profile, cwd, name, workspace, command, argv, reuse, from }) => {
     // The termilly command sends the words after "--" one by one: quoted here for the shell that will read them.
     const profileId = profileFor(profile);
     if (Array.isArray(argv) && argv.length) {
@@ -160,6 +160,8 @@ const METHODS = {
       ? state.workspaces.find(w => w.name.toLowerCase() === String(workspace).toLowerCase()) ?? createWorkspace({ name: workspace, startWith: 'empty' })
       : ensureActiveWorkspace();
     const tab = newTab({ wsId: ws.id, profile: profileId, name: name ? String(name).slice(0, 60) : null, cwd: cwd ?? null, command: command ?? null });
+    // Opened by a terminal's agent or script: that terminal may read it and type into it (together.js isOpener).
+    if (from && state.tabs.has(from)) tab.openedBy = from;
     return { id: tab.id };
   },
   snippets: () => listForApi(),
