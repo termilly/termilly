@@ -559,14 +559,14 @@ onHost(HOST.startFolder, m => {
 /**
  * What a terminal does as its shell starts (tab.start); see startOf.
  * @typedef {{ output: { lines: string[], closedAt: number, resurrected?: boolean, scroll?: number | null } | null,
- *   command: string | null, resumeSession: string | null, done: boolean }} ShellStart
+ *   command: string | null, resumeSession: string | null, resumeKind?: string | null, done: boolean }} ShellStart| null, resumeSession: string | null, done: boolean }} ShellStart
  */
 
 /**
  * What a terminal does as its shell starts, kept here: the saved output shown above it (after a restart, or a closed
  * terminal reopened: { lines, closedAt, resurrected }), the command typed at its first prompt (a layout's, a Claude
- * Code session to resume, the folder to go back to), the session that command resumes, and whether the start has
- * run.
+ * Code or Codex session to resume, the folder to go back to), the session that command resumes and its agent
+ * (AGENT_KIND), and whether the start has run.
  * @param {Tab} tab
  */
 const startOf = tab => (tab.start ??= { output: null, command: null, resumeSession: null, done: false });
@@ -575,7 +575,7 @@ const startOf = tab => (tab.start ??= { output: null, command: null, resumeSessi
  * Sets what a terminal does as its shell starts (any of output, command, resumeSession): from a layout, the API, a
  * reopened terminal, a restart (snapshot.js) or a reconnect.
  * @param {Tab} tab
- * @param {{ output?: any, command?: string | null, resumeSession?: string | null }} fields
+ * @param {{ output?: any, command?: string | null, resumeSession?: string | null, resumeKind?: string | null }} fields| null, resumeSession?: string | null }} fields
  */
 export function prepareStart(tab, fields) {
   Object.assign(startOf(tab), Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== undefined)));

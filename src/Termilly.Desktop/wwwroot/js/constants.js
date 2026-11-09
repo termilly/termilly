@@ -25,6 +25,7 @@ export const PROFILE_ICON = Object.freeze({
   kubernetes: 'k8s',
   custom: 'custom',
   claude: 'claude',
+  codex: 'codex',
 });
 
 /** C#: ProfileIds (ProfileKinds.cs). */
@@ -99,8 +100,17 @@ export const HOOK_EVENT = Object.freeze({
   sessionEnd: 'SessionEnd',
   subagentStart: 'SubagentStart',
   subagentStop: 'SubagentStop',
+  interrupt: 'Interrupt',
   statusLine: 'StatusLine',
   edit: 'Edit',
+});
+
+/** C#: AgentKinds (../Shared/AgentLookup.cs). */
+export const AGENT_KIND = Object.freeze({
+  claude: 'claude',
+  codex: 'codex',
+  claudeName: 'Claude Code',
+  codexName: 'Codex',
 });
 
 /** C#: ClaudeTools (../Shared/ClaudeTools.cs). */

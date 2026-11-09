@@ -72,9 +72,13 @@ internal static partial class SessionProfiles
     {
         var profiles = new List<SessionProfile>();
         profiles.AddRange(LocalShells());
-        if (ClaudeCode(profiles) is { } claude)
+        var shells = profiles.ToList(); // the agents run in the first of the shells, not in each other
+        foreach (var agent in new[] { Agent(shells, ClaudeId, AgentKinds.ClaudeName, ProfileIcons.Claude), Agent(shells, CodexId, AgentKinds.CodexName, ProfileIcons.Codex) })
         {
-            profiles.Add(claude);
+            if (agent is not null)
+            {
+                profiles.Add(agent);
+            }
         }
         profiles.AddRange(WslShells());
         profiles.AddRange(CustomShells(settings.Shells.Profiles ?? [], profiles));
@@ -106,50 +110,32 @@ internal static partial class SessionProfiles
         }
     }
 
-    /// <summary>Claude Code's profile and command.</summary>
-    public const string ClaudeId = "claude";
-    private const string ClaudeCommand = "claude";
+    /// <summary>Claude Code's and Codex's profiles; each is also the command typed at the shell's first prompt.</summary>
+    public const string ClaudeId = AgentKinds.Claude;
+    public const string CodexId = AgentKinds.Codex;
 
     /// <summary>
-    /// Claude Code, when it's installed (a claude on PATH that isn't a Termilly's own): the first shell, with claude
-    /// typed at its first prompt. Claude gets Termilly's hooks as any claude typed there does, and when it exits the
-    /// shell is still there.
+    /// An agent's profile when it's installed (a real claude or codex on PATH, not a Termilly's shim): the first shell,
+    /// with the agent's command typed at its first prompt. The agent gets Termilly's hooks as one typed there does, and
+    /// when it exits the shell is still there. Not installed, the agent isn't offered at all.
     /// </summary>
-    private static SessionProfile? ClaudeCode(List<SessionProfile> shells)
+    private static SessionProfile? Agent(List<SessionProfile> shells, string id, string name, string icon)
     {
-        if (shells.Count == 0 || FindClaude() is null)
+        if (shells.Count == 0 || FindAgent(id) is null)
         {
             return null;
         }
         var shell = shells[0];
-        return new SessionProfile(ClaudeId, "Claude Code", $"claude in {shell.Name}", ProfileIcons.Claude, shell.CommandLine, ProfileSources.Local,
-            StartCommand: ClaudeCommand, ShellIcon: shell.Shell);
+        return new SessionProfile(id, name, $"{id} in {shell.Name}", icon, shell.CommandLine, ProfileSources.Local,
+            StartCommand: id, ShellIcon: shell.Shell);
     }
 
-    /// <summary>The real claude on PATH (claude.exe, claude.cmd on Windows), not a Termilly's shim beside its hook helper.</summary>
-    internal static string? FindClaude(string? path = null)
-    {
-        var names = OperatingSystem.IsWindows() ? new[] { AppPaths.Exe(ClaudeCommand), ClaudeCommand + ".cmd" } : [ClaudeCommand];
-        foreach (var dir in (path ?? Environment.GetEnvironmentVariable(SystemVariables.Path) ?? "").Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            try
-            {
-                if (Directory.Exists(dir) && Directory.EnumerateFiles(dir, AgentExecutables.Hook + "*").Any())
-                {
-                    continue; // a Termilly's agent folder
-                }
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException)
-            {
-                continue;
-            }
-            if (names.Select(n => Path.Combine(dir, n)).FirstOrDefault(File.Exists) is { } found)
-            {
-                return found;
-            }
-        }
-        return null;
-    }
+    /// <summary>
+    /// The real <paramref name="agent"/> on PATH (claude.exe, claude.cmd, codex.cmd and so on on Windows), not a
+    /// Termilly's shim beside its hook helper.
+    /// </summary>
+    internal static string? FindAgent(string agent, string? path = null) =>
+        AgentLookup.FindReal(agent, path ?? Environment.GetEnvironmentVariable(SystemVariables.Path), Environment.GetEnvironmentVariable(SystemVariables.PathExt));
 
     /// <summary>The ssh client: Windows' ssh.exe, or ssh on other systems.</summary>
     internal static string SshCommand => AppPaths.Exe(SshConnections.SshProgram);

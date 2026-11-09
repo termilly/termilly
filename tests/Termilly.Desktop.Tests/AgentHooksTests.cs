@@ -28,6 +28,7 @@ public sealed class AgentHooksTests : IDisposable
     [InlineData("Stop", "done")]
     [InlineData("StopFailure", "error")]
     [InlineData("SessionEnd", "exited")]
+    [InlineData("Interrupt", "idle")]
     [InlineData("Notification", null)]
     [InlineData("SelfTest", null)]
     public void Events_map_to_pane_states(string hookEvent, string? state) =>
@@ -36,6 +37,60 @@ public sealed class AgentHooksTests : IDisposable
     [Fact]
     public void Claude_asking_a_question_needs_the_user() =>
         Assert.Equal("needs-input", AgentHooks.StateFor(Event("PreToolUse", "AskUserQuestion")));
+
+    // ---- Codex ----
+
+    /// <summary>A Codex hook payload, as Codex 0.167 sent it.</summary>
+    private const string CodexPrompt = """
+        { "session_id": "01a1c01a-29e1-7d33-99f6-3b14dcf53b06", "turn_id": "t1", "transcript_path": "C:\\x.jsonl",
+          "cwd": "C:\\work", "hook_event_name": "UserPromptSubmit", "model": "m", "permission_mode": "default",
+          "prompt": "Run echo hi" }
+        """;
+
+    [Fact]
+    public void A_codex_event_says_it_is_codexs_and_a_claude_one_says_nothing()
+    {
+        var codex = AgentHooks.Parse(Protocol.Message("p", "UserPromptSubmit", CodexPrompt, "codex"))!;
+        Assert.Equal("codex", codex.Agent);
+        Assert.Equal("01a1c01a-29e1-7d33-99f6-3b14dcf53b06", codex.Session);
+        Assert.Equal("Run echo hi", codex.Prompt);
+        Assert.Equal("working", AgentHooks.StateFor(codex));
+
+        var claude = Protocol.Message("p", "UserPromptSubmit", CodexPrompt);
+        Assert.DoesNotContain("\"agent\"", claude);
+        Assert.Equal("claude", AgentHooks.Parse(claude)!.Agent);
+    }
+
+    [Fact]
+    public void Only_codex_is_taken_as_another_agent() =>
+        Assert.Equal("claude", AgentHooks.Parse("""{ "v": 1, "pane": "p", "event": "Stop", "agent": "something" }""")!.Agent);
+
+    [Fact]
+    public void A_codex_subagents_own_events_are_told_apart() =>
+        Assert.True(Protocol.IsCodexSubagent("""{ "session_id": "sub", "agent_id": "a1", "agent_type": "worker" }""")
+            && !Protocol.IsCodexSubagent(CodexPrompt) && !Protocol.IsCodexSubagent(null));
+
+    [Fact]
+    public void Codex_gets_a_hook_for_each_event_and_the_mcp_server()
+    {
+        var args = Shim.CodexArguments(@"C:\Program Files\It's\agent\termilly-hook.exe", @"C:\a\termilly.exe", windows: true);
+        var values = args.Where((_, i) => i % 2 == 1).ToList();
+        Assert.All(args.Where((_, i) => i % 2 == 0), a => Assert.Equal("-c", a));
+        Assert.Equal(Termilly.Shared.HookEvents.Codex.Count + 1, values.Count);
+        // PowerShell runs a hook's command on Windows: a quoted path needs &, and a ' in it is doubled.
+        Assert.Contains("""hooks.SessionStart=[{hooks=[{type='command',command='''& 'C:/Program Files/It''s/agent/termilly-hook.exe' hook 1 SessionStart codex''',timeout=3}]}]""", values);
+        Assert.Contains("""hooks.PreToolUse=[{matcher='*',hooks=[{type='command',command='''& 'C:/Program Files/It''s/agent/termilly-hook.exe' hook 1 PreToolUse codex''',timeout=3}]}]""", values);
+        Assert.Contains("""mcp_servers.termilly={command='C:\a\termilly.exe',args=['mcp'],env_vars=['TERMILLY_PANE_ID','TERMILLY_PIPE'],tool_timeout_sec=130}""", values);
+        // npm's codex.cmd goes through cmd, which a double quote would let run what follows an &.
+        Assert.All(values, v => Assert.DoesNotContain("\"", v));
+        // The same every run: Codex remembers a trusted hook by its exact definition.
+        Assert.Equal(args, Shim.CodexArguments(@"C:\Program Files\It's\agent\termilly-hook.exe", @"C:\a\termilly.exe", windows: true));
+    }
+
+    [Fact]
+    public void Codex_hooks_elsewhere_run_the_helper_through_sh() =>
+        Assert.Contains("""hooks.Stop=[{hooks=[{type='command',command=''''/opt/it'\''s/termilly-hook' hook 1 Stop codex''',timeout=3}]}]""",
+            Shim.CodexArguments("/opt/it's/termilly-hook", "/opt/termilly", windows: false));
 
     // ---- The hooks Termilly adds to Claude Code ----
 
@@ -448,10 +503,10 @@ public sealed class AgentHooksTests : IDisposable
         File.WriteAllText(Path.Combine(npm, "claude.ps1"), "");
         File.WriteAllText(Path.Combine(native, "claude.exe"), "");
 
-        Assert.Equal(Path.Combine(npm, "claude.cmd"), Shim.FindReal($"{shim};{npm};{native}", ".COM;.EXE;.CMD", shim + "\\"));
-        Assert.Equal(Path.Combine(native, "claude.exe"), Shim.FindReal($"\"{shim}\";;{native}", null, shim));
-        Assert.Null(Shim.FindReal(shim, ".EXE", shim));
-        Assert.Null(Shim.FindReal($"{shim};{npm}", ".PS1", shim)); // a script would need PowerShell
+        Assert.Equal(Path.Combine(npm, "claude.cmd"), Shim.FindReal("claude", $"{shim};{npm};{native}", ".COM;.EXE;.CMD", shim + "\\"));
+        Assert.Equal(Path.Combine(native, "claude.exe"), Shim.FindReal("claude", $"\"{shim}\";;{native}", null, shim));
+        Assert.Null(Shim.FindReal("claude", shim, ".EXE", shim));
+        Assert.Null(Shim.FindReal("claude", $"{shim};{npm}", ".PS1", shim)); // a script would need PowerShell
     }
 
     [Fact]
@@ -465,8 +520,8 @@ public sealed class AgentHooksTests : IDisposable
         File.WriteAllText(Path.Combine(outer, "termilly-hook.exe"), "");
         File.WriteAllText(Path.Combine(native, "claude.exe"), "");
 
-        Assert.Equal(Path.Combine(native, "claude.exe"), Shim.FindReal($"{shim};{outer};{shim};{native}", ".EXE", shim));
-        Assert.Null(Shim.FindReal($"{shim};{outer}", ".EXE", shim));
+        Assert.Equal(Path.Combine(native, "claude.exe"), Shim.FindReal("claude", $"{shim};{outer};{shim};{native}", ".EXE", shim));
+        Assert.Null(Shim.FindReal("claude", $"{shim};{outer}", ".EXE", shim));
     }
 
     [Fact]

@@ -9,7 +9,7 @@
 
 import { PAGE } from './protocol.js';
 import { send, platform, PLATFORM } from './host.js';
-import { PROFILE_SOURCE, AGENT_STATE, PROFILE_ICON, AGENT_SOURCE, CLAUDE_TOOL } from './constants.js';
+import { PROFILE_SOURCE, AGENT_STATE, PROFILE_ICON, AGENT_SOURCE, AGENT_KIND, CLAUDE_TOOL } from './constants.js';
 import { debounce } from './util.js';
 import { windowInFront } from './windowshown.js';
 import { keepPlaces, keepPins, whenHostCloses } from './windows.js';
@@ -420,10 +420,17 @@ function commandRunning(tab) {
 }
 
 /**
- * A command line that starts Claude Code (`claude`, `cd x && claude`, a restored `cd …; claude --resume …`): it waits
- * for the user (a folder to trust, a prompt) until its hooks say otherwise, which over ssh nothing else can tell.
+ * A command line that starts Claude Code or Codex (`claude`, `cd x && codex`, a restored `cd …; claude --resume …`):
+ * it waits for the user (a folder to trust, a prompt) until its hooks say otherwise, which over ssh nothing else can tell.
  */
-const STARTS_CLAUDE = /(?:^|[;&|(]\s*)claude(?:\s|$)/;
+const STARTS_CLAUDE = /(?:^|[;&|(]\s*)(?:claude|codex)(?:\s|$)/;
+
+/**
+ * What resumes an agent's session: `claude --resume <id>`, or `codex resume <id>` for Codex.
+ * @param {string} session
+ * @param {string | null | undefined} kind one of AGENT_KIND; Claude Code when not said
+ */
+export const resumeAgentCommand = (session, kind) => (kind === AGENT_KIND.codex ? `codex resume ${session}` : `claude --resume ${session}`);
 
 /** States that tell the user something happened; arriving out of sight, they stay unread until looked at. */
 /** @type {Set<string>} */
@@ -439,8 +446,8 @@ export const isInView = tab => (tab.detached
   : tab.wsId === state.activeId && windowInFront() && document.hasFocus());
 
 /**
- * Whether Claude Code runs in this terminal now: its hooks or the `claude agents` poll reported it, and it hasn't
- * exited (an exit clears tab.agent). Output alerts set tab.agent too, with source "alert"; those don't count.
+ * Whether an agent runs in this terminal now (Claude Code or Codex, tab.agent.kind): its hooks or the `claude agents`
+ * poll reported it, and it hasn't exited (an exit clears tab.agent). Output alerts set tab.agent too, with source "alert"; those don't count.
  * @param {Tab | null | undefined} tab
  */
 export const runsClaude = tab => tab?.agent?.source === AGENT_SOURCE.hooks || tab?.agent?.source === AGENT_SOURCE.poll;

@@ -110,6 +110,8 @@ interface AgentInfo {
   folder?: string | null;
   /** Its news arrived out of sight and hasn't been looked at (store.js agentChanged). */
   unread?: boolean;
+  /** Which agent it is: one of AGENT_KIND (Claude Code when not said). */
+  kind?: string;
 }
 
 /** A terminal's pane: its element, header and body, and xterm with its fit add-on (js/panes.js, js/terminals.js). */
@@ -199,7 +201,7 @@ interface Tab {
   /** When its Replies and its Tool calls were last cleared, each on its own (by AgentStepKind): older ones are hidden. */
   stepsClearedAt?: Record<string, number>;
   /** Its agent was ended, to resume (js/hibernate.js). */
-  hibernated?: { session: string; at: number; folder?: string | null } | null;
+  hibernated?: { session: string; at: number; folder?: string | null; kind?: string } | null;
   /**
    * A terminal without a shell of its own: a tmux pane (js/tmux.js; client is its tmux client), or another Termilly
    * computer's terminal (js/remotepc.js; client is the computer). icon: what that computer says runs in it (its

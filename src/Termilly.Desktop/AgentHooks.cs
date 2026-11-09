@@ -12,11 +12,12 @@ namespace Termilly.Desktop;
 /// An agent event a terminal's hook reported (see Termilly.Agent/Protocol.cs). For PreToolUse and PostToolUse:
 /// <see cref="File"/> is the file an edit tool changes, <see cref="Cwd"/> Claude's folder (edit and shell tools), and
 /// <see cref="Dirs"/> the folders of the paths a shell command names. For SessionStart: <see cref="Folder"/> the folder
-/// the session belongs to, as its shell sees it (also on a server).
+/// the session belongs to, as its shell sees it (also on a server). <see cref="Agent"/> is which agent reported it
+/// (AgentKinds: Claude Code or Codex).
 /// </summary>
 internal sealed record AgentEvent(string Pane, string Event, string? Session, string? Tool, string? Message, string? Reason,
     string? File = null, string? Cwd = null, IReadOnlyList<string>? Dirs = null, string? Target = null, Subagent? Subagent = null,
-    StatusReport? Status = null, string? Folder = null, string? Prompt = null);
+    StatusReport? Status = null, string? Folder = null, string? Prompt = null, string Agent = AgentKinds.Claude);
 
 /// <summary>What Termilly's status line reports (Termilly.Agent/StatusLine.cs): the plan's limits, the context, Claude's cost.</summary>
 internal sealed record StatusReport(PlanLimits? Limits, ContextFigures? Context, ClaudeCost? Cost);
@@ -118,7 +119,8 @@ internal sealed class AgentHooks : IDisposable
     {
         // A subagent starting or stopping never makes the terminal look busy, done or idle.
         HookEvents.SubagentStart or HookEvents.SubagentStop => null,
-        HookEvents.SessionStart => AgentStates.Idle,
+        // Codex's Interrupt (Esc) ends the turn without a Stop: it waits for the next prompt.
+        HookEvents.SessionStart or HookEvents.Interrupt => AgentStates.Idle,
         HookEvents.PreToolUse when e.Tool == ClaudeTools.AskUserQuestion => AgentStates.NeedsInput,
         HookEvents.UserPromptSubmit or HookEvents.PreToolUse or HookEvents.PostToolUse or HookEvents.PreCompact => AgentStates.Working,
         HookEvents.PermissionRequest => AgentStates.NeedsInput,
@@ -196,7 +198,8 @@ internal sealed class AgentHooks : IDisposable
             return new AgentEvent(pane, hookEvent, Text(message, Fields.Session), Text(message, Fields.Tool), Text(message, Fields.Message),
                 Text(message, Fields.Reason), Text(message, Fields.File), Text(message, Fields.Cwd), Folders(message),
                 Text(message, Fields.Target), SubagentOf(message), StatusOf(message), Text(message, Fields.Folder),
-                Text(message, Fields.Prompt) is { } prompt && prompt.Length <= Termilly.Shared.HookMessage.MaxPrompt + 1 ? prompt : null);
+                Text(message, Fields.Prompt) is { } prompt && prompt.Length <= Termilly.Shared.HookMessage.MaxPrompt + 1 ? prompt : null,
+                Text(message, Fields.Agent) == AgentKinds.Codex ? AgentKinds.Codex : AgentKinds.Claude);
         }
         catch (Exception e) when (e is JsonException or FormatException or InvalidOperationException)
         {

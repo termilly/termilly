@@ -1,17 +1,17 @@
 // @ts-check
 // Bringing terminals back after a restart or crash (SessionSnapshot.cs keeps it, encrypted): every half minute,
 // and once more on exit, each terminal's last lines and running agent session are saved. At the next start they
-// come back dimmed above a fresh prompt, without a word about it: that's what Termilly does. A Claude Code session
-// that was running picks up again by itself (`claude --resume <session>` at the first prompt, in the folder it was
-// in); a hibernated one stays hibernated until its terminal is opened.
+// come back dimmed above a fresh prompt, without a word about it: that's what Termilly does. A Claude Code or Codex
+// session that was running picks up again by itself (`claude --resume <session>`, `codex resume <session>` at the first
+// prompt, in the folder it was in); a hibernated one stays hibernated until its terminal is opened.
 
 import { PAGE, HOST } from './protocol.js';
 import { send, onHost } from './host.js';
-import { state, finalSave } from './store.js';
+import { state, finalSave, resumeAgentCommand } from './store.js';
 import { bufferLines, scrolledBack, prepareStart } from './terminals.js';
 import { markHibernated } from './hibernate.js';
 import { startResuming } from './resuming.js';
-import { SETTING_VALUES } from './constants.js';
+import { AGENT_KIND, SETTING_VALUES } from './constants.js';
 import { showClosing, painted } from './closing.js';
 
 /** The choices of the settings used here (C#'s SettingValues). */
@@ -33,6 +33,12 @@ const scrollOf = s => (Number.isInteger(s.scroll) && s.scroll > 0 ? s.scroll : n
  */
 const folderOf = s => (typeof s.agentFolder === 'string' && s.agentFolder && !/[\x00-\x1f\x7f]/.test(s.agentFolder) ? s.agentFolder : null);
 
+/**
+ * Which agent a saved terminal's session is: Codex when the snapshot says so, else Claude Code (all were, before Codex).
+ * @param {any} s
+ */
+const kindOf = s => (s.agentKind === AGENT_KIND.codex ? AGENT_KIND.codex : AGENT_KIND.claude);
+
 /** What each open terminal shows now, in SessionSnapshot's shape. */
 function snapshot() {
   /** @type {Record<string, object>} */
@@ -47,6 +53,8 @@ function snapshot() {
       scroll: scrolledBack(tab, lines), // null at the bottom
       agentSession: session && SESSION_ID.test(session) ? session : null,
       agentFolder: tab.agent?.folder ?? tab.hibernated?.folder ?? null,
+      // The agent of the session kept, from the same place as the session.
+      agentKind: (tab.agent?.session ? tab.agent.kind : tab.hibernated?.session ? tab.hibernated.kind : tab.start?.resumeKind) ?? AGENT_KIND.claude,
       hibernated: !tab.agent?.session && !!tab.hibernated,
     };
   }
@@ -100,9 +108,9 @@ export function applySnapshot(saved) {
     // prompt that would have said so. Over SSH that folder is typed (resume.js), so it's checked here.
     if (folder) tab.lastCwd = folder;
     if (session && s.hibernated) {
-      markHibernated(tab, session, saved.savedAt, folder);
+      markHibernated(tab, session, saved.savedAt, folder, kindOf(s));
     } else if (session) {
-      prepareStart(tab, { resumeSession: session, command: `claude --resume ${session}` });
+      prepareStart(tab, { resumeSession: session, resumeKind: kindOf(s), command: resumeAgentCommand(session, kindOf(s)) });
       startResuming(tab, session);
     } else if (startCommandOf(tab)) {
       prepareStart(tab, { command: startCommandOf(tab) }); // a Claude Code terminal with nothing to resume: a new claude

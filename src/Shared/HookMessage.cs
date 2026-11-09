@@ -36,6 +36,8 @@ internal static class HookMessage
         public const string Folder = "folder";
         // UserPromptSubmit: what the user sent, for My prompts (kept in Termilly's own encrypted history).
         public const string Prompt = "prompt";
+        // Which agent sent it (AgentKinds); a message without one is Claude Code's, as all were before Codex.
+        public const string Agent = "agent";
 
         // A subagent's events, and an Agent call.
         public const string AgentId = "agentId";
@@ -140,7 +142,9 @@ internal static class AgentExecutables
     /// <summary>What Claude Code's hooks and status line run.</summary>
     public const string Hook = "termilly-hook";
     /// <summary>The shim terminals find first on PATH: it starts the real Claude Code with Termilly's hooks.</summary>
-    public const string Claude = "claude";
+    public const string Claude = AgentKinds.Claude;
+    /// <summary>The same shim for Codex: it starts the real Codex with Termilly's hooks and MCP server.</summary>
+    public const string Codex = AgentKinds.Codex;
     /// <summary>The termilly command (the API and MCP server) for scripts and agents.</summary>
     public const string Cli = "termilly";
     /// <summary>ssh's askpass helper: answers a password prompt from the saved credential.</summary>

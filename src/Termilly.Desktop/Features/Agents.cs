@@ -141,7 +141,8 @@ internal sealed class AgentMonitor : IStartable, IDisposable
         if (AgentHooks.StateFor(e) is { } state)
         {
             _poller?.Hooked(e.Pane, e.Session, ended: state == AgentStates.Exited);
-            if (!remote)
+            // Token use is read from Claude Code's transcripts; Codex's aren't read yet.
+            if (!remote && e.Agent == AgentKinds.Claude)
             {
                 Track(e.Pane, e.Session, state);
             }
@@ -149,7 +150,7 @@ internal sealed class AgentMonitor : IStartable, IDisposable
             {
                 RefreshPlan(); // the plan's name shows before the first limits do
             }
-            _page.Post(new ToPage.HookedAgent(e.Pane, state, e.Event, e.Tool, e.Message, e.Reason, e.Session, e.Target ?? e.File, e.Folder, e.Prompt));
+            _page.Post(new ToPage.HookedAgent(e.Pane, state, e.Event, e.Tool, e.Message, e.Reason, e.Session, e.Target ?? e.File, e.Folder, e.Prompt, e.Agent));
         }
         if (e.Status?.Limits is { } limits && limitsShown)
         {

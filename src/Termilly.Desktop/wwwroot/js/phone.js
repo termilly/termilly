@@ -8,7 +8,7 @@ import { PAGE, HOST } from './protocol.js';
 import { send, onHost } from './host.js';
 import { state, on, wsById, tabTitle, profileOf, activityOf, runsClaude, markSeen, isSsh, BADGES, EVENTS } from './store.js';
 import { entryDetail, notesForPhone } from './inbox.js';
-import { AGENT_STATE, CLAUDE_TOOL, PROFILE_ICON } from './constants.js';
+import { AGENT_KIND, AGENT_STATE, CLAUDE_TOOL, PROFILE_ICON } from './constants.js';
 import { debounce } from './util.js';
 import { isProduction } from './environments.js';
 import { screenOf } from './termscreen.js';
@@ -94,7 +94,7 @@ const RESUMING_LINE = 'Resuming the Claude session';
 /** @param {Tab} tab */
 function terminalOf(tab) {
   const profile = profileOf(tab);
-  const icon = runsClaude(tab) ? CLAUDE_BADGE : profile?.icon ?? '';
+  const icon = !runsClaude(tab) ? profile?.icon ?? '' : tab.agent?.kind === AGENT_KIND.codex ? PROFILE_ICON.codex : CLAUDE_BADGE;
   const activity = activityOf(tab);
   return {
     id: tab.id, ws: tab.wsId, title: tabTitle(tab), icon, note: tab.note ?? null, todo: listForPhone(terminalList(tab)),

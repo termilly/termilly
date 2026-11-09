@@ -3,7 +3,7 @@
 
 import { BADGES, PROFILE_SOURCES, state, tagColor, profileOf, runsClaude, sourceOf } from './store.js';
 import { DAY_MS, WEEK_DAYS } from './util.js';
-import { PROFILE_ICON } from './constants.js';
+import { AGENT_KIND, PROFILE_ICON } from './constants.js';
 import { RETURN_ICON } from './windows.js';
 
 /** The class of a badge at its usual size, in lists and headers. */
@@ -95,17 +95,18 @@ export const ltrPath = path => `‎${path ?? ''}‎`;
  * A profile's badge: the short mark of its icon.
  * @param {{ icon?: string } | null | undefined} profile
  * @param {string} [extraClass]
+ * @param {string} [title] its tooltip
  */
-export function badgeHtml(profile, extraClass = BADGE_SIZE.small) {
+export function badgeHtml(profile, extraClass = BADGE_SIZE.small, title) {
   const icon = profile?.icon ?? '';
-  if (icon === PROFILE_ICON.claude) return claudeBadge(extraClass);
+  if (icon === PROFILE_ICON.claude) return claudeBadge(extraClass, title);
   const word = /** @type {Record<string, string>} */ (PIXEL_WORDS)[icon];
-  return `<span class="badge ${extraClass}" data-icon="${escapeHtml(icon)}">${word ? pixelWord(word, extraClass === BADGE_SIZE.small)
+  return `<span class="badge ${extraClass}" data-icon="${escapeHtml(icon)}"${title ? ` title="${escapeHtml(title)}"` : ''}>${word ? pixelWord(word, extraClass === BADGE_SIZE.small)
     : `<span class="badge-text">${escapeHtml(/** @type {Record<string, string>} */ (BADGES)[icon] ?? '>_')}</span>`}</span>`;
 }
 
 /** Badges that are a word drawn in whole pixels, which a font can't keep sharp in an 18px badge. */
-const PIXEL_WORDS = { [PROFILE_ICON.serial]: 'COM', [PROFILE_ICON.ssh]: 'SSH', [PROFILE_ICON.wsl]: 'WSL' };
+const PIXEL_WORDS = { [PROFILE_ICON.serial]: 'COM', [PROFILE_ICON.ssh]: 'SSH', [PROFILE_ICON.wsl]: 'WSL', [PROFILE_ICON.codex]: 'CDX' };
 /**
  * The pixel fonts for those words. A word's width and height must have the same evenness as the badge's inside to
  * sit exactly in its middle: 6 rows, and 3 or 4 columns a letter (every word 12 wide), in the small badge's 16px; 6 x 8
@@ -116,6 +117,7 @@ const SMALL_FONT = /** @type {Record<string, string[]>} */ ({
   M: ['#..#', '####', '####', '#..#', '#..#', '#..#'], S: ['###', '#..', '###', '..#', '..#', '###'],
   H: ['#..#', '#..#', '####', '#..#', '#..#', '#..#'], W: ['#..#', '#..#', '#..#', '####', '####', '#..#'],
   L: ['#..', '#..', '#..', '#..', '#..', '###'],
+  D: ['###.', '#..#', '#..#', '#..#', '#..#', '###.'], X: ['#.#', '#.#', '.#.', '.#.', '#.#', '#.#'],
 });
 /** Rows of the large font: a full bar, the left side, the right side, both sides. */
 const [BAR, LEFT, RIGHT, SIDES] = ['######', '##....', '....##', '##..##'];
@@ -124,6 +126,8 @@ const LARGE_FONT = /** @type {Record<string, string[]>} */ ({
   M: [SIDES, SIDES, BAR, BAR, BAR, SIDES, SIDES, SIDES], S: [BAR, BAR, LEFT, BAR, BAR, RIGHT, BAR, BAR],
   H: [SIDES, SIDES, SIDES, BAR, BAR, SIDES, SIDES, SIDES], W: [SIDES, SIDES, SIDES, BAR, BAR, BAR, SIDES, SIDES],
   L: [LEFT, LEFT, LEFT, LEFT, LEFT, LEFT, BAR, BAR],
+  D: ['#####.', BAR, SIDES, SIDES, SIDES, SIDES, BAR, '#####.'],
+  X: [SIDES, SIDES, '.####.', '..##..', '..##..', '.####.', SIDES, SIDES],
 });
 /** The gap between letters, in pixels. */
 const GAP_PX = 1;
@@ -154,14 +158,18 @@ const CLAUDE_MARK = '<svg viewBox="0 0 12 12"><g fill="currentColor" stroke="non
   + '<rect x="5" y="0.5" width="2" height="11" rx="1" transform="rotate(-45 6 6)"/></g></svg>';
 
 /**
- * A terminal's badge: its shell's, or Claude's while Claude Code runs in it (back to the shell's when it exits).
+ * A terminal's badge: its shell's, or the agent's while Claude Code or Codex runs in it (back to the shell's when it
+ * exits).
  * Another computer's terminal shows what that computer says runs in it.
  * @param {Tab} tab
  * @param {string} [extraClass]
  */
 export function tabBadgeHtml(tab, extraClass = BADGE_SIZE.small) {
   if (tab.virtual?.icon) return badgeHtml({ icon: tab.virtual.icon }, extraClass);
-  return runsClaude(tab) ? claudeBadge(extraClass, 'Claude Code is running here') : badgeHtml(profileOf(tab), extraClass);
+  if (!runsClaude(tab)) return badgeHtml(profileOf(tab), extraClass);
+  return tab.agent?.kind === AGENT_KIND.codex
+    ? badgeHtml({ icon: PROFILE_ICON.codex }, extraClass, 'Codex is running here')
+    : claudeBadge(extraClass, 'Claude Code is running here');
 }
 
 /**

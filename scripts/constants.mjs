@@ -25,6 +25,7 @@ const SOURCES = [
   { file: 'Changes/ChangeModel.cs', cls: 'ChangeSources', js: 'CHANGE_SOURCE' },
   { file: 'Changes/ChangeModel.cs', cls: 'ChangeKinds', js: 'CHANGE_KIND' },
   { file: '../Shared/HookEvents.cs', cls: 'HookEvents', js: 'HOOK_EVENT' },
+  { file: '../Shared/AgentLookup.cs', cls: 'AgentKinds', js: 'AGENT_KIND' },
   { file: '../Shared/ClaudeTools.cs', cls: 'ClaudeTools', js: 'CLAUDE_TOOL' },
   { file: 'GitCommands.cs', cls: 'GitActions', js: 'GIT_ACTION' },
   { file: 'GitCommands.cs', cls: 'DiffSides', js: 'DIFF_SIDE' },

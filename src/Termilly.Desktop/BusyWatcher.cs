@@ -45,11 +45,11 @@ internal sealed class BusyWatcher : IDisposable
     /// <summary>Interactive programs, ignored with everything they start: they wait for the user, not the other way round.</summary>
     private static readonly string[] WindowsInteractive = [
         "ssh.exe", "mosh-client.exe", "telnet.exe", "plink.exe", "vim.exe", "nvim.exe", "vi.exe", "nano.exe",
-        "less.exe", "more.com", "man.exe", "htop.exe", "claude.exe", "wsl.exe",
+        "less.exe", "more.com", "man.exe", "htop.exe", "claude.exe", "codex.exe", "wsl.exe",
     ];
     private static readonly string[] UnixInteractive = [
         "ssh", "mosh-client", "telnet", "vim", "nvim", "vi", "nano", "micro", "emacs", "less", "more", "man",
-        "htop", "btop", "top", "mc", "tmux", "screen", AgentExecutables.Claude,
+        "htop", "btop", "top", "mc", "tmux", "screen", AgentExecutables.Claude, AgentExecutables.Codex,
     ];
     private static readonly HashSet<string> Interactive = OperatingSystem.IsWindows()
         ? new(WindowsInteractive, StringComparer.OrdinalIgnoreCase)

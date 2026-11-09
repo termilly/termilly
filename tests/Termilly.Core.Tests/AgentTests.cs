@@ -139,7 +139,7 @@ public sealed class AgentTests : IDisposable
         var real = Program(Folder("bin"), "claude");
 
         var path = string.Join(':', shim, notRunnable, Path.GetDirectoryName(real));
-        Assert.Equal(real, Shim.FindReal(path, pathExt: null, shimDirectory: shim + "/"));
+        Assert.Equal(real, Shim.FindReal("claude", path, pathExt: null, shimDirectory: shim + "/"));
     }
 
     [Fact]
@@ -151,7 +151,7 @@ public sealed class AgentTests : IDisposable
         }
         var shim = Folder("agent");
         Program(shim, "claude");
-        Assert.Null(Shim.FindReal(shim + ":" + Folder("empty"), pathExt: null, shimDirectory: shim));
+        Assert.Null(Shim.FindReal("claude", shim + ":" + Folder("empty"), pathExt: null, shimDirectory: shim));
     }
 
     [Fact]
