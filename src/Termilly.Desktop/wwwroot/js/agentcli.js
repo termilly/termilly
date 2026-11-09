@@ -16,8 +16,11 @@ const MAX_NAMED = 3;
 /** The first lines of a reply, for a notification. */
 const NOTICE_CHARS = 280;
 
-/** Every run: nothing keeps a session, and no MCP server can act for it (one that asks the user is added by the host). */
-const ALWAYS = Object.freeze(['--strict-mcp-config', '--no-session-persistence']);
+/** Every run: no MCP server can act for it (one that asks the user is added by the host). */
+const NO_SERVERS = '--strict-mcp-config';
+/** A run that nothing goes on from keeps no session. One whose agent is asked again later (a review's findings) keeps it. */
+const NO_SESSION = '--no-session-persistence';
+const RESUME = '--resume';
 /** A run nobody is asked in: what would ask is refused. One that asks gets its way of asking from the host (AskingRun.cs). */
 const NOBODY_ASKS = Object.freeze(['--permission-prompts', 'none']);
 /**
@@ -42,8 +45,14 @@ const REVIEW = Object.freeze(['--restricted', '--tools', `${READ_TOOLS},Bash`, '
   `${READ_TOOLS_ALLOWED},Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*)`]);
 
 /** Codex without a conversation: one prompt, in any folder. Its events as JSON lines, where its answer is read. */
-const CODEX_RUN = Object.freeze([AGENT_KIND.codex, 'exec', '--skip-git-repo-check']);
+const CODEX_RUN = Object.freeze([AGENT_KIND.codex, 'exec']);
+const CODEX_ANYWHERE = '--skip-git-repo-check';
 const CODEX_JSON = '--json';
+/** Codex going on with a session it kept. That command has no --sandbox: its sandbox is set as a setting instead. */
+const CODEX_RESUME = 'resume';
+const CODEX_RESUME_CHANGES = Object.freeze(['-c', 'sandbox_mode=workspace-write']);
+/** As Claude Code's NO_SESSION. */
+const CODEX_NO_SESSION = '--ephemeral';
 /** Codex's sandboxes: reading only (a prompt that may not change files, a review), or writing in its folder. */
 const CODEX_READ_ONLY = Object.freeze(['--sandbox', 'read-only']);
 const CODEX_CHANGES = Object.freeze(['--sandbox', 'workspace-write']);
@@ -77,20 +86,38 @@ function promptFor(prompt, shell, typed) {
 /**
  * The command for a prompt.
  * @param {string} prompt
- * @param {{ kind?: string, shell?: string, changes?: boolean, all?: boolean, json?: boolean, ask?: boolean, review?: boolean }} options
+ * @param {{ kind?: string, shell?: string, changes?: boolean, all?: boolean, json?: boolean, ask?: boolean, review?: boolean,
+ *   keep?: boolean, resume?: string | null }} options
  *   kind: the agent (AGENT_KIND), Claude Code when not said. json: the answer comes as one result, to read; else as text, for a
  *   terminal someone may look at. ask: what it may not do it asks the user, through the host (Claude Code only). all: with
- *   changes, it may do anything without asking. review: it reads and looks at what changed, and changes nothing.
+ *   changes, it may do anything without asking. review: it reads and looks at what changed, and changes nothing. keep: its
+ *   session is kept, to go on from later. resume: the session it goes on from (what its earlier result said, readResult), kept on.
  */
-export function agentCommand(prompt, { kind = AGENT_KIND.claude, shell, changes = false, all = false, json = false, ask = false, review = false }) {
-  if (kind === AGENT_KIND.codex) {
-    // Codex without a conversation asks nobody: its sandbox is what it may do.
-    const sandbox = review || !changes ? CODEX_READ_ONLY : all ? CODEX_EVERYTHING : CODEX_CHANGES;
-    return commandLine([...CODEX_RUN, ...(json ? [CODEX_JSON] : []), ...sandbox, codexPrompt(prompt)], shell);
-  }
+export function agentCommand(prompt, { kind = AGENT_KIND.claude, shell, changes = false, all = false, json = false, ask = false, review = false, keep = false, resume = null }) {
+  const session = sessionId(resume);
+  if (kind === AGENT_KIND.codex) return commandLine(codexWords(prompt, { changes, all, json, review, keep, session }), shell);
   const allowed = review ? REVIEW : !changes ? READ_ONLY : all ? EVERYTHING : ask ? CHANGES : CHANGES_UNASKED;
-  const words = [AGENT_COMMAND, '--print', promptFor(prompt, shell, !json), ...(json ? ['--output-format', 'json'] : []), ...allowed, ...ALWAYS, ...(ask ? [] : NOBODY_ASKS)];
+  const kept = session ? [RESUME, session] : keep ? [] : [NO_SESSION];
+  const words = [AGENT_COMMAND, '--print', promptFor(prompt, shell, !json), ...(json ? ['--output-format', 'json'] : []), ...allowed, NO_SERVERS, ...kept, ...(ask ? [] : NOBODY_ASKS)];
   return commandLine(words, shell);
+}
+
+/**
+ * A session's id as a command line may carry it, or null: what an agent's result said is letters, digits and dashes.
+ * @param {string | null | undefined} id
+ */
+const sessionId = id => (typeof id === 'string' && /^[\w-]{1,80}$/.test(id) ? id : null);
+
+/**
+ * Codex's words for a prompt. Without a conversation it asks nobody: its sandbox is what it may do.
+ * @param {string} prompt
+ * @param {{ changes: boolean, all: boolean, json: boolean, review: boolean, keep: boolean, session: string | null }} options
+ */
+function codexWords(prompt, { changes, all, json, review, keep, session }) {
+  const flags = [CODEX_ANYWHERE, ...(json ? [CODEX_JSON] : [])];
+  if (session) return [...CODEX_RUN, CODEX_RESUME, ...flags, ...(all ? CODEX_EVERYTHING : CODEX_RESUME_CHANGES), session, codexPrompt(prompt)];
+  const sandbox = review || !changes ? CODEX_READ_ONLY : all ? CODEX_EVERYTHING : CODEX_CHANGES;
+  return [...CODEX_RUN, ...flags, ...(keep ? [] : [CODEX_NO_SESSION]), ...sandbox, codexPrompt(prompt)];
 }
 
 /**
@@ -112,12 +139,13 @@ export function noticeOf(reply) {
 }
 
 /**
- * @typedef {{ reply: string, failed: boolean, errored: boolean, why: string, costUsd: number | null }} AgentResult failed: it
- *   ended with an error or was refused a tool; errored: only the first.
+ * @typedef {{ reply: string, failed: boolean, errored: boolean, why: string, costUsd: number | null, session: string | null }} AgentResult
+ *   failed: it ended with an error or was refused a tool; errored: only the first. session: the session it ran in, to go on from
+ *   where it was kept (agentCommand's keep).
  */
 
 /** Codex's events (its JSON lines) that say how a run went. */
-const CODEX_EVENT = Object.freeze({ item: 'item.completed', message: 'agent_message', done: 'turn.completed', failed: 'turn.failed', error: 'error' });
+const CODEX_EVENT = Object.freeze({ item: 'item.completed', message: 'agent_message', done: 'turn.completed', failed: 'turn.failed', error: 'error', started: 'thread.started' });
 
 /**
  * What Codex's run says: its last message as the reply, and whether its turn failed. Null when it printed no events: a shell
@@ -142,7 +170,8 @@ function readCodex(output) {
   const error = events.findLast(e => e.type === CODEX_EVENT.failed || e.type === CODEX_EVENT.error);
   const errored = !!error && !events.some(e => e.type === CODEX_EVENT.done);
   const why = errored ? String(error.error?.message ?? error.message ?? 'It ended with an error.') : '';
-  return { reply: String(reply), failed: errored, errored, why, costUsd: null };
+  const thread = events.find(e => e.type === CODEX_EVENT.started)?.thread_id;
+  return { reply: String(reply), failed: errored, errored, why, costUsd: null, session: sessionId(thread) };
 }
 
 /**
@@ -164,7 +193,10 @@ export function readResult(output, kind = AGENT_KIND.claude) {
       const denied = Array.isArray(result.permission_denials) ? result.permission_denials : [];
       const errors = Array.isArray(result.errors) ? result.errors.join(' ') : '';
       const why = denied.length ? wanted(denied) : result.is_error ? errors || String(result.subtype ?? 'It ended with an error.') : '';
-      return { reply: String(result.result ?? ''), failed: !!result.is_error || denied.length > 0, errored: !!result.is_error, why, costUsd: typeof result.total_cost_usd === 'number' ? result.total_cost_usd : null };
+      return {
+        reply: String(result.result ?? ''), failed: !!result.is_error || denied.length > 0, errored: !!result.is_error, why,
+        costUsd: typeof result.total_cost_usd === 'number' ? result.total_cost_usd : null, session: sessionId(result.session_id),
+      };
     } catch (e) {
       if (!(e instanceof SyntaxError)) throw e;
     }

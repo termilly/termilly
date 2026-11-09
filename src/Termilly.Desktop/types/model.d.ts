@@ -52,12 +52,13 @@ interface TodoTask {
   stage?: { what: string; round: number; count?: number | null };
   /**
    * What the agent that finished it said, and who; with reviewers, what each said in the last round, how many rounds it took,
-   * the rounds that found something, whether they agreed, and the terminal the work was done in.
+   * the rounds that found something, whether they agreed, the terminal the work was done in, and the silent agent's session
+   * (one more round goes on from it).
    */
   review?: {
     summary: string; by: string; kind?: string;
     reviews?: { kind: string; agrees: boolean; count: number | null; text: string }[];
-    rounds?: number; earlier?: { round: number; found: number }[]; agreed?: boolean; terminal?: string;
+    rounds?: number; earlier?: { round: number; found: number }[]; agreed?: boolean; terminal?: string; session?: string;
   };
   /** What its run out of sight asks the user for and waits on (js/todoask.js): what the tool would do, and with what. */
   ask?: { verb: string; what: string };

@@ -27,8 +27,8 @@ const LAST_LINE_CHARS = 200;
 /**
  * @typedef {{ folder: string, profile: SessionProfile, server: string | null }} RunPlace where a run is: server is the SSH
  *   host's name, or null for this computer
- * @typedef {{ taskId: string, line?: number, role: string, kind: string }} HiddenRun its task, the sub-item's line when it's on
- *   one, what it's for (ROLE) and its agent (AGENT_KIND)
+ * @typedef {{ taskId: string, line?: number, role: string, kind: string, resumed: boolean }} HiddenRun its task, the sub-item's
+ *   line when it's on one, what it's for (ROLE), its agent (AGENT_KIND), and whether it goes on from a session kept before
  * @typedef {{ result: import('./agentcli.js').AgentResult | null, stopped: boolean, why: string }} RunOutcome result: what the
  *   agent said, or null when it was stopped or gave no result; why: what to say then
  */
@@ -62,19 +62,20 @@ const loginShell = command => `"$SHELL" -l -c ${quoteArg(`${command} < /dev/null
 
 /**
  * Starts an agent in a hidden shell on a task.
- * @param {{ taskId: string, line?: number, role: string, kind: string, place: RunPlace, prompt: string }} run a review reads and
- *   changes nothing; the work and a fix may change files
+ * @param {{ taskId: string, line?: number, role: string, kind: string, place: RunPlace, prompt: string, keep?: boolean,
+ *   resume?: string | null }} run a review reads and changes nothing; the work and a fix may change files. keep: its session is
+ *   kept, for a fix to go on from; resume: the session it goes on from
  * @returns {string} the run's id
  */
-export function runHidden({ taskId, line, role, kind, place, prompt }) {
+export function runHidden({ taskId, line, role, kind, place, prompt, keep = false, resume = null }) {
   const { folder, profile } = place;
   const id = newId('t');
   const review = role === ROLE.review;
   // A shell on this computer reaches Termilly's pipe, so Claude Code there can ask the user. A reviewer has nothing to ask for.
   const ask = !review && kind === AGENT_KIND.claude && sourceOf(profile) === PROFILE_SOURCE.local;
   const all = !ask && state.todo.allowAll === true;
-  const agent = agentCommand(prompt, { kind, shell: profile.shellIcon ?? profile.icon, changes: !review, all, json: true, ask, review });
-  going.set(id, { taskId, line, role, kind });
+  const agent = agentCommand(prompt, { kind, shell: profile.shellIcon ?? profile.icon, changes: !review, all, json: true, ask, review, keep, resume });
+  going.set(id, { taskId, line, role, kind, resumed: !!resume });
   send(PAGE.scheduleRun, { runId: id, profile: profile.id, cwd: folder, command: place.server ? loginShell(agent) : agent, limitSeconds: LIMIT_SECONDS, ask });
   return id;
 }

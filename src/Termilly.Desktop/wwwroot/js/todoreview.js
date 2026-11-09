@@ -2,7 +2,8 @@
 // Implement, from start to Review: the agent picked does the task's work (silently, js/todorun.js, or in a terminal,
 // js/todoactions.js), then the agents picked to review it read what it did, each silently and changing nothing. What they find
 // goes back to the agent that did the work, which fixes it, and they look again, for as many rounds as the plan allows
-// (js/todoplan.js). The task stays In progress all that time, its row saying who has it now, and reaches the user's Review with
+// (js/todoplan.js). A silent agent fixes in the session it did the work in, so it still knows what it did and why (should that
+// session not open again, in a new one, told what was found); a reviewer starts anew each round, to look with fresh eyes. The task stays In progress all that time, its row saying who has it now, and reaches the user's Review with
 // the reviewers' verdict and what each one said. With nobody reviewing, the work's reply goes straight to Review, as before.
 
 import { PAGE } from './protocol.js';
@@ -38,6 +39,8 @@ import { STAGE, RUN, reviewPrompt, fixPrompt, readReview } from './todoplan.js';
  * @property {AgentReview[]} before what the round before found
  * @property {Set<string>} waiting this round's reviews still running, by run
  * @property {{ round: number, found: number }[]} earlier the rounds that found something, and how much
+ * @property {string | null} session the silent agent's session, which its fix goes on from; null in a terminal, or unknown
+ * @property {AgentReview[]} open the findings last handed back, should the fix have to start again
  */
 
 /**
@@ -83,7 +86,7 @@ function live(loop) {
 export function watchWork(task, plan, place, { line, terminal = null } = {}) {
   loops.delete(task.id);
   if (!plan.reviewers.length) return;
-  loops.set(task.id, { taskId: task.id, line, plan, place, terminal, round: 0, reply: '', by: '', reviews: [], before: [], waiting: new Set(), earlier: [] });
+  loops.set(task.id, { taskId: task.id, line, plan, place, terminal, round: 0, reply: '', by: '', reviews: [], before: [], waiting: new Set(), earlier: [], session: null, open: [] });
 }
 
 /**
@@ -95,7 +98,8 @@ export function watchWork(task, plan, place, { line, terminal = null } = {}) {
  * @param {RunPlace} place
  */
 export function implementSilently(ref, task, sub, plan, place) {
-  const run = runHidden({ taskId: task.id, line: sub?.at, role: ROLE.work, kind: plan.by, place, prompt: silentPrompt(task, sub) });
+  // With reviewers its session is kept, for the fixes to go on from; with none, nothing would.
+  const run = runHidden({ taskId: task.id, line: sub?.at, role: ROLE.work, kind: plan.by, place, prompt: silentPrompt(task, sub), keep: plan.reviewers.length > 0 });
   watchWork(task, plan, place, { line: sub?.at });
   setStatus(ref, task.id, TASK_STATUS.progress, { run, plan, stage: { what: STAGE.working, round: 0 } });
 }
@@ -151,7 +155,10 @@ function toReview(loop, agreed) {
   loops.delete(loop.taskId);
   if (!found) return;
   const { ref, task } = found;
-  const review = { summary: loop.reply, by: loop.by, kind: loop.plan.by, reviews: loop.reviews, rounds: loop.round, earlier: loop.earlier, agreed, terminal: loop.terminal ?? undefined };
+  const review = {
+    summary: loop.reply, by: loop.by, kind: loop.plan.by, reviews: loop.reviews, rounds: loop.round, earlier: loop.earlier, agreed,
+    terminal: loop.terminal ?? undefined, session: loop.session ?? undefined,
+  };
   setStatus(ref, task.id, TASK_STATUS.review, { plan: loop.plan, review });
   const tab = loop.terminal ? state.tabs.get(loop.terminal) ?? null : null;
   alertReview(task, loop.reply.split(/\r?\n/)[0] ?? '', tab);
@@ -190,9 +197,21 @@ function startFix(loop, open) {
     return true;
   }
   loop.earlier.push({ round: loop.round, found: found_ });
-  const run = runHidden({ taskId: loop.taskId, line: loop.line, role: ROLE.fix, kind: loop.plan.by, place: loop.place, prompt: fixPrompt(words, open, '') });
-  setStatus(found.ref, loop.taskId, TASK_STATUS.progress, { run, plan: loop.plan, stage });
+  loop.open = open;
+  fixSilently(loop, found, stage);
   return true;
+}
+
+/**
+ * The agent that did the work silently fixes what was found: in the session it worked in, where that's known, else in a new one.
+ * @param {Loop} loop
+ * @param {{ ref: ListRef, task: TodoTask }} found
+ * @param {TodoTask['stage']} stage
+ */
+function fixSilently(loop, found, stage) {
+  const prompt = fixPrompt(taskWords(found.task, loop.line), loop.open, '');
+  const run = runHidden({ taskId: loop.taskId, line: loop.line, role: ROLE.fix, kind: loop.plan.by, place: loop.place, prompt, keep: true, resume: loop.session });
+  setStatus(found.ref, loop.taskId, TASK_STATUS.progress, { run, plan: loop.plan, stage });
 }
 
 /**
@@ -239,8 +258,13 @@ function workEnded(id, run, outcome) {
   const loop = loops.get(run.taskId);
   // Refused a tool, it still did what it could: that goes on, saying what it wasn't let do.
   if (!result || result.errored) {
+    // Its session wouldn't open again (cleared, or the agent's files moved): the fix starts over in a new one.
+    if (run.role === ROLE.fix && run.resumed && loop && !outcome.stopped) {
+      loop.session = null;
+      fixSilently(loop, found, found.task.stage);
+    }
     // A fix that gave nothing leaves the work as the reviewers last saw it: that's the user's to judge.
-    if (run.role === ROLE.fix && loop && !outcome.stopped) toReview(loop, false);
+    else if (run.role === ROLE.fix && loop && !outcome.stopped) toReview(loop, false);
     else backToOpen(run.taskId, outcome);
     return;
   }
@@ -249,6 +273,7 @@ function workEnded(id, run, outcome) {
   if (loop) {
     loop.reply = summary;
     loop.by = silentBy(run.kind);
+    loop.session = result.session ?? loop.session;
     startReviews(loop);
     return;
   }
@@ -304,7 +329,7 @@ export function oneMoreRound(ref, task, place) {
   /** @type {Loop} */
   const loop = {
     taskId: task.id, plan: { ...plan, rounds: round + 1 }, place, terminal, round, reply: review.summary, by: review.by,
-    reviews: review.reviews ?? [], before: [], waiting: new Set(), earlier: [...(review.earlier ?? [])],
+    reviews: review.reviews ?? [], before: [], waiting: new Set(), earlier: [...(review.earlier ?? [])], session: review.session ?? null, open: [],
   };
   loops.set(task.id, loop);
   setStatus(ref, task.id, TASK_STATUS.progress, { terminal: terminal ?? undefined, plan: loop.plan, stage: { what: STAGE.fixing, round: round + 1 } });

@@ -89,7 +89,7 @@ test('the verdict a task in Review leads with', () => {
 });
 
 test('Codex runs without a terminal, in a sandbox that fits what it may do', () => {
-  assert.match(agentCommand('Do it', { kind: 'codex', shell: 'bash', changes: true, json: true }), /^codex exec --skip-git-repo-check --json --sandbox workspace-write 'Do it'$/);
+  assert.match(agentCommand('Do it', { kind: 'codex', shell: 'bash', changes: true, json: true }), /^codex exec --skip-git-repo-check --json --ephemeral --sandbox workspace-write 'Do it'$/);
   assert.match(agentCommand('Look', { kind: 'codex', shell: 'bash' }), /--sandbox read-only/);
   assert.match(agentCommand('Review', { kind: 'codex', shell: 'bash', changes: true, review: true }), /--sandbox read-only/);
   assert.match(agentCommand('Do it', { kind: 'codex', shell: 'bash', changes: true, all: true }), /--dangerously-bypass-approvals-and-sandbox/);
@@ -121,7 +121,7 @@ test('Codex\'s answer is its last message', () => {
     '{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"Looking."}}',
     '{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"Done.\\nVERDICT: AGREE"}}',
     '{"type":"turn.completed","usage":{"input_tokens":1}}'].join('\r\n');
-  assert.deepEqual(readResult(out, 'codex'), { reply: 'Done.\nVERDICT: AGREE', failed: false, errored: false, why: '', costUsd: null });
+  assert.deepEqual(readResult(out, 'codex'), { reply: 'Done.\nVERDICT: AGREE', failed: false, errored: false, why: '', costUsd: null, session: '01a1' });
 });
 
 test('Codex failing, or not there at all', () => {
@@ -132,6 +132,29 @@ test('Codex failing, or not there at all', () => {
 });
 
 test('Codex in a terminal someone may look at answers in words, not JSON lines', () => {
-  assert.equal(agentCommand('Summarize', { kind: 'codex', shell: 'bash' }), "codex exec --skip-git-repo-check --sandbox read-only Summarize");
-  assert.match(agentCommand('Summarize', { kind: 'codex', shell: 'bash', json: true }), /^codex exec --skip-git-repo-check --json --sandbox read-only/);
+  assert.equal(agentCommand('Summarize', { kind: 'codex', shell: 'bash' }), "codex exec --skip-git-repo-check --ephemeral --sandbox read-only Summarize");
+  assert.match(agentCommand('Summarize', { kind: 'codex', shell: 'bash', json: true }), /^codex exec --skip-git-repo-check --json --ephemeral --sandbox read-only/);
+});
+
+test('a run keeps no session unless something goes on from it', () => {
+  assert.match(agentCommand('x', { shell: 'bash', changes: true, json: true }), /--no-session-persistence/);
+  assert.doesNotMatch(agentCommand('x', { shell: 'bash', changes: true, json: true, keep: true }), /--no-session-persistence|--resume/);
+  assert.match(agentCommand('x', { kind: 'codex', shell: 'bash', changes: true, json: true }), /--ephemeral/);
+  assert.doesNotMatch(agentCommand('x', { kind: 'codex', shell: 'bash', changes: true, json: true, keep: true }), /--ephemeral/);
+});
+
+test('a fix goes on from the session the work was done in', () => {
+  const claude = agentCommand('Fix it', { shell: 'bash', changes: true, json: true, keep: true, resume: 'a1b2-c3' });
+  assert.match(claude, /--strict-mcp-config --resume a1b2-c3 --permission-prompts none$/);
+  assert.doesNotMatch(claude, /--no-session-persistence/);
+  assert.equal(agentCommand('Fix it', { kind: 'codex', shell: 'bash', changes: true, json: true, keep: true, resume: '01a1c254-f3a4' }),
+    "codex exec resume --skip-git-repo-check --json -c sandbox_mode=workspace-write 01a1c254-f3a4 'Fix it'");
+  assert.match(agentCommand('Fix it', { kind: 'codex', shell: 'bash', changes: true, all: true, resume: '01a1' }), /resume --skip-git-repo-check --dangerously-bypass-approvals-and-sandbox 01a1/);
+});
+
+test('what isn\'t a session\'s id never reaches the command line', () => {
+  const line = agentCommand('Fix it', { shell: 'bash', changes: true, json: true, keep: true, resume: 'x; rm -rf ~' });
+  assert.doesNotMatch(line, /rm -rf|--resume/);
+  assert.equal(readResult(JSON.stringify({ type: 'result', result: 'ok', session_id: 'bad id"' }))?.session, null);
+  assert.equal(readResult(JSON.stringify({ type: 'result', result: 'ok', session_id: '9f3e-11' }))?.session, '9f3e-11');
 });

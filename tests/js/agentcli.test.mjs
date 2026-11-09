@@ -52,7 +52,7 @@ test('a prompt stays one word in each shell', () => {
 });
 
 test('a result that worked gives its reply', () => {
-  assert.deepEqual(readResult(result()), { reply: 'All good.\nSecond line.', failed: false, errored: false, why: '', costUsd: 0.02 });
+  assert.deepEqual(readResult(result()), { reply: 'All good.\nSecond line.', failed: false, errored: false, why: '', costUsd: 0.02, session: null });
 });
 
 test('what a shell printed before it doesn\'t matter', () => {
