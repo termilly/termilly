@@ -99,11 +99,15 @@ internal static class MacKeychain
         return item;
     }
 
+    /// <summary>The status macOS gives when the keychain is locked and nobody can be asked to unlock it (an SSH session).</summary>
+    public const int InteractionNotAllowed = -25308;
+
+    /// <summary>Throws for a status that isn't success; the exception's HResult is the status.</summary>
     private static void Check(int status)
     {
         if (status != Ok)
         {
-            throw new InvalidOperationException($"The keychain said no (error {status}).");
+            throw new InvalidOperationException($"The keychain said no (error {status}).") { HResult = status };
         }
     }
 

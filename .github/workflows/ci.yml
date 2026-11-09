@@ -59,8 +59,18 @@ jobs:
           app=src/Termilly.Linux/bin/Release/net10.0/Termilly.app/Contents
           test -f "$app/Info.plist"
           test -L "$app/MacOS/termilly"
-          test -x src/Termilly.Linux/bin/Release/net10.0/termilly
+          test -x "$app/MacOS/termilly"
+      # A keychain of the job's own, unlocked and the default, so the keychain test runs (and must: see KeychainTests).
+      - name: A keychain for the tests
+        run: |
+          security create-keychain -p ci ci.keychain
+          security set-keychain-settings ci.keychain
+          security unlock-keychain -p ci ci.keychain
+          security list-keychains -d user -s ci.keychain $(security list-keychains -d user | tr -d '"')
+          security default-keychain -d user -s ci.keychain
       - name: Test
+        env:
+          TERMILLY_REQUIRE_KEYCHAIN: '1'
         run: dotnet test tests/Termilly.Core.Tests -c Release
 
   javascript:
