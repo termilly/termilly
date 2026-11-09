@@ -6,9 +6,9 @@
 
 import { PAGE, HOST } from './protocol.js';
 import { send, onHost } from './host.js';
-import { state, on, wsById, tabTitle, profileOf, activityOf, runsClaude, markSeen, isSsh, BADGES, EVENTS } from './store.js';
+import { state, on, wsById, tabTitle, profileOf, activityOf, runningAgent, markSeen, isSsh, BADGES, EVENTS } from './store.js';
 import { entryDetail, notesForPhone } from './inbox.js';
-import { AGENT_KIND, AGENT_STATE, CLAUDE_TOOL, PROFILE_ICON } from './constants.js';
+import { AGENT_STATE, CLAUDE_TOOL, PROFILE_ICON } from './constants.js';
 import { debounce } from './util.js';
 import { isProduction } from './environments.js';
 import { screenOf } from './termscreen.js';
@@ -24,6 +24,8 @@ import { terminalList, workspaceList } from './todo.js';
 import { hasFiles, shellFolderOf, placeOf } from './filepaths.js';
 import { hasPrompts } from './myprompts.js';
 import { platform } from './host.js';
+import { agentKind } from './agentkinds.js';
+import { agentMarkHtml, BADGE_SIZE } from './ui.js';
 
 /** How long changes settle before the phones hear of them. */
 const SEND_AFTER_MS = 300;
@@ -45,7 +47,6 @@ const ENTER_DELAY_MS = 200;
 const WAITING = Object.freeze({ permission: 'permission', question: 'question', attention: 'attention', error: 'error' });
 /** The badge marks the phone draws: the desktop's pixel words as text. */
 const WORDS = { [PROFILE_ICON.serial]: 'COM', [PROFILE_ICON.ssh]: 'SSH', [PROFILE_ICON.wsl]: 'WSL' };
-const CLAUDE_BADGE = 'claude';
 /**
  * A badge's text for a profile's icon, as the PC's sidebar shows it.
  * @param {string} icon
@@ -94,13 +95,16 @@ const RESUMING_LINE = 'Resuming the Claude session';
 /** @param {Tab} tab */
 function terminalOf(tab) {
   const profile = profileOf(tab);
-  const icon = !runsClaude(tab) ? profile?.icon ?? '' : tab.agent?.kind === AGENT_KIND.codex ? PROFILE_ICON.codex : CLAUDE_BADGE;
+  const agent = runningAgent(tab);
+  const icon = agent ? agentKind(agent).icon : profile?.icon ?? '';
   const activity = activityOf(tab);
   return {
     id: tab.id, ws: tab.wsId, title: tabTitle(tab), icon, note: tab.note ?? null, todo: listForPhone(terminalList(tab)),
     // A phone or another computer gives it its size: who (another computer showing it draws it the same).
     sizedBy: tab.sizedBy ?? null,
     badge: badgeOf(icon),
+    // An agent's mark (Claude's spark, OpenAI's knot for Codex), drawn as the PC draws it.
+    mark: agentMarkHtml(icon, BADGE_SIZE.large) || null,
     // Another Termilly computer showing it may open its Prompt history (Settings › Remote › Prompt history).
     prompts: !!state.settings.phone?.sharePrompts && hasPrompts(tab),
     agent: tab.agent?.state ?? null,

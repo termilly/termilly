@@ -77,7 +77,7 @@ const DEFAULT_SIZE = Object.freeze({ cols: 80, rows: 24 });
 /** Messages from the PC about the terminal watched (PhoneLive.Kinds). */
 const LIVE = Object.freeze({ screen: 'screen', output: 'output' });
 
-/** @typedef {{ id: string, title: string, ws: string, icon: string, badge: string, waiting: unknown, production: boolean, cols: number | null, rows: number | null, activity: string | null, percent: number | null, hint: string | null }} Shown */
+/** @typedef {{ id: string, title: string, ws: string, icon: string, badge: string, mark: string | null, waiting: unknown, production: boolean, cols: number | null, rows: number | null, activity: string | null, percent: number | null, hint: string | null }} Shown */
 
 /** The activities the PC draws next to a terminal's title (store.js ACTIVITY); others ("exited") draw nothing. */
 const ACTIVITIES = new Set(['needs', 'error', 'paused', 'done', 'percent', 'spin', 'hibernated']);
@@ -247,7 +247,7 @@ export function terminalView(app) {
   function head() {
     if (!shown) return '';
     return `<header class="tv-head"><button class="tv-back" data-tv="${TV.back}" aria-label="Back">‹</button>
-      <span class="badge${shown.icon === 'claude' ? ' claude' : ''}" data-icon="${esc(shown.icon)}">${shown.icon === 'claude' ? '✻' : esc(shown.badge)}</span>
+      <span class="badge" data-icon="${esc(shown.icon)}">${shown.mark ?? esc(shown.badge)}</span>
       <span class="tv-title">${esc(shown.title)}<span class="tv-ws"> · ${esc(app.wsName(shown.ws))}</span></span>
       <span class="activity-slot">${slotHtml(shown)}</span>
       ${shown.waiting ? `<button class="btn primary tv-answer" data-tv="${TV.answer}">Answer</button>` : ''}</header>`;

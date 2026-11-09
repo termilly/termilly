@@ -1154,8 +1154,8 @@ body[data-sidebar="rail"] .side-rail { opacity: 1; pointer-events: auto; }
 .rail-remote:hover, .rail-remote.open { background: var(--hover); color: var(--text); }
 .rail-remote svg { width: 16px; height: 16px; stroke-width: 1; }
 .menu-icon .badge.small { width: 16px; height: 16px; border-radius: 4px; font-size: 7.5px; }
-/* A pixel word (COM, SSH, WSL) keeps its own size: stretched to the menu's 16px icons, it outgrew its tile. */
-.menu-icon .badge-word { width: auto; height: auto; }
+/* A pixel word (COM, SSH, WSL) or mark (Codex) keeps its own size: stretched to the menu's 16px icons, it outgrew its tile. */
+.menu-icon .badge-word, .menu-icon .badge-mark { width: auto; height: auto; }
 .side-list::-webkit-scrollbar { width: 6px; }
 .side-list::-webkit-scrollbar-thumb { border-radius: 3px; background: var(--scroll-thumb); }
 
@@ -1583,6 +1583,8 @@ body[data-sidebar="rail"] .side-rail { opacity: 1; pointer-events: auto; }
 .badge[data-icon="claude"] { --tint: #d97757; }
 .badge[data-icon="claude"] svg { width: 12px; height: 12px; }
 .badge.lg[data-icon="claude"] svg { width: 16px; height: 16px; }
+/* Codex: OpenAI's knot, black or white as the text is (ui.js draws it in whole pixels at its own size). */
+.badge[data-icon="codex"] { --tint: var(--text); }
 .badge[data-icon="cmd"] { --tint: #c8c8c8; }
 .badge[data-icon="bash"] { --tint: #f1724f; }
 .badge[data-icon="wsl"] { --tint: #f2a33a; }

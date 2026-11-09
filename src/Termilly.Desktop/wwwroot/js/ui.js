@@ -1,9 +1,10 @@
 // @ts-check
 // Small markup helpers shared by the header, sidebar and search.
 
-import { BADGES, PROFILE_SOURCES, state, tagColor, profileOf, runsClaude, sourceOf } from './store.js';
+import { BADGES, PROFILE_SOURCES, state, tagColor, profileOf, runningAgent, sourceOf } from './store.js';
 import { DAY_MS, WEEK_DAYS } from './util.js';
-import { AGENT_KIND, PROFILE_ICON } from './constants.js';
+import { PROFILE_ICON } from './constants.js';
+import { agentKind } from './agentkinds.js';
 import { RETURN_ICON } from './windows.js';
 
 /** The class of a badge at its usual size, in lists and headers. */
@@ -99,14 +100,14 @@ export const ltrPath = path => `‎${path ?? ''}‎`;
  */
 export function badgeHtml(profile, extraClass = BADGE_SIZE.small, title) {
   const icon = profile?.icon ?? '';
-  if (icon === PROFILE_ICON.claude) return claudeBadge(extraClass, title);
+  if (agentMarkHtml(icon, extraClass)) return agentBadge(icon, extraClass, title);
   const word = /** @type {Record<string, string>} */ (PIXEL_WORDS)[icon];
   return `<span class="badge ${extraClass}" data-icon="${escapeHtml(icon)}"${title ? ` title="${escapeHtml(title)}"` : ''}>${word ? pixelWord(word, extraClass === BADGE_SIZE.small)
     : `<span class="badge-text">${escapeHtml(/** @type {Record<string, string>} */ (BADGES)[icon] ?? '>_')}</span>`}</span>`;
 }
 
 /** Badges that are a word drawn in whole pixels, which a font can't keep sharp in an 18px badge. */
-const PIXEL_WORDS = { [PROFILE_ICON.serial]: 'COM', [PROFILE_ICON.ssh]: 'SSH', [PROFILE_ICON.wsl]: 'WSL', [PROFILE_ICON.codex]: 'CDX' };
+const PIXEL_WORDS = { [PROFILE_ICON.serial]: 'COM', [PROFILE_ICON.ssh]: 'SSH', [PROFILE_ICON.wsl]: 'WSL' };
 /**
  * The pixel fonts for those words. A word's width and height must have the same evenness as the badge's inside to
  * sit exactly in its middle: 6 rows, and 3 or 4 columns a letter (every word 12 wide), in the small badge's 16px; 6 x 8
@@ -117,7 +118,6 @@ const SMALL_FONT = /** @type {Record<string, string[]>} */ ({
   M: ['#..#', '####', '####', '#..#', '#..#', '#..#'], S: ['###', '#..', '###', '..#', '..#', '###'],
   H: ['#..#', '#..#', '####', '#..#', '#..#', '#..#'], W: ['#..#', '#..#', '#..#', '####', '####', '#..#'],
   L: ['#..', '#..', '#..', '#..', '#..', '###'],
-  D: ['###.', '#..#', '#..#', '#..#', '#..#', '###.'], X: ['#.#', '#.#', '.#.', '.#.', '#.#', '#.#'],
 });
 /** Rows of the large font: a full bar, the left side, the right side, both sides. */
 const [BAR, LEFT, RIGHT, SIDES] = ['######', '##....', '....##', '##..##'];
@@ -126,8 +126,6 @@ const LARGE_FONT = /** @type {Record<string, string[]>} */ ({
   M: [SIDES, SIDES, BAR, BAR, BAR, SIDES, SIDES, SIDES], S: [BAR, BAR, LEFT, BAR, BAR, RIGHT, BAR, BAR],
   H: [SIDES, SIDES, SIDES, BAR, BAR, SIDES, SIDES, SIDES], W: [SIDES, SIDES, SIDES, BAR, BAR, BAR, SIDES, SIDES],
   L: [LEFT, LEFT, LEFT, LEFT, LEFT, LEFT, BAR, BAR],
-  D: ['#####.', BAR, SIDES, SIDES, SIDES, SIDES, BAR, '#####.'],
-  X: [SIDES, SIDES, '.####.', '..##..', '..##..', '.####.', SIDES, SIDES],
 });
 /** The gap between letters, in pixels. */
 const GAP_PX = 1;
@@ -152,33 +150,77 @@ function pixelWord(word, small) {
   return `<svg class="badge-word" viewBox="0 0 ${width} ${rows}" width="${width}" height="${rows}" shape-rendering="crispEdges" aria-label="${word}"><path fill="currentColor" stroke="none" d="${d}"/></svg>`;
 }
 
+/**
+ * A picture of whole pixels ('#' for one), as an SVG at its own size, which keeps it sharp.
+ * @param {string[]} rows
+ */
+function pixelPicture(rows) {
+  let d = '';
+  rows.forEach((row, y) => [...row].forEach((p, x) => {
+    if (p === '#') d += `M${x} ${y}h1v1h-1z`;
+  }));
+  const [w, h] = [rows[0].length, rows.length];
+  return `<svg class="badge-mark" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" shape-rendering="crispEdges"><path fill="currentColor" stroke="none" d="${d}"/></svg>`;
+}
+
+/**
+ * OpenAI's knot for Codex, drawn in whole pixels from its logo: 14 for the small badge's 16 inside, 18 for the
+ * others' 24 and 26 (even sizes sit exactly in the middle).
+ */
+const CODEX_SMALL = [
+  '....####......', '...##..#####..', '..##..##..###.', '.###.##..#..#.', '##.#.#.######.', '#..#.####..##.', '#..#.#..###.##',
+  '##.###..#.#..#', '.##..####.##.#', '.######.#.####', '.#..#..##.###.', '.##...##..##..', '..#####..##...', '......####....',
+];
+const CODEX_LARGE = [
+  '......####........', '.....##..#####....', '....##...######...', '...##..###....##..', '.####.##...#...##.',
+  '.#.##.#...####..#.', '##.##.#.##...####.', '#..##.##..##...##.', '#..##.#....###..##', '##..###....#.##.##',
+  '.##...##..##.##..#', '.####...##.#.##.##', '.#..####...#.##.#.', '.##...#...##.####.', '..#.....###..##...',
+  '...######....#....', '....#####...#.....', '........####......',
+];
+
+/**
+ * Each agent's mark on its badge, by its icon (agentkinds.js): one the agent added there needs one here too.
+ * @type {Record<string, (small: boolean) => string>}
+ */
+const AGENT_MARKS = {
+  [PROFILE_ICON.claude]: () => CLAUDE_MARK,
+  [PROFILE_ICON.codex]: small => pixelPicture(small ? CODEX_SMALL : CODEX_LARGE),
+};
+
+/**
+ * An agent's mark for a badge, or '' for an icon that isn't an agent's.
+ * @param {string} icon
+ * @param {string} [extraClass] the badge's size
+ */
+export const agentMarkHtml = (icon, extraClass = BADGE_SIZE.small) => AGENT_MARKS[icon]?.(extraClass === BADGE_SIZE.small) ?? '';
+
 // A spark for Claude Code: straight bars on whole pixels (sharp at 12px), diagonal ones for the other rays.
 const CLAUDE_MARK = '<svg viewBox="0 0 12 12"><g fill="currentColor" stroke="none"><rect x="5" y="0" width="2" height="12" rx="1"/>'
   + '<rect x="0" y="5" width="12" height="2" rx="1"/><rect x="5" y="0.5" width="2" height="11" rx="1" transform="rotate(45 6 6)"/>'
   + '<rect x="5" y="0.5" width="2" height="11" rx="1" transform="rotate(-45 6 6)"/></g></svg>';
 
 /**
- * A terminal's badge: its shell's, or the agent's while Claude Code or Codex runs in it (back to the shell's when it
- * exits).
- * Another computer's terminal shows what that computer says runs in it.
+ * A terminal's badge: its shell's, or the agent's while one runs in it, whatever terminal it started in (back to the
+ * shell's when it exits). Another computer's terminal shows what that computer says runs in it.
  * @param {Tab} tab
  * @param {string} [extraClass]
  */
 export function tabBadgeHtml(tab, extraClass = BADGE_SIZE.small) {
   if (tab.virtual?.icon) return badgeHtml({ icon: tab.virtual.icon }, extraClass);
-  if (!runsClaude(tab)) return badgeHtml(profileOf(tab), extraClass);
-  return tab.agent?.kind === AGENT_KIND.codex
-    ? badgeHtml({ icon: PROFILE_ICON.codex }, extraClass, 'Codex is running here')
-    : claudeBadge(extraClass, 'Claude Code is running here');
+  const agent = runningAgent(tab);
+  if (!agent) return badgeHtml(profileOf(tab), extraClass);
+  const { icon, name } = agentKind(agent);
+  return agentBadge(icon, extraClass, `${name} is running here`);
 }
 
 /**
- * Claude's badge: a Claude Code terminal, or one Claude runs in.
+ * An agent's badge: its terminal profile's (Claude Code, Codex), or a terminal it runs in.
+ * @param {string} icon
  * @param {string} extraClass
  * @param {string} [title]
  */
-function claudeBadge(extraClass, title) {
-  return `<span class="badge ${extraClass}" data-icon="${PROFILE_ICON.claude}"${title ? ` title="${title}"` : ''}>${CLAUDE_MARK}</span>`;
+function agentBadge(icon, extraClass, title) {
+  return `<span class="badge ${extraClass}" data-icon="${icon}"${title ? ` title="${escapeHtml(title)}"` : ''}>${agentMarkHtml(icon, extraClass)}</span>`;
 }
 
 /**

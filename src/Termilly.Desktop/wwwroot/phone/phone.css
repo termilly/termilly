@@ -108,7 +108,11 @@ form .button { flex: none; }
 .badge[data-icon="ssh"] { --tint: #76e3ea; }
 .badge[data-icon="serial"] { --tint: #f2cc60; }
 .badge[data-icon="bash"] { --tint: #f1724f; }
-.badge.claude { --tint: #d97757; font-size: 14px; }
+/* Agents: the PC draws their marks (js/ui.js); Claude's spark scales, Codex's knot is whole pixels at its own size. */
+.badge[data-icon="claude"] { --tint: #d97757; }
+.badge[data-icon="claude"] svg { width: 16px; height: 16px; }
+.td-where .badge[data-icon="claude"] svg { width: 12px; height: 12px; }
+.badge[data-icon="codex"] { --tint: var(--text); }
 
 /* ---- The answer sheet (design D) ---- */
 .dim { position: fixed; inset: 0; z-index: 10; background: rgba(0, 0, 0, .45); }

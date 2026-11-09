@@ -22,7 +22,7 @@ const app = /** @type {HTMLElement} */ (document.getElementById('app'));
 /** What a terminal waits for (js/phone.js). */
 /** @typedef {{ kind: string, tool: string | null, target: string | null, text: string, at: number, always?: boolean }} Waiting */
 /** A terminal as the PC describes it (js/phone.js). */
-/** @typedef {{ id: string, ws: string, title: string, icon: string, badge: string, agent: string | null, activity: string | null, percent: number | null, hint: string | null, line: string | null, waiting: Waiting | null, production: boolean, cols: number | null, rows: number | null }} Terminal */
+/** @typedef {{ id: string, ws: string, title: string, icon: string, badge: string, mark: string | null, agent: string | null, activity: string | null, percent: number | null, hint: string | null, line: string | null, waiting: Waiting | null, production: boolean, cols: number | null, rows: number | null }} Terminal */
 /** @typedef {import('./theme.js').Themed & { typing?: boolean, snippets?: import('./snippets.js').PhoneSnippet[], clips?: import('./clips.js').PhoneClip[], notes?: import('./tabs.js').Note[], workspaces: { id: string, name: string, color: string, cwd: string | null }[], terminals: Terminal[], places?: import('./manage.js').Place[], activeWs?: string }} Snapshot */
 
 /** The PC's API for the app (PhoneServer, PhoneAppApi). */
@@ -122,7 +122,7 @@ function age(at) {
 }
 
 /** @param {Terminal} t */
-const badge = t => `<span class="badge${t.icon === 'claude' ? ' claude' : ''}" data-icon="${esc(t.icon)}">${t.icon === 'claude' ? '✻' : esc(t.badge)}</span>`;
+const badge = t => `<span class="badge" data-icon="${esc(t.icon)}">${t.mark ?? esc(t.badge)}</span>`;
 
 /** @param {string} id */
 const wsOf = id => snap.workspaces.find(w => w.id === id);
