@@ -8,7 +8,7 @@ import { send, onHost } from './host.js';
 import { state, newId, tabTitle } from './store.js';
 import { setNote } from './notes.js';
 import { listOf, noteTarget, addTasks, updateTask, removeTask, moveTask, setStatus, findTask, todoTags, tagColor } from './todo.js';
-import { AGENT_COMMAND, agentInstalled, agentWorking, folderOfList, isOnGitHub, checkRepo, implementTask, keepIssue } from './todoactions.js';
+import { AGENT_COMMAND, agentWorking, folderOfList, implementPlace, cantImplement, isOnGitHub, checkRepo, implementTask, keepIssue } from './todoactions.js';
 import { implementSilently, stopRun } from './todorun.js';
 import { parseTask, detailLines, statusOf, splitNote, tickSub, issueBody, labelsForTags, TASK_STATUS } from './todolist.js';
 
@@ -43,7 +43,7 @@ export function listForPhone(ref) {
   const tasks = listOf(ref)?.tasks ?? [];
   const folder = folderOfList(ref);
   if (folder && tasks.length) checkRepo(folder);
-  return { tasks: tasks.map(taskForPhone), implement: !!folder && agentInstalled(), github: !!folder && isOnGitHub(folder) };
+  return { tasks: tasks.map(taskForPhone), implement: !!implementPlace(ref), github: !!folder && isOnGitHub(folder) };
 }
 
 /** To do's tags to pick from, with their colours. */
@@ -130,18 +130,16 @@ function remove(m) {
   return {};
 }
 
-const NEEDS_FOLDER = 'Implement needs Claude Code and a folder on the PC.';
-
 /** @param {Record<string, any>} m */
 function implement(m) {
   const { ref, task } = taskOf(m);
   const sub = m.at === undefined ? undefined : detailLines(task.details).find(line => line.sub && line.at === Number(m.at));
   if (m.silent) {
-    if (!implementSilently(ref, task, sub)) throw new Error(NEEDS_FOLDER);
+    if (!implementSilently(ref, task, sub)) throw new Error(`${cantImplement(ref)}.`);
     return { silent: true };
   }
   const agent = implementTask(ref, task, sub);
-  if (!agent) throw new Error(NEEDS_FOLDER);
+  if (!agent) throw new Error(`${cantImplement(ref)}.`);
   return { id: agent.id };
 }
 

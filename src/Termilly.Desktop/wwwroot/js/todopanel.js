@@ -9,7 +9,7 @@ import { PAGE, HOST } from './protocol.js';
 import { send, onHost } from './host.js';
 import { state, on, persist, newId, wsById, tabsOf, tabTitle, EVENTS } from './store.js';
 import { focusTab } from './panes.js';
-import { AGENT_COMMAND, agentInstalled, agentWorking, folderOfList as folderOf, isOnGitHub, checkRepo, implementTask, keepIssue } from './todoactions.js';
+import { AGENT_COMMAND, agentWorking, folderOfList as folderOf, implementPlace, cantImplement, offersImplement, isOnGitHub, checkRepo, implementTask, keepIssue } from './todoactions.js';
 import { implementSilently, stopRun } from './todorun.js';
 import { answerAsk, allowWaiting, ASK } from './todoask.js';
 import { openTagManager } from './todotags.js';
@@ -325,7 +325,18 @@ function stepHtml(line) {
 }
 
 /**
- * A task's buttons: Implement when Claude Code is installed, Edit, Create GitHub issue when the folder's repository is on
+ * Implement's button: off, saying why, when it can't run here.
+ * @param {ListRef} ref
+ */
+function implementButton(ref) {
+  const why = cantImplement(ref);
+  const server = implementPlace(ref)?.server;
+  const title = why || `Implement: Claude Code works on it${server ? ` on ${server}` : ''}, in a new terminal or silently`;
+  return `<button type="button" class="pane-btn" data-td="${ACTION.implement}" ${why ? 'disabled' : ''} title="${escapeHtml(title)}">${ICONS.play}</button>`;
+}
+
+/**
+ * A task's buttons: Implement when Claude Code is installed or the list's terminal is on an SSH host, Edit, Create GitHub issue when the folder's repository is on
  * GitHub and there's no issue yet, and Delete. A step has Implement and Create GitHub issue only.
  * @param {{ url: string, number: number } | undefined} issue
  * @param {boolean} isStep
@@ -334,7 +345,7 @@ function actsHtml(issue, isStep) {
   const folder = folderOfList();
   const canIssue = !issue && !!folder && isOnGitHub(folder);
   return `<span class="td-acts">
-    ${agentInstalled() ? `<button type="button" class="pane-btn" data-td="${ACTION.implement}" ${folder ? '' : 'disabled'} title="${folder ? 'Implement: Claude Code works on it, in a new terminal or silently' : 'Implement needs a folder on this computer'}">${ICONS.play}</button>` : ''}
+    ${current && offersImplement(current) ? implementButton(current) : ''}
     ${isStep ? '' : `<button type="button" class="pane-btn" data-td="${ACTION.edit}" title="Edit">${ICONS.rename}</button>`}
     ${canIssue ? `<button type="button" class="pane-btn" data-td="${ACTION.issue}" title="Create GitHub issue">${ICONS.git}</button>` : ''}
     ${isStep ? '' : `<button type="button" class="pane-btn" data-td="${ACTION.remove}" title="Delete">${ICONS.trash}</button>`}
@@ -1089,13 +1100,17 @@ function changeStatus(task, status) {
 function implementMenu(at, task, step) {
   const ref = current;
   if (!ref) return;
-  const asks = state.todo.allowAll ? 'gets whatever else it asks for (To do settings)' : 'asks in the task’s row for anything else';
+  const server = implementPlace(ref)?.server ?? null;
+  const asks = state.todo.allowAll ? 'gets whatever else it asks for (To do settings)'
+    : server ? `is refused anything else, as nobody can be asked on ${server} (To do settings can allow it all)` : 'asks in the task’s row for anything else';
+  const where = server ? `on ${server}, in the folder this terminal is in` : 'in this list’s folder';
+  const back = server ? ' The task goes to Review with its last reply when its turn ends' : '';
   showMenu([
-    { label: 'In a new terminal', icon: ICONS.terminal, title: 'Claude Code starts in a new terminal in this list’s folder, where you can watch it and answer it', action: () => implementTask(ref, task, step) },
+    { label: 'In a new terminal', icon: ICONS.terminal, title: `Claude Code starts in a new terminal ${where}, where you can watch it and answer it.${back}`, action: () => implementTask(ref, task, step) },
     {
-      label: 'Silent', icon: ICONS.play, title: `Nobody is watching: Claude Code works in a hidden shell, changes files without asking and ${asks}. The task goes to Review with its reply`,
+      label: 'Silent', icon: ICONS.play, title: `Nobody is watching: Claude Code works in a hidden shell ${where}, changes files without asking and ${asks}. The task goes to Review with its reply`,
       action: () => {
-        if (!implementSilently(ref, task, step)) showToast({ text: 'Claude Code can’t start silently here: this list needs a folder on this computer', state: TOAST.failed });
+        if (!implementSilently(ref, task, step)) showToast({ text: `Claude Code can’t start silently here. ${cantImplement(ref)}`, state: TOAST.failed });
       },
     },
   ], at);

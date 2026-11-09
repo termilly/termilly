@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   parseTask, tasksFromLines, tasksFromNote, tagOfHeading, selectedLines, withoutLines, openCount, tagsIn, allTags, withTags, moveBefore,
   labelsForTags, retag, splitNote, hoverLines, treeRows, detailLines, tickSub, tickByNumber, linkSub, subProgress, implementPrompt, statusOf, TASK_STATUS, HOVER_TASKS,
-  taskMatches, inPlace, silentPrompt, tagTypedAt, tagSuggestions, TAG_SUGGESTIONS, takeTags,
+  taskMatches, inPlace, silentPrompt, remotePrompt, tagTypedAt, tagSuggestions, TAG_SUGGESTIONS, takeTags,
 } from '../../src/Termilly.Desktop/wwwroot/js/todolist.js';
 
 const task = (id, more = {}) => ({ id, text: id, created: 0, ...more });
@@ -284,6 +284,17 @@ test('Silent asks for a summary and names no tools to call back', () => {
   assert.match(prompt, /reply with a short summary/);
   assert.doesNotMatch(prompt, /finish_task|termilly tasks/);
   assert.match(silentPrompt(t, detailLines(t.details)[2]), /step of my task 'Rotate the key': 'Rotate it'/);
+});
+
+test('on an SSH host it asks for a summary and names no tools, and it may be answered', () => {
+  const t = task('Rotate the key', { details: 'Before Friday.\n[x] Find it\n[] Rotate it' });
+  const prompt = remotePrompt(t);
+  assert.match(prompt, /Rotate the key/);
+  assert.match(prompt, /1\) Rotate it/);
+  assert.match(prompt, /reply with a short summary/);
+  assert.doesNotMatch(prompt, /finish_task|termilly tasks|tick_task/);
+  assert.doesNotMatch(prompt, /Nobody is watching/);
+  assert.match(remotePrompt(t, detailLines(t.details)[2]), /step of my task 'Rotate the key': 'Rotate it'/);
 });
 
 test('a tag finished in the add field leaves the text for a chip, the caret staying where it was typed', () => {

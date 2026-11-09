@@ -365,19 +365,37 @@ export function implementPrompt(task, sub) {
   return `Work on this task from my Termilly To do list: '${oneLine(task.text)}'.${notes ? ` Details: ${notes}` : ''}${steps.length ? ` Steps: ${steps.join(' ')}. Tick each with the termilly MCP tool tick_task, or run: termilly tasks tick ${task.id} N` : ''} This is task ${task.id}. When you finish, call the termilly MCP tool finish_task with a one-line summary, or run: termilly tasks done ${task.id} --summary 'what you did'`;
 }
 
+/** What a reply that goes to Review is asked to say. */
+const SAY_WHAT = ' When you finish, reply with a short summary of what you did and what is left, first line first.';
+
 /**
  * What Implement asks an agent working silently (Silent): the same task or step, with no tools to call back. Its reply is what
  * Review shows, so it's asked to say what it did.
  * @param {TodoTask} task
  * @param {DetailLine} [sub]
  */
-export function silentPrompt(task, sub) {
+export const silentPrompt = (task, sub) => replyPrompt(task, sub, ` Nobody is watching, so do not wait for answers.${SAY_WHAT}`);
+
+/**
+ * What Implement asks Claude Code on an SSH host, in a terminal there: the same task or step, with no tools to call back (Termilly's
+ * MCP server isn't on the host). Its last reply, when its turn ends, is what Review shows.
+ * @param {TodoTask} task
+ * @param {DetailLine} [sub]
+ */
+export const remotePrompt = (task, sub) => replyPrompt(task, sub, SAY_WHAT);
+
+/**
+ * A task or step as a prompt whose reply is the review.
+ * @param {TodoTask} task
+ * @param {DetailLine | undefined} sub
+ * @param {string} end what it's told about finishing
+ */
+function replyPrompt(task, sub, end) {
   const lines = detailLines(task.details);
-  const ask = ' Nobody is watching, so do not wait for answers. When you finish, reply with a short summary of what you did and what is left, first line first.';
-  if (sub) return `Work on this step of my task '${oneLine(task.text)}': '${oneLine(sub.text)}'.${ask}`;
+  if (sub) return `Work on this step of my task '${oneLine(task.text)}': '${oneLine(sub.text)}'.${end}`;
   const notes = oneLine(lines.filter(line => !line.sub).map(line => line.text).join(' '));
   const steps = lines.filter(line => line.sub && !line.done).map((line, i) => `${i + 1}) ${oneLine(line.text)}`);
-  return `Work on this task from my To do list: '${oneLine(task.text)}'.${notes ? ` Details: ${notes}` : ''}${steps.length ? ` Steps: ${steps.join(' ')}.` : ''}${ask}`;
+  return `Work on this task from my To do list: '${oneLine(task.text)}'.${notes ? ` Details: ${notes}` : ''}${steps.length ? ` Steps: ${steps.join(' ')}.` : ''}${end}`;
 }
 
 /**
