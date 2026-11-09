@@ -76,6 +76,8 @@ test('a review without a verdict doesn\'t agree', () => {
   assert.equal(review.agrees, false);
   assert.equal(review.count, null);
   assert.equal(readReview('claude', '').text, 'It gave no verdict.');
+  // A list of what's fine isn't a count of findings.
+  assert.equal(readReview('codex', 'No issues found:\n- math.js is right\n- README.md too').count, null);
 });
 
 test('the verdict a task in Review leads with', () => {
@@ -92,6 +94,12 @@ test('Codex runs without a terminal, in a sandbox that fits what it may do', () 
   assert.match(agentCommand('Review', { kind: 'codex', shell: 'bash', changes: true, review: true }), /--sandbox read-only/);
   assert.match(agentCommand('Do it', { kind: 'codex', shell: 'bash', changes: true, all: true }), /--dangerously-bypass-approvals-and-sandbox/);
   assert.doesNotMatch(agentCommand('Do it', { kind: 'codex', shell: 'bash', changes: true }), /claude|--print|permission/);
+});
+
+test('a prompt for Codex is one line cmd can pass on: no line break, double quote or percent sign', () => {
+  const line = agentCommand('It says:\n- "done" & 100% of %PATH%\r\n  VERDICT last', { kind: 'codex', shell: 'powershell', review: true });
+  assert.match(line, /'It says: - ''done'' & 100\uFF05 of \uFF05PATH\uFF05 VERDICT last'$/);
+  assert.doesNotMatch(line, /[\r\n"%]/);
 });
 
 test('a review by Claude Code reads, and looks at what changed with git, nothing more', () => {

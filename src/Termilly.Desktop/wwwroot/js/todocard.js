@@ -115,6 +115,8 @@ export function openImplementCard(at, options) {
     // Another agent doing the work: it can't review itself, so it leaves the reviewers.
     plan = fitPlan({ ...plan, ...change }, [...new Set([...options.agents, ...options.reviewers])]);
   };
+  /** Shows the card at the button; again after a menu on it was picked from, which closes every popover. */
+  const show = () => openPopover(card, at, { dynamic: true, refocus: () => at.focus() });
   /**
    * The agents to pick from, as a menu on top of the card.
    * @param {HTMLElement} control
@@ -123,14 +125,15 @@ export function openImplementCard(at, options) {
    */
   const pickAgent = (control, kinds, pick) => {
     showMenu(kinds.map(kind => ({ label: agentKind(kind).name, icon: badgeHtml({ icon: agentKind(kind).icon }), checked: kind === plan.by && control.dataset.card === CARD.by,
-      action: () => { change(pick(kind)); draw(control.dataset.card); } })), control, { nested: true });
+      action: () => { change(pick(kind)); show(); draw(control.dataset.card); } })), control, { nested: true });
   };
   card.addEventListener('click', e => {
     const control = /** @type {HTMLElement | null} */ (/** @type {HTMLElement} */ (e.target).closest('[data-card]'));
     const what = control?.dataset.card;
     if (!control || !what) return;
     if (what === CARD.keep) keep = /** @type {HTMLInputElement} */ (control).checked;
-    else if (what === CARD.by) pickAgent(control, options.agents, kind => ({ by: kind }));
+    // A reviewer picked to do the work changes places with the agent that was doing it.
+    else if (what === CARD.by) pickAgent(control, options.agents, kind => ({ by: kind, reviewers: plan.reviewers.map(r => (r === kind ? plan.by : r)) }));
     else if (what === CARD.add) {
       const left = reviewersFor(plan.by, options.reviewers).filter(kind => !plan.reviewers.includes(kind));
       if (left.length > 1) return pickAgent(control, left, kind => ({ reviewers: [...plan.reviewers, kind] }));
@@ -144,6 +147,6 @@ export function openImplementCard(at, options) {
       draw(what);
     }
   });
-  openPopover(card, at, { dynamic: true, refocus: () => at.focus() });
+  show();
   draw();
 }

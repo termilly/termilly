@@ -48,6 +48,17 @@ const CODEX_READ_ONLY = Object.freeze(['--sandbox', 'read-only']);
 const CODEX_CHANGES = Object.freeze(['--sandbox', 'workspace-write']);
 /** Everything is allowed, as Claude Code's EVERYTHING. */
 const CODEX_EVERYTHING = Object.freeze(['--dangerously-bypass-approvals-and-sandbox']);
+/** What stands in for a percent sign in a prompt for Codex (codexPrompt). */
+const WIDE_PERCENT = '\uFF05';
+
+/**
+ * A prompt as Codex can be handed it. On Windows Codex is npm's codex.cmd, so cmd reads its command line: that ends at the first
+ * line break (the rest of a prompt was lost), a double quote inside it ends the quoting, after which an & would run as a command,
+ * and %NAME% is filled in. So the prompt goes on one line, with no double quote and no percent sign in it. Another agent's reply
+ * is part of a review's prompt, so what's in it isn't ours to choose.
+ * @param {string} prompt
+ */
+const codexPrompt = prompt => prompt.trim().replace(/\s*\r?\n\s*/g, ' ').replaceAll('"', "'").replaceAll('%', WIDE_PERCENT);
 
 /**
  * A prompt as a shell can pass it on. Windows PowerShell 5.1 breaks a program's argument at a double quote inside it, and
@@ -74,7 +85,7 @@ export function agentCommand(prompt, { kind = AGENT_KIND.claude, shell, changes 
   if (kind === AGENT_KIND.codex) {
     // Codex without a terminal asks nobody: its sandbox is what it may do. Its answer is always JSON lines.
     const sandbox = review || !changes ? CODEX_READ_ONLY : all ? CODEX_EVERYTHING : CODEX_CHANGES;
-    return commandLine([...CODEX_RUN, ...sandbox, promptFor(prompt, shell, false)], shell);
+    return commandLine([...CODEX_RUN, ...sandbox, codexPrompt(prompt)], shell);
   }
   const allowed = review ? REVIEW : !changes ? READ_ONLY : all ? EVERYTHING : ask ? CHANGES : CHANGES_UNASKED;
   const words = [AGENT_COMMAND, '--print', promptFor(prompt, shell, !json), ...(json ? ['--output-format', 'json'] : []), ...allowed, ...ALWAYS, ...(ask ? [] : NOBODY_ASKS)];

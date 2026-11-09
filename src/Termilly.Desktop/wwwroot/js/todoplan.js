@@ -131,7 +131,8 @@ export function readReview(kind, reply) {
   const text = (verdict ? reply.replace(verdict[0], '') : reply).trim();
   const agrees = verdict?.[1].toUpperCase() === 'AGREE';
   const said = verdict?.[2] ? Number(verdict[2]) : null;
-  const count = agrees ? 0 : said ?? (text.match(FINDING_LINE)?.length || null);
+  // Its list's lines are counted only when it said it has findings: without a verdict, a list may be of what's fine.
+  const count = agrees ? 0 : said ?? (verdict ? text.match(FINDING_LINE)?.length || null : null);
   return { kind, agrees, count, text: text || (agrees ? 'Nothing found.' : 'It gave no verdict.') };
 }
 

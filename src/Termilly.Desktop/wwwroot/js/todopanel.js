@@ -270,7 +270,7 @@ function agentHtml(task) {
   const now = task.plan ? stageWords(task.plan, task.stage) : null;
   const stop = task.run ? `<button type="button" class="td-stop" data-td="${ACTION.stopRun}" title="${tab ? 'Stop the review: the task stays with its terminal' : 'Stop it: the task goes back to Open'}">Stop</button>` : '';
   const there = tab ? `<button type="button" class="td-agent" data-td="${ACTION.agentTerminal}" data-tab="${escapeHtml(tab.id)}" title="Go to its terminal">in ${escapeHtml(tabTitle(tab))}</button>` : '';
-  if (now) return `<span class="td-agent td-hidden-run td-now">${badgeHtml({ icon: agentKind(now.kind).icon })}<span>${escapeHtml(now.text)}${task.run && !tab ? ', silently' : ''}</span>${there}${stop}</span>`;
+  if (now) return `<span class="td-agent td-hidden-run td-now">${badgeHtml({ icon: agentKind(now.kind).icon })}<span>${escapeHtml(now.text)}</span>${there}${stop}</span>`;
   if (task.run) return `<span class="td-agent td-hidden-run">${AGENT_COMMAND}, silently${stop}</span>`;
   return tab ? `<button type="button" class="td-agent" data-td="${ACTION.agentTerminal}" data-tab="${escapeHtml(tab.id)}" title="Go to its terminal">${AGENT_COMMAND} in ${escapeHtml(tabTitle(tab))}</button>` : '';
 }
@@ -326,7 +326,10 @@ function aboutHtml(task) {
   const lines = detailLines(task.details);
   const notes = lines.filter(line => !line.sub).map(line => line.text).join('\n').trim();
   const steps = lines.filter(line => line.sub);
-  const said = task.review ? `<b>${escapeHtml(task.review.by)}:</b> ${escapeHtml(task.review.summary.trim())}` : '';
+  // Reviewed, its line leads with the verdict; else with what its agent said.
+  const verdict = task.review ? verdictOf(task.review) : null;
+  const said = verdict ? `<b>${escapeHtml(verdict.text)}</b> ${escapeHtml(verdict.more)}`
+    : task.review ? `<b>${escapeHtml(task.review.by)}:</b> ${escapeHtml(task.review.summary.trim())}` : '';
   const first = notes.split('\n')[0] || steps[0]?.text || '';
   const firstHtml = first ? escapeHtml(first) : said.split('\n')[0];
   if (!firstHtml) return '';
