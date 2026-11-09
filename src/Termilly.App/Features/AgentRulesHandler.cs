@@ -42,7 +42,7 @@ internal sealed class AgentRulesHandler(PageChannel page) : IMessageHandler
                 var plan = PlanFor(message.Folder);
                 file = plan.File;
                 var carried = plan.Rules.Where(r => r.Prefix is not null).ToList();
-                return file is not null && SameAsShown(carried, message.Rules ?? []) ? AgentRules.Write(carried, file) : (int?)null;
+                return file is not null && SameAsShown(carried, message.Rules ?? []) ? AgentRulesFile.Write(carried, file) : (int?)null;
             }).ConfigureAwait(false);
             page.Post(written is { } count ? new ToPage.AgentRulesCopied(count, file) : new ToPage.AgentRulesCopied(0, file, file is null ? NoProject : Changed));
         }

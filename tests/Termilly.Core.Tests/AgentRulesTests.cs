@@ -200,14 +200,14 @@ public sealed class AgentRulesTests : IDisposable
         var (claude, project) = Project(shared: """{ "allow": ["Bash(git *)"] }""");
         var first = AgentRules.Read(project, claude, managed: false);
         Assert.Equal(0, first.Existing);
-        AgentRules.Write(first.Rules, first.File!);
+        AgentRulesFile.Write(first.Rules, first.File!);
 
         // Claude Code now restricts git in a way Codex can't express: nothing carries over, and one line waits to be removed.
         File.WriteAllText(Path.Combine(project, ".claude", "settings.json"), """{ "permissions": { "allow": ["Bash(git *)"], "deny": ["Bash(git * --force)"] } }""");
         var second = AgentRules.Read(project, claude, managed: false);
         Assert.Equal(["-", "-"], Commands(second.Rules));
         Assert.Equal(1, second.Existing);
-        Assert.Equal(0, AgentRules.Write(second.Rules.Where(r => r.Prefix is not null), second.File!));
+        Assert.Equal(0, AgentRulesFile.Write(second.Rules.Where(r => r.Prefix is not null), second.File!));
         Assert.Equal(0, AgentRules.Read(project, claude, managed: false).Existing);
     }
 
@@ -285,33 +285,33 @@ public sealed class AgentRulesTests : IDisposable
     [Fact]
     public void A_rules_line_quotes_its_words_and_carries_termillys_mark()
     {
-        Assert.Equal("""prefix_rule(pattern=["git", "diff"], decision="allow")""" + AgentRules.Mark, AgentRules.Line(["git", "diff"], Allow));
+        Assert.Equal("""prefix_rule(pattern=["git", "diff"], decision="allow")""" + AgentRulesFile.Mark, AgentRulesFile.Line(["git", "diff"], Allow));
         // Words never hold these (they stay behind), but a line can't be broken by one all the same.
-        Assert.Equal("""prefix_rule(pattern=["a\\b", "say \"hi\"", "x\x0ay"], decision="prompt")""" + AgentRules.Mark, AgentRules.Line(["a\\b", "say \"hi\"", "x\ny"], Prompt));
+        Assert.Equal("""prefix_rule(pattern=["a\\b", "say \"hi\"", "x\x0ay"], decision="prompt")""" + AgentRulesFile.Mark, AgentRulesFile.Line(["a\\b", "say \"hi\"", "x\ny"], Prompt));
     }
 
     [Fact]
     public void Copying_writes_termillys_lines_anew_and_leaves_every_other_line_as_it_was()
     {
-        var first = AgentRules.Merge(null, Rules("""{ "allow": ["Bash(git:*)", "Read(**)"] }"""));
+        var first = AgentRulesFile.Merge(null, Rules("""{ "allow": ["Bash(git:*)", "Read(**)"] }"""));
         Assert.StartsWith("#", first);
-        Assert.Equal(1, AgentRules.Count(first));
+        Assert.Equal(1, AgentRulesFile.Count(first));
 
         // The user adds a rule of their own, reformatted and commented: not Termilly's, so it stays to the letter.
         var mine = "prefix_rule( pattern = [\"kubectl\", \"delete\"],\n    decision = \"forbidden\" )  # mine\n# keep this";
         var edited = first + mine;
 
         // Claude Code now denies forced pushes in a way Codex can't express: the git allow copied before must go.
-        var second = AgentRules.Merge(edited, Rules("""{ "allow": ["Bash(git:*)", "Bash(npm test:*)"], "deny": ["Bash(git * --force)", "Bash(git push:*)"] }"""));
+        var second = AgentRulesFile.Merge(edited, Rules("""{ "allow": ["Bash(git:*)", "Bash(npm test:*)"], "deny": ["Bash(git * --force)", "Bash(git push:*)"] }"""));
         Assert.DoesNotContain("""pattern=["git"], decision="allow""", second);
         Assert.Contains(mine, second);
-        Assert.EndsWith("# keep this\n" + AgentRules.Line(["npm", "test"], Allow) + "\n" + AgentRules.Line(["git", "push"], Forbidden) + "\n", second);
-        Assert.Equal(2, AgentRules.Count(second));
+        Assert.EndsWith("# keep this\n" + AgentRulesFile.Line(["npm", "test"], Allow) + "\n" + AgentRulesFile.Line(["git", "push"], Forbidden) + "\n", second);
+        Assert.Equal(2, AgentRulesFile.Count(second));
 
         // The same rules again change nothing; none at all leaves only what's the user's.
-        Assert.Equal(second, AgentRules.Merge(second, Rules("""{ "allow": ["Bash(npm test:*)"], "deny": ["Bash(git push:*)"] }""")));
-        Assert.Equal(0, AgentRules.Count(AgentRules.Merge(second, [])));
-        Assert.Contains(mine, AgentRules.Merge(second, []));
+        Assert.Equal(second, AgentRulesFile.Merge(second, Rules("""{ "allow": ["Bash(npm test:*)"], "deny": ["Bash(git push:*)"] }""")));
+        Assert.Equal(0, AgentRulesFile.Count(AgentRulesFile.Merge(second, [])));
+        Assert.Contains(mine, AgentRulesFile.Merge(second, []));
     }
 
     [Fact]
@@ -319,19 +319,19 @@ public sealed class AgentRulesTests : IDisposable
     {
         // The same rule as text the user wrote, without the mark: Termilly still writes its own line, so the deny is in force.
         var existing = "note = \"\"\"\nprefix_rule(pattern=[\"git\", \"push\"], decision=\"forbidden\")\n\"\"\"\n";
-        var merged = AgentRules.Merge(existing, Rules("""{ "allow": ["Bash(git:*)"], "deny": ["Bash(git push:*)"] }"""));
+        var merged = AgentRulesFile.Merge(existing, Rules("""{ "allow": ["Bash(git:*)"], "deny": ["Bash(git push:*)"] }"""));
         Assert.StartsWith(existing, merged);
-        Assert.Contains(AgentRules.Line(["git", "push"], Forbidden), merged);
+        Assert.Contains(AgentRulesFile.Line(["git", "push"], Forbidden), merged);
     }
 
     [Fact]
     public void The_file_is_written_whole_in_the_projects_codex_folder()
     {
-        var path = AgentRules.RulesPath(Path.Combine(_dir, "repo"));
-        Assert.Equal(1, AgentRules.Write(Rules("""{ "allow": ["Bash(git diff:*)"] }"""), path));
-        Assert.Equal(2, AgentRules.Write(Rules("""{ "allow": ["Bash(git diff:*)"], "deny": ["Bash(git push:*)"] }"""), path));
+        var path = AgentRulesFile.PathIn(Path.Combine(_dir, "repo"));
+        Assert.Equal(1, AgentRulesFile.Write(Rules("""{ "allow": ["Bash(git diff:*)"] }"""), path));
+        Assert.Equal(2, AgentRulesFile.Write(Rules("""{ "allow": ["Bash(git diff:*)"], "deny": ["Bash(git push:*)"] }"""), path));
         Assert.EndsWith(Path.Combine("repo", ".codex", "rules", "termilly.rules"), path);
-        Assert.Equal([AgentRules.Line(["git", "diff"], Allow), AgentRules.Line(["git", "push"], Forbidden)],
+        Assert.Equal([AgentRulesFile.Line(["git", "diff"], Allow), AgentRulesFile.Line(["git", "push"], Forbidden)],
             File.ReadAllLines(path).Where(l => l.StartsWith("prefix_rule", StringComparison.Ordinal)));
         Assert.Single(Directory.GetFiles(Path.GetDirectoryName(path)!)); // no temporary file left beside it
     }

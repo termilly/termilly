@@ -2,7 +2,6 @@ using System.IO;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using Microsoft.Win32;
 
 namespace Termilly.Desktop;
 
@@ -37,22 +36,12 @@ internal static partial class AgentRules
 
     private const string PermissionsKey = "permissions";
     private const string ManagedOnlyKey = "allowManagedPermissionRulesOnly";
-    private const string CodexFolder = ".codex";
-    private const string RulesFolder = "rules";
-    private const string OwnRulesFile = "termilly.rules";
     private const string GitFolder = ".git";
     private const string PowerShellTool = "PowerShell";
-    /// <summary>What ends each of Termilly's lines in the rules file: they're its to write anew, the others aren't.</summary>
-    internal const string Mark = "  # from Claude Code, by Termilly";
     /// <summary>A settings file larger than this isn't one a person keeps rules in.</summary>
     internal const long MaxSettingsBytes = 1024 * 1024;
     /// <summary>The most rules looked at; with more, what restricts what can't be told for sure.</summary>
     internal const int MaxRules = 2000;
-
-    private const string Header =
-        "# Commands Claude Code's settings allow, ask about or deny in this project, copied here by Termilly so Codex treats\n" +
-        "# them the same. The lines Termilly marks are written anew each time you copy; lines without the mark are yours and\n" +
-        "# are left as they are. Delete the file to undo it all.\n";
 
     private const string EveryCommand = "It's for every command; Codex's rules are for one each.";
     private const string NotACommand = "Not for a command: files, the web and tools are for Codex's sandbox.";
@@ -148,9 +137,6 @@ internal static partial class AgentRules
         return Path.GetFullPath(folder);
     }
 
-    /// <summary>The file Termilly keeps a project's carried-over rules in.</summary>
-    public static string RulesPath(string project) => Path.Combine(project, CodexFolder, RulesFolder, OwnRulesFile);
-
     /// <summary>
     /// What a copy in <paramref name="folder"/> would do. Allows count from the user's own settings and the project's two
     /// files; what's asked about or denied counts from those and from every folder on the way up as well, since reading
@@ -174,7 +160,7 @@ internal static partial class AgentRules
         }
         var names = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
         var rules = new List<Rule>();
-        string? unsure = (managed ?? IsManaged()) ? Managed : null;
+        string? unsure = (managed ?? ClaudeManagedSettings.Present()) ? Managed : null;
         // The first of a file's entries wins: the ones whose allows count come first.
         foreach (var file in files.DistinctBy(f => Path.GetFullPath(f.Path), names))
         {
@@ -185,8 +171,8 @@ internal static partial class AgentRules
         var distinct = rules.DistinctBy(r => (r.Text, r.Decision)).ToList();
         unsure ??= distinct.Count > MaxRules ? TooMany : null;
         var constrained = unsure is null ? Constrain(distinct) : distinct.Select(r => r.Decision == Decisions.Allow && r.Prefix is not null ? r with { Prefix = null, Why = unsure } : r).ToList();
-        var target = project is null ? null : RulesPath(project);
-        return new Plan(constrained.Take(MaxRules).ToList(), target, target is null ? 0 : CountIn(target));
+        var target = project is null ? null : AgentRulesFile.PathIn(project);
+        return new Plan(constrained.Take(MaxRules).ToList(), target, target is null ? 0 : AgentRulesFile.CountIn(target));
     }
 
     /// <summary>
@@ -400,105 +386,4 @@ internal static partial class AgentRules
     private static bool Overlap(IReadOnlyList<string> a, IReadOnlyList<string> b) =>
         a.Zip(b).All(pair => string.Equals(pair.First, pair.Second, StringComparison.OrdinalIgnoreCase));
 
-    /// <summary>
-    /// Whether an organization manages Claude Code's settings on this computer, as far as files and policies show: its
-    /// managed settings file or folder, a Windows policy, or a macOS profile. Settings an organization delivers from
-    /// Anthropic's servers leave no sign that can be relied on, and aren't seen.
-    /// </summary>
-    internal static bool IsManaged()
-    {
-        const string ManagedFile = "managed-settings.json";
-        const string DropIns = "managed-settings.d";
-        const string Product = "ClaudeCode";
-        const string PolicyKey = @"SOFTWARE\Policies\" + Product;
-        string[] folders = OperatingSystem.IsWindows()
-            ? [Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), Product), Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), Product)]
-            : OperatingSystem.IsMacOS() ? ["/Library/Application Support/ClaudeCode"] : ["/etc/claude-code"];
-        if (folders.Any(folder => File.Exists(Path.Combine(folder, ManagedFile)) || Directory.Exists(Path.Combine(folder, DropIns))))
-        {
-            return true;
-        }
-        if (OperatingSystem.IsMacOS())
-        {
-            const string Profile = "com.anthropic.claudecode.plist";
-            const string Profiles = "/Library/Managed Preferences";
-            return File.Exists(Path.Combine(Profiles, Profile)) || File.Exists(Path.Combine(Profiles, Environment.UserName, Profile));
-        }
-        if (!OperatingSystem.IsWindows())
-        {
-            return false;
-        }
-        using var machine = Registry.LocalMachine.OpenSubKey(PolicyKey);
-        using var user = Registry.CurrentUser.OpenSubKey(PolicyKey);
-        return machine is not null || user is not null;
-    }
-
-    /// <summary>A rule's line in the file, with Termilly's mark.</summary>
-    internal static string Line(IReadOnlyList<string> prefix, string decision) =>
-        new StringBuilder("prefix_rule(pattern=[").AppendJoin(", ", prefix.Select(Quoted)).Append("], decision=\"").Append(decision).Append("\")").Append(Mark).ToString();
-
-    /// <summary>
-    /// A word as a string of the rules file: in double quotes, with a backslash before each backslash and quote. A word
-    /// has neither (<see cref="NotPlain"/>), nor a line break or control character; they're escaped all the same.
-    /// </summary>
-    private static string Quoted(string word)
-    {
-        var text = new StringBuilder("\"");
-        foreach (var c in word)
-        {
-            text.Append(c switch
-            {
-                '\\' => "\\\\",
-                '"' => "\\\"",
-                < ' ' or '\x7F' => $"\\x{(int)c:x2}",
-                _ => c.ToString(),
-            });
-        }
-        return text.Append('"').ToString();
-    }
-
-    /// <summary>
-    /// The file's text with these rules as Termilly's lines: the lines it marked before go (an allow among them may have
-    /// stopped being safe), every other line stays exactly as it was, and the rules that carry over are written at the end.
-    /// </summary>
-    internal static string Merge(string? existing, IEnumerable<Rule> rules)
-    {
-        var kept = string.IsNullOrEmpty(existing)
-            ? Header
-            : string.Concat(existing.Split('\n').Where(line => !line.TrimEnd('\r').EndsWith(Mark, StringComparison.Ordinal)).Select((line, i) => i == 0 ? line : "\n" + line));
-        var text = new StringBuilder(kept);
-        if (text.Length > 0 && text[^1] != '\n')
-        {
-            text.Append('\n');
-        }
-        foreach (var rule in rules.Where(r => r.Prefix is not null))
-        {
-            text.Append(Line(rule.Prefix!, rule.Decision)).Append('\n');
-        }
-        return text.ToString();
-    }
-
-    /// <summary>How many of Termilly's rules a rules file's text holds.</summary>
-    internal static int Count(string text) => text.Split('\n').Count(line => line.TrimEnd('\r').EndsWith(Mark, StringComparison.Ordinal));
-
-    /// <summary>How many of Termilly's rules a project's file holds; none when it isn't there or can't be read.</summary>
-    private static int CountIn(string path)
-    {
-        try
-        {
-            return File.Exists(path) ? Count(File.ReadAllText(path)) : 0;
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            return 0;
-        }
-    }
-
-    /// <summary>Writes the rules that carry over as Termilly's lines of the project's file, and says how many there are.</summary>
-    public static int Write(IEnumerable<Rule> rules, string path)
-    {
-        var text = Merge(File.Exists(path) ? File.ReadAllText(path) : null, rules);
-        AppPaths.WriteAtomically(path, text);
-        return Count(text);
-    }
 }
