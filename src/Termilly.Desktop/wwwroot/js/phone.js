@@ -25,6 +25,7 @@ import { hasFiles, shellFolderOf, placeOf } from './filepaths.js';
 import { hasPrompts } from './myprompts.js';
 import { platform } from './host.js';
 import { agentKind } from './agentkinds.js';
+import { resumingText } from './resuming.js';
 import { agentMarkHtml, BADGE_SIZE } from './ui.js';
 
 /** How long changes settle before the phones hear of them. */
@@ -89,8 +90,6 @@ function waitingFor(tab) {
     always: kind === WAITING.permission && !!alwaysKey(tab) };
 }
 
-/** A resuming terminal's line on the phone. */
-const RESUMING_LINE = 'Resuming the Claude session';
 
 /** @param {Tab} tab */
 function terminalOf(tab) {
@@ -111,10 +110,10 @@ function terminalOf(tab) {
     activity: activity?.kind ?? (tab.exited ? 'exited' : null),
     percent: activity?.percent ?? null,
     hint: activity?.title ?? null,
-    line: tab.resuming ? RESUMING_LINE : tab.agent?.line ?? activity?.title ?? null,
+    line: tab.resuming ? resumingText(tab) : tab.agent?.line ?? activity?.title ?? null,
     waiting: waitingFor(tab),
     production: isProduction(tab),
-    // Its Claude session is resuming on the PC (js/resuming.js): the phone waits before opening it.
+    // Its agent's session is resuming on the PC (js/resuming.js): the phone waits before opening it.
     resuming: !!tab.resuming,
     // The terminal's size: the phone starts at it, then asks for its own (Features/Phone.cs, phone:size).
     cols: tab.view?.term?.cols ?? null, rows: tab.view?.term?.rows ?? null,

@@ -1,13 +1,14 @@
 // @ts-check
-// A Claude Code session coming back after a restart (snapshot.js types `claude --resume <session>` at the shell's
-// first prompt): until it reports in, an overlay covers the terminal with a spinner, what's typed is held (typed into
+// An agent's session coming back after a restart (snapshot.js types `claude --resume <session>`, or `codex resume
+// <session>`, at the shell's first prompt): until the agent runs (its program is there, or its hooks report in), an overlay covers the terminal with a spinner, what's typed is held (typed into
 // the shell around the command, it spoiled it), and phones don't open it (js/phone.js). If the shell is still at its
 // prompt a while after the command went (a size change or a key took it), the command goes once more. Esc, and only
 // Esc, cancels: the command isn't typed (or typed again), and the terminal is the user's.
 
 import { send } from './host.js';
 import { PAGE } from './protocol.js';
-import { on, emit, EVENTS } from './store.js';
+import { on, emit, runningAgent, EVENTS } from './store.js';
+import { agentKind } from './agentkinds.js';
 import { atPrompt } from './buffer.js';
 
 /** Typed this long ago and still at a prompt: once more. */
@@ -18,12 +19,13 @@ const OVERLAY_CLASS = 'resume-overlay';
 export const CANCEL_KEY = '\x1b';
 
 /**
- * A terminal's Claude Code session is resuming (snapshot.js): from now until it reports in, or Esc.
+ * A terminal's agent session is resuming (snapshot.js): from now until the agent runs, or Esc.
  * @param {Tab} tab
  * @param {string} session
+ * @param {string} kind which agent (AGENT_KIND)
  */
-export function startResuming(tab, session) {
-  tab.resuming = { session, command: null, retried: false, timer: 0 };
+export function startResuming(tab, session, kind) {
+  tab.resuming = { session, kind, command: null, retried: false, timer: 0 };
   drawOverlay(tab);
 }
 
@@ -60,7 +62,7 @@ export function cancelResume(tab) {
 }
 
 /**
- * Resuming is over: Claude reported in, or Esc.
+ * Resuming is over: the agent runs, or Esc.
  * @param {Tab} tab
  */
 function done(tab) {
@@ -77,7 +79,7 @@ function drawOverlay(tab) {
   if (!body || !tab.resuming || body.querySelector(`.${OVERLAY_CLASS}`)) return;
   const overlay = document.createElement('div');
   overlay.className = OVERLAY_CLASS;
-  overlay.innerHTML = '<span class="resume-spinner"></span><span class="resume-text">Resuming the Claude session</span><span class="resume-hint">Press ESC to cancel session resume</span>';
+  overlay.innerHTML = `<span class="resume-spinner"></span><span class="resume-text">${resumingText(tab)}</span><span class="resume-hint">Press ESC to cancel session resume</span>`;
   // A click keeps the keyboard with the terminal, where Esc is heard.
   overlay.addEventListener('mousedown', e => {
     e.preventDefault();
@@ -88,5 +90,14 @@ function drawOverlay(tab) {
 
 // Its view is made after the snapshot is read: the overlay goes on once it's there.
 on(EVENTS.terminalOpened, drawOverlay);
-// Claude reported in (its SessionStart): resumed.
+// The agent runs, so what's typed goes to it, not around its command in the shell. Claude Code's hooks report in as it
+// starts; Codex's first one waits for a prompt, which the overlay held back, so its program running (the host sees
+// it) counts too.
 on(EVENTS.agent, tab => { if (tab.resuming && tab.agent) done(tab); });
+on(EVENTS.tab, tab => { if (tab.resuming && runningAgent(tab)) done(tab); });
+
+/**
+ * What a resuming terminal says, on the PC and the phone: Resuming the Codex session.
+ * @param {Tab} tab
+ */
+export const resumingText = tab => `Resuming the ${agentKind(tab.resuming?.kind).short} session`;

@@ -111,7 +111,7 @@ export function applySnapshot(saved) {
       markHibernated(tab, session, saved.savedAt, folder, kindOf(s));
     } else if (session) {
       prepareStart(tab, { resumeSession: session, resumeKind: kindOf(s), command: resumeAgentCommand(session, kindOf(s)) });
-      startResuming(tab, session);
+      startResuming(tab, session, kindOf(s));
     } else if (startCommandOf(tab)) {
       prepareStart(tab, { command: startCommandOf(tab) }); // a Claude Code terminal with nothing to resume: a new claude
     }

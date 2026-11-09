@@ -243,8 +243,8 @@ interface Tab {
   takeBack?: boolean;
   /** Who has it open: the paired phones' and computers' names (js/phone.js). */
   viewers?: string[];
-  /** Its Claude Code session is resuming after a restart, until it reports in (js/resuming.js). */
-  resuming?: { session: string; command: string | null; retried: boolean; timer: number } | null;
+  /** Its agent's session (Claude Code, Codex: kind) is resuming after a restart, until it runs (js/resuming.js). */
+  resuming?: { session: string; kind: string; command: string | null; retried: boolean; timer: number } | null;
   /** What it brings back and types as its shell starts (js/terminals.js). */
   start?: import('../wwwroot/js/terminals.js').ShellStart;
   /** js/terminals.js's timers for its shell. */
