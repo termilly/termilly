@@ -19,6 +19,8 @@ internal static partial class Protocol
     public const string SettingsVariable = TerminalEnvironment.AgentSettings;
     /// <summary>Set by the shim for the Claude Code it starts, so a claude started from inside it isn't hooked twice.</summary>
     public const string ShimVariable = TerminalEnvironment.AgentShim;
+    /// <summary>The hook helper's path, for the hooks of the Codex the shim starts.</summary>
+    public const string HookProgramVariable = TerminalEnvironment.HookProgram;
 
     /// <summary>Version of the hook command line and message; bump when either changes.</summary>
     public const int Version = HookMessage.Version;

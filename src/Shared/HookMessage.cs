@@ -129,6 +129,11 @@ internal static class TerminalEnvironment
     public const string AgentSettings = "TERMILLY_AGENT_SETTINGS";
     /// <summary>Set by the shim for the Claude Code it starts, so a claude started from inside it isn't hooked twice.</summary>
     public const string AgentShim = "TERMILLY_AGENT_SHIM";
+    /// <summary>
+    /// The hook helper's path, set by the shim for the Codex it starts: Codex's hooks run it by this variable rather than by
+    /// its path, so their text is the same wherever Termilly is installed (Termilly.Agent/Shim.cs).
+    /// </summary>
+    public const string HookProgram = "TERMILLY_HOOK_EXE";
     /// <summary>The credential ssh's askpass helper reads (SshConnections sets it, Termilly.Agent/Askpass.cs reads it).</summary>
     public const string Credential = "TERMILLY_CREDENTIAL";
 }

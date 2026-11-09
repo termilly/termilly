@@ -35,8 +35,13 @@ internal static class Shim
         if (Environment.GetEnvironmentVariable(Protocol.ShimVariable) != "1" && File.Exists(settings))
         {
             var added = agent == AgentKinds.Codex
-                ? CodexArguments(Beside(AgentExecutables.Hook), Beside(AgentExecutables.Cli), OperatingSystem.IsWindows())
+                ? CodexArguments(Beside(AgentExecutables.Cli), OperatingSystem.IsWindows())
                 : ["--settings", settings];
+            if (agent == AgentKinds.Codex)
+            {
+                // Its hooks name the helper by this variable, which Codex hands on to them with the rest of its environment.
+                start.Environment[Protocol.HookProgramVariable] = Beside(AgentExecutables.Hook);
+            }
             foreach (var arg in added)
             {
                 start.ArgumentList.Add(arg);
@@ -78,17 +83,20 @@ internal static class Shim
     /// <summary>
     /// The -c values that add Termilly's hooks and MCP server to Codex for this run: a hook for each event Termilly
     /// listens to, running the helper (termilly-hook hook 1 SessionStart codex). Codex asks once whether to trust
-    /// hooks it hasn't seen; it remembers each by its exact definition, so these never change from run to run.
-    /// Codex runs a hook's command with PowerShell on Windows (a quoted path needs &amp; there) and sh elsewhere.
+    /// hooks it hasn't seen, and remembers each by its exact definition. So a definition must be the same from run to
+    /// run, and from one Termilly to the next: with the helper's path in it, every place Termilly ran from (an update's
+    /// new folder, a build of one's own) made them hooks Codex hadn't seen, to review again. The helper is named by a
+    /// variable instead (<see cref="Protocol.HookProgramVariable"/>, which the shim sets to its path for this Codex).
+    /// Codex runs a hook's command with PowerShell on Windows (a program in a variable needs &amp; there) and sh elsewhere.
     /// </summary>
     /// <remarks>
     /// On Windows npm installs Codex as codex.cmd, and cmd reads the arguments again: a double quote in one ends its
     /// quoting there and lets cmd run what follows an &amp;. So the values have no double quotes at all (TOML's literal
     /// strings), and each arrives as one quoted argument cmd leaves alone.
     /// </remarks>
-    public static List<string> CodexArguments(string hookExe, string cliExe, bool windows)
+    public static List<string> CodexArguments(string cliExe, bool windows)
     {
-        var program = windows ? $"& '{hookExe.Replace('\\', '/').Replace("'", "''")}'" : $"'{hookExe.Replace("'", "'\\''")}'";
+        var program = windows ? $"& $env:{Protocol.HookProgramVariable}" : $"\"${Protocol.HookProgramVariable}\"";
         var args = new List<string>();
         foreach (var (name, tools) in HookEvents.Codex)
         {

@@ -73,24 +73,34 @@ public sealed class AgentHooksTests : IDisposable
     [Fact]
     public void Codex_gets_a_hook_for_each_event_and_the_mcp_server()
     {
-        var args = Shim.CodexArguments(@"C:\Program Files\It's\agent\termilly-hook.exe", @"C:\a\termilly.exe", windows: true);
+        var args = Shim.CodexArguments(@"C:\a\termilly.exe", windows: true);
         var values = args.Where((_, i) => i % 2 == 1).ToList();
         Assert.All(args.Where((_, i) => i % 2 == 0), a => Assert.Equal("-c", a));
         Assert.Equal(Termilly.Shared.HookEvents.Codex.Count + 1, values.Count);
-        // PowerShell runs a hook's command on Windows: a quoted path needs &, and a ' in it is doubled.
-        Assert.Contains("""hooks.SessionStart=[{hooks=[{type='command',command='''& 'C:/Program Files/It''s/agent/termilly-hook.exe' hook 1 SessionStart codex''',timeout=3}]}]""", values);
-        Assert.Contains("""hooks.PreToolUse=[{matcher='*',hooks=[{type='command',command='''& 'C:/Program Files/It''s/agent/termilly-hook.exe' hook 1 PreToolUse codex''',timeout=3}]}]""", values);
+        // PowerShell runs a hook's command on Windows: the helper is in a variable, which needs & to be run.
+        Assert.Contains("""hooks.SessionStart=[{hooks=[{type='command',command='& $env:TERMILLY_HOOK_EXE hook 1 SessionStart codex',timeout=3}]}]""", values);
+        Assert.Contains("""hooks.PreToolUse=[{matcher='*',hooks=[{type='command',command='& $env:TERMILLY_HOOK_EXE hook 1 PreToolUse codex',timeout=3}]}]""", values);
         Assert.Contains("""mcp_servers.termilly={command='C:\a\termilly.exe',args=['mcp'],env_vars=['TERMILLY_PANE_ID','TERMILLY_PIPE'],tool_timeout_sec=130}""", values);
         // npm's codex.cmd goes through cmd, which a double quote would let run what follows an &.
         Assert.All(values, v => Assert.DoesNotContain("\"", v));
         // The same every run: Codex remembers a trusted hook by its exact definition.
-        Assert.Equal(args, Shim.CodexArguments(@"C:\Program Files\It's\agent\termilly-hook.exe", @"C:\a\termilly.exe", windows: true));
+        Assert.Equal(args, Shim.CodexArguments(@"C:\a\termilly.exe", windows: true));
+    }
+
+    [Fact]
+    public void Codex_hooks_are_the_same_wherever_termilly_runs_from()
+    {
+        // The helper's path isn't in them: an update's new folder, or a build of one's own, isn't a hook to review again.
+        static List<string> Hooks(string cli, bool windows) => Shim.CodexArguments(cli, windows).Where(a => a.StartsWith("hooks.", StringComparison.Ordinal)).ToList();
+        Assert.Equal(Hooks(@"C:\Program Files\Termilly\agent\termilly.exe", windows: true), Hooks(@"D:\dev\bin\Debug\agent\termilly.exe", windows: true));
+        Assert.Equal(Hooks("/opt/termilly/agent/termilly", windows: false), Hooks("/home/u/build/agent/termilly", windows: false));
+        Assert.All(Hooks(@"C:\x\termilly.exe", windows: true), h => Assert.DoesNotContain("termilly-hook", h));
     }
 
     [Fact]
     public void Codex_hooks_elsewhere_run_the_helper_through_sh() =>
-        Assert.Contains("""hooks.Stop=[{hooks=[{type='command',command=''''/opt/it'\''s/termilly-hook' hook 1 Stop codex''',timeout=3}]}]""",
-            Shim.CodexArguments("/opt/it's/termilly-hook", "/opt/termilly", windows: false));
+        Assert.Contains("""hooks.Stop=[{hooks=[{type='command',command='"$TERMILLY_HOOK_EXE" hook 1 Stop codex',timeout=3}]}]""",
+            Shim.CodexArguments("/opt/termilly", windows: false));
 
     // ---- The hooks Termilly adds to Claude Code ----
 
