@@ -216,6 +216,17 @@ const QUIET_MS = 1200;
 const SHELL_STARTING_MS = 15_000;
 /** How long output has to settle on what looks like a prompt before an SSH terminal's command is typed. */
 const PROMPT_SETTLE_MS = 700;
+/**
+ * How long a terminal's size has to stay put before its shell is told (#47). Each size it's told, Claude Code prints its
+ * screen again, and the copy before stays in the scrollback: dragging the window or a panel's animation would leave one
+ * per frame. The terminal itself reflows at once.
+ */
+const RESIZE_SETTLE_MS = 200;
+/**
+ * Sizes not told yet, by terminal.
+ * @type {Map<string, number>}
+ */
+const resizing = new Map();
 /** How much of a program's notification an alert keeps, in characters. */
 const MAX_ALERT_CHARS = 200;
 /** A terminal a file is dragged over (app.css). */
@@ -335,9 +346,14 @@ function wireInput(tab, term) {
     }
   });
   term.onResize((/** @type {{ cols: number, rows: number }} */ { cols, rows }) => {
-    // ConPTY repaints after a resize; that output isn't news, so it mustn't raise an attention dot.
-    quiet(tab);
-    send(PAGE.resize, { id: tab.id, cols, rows });
+    clearTimeout(resizing.get(tab.id));
+    resizing.set(tab.id, window.setTimeout(() => {
+      resizing.delete(tab.id);
+      if (!state.tabs.has(tab.id)) return; // closed meanwhile
+      // ConPTY repaints after a resize; that output isn't news, so it mustn't raise an attention dot.
+      quiet(tab);
+      send(PAGE.resize, { id: tab.id, cols, rows });
+    }, RESIZE_SETTLE_MS));
   });
   term.attachCustomKeyEventHandler((/** @type {KeyboardEvent} */ e) => inputHook(tab, term, e) && clipboardKey(term, e) && selectionKey(term, e) && keyHandler(e));
 }
