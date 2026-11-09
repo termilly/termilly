@@ -132,10 +132,11 @@ internal static partial class SessionProfiles
 
     /// <summary>
     /// The real <paramref name="agent"/> on PATH (claude.exe, claude.cmd, codex.cmd and so on on Windows), not a
-    /// Termilly's shim beside its hook helper.
+    /// Termilly's shim beside its hook helper. On Linux and macOS the PATH looked on is the one a terminal's shell has
+    /// (<see cref="LoginShellPath"/>): an app started from the desktop has a shorter one, without the user's own folders.
     /// </summary>
     internal static string? FindAgent(string agent, string? path = null) =>
-        AgentLookup.FindReal(agent, path ?? Environment.GetEnvironmentVariable(SystemVariables.Path), Environment.GetEnvironmentVariable(SystemVariables.PathExt));
+        AgentLookup.FindReal(agent, path ?? LoginShellPath.Value, Environment.GetEnvironmentVariable(SystemVariables.PathExt));
 
     /// <summary>The ssh client: Windows' ssh.exe, or ssh on other systems.</summary>
     internal static string SshCommand => AppPaths.Exe(SshConnections.SshProgram);
