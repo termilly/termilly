@@ -95,6 +95,19 @@ const CHANGES = Object.freeze({
 });
 
 /**
+ * The agents a control offers, and what picking one changes in the plan: who does the work (a reviewer picked for that changes
+ * places with the agent that was doing it), or one more reviewer, from those not reviewing yet.
+ * @type {Readonly<Record<string, (plan: ImplementPlan, options: CardOptions) => { kinds: readonly string[], pick: (kind: string) => Partial<ImplementPlan> }>>}
+ */
+const PICKS = Object.freeze({
+  [CARD.by]: (plan, options) => ({ kinds: options.agents, pick: kind => ({ by: kind, reviewers: plan.reviewers.map(r => (r === kind ? plan.by : r)) }) }),
+  [CARD.add]: (plan, options) => ({
+    kinds: reviewersFor(plan.by, options.reviewers).filter(kind => !plan.reviewers.includes(kind)),
+    pick: kind => ({ reviewers: [...plan.reviewers, kind] }),
+  }),
+});
+
+/**
  * Opens Implement's card at a task's Implement button.
  * @param {HTMLElement} at
  * @param {CardOptions} options
@@ -131,17 +144,16 @@ export function openImplementCard(at, options) {
     const control = /** @type {HTMLElement | null} */ (/** @type {HTMLElement} */ (e.target).closest('[data-card]'));
     const what = control?.dataset.card;
     if (!control || !what) return;
+    const agents = PICKS[what]?.(plan, options);
     if (what === CARD.keep) keep = /** @type {HTMLInputElement} */ (control).checked;
-    // A reviewer picked to do the work changes places with the agent that was doing it.
-    else if (what === CARD.by) pickAgent(control, options.agents, kind => ({ by: kind, reviewers: plan.reviewers.map(r => (r === kind ? plan.by : r)) }));
-    else if (what === CARD.add) {
-      const left = reviewersFor(plan.by, options.reviewers).filter(kind => !plan.reviewers.includes(kind));
-      if (left.length > 1) return pickAgent(control, left, kind => ({ reviewers: [...plan.reviewers, kind] }));
-      change({ reviewers: [...plan.reviewers, ...left] });
-      draw(CARD.start);
-    } else if (what === CARD.start) {
+    else if (what === CARD.start) {
       closePopover(card);
       options.start(plan, keep);
+    } else if (agents && agents.kinds.length > 1) pickAgent(control, agents.kinds, agents.pick);
+    else if (agents) {
+      // One agent to pick from: it's taken.
+      change(agents.pick(agents.kinds[0]));
+      draw(CARD.start);
     } else if (CHANGES[what]) {
       change(CHANGES[what](plan, control));
       draw(what);
