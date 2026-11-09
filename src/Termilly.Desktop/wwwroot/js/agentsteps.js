@@ -28,6 +28,8 @@ const REPLY_CHARS = 50;
 const TOOL_CHARS = 60;
 /** A shown line shorter than this can't stand for a reply that's longer (too many would match). */
 const MIN_PARTIAL = 16;
+/** What a row no longer in the output says: a click reads it in the list instead (js/myprompts.js). */
+export const GONE_TITLE = 'No longer in this terminal’s output. Click to read it.';
 /** A reply's row shows this many lines; a long one goes on in the terminal. */
 const ROW_LINES = 8;
 /**
@@ -222,7 +224,7 @@ export function stepRowHtml(p, k, filter, { nested = false } = {}) {
     : text(step.text.split('\n').slice(0, ROW_LINES).join('\n'));
   const when = new Date(step.at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
   return `<div class="step-row ${tool ? 'step-is-tool' : 'step-is-reply'}${last ? ' last' : ''}${step.failed ? ' failed' : ''}${gone ? ' gone' : ''}${nested ? ' nested' : ''}"
-      role="option" tabindex="-1" data-s="${k}" title="${gone ? 'No longer in this terminal’s output' : 'Show it in the terminal'}">
+      role="option" tabindex="-1" data-s="${k}" title="${gone ? GONE_TITLE : 'Show it in the terminal'}">
       <span class="prompt-time">${nested ? '' : escapeHtml(when)}</span>
       <span class="step-mark"></span>
       <span class="step-text">${last && !nested ? '<span class="step-last">Last reply</span>' : ''}${body}</span>

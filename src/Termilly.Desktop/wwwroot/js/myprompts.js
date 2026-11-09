@@ -10,13 +10,13 @@ import { request, send, onHost } from './host.js';
 import { HOOK_EVENT } from './constants.js';
 import { state, persist } from './store.js';
 import { openPopover, closePopover, isOpen } from './popups.js';
-import { escapeHtml, highlight, ICONS } from './ui.js';
+import { escapeHtml, highlight, ICONS, COPIED } from './ui.js';
 import { bufferLines } from './terminals.js';
 import { focusTab, switchWorkspace } from './panes.js';
 import { find, targetOf } from './dom.js';
 import { showToast, TOAST } from './toasts.js';
 import { AGENT_STEP } from './constants.js';
-import { shownSteps, placeSteps, stepRowHtml } from './agentsteps.js';
+import { shownSteps, placeSteps, stepRowHtml, GONE_TITLE } from './agentsteps.js';
 
 /** A terminal keeps this many of its Claude Code sessions' ids (a /clear starts a new one). */
 const KEPT_SESSIONS = 20;
@@ -48,6 +48,9 @@ const STEP_KIND = Object.freeze({ [MODE.replies]: AGENT_STEP.reply, [MODE.tools]
 const COUNT = '.prompts-count';
 const CLEARED = '.prompts-cleared';
 const GONE = 'gone';
+/** How long Copy in the reader says Copied. */
+const COPIED_MS = 1500;
+const COPY = 'Copy';
 
 /**
  * The terminal ran this Claude Code session: kept, so its prompts are listed even after a /clear or a restart.
@@ -143,9 +146,21 @@ pop.innerHTML = `
     <button data-mode="${MODE.tools}" role="tab" title="The commands Claude ran and the files it read and changed">Tool calls</button></span></div>
   <div class="prompts-filter"><input type="text" placeholder="Filter" spellcheck="false" aria-label="Filter"></div>
   <div class="inbox-list prompts-list" role="listbox"></div>
-  <div class="inbox-foot prompts-cleared" hidden><span></span><button class="btn small" data-unclear>Show them again</button></div>`;
+  <div class="inbox-foot prompts-cleared" hidden><span></span><button class="btn small" data-unclear>Show them again</button></div>
+  <div class="prompts-reader" hidden>
+    <div class="prompts-reader-head"><button class="btn small" data-reader-back>Back</button><span class="prompts-reader-what"></span>
+      <button class="btn small" data-reader-copy>${COPY}</button></div>
+    <div class="prompts-reader-text" tabindex="0"></div>
+    <div class="inbox-foot prompts-reader-foot"></div>
+  </div>`;
 const listEl = find(pop, '.prompts-list');
 const filterEl = /** @type {HTMLInputElement} */ (find(pop, 'input'));
+const readerEl = find(pop, '.prompts-reader');
+const readerText = find(readerEl, '.prompts-reader-text');
+/** The parts of the popover the reader stands in for while it's open. */
+const LIST_PARTS = ['.prompts-modes', '.prompts-filter', '.prompts-list', '.prompts-cleared'];
+/** What the reader shows: its whole text, for Copy. */
+let reading = '';
 
 /**
  * The list open now: its terminal, its output, the prompts and Claude's steps found, what it shows, and the prompts
@@ -186,8 +201,43 @@ function dayLabel(d) {
   return d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: d.getFullYear() === new Date().getFullYear() ? undefined : 'numeric' });
 }
 
+/**
+ * Shows something the terminal's output no longer has, from Claude Code's transcript: a prompt, a reply in full, or
+ * a tool and what it was used on (its output isn't kept).
+ * @param {{ what: string, at: string | null, text: string, note: string }} item
+ */
+function read(item) {
+  reading = item.text;
+  const when = item.at ? new Date(item.at) : null;
+  find(readerEl, '.prompts-reader-what').textContent = when
+    ? `${item.what} · ${dayLabel(when)} ${when.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}`
+    : item.what;
+  readerText.textContent = item.text;
+  find(readerEl, '.prompts-reader-foot').textContent = item.note;
+  find(readerEl, '[data-reader-copy]').textContent = COPY;
+  showReader(true);
+  readerText.scrollTop = 0;
+  readerText.focus();
+}
+
+/** @param {boolean} on the reader instead of the list */
+function showReader(on) {
+  readerEl.hidden = !on;
+  for (const part of LIST_PARTS) find(pop, part).classList.toggle('reader-on', on);
+  if (!on) reading = '';
+}
+
+/** @param {PlacedStep} p */
+function readStep(p) {
+  const { step } = p;
+  if (step.kind === AGENT_STEP.tool) {
+    read({ what: `Tool call${step.failed ? ', failed' : ''}`, at: step.at, text: `${step.tool ?? ''}(${step.text})`, note: 'Only the tool and what it was used on are kept, not what it printed.' });
+  } else read({ what: 'Reply', at: step.at, text: step.text, note: 'From Claude Code’s transcript on this PC.' });
+}
+
 function render() {
   if (!open) return;
+  showReader(false);
   for (const b of /** @type {NodeListOf<HTMLElement>} */ (pop.querySelectorAll('[data-mode]'))) b.classList.toggle('on', b.dataset.mode === open.mode);
   find(pop, '.prompts-modes').hidden = !open.steps.length;
   if (open.mode === MODE.prompts) renderPrompts();
@@ -256,7 +306,7 @@ function renderPrompts() {
     day = label;
     const gone = line < 0;
     return `${head}<div class="prompt-row${gone ? ' gone' : ''}" role="option" tabindex="-1" data-i="${i}"
-      title="${gone ? 'No longer in this terminal’s output' : 'Show it in the terminal'}">
+      title="${gone ? GONE_TITLE : 'Show it in the terminal'}">
       <span class="prompt-time">${when ? escapeHtml(when.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })) : ''}</span>
       <span class="prompt-text">${want ? highlight(prompt.text, filterEl.value.trim()) : escapeHtml(prompt.text)}</span>
       <button class="prompt-copy" data-copy="${i}" title="Copy" aria-label="Copy">${ICONS.copy}</button>
@@ -321,6 +371,17 @@ filterEl.addEventListener('input', render);
 pop.addEventListener('click', e => {
   if (!open) return;
   const { tab } = open;
+  if (targetOf(e).closest('[data-reader-back]')) {
+    showReader(false);
+    filterEl.focus();
+    return;
+  }
+  const copyBtn = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-reader-copy]'));
+  if (copyBtn) {
+    navigator.clipboard.writeText(reading).then(() => { copyBtn.textContent = COPIED; }, () => { copyBtn.textContent = 'Couldn’t copy'; });
+    setTimeout(() => { copyBtn.textContent = COPY; }, COPIED_MS);
+    return;
+  }
   const mode = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-mode]'));
   if (mode) {
     open.mode = /** @type {string} */ (mode.dataset.mode);
@@ -360,7 +421,10 @@ listEl.addEventListener('click', e => {
     return;
   }
   const row = /** @type {HTMLElement | null} */ (targetOf(e).closest('.prompt-row'));
-  if (row && !row.classList.contains(GONE)) goTo(open.found[Number(row.dataset.i)]);
+  if (!row) return;
+  const f = open.found[Number(row.dataset.i)];
+  if (!row.classList.contains(GONE)) goTo(f);
+  else read({ what: 'Prompt', at: f.prompt.at, text: f.prompt.text, note: f.prompt.at ? 'From Termilly’s history and Claude Code’s transcript on this PC.' : '' });
 });
 
 /**
@@ -384,6 +448,8 @@ function stepClick(e) {
   }
   const row = /** @type {HTMLElement | null} */ (targetOf(e).closest('.step-row'));
   if (!row) return false;
-  if (!row.classList.contains(GONE)) goTo(o.steps[Number(row.dataset.s)]);
+  const p = o.steps[Number(row.dataset.s)];
+  if (!row.classList.contains(GONE)) goTo(p);
+  else readStep(p);
   return true;
 }

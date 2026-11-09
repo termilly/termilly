@@ -1468,7 +1468,7 @@ body[data-sidebar="rail"] .side-rail { opacity: 1; pointer-events: auto; }
 .prompts-day { position: sticky; top: 0; z-index: 1; padding: 8px 8px 4px; background: var(--raised); color: var(--faint); font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
 .prompt-row { display: grid; grid-template-columns: auto minmax(0, 1fr) 20px; align-items: start; gap: 8px; padding: 6px 6px 6px 8px; border-radius: 8px; cursor: pointer; outline: none; }
 .prompt-row:hover, .prompt-row:focus { background: var(--hover); }
-.prompt-row.gone { cursor: default; }
+.prompt-row.gone { cursor: pointer; }
 .prompt-row.gone .prompt-text { color: var(--faint); }
 .prompt-time { min-width: 34px; padding-top: 1px; color: var(--faint); white-space: nowrap; font-size: 11px; font-variant-numeric: tabular-nums; }
 .prompt-text { display: -webkit-box; overflow: hidden; color: var(--text); font-size: 12.5px; line-height: 1.4; white-space: pre-wrap; word-break: break-word; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
@@ -3238,11 +3238,19 @@ textarea.field.note-text { flex: 1; width: 100%; min-height: 120px; resize: none
 .prompts-modes[hidden] { display: none; }
 .prompts-modes .seg { width: 100%; }
 .prompts-modes .seg button { flex: 1; }
+/* The reader: something the output no longer has, read from the transcript in place of the list. */
+.prompts-pop .reader-on { display: none !important; }
+.prompts-reader[hidden] { display: none; }
+.prompts-reader-head { display: flex; align-items: center; gap: 8px; padding: 0 10px 8px; }
+.prompts-reader-what { flex: 1; min-width: 0; color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.prompts-reader-text { max-height: min(480px, 65vh); overflow: auto; margin: 0 10px 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); font-size: 12.5px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; outline: none; }
+.prompts-reader-text:focus-visible { border-color: var(--accent); }
+.prompts-reader-foot:empty { display: none; }
 /* A step: its time, its dot (a reply's is plain; a tool's is green, red when it failed), its text and Copy. */
 .step-row { display: grid; align-self: stretch; grid-template-columns: auto 8px minmax(0, 1fr) 20px; align-items: start; gap: 8px; padding: 6px 6px 6px 8px; border-radius: 8px; cursor: pointer; outline: none; }
 .step-row:hover, .step-row:focus { background: var(--hover); }
 .step-row:hover .prompt-copy { opacity: 1; }
-.step-row.gone { cursor: default; }
+.step-row.gone { cursor: pointer; }
 .step-row.gone .step-text { color: var(--faint); }
 .step-mark { width: 7px; height: 7px; margin-top: 5px; border-radius: 50%; background: var(--text); }
 .step-row.step-is-tool .step-mark { background: var(--ok); }
