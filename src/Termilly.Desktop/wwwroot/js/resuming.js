@@ -50,13 +50,17 @@ export function resumeTyped(tab, command) {
 }
 
 /**
- * Esc while it resumes: the resume is called off (a command still waiting for the prompt isn't typed).
+ * Esc while it resumes: the resume is called off (a command still waiting for the prompt isn't typed). One already
+ * typed has resumed the session, which stays known for the next start: Codex says which session it is only after
+ * a prompt, so forgetting it here started a new Codex next time.
  * @param {Tab} tab
  */
 export function cancelResume(tab) {
+  const typed = !!tab.resuming?.command;
+  if (tab.resuming) cancelled.add(tab);
   if (tab.start) {
     tab.start.command = null;
-    tab.start.resumeSession = null;
+    if (!typed) tab.start.resumeSession = null;
   }
   done(tab);
 }
@@ -82,7 +86,10 @@ function done(tab, resumed = false) {
  * end rather than where it was.
  * @param {Tab} tab
  */
-export const wasResumed = tab => !tab.resuming && !!tab.start?.resumeSession;
+export const wasResumed = tab => !tab.resuming && !cancelled.has(tab) && !!tab.start?.resumeSession;
+
+/** Terminals whose resume Esc called off: their view stays where it was. @type {WeakSet<Tab>} */
+const cancelled = new WeakSet();
 
 /** @param {Tab} tab */
 function drawOverlay(tab) {
