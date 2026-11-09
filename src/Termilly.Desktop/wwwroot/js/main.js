@@ -32,6 +32,7 @@ import { toggleNotepad, toggleNotepadFromKeys, initNotepad } from './notepad.js'
 import { toggleTodo, initTodo } from './todopanel.js';
 import './todoagent.js';
 import './agentask.js';
+import { openAgentRules } from './agentrules.js';
 import { toggleClips, initClips } from './clipboard.js';
 import { chordOf, commandOf, keyHint, KEY_ID } from './keymap.js';
 import { openNewWorktree } from './worktree.js';
@@ -199,6 +200,7 @@ setCommands(() => [
   { label: 'Attach tmux', keywords: 'tmux control mode -CC attach session server remote panes windows wsl ssh', run: () => setTimeout(openAttach) },
   { label: 'Run a snippet', keywords: 'snippets saved commands run snippet macro button bar', run: () => setTimeout(openSnippets) },
   { label: 'Schedules', keywords: 'schedule cron timer run on time report recurring nightly', hint: keyHint(KEY_ID.schedules), run: () => setTimeout(toggleSchedules) },
+  { label: 'Copy Claude Code’s allowed commands to Codex', keywords: 'permissions rules allow approve approved codex claude share sync same agents', run: () => setTimeout(openAgentRules) },
   { label: 'Manage snippets', keywords: 'snippets explorer window edit new delete saved commands', run: () => setTimeout(openSnippetsWindow) },
   { label: 'Previous prompt', keywords: 'scroll jump command', hint: keyHint(KEY_ID.previousPrompt), run: commands.previousPrompt },
   { label: 'Next prompt', keywords: 'scroll jump command', hint: keyHint(KEY_ID.nextPrompt), run: commands.nextPrompt },

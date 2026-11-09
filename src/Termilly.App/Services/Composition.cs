@@ -86,6 +86,7 @@ internal static class Composition
         .AddHandler<NotepadHandler>()
         .AddHandler<ScheduleHandler>()
         .AddHandler<TodoIssues>()
+        .AddHandler<AgentRulesHandler>()
         .AddHandler<SshHandler>()
         .AddHandler<FilesHandler>()
         .AddHandler<PreviewWatchHandler>()
