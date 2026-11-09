@@ -10,7 +10,7 @@
 # Signing: with MAC_SIGN_IDENTITY set (a "Developer ID Application: ..." identity in the keychain) it signs for
 # release; without it, ad hoc ("-"), which macOS warns about when the app is opened but is enough to test the layout.
 set -eu
-repo=$(cd "$(dirname "$0")/../.." && pwd)
+repo=$(cd "$(dirname "$0")/../.." && pwd -P)  # -P: the real path, or the compiler and .editorconfig see two different ones
 here="$repo/installer/mac"
 cache="$repo/installer/.cache/mac"
 version=$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' "$repo/Directory.Build.props")
