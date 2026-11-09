@@ -25,6 +25,8 @@ const SEGMENTS = Object.freeze({
 /** The form's fields that belong to `when`: their name has this in front. */
 export const WHEN_FIELD = 'when.';
 export const WHEN_KIND_SEGMENT = 'whenKind';
+/** The box for "every" all day long; unticked, From and To show. It's the form's, not the schedule's: all day is no hours. */
+export const ALL_DAY_FIELD = 'allDay';
 
 /**
  * What the form picks from.
@@ -132,14 +134,26 @@ function daysHtml(s) {
     <p class="dialog-sub">No day picked means every day.</p>`;
 }
 
-/** @param {Schedule} s */
-function whenHtml(s) {
+/**
+ * @param {Schedule} s
+ * @param {boolean} allDay whether "every" runs all day, or between From and To
+ */
+function hoursHtml(s, allDay) {
+  const box = `<label class="note-pin"><input type="checkbox" name="${ALL_DAY_FIELD}"${allDay ? ' checked' : ''}> All day</label>`;
+  return allDay ? box : `${box}<div class="sch-row">${fieldHtml('From', inputHtml('when.from', s.when.from, '9:00'))}${fieldHtml('To', inputHtml('when.to', s.when.to, '18:00'))}</div>`;
+}
+
+/**
+ * @param {Schedule} s
+ * @param {boolean} allDay
+ */
+function whenHtml(s, allDay) {
   const { when } = s;
   const units = [[UNIT.minutes, 'minutes'], [UNIT.hours, 'hours']].map(([id, label]) => /** @type {const} */ ([id, label]));
   const missed = fieldHtml('If it was missed', `${segmentHtml('missed', s.missed)}<p class="dialog-sub">Termilly wasn’t running at its time. Several missed runs run once.</p>`);
   const body = when.kind === WHEN.time ? `${fieldHtml('Time', inputHtml('when.at', when.at, '20:00'))}${daysHtml(s)}${missed}`
-    : when.kind === WHEN.every ? `<div class="sch-row">${fieldHtml('Every', inputHtml('when.every', when.every, '1', 'number'))}${fieldHtml('Unit', selectHtml('when.unit', units, when.unit))}
-        ${fieldHtml('From', inputHtml('when.from', when.from, '9:00'))}${fieldHtml('To', inputHtml('when.to', when.to, '18:00'))}</div>${daysHtml(s)}${missed}`
+    : when.kind === WHEN.every ? `<div class="sch-row">${fieldHtml('Every', inputHtml('when.every', when.every, '1', 'number'))}${fieldHtml('Unit', selectHtml('when.unit', units, when.unit))}</div>
+        ${hoursHtml(s, allDay)}${daysHtml(s)}${missed}`
       : '';
   return `<h3 class="sch-head">When</h3>${segmentHtml(WHEN_KIND_SEGMENT, when.kind)}${body}`;
 }
@@ -167,13 +181,13 @@ const afterHtml = s => `<h3 class="sch-head">After it runs</h3>
  * @param {Choices} choices
  * @param {string} problem what stops it being saved
  * @param {string} next when it runs next, as it stands
- * @param {{ isNew: boolean, dirty: boolean }} now
+ * @param {{ isNew: boolean, dirty: boolean, allDay: boolean }} now
  */
-export function formHtml(s, choices, problem, next, { isNew, dirty }) {
+export function formHtml(s, choices, problem, next, { isNew, dirty, allDay }) {
   return `<label class="dialog-field">Name<input class="field" name="name" value="${escapeHtml(s.name)}" placeholder="Back up the database" spellcheck="false"></label>
     ${whatHtml(s, choices)}
     <h3 class="sch-head">Where</h3>${segmentHtml('where', s.where)}${placeHtml(s, choices)}
-    ${whenHtml(s)}
+    ${whenHtml(s, allDay)}
     ${afterHtml(s)}
     <div class="sch-foot">
       <p class="dialog-sub sch-next">${escapeHtml(next)}</p>

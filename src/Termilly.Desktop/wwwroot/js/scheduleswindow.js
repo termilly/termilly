@@ -18,8 +18,8 @@ import { readReport, shownText } from './schedulereport.js';
 import {
   schedules, scheduleById, runsOf, saveSchedule, removeSchedule, setScheduleOn, runNow, stopRun, runningNow,
 } from './schedules.js';
-import { formHtml, rowHtml, runsHtml, reportHtml, WHEN_FIELD, WHEN_KIND_SEGMENT } from './scheduleview.js';
-import { newSchedule, minutesOf, nextRun, describeAt, WHAT, WHERE, WHEN, RUN } from './schedulerules.js';
+import { formHtml, rowHtml, runsHtml, reportHtml, WHEN_FIELD, WHEN_KIND_SEGMENT, ALL_DAY_FIELD } from './scheduleview.js';
+import { newSchedule, minutesOf, nextRun, describeAt, isAllDay, WHAT, WHERE, WHEN, RUN } from './schedulerules.js';
 
 const NAME = 'Schedules';
 const WINDOW_KEY = 'schedules';
@@ -88,6 +88,8 @@ let isNew = false;
 let view = VIEW.form;
 /** @type {string | null} */
 let openRunId = null;
+/** Whether "every" runs all day long; unticked, the form asks for From and To. */
+let allDay = true;
 
 const isOpen = () => !layer.hidden || isDetached(WINDOW_KEY);
 const saved = () => (editing ? scheduleById(editing.id) : null);
@@ -116,8 +118,9 @@ function problemOf(s) {
   if (when.kind === WHEN.every) {
     const most = /** @type {Record<string, number>} */ (MAX_EVERY)[when.unit];
     if (!(when.every >= 1 && when.every <= most)) return `Every should be from 1 to ${most} ${when.unit}.`;
-    if ([when.from, when.to].filter(Boolean).length === 1) return 'Fill in both From and To, or neither.';
+    if (!allDay && !(when.from && when.to)) return 'Fill in From and To, or tick All day.';
     if ([when.from, when.to].some(t => t && minutesOf(t) === null)) return 'From and To should look like 9:00.';
+    if (!allDay && minutesOf(when.from) === minutesOf(when.to)) return 'From and To are the same. Tick All day to run all day.';
   }
   if (s.toNotepad && !s.notepadPage.trim()) return 'It needs the Notepad page’s name.';
   if (s.toFile && !s.file.trim()) return 'It needs a file name.';
@@ -159,7 +162,7 @@ function renderForm() {
   if (s.where === WHERE.server && !list.servers.some(p => p.id === s.profile)) s.profile = list.servers[0]?.id ?? null;
   if (s.where === WHERE.fresh && !s.wsId) s.wsId = state.activeId;
   if (s.what === WHAT.snippet && !s.snippet) s.snippet = list.snippets[0] ?? '';
-  editEl.innerHTML = formHtml(s, list, problemOf(s), nextText(), { isNew, dirty: isDirty() });
+  editEl.innerHTML = formHtml(s, list, problemOf(s), nextText(), { isNew, dirty: isDirty(), allDay });
   for (const select of editEl.querySelectorAll('select')) dropdown(/** @type {HTMLSelectElement} */ (select));
 }
 
@@ -223,6 +226,7 @@ function render() {
 function select(id, { runId = null } = {}) {
   const schedule = id ? scheduleById(id) : null;
   editing = schedule ? structuredClone(schedule) : null;
+  allDay = !editing || isAllDay(editing.when);
   isNew = false;
   openRunId = runId;
   view = runId ? VIEW.runs : VIEW.form;
@@ -249,6 +253,18 @@ function fieldChanged(field) {
   const value = field.type === 'checkbox' ? field.checked : NUMBERS.has(key) ? Number(field.value) : field.value;
   const target = /** @type {Record<string, unknown>} */ (/** @type {unknown} */ (field.name.startsWith(WHEN_FIELD) ? s.when : s));
   target[key] = value;
+}
+
+/**
+ * All day ticked takes the hours away; unticked, From and To show, empty.
+ * @param {boolean} on
+ */
+function allDayChanged(on) {
+  const { when } = /** @type {Schedule} */ (editing);
+  allDay = on;
+  when.from = '';
+  when.to = '';
+  renderForm();
 }
 
 /**
@@ -326,6 +342,7 @@ async function removeShown() {
 async function add() {
   if (!(await leave())) return;
   editing = newSchedule(newId('s'));
+  allDay = true;
   isNew = true;
   view = VIEW.form;
   openRunId = null;
@@ -419,6 +436,10 @@ for (const event of ['input', 'change']) {
   editEl.addEventListener(event, e => {
     const field = /** @type {HTMLInputElement} */ (targetOf(e));
     if (!editing || !field.name || !editEl.contains(field)) return;
+    if (field.name === ALL_DAY_FIELD) {
+      allDayChanged(field.checked);
+      return;
+    }
     fieldChanged(field);
     if (REDRAWS.has(field.name)) renderForm();
     else renderState();
