@@ -39,6 +39,7 @@ const HOME = 'home';
 /** @param {string} lead @param {any} x @param {string} kind @param {PhoneList} [ws] @returns {PhoneList} */
 const listFrom = (lead, x, kind, ws) => ({
   kind, id: x.id, name: x.name ?? x.title, tasks: x.todo?.tasks ?? [], implement: !!x.todo?.implement, github: !!x.todo?.github, note: x.note ?? null, lead, ws,
+  plan: x.todo?.plan ?? null, agents: x.todo?.agents ?? [], reviewers: x.todo?.reviewers ?? [],
 });
 
 /**
@@ -163,7 +164,7 @@ export function todoTab(app) {
       case SHEET.move: return moveSheetHtml(task, /** @type {PhoneList} */ (lists().find(l => l.id === list.id && l.kind === list.kind)), lists());
       case SHEET.tags: return tagsSheetHtml(task, allowed());
       case SHEET.remove: return removeSheetHtml(task);
-      case SHEET.implement: return implementSheetHtml(task);
+      case SHEET.implement: return implementSheetHtml(task, list, sheet.pick ?? firstPick(list));
       case SHEET.status: return statusSheetHtml(task);
       case SHEET.issue: return issueSheetHtml(sheet.issue ?? {});
       default: return taskSheetHtml(task, list, allowed());
@@ -202,17 +203,42 @@ export function todoTab(app) {
     drawSheet(true);
   }
 
-  /** Implement asks how first: in a new terminal or Silent. @param {string} id @param {number | undefined} [at] the step */
+  /**
+   * What Implement's sheet opens with: the list's plan on the PC, or with an older PC that sends none, its first way.
+   * @param {PhoneList} list
+   * @returns {import('./todoviews.js').ImplementPick}
+   */
+  const firstPick = list => ({ by: list.plan?.by ?? list.agents[0]?.kind ?? '', reviewers: list.plan?.reviewers ?? [], run: list.plan?.run === HOW.silent ? HOW.silent : HOW.terminal });
+
+  /** Implement asks who and how first, as the PC's card does. @param {string} id @param {number | undefined} [at] the step */
   function implement(id, at) {
-    sheet = { mode: SHEET.implement, task: id, ...(at === undefined ? {} : { at }) };
+    const list = findTask(id)?.list;
+    sheet = { mode: SHEET.implement, task: id, ...(at === undefined ? {} : { at }), ...(list ? { pick: firstPick(list) } : {}) };
     drawSheet(true);
   }
 
-  /** @param {string} how one of HOW */
-  function implementHow(how) {
-    if (!sheet) return;
+  /**
+   * A choice on Implement's sheet changes what's picked: who does the work (it can't review itself, so it leaves the reviewers),
+   * a reviewer on or off, or how it runs.
+   * @param {Partial<import('./todoviews.js').ImplementPick>} change
+   * @param {string} [reviewer] the reviewer to turn on or off
+   */
+  function implementPick(change, reviewer) {
+    const list = sheet ? findTask(sheet.task)?.list : null;
+    if (!sheet || !list) return;
+    const now = { ...(sheet.pick ?? firstPick(list)), ...change };
+    const toggled = reviewer === undefined ? now.reviewers : now.reviewers.includes(reviewer) ? now.reviewers.filter(kind => kind !== reviewer) : [...now.reviewers, reviewer];
+    sheet = { ...sheet, pick: { ...now, reviewers: toggled.filter(kind => kind !== now.by) } };
+    drawSheet(true);
+  }
+
+  /** Start on Implement's sheet: the PC runs what's picked. */
+  function implementStart() {
+    const list = sheet ? findTask(sheet.task)?.list : null;
+    if (!sheet || !list) return;
     const { task, at } = sheet;
-    ask({ action: ACTION.implement, task, ...(at === undefined ? {} : { at }), ...(how === HOW.silent ? { silent: true } : {}) });
+    const pick = sheet.pick ?? firstPick(list);
+    ask({ action: ACTION.implement, task, ...(at === undefined ? {} : { at }), by: pick.by, reviewers: pick.reviewers, silent: pick.run === HOW.silent });
   }
 
   function beginIssue() {
@@ -337,7 +363,10 @@ export function todoTab(app) {
         return true;
       }
       case TD.remove: toSheet(SHEET.remove); return true;
-      case TD.implementHow: implementHow(el.dataset.how ?? ''); return true;
+      case TD.implementHow: implementPick({ run: el.dataset.how ?? HOW.terminal }); return true;
+      case TD.implementBy: implementPick({ by: el.dataset.kind ?? '' }); return true;
+      case TD.implementReviewer: implementPick({}, el.dataset.kind ?? ''); return true;
+      case TD.implementStart: implementStart(); return true;
       case TD.pickStatus: {
         changeStatus(task.id, el.dataset.status ?? '');
         sheet = null;
@@ -533,7 +562,7 @@ export function todoTab(app) {
         drawSheet(true);
       } else if (!m.ok) app.toast(m.error ?? 'That didn’t go through.');
       else if (m.action === ACTION.implement && m.silent) {
-        app.toast('Claude Code is working on it silently.');
+        app.toast('It’s being worked on silently.');
         sheet = null;
         drawSheet();
       } else if (m.action === ACTION.implement) {

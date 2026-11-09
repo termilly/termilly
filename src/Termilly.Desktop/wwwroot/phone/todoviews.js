@@ -5,14 +5,18 @@
 /**
  * A task as the PC sends it (js/phonetodo.js).
  * @typedef {{ id: string, text: string, status: string, tags: string[], details: string, notes: string, steps: PhoneStep[],
- *   agent: { id: string, title: string } | null, working?: boolean, review: { summary: string, by: string } | null,
+ *   agent: { id: string, title: string } | null, working?: boolean, now?: string | null, review: { summary: string, by: string } | null,
  *   issue: { url: string, number: number } | null }} PhoneTask
  */
 /**
  * A terminal's or workspace's list.
  * @typedef {{ kind: string, id: string, name: string, tasks: PhoneTask[], implement: boolean, github: boolean, lead: string,
- *   note: { text: string, pinned?: boolean } | null, ws?: PhoneList }} PhoneList
+ *   note: { text: string, pinned?: boolean } | null, ws?: PhoneList, plan: ImplementPick | null, agents: { kind: string, name: string }[],
+ *   reviewers: string[] }} PhoneList plan: what Implement starts with on this list; agents: who can do the work; reviewers: who can
+ *   review (none unless the PC has more than one agent)
  */
+/** What Implement's sheet has picked: who does the work, who reviews it, and how it runs (HOW). */
+/** @typedef {{ by: string, reviewers: string[], run: string }} ImplementPick */
 /** @typedef {{ name: string, color: string }} PhoneTag */
 /** What the views need to know: the tags' colours, and what this phone may do. */
 /** @typedef {{ tags: PhoneTag[], typing: boolean, opening: boolean }} Allowed */
@@ -26,7 +30,7 @@ export const TD = Object.freeze({
   implement: 'implement', issue: 'issue', tags: 'tags', tag: 'tag', edit: 'edit', save: 'save', move: 'move', moveTo: 'moveTo',
   remove: 'remove', removeYes: 'removeYes', close: 'close', toTask: 'toTask', note: 'note', noteSave: 'noteSave', noteRemove: 'noteRemove',
   noteTasks: 'noteTasks', showAll: 'showAll', showDone: 'showDone', label: 'label', create: 'create', pickTag: 'pickTag',
-  implementHow: 'implementHow', pickStatus: 'pickStatus',
+  implementHow: 'implementHow', implementBy: 'implementBy', implementReviewer: 'implementReviewer', implementStart: 'implementStart', pickStatus: 'pickStatus',
 });
 /** Implement's two ways, as the PC's Implement menu has them. */
 export const HOW = Object.freeze({ terminal: 'terminal', silent: 'silent' });
@@ -105,7 +109,7 @@ function taskRow(task, ctx) {
   const meta = `${progress(task.steps)}${task.tags.map(tag => chip(tag, ctx)).join('')}${task.issue ? `<span class="td-sub">#${esc(task.issue.number)}</span>` : ''}`;
   return `<div class="row td-row${task.status === STATUS.done ? ' td-done' : ''}" data-td="${TD.task}" ${data}>${statusMarkHtml(task.status, data, ctx.typing, !!task.working)}
     <div class="r-text"><div class="r-name">${esc(task.text)}</div>
-      ${task.agent ? `<div class="td-agent">${esc(task.agent.title)}</div>` : ''}
+      ${task.now ? `<div class="td-agent">${esc(task.now)}</div>` : task.agent ? `<div class="td-agent">${esc(task.agent.title)}</div>` : ''}
       ${task.review ? `<div class="td-said"><b>${esc(task.review.by)}:</b> ${esc(task.review.summary)}</div>` : ''}
       ${meta ? `<div class="td-meta">${meta}</div>` : ''}</div></div>`;
 }
@@ -295,10 +299,37 @@ export function tagsSheetHtml(task, ctx) {
   return `${headHtml('Tags')}<div class="list td-pick">${rows || '<p class="muted center">No tags yet. Make them on the PC, or give a new task one.</p>'}</div>`;
 }
 
-/** Implement's two ways: in a new terminal, to watch and answer it, or Silent, in a hidden shell. @param {PhoneTask} task */
-export const implementSheetHtml = task => `${headHtml('Implement')}<p>${esc(task.text)}</p><div class="list td-pick">
-  <button class="row" data-td="${TD.implementHow}" data-how="${HOW.terminal}"><span class="r-text"><span class="r-name">In a new terminal</span><span class="r-meta">Claude Code works where you can watch it and answer it.</span></span></button>
-  <button class="row" data-td="${TD.implementHow}" data-how="${HOW.silent}"><span class="r-text"><span class="r-name">Silent</span><span class="r-meta">Claude Code works in a hidden shell. The task goes to Review with its reply.</span></span></button></div>`;
+/**
+ * A choice on Implement's sheet: a chip that's on or off.
+ * @param {string} td what tapping it does
+ * @param {string} data its data attribute, with the value
+ * @param {string} label
+ * @param {boolean} on
+ */
+const pickHtml = (td, data, label, on) => `<button class="td-chip td-pick-tag td-impl${on ? ' on' : ''}" data-td="${td}" ${data} aria-pressed="${on}">${esc(label)}</button>`;
+
+/**
+ * Implement's sheet, as the PC's card: who does the work, who reviews it (only where the PC has another agent to), and whether it
+ * runs in a new terminal, to watch and answer it, or Silent, in a hidden shell. It opens with the list's plan, so it's Start.
+ * @param {PhoneTask} task
+ * @param {PhoneList} list
+ * @param {ImplementPick} pick what's picked now
+ */
+export function implementSheetHtml(task, list, pick) {
+  const name = /** @param {string} kind */ kind => list.agents.find(a => a.kind === kind)?.name ?? kind;
+  const by = list.agents.length > 1
+    ? `<div class="td-impl-label">By</div><div class="td-tags">${list.agents.map(a => pickHtml(TD.implementBy, `data-kind="${esc(a.kind)}"`, a.name, a.kind === pick.by)).join('')}</div>` : '';
+  const can = list.reviewers.filter(kind => kind !== pick.by);
+  const reviewers = can.length
+    ? `<div class="td-impl-label">Reviewed by</div><div class="td-tags">${can.map(kind => pickHtml(TD.implementReviewer, `data-kind="${esc(kind)}"`, name(kind), pick.reviewers.includes(kind))).join('')}</div>` : '';
+  const runs = [[HOW.terminal, 'In a new terminal'], [HOW.silent, 'Silent']];
+  const how = pick.run === HOW.silent ? `${name(pick.by)} works in a hidden shell. The task goes to Review with its reply.` : `${name(pick.by)} works where you can watch it and answer it.`;
+  const reviewed = pick.reviewers.length ? ` ${pick.reviewers.map(name).join(' and ')} ${pick.reviewers.length > 1 ? 'review' : 'reviews'} it before it comes to you.` : '';
+  return `${headHtml('Implement')}<p>${esc(task.text)}</p>${by}${reviewers}
+    <div class="td-impl-label">Run</div><div class="td-tags">${runs.map(([run, label]) => pickHtml(TD.implementHow, `data-how="${run}"`, label, pick.run === run)).join('')}</div>
+    <p class="muted td-impl-how">${esc(how + reviewed)}</p>
+    <button class="ibtn fill" data-td="${TD.implementStart}">Start</button>`;
+}
 
 /** @param {PhoneTask} task */
 export const removeSheetHtml = task => `${headHtml('Delete task')}<p>${esc(task.text)}</p><button class="ibtn red" data-td="${TD.removeYes}">Delete</button>`;

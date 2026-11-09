@@ -50,7 +50,9 @@ export function listForPhone(ref) {
   const tasks = listOf(ref)?.tasks ?? [];
   const folder = folderOfList(ref);
   if (folder && tasks.length) checkRepo(folder);
-  return { tasks: tasks.map(taskForPhone), implement: !!implementPlace(ref), github: !!folder && isOnGitHub(folder) };
+  // What Implement's sheet on the phone picks from: the list's plan, the agents that can do the work, and those that can review.
+  const agents = agentsFor(ref).map(kind => ({ kind, name: agentKind(kind).name }));
+  return { tasks: tasks.map(taskForPhone), implement: !!implementPlace(ref), github: !!folder && isOnGitHub(folder), plan: planOf(ref), agents, reviewers: reviewersAt(ref) };
 }
 
 /** To do's tags to pick from, with their colours. */
