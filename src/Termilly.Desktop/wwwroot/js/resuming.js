@@ -66,6 +66,7 @@ export function cancelResume(tab) {
  * @param {Tab} tab
  */
 function done(tab) {
+  settling.get(tab)?.();
   if (!tab.resuming) return;
   clearTimeout(tab.resuming.timer);
   tab.resuming = null;
@@ -90,11 +91,46 @@ function drawOverlay(tab) {
 
 // Its view is made after the snapshot is read: the overlay goes on once it's there.
 on(EVENTS.terminalOpened, drawOverlay);
-// The agent runs, so what's typed goes to it, not around its command in the shell. Claude Code's hooks report in as it
-// starts; Codex's first one waits for a prompt, which the overlay held back, so its program running (the host sees
-// it) counts too.
+// The session is back. Claude Code's hooks report in once it has loaded it (SessionStart). Codex's first hook waits
+// for a prompt, which the overlay holds back: once its program runs (the host sees it), the session is back when its
+// screen goes quiet, the conversation drawn.
 on(EVENTS.agent, tab => { if (tab.resuming && tab.agent) done(tab); });
-on(EVENTS.tab, tab => { if (tab.resuming && runningAgent(tab)) done(tab); });
+on(EVENTS.tab, tab => {
+  if (tab.resuming && !settling.has(tab) && runningAgent(tab) && !agentKind(tab.resuming.kind).hookAtStart) settle(tab);
+});
+
+/** How long an agent's screen stays still before its resumed session counts as drawn, and the longest wait for it. */
+const QUIET_MS = 1000;
+const MAX_SETTLE_MS = 20_000;
+/** Terminals waiting for their agent's screen to go quiet, and what stops the waiting. @type {WeakMap<Tab, () => void>} */
+const settling = new WeakMap();
+
+/**
+ * Ends the resume once the agent's screen has been still for a moment (or after MAX_SETTLE_MS).
+ * @param {Tab} tab
+ */
+function settle(tab) {
+  const term = tab.view?.term;
+  if (!term) {
+    done(tab);
+    return;
+  }
+  let quiet = 0;
+  const finish = () => {
+    clearTimeout(quiet);
+    clearTimeout(cap);
+    writes.dispose();
+    settling.delete(tab);
+    done(tab);
+  };
+  const writes = term.onWriteParsed(() => {
+    clearTimeout(quiet);
+    quiet = window.setTimeout(finish, QUIET_MS);
+  });
+  const cap = window.setTimeout(finish, MAX_SETTLE_MS);
+  quiet = window.setTimeout(finish, QUIET_MS);
+  settling.set(tab, finish);
+}
 
 /**
  * What a resuming terminal says, on the PC and the phone: Resuming the Codex session.

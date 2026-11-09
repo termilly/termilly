@@ -12,17 +12,19 @@ import { AGENT_KIND, PROFILE_ICON } from './constants.js';
  * @property {string} icon its badge (PROFILE_ICON; ui.js draws its mark)
  * @property {string} program the command that starts it, which is its program's name too
  * @property {(session: string) => string} resume what resumes one of its sessions
+ * @property {boolean} hookAtStart whether its hooks report in as it starts (Claude Code's SessionStart), so a resumed
+ *   session is back when they do; Codex's first hook waits for a prompt, so its screen going quiet says it instead
  */
 
 /** @type {Readonly<Record<string, AgentKind>>} */
 export const AGENTS = Object.freeze({
   [AGENT_KIND.claude]: {
     name: AGENT_KIND.claudeName, short: 'Claude', icon: PROFILE_ICON.claude, program: AGENT_KIND.claude,
-    resume: session => `claude --resume ${session}`,
+    resume: session => `claude --resume ${session}`, hookAtStart: true,
   },
   [AGENT_KIND.codex]: {
     name: AGENT_KIND.codexName, short: AGENT_KIND.codexName, icon: PROFILE_ICON.codex, program: AGENT_KIND.codex,
-    resume: session => `codex resume ${session}`,
+    resume: session => `codex resume ${session}`, hookAtStart: false,
   },
 });
 
