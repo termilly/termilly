@@ -66,6 +66,8 @@ internal sealed class ProcessRunner : IProcessRunner
     public static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(20);
     public const long DefaultMaxOutput = 64L << 20;
     private const int ReadBuffer = 64 * 1024;
+    /// <summary>The most of a program's error output kept, in characters (what's shown of it is its first lines).</summary>
+    internal const int MaxErrorChars = 1 << 20;
 
     public ProcessResult Run(ProcessRequest request) => RunAsync(request).GetAwaiter().GetResult();
 
@@ -73,7 +75,7 @@ internal sealed class ProcessRunner : IProcessRunner
     {
         using var process = Start(request);
         process.StandardInput.Close();
-        var error = process.StandardError.ReadToEndAsync(CancellationToken.None);
+        var error = ReadErrorAsync(process.StandardError, MaxErrorChars);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancel);
         timeout.CancelAfter(request.Timeout);
         try
@@ -150,6 +152,26 @@ internal sealed class ProcessRunner : IProcessRunner
             output.Write(buffer, 0, read);
         }
         return (output.ToArray(), false);
+    }
+
+    /// <summary>
+    /// A program's error output, its first <paramref name="maxChars"/> characters: the rest is read and dropped, so a
+    /// program writing errors without end neither fills memory nor stops on a full pipe.
+    /// </summary>
+    internal static async Task<string> ReadErrorAsync(TextReader stderr, int maxChars)
+    {
+        var kept = new StringBuilder();
+        var buffer = new char[ReadBuffer];
+        int read;
+        while ((read = await stderr.ReadAsync(buffer, CancellationToken.None).ConfigureAwait(false)) > 0)
+        {
+            var room = maxChars - kept.Length;
+            if (room > 0)
+            {
+                kept.Append(buffer, 0, Math.Min(room, read));
+            }
+        }
+        return kept.ToString();
     }
 
     private static void Kill(Process process)

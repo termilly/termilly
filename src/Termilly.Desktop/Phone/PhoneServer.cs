@@ -89,6 +89,13 @@ internal sealed class PhoneServer : IDisposable
     private readonly byte[] _authorityFile;
     private readonly CancellationTokenSource _stop = new();
 
+    /// <summary>
+    /// Connections served at once, at most: each phone or computer keeps one live connection and opens a few for
+    /// requests, so this is far above real use, and a flood of connections can't start a task each without end.
+    /// </summary>
+    internal const int MaxConnections = 64;
+    private readonly ConnectionLimit _connections = new(MaxConnections);
+
     /// <summary>The setup page (plain http) and the app (HTTPS), at this PC's address.</summary>
     public string SetupUrl { get; }
     public string AppUrl { get; }
@@ -199,7 +206,11 @@ internal sealed class PhoneServer : IDisposable
             {
                 continue;
             }
-            _ = Task.Run(() => Serve(client));
+            // All taken: this one is closed at once (a real client tries again; a flood gets nothing).
+            if (!_connections.TryStart(() => Serve(client)))
+            {
+                client.Dispose();
+            }
         }
     }
 
