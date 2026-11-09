@@ -9,14 +9,15 @@
 
 import { PAGE } from './protocol.js';
 import { send } from './host.js';
-import { state, on, emit, tabTitle, profileOf, activityChanged, EVENTS, sourceOf } from './store.js';
+import { state, on, emit, tabTitle, profileOf, activityChanged, EVENTS, sourceOf, runsClaude, runningAgent } from './store.js';
 import { bufferLines } from './terminals.js';
 import { lastOutput } from './commands.js';
 import { environmentOf } from './environments.js';
 import { showMenu } from './popups.js';
 import { switchWorkspace, focusTab } from './panes.js';
 import { noticeDialog } from './dialogs.js';
-import { PROFILE_SOURCE } from './constants.js';
+import { PROFILE_SOURCE, AGENT_STATE } from './constants.js';
+import { agentKind } from './agentkinds.js';
 import { SECOND_MS } from './util.js';
 import { lineFrom } from './buffer.js';
 
@@ -39,7 +40,13 @@ const MATCH_LINES = 40;
 /** What a read returns: the last command and its output, or the terminal's last lines. */
 const READ = Object.freeze({ lastCommand: 'last_command', lines: 'lines' });
 /** What a wait waits for: the running command to finish, or an output line to match. */
-const UNTIL = Object.freeze({ commandFinished: 'command_finished', outputMatches: 'output_matches' });
+const UNTIL = Object.freeze({ commandFinished: 'command_finished', outputMatches: 'output_matches', agentDone: 'agent_done' });
+/**
+ * An agent's states that end its turn for whoever waits on it: it finished, failed, or waits for the user (a
+ * permission, a question). Idle after working: it was stopped (Esc).
+ * @type {Set<string>}
+ */
+const TURN_OVER = new Set([AGENT_STATE.done, AGENT_STATE.error, AGENT_STATE.needsInput, AGENT_STATE.attention, AGENT_STATE.idle]);
 /** How long a wait waits by default, and at most (the host gives up at 115), in seconds. */
 const DEFAULT_WAIT_S = 60;
 const MAX_WAIT_S = 110;
@@ -55,7 +62,7 @@ const MENU_OFFSET_PX = 120;
 function who(from) {
   const tab = from && state.tabs.get(from);
   if (!tab) return 'a script';
-  return `${tab.agent ? 'Claude' : 'a script'} in ${tabTitle(tab)}`;
+  return `${tab.agent ? agentKind(tab.agent.kind).short : 'a script'} in ${tabTitle(tab)}`;
 }
 
 /**
@@ -158,8 +165,9 @@ export function readTerminal(tab, { what = READ.lastCommand, count, from } = {})
 }
 
 /**
- * Waits for the running command to finish, or for a new output line to match `pattern`, then reads like
- * readTerminal; { timedOut: true } after `timeout_s` (60 s by default, at most 110: the host waits 115).
+ * Waits for the running command to finish, for a new output line to match `pattern`, or for the agent running there
+ * to end its turn, then reads like readTerminal; { timedOut: true } after `timeout_s` (60 s by default, at most 110:
+ * the host waits 115).
  * @param {Tab} tab
  * @param {{ until?: string, pattern?: string, timeout_s?: number, from?: string | null }} [options]
  */
@@ -167,6 +175,7 @@ export function waitForTerminal(tab, { until = UNTIL.commandFinished, pattern, t
   checkRead(tab, from);
   note(tab, from, 'watched');
   const limit = Math.min(MAX_WAIT_S, Math.max(1, Number(timeout) || DEFAULT_WAIT_S)) * SECOND_MS;
+  if (until === UNTIL.agentDone) return waitForTurn(tab, limit);
   return new Promise((resolve, reject) => {
     let regex = null;
     if (until === UNTIL.outputMatches) {
@@ -209,6 +218,46 @@ export function waitForTerminal(tab, { until = UNTIL.commandFinished, pattern, t
 
 // A command ending wakes whoever waits on it.
 on(EVENTS.commandEnding, ({ tab }) => { for (const fn of tab.access?.waiters ?? []) fn(); });
+
+/**
+ * Waits for the agent in a terminal (Claude Code, Codex) to end its turn, by its hooks: a full-screen agent redraws
+ * its screen rather than adding lines, so an output pattern can't tell. Returns its state, its last reply (the hooks
+ * carry it, cut at 500 characters) and the screen's last lines. A turn already working is waited out; otherwise the
+ * next one (the prompt just typed) is, from its start.
+ * @param {Tab} tab
+ * @param {number} limit in ms
+ */
+function waitForTurn(tab, limit) {
+  const agent = runningAgent(tab);
+  if (!agent) return Promise.reject(new Error(`No coding agent runs in ${tabTitle(tab)} (the terminal).`));
+  if (!runsClaude(tab)) {
+    return Promise.reject(new Error(`${agentKind(agent).name} in ${tabTitle(tab)} doesn't tell Termilly when it works yet (its hooks are off, or not trusted yet in Codex): wait for an output line instead.`));
+  }
+  return new Promise(resolve => {
+    let started = tab.agent?.state === AGENT_STATE.working;
+    /** @param {object} result */
+    const finish = result => {
+      clearTimeout(timer);
+      turnWaiters.delete(onAgent);
+      resolve(result);
+    };
+    /** @param {Tab} changed */
+    const onAgent = changed => {
+      if (changed !== tab) return;
+      const now = tab.agent?.state;
+      if (now === AGENT_STATE.working) started = true;
+      else if (!now || (started && TURN_OVER.has(now)) || now === AGENT_STATE.needsInput) {
+        finish({ ...snapshot(tab, READ.lines, MATCH_LINES), agent: now ?? AGENT_STATE.exited, reply: now === AGENT_STATE.done ? tab.agent?.message ?? null : null });
+      }
+    };
+    turnWaiters.add(onAgent);
+    const timer = setTimeout(() => finish({ pane: tab.id, title: tabTitle(tab), timedOut: true, agent: tab.agent?.state ?? null }), limit);
+  });
+}
+
+/** The waits on agents' turns, each told of every agent's change. @type {Set<(tab: Tab) => void>} */
+const turnWaiters = new Set();
+on(EVENTS.agent, (/** @type {Tab} */ tab) => { for (const fn of [...turnWaiters]) fn(tab); });
 
 // ---- Send to agent ----
 
