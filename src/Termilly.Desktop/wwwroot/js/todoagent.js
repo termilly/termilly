@@ -8,6 +8,7 @@ import { addApiMethods } from './api.js';
 import { findTask, listsOfAsker, updateTask, setStatus, releaseClosed } from './todo.js';
 import { TASK_STATUS, detailLines, statusOf, subProgress, tickByNumber } from './todolist.js';
 import { alertReview } from './notify.js';
+import { workDone } from './todoreview.js';
 
 /**
  * How the API names a task's statuses.
@@ -66,9 +67,11 @@ addApiMethods({
     if (step) tick(ref, task, [Number(step)]);
     const now = /** @type {TodoTask} */ (findTask(task.id)?.task);
     const [done, all] = subProgress(now.details);
-    if (step && done < all) return { ...describeTask(now), note: `Step ${step} is ticked. The task stays in progress: ${all - done} left.` };
     const said = String(summary ?? '').trim();
-    setStatus(ref, task.id, TASK_STATUS.review, { review: { summary: said, by: whoIs(from) } });
+    // Implement's reviewers look at it first, when it has some: the task stays In progress until they're done.
+    if (workDone(now, said, whoIs(from), !!step && done < all)) return { ...describeTask(now), note: 'It is being reviewed. What the review finds comes back to you here; fix it and finish the task again.' };
+    if (step && done < all) return { ...describeTask(now), note: `Step ${step} is ticked. The task stays in progress: ${all - done} left.` };
+    setStatus(ref, task.id, TASK_STATUS.review, { plan: now.plan, review: { summary: said, by: whoIs(from) } });
     alertReview(now, said, from ? state.tabs.get(from) ?? null : null);
     return { ...describeTask(/** @type {TodoTask} */ (findTask(task.id)?.task)), note: 'It waits in Review for the user.' };
   },

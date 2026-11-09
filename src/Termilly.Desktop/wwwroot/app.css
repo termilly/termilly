@@ -3466,6 +3466,55 @@ button.td-agent:hover { text-decoration: underline; }
 .td-about-all { display: flex; flex: 1; flex-direction: column; gap: 4px; min-width: 0; padding-bottom: 2px; }
 .td-details { white-space: pre-wrap; overflow-wrap: anywhere; }
 .td-result { padding: 6px 8px; border-radius: 6px; background: color-mix(in srgb, var(--text) 6%, transparent); white-space: pre-wrap; overflow-wrap: anywhere; }
+/* What a task's agents said, with reviewers (js/todopanel.js saidHtml): the verdict, then the work and each review. */
+.td-verdict { display: flex; align-items: center; gap: 6px; padding: 5px 8px; border-radius: 6px; background: color-mix(in srgb, var(--ok) 12%, transparent); color: var(--ok); }
+.td-verdict.open { background: color-mix(in srgb, var(--attention) 12%, transparent); color: var(--attention); }
+.td-verdict svg { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; }
+.td-verdict b { font-weight: 600; }
+.td-verdict span { color: var(--muted); }
+.td-said { display: flex; flex-direction: column; gap: 3px; }
+.td-by { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 11.5px; }
+.td-by b { color: var(--text); font-weight: 600; }
+.td-v { margin-left: auto; }
+.td-v.ok { color: var(--ok); }
+.td-v.open { color: var(--attention); }
+.td-earlier { color: var(--muted); font-size: 11.5px; }
+/* Who has a task now (agentHtml): the agent's badge, the words, its terminal and Stop. */
+.td-now { flex-wrap: wrap; color: var(--muted); }
+.td-now > span { color: var(--text); }
+.td-now .td-agent { color: var(--accent); }
+
+/* ---- Implement's card (js/todocard.js) ---- */
+.popover.td-card { width: 340px; padding: 0; }
+.tc-head { display: flex; flex-direction: column; padding: 12px 14px 6px; }
+.tc-head b { font-size: 13.5px; color: var(--text-strong); }
+.tc-head span { overflow: hidden; color: var(--muted); font-size: 12px; white-space: nowrap; text-overflow: ellipsis; }
+.tc-row { display: grid; grid-template-columns: 84px minmax(0, 1fr); align-items: center; gap: 10px; padding: 5px 14px; font-size: 13px; }
+.tc-row.top { align-items: start; }
+.tc-label { color: var(--muted); font-size: 12.5px; }
+.tc-row.top > .tc-label { padding-top: 5px; }
+.tc-one, .tc-by, .tc-chip { display: inline-flex; align-items: center; gap: 7px; }
+.tc-by { width: 100%; height: 28px; padding: 0 8px; text-align: left; cursor: pointer; }
+.tc-by .dropdown-chevron { display: inline-flex; margin-left: auto; color: var(--muted); }
+.tc-by .dropdown-chevron svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.5; }
+.tc-pick { display: flex; flex-wrap: wrap; gap: 6px; }
+.tc-chip { height: 26px; padding: 0 4px 0 7px; border: 1px solid var(--border-strong); border-radius: 7px; background: var(--raised-2); font-size: 12.5px; }
+.tc-chip button { width: 18px; height: 18px; padding: 0; border: 0; border-radius: 4px; background: none; color: var(--muted); font-size: 14px; line-height: 1; cursor: pointer; }
+.tc-chip button:hover { background: var(--hover); color: var(--text); }
+.tc-add { display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 9px 0 6px; border: 1px dashed var(--border-strong); border-radius: 7px; background: none; color: var(--muted); font: inherit; font-size: 12.5px; cursor: pointer; }
+.tc-add:hover { border-color: var(--accent); color: var(--text); }
+.tc-add svg { width: 16px; height: 16px; fill: none; stroke: currentColor; }
+.tc-step { display: inline-flex; align-items: stretch; height: 28px; border: 1px solid var(--border-strong); border-radius: 7px; background: var(--surface); overflow: hidden; }
+.tc-step output { display: grid; place-items: center; min-width: 34px; padding: 0 8px; font-size: 13px; font-variant-numeric: tabular-nums; }
+.tc-arrows { display: flex; flex-direction: column; border-left: 1px solid var(--border-strong); }
+.tc-arrows button { display: grid; flex: 1; place-items: center; width: 22px; padding: 0; border: 0; background: none; color: var(--muted); cursor: pointer; }
+.tc-arrows button + button { border-top: 1px solid var(--border-strong); }
+.tc-arrows button:hover:not(:disabled) { background: var(--hover); color: var(--text); }
+.tc-arrows button:disabled { opacity: .35; cursor: default; }
+.tc-arrows svg { width: 10px; height: 10px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.tc-hint { margin: 6px 0 0; color: var(--muted); font-size: 11.5px; line-height: 1.4; }
+.tc-foot { display: flex; align-items: center; gap: 10px; margin-top: 6px; padding: 10px 14px 12px; border-top: 1px solid var(--border); }
+.tc-keep { display: flex; flex: 1; align-items: center; gap: 7px; color: var(--muted); font-size: 12.5px; cursor: pointer; }
 .td-step { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; align-items: start; gap: 6px; min-height: 22px; color: var(--text); font-size: 13px; }
 .td-step-mark { display: inline-flex; height: 20px; align-items: center; color: var(--muted); }
 .td-step-mark svg { width: 16px; height: 16px; fill: none; stroke: currentColor; }

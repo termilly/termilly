@@ -106,7 +106,9 @@ export const getSetting = path => {
  * Its settings: alwaysNotify, a task's news always reaches the user; allowAll, Silent runs get what they ask for.
  * @typedef {{ open: boolean, list?: { kind: string, id: string } | null, width?: number, height?: number, side?: string,
  *   detached?: boolean, hosts?: Record<string, TodoTask[]>, onlyWithTasks?: boolean, tags?: string[], tagColors?: Record<string, string>, showDone?: boolean,
- *   hideActive?: boolean, searchAll?: boolean, alwaysNotify?: boolean, allowAll?: boolean }} TodoState
+ *   hideActive?: boolean, searchAll?: boolean, alwaysNotify?: boolean, allowAll?: boolean,
+ *   plan?: Partial<NonNullable<TodoTask['plan']>>, plans?: Record<string, NonNullable<TodoTask['plan']>> }} TodoState plan: what
+ *   Implement starts with where a list has no choice of its own (Settings › Agents); plans: each list's own, by list
  */
 
 /**

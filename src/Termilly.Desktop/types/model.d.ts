@@ -46,8 +46,19 @@ interface TodoTask {
   terminal?: string;
   /** Its run out of sight (Implement, Out of sight): the hidden shell's id. */
   run?: string;
-  /** What the agent that finished it said. */
-  review?: { summary: string; by: string };
+  /** What Implement was started with (js/todoplan.js): the agent doing the work, the agents reviewing it, the rounds and how it runs. */
+  plan?: { by: string; reviewers: string[]; rounds: number; run: string };
+  /** What its agents are at while it's In progress: working, reviewing or fixing (STAGE), in which round, and how many findings are being fixed. */
+  stage?: { what: string; round: number; count?: number | null };
+  /**
+   * What the agent that finished it said, and who; with reviewers, what each said in the last round, how many rounds it took,
+   * the rounds that found something, whether they agreed, and the terminal the work was done in.
+   */
+  review?: {
+    summary: string; by: string; kind?: string;
+    reviews?: { kind: string; agrees: boolean; count: number | null; text: string }[];
+    rounds?: number; earlier?: { round: number; found: number }[]; agreed?: boolean; terminal?: string;
+  };
   /** What its run out of sight asks the user for and waits on (js/todoask.js): what the tool would do, and with what. */
   ask?: { verb: string; what: string };
 }

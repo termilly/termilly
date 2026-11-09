@@ -365,13 +365,14 @@ export function listsOfAsker(from) {
 }
 
 /**
- * Moves a task to a status. What only one status has goes with it: its terminal, and what its agent said.
+ * Moves a task to a status. What only one status has goes with it: its terminal, what its agents are at, and what they said.
+ * Implement's plan stays while its agents work and while it waits in Review; without one given, it goes.
  * @param {ListRef} ref
  * @param {string} id
  * @param {string} status
- * @param {{ terminal?: string, run?: string, review?: TodoTask['review'] }} [with_]
+ * @param {{ terminal?: string, run?: string, review?: TodoTask['review'], plan?: TodoTask['plan'], stage?: TodoTask['stage'] }} [with_]
  */
-export function setStatus(ref, id, status, { terminal, run, review } = {}) {
+export function setStatus(ref, id, status, { terminal, run, review, plan, stage } = {}) {
   const middle = status === TASK_STATUS.progress || status === TASK_STATUS.review;
   // An alert about it may wait for the user to leave the PC.
   if (status !== TASK_STATUS.review) send(PAGE.phoneWithdraw, { id });
@@ -380,6 +381,7 @@ export function setStatus(ref, id, status, { terminal, run, review } = {}) {
   updateTask(ref, id, {
     done: status === TASK_STATUS.done ? true : undefined, status: middle ? status : undefined,
     terminal: status === TASK_STATUS.progress ? terminal : undefined, run: status === TASK_STATUS.progress ? run : undefined,
+    plan: middle ? plan : undefined, stage: status === TASK_STATUS.progress ? stage : undefined,
     // Nothing is asked for once it's off In progress, and a new run hasn't asked yet.
     ask: undefined,
     ...said,

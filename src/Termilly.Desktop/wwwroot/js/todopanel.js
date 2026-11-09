@@ -9,13 +9,19 @@ import { PAGE, HOST } from './protocol.js';
 import { send, onHost } from './host.js';
 import { state, on, persist, newId, wsById, tabsOf, tabTitle, EVENTS } from './store.js';
 import { focusTab } from './panes.js';
-import { AGENT_COMMAND, agentWorking, folderOfList as folderOf, implementPlace, cantImplement, offersImplement, isOnGitHub, checkRepo, implementTask, keepIssue } from './todoactions.js';
-import { implementSilently, stopRun } from './todorun.js';
+import {
+  AGENT_COMMAND, agentWorking, folderOfList as folderOf, implementPlace, cantImplement, offersImplement, isOnGitHub, checkRepo, keepIssue,
+  implement, anotherRound, planOf, hasOwnPlan, keepPlan, agentsFor, reviewersAt,
+} from './todoactions.js';
+import { stopRun } from './todorun.js';
+import { openImplementCard } from './todocard.js';
+import { agentKind } from './agentkinds.js';
+import { stageWords, verdictOf, planWords } from './todoplan.js';
 import { answerAsk, allowWaiting, ASK } from './todoask.js';
 import { openTagManager } from './todotags.js';
 import { listItems, dotHtml } from './todomenu.js';
 import { tagCompletion } from './todotagcomplete.js';
-import { escapeHtml, cssColor, tabBadgeHtml, ICONS } from './ui.js';
+import { escapeHtml, cssColor, tabBadgeHtml, badgeHtml, ICONS } from './ui.js';
 import { byId, find, targetOf, WORKSPACE_ID, DOCK_GRIP, PANEL_HEAD } from './dom.js';
 import { showMenu, openPopover, closePopover, isOpen, closeAll, SEPARATOR } from './popups.js';
 import { showToast, TOAST } from './toasts.js';
@@ -73,7 +79,7 @@ const ACTION = Object.freeze({
   pick: 'pick', note: 'note', pin: 'pin', detach: 'detach', close: 'close', fold: 'fold', tag: 'tag', more: 'more', save: 'save',
   cancel: 'cancel', label: 'label', create: 'create', backToList: 'backToList', pickTags: 'pickTags', dropTag: 'dropTag', manageTags: 'manageTags',
   dropAddTag: 'dropAddTag',
-  implement: 'implement', issue: 'issue', openIssue: 'openIssue', status: 'status', agentTerminal: 'agentTerminal', accept: 'accept', reopen: 'reopen',
+  implement: 'implement', issue: 'issue', openIssue: 'openIssue', status: 'status', agentTerminal: 'agentTerminal', accept: 'accept', reopen: 'reopen', round: 'round',
   edit: 'edit', remove: 'remove', expand: 'expand', stopRun: 'stopRun', scope: 'scope', clearSearch: 'clearSearch', searchToggle: 'searchToggle',
   allow: 'allow', allowAll: 'allowAll', deny: 'deny', filter: 'filter', foldActive: 'foldActive', clearActive: 'clearActive', clearDone: 'clearDone', settings: 'settings',
 });
@@ -198,7 +204,7 @@ const chip = (tag, on = false) => `<button type="button" class="td-chip${on ? ' 
 function statusButtonHtml(task) {
   const status = statusOf(task);
   const working = agentWorking(task);
-  const name = working ? `${STATUS_NAME[status]}: ${AGENT_COMMAND} is working on it` : STATUS_NAME[status];
+  const name = working ? `${STATUS_NAME[status]}: ${agentWord(task)} is working on it` : STATUS_NAME[status];
   return `<button type="button" class="td-status st-${status}${working ? ' working' : ''}" data-td="${ACTION.status}" title="${name}. Click to change" aria-label="Status: ${name}">${working ? WORKING_ICON : STATUS_ICON[status]}</button>`;
 }
 
@@ -250,15 +256,22 @@ function rowHtml(task, elsewhere) {
   </div>`;
 }
 
+/** The agent on a task, as its command names it (claude, codex). @param {TodoTask} task */
+const agentWord = task => (task.plan ? agentKind(task.plan.by).program : AGENT_COMMAND);
+
 /**
- * Who's working on a task: an agent in a terminal, leading to it, or one out of sight, with Stop.
+ * Who has a task now, in words under its title: the agent working, reviewing or fixing, and who's next (js/todoplan.js). A
+ * hidden run has Stop; an agent in a terminal leads to it.
  * @param {TodoTask} task
  */
 function agentHtml(task) {
-  if (task.run && statusOf(task) === TASK_STATUS.progress) {
-    return `<span class="td-agent td-hidden-run">${AGENT_COMMAND}, silently<button type="button" class="td-stop" data-td="${ACTION.stopRun}" title="Stop it: the task goes back to Open">Stop</button></span>`;
-  }
+  if (statusOf(task) !== TASK_STATUS.progress) return '';
   const tab = task.terminal ? state.tabs.get(task.terminal) : null;
+  const now = task.plan ? stageWords(task.plan, task.stage) : null;
+  const stop = task.run ? `<button type="button" class="td-stop" data-td="${ACTION.stopRun}" title="${tab ? 'Stop the review: the task stays with its terminal' : 'Stop it: the task goes back to Open'}">Stop</button>` : '';
+  const there = tab ? `<button type="button" class="td-agent" data-td="${ACTION.agentTerminal}" data-tab="${escapeHtml(tab.id)}" title="Go to its terminal">in ${escapeHtml(tabTitle(tab))}</button>` : '';
+  if (now) return `<span class="td-agent td-hidden-run td-now">${badgeHtml({ icon: agentKind(now.kind).icon })}<span>${escapeHtml(now.text)}${task.run && !tab ? ', silently' : ''}</span>${there}${stop}</span>`;
+  if (task.run) return `<span class="td-agent td-hidden-run">${AGENT_COMMAND}, silently${stop}</span>`;
   return tab ? `<button type="button" class="td-agent" data-td="${ACTION.agentTerminal}" data-tab="${escapeHtml(tab.id)}" title="Go to its terminal">${AGENT_COMMAND} in ${escapeHtml(tabTitle(tab))}</button>` : '';
 }
 
@@ -269,15 +282,38 @@ function agentHtml(task) {
 function askHtml(task) {
   if (!task.ask || statusOf(task) !== TASK_STATUS.progress) return '';
   return `<div class="td-ask">
-    <div class="td-ask-text">${AGENT_COMMAND} ${escapeHtml(task.ask.verb)} <code>${escapeHtml(task.ask.what)}</code></div>
+    <div class="td-ask-text">${agentWord(task)} ${escapeHtml(task.ask.verb)} <code>${escapeHtml(task.ask.what)}</code></div>
     <span class="td-edit-actions"><button type="button" class="btn small" data-td="${ACTION.deny}" title="It goes on without it">Deny</button><button type="button" class="btn small" data-td="${ACTION.allowAll}" title="This, and anything else it asks for until it finishes">Allow all</button><button type="button" class="btn small primary" data-td="${ACTION.allow}">Allow</button></span>
   </div>`;
 }
 
-/** The two ways on from Review (what the agent said is in the task's details, aboutHtml). @param {TodoTask} task */
+/**
+ * The ways on from Review (what the agents said is in the task's details, aboutHtml): back to Open, Accept, and where its
+ * reviewers didn't agree, one more round of fixing and reviewing.
+ * @param {TodoTask} task
+ */
 function reviewHtml(task) {
   if (statusOf(task) !== TASK_STATUS.review) return '';
-  return `<div class="td-review"><span class="td-edit-actions"><button type="button" class="btn small" data-td="${ACTION.reopen}">Back to open</button><button type="button" class="btn small primary" data-td="${ACTION.accept}">Accept</button></span></div>`;
+  const open = !!task.plan && !!task.review && verdictOf(task.review)?.agreed === false;
+  const round = open ? `<button type="button" class="btn small" data-td="${ACTION.round}" title="What’s still open goes back to ${escapeHtml(agentKind(task.plan?.by).name)}, and the reviewers look again">One more round</button>` : '';
+  return `<div class="td-review"><span class="td-edit-actions"><button type="button" class="btn small" data-td="${ACTION.reopen}">Back to open</button>${round}<button type="button" class="btn small primary" data-td="${ACTION.accept}">Accept</button></span></div>`;
+}
+
+/**
+ * What a task's agents said, in a task opened out: the reviewers' verdict first, then the work's reply and each review, and
+ * the earlier rounds in a line. With nobody reviewing, the reply alone, as before.
+ * @param {NonNullable<TodoTask['review']>} review
+ */
+function saidHtml(review) {
+  const verdict = verdictOf(review);
+  const work = `<b>${escapeHtml(review.by)}:</b> ${escapeHtml(review.summary.trim())}`;
+  if (!verdict) return `<div class="td-result">${work}</div>`;
+  const reviews = (review.reviews ?? []).map(r => `<div class="td-said"><div class="td-by">${badgeHtml({ icon: agentKind(r.kind).icon })}<b>${escapeHtml(agentKind(r.kind).name)}</b> reviewed<span class="td-v ${r.agrees ? 'ok' : 'open'}">${r.agrees ? 'Agrees' : r.count ? `${r.count} open` : 'Doesn’t agree'}</span></div><div class="td-result">${escapeHtml(r.text)}</div></div>`).join('');
+  const earlier = (review.earlier ?? []).length
+    ? `<div class="td-earlier">${(review.earlier ?? []).map(e => `Round ${e.round}: ${e.found ? `${e.found} ${e.found === 1 ? 'finding' : 'findings'}` : 'findings'} went back`).join('. ')}</div>` : '';
+  return `<div class="td-verdict ${verdict.agreed ? 'ok' : 'open'}">${verdict.agreed ? STEP_MARK.done : ''}<b>${escapeHtml(verdict.text)}</b><span>${escapeHtml(verdict.more)}</span></div>
+    <div class="td-said"><div class="td-by">${review.kind ? badgeHtml({ icon: agentKind(review.kind).icon }) : ''}<b>${escapeHtml(review.by)}</b> did the work</div><div class="td-result">${escapeHtml(review.summary.trim())}</div></div>
+    ${reviews}${earlier}`;
 }
 
 /**
@@ -300,7 +336,7 @@ function aboutHtml(task) {
   return `<div class="td-about open">${toggle}<div class="td-about-all">
     ${notes ? `<div class="td-details">${escapeHtml(notes)}</div>` : ''}
     ${steps.map(stepHtml).join('')}
-    ${said ? `<div class="td-result">${said}</div>` : ''}
+    ${task.review ? saidHtml(task.review) : ''}
   </div></div>`;
 }
 
@@ -331,7 +367,7 @@ function stepHtml(line) {
 function implementButton(ref) {
   const why = cantImplement(ref);
   const server = implementPlace(ref)?.server;
-  const title = why || `Implement: Claude Code works on it${server ? ` on ${server}` : ''}, in a new terminal or silently`;
+  const title = why || `Implement${server ? ` on ${server}` : ''}: ${planWords(planOf(ref))}. Click to choose and start`;
   return `<button type="button" class="pane-btn" data-td="${ACTION.implement}" ${why ? 'disabled' : ''} title="${escapeHtml(title)}">${ICONS.play}</button>`;
 }
 
@@ -1092,28 +1128,33 @@ function changeStatus(task, status) {
 }
 
 /**
- * Implement's two ways: in a new terminal, where you can watch and answer it, or Silent, as a schedule's agent runs.
+ * Implement's card (js/todocard.js): who does the work, who reviews it, and whether it's in a new terminal, where you can watch
+ * and answer it, or silent, as a schedule's agent runs. Start runs it; ticked to, it also keeps the choice as this list's.
  * @param {HTMLElement} at
  * @param {TodoTask} task
  * @param {import('./todolist.js').DetailLine} [step]
  */
-function implementMenu(at, task, step) {
+function implementCard(at, task, step) {
   const ref = current;
   if (!ref) return;
-  const server = implementPlace(ref)?.server ?? null;
-  const asks = state.todo.allowAll ? 'gets whatever else it asks for (To do settings)'
-    : server ? `is refused anything else, as nobody can be asked on ${server} (To do settings can allow it all)` : 'asks in the task’s row for anything else';
-  const where = server ? `on ${server}, in the folder this terminal is in` : 'in this list’s folder';
-  const back = server ? ' The task goes to Review with its last reply when its turn ends' : '';
-  showMenu([
-    { label: 'In a new terminal', icon: ICONS.terminal, title: `Claude Code starts in a new terminal ${where}, where you can watch it and answer it.${back}`, action: () => implementTask(ref, task, step) },
-    {
-      label: 'Silent', icon: ICONS.play, title: `Nobody is watching: Claude Code works in a hidden shell ${where}, changes files without asking and ${asks}. The task goes to Review with its reply`,
-      action: () => {
-        if (!implementSilently(ref, task, step)) showToast({ text: `Claude Code can’t start silently here. ${cantImplement(ref)}`, state: TOAST.failed });
-      },
+  openImplementCard(at, {
+    title: step?.text ?? task.text, plan: planOf(ref), agents: agentsFor(ref), reviewers: reviewersAt(ref),
+    // A list with no plan of its own yet keeps its first one, unless that's unticked.
+    keep: !hasOwnPlan(ref), where: implementPlace(ref)?.server ?? undefined,
+    start: (plan, keep) => {
+      if (keep) keepPlan(ref, plan);
+      const now = findTask(task.id)?.task ?? task;
+      if (!implement(ref, now, step, plan).started) showToast({ text: `${agentKind(plan.by).name} can’t start here. ${cantImplement(ref)}`, state: TOAST.failed });
     },
-  ], at);
+  });
+}
+
+/**
+ * One more round for a task in Review whose reviewers didn't agree.
+ * @param {TodoTask} task
+ */
+function moreRounds(task) {
+  if (current && !anotherRound(current, task)) showToast({ text: `It can’t go another round here. ${cantImplement(current)}`, state: TOAST.failed });
 }
 
 /**
@@ -1208,7 +1249,7 @@ async function activeToClear(tasks) {
   const working = busy.some(task => task.run || agentWorking(task));
   const answer = await choiceDialog({
     title: one ? 'A task is in progress' : `${busy.length} tasks are in progress`,
-    body: `${one ? `“${busy[0].text}” is` : 'They are'} in progress${working ? `, and ${AGENT_COMMAND} is working on ${one ? 'it' : 'some'}` : ''}. `
+    body: `${one ? `“${busy[0].text}” is` : 'They are'} in progress${working ? `, and an agent is working on ${one ? 'it' : 'some'}` : ''}. `
       + (others ? `Keep ${one ? 'it' : 'them'} and clear the other ${others === 1 ? 'task' : `${others} tasks`}, or clear all ${tasks.length}?` : `Clear ${one ? 'it' : 'them'} too?`)
       + (busy.some(task => task.run) ? ' A silent run is stopped.' : ''),
     keep: others ? `Keep ${one ? 'it' : 'them'}` : undefined,
@@ -1341,7 +1382,8 @@ function stepOf(control, task) {
 const ON_TASK = Object.freeze({
   [ACTION.edit]: (_control, task) => beginEdit(task.id),
   [ACTION.remove]: (_control, task) => deleteTask(task),
-  [ACTION.implement]: (control, task) => implementMenu(control, task, stepOf(control, task)),
+  [ACTION.implement]: (control, task) => implementCard(control, task, stepOf(control, task)),
+  [ACTION.round]: (_control, task) => moreRounds(task),
   [ACTION.issue]: (control, task) => beginIssue(task, stepOf(control, task)),
   [ACTION.status]: (control, task) => statusMenu(task, control),
   [ACTION.accept]: (_control, task) => acceptTask(task),

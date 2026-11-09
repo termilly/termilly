@@ -31,7 +31,7 @@ const ENTER_MAX_MS = 3000;
  * settles.
  * @param {Tab} tab
  */
-function beforeEnter(tab) {
+export function beforeEnter(tab) {
   const term = tab.view?.term;
   const agent = runningAgent(tab);
   if (!term || !agent || !agentKind(agent).enterAfterQuiet) return new Promise(resolve => setTimeout(resolve, ENTER_DELAY_MS));
