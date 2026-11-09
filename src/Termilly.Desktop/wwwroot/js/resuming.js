@@ -62,17 +62,27 @@ export function cancelResume(tab) {
 }
 
 /**
- * Resuming is over: the agent runs, or Esc.
+ * Resuming is over: the session is back (resumed), or Esc. A session that's back is at the terminal's end, where its
+ * view goes; the restart put the view where it was before (terminals.js scrollRestored), above what the agent drew.
  * @param {Tab} tab
+ * @param {boolean} [resumed]
  */
-function done(tab) {
+function done(tab, resumed = false) {
   settling.get(tab)?.();
   if (!tab.resuming) return;
   clearTimeout(tab.resuming.timer);
   tab.resuming = null;
   tab.view?.body.querySelector(`.${OVERLAY_CLASS}`)?.remove();
+  if (resumed) tab.view?.term?.scrollToBottom();
   emit(EVENTS.tab, tab);
 }
+
+/**
+ * Whether a terminal's agent session came back after a restart (not called off with Esc), so its view belongs at the
+ * end rather than where it was.
+ * @param {Tab} tab
+ */
+export const wasResumed = tab => !tab.resuming && !!tab.start?.resumeSession;
 
 /** @param {Tab} tab */
 function drawOverlay(tab) {
@@ -94,7 +104,7 @@ on(EVENTS.terminalOpened, drawOverlay);
 // The session is back. Claude Code's hooks report in once it has loaded it (SessionStart). Codex's first hook waits
 // for a prompt, which the overlay holds back: once its program runs (the host sees it), the session is back when its
 // screen goes quiet, the conversation drawn.
-on(EVENTS.agent, tab => { if (tab.resuming && tab.agent) done(tab); });
+on(EVENTS.agent, tab => { if (tab.resuming && tab.agent) done(tab, true); });
 on(EVENTS.tab, tab => {
   if (tab.resuming && !settling.has(tab) && runningAgent(tab) && !agentKind(tab.resuming.kind).hookAtStart) settle(tab);
 });
@@ -112,24 +122,28 @@ const settling = new WeakMap();
 function settle(tab) {
   const term = tab.view?.term;
   if (!term) {
-    done(tab);
+    done(tab, true);
     return;
   }
   let quiet = 0;
-  const finish = () => {
+  // Stops watching (Esc calls it through done too); the timers below then end the resume as resumed.
+  const stop = () => {
     clearTimeout(quiet);
     clearTimeout(cap);
     writes.dispose();
     settling.delete(tab);
-    done(tab);
+  };
+  const back = () => {
+    stop();
+    done(tab, true);
   };
   const writes = term.onWriteParsed(() => {
     clearTimeout(quiet);
-    quiet = window.setTimeout(finish, QUIET_MS);
+    quiet = window.setTimeout(back, QUIET_MS);
   });
-  const cap = window.setTimeout(finish, MAX_SETTLE_MS);
-  quiet = window.setTimeout(finish, QUIET_MS);
-  settling.set(tab, finish);
+  const cap = window.setTimeout(back, MAX_SETTLE_MS);
+  quiet = window.setTimeout(back, QUIET_MS);
+  settling.set(tab, stop);
 }
 
 /**

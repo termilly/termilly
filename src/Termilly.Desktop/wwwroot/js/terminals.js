@@ -23,7 +23,7 @@ import { noteRemotePrompt, noteRemoteCwd, leftRemote } from './remotecwd.js';
 import { AGENT_STATE, AGENT_SOURCE, PROFILE_ICON } from './constants.js';
 import { find, field, PATH_DRAG, CLIP_DRAG } from './dom.js';
 import { continuesOnNextRow, atPrompt } from './buffer.js';
-import { isResuming, resumeTyped, cancelResume, CANCEL_KEY } from './resuming.js';
+import { isResuming, resumeTyped, cancelResume, wasResumed, CANCEL_KEY } from './resuming.js';
 import { clipboardKey, wireClipboard, PASTE_LABEL } from './termclipboard.js';
 import { selectionKey } from './keyselect.js';
 import { hoverMarkedLink, COPY_HINT } from './termlinks.js';
@@ -241,8 +241,9 @@ export function openTerminal(tab) {
   const view = tab.start?.output ? writeRestoredOutput(tab) : null;
   scanFrom(tab, term.buffer.normal.baseY + term.buffer.normal.cursorY); // old output isn't news for triggers
   startShell(tab);
-  // The new shell clears its screen on start; once it has, scroll to where the terminal was.
-  if (view) setTimeout(() => view.then(top => scrollRestored(term, top)), RESTORED_SCROLL_AFTER_MS);
+  // The new shell clears its screen on start; once it has, scroll to where the terminal was. An agent's session that's
+  // already back is at the end (resuming.js scrolled there), which stays.
+  if (view) setTimeout(() => view.then(top => scrollRestored(term, wasResumed(tab) ? null : top)), RESTORED_SCROLL_AFTER_MS);
 }
 
 /** A closed terminal reopened shows its old output, the new prompt on the view's last rows (this many). */
@@ -559,7 +560,7 @@ onHost(HOST.startFolder, m => {
 /**
  * What a terminal does as its shell starts (tab.start); see startOf.
  * @typedef {{ output: { lines: string[], closedAt: number, resurrected?: boolean, scroll?: number | null } | null,
- *   command: string | null, resumeSession: string | null, resumeKind?: string | null, done: boolean }} ShellStart| null, resumeSession: string | null, done: boolean }} ShellStart
+ *   command: string | null, resumeSession: string | null, resumeKind?: string | null, done: boolean }} ShellStart
  */
 
 /**
@@ -575,7 +576,7 @@ const startOf = tab => (tab.start ??= { output: null, command: null, resumeSessi
  * Sets what a terminal does as its shell starts (any of output, command, resumeSession): from a layout, the API, a
  * reopened terminal, a restart (snapshot.js) or a reconnect.
  * @param {Tab} tab
- * @param {{ output?: any, command?: string | null, resumeSession?: string | null, resumeKind?: string | null }} fields| null, resumeSession?: string | null }} fields
+ * @param {{ output?: any, command?: string | null, resumeSession?: string | null, resumeKind?: string | null }} fields
  */
 export function prepareStart(tab, fields) {
   Object.assign(startOf(tab), Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== undefined)));
