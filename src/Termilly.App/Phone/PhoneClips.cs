@@ -27,8 +27,8 @@ internal sealed class PhoneClips(ISettingsStore settings, TerminalSessions sessi
     /// <summary>Pastes a clip into the terminal the phone shows.</summary>
     public JsonObject Paste(JsonObject message)
     {
-        var pane = message[PaneField]?.GetValue<string>() ?? "";
-        var id = message[IdField]?.GetValue<string>() ?? "";
+        var pane = message[PaneField].AsText() ?? "";
+        var id = message[IdField].AsText() ?? "";
         if (Refused(PasteOp) is { } off)
         {
             return off;
@@ -44,7 +44,7 @@ internal sealed class PhoneClips(ISettingsStore settings, TerminalSessions sessi
     /// <summary>A clip's text for the phone's message box (cut short past <see cref="MaxText"/>); a secret's is refused.</summary>
     public JsonObject Text(JsonObject message)
     {
-        var id = message[IdField]?.GetValue<string>() ?? "";
+        var id = message[IdField].AsText() ?? "";
         if (Refused(TextOp) is { } off)
         {
             return off;

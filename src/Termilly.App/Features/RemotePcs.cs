@@ -188,15 +188,15 @@ internal sealed class RemotePcsHandler(PageChannel page, RemotePcStore store, Ph
             Post();
             while (await PcConnection.ReceiveAsync(socket, stop).ConfigureAwait(false) is { } message)
             {
-                var type = message[Fields.Type]?.GetValue<string>();
-                if (type == Kinds.Answered && message[Fields.Op]?.GetValue<string>() == Kinds.Manage)
+                var type = message[Fields.Type].AsText();
+                if (type == Kinds.Answered && message[Fields.Op].AsText() == Kinds.Manage)
                 {
                     live.Answer?.TrySetResult(message);
                 }
                 else if (type == Kinds.State && message[Fields.State] is { } state)
                 {
                     live.State = state.ToJsonString();
-                    if (message[Phone.PhoneLive.ComputerField]?.GetValue<string>() is { Length: > 0 } name && name != pc.Name)
+                    if (message[Phone.PhoneLive.ComputerField].AsText() is { Length: > 0 } name && name != pc.Name)
                     {
                         // Its own name, not what the network called its address when it was paired.
                         pc = pc with { Name = name };
@@ -211,6 +211,11 @@ internal sealed class RemotePcsHandler(PageChannel page, RemotePcStore store, Ph
         {
             live.Error = stop.IsCancellationRequested ? null : "Can’t be reached now.";
         }
+        catch (Exception e) when (e is not OutOfMemoryException)
+        {
+            CrashLog.Caught(e); // a bug: written down; the connection is tried again as after any loss
+            live.Error = "Can’t be reached now.";
+        }
         finally
         {
             live.Socket = null;
@@ -222,6 +227,13 @@ internal sealed class RemotePcsHandler(PageChannel page, RemotePcStore store, Ph
     {
         page.Post(new ToPage.PcManaged(m.RequestId, await AskAsync(m).ConfigureAwait(false)));
     }
+
+    /// <summary>
+    /// What a computer's answer says went wrong, or null when it's done: done only when it says so (ok is true; every
+    /// answer carries ok), so a missing or garbled ok is a failure, with its error or a general one.
+    /// </summary>
+    internal static string? ErrorOf(JsonObject answer) =>
+        answer[Fields.Ok].AsBool() == true ? null : answer[Fields.Error].AsText() ?? "That didn’t go through.";
 
     /// <summary>The computer's error, or null when it's done.</summary>
     private async Task<string?> AskAsync(FromPage.PcManage m)
@@ -239,7 +251,7 @@ internal sealed class RemotePcsHandler(PageChannel page, RemotePcStore store, Ph
         {
             await PcConnection.SendAsync(socket, live.Gate, message, _stop.Token).ConfigureAwait(false);
             var done = await answer.Task.WaitAsync(AskFor, _stop.Token).ConfigureAwait(false);
-            return done[Fields.Ok]?.GetValue<bool>() == false ? done[Fields.Error]?.GetValue<string>() ?? "That didn’t go through." : null;
+            return ErrorOf(done);
         }
         catch (Exception e) when (e is WebSocketException or IOException or OperationCanceledException or TimeoutException or ObjectDisposedException)
         {
@@ -283,23 +295,27 @@ internal sealed class RemotePcsHandler(PageChannel page, RemotePcStore store, Ph
         {
             while (await PcConnection.ReceiveAsync(watch.Socket, watch.Stop.Token).ConfigureAwait(false) is { } message)
             {
-                var type = message[Fields.Type]?.GetValue<string>();
-                if ((type == Kinds.Screen || type == Kinds.Output) && message[Fields.Pane]?.GetValue<string>() == watch.Pane)
+                var type = message[Fields.Type].AsText();
+                if ((type == Kinds.Screen || type == Kinds.Output) && message[Fields.Pane].AsText() == watch.Pane)
                 {
-                    page.Post(new ToPage.PcOutput(tab, message[Fields.Data]?.GetValue<string>() ?? "", type == Kinds.Screen));
+                    page.Post(new ToPage.PcOutput(tab, message[Fields.Data].AsText() ?? "", type == Kinds.Screen));
                 }
-                else if (type == Phone.PhoneLive.Kinds.Released && message[Fields.Pane]?.GetValue<string>() == watch.Pane)
+                else if (type == Phone.PhoneLive.Kinds.Released && message[Fields.Pane].AsText() == watch.Pane)
                 {
-                    page.Post(new ToPage.PcPaused(tab, message[Phone.PhoneLive.ByField]?.GetValue<string>()));
+                    page.Post(new ToPage.PcPaused(tab, message[Phone.PhoneLive.ByField].AsText()));
                 }
-                else if (type == Kinds.Answered && message[Fields.Ok]?.GetValue<bool>() == false)
+                else if (type == Kinds.Answered && message[Fields.Ok].AsBool() == false)
                 {
-                    page.Post(new ToPage.PcRefused(tab, message[Fields.Error]?.GetValue<string>() ?? "That didn’t go through."));
+                    page.Post(new ToPage.PcRefused(tab, message[Fields.Error].AsText() ?? "That didn’t go through."));
                 }
             }
         }
         catch (Exception e) when (e is WebSocketException or IOException or OperationCanceledException)
         {
+        }
+        catch (Exception e) when (e is not OutOfMemoryException)
+        {
+            CrashLog.Caught(e); // a bug: written down; the terminal shows it's lost, as after any loss
         }
         if (_watches.TryGetValue(tab, out var still) && still == watch)
         {

@@ -170,7 +170,7 @@ internal static class Cli
 
     private static int Output(JsonNode? result)
     {
-        if (result?[ApiFields.TimedOut]?.GetValue<bool>() == true)
+        if (result?[ApiFields.TimedOut].AsBool() == true)
         {
             Console.Error.WriteLine("Timed out.");
             return TimedOut;

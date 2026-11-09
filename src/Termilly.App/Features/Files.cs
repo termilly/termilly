@@ -47,6 +47,9 @@ internal sealed class FilesHandler(
             ? new(arguments, profile.CommandLine[(SessionProfiles.SshCommand.Length + 1)..])
             : null;
 
+    /// <summary>Whether a terminal's files are on this machine (a copy into its folder takes room on this computer's disk).</summary>
+    public bool IsLocal(string terminal) => PlaceOf(terminal) is null;
+
     /// <summary>sftp's arguments for an SSH terminal's server; null for a terminal whose files are on this machine.</summary>
     private string? ServerOf(string terminal) => PlaceOf(terminal)?.Sftp;
 

@@ -105,7 +105,7 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
         {
             [PageApi.CallFields.Args] = new JsonObject { [Answer.Pane] = pane },
         }).ConfigureAwait(false);
-        return answer?[DataField]?.GetValue<string>() ?? "";
+        return answer?[DataField].AsText() ?? "";
     }
 
     public void Register(MessageRouter router)
@@ -213,7 +213,7 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
     private const string DataField = "data";
 
     /// <summary>A phone sent something: keys for the terminal it watches, or an answer to an agent.</summary>
-    private Task<JsonObject> ReceivedAsync(string device, JsonObject message) => message[OpField]?.GetValue<string>() switch
+    private Task<JsonObject> ReceivedAsync(string device, JsonObject message) => message[OpField].AsText() switch
     {
         InputOp => Task.FromResult(Type(message)),
         PhoneClips.PasteOp => Task.FromResult(_clips.Paste(message)),
@@ -234,7 +234,7 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
     /// </summary>
     private async Task<JsonObject> ManageAsync(string device, JsonObject message)
     {
-        var action = message[ActionField]?.GetValue<string>();
+        var action = message[ActionField].AsText();
         if (PhoneManage.Refused(action, _settings.Current.Phone) is { } setting)
         {
             return new JsonObject { [Answer.Ok] = false, [OpField] = ManageOp, [ActionField] = action, [Answer.Error] = $"That's off on this PC: Settings › Remote › {setting}." };
@@ -258,8 +258,8 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
     /// <summary>Keys from a phone, typed into the terminal: only while Settings › Remote allows typing.</summary>
     private JsonObject Type(JsonObject message)
     {
-        var pane = message[Answer.Pane]?.GetValue<string>() ?? "";
-        var data = message[DataField]?.GetValue<string>() ?? "";
+        var pane = message[Answer.Pane].AsText() ?? "";
+        var data = message[DataField].AsText() ?? "";
         if (!_settings.Current.Phone.AllowTyping)
         {
             return new JsonObject { [Answer.Ok] = false, [Answer.Error] = "Typing from the phone is off: Settings › Remote › Allow typing." };
@@ -285,8 +285,8 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
     /// </summary>
     private async Task<JsonObject> AnswerAsync(string device, JsonObject message)
     {
-        var choice = message[Answer.Choice]?.GetValue<string>();
-        var text = message[Answer.Text]?.GetValue<string>() ?? "";
+        var choice = message[Answer.Choice].AsText();
+        var text = message[Answer.Text].AsText() ?? "";
         if (!Choices.Contains(choice) || text.Length > MaxReply)
         {
             return new JsonObject { [Answer.Ok] = false, [Answer.Error] = "Not something a phone can ask." };

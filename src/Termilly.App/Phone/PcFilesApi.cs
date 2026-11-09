@@ -68,7 +68,8 @@ internal sealed class PcFilesApi(FilesHandler files, ISettingsStore settings)
     private static readonly TimeSpan Idle = TimeSpan.FromMinutes(1);
     private const int Chunk = 81920;
     private const string TempPrefix = "termilly-in-";
-    private const string Refused = "Copying files here is off: on that computer, Settings › Remote › Allow typing.";
+    private const string NoRoom = "This computer doesn't have room for the copy.";
+    private const string Refused ="Copying files here is off: on that computer, Settings › Remote › Allow typing.";
 
     public static bool Handles(string path) => path is PcFiles.Tree or PcFiles.List or PcFiles.MakeFolder;
 
@@ -88,16 +89,16 @@ internal sealed class PcFilesApi(FilesHandler files, ISettingsStore settings)
         {
             body = null;
         }
-        var pane = body?[PcFiles.Fields.Pane]?.GetValue<string>();
+        var pane = body?[PcFiles.Fields.Pane].AsText();
         if (body is null || string.IsNullOrEmpty(pane))
         {
             return new(HttpStatusCode.BadRequest, MediaTypes.PlainText, []);
         }
-        var path = body[PcFiles.Fields.Path]?.GetValue<string>();
+        var path = body[PcFiles.Fields.Path].AsText();
         return request.Path switch
         {
-            PcFiles.Tree => Json(files.TreeJson(pane, null, (body[PcFiles.Fields.Paths] as JsonArray)?.Select(p => p?.GetValue<string>() ?? "").ToList() ?? [],
-                body[PcFiles.Fields.Files]?.GetValue<bool>() ?? false)),
+            PcFiles.Tree => Json(files.TreeJson(pane, null, (body[PcFiles.Fields.Paths] as JsonArray)?.Select(p => p.AsText() ?? "").ToList() ?? [],
+                body[PcFiles.Fields.Files].AsBool() ?? false)),
             PcFiles.List => Json(files.ListingJson(pane, null, path)),
             PcFiles.MakeFolder => files.MakeFolder(pane, path ?? "") is { } error ? Error(error) : Json("{}"),
             _ => new(HttpStatusCode.NotFound, MediaTypes.PlainText, []),
@@ -123,18 +124,19 @@ internal sealed class PcFilesApi(FilesHandler files, ISettingsStore settings)
             return new(HttpStatusCode.BadRequest, MediaTypes.PlainText, []);
         }
         var temp = Directory.CreateTempSubdirectory(TempPrefix).FullName;
+        // Each thing this copy writes is reserved first on the disk it lands on, beside copies running at once
+        // (DiskBudget), and given back once written: the zip here, the item unpacked and its copy in PlaceAsync.
+        IDisposable? zipRoom = null;
         try
         {
+            if ((zipRoom = DiskBudget.Shared.TryReserve(temp, length)) is null)
+            {
+                return Error(NoRoom);
+            }
             var zip = Path.Combine(temp, PcFiles.ItemZip);
             await Receive(request.Body, stream, length, zip, cancel).ConfigureAwait(false);
-            var unpacked = Path.Combine(temp, "item");
-            ZipFile.ExtractToDirectory(zip, unpacked);
-            var item = Path.Combine(unpacked, name);
-            if (!File.Exists(item) && !Directory.Exists(item))
-            {
-                return Error("The copy came without the item.");
-            }
-            return await Task.Run(() => files.CopyHere(item, pane, dir, name), cancel).ConfigureAwait(false) is { } error ? Error(error) : Json("{}");
+            zipRoom.Dispose();
+            return await PlaceAsync(temp, zip, (pane, dir, name), cancel).ConfigureAwait(false);
         }
         catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
         {
@@ -142,8 +144,34 @@ internal sealed class PcFilesApi(FilesHandler files, ISettingsStore settings)
         }
         finally
         {
+            zipRoom?.Dispose();
             Storage.Try(() => Directory.Delete(temp, recursive: true));
         }
+    }
+
+    /// <summary>
+    /// Unpacks a received zip in the temporary folder and copies its item into the terminal's folder, once there's
+    /// room reserved for both (the copy only when its folder is on this computer).
+    /// </summary>
+    private async Task<PhoneReply> PlaceAsync(string temp, string zip, (string Pane, string Dir, string Name) to, CancellationToken cancel)
+    {
+        var size = ItemUnzip.Size(zip);
+        using var unpackRoom = size > MaxUpload ? null : DiskBudget.Shared.TryReserve(temp, size);
+        var local = files.IsLocal(to.Pane);
+        using var copyRoom = local && unpackRoom is not null ? DiskBudget.Shared.TryReserve(to.Dir, size) : null;
+        if (unpackRoom is null || (local && copyRoom is null))
+        {
+            return Error(NoRoom);
+        }
+        var unpacked = Path.Combine(temp, "item");
+        ItemUnzip.Extract(zip, unpacked, size);
+        unpackRoom.Dispose();
+        var item = Path.Combine(unpacked, to.Name);
+        if (!File.Exists(item) && !Directory.Exists(item))
+        {
+            return Error("The copy came without the item.");
+        }
+        return await Task.Run(() => files.CopyHere(item, to.Pane, to.Dir, to.Name), cancel).ConfigureAwait(false) is { } error ? Error(error) : Json("{}");
     }
 
     /// <summary>Writes the body to a file: the part read with the head, then the rest, each read given a minute.</summary>

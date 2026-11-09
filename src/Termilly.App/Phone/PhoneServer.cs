@@ -24,7 +24,7 @@ namespace Termilly.Desktop.Phone;
 /// </list>
 /// Paired phones get the app's API (PhoneAppApi); anything else gets 403.
 /// </summary>
-internal sealed class PhoneServer : IDisposable
+internal sealed partial class PhoneServer : IDisposable
 {
     private const int MaxBody = 16 * 1024;
     private const int MaxHead = 16 * 1024;
@@ -47,23 +47,6 @@ internal sealed class PhoneServer : IDisposable
     private static readonly string[] SetupFiles = [SetupPage, "setup.js", "phone.css"];
     private const string CertificatePath = "/termilly.cer";
     private const string CertificateType = "application/x-x509-ca-cert";
-
-    /// <summary>The private IPv4 ranges (10/8, 172.16/12, 192.168/16) and the shared range VPNs like Tailscale use (100.64/10).</summary>
-    private static class PrivateRanges
-    {
-        public const byte TenNet = 10;
-        public const byte ClassB = 172;
-        public const byte ClassBFrom = 16;
-        public const byte ClassBTo = 31;
-        public const byte ClassC = 192;
-        public const byte ClassCSecond = 168;
-        public const byte Shared = 100;
-        public const byte SharedFrom = 64;
-        public const byte SharedTo = 127;
-        /// <summary>169.254.x: an address a network adapter gave itself, reaching nothing.</summary>
-        public const byte LinkLocal = 169;
-        public const byte LinkLocalSecond = 254;
-    }
 
     private static readonly Dictionary<string, string> Types = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -88,6 +71,13 @@ internal sealed class PhoneServer : IDisposable
     private readonly X509Certificate2 _certificate;
     private readonly byte[] _authorityFile;
     private readonly CancellationTokenSource _stop = new();
+
+    /// <summary>
+    /// Connections served at once, at most: each phone or computer keeps one live connection and opens a few for
+    /// requests, so this is far above real use, and a flood of connections can't start a task each without end.
+    /// </summary>
+    internal const int MaxConnections = 64;
+    private readonly ConnectionLimit _connections = new(MaxConnections);
 
     /// <summary>The setup page (plain http) and the app (HTTPS), at this PC's address.</summary>
     public string SetupUrl { get; }
@@ -143,38 +133,6 @@ internal sealed class PhoneServer : IDisposable
             .OrderBy(n => n.GetIPProperties().GatewayAddresses.Count == 0)
             .SelectMany(n => n.GetIPProperties().UnicastAddresses.Select(a => a.Address)));
 
-    /// <summary>
-    /// The address to listen on: the first private one, else the first of any other. A cloud machine's network can use
-    /// any subnet, or have a public address only.
-    /// </summary>
-    internal static IPAddress? Pick(IEnumerable<IPAddress> addresses)
-    {
-        var usable = addresses.Where(IsUsable).ToList();
-        return usable.Find(IsPrivate) ?? usable.FirstOrDefault();
-    }
-
-    private static bool IsUsable(IPAddress address)
-    {
-        if (address.AddressFamily != AddressFamily.InterNetwork || IPAddress.IsLoopback(address))
-        {
-            return false;
-        }
-        var b = address.GetAddressBytes();
-        return b[0] != PrivateRanges.LinkLocal || b[1] != PrivateRanges.LinkLocalSecond;
-    }
-
-    public static bool IsPrivate(IPAddress address)
-    {
-        if (address.AddressFamily != AddressFamily.InterNetwork)
-        {
-            return false;
-        }
-        var b = address.GetAddressBytes();
-        return b[0] == PrivateRanges.TenNet || (b[0] == PrivateRanges.ClassB && b[1] is >= PrivateRanges.ClassBFrom and <= PrivateRanges.ClassBTo) ||
-               (b[0] == PrivateRanges.ClassC && b[1] == PrivateRanges.ClassCSecond) ||
-               (b[0] == PrivateRanges.Shared && b[1] is >= PrivateRanges.SharedFrom and <= PrivateRanges.SharedTo);
-    }
-
     public void Dispose()
     {
         _stop.Cancel();
@@ -199,7 +157,11 @@ internal sealed class PhoneServer : IDisposable
             {
                 continue;
             }
-            _ = Task.Run(() => Serve(client));
+            // All taken: this one is closed at once (a real client tries again; a flood gets nothing).
+            if (!_connections.TryStart(() => Serve(client)))
+            {
+                client.Dispose();
+            }
         }
     }
 
@@ -239,11 +201,7 @@ internal sealed class PhoneServer : IDisposable
                 }
                 if (request.Path == PcFiles.Put)
                 {
-                    // Its body can be large and slow: read here, not with the request, and not within its time.
-                    var taken = secure && _files is not null && request.Method == HttpMethod.Put.Method && _api.DeviceOf(request) is not null
-                        ? await _files.UploadAsync(request, stream, _stop.Token)
-                        : Forbidden;
-                    await WriteResponse(stream, taken, _stop.Token);
+                    await ServeUpload(request, stream, secure);
                     return;
                 }
                 var reply = secure ? await RespondSecure(request) : await RespondPlain(request);
@@ -253,6 +211,22 @@ internal sealed class PhoneServer : IDisposable
         catch (Exception e) when (e is IOException or OperationCanceledException or SocketException or FormatException or AuthenticationException)
         {
         }
+        catch (Exception e) when (e is not OutOfMemoryException)
+        {
+            CrashLog.Caught(e); // a bug: written down, and only this connection ends
+        }
+    }
+
+    /// <summary>
+    /// Another computer copying an item here (PcFilesApi): its body can be large and slow, so it's read here, not with
+    /// the request, and not within the request's time.
+    /// </summary>
+    private async Task ServeUpload(PhoneRequest request, Stream stream, bool secure)
+    {
+        var taken = secure && _files is not null && request.Method == HttpMethod.Put.Method && _api.DeviceOf(request) is not null
+            ? await _files.UploadAsync(request, stream, _stop.Token)
+            : Forbidden;
+        await WriteResponse(stream, taken, _stop.Token);
     }
 
     /// <summary>A paired phone's live connection (RFC 6455): accepted, then PhoneLive serves it until it closes.</summary>
