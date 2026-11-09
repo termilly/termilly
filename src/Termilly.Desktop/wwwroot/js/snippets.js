@@ -101,8 +101,9 @@ function targetsFor(where, tab = focusedTab()) {
  * @param {Snippet} snippet
  * @param {Record<string, string>} values
  * @param {Tab[]} targets
+ * @param {(tab: Tab) => void} [beforeSend] called for each terminal just before its text goes in
  */
-export async function sendSnippet(snippet, values, targets) {
+export async function sendSnippet(snippet, values, targets, beforeSend) {
   const text = fill(snippet.command, values);
   const live = targets.filter(t => !t.exited);
   if (!live.length) return null;
@@ -110,7 +111,10 @@ export async function sendSnippet(snippet, values, targets) {
   // Each line ends with Enter, as typed: a bare \n is Ctrl+Enter to PSReadLine, which opens a line above, so the
   // lines would run in reverse.
   const data = `${text.replace(/\r?\n/g, '\r')}${snippet.enter === false ? '' : '\r'}`;
-  for (const tab of live) send(PAGE.input, { id: tab.id, data });
+  for (const tab of live) {
+    beforeSend?.(tab);
+    send(PAGE.input, { id: tab.id, data });
+  }
   return live;
 }
 
@@ -358,14 +362,14 @@ export const listForApi = () => allSnippets().map(s => ({ name: s.name, command:
 
 /**
  * Runs a snippet by name in a terminal for the API; every placeholder needs a value or a default.
- * @param {{ name: string, tab: Tab, vars?: Record<string, string> | null }} request
+ * @param {{ name: string, tab: Tab, vars?: Record<string, string> | null, beforeSend?: (tab: Tab) => void }} request
  */
-export async function runForApi({ name, tab, vars }) {
+export async function runForApi({ name, tab, vars, beforeSend }) {
   const snippet = findSnippet(name, wsById(tab.wsId));
   if (!snippet) throw new Error(`No snippet named ${name}.`);
   const missing = placeholders(snippet.command).filter(p => !p.def && !(vars && p.name in vars)).map(p => p.name);
   if (missing.length) throw new Error(`The snippet needs values for: ${missing.join(', ')}.`);
-  const sent = await sendSnippet(snippet, vars ?? {}, [tab]);
+  const sent = await sendSnippet(snippet, vars ?? {}, [tab], beforeSend);
   if (!sent) throw new Error(`Terminal ${tab.id} is on production, and the user said no.`);
   return { id: tab.id, command: fill(snippet.command, vars ?? {}) };
 }

@@ -62,6 +62,7 @@ internal static class ApiFields
     public const string Until = "until";
     public const string Pattern = "pattern";
     public const string TimeoutSeconds = "timeout_s";
+    public const string AfterTurn = "after_turn";
     public const string Query = "query";
     public const string Failed = "failed";
     public const string In = "in";

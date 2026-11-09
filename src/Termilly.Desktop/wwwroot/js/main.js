@@ -74,6 +74,7 @@ import { updateSettings, DEFAULT_FONT_SIZE, DEFAULT_ZOOM, MIN_ZOOM, MAX_ZOOM, ZO
 import { openNewWorkspace } from './newworkspace.js';
 import { remoteGit } from './remotehost.js';
 import { AGENT_KIND, AGENT_STATE, SETTING_VALUES, WINDOW_ACTION } from './constants.js';
+import { recordReport } from './agentturns.js';
 import { inEachDocument } from './windows.js';
 import { rememberSession, recordPrompt } from './myprompts.js';
 import './tooltips.js';
@@ -489,6 +490,9 @@ window.addEventListener('focus', seeFocused);
 onHost(HOST.agent, m => {
   const tab = state.tabs.get(m.id);
   if (!tab) return;
+  // Counted for waits on the agent (js/agentturns.js): its reports, the turns its prompts start, and its last answer,
+  // which a wait still gives after the agent has exited.
+  recordReport(tab, { ...m, event: /** @type {Partial<Host_agent_1>} */ (m).event });
   tab.agent = m.state === AGENT_STATE.exited
     ? null
     : {

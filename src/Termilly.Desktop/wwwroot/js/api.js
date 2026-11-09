@@ -11,7 +11,7 @@ import { newTab, focusedTab, focusTab, switchWorkspace } from './panes.js';
 import { createWorkspace, ensureActiveWorkspace } from './workspaces.js';
 import { confirmProduction } from './environments.js';
 import { listForApi, runForApi } from './snippets.js';
-import { readTerminal, waitForTerminal, checkType } from './together.js';
+import { readTerminal, waitForTerminal, checkType, noteTyped } from './together.js';
 import { commandLine } from './quoting.js';
 
 /**
@@ -164,11 +164,11 @@ const METHODS = {
   },
   snippets: () => listForApi(),
   read: ({ pane, what, count, from }) => readTerminal(tabFor(pane), { what, count, from }),
-  wait: ({ pane, until, pattern, timeout_s, from }) => waitForTerminal(tabFor(pane), { until, pattern, timeout_s, from }),
+  wait: ({ pane, until, pattern, timeout_s, after_turn, from }) => waitForTerminal(tabFor(pane), { until, pattern, timeout_s, after_turn, from }),
   snippet: ({ name, pane, vars, from }) => {
     const tab = tabFor(pane);
     checkType(tab, from);
-    return runForApi({ name, tab, vars: vars ?? {} });
+    return runForApi({ name, tab, vars: vars ?? {}, beforeSend: noteTyped });
   },
   send: async ({ pane, text, enter, from }) => {
     const tab = tabFor(pane);
@@ -176,12 +176,14 @@ const METHODS = {
     checkType(tab, from);
     // A script or agent typing into production: the user says yes first (environments.js).
     if (!(await confirmProduction([tab], 'Let a script type', String(text ?? '')))) throw new Error(`Terminal ${tab.id} is on production, and the user said no.`);
+    const turn = noteTyped(tab); // as it goes in, after any question: a wait after it waits out the turn it starts
     send(PAGE.input, { id: tab.id, data: String(text ?? '') });
     if (enter) {
       await beforeEnter(tab);
       if (!tab.exited) send(PAGE.input, { id: tab.id, data: '\r' });
     }
-    return { id: tab.id };
+    // For an agent there: a wait for its answer waits for a turn after this one (together.js waitForTurn).
+    return { id: tab.id, turn };
   },
 };
 

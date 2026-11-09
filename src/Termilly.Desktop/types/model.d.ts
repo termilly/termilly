@@ -187,6 +187,11 @@ interface Tab {
   /** Its shell ended (and it waits for a key to start again). */
   exited?: boolean;
   agent?: AgentInfo | null;
+  /** How many turns (prompts taken) its agent has started, for waits on them (js/agentturns.js). */
+  agentTurns?: number;
+  /** How many reports its agent has made, and its last answer with the turn it ended (js/agentturns.js). */
+  agentReports?: number;
+  agentReply?: { turn: number; text: string | null };
   /** An agent has run in it. */
   agentSeen?: boolean;
   /** The Claude Code sessions it ran, oldest first, for My prompts (js/myprompts.js). */
