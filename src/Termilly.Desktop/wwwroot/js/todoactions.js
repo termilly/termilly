@@ -9,7 +9,7 @@
 
 import { PAGE, HOST } from './protocol.js';
 import { send, onHost } from './host.js';
-import { state, on, emit, persist, lastFolderOf, wsById, isSsh, profileOf, defaultProfile, activityOf, installedAgents, ACTIVITY, EVENTS } from './store.js';
+import { state, on, emit, persist, lastFolderOf, wsById, isSsh, profileOf, defaultProfile, activityOf, installedAgents, runningAgent, ACTIVITY, EVENTS } from './store.js';
 import { newTab } from './panes.js';
 import { commandLine } from './quoting.js';
 import { resumeCommand } from './resume.js';
@@ -257,7 +257,7 @@ on(EVENTS.agent, /** @param {Tab} tab */ tab => {
   const found = findTask(run.taskId);
   if (!found || found.task.terminal !== tab.id || statusOf(found.task) !== TASK_STATUS.progress) return;
   const summary = (tab.agent.message ?? '').trim();
-  const by = `${tab.agentType ?? found.task.plan?.by ?? AGENT_COMMAND} on ${run.server}`;
+  const by = `${agentKind(runningAgent(tab) ?? found.task.plan?.by).program} on ${run.server}`;
   if (run.line !== undefined) updateTask(found.ref, found.task.id, { details: tickSub(found.task.details ?? '', run.line, true) });
   if (workDone(found.task, summary, by)) return;
   setStatus(found.ref, found.task.id, TASK_STATUS.review, { plan: found.task.plan, review: { summary, by, kind: found.task.plan?.by } });

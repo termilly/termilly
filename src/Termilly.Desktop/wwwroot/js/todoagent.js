@@ -3,7 +3,8 @@
 // a task. An agent reads tasks, ticks sub-items and finishes; it never adds, edits or deletes one. A finish waits in Review
 // for the user, and a task whose terminal closes before its agent finished goes back to Open.
 
-import { state, on, tabTitle, EVENTS } from './store.js';
+import { state, on, tabTitle, runningAgent, EVENTS } from './store.js';
+import { agentKind } from './agentkinds.js';
 import { addApiMethods } from './api.js';
 import { findTask, listsOfAsker, updateTask, setStatus, releaseClosed } from './todo.js';
 import { TASK_STATUS, detailLines, statusOf, subProgress, tickByNumber } from './todolist.js';
@@ -33,10 +34,14 @@ function taskFor(args) {
   return found;
 }
 
-/** @param {string | undefined} from the terminal that asks */
+/**
+ * Who finished a task: the agent in the terminal that asks, by its command (claude, codex), and that terminal. Not
+ * tab.agentType: that's whether agents may type there (js/together.js), which named it "true" once that was on.
+ * @param {string | undefined} from the terminal that asks
+ */
 function whoIs(from) {
   const tab = from ? state.tabs.get(from) : null;
-  return tab ? `${tab.agentType ?? 'claude'} in ${tabTitle(tab)}` : AN_AGENT;
+  return tab ? `${agentKind(runningAgent(tab)).program} in ${tabTitle(tab)}` : AN_AGENT;
 }
 
 /**
