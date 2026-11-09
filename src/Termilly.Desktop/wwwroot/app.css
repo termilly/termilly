@@ -3486,6 +3486,10 @@ button.td-agent:hover { text-decoration: underline; }
 .td-now > .td-stop { margin-top: 1px; }
 .td-now .td-agent { color: var(--accent); line-height: 18px; }
 
+/* A schedule's agent prompt: which agent runs it (js/scheduleview.js byHtml). */
+.sch-by { display: flex; align-items: center; gap: 10px; margin-top: 10px; color: var(--muted); font-size: 12.5px; }
+.sch-by .dropdown { width: 200px; }
+
 /* ---- Implement's card (js/todocard.js) ---- */
 .popover.td-card { width: 340px; padding: 0; }
 .tc-head { display: flex; flex-direction: column; padding: 12px 14px 6px; }

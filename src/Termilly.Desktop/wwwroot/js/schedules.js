@@ -105,7 +105,7 @@ function tidyRuns() {
  */
 function commandOf(schedule) {
   if (schedule.what === WHAT.command) return schedule.command;
-  if (schedule.what === WHAT.agent) return agentCommand(schedule.prompt, { shell: shellOf(schedule), changes: schedule.allowChanges, all: !!schedule.allowAll, json: isOutOfSight(schedule) });
+  if (schedule.what === WHAT.agent) return agentCommand(schedule.prompt, { kind: schedule.agent, shell: shellOf(schedule), changes: schedule.allowChanges, all: !!schedule.allowAll, json: isOutOfSight(schedule) });
   const found = [undefined, ...state.workspaces].flatMap(ws => allSnippets(ws)).find(s => s.name === schedule.snippet);
   return found ? fill(found.command, {}) : null;
 }
@@ -315,7 +315,7 @@ onHost(HOST.scheduleEnded, async m => {
   const going = active.get(m.runId);
   if (!going) return;
   const text = await plainText(m.tail ?? '');
-  const agent = going.schedule.what === WHAT.agent ? readResult(text) : null;
+  const agent = going.schedule.what === WHAT.agent ? readResult(text, going.schedule.agent) : null;
   if (agent && !m.stopped) endAgent(going, m.exitCode ?? null, agent);
   else end(going.run, going.schedule, { code: m.exitCode, stopped: m.stopped, error: m.error, summary: summaryOf(text), text });
 });

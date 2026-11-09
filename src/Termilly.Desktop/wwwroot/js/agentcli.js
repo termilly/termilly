@@ -41,8 +41,9 @@ const EVERYTHING = Object.freeze(['--permission-mode', 'bypassPermissions']);
 const REVIEW = Object.freeze(['--restricted', '--tools', `${READ_TOOLS},Bash`, '--allowedTools',
   `${READ_TOOLS_ALLOWED},Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*)`]);
 
-/** Codex without a terminal: its events as JSON lines, in any folder. */
-const CODEX_RUN = Object.freeze([AGENT_KIND.codex, 'exec', '--json', '--skip-git-repo-check']);
+/** Codex without a conversation: one prompt, in any folder. Its events as JSON lines, where its answer is read. */
+const CODEX_RUN = Object.freeze([AGENT_KIND.codex, 'exec', '--skip-git-repo-check']);
+const CODEX_JSON = '--json';
 /** Codex's sandboxes: reading only (a prompt that may not change files, a review), or writing in its folder. */
 const CODEX_READ_ONLY = Object.freeze(['--sandbox', 'read-only']);
 const CODEX_CHANGES = Object.freeze(['--sandbox', 'workspace-write']);
@@ -83,9 +84,9 @@ function promptFor(prompt, shell, typed) {
  */
 export function agentCommand(prompt, { kind = AGENT_KIND.claude, shell, changes = false, all = false, json = false, ask = false, review = false }) {
   if (kind === AGENT_KIND.codex) {
-    // Codex without a terminal asks nobody: its sandbox is what it may do. Its answer is always JSON lines.
+    // Codex without a conversation asks nobody: its sandbox is what it may do.
     const sandbox = review || !changes ? CODEX_READ_ONLY : all ? CODEX_EVERYTHING : CODEX_CHANGES;
-    return commandLine([...CODEX_RUN, ...sandbox, codexPrompt(prompt)], shell);
+    return commandLine([...CODEX_RUN, ...(json ? [CODEX_JSON] : []), ...sandbox, codexPrompt(prompt)], shell);
   }
   const allowed = review ? REVIEW : !changes ? READ_ONLY : all ? EVERYTHING : ask ? CHANGES : CHANGES_UNASKED;
   const words = [AGENT_COMMAND, '--print', promptFor(prompt, shell, !json), ...(json ? ['--output-format', 'json'] : []), ...allowed, ...ALWAYS, ...(ask ? [] : NOBODY_ASKS)];

@@ -7,7 +7,7 @@
 import { openPopover, closePopover, showMenu } from './popups.js';
 import { escapeHtml, badgeHtml, ICONS } from './ui.js';
 import { agentKind } from './agentkinds.js';
-import { RUN, ROUNDS, fitPlan, reviewersFor, namesOf } from './todoplan.js';
+import { RUN, RUN_NAMES, ROUNDS, fitPlan, reviewersFor, namesOf } from './todoplan.js';
 
 /** @typedef {import('./todoplan.js').ImplementPlan} ImplementPlan */
 
@@ -74,11 +74,10 @@ function reviewHtml(plan, can) {
  * @param {boolean} keep
  */
 function cardHtml(options, plan, keep) {
-  const runs = [[RUN.terminal, 'In a new terminal'], [RUN.silent, 'Silent']];
   return `<div class="tc-head"><b>Implement${options.where ? ` on ${escapeHtml(options.where)}` : ''}</b><span>${escapeHtml(options.title)}</span></div>
     <div class="tc-row"><span class="tc-label">By</span><div>${byHtml(plan, options.agents)}</div></div>
     ${reviewHtml(plan, reviewersFor(plan.by, options.reviewers))}
-    <div class="tc-row"><span class="tc-label">Run</span><div><span class="seg">${runs.map(([run, label]) => `<button type="button" data-card="${CARD.run}" data-run="${run}" class="${plan.run === run ? 'on' : ''}" aria-pressed="${plan.run === run}">${label}</button>`).join('')}</span></div></div>
+    <div class="tc-row"><span class="tc-label">Run</span><div><span class="seg">${RUN_NAMES.map(([run, label]) => `<button type="button" data-card="${CARD.run}" data-run="${run}" class="${plan.run === run ? 'on' : ''}" aria-pressed="${plan.run === run}">${label}</button>`).join('')}</span></div></div>
     <div class="tc-foot"><label class="tc-keep" title="Start then also keeps this as the list’s plan: the card opens with it next time. Without it, only this run uses it."><input type="checkbox" data-card="${CARD.keep}"${keep ? ' checked' : ''}> Use for this list from now on</label>
       <button type="button" class="btn small primary" data-card="${CARD.start}">Start</button></div>`;
 }

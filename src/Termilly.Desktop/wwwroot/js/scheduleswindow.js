@@ -34,7 +34,7 @@ const FIRST_SHARE = 0.8;
 const PROD_TAG = 'prod';
 const KEY_SAVE = 'KeyS';
 /** Boxes that show or hide more of the form. */
-const REDRAWS = new Set(['allowChanges', 'allowAll', 'toNotepad', 'toFile']);
+const REDRAWS = new Set(['allowChanges', 'allowAll', 'toNotepad', 'toFile', 'agent']);
 /** Fields that hold numbers. */
 const NUMBERS = new Set(['limitMinutes', 'keepDays', 'every']);
 /** The biggest "every", so a day still has a run in it. */

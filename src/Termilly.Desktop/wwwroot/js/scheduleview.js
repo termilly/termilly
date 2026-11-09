@@ -2,6 +2,9 @@
 // What the Schedules window (js/scheduleswindow.js) shows: a row of its list, the form, and a schedule's runs.
 
 import { escapeHtml } from './ui.js';
+import { installedAgents } from './store.js';
+import { agentKind } from './agentkinds.js';
+import { AGENT_KIND } from './constants.js';
 import {
   WHAT, WHERE, WHEN, UNIT, NOTIFY, MISSED, AFTER, BUSY, CLOSED, RUN, RUN_LABEL, DAY_NAMES, describeWhen, describeAt, describeTook,
 } from './schedulerules.js';
@@ -76,13 +79,29 @@ const profileOptions = profiles => profiles.map(p => /** @type {const} */ ([p.id
  * @param {Schedule} s
  */
 function permissionsText(s) {
+  if (s.agent === AGENT_KIND.codex) {
+    if (!s.allowChanges) return 'Read only: it can read files and run commands that only look, in Codex’s read-only sandbox. It can’t change anything.';
+    if (s.allowAll) return 'With nobody watching, it does anything it decides to, with no sandbox and no permission checks: any command, any file. Only for prompts and folders you trust.';
+    return 'With nobody watching, it edits files and runs commands in Codex’s sandbox, which keeps its changes to this folder. What the sandbox doesn’t allow is refused and it goes on without it.';
+  }
   if (!s.allowChanges) return 'Read only: it can read files in its folder and fetch pages, but can’t change files or run commands. Your Claude Code settings aren’t used.';
   if (s.allowAll) return 'With nobody watching, it does anything it decides to, with no permission checks: any command, any file, any tool. Only for prompts and folders you trust.';
   return 'With nobody watching, it edits files, and Claude Code’s auto mode decides the rest: safe commands run, risky ones are refused and it goes on without them. Your Claude Code settings still allow what they allow.';
 }
 
+/**
+ * Which agent runs the prompt, offered where more than one is installed; with one, that one runs it.
+ * @param {Schedule} s
+ */
+function byHtml(s) {
+  const agents = installedAgents();
+  if (agents.length < 2) return '';
+  return `<label class="sch-by"><span>By</span><select class="field" name="agent" aria-label="The agent that runs the prompt">${agents.map(kind => `<option value="${kind}"${kind === (s.agent ?? AGENT_KIND.claude) ? ' selected' : ''}>${escapeHtml(agentKind(kind).name)}</option>`).join('')}</select></label>`;
+}
+
 /** @param {Schedule} s */
 const agentHtml = s => `<textarea class="field snippet-command sch-prompt" name="prompt" rows="5" spellcheck="false" placeholder="Summarize what changed in this repository today">${escapeHtml(s.prompt)}</textarea>
+  ${byHtml(s)}
   <label class="note-pin"><input type="checkbox" name="allowChanges"${s.allowChanges ? ' checked' : ''}> Let it change files</label>
   ${s.allowChanges ? `<label class="note-pin"><input type="checkbox" name="allowAll"${s.allowAll ? ' checked' : ''}> Allow everything</label>` : ''}
   <p class="dialog-sub${s.allowChanges ? ' sch-warn' : ''}">${permissionsText(s)}</p>

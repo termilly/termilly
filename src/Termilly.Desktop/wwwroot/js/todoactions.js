@@ -9,7 +9,7 @@
 
 import { PAGE, HOST } from './protocol.js';
 import { send, onHost } from './host.js';
-import { state, on, emit, persist, lastFolderOf, wsById, isSsh, profileOf, defaultProfile, activityOf, ACTIVITY, EVENTS } from './store.js';
+import { state, on, emit, persist, lastFolderOf, wsById, isSsh, profileOf, defaultProfile, activityOf, installedAgents, ACTIVITY, EVENTS } from './store.js';
 import { newTab } from './panes.js';
 import { commandLine } from './quoting.js';
 import { resumeCommand } from './resume.js';
@@ -33,8 +33,7 @@ const MAX_AGENT_NAME = 32;
 /** @type {Map<string, boolean>} */
 const onGitHub = new Map();
 
-/** The agents installed here, in the order they're offered: the host offers an agent's profile only then (SessionProfiles.cs). */
-export const installedAgents = () => KNOWN_AGENTS.filter(kind => state.profiles.some(p => p.startCommand === agentKind(kind).program));
+export { installedAgents };
 
 /** Whether an agent is installed here. */
 export const agentInstalled = () => installedAgents().length > 0;

@@ -89,7 +89,7 @@ test('the verdict a task in Review leads with', () => {
 });
 
 test('Codex runs without a terminal, in a sandbox that fits what it may do', () => {
-  assert.match(agentCommand('Do it', { kind: 'codex', shell: 'bash', changes: true, json: true }), /^codex exec --json --skip-git-repo-check --sandbox workspace-write 'Do it'$/);
+  assert.match(agentCommand('Do it', { kind: 'codex', shell: 'bash', changes: true, json: true }), /^codex exec --skip-git-repo-check --json --sandbox workspace-write 'Do it'$/);
   assert.match(agentCommand('Look', { kind: 'codex', shell: 'bash' }), /--sandbox read-only/);
   assert.match(agentCommand('Review', { kind: 'codex', shell: 'bash', changes: true, review: true }), /--sandbox read-only/);
   assert.match(agentCommand('Do it', { kind: 'codex', shell: 'bash', changes: true, all: true }), /--dangerously-bypass-approvals-and-sandbox/);
@@ -129,4 +129,9 @@ test('Codex failing, or not there at all', () => {
   assert.equal(failed?.errored, true);
   assert.equal(failed?.why, 'Out of credits');
   assert.equal(readResult('codex: command not found', 'codex'), null);
+});
+
+test('Codex in a terminal someone may look at answers in words, not JSON lines', () => {
+  assert.equal(agentCommand('Summarize', { kind: 'codex', shell: 'bash' }), "codex exec --skip-git-repo-check --sandbox read-only Summarize");
+  assert.match(agentCommand('Summarize', { kind: 'codex', shell: 'bash', json: true }), /^codex exec --skip-git-repo-check --json --sandbox read-only/);
 });

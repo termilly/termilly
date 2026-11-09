@@ -7,6 +7,8 @@ import { AGENTS, agentKind } from './agentkinds.js';
 
 /** How Implement runs. */
 export const RUN = Object.freeze({ terminal: 'terminal', silent: 'silent' });
+/** What each way of running is called, in the order they're offered. */
+export const RUN_NAMES = Object.freeze([[RUN.terminal, 'In a new terminal'], [RUN.silent, 'Silent']]);
 /** What a task's agents are at, while it's In progress. */
 export const STAGE = Object.freeze({ working: 'working', reviewing: 'reviewing', fixing: 'fixing' });
 /** The rounds a review may take: each is one review, and the fixes it asks for. */

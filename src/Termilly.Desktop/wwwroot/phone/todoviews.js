@@ -34,6 +34,8 @@ export const TD = Object.freeze({
 });
 /** Implement's two ways, as the PC's Implement menu has them. */
 export const HOW = Object.freeze({ terminal: 'terminal', silent: 'silent' });
+/** What each is called, in the order they're offered. */
+const HOW_NAMES = Object.freeze([[HOW.terminal, 'In a new terminal'], [HOW.silent, 'Silent']]);
 /** The fields that are read by name (data-field). */
 export const FIELD = Object.freeze({ add: 'add', find: 'find', text: 'text', details: 'details', note: 'note', pin: 'pin', title: 'title', body: 'body', newTag: 'newTag' });
 
@@ -322,11 +324,10 @@ export function implementSheetHtml(task, list, pick) {
   const can = list.reviewers.filter(kind => kind !== pick.by);
   const reviewers = can.length
     ? `<div class="td-impl-label">Reviewed by</div><div class="td-tags">${can.map(kind => pickHtml(TD.implementReviewer, `data-kind="${esc(kind)}"`, name(kind), pick.reviewers.includes(kind))).join('')}</div>` : '';
-  const runs = [[HOW.terminal, 'In a new terminal'], [HOW.silent, 'Silent']];
   const how = pick.run === HOW.silent ? `${name(pick.by)} works in a hidden shell. The task goes to Review with its reply.` : `${name(pick.by)} works where you can watch it and answer it.`;
   const reviewed = pick.reviewers.length ? ` ${pick.reviewers.map(name).join(' and ')} ${pick.reviewers.length > 1 ? 'review' : 'reviews'} it before it comes to you.` : '';
   return `${headHtml('Implement')}<p>${esc(task.text)}</p>${by}${reviewers}
-    <div class="td-impl-label">Run</div><div class="td-tags">${runs.map(([run, label]) => pickHtml(TD.implementHow, `data-how="${run}"`, label, pick.run === run)).join('')}</div>
+    <div class="td-impl-label">Run</div><div class="td-tags">${HOW_NAMES.map(([run, label]) => pickHtml(TD.implementHow, `data-how="${run}"`, label, pick.run === run)).join('')}</div>
     <p class="muted td-impl-how">${esc(how + reviewed)}</p>
     <button class="ibtn fill" data-td="${TD.implementStart}">Start</button>`;
 }

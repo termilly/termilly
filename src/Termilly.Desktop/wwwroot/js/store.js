@@ -12,7 +12,7 @@ import { send, platform, PLATFORM } from './host.js';
 import { PROFILE_SOURCE, AGENT_STATE, PROFILE_ICON, AGENT_SOURCE, AGENT_KIND, CLAUDE_TOOL } from './constants.js';
 import { debounce } from './util.js';
 import { windowInFront } from './windowshown.js';
-import { agentKind, agentOfProgram, AGENT_PROGRAMS } from './agentkinds.js';
+import { agentKind, agentOfProgram, AGENTS, AGENT_PROGRAMS } from './agentkinds.js';
 import { keepPlaces, keepPins, whenHostCloses } from './windows.js';
 
 /** The kinds of node in a workspace's layout tree (see the top of this file). */
@@ -462,6 +462,9 @@ export const runsClaude = tab => tab?.agent?.source === AGENT_SOURCE.hooks || ta
  * @param {Tab | null | undefined} tab
  */
 export const runningAgent = tab => (runsClaude(tab) ? tab?.agent?.kind ?? AGENT_KIND.claude : agentOfProgram(tab?.interactive));
+
+/** The agents installed here, in the order they're offered: the host offers an agent's profile only then (SessionProfiles.cs). */
+export const installedAgents = () => Object.keys(AGENTS).filter(kind => state.profiles.some(p => p.startCommand === AGENTS[kind].program));
 
 /**
  * An agent's states that end its turn (Stop, StopFailure).
