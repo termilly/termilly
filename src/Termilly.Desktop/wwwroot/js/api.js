@@ -5,7 +5,8 @@
 
 import { PAGE, HOST } from './protocol.js';
 import { send, onHost, platform, PLATFORM } from './host.js';
-import { state, emit, wsById, tabTitle, profileOf, defaultProfile, EVENTS } from './store.js';
+import { state, emit, wsById, tabTitle, profileOf, defaultProfile, runningAgent, EVENTS } from './store.js';
+import { agentKind } from './agentkinds.js';
 import { newTab, focusedTab, focusTab, switchWorkspace } from './panes.js';
 import { createWorkspace, ensureActiveWorkspace } from './workspaces.js';
 import { confirmProduction } from './environments.js';
@@ -18,6 +19,38 @@ import { commandLine } from './quoting.js';
  * Enter as one paste, and the Enter only adds a line instead of submitting (50 ms was enough when measured).
  */
 const ENTER_DELAY_MS = 200;
+/**
+ * For an agent that needs it (agentkinds.js enterAfterQuiet: Codex), the Enter waits instead until its screen has
+ * been still this long after the text, the text all in, and at most ENTER_MAX_MS.
+ */
+const ENTER_QUIET_MS = 300;
+const ENTER_MAX_MS = 3000;
+
+/**
+ * Waits before the API's Enter: ENTER_DELAY_MS, or for an agent that takes a long text for a paste, until its screen
+ * settles.
+ * @param {Tab} tab
+ */
+function beforeEnter(tab) {
+  const term = tab.view?.term;
+  const agent = runningAgent(tab);
+  if (!term || !agent || !agentKind(agent).enterAfterQuiet) return new Promise(resolve => setTimeout(resolve, ENTER_DELAY_MS));
+  return new Promise(resolve => {
+    let quiet = 0;
+    const end = () => {
+      clearTimeout(quiet);
+      clearTimeout(cap);
+      writes.dispose();
+      resolve(undefined);
+    };
+    const writes = term.onWriteParsed(() => {
+      clearTimeout(quiet);
+      quiet = window.setTimeout(end, ENTER_QUIET_MS);
+    });
+    const cap = window.setTimeout(end, ENTER_MAX_MS);
+    quiet = window.setTimeout(end, Math.max(ENTER_DELAY_MS, ENTER_QUIET_MS));
+  });
+}
 
 /** What the API says a terminal is busy with when it runs a command whose program it doesn't know. */
 const BUSY_COMMAND = 'command';
@@ -145,7 +178,7 @@ const METHODS = {
     if (!(await confirmProduction([tab], 'Let a script type', String(text ?? '')))) throw new Error(`Terminal ${tab.id} is on production, and the user said no.`);
     send(PAGE.input, { id: tab.id, data: String(text ?? '') });
     if (enter) {
-      await new Promise(resolve => setTimeout(resolve, ENTER_DELAY_MS));
+      await beforeEnter(tab);
       if (!tab.exited) send(PAGE.input, { id: tab.id, data: '\r' });
     }
     return { id: tab.id };

@@ -24,6 +24,7 @@ import { AGENT_STATE, AGENT_SOURCE, PROFILE_ICON } from './constants.js';
 import { find, field, PATH_DRAG, CLIP_DRAG } from './dom.js';
 import { continuesOnNextRow, atPrompt } from './buffer.js';
 import { isResuming, resumeTyped, cancelResume, wasResumed, CANCEL_KEY } from './resuming.js';
+import { agentKind, agentOfProgram } from './agentkinds.js';
 import { clipboardKey, wireClipboard, PASTE_LABEL } from './termclipboard.js';
 import { selectionKey } from './keyselect.js';
 import { hoverMarkedLink, COPY_HINT } from './termlinks.js';
@@ -542,6 +543,10 @@ onHost(HOST.busy, m => {
   const interactiveBefore = tab.interactive ?? null;
   tab.busy = m.busy ? m.name : null;
   tab.interactive = m.interactive ? m.name : null;
+  // A resumed agent that has exited: its session isn't to resume at the next start any more (see runPendingCommand).
+  if (tab.start?.resumeSession && tab.start.done && agentOfProgram(interactiveBefore) && !agentOfProgram(tab.interactive)) {
+    tab.start.resumeSession = null;
+  }
   if (tab.busy !== before || tab.interactive !== interactiveBefore) activityChanged(tab, !before !== !tab.busy || !interactiveBefore !== !tab.interactive);
 });
 
@@ -780,7 +785,9 @@ function runPendingCommand(tab) {
   if (!command || tab.exited) return;
   const resuming = start.resumeSession;
   start.command = null;
-  start.resumeSession = null; // typed: from here on the agent's hooks report its session
+  // Typed: from here on Claude Code's hooks report its session. Codex's first hook waits for a prompt, so its session
+  // stays known here (for the next start) until its program exits.
+  if (!resuming || agentKind(start.resumeKind).hookAtStart) start.resumeSession = null;
   send(PAGE.input, { id: tab.id, data: `${command}\r` });
   if (resuming) resumeTyped(tab, command); // typed again if it didn't take
 }

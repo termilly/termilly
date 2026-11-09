@@ -14,17 +14,19 @@ import { AGENT_KIND, PROFILE_ICON } from './constants.js';
  * @property {(session: string) => string} resume what resumes one of its sessions
  * @property {boolean} hookAtStart whether its hooks report in as it starts (Claude Code's SessionStart), so a resumed
  *   session is back when they do; Codex's first hook waits for a prompt, so its screen going quiet says it instead
+ * @property {boolean} enterAfterQuiet whether Enter typed after a text must wait for its screen to settle: Codex takes
+ *   fast typing for a paste, and an Enter arriving while a long one is still going in becomes a new line in it
  */
 
 /** @type {Readonly<Record<string, AgentKind>>} */
 export const AGENTS = Object.freeze({
   [AGENT_KIND.claude]: {
     name: AGENT_KIND.claudeName, short: 'Claude', icon: PROFILE_ICON.claude, program: AGENT_KIND.claude,
-    resume: session => `claude --resume ${session}`, hookAtStart: true,
+    resume: session => `claude --resume ${session}`, hookAtStart: true, enterAfterQuiet: false,
   },
   [AGENT_KIND.codex]: {
     name: AGENT_KIND.codexName, short: AGENT_KIND.codexName, icon: PROFILE_ICON.codex, program: AGENT_KIND.codex,
-    resume: session => `codex resume ${session}`, hookAtStart: false,
+    resume: session => `codex resume ${session}`, hookAtStart: false, enterAfterQuiet: true,
   },
 });
 

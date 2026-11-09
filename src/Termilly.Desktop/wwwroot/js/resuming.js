@@ -51,13 +51,12 @@ export function resumeTyped(tab, command) {
 
 /**
  * Esc while it resumes: the resume is called off (a command still waiting for the prompt isn't typed). One already
- * typed has resumed the session, which stays known for the next start: Codex says which session it is only after
- * a prompt, so forgetting it here started a new Codex next time.
+ * typed has resumed the session, which stays known for the next start where the shell start kept it (Codex, which
+ * says which session it is only after a prompt; see terminals.js runPendingCommand).
  * @param {Tab} tab
  */
 export function cancelResume(tab) {
   const typed = !!tab.resuming?.command;
-  if (tab.resuming) cancelled.add(tab);
   if (tab.start) {
     tab.start.command = null;
     if (!typed) tab.start.resumeSession = null;
@@ -77,19 +76,22 @@ function done(tab, resumed = false) {
   clearTimeout(tab.resuming.timer);
   tab.resuming = null;
   tab.view?.body.querySelector(`.${OVERLAY_CLASS}`)?.remove();
-  if (resumed) tab.view?.term?.scrollToBottom();
+  if (resumed) {
+    resumedTabs.add(tab);
+    tab.view?.term?.scrollToBottom();
+  }
   emit(EVENTS.tab, tab);
 }
 
+/** Terminals whose agent session came back after a restart (not called off with Esc). @type {WeakSet<Tab>} */
+const resumedTabs = new WeakSet();
+
 /**
- * Whether a terminal's agent session came back after a restart (not called off with Esc), so its view belongs at the
- * end rather than where it was.
+ * Whether a terminal's agent session came back after a restart, so its view belongs at the end rather than where it
+ * was.
  * @param {Tab} tab
  */
-export const wasResumed = tab => !tab.resuming && !cancelled.has(tab) && !!tab.start?.resumeSession;
-
-/** Terminals whose resume Esc called off: their view stays where it was. @type {WeakSet<Tab>} */
-const cancelled = new WeakSet();
+export const wasResumed = tab => resumedTabs.has(tab);
 
 /** @param {Tab} tab */
 function drawOverlay(tab) {
