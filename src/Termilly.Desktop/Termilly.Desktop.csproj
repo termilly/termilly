@@ -16,8 +16,9 @@
     <Resource Include="Assets\loader\*.png" />
   </ItemGroup>
 
+  <!-- Everything but the window and what only Windows has: the code all platforms share (src/Termilly.App). -->
   <ItemGroup>
-    <ProjectReference Include="..\Termilly.Pty\Termilly.Pty.csproj" />
+    <ProjectReference Include="..\Termilly.App\Termilly.App.csproj" />
     <InternalsVisibleTo Include="Termilly.Desktop.Tests" />
   </ItemGroup>
 
@@ -64,11 +65,7 @@
   </Target>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.13" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4258.31" />
-    <PackageReference Include="System.IO.Ports" Version="10.0.12" />
-    <!-- Workspace layout files (.termilly.yml); see WorkspaceLayout. -->
-    <PackageReference Include="YamlDotNet" Version="16.3.0" />
   </ItemGroup>
 
   <ItemGroup>
@@ -87,9 +84,8 @@
     <None Include="Assets\loader\mark-128.png" Link="Assets\toast.png" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
-  <!-- Names on the wire and in the environment shared with the agent helper (src/Shared): one place for each. -->
+  <!-- Names on the wire and in the environment shared with the agent helper (src/Shared, built into Termilly.App). -->
   <ItemGroup>
-    <Compile Include="..\Shared\*.cs" LinkBase="Shared" />
     <Using Include="Termilly.Shared" />
   </ItemGroup>
 

@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Termilly's code that every platform runs: the services, features, phone server and messaging behind the web UI.
+    The apps reference it and add their own window and the parts only their system has: src/Termilly.Desktop for
+    Windows (WPF and WebView2), src/Termilly.Linux for Linux and macOS (Photino). Platform differences here are
+    decided at run time (OperatingSystem.IsWindows and the like), so one build serves them all.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>Termilly.App</AssemblyName>
+    <RootNamespace>Termilly.Desktop</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.13" />
+    <PackageReference Include="System.IO.Ports" Version="10.0.12" />
+    <!-- The vault's key on Windows (DPAPI); Linux and macOS use LocalKey. -->
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.12" />
+    <!-- Workspace layout files (.termilly.yml); see WorkspaceLayout. -->
+    <PackageReference Include="YamlDotNet" Version="16.3.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Termilly.Pty\Termilly.Pty.csproj" />
+  </ItemGroup>
+
+  <!-- The apps (Termilly on Windows, termilly on Linux and macOS) and the tests use its internal types. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="Termilly" />
+    <InternalsVisibleTo Include="termilly" />
+    <InternalsVisibleTo Include="Termilly.Desktop.Tests" />
+    <InternalsVisibleTo Include="Termilly.Core.Tests" />
+  </ItemGroup>
+
+  <!-- Names on the wire and in the environment shared with the agent helper (src/Shared): one place for each. -->
+  <ItemGroup>
+    <Compile Include="..\Shared\*.cs" LinkBase="Shared" />
+    <Using Include="Termilly.Shared" />
+  </ItemGroup>
+
+</Project>

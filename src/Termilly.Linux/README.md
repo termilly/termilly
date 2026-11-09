@@ -1,8 +1,8 @@
 # Termilly on Linux (work in progress)
 
 The same web UI as on Windows, in a Photino window (WebKitGTK), with terminals in Linux pseudo terminals
-(`src/Termilly.Pty/Unix`). It shares the Windows app's platform-neutral code (compiled in from
-`src/Termilly.Desktop`). What the page asks for is answered by `PageHost.cs`, shared with Windows; `LinuxHost.cs`
+(`src/Termilly.Pty/Unix`). It runs the code every platform shares
+(`src/Termilly.App`). What the page asks for is answered by `PageHost.cs`, shared with Windows; `LinuxHost.cs`
 adds what Linux does its own way (pseudo terminals, GTK dialogs, xdg-open, notify-send).
 
 ## Install it

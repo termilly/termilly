@@ -266,27 +266,21 @@ internal sealed class Vault
 
     private static string Format(string code) => string.Join('-', code.Chunk(CodeGroup).Select(c => new string(c)));
 
-#if LINUX
-    // Linux has no DPAPI: the data key is locked with a key kept in a file only this user can read (LocalKey).
-    private static string Protect(byte[] data) => Convert.ToBase64String(LocalKey.Protect(data, Entropy));
+    // Windows locks the data key with DPAPI. Linux and macOS have no DPAPI: there it's locked with a key kept in a file
+    // only this user can read (LocalKey).
+    private static string Protect(byte[] data) => Convert.ToBase64String(OperatingSystem.IsWindows()
+        ? ProtectedData.Protect(data, Entropy, DataProtectionScope.CurrentUser)
+        : LocalKey.Protect(data, Entropy));
 
     private static byte[]? Unprotect(string data)
     {
         try
         {
-            return LocalKey.Unprotect(Convert.FromBase64String(data), Entropy);
+            var locked = Convert.FromBase64String(data);
+            return OperatingSystem.IsWindows()
+                ? ProtectedData.Unprotect(locked, Entropy, DataProtectionScope.CurrentUser)
+                : LocalKey.Unprotect(locked, Entropy);
         }
-#else
-    private static string Protect(byte[] data) =>
-        Convert.ToBase64String(ProtectedData.Protect(data, Entropy, DataProtectionScope.CurrentUser));
-
-    private static byte[]? Unprotect(string data)
-    {
-        try
-        {
-            return ProtectedData.Unprotect(Convert.FromBase64String(data), Entropy, DataProtectionScope.CurrentUser);
-        }
-#endif
         catch (Exception e) when (e is CryptographicException or FormatException)
         {
             return null; // e.g. after an admin password reset, or keys.json copied from another account
