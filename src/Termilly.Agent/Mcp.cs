@@ -198,7 +198,7 @@ internal static class Mcp
     {
         try
         {
-            return call(ApiMethods.Capabilities, null)?[ApiFields.AllowInput]?.GetValue<bool>() == true;
+            return call(ApiMethods.Capabilities, null)?[ApiFields.AllowInput].AsBool() == true;
         }
         catch (ApiException)
         {

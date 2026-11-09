@@ -250,11 +250,7 @@ internal sealed class PhoneServer : IDisposable
                 }
                 if (request.Path == PcFiles.Put)
                 {
-                    // Its body can be large and slow: read here, not with the request, and not within its time.
-                    var taken = secure && _files is not null && request.Method == HttpMethod.Put.Method && _api.DeviceOf(request) is not null
-                        ? await _files.UploadAsync(request, stream, _stop.Token)
-                        : Forbidden;
-                    await WriteResponse(stream, taken, _stop.Token);
+                    await ServeUpload(request, stream, secure);
                     return;
                 }
                 var reply = secure ? await RespondSecure(request) : await RespondPlain(request);
@@ -264,6 +260,22 @@ internal sealed class PhoneServer : IDisposable
         catch (Exception e) when (e is IOException or OperationCanceledException or SocketException or FormatException or AuthenticationException)
         {
         }
+        catch (Exception e) when (e is not OutOfMemoryException)
+        {
+            CrashLog.Caught(e); // a bug: written down, and only this connection ends
+        }
+    }
+
+    /// <summary>
+    /// Another computer copying an item here (PcFilesApi): its body can be large and slow, so it's read here, not with
+    /// the request, and not within the request's time.
+    /// </summary>
+    private async Task ServeUpload(PhoneRequest request, Stream stream, bool secure)
+    {
+        var taken = secure && _files is not null && request.Method == HttpMethod.Put.Method && _api.DeviceOf(request) is not null
+            ? await _files.UploadAsync(request, stream, _stop.Token)
+            : Forbidden;
+        await WriteResponse(stream, taken, _stop.Token);
     }
 
     /// <summary>A paired phone's live connection (RFC 6455): accepted, then PhoneLive serves it until it closes.</summary>

@@ -67,7 +67,7 @@ internal static class Api
         var line = Protocol.Send(pipe, request.ToJsonString(), PipeTimeouts.ForApi(method))
             ?? throw new ApiException("Termilly didn't answer.");
         var reply = JsonNode.Parse(line) as JsonObject ?? throw new ApiException("Termilly's answer wasn't readable.");
-        if (reply[ApiFields.Ok]?.GetValue<bool>() != true)
+        if (reply[ApiFields.Ok].AsBool() != true)
         {
             throw new ApiException(reply[ApiFields.Error]?.ToString() ?? "Termilly refused.");
         }

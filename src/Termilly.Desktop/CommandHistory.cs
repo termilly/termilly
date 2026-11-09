@@ -91,11 +91,11 @@ internal sealed class CommandHistory(Vault vault)
         lock (_gate)
         {
             var entries = Load();
-            var known = entries.Select(e => e[Fields.Id]?.GetValue<string>()).OfType<string>().ToHashSet();
+            var known = entries.Select(e => e[Fields.Id].AsText()).OfType<string>().ToHashSet();
             var added = 0;
             foreach (var entry in incoming)
             {
-                if (entry[Fields.Id]?.GetValue<string>() is not { } id || entry[Fields.Command] is null || !known.Add(id))
+                if (entry[Fields.Id].AsText() is not { } id || entry[Fields.Command] is null || !known.Add(id))
                 {
                     continue;
                 }
@@ -106,7 +106,7 @@ internal sealed class CommandHistory(Vault vault)
             }
             if (added > 0)
             {
-                entries.Sort((a, b) => (a[Fields.At]?.GetValue<long>() ?? 0).CompareTo(b[Fields.At]?.GetValue<long>() ?? 0));
+                entries.Sort((a, b) => (a[Fields.At].AsLong() ?? 0).CompareTo(b[Fields.At].AsLong() ?? 0));
                 Save(entries);
             }
             return added;
@@ -120,7 +120,7 @@ internal sealed class CommandHistory(Vault vault)
         lock (_gate)
         {
             var entries = Load();
-            var expired = entries.RemoveAll(e => (e[Fields.At]?.GetValue<long>() ?? 0) < cutoff);
+            var expired = entries.RemoveAll(e => (e[Fields.At].AsLong() ?? 0) < cutoff);
             if (expired > 0)
             {
                 Save(entries);

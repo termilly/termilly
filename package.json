@@ -11,10 +11,11 @@
     "copies": "jscpd",
     "cycles": "node scripts/check-cycles.mjs",
     "anonymous": "node scripts/check-anonymous.mjs",
-    "check": "npm run lint && npm run types && npm run test && npm run protocol && npm run constants && npm run cycles && npm run anonymous && npm run literals && npm run size && npm run copies",
+    "check": "npm run lint && npm run types && npm run test && npm run protocol && npm run constants && npm run cycles && npm run anonymous && npm run json-reads && npm run literals && npm run size && npm run copies",
     "protocol": "node scripts/protocol.mjs --check",
     "size": "node scripts/check-size.mjs",
-    "constants": "node scripts/constants.mjs --check"
+    "constants": "node scripts/constants.mjs --check",
+    "json-reads": "node scripts/check-json-reads.mjs"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

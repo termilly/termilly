@@ -196,6 +196,10 @@ internal sealed class PhoneLive : IDisposable
         catch (Exception e) when (e is WebSocketException or OperationCanceledException or IOException or ObjectDisposedException)
         {
         }
+        catch (Exception e) when (e is not OutOfMemoryException)
+        {
+            CrashLog.Caught(e); // a bug: written down, and only this phone's connection ends
+        }
         finally
         {
             Leave(me);
@@ -210,7 +214,7 @@ internal sealed class PhoneLive : IDisposable
     /// <summary>One message from a phone: about the connection itself (watch, size, seen, refresh), or for <see cref="Received"/>.</summary>
     private async Task HandleAsync(WebSocket socket, Phone me, JsonObject? message)
     {
-        var op = message?[OpField]?.GetValue<string>();
+        var op = message?[OpField].AsText();
         if (op is Ops.Watch or Ops.Unwatch)
         {
             await WatchAsync(socket, me, op == Ops.Watch ? message : null).ConfigureAwait(false);
@@ -239,7 +243,7 @@ internal sealed class PhoneLive : IDisposable
     private void Seen(Phone phone, JsonObject? message)
     {
         var was = phone.Shown;
-        phone.Shown = message?[ShownField]?.GetValue<bool>() ?? true;
+        phone.Shown = message?[ShownField].AsBool() ?? true;
         if (phone.Shown && !was && phone.Watching is { } pane)
         {
             Opened?.Invoke(pane);
@@ -252,7 +256,7 @@ internal sealed class PhoneLive : IDisposable
     /// </summary>
     private async Task WatchAsync(WebSocket socket, Phone phone, JsonObject? watch)
     {
-        var pane = watch?[PaneField]?.GetValue<string>();
+        var pane = watch?[PaneField].AsText();
         var was = phone.Watching;
         if (was != pane)
         {
@@ -307,8 +311,8 @@ internal sealed class PhoneLive : IDisposable
     /// </summary>
     private void Resize(Phone phone, JsonObject message)
     {
-        if (phone.Watching is not { } pane || message[PaneField]?.GetValue<string>() != pane
-            || message[ColsField]?.GetValue<int?>() is not { } cols || message[RowsField]?.GetValue<int?>() is not { } rows)
+        if (phone.Watching is not { } pane || message[PaneField].AsText() != pane
+            || message[ColsField].AsInt() is not { } cols || message[RowsField].AsInt() is not { } rows)
         {
             return;
         }

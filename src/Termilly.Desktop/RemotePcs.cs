@@ -140,7 +140,7 @@ internal static class PcConnection
         var body = new JsonObject { [PairFields.Code] = code, [PairFields.Name] = myName, [PairFields.Computer] = myAuthority }.ToJsonString();
         using var response = await secure.PostAsync(new Uri($"https://{address}{PairPath}"), new StringContent(body, Encoding.UTF8, "application/json"), cancel).ConfigureAwait(false);
         var answer = await AnswerOf(response, cancel).ConfigureAwait(false);
-        if (response.StatusCode == HttpStatusCode.Conflict && answer?[PairFields.Error]?.GetValue<string>() is { } refused)
+        if (response.StatusCode == HttpStatusCode.Conflict && answer?[PairFields.Error].AsText() is { } refused)
         {
             throw new InvalidOperationException(refused);
         }
@@ -149,7 +149,7 @@ internal static class PcConnection
         {
             throw new InvalidOperationException("That code didn’t work: it’s wrong or old. Show a new one there, in Settings › Remote › Pair a computer.");
         }
-        var name = answer?[PairFields.Name]?.GetValue<string>() is { Length: > 0 } own ? own : await NameOf(address).ConfigureAwait(false);
+        var name = answer?[PairFields.Name].AsText() is { Length: > 0 } own ? own : await NameOf(address).ConfigureAwait(false);
         return new RemotePc(Guid.NewGuid().ToString("N"), name, address, token, Convert.ToBase64String(der));
     }
 

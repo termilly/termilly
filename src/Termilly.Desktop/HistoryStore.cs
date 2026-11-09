@@ -54,7 +54,7 @@ internal sealed partial class HistoryStore(Vault vault)
         var json = entry.GetRawText();
         if (redactSecrets && JsonNode.Parse(json) is JsonObject node && node[TerminalRecordFields.Lines] is JsonArray lines)
         {
-            var redacted = SecretRedactor.Redact(lines.Select(l => l?.GetValue<string>() ?? "").ToList());
+            var redacted = SecretRedactor.Redact(lines.Select(l => l.AsText() ?? "").ToList());
             node[TerminalRecordFields.Lines] = new JsonArray(redacted.Select(l => (JsonNode?)l).ToArray());
             json = node.ToJsonString();
         }

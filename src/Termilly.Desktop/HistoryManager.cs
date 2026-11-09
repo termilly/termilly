@@ -208,15 +208,15 @@ internal sealed class HistoryManager(Vault vault, ISettingsStore settings, Histo
             foreach (var c in list)
             {
                 var size = (long)c.ToJsonString().Length;
-                tally.Older(At(c), c[Command.Text]?.GetValue<string>());
-                if (c[Command.Host]?.GetValue<string>() is { } host)
+                tally.Older(At(c), c[Command.Text].AsText());
+                if (c[Command.Host].AsText() is { } host)
                 {
                     (syncedCount, syncedSize) = (syncedCount + 1, syncedSize + size);
                     byHost[host] = byHost.GetValueOrDefault(host) + 1;
                     continue;
                 }
                 (ownCount, ownSize) = (ownCount + 1, ownSize + size);
-                if (c[Command.Workspace]?.GetValue<string>() is { } ws)
+                if (c[Command.Workspace].AsText() is { } ws)
                 {
                     var known = tally.Workspaces.GetValueOrDefault(ws);
                     tally.Workspaces[ws] = known with { Commands = known.Commands + 1 };
@@ -286,7 +286,7 @@ internal sealed class HistoryManager(Vault vault, ISettingsStore settings, Histo
         }
         var (own, ownBytes) = scope.Kinds.Contains(Kinds.Commands) && (!scope.Narrowed || scope.Workspaces.Count > 0)
             ? commands.RemoveWhere(c => c[Command.Host] is null && At(c) < scope.Before
-                && (scope.Workspaces.Count == 0 || (c[Command.Workspace]?.GetValue<string>() is { } ws && scope.Workspaces.Contains(ws))), dryRun)
+                && (scope.Workspaces.Count == 0 || (c[Command.Workspace].AsText() is { } ws && scope.Workspaces.Contains(ws))), dryRun)
             : (0, 0);
         var (synced, syncedBytes) = scope.Kinds.Contains(Kinds.Synced) && !scope.Narrowed
             ? commands.RemoveWhere(c => c[Command.Host] is not null && At(c) < scope.Before, dryRun)
@@ -360,7 +360,7 @@ internal sealed class HistoryManager(Vault vault, ISettingsStore settings, Histo
             {
                 lines.AddRange(earlier.Lines(link));
             }
-            lines.AddRange((node[Entry.Lines] as JsonArray ?? []).Select(l => l?.GetValue<string>() ?? ""));
+            lines.AddRange((node[Entry.Lines] as JsonArray ?? []).Select(l => l.AsText() ?? ""));
             var name = $"closed/{when:yyyy-MM-dd HHmm} {Join(Text(node, Entry.Name), Text(node, Entry.Workspace))}";
             Write(zip, Unique(used, name), lines);
         }
@@ -375,9 +375,9 @@ internal sealed class HistoryManager(Vault vault, ISettingsStore settings, Histo
         var commandLines = commands.Read(list => list.Select(c =>
         {
             var at = DateTimeOffset.FromUnixTimeMilliseconds(At(c)).ToLocalTime();
-            var where = string.Join(" · ", new[] { c[Command.Host]?.GetValue<string>(), c[Command.Workspace]?.GetValue<string>(), c[Command.Terminal]?.GetValue<string>(), c[Command.Cwd]?.GetValue<string>() }.Where(s => !string.IsNullOrEmpty(s)));
-            var exit = c[Command.ExitCode]?.GetValue<long?>() is { } code ? $" [exit {code}]" : "";
-            return $"{at:yyyy-MM-dd HH:mm:ss}{exit}  {where}\n    {c[Command.Text]?.GetValue<string>()}";
+            var where = string.Join(" · ", new[] { c[Command.Host].AsText(), c[Command.Workspace].AsText(), c[Command.Terminal].AsText(), c[Command.Cwd].AsText() }.Where(s => !string.IsNullOrEmpty(s)));
+            var exit = c[Command.ExitCode].AsLong() is { } code ? $" [exit {code}]" : "";
+            return $"{at:yyyy-MM-dd HH:mm:ss}{exit}  {where}\n    {c[Command.Text].AsText()}";
         }).ToList());
         Write(zip, "commands", commandLines);
     }
@@ -411,7 +411,7 @@ internal sealed class HistoryManager(Vault vault, ISettingsStore settings, Histo
     private static IEnumerable<string> TagsOf(JsonObject node) =>
         (node[Entry.Tags] as JsonArray ?? []).Select(t => t is JsonValue v && v.TryGetValue<string>(out var s) ? s : null).OfType<string>();
 
-    private static long At(JsonObject command) => command[Command.At]?.GetValue<long>() ?? 0;
+    private static long At(JsonObject command) => command[Command.At].AsLong() ?? 0;
 
     private static string Join(string? name, string? workspace) =>
         string.IsNullOrEmpty(workspace) ? name ?? "" : $"{name} · {workspace}";

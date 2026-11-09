@@ -47,7 +47,7 @@ internal sealed class PcPromptsApi(PromptsHandler prompts, PageApi api, ISetting
         string? pane;
         try
         {
-            pane = (JsonNode.Parse(request.Body) as JsonObject)?[PcPrompts.Fields.Pane]?.GetValue<string>();
+            pane = (JsonNode.Parse(request.Body) as JsonObject)?[PcPrompts.Fields.Pane].AsText();
         }
         catch (Exception e) when (e is JsonException or InvalidOperationException)
         {
@@ -67,11 +67,11 @@ internal sealed class PcPromptsApi(PromptsHandler prompts, PageApi api, ISetting
         {
             return PcFilesApi.Error(e.Message);
         }
-        if (found?[PcPrompts.Fields.Found]?.GetValue<bool>() != true)
+        if (found?[PcPrompts.Fields.Found].AsBool() != true)
         {
             return PcFilesApi.Error(Gone);
         }
-        var sessions = (found[PcPrompts.Fields.Sessions] as JsonArray)?.Select(s => s?.GetValue<string>()).OfType<string>().ToList() ?? [];
+        var sessions = (found[PcPrompts.Fields.Sessions] as JsonArray)?.Select(s => s.AsText()).OfType<string>().ToList() ?? [];
         var list = new JsonArray(prompts.Prompts(pane, sessions)
             .Select(p => (JsonNode)new JsonObject { [PcPrompts.Fields.Text] = p.Text, [PcPrompts.Fields.At] = p.At }).ToArray());
         var steps = new JsonArray(PromptsHandler.Steps(sessions).Select(s => (JsonNode)new JsonObject
@@ -88,7 +88,7 @@ internal sealed class PcPromptsApi(PromptsHandler prompts, PageApi api, ISetting
     /// <summary>The prompts in another computer's answer.</summary>
     public static IReadOnlyList<AgentPrompt> Read(JsonObject answer) =>
         (answer[PcPrompts.Fields.Prompts] as JsonArray)?.OfType<JsonObject>()
-            .Select(p => new AgentPrompt(p[PcPrompts.Fields.Text]?.GetValue<string>() ?? "", p[PcPrompts.Fields.At]?.GetValue<string>() ?? ""))
+            .Select(p => new AgentPrompt(p[PcPrompts.Fields.Text].AsText() ?? "", p[PcPrompts.Fields.At].AsText() ?? ""))
             .Where(p => p.Text.Length > 0).ToList() ?? [];
 
     /// <summary>What Claude did, in another computer's answer (none from a Termilly older than 1.7.0, which sends none).</summary>

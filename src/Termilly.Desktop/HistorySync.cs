@@ -140,7 +140,7 @@ internal sealed class HistorySync(Vault vault, CommandHistory history)
             {
                 return null;
             }
-            return new(data[Fields.Name]?.GetValue<string>() ?? "Another PC", data[Fields.Updated]?.GetValue<long>() ?? 0,
+            return new(data[Fields.Name].AsText() ?? "Another PC", data[Fields.Updated].AsLong() ?? 0,
                 (data[Fields.Entries] as JsonArray)?.OfType<JsonObject>().ToList() ?? []);
         }
         catch (Exception e) when (e is CryptographicException or JsonException or InvalidOperationException or FormatException)
