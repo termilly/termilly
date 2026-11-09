@@ -73,14 +73,15 @@ for arch in $archs; do
     rm -f "$macos/dotnet/dotnet"
 
     echo "Termilly $version ($arch): publishing"
-    dotnet publish "$repo/src/Termilly.Linux" -c Release -r "$rid" --self-contained false \
-        -p:AppHostRelativeDotNet=dotnet -o "$macos" -v quiet -nologo
+    # Where each launcher finds .NET, given through the environment: dotnet's -p: can't take a value with "../".
+    AppHostRelativeDotNet=dotnet dotnet publish "$repo/src/Termilly.Linux" -c Release -r "$rid" --self-contained false \
+        -o "$macos" -v quiet -nologo
     # The build's host and agent helper came along, looking for a system .NET: published again, looking for the app's.
     rm -rf "$macos/host" "$macos/agent"
-    dotnet publish "$repo/src/Termilly.Host" -c Release -r "$rid" --self-contained false \
-        -p:AppHostRelativeDotNet=../dotnet -o "$macos/host" -v quiet -nologo
-    dotnet publish "$repo/src/Termilly.Agent" -c Release -r "$rid" --self-contained false \
-        -p:AppHostRelativeDotNet=../dotnet -o "$macos/agent" -v quiet -nologo
+    AppHostRelativeDotNet=../dotnet dotnet publish "$repo/src/Termilly.Host" -c Release -r "$rid" --self-contained false \
+        -o "$macos/host" -v quiet -nologo
+    AppHostRelativeDotNet=../dotnet dotnet publish "$repo/src/Termilly.Agent" -c Release -r "$rid" --self-contained false \
+        -o "$macos/agent" -v quiet -nologo
     # The agent helper runs under four names (see Termilly.Linux.csproj, CopyAgentHelper).
     for name in claude termilly termilly-askpass; do cp "$macos/agent/termilly-hook" "$macos/agent/$name"; done
     # What a build folder has but an app doesn't need.
