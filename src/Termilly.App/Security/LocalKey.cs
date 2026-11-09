@@ -6,8 +6,9 @@ namespace Termilly.Desktop.Security;
 /// What DPAPI does for the vault on Windows, on Linux: a random key in a file only this user can read
 /// (~/.local/share/Termilly/local.key, mode 600), which locks the data key with AES-GCM. As with DPAPI's
 /// current-user scope, any program running as this user could use it; the recovery code still unlocks the data if
-/// the file is lost.
+/// the file is lost. Not on Windows, which has DPAPI (Vault chooses at run time).
 /// </summary>
+[System.Runtime.Versioning.UnsupportedOSPlatform(OsPlatforms.Windows)]
 internal static class LocalKey
 {
     private static readonly Lazy<byte[]> Key = new(LoadOrCreate);

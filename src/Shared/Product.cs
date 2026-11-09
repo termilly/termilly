@@ -8,6 +8,12 @@ internal static class Product
     public const string DocsUrl = "https://termilly.com/docs/";
 }
 
+/// <summary>The platform names .NET's platform attributes take (SupportedOSPlatform and its kin).</summary>
+internal static class OsPlatforms
+{
+    public const string Windows = "windows";
+}
+
 /// <summary>Where Git for Windows installs, and Git Bash in it (Windows only).</summary>
 internal static class GitForWindows
 {
