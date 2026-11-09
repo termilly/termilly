@@ -92,9 +92,19 @@ for arch in $archs; do
     # What a build folder has but an app doesn't need.
     rm -rf "$macos/conpty" "$macos/install-desktop.sh" "$macos/termilly.desktop"
     find "$macos" -name '*.pdb' -delete
-    # Folders of data go in Contents/Resources, linked from where Termilly looks for them: macOS takes every folder in
-    # Contents/MacOS for code, and one with a dot in its name (fish's vendor_conf.d) for a broken bundle.
+    # Contents/MacOS keeps only programs and libraries; everything else goes in Contents/Resources, linked from where
+    # .NET and Termilly look for it. macOS counts every file in Contents/MacOS as code that must carry its own signature
+    # (which a data file could only keep in extended attributes), and a folder there with a dot in its name (fish's
+    # vendor_conf.d) as a broken bundle. Data folders move whole; the rest (.NET assemblies, .json, notices) file by file.
     for dir in wwwroot shell icons; do mv "$macos/$dir" "$resources/$dir" && ln -s "../Resources/$dir" "$macos/$dir"; done
+    (cd "$macos" && find . -type f) | while read -r rel; do
+        rel=${rel#./}
+        case $(file -b "$macos/$rel") in *Mach-O*) continue ;; esac
+        mkdir -p "$(dirname "$resources/app/$rel")"
+        mv "$macos/$rel" "$resources/app/$rel"
+        up=$(echo "$rel" | sed -e 's:[^/]*/:../:g' -e 's:[^/]*$::')
+        ln -s "$up../Resources/app/$rel" "$macos/$rel"
+    done
 
     # The icon: the Linux sizes up to 256, and 512 and 1024 rendered for the Mac (branding/make-icon.ps1).
     iconset="$work/termilly.iconset"
@@ -116,11 +126,10 @@ for arch in $archs; do
     plutil -lint -s "$app/Contents/Info.plist"
 
     echo "Termilly $version ($arch): signing ($([ "$identity" = "-" ] && echo "ad hoc" || echo "$identity"))"
-    # Inside out: every file in Contents/MacOS first, the app last (it seals the rest). macOS counts everything in
-    # Contents/MacOS as code, so the .NET assemblies and the page get signatures too (kept in extended attributes,
-    # which the .dmg and ditto's .zip carry; anything unpacking an update must keep them as well).
-    { find "$macos" -type f ! -path "$macos/termilly"; find "$resources/dotnet" -type f; } | while read -r file; do
-        case $(file -b "$file") in *Mach-O*) sign_program "$file" ;; *) sign "$file" ;; esac
+    # Inside out: every program and library first (Contents/MacOS and the .NET runtime), the app last; its signature
+    # seals the rest, the data in Contents/Resources included.
+    find "$macos" "$resources/dotnet" -type f ! -path "$macos/termilly" | while read -r file; do
+        case $(file -b "$file") in *Mach-O*) sign_program "$file" ;; esac
     done
     sign_program "$app"
     codesign --verify --deep --strict "$app"
@@ -133,7 +142,10 @@ for arch in $archs; do
     mkdir "$staging"
     ditto "$app" "$staging/Termilly.app"
     ln -s /Applications "$staging/Applications"
-    hdiutil create -quiet -volname "Termilly" -srcfolder "$staging" -fs HFS+ -format UDZO -ov "$base.dmg"
+    # makehybrid writes the image without mounting it (hdiutil create mounts one, which hangs on a Mac without a
+    # desktop session, such as a rented one over ssh); convert compresses it.
+    hdiutil makehybrid -quiet -hfs -hfs-volume-name "Termilly" -o "$work/raw.dmg" "$staging"
+    hdiutil convert -quiet "$work/raw.dmg" -format UDZO -o "$base.dmg"
     [ "$identity" = "-" ] || codesign --force --sign "$identity" --timestamp "$base.dmg"
     rm -rf "$work"
     echo "$base.dmg ($(du -h "$base.dmg" | cut -f1)), $base.zip ($(du -h "$base.zip" | cut -f1))"
