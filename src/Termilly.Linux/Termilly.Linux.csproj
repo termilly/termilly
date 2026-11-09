@@ -110,8 +110,8 @@
   </ItemGroup>
 
   <!--
-    The agent helper goes in agent/ next to the app, as on Windows, under four names that all run termilly-hook.dll:
-    termilly-hook for Claude Code's hooks, claude (the shim terminals find first on PATH, see AgentHooks), termilly
+    The agent helper goes in agent/ next to the app, as on Windows, under five names that all run termilly-hook.dll:
+    termilly-hook for the agents' hooks, claude and codex (the shims terminals find first on PATH, see AgentHooks), termilly
     (the termilly command and MCP server) and termilly-askpass (ssh's SSH_ASKPASS).
   -->
   <ItemGroup>
@@ -130,9 +130,10 @@
     <Copy SourceFiles="@(AgentFiles)" DestinationFolder="$(OutDir)agent" SkipUnchangedFiles="true" />
     <!-- The extensionless apphost and chmod are Linux-only (on Windows this project is built just for the tests). -->
     <Copy SourceFiles="$(AgentOutputDir)termilly-hook" DestinationFiles="$(OutDir)agent/claude" SkipUnchangedFiles="true" Condition="!$([MSBuild]::IsOSPlatform('Windows'))" />
+    <Copy SourceFiles="$(AgentOutputDir)termilly-hook" DestinationFiles="$(OutDir)agent/codex" SkipUnchangedFiles="true" Condition="!$([MSBuild]::IsOSPlatform('Windows'))" />
     <Copy SourceFiles="$(AgentOutputDir)termilly-hook" DestinationFiles="$(OutDir)agent/termilly" SkipUnchangedFiles="true" Condition="!$([MSBuild]::IsOSPlatform('Windows'))" />
     <Copy SourceFiles="$(AgentOutputDir)termilly-hook" DestinationFiles="$(OutDir)agent/termilly-askpass" SkipUnchangedFiles="true" Condition="!$([MSBuild]::IsOSPlatform('Windows'))" />
-    <Exec Command="chmod +x &quot;$(OutDir)agent/termilly-hook&quot; &quot;$(OutDir)agent/claude&quot; &quot;$(OutDir)agent/termilly&quot; &quot;$(OutDir)agent/termilly-askpass&quot;" Condition="!$([MSBuild]::IsOSPlatform('Windows'))" />
+    <Exec Command="chmod +x &quot;$(OutDir)agent/termilly-hook&quot; &quot;$(OutDir)agent/claude&quot; &quot;$(OutDir)agent/codex&quot; &quot;$(OutDir)agent/termilly&quot; &quot;$(OutDir)agent/termilly-askpass&quot;" Condition="!$([MSBuild]::IsOSPlatform('Windows'))" />
   </Target>
 
   <!-- Names on the wire and in the environment shared with the agent helper (src/Shared, built into Termilly.App). -->

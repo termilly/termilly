@@ -464,7 +464,7 @@ export const HOST = Object.freeze({
 /** @typedef {{ actions: Array<any> }} Host_actionDefaults */
 /** @typedef {{ name: string, message: string }} Host_actionFailed */
 /** @typedef {{ id: string, state: string, message: string|null, session: string|null, source: string }} Host_agent_0 */
-/** @typedef {{ id: string, state: string, event: string, tool: string|null, message: string|null, reason: string|null, session: string|null, target: string|null, folder: string|null, prompt?: string|null, source: string }} Host_agent_1 */
+/** @typedef {{ id: string, state: string, event: string, tool: string|null, message: string|null, reason: string|null, session: string|null, target: string|null, folder: string|null, prompt?: string|null, agent?: string, source: string }} Host_agent_1 */
 /** @typedef {Host_agent_0|Host_agent_1} Host_agent */
 /** @typedef {{  }} Host_agentsNext */
 /** @typedef {{ requestId: string, method?: string, args?: any }} Host_api */

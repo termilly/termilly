@@ -110,6 +110,8 @@ interface AgentInfo {
   folder?: string | null;
   /** Its news arrived out of sight and hasn't been looked at (store.js agentChanged). */
   unread?: boolean;
+  /** Which agent it is: one of AGENT_KIND (Claude Code when not said). */
+  kind?: string;
 }
 
 /** A terminal's pane: its element, header and body, and xterm with its fit add-on (js/panes.js, js/terminals.js). */
@@ -185,6 +187,11 @@ interface Tab {
   /** Its shell ended (and it waits for a key to start again). */
   exited?: boolean;
   agent?: AgentInfo | null;
+  /** How many turns (prompts taken) its agent has started, for waits on them (js/agentturns.js). */
+  agentTurns?: number;
+  /** How many reports its agent has made, and its last answer with the turn it ended (js/agentturns.js). */
+  agentReports?: number;
+  agentReply?: { turn: number; text: string | null };
   /** An agent has run in it. */
   agentSeen?: boolean;
   /** The Claude Code sessions it ran, oldest first, for My prompts (js/myprompts.js). */
@@ -199,7 +206,7 @@ interface Tab {
   /** When its Replies and its Tool calls were last cleared, each on its own (by AgentStepKind): older ones are hidden. */
   stepsClearedAt?: Record<string, number>;
   /** Its agent was ended, to resume (js/hibernate.js). */
-  hibernated?: { session: string; at: number; folder?: string | null } | null;
+  hibernated?: { session: string; at: number; folder?: string | null; kind?: string } | null;
   /**
    * A terminal without a shell of its own: a tmux pane (js/tmux.js; client is its tmux client), or another Termilly
    * computer's terminal (js/remotepc.js; client is the computer). icon: what that computer says runs in it (its
@@ -241,8 +248,8 @@ interface Tab {
   takeBack?: boolean;
   /** Who has it open: the paired phones' and computers' names (js/phone.js). */
   viewers?: string[];
-  /** Its Claude Code session is resuming after a restart, until it reports in (js/resuming.js). */
-  resuming?: { session: string; command: string | null; retried: boolean; timer: number } | null;
+  /** Its agent's session (Claude Code, Codex: kind) is resuming after a restart, until it runs (js/resuming.js). */
+  resuming?: { session: string; kind: string; command: string | null; retried: boolean; timer: number } | null;
   /** What it brings back and types as its shell starts (js/terminals.js). */
   start?: import('../wwwroot/js/terminals.js').ShellStart;
   /** js/terminals.js's timers for its shell. */

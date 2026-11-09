@@ -23,7 +23,8 @@ import { noteRemotePrompt, noteRemoteCwd, leftRemote } from './remotecwd.js';
 import { AGENT_STATE, AGENT_SOURCE, PROFILE_ICON } from './constants.js';
 import { find, field, PATH_DRAG, CLIP_DRAG } from './dom.js';
 import { continuesOnNextRow, atPrompt } from './buffer.js';
-import { isResuming, resumeTyped, cancelResume, CANCEL_KEY } from './resuming.js';
+import { isResuming, resumeTyped, cancelResume, wasResumed, CANCEL_KEY } from './resuming.js';
+import { agentKind, agentOfProgram } from './agentkinds.js';
 import { clipboardKey, wireClipboard, PASTE_LABEL } from './termclipboard.js';
 import { selectionKey } from './keyselect.js';
 import { hoverMarkedLink, COPY_HINT } from './termlinks.js';
@@ -241,8 +242,9 @@ export function openTerminal(tab) {
   const view = tab.start?.output ? writeRestoredOutput(tab) : null;
   scanFrom(tab, term.buffer.normal.baseY + term.buffer.normal.cursorY); // old output isn't news for triggers
   startShell(tab);
-  // The new shell clears its screen on start; once it has, scroll to where the terminal was.
-  if (view) setTimeout(() => view.then(top => scrollRestored(term, top)), RESTORED_SCROLL_AFTER_MS);
+  // The new shell clears its screen on start; once it has, scroll to where the terminal was. An agent's session that's
+  // already back is at the end (resuming.js scrolled there), which stays.
+  if (view) setTimeout(() => view.then(top => scrollRestored(term, wasResumed(tab) ? null : top)), RESTORED_SCROLL_AFTER_MS);
 }
 
 /** A closed terminal reopened shows its old output, the new prompt on the view's last rows (this many). */
@@ -541,6 +543,10 @@ onHost(HOST.busy, m => {
   const interactiveBefore = tab.interactive ?? null;
   tab.busy = m.busy ? m.name : null;
   tab.interactive = m.interactive ? m.name : null;
+  // A resumed agent that has exited: its session isn't to resume at the next start any more (see runPendingCommand).
+  if (tab.start?.resumeSession && tab.start.done && agentOfProgram(interactiveBefore) && !agentOfProgram(tab.interactive)) {
+    tab.start.resumeSession = null;
+  }
   if (tab.busy !== before || tab.interactive !== interactiveBefore) activityChanged(tab, !before !== !tab.busy || !interactiveBefore !== !tab.interactive);
 });
 
@@ -559,14 +565,14 @@ onHost(HOST.startFolder, m => {
 /**
  * What a terminal does as its shell starts (tab.start); see startOf.
  * @typedef {{ output: { lines: string[], closedAt: number, resurrected?: boolean, scroll?: number | null } | null,
- *   command: string | null, resumeSession: string | null, done: boolean }} ShellStart
+ *   command: string | null, resumeSession: string | null, resumeKind?: string | null, done: boolean }} ShellStart
  */
 
 /**
  * What a terminal does as its shell starts, kept here: the saved output shown above it (after a restart, or a closed
  * terminal reopened: { lines, closedAt, resurrected }), the command typed at its first prompt (a layout's, a Claude
- * Code session to resume, the folder to go back to), the session that command resumes, and whether the start has
- * run.
+ * Code or Codex session to resume, the folder to go back to), the session that command resumes and its agent
+ * (AGENT_KIND), and whether the start has run.
  * @param {Tab} tab
  */
 const startOf = tab => (tab.start ??= { output: null, command: null, resumeSession: null, done: false });
@@ -575,7 +581,7 @@ const startOf = tab => (tab.start ??= { output: null, command: null, resumeSessi
  * Sets what a terminal does as its shell starts (any of output, command, resumeSession): from a layout, the API, a
  * reopened terminal, a restart (snapshot.js) or a reconnect.
  * @param {Tab} tab
- * @param {{ output?: any, command?: string | null, resumeSession?: string | null }} fields
+ * @param {{ output?: any, command?: string | null, resumeSession?: string | null, resumeKind?: string | null }} fields
  */
 export function prepareStart(tab, fields) {
   Object.assign(startOf(tab), Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== undefined)));
@@ -779,7 +785,9 @@ function runPendingCommand(tab) {
   if (!command || tab.exited) return;
   const resuming = start.resumeSession;
   start.command = null;
-  start.resumeSession = null; // typed: from here on the agent's hooks report its session
+  // Typed: from here on Claude Code's hooks report its session. Codex's first hook waits for a prompt, so its session
+  // stays known here (for the next start) until its program exits.
+  if (!resuming || agentKind(start.resumeKind).hookAtStart) start.resumeSession = null;
   send(PAGE.input, { id: tab.id, data: `${command}\r` });
   if (resuming) resumeTyped(tab, command); // typed again if it didn't take
 }

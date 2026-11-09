@@ -24,7 +24,7 @@ rm -rf "$root/opt/termilly/conpty"
 find "$root/opt" -type d -exec chmod 755 {} +
 find "$root/opt" -type f -exec chmod 644 {} +
 chmod 755 "$root/opt/termilly/termilly" "$root/opt/termilly/host/termilly-host" "$root"/opt/termilly/agent/claude \
-    "$root"/opt/termilly/agent/termilly "$root"/opt/termilly/agent/termilly-askpass "$root"/opt/termilly/agent/termilly-hook
+    "$root"/opt/termilly/agent/codex "$root"/opt/termilly/agent/termilly "$root"/opt/termilly/agent/termilly-askpass "$root"/opt/termilly/agent/termilly-hook
 
 install -Dm755 "$here/termilly-launcher.sh" "$root/usr/bin/termilly"
 install -Dm644 "$here/termilly.desktop" "$root/usr/share/applications/termilly.desktop"

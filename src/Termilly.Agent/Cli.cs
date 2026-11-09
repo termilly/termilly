@@ -26,8 +26,9 @@ internal static class Cli
           termilly snippet run <name> [--pane ID] [--var NAME=VALUE]...
                                                        run a snippet in a terminal (allow typing in Settings first)
           termilly read [--pane ID] [--lines N]        another terminal's last command and its output (or its last N lines)
-          termilly wait [--pane ID] [--match REGEX] [--timeout S]
-                                                       until its command finishes (or a line matches), then its output
+          termilly wait [--pane ID] [--match REGEX | --agent] [--timeout S]
+                                                       until its command finishes (or a line matches, or its agent's
+                                                       turn ends: then its reply), then its output
           termilly history [words] [--failed] [--in FOLDER] [--limit N]
                                                        commands run, newest first (secrets redacted)
           termilly mcp                                 run as an MCP server (stdio) for coding agents
@@ -55,6 +56,7 @@ internal static class Cli
         public const string Enter = "--enter";
         public const string Lines = "--lines";
         public const string Match = "--match";
+        public const string Agent = "--agent";
         public const string Timeout = "--timeout";
         public const string Var = "--var";
         public const string Failed = "--failed";
@@ -136,7 +138,9 @@ internal static class Cli
 
     private static JsonObject WaitArguments(string[] args)
     {
-        var request = new JsonObject { [ApiFields.Pane] = Pane(args), [ApiFields.Until] = Option(args, Options.Match) is null ? ApiReadModes.CommandFinished : ApiReadModes.OutputMatches, [ApiFields.Pattern] = Option(args, Options.Match) };
+        var until = args.Contains(Options.Agent) ? ApiReadModes.AgentDone
+            : Option(args, Options.Match) is null ? ApiReadModes.CommandFinished : ApiReadModes.OutputMatches;
+        var request = new JsonObject { [ApiFields.Pane] = Pane(args), [ApiFields.Until] = until, [ApiFields.Pattern] = Option(args, Options.Match) };
         if (int.TryParse(Option(args, Options.Timeout), out var seconds))
         {
             request[ApiFields.TimeoutSeconds] = seconds;
@@ -182,6 +186,16 @@ internal static class Cli
         if (result?[ApiFields.Matched]?.ToString() is { Length: > 0 } matched)
         {
             Console.WriteLine(matched);
+        }
+        // An agent's turn that ended: its answer is what a script wants, not the screen around it.
+        if (result?[ApiFields.Reply]?.ToString() is { Length: > 0 } reply)
+        {
+            Console.WriteLine(reply);
+            return 0;
+        }
+        if (result?[ApiFields.Agent]?.ToString() is { Length: > 0 } agent)
+        {
+            Console.Error.WriteLine($"The agent's turn ended: {agent}.");
         }
         foreach (var line in result?[ApiFields.Lines]?.AsArray() ?? [])
         {

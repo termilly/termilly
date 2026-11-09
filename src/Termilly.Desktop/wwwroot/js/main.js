@@ -73,7 +73,8 @@ import { badgeHtml, escapeHtml, keysHtml } from './ui.js';
 import { updateSettings, DEFAULT_FONT_SIZE, DEFAULT_ZOOM, MIN_ZOOM, MAX_ZOOM, ZOOM_STEP } from './preferences.js';
 import { openNewWorkspace } from './newworkspace.js';
 import { remoteGit } from './remotehost.js';
-import { AGENT_STATE, SETTING_VALUES, WINDOW_ACTION } from './constants.js';
+import { AGENT_KIND, AGENT_STATE, SETTING_VALUES, WINDOW_ACTION } from './constants.js';
+import { recordReport } from './agentturns.js';
 import { inEachDocument } from './windows.js';
 import { rememberSession, recordPrompt } from './myprompts.js';
 import './tooltips.js';
@@ -489,6 +490,9 @@ window.addEventListener('focus', seeFocused);
 onHost(HOST.agent, m => {
   const tab = state.tabs.get(m.id);
   if (!tab) return;
+  // Counted for waits on the agent (js/agentturns.js): its reports, the turns its prompts start, and its last answer,
+  // which a wait still gives after the agent has exited.
+  recordReport(tab, { ...m, event: /** @type {Partial<Host_agent_1>} */ (m).event });
   tab.agent = m.state === AGENT_STATE.exited
     ? null
     : {
@@ -505,6 +509,8 @@ onHost(HOST.agent, m => {
       hadTurn: (tab.agent?.hadTurn && (m.session ?? tab.agent?.session) === tab.agent?.session) || /** @type {string[]} */ ([AGENT_STATE.working, AGENT_STATE.needsInput, AGENT_STATE.done, AGENT_STATE.error]).includes(m.state),
       // Where it resumes after a restart (snapshot.js): SessionStart says, the events after it don't.
       folder: /** @type {Partial<Host_agent_1>} */ (m).folder ?? tab.agent?.folder ?? null,
+      // Claude Code or Codex: what resumes it and its badge. The poll only knows Claude Code.
+      kind: /** @type {Partial<Host_agent_1>} */ (m).agent ?? AGENT_KIND.claude,
     };
   rememberSession(tab);
   recordPrompt(tab, /** @type {Partial<Host_agent_1>} */ (m));

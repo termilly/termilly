@@ -51,7 +51,7 @@ internal static class AppPaths
     }
 
     /// <summary>A program's file name on this system: "ssh.exe" on Windows, "ssh" elsewhere.</summary>
-    public static string Exe(string name) => OperatingSystem.IsWindows() ? name + ".exe" : name;
+    public static string Exe(string name) => OperatingSystem.IsWindows() ? name + AgentLookup.WindowsExe : name;
 
     /// <summary>Writes to a temp file and swaps it in, so a crash mid-write never leaves a truncated file.</summary>
     /// <summary>A plain text file's extension.</summary>

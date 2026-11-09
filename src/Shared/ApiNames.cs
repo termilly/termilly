@@ -62,6 +62,7 @@ internal static class ApiFields
     public const string Until = "until";
     public const string Pattern = "pattern";
     public const string TimeoutSeconds = "timeout_s";
+    public const string AfterTurn = "after_turn";
     public const string Query = "query";
     public const string Failed = "failed";
     public const string In = "in";
@@ -91,6 +92,8 @@ internal static class ApiFields
     public const string TimedOut = "timedOut";
     public const string ExitCode = "exitCode";
     public const string Matched = "matched";
+    /// <summary>What an agent said last, when a wait for its turn ends with it done.</summary>
+    public const string Reply = "reply";
     public const string Lines = "lines";
 }
 
@@ -108,4 +111,5 @@ internal static class ApiReadModes
     public const string Lines = ApiFields.Lines;
     public const string CommandFinished = "command_finished";
     public const string OutputMatches = "output_matches";
+    public const string AgentDone = "agent_done";
 }

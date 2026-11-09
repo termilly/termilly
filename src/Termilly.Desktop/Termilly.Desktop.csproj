@@ -23,8 +23,8 @@
   </ItemGroup>
 
   <!--
-    The agent helper goes in agent\ next to the app, twice: termilly-hook.exe for Claude Code's hooks, and the same
-    program as claude.exe, the shim terminals find first on PATH (see AgentHooks). Both run termilly-hook.dll.
+    The agent helper goes in agent\ next to the app: termilly-hook.exe for the agents' hooks, and the same program as
+    claude.exe and codex.exe, the shims terminals find first on PATH (see AgentHooks). All run termilly-hook.dll.
   -->
   <ItemGroup>
     <ProjectReference Include="..\Termilly.Agent\Termilly.Agent.csproj" ReferenceOutputAssembly="false" />
@@ -58,6 +58,8 @@
     </ItemGroup>
     <Copy SourceFiles="@(AgentFiles)" DestinationFolder="$(OutDir)agent" SkipUnchangedFiles="true" />
     <Copy SourceFiles="$(AgentOutputDir)termilly-hook.exe" DestinationFiles="$(OutDir)agent\claude.exe" SkipUnchangedFiles="true" />
+    <!-- And as codex.exe: the same shim for Codex. -->
+    <Copy SourceFiles="$(AgentOutputDir)termilly-hook.exe" DestinationFiles="$(OutDir)agent\codex.exe" SkipUnchangedFiles="true" />
     <!-- And as termilly.exe: the termilly command (API and MCP server) for scripts and agents. -->
     <Copy SourceFiles="$(AgentOutputDir)termilly-hook.exe" DestinationFiles="$(OutDir)agent\termilly.exe" SkipUnchangedFiles="true" />
     <!-- And as termilly-askpass.exe: ssh's SSH_ASKPASS for SSH connections whose password is a reference. -->

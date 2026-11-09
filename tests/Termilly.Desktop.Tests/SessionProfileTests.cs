@@ -277,12 +277,37 @@ public sealed class SessionProfileTests : IDisposable
         var shim = Directory.CreateDirectory(Path.Combine(_dir, "agent")).FullName;
         var real = Directory.CreateDirectory(Path.Combine(_dir, "bin")).FullName;
         var name = OperatingSystem.IsWindows() ? "claude.exe" : "claude";
-        File.WriteAllText(Path.Combine(shim, name), "");
-        File.WriteAllText(Path.Combine(shim, OperatingSystem.IsWindows() ? "termilly-hook.exe" : "termilly-hook"), "");
-        File.WriteAllText(Path.Combine(real, name), "");
+        Program(Path.Combine(shim, name));
+        Program(Path.Combine(shim, OperatingSystem.IsWindows() ? "termilly-hook.exe" : "termilly-hook"));
+        Program(Path.Combine(real, name));
 
-        Assert.Equal(Path.Combine(real, name), SessionProfiles.FindClaude(string.Join(Path.PathSeparator, shim, real)));
-        Assert.Null(SessionProfiles.FindClaude(shim));
+        Assert.Equal(Path.Combine(real, name), SessionProfiles.FindAgent("claude", string.Join(Path.PathSeparator, shim, real)));
+        Assert.Null(SessionProfiles.FindAgent("claude", shim));
+    }
+
+    [Fact]
+    public void Codex_from_npm_is_found_and_offered_only_when_installed()
+    {
+        var shim = Directory.CreateDirectory(Path.Combine(_dir, "agent")).FullName;
+        var npm = Directory.CreateDirectory(Path.Combine(_dir, "npm")).FullName;
+        Program(Path.Combine(shim, OperatingSystem.IsWindows() ? "codex.exe" : "codex"));
+        Program(Path.Combine(shim, OperatingSystem.IsWindows() ? "termilly-hook.exe" : "termilly-hook"));
+        Assert.Null(SessionProfiles.FindAgent("codex", shim));
+
+        // npm puts codex.cmd (and a codex shell script beside it) in its folder on Windows, codex elsewhere.
+        var codex = Path.Combine(npm, OperatingSystem.IsWindows() ? "codex.cmd" : "codex");
+        Program(codex);
+        Assert.Equal(codex, SessionProfiles.FindAgent("codex", string.Join(Path.PathSeparator, shim, npm)));
+    }
+
+    /// <summary>An empty program file: executable where that's a file's mode.</summary>
+    private static void Program(string path)
+    {
+        File.WriteAllText(path, "");
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
     }
 
     [Fact]

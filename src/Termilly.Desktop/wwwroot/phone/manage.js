@@ -6,7 +6,7 @@
 
 import { TOUCH } from './gestures.js';
 
-/** @typedef {{ id: string, name: string, description: string, icon: string, badge: string, source: string, remote: boolean, production: boolean }} Place */
+/** @typedef {{ id: string, name: string, description: string, icon: string, badge: string, mark: string | null, source: string, remote: boolean, production: boolean }} Place */
 /** @typedef {{ id: string, name: string, color: string, cwd: string | null }} Ws */
 /** @typedef {{ id: string, ws: string, title: string, icon: string, badge: string, activity: string | null, waiting: unknown, production: boolean }} Term */
 /** @typedef {{ typing?: boolean, places?: Place[], activeWs?: string, workspaces: Ws[], terminals: Term[] }} Snap */
@@ -40,8 +40,8 @@ const PLUS = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12
 
 /** @param {unknown} text */
 const esc = text => String(text ?? '').replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
-/** @param {{ icon: string, badge: string }} p */
-const badgeHtml = p => `<span class="badge${p.icon === 'claude' ? ' claude' : ''}" data-icon="${esc(p.icon)}">${p.icon === 'claude' ? '✻' : esc(p.badge)}</span>`;
+/** @param {{ icon: string, badge: string, mark?: string | null }} p (mark: an agent's, drawn by the PC) */
+const badgeHtml = p => `<span class="badge" data-icon="${esc(p.icon)}">${p.mark ?? esc(p.badge)}</span>`;
 
 /**
  * @param {{ snap: () => Snap, send: (message: object) => void, toast: (text: string) => void, openTerminal: (id: string) => void, render: () => void }} app
