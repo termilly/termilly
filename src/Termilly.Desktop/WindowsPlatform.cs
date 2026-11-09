@@ -52,10 +52,11 @@ internal sealed class WindowsPlatform(MainWindow window) :
 
     // ---- Dialogs: the page's messages arrive on the window's thread, so they open there and answer at once ----
 
-    public Task<string?> PickFolderAsync(string title, string initial)
+    public Task<string?> PickFolderAsync(string title, string initial, string? over = null)
     {
         var dialog = new Microsoft.Win32.OpenFolderDialog { Title = title, InitialDirectory = initial };
-        return Task.FromResult(dialog.ShowDialog(window) == true ? dialog.FolderName : null);
+        // Over the window it was asked from: owned by the main window, that one would come up over a detached window.
+        return Task.FromResult(dialog.ShowDialog(window.WindowNamed(over)) == true ? dialog.FolderName : null);
     }
 
     public Task<string?> PickLayoutToSaveAsync(string fileName)

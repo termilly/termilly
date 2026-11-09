@@ -99,7 +99,7 @@ internal abstract class PhotinoPlatform(Action<string> send, string? startFolder
 
     protected static string Home => Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 
-    public async Task<string?> PickFolderAsync(string title, string initial) =>
+    public async Task<string?> PickFolderAsync(string title, string initial, string? over = null) =>
         _window is null ? null : (await _window.ShowOpenFolderAsync(title, initial, false).ConfigureAwait(false))?.FirstOrDefault();
 
     public async Task<string?> PickLayoutToSaveAsync(string fileName)

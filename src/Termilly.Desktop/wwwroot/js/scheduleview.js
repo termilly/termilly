@@ -69,12 +69,21 @@ const inputHtml = (name, value, placeholder = '', type = 'text') =>
 /** @param {SessionProfile[]} profiles */
 const profileOptions = profiles => profiles.map(p => /** @type {const} */ ([p.id, p.name]));
 
+/**
+ * What a run may do, as its boxes say. Nobody is asked: what it may not do is refused, and the run goes on.
+ * @param {Schedule} s
+ */
+function permissionsText(s) {
+  if (!s.allowChanges) return 'Read only: it can read files in its folder and fetch pages, but can’t change files or run commands. Your Claude Code settings aren’t used.';
+  if (s.allowAll) return 'With nobody watching, it does anything it decides to, with no permission checks: any command, any file, any tool. Only for prompts and folders you trust.';
+  return 'With nobody watching, it edits files, and Claude Code’s auto mode decides the rest: safe commands run, risky ones are refused and it goes on without them. Your Claude Code settings still allow what they allow.';
+}
+
 /** @param {Schedule} s */
 const agentHtml = s => `<textarea class="field snippet-command sch-prompt" name="prompt" rows="5" spellcheck="false" placeholder="Summarize what changed in this repository today">${escapeHtml(s.prompt)}</textarea>
   <label class="note-pin"><input type="checkbox" name="allowChanges"${s.allowChanges ? ' checked' : ''}> Let it change files</label>
-  <p class="dialog-sub${s.allowChanges ? ' sch-warn' : ''}">${s.allowChanges
-    ? 'With nobody watching, it edits files without asking, and runs the commands your Claude Code settings allow. Anything else it asks for fails the run.'
-    : 'Read only: it can read files in its folder and fetch pages, but can’t change files or run commands. Your Claude Code settings aren’t used.'}</p>
+  ${s.allowChanges ? `<label class="note-pin"><input type="checkbox" name="allowAll"${s.allowAll ? ' checked' : ''}> Allow everything</label>` : ''}
+  <p class="dialog-sub${s.allowChanges ? ' sch-warn' : ''}">${permissionsText(s)}</p>
   <label class="note-pin"><input type="checkbox" name="replyInNotice"${s.replyInNotice ? ' checked' : ''}> Put its reply in the notification</label>`;
 
 /**
@@ -98,7 +107,7 @@ function whatHtml(s, choices) {
  * @param {Choices} choices
  */
 function placeHtml(s, choices) {
-  const folder = fieldHtml('Folder', inputHtml('cwd', s.cwd, 'The home folder'));
+  const folder = fieldHtml('Folder', `<span class="field-row">${inputHtml('cwd', s.cwd, 'The home folder')}<button type="button" class="btn" data-sch="browse">Browse</button></span>`);
   const shell = fieldHtml('Shell', selectHtml('profile', profileOptions(choices.shells), s.profile));
   if (s.where === WHERE.hidden) return `${shell}${folder}<p class="dialog-sub">A shell nobody sees runs it and closes. What it prints is kept as a report.</p>`;
   if (s.where === WHERE.server) {

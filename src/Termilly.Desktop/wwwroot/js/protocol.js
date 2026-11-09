@@ -317,7 +317,7 @@ export const HOST = Object.freeze({
 /** @typedef {{ id?: string, pinned?: boolean }} Page_clipPin */
 /** @typedef {{ requestId?: string|null, id?: string, as?: string }} Page_clipTake */
 /** @typedef {{  }} Page_dataDirOpen */
-/** @typedef {{ requestId?: string|null, initial?: string|null }} Page_dialogPickFolder */
+/** @typedef {{ requestId?: string|null, initial?: string|null, window?: string|null }} Page_dialogPickFolder */
 /** @typedef {{ id?: string, lines?: Array<string>|null }} Page_earlierAdd */
 /** @typedef {{ id?: string }} Page_earlierDelete */
 /** @typedef {{ ids?: Array<string>|null }} Page_earlierKeep */

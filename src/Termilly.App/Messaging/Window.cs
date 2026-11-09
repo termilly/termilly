@@ -154,7 +154,8 @@ internal static partial class FromPage
         public static string Type => "dataDir:open";
     }
 
-    internal sealed record PickFolder(string? RequestId = null, string? Initial = null) : IPageMessage
+    /// <summary>A folder picker; Window names the page's window it's over (a detached one), none the main window.</summary>
+    internal sealed record PickFolder(string? RequestId = null, string? Initial = null, string? Window = null) : IPageMessage
     {
         public static string Type => "dialog:pickFolder";
     }

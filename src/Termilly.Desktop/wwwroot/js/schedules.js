@@ -45,6 +45,12 @@ export const scheduleById = id => schedules().find(s => s.id === id) ?? null;
 export const runsOf = scheduleId => runs().filter(r => r.scheduleId === scheduleId);
 /** @param {string} id */
 const isGoing = id => [...active.values()].some(a => a.schedule.id === id);
+/**
+ * Whether a schedule's prompt runs in a terminal now: nobody is asked there, so what Claude Code would ask for it refuses
+ * by itself (agentcli.js).
+ * @param {Tab} tab
+ */
+export const nobodyAsksIn = tab => [...active.values()].some(a => a.tab === tab && a.schedule.what === WHAT.agent);
 /** The runs going on now, for the sidebar. */
 export const runningNow = () => [...active.values()].filter(a => a.run.status === RUN.running || a.run.status === RUN.waiting);
 
@@ -99,7 +105,7 @@ function tidyRuns() {
  */
 function commandOf(schedule) {
   if (schedule.what === WHAT.command) return schedule.command;
-  if (schedule.what === WHAT.agent) return agentCommand(schedule.prompt, { shell: shellOf(schedule), changes: schedule.allowChanges, json: isOutOfSight(schedule) });
+  if (schedule.what === WHAT.agent) return agentCommand(schedule.prompt, { shell: shellOf(schedule), changes: schedule.allowChanges, all: !!schedule.allowAll, json: isOutOfSight(schedule) });
   const found = [undefined, ...state.workspaces].flatMap(ws => allSnippets(ws)).find(s => s.name === schedule.snippet);
   return found ? fill(found.command, {}) : null;
 }
@@ -315,7 +321,8 @@ onHost(HOST.scheduleEnded, async m => {
 });
 
 /**
- * An agent's run ended with its result. A run refused something failed, whatever it says: what it was asked isn't done.
+ * An agent's run ended with its result. One that was refused something still worked when it ended well: it went on without
+ * it, and its summary starts with what it was refused.
  * @param {ActiveRun} going
  * @param {number | null} code
  * @param {NonNullable<ReturnType<typeof readResult>>} agent
@@ -323,8 +330,8 @@ onHost(HOST.scheduleEnded, async m => {
 function endAgent({ run, schedule }, code, agent) {
   const headline = agent.reply.split(/\r?\n/).map(line => line.trim()).find(Boolean) ?? '';
   const notice = schedule.replyInNotice ? noticeOf(agent.reply) : undefined;
-  const how = agent.failed ? { error: agent.why, code } : { code, summary: summaryOf(headline) };
-  end(run, schedule, { ...how, costUsd: agent.costUsd, notice: agent.failed ? undefined : notice, text: agent.reply });
+  const how = agent.errored ? { error: agent.why, code } : { code, summary: summaryOf([agent.why, headline].filter(Boolean).join(' ')) };
+  end(run, schedule, { ...how, costUsd: agent.costUsd, notice: agent.errored ? undefined : notice, text: agent.reply });
 }
 
 /**

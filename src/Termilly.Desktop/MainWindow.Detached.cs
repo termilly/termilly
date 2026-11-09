@@ -16,6 +16,27 @@ public partial class MainWindow
     private readonly List<DetachedWindow> _detached = [];
 
     /// <summary>
+    /// Windows of their own come up over the main window, as they were when Termilly closed: they open with the page,
+    /// before the main window is shown and comes to the front. Raised, not activated, so the main window keeps the keys;
+    /// one kept on top already stays so.
+    /// </summary>
+    private void RaiseDetached()
+    {
+        foreach (var window in _detached)
+        {
+            if (window.IsVisible && window.WindowState != WindowState.Minimized && !window.Topmost)
+            {
+                window.Topmost = true;
+                window.Topmost = false;
+            }
+        }
+    }
+
+    /// <summary>The page's window by its name: a detached one, else (no name, or gone) this one.</summary>
+    internal System.Windows.Window WindowNamed(string? pageWindowName) =>
+        _detached.Find(w => w.PageWindowName == pageWindowName) is { } detached ? detached : this;
+
+    /// <summary>
     /// window.open of one of the page's own windows (named so, js/windows.js): a window of its own (DetachedWindow), still
     /// the page's (window.opener), which builds its empty page and moves into it what it shows. Anything else is left
     /// to WebView2, as before.

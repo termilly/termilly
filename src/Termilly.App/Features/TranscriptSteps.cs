@@ -12,8 +12,8 @@ internal static class TranscriptSteps
 {
     /// <summary>At most this many steps are listed (the newest).</summary>
     public const int MaxSteps = 4000;
-    /// <summary>A reply longer than this is cut (the list shows its start; the terminal has the rest).</summary>
-    private const int MaxReply = 8000;
+    /// <summary>A reply longer than this is cut (the list shows its start, its reader all of this).</summary>
+    private const int MaxReply = 20000;
     /// <summary>What a tool was used on is cut to this.</summary>
     private const int MaxToolText = 300;
 

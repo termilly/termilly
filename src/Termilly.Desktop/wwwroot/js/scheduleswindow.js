@@ -8,12 +8,12 @@ import { send } from './host.js';
 import { state, on, emit, persist, newId, EVENTS } from './store.js';
 import { restoreFocus, newTab } from './panes.js';
 import { closeAll, dropdown } from './popups.js';
-import { modal, CONFIRM_DIALOG } from './dialogs.js';
-import { escapeHtml } from './ui.js';
+import { modal, pickFolder, CONFIRM_DIALOG } from './dialogs.js';
+import { escapeHtml, COPIED } from './ui.js';
 import { fuzzyMatch } from './fuzzy.js';
 import { allSnippets, NAME_WORDS } from './snippets.js';
 import { byId, find, targetOf, TOOL_COUNT } from './dom.js';
-import { detach, closeWindow, focusWindow, isDetached } from './windows.js';
+import { detach, closeWindow, focusWindow, isDetached, windowName } from './windows.js';
 import { readReport, shownText } from './schedulereport.js';
 import {
   schedules, scheduleById, runsOf, saveSchedule, removeSchedule, setScheduleOn, runNow, stopRun, runningNow,
@@ -25,7 +25,7 @@ const NAME = 'Schedules';
 const WINDOW_KEY = 'schedules';
 /** The window's buttons (their data-sch). */
 const ACTION = Object.freeze({
-  add: 'add', close: 'close', save: 'save', remove: 'delete', run: 'run', stop: 'stop', copy: 'copy', terminal: 'terminal', onOff: 'onOff', file: 'file',
+  add: 'add', close: 'close', save: 'save', remove: 'delete', run: 'run', stop: 'stop', copy: 'copy', terminal: 'terminal', onOff: 'onOff', file: 'file', browse: 'browse',
 });
 /** The two views of a schedule. */
 const VIEW = Object.freeze({ form: 'form', runs: 'runs' });
@@ -34,7 +34,7 @@ const FIRST_SHARE = 0.8;
 const PROD_TAG = 'prod';
 const KEY_SAVE = 'KeyS';
 /** Boxes that show or hide more of the form. */
-const REDRAWS = new Set(['allowChanges', 'toNotepad', 'toFile']);
+const REDRAWS = new Set(['allowChanges', 'allowAll', 'toNotepad', 'toFile']);
 /** Fields that hold numbers. */
 const NUMBERS = new Set(['limitMinutes', 'keepDays', 'every']);
 /** The biggest "every", so a day still has a run in it. */
@@ -134,6 +134,11 @@ function nextText() {
   return at ? `Next run: ${describeAt(at, now)}. It runs while Termilly is open or in the tray.` : '';
 }
 
+/** The list as last drawn. */
+let listHtml = '';
+/** The runs view as last drawn, with its output. */
+let runsShown = '';
+
 function renderList() {
   const q = searchEl.value.trim();
   const all = isNew && editing ? [...schedules(), editing] : schedules();
@@ -141,8 +146,10 @@ function renderList() {
   const count = schedules().length;
   find(box, '.sch-count').textContent = `${count} schedule${count === 1 ? '' : 's'}`;
   const now = Date.now();
-  listEl.innerHTML = shown.length ? shown.map(s => rowHtml(s, runsOf(s.id), { selected: s.id === editing?.id, now })).join('')
+  const html = shown.length ? shown.map(s => rowHtml(s, runsOf(s.id), { selected: s.id === editing?.id, now })).join('')
     : `<p class="set-desc sw-empty">${q ? 'No schedule matches.' : 'No schedules yet. Run a command or a snippet on time, with New schedule.'}</p>`;
+  // The clock ticks every few seconds: the same list drawn again would only flicker.
+  if (html !== listHtml) listEl.innerHTML = listHtml = html;
 }
 
 function renderForm() {
@@ -167,31 +174,45 @@ function renderState() {
   run.disabled = isNew || isDirty();
 }
 
+/**
+ * The runs, and the open one's output under it. Drawn whole once its output is read, and not again while nothing changed:
+ * the clock's ticks redraw it, and an output emptied and read again flashes.
+ */
 async function renderRuns() {
-  const runs = runsOf(/** @type {Schedule} */ (editing).id);
+  const id = /** @type {Schedule} */ (editing).id;
+  const runs = runsOf(id);
   const open = runs.find(r => r.id === openRunId) ?? null;
-  editEl.innerHTML = runsHtml(runs, openRunId);
-  if (!open) return;
-  const asked = open.id;
-  const report = await readReport(asked);
-  if (openRunId !== asked || view !== VIEW.runs) return;
-  const text = report === null ? null : await shownText(report);
-  if (openRunId !== asked || view !== VIEW.runs) return;
-  find(editEl, `[data-run="${asked}"]`).insertAdjacentHTML('afterend', reportHtml(open, text));
+  const asked = open?.id ?? null;
+  let report = '';
+  if (open) {
+    const kept = await readReport(open.id);
+    const text = kept === null ? null : await shownText(kept);
+    if (openRunId !== asked || view !== VIEW.runs || editing?.id !== id) return;
+    report = reportHtml(open, text);
+  }
+  const html = runsHtml(runs, openRunId);
+  const whole = html + report;
+  if (whole === runsShown) return;
+  runsShown = whole;
+  editEl.innerHTML = html;
+  if (open) find(editEl, `[data-run="${asked}"]`).insertAdjacentHTML('afterend', report);
 }
 
 function render() {
   renderList();
   tabsEl.hidden = !editing;
   if (!editing) {
+    runsShown = '';
     editEl.innerHTML = `<p class="set-desc sw-none">${schedules().length ? 'Pick a schedule on the left.' : ''}</p>`;
     return;
   }
   for (const b of tabsEl.querySelectorAll('[data-view]')) b.classList.toggle('on', /** @type {HTMLElement} */ (b).dataset.view === view);
   onBox.checked = editing.on;
   /** @type {HTMLElement} */ (find(tabsEl, '.sch-on')).hidden = isNew;
-  if (view === VIEW.form) renderForm();
-  else renderRuns();
+  if (view === VIEW.form) {
+    runsShown = '';
+    renderForm();
+  } else renderRuns();
 }
 
 /**
@@ -322,6 +343,37 @@ async function openAsTerminal() {
   newTab({ profile: shell, wsId: state.activeId, cwd: s.cwd || null, name: s.name, restore: { lines: text.split('\n'), closedAt: Date.now() } });
 }
 
+/**
+ * Picks the run's folder on this computer: the picker gives it as it's spelled on disk. It's over this window: one owned
+ * by the main window would bring that up over a window of its own.
+ */
+async function browseFolder() {
+  const field = /** @type {HTMLInputElement} */ (find(editEl, '[name=cwd]'));
+  const path = await pickFolder(field.value || undefined, isDetached(WINDOW_KEY) ? windowName(WINDOW_KEY) : undefined);
+  if (!path || !editing) return;
+  field.value = path;
+  field.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+/** How long Copy says it copied. */
+const COPIED_MS = 1500;
+
+/**
+ * Copies the open run's output. Through the clipboard of the window it's shown in: the main window's refuses while a
+ * window of its own has the focus.
+ */
+async function copyOutput() {
+  const button = /** @type {HTMLButtonElement} */ (find(editEl, `[data-sch="${ACTION.copy}"]`));
+  const here = editEl.ownerDocument.defaultView ?? window;
+  try {
+    await here.navigator.clipboard.writeText(find(editEl, '.sch-output').textContent ?? '');
+    button.textContent = COPIED;
+  } catch {
+    button.textContent = 'Couldn’t copy';
+  }
+  setTimeout(() => { button.textContent = 'Copy'; }, COPIED_MS);
+}
+
 /** @param {string} action */
 async function act(action) {
   if (action === ACTION.add) await add();
@@ -334,8 +386,9 @@ async function act(action) {
     view = VIEW.runs;
     render();
   } else if (action === ACTION.stop && openRunId) stopRun(openRunId);
-  else if (action === ACTION.copy) await navigator.clipboard.writeText(find(editEl, '.sch-output').textContent ?? '');
+  else if (action === ACTION.copy) await copyOutput();
   else if (action === ACTION.terminal) await openAsTerminal();
+  else if (action === ACTION.browse) await browseFolder();
   else if (action === ACTION.file) {
     const run = openRunId ? state.schedules.runs.find(r => r.id === openRunId) : null;
     if (run?.file) send(PAGE.openPath, { path: run.file });

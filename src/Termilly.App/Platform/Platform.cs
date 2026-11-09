@@ -52,7 +52,8 @@ internal interface IAppWindow
 /// <summary>The system's file dialogs. Each answers null (or nothing) when cancelled.</summary>
 internal interface IFileDialogs
 {
-    Task<string?> PickFolderAsync(string title, string initial);
+    /// <param name="over">The page's window it's over: a detached one by its name, else the main window.</param>
+    Task<string?> PickFolderAsync(string title, string initial, string? over = null);
 
     /// <summary>Where to export a workspace layout (a .termilly.yml file).</summary>
     Task<string?> PickLayoutToSaveAsync(string fileName);

@@ -36,7 +36,7 @@ import { chordOf, commandOf, keyHint, KEY_ID } from './keymap.js';
 import { openNewWorktree } from './worktree.js';
 import { openChangedFiles } from './changes.js';
 import { openSnippetsWindow, initSnippetsWindow } from './snippetswindow.js';
-import { initSchedules } from './schedules.js';
+import { initSchedules, nobodyAsksIn } from './schedules.js';
 import { toggleSchedules, initSchedulesWindow } from './scheduleswindow.js';
 import { THEMES } from './themes.js';
 import { isPreviewOpen, closePreview } from './preview.js';
@@ -485,11 +485,25 @@ function seeFocused() {
 }
 window.addEventListener('focus', seeFocused);
 
+/**
+ * A schedule's prompt asks nobody: Claude Code says it would ask (its PermissionRequest hook), then refuses the tool by
+ * itself and goes on. That's no news for the user, so it still works, and its line says what it was refused.
+ * @param {Tab} tab
+ * @param {import('./protocol.js').Host_agent} m
+ * @returns {{ m: import('./protocol.js').Host_agent, line: string | null }} line: what the sidebar says instead
+ */
+function refusedByItself(tab, m) {
+  if (m.state !== AGENT_STATE.needsInput || !nobodyAsksIn(tab)) return { m, line: null };
+  const tool = /** @type {Partial<Host_agent_1>} */ (m).tool;
+  return { m: { ...m, state: AGENT_STATE.working }, line: `Refused ${tool ?? 'a tool'}: nobody to ask` };
+}
+
 // An agent reported in: Claude Code's hooks through Termilly's claude shim (source "hooks", see AgentHooks.cs), or
 // `claude agents --json` for a Claude Code the hooks don't reach (source "poll", see ClaudeAgentsPoller.cs).
-onHost(HOST.agent, m => {
-  const tab = state.tabs.get(m.id);
+onHost(HOST.agent, report => {
+  const tab = state.tabs.get(report.id);
   if (!tab) return;
+  const { m, line: refused } = refusedByItself(tab, report);
   // Counted for waits on the agent (js/agentturns.js): its reports, the turns its prompts start, and its last answer,
   // which a wait still gives after the agent has exited.
   recordReport(tab, { ...m, event: /** @type {Partial<Host_agent_1>} */ (m).event });
@@ -504,7 +518,7 @@ onHost(HOST.agent, m => {
       reason: /** @type {Partial<Host_agent_1>} */ (m).reason,
       session: m.session ?? tab.agent?.session, at: Date.now(),
       // The sidebar's activity line (agentline.js): kept until an event says something new.
-      line: activityLine(m) ?? tab.agent?.line ?? null,
+      line: refused ?? activityLine(m) ?? tab.agent?.line ?? null,
       // Whether this session has had a turn: only then is there a conversation to resume (hibernate.js).
       hadTurn: (tab.agent?.hadTurn && (m.session ?? tab.agent?.session) === tab.agent?.session) || /** @type {string[]} */ ([AGENT_STATE.working, AGENT_STATE.needsInput, AGENT_STATE.done, AGENT_STATE.error]).includes(m.state),
       // Where it resumes after a restart (snapshot.js): SessionStart says, the events after it don't.

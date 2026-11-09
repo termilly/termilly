@@ -303,7 +303,7 @@ internal sealed class WindowHandler : IMessageHandler
             }
         });
         router.On<FromPage.DataDirOpen>(_ => _desktop.OpenFolder(AppPaths.DataDirectory));
-        router.On<FromPage.PickFolder>(m => PickFolderAsync(m.RequestId, m.Initial));
+        router.On<FromPage.PickFolder>(m => PickFolderAsync(m.RequestId, m.Initial, m.Window));
     }
 
     /// <summary>The page reported in: tmux clients a reloaded page had are gone, and folders handed over meanwhile open.</summary>
@@ -314,9 +314,9 @@ internal sealed class WindowHandler : IMessageHandler
         _api.PageReady();
     }
 
-    private async Task PickFolderAsync(string? requestId, string? initial)
+    private async Task PickFolderAsync(string? requestId, string? initial, string? window)
     {
-        var path = await _dialogs.PickFolderAsync(FolderPickerTitle, AppPaths.ResolveWorkingDirectory(initial)).ConfigureAwait(false);
+        var path = await _dialogs.PickFolderAsync(FolderPickerTitle, AppPaths.ResolveWorkingDirectory(initial), window).ConfigureAwait(false);
         _page.Post(new ToPage.FolderPicked(requestId, path));
     }
 }

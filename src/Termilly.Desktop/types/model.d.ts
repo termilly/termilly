@@ -305,6 +305,8 @@ interface Schedule {
   prompt: string;
   /** An agent may change files; by default it only reads. */
   allowChanges: boolean;
+  /** With allowChanges, an agent may also do anything else without asking: any command, any tool. */
+  allowAll?: boolean;
   /** An agent's reply goes in the notification. */
   replyInNotice: boolean;
   /** Each run's report goes to the top of a Notepad page, by its name (js/schedulesave.js). */
