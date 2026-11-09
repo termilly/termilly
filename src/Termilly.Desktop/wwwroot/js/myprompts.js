@@ -308,7 +308,7 @@ export async function openPrompts(tab, anchor) {
   const { prompts, steps } = await promptsOf(tab, shown);
   const at = place(prompts, shown);
   open = {
-    tab, lines, found: prompts.map((prompt, i) => ({ prompt, line: at[i] })), steps: placeSteps(steps, prompts, shownSteps(lines)),
+    tab, lines, found: prompts.map((prompt, i) => ({ prompt, line: at[i] })), steps: placeSteps(steps, prompts, shownSteps(lines), lines),
     mode: open?.tab === tab ? open.mode : MODE.prompts, expanded: new Set(),
   };
   filterEl.value = '';

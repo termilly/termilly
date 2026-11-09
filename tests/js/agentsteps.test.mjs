@@ -19,7 +19,7 @@ const T = n => `2026-11-04T22:${String(n).padStart(2, '0')}:00Z`;
 const prompts = [{ at: T(0) }, { at: T(10) }];
 
 /** Each step's line, or -1. */
-const lines = (steps, output) => placeSteps(steps, prompts, shownSteps(output)).map(p => p.line);
+const lines = (steps, output) => placeSteps(steps, prompts, shownSteps(output), output).map(p => p.line);
 
 test('a folded tool call and a command starting like a later one leave the replies above them in place', () => {
   const output = [
@@ -62,4 +62,23 @@ test('a tool used on something with underscores matches its shown line', () => {
   const output = ['● Search(pattern: "read_terminal_output", path: "src")', '● Read it.'];
   const steps = [tool('Grep', 'read_terminal_output', T(1)), reply('Read it.', T(2))];
   assert.deepEqual(lines(steps, output), [0, 1]);
+});
+
+test('a long answer whose first line Claude Code drew over is found by a later part of it', () => {
+  const output = [
+    '● Bash(git commit -q -am "Schedules")',
+    '  ⎿  (timeout 10m)',
+    '  screen.',
+    '  Copy button: it\'s meant to copy the open run\'s output to the clipboard. It didn\'t work becau',
+    '  se the main window was used.',
+  ];
+  const answer = 'I fixed both. `npm run check` passes. I haven\'t tried it on screen.\n\n**Copy button:** it\'s meant to copy the open run\'s output to the clipboard. It didn\'t work because the main window was used.';
+  const steps = [tool('Bash', 'git commit -q -am "Schedules"', T(1)), reply(answer, T(2))];
+  assert.deepEqual(lines(steps, output), [0, 3]);
+});
+
+test('a reply none of whose text the output shows stays gone', () => {
+  const output = ['● Bash(git status)', '● All clean, nothing to commit here.'];
+  const steps = [tool('Bash', 'git status', T(1)), reply('All clean, nothing to commit here.', T(2)), reply('A reply that scrolled out of the terminal long ago, before anything above.', T(3))];
+  assert.deepEqual(lines(steps, output), [0, 1, -1]);
 });

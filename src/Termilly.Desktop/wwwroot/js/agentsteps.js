@@ -30,6 +30,13 @@ const TOOL_CHARS = 60;
 const MIN_PARTIAL = 16;
 /** A reply's row shows this many lines; a long one goes on in the terminal. */
 const ROW_LINES = 8;
+/**
+ * A reply whose first line the output no longer has (Claude Code draws a long answer over its own start) is found by
+ * a later piece of it this long, tried every PIECE_STEP characters, at most PIECE_TRIES times.
+ */
+const PIECE_CHARS = 40;
+const PIECE_STEP = 30;
+const PIECE_TRIES = 20;
 
 /** @param {string} s */
 const norm = s => s.replace(/\s+/g, ' ').trim().toLowerCase();
@@ -94,9 +101,10 @@ function matches(step, shown) {
  * @param {AgentStep[]} steps oldest first
  * @param {{ at: string | null }[]} prompts oldest first
  * @param {{ line: number, text: string }[]} shown
+ * @param {string[]} [lines] the output, for the replies whose first line it no longer has
  * @returns {PlacedStep[]}
  */
-export function placeSteps(steps, prompts, shown) {
+export function placeSteps(steps, prompts, shown, lines = []) {
   const times = prompts.map(p => (p.at ? Date.parse(p.at) : NaN));
   const placed = steps.map(step => {
     const at = Date.parse(step.at);
@@ -119,6 +127,16 @@ export function placeSteps(steps, prompts, shown) {
     const s = findAbove(p.step, shown, below, -1);
     if (s >= 0) [at[i], below] = [s, s];
   }
+  /** A reply found only by a later piece of it: its line in the output, by its index in placed. @type {Map<number, number>} */
+  const byPiece = new Map();
+  for (let i = 0; i < placed.length; i++) {
+    if (placed[i].step.kind !== AGENT_STEP.reply || at[i] >= 0) continue;
+    const before = nearestReply(placed, at, i, -1);
+    const after = nearestReply(placed, at, i, 1);
+    const from = Math.max(before >= 0 ? shown[before].line + 1 : 0, ...[...byPiece.values()].map(l => l + 1));
+    const line = findPiece(placed[i].step, lines, from, after >= 0 ? shown[after].line : lines.length);
+    if (line >= 0) byPiece.set(i, line);
+  }
   // Each tool between the nearest placed replies before and after it, newest first, each above the one after it.
   let after = shown.length;
   for (let i = placed.length - 1; i >= 0; i--) {
@@ -131,8 +149,48 @@ export function placeSteps(steps, prompts, shown) {
     const s = findAbove(placed[i].step, shown, after, before);
     if (s >= 0) [at[i], after] = [s, s];
   }
-  placed.forEach((p, i) => { if (at[i] >= 0) p.line = shown[at[i]].line; });
+  placed.forEach((p, i) => { if (at[i] >= 0) p.line = shown[at[i]].line; else p.line = byPiece.get(i) ?? -1; });
   return placed;
+}
+
+/**
+ * The index in shown of the nearest reply placed before (dir -1) or after (dir 1) the step at i, or -1.
+ * @param {PlacedStep[]} placed
+ * @param {number[]} at
+ * @param {number} i
+ * @param {number} dir
+ */
+function nearestReply(placed, at, i, dir) {
+  for (let j = i + dir; j >= 0 && j < placed.length; j += dir) if (placed[j].step.kind === AGENT_STEP.reply && at[j] >= 0) return at[j];
+  return -1;
+}
+
+/**
+ * The first line, from `from` up to `to`, where a later piece of a reply shows, or -1. Compared without spaces
+ * (Claude Code wraps the text, sometimes inside a word) and without Markdown's marks.
+ * @param {AgentStep} step
+ * @param {string[]} lines
+ * @param {number} from
+ * @param {number} to
+ */
+function findPiece(step, lines, from, to) {
+  const want = bare(step.text);
+  if (want.length < PIECE_CHARS || from >= to) return -1;
+  let text = '';
+  /** Where each line starts in text. @type {number[]} */
+  const starts = [];
+  for (let l = from; l < to; l++) {
+    starts.push(text.length);
+    text += bare(lines[l] ?? '');
+  }
+  for (let k = 0, off = 0; k < PIECE_TRIES && off + PIECE_CHARS <= want.length; k++, off += PIECE_STEP) {
+    const found = text.indexOf(want.slice(off, off + PIECE_CHARS));
+    if (found < 0) continue;
+    let l = starts.length - 1;
+    while (starts[l] > found) l--;
+    return from + l;
+  }
+  return -1;
 }
 
 /**
