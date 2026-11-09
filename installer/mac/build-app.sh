@@ -4,7 +4,7 @@
 #   installer/mac/build-app.sh [arm64|x64 ...]     default: both
 #
 # Runs on a Mac (iconutil, hdiutil, codesign). Macs don't have .NET, so the app carries one copy of the .NET runtime in
-# Contents/MacOS/dotnet, and every program in it (termilly, host/termilly-host, the agent helpers) is published to look
+# Contents/Resources/dotnet, and every program in it (termilly, host/termilly-host, the agent helpers) is published to look
 # for .NET there (AppHostRelativeDotNet), not in a system install.
 #
 # Signing: with MAC_SIGN_IDENTITY set (a "Developer ID Application: ..." identity in the keychain) it signs for
@@ -58,9 +58,11 @@ for arch in $archs; do
     case $arch in arm64 | x64) ;; *) echo "Unknown processor: $arch (arm64 or x64)" >&2; exit 1 ;; esac
     rid="osx-$arch"
     work=$(mktemp -d)
+    trap 'rm -rf "$work"' EXIT
     app="$work/Termilly.app"
     macos="$app/Contents/MacOS"
-    mkdir -p "$macos" "$app/Contents/Resources"
+    resources="$app/Contents/Resources"
+    mkdir -p "$macos" "$resources"
 
     echo "Termilly $version ($arch): .NET runtime $runtime"
     tarball="$cache/dotnet-runtime-$runtime-$rid.tar.gz"
@@ -70,31 +72,34 @@ for arch in $archs; do
         [ "$(shasum -a 512 "$tarball.part" | cut -d' ' -f1)" = "$2" ] || { echo "$1: wrong SHA-512" >&2; exit 1; }
         mv "$tarball.part" "$tarball"
     fi
-    mkdir "$macos/dotnet"
-    tar -xzf "$tarball" -C "$macos/dotnet"
+    mkdir "$resources/dotnet"
+    tar -xzf "$tarball" -C "$resources/dotnet"
     # Only the runtime is used, through each program's own launcher: not the dotnet command.
-    rm -f "$macos/dotnet/dotnet"
+    rm -f "$resources/dotnet/dotnet"
 
     echo "Termilly $version ($arch): publishing"
     # Where each launcher finds .NET, given through the environment: dotnet's -p: can't take a value with "../".
-    AppHostRelativeDotNet=dotnet dotnet publish "$repo/src/Termilly.Linux" -c Release -r "$rid" --self-contained false \
+    AppHostRelativeDotNet=../Resources/dotnet dotnet publish "$repo/src/Termilly.Linux" -c Release -r "$rid" --self-contained false \
         -o "$macos" -v quiet -nologo
     # The build's host and agent helper came along, looking for a system .NET: published again, looking for the app's.
     rm -rf "$macos/host" "$macos/agent"
-    AppHostRelativeDotNet=../dotnet dotnet publish "$repo/src/Termilly.Host" -c Release -r "$rid" --self-contained false \
+    AppHostRelativeDotNet=../../Resources/dotnet dotnet publish "$repo/src/Termilly.Host" -c Release -r "$rid" --self-contained false \
         -o "$macos/host" -v quiet -nologo
-    AppHostRelativeDotNet=../dotnet dotnet publish "$repo/src/Termilly.Agent" -c Release -r "$rid" --self-contained false \
+    AppHostRelativeDotNet=../../Resources/dotnet dotnet publish "$repo/src/Termilly.Agent" -c Release -r "$rid" --self-contained false \
         -o "$macos/agent" -v quiet -nologo
     # The agent helper runs under four names (see Termilly.Linux.csproj, CopyAgentHelper).
     for name in claude termilly termilly-askpass; do cp "$macos/agent/termilly-hook" "$macos/agent/$name"; done
     # What a build folder has but an app doesn't need.
     rm -rf "$macos/conpty" "$macos/install-desktop.sh" "$macos/termilly.desktop"
     find "$macos" -name '*.pdb' -delete
+    # Folders of data go in Contents/Resources, linked from where Termilly looks for them: macOS takes every folder in
+    # Contents/MacOS for code, and one with a dot in its name (fish's vendor_conf.d) for a broken bundle.
+    for dir in wwwroot shell icons; do mv "$macos/$dir" "$resources/$dir" && ln -s "../Resources/$dir" "$macos/$dir"; done
 
     # The icon: the Linux sizes up to 256, and 512 and 1024 rendered for the Mac (branding/make-icon.ps1).
     iconset="$work/termilly.iconset"
     mkdir "$iconset"
-    icons="$macos/icons/hicolor"
+    icons="$resources/icons/hicolor"
     cp "$icons/16x16/apps/termilly.png" "$iconset/icon_16x16.png"
     cp "$icons/32x32/apps/termilly.png" "$iconset/icon_16x16@2x.png"
     cp "$icons/32x32/apps/termilly.png" "$iconset/icon_32x32.png"
@@ -114,7 +119,7 @@ for arch in $archs; do
     # Inside out: every file in Contents/MacOS first, the app last (it seals the rest). macOS counts everything in
     # Contents/MacOS as code, so the .NET assemblies and the page get signatures too (kept in extended attributes,
     # which the .dmg and ditto's .zip carry; anything unpacking an update must keep them as well).
-    find "$macos" -type f ! -path "$macos/termilly" | while read -r file; do
+    { find "$macos" -type f ! -path "$macos/termilly"; find "$resources/dotnet" -type f; } | while read -r file; do
         case $(file -b "$file") in *Mach-O*) sign_program "$file" ;; *) sign "$file" ;; esac
     done
     sign_program "$app"
