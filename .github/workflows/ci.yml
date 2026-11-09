@@ -1,4 +1,4 @@
-# Checks every push to develop and main, and every pull request: the build and tests on Windows and Linux (the
+# Checks every push to develop and main, and every pull request: the build and tests on Windows, Linux and macOS (the
 # analyzers and code style fail the build), and the page's JavaScript (lint, type check, tests, magic values, copies,
 # import cycles).
 # Read-only: no secrets, nothing published. Releases are built by release.yml, which only runs by hand.
@@ -40,6 +40,26 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
+      - name: Test
+        run: dotnet test tests/Termilly.Core.Tests -c Release
+
+  # The Linux build is also the macOS one: here it makes Termilly.app too, and the tests run the macOS parts (the
+  # pseudo terminal, sockets, fonts, the launch agent that starts the host, the keychain).
+  macos:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+      - name: Build
+        run: dotnet build src/Termilly.Linux -c Release
+      - name: The app bundle is made
+        run: |
+          app=src/Termilly.Linux/bin/Release/net10.0/Termilly.app/Contents
+          test -f "$app/Info.plist"
+          test -L "$app/MacOS/termilly"
+          test -x src/Termilly.Linux/bin/Release/net10.0/termilly
       - name: Test
         run: dotnet test tests/Termilly.Core.Tests -c Release
 
