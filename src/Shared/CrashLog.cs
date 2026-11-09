@@ -45,6 +45,13 @@ internal static class CrashLog
             }
         };
 
+    /// <summary>
+    /// Writes an error a server caught where something from outside came in (a phone's request, another computer's
+    /// message) to the app's log: a bug, not a dropped connection, so it's seen instead of ending one task quietly.
+    /// Only that request or connection ends; the program carries on.
+    /// </summary>
+    public static void Caught(Exception error) => Write(PathOf(FileName), error, DateTimeOffset.Now);
+
     /// <summary>Adds one crash to the log at <paramref name="path"/>. Never throws: the program is going down already.</summary>
     public static void Write(string path, Exception error, DateTimeOffset when)
     {

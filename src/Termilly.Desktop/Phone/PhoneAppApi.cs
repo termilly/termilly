@@ -146,7 +146,7 @@ internal sealed class PhoneAppApi(PhoneStore store, string pushKey, Func<string,
     {
         try
         {
-            return (JsonNode.Parse(body) as JsonObject)?[name]?.GetValue<string>();
+            return (JsonNode.Parse(body) as JsonObject)?[name].AsText();
         }
         catch (Exception e) when (e is JsonException or InvalidOperationException or FormatException)
         {
@@ -160,10 +160,10 @@ internal sealed class PhoneAppApi(PhoneStore store, string pushKey, Func<string,
         try
         {
             var json = JsonNode.Parse(body) as JsonObject;
-            var endpoint = json?[Fields.Endpoint]?.GetValue<string>();
+            var endpoint = json?[Fields.Endpoint].AsText();
             var keys = json?[Fields.Keys] as JsonObject;
-            var p256dh = keys?[Fields.P256dh]?.GetValue<string>();
-            var auth = keys?[Fields.Auth]?.GetValue<string>();
+            var p256dh = keys?[Fields.P256dh].AsText();
+            var auth = keys?[Fields.Auth].AsText();
             return IsPushService(endpoint) && !string.IsNullOrEmpty(p256dh) && !string.IsNullOrEmpty(auth) ? new PushTarget(endpoint!, p256dh, auth) : null;
         }
         catch (Exception e) when (e is JsonException or InvalidOperationException or FormatException)

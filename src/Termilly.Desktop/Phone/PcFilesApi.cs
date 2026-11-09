@@ -88,16 +88,16 @@ internal sealed class PcFilesApi(FilesHandler files, ISettingsStore settings)
         {
             body = null;
         }
-        var pane = body?[PcFiles.Fields.Pane]?.GetValue<string>();
+        var pane = body?[PcFiles.Fields.Pane].AsText();
         if (body is null || string.IsNullOrEmpty(pane))
         {
             return new(HttpStatusCode.BadRequest, MediaTypes.PlainText, []);
         }
-        var path = body[PcFiles.Fields.Path]?.GetValue<string>();
+        var path = body[PcFiles.Fields.Path].AsText();
         return request.Path switch
         {
-            PcFiles.Tree => Json(files.TreeJson(pane, null, (body[PcFiles.Fields.Paths] as JsonArray)?.Select(p => p?.GetValue<string>() ?? "").ToList() ?? [],
-                body[PcFiles.Fields.Files]?.GetValue<bool>() ?? false)),
+            PcFiles.Tree => Json(files.TreeJson(pane, null, (body[PcFiles.Fields.Paths] as JsonArray)?.Select(p => p.AsText() ?? "").ToList() ?? [],
+                body[PcFiles.Fields.Files].AsBool() ?? false)),
             PcFiles.List => Json(files.ListingJson(pane, null, path)),
             PcFiles.MakeFolder => files.MakeFolder(pane, path ?? "") is { } error ? Error(error) : Json("{}"),
             _ => new(HttpStatusCode.NotFound, MediaTypes.PlainText, []),

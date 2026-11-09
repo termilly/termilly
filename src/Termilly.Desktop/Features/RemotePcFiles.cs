@@ -126,7 +126,7 @@ internal sealed class RemotePcFiles(RemotePcStore store)
         catch (JsonException)
         {
         }
-        if (answer?[PcFiles.Fields.Error]?.GetValue<string>() is { } error)
+        if (answer?[PcFiles.Fields.Error].AsText() is { } error)
         {
             throw new IOException(error);
         }

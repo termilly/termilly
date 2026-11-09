@@ -280,7 +280,7 @@ internal sealed class AgentHooks : IDisposable
 
     /// <summary>A message for this version of the hook (an older helper left running speaks another).</summary>
     private static bool IsThisVersion(JsonObject message) =>
-        message[Fields.Version]?.GetValueKind() == JsonValueKind.Number && message[Fields.Version]!.GetValue<int>() == Version;
+        message[Fields.Version].AsInt() == Version;
 
     /// <summary>A figure from a status line message's cost (Claude's own: dollars, duration), or null.</summary>
     /// <summary>A status line's report; null for other messages.</summary>
