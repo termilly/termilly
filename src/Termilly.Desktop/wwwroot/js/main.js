@@ -31,6 +31,7 @@ import { toggleFiles, initFiles } from './filepanel.js';
 import { toggleNotepad, toggleNotepadFromKeys, initNotepad } from './notepad.js';
 import { toggleTodo, initTodo } from './todopanel.js';
 import './todoagent.js';
+import './scheduleagent.js';
 import './agentask.js';
 import { openAgentRules } from './agentrules.js';
 import { toggleClips, initClips } from './clipboard.js';

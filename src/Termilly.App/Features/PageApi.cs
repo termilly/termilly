@@ -24,7 +24,7 @@ internal sealed class PageApi(PageChannel page, ISettingsStore settings, IAppWin
     private static readonly TimeSpan AskingWait = PipeTimeouts.Asking - TimeSpan.FromSeconds(5);
 
     /// <summary>The methods about terminals, which the page answers.</summary>
-    private static readonly string[] PageMethods = [ApiMethods.Tasks, ApiMethods.Task, ApiMethods.TaskTick, ApiMethods.TaskDone, ApiMethods.TaskAsk, ApiMethods.List, ApiMethods.State, ApiMethods.Status, ApiMethods.Open, ApiMethods.Send, ApiMethods.Snippets, ApiMethods.Snippet, ApiMethods.Read, ApiMethods.Wait, ApiMethods.AgentAsk];
+    private static readonly string[] PageMethods = [ApiMethods.Tasks, ApiMethods.Task, ApiMethods.TaskTick, ApiMethods.TaskDone, ApiMethods.TaskAdd, ApiMethods.Schedules, ApiMethods.ScheduleAdd, ApiMethods.ScheduleRun, ApiMethods.ScheduleSet, ApiMethods.TaskAsk, ApiMethods.List, ApiMethods.State, ApiMethods.Status, ApiMethods.Open, ApiMethods.Send, ApiMethods.Snippets, ApiMethods.Snippet, ApiMethods.Read, ApiMethods.Wait, ApiMethods.AgentAsk];
     /// <summary>The methods that return a terminal's output, which is redacted for an agent.</summary>
     private static readonly string[] OutputMethods = [ApiMethods.Read, ApiMethods.Wait];
 
@@ -90,6 +90,8 @@ internal sealed class PageApi(PageChannel page, ISettingsStore settings, IAppWin
                 return vault.IsLocked ? No("History is locked.") : Ok(ApiHistory.Search(commands.List(current.Session.HistoryDays), request));
             case var typing when ApiMethods.Typing.Contains(typing) && !current.Agents.ApiAllowInput:
                 return No("Typing into terminals from scripts and agents is off. Turn it on in Termilly: Settings › Terminal › Let scripts and agents type.");
+            case var scheduling when ApiMethods.Scheduling.Contains(scheduling) && !current.Agents.ApiAllowInput:
+                return No("Adding and running schedules from agents is off. Turn it on in Termilly: Settings › Terminal › Let scripts and agents type.");
             case var asked when PageMethods.Contains(asked):
                 try
                 {

@@ -37,7 +37,7 @@ function ownerOf(ref) {
  * @param {ListRef} ref
  * @returns {string}
  */
-function nameOf(ref) {
+export function nameOf(ref) {
   if (ref.kind === LIST_KIND.terminal) return tabTitle(/** @type {Tab} */ (state.tabs.get(ref.id)));
   return /** @type {Workspace} */ (wsById(ref.id)).name;
 }

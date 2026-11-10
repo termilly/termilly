@@ -1,12 +1,12 @@
 // @ts-check
-// To do and agents: what the termilly command and its MCP tools (list_tasks, get_task, tick_task, finish_task) can do with
-// a task. An agent reads tasks, ticks sub-items and finishes; it never adds, edits or deletes one. A finish waits in Review
+// To do and agents: what the termilly command and its MCP tools (list_tasks, get_task, add_task, tick_task, finish_task)
+// can do with a task. An agent reads tasks, adds one when asked, ticks sub-items and finishes; it never edits or deletes one. A finish waits in Review
 // for the user, and a task whose terminal closes before its agent finished goes back to Open.
 
-import { state, on, tabTitle, runningAgent, EVENTS } from './store.js';
+import { state, on, tabTitle, runningAgent, wsById, EVENTS } from './store.js';
 import { agentKind } from './agentkinds.js';
 import { addApiMethods } from './api.js';
-import { findTask, listsOfAsker, updateTask, setStatus, releaseClosed } from './todo.js';
+import { findTask, listsOfAsker, updateTask, setStatus, releaseClosed, addTasks, terminalList, workspaceList, nameOf, LIST_KIND } from './todo.js';
 import { TASK_STATUS, detailLines, statusOf, subProgress, tickByNumber } from './todolist.js';
 import { alertReview } from './notify.js';
 import { workDone } from './todoreview.js';
@@ -55,7 +55,24 @@ function tick(ref, task, numbers) {
   if (details !== (task.details ?? '')) updateTask(ref, task.id, { details });
 }
 
+/**
+ * Adds a task the asking agent was told to add: to its terminal's list, or its workspace's.
+ * @param {any} args
+ */
+function addTask({ title, details, tags, list, from }) {
+  const tab = from ? state.tabs.get(from) : null;
+  if (!tab) throw new Error('add_task adds to the To do list of the terminal you run in; run it from a Termilly terminal.');
+  const text = String(title ?? '').trim();
+  if (!text) throw new Error('A task needs a title.');
+  const ws = wsById(tab.wsId);
+  const ref = list === LIST_KIND.workspace && ws ? workspaceList(ws) : terminalList(tab);
+  const tagList = String(tags ?? '').split(',').map(t => t.trim().replace(/^#/, '')).filter(Boolean);
+  const [id] = addTasks(ref, [{ text, details: String(details ?? '').trim() || undefined, tags: tagList.length ? tagList : undefined }]);
+  return { ...describeTask(/** @type {TodoTask} */ (findTask(id)?.task)), list: nameOf(ref) };
+}
+
 addApiMethods({
+  task_add: args => addTask(args),
   tasks: ({ from }) => ({ tasks: listsOfAsker(from).flatMap(list => list.tasks.map(task => ({ ...describeTask(task), list: list.name }))) }),
   task: args => {
     const { task } = taskFor(args);
