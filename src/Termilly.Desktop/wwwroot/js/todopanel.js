@@ -69,6 +69,8 @@ const ROW_CONTROL = 'button, input, .td-acts';
 const ELSEWHERE = '[data-elsewhere]';
 const EDIT_ROW = '.td-edit';
 const EDIT_TEXT = '.td-edit-text';
+/** The edited task's details box: as tall as its text, up to a limit (CSS max-height), then it scrolls. */
+const EDIT_DETAILS = '.td-edit-details';
 /** A deletion's toast button that brings the tasks back. */
 const UNDO = 'Undo';
 const ISSUE_TITLE = '.td-issue-title';
@@ -468,6 +470,15 @@ function fitNote() {
   noteArea.style.height = `${Math.min(noteArea.scrollHeight, NOTE_MAX_ROWS * NOTE_LINE_PX + NOTE_PADDING_PX)}px`;
 }
 
+/** The edited task's details box as tall as its text, when there is one shown. */
+function fitDetails() {
+  const box = /** @type {HTMLTextAreaElement | null} */ (listEl.querySelector(EDIT_DETAILS));
+  if (!box || !box.isConnected || !box.offsetParent) return;
+  const borders = box.offsetHeight - box.clientHeight;
+  box.style.height = 'auto';
+  box.style.height = `${box.scrollHeight + borders}px`;
+}
+
 /** @param {TodoList} list */
 function renderNote(list) {
   noteButton.hidden = !list.note;
@@ -518,6 +529,7 @@ function render() {
   picked = picked.filter(t => tags.some(([tag]) => tag === t));
   showFilter();
   listEl.innerHTML = listHtml(list);
+  fitDetails();
   showSearch();
   find(panel, `[data-td="${ACTION.pick}"]`).title = `Pick a list. This one has ${openCount(list.tasks)} open`;
   if (issue) renderIssue(list);
@@ -1525,6 +1537,10 @@ listEl.addEventListener('mousedown', e => {
 listEl.addEventListener('dblclick', e => {
   const row = /** @type {HTMLElement | null} */ (targetOf(e).closest(TASK));
   if (row && !row.matches(ELSEWHERE) && !startedOnControl && !targetOf(e).closest(ROW_CONTROL)) beginEdit(/** @type {string} */ (row.dataset.task));
+});
+
+listEl.addEventListener('input', e => {
+  if (targetOf(e).matches(EDIT_DETAILS)) fitDetails();
 });
 
 listEl.addEventListener('contextmenu', e => {

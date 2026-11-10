@@ -3528,6 +3528,8 @@ button.td-agent:hover { text-decoration: underline; }
 .td-fold:hover { color: var(--text); }
 .td-edit, .td-issue { display: flex; flex-direction: column; gap: 6px; }
 .td-edit { margin: 2px; padding: 8px; border: 1px solid var(--border); border-radius: 6px; }
+/* As tall as its text (fitDetails), up to this, then it scrolls. */
+.td-edit-details { max-height: 60vh; overflow-y: auto; }
 .td-issue { flex: 1; min-height: 0; overflow-y: auto; padding: 10px; }
 .td-issue h3 { margin: 0; font-size: 14px; }
 .td-issue-repo { margin: 0; color: var(--muted); font: 12px var(--mono); }
