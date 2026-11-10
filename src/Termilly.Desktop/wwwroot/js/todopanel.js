@@ -1126,12 +1126,14 @@ function statusMenu(task, at) {
 }
 
 /**
- * Review's Accept: the task goes to Done at once, saying so, with Undo back to Review.
+ * Review's Accept: the task goes to Done at once, folded (even if Review opened it out to read), saying so, with Undo back
+ * to Review.
  * @param {TodoTask} task
  */
 function acceptTask(task) {
   const ref = current;
   if (!ref) return;
+  expanded.delete(task.id);
   setStatus(ref, task.id, TASK_STATUS.done, { review: task.review });
   showToast({
     text: `“${task.text}” moved to Done`, state: TOAST.done,
