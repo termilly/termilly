@@ -24,7 +24,7 @@ internal sealed class PageApi(PageChannel page, ISettingsStore settings, IAppWin
     private static readonly TimeSpan AskingWait = PipeTimeouts.Asking - TimeSpan.FromSeconds(5);
 
     /// <summary>The methods about terminals, which the page answers.</summary>
-    private static readonly string[] PageMethods = [ApiMethods.Tasks, ApiMethods.Task, ApiMethods.TaskTick, ApiMethods.TaskDone, ApiMethods.TaskAdd, ApiMethods.Schedules, ApiMethods.ScheduleAdd, ApiMethods.ScheduleRun, ApiMethods.ScheduleSet, ApiMethods.TaskAsk, ApiMethods.List, ApiMethods.State, ApiMethods.Status, ApiMethods.Open, ApiMethods.Send, ApiMethods.Snippets, ApiMethods.Snippet, ApiMethods.Read, ApiMethods.Wait, ApiMethods.AgentAsk];
+    private static readonly string[] PageMethods = [ApiMethods.Tasks, ApiMethods.Task, ApiMethods.TaskTick, ApiMethods.TaskDone, ApiMethods.TaskAdd, ApiMethods.Schedules, ApiMethods.ScheduleAdd, ApiMethods.ScheduleRun, ApiMethods.ScheduleSet, ApiMethods.NotepadPages, ApiMethods.NotepadRead, ApiMethods.NotepadAdd, ApiMethods.NotepadWrite, ApiMethods.NotepadRename, ApiMethods.TaskAsk, ApiMethods.List, ApiMethods.State, ApiMethods.Status, ApiMethods.Open, ApiMethods.Send, ApiMethods.Snippets, ApiMethods.Snippet, ApiMethods.Read, ApiMethods.Wait, ApiMethods.AgentAsk];
     /// <summary>The methods that return a terminal's output, which is redacted for an agent.</summary>
     private static readonly string[] OutputMethods = [ApiMethods.Read, ApiMethods.Wait];
 

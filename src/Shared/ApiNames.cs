@@ -31,6 +31,12 @@ internal static class ApiMethods
     public const string ScheduleAdd = "schedule_add";
     public const string ScheduleRun = "schedule_run";
     public const string ScheduleSet = "schedule_set";
+    /// <summary>Notepad: its pages listed and read, a page added, its text written (replaced, or added at its end or top) and renamed.</summary>
+    public const string NotepadPages = "notepad_pages";
+    public const string NotepadRead = "notepad_read";
+    public const string NotepadAdd = "notepad_add";
+    public const string NotepadWrite = "notepad_write";
+    public const string NotepadRename = "notepad_rename";
     /// <summary>
     /// Claude Code working on a task out of sight asks the user for a permission it doesn't have (the MCP server's
     /// ask_permission, its --permission-prompt-tool): it waits for Allow or Deny in the task's row.
@@ -106,6 +112,10 @@ internal static class ApiFields
     public const string Unit = "unit";
     public const string Days = "days";
     public const string OnStart = "on_start";
+    /// <summary>A Notepad page: its id or name, how text is written to it (replace, append or prepend), and whether it's shown.</summary>
+    public const string Page = "page";
+    public const string Mode = "mode";
+    public const string Show = "show";
     /// <summary>A permission asked for: the run out of sight that asks, and the tool and what it would do with it.</summary>
     public const string Run = "run";
     public const string ToolName = "tool_name";
