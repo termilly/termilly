@@ -317,7 +317,7 @@ export const ICONS = {
   sun: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.8"/><path d="M8 1.8v1.4M8 12.8v1.4M1.8 8h1.4M12.8 8h1.4M3.6 3.6l1 1M11.4 11.4l1 1M3.6 12.4l1-1M11.4 4.6l1-1"/></svg>',
   moon: '<svg viewBox="0 0 16 16"><path d="M13 9.6A5.5 5.5 0 0 1 6.4 3 5.5 5.5 0 1 0 13 9.6z"/></svg>',
   /** A speech bubble with a prompt's chevron: what you asked an agent. */
-  prompts: '<svg viewBox="0 0 16 16"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/><path d="M5.5 5.5l2 1.5-2 1.5M8.5 8.5h2"/></svg>',
+  prompts: '<svg viewBox="0 0 16 16"><path d="M2.5 2.5h11v8h-6l-3 2.5v-2.5h-2z"/><path d="M5.5 5.5h5M5.5 7.5h3"/></svg>',
   /** Braces: a snippet (as on termilly.com). */
   snippet: '<svg viewBox="0 0 16 16"><path d="M6.5 2.5h-1a1 1 0 0 0-1 1v3L3 8l1.5 1.5v3a1 1 0 0 0 1 1h1M9.5 2.5h1a1 1 0 0 1 1 1v3L13 8l-1.5 1.5v3a1 1 0 0 1-1 1h-1"/></svg>',
   /** A lightning bolt: an action (as on termilly.com). */
