@@ -24,9 +24,9 @@ internal sealed class PageApi(PageChannel page, ISettingsStore settings, IAppWin
     private static readonly TimeSpan AskingWait = PipeTimeouts.Asking - TimeSpan.FromSeconds(5);
 
     /// <summary>The methods about terminals, which the page answers.</summary>
-    private static readonly string[] PageMethods = [ApiMethods.Tasks, ApiMethods.Task, ApiMethods.TaskTick, ApiMethods.TaskDone, ApiMethods.TaskAdd, ApiMethods.Schedules, ApiMethods.ScheduleAdd, ApiMethods.ScheduleRun, ApiMethods.ScheduleSet, ApiMethods.NotepadPages, ApiMethods.NotepadRead, ApiMethods.NotepadAdd, ApiMethods.NotepadWrite, ApiMethods.NotepadRename, ApiMethods.TaskAsk, ApiMethods.List, ApiMethods.State, ApiMethods.Status, ApiMethods.Open, ApiMethods.Send, ApiMethods.Snippets, ApiMethods.Snippet, ApiMethods.Read, ApiMethods.Wait, ApiMethods.AgentAsk];
+    private static readonly string[] PageMethods = [ApiMethods.Tasks, ApiMethods.Task, ApiMethods.TaskTick, ApiMethods.TaskDone, ApiMethods.TaskAdd, ApiMethods.Schedules, ApiMethods.ScheduleAdd, ApiMethods.ScheduleRun, ApiMethods.ScheduleSet, ApiMethods.NotepadPages, ApiMethods.NotepadRead, ApiMethods.NotepadAdd, ApiMethods.NotepadWrite, ApiMethods.NotepadRename, ApiMethods.TaskAsk, ApiMethods.List, ApiMethods.State, ApiMethods.Status, ApiMethods.Open, ApiMethods.Send, ApiMethods.Snippets, ApiMethods.Snippet, ApiMethods.Read, ApiMethods.Wait, ApiMethods.Ask, ApiMethods.AgentAsk];
     /// <summary>The methods that return a terminal's output, which is redacted for an agent.</summary>
-    private static readonly string[] OutputMethods = [ApiMethods.Read, ApiMethods.Wait];
+    private static readonly string[] OutputMethods = [ApiMethods.Read, ApiMethods.Wait, ApiMethods.Ask];
 
     /// <summary>The page's own call's fields: the method and its arguments.</summary>
     public static class CallFields
@@ -73,6 +73,10 @@ internal sealed class PageApi(PageChannel page, ISettingsStore settings, IAppWin
         var method = request[ApiFields.Method]!.ToString();
         var activate = request[ApiFields.Activate]?.GetValueKind() == JsonValueKind.True;
         var current = settings.Current;
+        if (SwitchedOff(method, request, current.Agents.ApiAllowInput) is { } off)
+        {
+            return No(off);
+        }
         switch (method)
         {
             case ApiMethods.Activate:
@@ -88,10 +92,6 @@ internal sealed class PageApi(PageChannel page, ISettingsStore settings, IAppWin
                 return Ok(new JsonObject { [ApiFields.AllowInput] = current.Agents.ApiAllowInput });
             case ApiMethods.History:
                 return vault.IsLocked ? No("History is locked.") : Ok(ApiHistory.Search(commands.List(current.Session.HistoryDays), request));
-            case var typing when ApiMethods.Typing.Contains(typing) && !current.Agents.ApiAllowInput:
-                return No("Typing into terminals from scripts and agents is off. Turn it on in Termilly: Settings › Terminal › Let scripts and agents type.");
-            case var scheduling when ApiMethods.Scheduling.Contains(scheduling) && !current.Agents.ApiAllowInput:
-                return No("Adding and running schedules from agents is off. Turn it on in Termilly: Settings › Terminal › Let scripts and agents type.");
             case var asked when PageMethods.Contains(asked):
                 try
                 {
@@ -115,6 +115,28 @@ internal sealed class PageApi(PageChannel page, ISettingsStore settings, IAppWin
                 return No($"Unknown method {method}.");
         }
     }
+
+    /// <summary>
+    /// Why a request is refused while Settings › Terminal › Let scripts and agents type is off, or null when it isn't (or the
+    /// switch is on): typing into a terminal, making a schedule run, and opening a terminal that runs a command, which is as
+    /// good as typing one, whoever asks (an agent's MCP tool or the termilly command its shell runs). Opening a folder
+    /// ("Open in Termilly") needs nothing.
+    /// </summary>
+    internal static string? SwitchedOff(string method, JsonObject request, bool allowInput) => allowInput ? null : method switch
+    {
+        ApiMethods.Open when RunsCommand(request) => "Opening a terminal that runs a command from scripts and agents is off. Turn it on in Termilly: Settings › Terminal › Let scripts and agents type.",
+        _ when ApiMethods.Typing.Contains(method) => "Typing into terminals from scripts and agents is off. Turn it on in Termilly: Settings › Terminal › Let scripts and agents type.",
+        _ when ApiMethods.Scheduling.Contains(method) => "Adding and running schedules from agents is off. Turn it on in Termilly: Settings › Terminal › Let scripts and agents type.",
+        _ => null,
+    };
+
+    /// <summary>
+    /// Whether an open request names a command to run in the new terminal (a command line, or the words after --). Anything
+    /// in those fields but nothing or blank text counts, so an odd value can't slip past.
+    /// </summary>
+    internal static bool RunsCommand(JsonObject request) =>
+        request[ApiFields.Command] is { } command && !(command is JsonValue value && value.TryGetValue<string>(out var line) && string.IsNullOrWhiteSpace(line))
+        || request[ApiFields.Argv] is { } argv && !(argv is JsonArray words && words.Count == 0);
 
     /// <summary>
     /// Asks the page and waits for its answer (api:result); throws with its error, or when it doesn't answer.

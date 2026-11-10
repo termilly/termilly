@@ -28,7 +28,6 @@ internal static partial class RemoteIntegration
     private const string HookScript = "termilly-hook.sh";
     private const string Uninstaller = "uninstall.sh";
     /// <summary>Claude Code's settings with Termilly's hooks, as installed in ~/.termilly.</summary>
-    private const string ClaudeSettingsFile = "claude-settings.json";
 
     [GeneratedRegex(@"^TERMILLY_REMOTE_VERSION=(\d+)", RegexOptions.Multiline)]
     private static partial Regex VersionLine();
@@ -64,7 +63,7 @@ internal static partial class RemoteIntegration
         {
             Add(name, File.ReadAllText(Path.Combine(folder, name)));
         }
-        Add(ClaudeSettingsFile, ClaudeHookSettings.ForRemote());
+        Add(AgentFiles.ClaudeSettings, ClaudeHookSettings.ForRemote());
         text.Append("chmod +x \"$d/termilly-hook.sh\" \"$d/uninstall.sh\"\n");
         text.Append("""
             line='[ -f "$HOME/.termilly/termilly.sh" ] && . "$HOME/.termilly/termilly.sh"'

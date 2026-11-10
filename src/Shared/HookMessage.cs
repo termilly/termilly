@@ -110,7 +110,7 @@ internal static class PipeTimeouts
     /// <summary>How long a call to <paramref name="method"/> may take.</summary>
     public static TimeSpan ForApi(string? method) => method switch
     {
-        ApiMethods.Send or ApiMethods.Snippet or ApiMethods.Wait or ApiMethods.AgentAsk => ApiWaiting,
+        ApiMethods.Send or ApiMethods.Snippet or ApiMethods.Wait or ApiMethods.Ask or ApiMethods.AgentAsk => ApiWaiting,
         ApiMethods.TaskAsk => Asking,
         _ => Api,
     };
@@ -136,6 +136,15 @@ internal static class TerminalEnvironment
     public const string HookProgram = "TERMILLY_HOOK_EXE";
     /// <summary>The credential ssh's askpass helper reads (SshConnections sets it, Termilly.Agent/Askpass.cs reads it).</summary>
     public const string Credential = "TERMILLY_CREDENTIAL";
+}
+
+/// <summary>The files in the data folder's agent folder that the claude shim hands Claude Code.</summary>
+internal static class AgentFiles
+{
+    /// <summary>Termilly's hooks and status line (--settings): its path is in TERMILLY_AGENT_SETTINGS.</summary>
+    public const string ClaudeSettings = "claude-settings.json";
+    /// <summary>Termilly's MCP server (--mcp-config), next to the settings.</summary>
+    public const string ClaudeMcp = "claude-mcp.json";
 }
 
 /// <summary>

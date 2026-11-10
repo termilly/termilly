@@ -86,7 +86,6 @@ internal sealed class AgentHooks : IDisposable
     private static readonly string EditMark = $"\"{Fields.Event}\":\"{HookEvents.Edit}\"";
     /// <summary>The helper's folder next to the app, and the hooks' settings' folder in the data folder.</summary>
     private const string AgentFolder = "agent";
-    private const string ClaudeSettingsFile = "claude-settings.json";
     /// <summary>The longest event name a remote hook may report.</summary>
     private const int MaxRemoteEvent = 40;
     /// <summary>Percentages (context, plan limits) are kept within this.</summary>
@@ -104,7 +103,10 @@ internal sealed class AgentHooks : IDisposable
     public static string HookExe => Path.Combine(AgentDirectory, AppPaths.Exe(AgentExecutables.Hook));
 
     /// <summary>Hooks Termilly adds to Claude Code, regenerated at every start (the app's folder may have moved).</summary>
-    public static string ClaudeSettingsPath => Path.Combine(AppPaths.DataDirectory, AgentFolder, ClaudeSettingsFile);
+    public static string ClaudeSettingsPath => Path.Combine(AppPaths.DataDirectory, AgentFolder, AgentFiles.ClaudeSettings);
+
+    /// <summary>Termilly's MCP server for Claude Code (ClaudeMcpConfig), next to the hooks.</summary>
+    public static string ClaudeMcpPath => Path.Combine(AppPaths.DataDirectory, AgentFolder, AgentFiles.ClaudeMcp);
 
     /// <summary>
     /// What an event means for the pane: working, needs-input, done, error, exited, or idle (an agent is there,

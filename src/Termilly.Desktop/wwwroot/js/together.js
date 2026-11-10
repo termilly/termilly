@@ -44,7 +44,7 @@ const MATCH_LINES = 40;
 /** What a read returns: the last command and its output, or the terminal's last lines. */
 const READ = Object.freeze({ lastCommand: 'last_command', lines: 'lines' });
 /** What a wait waits for: the running command to finish, or an output line to match. */
-const UNTIL = Object.freeze({ commandFinished: 'command_finished', outputMatches: 'output_matches', agentDone: 'agent_done' });
+export const UNTIL = Object.freeze({ commandFinished: 'command_finished', outputMatches: 'output_matches', agentDone: 'agent_done' });
 /** How long a wait waits by default, and at most (the host gives up at 115), in seconds. */
 const DEFAULT_WAIT_S = 60;
 const MAX_WAIT_S = 110;
@@ -133,26 +133,29 @@ function note(tab, from, what) {
 }
 
 /**
+ * The read check for the API's read, wait and ask.
  * @param {Tab} tab
  * @param {string | null | undefined} from
  */
-function checkRead(tab, from) {
+export function checkRead(tab, from) {
   if (from && from === tab.id) return; // a terminal reading itself
   if (tab.agentRead === undefined && isOpener(tab, from)) return; // it opened this terminal
   if (!canRead(tab)) throw new Error(`${tabTitle(tab)} (the terminal) doesn't let scripts or agents read it. Turn it on in its menu: Scripts and agents › Can read this terminal.`);
 }
 
 /**
- * The typing check for the API's send and snippets (the global switch is checked by the host).
+ * The typing check for the API's send, ask and snippets (the global switch is checked by the host). Noted on the terminal
+ * unless `noteIt` is false (a check made again before typing, after the user was asked).
  * @param {Tab} tab
  * @param {string | null | undefined} from
+ * @param {boolean} [noteIt]
  */
-export function checkType(tab, from) {
+export function checkType(tab, from, noteIt = true) {
   if (from && from === tab.id) return; // an agent typing into its own terminal
   // Codex asking the user to review its hooks takes single keys ("t" trusts them all): nothing is typed into that but by the user.
   if (hooksWaitForReview(tab)) throw new Error(`${reviewWords(tab)} Nothing can be typed there until then.`);
   if (!canType(tab) && !(tab.agentType === undefined && isOpener(tab, from))) throw new Error(`${tabTitle(tab)} (the terminal) doesn't let scripts or agents type into it. Turn it on in its menu: Scripts and agents › Can type here.`);
-  note(tab, from, 'typed into');
+  if (noteIt) note(tab, from, 'typed into');
 }
 
 /**
@@ -231,6 +234,78 @@ export function waitForTerminal(tab, { until = UNTIL.commandFinished, pattern, t
       }
     });
     const timer = setTimeout(() => finish({ pane: tab.id, title: tabTitle(tab), timedOut: true }), limit);
+  });
+}
+
+/** What an ask that timed out says, with the terminal's last lines: told from what the terminal shows at that moment. */
+const STILL_RUNNING = 'The command was still running when the wait ended; it was left running.';
+const NOT_STARTED = 'No command started after the line was typed: it may have gone to a program waiting for input.';
+const NO_MARKS = 'This terminal hasn’t reported where its commands start and end (no shell integration there), so whether the command is done can’t be told.';
+
+/**
+ * The end of the next command in a terminal, set up before that command is typed (the API's ask), so a quick one can't end
+ * before anything listens. Resolves like readTerminal's last command; at `deadline` (ms since the epoch) with the last
+ * lines, timedOut and why it couldn't tell. Call it only when no command runs there.
+ * @param {Tab} tab
+ * @param {number} deadline
+ * @returns {Promise<object>}
+ */
+export function nextCommandEnd(tab, deadline) {
+  return new Promise(resolve => {
+    let done = false;
+    /** @param {object} result */
+    const finish = result => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      accessOf(tab).waiters.delete(onEnd);
+      resolve(result);
+    };
+    const onEnd = () => setTimeout(() => finish(snapshot(tab, READ.lastCommand)), END_DELAY_MS);
+    // A shell that has never reported a command (no OSC 133 marks) won't report this one's end either.
+    const why = () => (tab.running ? STILL_RUNNING : tab.lastCommand ? NOT_STARTED : NO_MARKS);
+    const timer = setTimeout(() => finish({ ...snapshot(tab, READ.lines, MATCH_LINES), timedOut: true, why: why() }), Math.max(0, deadline - Date.now()));
+    accessOf(tab).waiters.add(onEnd);
+  });
+}
+
+/** When a script or agent last pressed Enter in a terminal, and when its shell last came back to its prompt. @type {WeakMap<Tab, number>} */
+const enteredAt = new WeakMap();
+/** @type {WeakMap<Tab, number>} */
+const promptAt = new WeakMap();
+/** Waits for a prompt to come back. @type {Set<() => void>} */
+const promptWaiters = new Set();
+on(EVENTS.prompt, tab => {
+  promptAt.set(tab, Date.now());
+  for (const fn of [...promptWaiters]) fn();
+});
+
+/**
+ * Notes that the API pressed Enter in a terminal: an ask after it waits for the shell to answer that line (shellAnswered).
+ * @param {Tab} tab
+ */
+export const noteEnter = tab => { enteredAt.set(tab, Date.now()); };
+
+/**
+ * Whether the shell has come back to its prompt since the API last pressed Enter there, waiting for it until `until` (ms
+ * since the epoch). True right away when it has, when nothing was typed, or when the shell doesn't report its prompts (no
+ * OSC 133 marks): then nothing can be told apart anyway.
+ * @param {Tab} tab
+ * @param {number} until
+ * @returns {Promise<boolean>}
+ */
+export function shellAnswered(tab, until) {
+  const answered = () => tab.exited || (promptAt.get(tab) ?? 0) >= (enteredAt.get(tab) ?? 0);
+  if (!tab.lastCommand && !promptAt.has(tab) || answered()) return Promise.resolve(true);
+  return new Promise(resolve => {
+    const finish = () => {
+      clearTimeout(timer);
+      promptWaiters.delete(check);
+      resolve(answered());
+    };
+    const check = () => { if (answered()) finish(); };
+    const timer = setTimeout(finish, Math.max(0, until - Date.now()));
+    promptWaiters.add(check);
   });
 }
 

@@ -71,6 +71,24 @@ public sealed class AgentHooksTests : IDisposable
             && !Protocol.IsCodexSubagent(CodexPrompt) && !Protocol.IsCodexSubagent(null));
 
     [Fact]
+    public void Claude_gets_the_mcp_server_only_once_termilly_wrote_it_beside_the_hooks()
+    {
+        Directory.CreateDirectory(_dir);
+        var settings = Path.Combine(_dir, "claude-settings.json");
+        Assert.Equal(["--settings", settings], Shim.ClaudeArguments(settings));
+
+        var mcp = Path.Combine(_dir, "claude-mcp.json");
+        ClaudeMcpConfig.Write(mcp);
+        // --mcp-config takes several files: --settings after it ends its list, so a prompt or subcommand after them stays one.
+        Assert.Equal(["--mcp-config", mcp, "--settings", settings], Shim.ClaudeArguments(settings));
+        // One stdio server named termilly, with no environment of its own: it gets Claude Code's, which names its terminal.
+        var server = JsonNode.Parse(File.ReadAllText(mcp))!["mcpServers"]!["termilly"]!;
+        Assert.Equal("stdio", server["type"]!.GetValue<string>());
+        Assert.Equal(["mcp"], server["args"]!.AsArray().Select(a => a!.GetValue<string>()));
+        Assert.Null(server["env"]);
+    }
+
+    [Fact]
     public void Codex_gets_a_hook_for_each_event_and_the_mcp_server()
     {
         var args = Shim.CodexArguments(@"C:\a\termilly.exe", windows: true);

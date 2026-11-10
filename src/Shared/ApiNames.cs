@@ -15,6 +15,11 @@ internal static class ApiMethods
     public const string Snippet = "snippet";
     public const string Read = "read";
     public const string Wait = "wait";
+    /// <summary>
+    /// Types a line into a terminal and waits for what it brings: the agent there ends the turn it starts, or the command
+    /// it runs ends (the MCP server's ask_terminal). It needs both reading and typing allowed.
+    /// </summary>
+    public const string Ask = "ask";
     public const string History = "history";
     public const string Capabilities = "capabilities";
     /// <summary>Termilly started again while one runs (OpenFolder.cs): that window comes to the front.</summary>
@@ -49,7 +54,7 @@ internal static class ApiMethods
     public const string AgentAsk = "agent_ask";
 
     /// <summary>The methods that type into a terminal: they need Settings › Terminal › API, and may wait on the user.</summary>
-    public static readonly IReadOnlyList<string> Typing = [Send, Snippet];
+    public static readonly IReadOnlyList<string> Typing = [Send, Snippet, Ask];
 
     /// <summary>The methods that make something run later or now: they need the same setting as typing.</summary>
     public static readonly IReadOnlyList<string> Scheduling = [ScheduleAdd, ScheduleRun, ScheduleSet];

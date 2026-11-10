@@ -5,10 +5,10 @@ namespace Termilly.Agent;
 
 /// <summary>
 /// Runs as claude or codex (claude.exe, codex.exe on Windows) from Termilly's agent folder, which terminals have first
-/// on PATH. Starts the real agent with Termilly's hooks added and passes its exit code back: Claude Code gets them with
-/// --settings, Codex as -c values (both add to the user's own hooks, they don't replace them, and neither touches the
-/// user's config). Codex gets the termilly MCP server too. Outside Termilly, or for an agent started from inside a hooked
-/// one, the shim adds nothing.
+/// on PATH. Starts the real agent with Termilly's hooks and MCP server added and passes its exit code back: Claude Code
+/// gets them with --settings and --mcp-config, Codex as -c values (both add to the user's own hooks and servers, they
+/// don't replace them, and neither touches the user's config; a server of theirs named termilly gives way to Termilly's
+/// for that run). Outside Termilly, or for an agent started from inside a hooked one, the shim adds nothing.
 /// </summary>
 internal static class Shim
 {
@@ -36,7 +36,7 @@ internal static class Shim
         {
             var added = agent == AgentKinds.Codex
                 ? CodexArguments(Beside(AgentExecutables.Cli), OperatingSystem.IsWindows())
-                : ["--settings", settings];
+                : ClaudeArguments(settings!);
             if (agent == AgentKinds.Codex)
             {
                 // Its hooks name the helper by this variable, which Codex hands on to them with the rest of its environment.
@@ -58,6 +58,26 @@ internal static class Shim
         using var process = Process.Start(start)!;
         process.WaitForExit();
         return process.ExitCode;
+    }
+
+    /// <summary>
+    /// What Claude Code gets: Termilly's hooks (--settings) and, when Termilly wrote it, its MCP server (--mcp-config, the
+    /// file next to the settings), so its tools are there without `claude mcp add`. --mcp-config takes any number of
+    /// files, so it comes first: --settings, which takes one, ends its list, and the user's own prompt or subcommand after
+    /// it isn't read as another config.
+    /// </summary>
+    public static List<string> ClaudeArguments(string settings)
+    {
+        var args = new List<string>();
+        var mcp = Path.Combine(Path.GetDirectoryName(settings) ?? "", AgentFiles.ClaudeMcp);
+        if (File.Exists(mcp))
+        {
+            args.Add("--mcp-config");
+            args.Add(mcp);
+        }
+        args.Add("--settings");
+        args.Add(settings);
+        return args;
     }
 
     /// <summary>The first real <paramref name="agent"/> on PATH: not this shim, nor another Termilly's (AgentLookup).</summary>
