@@ -87,6 +87,8 @@ interface InterfaceSettings {
   confirmCloseWorkspace: boolean;
   gitStatus: boolean;
   checkForUpdates: boolean;
+  /** A newer version is installed when Termilly starts, before anything else runs (StartupUpdateGate). Windows' per-user installs only for now; off unless the user turns it on. */
+  installUpdatesOnStart: boolean;
   disabledPlugins: string[] | null;
   /** The window's Minimize: to the taskbar, or the tray (Windows). */
   minimizeTo: string;

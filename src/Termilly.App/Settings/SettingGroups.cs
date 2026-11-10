@@ -82,6 +82,11 @@ internal sealed record InterfaceSettings
     public bool ConfirmCloseWorkspace { get; init; } = true;
     public bool GitStatus { get; init; } = true;
     public bool CheckForUpdates { get; init; } = true;
+    /// <summary>
+    /// A newer version is installed when Termilly starts, before anything else runs (StartupUpdateGate). Windows'
+    /// per-user installs only for now; off unless the user turns it on.
+    /// </summary>
+    public bool InstallUpdatesOnStart { get; init; }
     public IReadOnlyList<string>? DisabledPlugins { get; init; }
     /// <summary>The window's Minimize: to the taskbar, or the tray (Windows).</summary>
     public string MinimizeTo { get; init; } = SettingValues.MinimizeTo.Default;

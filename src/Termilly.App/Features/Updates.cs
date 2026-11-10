@@ -122,7 +122,7 @@ internal sealed class UpdateHandler(
     {
         try
         {
-            var file = await download.DownloadAsync(asked.Package, new Percent(p => Move(asked, a => a with { Percent = p })), cancel).ConfigureAwait(false);
+            var file = await download.DownloadAsync(asked.Package, new DirectProgress(p => Move(asked, a => a with { Percent = p })), cancel).ConfigureAwait(false);
             Move(asked, a => a with { State = UpdateStates.Ready, Percent = AllOfIt, File = file });
         }
         catch (OperationCanceledException) when (cancel.IsCancellationRequested)
@@ -231,11 +231,5 @@ internal sealed class UpdateHandler(
             _cancel?.Dispose();
             _cancel = null;
         }
-    }
-
-    /// <summary>Reports a download's percent where it happens (not through a synchronization context, as Progress would).</summary>
-    private sealed class Percent(Action<int> report) : IProgress<int>
-    {
-        public void Report(int value) => report(value);
     }
 }

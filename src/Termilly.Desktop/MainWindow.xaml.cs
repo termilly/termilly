@@ -75,11 +75,7 @@ public partial class MainWindow : Window
         Stage.SizeChanged += (_, _) => FitPageToWindow();
         ApplyTheme();
 
-        _loader = new StartupLoader(LoaderMark, LoaderText, LoaderCaret);
-        _loader.ShowMark(VisualTreeHelper.GetDpi(this).DpiScaleX);
-        DpiChanged += (_, e) => _loader.ShowMark(e.NewDpi.DpiScaleX);
-        Loader.MouseLeftButtonDown += (_, _) => DragMove();
-        _loader.Start();
+        _loader = StartupLoader.StartIn(this, Loader, LoaderMark, LoaderText, LoaderCaret);
 
         // Never leave the window stuck on the start-up screen, even if the page fails to report in.
         _revealFallback = new DispatcherTimer { Interval = RevealTimeout };

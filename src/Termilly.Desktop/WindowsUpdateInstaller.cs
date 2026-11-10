@@ -21,9 +21,20 @@ internal sealed class WindowsUpdateInstaller : IUpdateInstaller
 
     public bool EndsKeptShells => true;
 
+    /// <summary>The install this copy runs from, for this user or all users; null for a copy setup didn't install (a build).</summary>
+    public static InstalledCopy? Installed()
+    {
+        var installed = InstalledCopy.Match(AppContext.BaseDirectory, Location(RegistryHive.CurrentUser), Location(RegistryHive.LocalMachine));
+#if DEBUG
+        // With a stand-in for setup (TestSetup), a build counts as installed for this user where it runs.
+        installed ??= Environment.GetEnvironmentVariable(TestSetupVariable) is { Length: > 0 } ? new InstalledCopy(AppContext.BaseDirectory, false) : null;
+#endif
+        return installed;
+    }
+
     public Task<UpdateInstallResult> InstallAsync(string file, CancellationToken cancel)
     {
-        var command = SetupCommand.For(file, InstalledCopy.Match(AppContext.BaseDirectory, Location(RegistryHive.CurrentUser), Location(RegistryHive.LocalMachine)));
+        var command = SetupCommand.For(file, Installed());
 #if DEBUG
         command = TestSetup(command);
 #endif
@@ -61,8 +72,10 @@ internal sealed class WindowsUpdateInstaller : IUpdateInstaller
     /// A Debug build can run a stand-in for setup (TERMILLY_UPDATE_SETUP: a program that gets setup's path and
     /// arguments), so the update can be tried without installing anything.
     /// </summary>
+    private const string TestSetupVariable = "TERMILLY_UPDATE_SETUP";
+
     private static SetupCommand TestSetup(SetupCommand command) =>
-        Environment.GetEnvironmentVariable("TERMILLY_UPDATE_SETUP") is { Length: > 0 } stand
+        Environment.GetEnvironmentVariable(TestSetupVariable) is { Length: > 0 } stand
             ? command with { File = stand, Arguments = SetupCommand.Quote(command.File) + " " + command.Arguments }
             : command;
 #endif

@@ -15,8 +15,10 @@ namespace Termilly.Desktop;
 /// </summary>
 internal sealed class StartupLoader(Image mark, TextBlock text, Rectangle caret)
 {
-    private const string Word = "Loading";
+    private const string Loading = "Loading";
     private const int MaxDots = 3;
+    /// <summary>The dots at their most, for sizing a line before it's typed.</summary>
+    public static readonly string AllDots = new('.', MaxDots);
     /// <summary>The mark's size at 100%, and pre-rendered at each display scale from 100% to 200%.</summary>
     private const int MarkSize = 48;
     private static readonly int[] MarkSizes = [48, 60, 72, 84, 96];
@@ -26,8 +28,40 @@ internal sealed class StartupLoader(Image mark, TextBlock text, Rectangle caret)
     private static readonly TimeSpan BlinkOff = TimeSpan.FromSeconds(0.55);
 
     private readonly DispatcherTimer _typing = new();
+    private string _word = Loading;
     private int _typed;
     private int _dots;
+
+    /// <summary>
+    /// Types another line in place of the one shown ("Checking for updates", while an update runs before the page
+    /// loads: UpdateGateWindow), with the same dots after it.
+    /// </summary>
+    public void Say(string word)
+    {
+        if (word == _word)
+        {
+            return;
+        }
+        _word = word;
+        _typed = 0;
+        _dots = 0;
+        text.Text = "";
+        _typing.Interval = LetterDelay;
+    }
+
+    /// <summary>
+    /// The loader on <paramref name="window"/>'s start-up screen (<paramref name="screen"/>), started: its mark at the
+    /// display's scale (and again when the window moves to another), typing, and the screen dragging the window.
+    /// </summary>
+    public static StartupLoader StartIn(Window window, UIElement screen, Image mark, TextBlock text, Rectangle caret)
+    {
+        var loader = new StartupLoader(mark, text, caret);
+        loader.ShowMark(VisualTreeHelper.GetDpi(window).DpiScaleX);
+        window.DpiChanged += (_, e) => loader.ShowMark(e.NewDpi.DpiScaleX);
+        screen.MouseLeftButtonDown += (_, _) => window.DragMove();
+        loader.Start();
+        return loader;
+    }
 
     /// <summary>
     /// Uses the mark pre-rendered at this display's pixel size, shown 1:1 so it stays sharp. Scales without an exact
@@ -60,13 +94,13 @@ internal sealed class StartupLoader(Image mark, TextBlock text, Rectangle caret)
 
     private void Type()
     {
-        if (_typed < Word.Length)
+        if (_typed < _word.Length)
         {
-            text.Text = Word[..++_typed];
-            _typing.Interval = _typed == Word.Length ? WordPause : LetterDelay;
+            text.Text = _word[..++_typed];
+            _typing.Interval = _typed == _word.Length ? WordPause : LetterDelay;
             return;
         }
         _dots = (_dots + 1) % (MaxDots + 1);
-        text.Text = Word + new string('.', _dots);
+        text.Text = _word + new string('.', _dots);
     }
 }

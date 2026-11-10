@@ -2,7 +2,7 @@
 // Settings › About: the version and updates, the guided tour, the data folder and a memory report.
 
 import { PAGE, HOST } from '../protocol.js';
-import { send, onHost } from '../host.js';
+import { send, onHost, platform, PLATFORM } from '../host.js';
 import { state, tabTitle } from '../store.js';
 import { escapeHtml, ICONS } from '../ui.js';
 import { updateAboutHtml, checkForUpdates, onUpdateStatus } from '../update.js';
@@ -26,6 +26,15 @@ const CELL_BYTES = 12;
 const mb = (/** @type {number} */ bytes) =>
   `${(bytes / BYTES_PER_MB).toFixed(bytes < FINE_MB * BYTES_PER_MB ? 1 : 0)} MB`;
 
+/**
+ * Installing a newer version at start: Windows only for now (Linux and macOS keep the notice and its button).
+ * Updates are off without checking for them, so it waits for that setting.
+ */
+const installAtStartRow = () => (platform === PLATFORM.windows
+  ? row('Install updates when Termilly starts', 'A newer version is downloaded and installed before Termilly opens. Not while shells are kept running.',
+    toggle('interface.installUpdatesOnStart'), { keywords: 'update automatic auto install start' })
+  : '');
+
 /** @type {import('./page.js').Section} */
 const ABOUT = {
   id: SECTION.about,
@@ -34,6 +43,7 @@ const ABOUT = {
     <div class="about-head"><img src="assets/mark-40.png" srcset="assets/mark-40.png 1x" width="40" height="40" alt="">
       <div><div class="about-name">Termilly</div><div class="set-desc">Version ${escapeHtml(about.version ?? '')}</div></div></div>`
     + group('Updates', row('Check for updates', 'Look for a newer version at start and twice a day.', toggle('interface.checkForUpdates'), { keywords: 'update version new release download' })
+      + installAtStartRow()
       + row('Check now', updateAboutHtml(), '<button class="btn small" data-action="checkUpdates">Check now</button>', { keywords: 'update version' }))
     + group('', row('What’s new', 'What changed in this version, as it showed after the update.', '<button class="btn small" data-action="whatsNew">What’s new</button>', { keywords: 'changelog release notes version' })
       + row('Guided tour', 'A short walk past the things you’ll use every day.', '<button class="btn small" data-action="startTour">Take the tour</button>'))
