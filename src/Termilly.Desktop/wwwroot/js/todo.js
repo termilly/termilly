@@ -380,6 +380,10 @@ export function setStatus(ref, id, status, { terminal, run, review, plan, stage 
   if (status !== TASK_STATUS.review) send(PAGE.phoneWithdraw, { id });
   // What the agent said stays with a task accepted (Done), to read again in its row; a new run or Back to open clears it.
   const said = status === TASK_STATUS.done ? {} : { review: status === TASK_STATUS.review ? review : undefined };
+  // A task just done goes on top of the list, so it shows first in Done, as a new task shows first in Active.
+  const tasks = tasksOf(ref);
+  const at = tasks.findIndex(task => task.id === id);
+  if (status === TASK_STATUS.done && at > 0 && !tasks[at].done) setTasks(ref, [tasks[at], ...tasks.filter(task => task.id !== id)]);
   updateTask(ref, id, {
     done: status === TASK_STATUS.done ? true : undefined, status: middle ? status : undefined,
     terminal: status === TASK_STATUS.progress ? terminal : undefined, run: status === TASK_STATUS.progress ? run : undefined,
