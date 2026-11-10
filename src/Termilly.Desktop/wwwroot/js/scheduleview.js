@@ -84,12 +84,12 @@ const profileOptions = profiles => profiles.map(p => /** @type {const} */ ([p.id
 function permissionsText(s) {
   if (s.agent === AGENT_KIND.codex) {
     if (!s.allowChanges) return 'Read only: it can read files and run commands that only look, in Codex’s read-only sandbox. It can’t change anything.';
-    if (s.allowAll) return 'With nobody watching, it does anything it decides to, with no sandbox and no permission checks: any command, any file. Only for prompts and folders you trust.';
-    return 'With nobody watching, it edits files and runs commands in Codex’s sandbox, which keeps its changes to this folder. What the sandbox doesn’t allow is refused and it goes on without it.';
+    if (s.allowAll) return 'Silent. No sandbox and no permission checks. It can run any command and change any file. Use only for prompts and folders you trust.';
+    return 'Silent. It edits files and runs commands in Codex’s sandbox, inside this folder only. Anything else is refused and it carries on.';
   }
   if (!s.allowChanges) return 'Read only: it can read files in its folder and fetch pages, but can’t change files or run commands. Your Claude Code settings aren’t used.';
-  if (s.allowAll) return 'With nobody watching, it does anything it decides to, with no permission checks: any command, any file, any tool. Only for prompts and folders you trust.';
-  return 'With nobody watching, it edits files, and Claude Code’s auto mode decides the rest: safe commands run, risky ones are refused and it goes on without them. Your Claude Code settings still allow what they allow.';
+  if (s.allowAll) return 'Silent. No permission checks. It can run any command, change any file and use any tool. Use only for prompts and folders you trust.';
+  return 'Silent. It edits files. Safe commands run, risky ones are refused and it carries on. Your Claude Code settings still apply.';
 }
 
 /**
