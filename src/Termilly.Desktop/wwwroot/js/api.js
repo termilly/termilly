@@ -259,12 +259,16 @@ async function askAgent(tab, text, deadline, from, ready) {
  */
 async function askShell(tab, text, deadline, ready) {
   // Wrapped, so the typing queue moves on once Enter is in rather than when the command ends.
+  const busy = () => {
+    if (tab.running) throw new Error(`${tabTitle(tab)} (the terminal) is still running ${tab.running.command ?? 'a command'}: ask_terminal waits for a new one. Use send_to_terminal to type into the running one, or wait_for_terminal.`);
+  };
   const listening = await typeInto(tab, text, true, async () => {
+    busy();
     // Briefly: this holds up any typing behind it, which may be meant to stop what that line started.
     const answered = await shellAnswered(tab, Math.min(deadline - ASK_MIN_LEFT_MS, Date.now() + ANSWER_WAIT_MS));
     ready();
-    if (!answered && !tab.running) throw new Error(`${tabTitle(tab)} (the terminal) hasn't answered the line typed into it before, so its command couldn't be told from this one. Ask again once it's back at its prompt.`);
-    if (tab.running) throw new Error(`${tabTitle(tab)} (the terminal) is still running ${tab.running.command ?? 'a command'}: ask_terminal waits for a new one. Use send_to_terminal to type into the running one, or wait_for_terminal.`);
+    busy();
+    if (!answered) throw new Error(`${tabTitle(tab)} (the terminal) hasn't answered the line typed into it before, so its command couldn't be told from this one. Ask again once it's back at its prompt.`);
     noteTyped(tab);
     return { end: nextCommandEnd(tab, deadline) };
   });
