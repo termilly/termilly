@@ -319,7 +319,10 @@ const STARTING_MS = 30_000;
 /**
  * Whether a terminal is ready for a line: its start command typed (a terminal just opened gets it at its first prompt),
  * the agent that command starts running there, and that agent ready for a prompt: Claude Code once its hooks report in
- * (SessionStart), Codex once its screen has been still a moment, as it reports nothing until its first prompt.
+ * (SessionStart), Codex once its screen has been still a moment, as it reports nothing until its first prompt. A shell
+ * is ready once it has shown a prompt: marked (OSC 133), or for one without marks, something on its screen that has been
+ * still a moment. Typed into a shell still starting, a line can be lost or upset it (Windows PowerShell's line editor
+ * crashed on one).
  * @param {Tab} tab
  * @param {number} quietSince when its screen last changed (ms since the epoch)
  */
@@ -332,8 +335,9 @@ function isReady(tab, quietSince) {
   const starts = agentOfProgram(typed.trim().split(/\s+/)[0]);
   const agent = runningAgent(tab);
   if (starts && !agent) return false; // typed, its program not up yet
-  if (!agent || tab.agent) return true;
-  return !agentKind(agent).hookAtStart && Date.now() - quietSince >= READY_QUIET_MS;
+  const still = Date.now() - quietSince >= READY_QUIET_MS;
+  if (!agent) return !!tab.lastCommand || promptAt.has(tab) || (still && bufferLines(tab).some(line => line.trim()));
+  return !!tab.agent || !agentKind(agent).hookAtStart && still;
 }
 
 /**
