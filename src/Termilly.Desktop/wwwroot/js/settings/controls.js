@@ -17,14 +17,15 @@ export function setRange(range, value) {
 
 /**
  * A labelled row: title and description on the left, the control on the right (or below with `stack`).
- * `keywords` are other words the search finds it by.
+ * `keywords` are other words the search finds it by. `needs` is a switch it depends on ("group.key"): while that's
+ * off, the row is greyed out and can't be changed.
  * @param {string} label
  * @param {string} description
  * @param {string} control
- * @param {{ stack?: boolean, keywords?: string }} [options]
+ * @param {{ stack?: boolean, keywords?: string, needs?: string }} [options]
  */
-export const row = (label, description, control, { stack = false, keywords = '' } = {}) => `
-  <div class="set-row${stack ? ' stack' : ''}"${keywords ? ` data-keywords="${escapeHtml(keywords)}"` : ''}>
+export const row = (label, description, control, { stack = false, keywords = '', needs = '' } = {}) => `
+  <div class="set-row${stack ? ' stack' : ''}"${keywords ? ` data-keywords="${escapeHtml(keywords)}"` : ''}${needs ? ` data-needs="${needs}"` : ''}>
     <div class="set-label"><div class="set-name">${label}</div>${description ? `<div class="set-desc">${description}</div>` : ''}</div>
     <div class="set-control">${control}</div>
   </div>`;

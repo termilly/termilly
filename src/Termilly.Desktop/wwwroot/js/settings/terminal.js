@@ -23,14 +23,17 @@ const clipRows = () => row('Keep copies', 'Every copy kept, to paste again from 
   + row('Keep after a restart', 'Encrypted on this PC. Secrets are never written and go after 10 minutes.', toggle('clips.keep'), { keywords: 'clipboard history restart encrypted' })
   + row('Clips kept', 'The oldest go first. Pinned clips don’t count.', seg('clips.limit', choices(clipLimit.all, String)), { keywords: 'clipboard history limit' });
 
+/** The status bar's own switch, which the rows after it need. */
+const STATUS_BAR = 'terminal.statusBar';
+
 /** The status bar's rows: the bar itself, what's on it (each agent's session, the plan's limits, the branch), and how. */
-const statusBarRows = () => row('Status bar', 'A bar under each terminal: its agent’s session, files changed, the git branch.', toggle('terminal.statusBar'), { keywords: 'status bar footer branch model context' })
-  + row('Claude Code session', 'Model, context and tokens. Click the model to change it.', toggle('agents.claudeUsage'), { keywords: 'claude usage model context tokens' })
-  + row('Codex session', 'Model, context and tokens, from Codex’s session files.', toggle('agents.codexUsage'), { keywords: 'codex usage model context tokens openai' })
-  + row('Plan usage limits', 'The 5-hour and weekly limits of your Claude and Codex plans.', toggle('agents.claudeLimits'), { keywords: 'plan limit usage 5-hour weekly' })
-  + row('Meters', 'Context and limits as bars. Off: numbers only.', toggle('terminal.statusMeters'), { keywords: 'status bar meter numbers' })
-  + row('Colour by state', 'The bar takes the colour of what the agent is doing: working, needs you, failed.', toggle('terminal.statusStateColor'), { keywords: 'status bar colour color state working needs' })
-  + row('Git branch', 'The branch, its uncommitted changes and ↑↓ against its upstream. Click to switch.', toggle('interface.gitStatus'), { keywords: 'git branch dirty changes ahead behind upstream repository worktree switch' });
+const statusBarRows = () => row('Status bar', 'A bar under each terminal: its agent’s session, files changed, the git branch.', toggle(STATUS_BAR), { keywords: 'status bar footer branch model context' })
+  + row('Claude Code session', 'Model, context and tokens. Click the model to change it.', toggle('agents.claudeUsage'), { keywords: 'claude usage model context tokens', needs: STATUS_BAR })
+  + row('Codex session', 'Model, context and tokens, from Codex’s session files.', toggle('agents.codexUsage'), { keywords: 'codex usage model context tokens openai', needs: STATUS_BAR })
+  + row('Plan usage limits', 'The 5-hour and weekly limits of your Claude and Codex plans.', toggle('agents.claudeLimits'), { keywords: 'plan limit usage 5-hour weekly', needs: STATUS_BAR })
+  + row('Meters', 'Context and limits as bars. Off: numbers only.', toggle('terminal.statusMeters'), { keywords: 'status bar meter numbers', needs: STATUS_BAR })
+  + row('Colour by state', 'The bar takes the colour of what the agent is doing: working, needs you, failed.', toggle('terminal.statusStateColor'), { keywords: 'status bar colour color state working needs', needs: STATUS_BAR })
+  + row('Git branch', 'The branch, its uncommitted changes and ↑↓ against its upstream. Click to switch.', toggle('interface.gitStatus'), { keywords: 'git branch dirty changes ahead behind upstream repository worktree switch', needs: STATUS_BAR });
 
 /** A row per environment (production, staging) with its host patterns, comma-separated. */
 function envPatternRows() {

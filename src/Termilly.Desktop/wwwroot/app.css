@@ -2096,6 +2096,9 @@ details[open] > summary .wn-caret { transform: rotate(90deg); }
 .set-row { display: flex; align-items: center; gap: 24px; padding: 12px 0; }
 .set-row + .set-row { border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent); }
 .set-row.stack { flex-direction: column; align-items: stretch; gap: 10px; }
+/* A row whose switch it depends on is off (data-needs). */
+.set-row.needs-off { opacity: 0.45; }
+.set-row.needs-off .set-control { pointer-events: none; }
 .set-label { flex: 1; min-width: 0; }
 .set-name { font-size: 13px; font-weight: 500; }
 .set-desc { margin-top: 3px; color: var(--muted); font-size: 12px; line-height: 1.5; }

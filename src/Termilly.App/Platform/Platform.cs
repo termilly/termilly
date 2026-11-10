@@ -176,9 +176,31 @@ internal static class ListeningPorts
     /// <summary>The most ports shown on a terminal's row.</summary>
     private const int MaxPerTerminal = 8;
 
-    public static IReadOnlyDictionary<string, int[]> ByTerminal(IEnumerable<(int Pid, int Port)> listening, IReadOnlyDictionary<int, string> owners) =>
-        listening.Where(l => owners.ContainsKey(l.Pid)).GroupBy(l => owners[l.Pid])
+/// <summary>
+    /// The ports each terminal's processes listen on. A coding agent's own sockets are left out (Codex listens on a
+    /// random local port for itself): there's nothing to open there. What an agent starts, a dev server, still counts.
+    /// </summary>
+    /// <param name="isAgent">Whether a process is an agent itself; by default, by its program's name.</param>
+    public static IReadOnlyDictionary<string, int[]> ByTerminal(IEnumerable<(int Pid, int Port)> listening, IReadOnlyDictionary<int, string> owners, Func<int, bool>? isAgent = null)
+    {
+        isAgent ??= IsAgentProcess;
+        return listening.Where(l => owners.ContainsKey(l.Pid) && !isAgent(l.Pid)).GroupBy(l => owners[l.Pid])
             .ToDictionary(g => g.Key, g => g.Select(l => l.Port).Distinct().Order().Take(MaxPerTerminal).ToArray());
+    }
+
+    /// <summary>Whether a process is a coding agent's own program (claude, codex), by its name; false once it's gone.</summary>
+    private static bool IsAgentProcess(int pid)
+    {
+        try
+        {
+            using var process = System.Diagnostics.Process.GetProcessById(pid);
+            return process.ProcessName.ToLowerInvariant() is AgentKinds.Claude or AgentKinds.Codex;
+        }
+        catch (Exception e) when (e is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            return false;
+        }
+    }
 
     /// <summary>
     /// Which terminal each process belongs to: a terminal's shell, and everything started from it, at any depth.
