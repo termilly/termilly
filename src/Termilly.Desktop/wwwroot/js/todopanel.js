@@ -612,7 +612,7 @@ function closeSearch(refocus) {
 
 // ---- Filtering by tag ----
 
-/** A tag, or Show every task, in the filter's list. */
+/** A tag, or Clear filter, in the filter's list. */
 const FILTER_ROW = '.tp-row';
 /** The filter's list of tags while it's open. */
 /** @type {HTMLElement | null} */
@@ -628,8 +628,8 @@ function showFilter() {
 }
 
 /**
- * The filter's list: the tags of this list's open tasks, ticked when picked, with how many tasks have each; and the way
- * back to every task while some are picked.
+ * The filter's list: Clear filter on top while some tags are picked, then the tags of this list's open tasks, ticked
+ * when picked, with how many tasks have each.
  * @param {HTMLElement} popover
  */
 function drawFilter(popover) {
@@ -639,8 +639,8 @@ function drawFilter(popover) {
       <span class="check${picked.includes(tag) ? ' on' : ''}"><svg viewBox="0 0 12 12"><path d="M2.5 6.5l2.5 2.5 4.5-5.5"/></svg></span>
       <span class="td-chip" ${chipStyle(tag)}>${escapeHtml(tag)}</span><span class="tp-count">${count}</span>
     </button>`);
-  const clear = picked.length ? `<div class="tp-sep"></div><button type="button" class="tp-row" data-clear><span class="menu-icon">${ICONS.close}</span>Show every task</button>` : '';
-  body.innerHTML = rows.join('') + clear || '<div class="tp-empty">No open task in this list has a tag</div>';
+  const clear = picked.length ? `<button type="button" class="tp-row" data-clear><span class="menu-icon">${ICONS.close}</span>Clear filter</button>${rows.length ? '<div class="tp-sep"></div>' : ''}` : '';
+  body.innerHTML = clear + rows.join('') || '<div class="tp-empty">No open task in this list has a tag</div>';
 }
 
 /**
