@@ -185,10 +185,11 @@ internal static partial class Protocol
             message[HookMessage.Fields.File] = file;
             message[HookMessage.Fields.Cwd] = Text(payload, Payload.Cwd, MaxPath, cut: false);
         }
-        else if (tool is not null && ClaudeTools.ShellTools.Contains(tool))
+        else if (tool is not null && ClaudeTools.WatchedTools.Contains(tool))
         {
             message[HookMessage.Fields.Cwd] = Text(payload, Payload.Cwd, MaxPath, cut: false);
-            var folders = CommandFolders(Text(payload?[Payload.ToolInput] as JsonObject, Input.Command, int.MaxValue));
+            var command = Text(payload?[Payload.ToolInput] as JsonObject, Input.Command, int.MaxValue);
+            var folders = tool == CodexTools.ApplyPatch ? PatchFolders(command) : CommandFolders(command);
             if (folders.Count > 0)
             {
                 message[HookMessage.Fields.Dirs] = new JsonArray(folders.Select(f => (JsonNode?)f).ToArray());

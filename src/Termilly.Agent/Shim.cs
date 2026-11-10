@@ -109,8 +109,17 @@ internal static class Shim
         args.Add(ConfigOption);
         args.Add($"mcp_servers.{CodexMcpServer}={{command={Toml(cliExe)},args=['{AgentCommands.Mcp}']," +
             $"env_vars=['{Protocol.PaneVariable}','{Protocol.PipeVariable}'],tool_timeout_sec={CodexToolTimeoutSeconds}}}");
+        // Inline, as Claude Code is, rather than on the alternate screen: there Codex takes the mouse, so Termilly's
+        // right-click menu, its file and web links, selecting and the scrollback (searching it, history) didn't work.
+        // A -c of the user's own after these still wins.
+        args.Add(ConfigOption);
+        args.Add($"{CodexAltScreen}='{CodexAltScreenNever}'");
         return args;
     }
+
+    /// <summary>Codex's setting for the alternate screen (auto, always, never), and the value that keeps it inline.</summary>
+    private const string CodexAltScreen = "tui.alternate_screen";
+    private const string CodexAltScreenNever = "never";
 
     /// <summary>The quotes of TOML's multi-line literal string, which takes any text but three of them in a row.</summary>
     private const string LiteralQuotes = "'''";

@@ -97,14 +97,16 @@ export function clipboardKey(term, e) {
  * @param {any} term xterm
  * @param {HTMLElement} body the terminal's element
  * @param {(text: string) => void} paste types `text` after the terminal's paste checks
+ * @param {() => boolean} [agentHere] whether a coding agent runs there: its right-click stays Termilly's menu even when it
+ *   asks for the mouse, as a full-screen agent may
  */
-export function wireClipboard(term, body, paste) {
+export function wireClipboard(term, body, paste, agentHere = () => false) {
   body.addEventListener('mouseup', () => {
     if (state.settings.terminal.copyOnSelect && term.hasSelection()) copySelection(term, body);
   });
   body.addEventListener('contextmenu', e => {
     e.preventDefault();
-    if (term.modes.mouseTrackingMode !== NO_MOUSE_TRACKING) return;
+    if (term.modes.mouseTrackingMode !== NO_MOUSE_TRACKING && !agentHere()) return;
     // Nothing selected, a link under the mouse: Copy takes the link, as Ctrl+C does over it.
     const link = term.hasSelection() ? null : linkUnderMouse();
     showMenu([

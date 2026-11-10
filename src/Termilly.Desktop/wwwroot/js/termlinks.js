@@ -1,5 +1,5 @@
 // @ts-check
-// Links in a terminal's text that Termilly finds itself (the files Claude changed, web addresses): read one logical
+// Links in a terminal's text that Termilly finds itself (the files the agent changed, web addresses): read one logical
 // line at a time, so a link that wraps onto the next row is one link. Under the mouse it's underlined and coloured;
 // Ctrl+click opens it (or a plain click, where the kind of link says so) and Ctrl+C copies it.
 

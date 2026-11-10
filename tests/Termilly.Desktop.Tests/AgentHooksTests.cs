@@ -76,7 +76,9 @@ public sealed class AgentHooksTests : IDisposable
         var args = Shim.CodexArguments(@"C:\a\termilly.exe", windows: true);
         var values = args.Where((_, i) => i % 2 == 1).ToList();
         Assert.All(args.Where((_, i) => i % 2 == 0), a => Assert.Equal("-c", a));
-        Assert.Equal(Termilly.Shared.HookEvents.Codex.Count + 1, values.Count);
+        Assert.Equal(Termilly.Shared.HookEvents.Codex.Count + 2, values.Count);
+        // Inline, as Claude Code: on the alternate screen Codex takes the mouse from Termilly's menu, links and selection.
+        Assert.Contains("tui.alternate_screen='never'", values);
         // PowerShell runs a hook's command on Windows: the helper is in a variable, which needs & to be run.
         Assert.Contains("""hooks.SessionStart=[{hooks=[{type='command',command='& $env:TERMILLY_HOOK_EXE hook 1 SessionStart codex',timeout=3}]}]""", values);
         Assert.Contains("""hooks.PreToolUse=[{matcher='*',hooks=[{type='command',command='& $env:TERMILLY_HOOK_EXE hook 1 PreToolUse codex',timeout=3}]}]""", values);
@@ -330,6 +332,21 @@ public sealed class AgentHooksTests : IDisposable
         // Only the program it runs, for the activity line (js/agentline.js): never its arguments.
         Assert.Equal("Copy-Item", e.Target);
         Assert.DoesNotContain("Verbose", message);
+    }
+
+    [Fact]
+    public void A_codex_patch_passes_only_the_folders_of_its_files()
+    {
+        const string patch = "*** Begin Patch\n*** Update File: src/api/a.ts\n@@\n-old secret line\n+new line\n*** Add File: notes.md\n+hello\n*** Update File: src/api/b.ts\n*** Move to: lib/b.ts\n*** Delete File: C:/work/old/c.ts\n*** End Patch";
+        var payload = new System.Text.Json.Nodes.JsonObject { ["tool_name"] = "apply_patch", ["cwd"] = "C:/work", ["tool_input"] = new System.Text.Json.Nodes.JsonObject { ["command"] = patch } }.ToJsonString();
+        var message = Protocol.Message("p", "PreToolUse", payload, "codex");
+        var e = AgentHooks.Parse(message)!;
+        Assert.Equal((null, "C:/work", "apply_patch"), (e.File, e.Cwd, e.Tool));
+        Assert.Equal(["src/api", ".", "lib", "C:/work/old"], e.Dirs!);
+        Assert.DoesNotContain("secret", message); // the patch itself never leaves the hook
+        Assert.DoesNotContain("a.ts", message);
+        Assert.Empty(Protocol.PatchFolders("no patch here"));
+        Assert.Equal(["src"], Protocol.PatchFolders("*** Begin Patch\r\n*** Update File: src/a.ts\r\n*** End Patch"));
     }
 
     [Fact]

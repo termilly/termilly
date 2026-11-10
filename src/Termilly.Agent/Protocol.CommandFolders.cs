@@ -55,6 +55,35 @@ internal static partial class Protocol
         return folders;
     }
 
+    /// <summary>
+    /// The folders of the files a Codex patch (apply_patch) adds, changes, deletes or moves to, from its file lines
+    /// ("*** Update File: src/a.ts", "*** Move to: src/b.ts"); a bare file name gives ".". Relative paths stay relative:
+    /// the app reads them from the folder Codex works in. Only the folders leave the hook, never the patch.
+    /// </summary>
+    public static List<string> PatchFolders(string? patch)
+    {
+        var folders = new List<string>();
+        foreach (System.Text.RegularExpressions.Match m in PatchFile().Matches(patch ?? ""))
+        {
+            var path = m.Groups[DirGroup].Value.Trim();
+            var cut = Math.Max(path.LastIndexOf('\\'), path.LastIndexOf('/'));
+            var folder = cut > 0 ? path[..cut] : cut == 0 ? path[..1] : ".";
+            if (folder.Length <= MaxPath && !folders.Contains(folder, StringComparer.OrdinalIgnoreCase))
+            {
+                folders.Add(folder);
+            }
+            if (folders.Count == MaxFolders)
+            {
+                break;
+            }
+        }
+        return folders;
+    }
+
+    // A patch's file lines: "*** Add File: path", "*** Update File: path", "*** Delete File: path", "*** Move to: path".
+    [System.Text.RegularExpressions.GeneratedRegex(@"^\*\*\* (?:Add File|Update File|Delete File|Move to): (?<dir>.+?)\r?$", System.Text.RegularExpressions.RegexOptions.Multiline)]
+    private static partial System.Text.RegularExpressions.Regex PatchFile();
+
     private static bool IsRooted(string path) =>
         path.Length >= 2 && path[1] == ':' || path.StartsWith('/') || path.StartsWith('\\') || path.StartsWith('~');
 

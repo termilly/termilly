@@ -24,4 +24,17 @@ internal static class ClaudeTools
 
     /// <summary>Claude's shell tools: a command can create or change files too.</summary>
     public static readonly IReadOnlyList<string> ShellTools = [Bash, PowerShell];
+
+    /// <summary>
+    /// The tools whose changes the change preview finds by watching folders: the shell tools (Claude Code's, and Codex's
+    /// shell, which its hooks also call Bash), and Codex's apply_patch, which may change several files at once.
+    /// </summary>
+    public static readonly IReadOnlyList<string> WatchedTools = [Bash, PowerShell, CodexTools.ApplyPatch];
+}
+
+/// <summary>The Codex tools Termilly knows by name.</summary>
+internal static class CodexTools
+{
+    /// <summary>Codex's edit: a patch (its tool_input's command) that adds, changes, moves or deletes files.</summary>
+    public const string ApplyPatch = "apply_patch";
 }

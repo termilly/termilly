@@ -5,7 +5,7 @@ import { PAGE, HOST } from './protocol.js';
 import { send, sendWithFiles, onHost, droppedPaths, platform, PLATFORM } from './host.js';
 import {
   state, on, emit, wsById, activityChanged, agentChanged, COMMAND_DELAY, noteDir, persist, lastFolderOf, GROUPS, isSsh,
-  isSshProfile, EVENTS,
+  isSshProfile, runningAgent, EVENTS,
 } from './store.js';
 import { inputTargets } from './broadcast.js';
 import { promptStarted, inputStarted, commandStarted, commandEnded, commandReported } from './commands.js';
@@ -898,7 +898,7 @@ function wireDropAndPaste(tab, term) {
     e.stopImmediatePropagation();
   }, true);
   // The right-click menu's Paste has no paste event: the same checks, then xterm types it.
-  wireClipboard(term, body, text => { if (!checkPaste(tab, text)) term.paste(text); });
+  wireClipboard(term, body, text => { if (!checkPaste(tab, text)) term.paste(text); }, () => !!runningAgent(tab));
 }
 
 /**

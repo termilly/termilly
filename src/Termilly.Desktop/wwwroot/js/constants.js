@@ -113,6 +113,11 @@ export const AGENT_KIND = Object.freeze({
   codexName: 'Codex',
 });
 
+/** C#: CodexTools (../Shared/ClaudeTools.cs). */
+export const CODEX_TOOL = Object.freeze({
+  applyPatch: 'apply_patch',
+});
+
 /** C#: ClaudeTools (../Shared/ClaudeTools.cs). */
 export const CLAUDE_TOOL = Object.freeze({
   edit: 'Edit',
@@ -130,6 +135,7 @@ export const CLAUDE_TOOL = Object.freeze({
   askUserQuestion: 'AskUserQuestion',
   editTools: Object.freeze(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']),
   shellTools: Object.freeze(['Bash', 'PowerShell']),
+  watchedTools: Object.freeze(['Bash', 'PowerShell', 'apply_patch']),
 });
 
 /** C#: GitActions (GitCommands.cs). */

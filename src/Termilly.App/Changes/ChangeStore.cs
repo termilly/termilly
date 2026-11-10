@@ -42,7 +42,7 @@ internal sealed class ChangeStore
     public HookReply OnEvent(AgentEvent e, AppSettings settings)
     {
         var path = e.File is null ? null : ChangePaths.Normalize(e.File, e.Cwd);
-        var shell = e.File is null && ClaudeTools.ShellTools.Contains(e.Tool) && settings.Changes.ShellFiles;
+        var shell = e.File is null && ClaudeTools.WatchedTools.Contains(e.Tool) && settings.Changes.ShellFiles;
         switch (e.Event)
         {
             case HookEvents.SessionStart when NewSession(e, settings):
