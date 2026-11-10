@@ -60,8 +60,8 @@ function terminalOf(m) {
 }
 
 /**
- * Opens a terminal on a profile in a workspace (the PC's current one if the phone names none), in a folder if one
- * was typed; the phone opens it once it's listed.
+ * Opens a terminal on a profile in a workspace (the PC's current one if the phone names none), in a folder and with
+ * a name if they were typed (no name: the shell's own); the phone opens it once it's listed.
  * @param {Record<string, any>} m
  */
 function open(m) {
@@ -70,7 +70,8 @@ function open(m) {
   const ws = wsById(String(m.ws ?? '')) ?? wsById(state.activeId);
   if (!ws) throw new Error('That workspace is gone.');
   const cwd = typeof m.cwd === 'string' && m.cwd.trim() ? m.cwd.trim().slice(0, MAX.folder) : null;
-  const tab = newTab({ profile: profile.id, wsId: ws.id, cwd });
+  const name = typeof m.name === 'string' ? m.name.trim().slice(0, MAX.name) || null : null;
+  const tab = newTab({ profile: profile.id, wsId: ws.id, cwd, name });
   tab.openedBy = whoAsked(m);
   emit(EVENTS.tab, tab);
   leaveTrace(`${whoAsked(m)} opened a terminal in ${ws.name}`);
