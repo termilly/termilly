@@ -228,7 +228,7 @@ internal sealed class AgentMonitor : IStartable, IDisposable
     /// Which plan the user is on (`claude auth status`): read with the first limits and then hourly at most, and the
     /// last answer sent again with every limits update (a reloaded page has lost it).
     /// </summary>
-    private void RefreshPlan()
+    public void RefreshPlan()
     {
         if (_plan is { } known)
         {

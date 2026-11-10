@@ -6,7 +6,7 @@
 
 import { HOST } from './protocol.js';
 import { onHost } from './host.js';
-import { state, on, emit, wsById, EVENTS } from './store.js';
+import { state, on, emit, wsById, runningAgent, EVENTS } from './store.js';
 import { planLimits, anyLimits, currentPlan, isSubscription, PLAN_WINDOW } from './plan.js';
 import { formatTokens, SECOND_MS, MINUTE_MS, HOUR_MS, DAY_MS } from './util.js';
 import { costOf, costText, costTitle, costMode, dollars, workspaceCost, ledgerTotals, COST_LABEL } from './cost.js';
@@ -96,7 +96,7 @@ const clock = ms => new Date(ms).toLocaleTimeString(undefined, { hour: '2-digit'
  * The agent a terminal's session is (AGENT_KIND): Claude Code unless its hooks said otherwise.
  * @param {Tab} tab
  */
-export const sessionKind = tab => tab.agent?.kind ?? AGENT_KIND.claude;
+export const sessionKind = tab => runningAgent(tab) ?? tab.agent?.kind ?? AGENT_KIND.claude;
 
 /**
  * A limit window of an agent's plan still running (Claude Code drops one once it has reset), or null.
@@ -192,15 +192,30 @@ const meterHtml = (percent, meters) => (meters ? `<span class="cu-meter ${level(
  */
 export function statusUsageHtml(tab, meters) {
   const u = usageOf(tab);
-  if (!u || (!u.contextWindow && !tab.claude?.context)) return ''; // no figures yet, only the model
   const kind = sessionKind(tab);
-  const { percent: p } = contextOf(tab, u);
-  const five = windowOf(PLAN_WINDOW.fiveHour, kind);
   const cost = kind === AGENT_KIND.claude ? costOf(tab) : null;
-  const title = escapeHtml(usageTitle(tab, u));
-  return `<button class="sb-item sb-usage ${meters ? '' : level(p)}" data-sb="usage" title="${title}">${meters ? '' : 'ctx '}${meterHtml(p, meters)}<span>${p}%</span></button>`
-    + (five ? `<button class="sb-item sb-plan ${meters ? '' : level(five.used)}" data-sb="usage" title="${title}">5h ${meterHtml(five.used, meters)}<span>${Math.round(five.used)}%</span></button>` : '')
+  // The context once the session has figures; the plan's limits always (they're the account's, kept fresh: planrefresh.js).
+  const context = u && (u.contextWindow || tab.claude?.context) ? contextOf(tab, u).percent : null;
+  return (context === null ? '' : `<button class="sb-item sb-usage ${meters ? '' : level(context)}" data-sb="usage" title="${escapeHtml(usageTitle(tab, /** @type {ClaudeUsage} */ (u)))}">${meters ? '' : 'ctx '}${meterHtml(context, meters)}<span>${context}%</span></button>`)
+    + planItemHtml(PLAN_WINDOW.fiveHour, kind, meters) + planItemHtml(PLAN_WINDOW.sevenDay, kind, meters)
     + (cost && costText(cost) ? `<span class="sb-item sb-cost" title="${escapeHtml(costTitle(cost))}">${escapeHtml(costText(cost))}</span>` : '');
+}
+
+/** The status bar's short names for the plan's windows, and the words on hover. */
+const WINDOW_LABEL = Object.freeze({ [PLAN_WINDOW.fiveHour]: ['5h', '5-hour limit'], [PLAN_WINDOW.sevenDay]: ['wk', 'Weekly limit'] });
+
+/**
+ * One of the plan's windows in the status bar: how much of it is used, and when it resets on hover.
+ * @param {'fiveHour' | 'sevenDay'} name
+ * @param {string} kind the agent (AGENT_KIND)
+ * @param {boolean} meters
+ */
+function planItemHtml(name, kind, meters) {
+  const w = windowOf(name, kind);
+  if (!w) return '';
+  const [short, long] = WINDOW_LABEL[name];
+  const title = `${agentKind(kind).short} plan, ${long.toLowerCase()}: ${Math.round(w.used)}% used${w.resetsAt ? `. ${resetText(w.resetsAt)}` : ''}. Click for details.`;
+  return `<button class="sb-item sb-plan ${meters ? '' : level(w.used)}" data-sb="usage" title="${escapeHtml(title)}">${short} ${meterHtml(w.used, meters)}<span>${Math.round(w.used)}%</span></button>`;
 }
 
 /**
@@ -249,14 +264,14 @@ function limitsHtml(kind) {
   if (!state.settings.agents.claudeLimits) return '';
   return `<div class="cu-plan">
       <div class="cu-plan-head">Plan usage${name ? `<b>${escapeHtml(name)}</b>` : ''}</div>
-      ${windows.length ? `<div class="cu-reset${limitsStale(kind) ? ' stale' : ''}">As of ${clock(/** @type {PlanLimits} */ (planLimits(kind)).at)} · updated with ${agent}’s replies</div>` : ''}
+      ${windows.length ? `<div class="cu-reset${limitsStale(kind) ? ' stale' : ''}">As of ${clock(/** @type {PlanLimits} */ (planLimits(kind)).at)} · ${state.settings.agents.refreshLimits ? 'kept up to date while Termilly is in front' : `updated with ${agent}’s replies`}</div>` : ''}
       ${windows.map(([w, label]) => `
         <div class="cu-limit-row"><span>${label}</span><b>${Math.round(w.used)}% used</b></div>
         <div class="cu-meter big ${level(w.used)}"><i style="width:${Math.min(PERCENT, w.used)}%"></i></div>
         <div class="cu-reset">${escapeHtml(resetText(w.resetsAt))}</div>`).join('')}
       ${windows.length
         ? `<div class="cu-reset cu-note">The very latest figures: <code>${codex ? '/status' : '/usage'}</code> in ${agent}.</div>`
-        : `<div class="cu-reset cu-note">The 5-hour and weekly limits come with ${agent}’s next reply${codex ? '' : ' (Pro and Max plans). If they don’t, restart <code>claude</code> in this terminal'}.</div>`}
+        : `<div class="cu-reset cu-note">${state.settings.agents.refreshLimits ? `Asking ${agent} for the 5-hour and weekly limits.` : `The 5-hour and weekly limits come with ${agent}’s next reply${codex ? '' : ' (Pro and Max plans)'}.`}</div>`}
     </div>`;
 }
 
@@ -278,10 +293,21 @@ export function openUsage(tab, anchor) {
   openPopover(pop, anchor, { side: SIDE.above, dynamic: true, onClose: () => { popTab = null; } });
 }
 
+/**
+ * Before the session's first reply: the agent and its plan's limits only.
+ * @param {Tab} tab
+ */
+function fillLimitsOnly(tab) {
+  const kind = sessionKind(tab);
+  if (!state.settings.agents.claudeLimits) return false;
+  pop.innerHTML = `<div class="cu-head">${escapeHtml(agentKind(kind).name)}</div>${limitsHtml(kind)}`;
+  return true;
+}
+
 /** @param {Tab} tab */
 function fillUsage(tab) {
   const u = usageOf(tab);
-  if (!u) return false;
+  if (!u) return fillLimitsOnly(tab);
   const ctx = contextOf(tab, u);
   const p = ctx.percent;
   const kind = sessionKind(tab);

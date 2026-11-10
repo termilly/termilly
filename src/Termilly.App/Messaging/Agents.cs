@@ -35,6 +35,12 @@ internal static partial class FromPage
         public static string Type => "remote:remove";
     }
 
+    /// <summary>The plan limits of an agent (claude, codex) are old: the host asks for them (Features/PlanRefresh.cs).</summary>
+    internal sealed record LimitsRefresh(string? Agent = null) : IPageMessage
+    {
+        public static string Type => "limits:refresh";
+    }
+
     /// <summary>The status bar's model picker wants the models Codex offers.</summary>
     internal sealed record CodexModelsAsk : IPageMessage
     {

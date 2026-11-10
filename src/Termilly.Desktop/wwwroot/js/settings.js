@@ -347,7 +347,7 @@ function syncControls() {
   }
   // A row that needs a switch that's off is greyed out, and its control out of reach of the mouse and the keyboard.
   for (const row of /** @type {NodeListOf<HTMLElement>} */ (body.querySelectorAll('[data-needs]'))) {
-    const off = !getSetting(/** @type {string} */ (row.dataset.needs));
+    const off = /** @type {string} */ (row.dataset.needs).split(',').some(key => !getSetting(key));
     row.classList.toggle('needs-off', off);
     for (const control of /** @type {NodeListOf<HTMLButtonElement>} */ (row.querySelectorAll('button, input, select'))) control.disabled = off;
   }

@@ -17,8 +17,8 @@ export function setRange(range, value) {
 
 /**
  * A labelled row: title and description on the left, the control on the right (or below with `stack`).
- * `keywords` are other words the search finds it by. `needs` is a switch it depends on ("group.key"): while that's
- * off, the row is greyed out and can't be changed.
+ * `keywords` are other words the search finds it by. `needs` is a switch it depends on ("group.key", or several
+ * with commas): while one is off, the row is greyed out and can't be changed.
  * @param {string} label
  * @param {string} description
  * @param {string} control

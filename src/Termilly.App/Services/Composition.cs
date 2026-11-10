@@ -79,6 +79,7 @@ internal static class Composition
         .AddHandler<SecurityHandler>()
         .AddHandler<RemoteHandler>()
         .AddHandler<CodexModelsHandler>()
+        .AddHandler<PlanRefreshHandler>()
         .AddHandler<ChangesHandler>()
         .AddHandler<PromptsHandler>()
         .AddHandler<GitHandler>()

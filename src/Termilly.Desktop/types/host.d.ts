@@ -247,6 +247,8 @@ interface AgentSettings {
   codexUsage: boolean;
   /** The plan's 5-hour and weekly limits, Claude's and Codex's. */
   claudeLimits: boolean;
+  /** The limits asked for while Termilly is in front, so they're always there: Codex's for free, Claude's with a tiny Haiku prompt at most every 15 minutes (Features/PlanRefresh.cs). */
+  refreshLimits: boolean;
 }
 
 /** The change preview (Changes/, js/preview.js): where it opens, what it compares, and how it shows a change. */

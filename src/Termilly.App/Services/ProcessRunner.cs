@@ -22,6 +22,15 @@ internal sealed record ProcessRequest(string File, IReadOnlyList<string> Argumen
 
     /// <summary>Output past this many bytes isn't read: the result says <see cref="ProcessResult.Truncated"/>.</summary>
     public long MaxOutputBytes { get; init; } = ProcessRunner.DefaultMaxOutput;
+
+    /// <summary>Written to the program's input; without <see cref="DoneWhen"/> the input is closed after it.</summary>
+    public string? Input { get; init; }
+
+    /// <summary>
+    /// For a program that answers and then waits for more (a JSON-RPC server): once the output so far says this, the
+    /// program is ended and what it wrote is the result (exit code 0). Its input stays open till then.
+    /// </summary>
+    public Func<byte[], bool>? DoneWhen { get; init; }
 }
 
 /// <summary>How a program ended: its exit code, what it wrote, and what it wrote to stderr.</summary>
@@ -74,16 +83,28 @@ internal sealed class ProcessRunner : IProcessRunner
     public async Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken cancel = default)
     {
         using var process = Start(request);
-        process.StandardInput.Close();
+        if (request.Input is { } input)
+        {
+            await process.StandardInput.WriteAsync(input).ConfigureAwait(false);
+            await process.StandardInput.FlushAsync(cancel).ConfigureAwait(false);
+        }
+        if (request.DoneWhen is null)
+        {
+            process.StandardInput.Close();
+        }
         var error = ReadErrorAsync(process.StandardError, MaxErrorChars);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancel);
         timeout.CancelAfter(request.Timeout);
         try
         {
-            var (output, truncated) = await ReadOutputAsync(process.StandardOutput.BaseStream, request.MaxOutputBytes, timeout.Token).ConfigureAwait(false);
-            if (truncated)
+            var (output, truncated, done) = await ReadOutputAsync(process.StandardOutput.BaseStream, request.MaxOutputBytes, request.DoneWhen, timeout.Token).ConfigureAwait(false);
+            if (truncated || done)
             {
                 Kill(process);
+            }
+            if (done)
+            {
+                return new ProcessResult(0, output, "", Truncated: false);
             }
             await process.WaitForExitAsync(timeout.Token).ConfigureAwait(false);
             return new ProcessResult(process.ExitCode, output, await error.ConfigureAwait(false), truncated);
@@ -137,8 +158,11 @@ internal sealed class ProcessRunner : IProcessRunner
         }
     }
 
-    /// <summary>Everything the program writes, up to the limit; past it, what was read and that there was more.</summary>
-    private static async Task<(byte[] Output, bool Truncated)> ReadOutputAsync(Stream stdout, long maxBytes, CancellationToken cancel)
+    /// <summary>
+    /// Everything the program writes, up to the limit; past it, what was read and that there was more. With
+    /// <paramref name="doneWhen"/>, it stops as soon as the output says so.
+    /// </summary>
+    private static async Task<(byte[] Output, bool Truncated, bool Done)> ReadOutputAsync(Stream stdout, long maxBytes, Func<byte[], bool>? doneWhen, CancellationToken cancel)
     {
         using var output = new MemoryStream();
         var buffer = new byte[ReadBuffer];
@@ -147,11 +171,15 @@ internal sealed class ProcessRunner : IProcessRunner
         {
             if (output.Length + read > maxBytes)
             {
-                return (output.ToArray(), true);
+                return (output.ToArray(), true, false);
             }
             output.Write(buffer, 0, read);
+            if (doneWhen?.Invoke(output.ToArray()) == true)
+            {
+                return (output.ToArray(), false, true);
+            }
         }
-        return (output.ToArray(), false);
+        return (output.ToArray(), false, false);
     }
 
     /// <summary>

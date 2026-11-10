@@ -427,6 +427,11 @@ internal sealed record AgentSettings
     public bool CodexUsage { get; init; } = true;
     /// <summary>The plan's 5-hour and weekly limits, Claude's and Codex's.</summary>
     public bool ClaudeLimits { get; init; } = true;
+    /// <summary>
+    /// The limits asked for while Termilly is in front, so they're always there: Codex's for free, Claude's with a tiny
+    /// Haiku prompt at most every 15 minutes (Features/PlanRefresh.cs).
+    /// </summary>
+    public bool RefreshLimits { get; init; } = true;
 
     public AgentSettings Normalize() => this with
     {
