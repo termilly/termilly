@@ -293,15 +293,18 @@ function askHtml(task) {
 }
 
 /**
- * The ways on from Review (what the agents said is in the task's details, aboutHtml): back to Open, Accept, and where its
- * reviewers didn't agree, one more round of fixing and reviewing.
+ * The ways on from Review (what the agents said is in the task's details, aboutHtml): back to Open, Review (opens the task
+ * out to read what they said, as its arrow does), Accept, and where its reviewers didn't agree, one more round of fixing
+ * and reviewing.
  * @param {TodoTask} task
  */
 function reviewHtml(task) {
   if (statusOf(task) !== TASK_STATUS.review) return '';
   const open = !!task.plan && !!task.review && verdictOf(task.review)?.agreed === false;
   const round = open ? `<button type="button" class="btn small" data-td="${ACTION.round}" title="What’s still open goes back to ${escapeHtml(agentKind(task.plan?.by).name)}, and the reviewers look again">One more round</button>` : '';
-  return `<div class="td-review"><span class="td-edit-actions"><button type="button" class="btn small" data-td="${ACTION.reopen}">Back to open</button>${round}<button type="button" class="btn small primary" data-td="${ACTION.accept}">Accept</button></span></div>`;
+  const shown = expanded.has(task.id);
+  const read = aboutHtml(task) ? `<button type="button" class="btn small" data-td="${ACTION.expand}" aria-expanded="${shown}" title="${shown ? 'Show less' : 'Read what the agent said'}">Review</button>` : '';
+  return `<div class="td-review"><span class="td-edit-actions"><button type="button" class="btn small" data-td="${ACTION.reopen}">Back to open</button>${read}${round}<button type="button" class="btn small primary" data-td="${ACTION.accept}">Accept</button></span></div>`;
 }
 
 /**
