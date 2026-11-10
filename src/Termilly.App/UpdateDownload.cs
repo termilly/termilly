@@ -5,6 +5,12 @@ using Termilly.Desktop.Services;
 
 namespace Termilly.Desktop;
 
+/// <summary>Reports a download's percent where it happens (not through a synchronization context, as Progress would).</summary>
+internal sealed class DirectProgress(Action<int> report) : IProgress<int>
+{
+    public void Report(int value) => report(value);
+}
+
 /// <summary>A download that couldn't give a file fit to run; its message is said to the user as it is.</summary>
 internal sealed class UpdateDownloadException(string message, Exception? inner = null) : IOException(message, inner);
 

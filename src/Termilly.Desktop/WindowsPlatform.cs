@@ -28,7 +28,10 @@ internal sealed class WindowsPlatform(MainWindow window) :
 
     public void Send(string json) => window.Dispatcher.InvokeAsync(() => window.PostToPage(json));
 
-    public bool PrefersLight => Microsoft.Win32.Registry.GetValue(PersonalizeKey, AppsUseLightTheme, 0) is 1;
+    public bool PrefersLight => SystemPrefersLight;
+
+    /// <summary>Whether Windows' apps are in light mode; also read before the window exists (UpdateGateWindow).</summary>
+    public static bool SystemPrefersLight => Microsoft.Win32.Registry.GetValue(PersonalizeKey, AppsUseLightTheme, 0) is 1;
 
     // ---- The window ----
 
