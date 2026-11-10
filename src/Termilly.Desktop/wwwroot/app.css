@@ -3382,6 +3382,10 @@ body.detached-window .files-head .np-sep { height: 18px; margin: 0 0 0 1px; back
 .td-task { position: relative; display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 2px 7px; padding: 4px 6px; border-radius: 6px; outline: none; font-size: 13px; }
 .td-task:hover { background: var(--hover); }
 .td-task:focus-visible { box-shadow: inset 0 0 0 1px var(--accent); }
+/* Selected with Ctrl+click: the groups' Implement and Delete act on these. */
+.td-task.selected { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.td-task.selected:hover { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+.td-task.selected > .td-acts { background: linear-gradient(color-mix(in srgb, var(--accent) 22%, transparent), color-mix(in srgb, var(--accent) 22%, transparent)), var(--surface); }
 .td-task[data-elsewhere] { cursor: pointer; }
 .td-status { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 20px; padding: 0; border: 0; border-radius: 4px; background: none; color: var(--muted); cursor: pointer; }
 .td-status:hover { background: color-mix(in srgb, currentColor 16%, transparent); }
@@ -3522,6 +3526,13 @@ button.td-agent:hover { text-decoration: underline; }
 .td-fold-clear { flex: none; opacity: 1; visibility: hidden; }
 .td-fold-clear svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1; }
 .td-fold-row:hover .td-fold-clear, .td-fold-clear:focus-visible { visibility: visible; }
+.td-fold-clear:disabled { opacity: .4; cursor: default; }
+/* Implement all's question: the tasks, each with its tags. */
+.td-bulk { max-height: 40vh; margin: 0 0 12px; padding: 0; overflow-y: auto; list-style: none; }
+.td-bulk li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 4px 0; border-top: 1px solid var(--border); font-size: 13px; }
+.td-bulk li:first-child { border-top: 0; }
+.td-bulk .td-chip { cursor: default; }
+.td-bulk-text { flex: 1 1 auto; min-width: 0; margin-right: 4px; overflow-wrap: anywhere; }
 .td-fold { display: flex; flex: 1; align-items: center; gap: 4px; min-width: 0; padding: 5px 6px; border: 0; background: none; color: var(--muted); font: inherit; font-size: 12px; font-weight: 600; text-align: left; cursor: pointer; }
 .td-fold svg { width: 12px; height: 12px; fill: none; stroke: currentColor; }
 .td-fold-count { font-weight: 400; }

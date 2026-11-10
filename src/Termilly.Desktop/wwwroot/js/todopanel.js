@@ -15,6 +15,7 @@ import {
 } from './todoactions.js';
 import { stopRun } from './todorun.js';
 import { openImplementCard } from './todocard.js';
+import { confirmImplement, tasksWord } from './todobulk.js';
 import { agentKind } from './agentkinds.js';
 import { stageWords, verdictOf, planWords } from './todoplan.js';
 import { answerAsk, allowWaiting, ASK } from './todoask.js';
@@ -84,6 +85,7 @@ const ACTION = Object.freeze({
   implement: 'implement', issue: 'issue', openIssue: 'openIssue', status: 'status', agentTerminal: 'agentTerminal', accept: 'accept', reopen: 'reopen', round: 'round',
   edit: 'edit', remove: 'remove', expand: 'expand', stopRun: 'stopRun', scope: 'scope', clearSearch: 'clearSearch', searchToggle: 'searchToggle',
   allow: 'allow', allowAll: 'allowAll', deny: 'deny', filter: 'filter', foldActive: 'foldActive', clearActive: 'clearActive', clearDone: 'clearDone', settings: 'settings',
+  implementAll: 'implementAll',
 });
 /** How long after the last key a note is saved. */
 const NOTE_SAVE_MS = 400;
@@ -188,6 +190,10 @@ let settled = new Set();
 /** The tasks opened out in their rows (all their details, steps and what the agent said), by id. */
 /** @type {Set<string>} */
 const expanded = new Set();
+/** The tasks Ctrl+click selected, by id: the groups' Implement and Delete act on them instead of all that's shown. Only
+ * tasks shown stay selected. */
+/** @type {Set<string>} */
+const selected = new Set();
 
 const shown = () => listOf(current);
 
@@ -252,7 +258,8 @@ function metaHtml(task) {
 function rowHtml(task, elsewhere) {
   if (task.id === editing) return editorHtml(task);
   const there = elsewhere ? ` data-elsewhere title="In ${escapeHtml(elsewhere)}. Click to open it there"` : ' draggable="true"';
-  return `<div class="td-task st-${statusOf(task)}${task.done ? ' done' : ''}" data-task="${escapeHtml(task.id)}" tabindex="0"${there}>
+  const chosen = !elsewhere && selected.has(task.id);
+  return `<div class="td-task st-${statusOf(task)}${task.done ? ' done' : ''}${chosen ? ' selected' : ''}" data-task="${escapeHtml(task.id)}" tabindex="0"${chosen ? ' aria-selected="true"' : ''}${there}>
     ${statusButtonHtml(task)}
     <div class="td-body"><div class="td-text">${escapeHtml(task.text)}</div>${elsewhere ? '' : aboutHtml(task)}${elsewhere ? `<div class="td-meta"><span class="td-where">${escapeHtml(elsewhere)}</span></div>` : metaHtml(task)}</div>
     ${elsewhere ? '' : actsHtml(task.issue, false)}
@@ -449,20 +456,46 @@ function listHtml(list) {
   const empty = !list.tasks.length ? `<p class="td-empty">${list.note ? 'No tasks. Right-click the note to turn its lines into tasks.' : 'Nothing here yet.'}</p>` : '';
   const showActive = !state.todo.hideActive;
   // Active counts those not done; one done while the list is shown stays in it, ticked, until it's shown again.
-  const active = main.length ? foldHtml('Active', main.filter(task => !task.done).length, showActive, ACTION.foldActive, ACTION.clearActive, 'Clear active tasks') : '';
-  const fold = done.length ? foldHtml(STATUS_NAME[TASK_STATUS.done], done.length, !!state.todo.showDone, ACTION.fold, ACTION.clearDone, 'Clear done tasks') : '';
+  const activeActs = `${current && offersImplement(current) ? implementAllHtml(current) : ''}${clearHtml(false)}`;
+  const active = main.length ? foldHtml('Active', main.filter(task => !task.done).length, showActive, ACTION.foldActive, activeActs) : '';
+  const fold = done.length ? foldHtml(STATUS_NAME[TASK_STATUS.done], done.length, !!state.todo.showDone, ACTION.fold, clearHtml(true)) : '';
   return `${empty}${active}${showActive ? main.map(t => rowHtml(t)).join('') : ''}${fold}${state.todo.showDone ? done.map(t => rowHtml(t)).join('') : ''}`;
 }
 
 /**
- * A group's header (Active, Done): its fold, how many it has, and its clear button at the end on hover.
- * @param {string} name @param {number} count @param {boolean} open @param {string} fold @param {string} clear @param {string} clearLabel
+ * A group's header (Active, Done): its fold, how many it has, and its buttons at the end on hover.
+ * @param {string} name @param {number} count @param {boolean} open @param {string} fold @param {string} acts
  */
-function foldHtml(name, count, open, fold, clear, clearLabel) {
+function foldHtml(name, count, open, fold, acts) {
   return `<div class="td-fold-row">
     <button class="td-fold" data-td="${fold}" aria-expanded="${open}">${open ? ICONS.chevronDown : ICONS.chevronRight}${name}<span class="td-fold-count">${count}</span></button>
-    <button type="button" class="pane-btn td-fold-clear" data-td="${clear}" title="${clearLabel}" aria-label="${clearLabel}"${count ? '' : ' disabled'}>${ICONS.trash}</button>
+    ${acts}
   </div>`;
+}
+
+/**
+ * A group's Delete button: the tasks selected in it, or else all it shows.
+ * @param {boolean} done Done's, or Active's
+ */
+function clearHtml(done) {
+  const count = clearable(done).length;
+  const kind = done ? 'done' : 'active';
+  const label = !selected.size ? `Clear ${kind} tasks`
+    : count ? `Delete the ${count === 1 ? `selected ${kind} task` : `${count} selected ${kind} tasks`}` : `No ${kind} task is selected`;
+  return `<button type="button" class="pane-btn td-fold-clear" data-td="${done ? ACTION.clearDone : ACTION.clearActive}" title="${label}" aria-label="${label}"${count ? '' : ' disabled'}>${ICONS.trash}</button>`;
+}
+
+/**
+ * Active's Implement button: an agent on each open task selected, or else on each open task it shows. Off, saying why, when
+ * it can't run here or there's none.
+ * @param {ListRef} ref
+ */
+function implementAllHtml(ref) {
+  const why = cantImplement(ref);
+  const count = toImplement().length;
+  const which = selected.size ? 'selected' : 'shown';
+  const title = why || (count ? `Implement the ${count === 1 ? 'open task' : `${count} open tasks`} ${which}, one agent on each. Click to choose and start` : `No open task ${which} to implement`);
+  return `<button type="button" class="pane-btn td-fold-clear" data-td="${ACTION.implementAll}" ${why || !count ? 'disabled' : ''} title="${escapeHtml(title)}" aria-label="Implement all">${ICONS.play}</button>`;
 }
 
 /** @typedef {import('./todo.js').TodoList} TodoList */
@@ -523,6 +556,7 @@ function render() {
     pickIcon.innerHTML = '';
     listEl.innerHTML = '';
     noteButton.hidden = true;
+    selected.clear();
     return;
   }
   showPick(list);
@@ -530,6 +564,7 @@ function render() {
   renderNote(list);
   const tags = tagsIn(list.tasks);
   picked = picked.filter(t => tags.some(([tag]) => tag === t));
+  keepSelectedShown(list);
   showFilter();
   listEl.innerHTML = listHtml(list);
   fitDetails();
@@ -690,6 +725,7 @@ function openList(ref) {
     editing = null;
     issue = null;
     settled = new Set();
+    selected.clear();
   }
   current = ref;
   state.todo.list = ref;
@@ -1236,16 +1272,38 @@ function deleteTask(task) {
 const visibleTasks = list => withTags(list.tasks, picked).filter(task => !query || taskMatches(task, query));
 
 /**
- * This list's active tasks (open, in progress, in review) or its done ones, of those shown.
+ * Drops from the selection what isn't shown any more (filtered out, searched away, deleted, another list).
+ * @param {TodoList} list
+ */
+function keepSelectedShown(list) {
+  if (!selected.size) return;
+  const ids = new Set(visibleTasks(list).map(task => task.id));
+  for (const id of selected) if (!ids.has(id)) selected.delete(id);
+}
+
+/** The tasks selected, in the list's order. */
+function selectedTasks() {
+  const list = shown();
+  return list && selected.size ? visibleTasks(list).filter(task => selected.has(task.id)) : [];
+}
+
+/**
+ * This list's active tasks (open, in progress, in review) or its done ones: those selected, or with none selected, all those
+ * shown.
  * @param {boolean} done
  */
 function clearable(done) {
   const list = shown();
-  return list ? visibleTasks(list).filter(task => !!task.done === done) : [];
+  if (!list) return [];
+  return (selected.size ? selectedTasks() : visibleTasks(list)).filter(task => !!task.done === done);
 }
 
+/** The open tasks Implement all starts an agent on: those selected, or with none selected, all those shown. */
+const toImplement = () => clearable(false).filter(task => statusOf(task) === TASK_STATUS.open);
+
 /**
- * Clear active tasks and Clear done tasks, for the list's right-click menus: greyed out when there's none.
+ * Clear active tasks and Clear done tasks, for the list's right-click menus: greyed out when there's none. With tasks
+ * selected, they delete the selected ones.
  * @returns {import('./popups.js').MenuItem[]}
  */
 function clearItems() {
@@ -1255,11 +1313,63 @@ function clearItems() {
     const count = clearable(done).length;
     return {
       label, icon: ICONS.trash, hint: count ? String(count) : '', disabled: !count,
-      title: `Deletes this list’s ${done ? 'done' : 'open, in progress and in review'} tasks${narrowed ? ' that are shown' : ''}, with Undo`,
+      title: `Deletes this list’s ${done ? 'done' : 'open, in progress and in review'} tasks${selected.size ? ' that are selected' : narrowed ? ' that are shown' : ''}, with Undo`,
       action: () => void clearTasks(done),
     };
   };
-  return [item(false, 'Clear active tasks'), item(true, 'Clear done tasks')];
+  return selected.size
+    ? [item(false, 'Delete selected active tasks'), item(true, 'Delete selected done tasks')]
+    : [item(false, 'Clear active tasks'), item(true, 'Clear done tasks')];
+}
+
+/**
+ * Implement all, on Active's header: the card to choose who does the work, then the open tasks selected (or shown) listed
+ * with their tags to confirm, then an agent on each.
+ * @param {HTMLElement} at
+ */
+function implementAll(at) {
+  const ref = current;
+  if (!ref || !toImplement().length) return;
+  openImplementCard(at, {
+    title: tasksWord(toImplement().length), plan: planOf(ref), agents: agentsFor(ref), reviewers: reviewersAt(ref),
+    keep: !hasOwnPlan(ref), where: implementPlace(ref)?.server ?? undefined,
+    start: async (plan, keep) => {
+      const tasks = toImplement();
+      const left = clearable(false).length - tasks.length;
+      if (!tasks.length || !await confirmImplement({ tasks, by: agentKind(plan.by).name, left })) return;
+      if (keep) keepPlan(ref, plan);
+      // As they are now: they can change while the question is up.
+      const now = tasks.flatMap(task => findTask(task.id)?.task ?? []).filter(task => statusOf(task) === TASK_STATUS.open);
+      const failed = now.filter(task => !implement(ref, task, undefined, plan).started).length;
+      selected.clear();
+      render();
+      if (failed) showToast({ text: `${agentKind(plan.by).name} couldn’t start on ${tasksWord(failed)}. ${cantImplement(ref)}`, state: TOAST.failed });
+    },
+  });
+}
+
+/**
+ * Selects a task, or takes it out of the selection (Ctrl+click).
+ * @param {string} id
+ */
+function toggleSelected(id) {
+  if (!selected.delete(id)) selected.add(id);
+  render();
+  /** @type {HTMLElement | null} */ (listEl.querySelector(`[data-task="${CSS.escape(id)}"]`))?.focus();
+}
+
+/** Nothing selected any more. Whether there was something. */
+function clearSelection() {
+  if (!selected.size) return false;
+  selected.clear();
+  render();
+  return true;
+}
+
+/** Deletes every task selected, active and done, with Undo (the Delete key on one of them). */
+function deleteSelected() {
+  const tasks = selectedTasks();
+  if (current && tasks.length) dropTasks(current, tasks, `Deleted ${tasksWord(tasks.length)}`);
 }
 
 /**
@@ -1287,25 +1397,37 @@ async function activeToClear(tasks) {
 }
 
 /**
- * Deletes this list's active tasks, or its done ones (those shown), with Undo. Those running out of sight are stopped first.
- * Clearing active ones asks first when some are in progress.
+ * Deletes this list's active tasks, or its done ones (those selected, or else those shown), with Undo. Those running out of
+ * sight are stopped first. Clearing active ones asks first when some are in progress.
  * @param {boolean} done
  */
 async function clearTasks(done) {
   const ref = current;
   if (!ref || !shown()) return;
+  const mine = selected.size > 0;
   const chosen = done ? clearable(done) : await activeToClear(clearable(done));
-  // The list as it is now: it can change while the question is up.
+  if (chosen?.length) dropTasks(ref, chosen, `${mine ? 'Deleted' : 'Cleared'} ${chosen.length} ${mine ? 'selected ' : ''}${done ? 'done' : 'active'} ${chosen.length === 1 ? 'task' : 'tasks'}`);
+}
+
+/**
+ * Deletes tasks from a list, with Undo that puts them back where they were. Those running out of sight are stopped first.
+ * @param {ListRef} ref
+ * @param {TodoTask[]} chosen
+ * @param {string} text the toast's
+ */
+function dropTasks(ref, chosen, text) {
+  // The list as it is now: it can change while a question is up.
   const list = listOf(ref);
-  if (!chosen || !list) return;
+  if (!list) return;
   const gone = new Set(chosen.map(task => task.id));
   if (!gone.size) return;
+  for (const id of gone) selected.delete(id);
   // Each with where it was, to put it back there; one that was running comes back Open: its run is gone.
   const kept = list.tasks.flatMap((task, at) => (gone.has(task.id) ? [{ at, task: task.run ? { ...task, run: undefined, status: undefined } : task }] : []));
   for (const task of list.tasks) if (gone.has(task.id) && task.run) stopRun(task);
   reorderTasks(ref, tasks => void tasks.splice(0, tasks.length, ...tasks.filter(task => !gone.has(task.id))));
   showToast({
-    text: `Cleared ${gone.size} ${done ? 'done' : 'active'} ${gone.size === 1 ? 'task' : 'tasks'}`, state: TOAST.done,
+    text, state: TOAST.done,
     action: {
       label: UNDO,
       run: () => void (listOf(ref) && reorderTasks(ref, tasks => {
@@ -1495,6 +1617,7 @@ function panelAct(control) {
       return render();
     case ACTION.clearDone: return void clearTasks(true);
     case ACTION.clearActive: return void clearTasks(false);
+    case ACTION.implementAll: return implementAll(control);
     case ACTION.scope:
     case ACTION.searchToggle:
     case ACTION.clearSearch: return searchAct(control);
@@ -1531,6 +1654,15 @@ panel.addEventListener('click', e => {
   const away = /** @type {HTMLElement | null} */ (targetOf(e).closest(ELSEWHERE));
   const found = away && findTask(/** @type {string} */ (away.dataset.task));
   if (found) return openList(found.ref);
+  // Ctrl+click (Cmd+click on a Mac) on a task selects it, or takes it out; a plain click on one ends the selection.
+  const row = /** @type {HTMLElement | null} */ (targetOf(e).closest(TASK));
+  if (row && !targetOf(e).closest(ROW_CONTROL)) {
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      return toggleSelected(/** @type {string} */ (row.dataset.task));
+    }
+    if (clearSelection()) return undefined;
+  }
   const control = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-td]'));
   if (control) act(control);
   return undefined;
@@ -1718,7 +1850,8 @@ listEl.addEventListener('keydown', e => {
 issueForm.addEventListener('submit', e => e.preventDefault());
 
 /**
- * Keys on a task: Space opens it out or folds it, Enter edits it, Delete deletes it, and the arrows go up and down.
+ * Keys on a task: Space opens it out or folds it, Enter edits it, Delete deletes it (every task selected, when it's one of
+ * them), Escape ends the selection, and the arrows go up and down.
  * @param {KeyboardEvent} e
  * @param {HTMLElement} row
  */
@@ -1727,7 +1860,15 @@ function rowKey(e, row) {
   if (!task) return;
   if (e.key === ' ') toggleExpanded(task);
   else if (e.key === 'Enter') beginEdit(task.id);
-  else if (e.key === 'Delete') deleteTask(task);
+  else if (e.key === 'Delete') {
+    if (selected.has(task.id)) deleteSelected();
+    else deleteTask(task);
+  } else if (e.key === 'Escape' && selected.size) {
+    e.stopPropagation();
+    const id = task.id;
+    clearSelection();
+    /** @type {HTMLElement | null} */ (listEl.querySelector(`[data-task="${CSS.escape(id)}"]`))?.focus();
+  }
   else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
     const rows = [...listEl.querySelectorAll(TASK)];
     /** @type {HTMLElement | undefined} */ (rows[rows.indexOf(row) + (e.key === 'ArrowDown' ? 1 : -1)])?.focus();
