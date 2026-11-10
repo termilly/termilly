@@ -215,13 +215,15 @@ const CHEVRON = '<svg viewBox="0 0 12 12"><path d="M4.5 3L7.5 6 4.5 9"/></svg>';
 /**
  * Shows a menu at `anchor`. Items: { label, icon (svg markup), hint (markup), checked, danger, action,
  * submenu: () => items }, or 'separator'. Arrow keys move, Enter/Space run, Right opens a submenu. keepFocus leaves the
- * keyboard focus where it is (a text box keeps showing its selection), and refocus says where it goes on closing.
+ * keyboard focus where it is (a text box keeps showing its selection), and refocus says where it goes on closing. alone: picking
+ * from it closes only it, not the popover it was opened over (a card it picks for stays put instead of closing and opening again).
  * @param {MenuEntry[]} items
  * @param {Anchor} anchor
- * @param {{ side?: 'below' | 'right' | 'above', nested?: boolean, className?: string, keepFocus?: boolean, refocus?: () => void }} [options]
+ * @param {{ side?: 'below' | 'right' | 'above', nested?: boolean, alone?: boolean, className?: string, keepFocus?: boolean, refocus?: () => void }} [options]
  */
-export function showMenu(items, anchor, { side = SIDE.below, nested = false, className = '', keepFocus = false, refocus } = {}) {
+export function showMenu(items, anchor, { side = SIDE.below, nested = false, alone = false, className = '', keepFocus = false, refocus } = {}) {
   const menu = document.createElement('div');
+  if (alone) menu.dataset.alone = '1';
   menu.className = `popover menu context-menu ${className}`;
   menu.setAttribute('role', 'menu');
   menu.hidden = true;
@@ -331,7 +333,8 @@ function menuRow(menu, item) {
   } else {
     button.addEventListener('mouseenter', closeSubmenus);
     button.addEventListener('click', () => {
-      closeAll();
+      if (menu.dataset.alone) closePopover(menu);
+      else closeAll();
       item.action?.();
     });
   }

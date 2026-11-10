@@ -125,7 +125,7 @@ export function planClicked(e, plan, options, apply, { nested = false } = {}) {
   const agents = PICKS[what]?.(plan, options);
   if (agents && agents.kinds.length > 1) {
     showMenu(agents.kinds.map(kind => ({ label: agentKind(kind).name, icon: badgeHtml({ icon: agentKind(kind).icon }), checked: kind === plan.by && what === PLAN.by,
-      action: () => fit(agents.pick(kind), true) })), control, { nested, className: 'dropdown-menu' }); // over the Schedules window too
+      action: () => fit(agents.pick(kind), true) })), control, { nested, alone: nested, className: 'dropdown-menu' }); // over the Schedules window too; over a card, the card stays
   } else if (agents?.kinds.length) fit(agents.pick(agents.kinds[0]), false);
   else if (CHANGES[what]) fit(CHANGES[what](plan, control), false);
   return true;

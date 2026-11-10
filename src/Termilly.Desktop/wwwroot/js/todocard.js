@@ -56,12 +56,9 @@ export function openImplementCard(at, options) {
     const at = focus ? `[data-card="${focus}"]:not(:disabled), [data-plan="${focus}"]:not(:disabled)` : `[data-card="${CARD.start}"]`;
     /** @type {HTMLElement | null} */ (card.querySelector(at) ?? card.querySelector(`[data-card="${CARD.start}"]`))?.focus();
   };
-  /** Shows the card at the button; again after a menu on it was picked from, which closes every popover. */
-  const show = () => openPopover(card, at, { dynamic: true, refocus: () => at.focus() });
   card.addEventListener('click', e => {
-    const picked = planClicked(e, plan, options, (next, control, fromMenu) => {
+    const picked = planClicked(e, plan, options, (next, control) => {
       plan = next;
-      if (fromMenu) show();
       draw(control);
     }, { nested: true });
     const control = /** @type {HTMLElement | null} */ (/** @type {HTMLElement} */ (e.target).closest('[data-card]'));
@@ -76,6 +73,6 @@ export function openImplementCard(at, options) {
       options.start(plan, keep);
     }
   });
-  show();
+  openPopover(card, at, { dynamic: true, refocus: () => at.focus() });
   draw();
 }
