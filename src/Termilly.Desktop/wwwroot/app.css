@@ -2959,7 +2959,12 @@ textarea.field.note-text { flex: 1; width: 100%; min-height: 120px; resize: none
 .sch-report-head { display: flex; align-items: center; gap: 6px; }
 .sch-report-head .spacer { flex: 1; }
 .sch-report-title { font-size: 12.5px; font-weight: 600; }
-.sch-output { max-height: 320px; margin: 0; padding: 10px; overflow: auto; border-radius: 6px; background: var(--surface-2, var(--hover)); color: var(--text); font: 12px/1.45 var(--term-font); white-space: pre-wrap; word-break: break-word; }
+.sch-output { max-height: 320px; margin: 0; overflow: auto; color: var(--text); font: 12px/1.45 var(--term-font); white-space: pre-wrap; word-break: break-word; }
+.sch-output, .sch-why { -webkit-user-select: text; user-select: text; cursor: text; }
+/* Links in a report: as a terminal's under the mouse (js/termlinks.js), opened with a click. */
+.sch-link { color: #76e3ea; cursor: pointer; }
+:root[data-theme="light"] .sch-link { color: #1b7c83; }
+.sch-link:hover { text-decoration: underline; }
 
 /* The notification center's title, and under it how many there are. */
 .inbox-heading { display: flex; flex-direction: column; gap: 2px; min-width: 0; }

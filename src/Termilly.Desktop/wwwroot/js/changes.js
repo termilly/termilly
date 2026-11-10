@@ -58,12 +58,20 @@ const resolvedPaths = new Map();
  * @param {Tab} tab
  * @param {string} text
  */
-export function resolvePath(tab, text) {
-  const key = `${tab.id}\n${text}`;
+export const resolvePath = (tab, text) =>
+  resolveIn({ id: tab.id, cwd: tab.cwd ?? null, wsCwd: wsById(tab.wsId)?.cwd ?? null, remote: isRemote(tab) }, text);
+
+/**
+ * Where a path leads from a place that may not be a terminal (a schedule's report: its folder, no terminal id).
+ * @param {{ id: string, cwd: string | null, wsCwd: string | null, remote: boolean }} place
+ * @param {string} text
+ */
+export function resolveIn(place, text) {
+  const key = `${place.id}\n${place.cwd}\n${place.wsCwd}\n${text}`;
   const known = resolvedPaths.get(key);
   if (known && Date.now() - known.at < RESOLVED_FOR_MS) return known.reply;
   if (resolvedPaths.size > MAX_RESOLVED) resolvedPaths.clear();
-  const reply = request(PAGE.changesResolve, { id: tab.id, text, cwd: tab.cwd ?? null, wsCwd: wsById(tab.wsId)?.cwd ?? null, remote: isRemote(tab) });
+  const reply = request(PAGE.changesResolve, { ...place, text });
   resolvedPaths.set(key, { at: Date.now(), reply });
   return reply;
 }
@@ -88,9 +96,16 @@ export function openChange(tab, text) {
  * @param {Tab} tab
  * @param {string} text
  */
-export async function realPaths(tab, text) {
+export const realPaths = (tab, text) => realPathsBy(t => resolvePath(tab, t), text);
+
+/**
+ * The paths in a line that lead somewhere real, as a resolver says.
+ * @param {(text: string) => Promise<import('./protocol.js').Host_changesResolved>} resolve
+ * @param {string} text
+ */
+export async function realPathsBy(resolve, text) {
   /** @param {FoundLink[]} candidates the ones that lead somewhere, with what they lead to */
-  const real = async candidates => (await Promise.all(candidates.map(async c => ({ c, reply: await resolvePath(tab, c.text) }))))
+  const real = async candidates => (await Promise.all(candidates.map(async c => ({ c, reply: await resolve(c.text) }))))
     .filter(r => r.reply.path);
   // A path with spaces first (the usual patterns stop at a space); where it isn't real, the shorter path in it may be.
   const spaced = await real(findSpacedPaths(text));

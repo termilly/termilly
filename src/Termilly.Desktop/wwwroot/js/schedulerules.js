@@ -30,7 +30,7 @@ export const RUN = Object.freeze({
  * @type {Readonly<Record<string, string>>}
  */
 export const RUN_LABEL = Object.freeze({
-  [RUN.waiting]: 'Waiting', [RUN.running]: 'Running', [RUN.worked]: 'Worked', [RUN.failed]: 'Failed', [RUN.stopped]: 'Stopped',
+  [RUN.waiting]: 'Waiting', [RUN.running]: 'Running', [RUN.worked]: 'Done', [RUN.failed]: 'Failed', [RUN.stopped]: 'Stopped',
   [RUN.missed]: 'Missed', [RUN.skipped]: 'Skipped', [RUN.sent]: 'Sent',
 });
 

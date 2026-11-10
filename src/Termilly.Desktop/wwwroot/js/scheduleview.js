@@ -5,6 +5,7 @@ import { escapeHtml } from './ui.js';
 import { installedAgents } from './store.js';
 import { agentKind } from './agentkinds.js';
 import { AGENT_KIND } from './constants.js';
+import { reportTextHtml } from './schedulelinks.js';
 import {
   WHAT, WHERE, WHEN, UNIT, NOTIFY, MISSED, AFTER, BUSY, CLOSED, RUN, RUN_LABEL, DAY_NAMES, describeWhen, describeAt, describeTook,
 } from './schedulerules.js';
@@ -275,9 +276,9 @@ export function reportHtml(run, text) {
       ${text === null ? '' : `<button class="btn small" data-sch="copy">Copy</button><button class="btn small" data-sch="terminal">Open as a terminal</button>`}
       <button class="btn small" data-sch="run">Run again</button>
     </div>
-    ${run.summary && run.status !== RUN.worked ? `<p class="sch-why">${escapeHtml(run.summary)}</p>` : ''}
+    ${run.summary && run.status !== RUN.worked ? `<p class="sch-why">${reportTextHtml(run.summary)}</p>` : ''}
     ${run.file ? `<p class="dialog-sub sch-saved">Saved to <button class="link" data-sch="file" title="Show it in its folder">${escapeHtml(run.file)}</button></p>` : ''}
     ${run.fileError ? `<p class="sch-why">Couldn’t save it to a file: ${escapeHtml(run.fileError)}</p>` : ''}
-    ${text === null ? `<p class="set-desc">${empty}</p>` : `<pre class="sch-output">${escapeHtml(text)}</pre>`}
+    ${text === null ? `<p class="set-desc">${empty}</p>` : `<pre class="sch-output">${reportTextHtml(text)}</pre>`}
   </div>`;
 }

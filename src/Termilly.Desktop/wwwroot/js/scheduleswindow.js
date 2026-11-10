@@ -15,6 +15,7 @@ import { allSnippets, NAME_WORDS } from './snippets.js';
 import { byId, find, targetOf, TOOL_COUNT } from './dom.js';
 import { detach, closeWindow, focusWindow, isDetached, windowName } from './windows.js';
 import { readReport, shownText } from './schedulereport.js';
+import { withPaths, openReportLink, LINK_CLASS } from './schedulelinks.js';
 import {
   schedules, scheduleById, runsOf, saveSchedule, removeSchedule, setScheduleOn, runNow, stopRun, runningNow,
 } from './schedules.js';
@@ -39,6 +40,8 @@ const REDRAWS = new Set(['allowChanges', 'allowAll', 'toNotepad', 'toFile', 'age
 const NUMBERS = new Set(['limitMinutes', 'keepDays', 'every']);
 /** The biggest "every", so a day still has a run in it. */
 const MAX_EVERY = Object.freeze({ minutes: 1440, hours: 24 });
+/** A run's output, under its row. */
+const OUTPUT = '.sch-output';
 const CLOSE = '<svg viewBox="0 0 12 12"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7"/></svg>';
 
 const layer = document.createElement('div');
@@ -187,18 +190,23 @@ async function renderRuns() {
   const open = runs.find(r => r.id === openRunId) ?? null;
   const asked = open?.id ?? null;
   let report = '';
+  /** @type {string | null} */
+  let reportShown = null;
   if (open) {
     const kept = await readReport(open.id);
-    const text = kept === null ? null : await shownText(kept);
+    reportShown = kept === null ? null : await shownText(kept);
     if (openRunId !== asked || view !== VIEW.runs || editing?.id !== id) return;
-    report = reportHtml(open, text);
+    report = reportHtml(open, reportShown);
   }
   const html = runsHtml(runs, openRunId);
   const whole = html + report;
   if (whole === runsShown) return;
   runsShown = whole;
   editEl.innerHTML = html;
-  if (open) find(editEl, `[data-run="${asked}"]`).insertAdjacentHTML('afterend', report);
+  if (!open) return;
+  find(editEl, `[data-run="${asked}"]`).insertAdjacentHTML('afterend', report);
+  const output = /** @type {HTMLElement | null} */ (editEl.querySelector(OUTPUT));
+  if (output && reportShown !== null) withPaths(output, /** @type {Schedule} */ (editing), reportShown);
 }
 
 function render() {
@@ -383,7 +391,7 @@ async function copyOutput() {
   const button = /** @type {HTMLButtonElement} */ (find(editEl, `[data-sch="${ACTION.copy}"]`));
   const here = editEl.ownerDocument.defaultView ?? window;
   try {
-    await here.navigator.clipboard.writeText(find(editEl, '.sch-output').textContent ?? '');
+    await here.navigator.clipboard.writeText(find(editEl, OUTPUT).textContent ?? '');
     button.textContent = COPIED;
   } catch {
     button.textContent = 'Couldn’t copy';
@@ -420,7 +428,9 @@ box.addEventListener('click', e => {
   const tab = /** @type {HTMLElement | null} */ (target.closest('[data-view]'));
   const run = /** @type {HTMLElement | null} */ (target.closest('[data-run]'));
   const button = /** @type {HTMLElement | null} */ (target.closest('[data-sch]'));
-  if (button) act(/** @type {string} */ (button.dataset.sch));
+  const link = /** @type {HTMLElement | null} */ (target.closest(`.${LINK_CLASS}`));
+  if (link && editing) openReportLink(link, editing);
+  else if (button) act(/** @type {string} */ (button.dataset.sch));
   else if (seg) segmentChose(seg);
   else if (day) dayChose(day);
   else if (run) {
