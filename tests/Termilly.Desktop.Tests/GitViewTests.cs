@@ -415,4 +415,26 @@ public sealed class GitViewTests : IDisposable
 
         Assert.Throws<ArgumentException>(() => GitView.Act(repo, "switch", null, "--orphan=x", hasCommits: true, TestServices.GitRunner));
         Assert.Throws<ArgumentException>(() => GitView.Act(repo, "delete", "../outside.txt", null, hasCommits: true, TestServices.GitRunner));
-    }}
+    }
+
+    [Fact]
+    public void A_new_branch_is_made_from_head_and_checked_out_and_fetch_without_remotes_does_nothing()
+    {
+        if (!HasGit())
+        {
+            return;
+        }
+        var repo = Repo();
+        GitView.Act(repo, "new-branch", null, " topic/login ", hasCommits: true, TestServices.GitRunner);
+        Assert.Equal("topic/login", GitView.Status(repo, TestServices.GitRunner).Branch);
+
+        // git's own refusal comes back whole: the branch exists already.
+        var e = Assert.Throws<GitFailedException>(() => GitView.Act(repo, "new-branch", null, "feature", hasCommits: true, TestServices.GitRunner));
+        Assert.Contains("already exists", e.Detail);
+        // A name that would be read as an option never reaches git.
+        Assert.Throws<ArgumentException>(() => GitView.Act(repo, "new-branch", null, "--orphan", hasCommits: true, TestServices.GitRunner));
+        Assert.Throws<ArgumentException>(() => GitView.Act(repo, "new-branch", null, "  ", hasCommits: true, TestServices.GitRunner));
+
+        GitView.Act(repo, "fetch", null, null, hasCommits: true, TestServices.GitRunner);
+    }
+}

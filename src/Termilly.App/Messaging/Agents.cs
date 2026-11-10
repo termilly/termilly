@@ -35,6 +35,12 @@ internal static partial class FromPage
         public static string Type => "remote:remove";
     }
 
+    /// <summary>The status bar's model picker wants the models Codex offers.</summary>
+    internal sealed record CodexModelsAsk : IPageMessage
+    {
+        public static string Type => "codex:models";
+    }
+
     /// <summary>The page's answer to what the host asked it (<see cref="ToPage.PageCall"/>): a result, or an error.</summary>
     internal sealed record ApiResult(string? RequestId = null, JsonElement? Result = null, string? Error = null) : IPageMessage
     {
@@ -89,6 +95,18 @@ internal static partial class ToPage
     internal sealed record LimitsReport(PlanWindow? FiveHour, PlanWindow? SevenDay) : IHostMessage
     {
         public static string Type => "claude:limits";
+    }
+
+    /// <summary>The Codex account's plan limits, from its rollout files: the page shows them on every Codex terminal.</summary>
+    internal sealed record CodexLimitsReport(PlanWindow? FiveHour, PlanWindow? SevenDay) : IHostMessage
+    {
+        public static string Type => "codex:limits";
+    }
+
+    /// <summary>The models Codex offers (its /model list), for the status bar's model picker.</summary>
+    internal sealed record CodexModelList(IReadOnlyList<CodexModel> Models) : IHostMessage
+    {
+        public static string Type => "codex:models";
     }
 
     internal sealed record PlanReport(string? Subscription, string? AuthMethod) : IHostMessage

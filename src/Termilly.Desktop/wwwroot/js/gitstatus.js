@@ -1,15 +1,14 @@
 // @ts-check
-// Project status in the sidebar: on each terminal's row the git branch it works on, a dot when it has uncommitted
-// changes and ↑N/↓N against its upstream (GitStatus.cs, or reported by a server's shell over ssh), and the ports its
-// processes listen on (:3000), which open in the browser. Looked up only for workspaces open in the sidebar, at most
-// every few seconds, and refreshed when a command ends, the window gets focus or the workspace changes; never in a
-// loop while Termilly is in the background.
+// Project status: the git branch each terminal works on, whether it has uncommitted changes and ↑N/↓N against its
+// upstream (GitStatus.cs, or reported by a server's shell over ssh), for its status bar (statusbar.js); and the ports
+// its processes listen on (:3000) on its row in the sidebar, which open in the browser. Looked up only for the
+// workspaces open in the sidebar and the one shown, at most every few seconds, and refreshed when a command ends, the
+// window gets focus or the workspace changes; never in a loop while Termilly is in the background.
 
 import { PAGE, HOST } from './protocol.js';
 import { send, onHost } from './host.js';
-import { state, on, tabsOf, profileOf, activityChanged, emit, isRemote, EVENTS } from './store.js';
+import { state, on, tabsOf, activityChanged, emit, isRemote, wsById, EVENTS } from './store.js';
 import { debounce, SECOND_MS } from './util.js';
-import { escapeHtml } from './ui.js';
 import { remoteGit } from './remotehost.js';
 
 /**
@@ -36,12 +35,12 @@ const portsOn = () => state.settings.terminal.ports !== false;
  */
 const lookable = folder => !!folder && !/^\\\\/.test(folder) && !/^\/\/[^/]/.test(folder);
 
-/** The folders of the terminals shown in the sidebar (open workspaces), except those on a server. */
+/** The folders of the terminals shown (open workspaces, and the active one), except those on a server. */
 function folders() {
   const list = [];
   for (const ws of state.workspaces) {
     if (lookable(ws.cwd)) list.push(ws.cwd); // for the workspace menu's Git
-    if (ws.collapsed) continue;
+    if (ws.collapsed && ws.id !== state.activeId) continue;
     for (const tab of tabsOf(ws)) {
       const folder = folderOf(tab, ws);
       if (!isRemote(tab) && !remoteGit(tab) && lookable(folder)) list.push(folder);
@@ -114,16 +113,17 @@ setTimeout(() => { refreshGit(); refreshPorts(); }, FIRST_LOOK_MS);
 
 // ---- Showing it ----
 
-/** A detached HEAD's name on its chip. */
-const DETACHED_LABEL = 'detached';
-/** The class of a chip on a terminal's row (app.css), rather than on its workspace's. */
-const TAB_CHIP = 'tab';
+/** A detached HEAD's name in the status bar. */
+export const DETACHED_LABEL = 'detached';
 
 /** @param {string | null | undefined} folder */
 const gitOf = folder => (lookable(folder) ? byFolder.get(folder) ?? null : null);
 
-/** @param {RepoState} s */
-function title(s) {
+/**
+ * What the status bar's branch says on hover: the branch, its upstream, uncommitted changes, the last commit.
+ * @param {RepoState} s
+ */
+export function repoTitle(s) {
   return [
     s.detached ? 'Detached HEAD' : `Branch ${s.branch}`,
     s.upstream ? `tracking ${s.upstream}${s.ahead || s.behind ? ` (${s.ahead} ahead, ${s.behind} behind)` : ', up to date'}` : 'no upstream',
@@ -134,23 +134,7 @@ function title(s) {
 }
 
 /**
- * The branch chip for a repository state: "main •" with ↑↓. A click opens the Git window on it; for a repository on
- * a server (reported over ssh, remotehost.js), through that terminal's SSH host.
- * @param {RepoState} s
- * @param {string} [extraClass]
- * @param {Tab | null} [tab]
- */
-function chip(s, extraClass = '', tab = null) {
-  const name = s.detached ? DETACHED_LABEL : s.branch;
-  const server = s.remote && tab ? ` data-git-remote="${escapeHtml(tab.id)}"` : '';
-  return `<span class="git-chip ${extraClass}${s.changed ? ' dirty' : ''}" data-git-root="${escapeHtml(s.root)}"${server} role="button" title="${escapeHtml(`${title(s)}${s.remote ? `\nOn ${profileOf(/** @type {Tab} */ (tab))?.name ?? 'the server'}` : ''}\nClick to see the changes and history`)}">`
-    + `<svg viewBox="0 0 16 16"><circle cx="5" cy="4" r="1.6"/><circle cx="5" cy="12" r="1.6"/><circle cx="11" cy="6" r="1.6"/><path d="M5 5.6v4.8M11 7.6c0 2-2.2 2.4-5 3"/></svg>`
-    + `<span class="git-branch">${escapeHtml(name ?? '?')}</span>${s.changed ? '<i class="git-dirty"></i>' : ''}`
-    + `${s.ahead ? `<span class="git-ab">↑${s.ahead}</span>` : ''}${s.behind ? `<span class="git-ab">↓${s.behind}</span>` : ''}</span>`;
-}
-
-/**
- * The folder a terminal works in, for its chip: where its shell is now, else where it started.
+ * The folder a terminal works in, for its branch: where its shell is now, else where it started.
  * @param {Tab} tab
  * @param {Workspace} ws
  */
@@ -167,17 +151,20 @@ const folderOf = (tab, ws) => tab.cwd ?? tab.startCwd ?? ws.cwd;
 const tabGit = (tab, ws) => remoteGit(tab) ?? (isRemote(tab) ? null : gitOf(folderOf(tab, ws)));
 
 /**
- * A terminal row's extras: its branch when its repository isn't its workspace's, and its ports.
+ * The repository a terminal works in, for its status bar; null when it's in none, or git status is off.
  * @param {Tab} tab
- * @param {Workspace} ws
  */
-export function tabProjectHtml(tab, ws) {
+export const tabRepo = tab => {
+  const ws = wsById(tab.wsId);
+  return gitOn() && ws ? tabGit(tab, ws) : null;
+};
+
+/**
+ * A terminal row's extras: the ports its programs listen on.
+ * @param {Tab} tab
+ */
+export function tabProjectHtml(tab) {
   let html = '';
-  if (gitOn()) {
-    // On every terminal in a repository, also when several share one.
-    const s = tabGit(tab, ws);
-    if (s) html += chip(s, TAB_CHIP, tab);
-  }
   if (portsOn()) {
     for (const port of portsByTab.get(tab.id) ?? []) {
       html += `<span class="port-chip" data-port="${port}" title="Listening on port ${port}. Click to open http://localhost:${port}" role="button">:${port}</span>`;

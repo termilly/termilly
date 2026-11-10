@@ -24,7 +24,7 @@ internal sealed record ClaudeUsage(
 /// a little at a time: each <see cref="Read"/> takes only what was written since the last. Only the usage, model and
 /// a few session details are kept; prompts, replies and tool output are skipped without being decoded.
 /// </summary>
-internal sealed class TranscriptUsage
+internal sealed class TranscriptUsage : IUsageReader
 {
     /// <summary>A line this long is a tool result or a file, never a reply's usage: skipped unread.</summary>
     private const int MaxLine = 4 << 20;
@@ -186,30 +186,53 @@ internal sealed class TranscriptUsage
         e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Number && v.TryGetInt64(out var n) ? n : 0;
 }
 
+/// <summary>Reads one session's file a little at a time (<see cref="TranscriptUsage"/>, <see cref="CodexRollout"/>).</summary>
+internal interface IUsageReader
+{
+    /// <summary>Reads what was added since the last call; true when the usage changed.</summary>
+    bool Read();
+
+    ClaudeUsage Usage { get; }
+}
+
+/// <summary>Where an agent keeps a session's file (null until it's written), and how it's read.</summary>
+internal sealed record UsageSource(Func<string, string?> Find, Func<string, string, IUsageReader> Open);
+
 /// <summary>
-/// Follows the Claude Code session in each terminal (from its hooks, or the `claude agents` fallback) and reports
-/// its token use as it grows. Every two seconds it looks at the transcripts of the sessions it follows; one that
-/// hasn't grown costs a file-size check.
+/// Follows the agent session in each terminal (from its hooks, or the `claude agents` fallback) and reports its token
+/// use as it grows: Claude Code's from its transcripts, Codex's from its rollout files. Every two seconds it looks at
+/// the files of the sessions it follows; one that hasn't grown costs a file-size check.
 /// </summary>
-internal sealed partial class ClaudeUsageTracker : IDisposable
+internal sealed partial class UsageTracker : IDisposable
 {
     private static readonly TimeSpan Interval = TimeSpan.FromSeconds(2);
 
     private readonly Action<string, ClaudeUsage> _changed;
-    private readonly string _projects;
-    private readonly Dictionary<string, (string Session, TranscriptUsage? Reader)> _panes = new();
+    private readonly UsageSource _source;
+    private readonly Dictionary<string, (string Session, IUsageReader? Reader)> _panes = new();
     private readonly Lock _lock = new();
     private readonly Timer _timer;
     private int _ticking;
 
     /// <param name="changed">Called on a pool thread with a terminal's id and its session's usage.</param>
     /// <param name="projects">Claude Code's projects folder; by default ~/.claude/projects (or under CLAUDE_CONFIG_DIR).</param>
-    public ClaudeUsageTracker(Action<string, ClaudeUsage> changed, string? projects = null)
+    public UsageTracker(Action<string, ClaudeUsage> changed, string? projects = null)
+        : this(changed, ClaudeSource(projects ?? ProjectsDirectory()))
+    {
+    }
+
+    /// <param name="changed">Called on a pool thread with a terminal's id and its session's usage.</param>
+    /// <param name="source">The agent's session files.</param>
+    public UsageTracker(Action<string, ClaudeUsage> changed, UsageSource source)
     {
         _changed = changed;
-        _projects = projects ?? ProjectsDirectory();
+        _source = source;
         _timer = new Timer(_ => Tick(), null, Interval, Interval);
     }
+
+    /// <summary>Claude Code's transcripts under a projects folder.</summary>
+    public static UsageSource ClaudeSource(string projects) =>
+        new(session => FindTranscript(projects, session), (path, session) => new TranscriptUsage(path, session));
 
     public static string ProjectsDirectory() => System.IO.Path.Combine(ClaudeCodeFiles.ConfigDirectory(), ClaudeCodeFiles.Projects);
 
@@ -240,11 +263,14 @@ internal sealed partial class ClaudeUsageTracker : IDisposable
         }
     }
 
-    /// <summary>The transcript of a session, in whichever project folder Claude Code put it.</summary>
-    public string? FindTranscript(string session) => FindTranscript(_projects, session);
-
     /// <summary>The transcript of a session under a projects folder; null for one not written yet, or not a session id.</summary>
-    public static string? FindTranscript(string projects, string session)
+    public static string? FindTranscript(string projects, string session) => FindFile(projects, session, session + ".jsonl");
+
+    /// <summary>
+    /// A session's file anywhere under a folder (its newest, if there are several); null for one not written yet, or
+    /// a session that isn't an id (it becomes part of the file pattern).
+    /// </summary>
+    public static string? FindFile(string folder, string session, string pattern)
     {
         if (!SessionId().IsMatch(session))
         {
@@ -252,8 +278,8 @@ internal sealed partial class ClaudeUsageTracker : IDisposable
         }
         try
         {
-            return Directory.Exists(projects)
-                ? Directory.EnumerateFiles(projects, session + ".jsonl", SearchOption.AllDirectories).FirstOrDefault()
+            return Directory.Exists(folder)
+                ? Directory.EnumerateFiles(folder, pattern, SearchOption.AllDirectories).MaxBy(File.GetLastWriteTimeUtc)
                 : null;
         }
         catch (Exception e) when (Storage.IsFileError(e))
@@ -271,7 +297,7 @@ internal sealed partial class ClaudeUsageTracker : IDisposable
         }
         try
         {
-            List<(string Pane, string Session, TranscriptUsage? Reader)> panes;
+            List<(string Pane, string Session, IUsageReader? Reader)> panes;
             lock (_lock)
             {
                 panes = _panes.Select(p => (p.Key, p.Value.Session, p.Value.Reader)).ToList();
@@ -281,11 +307,11 @@ internal sealed partial class ClaudeUsageTracker : IDisposable
                 var reader = known;
                 if (reader is null)
                 {
-                    if (FindTranscript(session) is not { } path)
+                    if (_source.Find(session) is not { } path)
                     {
                         continue; // not written yet: Claude Code starts it with the first prompt
                     }
-                    reader = new TranscriptUsage(path, session);
+                    reader = _source.Open(path, session);
                     lock (_lock)
                     {
                         if (!_panes.TryGetValue(pane, out var now) || now.Session != session)

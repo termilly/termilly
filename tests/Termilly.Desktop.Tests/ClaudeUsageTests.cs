@@ -74,7 +74,7 @@ public sealed class ClaudeUsageTests : IDisposable
         var project = Directory.CreateDirectory(Path.Combine(_dir, "D--work-app")).FullName;
         File.WriteAllText(Path.Combine(project, Session + ".jsonl"), Reply("m1", 1, 1, 1, 9) + "\n");
         var reports = new List<(string Pane, ClaudeUsage Usage)>();
-        using var tracker = new ClaudeUsageTracker((pane, usage) => { lock (reports) { reports.Add((pane, usage)); } }, _dir);
+        using var tracker = new UsageTracker((pane, usage) => { lock (reports) { reports.Add((pane, usage)); } }, _dir);
 
         tracker.Track("t1", "../escape");
         tracker.Track("t1", Session);

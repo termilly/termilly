@@ -64,6 +64,12 @@ interface TerminalSettings {
   colors: string | null;
   /** A terminal's row shows the ports its programs listen on. */
   ports: boolean;
+  /** A bar under each terminal: its agent's session, files changed, the git branch (js/statusbar.js). */
+  statusBar: boolean;
+  /** The status bar draws the context and plan limits as meters; off, as numbers only. */
+  statusMeters: boolean;
+  /** The status bar takes the colour of what the agent is doing (working, needs you, error). */
+  statusStateColor: boolean;
 }
 
 /** The app around the terminals: theme, its own font, the sidebar's activity and git status, updates, plugins. */
@@ -235,7 +241,11 @@ interface AgentSettings {
   /** The sidebar's agent activity line. */
   line: string;
   costDisplay: string;
+  /** A Claude Code terminal's status bar shows its session: model, context, tokens. */
   claudeUsage: boolean;
+  /** A Codex terminal's status bar shows its session (read from Codex's rollout files). */
+  codexUsage: boolean;
+  /** The plan's 5-hour and weekly limits, Claude's and Codex's. */
   claudeLimits: boolean;
 }
 

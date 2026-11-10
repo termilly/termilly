@@ -34,8 +34,8 @@ internal sealed class PromptsHandler(PageChannel page, PromptHistory history, IS
     /// <summary>What Claude did in a terminal's sessions, from their transcripts on this PC.</summary>
     public static IReadOnlyList<AgentStep> Steps(IEnumerable<string> sessions)
     {
-        var projects = ClaudeUsageTracker.ProjectsDirectory();
-        return Steps(sessions, session => ClaudeUsageTracker.FindTranscript(projects, session));
+        var projects = UsageTracker.ProjectsDirectory();
+        return Steps(sessions, session => UsageTracker.FindTranscript(projects, session));
     }
 
     /// <summary>
@@ -62,8 +62,8 @@ internal sealed class PromptsHandler(PageChannel page, PromptHistory history, IS
     {
         IReadOnlyList<StoredPrompt> stored = [];
         Storage.Try(() => stored = history.Of(id, settings.Current.Session.HistoryDays));
-        var projects = ClaudeUsageTracker.ProjectsDirectory();
-        return Merge(sessions, session => ClaudeUsageTracker.FindTranscript(projects, session), stored);
+        var projects = UsageTracker.ProjectsDirectory();
+        return Merge(sessions, session => UsageTracker.FindTranscript(projects, session), stored);
     }
 
     /// <summary>

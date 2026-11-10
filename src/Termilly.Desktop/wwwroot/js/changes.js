@@ -168,7 +168,7 @@ function renderList() {
  */
 export function openChangedFiles(tab = focusedTab(), anchor) {
   if (!tab) return;
-  anchor ??= tab.view?.header?.querySelector('.changes-btn:not([hidden])') ?? tab.view?.header;
+  anchor ??= tab.view?.status?.querySelector('.sb-changes') ?? tab.view?.header;
   if (!anchor) return;
   if (isOpen(list) && listTab === tab) return closePopover(list);
   listTab = tab;

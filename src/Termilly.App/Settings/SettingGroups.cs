@@ -39,6 +39,12 @@ internal sealed record TerminalSettings
     public string? Colors { get; init; }
     /// <summary>A terminal's row shows the ports its programs listen on.</summary>
     public bool Ports { get; init; } = true;
+    /// <summary>A bar under each terminal: its agent's session, files changed, the git branch (js/statusbar.js).</summary>
+    public bool StatusBar { get; init; } = true;
+    /// <summary>The status bar draws the context and plan limits as meters; off, as numbers only.</summary>
+    public bool StatusMeters { get; init; } = true;
+    /// <summary>The status bar takes the colour of what the agent is doing (working, needs you, error).</summary>
+    public bool StatusStateColor { get; init; }
 
     public TerminalSettings Normalize() => this with
     {
@@ -415,7 +421,11 @@ internal sealed record AgentSettings
     /// <summary>The sidebar's agent activity line.</summary>
     public string Line { get; init; } = SettingValues.AgentLine.Default;
     public string CostDisplay { get; init; } = SettingValues.CostDisplay.Default;
+    /// <summary>A Claude Code terminal's status bar shows its session: model, context, tokens.</summary>
     public bool ClaudeUsage { get; init; } = true;
+    /// <summary>A Codex terminal's status bar shows its session (read from Codex's rollout files).</summary>
+    public bool CodexUsage { get; init; } = true;
+    /// <summary>The plan's 5-hour and weekly limits, Claude's and Codex's.</summary>
     public bool ClaudeLimits { get; init; } = true;
 
     public AgentSettings Normalize() => this with

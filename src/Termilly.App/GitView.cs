@@ -253,14 +253,24 @@ internal static partial class GitView
     /// <item>ignore: add the file to the repository's .gitignore;</item>
     /// <item>switch: check out a branch git listed; a remote one as a new local branch that tracks it.</item>
     /// </list>
-    /// git's own refusals (changes a switch would overwrite, a branch that already exists) come back as they are.
+    /// <item>new-branch: make a branch from HEAD and check it out (the status bar's branch picker);</item>
+    /// <item>fetch: fetch every remote (the branch picker).</item>
+    /// git's own refusals (changes a switch would overwrite, a branch that already exists, a name git won't take)
+    /// come back as they are.
     /// </summary>
     public static void Act(string root, string action, string? path, string? reference, bool hasCommits, GitRunner git)
     {
-        if (action == GitActions.Switch)
+        switch (action)
         {
-            SwitchTo(root, reference, git);
-            return;
+            case GitActions.Switch:
+                SwitchTo(root, reference, git);
+                return;
+            case GitActions.NewBranch:
+                git.Run(root, [GitCommands.Switch, GitCommands.Options.Create, NewBranchName(reference)]);
+                return;
+            case GitActions.Fetch:
+                git.Run(root, [GitCommands.Fetch, GitCommands.Options.AllRemotes]);
+                return;
         }
         var file = git.CheckPath(root, path);
         if (action == GitActions.Ignore)
@@ -292,6 +302,16 @@ internal static partial class GitView
         git.Run(root, reference.StartsWith(GitCommands.Refs.HeadsPrefix, StringComparison.Ordinal)
             ? [GitCommands.Switch, GitCommands.Options.EndOfOptions, reference[GitCommands.Refs.HeadsPrefix.Length..]]
             : [GitCommands.Switch, "--track", GitCommands.Options.EndOfOptions, reference[GitCommands.Refs.RemotesPrefix.Length..]]);
+    }
+
+    /// <summary>
+    /// A new branch's name as typed; git itself refuses one it won't take. One starting with "-" would be read as an
+    /// option (switch has no end-of-options before its new name), so it's refused here.
+    /// </summary>
+    private static string NewBranchName(string? name)
+    {
+        var trimmed = name?.Trim() ?? "";
+        return trimmed.Length == 0 || trimmed.StartsWith('-') ? throw new ArgumentException("That isn't a branch name.") : trimmed;
     }
 
     // ---- Branches ----

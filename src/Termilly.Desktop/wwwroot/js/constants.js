@@ -141,6 +141,8 @@ export const GIT_ACTION = Object.freeze({
   delete: 'delete',
   ignore: 'ignore',
   switch: 'switch',
+  fetch: 'fetch',
+  newBranch: 'new-branch',
 });
 
 /** C#: DiffSides (GitCommands.cs). */

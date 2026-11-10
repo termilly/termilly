@@ -68,6 +68,7 @@ import { handleExit as handleSshExit } from './reconnect.js';
 import { openAttach } from './tmux.js';
 import { applySettings, toggleSettings, toggleTheme, settingEntries, openSetting } from './settings.js';
 import { updateHeader } from './header.js';
+import './statusbar.js';
 import { beginRename } from './rename.js';
 import { TAG_BUTTON } from './tabmenu.js';
 import { openTagPicker } from './tagpicker.js';

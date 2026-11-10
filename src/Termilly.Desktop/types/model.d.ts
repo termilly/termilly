@@ -131,6 +131,8 @@ interface TabView {
   el: HTMLElement;
   body: HTMLElement;
   header: HTMLElement;
+  /** The bar under the terminal (js/statusbar.js): its agent's session, files changed, the git branch. */
+  status?: HTMLElement;
   term: any;
   fit: any;
 }

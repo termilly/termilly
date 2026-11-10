@@ -104,6 +104,14 @@ let headerBuilder = () => document.createElement('div');
 export const setHeaderBuilder = fn => { headerBuilder = fn; };
 
 /**
+ * Builds a terminal's status bar, under it (statusbar.js gives it, as it sits above the panes); none until then.
+ * @type {(tab: Tab) => HTMLElement | null}
+ */
+let statusBuilder = () => null;
+/** @param {(tab: Tab) => HTMLElement} fn */
+export const setStatusBuilder = fn => { statusBuilder = fn; };
+
+/**
  * The active workspace, made if there is none (workspaces.js gives it, as it sits above the panes).
  * @type {() => Workspace | null}
  */
@@ -160,6 +168,11 @@ export function createView(tab, { draggable = true } = {}) {
   tab.view = /** @type {TabView} */ (/** @type {unknown} */ ({ el, body, term: null, fit: null })); // its header comes next
   tab.view.header = headerBuilder(tab);
   el.append(tab.view.header, body);
+  const status = statusBuilder(tab);
+  if (status) {
+    tab.view.status = status;
+    el.append(status);
+  }
   // A click in a field on the pane (its name being renamed) stays there: giving the terminal the keyboard would end
   // the edit, and a click there only moves the cursor.
   el.addEventListener('mousedown', e => { if (!targetOf(e).closest('input')) focusTab(tab); }, true);

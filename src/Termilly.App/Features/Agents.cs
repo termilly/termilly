@@ -24,8 +24,12 @@ internal sealed class AgentMonitor : IStartable, IDisposable
     private readonly BackgroundHost _host;
     private AgentHooks? _hooks;
     private ClaudeAgentsPoller? _poller;
-    /// <summary>Token use of the Claude Code session in each terminal, for its header (ClaudeUsage.cs).</summary>
-    private ClaudeUsageTracker? _usage;
+    /// <summary>Token use of the Claude Code session in each terminal, for its status bar (ClaudeUsage.cs).</summary>
+    private UsageTracker? _usage;
+    /// <summary>The same for Codex, from its rollout files (CodexUsage.cs).</summary>
+    private UsageTracker? _codexUsage;
+    /// <summary>The Codex limits last sent: every token count carries them, most of them unchanged.</summary>
+    private PlanLimits? _codexLimits;
     private DateTime _planReadAt = DateTime.MinValue;
     private ClaudePlan.Info? _plan;
 
@@ -89,28 +93,54 @@ internal sealed class AgentMonitor : IStartable, IDisposable
 
         if (Settings.Agents.Integration && Settings.Agents.ClaudeUsage)
         {
-            _usage ??= new ClaudeUsageTracker((id, usage) => _page.Post(new ToPage.UsageReport(id, usage)));
+            _usage ??= new UsageTracker((id, usage) => _page.Post(new ToPage.UsageReport(id, usage)));
         }
         else if (_usage is not null)
         {
             _usage.Dispose();
             _usage = null;
         }
+
+        if (Settings.Agents.Integration && Settings.Agents.CodexUsage)
+        {
+            _codexUsage ??= new UsageTracker((id, usage) => _page.Post(new ToPage.UsageReport(id, usage)), CodexFiles.Source(CodexFiles.SessionsDirectory(), OnCodexLimits));
+        }
+        else if (_codexUsage is not null)
+        {
+            _codexUsage.Dispose();
+            _codexUsage = null;
+        }
     }
 
-    private void Forget(string terminal) => _usage?.Forget(terminal);
-
-    /// <summary>Follows the token use of the Claude Code session a terminal reported (the header's Claude session).</summary>
-    private void Track(string pane, string? session, string state)
+    private void Forget(string terminal)
     {
+        _usage?.Forget(terminal);
+        _codexUsage?.Forget(terminal);
+    }
+
+    /// <summary>Follows the token use of the session a terminal reported (its status bar), Claude Code's or Codex's.</summary>
+    private void Track(string pane, string? session, string state, string agent = AgentKinds.Claude)
+    {
+        var tracker = agent == AgentKinds.Codex ? _codexUsage : _usage;
         if (state == AgentStates.Exited)
         {
-            _usage?.Forget(pane);
+            tracker?.Forget(pane);
         }
         else
         {
-            _usage?.Track(pane, session);
+            tracker?.Track(pane, session);
         }
+    }
+
+    /// <summary>The Codex account's limits, as its last token count gave them; sent when they change and are shown.</summary>
+    private void OnCodexLimits(PlanLimits limits)
+    {
+        if (limits == _codexLimits || !(Settings.Agents.CodexUsage && Settings.Agents.ClaudeLimits))
+        {
+            return;
+        }
+        _codexLimits = limits;
+        _page.Post(new ToPage.CodexLimitsReport(limits.FiveHour, limits.SevenDay));
     }
 
     /// <summary>
@@ -141,10 +171,10 @@ internal sealed class AgentMonitor : IStartable, IDisposable
         if (AgentHooks.StateFor(e) is { } state)
         {
             _poller?.Hooked(e.Pane, e.Session, ended: state == AgentStates.Exited);
-            // Token use is read from Claude Code's transcripts; Codex's aren't read yet.
-            if (!remote && e.Agent == AgentKinds.Claude)
+            // Token use is read from the agent's own files on this PC: Claude Code's transcripts, Codex's rollouts.
+            if (!remote)
             {
-                Track(e.Pane, e.Session, state);
+                Track(e.Pane, e.Session, state, e.Agent);
             }
             if (limitsShown)
             {
@@ -234,7 +264,15 @@ internal sealed class AgentMonitor : IStartable, IDisposable
         _hooks?.Dispose();
         _poller?.Dispose();
         _usage?.Dispose();
+        _codexUsage?.Dispose();
     }
+}
+
+/// <summary>The models Codex offers, for the status bar's model picker (read from its cache when asked).</summary>
+internal sealed class CodexModelsHandler(PageChannel page) : IMessageHandler
+{
+    public void Register(MessageRouter router) =>
+        router.On<FromPage.CodexModelsAsk>(_ => Task.Run(() => page.Post(new ToPage.CodexModelList(CodexModels.Read()))));
 }
 
 /// <summary>Termilly's shell integration on servers (shell/remote): installing and removing it, and what its hooks report.</summary>

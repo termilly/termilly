@@ -2526,16 +2526,6 @@ textarea.field { height: auto; padding: 7px 10px; line-height: 1.5; resize: vert
 
 /* "N files changed" on a terminal's header (js/changes.js) */
 /* The changed-files list on a terminal's header (js/changes.js). */
-.changes-btn {
-  display: inline-flex; align-items: center; gap: 4px; width: auto; height: 22px; padding: 0 6px 0 7px;
-  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); border-radius: 6px;
-  background: var(--accent-fill); color: var(--accent); font-size: 11px; font-weight: 600; opacity: 1;
-}
-.changes-btn[hidden] { display: none; }
-.changes-btn svg { width: 11px; height: 11px; stroke-width: 1.5; }
-.changes-btn .chev { width: 9px; height: 9px; opacity: 0.8; }
-.changes-btn:hover, .changes-btn.open { background: color-mix(in srgb, var(--accent) 24%, transparent); color: var(--text); }
-.changes-btn.empty { border-color: var(--border-strong); background: none; color: var(--muted); font-weight: 500; }
 .changes-pop { width: 400px; padding: 0; }
 .changes-pop .inbox-head { justify-content: flex-start; gap: 6px; }
 .changes-pop .inbox-head .section-head { margin-right: auto; }
@@ -2715,17 +2705,6 @@ textarea.field { height: auto; padding: 7px 10px; line-height: 1.5; resize: vert
 .gw-binary { color: var(--faint); }
 .gw-commit-diff { display: flex; flex: 1; flex-direction: column; min-height: 0; }
 .gw-branch-log { flex: 1; min-height: 0; padding: 4px; overflow: auto; }
-.git-chip[data-git-root] { cursor: pointer; }
-.git-chip[data-git-root]:hover { color: var(--text); }
-
-/* The Claude Code session on a terminal's header: model, context meter, tokens written (js/claudeusage.js). */
-.claude-usage {
-  display: inline-flex; align-items: center; gap: 5px; width: auto; height: 22px; padding: 0 7px;
-  border: 1px solid var(--border-strong); border-radius: 6px; color: var(--muted);
-  font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; opacity: 1;
-}
-.claude-usage[hidden] { display: none; }
-.claude-usage .cu-model { color: var(--text); font-weight: 600; }
 .cu-meter { position: relative; width: 26px; height: 4px; overflow: hidden; border-radius: 2px; background: var(--border-strong); }
 .cu-meter i { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: var(--accent); }
 .cu-meter.high i { background: var(--attention, #f2cc60); }
@@ -3042,19 +3021,11 @@ textarea.field.note-text { flex: 1; width: 100%; min-height: 120px; resize: none
 .res-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .res-where { flex: none; color: var(--muted); font-size: 11.5px; }
 
-/* Project status (js/gitstatus.js): branch chips and listening ports in the sidebar. */
-.git-chip { display: inline-flex; flex: none; align-items: center; gap: 3px; min-width: 0; max-width: 120px; margin-left: 6px; padding: 0 5px; border-radius: 4px; background: var(--hover); color: var(--muted); font-size: 10.5px; line-height: 16px; }
-.git-chip svg { width: 10px; height: 10px; flex: none; stroke-width: 1.4; }
-.git-branch { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.git-dirty { flex: none; width: 5px; height: 5px; border-radius: 50%; background: var(--attention); }
-.git-ab { flex: none; color: var(--accent); font-variant-numeric: tabular-nums; }
-.git-chip.tab { margin-left: 0; }
+/* Project status (js/gitstatus.js): listening ports in the sidebar. */
 .port-chip { flex: none; padding: 0 4px; border-radius: 4px; background: color-mix(in srgb, var(--ok, #7ee787) 14%, transparent); color: var(--ok, #7ee787); font-size: 10.5px; font-variant-numeric: tabular-nums; line-height: 16px; cursor: pointer; }
 .port-chip:hover { background: color-mix(in srgb, var(--ok, #7ee787) 28%, transparent); }
-/* The workspace name keeps its room; the branch chip gives way first. */
 .ws-row { min-width: 0; overflow: hidden; }
 .ws-row .ws-name { flex: 0 1 auto; min-width: 48px; }
-.git-chip.ws { flex: 0 10 auto; min-width: 22px; margin-left: 0; }
 
 /* The output viewer (js/viewer.js): a panel over the right edge, like the change preview's. */
 .viewer-panel { position: absolute; top: 0; right: 0; bottom: 0; z-index: 56; display: flex; width: min(58vw, 960px); min-width: 340px; box-shadow: var(--shadow-pop); border-radius: var(--radius); }
@@ -3574,3 +3545,71 @@ button.td-agent:hover { text-decoration: underline; }
 .td-labels { display: flex; flex-wrap: wrap; gap: 4px; }
 .td-label { height: 22px; padding: 0 9px; border: 1px solid var(--border); border-radius: 999px; background: none; color: var(--muted); font: inherit; font-size: 12px; cursor: pointer; }
 .td-label.on { border-color: var(--accent); color: var(--text); }
+
+/* A terminal's status bar (js/statusbar.js), Notepad's height (.np-status: 4px + 11.5px text + 4px, and its line):
+   the agent's session on the left, the files it changed, the repository and the branch on the right. */
+.pane-statusbar {
+  display: flex; flex: none; align-items: center; gap: 1px; height: 23px; padding: 0 4px; overflow: hidden;
+  border-top: 1px solid var(--border); background: var(--header); color: var(--muted);
+  font-size: 11.5px; font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.pane-statusbar[hidden] { display: none; }
+.sb-fill { flex: 1; min-width: 4px; }
+.sb-item { display: inline-flex; flex: none; align-items: center; gap: 5px; height: 18px; padding: 0 6px; border-radius: 4px; color: var(--muted); }
+button.sb-item:hover, button.sb-item.open { background: var(--hover); color: var(--text); }
+.sb-item b { color: var(--text); font-weight: 600; }
+.sb-item svg { width: 12px; height: 12px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.2; }
+.sb-item svg.chev { width: 8px; height: 8px; opacity: 0.7; stroke-width: 1.4; }
+.sb-item .cu-meter { width: 30px; }
+.sb-item.high { color: var(--attention); }
+.sb-item.full { color: var(--danger); }
+.sb-changes.sb-none { opacity: 0.6; }
+.sb-ab { color: var(--accent); }
+.sb-sep { flex: none; width: 1px; height: 12px; margin: 0 3px; background: var(--border-strong); }
+/* The branch keeps its corner; the repository's name gives way first. */
+.sb-repo { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.sb-branch { flex: 0 1 auto; min-width: 40px; }
+.sb-branch-name { overflow: hidden; max-width: 220px; text-overflow: ellipsis; }
+.sb-dirty { flex: none; width: 5px; height: 5px; border-radius: 50%; background: var(--attention); }
+/* Colour by state: what the agent is doing, in words and in the bar's colour. */
+.sb-state { gap: 6px; color: var(--text); font-weight: 600; }
+.sb-state i { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.pane-statusbar[data-state="working"] { border-top-color: color-mix(in srgb, var(--accent) 40%, var(--border)); background: color-mix(in srgb, var(--accent) 16%, var(--header)); }
+.pane-statusbar[data-state="needs"] { border-top-color: color-mix(in srgb, var(--attention) 45%, var(--border)); background: color-mix(in srgb, var(--attention) 16%, var(--header)); }
+.pane-statusbar[data-state="needs"] .sb-state i { background: var(--attention); }
+.pane-statusbar[data-state="failed"] { border-top-color: color-mix(in srgb, var(--danger) 45%, var(--border)); background: color-mix(in srgb, var(--danger) 14%, var(--header)); }
+.pane-statusbar[data-state="failed"] .sb-state i { background: var(--danger); }
+
+/* The status bar's branch picker (js/branchpicker.js), as Visual Studio's. */
+.bp-pop { width: 360px; padding: 0; overflow: hidden; }
+.bp-search { display: flex; align-items: center; gap: 7px; height: 30px; margin: 8px 8px 4px; padding: 0 9px; border: 1px solid var(--accent); border-radius: 6px; background: var(--surface); }
+.bp-search svg { width: 13px; height: 13px; flex: none; fill: none; stroke: var(--muted); stroke-width: 1.3; }
+.bp-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; color: var(--text); font: 12px var(--ui-font); }
+.bp-search input::placeholder { color: var(--faint); }
+.bp-list { max-height: 280px; padding: 2px 4px 4px; overflow: auto; }
+.bp-group { display: flex; align-items: center; gap: 6px; padding: 7px 8px 3px; color: var(--faint); font-size: 10.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+.bp-group svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.2; }
+.bp-count { margin-left: auto; font-weight: 500; letter-spacing: 0; text-transform: none; }
+.bp-row { display: flex; align-items: center; gap: 7px; height: 26px; padding: 0 8px; border-radius: 5px; color: var(--text); cursor: pointer; }
+.bp-row:hover, .bp-row.sel { background: var(--hover); }
+.bp-row.sel { box-shadow: inset 2px 0 0 var(--accent); }
+.bp-row.current .bp-name { font-weight: 700; }
+.bp-check { display: grid; flex: none; place-items: center; width: 12px; color: var(--accent); }
+.bp-check svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.6; }
+.bp-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bp-name mark { border-radius: 2px; background: var(--mark-bg); color: inherit; }
+.bp-remote { color: var(--faint); }
+.bp-meta { flex: none; color: var(--faint); font-size: 11px; }
+.bp-ab { color: var(--accent); }
+.bp-empty { padding: 14px 10px; color: var(--muted); text-align: center; }
+.bp-error { margin: 4px 8px; padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent); border-radius: 6px; background: color-mix(in srgb, var(--danger) 8%, transparent); }
+.bp-error[hidden] { display: none; }
+.bp-error-head { margin-bottom: 4px; color: var(--danger-text); font-weight: 600; }
+.bp-error-text { max-height: 140px; margin: 0; overflow: auto; color: var(--text); font: 11.5px/1.45 var(--mono); white-space: pre-wrap; -webkit-user-select: text; user-select: text; }
+.bp-hint { padding: 5px 10px 7px; border-top: 1px solid var(--border); color: var(--faint); font-size: 11px; }
+.bp-hint:empty { display: none; }
+.bp-foot { display: flex; gap: 2px; padding: 4px; border-top: 1px solid var(--border); }
+.bp-foot button { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 9px; border-radius: 5px; color: var(--muted); }
+.bp-foot button:hover { background: var(--hover); color: var(--text); }
+.bp-foot svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.2; }
+.bp-right { margin-left: auto; }

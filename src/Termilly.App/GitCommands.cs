@@ -26,6 +26,7 @@ internal static class GitCommands
     public const string Remove = "rm";
     public const string Clean = "clean";
     public const string Switch = "switch";
+    public const string Fetch = "fetch";
     public const string Worktree = "worktree";
     public const string Branch = "branch";
     public const string Remote = "remote";
@@ -54,6 +55,10 @@ internal static class GitCommands
         public const string GetUrl = "get-url";
         /// <summary>The branch checked out (branch --show-current); nothing when detached.</summary>
         public const string ShowCurrent = "--show-current";
+        /// <summary>switch: make the branch and check it out.</summary>
+        public const string Create = "--create";
+        /// <summary>fetch: from every remote.</summary>
+        public const string AllRemotes = "--all";
     }
 
     /// <summary>Where branches live among the refs.</summary>
@@ -81,6 +86,10 @@ internal static class GitActions
     public const string Delete = "delete";
     public const string Ignore = "ignore";
     public const string Switch = "switch";
+    /// <summary>Fetches every remote, so the branch picker lists what they have now.</summary>
+    public const string Fetch = "fetch";
+    /// <summary>Makes a branch from where HEAD is and checks it out (the reference is its name).</summary>
+    public const string NewBranch = "new-branch";
 }
 
 /// <summary>Which change of a file the Git window shows (GitView.Diff).</summary>

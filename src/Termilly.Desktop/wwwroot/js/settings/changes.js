@@ -25,7 +25,7 @@ const CHANGES = {
         Ctrl+click on a path still works, comparing the file with the last commit.</p>`))
       + `<div class="${s.changes.enabled ? '' : 'set-off'}">`
       + group('Open it from', row('Ctrl+click a path', 'Paths in a terminal’s output open the preview.', toggle('changes.links'))
-        + row('Changed files list', 'The files Claude changed, listed on the terminal’s header.', toggle('changes.button'))
+        + row('Changed files list', 'The files the agent changed, in the terminal’s status bar.', toggle('changes.button'))
         + row('Shortcut and palette', 'Ctrl+Shift+D shows the last change.', toggle('changes.shortcut')))
       + group('Where it opens', row('Placement', 'A pane, a panel over the right edge, or a window.',
         seg('changes.placement', [[changePlacement.split, 'Pane'], [changePlacement.panel, 'Side panel'], [changePlacement.float, 'Floating']]))

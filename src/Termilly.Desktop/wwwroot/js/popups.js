@@ -35,7 +35,7 @@ const AWAY_FROM_BAR = Object.freeze({
   [DOCK_SIDE.top]: SIDE.below, [DOCK_SIDE.left]: SIDE.right, [DOCK_SIDE.right]: SIDE.left, [DOCK_SIDE.bottom]: SIDE.above,
 });
 
-/** @type {Array<{ el: HTMLElement, anchorEl: Element | null, onClose?: () => void, dynamic: boolean, refocus?: () => void }>} */
+/** @type {Array<{ el: HTMLElement, anchorEl: Element | null, onClose?: () => void, dynamic: boolean, refocus?: () => void, side?: string }>} */
 const stack = [];
 let restoreFocus = () => {};
 
@@ -61,7 +61,7 @@ export function setFocusRestorer(fn) {
  * refocus (where the keyboard focus goes when it closes, instead of the terminal).
  * @param {HTMLElement} el
  * @param {Anchor} anchor
- * @param {{ side?: 'below' | 'right', nested?: boolean, onClose?: () => void, dynamic?: boolean, refocus?: () => void }} [options]
+ * @param {{ side?: 'below' | 'right' | 'above', nested?: boolean, onClose?: () => void, dynamic?: boolean, refocus?: () => void }} [options]
  */
 export function openPopover(el, anchor, { side = SIDE.below, nested = false, onClose, dynamic = false, refocus } = {}) {
   if (!nested) closeAll();
@@ -73,7 +73,17 @@ export function openPopover(el, anchor, { side = SIDE.below, nested = false, onC
   keepWheel(el);
   const where = anchorEl && side === SIDE.below ? AWAY_FROM_BAR[barSideOf(anchorEl)] ?? side : side;
   place(el, anchorEl ? anchorEl.getBoundingClientRect() : /** @type {DOMRect | { x: number, y: number }} */ (anchor), where);
-  stack.push({ el, anchorEl, onClose, dynamic, refocus });
+  stack.push({ el, anchorEl, onClose, dynamic, refocus, side: where });
+}
+
+/**
+ * Places an open popover against its element again, after what's in it changed size: one that opens upwards would
+ * otherwise grow down past the window's edge.
+ * @param {HTMLElement} el
+ */
+export function placeAgain(el) {
+  const entry = stack.find(e => e.el === el);
+  if (entry?.anchorEl?.isConnected) place(el, entry.anchorEl.getBoundingClientRect(), entry.side ?? SIDE.below);
 }
 
 /** The popovers whose wheel is kept to them (keepWheel). */
@@ -208,7 +218,7 @@ const CHEVRON = '<svg viewBox="0 0 12 12"><path d="M4.5 3L7.5 6 4.5 9"/></svg>';
  * keyboard focus where it is (a text box keeps showing its selection), and refocus says where it goes on closing.
  * @param {MenuEntry[]} items
  * @param {Anchor} anchor
- * @param {{ side?: 'below' | 'right', nested?: boolean, className?: string, keepFocus?: boolean, refocus?: () => void }} [options]
+ * @param {{ side?: 'below' | 'right' | 'above', nested?: boolean, className?: string, keepFocus?: boolean, refocus?: () => void }} [options]
  */
 export function showMenu(items, anchor, { side = SIDE.below, nested = false, className = '', keepFocus = false, refocus } = {}) {
   const menu = document.createElement('div');
