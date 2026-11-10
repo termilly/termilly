@@ -21,21 +21,23 @@ import { commandLine } from './quoting.js';
  */
 const ENTER_DELAY_MS = 200;
 /**
- * For an agent that needs it (agentkinds.js enterAfterQuiet: Codex), the Enter waits instead until its screen has
- * been still this long after the text, the text all in, and at most ENTER_MAX_MS.
+ * For an agent that needs it (agentkinds.js enterAfterQuiet: Codex), the Enter waits instead until its screen has shown
+ * the text and then been still this long, and at most ENTER_MAX_MS.
  */
 const ENTER_QUIET_MS = 300;
 const ENTER_MAX_MS = 3000;
 
 /**
  * Waits before the API's Enter: ENTER_DELAY_MS, or for an agent that takes a long text for a paste, until its screen
- * settles.
+ * settles. Codex draws nothing while it takes in a long text (0.4 s for 1,100 characters, measured), and an Enter in that
+ * time is lost, so its stillness only counts once its screen has shown the text.
  * @param {Tab} tab
+ * @param {boolean} [typed] whether text was typed just before; with none, nothing will show it, so only ENTER_DELAY_MS
  */
-export function beforeEnter(tab) {
+export function beforeEnter(tab, typed = true) {
   const term = tab.view?.term;
   const agent = runningAgent(tab);
-  if (!term || !agent || !agentKind(agent).enterAfterQuiet) return new Promise(resolve => setTimeout(resolve, ENTER_DELAY_MS));
+  if (!typed || !term || !agent || !agentKind(agent).enterAfterQuiet) return new Promise(resolve => setTimeout(resolve, ENTER_DELAY_MS));
   return new Promise(resolve => {
     let quiet = 0;
     const end = () => {
@@ -49,7 +51,6 @@ export function beforeEnter(tab) {
       quiet = window.setTimeout(end, ENTER_QUIET_MS);
     });
     const cap = window.setTimeout(end, ENTER_MAX_MS);
-    quiet = window.setTimeout(end, Math.max(ENTER_DELAY_MS, ENTER_QUIET_MS));
   });
 }
 
@@ -172,9 +173,10 @@ function queued(tab, fn) {
 function typeInto(tab, text, enter, before) {
   return queued(tab, async () => {
     const result = await before();
-    send(PAGE.input, { id: tab.id, data: String(text ?? '') });
+    const data = String(text ?? '');
+    send(PAGE.input, { id: tab.id, data });
     if (enter) {
-      await beforeEnter(tab);
+      await beforeEnter(tab, data !== '');
       if (!tab.exited) send(PAGE.input, { id: tab.id, data: '\r' });
       noteEnter(tab);
     }

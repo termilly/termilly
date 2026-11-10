@@ -25,6 +25,7 @@ import { hasFiles, shellFolderOf, placeOf } from './filepaths.js';
 import { hasPrompts } from './myprompts.js';
 import { platform } from './host.js';
 import { agentKind } from './agentkinds.js';
+import { beforeEnter } from './api.js';
 import { resumingText } from './resuming.js';
 import { agentMarkHtml, BADGE_SIZE } from './ui.js';
 
@@ -43,7 +44,6 @@ const PROMPT_LINES = 40;
 const CHOICE = Object.freeze({ approve: 'approve', always: 'always', reject: 'reject', reply: 'reply' });
 /** After Esc, Claude Code takes a moment to show its prompt for what to do instead; then the text, then Enter. */
 const AFTER_ESC_MS = 400;
-const ENTER_DELAY_MS = 200;
 /** What a waiting terminal waits for, as the phone shows it. */
 const WAITING = Object.freeze({ permission: 'permission', question: 'question', attention: 'attention', error: 'error' });
 /** The badge marks the phone draws: the desktop's pixel words as text. */
@@ -202,7 +202,7 @@ async function answer({ pane, choice, text }) {
       await pause(AFTER_ESC_MS);
     }
     send(PAGE.input, { id: tab.id, data: text });
-    await pause(ENTER_DELAY_MS);
+    await beforeEnter(tab); // Codex loses an Enter that comes while it still takes in a long text
     send(PAGE.input, { id: tab.id, data: '\r' });
     agentInput(tab, '\r');
     return { answered: choice };
