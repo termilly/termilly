@@ -36,6 +36,8 @@ function taskForPhone(task) {
     notes: lines.filter(line => !line.sub).map(line => line.text).join('\n').trim(),
     steps: lines.filter(line => line.sub).map(({ at, text, done }) => ({ at, text, done })),
     agent: tab ? { id: tab.id, title: `${task.plan ? agentKind(task.plan.by).program : AGENT_COMMAND} in ${tabTitle(tab)}` } : null, working: agentWorking(task),
+    // Implemented silently: no terminal to show, but an agent has it.
+    running: !!task.run,
     // Who has it now, in words, while its agents work and review (js/todoplan.js).
     now: task.plan && statusOf(task) === TASK_STATUS.progress ? stageWords(task.plan, task.stage).text : null,
     review: task.review ?? null, issue: task.issue ?? null,
