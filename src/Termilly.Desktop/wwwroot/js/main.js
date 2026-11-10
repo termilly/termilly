@@ -261,6 +261,14 @@ document.addEventListener('click', e => {
   }
 });
 
+// The window's own frame (title bar and its buttons, the docked bars, the sidebar, the status bars) has no browser menu:
+// where none of Termilly's opened, a right click there does nothing. A text field keeps its menu.
+const APP_FRAME = '#titlebar, .bar-dock, #sidebar, .pane-statusbar';
+document.addEventListener('contextmenu', e => {
+  const target = targetOf(e);
+  if (target.closest(APP_FRAME) && !target.closest('input, textarea, [contenteditable="true"]')) e.preventDefault();
+});
+
 // ---- Shell menu (+ button) ----
 
 const profileMenu = byId('profile-menu');
