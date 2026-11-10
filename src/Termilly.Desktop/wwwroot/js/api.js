@@ -11,7 +11,7 @@ import { newTab, focusedTab, focusTab, switchWorkspace } from './panes.js';
 import { createWorkspace, ensureActiveWorkspace } from './workspaces.js';
 import { confirmProduction } from './environments.js';
 import { listForApi, runForApi } from './snippets.js';
-import { readTerminal, waitForTerminal, checkType, checkRead, noteTyped, nextCommandEnd, noteEnter, shellAnswered, UNTIL } from './together.js';
+import { readTerminal, waitForTerminal, checkType, checkRead, noteTyped, nextCommandEnd, noteEnter, shellAnswered, terminalReady, UNTIL } from './together.js';
 import { SECOND_MS } from './util.js';
 import { commandLine } from './quoting.js';
 
@@ -137,6 +137,8 @@ const ASK_MAX_S = 100;
 const ASK_MIN_LEFT_MS = 2000;
 /** How long an ask to a shell waits for it to answer a line typed just before (back at its prompt). */
 const ANSWER_WAIT_MS = 3000;
+/** The longest an ask waits for a terminal that's still starting (just opened, or its agent loading) to be ready. */
+const READY_WAIT_MS = 30_000;
 
 /** Each terminal's typing in progress: a send, snippet or ask types once the one before it there is in. @type {WeakMap<Tab, Promise<unknown>>} */
 const typing = new WeakMap();
@@ -219,6 +221,11 @@ async function ask({ pane, text, timeout_s, from }) {
   if (asking.has(tab)) throw new Error(`An ask is already waiting on ${tabTitle(tab)} (the terminal). Try again once it's answered.`);
   asking.add(tab);
   try {
+    // A terminal just opened, or whose agent is still starting, is waited for first: outside the typing queue, as nothing
+    // is typed meanwhile. Then it's told whether an agent or a shell takes the line.
+    if (!(await terminalReady(tab, Math.min(deadline - ASK_MIN_LEFT_MS, Date.now() + READY_WAIT_MS)))) {
+      throw new Error(`${tabTitle(tab)} (the terminal) is still starting${runningAgent(tab) ? ` ${agentKind(runningAgent(tab)).name}` : ''}, so nothing was typed. Ask again in a moment.`);
+    }
     /** Checked again in its turn to type: what's allowed, and the time left. */
     const ready = () => {
       recheck();

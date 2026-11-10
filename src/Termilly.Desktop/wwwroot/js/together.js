@@ -19,7 +19,7 @@ import { showMenu } from './popups.js';
 import { switchWorkspace, focusTab } from './panes.js';
 import { noticeDialog } from './dialogs.js';
 import { PROFILE_SOURCE, AGENT_STATE } from './constants.js';
-import { agentKind } from './agentkinds.js';
+import { agentKind, agentOfProgram } from './agentkinds.js';
 import { noteTyping, planWait, isOver, replyOf, waitDone } from './agentturns.js';
 import { showToast, TOAST } from './toasts.js';
 import { SECOND_MS } from './util.js';
@@ -306,6 +306,57 @@ export function shellAnswered(tab, until) {
     const check = () => { if (answered()) finish(); };
     const timer = setTimeout(finish, Math.max(0, until - Date.now()));
     promptWaiters.add(check);
+  });
+}
+
+/** How long a starting agent's screen stays still before it counts as ready for a prompt (Codex reports nothing until one). */
+const READY_QUIET_MS = 1000;
+/** How often a wait for a terminal to be ready looks again. */
+const READY_POLL_MS = 200;
+/** How long after its start command was typed an agent it names counts as still starting. */
+const STARTING_MS = 30_000;
+
+/**
+ * Whether a terminal is ready for a line: its start command typed (a terminal just opened gets it at its first prompt),
+ * the agent that command starts running there, and that agent ready for a prompt: Claude Code once its hooks report in
+ * (SessionStart), Codex once its screen has been still a moment, as it reports nothing until its first prompt.
+ * @param {Tab} tab
+ * @param {number} quietSince when its screen last changed (ms since the epoch)
+ */
+function isReady(tab, quietSince) {
+  if (tab.exited) return true; // nothing to wait for: the ask says so
+  const start = tab.start;
+  if (start && !start.done || start?.command) return false; // its shell, or its start command, still to come
+  // The agent a start command typed a moment ago starts (the host reports its program a little after it's typed).
+  const typed = start?.typed && Date.now() - start.typed.at < STARTING_MS ? start.typed.command : '';
+  const starts = agentOfProgram(typed.trim().split(/\s+/)[0]);
+  const agent = runningAgent(tab);
+  if (starts && !agent) return false; // typed, its program not up yet
+  if (!agent || tab.agent) return true;
+  return !agentKind(agent).hookAtStart && Date.now() - quietSince >= READY_QUIET_MS;
+}
+
+/**
+ * Waits until a terminal is ready for a line (isReady): one just opened, or whose agent is still starting, gets that long,
+ * so a line isn't typed into a shell that hasn't started its agent yet, or an agent still drawing its screen. False when
+ * it isn't by `until` (ms since the epoch).
+ * @param {Tab} tab
+ * @param {number} until
+ * @returns {Promise<boolean>}
+ */
+export function terminalReady(tab, until) {
+  let quietSince = Date.now();
+  if (isReady(tab, quietSince)) return Promise.resolve(true);
+  const writes = tab.view?.term?.onWriteParsed(() => { quietSince = Date.now(); });
+  return new Promise(resolve => {
+    const look = () => {
+      const ready = isReady(tab, quietSince);
+      if (!ready && Date.now() < until) return;
+      clearInterval(timer);
+      writes?.dispose();
+      resolve(ready);
+    };
+    const timer = setInterval(look, READY_POLL_MS);
   });
 }
 

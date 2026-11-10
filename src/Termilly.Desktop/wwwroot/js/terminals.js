@@ -581,14 +581,16 @@ onHost(HOST.startFolder, m => {
 /**
  * What a terminal does as its shell starts (tab.start); see startOf.
  * @typedef {{ output: { lines: string[], closedAt: number, resurrected?: boolean, scroll?: number | null } | null,
- *   command: string | null, resumeSession: string | null, resumeKind?: string | null, done: boolean }} ShellStart
+ *   command: string | null, resumeSession: string | null, resumeKind?: string | null, done: boolean,
+ *   typed?: { command: string, at: number } }} ShellStart
  */
 
 /**
  * What a terminal does as its shell starts, kept here: the saved output shown above it (after a restart, or a closed
  * terminal reopened: { lines, closedAt, resurrected }), the command typed at its first prompt (a layout's, a Claude
  * Code or Codex session to resume, the folder to go back to), the session that command resumes and its agent
- * (AGENT_KIND), and whether the start has run.
+ * (AGENT_KIND), whether the start has run, and the command once it was typed and when (an ask waits for the agent it
+ * starts: together.js terminalReady).
  * @param {Tab} tab
  */
 const startOf = tab => (tab.start ??= { output: null, command: null, resumeSession: null, done: false });
@@ -801,6 +803,7 @@ function runPendingCommand(tab) {
   if (!command || tab.exited) return;
   const resuming = start.resumeSession;
   start.command = null;
+  start.typed = { command, at: Date.now() };
   // Typed: from here on Claude Code's hooks report its session. Codex's first hook waits for a prompt, so its session
   // stays known here (for the next start) until its program exits.
   if (!resuming || agentKind(start.resumeKind).hookAtStart) start.resumeSession = null;
