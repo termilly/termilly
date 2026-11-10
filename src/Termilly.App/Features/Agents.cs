@@ -68,9 +68,10 @@ internal sealed class AgentMonitor : IStartable, IDisposable
         _hooks ??= new AgentHooks(OnEvent, _host.PipeName, _api.HandleAsync, OnEdit);
         if (Settings.Agents.Integration && File.Exists(AgentHooks.HookExe))
         {
-            // The status line (plan limits) only with its setting on: it stands in for the user's own, which it then runs.
+            // The status line whenever Claude's session shows: Claude Code's own context and cost, and the plan limits
+            // (shown only with their setting on, see OnEvent). It stands in for the user's own, which it then runs.
             var userSettings = Path.Combine(ClaudeCodeFiles.ConfigDirectory(), ClaudeCodeFiles.Settings);
-            Storage.Try(() => ClaudeHookSettings.Write(AgentHooks.ClaudeSettingsPath, AgentHooks.HookExe, Settings.Agents.ClaudeUsage && Settings.Agents.ClaudeLimits, userSettings));
+            Storage.Try(() => ClaudeHookSettings.Write(AgentHooks.ClaudeSettingsPath, AgentHooks.HookExe, Settings.Agents.ClaudeUsage, userSettings));
         }
 
         if (Settings.Agents.Integration && _poller is null && ClaudeAgentsPoller.FindClaude() is { } claude)

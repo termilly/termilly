@@ -57,6 +57,24 @@ const FULL_PERCENT = 90;
  */
 const claudeOf = tab => (tab.claude ??= { usage: null, context: null });
 
+/**
+ * Each model's context window as Claude Code's status line gave it, so a session without those figures yet (just
+ * started, or started before the status line was set) isn't measured against the transcript's 200k guess: a model
+ * without "[1m]" in its name can still have a 1M window.
+ * @type {Map<string, number>}
+ */
+const knownWindows = new Map();
+
+/**
+ * Remembers the window of the model a terminal's session runs, once its status line has reported it.
+ * @param {Tab} tab
+ */
+function learnWindow(tab) {
+  const c = tab.claude?.context;
+  const u = tab.claude?.usage;
+  if (c?.size && u?.model && (!c.session || c.session === u.session)) knownWindows.set(u.model, c.size);
+}
+
 const redrawAll = () => {
   for (const tab of state.tabs.values()) if (tab.claude?.usage) emit(EVENTS.claudeUsage, tab);
   if (!pop.hidden && popTab) fillUsage(popTab);
@@ -66,6 +84,7 @@ onHost(HOST.claudeUsage, m => {
   const tab = state.tabs.get(m.id);
   if (!tab) return;
   claudeOf(tab).usage = m.usage;
+  learnWindow(tab);
   emit(EVENTS.claudeUsage, tab);
   if (!pop.hidden && popTab === tab) fillUsage(tab); // the details follow too
 });
@@ -78,6 +97,7 @@ onHost(HOST.claudeContext, m => {
   const tab = state.tabs.get(m.id);
   if (!tab) return;
   claudeOf(tab).context = { session: m.session ?? null, used: m.used, size: m.size, tokens: m.tokens ?? null };
+  learnWindow(tab);
   emit(EVENTS.claudeUsage, tab);
   if (!pop.hidden && popTab === tab) fillUsage(tab);
 });
@@ -169,9 +189,12 @@ function contextOf(tab, u) {
   if (c && (!c.session || c.session === u.session)) {
     return { percent: Math.min(PERCENT, Math.round(c.used)), tokens: c.tokens ?? Math.round((c.used / PERCENT) * c.size), size: c.size, official: true };
   }
-  // Codex names its model before its first token count, which brings the window's size.
-  const percent = u.contextWindow ? Math.min(PERCENT, Math.round((u.context / u.contextWindow) * PERCENT)) : 0;
-  return { percent, tokens: u.context, size: u.contextWindow, official: false };
+  // Codex names its model before its first token count, which brings the window's size. For Claude, the window its
+  // status line gave for this model wins over the transcript's guess.
+  const known = u.model ? knownWindows.get(u.model) : undefined;
+  const size = known ? Math.max(known, u.context) : u.contextWindow;
+  const percent = size ? Math.min(PERCENT, Math.round((u.context / size) * PERCENT)) : 0;
+  return { percent, tokens: u.context, size, official: false };
 }
 
 /** @param {number} p */
