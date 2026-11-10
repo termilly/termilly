@@ -899,12 +899,15 @@ function saveEdit() {
   updateTask(list.ref, id, { text, details: details || undefined, tags: editTags.length ? [...editTags] : undefined });
 }
 
-/** @param {string} id */
-function beginEdit(id) {
+/**
+ * @param {string} id
+ * @param {boolean} [toDetails] the caret goes in the details box instead of the title
+ */
+function beginEdit(id, toDetails = false) {
   editing = id;
   editTags = [...(taskById(id)?.tags ?? [])];
   render();
-  /** @type {HTMLInputElement | null} */ (listEl.querySelector(EDIT_TEXT))?.focus();
+  /** @type {HTMLInputElement | HTMLTextAreaElement | null} */ (listEl.querySelector(toDetails ? EDIT_DETAILS : EDIT_TEXT))?.focus();
 }
 
 /** Draws the edited task's tags again; the rest of its form stays as typed. */
@@ -1645,10 +1648,10 @@ addField.addEventListener('keydown', e => {
   addTags = [];
   renderAddTags();
   const [id] = addTasks(current, [task]);
-  // Ctrl+Enter opens the new task in its editor, its title and tags as typed, for details; Escape there takes it back.
+  // Ctrl+Enter opens the new task in its editor, its title and tags as typed, the caret in its details; Escape there takes it back.
   if (id && (e.ctrlKey || e.metaKey)) {
     drafted = id;
-    beginEdit(id);
+    beginEdit(id, true);
   }
 });
 
