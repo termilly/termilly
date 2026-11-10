@@ -295,6 +295,7 @@ function changed(ref) {
  * Adds tasks on top of a list, under the field they're typed in (done ones go to its done part): they show in the order given.
  * @param {ListRef} ref
  * @param {{ text: string, tags?: string[], done?: boolean, details?: string }[]} tasks
+ * @returns {string[]} the new tasks' ids, in the order given
  */
 export function addTasks(ref, tasks) {
   const created = Date.now();
@@ -307,6 +308,7 @@ export function addTasks(ref, tasks) {
   }));
   setTasks(ref, [...added, ...tasksOf(ref)]);
   changed(ref);
+  return added.map(task => task.id);
 }
 
 /**

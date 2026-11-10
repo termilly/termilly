@@ -116,7 +116,7 @@ panel.innerHTML = `
       <button class="pane-btn td-pin" data-td="${ACTION.pin}" title="Pin the first line to the terminal’s header">${ICONS.pin}</button>
     </div>
     <div class="td-addbar">
-      <input class="field td-add" spellcheck="false" autocomplete="off" title="A word typed as #tag or :tag: tags the task">
+      <input class="field td-add" spellcheck="false" autocomplete="off" title="Enter adds the task, Ctrl+Enter opens it to add details. A word typed as #tag or :tag: tags the task">
       <button type="button" class="pane-btn td-search-btn" data-td="${ACTION.searchToggle}" title="Search tasks (Ctrl+F)" aria-label="Search tasks" aria-expanded="false">${ICONS.search}</button>
       <button type="button" class="pane-btn td-search-btn td-filter-btn" data-td="${ACTION.filter}" title="Filter by tag" aria-label="Filter by tag" aria-haspopup="listbox">${ICONS.filter}<span class="td-filter-count" hidden></span></button>
     </div>
@@ -168,6 +168,9 @@ let hidingNote = false;
 let editing = null;
 /** @type {string[]} */
 let editTags = [];
+/** The task Ctrl+Enter in the add field made and opened in its editor: Escape there takes it back into the field. */
+/** @type {string | null} */
+let drafted = null;
 /** The task (or its sub-item, by line) an issue is being made from, and what the host said about its repository. */
 /** @type {{ taskId: string, line?: number, title: string, body: string, requestId: string, repo?: string, labels: string[], ticked: string[], error?: string, busy?: boolean, folder: string | null } | null} */
 let issue = null;
@@ -877,6 +880,7 @@ function saveEdit() {
   const details = /** @type {HTMLTextAreaElement} */ (find(row, '.td-edit-details')).value.trim();
   const id = editing;
   editing = null;
+  drafted = null;
   updateTask(list.ref, id, { text, details: details || undefined, tags: editTags.length ? [...editTags] : undefined });
 }
 
@@ -1621,8 +1625,27 @@ addField.addEventListener('keydown', e => {
   addField.value = '';
   addTags = [];
   renderAddTags();
-  addTasks(current, [task]);
+  const [id] = addTasks(current, [task]);
+  // Ctrl+Enter opens the new task in its editor, its title and tags as typed, for details; Escape there takes it back.
+  if (id && (e.ctrlKey || e.metaKey)) {
+    drafted = id;
+    beginEdit(id);
+  }
 });
+
+/** Escape on a task Ctrl+Enter just made: it goes, and its title and tags go back in the add field. */
+function undraft() {
+  const task = drafted && editing === drafted ? taskById(drafted) : null;
+  drafted = null;
+  if (!task || !current) return false;
+  editing = null;
+  removeTask(current, task.id);
+  addField.value = task.text;
+  addTags = [...(task.tags ?? [])];
+  renderAddTags();
+  addField.focus();
+  return true;
+}
 
 // Lines pasted are a task each; one line is left to the field, to be edited first.
 addField.addEventListener('paste', e => {
@@ -1659,6 +1682,7 @@ listEl.addEventListener('keydown', e => {
   if (!editing) return;
   if (e.key === 'Escape') {
     e.stopPropagation();
+    if (undraft()) return;
     editing = null;
     render();
   } else if (e.key === 'Enter' && (e.ctrlKey || !targetOf(e).matches('textarea'))) {
