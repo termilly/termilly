@@ -325,6 +325,10 @@ interface Schedule {
   allowAll?: boolean;
   /** Which agent runs the prompt (AGENT_KIND); Claude Code when not said. */
   agent?: string;
+  /** The agents that review what it did, out of sight (js/schedulereview.js); none when not said. */
+  reviewers?: string[];
+  /** The most review rounds it gets (js/todoplan.js ROUNDS). */
+  rounds?: number;
   /** An agent's reply goes in the notification. */
   replyInNotice: boolean;
   /** Each run's report goes to the top of a Notepad page, by its name (js/schedulesave.js). */

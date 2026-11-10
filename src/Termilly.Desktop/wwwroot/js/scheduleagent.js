@@ -9,6 +9,7 @@ import { addApiMethods } from './api.js';
 import { schedules, scheduleById, runsOf, saveSchedule, runNow, setScheduleOn } from './schedules.js';
 import { newSchedule, describeWhen, describeAt, WHAT, WHEN, UNIT, DAY_NAMES, minutesOf } from './schedulerules.js';
 import { AGENT_KIND } from './constants.js';
+import { reviewersOf } from './schedulereview.js';
 import { allSnippets } from './snippets.js';
 
 /** A schedule's id, as the UI makes them. */
@@ -25,7 +26,7 @@ function describeSchedule(s) {
   return {
     id: s.id, name: s.name, on: s.on, what: s.what,
     runs: s.what === WHAT.agent ? s.prompt : s.what === WHAT.snippet ? s.snippet : s.command,
-    ...(s.what === WHAT.agent ? { agent: s.agent ?? AGENT_KIND.claude } : {}),
+    ...(s.what === WHAT.agent ? { agent: s.agent ?? AGENT_KIND.claude, reviewers: reviewersOf(s) } : {}),
     when: describeWhen(s.when), next: s.on ? describeAt(s.nextAt, Date.now()) : null,
     last: last ? { status: last.status, at: new Date(last.at).toISOString(), summary: last.summary } : null,
   };

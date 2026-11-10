@@ -2,7 +2,7 @@
 // work, and how a reviewer's reply is read. And for agentcli.js: how Codex and a review are asked.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { fitPlan, reviewersFor, planWords, stageWords, reviewPrompt, fixPrompt, readReview, verdictOf, RUN, STAGE, ROUNDS } from '../../src/Termilly.Desktop/wwwroot/js/todoplan.js';
+import { fitPlan, reviewersFor, planWords, stageWords, reviewPrompt, fixPrompt, answerReviewPrompt, answerFixPrompt, readReview, verdictOf, RUN, STAGE, ROUNDS } from '../../src/Termilly.Desktop/wwwroot/js/todoplan.js';
 import { agentCommand, readResult } from '../../src/Termilly.Desktop/wwwroot/js/agentcli.js';
 
 const BOTH = ['claude', 'codex'];
@@ -157,4 +157,28 @@ test('what isn\'t a session\'s id never reaches the command line', () => {
   assert.doesNotMatch(line, /rm -rf|--resume/);
   assert.equal(readResult(JSON.stringify({ type: 'result', result: 'ok', session_id: 'bad id"' }))?.session, null);
   assert.equal(readResult(JSON.stringify({ type: 'result', result: 'ok', session_id: '9f3e-11' }))?.session, '9f3e-11');
+});
+
+test('a schedule\'s answer is checked against the files, changing nothing, and ends with a verdict', () => {
+  const prompt = answerReviewPrompt('What changed\ntoday?', 'Claude Code', 'Two commits, both in a.js.');
+  assert.match(prompt, /was asked this in this folder: 'What changed today\?'\. Its answer: Two commits, both in a\.js\./);
+  assert.match(prompt, /Check the answer against the files here/);
+  assert.match(prompt, /Do not change, create or delete any file/);
+  assert.match(prompt, /VERDICT: AGREE.*VERDICT: FINDINGS N/);
+  assert.match(answerReviewPrompt('q', 'Codex', 'a', [{ kind: 'claude', agrees: false, count: 1, text: '1. Wrong count' }]), /which Codex says it corrected: 1\. Wrong count/);
+});
+
+test('an answer goes back to be corrected whole, given again only in a new session', () => {
+  const reviews = [{ kind: 'codex', agrees: false, count: 1, text: '1. It was three commits' }];
+  const resumed = answerFixPrompt('What changed?', reviews, null);
+  assert.match(resumed, /Codex found: 1\. It was three commits Correct your answer/);
+  assert.match(resumed, /Reply with your whole answer again, corrected/);
+  assert.doesNotMatch(resumed, /Your answer was/);
+  assert.match(answerFixPrompt('What changed?', reviews, 'Two commits.'), /was reviewed\. Your answer was: Two commits\. Codex found/);
+});
+
+test('Codex going on from a session that only reads stays read only', () => {
+  assert.equal(agentCommand('Correct it', { kind: 'codex', shell: 'bash', json: true, keep: true, resume: '01a1' }),
+    "codex exec resume --skip-git-repo-check --json -c sandbox_mode=read-only 01a1 'Correct it'");
+  assert.match(agentCommand('Correct it', { kind: 'codex', shell: 'bash', all: true, resume: '01a1' }), /sandbox_mode=read-only/);
 });

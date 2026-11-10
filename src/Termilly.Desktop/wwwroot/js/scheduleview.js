@@ -6,6 +6,7 @@ import { installedAgents } from './store.js';
 import { agentKind } from './agentkinds.js';
 import { AGENT_KIND } from './constants.js';
 import { reportTextHtml } from './schedulelinks.js';
+import { reviewersFor, namesOf, ROUNDS } from './todoplan.js';
 import {
   WHAT, WHERE, WHEN, UNIT, NOTIFY, MISSED, AFTER, BUSY, CLOSED, RUN, RUN_LABEL, DAY_NAMES, describeWhen, describeAt, describeTook,
 } from './schedulerules.js';
@@ -100,9 +101,33 @@ function byHtml(s) {
   return `<label class="sch-by"><span>By</span><select class="field" name="agent" aria-label="The agent that runs the prompt">${agents.map(kind => `<option value="${kind}"${kind === (s.agent ?? AGENT_KIND.claude) ? ' selected' : ''}>${escapeHtml(agentKind(kind).name)}</option>`).join('')}</select></label>`;
 }
 
+/** The form's boxes for reviewers: their name, each one's value an agent. */
+export const REVIEWER_FIELD = 'reviewer';
+
+/**
+ * Which agents review what it did, and for how many rounds at most, as To do's Implement has them (js/todocard.js): offered
+ * where more than one agent is installed, and only out of sight, where they run.
+ * @param {Schedule} s
+ */
+function reviewersHtml(s) {
+  const by = s.agent ?? AGENT_KIND.claude;
+  const can = reviewersFor(by, installedAgents());
+  if (!can.length) return '';
+  if (s.where !== WHERE.hidden) return '<p class="dialog-sub">Other agents can review what it did when it runs out of sight.</p>';
+  const picked = (s.reviewers ?? []).filter(kind => can.includes(kind));
+  const boxes = can.map(kind => `<label class="note-pin"><input type="checkbox" name="${REVIEWER_FIELD}" value="${kind}"${picked.includes(kind) ? ' checked' : ''}> Reviewed by ${escapeHtml(agentKind(kind).name)}</label>`).join('');
+  if (!picked.length) return boxes;
+  const who = namesOf(picked);
+  const many = picked.length > 1;
+  const back = s.allowChanges ? `goes back to ${agentKind(by).name} to fix` : `goes back to ${agentKind(by).name}, which corrects its answer`;
+  return `${boxes}${fieldHtml('Review rounds, at most', inputHtml('rounds', s.rounds ?? ROUNDS.usual, String(ROUNDS.usual), 'number'))}
+    <p class="dialog-sub">What ${escapeHtml(who)} ${many ? 'find' : 'finds'} ${escapeHtml(back)}, and ${many ? 'they look' : 'it looks'} again. The report has their verdict. Each agent’s run gets the time below.</p>`;
+}
+
 /** @param {Schedule} s */
 const agentHtml = s => `<textarea class="field snippet-command sch-prompt" name="prompt" rows="5" spellcheck="false" placeholder="Summarize what changed in this repository today">${escapeHtml(s.prompt)}</textarea>
   ${byHtml(s)}
+  ${reviewersHtml(s)}
   <label class="note-pin"><input type="checkbox" name="allowChanges"${s.allowChanges ? ' checked' : ''}> Let it change files</label>
   ${s.allowChanges ? `<label class="note-pin"><input type="checkbox" name="allowAll"${s.allowAll ? ' checked' : ''}> Allow everything</label>` : ''}
   <p class="dialog-sub${s.allowChanges ? ' sch-warn' : ''}">${permissionsText(s)}</p>

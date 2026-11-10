@@ -51,6 +51,8 @@ const CODEX_JSON = '--json';
 /** Codex going on with a session it kept. That command has no --sandbox: its sandbox is set as a setting instead. */
 const CODEX_RESUME = 'resume';
 const CODEX_RESUME_CHANGES = Object.freeze(['-c', 'sandbox_mode=workspace-write']);
+/** Going on with a session that only reads (a schedule's answer, corrected after a review). */
+const CODEX_RESUME_READ_ONLY = Object.freeze(['-c', 'sandbox_mode=read-only']);
 /** As Claude Code's NO_SESSION. */
 const CODEX_NO_SESSION = '--ephemeral';
 /** Codex's sandboxes: reading only (a prompt that may not change files, a review), or writing in its folder. */
@@ -115,7 +117,10 @@ const sessionId = id => (typeof id === 'string' && /^[\w-]{1,80}$/.test(id) ? id
  */
 function codexWords(prompt, { changes, all, json, review, keep, session }) {
   const flags = [CODEX_ANYWHERE, ...(json ? [CODEX_JSON] : [])];
-  if (session) return [...CODEX_RUN, CODEX_RESUME, ...flags, ...(all ? CODEX_EVERYTHING : CODEX_RESUME_CHANGES), session, codexPrompt(prompt)];
+  if (session) {
+    const sandbox = review || !changes ? CODEX_RESUME_READ_ONLY : all ? CODEX_EVERYTHING : CODEX_RESUME_CHANGES;
+    return [...CODEX_RUN, CODEX_RESUME, ...flags, ...sandbox, session, codexPrompt(prompt)];
+  }
   const sandbox = review || !changes ? CODEX_READ_ONLY : all ? CODEX_EVERYTHING : CODEX_CHANGES;
   return [...CODEX_RUN, ...flags, ...(keep ? [] : [CODEX_NO_SESSION]), ...sandbox, codexPrompt(prompt)];
 }

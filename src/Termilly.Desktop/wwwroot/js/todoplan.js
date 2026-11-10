@@ -93,6 +93,8 @@ const oneLine = text => text.replace(/\s+/g, ' ').trim();
 const MAX_QUOTED = 4000;
 /** @param {string} text */
 const quoted = text => (text.length > MAX_QUOTED ? `${text.slice(0, MAX_QUOTED)} (cut short)` : text).trim();
+/** How every review ends: its verdict, on a line of its own. */
+const VERDICT_ASK = ` End your reply with one last line, exactly '${VERDICT.agree}' when nothing has to change, or '${VERDICT.findings} N' with the number of findings when something does.`;
 
 /**
  * What a reviewer is asked: to check the work on a task without changing anything, and to end with its verdict.
@@ -106,7 +108,37 @@ export function reviewPrompt(task, by, reply, before = []) {
   return `Review work another agent (${by}) just did in this folder on this task: '${oneLine(task)}'. ${by} says: ${quoted(reply) || '(nothing)'}${earlier}`
     + ' Look at what changed (git status and git diff, when this is a git repository) and read the files it touched. Check that the task is done and done right: bugs, things left out, things broken.'
     + ' Do not change, create or delete any file, and do not wait for answers. Reply with your findings as a numbered list, most important first, each with its file; leave out matters of taste.'
-    + ` End your reply with one last line, exactly '${VERDICT.agree}' when nothing has to change, or '${VERDICT.findings} N' with the number of findings when something does.`;
+    + VERDICT_ASK;
+}
+
+/**
+ * What a reviewer is asked about an answer: another agent was asked something here (a schedule's prompt that only reads), and
+ * its answer is checked against the files, without changing anything.
+ * @param {string} question what the agent was asked
+ * @param {string} by the agent that answered, by name
+ * @param {string} answer its answer
+ * @param {AgentReview[]} [before] what the round before found, when it's a later one
+ */
+export function answerReviewPrompt(question, by, answer, before = []) {
+  const earlier = before.length ? ` In the round before, the review found this, which ${by} says it corrected: ${quoted(before.map(r => r.text).join(' '))}` : '';
+  return `Another agent (${by}) was asked this in this folder: '${oneLine(question)}'. Its answer: ${quoted(answer) || '(nothing)'}${earlier}`
+    + ' Check the answer against the files here: claims that are wrong, things it missed that the question asks for, things that do not hold.'
+    + ' Do not change, create or delete any file, and do not wait for answers. Reply with your findings as a numbered list, most important first; leave out matters of taste.'
+    + VERDICT_ASK;
+}
+
+/**
+ * What the agent that answered is asked after a review that found something: its whole answer again, corrected, as that's what
+ * is kept. In a new session (the old one wouldn't open) it's given its answer.
+ * @param {string} question what it was asked
+ * @param {AgentReview[]} reviews the reviews of this round that found something
+ * @param {string | null} answer its answer, when it goes on in a new session; null when it's in the one it answered in
+ */
+export function answerFixPrompt(question, reviews, answer) {
+  const found = reviews.map(r => `${agentKind(r.kind).name} found: ${quoted(r.text)}`).join(' ');
+  const yours = answer === null ? '' : ` Your answer was: ${quoted(answer)}`;
+  return `Your answer to '${oneLine(question)}' was reviewed.${yours} ${found} Correct your answer where these findings are right; where one is wrong, keep what you said.`
+    + ' Nobody is watching, so do not wait for answers. Reply with your whole answer again, corrected, as it should be read on its own.';
 }
 
 /**

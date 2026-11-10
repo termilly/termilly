@@ -19,7 +19,9 @@ import { withPaths, openReportLink, LINK_CLASS } from './schedulelinks.js';
 import {
   schedules, scheduleById, runsOf, saveSchedule, removeSchedule, setScheduleOn, runNow, stopRun, runningNow,
 } from './schedules.js';
-import { formHtml, rowHtml, runsHtml, reportHtml, WHEN_FIELD, WHEN_KIND_SEGMENT, ALL_DAY_FIELD } from './scheduleview.js';
+import { formHtml, rowHtml, runsHtml, reportHtml, WHEN_FIELD, WHEN_KIND_SEGMENT, ALL_DAY_FIELD, REVIEWER_FIELD } from './scheduleview.js';
+import { ROUNDS } from './todoplan.js';
+import { AGENT_KIND } from './constants.js';
 import { newSchedule, minutesOf, nextRun, describeAt, isAllDay, WHAT, WHERE, WHEN, RUN } from './schedulerules.js';
 
 const NAME = 'Schedules';
@@ -37,7 +39,7 @@ const KEY_SAVE = 'KeyS';
 /** Boxes that show or hide more of the form. */
 const REDRAWS = new Set(['allowChanges', 'allowAll', 'toNotepad', 'toFile', 'agent']);
 /** Fields that hold numbers. */
-const NUMBERS = new Set(['limitMinutes', 'keepDays', 'every']);
+const NUMBERS = new Set(['limitMinutes', 'keepDays', 'every', 'rounds']);
 /** The biggest "every", so a day still has a run in it. */
 const MAX_EVERY = Object.freeze({ minutes: 1440, hours: 24 });
 /** A run's output, under its row. */
@@ -115,6 +117,8 @@ function problemOf(s) {
   if (s.what === WHAT.command && !s.command.trim()) return 'It needs a command.';
   if (s.what === WHAT.snippet && !s.snippet) return 'It needs a snippet.';
   if (s.what === WHAT.agent && !s.prompt.trim()) return 'It needs a prompt.';
+  const rounds = s.rounds ?? ROUNDS.usual;
+  if (s.what === WHAT.agent && s.reviewers?.length && !(Number.isInteger(rounds) && rounds >= ROUNDS.min && rounds <= ROUNDS.max)) return `Review rounds go from ${ROUNDS.min} to ${ROUNDS.max}.`;
   if (s.where === WHERE.server && !s.profile) return 'It needs a server.';
   if (s.where === WHERE.terminal && !s.terminal.trim()) return 'It needs a terminal’s name or a #tag.';
   if (when.kind === WHEN.time && minutesOf(when.at) === null) return 'The time should look like 20:00.';
@@ -261,6 +265,18 @@ function fieldChanged(field) {
   const value = field.type === 'checkbox' ? field.checked : NUMBERS.has(key) ? Number(field.value) : field.value;
   const target = /** @type {Record<string, unknown>} */ (/** @type {unknown} */ (field.name.startsWith(WHEN_FIELD) ? s.when : s));
   target[key] = value;
+}
+
+/**
+ * A reviewer's box: the agent reviews what the prompt did, or not.
+ * @param {string} kind
+ * @param {boolean} on
+ */
+function reviewerChanged(kind, on) {
+  const s = /** @type {Schedule} */ (editing);
+  const others = (s.reviewers ?? []).filter(k => k !== kind);
+  s.reviewers = on ? [...others, kind] : others;
+  renderForm();
 }
 
 /**
@@ -450,6 +466,12 @@ for (const event of ['input', 'change']) {
       allDayChanged(field.checked);
       return;
     }
+    if (field.name === REVIEWER_FIELD) {
+      reviewerChanged(field.value, field.checked);
+      return;
+    }
+    // An agent that reviewed it runs it now: the one that ran it reviews in its place, as To do's Implement card has it.
+    if (field.name === 'agent') editing.reviewers = (editing.reviewers ?? []).map(kind => (kind === field.value ? editing?.agent ?? AGENT_KIND.claude : kind));
     fieldChanged(field);
     if (REDRAWS.has(field.name)) renderForm();
     else renderState();

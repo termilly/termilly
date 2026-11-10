@@ -15,6 +15,7 @@ import { agentCommand, readResult, noticeOf } from './agentcli.js';
 import { saveReport } from './schedulesave.js';
 import { addScheduleNote } from './inbox.js';
 import { plainText } from './schedulereport.js';
+import { reviewersOf, startReviews, stopReviews } from './schedulereview.js';
 import { runInNewTerminal, runInTerminal, stopInTerminal, finishTerminal, terminalsFor, TERMINAL_TURN } from './scheduleterminal.js';
 import {
   nextRun, newSchedule, statusOf, summaryOf, shouldTell, sortRuns, RUN, RUN_LABEL, WHAT, WHERE, WHEN, MISSED, GRACE_MS,
@@ -105,7 +106,11 @@ function tidyRuns() {
  */
 function commandOf(schedule) {
   if (schedule.what === WHAT.command) return schedule.command;
-  if (schedule.what === WHAT.agent) return agentCommand(schedule.prompt, { kind: schedule.agent, shell: shellOf(schedule), changes: schedule.allowChanges, all: !!schedule.allowAll, json: isOutOfSight(schedule) });
+  if (schedule.what === WHAT.agent) {
+    // With reviewers, its session is kept, for their findings to go back to.
+    const keep = reviewersOf(schedule).length > 0;
+    return agentCommand(schedule.prompt, { kind: schedule.agent, shell: shellOf(schedule), changes: schedule.allowChanges, all: !!schedule.allowAll, json: isOutOfSight(schedule), keep });
+  }
   const found = [undefined, ...state.workspaces].flatMap(ws => allSnippets(ws)).find(s => s.name === schedule.snippet);
   return found ? fill(found.command, {}) : null;
 }
@@ -235,7 +240,7 @@ export function stopRun(runId) {
     end(going.run, going.schedule, { stopped: true });
   } else if (going.run.status === RUN.waiting) {
     end(going.run, going.schedule, { stopped: true });
-  } else send(PAGE.scheduleStop, { runId });
+  } else if (!stopReviews(runId)) send(PAGE.scheduleStop, { runId });
 }
 
 /**
@@ -327,7 +332,14 @@ onHost(HOST.scheduleEnded, async m => {
  * @param {number | null} code
  * @param {NonNullable<ReturnType<typeof readResult>>} agent
  */
-function endAgent({ run, schedule }, code, agent) {
+function endAgent(going, code, agent) {
+  const { run, schedule } = going;
+  const reviewers = reviewersOf(schedule);
+  // Its reviewers read it now; the run ends when they're through.
+  if (reviewers.length && !agent.errored) {
+    startReviews(going, agent, code, { reviewers, shell: shellOf(schedule), finish: how => end(run, schedule, how), changed });
+    return;
+  }
   const headline = agent.reply.split(/\r?\n/).map(line => line.trim()).find(Boolean) ?? '';
   const notice = schedule.replyInNotice ? noticeOf(agent.reply) : undefined;
   const how = agent.errored ? { error: agent.why, code } : { code, summary: summaryOf([agent.why, headline].filter(Boolean).join(' ')) };
