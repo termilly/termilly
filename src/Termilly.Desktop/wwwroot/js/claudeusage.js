@@ -195,9 +195,10 @@ export function statusUsageHtml(tab, meters) {
   const kind = sessionKind(tab);
   const cost = kind === AGENT_KIND.claude ? costOf(tab) : null;
   // The context once the session has figures; the plan's limits always (they're the account's, kept fresh: planrefresh.js).
-  const context = u && (u.contextWindow || tab.claude?.context) ? contextOf(tab, u).percent : null;
+  const context = state.settings.terminal.statusContext !== false && u && (u.contextWindow || tab.claude?.context) ? contextOf(tab, u).percent : null;
   return (context === null ? '' : `<button class="sb-item sb-usage ${meters ? '' : level(context)}" data-sb="usage" title="${escapeHtml(usageTitle(tab, /** @type {ClaudeUsage} */ (u)))}">${meters ? '' : 'ctx '}${meterHtml(context, meters)}<span>${context}%</span></button>`)
-    + planItemHtml(PLAN_WINDOW.fiveHour, kind, meters) + planItemHtml(PLAN_WINDOW.sevenDay, kind, meters)
+    + (state.settings.terminal.statusFiveHour !== false ? planItemHtml(PLAN_WINDOW.fiveHour, kind, meters) : '')
+    + (state.settings.terminal.statusWeek !== false ? planItemHtml(PLAN_WINDOW.sevenDay, kind, meters) : '')
     + (cost && costText(cost) ? `<span class="sb-item sb-cost" title="${escapeHtml(costTitle(cost))}">${escapeHtml(costText(cost))}</span>` : '');
 }
 

@@ -66,6 +66,12 @@ interface TerminalSettings {
   ports: boolean;
   /** A bar under each terminal: its agent's session, files changed, the git branch (js/statusbar.js). */
   statusBar: boolean;
+  /** The status bar shows how full the agent's context is. */
+  statusContext: boolean;
+  /** The status bar shows the plan's 5-hour limit (Claude's and Codex's). */
+  statusFiveHour: boolean;
+  /** The status bar shows the plan's weekly limit. */
+  statusWeek: boolean;
   /** The status bar draws the context and plan limits as meters; off, as numbers only. */
   statusMeters: boolean;
   /** The status bar takes the colour of what the agent is doing (working, needs you, error). */

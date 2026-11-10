@@ -41,6 +41,12 @@ internal sealed record TerminalSettings
     public bool Ports { get; init; } = true;
     /// <summary>A bar under each terminal: its agent's session, files changed, the git branch (js/statusbar.js).</summary>
     public bool StatusBar { get; init; } = true;
+    /// <summary>The status bar shows how full the agent's context is.</summary>
+    public bool StatusContext { get; init; } = true;
+    /// <summary>The status bar shows the plan's 5-hour limit (Claude's and Codex's).</summary>
+    public bool StatusFiveHour { get; init; } = true;
+    /// <summary>The status bar shows the plan's weekly limit.</summary>
+    public bool StatusWeek { get; init; } = true;
     /// <summary>The status bar draws the context and plan limits as meters; off, as numbers only.</summary>
     public bool StatusMeters { get; init; } = true;
     /// <summary>The status bar takes the colour of what the agent is doing (working, needs you, error).</summary>

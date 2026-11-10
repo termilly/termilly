@@ -4,7 +4,7 @@
 // the right the files the agent changed, how the branch stands against its upstream, the repository and the branch
 // (which opens the branch picker). With "Colour by state" on, the bar takes the colour of what the agent is doing.
 
-import { state, on, emit, runningAgent, EVENTS } from './store.js';
+import { state, on, emit, runningAgent, GROUPS, EVENTS } from './store.js';
 import { setStatusBuilder } from './panes.js';
 import { statusUsageHtml, usageOf, modelName, openUsage, sessionKind, sessionShown } from './claudeusage.js';
 import { tabRepo, repoTitle, DETACHED_LABEL } from './gitstatus.js';
@@ -14,6 +14,7 @@ import { agentKind } from './agentkinds.js';
 import { codexStartModel, codexModelName } from './codexmodels.js';
 import { escapeHtml, ICONS } from './ui.js';
 import { setHtmlIfChanged, targetOf } from './dom.js';
+import { updateSettings } from './preferences.js';
 import { AGENT_STATE, AGENT_KIND } from './constants.js';
 
 /** The chevron after a picker's item: it opens upwards, over the terminal. */
@@ -134,4 +135,17 @@ on(EVENTS.changes, updateStatusBar);
 on(EVENTS.claudeUsage, updateStatusBar);
 on(EVENTS.workspaces, updateAll); // a repository's state came, or the terminals moved
 on(EVENTS.planChanged, updateAll);
-on(EVENTS.settings, updateAll);
+on(EVENTS.settings, () => {
+  followLimits();
+  updateAll();
+});
+
+/**
+ * The plan's limits are read (Claude Code's status line, the refresh) while the bar shows either of its windows: the
+ * setting that says so follows the two switches, also when an older settings file has it off.
+ */
+function followLimits() {
+  const t = state.settings.terminal;
+  const wanted = t.statusFiveHour !== false || t.statusWeek !== false;
+  if (!!state.settings.agents.claudeLimits !== wanted) updateSettings(GROUPS.agents, { claudeLimits: wanted });
+}

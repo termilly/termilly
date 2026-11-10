@@ -25,12 +25,17 @@ const clipRows = () => row('Keep copies', 'Every copy kept, to paste again from 
 
 /** The status bar's own switch, which the rows after it need. */
 const STATUS_BAR = 'terminal.statusBar';
+/** The plan's two windows in the bar: with either on, Termilly reads the limits (agents.claudeLimits follows them, statusbar.js). */
+const FIVE_HOUR = 'terminal.statusFiveHour';
+const WEEK = 'terminal.statusWeek';
 
 /** The status bar's rows: the bar itself, what's on it (each agent's session, the plan's limits, the branch), and how. */
 const statusBarRows = () => row('Status bar', 'A bar under each terminal: its agent’s session, files changed, the git branch.', toggle(STATUS_BAR), { keywords: 'status bar footer branch model context' })
   + row('Claude Code session', 'Model, context and tokens. Click the model to change it.', toggle('agents.claudeUsage'), { keywords: 'claude usage model context tokens', needs: STATUS_BAR })
   + row('Codex session', 'Model, context and tokens, from Codex’s session files.', toggle('agents.codexUsage'), { keywords: 'codex usage model context tokens openai', needs: STATUS_BAR })
-  + row('Plan usage limits', 'The 5-hour and weekly limits of your Claude and Codex plans.', toggle('agents.claudeLimits'), { keywords: 'plan limit usage 5-hour weekly', needs: STATUS_BAR })
+  + row('Context', 'How full the agent’s context is.', toggle('terminal.statusContext'), { keywords: 'status bar context tokens', needs: STATUS_BAR })
+  + row('5-hour usage', 'How much of your plan’s 5-hour limit is used (Claude and Codex).', toggle(FIVE_HOUR), { keywords: 'plan limit usage 5-hour session daily', needs: STATUS_BAR })
+  + row('Weekly usage', 'How much of your plan’s weekly limit is used.', toggle(WEEK), { keywords: 'plan limit usage weekly week', needs: STATUS_BAR })
   + row('Keep limits up to date', 'Always show them: Codex’s are free, Claude’s cost a tiny Haiku prompt every 15 minutes at most, only while Termilly is in front.', toggle('agents.refreshLimits'), { keywords: 'plan limit usage refresh haiku 5-hour weekly', needs: `${STATUS_BAR},agents.claudeLimits` })
   + row('Meters', 'Context and limits as bars. Off: numbers only.', toggle('terminal.statusMeters'), { keywords: 'status bar meter numbers', needs: STATUS_BAR })
   + row('Colour by state', 'The bar takes the colour of what the agent is doing: working, needs you, failed.', toggle('terminal.statusStateColor'), { keywords: 'status bar colour color state working needs', needs: STATUS_BAR })
