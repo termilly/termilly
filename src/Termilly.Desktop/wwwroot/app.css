@@ -3470,8 +3470,10 @@ button.td-agent:hover { text-decoration: underline; }
 .td-now .td-agent { color: var(--accent); line-height: 18px; }
 
 /* A schedule's agent prompt: which agent runs it (js/scheduleview.js byHtml). */
-.sch-by { display: flex; align-items: center; gap: 10px; margin-top: 10px; color: var(--muted); font-size: 12.5px; }
-.sch-by .dropdown { width: 200px; }
+/* Who runs an agent prompt and who reviews it: the rows of To do's Implement card (js/planrows.js), in the form. */
+.sch-plan { display: flex; flex-direction: column; max-width: 420px; margin-top: 10px; }
+.sch-plan .tc-row { padding: 4px 0; }
+.sch-plan .tc-by { width: 220px; }
 
 /* ---- Copy allowed commands to Codex (js/agentrules.js) ---- */
 .dialog.agent-rules { width: min(640px, calc(100vw - 48px)); }

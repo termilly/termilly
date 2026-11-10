@@ -6,7 +6,8 @@ import { installedAgents } from './store.js';
 import { agentKind } from './agentkinds.js';
 import { AGENT_KIND } from './constants.js';
 import { reportTextHtml } from './schedulelinks.js';
-import { reviewersFor, namesOf, ROUNDS } from './todoplan.js';
+import { reviewersFor, namesOf, fitPlan } from './todoplan.js';
+import { planRowsHtml } from './planrows.js';
 import {
   WHAT, WHERE, WHEN, UNIT, NOTIFY, MISSED, AFTER, BUSY, CLOSED, RUN, RUN_LABEL, DAY_NAMES, describeWhen, describeAt, describeTook,
 } from './schedulerules.js';
@@ -92,42 +93,41 @@ function permissionsText(s) {
 }
 
 /**
- * Which agent runs the prompt, offered where more than one is installed; with one, that one runs it.
+ * The plan a schedule's agent prompt runs with: who runs it, who reviews it and for how many rounds at most, among the agents
+ * installed.
  * @param {Schedule} s
  */
-function byHtml(s) {
-  const agents = installedAgents();
-  if (agents.length < 2) return '';
-  return `<label class="sch-by"><span>By</span><select class="field" name="agent" aria-label="The agent that runs the prompt">${agents.map(kind => `<option value="${kind}"${kind === (s.agent ?? AGENT_KIND.claude) ? ' selected' : ''}>${escapeHtml(agentKind(kind).name)}</option>`).join('')}</select></label>`;
-}
-
-/** The form's boxes for reviewers: their name, each one's value an agent. */
-export const REVIEWER_FIELD = 'reviewer';
+export const planOf = s => fitPlan({ by: s.agent ?? AGENT_KIND.claude, reviewers: s.reviewers ?? [], rounds: s.rounds }, installedAgents());
 
 /**
- * Which agents review what it did, and for how many rounds at most, as To do's Implement has them (js/todocard.js): offered
- * where more than one agent is installed, and only out of sight, where they run.
+ * What a schedule's review does, under its rounds.
+ * @param {Schedule} s
+ * @returns {(plan: import('./todoplan.js').ImplementPlan) => string}
+ */
+const reviewHint = s => plan => {
+  const many = plan.reviewers.length > 1;
+  const by = agentKind(plan.by).name;
+  const back = s.allowChanges ? `goes back to ${by} to fix` : `goes back to ${by}, which corrects its answer`;
+  const again = plan.rounds > 1 ? `, and ${many ? 'they look' : 'it looks'} again, ${plan.rounds} rounds at most` : '';
+  return `What ${namesOf(plan.reviewers)} ${many ? 'find' : 'finds'} ${back}${again}. The report has their verdict. Each agent’s run gets the time below.`;
+};
+
+/**
+ * Who runs the prompt and which agents review what it did, for how many rounds at most, picked as To do's Implement card has
+ * them (js/planrows.js). Reviewers run only out of sight.
  * @param {Schedule} s
  */
-function reviewersHtml(s) {
-  const by = s.agent ?? AGENT_KIND.claude;
-  const can = reviewersFor(by, installedAgents());
-  if (!can.length) return '';
-  if (s.where !== WHERE.hidden) return '<p class="dialog-sub">Other agents can review what it did when it runs out of sight.</p>';
-  const picked = (s.reviewers ?? []).filter(kind => can.includes(kind));
-  const boxes = can.map(kind => `<label class="note-pin"><input type="checkbox" name="${REVIEWER_FIELD}" value="${kind}"${picked.includes(kind) ? ' checked' : ''}> Reviewed by ${escapeHtml(agentKind(kind).name)}</label>`).join('');
-  if (!picked.length) return boxes;
-  const who = namesOf(picked);
-  const many = picked.length > 1;
-  const back = s.allowChanges ? `goes back to ${agentKind(by).name} to fix` : `goes back to ${agentKind(by).name}, which corrects its answer`;
-  return `${boxes}${fieldHtml('Review rounds, at most', inputHtml('rounds', s.rounds ?? ROUNDS.usual, String(ROUNDS.usual), 'number'))}
-    <p class="dialog-sub">What ${escapeHtml(who)} ${many ? 'find' : 'finds'} ${escapeHtml(back)}, and ${many ? 'they look' : 'it looks'} again. The report has their verdict. Each agent’s run gets the time below.</p>`;
+function planHtml(s) {
+  const plan = planOf(s);
+  const agents = installedAgents();
+  const hidden = s.where === WHERE.hidden;
+  const note = !hidden && reviewersFor(plan.by, agents).length ? '<p class="dialog-sub">Other agents can review what it did when it runs out of sight.</p>' : '';
+  return `<div class="sch-plan">${planRowsHtml(plan, { agents, reviewers: agents, hint: reviewHint(s) }, { review: hidden })}</div>${note}`;
 }
 
 /** @param {Schedule} s */
 const agentHtml = s => `<textarea class="field snippet-command sch-prompt" name="prompt" rows="5" spellcheck="false" placeholder="Summarize what changed in this repository today">${escapeHtml(s.prompt)}</textarea>
-  ${byHtml(s)}
-  ${reviewersHtml(s)}
+  ${planHtml(s)}
   <label class="note-pin"><input type="checkbox" name="allowChanges"${s.allowChanges ? ' checked' : ''}> Let it change files</label>
   ${s.allowChanges ? `<label class="note-pin"><input type="checkbox" name="allowAll"${s.allowAll ? ' checked' : ''}> Allow everything</label>` : ''}
   <p class="dialog-sub${s.allowChanges ? ' sch-warn' : ''}">${permissionsText(s)}</p>

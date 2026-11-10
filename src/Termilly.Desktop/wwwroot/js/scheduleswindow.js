@@ -5,7 +5,7 @@
 
 import { PAGE } from './protocol.js';
 import { send } from './host.js';
-import { state, on, emit, persist, newId, EVENTS } from './store.js';
+import { state, on, emit, persist, newId, installedAgents, EVENTS } from './store.js';
 import { restoreFocus, newTab } from './panes.js';
 import { closeAll, dropdown } from './popups.js';
 import { modal, pickFolder, CONFIRM_DIALOG } from './dialogs.js';
@@ -19,9 +19,8 @@ import { withPaths, openReportLink, LINK_CLASS } from './schedulelinks.js';
 import {
   schedules, scheduleById, runsOf, saveSchedule, removeSchedule, setScheduleOn, runNow, stopRun, runningNow,
 } from './schedules.js';
-import { formHtml, rowHtml, runsHtml, reportHtml, WHEN_FIELD, WHEN_KIND_SEGMENT, ALL_DAY_FIELD, REVIEWER_FIELD } from './scheduleview.js';
-import { ROUNDS } from './todoplan.js';
-import { AGENT_KIND } from './constants.js';
+import { formHtml, rowHtml, runsHtml, reportHtml, planOf, WHEN_FIELD, WHEN_KIND_SEGMENT, ALL_DAY_FIELD } from './scheduleview.js';
+import { planClicked } from './planrows.js';
 import { newSchedule, minutesOf, nextRun, describeAt, isAllDay, WHAT, WHERE, WHEN, RUN } from './schedulerules.js';
 
 const NAME = 'Schedules';
@@ -37,9 +36,9 @@ const FIRST_SHARE = 0.8;
 const PROD_TAG = 'prod';
 const KEY_SAVE = 'KeyS';
 /** Boxes that show or hide more of the form. */
-const REDRAWS = new Set(['allowChanges', 'allowAll', 'toNotepad', 'toFile', 'agent']);
+const REDRAWS = new Set(['allowChanges', 'allowAll', 'toNotepad', 'toFile']);
 /** Fields that hold numbers. */
-const NUMBERS = new Set(['limitMinutes', 'keepDays', 'every', 'rounds']);
+const NUMBERS = new Set(['limitMinutes', 'keepDays', 'every']);
 /** The biggest "every", so a day still has a run in it. */
 const MAX_EVERY = Object.freeze({ minutes: 1440, hours: 24 });
 /** A run's output, under its row. */
@@ -117,8 +116,6 @@ function problemOf(s) {
   if (s.what === WHAT.command && !s.command.trim()) return 'It needs a command.';
   if (s.what === WHAT.snippet && !s.snippet) return 'It needs a snippet.';
   if (s.what === WHAT.agent && !s.prompt.trim()) return 'It needs a prompt.';
-  const rounds = s.rounds ?? ROUNDS.usual;
-  if (s.what === WHAT.agent && s.reviewers?.length && !(Number.isInteger(rounds) && rounds >= ROUNDS.min && rounds <= ROUNDS.max)) return `Review rounds go from ${ROUNDS.min} to ${ROUNDS.max}.`;
   if (s.where === WHERE.server && !s.profile) return 'It needs a server.';
   if (s.where === WHERE.terminal && !s.terminal.trim()) return 'It needs a terminal’s name or a #tag.';
   if (when.kind === WHEN.time && minutesOf(when.at) === null) return 'The time should look like 20:00.';
@@ -268,15 +265,23 @@ function fieldChanged(field) {
 }
 
 /**
- * A reviewer's box: the agent reviews what the prompt did, or not.
- * @param {string} kind
- * @param {boolean} on
+ * A click on who runs an agent prompt, who reviews it or its rounds, as on To do's Implement card: the schedule takes the plan
+ * picked, and the keyboard stays on what was clicked.
+ * @param {MouseEvent} e
+ * @returns {boolean} whether it was one of those
  */
-function reviewerChanged(kind, on) {
-  const s = /** @type {Schedule} */ (editing);
-  const others = (s.reviewers ?? []).filter(k => k !== kind);
-  s.reviewers = on ? [...others, kind] : others;
-  renderForm();
+function planChose(e) {
+  const s = editing;
+  if (!s) return false;
+  const agents = installedAgents();
+  return planClicked(e, planOf(s), { agents, reviewers: agents }, (plan, control) => {
+    s.agent = plan.by;
+    s.reviewers = plan.reviewers;
+    s.rounds = plan.rounds;
+    renderForm();
+    renderState();
+    /** @type {HTMLElement | null} */ (editEl.querySelector(`[data-plan="${control}"]:not(:disabled)`))?.focus();
+  });
 }
 
 /**
@@ -445,6 +450,7 @@ box.addEventListener('click', e => {
   const run = /** @type {HTMLElement | null} */ (target.closest('[data-run]'));
   const button = /** @type {HTMLElement | null} */ (target.closest('[data-sch]'));
   const link = /** @type {HTMLElement | null} */ (target.closest(`.${LINK_CLASS}`));
+  if (planChose(e)) return;
   if (link && editing) openReportLink(link, editing);
   else if (button) act(/** @type {string} */ (button.dataset.sch));
   else if (seg) segmentChose(seg);
@@ -466,12 +472,6 @@ for (const event of ['input', 'change']) {
       allDayChanged(field.checked);
       return;
     }
-    if (field.name === REVIEWER_FIELD) {
-      reviewerChanged(field.value, field.checked);
-      return;
-    }
-    // An agent that reviewed it runs it now: the one that ran it reviews in its place, as To do's Implement card has it.
-    if (field.name === 'agent') editing.reviewers = (editing.reviewers ?? []).map(kind => (kind === field.value ? editing?.agent ?? AGENT_KIND.claude : kind));
     fieldChanged(field);
     if (REDRAWS.has(field.name)) renderForm();
     else renderState();

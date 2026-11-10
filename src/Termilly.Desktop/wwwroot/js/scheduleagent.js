@@ -4,13 +4,25 @@
 // they make something run. A schedule an agent adds runs out of sight, and an agent prompt in it only reads files: the
 // user can allow more in the Schedules window.
 
-import { state, newId, lastFolderOf } from './store.js';
+import { state, newId, lastFolderOf, installedAgents } from './store.js';
 import { addApiMethods } from './api.js';
 import { schedules, scheduleById, runsOf, saveSchedule, runNow, setScheduleOn } from './schedules.js';
 import { newSchedule, describeWhen, describeAt, WHAT, WHEN, UNIT, DAY_NAMES, minutesOf } from './schedulerules.js';
 import { AGENT_KIND } from './constants.js';
 import { reviewersOf } from './schedulereview.js';
 import { allSnippets } from './snippets.js';
+
+/**
+ * The agent an agent prompt names, among those installed: Claude Code when it names none (or the first installed without it).
+ * @param {unknown} asked
+ */
+function agentOf(asked) {
+  const installed = installedAgents();
+  const kind = String(asked ?? '').trim().toLowerCase();
+  if (!kind) return installed.includes(AGENT_KIND.claude) ? AGENT_KIND.claude : installed[0] ?? AGENT_KIND.claude;
+  if (!installed.includes(kind)) throw new Error(`There's no agent "${kind}" here. Installed: ${installed.join(', ') || 'none'}.`);
+  return kind;
+}
 
 /** A schedule's id, as the UI makes them. */
 const ID_PREFIX = 's';
@@ -84,7 +96,7 @@ function whatOf(args) {
   if (what === WHAT.agent) {
     const prompt = String(args.prompt ?? '').trim();
     if (!prompt) throw new Error('An agent schedule needs its prompt.');
-    return { what, prompt, agent: args.agent === AGENT_KIND.codex ? AGENT_KIND.codex : AGENT_KIND.claude, allowChanges: false, allowAll: false };
+    return { what, prompt, agent: agentOf(args.agent), allowChanges: false, allowAll: false };
   }
   const command = String(args.command ?? '').trim();
   if (!command) throw new Error('A command schedule needs its command.');
