@@ -272,7 +272,11 @@ internal sealed class AgentMonitor : IStartable, IDisposable
 internal sealed class CodexModelsHandler(PageChannel page) : IMessageHandler
 {
     public void Register(MessageRouter router) =>
-        router.On<FromPage.CodexModelsAsk>(_ => Task.Run(() => page.Post(new ToPage.CodexModelList(CodexModels.Read()))));
+        router.On<FromPage.CodexModelsAsk>(_ => Task.Run(() =>
+        {
+            var models = CodexModels.Read();
+            page.Post(new ToPage.CodexModelList(models, CodexModels.Default(models)));
+        }));
 }
 
 /// <summary>Termilly's shell integration on servers (shell/remote): installing and removing it, and what its hooks report.</summary>

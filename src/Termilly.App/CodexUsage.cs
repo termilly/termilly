@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Termilly.Desktop.Services;
 
 namespace Termilly.Desktop;
@@ -30,9 +31,40 @@ internal static class CodexFiles
 internal sealed record CodexModel(string Slug, string Name, string? Description);
 
 /// <summary>Codex's models, from its cache of what the account may use (the ones its own /model lists).</summary>
-internal static class CodexModels
+internal static partial class CodexModels
 {
     private const string Listed = "list";
+    private const string Config = "config.toml";
+
+    /// <summary>
+    /// The model a new Codex session starts with: config.toml's own <c>model</c> (a line before its first [table]),
+    /// else the first Codex lists. A session tells which it runs only with its first reply; till then this is it.
+    /// </summary>
+    public static string? Default(IReadOnlyList<CodexModel> models, string? home = null)
+    {
+        try
+        {
+            foreach (var line in File.ReadLines(Path.Combine(home ?? CodexFiles.Home(), Config)))
+            {
+                if (line.TrimStart().StartsWith('['))
+                {
+                    break;
+                }
+                if (ModelLine().Match(line) is { Success: true } m)
+                {
+                    return m.Groups[1].Value;
+                }
+            }
+        }
+        catch (Exception e) when (Storage.IsFileError(e))
+        {
+            // No config: Codex's own default.
+        }
+        return models.Count > 0 ? models[0].Slug : null;
+    }
+
+    [GeneratedRegex("""^\s*model\s*=\s*["']([^"']+)["']""")]
+    private static partial Regex ModelLine();
 
     public static IReadOnlyList<CodexModel> Read(string? home = null)
     {

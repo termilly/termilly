@@ -104,7 +104,8 @@ internal static partial class ToPage
     }
 
     /// <summary>The models Codex offers (its /model list), for the status bar's model picker.</summary>
-    internal sealed record CodexModelList(IReadOnlyList<CodexModel> Models) : IHostMessage
+    /// <param name="Default">The model a new session starts with (Codex says which it runs only with its first reply).</param>
+    internal sealed record CodexModelList(IReadOnlyList<CodexModel> Models, string? Default) : IHostMessage
     {
         public static string Type => "codex:models";
     }

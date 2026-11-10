@@ -8,7 +8,7 @@ import { send } from './host.js';
 import { emit, EVENTS } from './store.js';
 import { showMenu, SIDE } from './popups.js';
 import { usageOf } from './claudeusage.js';
-import { codexModels, refreshCodexModels } from './codexmodels.js';
+import { freshCodexModels, codexStartModel } from './codexmodels.js';
 import { beforeEnter } from './api.js';
 import { isAgentWorking } from './agentline.js';
 import { agentKind } from './agentkinds.js';
@@ -37,9 +37,16 @@ const CLAUDE_MODELS = Object.freeze([
 const currentModel = tab => usageOf(tab)?.model ?? '';
 
 /**
+ * The model to tick: the one just picked, else the session's, else (before Codex's first reply) the one it starts with.
+ * @param {Tab} tab
+ * @param {string} kind
+ */
+const tickedModel = (tab, kind) => picked.get(tab.id)?.model ?? (currentModel(tab) || (kind === AGENT_KIND.codex ? codexStartModel() ?? '' : ''));
+
+/**
  * The model just picked in a terminal: its name, and the model its session ran then. The agent writes the new one to
  * its session's file only with its next reply, so until then the status bar shows the pick.
- * @type {Map<string, { name: string, from: string }>}
+ * @type {Map<string, { model: string, name: string, from: string }>}
  */
 const picked = new Map();
 
@@ -63,7 +70,7 @@ async function typeModel(tab, model, name) {
   send(PAGE.input, { id: tab.id, data: `${MODEL_COMMAND} ${model}` });
   await beforeEnter(tab);
   send(PAGE.input, { id: tab.id, data: '\r' });
-  picked.set(tab.id, { name, from: currentModel(tab) });
+  picked.set(tab.id, { model, name, from: currentModel(tab) });
   emit(EVENTS.claudeUsage, tab);
 }
 
@@ -74,7 +81,7 @@ async function typeModel(tab, model, name) {
  * @returns {import('./popups.js').MenuEntry[]}
  */
 function claudeItems(tab, state) {
-  const model = currentModel(tab).toLowerCase();
+  const model = tickedModel(tab, AGENT_KIND.claude).toLowerCase();
   return CLAUDE_MODELS.map(m => ({
     label: m.label, hint: escapeHtml(m.hint), checked: model.includes(m.alias), ...state,
     action: () => typeModel(tab, m.alias, m.label),
@@ -85,11 +92,11 @@ function claudeItems(tab, state) {
  * Codex's choices: the models its own /model lists, from its cache.
  * @param {Tab} tab
  * @param {{ disabled: boolean, title: string }} state
+ * @param {import('./codexmodels.js').CodexModel[]} models
  * @returns {import('./popups.js').MenuEntry[]}
  */
-function codexItems(tab, state) {
-  const model = currentModel(tab);
-  const models = codexModels();
+function codexItems(tab, state, models) {
+  const model = tickedModel(tab, AGENT_KIND.codex);
   if (!models.length) return [{ label: 'Codex hasn’t listed its models yet', disabled: true, title: 'Run codex once, or open this again in a moment' }];
   return models.map(m => ({
     label: m.name, checked: m.slug === model, ...state, title: state.title || (m.description ?? ''),
@@ -103,9 +110,12 @@ function codexItems(tab, state) {
  * @param {HTMLElement} anchor
  * @param {string} kind the agent running there (AGENT_KIND)
  */
-export function openModelPicker(tab, anchor, kind) {
-  if (kind === AGENT_KIND.codex) refreshCodexModels();
+export async function openModelPicker(tab, anchor, kind) {
+  // Codex's list is read fresh each time (it may have fetched new models), and waited for: before a session's first
+  // prompt nothing else has asked for it yet.
+  const models = kind === AGENT_KIND.codex ? await freshCodexModels() : [];
+  if (!anchor.isConnected) return;
   const busy = isAgentWorking(tab);
   const state = { disabled: busy, title: busy ? `${agentKind(kind).short} is working. The model changes between turns.` : '' };
-  showMenu(kind === AGENT_KIND.codex ? codexItems(tab, state) : claudeItems(tab, state), anchor, { side: SIDE.above });
+  showMenu(kind === AGENT_KIND.codex ? codexItems(tab, state, models) : claudeItems(tab, state), anchor, { side: SIDE.above });
 }

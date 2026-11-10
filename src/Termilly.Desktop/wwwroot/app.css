@@ -1065,7 +1065,7 @@ body[data-sidebar="rail"] .side-rail { opacity: 1; pointer-events: auto; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 8px 8px 14px;
+  padding: 3px 8px 8px 14px; /* centred on the 30px terminal title bar beside it */
   color: var(--muted);
   font-size: 11px;
   font-weight: 600;

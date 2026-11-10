@@ -497,7 +497,7 @@ export const HOST = Object.freeze({
 /** @typedef {{ items: Array<ClipView>, keeping: boolean }} Host_clipClips */
 /** @typedef {{ requestId: string|null, text: string|null, error?: string|null }} Host_clipTaken */
 /** @typedef {{ fiveHour: any|null, sevenDay: any|null }} Host_codexLimits */
-/** @typedef {{ models: Array<any> }} Host_codexModels */
+/** @typedef {{ models: Array<any>, default: string|null }} Host_codexModels */
 /** @typedef {{ requestId: string|null, hits: Array<any> }} Host_earlierFound */
 /** @typedef {{ requestId: string|null, lines: Array<string> }} Host_earlierTail */
 /** @typedef {{ id: string, message: string }} Host_error */

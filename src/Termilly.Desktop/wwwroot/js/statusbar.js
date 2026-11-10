@@ -11,9 +11,10 @@ import { tabRepo, repoTitle, DETACHED_LABEL } from './gitstatus.js';
 import { openBranchPicker } from './branchpicker.js';
 import { openModelPicker, pickedModel } from './modelpicker.js';
 import { agentKind } from './agentkinds.js';
+import { codexStartModel, codexModelName } from './codexmodels.js';
 import { escapeHtml, ICONS } from './ui.js';
 import { setHtmlIfChanged, targetOf } from './dom.js';
-import { AGENT_STATE } from './constants.js';
+import { AGENT_STATE, AGENT_KIND } from './constants.js';
 
 /** The chevron after a picker's item: it opens upwards, over the terminal. */
 const CHEVRON_UP = '<svg class="chev" viewBox="0 0 8 8"><path d="M1.5 5.5L4 3l2.5 2.5"/></svg>';
@@ -37,6 +38,15 @@ function barState(tab) {
 }
 
 /**
+ * The model's name before the session's first reply says it: Codex's start model, else the agent's name.
+ * @param {string} kind
+ */
+function startName(kind) {
+  const start = kind === AGENT_KIND.codex ? codexStartModel() : null;
+  return start ? codexModelName(start) : agentKind(kind).short;
+}
+
+/**
  * The left side: the agent's model (a button: the model picker), then its usage. Before the first reply there's no
  * usage yet, and the model's button says the agent's name.
  * @param {Tab} tab
@@ -45,7 +55,7 @@ function agentHtml(tab) {
   const kind = runningAgent(tab);
   if (!kind || !sessionShown(kind)) return '';
   const usage = usageOf(tab);
-  const name = pickedModel(tab) ?? (usage ? modelName(usage.model) : agentKind(kind).short);
+  const name = pickedModel(tab) ?? (usage ? modelName(usage.model) : startName(kind));
   const word = barState(tab);
   return (word ? `<span class="sb-item sb-state"><i></i>${STATE_WORDS[word]}</span>` : '')
     + `<button class="sb-item sb-model" data-sb="model" title="${escapeHtml(`${agentKind(kind).name}${usage?.model ? `: ${usage.model}` : ''}. Click to change the model.`)}"><b>${escapeHtml(name)}</b>${CHEVRON_UP}</button>`

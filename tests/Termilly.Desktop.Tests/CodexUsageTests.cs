@@ -93,4 +93,16 @@ public sealed class CodexUsageTests : IDisposable
         Assert.Equal("Workhorse", models[0].Description);
         Assert.Empty(CodexModels.Read(Path.Combine(_dir, "missing")));
     }
+
+    [Fact]
+    public void A_new_session_starts_with_configs_model_else_the_first_listed()
+    {
+        IReadOnlyList<CodexModel> models = [new("gpt-6.1-sol", "GPT-6.1-Sol", null), new("gpt-6-astra", "GPT-6-Astra", null)];
+        Assert.Equal("gpt-6.1-sol", CodexModels.Default(models, _dir)); // no config.toml
+        File.WriteAllText(Path.Combine(_dir, "config.toml"), "approval_policy = \"never\"\n\n[profiles.fast]\nmodel = \"gpt-5.6-luna\"\n");
+        Assert.Equal("gpt-6.1-sol", CodexModels.Default(models, _dir)); // a profile's model isn't the default
+        File.WriteAllText(Path.Combine(_dir, "config.toml"), "model = \"gpt-6-astra\"\n[profiles.fast]\nmodel = \"gpt-5.6-luna\"\n");
+        Assert.Equal("gpt-6-astra", CodexModels.Default(models, _dir));
+        Assert.Null(CodexModels.Default([], Path.Combine(_dir, "missing")));
+    }
 }
