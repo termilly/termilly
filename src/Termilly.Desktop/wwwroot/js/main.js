@@ -9,7 +9,7 @@ import {
 } from './store.js';
 import { setWindowState } from './windowshown.js';
 import { setFocusRestorer, openPopover, closePopover } from './popups.js';
-import { setKeyHandler, scheduleFit, clearActivity, keptRunning } from './terminals.js';
+import { setKeyHandler, scheduleFit, clearActivity, keptRunning, holdOpening, openHeld } from './terminals.js';
 import { consoleDefaults } from './consolecolors.js';
 import {
   newTab, closeTab, focusedTab, splitFocused, moveFocus, renderAll, switchWorkspace, restoreFocus, noteOutput,
@@ -480,6 +480,7 @@ function signalReady() {
   if (readySent) return;
   readySent = true;
   send(PAGE.ready);
+  openHeld();
   const loader = document.getElementById(LOADER_ID); // Linux's (js/loader.js); Windows's is the window's own
   if (loader) {
     // js/loader.js keeps its timer on the element.
@@ -596,6 +597,7 @@ function boot(saved, snapshot, liveSessions = []) {
     state.workspaces = [ws];
     state.activeId = ws.id;
   }
+  holdOpening(); // only the terminal in focus opens before the page shows; the rest open after (openHeld)
   renderAll();
   initSidebar();
   initToolbar();
@@ -616,6 +618,7 @@ function boot(saved, snapshot, liveSessions = []) {
   // no terminal to wait for, and after a few seconds at most.
   if (!focusedTab()) signalReady();
   setTimeout(signalReady, READY_AT_MOST_MS);
+  if (readySent) openHeld(); // shown before it booted (history was locked)
 }
 
 // History can't be unlocked: show the page so the unlock dialog (security.js) can be answered.
