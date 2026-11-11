@@ -44,6 +44,7 @@ internal static class Processes
     public static bool StartTermilly(string dir)
     {
         var exe = Path.Combine(dir, InstalledFiles.App);
+        Log.Write($"starting Termilly: {exe}");
         if (!File.Exists(exe))
         {
             Log.Write($"couldn't start Termilly: {exe} isn't there");
@@ -52,6 +53,7 @@ internal static class Processes
         try
         {
             Process.Start(new ProcessStartInfo("explorer.exe", Elevation.Quote(exe)) { UseShellExecute = false })?.Dispose();
+            Log.Write("Termilly launch handed to Explorer (window readiness not confirmed)");
             return true;
         }
         catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException)

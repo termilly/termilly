@@ -29,7 +29,9 @@ internal sealed class PageBoot(
         {
             var current = settings.Current;
             using var saved = workspaces.Load();
+            StartupLog.Mark("boot: waiting for the background host");
             var liveSessions = await host.LiveSessionsAsync().ConfigureAwait(false);
+            StartupLog.Mark($"boot: the host keeps {liveSessions.Length} shell(s)");
             using var last = current.Session.Restore == SettingValues.RestoreSession.Scrollback ? snapshot.Load() : null;
             profiles.Detect(); // picks up hosts added to ~/.ssh/config since start-up when the page reloads
             page.Post(new ToPage.Boot(
@@ -37,6 +39,7 @@ internal sealed class PageBoot(
                 new ToPage.SecurityInfo(vault.IsNew ? vault.RecoveryCode() : null, vault.Archives.Count),
                 new ToPage.AboutInfo(AppVersion.Current, AppPaths.DataDirectory, RemoteIntegration.VersionIn(),
                     CrashLog.Recent(AppPaths.DataDirectory, DateTimeOffset.Now - CrashLog.RecentFor))));
+            StartupLog.Mark("boot sent to the page");
         }
 
         if (!_fontsSent)
@@ -310,6 +313,7 @@ internal sealed class WindowHandler : IMessageHandler
     private void Ready()
     {
         _tmux.StopAll(); // a reloaded page has no tmux clients of its own
+        StartupLog.Mark("page says ready");
         _window.PageReady();
         _api.PageReady();
     }
