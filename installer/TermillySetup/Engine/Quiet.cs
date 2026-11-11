@@ -21,17 +21,18 @@ namespace Termilly.Setup.Engine;
 /// </summary>
 internal static class Quiet
 {
-    public static int Run()
+    public static int Run(Action? starting = null, Action<string>? failed = null)
     {
         var elapsed = Stopwatch.StartNew();
         Log.Write($"quiet {(SetupApp.Has(Flags.Uninstall) ? "uninstall" : "install")} started: {Environment.CommandLine}");
         try
         {
-            return SetupApp.Has(Flags.Uninstall) ? Uninstall(SetupApp.Args) : Install(SetupApp.Args);
+            return SetupApp.Has(Flags.Uninstall) ? Uninstall(SetupApp.Args) : Install(SetupApp.Args, starting);
         }
         catch (Exception e)
         {
             Log.Write($"quiet {(SetupApp.Has(Flags.Uninstall) ? "uninstall" : "install")} failed: {e}");
+            failed?.Invoke(e.Message);
             return ExitCodes.Failed;
         }
         finally
@@ -69,7 +70,7 @@ internal static class Quiet
         return ExitCodes.Done;
     }
 
-    private static int Install(Arguments args)
+    private static int Install(Arguments args, Action? starting)
     {
         var integrate = !args.Has(Flags.NoWindowsIntegration);
         if (!integrate && args.Value(Flags.Dir) is null)
@@ -89,6 +90,7 @@ internal static class Quiet
         {
             return WindowsCodes.ElevationRequired;
         }
+        var launchFailed = false;
         try
         {
             new Installation(payload, options, integrate).InstallAsync(p => Log.Write($"{p.Step}: {p.Text}"), CancellationToken.None).GetAwaiter().GetResult();
@@ -99,8 +101,13 @@ internal static class Quiet
             // if installing failed, whatever is there, rather than leaving the user without it.
             if (args.Has(Flags.Start))
             {
-                Processes.StartTermilly(options.InstallDir);
+                starting?.Invoke();
+                launchFailed = !Processes.StartTermilly(options.InstallDir, direct: !integrate);
             }
+        }
+        if (launchFailed && starting is not null)
+        {
+            throw new SetupException("Termilly could not be started. See the setup log for details.");
         }
         return ExitCodes.Done;
     }

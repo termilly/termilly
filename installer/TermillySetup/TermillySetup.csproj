@@ -45,6 +45,7 @@
          (src/Shared); only these files of them, which .NET Framework compiles as they are. -->
     <Compile Include="..\..\src\Shared\Product.cs" Link="Shared\Product.cs" />
     <Compile Include="..\..\src\Shared\SetupFlags.cs" Link="Shared\SetupFlags.cs" />
+    <Compile Include="..\..\src\Shared\UpdateSignals.cs" Link="Shared\UpdateSignals.cs" />
   </ItemGroup>
 
   <ItemGroup>

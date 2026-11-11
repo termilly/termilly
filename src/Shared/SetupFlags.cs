@@ -10,6 +10,8 @@ internal static class SetupFlags
     public const string Quiet = "--quiet";
     /// <summary>After a quiet install, start Termilly again, as the user who's signed in.</summary>
     public const string Start = "--start";
+    /// <summary>In-app update status window; its optional value is the initiating user's event scope.</summary>
+    public const string UpdateWindow = "--update-window";
     public const string AllUsers = "--all-users";
     /// <summary>The folder to install in, as the next argument.</summary>
     public const string Dir = "--dir";

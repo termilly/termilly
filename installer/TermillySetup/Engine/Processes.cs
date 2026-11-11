@@ -39,9 +39,10 @@ internal static class Processes
 
     /// <summary>
     /// Starts the installed Termilly in <paramref name="dir"/> through Explorer, so it runs as the signed-in user even
-    /// when setup runs as administrator. False (and logged) when it couldn't.
+    /// when setup runs as administrator. False (and logged) when it couldn't. <paramref name="direct"/>: started by setup
+    /// itself, with setup's environment (a test install, --no-windows-integration, keeps its own data folder that way).
     /// </summary>
-    public static bool StartTermilly(string dir)
+    public static bool StartTermilly(string dir, bool direct = false)
     {
         var exe = Path.Combine(dir, InstalledFiles.App);
         Log.Write($"starting Termilly: {exe}");
@@ -52,7 +53,13 @@ internal static class Processes
         }
         try
         {
-            Process.Start(new ProcessStartInfo("explorer.exe", Elevation.Quote(exe)) { UseShellExecute = false })?.Dispose();
+            // The new Termilly may come to the front: setup was started from Termilly's window, so it may pass that on.
+            AllowSetForegroundWindow(AnyProcess);
+            var start = direct
+                ? new ProcessStartInfo(exe) { UseShellExecute = false, WorkingDirectory = Path.GetDirectoryName(dir) ?? dir }
+                : new ProcessStartInfo("explorer.exe", Elevation.Quote(exe)) { UseShellExecute = false };
+            Process.Start(start)?.Dispose();
+            Log.Write($"started Termilly{(direct ? " (directly, test install)" : " through Explorer")}");
             Log.Write("Termilly launch handed to Explorer (window readiness not confirmed)");
             return true;
         }
@@ -154,4 +161,10 @@ internal static class Processes
 
     [DllImport("kernel32.dll")]
     private static extern bool CloseHandle(IntPtr handle);
+
+    /// <summary>ASFW_ANY: any process may take the foreground from setup.</summary>
+    private const int AnyProcess = -1;
+
+    [DllImport("user32.dll")]
+    private static extern bool AllowSetForegroundWindow(int processId);
 }

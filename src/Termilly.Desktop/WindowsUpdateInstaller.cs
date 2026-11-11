@@ -21,9 +21,14 @@ internal sealed class WindowsUpdateInstaller : IUpdateInstaller
 
     public bool EndsKeptShells => true;
 
-    public Task<UpdateInstallResult> InstallAsync(string file, CancellationToken cancel)
+    public async Task<UpdateInstallResult> InstallAsync(string file, CancellationToken cancel)
     {
-        var command = SetupCommand.For(file, InstalledCopy.Match(AppContext.BaseDirectory, Location(RegistryHive.CurrentUser), Location(RegistryHive.LocalMachine)));
+        var scope = UpdateSignals.Scope(AppContext.BaseDirectory);
+        using var shown = TryCreateSignal(scope, UpdateSignals.Shown);
+        using var started = TryCreateSignal(scope, UpdateSignals.Started);
+        shown?.Reset();
+        started?.Reset();
+        var command = SetupCommand.For(file, InstalledCopy.Match(AppContext.BaseDirectory, Location(RegistryHive.CurrentUser), Location(RegistryHive.LocalMachine)), scope);
 #if DEBUG
         command = TestSetup(command);
 #endif
@@ -37,15 +42,30 @@ internal sealed class WindowsUpdateInstaller : IUpdateInstaller
         try
         {
             Process.Start(start)?.Dispose();
-            return Task.FromResult(UpdateInstallResult.Running);
+            if (shown is not null)
+            {
+                var painted = await Task.Run(() => shown.WaitOne(TimeSpan.FromSeconds(2)), cancel).ConfigureAwait(false);
+                StartupLog.Mark(painted ? "update window painted" : "update window paint wait timed out");
+            }
+            return UpdateInstallResult.Running;
         }
         catch (Win32Exception e) when (e.NativeErrorCode == Cancelled)
         {
-            return Task.FromResult(UpdateInstallResult.Failed("Windows didn't get permission to install for all users, so nothing changed."));
+            return UpdateInstallResult.Failed("Windows didn't get permission to install for all users, so nothing changed.");
         }
         catch (Win32Exception e)
         {
-            return Task.FromResult(UpdateInstallResult.Failed($"Couldn't start setup: {e.Message}"));
+            return UpdateInstallResult.Failed($"Couldn't start setup: {e.Message}");
+        }
+    }
+
+    private static System.Threading.EventWaitHandle? TryCreateSignal(string scope, string stage)
+    {
+        try { return UpdateSignals.Create(scope, stage); }
+        catch (Exception e) when (e is Win32Exception or UnauthorizedAccessException or System.IO.IOException)
+        {
+            StartupLog.Mark($"update window paint signal unavailable: {e.Message}");
+            return null;
         }
     }
 

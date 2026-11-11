@@ -70,7 +70,7 @@ public partial class MainWindow : Window
         StartupLog.Mark("services built");
         _settings.Saved += _ => OnSettingsSaved();
         InitializeComponent();
-        ContentRendered += (_, _) => StartupLog.Mark("window shown (start-up screen)");
+        ContentRendered += OnStartupScreenPainted;
         WindowInterop.UseCustomChrome(this);
         // Termilly opens where the window was last closed (maximized, if it was), on the start-up screen until the
         // page is ready (RevealPage).
@@ -106,6 +106,23 @@ public partial class MainWindow : Window
     }
 
     private AppSettings Settings => _settings.Current;
+
+    private void OnStartupScreenPainted(object? sender, EventArgs e)
+    {
+        ContentRendered -= OnStartupScreenPainted;
+        StartupLog.Mark("window shown (start-up screen)");
+        try
+        {
+            if (UpdateSignals.SignalStarted(AppContext.BaseDirectory))
+            {
+                StartupLog.Mark("update startup screen paint signalled");
+            }
+        }
+        catch (Exception error) when (error is System.ComponentModel.Win32Exception or UnauthorizedAccessException or IOException)
+        {
+            StartupLog.Mark($"update startup screen signal unavailable: {error.Message}");
+        }
+    }
 
     /// <summary>The whole app's size (Settings' zoom) as WebView2 takes it: 1 is as designed.</summary>
     private double Zoom => Settings.Interface.Zoom / (double)InterfaceSettings.DefaultZoom;
