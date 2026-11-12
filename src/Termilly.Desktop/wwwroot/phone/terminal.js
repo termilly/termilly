@@ -5,8 +5,8 @@
 // push the text up, here and on the PC), and while the keyboard is up the view slides up to keep the cursor's line
 // above it. First what it shows (the window's own terminal, drawn again at that size), then what it prints.
 // With Settings › Remote › Allow typing on, the phone's keyboard types into it, and a key bar adds what a phone lacks:
-// Esc, Tab, Ctrl, the arrows, Paste and the PC's snippets. A terminal running Claude Code also gets a box to message
-// it: a plain text field, so the phone's keyboard can dictate into it, and what's said is checked before it goes.
+// Esc, Tab, Ctrl, the arrows, Paste and the PC's snippets. A terminal running an agent (Claude Code, Codex) also gets a
+// box to message it, the same for each: a plain text field, so the phone's keyboard can dictate into it, and what's said is checked before it goes.
 
 import { SCREEN, terminalTouch } from './gestures.js';
 import { snippetSheet, asTyped } from './snippets.js';
@@ -29,10 +29,15 @@ const PASTE = 'paste';
 const SNIP = 'snip';
 /** Clipboard's sheet: the PC's text clips to paste (clips.js). */
 const CLIPS = 'clips';
-/** The same from Claude's +: the clip's text goes to the message box. */
+/** The same from the message box's +: the clip's text goes in the box. */
 const CLIPS_BOX = 'clips-box';
-/** A message to Claude goes in, then Enter after this (as the PC's own send does, api.js); one with lines is pasted. */
+/** A message to an agent goes in, then Enter after this (as the PC's own send does, api.js); one with lines is pasted. */
 const ENTER_AFTER_MS = 200;
+/** Codex takes fast typing for a paste, and an Enter that comes while a long text still goes in becomes a new line in it:
+ * its Enter waits until the screen has been quiet this long, but no longer than the most (js/api.js beforeEnter). */
+const CODEX_ENTER = Object.freeze({ quiet: 300, most: 3000 });
+/** The agents a terminal's icon says run there, by the name the message box's hint gives them (js/agentkinds.js). */
+const AGENT_NAME = Object.freeze({ claude: 'Claude', codex: 'Codex' });
 const PASTED = Object.freeze({ start: '\x1b[200~', end: '\x1b[201~' });
 /** Ctrl with a letter: its code is the letter's minus 64 (Ctrl+C is 3). */
 const CTRL_OFFSET = 64;
@@ -219,7 +224,7 @@ export function terminalView(app) {
     return true;
   }
 
-  // The box under a Claude terminal (compose.js): Messages or One bar, as Settings says.
+  // The box under an agent's terminal (compose.js): Messages or One bar, as Settings says.
   const compose = composer(view, { keys: BAR, type, toast: app.toast, redraw: () => frame() });
 
   // The terminal's workspace's snippets and the global ones.
@@ -260,7 +265,7 @@ export function terminalView(app) {
     view.querySelectorAll('.tv-head, .tv-foot, .c-menu').forEach(el => el.remove());
     view.insertAdjacentHTML('afterbegin', head());
     box?.insertAdjacentHTML('afterend', typing
-      ? compose.html(shown?.icon === 'claude')
+      ? compose.html(/** @type {Record<string, string>} */ (AGENT_NAME)[shown?.icon ?? ''] ?? null)
       : '<p class="tv-foot tv-note">Typing from the phone is off: Settings › Remote › Allow typing, on the PC.</p>');
     setCtrl(ctrl);
   }
@@ -317,14 +322,16 @@ export function terminalView(app) {
         requestAnimationFrame(fitGrid);
       },
       sized: () => localStorage.setItem(SIZE_KEY, String(fontSize)),
-      // Under a Claude terminal the tap goes to the message box: the keyboard's dictation works there, while in the
-      // terminal itself it garbles (it rewrites words already sent, so they come out twice).
+      // Under an agent's terminal the tap goes to the message box: the keyboard's dictation works there, while in the
+      // terminal itself it garbles (it rewrites words already sent, so they come out twice). Either way the tap is used
+      // up here: the phone's own click after it would land on whatever is under the finger once the keyboard has moved
+      // the page (the list of terminals behind the view).
       tap: () => {
         if (!typing) return false;
         const field = compose.field();
-        if (!field) term?.focus();
-        field?.focus();
-        return !!field;
+        if (field) field.focus();
+        else term?.focus();
+        return true;
       },
     });
   }
@@ -418,7 +425,31 @@ export function terminalView(app) {
   window.visualViewport?.addEventListener('resize', fitViewport);
   window.visualViewport?.addEventListener('scroll', pin);
 
-  /** Sends what's in the message box to Claude: the words, then Enter. */
+  /**
+   * Enter after a message, once it has gone in: Codex's waits for its screen to settle (CODEX_ENTER).
+   * @param {string} pane
+   */
+  function enterAfter(pane) {
+    const done = () => { if (shown?.id === pane) type('\r'); };
+    if (shown?.icon !== 'codex' || !term) {
+      setTimeout(done, ENTER_AFTER_MS);
+      return;
+    }
+    let quiet = window.setTimeout(end, CODEX_ENTER.quiet);
+    const most = window.setTimeout(end, CODEX_ENTER.most);
+    const writes = term.onWriteParsed(() => {
+      clearTimeout(quiet);
+      quiet = window.setTimeout(end, CODEX_ENTER.quiet);
+    });
+    function end() {
+      clearTimeout(quiet);
+      clearTimeout(most);
+      writes.dispose();
+      done();
+    }
+  }
+
+  /** Sends what's in the message box to the agent: the words, then Enter. */
   function sendMessage() {
     const field = /** @type {HTMLTextAreaElement | null} */ (view.querySelector(`${COMPOSE} textarea`));
     const text = field?.value.trim() ?? '';
@@ -428,7 +459,7 @@ export function terminalView(app) {
     compose.stopListening(); // sent: no more dictation into it
     field.blur(); // and the keyboard goes, which ends the keyboard's own dictation (it listens while the box has it)
     compose.changed();
-    setTimeout(() => type('\r'), ENTER_AFTER_MS);
+    if (shown) enterAfter(shown.id);
   }
   view.addEventListener('submit', e => {
     e.preventDefault();
@@ -487,7 +518,7 @@ export function terminalView(app) {
 
   return {
     open, close, update, message, rewatch, retheme,
-    /** A clip's text the PC sent for the message box (Paste from Clipboard in Claude's +). @param {string} text */
+    /** A clip's text the PC sent for the message box (Paste from Clipboard in its +). @param {string} text */
     fillBox: text => compose.fill(text),
     /** The terminal shown, or null. */
     get viewing() { return shown?.id ?? null; },

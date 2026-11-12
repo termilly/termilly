@@ -15,7 +15,7 @@ export const SETTINGS_PAGE = Object.freeze({ list: '', alerts: 'alerts', appeara
 export const PAGE_TITLE = Object.freeze({ alerts: 'Alerts', appearance: 'Appearance', themes: 'More themes', text: 'Terminal text', scrolling: 'Scrolling', compose: 'Message box', dictation: 'Dictation', pc: 'Your PC' });
 /** How the microphone dictates (compose.js DICTATION), as Settings offers it. */
 const DICTATION_CHOICES = [['keyboard', 'Keyboard', 'Use the keyboard\'s microphone. The phone never asks'], ['termilly', 'Termilly', 'Dictates without the keyboard. iOS asks for the microphone after each restart']];
-/** The boxes for writing to Claude (compose.js COMPOSE_STYLE), as Settings offers them. */
+/** The boxes for writing to an agent (compose.js COMPOSE_STYLE), as Settings offers them. */
 const COMPOSE_CHOICES = [['messages', 'Messages', 'A round field with the microphone, over the keys'], ['bar', 'One bar', 'Keys and the field share one row, with a switch']];
 /** The ways the terminal scrolls back (gestures.js SCROLLING), as Settings offers them. */
 const SCROLL_CHOICES = [['smooth', 'Smooth'], ['lines', 'Line by line']];
@@ -142,7 +142,7 @@ export function settingsHtml(now) {
       <span>${now.size} pt</span><button class="btn" data-do="${SETTING.bigger}" aria-label="Bigger">A+</button></div>`;
     case SETTINGS_PAGE.scrolling: return choicesHtml(SCROLL_CHOICES, now.scrolling, SETTING.scrolling);
     case SETTINGS_PAGE.compose: return `${choicesHtml(COMPOSE_CHOICES, now.compose, SETTING.compose)}
-      <p class="muted hint">Under a Claude terminal, for writing to Claude.</p>`;
+      <p class="muted hint">Under a Claude Code or Codex terminal, for writing to it.</p>`;
     case SETTINGS_PAGE.dictation: return choicesHtml(DICTATION_CHOICES, now.dictation, SETTING.dictation);
     case SETTINGS_PAGE.pc: return `<div class="list pad"><p class="mono">${esc(now.host)}</p>
       <p class="muted">${now.connected ? 'Connected.' : 'Reconnecting.'}</p></div>
