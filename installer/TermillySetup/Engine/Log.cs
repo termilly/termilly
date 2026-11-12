@@ -19,9 +19,10 @@ internal static class Log
 
     public static void Write(string message)
     {
-        var line = $"[{DateTime.Now:HH:mm:ss}] {message}";
+        string line;
         lock (Gate)
         {
+            line = $"[{DateTime.Now:HH:mm:ss.fff}] {message}";
             Text.AppendLine(line);
             try
             {

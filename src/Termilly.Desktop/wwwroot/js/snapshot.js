@@ -8,7 +8,7 @@
 import { PAGE, HOST } from './protocol.js';
 import { send, onHost } from './host.js';
 import { state, finalSave, resumeAgentCommand } from './store.js';
-import { bufferLines, scrolledBack, prepareStart } from './terminals.js';
+import { bufferLines, scrolledBack, prepareStart, isHeld } from './terminals.js';
 import { markHibernated } from './hibernate.js';
 import { startResuming } from './resuming.js';
 import { AGENT_KIND, SETTING_VALUES } from './constants.js';
@@ -44,13 +44,15 @@ function snapshot() {
   /** @type {Record<string, object>} */
   const tabs = {};
   for (const tab of state.tabs.values()) {
-    if (!tab.view?.term || tab.noHistory) continue;
+    // A terminal still waiting to open after a start keeps what it was going to show.
+    const waiting = isHeld(tab) ? (tab.start?.output ?? { lines: [], scroll: null }) : null;
+    if ((!tab.view?.term && !waiting) || tab.noHistory) continue;
     // A session still waiting to resume (its shell hasn't shown a prompt yet) is kept for the next start too.
     const session = tab.agent?.session ?? tab.hibernated?.session ?? tab.start?.resumeSession;
-    const lines = bufferLines(tab); // the whole scrollback: it all comes back
+    const lines = waiting ? waiting.lines : bufferLines(tab); // the whole scrollback: it all comes back
     tabs[tab.id] = {
       lines,
-      scroll: scrolledBack(tab, lines), // null at the bottom
+      scroll: waiting ? (waiting.scroll ?? null) : scrolledBack(tab, lines), // null at the bottom
       agentSession: session && SESSION_ID.test(session) ? session : null,
       agentFolder: tab.agent?.folder ?? tab.hibernated?.folder ?? null,
       // The agent of the session kept, from the same place as the session.

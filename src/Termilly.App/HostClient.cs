@@ -85,6 +85,7 @@ internal sealed class HostClient : IDisposable
                     return null;
                 }
                 client.Running = hello.Sessions.ToDictionary(s => s.Id, s => (s.Pid, s.Alive));
+                StartupLog.Mark($"host connected (try {attempt + 1})");
                 return client;
             }
             catch (Exception e) when (e is TimeoutException or IOException or UnauthorizedAccessException)
@@ -92,6 +93,7 @@ internal sealed class HostClient : IDisposable
                 pipe.Dispose();
                 if (attempt == 0 && File.Exists(HostExe))
                 {
+                    StartupLog.Mark("no host running: starting one");
                     Process.Start(new ProcessStartInfo(HostExe) { UseShellExecute = false, CreateNoWindow = true, WorkingDirectory = Path.GetDirectoryName(HostExe)! });
                 }
                 else

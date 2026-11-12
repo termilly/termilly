@@ -60,11 +60,13 @@ internal sealed class Installation
 
     private readonly Payload _payload;
     private readonly SetupOptions _options;
+    private readonly bool _integrate;
 
-    public Installation(Payload payload, SetupOptions options)
+    public Installation(Payload payload, SetupOptions options, bool integrate = true)
     {
         _payload = payload;
         _options = options;
+        _integrate = integrate;
     }
 
     /// <summary>Whether the .NET runtime came from setup's own copy (the Done page says so).</summary>
@@ -80,21 +82,29 @@ internal sealed class Installation
         {
             throw new SetupException("Setup is damaged: its files don't match what was built.", "Download setup again from termilly.com.");
         }
+        Log.Write("payload verification done");
         await InstallRuntimesAsync(report, cancel).ConfigureAwait(false);
         await CopyFilesAsync(dir, report, cancel).ConfigureAwait(false);
 
-        report(new Progress(Step.Windows, "Adding shortcuts…", At.Shortcuts));
+        report(new Progress(Step.Windows, _integrate ? "Adding shortcuts…" : "Writing Termilly settings…", At.Shortcuts));
         var exe = Path.Combine(dir, InstalledFiles.App);
         try
         {
-            RegisterWindows(dir, exe);
+            if (_integrate)
+            {
+                RegisterWindows(dir, exe);
+            }
+            else
+            {
+                Log.Write("Windows integration skipped (--no-windows-integration)");
+            }
             TermillySettings.Write(_options);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Security.SecurityException or COMException)
         {
             throw new SetupException("Termilly's files are installed, but Windows integration failed: " + e.Message, "Retry, or run setup as administrator.");
         }
-        report(new Progress(Step.Windows, "Shortcuts and uninstall entry added", At.Registered, Done: true));
+        report(new Progress(Step.Windows, _integrate ? "Shortcuts and uninstall entry added" : "Windows integration skipped", At.Registered, Done: true));
 
         report(new Progress(Step.Check, "Checking the installation…", At.Checking));
         if (!File.Exists(exe))
@@ -136,6 +146,7 @@ internal sealed class Installation
     {
         report(new Progress(Step.Files, "Closing Termilly…", At.Closing));
         await Task.Run(() => Processes.CloseAll(dir), cancel).ConfigureAwait(false);
+        Log.Write("closing Termilly done");
         report(new Progress(Step.Files, "Copying Termilly…", At.Copying));
         var staging = dir + StagingSuffix;
         var backup = dir + BackupSuffix;
@@ -151,6 +162,7 @@ internal sealed class Installation
                 WriteCommandShim(staging);
             }
         }, cancel).ConfigureAwait(false);
+        Log.Write("staging files done");
         for (var attempt = 1; !TrySwap(dir, staging, backup, attempt); attempt++)
         {
             if (attempt == SwapAttempts)
@@ -161,6 +173,7 @@ internal sealed class Installation
             }
             // Whatever still runs from the folder (Termilly closing, a helper started meanwhile) is closed again.
             await Task.Run(() => Processes.CloseAll(dir), cancel).ConfigureAwait(false);
+            Log.Write($"closing Termilly done after swap try {attempt}; retrying in {SwapRetryDelay.TotalMilliseconds:0} ms");
             await Task.Delay(SwapRetryDelay, cancel).ConfigureAwait(false);
         }
         report(new Progress(Step.Files, "Termilly copied", At.Copied, Done: true, Note: $"{Folders.SizeMb(dir):0} MB"));
@@ -172,6 +185,7 @@ internal sealed class Installation
     /// </summary>
     internal static bool TrySwap(string dir, string staging, string backup, int attempt)
     {
+        Log.Write($"swapping folder (try {attempt} of {SwapAttempts}): {dir}");
         try
         {
             if (Directory.Exists(dir))
@@ -179,6 +193,7 @@ internal sealed class Installation
                 Directory.Move(dir, backup);
             }
             Directory.Move(staging, dir);
+            Log.Write($"folder swap done (try {attempt} of {SwapAttempts})");
             return true;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)

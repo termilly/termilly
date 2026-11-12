@@ -52,6 +52,7 @@ public partial class MainWindow : Window
 
     public MainWindow()
     {
+        StartupLog.Mark("building services");
         _services = new ServiceCollection()
             .AddTermilly()
             .AddPlatform(new WindowsPlatform(this))
@@ -66,8 +67,10 @@ public partial class MainWindow : Window
         _page = _services.GetRequiredService<PageHost>();
         _theme = _services.GetRequiredService<WindowTheme>();
         _quit = _services.GetRequiredService<QuitGate>();
+        StartupLog.Mark("services built");
         _settings.Saved += _ => OnSettingsSaved();
         InitializeComponent();
+        ContentRendered += OnStartupScreenPainted;
         WindowInterop.UseCustomChrome(this);
         // Termilly opens where the window was last closed (maximized, if it was), on the start-up screen until the
         // page is ready (RevealPage).
@@ -83,20 +86,43 @@ public partial class MainWindow : Window
 
         // Never leave the window stuck on the start-up screen, even if the page fails to report in.
         _revealFallback = new DispatcherTimer { Interval = RevealTimeout };
-        _revealFallback.Tick += (_, _) => RevealPage();
+        _revealFallback.Tick += (_, _) =>
+        {
+            StartupLog.Mark($"page not ready after {RevealTimeout.TotalSeconds:0} s: shown anyway");
+            RevealPage();
+        };
         _revealFallback.Start();
 
         Loaded += async (_, _) =>
         {
+            StartupLog.Mark("window loaded");
             _hotkeys = new GlobalHotkeys(this);
             _tray = CreateTray();
             _page.Start();
+            StartupLog.Mark("services started");
             UpdateGlobalHotkeys();
             await InitializeWebViewAsync();
         };
     }
 
     private AppSettings Settings => _settings.Current;
+
+    private void OnStartupScreenPainted(object? sender, EventArgs e)
+    {
+        ContentRendered -= OnStartupScreenPainted;
+        StartupLog.Mark("window shown (start-up screen)");
+        try
+        {
+            if (UpdateSignals.SignalStarted(AppContext.BaseDirectory))
+            {
+                StartupLog.Mark("update startup screen paint signalled");
+            }
+        }
+        catch (Exception error) when (error is System.ComponentModel.Win32Exception or UnauthorizedAccessException or IOException)
+        {
+            StartupLog.Mark($"update startup screen signal unavailable: {error.Message}");
+        }
+    }
 
     /// <summary>The whole app's size (Settings' zoom) as WebView2 takes it: 1 is as designed.</summary>
     private double Zoom => Settings.Interface.Zoom / (double)InterfaceSettings.DefaultZoom;
@@ -147,9 +173,11 @@ public partial class MainWindow : Window
             return;
         }
         _target = null;
+        StartupLog.Mark("revealing the page");
         var fade = new System.Windows.Media.Animation.DoubleAnimation(0, RevealFade);
         fade.Completed += (_, _) =>
         {
+            StartupLog.Mark("page shown");
             Canvas.SetLeft(Web, 0);
             Canvas.SetTop(Web, 0);
             Loader.Visibility = Visibility.Collapsed;
@@ -183,7 +211,9 @@ public partial class MainWindow : Window
 #endif
             var env = await CoreWebView2Environment.CreateAsync(
                 userDataFolder: Path.Combine(AppPaths.DataDirectory, WebViewFolder), options: options);
+            StartupLog.Mark("WebView2 environment created");
             await Web.EnsureCoreWebView2Async(env);
+            StartupLog.Mark("WebView2 ready");
         }
         catch (WebView2RuntimeNotFoundException)
         {
@@ -203,7 +233,11 @@ public partial class MainWindow : Window
         core.WebMessageReceived += OnWebMessage;
         core.PermissionRequested += OnPermissionRequested;
         core.NewWindowRequested += OnNewWindowRequested;
-        core.NavigationCompleted += (_, _) => PostWindowState();
+        core.NavigationCompleted += (_, _) =>
+        {
+            StartupLog.Mark("page loaded");
+            PostWindowState();
+        };
         core.Navigate($"https://{HostName}/index.html");
     }
 

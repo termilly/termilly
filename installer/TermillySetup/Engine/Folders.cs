@@ -15,7 +15,9 @@ internal static class Folders
     private const int RetryDelayMs = 500;
 
     /// <summary>Termilly's settings, workspaces and history (this user's).</summary>
-    public static string Data => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), Product.Name);
+    public static string Data => Environment.GetEnvironmentVariable("TERMILLY_DATA_DIR") is { Length: > 0 } overridden
+        ? overridden
+        : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), Product.Name);
 
     public static void Delete(string dir, int retries = Retries)
     {

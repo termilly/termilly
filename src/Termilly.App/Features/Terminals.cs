@@ -92,11 +92,13 @@ internal sealed class TerminalHandler(
                 terminals.Started(id, stream, 0);
                 return;
             }
+            var took = System.Diagnostics.Stopwatch.StartNew();
             var (session, pid) = StartShell(id, new PtyOptions(commandLine, cols, rows, folder, environment), Output, (code, exitedPid) =>
             {
                 terminals.Exited(id, exitedPid);
                 page.Post(new ToPage.Exit(id, code));
             });
+            StartupLog.Mark($"shell {id} ({profile.Name}, {session.GetType().Name}) in {took.ElapsedMilliseconds} ms");
             terminals.Started(id, session, pid);
         }
         catch (Exception ex)

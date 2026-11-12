@@ -9,6 +9,12 @@ public partial class App : Application
     {
         base.OnStartup(e);
         SetupApp.LeaveStartFolder();
+        if (UpdateWindow.IsRequested(SetupApp.Args))
+        {
+            MainWindow = new UpdateWindow();
+            MainWindow.Show();
+            return;
+        }
         if (SetupApp.Has("--quiet"))
         {
             Shutdown(Engine.Quiet.Run()); // no window: scripts and IT tools (Engine/Quiet.cs)

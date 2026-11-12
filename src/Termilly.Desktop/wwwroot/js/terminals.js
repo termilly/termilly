@@ -237,11 +237,60 @@ const PASTE = Object.freeze({ oneLine: 'one', all: 'all' });
 /** The lines of a multi-line paste the question shows. */
 const PASTE_PREVIEW_LINES = 8;
 
+// ---- Opening terminals at start ----
+
+/**
+ * The terminals held back while the page starts (holdBack): only the one in focus opens before the page shows, so the
+ * page shows as soon as its prompt is up instead of after every terminal's saved output is written. The rest open
+ * after, one at a time (openHeld). Each leaves the set when it opens.
+ * @type {Set<Tab>}
+ */
+const held = new Set();
+let holding = false;
+
+/** At start, before the workspaces are drawn: the terminals not in focus wait to open (holdBack). */
+export function holdOpening() {
+  holding = true;
+}
+
+/**
+ * While the page starts, holds a terminal back from opening (openHeld opens it).
+ * @param {Tab} tab
+ * @returns {boolean} whether it waits
+ */
+export function holdBack(tab) {
+  if (!holding) return false;
+  held.add(tab);
+  return true;
+}
+
+/** Whether a terminal still waits to open after a start: it has its saved output and agent session still to come. */
+export const isHeld = (/** @type {Tab} */ tab) => held.has(tab);
+
+/** Between two terminals opened after a start: the page takes input and output meanwhile. */
+const BETWEEN_HELD_MS = 0;
+
+/**
+ * The page shows: the terminals held back open one after another, the active workspace's first, each once the one
+ * before has written its saved output. One opened meanwhile (focused, or its workspace shown) is skipped.
+ */
+export async function openHeld() {
+  holding = false;
+  const tabs = [...held].sort((a, b) => Number(a.wsId !== state.activeId) - Number(b.wsId !== state.activeId));
+  for (const tab of tabs) {
+    await new Promise(resolve => setTimeout(resolve, BETWEEN_HELD_MS));
+    if (held.has(tab) && state.tabs.get(tab.id) === tab && tab.view && !tab.view.term) await openTerminal(tab);
+    held.delete(tab);
+  }
+}
+
 /**
  * Opens the tab's terminal (its view must be in the DOM so xterm can measure it) and starts its shell.
  * @param {Tab} tab
+ * @returns {Promise<unknown>} settles once its saved output, if any, is written
  */
 export function openTerminal(tab) {
+  held.delete(tab);
   const term = createTerminal(tab);
   emit(EVENTS.terminalOpened, tab); // the change preview adds its Ctrl+click links (js/changes.js)
   wireInput(tab, term);
@@ -256,6 +305,7 @@ export function openTerminal(tab) {
   // The new shell clears its screen on start; once it has, scroll to where the terminal was. An agent's session that's
   // already back is at the end (resuming.js scrolled there), which stays.
   if (view) setTimeout(() => view.then(top => scrollRestored(term, wasResumed(tab) ? null : top)), RESTORED_SCROLL_AFTER_MS);
+  return view ?? Promise.resolve();
 }
 
 /** A closed terminal reopened shows its old output, the new prompt on the view's last rows (this many). */
@@ -1008,6 +1058,7 @@ export function quiet(tab, ms = QUIET_MS) {
 
 /** @param {Tab} tab */
 export function disposeTerminal(tab) {
+  held.delete(tab);
   send(PAGE.kill, { id: tab.id });
   dropGpu(tab);
   tab.view?.term?.dispose();
