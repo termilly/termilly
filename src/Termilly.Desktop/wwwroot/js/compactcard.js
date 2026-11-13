@@ -37,7 +37,9 @@ const UNDER_CHOICE = 3;
 
 /**
  * @typedef {{ key: string, label: string, detail: string, picked: boolean }} MenuChoice
- * @typedef {{ title: string, context: string[], choices: MenuChoice[] }} Menu
+ * @typedef {{ title: string, context: string[], choices: MenuChoice[], whole?: string | null }} Menu
+ *   whole: everything the prompt says, from where it starts (not cut for showing), which tells it from another; null
+ *   when its start is off the screen (the menu can't be told apart, so the card offers only the terminal)
  */
 
 /**
@@ -61,7 +63,25 @@ export function readMenu(lines) {
   // A menu the agent waits on has its pointer on one choice; a numbered list in its words has none.
   if (choices.length < 2 || !choices.some(c => c.picked)) return null;
   const { title, context } = questionAbove(rows, first);
-  return { title, context, choices };
+  const start = promptStart(rows, first);
+  const whole = start < 0 ? null : JSON.stringify([rows.slice(start, first).map(r => r.trim()), choices.map(c => [c.key, c.label, c.detail])]);
+  return { title, context, choices, whole };
+}
+
+/**
+ * Where the prompt above a menu starts: the line after its rule (Claude Code) or its gap of blank lines (Codex); -1
+ * when neither is on the screen.
+ * @param {string[]} rows
+ * @param {number} first
+ */
+function promptStart(rows, first) {
+  let blanks = 0;
+  for (let i = first - 1; i >= 0; i--) {
+    const row = rows[i].trim();
+    blanks = row ? 0 : blanks + 1;
+    if (RULE.test(row) || blanks === GAP) return i + 1;
+  }
+  return -1;
 }
 
 /**
@@ -177,12 +197,14 @@ export function cardHtml(menu, name, openClass) {
 }
 
 /**
- * What tells one menu from another: its question, what it's about and its choices (not which one the pointer is on,
- * which the user moves with the keys). A card's buttons press only while the screen shows the menu with its key.
+ * What tells one menu from another: all its prompt says and its choices (not which one the pointer is on, which the
+ * user moves with the keys); empty for one whose start is off the screen. A card's buttons press only while the
+ * screen shows the menu with its key.
  * @param {Menu} menu
  */
 export function menuKey(menu) {
-  const text = JSON.stringify([menu.title, menu.context, menu.choices.map(c => [c.key, c.label, c.detail])]);
+  if (menu.whole === null) return '';
+  const text = menu.whole ?? JSON.stringify([menu.title, menu.context, menu.choices.map(c => [c.key, c.label, c.detail])]);
   let hash = HASH_SEED;
   for (let i = 0; i < text.length; i++) hash = (Math.imul(hash, HASH_PRIME) ^ text.charCodeAt(i)) >>> 0;
   return `${hash.toString(HASH_BASE)}:${text.length}`;
@@ -196,8 +218,9 @@ function menuCardHtml(menu, openClass) {
   const open = `<button class="${openClass}">Open terminal</button>`;
   // A plan's blank lines keep its paragraphs apart.
   const context = menu.context.map(line => (line ? `<div>${escapeHtml(line)}</div>` : '<br>')).join('');
-  const choices = menu.choices.map(c => `<button class="cv-choice${c.picked ? ' picked' : ''}" data-choice="${c.key}" title="${escapeHtml(c.detail || c.label)}">`
-    + `<kbd>${c.key}</kbd>${escapeHtml(c.label)}${c.detail ? `<small>${escapeHtml(c.detail)}</small>` : ''}</button>`).join('');
+  // A menu that can't be told from another (its start is off a short screen) gets no buttons: the terminal answers it.
+  const choices = menuKey(menu) ? menu.choices.map(c => `<button class="cv-choice${c.picked ? ' picked' : ''}" data-choice="${c.key}" title="${escapeHtml(c.detail || c.label)}">`
+    + `<kbd>${c.key}</kbd>${escapeHtml(c.label)}${c.detail ? `<small>${escapeHtml(c.detail)}</small>` : ''}</button>`).join('') : '';
   return `<div class="cv-card" data-menu="${menuKey(menu)}"><div class="cv-question">${escapeHtml(menu.title)}</div>`
     + `${context ? `<div class="cv-context">${context}</div>` : ''}<div class="cv-choices">${choices}${open}</div></div>`;
 }

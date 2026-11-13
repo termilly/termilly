@@ -33,7 +33,9 @@ test('a Claude Code permission prompt: its question, the command, and its three 
     '',
     ' Esc to cancel · Tab to amend',
   ]);
-  assert.deepEqual(menu, {
+  assert.ok(menu?.whole);
+  assert.deepEqual({ ...menu, whole: undefined }, {
+    whole: undefined,
     title: 'Do you want to proceed?',
     context: ['PowerShell command', 'Initialize a git repository', 'git init', 'This command requires approval'],
     choices: [
@@ -123,8 +125,14 @@ test('no menu: a numbered list in the conversation is not one unless it starts a
 });
 
 test('a menu keeps its key while the pointer moves, and another question gets another key', () => {
-  const at = pointer => readMenu(['Do you want to proceed?', `${pointer === 1 ? '>' : ' '} 1. Yes`, `${pointer === 2 ? '>' : ' '} 2. No`]);
-  const other = readMenu(['Do you want to make this edit?', '> 1. Yes', '  2. No']);
+  const at = pointer => readMenu(['──────────', 'Do you want to proceed?', `${pointer === 1 ? '>' : ' '} 1. Yes`, `${pointer === 2 ? '>' : ' '} 2. No`]);
+  const other = readMenu(['──────────', 'Do you want to make this edit?', '> 1. Yes', '  2. No']);
   assert.equal(menuKey(at(1)), menuKey(at(2)));
   assert.notEqual(menuKey(at(1)), menuKey(other));
+});
+
+test('a menu is known by all its prompt says, not only the lines the card shows; one whose start is off the screen has no key', () => {
+  const prompt = command => ['────────────────────', 'Bash command', command, ...Array.from({ length: 13 }, (_, i) => `# line ${i}`), '', 'Do you want to proceed?', '> 1. Yes', '  2. No'];
+  assert.notEqual(menuKey(readMenu(prompt('rm -rf a'))), menuKey(readMenu(prompt('rm -rf b'))));
+  assert.equal(menuKey(readMenu(prompt('rm -rf a').slice(1))), '');
 });

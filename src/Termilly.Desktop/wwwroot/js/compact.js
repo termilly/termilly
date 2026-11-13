@@ -308,26 +308,29 @@ function menuOf(tab) {
   const ask = pendingQuestion(tab);
   if (!ask?.questions) return screen;
   const only = ask.questions.length === 1 ? ask.questions[0] : undefined;
-  const question = (screen ? ask.questions.find(q => q.question === screen.title) : undefined) ?? only;
+  const named = screen ? ask.questions.find(q => q.question === screen.title) : undefined;
+  // A screen that asks another question than these (the next AskUserQuestion, before its line is here) wins.
+  if (!named && screen?.title.endsWith('?')) return screen;
+  const question = named ?? only;
   if (!question || question.multi) return screen;
   // Claude Code goes on to its next question, or to its review of them, after this one; the last one is answered.
   return { ...questionMenu(question), last: question === only };
 }
 
 /**
- * Picks a choice of the question the agent waits on, by pressing its number as the user would: only while the agent
- * still waits on the very menu the card showed (the screen may have moved on to another question with a "1. Yes" of
+ * Picks a choice of the question the agent waits on (or the menu it shows as it starts), by pressing its number as
+ * the user would: only while the agent still waits on the very menu the card showed (the screen may have moved on to another question with a "1. Yes" of
  * its own), and once per menu (its number pressed twice would answer the next question too).
  * @param {Tab} tab
  * @param {string} key
  * @param {string} shown the card's menu, by menuKey
  */
 function pick(tab, key, shown) {
-  if (!waitsForAnswer(tab) || tab.exited) return;
+  if (!(waitsForAnswer(tab) || !atPrompt(tab)) || tab.exited) return;
   const menu = menuOf(tab);
   const c = compactOf(tab);
   const now = menu ? menuKey(menu) : '';
-  if (!menu || now !== shown || !menu.choices.some(choice => choice.key === key)
+  if (!menu || !now || now !== shown || !menu.choices.some(choice => choice.key === key)
       || (c.picked?.menu === now && Date.now() - c.picked.at < REPICK_MS)) {
     render(tab);
     return;
@@ -362,6 +365,9 @@ function workingHtml(tab) {
 function emptyHtml(tab) {
   const name = escapeHtml(agentKind(runningAgent(tab)).short);
   if (!atPrompt(tab)) {
+    // A menu of its own as it starts (Codex's "Trust and continue"): a card too.
+    const menu = screenMenu(tab);
+    if (menu && menuKey(menu)) return cardHtml(menu, name, OPEN_TERMINAL.slice(1));
     return `<div class="cv-empty">${name} is starting. Anything it asks first is in the terminal.<br><button class="${OPEN_TERMINAL.slice(1)}">Open terminal</button></div>`;
   }
   return `<div class="cv-empty">${compactOf(tab).session ? `Nothing yet. Ask ${name} something below.` : `Ask ${name} something below.`}</div>`;
