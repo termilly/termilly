@@ -351,15 +351,27 @@ function render(tab) {
   });
 }
 
+/**
+ * What each feed shows now, as drawn.
+ * @type {WeakMap<HTMLElement, string>}
+ */
+const drawn = new WeakMap();
+
 /** @param {Tab} tab */
 function draw(tab) {
   const c = compactOf(tab);
   if (!c.el || c.el.hidden) return;
   const feed = find(c.el, '.cv-feed');
   const following = feed.scrollHeight - feed.scrollTop - feed.clientHeight < FOLLOW_SLACK_PX;
-  feed.innerHTML = c.lines.length || waitsForAnswer(tab)
+  const html = c.lines.length || waitsForAnswer(tab)
     ? linesHtml(c.lines, lineLinks(tab, c.lines, () => render(tab))) + workingHtml(tab)
     : emptyHtml(tab);
+  // Drawn again only when it changed: new elements under a pressed mouse button would lose its click (a press on a
+  // card moves the focus about, which draws the view again), and a selection in the feed would be lost.
+  if (drawn.get(feed) !== html) {
+    feed.innerHTML = html;
+    drawn.set(feed, html);
+  }
   if (following) feed.scrollTop = feed.scrollHeight;
   updateComposer(tab, c.el);
 }
