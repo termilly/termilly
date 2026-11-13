@@ -5,7 +5,7 @@ What changed in each release. Termilly says in its title bar when a newer one is
 ## 1.8.0 (2026-11-13)
 
 - **Mac support:** Termilly now runs on Mac.
-- **Codex support:** use Codex just like Claude Code.
+- **Codex support:** use Codex natively in Termilly.
 - **AIs talk to Termilly:** they can use your terminals, To do, schedules and Notepad.
 - **AIs work together:** one AI does a task, another checks it.
 - **New status bar:** model picker, usage meter, cost and git branch under each terminal.
