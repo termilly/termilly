@@ -12,14 +12,13 @@ import { findWebLinks } from './webaddress.js';
 import { COPY_HINT } from './termlinks.js';
 import { escapeHtml } from './ui.js';
 import { showToast } from './toasts.js';
-import { debounce } from './util.js';
+import { debounce, linesOf } from './util.js';
 import { targetOf } from './dom.js';
 import { inEachDocument } from './windows.js';
 
 /** A link in the page: where it is, its text, whether it's a web address, its tooltip and what Ctrl+click does. */
 /** @typedef {{ start: number, end: number, text: string, web: boolean, title: string, open: () => void }} PadLink */
 
-const LF = '\n';
 /** How long typing pauses before the paths are looked for again (each one is asked of the host). */
 const FIND_AFTER_MS = 300;
 const LINK_CLASS = 'np-link';
@@ -52,19 +51,6 @@ const webLink = (w, from) => ({
   title: `${w.text}\nCtrl+click to open in your browser\n${COPY_HINT}`,
   open: () => send(PAGE.openUrl, { url: w.text }),
 });
-
-/**
- * Each line of a page and where it starts.
- * @param {string} text
- */
-function linesOf(text) {
-  let at = 0;
-  return text.split(LF).map(line => {
-    const from = at;
-    at += line.length + LF.length;
-    return { line, from };
-  });
-}
 
 /** @param {string} text */
 const webLinks = text => linesOf(text).flatMap(({ line, from }) => findWebLinks(line).map(w => webLink(w, from)));

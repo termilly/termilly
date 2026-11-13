@@ -1065,7 +1065,7 @@ body[data-sidebar="rail"] .side-rail { opacity: 1; pointer-events: auto; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 8px 8px 14px;
+  padding: 3px 8px 8px 14px; /* centred on the 30px terminal title bar beside it */
   color: var(--muted);
   font-size: 11px;
   font-weight: 600;
@@ -1154,8 +1154,8 @@ body[data-sidebar="rail"] .side-rail { opacity: 1; pointer-events: auto; }
 .rail-remote:hover, .rail-remote.open { background: var(--hover); color: var(--text); }
 .rail-remote svg { width: 16px; height: 16px; stroke-width: 1; }
 .menu-icon .badge.small { width: 16px; height: 16px; border-radius: 4px; font-size: 7.5px; }
-/* A pixel word (COM, SSH, WSL) keeps its own size: stretched to the menu's 16px icons, it outgrew its tile. */
-.menu-icon .badge-word { width: auto; height: auto; }
+/* A pixel word (COM, SSH, WSL) or mark (Codex) keeps its own size: stretched to the menu's 16px icons, it outgrew its tile. */
+.menu-icon .badge-word, .menu-icon .badge-mark { width: auto; height: auto; }
 .side-list::-webkit-scrollbar { width: 6px; }
 .side-list::-webkit-scrollbar-thumb { border-radius: 3px; background: var(--scroll-thumb); }
 
@@ -1468,7 +1468,7 @@ body[data-sidebar="rail"] .side-rail { opacity: 1; pointer-events: auto; }
 .prompts-day { position: sticky; top: 0; z-index: 1; padding: 8px 8px 4px; background: var(--raised); color: var(--faint); font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
 .prompt-row { display: grid; grid-template-columns: auto minmax(0, 1fr) 20px; align-items: start; gap: 8px; padding: 6px 6px 6px 8px; border-radius: 8px; cursor: pointer; outline: none; }
 .prompt-row:hover, .prompt-row:focus { background: var(--hover); }
-.prompt-row.gone { cursor: default; }
+.prompt-row.gone { cursor: pointer; }
 .prompt-row.gone .prompt-text { color: var(--faint); }
 .prompt-time { min-width: 34px; padding-top: 1px; color: var(--faint); white-space: nowrap; font-size: 11px; font-variant-numeric: tabular-nums; }
 .prompt-text { display: -webkit-box; overflow: hidden; color: var(--text); font-size: 12.5px; line-height: 1.4; white-space: pre-wrap; word-break: break-word; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
@@ -1583,6 +1583,8 @@ body[data-sidebar="rail"] .side-rail { opacity: 1; pointer-events: auto; }
 .badge[data-icon="claude"] { --tint: #d97757; }
 .badge[data-icon="claude"] svg { width: 12px; height: 12px; }
 .badge.lg[data-icon="claude"] svg { width: 16px; height: 16px; }
+/* Codex: OpenAI's knot, black or white as the text is (ui.js draws it in whole pixels at its own size). */
+.badge[data-icon="codex"] { --tint: var(--text); }
 .badge[data-icon="cmd"] { --tint: #c8c8c8; }
 .badge[data-icon="bash"] { --tint: #f1724f; }
 .badge[data-icon="wsl"] { --tint: #f2a33a; }
@@ -2094,6 +2096,9 @@ details[open] > summary .wn-caret { transform: rotate(90deg); }
 .set-row { display: flex; align-items: center; gap: 24px; padding: 12px 0; }
 .set-row + .set-row { border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent); }
 .set-row.stack { flex-direction: column; align-items: stretch; gap: 10px; }
+/* A row whose switch it depends on is off (data-needs). */
+.set-row.needs-off { opacity: 0.45; }
+.set-row.needs-off .set-control { pointer-events: none; }
 .set-label { flex: 1; min-width: 0; }
 .set-name { font-size: 13px; font-weight: 500; }
 .set-desc { margin-top: 3px; color: var(--muted); font-size: 12px; line-height: 1.5; }
@@ -2524,16 +2529,6 @@ textarea.field { height: auto; padding: 7px 10px; line-height: 1.5; resize: vert
 
 /* "N files changed" on a terminal's header (js/changes.js) */
 /* The changed-files list on a terminal's header (js/changes.js). */
-.changes-btn {
-  display: inline-flex; align-items: center; gap: 4px; width: auto; height: 22px; padding: 0 6px 0 7px;
-  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); border-radius: 6px;
-  background: var(--accent-fill); color: var(--accent); font-size: 11px; font-weight: 600; opacity: 1;
-}
-.changes-btn[hidden] { display: none; }
-.changes-btn svg { width: 11px; height: 11px; stroke-width: 1.5; }
-.changes-btn .chev { width: 9px; height: 9px; opacity: 0.8; }
-.changes-btn:hover, .changes-btn.open { background: color-mix(in srgb, var(--accent) 24%, transparent); color: var(--text); }
-.changes-btn.empty { border-color: var(--border-strong); background: none; color: var(--muted); font-weight: 500; }
 .changes-pop { width: 400px; padding: 0; }
 .changes-pop .inbox-head { justify-content: flex-start; gap: 6px; }
 .changes-pop .inbox-head .section-head { margin-right: auto; }
@@ -2713,17 +2708,6 @@ textarea.field { height: auto; padding: 7px 10px; line-height: 1.5; resize: vert
 .gw-binary { color: var(--faint); }
 .gw-commit-diff { display: flex; flex: 1; flex-direction: column; min-height: 0; }
 .gw-branch-log { flex: 1; min-height: 0; padding: 4px; overflow: auto; }
-.git-chip[data-git-root] { cursor: pointer; }
-.git-chip[data-git-root]:hover { color: var(--text); }
-
-/* The Claude Code session on a terminal's header: model, context meter, tokens written (js/claudeusage.js). */
-.claude-usage {
-  display: inline-flex; align-items: center; gap: 5px; width: auto; height: 22px; padding: 0 7px;
-  border: 1px solid var(--border-strong); border-radius: 6px; color: var(--muted);
-  font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; opacity: 1;
-}
-.claude-usage[hidden] { display: none; }
-.claude-usage .cu-model { color: var(--text); font-weight: 600; }
 .cu-meter { position: relative; width: 26px; height: 4px; overflow: hidden; border-radius: 2px; background: var(--border-strong); }
 .cu-meter i { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: var(--accent); }
 .cu-meter.high i { background: var(--attention, #f2cc60); }
@@ -2975,7 +2959,12 @@ textarea.field.note-text { flex: 1; width: 100%; min-height: 120px; resize: none
 .sch-report-head { display: flex; align-items: center; gap: 6px; }
 .sch-report-head .spacer { flex: 1; }
 .sch-report-title { font-size: 12.5px; font-weight: 600; }
-.sch-output { max-height: 320px; margin: 0; padding: 10px; overflow: auto; border-radius: 6px; background: var(--surface-2, var(--hover)); color: var(--text); font: 12px/1.45 var(--term-font); white-space: pre-wrap; word-break: break-word; }
+.sch-output { max-height: 320px; margin: 0; overflow: auto; color: var(--text); font: 12px/1.45 var(--term-font); white-space: pre-wrap; word-break: break-word; }
+.sch-output, .sch-why { -webkit-user-select: text; user-select: text; cursor: text; }
+/* Links in a report: as a terminal's under the mouse (js/termlinks.js), opened with a click. */
+.sch-link { color: #76e3ea; cursor: pointer; }
+:root[data-theme="light"] .sch-link { color: #1b7c83; }
+.sch-link:hover { text-decoration: underline; }
 
 /* The notification center's title, and under it how many there are. */
 .inbox-heading { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
@@ -3040,19 +3029,11 @@ textarea.field.note-text { flex: 1; width: 100%; min-height: 120px; resize: none
 .res-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .res-where { flex: none; color: var(--muted); font-size: 11.5px; }
 
-/* Project status (js/gitstatus.js): branch chips and listening ports in the sidebar. */
-.git-chip { display: inline-flex; flex: none; align-items: center; gap: 3px; min-width: 0; max-width: 120px; margin-left: 6px; padding: 0 5px; border-radius: 4px; background: var(--hover); color: var(--muted); font-size: 10.5px; line-height: 16px; }
-.git-chip svg { width: 10px; height: 10px; flex: none; stroke-width: 1.4; }
-.git-branch { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.git-dirty { flex: none; width: 5px; height: 5px; border-radius: 50%; background: var(--attention); }
-.git-ab { flex: none; color: var(--accent); font-variant-numeric: tabular-nums; }
-.git-chip.tab { margin-left: 0; }
+/* Project status (js/gitstatus.js): listening ports in the sidebar. */
 .port-chip { flex: none; padding: 0 4px; border-radius: 4px; background: color-mix(in srgb, var(--ok, #7ee787) 14%, transparent); color: var(--ok, #7ee787); font-size: 10.5px; font-variant-numeric: tabular-nums; line-height: 16px; cursor: pointer; }
 .port-chip:hover { background: color-mix(in srgb, var(--ok, #7ee787) 28%, transparent); }
-/* The workspace name keeps its room; the branch chip gives way first. */
 .ws-row { min-width: 0; overflow: hidden; }
 .ws-row .ws-name { flex: 0 1 auto; min-width: 48px; }
-.git-chip.ws { flex: 0 10 auto; min-width: 22px; margin-left: 0; }
 
 /* The output viewer (js/viewer.js): a panel over the right edge, like the change preview's. */
 .viewer-panel { position: absolute; top: 0; right: 0; bottom: 0; z-index: 56; display: flex; width: min(58vw, 960px); min-width: 340px; box-shadow: var(--shadow-pop); border-radius: var(--radius); }
@@ -3238,11 +3219,19 @@ textarea.field.note-text { flex: 1; width: 100%; min-height: 120px; resize: none
 .prompts-modes[hidden] { display: none; }
 .prompts-modes .seg { width: 100%; }
 .prompts-modes .seg button { flex: 1; }
+/* The reader: something the output no longer has, read from the transcript in place of the list. */
+.prompts-pop .reader-on { display: none !important; }
+.prompts-reader[hidden] { display: none; }
+.prompts-reader-head { display: flex; align-items: center; gap: 8px; padding: 0 10px 8px; }
+.prompts-reader-what { flex: 1; min-width: 0; color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.prompts-reader-text { max-height: min(480px, 65vh); overflow: auto; margin: 0 10px 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); font-size: 12.5px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; outline: none; }
+.prompts-reader-text:focus-visible { border-color: var(--accent); }
+.prompts-reader-foot:empty { display: none; }
 /* A step: its time, its dot (a reply's is plain; a tool's is green, red when it failed), its text and Copy. */
 .step-row { display: grid; align-self: stretch; grid-template-columns: auto 8px minmax(0, 1fr) 20px; align-items: start; gap: 8px; padding: 6px 6px 6px 8px; border-radius: 8px; cursor: pointer; outline: none; }
 .step-row:hover, .step-row:focus { background: var(--hover); }
 .step-row:hover .prompt-copy { opacity: 1; }
-.step-row.gone { cursor: default; }
+.step-row.gone { cursor: pointer; }
 .step-row.gone .step-text { color: var(--faint); }
 .step-mark { width: 7px; height: 7px; margin-top: 5px; border-radius: 50%; background: var(--text); }
 .step-row.step-is-tool .step-mark { background: var(--ok); }
@@ -3398,6 +3387,10 @@ body.detached-window .files-head .np-sep { height: 18px; margin: 0 0 0 1px; back
 .td-task { position: relative; display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 2px 7px; padding: 4px 6px; border-radius: 6px; outline: none; font-size: 13px; }
 .td-task:hover { background: var(--hover); }
 .td-task:focus-visible { box-shadow: inset 0 0 0 1px var(--accent); }
+/* Selected with Ctrl+click: the groups' Implement and Delete act on these. */
+.td-task.selected { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.td-task.selected:hover { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+.td-task.selected > .td-acts { background: linear-gradient(color-mix(in srgb, var(--accent) 22%, transparent), color-mix(in srgb, var(--accent) 22%, transparent)), var(--surface); }
 .td-task[data-elsewhere] { cursor: pointer; }
 .td-status { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 20px; padding: 0; border: 0; border-radius: 4px; background: none; color: var(--muted); cursor: pointer; }
 .td-status:hover { background: color-mix(in srgb, currentColor 16%, transparent); }
@@ -3456,6 +3449,78 @@ button.td-agent:hover { text-decoration: underline; }
 .td-about-all { display: flex; flex: 1; flex-direction: column; gap: 4px; min-width: 0; padding-bottom: 2px; }
 .td-details { white-space: pre-wrap; overflow-wrap: anywhere; }
 .td-result { padding: 6px 8px; border-radius: 6px; background: color-mix(in srgb, var(--text) 6%, transparent); white-space: pre-wrap; overflow-wrap: anywhere; }
+/* What a task's agents said, with reviewers (js/todopanel.js saidHtml): the verdict, then the work and each review. */
+.td-verdict { display: flex; align-items: center; gap: 6px; padding: 5px 8px; border-radius: 6px; background: color-mix(in srgb, var(--ok) 12%, transparent); color: var(--ok); }
+.td-verdict.open { background: color-mix(in srgb, var(--attention) 12%, transparent); color: var(--attention); }
+.td-verdict svg { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; }
+.td-verdict b { font-weight: 600; }
+.td-verdict span { color: var(--muted); }
+.td-said { display: flex; flex-direction: column; gap: 3px; }
+.td-by { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 11.5px; }
+.td-by b { color: var(--text); font-weight: 600; }
+.td-v { margin-left: auto; }
+.td-v.ok { color: var(--ok); }
+.td-v.open { color: var(--attention); }
+.td-earlier { color: var(--muted); font-size: 11.5px; }
+/* Who has a task now (agentHtml): the agent's badge, the words, its terminal and Stop. */
+.td-now { display: flex; align-items: flex-start; width: 100%; color: var(--muted); }
+.td-now > span { flex: 0 1 auto; min-width: 0; color: var(--text); line-height: 18px; }
+.td-now > .badge, .td-now > .td-stop, .td-now > .td-agent { flex: none; }
+.td-now > .td-stop { margin-top: 1px; }
+.td-now .td-agent { color: var(--accent); line-height: 18px; }
+
+/* A schedule's agent prompt: which agent runs it (js/scheduleview.js byHtml). */
+/* Who runs an agent prompt and who reviews it: the rows of To do's Implement card (js/planrows.js), in the form. */
+.sch-plan { display: flex; flex-direction: column; max-width: 420px; margin-top: 10px; }
+.sch-plan .tc-row { padding: 4px 0; }
+.sch-plan .tc-by { width: 220px; }
+
+/* ---- Copy allowed commands to Codex (js/agentrules.js) ---- */
+.dialog.agent-rules { width: min(640px, calc(100vw - 48px)); }
+.ar-list { display: flex; flex-direction: column; gap: 2px; max-height: 280px; overflow-y: auto; padding: 6px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+.ar-row { display: flex; align-items: baseline; gap: 10px; padding: 3px 4px; font-size: 12.5px; }
+.ar-row code { flex: 0 1 auto; min-width: 0; overflow-wrap: anywhere; color: var(--text); font: 12px var(--mono); }
+.ar-decision { flex: none; width: 68px; color: var(--ok); font-size: 11.5px; }
+.ar-decision.prompt { color: var(--attention); }
+.ar-decision.forbidden { color: var(--danger); }
+.ar-source { flex: 1; min-width: 80px; color: var(--muted); font-size: 11.5px; text-align: right; }
+.ar-stay { margin-top: 10px; color: var(--muted); font-size: 12.5px; }
+.ar-stay summary { cursor: pointer; }
+.ar-stay .ar-list { margin-top: 6px; max-height: 160px; }
+.ar-stay .ar-source { flex: 2; }
+.ar-file { margin: 12px 0 0; }
+
+/* ---- Implement's card (js/todocard.js) ---- */
+.popover.td-card { width: 340px; padding: 0; }
+.tc-head { display: flex; flex-direction: column; padding: 12px 14px 6px; }
+.tc-head b { font-size: 13.5px; color: var(--text-strong); }
+.tc-head span { overflow: hidden; color: var(--muted); font-size: 12px; white-space: nowrap; text-overflow: ellipsis; }
+.tc-row { display: grid; grid-template-columns: 84px minmax(0, 1fr); align-items: center; gap: 10px; padding: 5px 14px; font-size: 13px; }
+.tc-row.top { align-items: start; }
+.tc-label { color: var(--muted); font-size: 12.5px; }
+.tc-row.top > .tc-label { padding-top: 5px; }
+.tc-one, .tc-by, .tc-chip { display: inline-flex; align-items: center; gap: 7px; }
+.tc-by { width: 100%; height: 28px; padding: 0 8px; text-align: left; cursor: pointer; }
+.tc-by .dropdown-chevron { display: inline-flex; margin-left: auto; color: var(--muted); }
+.tc-by .dropdown-chevron svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.5; }
+.tc-pick { display: flex; flex-wrap: wrap; gap: 6px; }
+.tc-chip { height: 26px; padding: 0 4px 0 7px; border: 1px solid var(--border-strong); border-radius: 7px; background: var(--raised-2); font-size: 12.5px; }
+.tc-chip button { width: 18px; height: 18px; padding: 0; border: 0; border-radius: 4px; background: none; color: var(--muted); font-size: 14px; line-height: 1; cursor: pointer; }
+.tc-chip button:hover { background: var(--hover); color: var(--text); }
+.tc-add { display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 9px 0 6px; border: 1px dashed var(--border-strong); border-radius: 7px; background: none; color: var(--muted); font: inherit; font-size: 12.5px; cursor: pointer; }
+.tc-add:hover { border-color: var(--accent); color: var(--text); }
+.tc-add svg { width: 16px; height: 16px; fill: none; stroke: currentColor; }
+.tc-step { display: inline-flex; align-items: stretch; height: 28px; border: 1px solid var(--border-strong); border-radius: 7px; background: var(--surface); overflow: hidden; }
+.tc-step output { display: grid; place-items: center; min-width: 34px; padding: 0 8px; font-size: 13px; font-variant-numeric: tabular-nums; }
+.tc-arrows { display: flex; flex-direction: column; border-left: 1px solid var(--border-strong); }
+.tc-arrows button { display: grid; flex: 1; place-items: center; width: 22px; padding: 0; border: 0; background: none; color: var(--muted); cursor: pointer; }
+.tc-arrows button + button { border-top: 1px solid var(--border-strong); }
+.tc-arrows button:hover:not(:disabled) { background: var(--hover); color: var(--text); }
+.tc-arrows button:disabled { opacity: .35; cursor: default; }
+.tc-arrows svg { width: 10px; height: 10px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.tc-hint { margin: 6px 0 0; color: var(--muted); font-size: 11.5px; line-height: 1.4; }
+.tc-foot { display: flex; align-items: center; gap: 10px; margin-top: 6px; padding: 10px 14px 12px; border-top: 1px solid var(--border); }
+.tc-keep { display: flex; flex: 1; align-items: center; gap: 7px; color: var(--muted); font-size: 12.5px; cursor: pointer; }
 .td-step { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; align-items: start; gap: 6px; min-height: 22px; color: var(--text); font-size: 13px; }
 .td-step-mark { display: inline-flex; height: 20px; align-items: center; color: var(--muted); }
 .td-step-mark svg { width: 16px; height: 16px; fill: none; stroke: currentColor; }
@@ -3468,12 +3533,21 @@ button.td-agent:hover { text-decoration: underline; }
 .td-fold-clear { flex: none; opacity: 1; visibility: hidden; }
 .td-fold-clear svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1; }
 .td-fold-row:hover .td-fold-clear, .td-fold-clear:focus-visible { visibility: visible; }
+.td-fold-clear:disabled { opacity: .4; cursor: default; }
+/* Implement all's question: the tasks, each with its tags. */
+.td-bulk { max-height: 40vh; margin: 0 0 12px; padding: 0; overflow-y: auto; list-style: none; }
+.td-bulk li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 4px 0; border-top: 1px solid var(--border); font-size: 13px; }
+.td-bulk li:first-child { border-top: 0; }
+.td-bulk .td-chip { cursor: default; }
+.td-bulk-text { flex: 1 1 auto; min-width: 0; margin-right: 4px; overflow-wrap: anywhere; }
 .td-fold { display: flex; flex: 1; align-items: center; gap: 4px; min-width: 0; padding: 5px 6px; border: 0; background: none; color: var(--muted); font: inherit; font-size: 12px; font-weight: 600; text-align: left; cursor: pointer; }
 .td-fold svg { width: 12px; height: 12px; fill: none; stroke: currentColor; }
 .td-fold-count { font-weight: 400; }
 .td-fold:hover { color: var(--text); }
 .td-edit, .td-issue { display: flex; flex-direction: column; gap: 6px; }
 .td-edit { margin: 2px; padding: 8px; border: 1px solid var(--border); border-radius: 6px; }
+/* As tall as its text (fitDetails), up to this, then it scrolls. */
+.td-edit-details { max-height: 60vh; overflow-y: auto; }
 .td-issue { flex: 1; min-height: 0; overflow-y: auto; padding: 10px; }
 .td-issue h3 { margin: 0; font-size: 14px; }
 .td-issue-repo { margin: 0; color: var(--muted); font: 12px var(--mono); }
@@ -3494,3 +3568,71 @@ button.td-agent:hover { text-decoration: underline; }
 .td-labels { display: flex; flex-wrap: wrap; gap: 4px; }
 .td-label { height: 22px; padding: 0 9px; border: 1px solid var(--border); border-radius: 999px; background: none; color: var(--muted); font: inherit; font-size: 12px; cursor: pointer; }
 .td-label.on { border-color: var(--accent); color: var(--text); }
+
+/* A terminal's status bar (js/statusbar.js), Notepad's height (.np-status: 4px + 11.5px text + 4px, and its line):
+   the agent's session on the left, the files it changed, the repository and the branch on the right. */
+.pane-statusbar {
+  display: flex; flex: none; align-items: center; gap: 1px; height: 23px; padding: 0 4px; overflow: hidden;
+  border-top: 1px solid var(--border); background: var(--header); color: var(--muted);
+  font-size: 11.5px; font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.pane-statusbar[hidden] { display: none; }
+.sb-fill { flex: 1; min-width: 4px; }
+.sb-item { display: inline-flex; flex: none; align-items: center; gap: 5px; height: 18px; padding: 0 6px; border-radius: 4px; color: var(--muted); }
+button.sb-item:hover, button.sb-item.open { background: var(--hover); color: var(--text); }
+.sb-item b { color: var(--text); font-weight: 600; }
+.sb-item svg { width: 12px; height: 12px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.2; }
+.sb-item svg.chev { width: 8px; height: 8px; opacity: 0.7; stroke-width: 1.4; }
+.sb-item .cu-meter { width: 30px; }
+.sb-item.high { color: var(--attention); }
+.sb-item.full { color: var(--danger); }
+.sb-changes.sb-none { opacity: 0.6; }
+.sb-ab { color: var(--accent); }
+.sb-sep { flex: none; width: 1px; height: 12px; margin: 0 3px; background: var(--border-strong); }
+/* The branch keeps its corner; the repository's name gives way first. */
+.sb-repo { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.sb-branch { flex: 0 1 auto; min-width: 40px; }
+.sb-branch-name { overflow: hidden; max-width: 220px; text-overflow: ellipsis; }
+.sb-dirty { flex: none; width: 5px; height: 5px; border-radius: 50%; background: var(--attention); }
+/* Colour by state: what the agent is doing, in words and in the bar's colour. */
+.sb-state { gap: 6px; color: var(--text); font-weight: 600; }
+.sb-state i { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.pane-statusbar[data-state="working"] { border-top-color: color-mix(in srgb, var(--accent) 40%, var(--border)); background: color-mix(in srgb, var(--accent) 16%, var(--header)); }
+.pane-statusbar[data-state="needs"] { border-top-color: color-mix(in srgb, var(--attention) 45%, var(--border)); background: color-mix(in srgb, var(--attention) 16%, var(--header)); }
+.pane-statusbar[data-state="needs"] .sb-state i { background: var(--attention); }
+.pane-statusbar[data-state="failed"] { border-top-color: color-mix(in srgb, var(--danger) 45%, var(--border)); background: color-mix(in srgb, var(--danger) 14%, var(--header)); }
+.pane-statusbar[data-state="failed"] .sb-state i { background: var(--danger); }
+
+/* The status bar's branch picker (js/branchpicker.js), as Visual Studio's. */
+.bp-pop { width: 360px; padding: 0; overflow: hidden; }
+.bp-search { display: flex; align-items: center; gap: 7px; height: 30px; margin: 8px 8px 4px; padding: 0 9px; border: 1px solid var(--accent); border-radius: 6px; background: var(--surface); }
+.bp-search svg { width: 13px; height: 13px; flex: none; fill: none; stroke: var(--muted); stroke-width: 1.3; }
+.bp-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; color: var(--text); font: 12px var(--ui-font); }
+.bp-search input::placeholder { color: var(--faint); }
+.bp-list { max-height: 280px; padding: 2px 4px 4px; overflow: auto; }
+.bp-group { display: flex; align-items: center; gap: 6px; padding: 7px 8px 3px; color: var(--faint); font-size: 10.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+.bp-group svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.2; }
+.bp-count { margin-left: auto; font-weight: 500; letter-spacing: 0; text-transform: none; }
+.bp-row { display: flex; align-items: center; gap: 7px; height: 26px; padding: 0 8px; border-radius: 5px; color: var(--text); cursor: pointer; }
+.bp-row:hover, .bp-row.sel { background: var(--hover); }
+.bp-row.sel { box-shadow: inset 2px 0 0 var(--accent); }
+.bp-row.current .bp-name { font-weight: 700; }
+.bp-check { display: grid; flex: none; place-items: center; width: 12px; color: var(--accent); }
+.bp-check svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.6; }
+.bp-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bp-name mark { border-radius: 2px; background: var(--mark-bg); color: inherit; }
+.bp-remote { color: var(--faint); }
+.bp-meta { flex: none; color: var(--faint); font-size: 11px; }
+.bp-ab { color: var(--accent); }
+.bp-empty { padding: 14px 10px; color: var(--muted); text-align: center; }
+.bp-error { margin: 4px 8px; padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent); border-radius: 6px; background: color-mix(in srgb, var(--danger) 8%, transparent); }
+.bp-error[hidden] { display: none; }
+.bp-error-head { margin-bottom: 4px; color: var(--danger-text); font-weight: 600; }
+.bp-error-text { max-height: 140px; margin: 0; overflow: auto; color: var(--text); font: 11.5px/1.45 var(--mono); white-space: pre-wrap; -webkit-user-select: text; user-select: text; }
+.bp-hint { padding: 5px 10px 7px; border-top: 1px solid var(--border); color: var(--faint); font-size: 11px; }
+.bp-hint:empty { display: none; }
+.bp-foot { display: flex; gap: 2px; padding: 4px; border-top: 1px solid var(--border); }
+.bp-foot button { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 9px; border-radius: 5px; color: var(--muted); }
+.bp-foot button:hover { background: var(--hover); color: var(--text); }
+.bp-foot svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.2; }
+.bp-right { margin-left: auto; }

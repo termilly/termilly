@@ -9,7 +9,7 @@ import {
 } from './store.js';
 import { setWindowState } from './windowshown.js';
 import { setFocusRestorer, openPopover, closePopover } from './popups.js';
-import { setKeyHandler, scheduleFit, clearActivity, keptRunning } from './terminals.js';
+import { setKeyHandler, scheduleFit, clearActivity, keptRunning, holdOpening, openHeld } from './terminals.js';
 import { consoleDefaults } from './consolecolors.js';
 import {
   newTab, closeTab, focusedTab, splitFocused, moveFocus, renderAll, switchWorkspace, restoreFocus, noteOutput,
@@ -31,12 +31,16 @@ import { toggleFiles, initFiles } from './filepanel.js';
 import { toggleNotepad, toggleNotepadFromKeys, initNotepad } from './notepad.js';
 import { toggleTodo, initTodo } from './todopanel.js';
 import './todoagent.js';
+import './scheduleagent.js';
+import './notepadagent.js';
+import './agentask.js';
+import { openAgentRules } from './agentrules.js';
 import { toggleClips, initClips } from './clipboard.js';
 import { chordOf, commandOf, keyHint, KEY_ID } from './keymap.js';
 import { openNewWorktree } from './worktree.js';
 import { openChangedFiles } from './changes.js';
 import { openSnippetsWindow, initSnippetsWindow } from './snippetswindow.js';
-import { initSchedules } from './schedules.js';
+import { initSchedules, nobodyAsksIn } from './schedules.js';
 import { toggleSchedules, initSchedulesWindow } from './scheduleswindow.js';
 import { THEMES } from './themes.js';
 import { isPreviewOpen, closePreview } from './preview.js';
@@ -66,6 +70,8 @@ import { handleExit as handleSshExit } from './reconnect.js';
 import { openAttach } from './tmux.js';
 import { applySettings, toggleSettings, toggleTheme, settingEntries, openSetting } from './settings.js';
 import { updateHeader } from './header.js';
+import './statusbar.js';
+import './planrefresh.js';
 import { beginRename } from './rename.js';
 import { TAG_BUTTON } from './tabmenu.js';
 import { openTagPicker } from './tagpicker.js';
@@ -73,7 +79,8 @@ import { badgeHtml, escapeHtml, keysHtml } from './ui.js';
 import { updateSettings, DEFAULT_FONT_SIZE, DEFAULT_ZOOM, MIN_ZOOM, MAX_ZOOM, ZOOM_STEP } from './preferences.js';
 import { openNewWorkspace } from './newworkspace.js';
 import { remoteGit } from './remotehost.js';
-import { AGENT_STATE, SETTING_VALUES, WINDOW_ACTION } from './constants.js';
+import { AGENT_KIND, AGENT_STATE, SETTING_VALUES, WINDOW_ACTION } from './constants.js';
+import { recordReport } from './agentturns.js';
 import { inEachDocument } from './windows.js';
 import { rememberSession, recordPrompt } from './myprompts.js';
 import './tooltips.js';
@@ -197,6 +204,7 @@ setCommands(() => [
   { label: 'Attach tmux', keywords: 'tmux control mode -CC attach session server remote panes windows wsl ssh', run: () => setTimeout(openAttach) },
   { label: 'Run a snippet', keywords: 'snippets saved commands run snippet macro button bar', run: () => setTimeout(openSnippets) },
   { label: 'Schedules', keywords: 'schedule cron timer run on time report recurring nightly', hint: keyHint(KEY_ID.schedules), run: () => setTimeout(toggleSchedules) },
+  { label: 'Copy Claude Code’s allowed commands to Codex', keywords: 'permissions rules allow approve approved codex claude share sync same agents', run: () => setTimeout(openAgentRules) },
   { label: 'Manage snippets', keywords: 'snippets explorer window edit new delete saved commands', run: () => setTimeout(openSnippetsWindow) },
   { label: 'Previous prompt', keywords: 'scroll jump command', hint: keyHint(KEY_ID.previousPrompt), run: commands.previousPrompt },
   { label: 'Next prompt', keywords: 'scroll jump command', hint: keyHint(KEY_ID.nextPrompt), run: commands.nextPrompt },
@@ -252,6 +260,14 @@ document.addEventListener('click', e => {
   if (button) {
     /** @type {Record<string, () => unknown>} */ (commands)[/** @type {string} */ (button.dataset.command)]?.();
   }
+});
+
+// The window's own frame (title bar and its buttons, the docked bars, the sidebar, the status bars) has no browser menu:
+// where none of Termilly's opened, a right click there does nothing. A text field keeps its menu.
+const APP_FRAME = '#titlebar, .bar-dock, #sidebar, .pane-statusbar';
+document.addEventListener('contextmenu', e => {
+  const target = targetOf(e);
+  if (target.closest(APP_FRAME) && !target.closest('input, textarea, [contenteditable="true"]')) e.preventDefault();
 });
 
 // ---- Shell menu (+ button) ----
@@ -464,6 +480,7 @@ function signalReady() {
   if (readySent) return;
   readySent = true;
   send(PAGE.ready);
+  openHeld();
   const loader = document.getElementById(LOADER_ID); // Linux's (js/loader.js); Windows's is the window's own
   if (loader) {
     // js/loader.js keeps its timer on the element.
@@ -484,11 +501,28 @@ function seeFocused() {
 }
 window.addEventListener('focus', seeFocused);
 
+/**
+ * A schedule's prompt asks nobody: Claude Code says it would ask (its PermissionRequest hook), then refuses the tool by
+ * itself and goes on. That's no news for the user, so it still works, and its line says what it was refused.
+ * @param {Tab} tab
+ * @param {import('./protocol.js').Host_agent} m
+ * @returns {{ m: import('./protocol.js').Host_agent, line: string | null }} line: what the sidebar says instead
+ */
+function refusedByItself(tab, m) {
+  if (m.state !== AGENT_STATE.needsInput || !nobodyAsksIn(tab)) return { m, line: null };
+  const tool = /** @type {Partial<Host_agent_1>} */ (m).tool;
+  return { m: { ...m, state: AGENT_STATE.working }, line: `Refused ${tool ?? 'a tool'}: nobody to ask` };
+}
+
 // An agent reported in: Claude Code's hooks through Termilly's claude shim (source "hooks", see AgentHooks.cs), or
 // `claude agents --json` for a Claude Code the hooks don't reach (source "poll", see ClaudeAgentsPoller.cs).
-onHost(HOST.agent, m => {
-  const tab = state.tabs.get(m.id);
+onHost(HOST.agent, report => {
+  const tab = state.tabs.get(report.id);
   if (!tab) return;
+  const { m, line: refused } = refusedByItself(tab, report);
+  // Counted for waits on the agent (js/agentturns.js): its reports, the turns its prompts start, and its last answer,
+  // which a wait still gives after the agent has exited.
+  recordReport(tab, { ...m, event: /** @type {Partial<Host_agent_1>} */ (m).event });
   tab.agent = m.state === AGENT_STATE.exited
     ? null
     : {
@@ -500,11 +534,13 @@ onHost(HOST.agent, m => {
       reason: /** @type {Partial<Host_agent_1>} */ (m).reason,
       session: m.session ?? tab.agent?.session, at: Date.now(),
       // The sidebar's activity line (agentline.js): kept until an event says something new.
-      line: activityLine(m) ?? tab.agent?.line ?? null,
+      line: refused ?? activityLine(m) ?? tab.agent?.line ?? null,
       // Whether this session has had a turn: only then is there a conversation to resume (hibernate.js).
       hadTurn: (tab.agent?.hadTurn && (m.session ?? tab.agent?.session) === tab.agent?.session) || /** @type {string[]} */ ([AGENT_STATE.working, AGENT_STATE.needsInput, AGENT_STATE.done, AGENT_STATE.error]).includes(m.state),
       // Where it resumes after a restart (snapshot.js): SessionStart says, the events after it don't.
       folder: /** @type {Partial<Host_agent_1>} */ (m).folder ?? tab.agent?.folder ?? null,
+      // Claude Code or Codex: what resumes it and its badge. The poll only knows Claude Code.
+      kind: /** @type {Partial<Host_agent_1>} */ (m).agent ?? AGENT_KIND.claude,
     };
   rememberSession(tab);
   recordPrompt(tab, /** @type {Partial<Host_agent_1>} */ (m));
@@ -561,6 +597,7 @@ function boot(saved, snapshot, liveSessions = []) {
     state.workspaces = [ws];
     state.activeId = ws.id;
   }
+  holdOpening(); // only the terminal in focus opens before the page shows; the rest open after (openHeld)
   renderAll();
   initSidebar();
   initToolbar();
@@ -581,6 +618,7 @@ function boot(saved, snapshot, liveSessions = []) {
   // no terminal to wait for, and after a few seconds at most.
   if (!focusedTab()) signalReady();
   setTimeout(signalReady, READY_AT_MOST_MS);
+  if (readySent) openHeld(); // shown before it booted (history was locked)
 }
 
 // History can't be unlocked: show the page so the unlock dialog (security.js) can be answered.

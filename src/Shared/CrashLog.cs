@@ -45,6 +45,13 @@ internal static class CrashLog
             }
         };
 
+    /// <summary>
+    /// Writes an error a server caught where something from outside came in (a phone's request, another computer's
+    /// message) to the app's log: a bug, not a dropped connection, so it's seen instead of ending one task quietly.
+    /// Only that request or connection ends; the program carries on.
+    /// </summary>
+    public static void Caught(Exception error) => Write(PathOf(FileName), error, DateTimeOffset.Now);
+
     /// <summary>Adds one crash to the log at <paramref name="path"/>. Never throws: the program is going down already.</summary>
     public static void Write(string path, Exception error, DateTimeOffset when)
     {
@@ -84,7 +91,7 @@ internal static class CrashLog
 internal static class DataFolder
 {
     public static string Path { get; } =
-        Environment.GetEnvironmentVariable("TERMILLY_DATA_DIR") is { Length: > 0 } overridden
+        Environment.GetEnvironmentVariable(Product.DataDirVariable) is { Length: > 0 } overridden
             ? overridden
             : System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), Product.Name);
 }

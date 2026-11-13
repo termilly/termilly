@@ -71,3 +71,16 @@ export function formatTokens(n) {
   if (n < MILLION) return `${n < FINE_THOUSANDS ? (n / THOUSAND).toFixed(1) : Math.round(n / THOUSAND)}k`;
   return `${(n / MILLION).toFixed(n < FINE_MILLIONS ? 2 : 1).replace(/\.?0+$/, '')}M`;
 }
+
+/**
+ * Each line of a text and where it starts in it.
+ * @param {string} text
+ */
+export function linesOf(text) {
+  let at = 0;
+  return text.split('\n').map(line => {
+    const from = at;
+    at += line.length + 1;
+    return { line, from };
+  });
+}

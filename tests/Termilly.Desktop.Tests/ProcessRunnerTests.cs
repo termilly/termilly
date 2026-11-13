@@ -67,4 +67,17 @@ public sealed class ProcessRunnerTests
 
         Assert.Equal([Path.TrimEndingDirectorySeparator(folder), "42"], result.Text.Split("\r\n", StringSplitOptions.RemoveEmptyEntries));
     }
+
+    [Fact]
+    public async Task Error_output_keeps_its_start_and_the_rest_is_read_and_dropped()
+    {
+        var endless = new StringReader(new string('e', 3 * ProcessRunner.MaxErrorChars));
+        var kept = await ProcessRunner.ReadErrorAsync(endless, ProcessRunner.MaxErrorChars);
+        Assert.Equal(ProcessRunner.MaxErrorChars, kept.Length);
+        Assert.Equal(-1, endless.Peek()); // all of it was read: a program writing more never waits on a full pipe
+    }
+
+    [Fact]
+    public async Task Error_output_under_the_limit_is_kept_whole() =>
+        Assert.Equal("oops", await ProcessRunner.ReadErrorAsync(new StringReader("oops"), ProcessRunner.MaxErrorChars));
 }

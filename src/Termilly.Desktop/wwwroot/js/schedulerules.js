@@ -30,7 +30,7 @@ export const RUN = Object.freeze({
  * @type {Readonly<Record<string, string>>}
  */
 export const RUN_LABEL = Object.freeze({
-  [RUN.waiting]: 'Waiting', [RUN.running]: 'Running', [RUN.worked]: 'Worked', [RUN.failed]: 'Failed', [RUN.stopped]: 'Stopped',
+  [RUN.waiting]: 'Waiting', [RUN.running]: 'Running', [RUN.worked]: 'Done', [RUN.failed]: 'Failed', [RUN.stopped]: 'Stopped',
   [RUN.missed]: 'Missed', [RUN.skipped]: 'Skipped', [RUN.sent]: 'Sent',
 });
 
@@ -115,7 +115,8 @@ function slotsOf(when) {
   }
   const from = minutesOf(when.from) ?? 0;
   const to = minutesOf(when.to) ?? DAY_MINUTES - 1;
-  const end = to < from ? to + DAY_MINUTES : to;
+  // The same start and end is the whole day round: 0:00 to 0:00 is every hour, not only midnight.
+  const end = to < from ? to + DAY_MINUTES : to === from ? from + DAY_MINUTES - 1 : to;
   const slots = [];
   for (let minute = from; minute <= end; minute += stepOf(when)) slots.push(minute);
   return slots;
@@ -163,6 +164,12 @@ function daysText(days) {
 }
 
 /**
+ * Whether "every" runs all day: no hours, or hours that start and end together.
+ * @param {ScheduleWhen} when
+ */
+export const isAllDay = when => !when.from || !when.to || minutesOf(when.from) === minutesOf(when.to);
+
+/**
  * "Weekdays at 02:30", "Every 2 hours, 9:00 to 18:00", "When Termilly starts".
  * @param {ScheduleWhen} when
  */
@@ -172,7 +179,7 @@ export function describeWhen(when) {
   if (when.kind === WHEN.time) return `${daysText(days)} at ${when.at}`;
   const count = Math.max(1, Math.round(when.every));
   const each = count === 1 ? `Every ${when.unit === UNIT.hours ? 'hour' : 'minute'}` : `Every ${count} ${when.unit}`;
-  const hours = when.from && when.to ? `, ${when.from} to ${when.to}` : '';
+  const hours = isAllDay(when) ? '' : `, ${when.from} to ${when.to}`;
   return `${each}${hours}${days.length && days.length < DAY_NAMES.length ? `, ${daysText(days).toLowerCase()}` : ''}`;
 }
 
@@ -263,7 +270,7 @@ export function sortRuns(runs, schedules, now) {
  */
 export function newSchedule(id) {
   return {
-    id, name: '', on: true, what: WHAT.command, command: '', snippet: '', prompt: '', allowChanges: false, replyInNotice: true,
+    id, name: '', on: true, what: WHAT.command, command: '', snippet: '', prompt: '', allowChanges: false, allowAll: false, replyInNotice: true,
     toNotepad: false, notepadPage: REPORTS_PAGE, toFile: false, file: REPORT_FILE, where: WHERE.hidden, profile: null, cwd: '', wsId: null,
     terminal: '', after: AFTER.closeIfWorked, busy: BUSY.wait, closed: CLOSED.open,
     when: { kind: WHEN.time, at: '20:00', days: [], every: 1, unit: UNIT.hours, from: '', to: '' },

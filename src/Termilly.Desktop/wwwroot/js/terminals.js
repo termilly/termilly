@@ -5,7 +5,7 @@ import { PAGE, HOST } from './protocol.js';
 import { send, sendWithFiles, onHost, droppedPaths, platform, PLATFORM } from './host.js';
 import {
   state, on, emit, wsById, activityChanged, agentChanged, COMMAND_DELAY, noteDir, persist, lastFolderOf, GROUPS, isSsh,
-  isSshProfile, EVENTS,
+  isSshProfile, runningAgent, EVENTS,
 } from './store.js';
 import { inputTargets } from './broadcast.js';
 import { promptStarted, inputStarted, commandStarted, commandEnded, commandReported } from './commands.js';
@@ -23,7 +23,8 @@ import { noteRemotePrompt, noteRemoteCwd, leftRemote } from './remotecwd.js';
 import { AGENT_STATE, AGENT_SOURCE, PROFILE_ICON } from './constants.js';
 import { find, field, PATH_DRAG, CLIP_DRAG } from './dom.js';
 import { continuesOnNextRow, atPrompt } from './buffer.js';
-import { isResuming, resumeTyped, cancelResume, CANCEL_KEY } from './resuming.js';
+import { isResuming, resumeTyped, cancelResume, wasResumed, CANCEL_KEY } from './resuming.js';
+import { agentKind, agentOfProgram } from './agentkinds.js';
 import { clipboardKey, wireClipboard, PASTE_LABEL } from './termclipboard.js';
 import { selectionKey } from './keyselect.js';
 import { hoverMarkedLink, COPY_HINT } from './termlinks.js';
@@ -216,6 +217,17 @@ const QUIET_MS = 1200;
 const SHELL_STARTING_MS = 15_000;
 /** How long output has to settle on what looks like a prompt before an SSH terminal's command is typed. */
 const PROMPT_SETTLE_MS = 700;
+/**
+ * How long a terminal's size has to stay put before its shell is told (#47). Each size it's told, Claude Code prints its
+ * screen again, and the copy before stays in the scrollback: dragging the window or a panel's animation would leave one
+ * per frame. The terminal itself reflows at once.
+ */
+const RESIZE_SETTLE_MS = 200;
+/**
+ * Sizes not told yet, by terminal.
+ * @type {Map<string, number>}
+ */
+const resizing = new Map();
 /** How much of a program's notification an alert keeps, in characters. */
 const MAX_ALERT_CHARS = 200;
 /** A terminal a file is dragged over (app.css). */
@@ -225,11 +237,60 @@ const PASTE = Object.freeze({ oneLine: 'one', all: 'all' });
 /** The lines of a multi-line paste the question shows. */
 const PASTE_PREVIEW_LINES = 8;
 
+// ---- Opening terminals at start ----
+
+/**
+ * The terminals held back while the page starts (holdBack): only the one in focus opens before the page shows, so the
+ * page shows as soon as its prompt is up instead of after every terminal's saved output is written. The rest open
+ * after, one at a time (openHeld). Each leaves the set when it opens.
+ * @type {Set<Tab>}
+ */
+const held = new Set();
+let holding = false;
+
+/** At start, before the workspaces are drawn: the terminals not in focus wait to open (holdBack). */
+export function holdOpening() {
+  holding = true;
+}
+
+/**
+ * While the page starts, holds a terminal back from opening (openHeld opens it).
+ * @param {Tab} tab
+ * @returns {boolean} whether it waits
+ */
+export function holdBack(tab) {
+  if (!holding) return false;
+  held.add(tab);
+  return true;
+}
+
+/** Whether a terminal still waits to open after a start: it has its saved output and agent session still to come. */
+export const isHeld = (/** @type {Tab} */ tab) => held.has(tab);
+
+/** Between two terminals opened after a start: the page takes input and output meanwhile. */
+const BETWEEN_HELD_MS = 0;
+
+/**
+ * The page shows: the terminals held back open one after another, the active workspace's first, each once the one
+ * before has written its saved output. One opened meanwhile (focused, or its workspace shown) is skipped.
+ */
+export async function openHeld() {
+  holding = false;
+  const tabs = [...held].sort((a, b) => Number(a.wsId !== state.activeId) - Number(b.wsId !== state.activeId));
+  for (const tab of tabs) {
+    await new Promise(resolve => setTimeout(resolve, BETWEEN_HELD_MS));
+    if (held.has(tab) && state.tabs.get(tab.id) === tab && tab.view && !tab.view.term) await openTerminal(tab);
+    held.delete(tab);
+  }
+}
+
 /**
  * Opens the tab's terminal (its view must be in the DOM so xterm can measure it) and starts its shell.
  * @param {Tab} tab
+ * @returns {Promise<unknown>} settles once its saved output, if any, is written
  */
 export function openTerminal(tab) {
+  held.delete(tab);
   const term = createTerminal(tab);
   emit(EVENTS.terminalOpened, tab); // the change preview adds its Ctrl+click links (js/changes.js)
   wireInput(tab, term);
@@ -241,8 +302,10 @@ export function openTerminal(tab) {
   const view = tab.start?.output ? writeRestoredOutput(tab) : null;
   scanFrom(tab, term.buffer.normal.baseY + term.buffer.normal.cursorY); // old output isn't news for triggers
   startShell(tab);
-  // The new shell clears its screen on start; once it has, scroll to where the terminal was.
-  if (view) setTimeout(() => view.then(top => scrollRestored(term, top)), RESTORED_SCROLL_AFTER_MS);
+  // The new shell clears its screen on start; once it has, scroll to where the terminal was. An agent's session that's
+  // already back is at the end (resuming.js scrolled there), which stays.
+  if (view) setTimeout(() => view.then(top => scrollRestored(term, wasResumed(tab) ? null : top)), RESTORED_SCROLL_AFTER_MS);
+  return view ?? Promise.resolve();
 }
 
 /** A closed terminal reopened shows its old output, the new prompt on the view's last rows (this many). */
@@ -335,9 +398,14 @@ function wireInput(tab, term) {
     }
   });
   term.onResize((/** @type {{ cols: number, rows: number }} */ { cols, rows }) => {
-    // ConPTY repaints after a resize; that output isn't news, so it mustn't raise an attention dot.
-    quiet(tab);
-    send(PAGE.resize, { id: tab.id, cols, rows });
+    clearTimeout(resizing.get(tab.id));
+    resizing.set(tab.id, window.setTimeout(() => {
+      resizing.delete(tab.id);
+      if (!state.tabs.has(tab.id)) return; // closed meanwhile
+      // ConPTY repaints after a resize; that output isn't news, so it mustn't raise an attention dot.
+      quiet(tab);
+      send(PAGE.resize, { id: tab.id, cols, rows });
+    }, RESIZE_SETTLE_MS));
   });
   term.attachCustomKeyEventHandler((/** @type {KeyboardEvent} */ e) => inputHook(tab, term, e) && clipboardKey(term, e) && selectionKey(term, e) && keyHandler(e));
 }
@@ -541,6 +609,10 @@ onHost(HOST.busy, m => {
   const interactiveBefore = tab.interactive ?? null;
   tab.busy = m.busy ? m.name : null;
   tab.interactive = m.interactive ? m.name : null;
+  // A resumed agent that has exited: its session isn't to resume at the next start any more (see runPendingCommand).
+  if (tab.start?.resumeSession && tab.start.done && agentOfProgram(interactiveBefore) && !agentOfProgram(tab.interactive)) {
+    tab.start.resumeSession = null;
+  }
   if (tab.busy !== before || tab.interactive !== interactiveBefore) activityChanged(tab, !before !== !tab.busy || !interactiveBefore !== !tab.interactive);
 });
 
@@ -559,14 +631,16 @@ onHost(HOST.startFolder, m => {
 /**
  * What a terminal does as its shell starts (tab.start); see startOf.
  * @typedef {{ output: { lines: string[], closedAt: number, resurrected?: boolean, scroll?: number | null } | null,
- *   command: string | null, resumeSession: string | null, done: boolean }} ShellStart
+ *   command: string | null, resumeSession: string | null, resumeKind?: string | null, done: boolean,
+ *   typed?: { command: string, at: number } }} ShellStart
  */
 
 /**
  * What a terminal does as its shell starts, kept here: the saved output shown above it (after a restart, or a closed
  * terminal reopened: { lines, closedAt, resurrected }), the command typed at its first prompt (a layout's, a Claude
- * Code session to resume, the folder to go back to), the session that command resumes, and whether the start has
- * run.
+ * Code or Codex session to resume, the folder to go back to), the session that command resumes and its agent
+ * (AGENT_KIND), whether the start has run, and the command once it was typed and when (an ask waits for the agent it
+ * starts: together.js terminalReady).
  * @param {Tab} tab
  */
 const startOf = tab => (tab.start ??= { output: null, command: null, resumeSession: null, done: false });
@@ -575,7 +649,7 @@ const startOf = tab => (tab.start ??= { output: null, command: null, resumeSessi
  * Sets what a terminal does as its shell starts (any of output, command, resumeSession): from a layout, the API, a
  * reopened terminal, a restart (snapshot.js) or a reconnect.
  * @param {Tab} tab
- * @param {{ output?: any, command?: string | null, resumeSession?: string | null }} fields
+ * @param {{ output?: any, command?: string | null, resumeSession?: string | null, resumeKind?: string | null }} fields
  */
 export function prepareStart(tab, fields) {
   Object.assign(startOf(tab), Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== undefined)));
@@ -779,7 +853,10 @@ function runPendingCommand(tab) {
   if (!command || tab.exited) return;
   const resuming = start.resumeSession;
   start.command = null;
-  start.resumeSession = null; // typed: from here on the agent's hooks report its session
+  start.typed = { command, at: Date.now() };
+  // Typed: from here on Claude Code's hooks report its session. Codex's first hook waits for a prompt, so its session
+  // stays known here (for the next start) until its program exits.
+  if (!resuming || agentKind(start.resumeKind).hookAtStart) start.resumeSession = null;
   send(PAGE.input, { id: tab.id, data: `${command}\r` });
   if (resuming) resumeTyped(tab, command); // typed again if it didn't take
 }
@@ -874,7 +951,7 @@ function wireDropAndPaste(tab, term) {
     e.stopImmediatePropagation();
   }, true);
   // The right-click menu's Paste has no paste event: the same checks, then xterm types it.
-  wireClipboard(term, body, text => { if (!checkPaste(tab, text)) term.paste(text); });
+  wireClipboard(term, body, text => { if (!checkPaste(tab, text)) term.paste(text); }, () => !!runningAgent(tab));
 }
 
 /**
@@ -981,6 +1058,7 @@ export function quiet(tab, ms = QUIET_MS) {
 
 /** @param {Tab} tab */
 export function disposeTerminal(tab) {
+  held.delete(tab);
   send(PAGE.kill, { id: tab.id });
   dropGpu(tab);
   tab.view?.term?.dispose();

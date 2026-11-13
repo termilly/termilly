@@ -1,7 +1,8 @@
 // @ts-check
-// Claude Code's command line, for runs with nobody watching (js/schedules.js): how one is asked, and what its answer says.
+// An agent's command line, for runs with nobody watching (js/schedules.js, js/todorun.js): how Claude Code or Codex is asked,
+// and what its answer says.
 
-import { PROFILE_ICON } from './constants.js';
+import { PROFILE_ICON, AGENT_KIND } from './constants.js';
 import { commandLine } from './quoting.js';
 
 /** What runs Claude Code. */
@@ -15,8 +16,11 @@ const MAX_NAMED = 3;
 /** The first lines of a reply, for a notification. */
 const NOTICE_CHARS = 280;
 
-/** Every run: nothing keeps a session, and no MCP server can act for it (one that asks the user is added by the host). */
-const ALWAYS = Object.freeze(['--strict-mcp-config', '--no-session-persistence']);
+/** Every run: no MCP server can act for it (one that asks the user is added by the host). */
+const NO_SERVERS = '--strict-mcp-config';
+/** A run that nothing goes on from keeps no session. One whose agent is asked again later (a review's findings) keeps it. */
+const NO_SESSION = '--no-session-persistence';
+const RESUME = '--resume';
 /** A run nobody is asked in: what would ask is refused. One that asks gets its way of asking from the host (AskingRun.cs). */
 const NOBODY_ASKS = Object.freeze(['--permission-prompts', 'none']);
 /**
@@ -26,6 +30,47 @@ const NOBODY_ASKS = Object.freeze(['--permission-prompts', 'none']);
 const READ_ONLY = Object.freeze(['--restricted', '--tools', READ_TOOLS, '--allowedTools', READ_TOOLS_ALLOWED]);
 /** Changes are allowed: files are edited without asking, and commands run as the user's own settings say. */
 const CHANGES = Object.freeze(['--permission-mode', 'acceptEdits']);
+/**
+ * Changes are allowed with nobody to ask: Claude Code's auto mode, as in a session, where a safety check lets safe commands
+ * run and refuses risky ones. The user's settings still allow what they allow.
+ */
+const CHANGES_UNASKED = Object.freeze(['--permission-mode', 'auto']);
+/** Everything is allowed: where nobody can be asked (on a server), and To do's Allow all in Silent runs is on. */
+const EVERYTHING = Object.freeze(['--permission-mode', 'bypassPermissions']);
+/**
+ * A review of another agent's work: the tools that read, and git's commands that only show (what changed is in git diff).
+ * Anything else it tries is refused, as nobody is asked.
+ */
+const REVIEW = Object.freeze(['--restricted', '--tools', `${READ_TOOLS},Bash`, '--allowedTools',
+  `${READ_TOOLS_ALLOWED},Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*)`]);
+
+/** Codex without a conversation: one prompt, in any folder. Its events as JSON lines, where its answer is read. */
+const CODEX_RUN = Object.freeze([AGENT_KIND.codex, 'exec']);
+const CODEX_ANYWHERE = '--skip-git-repo-check';
+const CODEX_JSON = '--json';
+/** Codex going on with a session it kept. That command has no --sandbox: its sandbox is set as a setting instead. */
+const CODEX_RESUME = 'resume';
+const CODEX_RESUME_CHANGES = Object.freeze(['-c', 'sandbox_mode=workspace-write']);
+/** Going on with a session that only reads (a schedule's answer, corrected after a review). */
+const CODEX_RESUME_READ_ONLY = Object.freeze(['-c', 'sandbox_mode=read-only']);
+/** As Claude Code's NO_SESSION. */
+const CODEX_NO_SESSION = '--ephemeral';
+/** Codex's sandboxes: reading only (a prompt that may not change files, a review), or writing in its folder. */
+const CODEX_READ_ONLY = Object.freeze(['--sandbox', 'read-only']);
+const CODEX_CHANGES = Object.freeze(['--sandbox', 'workspace-write']);
+/** Everything is allowed, as Claude Code's EVERYTHING. */
+const CODEX_EVERYTHING = Object.freeze(['--dangerously-bypass-approvals-and-sandbox']);
+/** What stands in for a percent sign in a prompt for Codex (codexPrompt). */
+const WIDE_PERCENT = '\uFF05';
+
+/**
+ * A prompt as Codex can be handed it. On Windows Codex is npm's codex.cmd, so cmd reads its command line: that ends at the first
+ * line break (the rest of a prompt was lost), a double quote inside it ends the quoting, after which an & would run as a command,
+ * and %NAME% is filled in. So the prompt goes on one line, with no double quote and no percent sign in it. Another agent's reply
+ * is part of a review's prompt, so what's in it isn't ours to choose.
+ * @param {string} prompt
+ */
+const codexPrompt = prompt => prompt.trim().replace(/\s*\r?\n\s*/g, ' ').replaceAll('"', "'").replaceAll('%', WIDE_PERCENT);
 
 /**
  * A prompt as a shell can pass it on. Windows PowerShell 5.1 breaks a program's argument at a double quote inside it, and
@@ -43,12 +88,41 @@ function promptFor(prompt, shell, typed) {
 /**
  * The command for a prompt.
  * @param {string} prompt
- * @param {{ shell?: string, changes?: boolean, json?: boolean, ask?: boolean }} options json: the answer comes as one result, to
- *   read; else as text, for a terminal someone may look at. ask: what it may not do it asks the user, through the host.
+ * @param {{ kind?: string, shell?: string, changes?: boolean, all?: boolean, json?: boolean, ask?: boolean, review?: boolean,
+ *   keep?: boolean, resume?: string | null }} options
+ *   kind: the agent (AGENT_KIND), Claude Code when not said. json: the answer comes as one result, to read; else as text, for a
+ *   terminal someone may look at. ask: what it may not do it asks the user, through the host (Claude Code only). all: with
+ *   changes, it may do anything without asking. review: it reads and looks at what changed, and changes nothing. keep: its
+ *   session is kept, to go on from later. resume: the session it goes on from (what its earlier result said, readResult), kept on.
  */
-export function agentCommand(prompt, { shell, changes = false, json = false, ask = false }) {
-  const words = [AGENT_COMMAND, '--print', promptFor(prompt, shell, !json), ...(json ? ['--output-format', 'json'] : []), ...(changes ? CHANGES : READ_ONLY), ...ALWAYS, ...(ask ? [] : NOBODY_ASKS)];
+export function agentCommand(prompt, { kind = AGENT_KIND.claude, shell, changes = false, all = false, json = false, ask = false, review = false, keep = false, resume = null }) {
+  const session = sessionId(resume);
+  if (kind === AGENT_KIND.codex) return commandLine(codexWords(prompt, { changes, all, json, review, keep, session }), shell);
+  const allowed = review ? REVIEW : !changes ? READ_ONLY : all ? EVERYTHING : ask ? CHANGES : CHANGES_UNASKED;
+  const kept = session ? [RESUME, session] : keep ? [] : [NO_SESSION];
+  const words = [AGENT_COMMAND, '--print', promptFor(prompt, shell, !json), ...(json ? ['--output-format', 'json'] : []), ...allowed, NO_SERVERS, ...kept, ...(ask ? [] : NOBODY_ASKS)];
   return commandLine(words, shell);
+}
+
+/**
+ * A session's id as a command line may carry it, or null: what an agent's result said is letters, digits and dashes.
+ * @param {string | null | undefined} id
+ */
+const sessionId = id => (typeof id === 'string' && /^[\w-]{1,80}$/.test(id) ? id : null);
+
+/**
+ * Codex's words for a prompt. Without a conversation it asks nobody: its sandbox is what it may do.
+ * @param {string} prompt
+ * @param {{ changes: boolean, all: boolean, json: boolean, review: boolean, keep: boolean, session: string | null }} options
+ */
+function codexWords(prompt, { changes, all, json, review, keep, session }) {
+  const flags = [CODEX_ANYWHERE, ...(json ? [CODEX_JSON] : [])];
+  if (session) {
+    const sandbox = review || !changes ? CODEX_RESUME_READ_ONLY : all ? CODEX_EVERYTHING : CODEX_RESUME_CHANGES;
+    return [...CODEX_RUN, CODEX_RESUME, ...flags, ...sandbox, session, codexPrompt(prompt)];
+  }
+  const sandbox = review || !changes ? CODEX_READ_ONLY : all ? CODEX_EVERYTHING : CODEX_CHANGES;
+  return [...CODEX_RUN, ...flags, ...(keep ? [] : [CODEX_NO_SESSION]), ...sandbox, codexPrompt(prompt)];
 }
 
 /**
@@ -57,7 +131,7 @@ export function agentCommand(prompt, { shell, changes = false, json = false, ask
  */
 function wanted(denied) {
   const names = [...new Set(denied.map(d => d.tool_name ?? 'a tool'))];
-  return `It needed permission for ${names.slice(0, MAX_NAMED).join(', ')}${names.length > MAX_NAMED ? ` and ${names.length - MAX_NAMED} more` : ''}.`;
+  return `Refused ${names.slice(0, MAX_NAMED).join(', ')}${names.length > MAX_NAMED ? ` and ${names.length - MAX_NAMED} more` : ''}.`;
 }
 
 /**
@@ -70,13 +144,50 @@ export function noticeOf(reply) {
 }
 
 /**
- * What a run's output says, when it's Claude Code's result: its reply, whether it failed, and why. Null for anything else: a shell
+ * @typedef {{ reply: string, failed: boolean, errored: boolean, why: string, costUsd: number | null, session: string | null }} AgentResult
+ *   failed: it ended with an error or was refused a tool; errored: only the first. session: the session it ran in, to go on from
+ *   where it was kept (agentCommand's keep).
+ */
+
+/** Codex's events (its JSON lines) that say how a run went. */
+const CODEX_EVENT = Object.freeze({ item: 'item.completed', message: 'agent_message', done: 'turn.completed', failed: 'turn.failed', error: 'error', started: 'thread.started' });
+
+/**
+ * What Codex's run says: its last message as the reply, and whether its turn failed. Null when it printed no events: a shell
+ * that couldn't find it.
+ * @param {string} output as text
+ * @returns {AgentResult | null}
+ */
+function readCodex(output) {
+  /** @type {any[]} */
+  const events = [];
+  for (const line of output.split(/\r?\n/)) {
+    const text = line.trim();
+    if (!text.startsWith('{"type"')) continue;
+    try {
+      events.push(JSON.parse(text));
+    } catch (e) {
+      if (!(e instanceof SyntaxError)) throw e;
+    }
+  }
+  if (!events.length) return null;
+  const reply = events.findLast(e => e.type === CODEX_EVENT.item && e.item?.type === CODEX_EVENT.message)?.item.text ?? '';
+  const error = events.findLast(e => e.type === CODEX_EVENT.failed || e.type === CODEX_EVENT.error);
+  const errored = !!error && !events.some(e => e.type === CODEX_EVENT.done);
+  const why = errored ? String(error.error?.message ?? error.message ?? 'It ended with an error.') : '';
+  const thread = events.find(e => e.type === CODEX_EVENT.started)?.thread_id;
+  return { reply: String(reply), failed: errored, errored, why, costUsd: null, session: sessionId(thread) };
+}
+
+/**
+ * What a run's output says, when it's the agent's result: its reply, whether it failed, and why. Null for anything else: a shell
  * that couldn't find it, or an older one on a server.
  * @param {string} output as text
- * @returns {{ reply: string, failed: boolean, errored: boolean, why: string, costUsd: number | null } | null} failed: it ended
- *   with an error or was refused a tool; errored: only the first.
+ * @param {string} [kind] the agent (AGENT_KIND), Claude Code when not said
+ * @returns {AgentResult | null}
  */
-export function readResult(output) {
+export function readResult(output, kind = AGENT_KIND.claude) {
+  if (kind === AGENT_KIND.codex) return readCodex(output);
   const start = output.lastIndexOf('{"');
   const whole = output.indexOf('{"');
   for (const at of [whole, start]) {
@@ -87,7 +198,10 @@ export function readResult(output) {
       const denied = Array.isArray(result.permission_denials) ? result.permission_denials : [];
       const errors = Array.isArray(result.errors) ? result.errors.join(' ') : '';
       const why = denied.length ? wanted(denied) : result.is_error ? errors || String(result.subtype ?? 'It ended with an error.') : '';
-      return { reply: String(result.result ?? ''), failed: !!result.is_error || denied.length > 0, errored: !!result.is_error, why, costUsd: typeof result.total_cost_usd === 'number' ? result.total_cost_usd : null };
+      return {
+        reply: String(result.result ?? ''), failed: !!result.is_error || denied.length > 0, errored: !!result.is_error, why,
+        costUsd: typeof result.total_cost_usd === 'number' ? result.total_cost_usd : null, session: sessionId(result.session_id),
+      };
     } catch (e) {
       if (!(e instanceof SyntaxError)) throw e;
     }

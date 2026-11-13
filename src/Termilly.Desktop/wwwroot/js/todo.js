@@ -37,7 +37,7 @@ function ownerOf(ref) {
  * @param {ListRef} ref
  * @returns {string}
  */
-function nameOf(ref) {
+export function nameOf(ref) {
   if (ref.kind === LIST_KIND.terminal) return tabTitle(/** @type {Tab} */ (state.tabs.get(ref.id)));
   return /** @type {Workspace} */ (wsById(ref.id)).name;
 }
@@ -295,6 +295,7 @@ function changed(ref) {
  * Adds tasks on top of a list, under the field they're typed in (done ones go to its done part): they show in the order given.
  * @param {ListRef} ref
  * @param {{ text: string, tags?: string[], done?: boolean, details?: string }[]} tasks
+ * @returns {string[]} the new tasks' ids, in the order given
  */
 export function addTasks(ref, tasks) {
   const created = Date.now();
@@ -307,6 +308,7 @@ export function addTasks(ref, tasks) {
   }));
   setTasks(ref, [...added, ...tasksOf(ref)]);
   changed(ref);
+  return added.map(task => task.id);
 }
 
 /**
@@ -365,21 +367,27 @@ export function listsOfAsker(from) {
 }
 
 /**
- * Moves a task to a status. What only one status has goes with it: its terminal, and what its agent said.
+ * Moves a task to a status. What only one status has goes with it: its terminal, what its agents are at, and what they said.
+ * Implement's plan stays while its agents work and while it waits in Review; without one given, it goes.
  * @param {ListRef} ref
  * @param {string} id
  * @param {string} status
- * @param {{ terminal?: string, run?: string, review?: TodoTask['review'] }} [with_]
+ * @param {{ terminal?: string, run?: string, review?: TodoTask['review'], plan?: TodoTask['plan'], stage?: TodoTask['stage'] }} [with_]
  */
-export function setStatus(ref, id, status, { terminal, run, review } = {}) {
+export function setStatus(ref, id, status, { terminal, run, review, plan, stage } = {}) {
   const middle = status === TASK_STATUS.progress || status === TASK_STATUS.review;
   // An alert about it may wait for the user to leave the PC.
   if (status !== TASK_STATUS.review) send(PAGE.phoneWithdraw, { id });
   // What the agent said stays with a task accepted (Done), to read again in its row; a new run or Back to open clears it.
   const said = status === TASK_STATUS.done ? {} : { review: status === TASK_STATUS.review ? review : undefined };
+  // A task just done goes on top of the list, so it shows first in Done, as a new task shows first in Active.
+  const tasks = tasksOf(ref);
+  const at = tasks.findIndex(task => task.id === id);
+  if (status === TASK_STATUS.done && at > 0 && !tasks[at].done) setTasks(ref, [tasks[at], ...tasks.filter(task => task.id !== id)]);
   updateTask(ref, id, {
     done: status === TASK_STATUS.done ? true : undefined, status: middle ? status : undefined,
     terminal: status === TASK_STATUS.progress ? terminal : undefined, run: status === TASK_STATUS.progress ? run : undefined,
+    plan: middle ? plan : undefined, stage: status === TASK_STATUS.progress ? stage : undefined,
     // Nothing is asked for once it's off In progress, and a new run hasn't asked yet.
     ask: undefined,
     ...said,

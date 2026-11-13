@@ -386,6 +386,48 @@ export function addToPage(name, text) {
   }
 }
 
+// ---- Pages changed by agents (js/notepadagent.js) ----
+
+/** The pages, in their tabs' order. */
+export const notepadPages = () => pages();
+
+/**
+ * A new page with this name and text, at the end of the tabs. Shown (the Notepad opened on it, the focus left where it is)
+ * when `open`, else the page shown stays.
+ * @param {string} name
+ * @param {string} text
+ * @param {boolean} open
+ */
+export function addNamedPage(name, text, open) {
+  const active = state.notepad.activeId;
+  const page = newPage(text.replaceAll(CRLF, LF));
+  page.name = name;
+  if (!open) state.notepad.activeId = active ?? page.id;
+  persist();
+  if (open) show({ quiet: true });
+  else render();
+  return page;
+}
+
+/**
+ * Changes a page's text or name, drawn again without taking the focus or moving the caret of someone typing in it.
+ * @param {NotepadPage} page
+ * @param {{ text?: string, name?: string, before?: number }} change before: how much text went in ahead of the caret
+ */
+export function changePage(page, { text, name, before = 0 }) {
+  const shown = page === activePage();
+  const { selectionStart, selectionEnd, scrollTop } = area;
+  if (text !== undefined) page.text = text.replaceAll(CRLF, LF);
+  if (name !== undefined) page.name = name;
+  persist();
+  render();
+  if (shown && text !== undefined) {
+    const at = (/** @type {number} */ n) => Math.min(page.text.length, n + before);
+    area.setSelectionRange(at(selectionStart), at(selectionEnd));
+    area.scrollTop = scrollTop;
+  }
+}
+
 /** The Clipboard's wording for it: a clip is already copied, it's pasted there. */
 export const PASTE_TO_NOTEPAD = 'Paste to Notepad';
 

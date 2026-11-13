@@ -21,6 +21,8 @@ import { barSideOf, DOCK_SIDE } from './dom.js';
 
 /** A menu entry that draws a line between groups of entries. */
 export const SEPARATOR = 'separator';
+/** The class of a menu a dropdown button opens (its items' width follows the button). */
+export const DROPDOWN_MENU = 'dropdown-menu';
 
 /**
  * Which side of its anchor a popover opens on: below it, or to its right (a submenu). Left and above are for the title
@@ -35,7 +37,7 @@ const AWAY_FROM_BAR = Object.freeze({
   [DOCK_SIDE.top]: SIDE.below, [DOCK_SIDE.left]: SIDE.right, [DOCK_SIDE.right]: SIDE.left, [DOCK_SIDE.bottom]: SIDE.above,
 });
 
-/** @type {Array<{ el: HTMLElement, anchorEl: Element | null, onClose?: () => void, dynamic: boolean, refocus?: () => void }>} */
+/** @type {Array<{ el: HTMLElement, anchorEl: Element | null, onClose?: () => void, dynamic: boolean, refocus?: () => void, side?: string }>} */
 const stack = [];
 let restoreFocus = () => {};
 
@@ -61,7 +63,7 @@ export function setFocusRestorer(fn) {
  * refocus (where the keyboard focus goes when it closes, instead of the terminal).
  * @param {HTMLElement} el
  * @param {Anchor} anchor
- * @param {{ side?: 'below' | 'right', nested?: boolean, onClose?: () => void, dynamic?: boolean, refocus?: () => void }} [options]
+ * @param {{ side?: 'below' | 'right' | 'above', nested?: boolean, onClose?: () => void, dynamic?: boolean, refocus?: () => void }} [options]
  */
 export function openPopover(el, anchor, { side = SIDE.below, nested = false, onClose, dynamic = false, refocus } = {}) {
   if (!nested) closeAll();
@@ -73,7 +75,17 @@ export function openPopover(el, anchor, { side = SIDE.below, nested = false, onC
   keepWheel(el);
   const where = anchorEl && side === SIDE.below ? AWAY_FROM_BAR[barSideOf(anchorEl)] ?? side : side;
   place(el, anchorEl ? anchorEl.getBoundingClientRect() : /** @type {DOMRect | { x: number, y: number }} */ (anchor), where);
-  stack.push({ el, anchorEl, onClose, dynamic, refocus });
+  stack.push({ el, anchorEl, onClose, dynamic, refocus, side: where });
+}
+
+/**
+ * Places an open popover against its element again, after what's in it changed size: one that opens upwards would
+ * otherwise grow down past the window's edge.
+ * @param {HTMLElement} el
+ */
+export function placeAgain(el) {
+  const entry = stack.find(e => e.el === el);
+  if (entry?.anchorEl?.isConnected) place(el, entry.anchorEl.getBoundingClientRect(), entry.side ?? SIDE.below);
 }
 
 /** The popovers whose wheel is kept to them (keepWheel). */
@@ -205,13 +217,15 @@ const CHEVRON = '<svg viewBox="0 0 12 12"><path d="M4.5 3L7.5 6 4.5 9"/></svg>';
 /**
  * Shows a menu at `anchor`. Items: { label, icon (svg markup), hint (markup), checked, danger, action,
  * submenu: () => items }, or 'separator'. Arrow keys move, Enter/Space run, Right opens a submenu. keepFocus leaves the
- * keyboard focus where it is (a text box keeps showing its selection), and refocus says where it goes on closing.
+ * keyboard focus where it is (a text box keeps showing its selection), and refocus says where it goes on closing. alone: picking
+ * from it closes only it, not the popover it was opened over (a card it picks for stays put instead of closing and opening again).
  * @param {MenuEntry[]} items
  * @param {Anchor} anchor
- * @param {{ side?: 'below' | 'right', nested?: boolean, className?: string, keepFocus?: boolean, refocus?: () => void }} [options]
+ * @param {{ side?: 'below' | 'right' | 'above', nested?: boolean, alone?: boolean, className?: string, keepFocus?: boolean, refocus?: () => void }} [options]
  */
-export function showMenu(items, anchor, { side = SIDE.below, nested = false, className = '', keepFocus = false, refocus } = {}) {
+export function showMenu(items, anchor, { side = SIDE.below, nested = false, alone = false, className = '', keepFocus = false, refocus } = {}) {
   const menu = document.createElement('div');
+  if (alone) menu.dataset.alone = '1';
   menu.className = `popover menu context-menu ${className}`;
   menu.setAttribute('role', 'menu');
   menu.hidden = true;
@@ -321,7 +335,8 @@ function menuRow(menu, item) {
   } else {
     button.addEventListener('mouseenter', closeSubmenus);
     button.addEventListener('click', () => {
-      closeAll();
+      if (menu.dataset.alone) closePopover(menu);
+      else closeAll();
       item.action?.();
     });
   }
@@ -388,7 +403,7 @@ function openDropdown(select, button) {
       },
     })),
   ]);
-  const menu = showMenu(items, button, { className: 'dropdown-menu' });
+  const menu = showMenu(items, button, { className: DROPDOWN_MENU });
   menu.style.minWidth = `${button.offsetWidth}px`;
   /** @type {HTMLElement | null} */
   const current = menu.querySelector('[aria-checked="true"]');

@@ -45,7 +45,7 @@ public sealed class HistoryManagerTests : IDisposable
             ["tags"] = new JsonArray((tags ?? []).Select(t => (JsonNode?)t).ToArray()),
             ["lines"] = new JsonArray("$ npm test", $"output of {name}"), ["earlier"] = earlierOf,
         };
-        _closed.Add(JsonDocument.Parse(entry.ToJsonString()).RootElement, redactSecrets: false);
+        _closed.Add(JsonElement.Parse(entry.ToJsonString()), redactSecrets: false);
     }
 
     private void Commands()
@@ -55,8 +55,8 @@ public sealed class HistoryManagerTests : IDisposable
             new JsonObject { ["id"] = "c1", ["command"] = "git push", ["at"] = DaysAgo(200), ["workspace"] = "api" },
             new JsonObject { ["id"] = "c2", ["command"] = "npm test", ["at"] = DaysAgo(1), ["workspace"] = "web" },
         ], "laptop");
-        _commands.Add(JsonDocument.Parse($$"""{"command":"dotnet build","at":{{DaysAgo(150)}},"workspace":"api"}""").RootElement, redactSecrets: false);
-        _commands.Add(JsonDocument.Parse($$"""{"command":"ls","at":{{DaysAgo(2)}},"workspace":"web"}""").RootElement, redactSecrets: false);
+        _commands.Add(JsonElement.Parse($$"""{"command":"dotnet build","at":{{DaysAgo(150)}},"workspace":"api"}"""), redactSecrets: false);
+        _commands.Add(JsonElement.Parse($$"""{"command":"ls","at":{{DaysAgo(2)}},"workspace":"web"}"""), redactSecrets: false);
     }
 
     [Fact]

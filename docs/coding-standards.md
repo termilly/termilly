@@ -8,12 +8,13 @@ review. When the code and this page disagree, the code is usually right and this
 
 | Project | What it is |
 | --- | --- |
-| `src/Termilly.Desktop` | The app: WPF and WebView2 on Windows. Hosts the page (`wwwroot`), runs the shells, keeps settings, history and the vault. |
-| `src/Termilly.Linux` | The same app on Linux, with Photino instead of WPF. Shares Desktop's code; only the platform services differ. |
+| `src/Termilly.App` | The code every platform runs (a library): runs the shells, answers the page, keeps settings, history and the vault, serves the phone. Platform differences are checked at run time. |
+| `src/Termilly.Desktop` | The Windows app: WPF and WebView2, and what only Windows has. Holds the page (`wwwroot`), which every platform serves. |
+| `src/Termilly.Linux` | The Linux and macOS app: Photino instead of WPF, and what only they have. |
 | `src/Termilly.Host` | The background process that keeps shells running when the window closes (`termilly-host`). |
 | `src/Termilly.Pty` | Pseudo consoles: ConPTY on Windows, a Unix PTY on Linux, and the protocol to the host. |
 | `src/Termilly.Agent` | `termilly` and `termilly-hook`: the CLI, the MCP server and Claude Code's hooks. |
-| `src/Shared` | Constants the projects above share (hook events, pipe names, API names), linked into each. |
+| `src/Shared` | Constants the projects above share (hook events, pipe names, API names): built into Termilly.App, linked into the others. |
 | `installer/TermillySetup` | The Windows setup program (.NET Framework 4.8, so it runs with nothing installed). |
 
 ## Writing

@@ -2,9 +2,9 @@ using System.Text;
 using Termilly.Agent;
 
 // One helper, three jobs, picked by the name it runs under:
-//   claude.exe                          the shim: starts the real Claude Code with Termilly's hooks (Shim.cs)
+//   claude.exe, codex.exe               the shim: starts the real Claude Code or Codex with Termilly's hooks (Shim.cs)
 //   termilly.exe ...                    the termilly command and its MCP server (Cli.cs, Mcp.cs)
-//   termilly-hook.exe hook 1 <Event>    a Claude Code hook: tells Termilly the pane's agent event
+//   termilly-hook.exe hook 1 <Event>    a Claude Code hook: tells Termilly the pane's agent event (codex after it: Codex's)
 //   termilly-hook.exe statusline 1      Claude Code's status line: passes the plan limits on, then runs the user's own (StatusLine.cs)
 //   termilly-hook.exe selftest          checks this terminal can reach Termilly, and which claude it would run
 
@@ -12,7 +12,11 @@ CrashLog.Install(CrashLog.HelperFileName);
 var name = Path.GetFileNameWithoutExtension(Environment.ProcessPath);
 if (string.Equals(name, AgentExecutables.Claude, StringComparison.OrdinalIgnoreCase))
 {
-    return Shim.Run(args);
+    return Shim.Run(AgentKinds.Claude, args);
+}
+if (string.Equals(name, AgentExecutables.Codex, StringComparison.OrdinalIgnoreCase))
+{
+    return Shim.Run(AgentKinds.Codex, args);
 }
 if (string.Equals(name, AgentExecutables.Cli, StringComparison.OrdinalIgnoreCase))
 {
@@ -25,7 +29,8 @@ if (string.Equals(name, AgentExecutables.Askpass, StringComparison.OrdinalIgnore
 
 return args switch
 {
-    [HookCommands.Hook, var version, var hookEvent] => Hook(version, hookEvent),
+    [HookCommands.Hook, var version, var hookEvent] => Hook(version, hookEvent, AgentKinds.Claude),
+    [HookCommands.Hook, var version, var hookEvent, AgentKinds.Codex] => Hook(version, hookEvent, AgentKinds.Codex),
     [HookCommands.StatusLine, var version] => StatusLine.Run(version, Console.OpenStandardInput(), Console.Out),
     ["selftest"] => SelfTest(),
     _ => Usage(),
@@ -33,7 +38,7 @@ return args switch
 
 // A hook must never get in the agent's way: it prints nothing (some events read stdout as instructions), always
 // exits 0, and gives up after a second if Termilly doesn't answer.
-static int Hook(string version, string hookEvent)
+static int Hook(string version, string hookEvent, string agent)
 {
     var pane = Environment.GetEnvironmentVariable(Protocol.PaneVariable);
     var pipe = Environment.GetEnvironmentVariable(Protocol.PipeVariable);
@@ -59,7 +64,11 @@ static int Hook(string version, string hookEvent)
         try { File.AppendAllText(log, $"{DateTime.Now:HH:mm:ss.fff}\t{hookEvent}\t{payload}\n"); } catch (IOException) { }
     }
 #endif
-    var reply = Protocol.Send(pipe, Protocol.Message(pane, hookEvent, payload), PipeTimeouts.Hook);
+    if (agent == AgentKinds.Codex && Protocol.IsCodexSubagent(payload))
+    {
+        return 0;
+    }
+    var reply = Protocol.Send(pipe, Protocol.Message(pane, hookEvent, payload, agent), PipeTimeouts.Hook);
 #if DEBUG
     if (Environment.GetEnvironmentVariable(HookLogVariable) is { Length: > 0 } replyLog)
     {
@@ -113,8 +122,15 @@ static int SelfTest()
         ? null
         : Protocol.Send(pipe, Protocol.Message(pane, "SelfTest", null), SelfTestTimeout);
     Check(reply?.Contains(HookReplies.OkMark) == true, Product.Name, reply is null ? "didn't answer" : "answered");
-    var real = Shim.FindReal(Environment.GetEnvironmentVariable(SystemVariables.Path), Environment.GetEnvironmentVariable(SystemVariables.PathExt), AppContext.BaseDirectory);
-    Check(real is not null, "Claude Code", real ?? "not found on PATH");
+    // Either agent will do: someone may use only one of them.
+    var found = false;
+    foreach (var (agent, product) in new[] { (AgentKinds.Claude, AgentKinds.ClaudeName), (AgentKinds.Codex, AgentKinds.CodexName) })
+    {
+        var real = Shim.FindReal(agent, Environment.GetEnvironmentVariable(SystemVariables.Path), Environment.GetEnvironmentVariable(SystemVariables.PathExt), AppContext.BaseDirectory);
+        found |= real is not null;
+        Console.WriteLine($"{(real is null ? "-   " : "ok  ")}  {product}: {real ?? "not found on PATH"}");
+    }
+    Check(found, "an agent", found ? "found" : "neither Claude Code nor Codex is on PATH");
     return ok ? 0 : 1;
 }
 

@@ -17,7 +17,7 @@ const OWN_ACTIONS = new Set(Object.values(ACTION));
 const SC = Object.freeze({ open: 'open', back: 'back', run: 'run', stop: 'stop', on: 'on', report: 'report' });
 /** How runs stand (js/schedulerules.js RUN), and what each says. */
 const LABEL = Object.freeze({
-  waiting: 'Waiting', running: 'Running', worked: 'Worked', failed: 'Failed', stopped: 'Stopped', missed: 'Missed', skipped: 'Skipped', sent: 'Sent',
+  waiting: 'Waiting', running: 'Running', worked: 'Done', failed: 'Failed', stopped: 'Stopped', missed: 'Missed', skipped: 'Skipped', sent: 'Sent',
 });
 const GOING = new Set(['waiting', 'running']);
 /** How many runs a schedule's row shows. */

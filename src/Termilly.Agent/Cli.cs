@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json.Nodes;
 
 namespace Termilly.Agent;
@@ -26,8 +27,9 @@ internal static class Cli
           termilly snippet run <name> [--pane ID] [--var NAME=VALUE]...
                                                        run a snippet in a terminal (allow typing in Settings first)
           termilly read [--pane ID] [--lines N]        another terminal's last command and its output (or its last N lines)
-          termilly wait [--pane ID] [--match REGEX] [--timeout S]
-                                                       until its command finishes (or a line matches), then its output
+          termilly wait [--pane ID] [--match REGEX | --agent] [--timeout S]
+                                                       until its command finishes (or a line matches, or its agent's
+                                                       turn ends: then its reply), then its output
           termilly history [words] [--failed] [--in FOLDER] [--limit N]
                                                        commands run, newest first (secrets redacted)
           termilly mcp                                 run as an MCP server (stdio) for coding agents
@@ -55,6 +57,7 @@ internal static class Cli
         public const string Enter = "--enter";
         public const string Lines = "--lines";
         public const string Match = "--match";
+        public const string Agent = "--agent";
         public const string Timeout = "--timeout";
         public const string Var = "--var";
         public const string Failed = "--failed";
@@ -82,6 +85,19 @@ internal static class Cli
     private const int StateWidth = -14;
     private const int SnippetNameWidth = -28;
 
+    /// <summary>
+    /// The MCP server on stdin and stdout, as UTF-8 both ways (MCP's JSON lines are UTF-8). Not Console.In and Console.Out:
+    /// on Windows they use the console's OEM code page (437, 852) for a redirected stream, which turned what an agent sent
+    /// into other characters before Termilly saw it (› arrived as Γç║, accented letters likewise).
+    /// </summary>
+    private static int RunMcp()
+    {
+        var utf8 = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+        using var input = new StreamReader(Console.OpenStandardInput(), utf8);
+        using var output = new StreamWriter(Console.OpenStandardOutput(), utf8) { AutoFlush = true };
+        return Mcp.Run(input, output);
+    }
+
     public static int Run(string[] args)
     {
         try
@@ -89,7 +105,7 @@ internal static class Cli
             return args switch
             {
                 [] or [Commands.Help or Options.Help or Options.HelpShort, ..] => Print(Help),
-                [Commands.Mcp, ..] => Mcp.Run(Console.In, Console.Out),
+                [Commands.Mcp, ..] => RunMcp(),
                 [ApiMethods.List, .. var rest] => List(rest),
                 [ApiMethods.State, .. var rest] => Print(Api.Pretty(Api.Call(ApiMethods.State, new JsonObject { [ApiFields.Pane] = Pane(rest) }))),
                 [ApiMethods.Status, var text, .. var rest] => Done(Api.Call(ApiMethods.Status, new JsonObject { [ApiFields.Pane] = Pane(rest), [ApiFields.Text] = text })),
@@ -136,7 +152,9 @@ internal static class Cli
 
     private static JsonObject WaitArguments(string[] args)
     {
-        var request = new JsonObject { [ApiFields.Pane] = Pane(args), [ApiFields.Until] = Option(args, Options.Match) is null ? ApiReadModes.CommandFinished : ApiReadModes.OutputMatches, [ApiFields.Pattern] = Option(args, Options.Match) };
+        var until = args.Contains(Options.Agent) ? ApiReadModes.AgentDone
+            : Option(args, Options.Match) is null ? ApiReadModes.CommandFinished : ApiReadModes.OutputMatches;
+        var request = new JsonObject { [ApiFields.Pane] = Pane(args), [ApiFields.Until] = until, [ApiFields.Pattern] = Option(args, Options.Match) };
         if (int.TryParse(Option(args, Options.Timeout), out var seconds))
         {
             request[ApiFields.TimeoutSeconds] = seconds;
@@ -170,7 +188,7 @@ internal static class Cli
 
     private static int Output(JsonNode? result)
     {
-        if (result?[ApiFields.TimedOut]?.GetValue<bool>() == true)
+        if (result?[ApiFields.TimedOut].AsBool() == true)
         {
             Console.Error.WriteLine("Timed out.");
             return TimedOut;
@@ -182,6 +200,16 @@ internal static class Cli
         if (result?[ApiFields.Matched]?.ToString() is { Length: > 0 } matched)
         {
             Console.WriteLine(matched);
+        }
+        // An agent's turn that ended: its answer is what a script wants, not the screen around it.
+        if (result?[ApiFields.Reply]?.ToString() is { Length: > 0 } reply)
+        {
+            Console.WriteLine(reply);
+            return 0;
+        }
+        if (result?[ApiFields.Agent]?.ToString() is { Length: > 0 } agent)
+        {
+            Console.Error.WriteLine($"The agent's turn ended: {agent}.");
         }
         foreach (var line in result?[ApiFields.Lines]?.AsArray() ?? [])
         {

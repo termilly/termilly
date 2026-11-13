@@ -10,6 +10,8 @@ import { fileURLToPath } from 'node:url';
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const desktop = path.join(repo, 'src/Termilly.Desktop');
+/** Where the C# is: the code all platforms share. */
+const app = path.join(repo, 'src/Termilly.App');
 const target = path.join(desktop, 'wwwroot/js/constants.js');
 const typesTarget = path.join(desktop, 'types/host.d.ts');
 
@@ -25,6 +27,8 @@ const SOURCES = [
   { file: 'Changes/ChangeModel.cs', cls: 'ChangeSources', js: 'CHANGE_SOURCE' },
   { file: 'Changes/ChangeModel.cs', cls: 'ChangeKinds', js: 'CHANGE_KIND' },
   { file: '../Shared/HookEvents.cs', cls: 'HookEvents', js: 'HOOK_EVENT' },
+  { file: '../Shared/AgentLookup.cs', cls: 'AgentKinds', js: 'AGENT_KIND' },
+  { file: '../Shared/ClaudeTools.cs', cls: 'CodexTools', js: 'CODEX_TOOL' },
   { file: '../Shared/ClaudeTools.cs', cls: 'ClaudeTools', js: 'CLAUDE_TOOL' },
   { file: 'GitCommands.cs', cls: 'GitActions', js: 'GIT_ACTION' },
   { file: 'GitCommands.cs', cls: 'DiffSides', js: 'DIFF_SIDE' },
@@ -105,7 +109,7 @@ function read() {
   const all = new Map();
   const out = [];
   for (const source of SOURCES) {
-    const text = fs.readFileSync(path.join(desktop, source.file), 'utf8').replaceAll('\r\n', '\n');
+    const text = fs.readFileSync(path.join(app, source.file), 'utf8').replaceAll('\r\n', '\n');
     const { own, nested } = split(classBody(text, source.cls));
     const object = members(own, all);
     all.set(source.cls, object);
@@ -164,7 +168,7 @@ const summary = doc => /<summary>([\s\S]*?)<\/summary>/.exec(doc ?? '')?.[1].rep
 function readRecords() {
   const records = new Map();
   for (const file of TYPE_FILES) {
-    const text = fs.readFileSync(path.join(desktop, file), 'utf8').replaceAll('\r\n', '\n');
+    const text = fs.readFileSync(path.join(app, file), 'utf8').replaceAll('\r\n', '\n');
     for (const m of text.matchAll(/((?:[ \t]*\/\/\/[^\n]*\n)*)internal sealed record (\w+)\s*([({])/g)) {
       const fields = [];
       if (m[3] === '(') {

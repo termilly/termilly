@@ -9,9 +9,10 @@
 
 import { PAGE } from './protocol.js';
 import { send, platform, PLATFORM } from './host.js';
-import { PROFILE_SOURCE, AGENT_STATE, PROFILE_ICON, AGENT_SOURCE, CLAUDE_TOOL } from './constants.js';
+import { PROFILE_SOURCE, AGENT_STATE, PROFILE_ICON, AGENT_SOURCE, AGENT_KIND, CLAUDE_TOOL } from './constants.js';
 import { debounce } from './util.js';
 import { windowInFront } from './windowshown.js';
+import { agentKind, agentOfProgram, AGENTS, AGENT_PROGRAMS } from './agentkinds.js';
 import { keepPlaces, keepPins, whenHostCloses } from './windows.js';
 
 /** The kinds of node in a workspace's layout tree (see the top of this file). */
@@ -105,7 +106,9 @@ export const getSetting = path => {
  * Its settings: alwaysNotify, a task's news always reaches the user; allowAll, Silent runs get what they ask for.
  * @typedef {{ open: boolean, list?: { kind: string, id: string } | null, width?: number, height?: number, side?: string,
  *   detached?: boolean, hosts?: Record<string, TodoTask[]>, onlyWithTasks?: boolean, tags?: string[], tagColors?: Record<string, string>, showDone?: boolean,
- *   hideActive?: boolean, searchAll?: boolean, alwaysNotify?: boolean, allowAll?: boolean }} TodoState
+ *   hideActive?: boolean, searchAll?: boolean, alwaysNotify?: boolean, allowAll?: boolean,
+ *   plan?: Partial<NonNullable<TodoTask['plan']>>, plans?: Record<string, NonNullable<TodoTask['plan']>> }} TodoState plan: what
+ *   Implement starts with where a list has no choice of its own (Settings › Agents); plans: each list's own, by list
  */
 
 /**
@@ -357,13 +360,14 @@ const PROGRESS = Object.freeze({ percent: 1, error: 2, paused: 4 });
 const AGENT_ACTIVITY = {
   [AGENT_STATE.needsInput]: a => ({
     kind: ACTIVITY.needs,
-    title: a.tool && a.tool !== CLAUDE_TOOL.askUserQuestion ? `Claude needs you: allow ${a.tool}?`
-      : a.source === AGENT_SOURCE.poll && a.message ? `Claude needs you: ${a.message}` : 'Claude needs your input',
+    title: a.tool && a.tool !== CLAUDE_TOOL.askUserQuestion ? `${agentKind(a.kind).short} needs you: allow ${a.tool}?`
+      : a.source === AGENT_SOURCE.poll && a.message ? `${agentKind(a.kind).short} needs you: ${a.message}`
+        : `${agentKind(a.kind).short} needs your input`,
   }),
   [AGENT_STATE.attention]: a => ({ kind: ACTIVITY.needs, title: a.message ? `Wants your attention: ${a.message}` : 'Wants your attention' }),
-  [AGENT_STATE.error]: a => ({ kind: ACTIVITY.error, percent: FULL_PERCENT, title: a.reason ? `Claude stopped with an error: ${a.reason}` : 'Claude stopped with an error' }),
-  [AGENT_STATE.done]: () => ({ kind: ACTIVITY.done, title: 'Claude finished: your turn' }),
-  [AGENT_STATE.working]: () => ({ kind: ACTIVITY.spin, title: 'Claude is working…' }),
+  [AGENT_STATE.error]: a => ({ kind: ACTIVITY.error, percent: FULL_PERCENT, title: `${agentKind(a.kind).short} stopped with an error${a.reason ? `: ${a.reason}` : ''}` }),
+  [AGENT_STATE.done]: a => ({ kind: ACTIVITY.done, title: `${agentKind(a.kind).short} finished: your turn` }),
+  [AGENT_STATE.working]: a => ({ kind: ACTIVITY.spin, title: `${agentKind(a.kind).short} is working…` }),
 };
 
 /**
@@ -387,7 +391,7 @@ function agentActivity(tab) {
  * @returns {Activity | null}
  */
 export function activityOf(tab) {
-  if (tab.hibernated) return { kind: ACTIVITY.hibernated, title: 'Hibernated: Claude Code resumes this conversation when you open it' };
+  if (tab.hibernated) return { kind: ACTIVITY.hibernated, title: `Hibernated: ${agentKind(tab.hibernated.kind).name} resumes this conversation when you open it` };
   const agent = agentActivity(tab);
   if (agent) return agent;
   // Claude Code reporting in (hooks, poll) says when it works. Idle, it waits for the user: the command it runs in
@@ -420,10 +424,17 @@ function commandRunning(tab) {
 }
 
 /**
- * A command line that starts Claude Code (`claude`, `cd x && claude`, a restored `cd …; claude --resume …`): it waits
- * for the user (a folder to trust, a prompt) until its hooks say otherwise, which over ssh nothing else can tell.
+ * A command line that starts Claude Code or Codex (`claude`, `cd x && codex`, a restored `cd …; claude --resume …`):
+ * it waits for the user (a folder to trust, a prompt) until its hooks say otherwise, which over ssh nothing else can tell.
  */
-const STARTS_CLAUDE = /(?:^|[;&|(]\s*)claude(?:\s|$)/;
+const STARTS_CLAUDE = new RegExp(String.raw`(?:^|[;&|(]\s*)(?:${AGENT_PROGRAMS.join('|')})(?:\s|$)`);
+
+/**
+ * What resumes an agent's session: `claude --resume <id>`, or `codex resume <id>` for Codex.
+ * @param {string} session
+ * @param {string | null | undefined} kind one of AGENT_KIND; Claude Code when not said
+ */
+export const resumeAgentCommand = (session, kind) => agentKind(kind).resume(session);
 
 /** States that tell the user something happened; arriving out of sight, they stay unread until looked at. */
 /** @type {Set<string>} */
@@ -439,11 +450,21 @@ export const isInView = tab => (tab.detached
   : tab.wsId === state.activeId && windowInFront() && document.hasFocus());
 
 /**
- * Whether Claude Code runs in this terminal now: its hooks or the `claude agents` poll reported it, and it hasn't
- * exited (an exit clears tab.agent). Output alerts set tab.agent too, with source "alert"; those don't count.
+ * Whether an agent runs in this terminal now (Claude Code or Codex, tab.agent.kind): its hooks or the `claude agents`
+ * poll reported it, and it hasn't exited (an exit clears tab.agent). Output alerts set tab.agent too, with source "alert"; those don't count.
  * @param {Tab | null | undefined} tab
  */
 export const runsClaude = tab => tab?.agent?.source === AGENT_SOURCE.hooks || tab?.agent?.source === AGENT_SOURCE.poll;
+
+/**
+ * The agent running in a terminal (one of AGENT_KIND), or null: what its hooks say, or else the program the host sees
+ * in it (codex.exe), so its badge shows as it starts, before its first hook (Codex's wait until the user trusts them).
+ * @param {Tab | null | undefined} tab
+ */
+export const runningAgent = tab => (runsClaude(tab) ? tab?.agent?.kind ?? AGENT_KIND.claude : agentOfProgram(tab?.interactive));
+
+/** The agents installed here, in the order they're offered: the host offers an agent's profile only then (SessionProfiles.cs). */
+export const installedAgents = () => Object.keys(AGENTS).filter(kind => state.profiles.some(p => p.startCommand === AGENTS[kind].program));
 
 /**
  * An agent's states that end its turn (Stop, StopFailure).
@@ -790,10 +811,10 @@ function serialize() {
     // tmux windows aren't saved: they're tmux's, and attaching again brings them back (tmux.js).
     workspaces: state.workspaces.filter(w => !w.tmux).map(({ id, name, color, cwd, focusId, root, note, tasks, snippets, collapsed, copyTo }) => ({ id, name, color, cwd, focusId, tasks, root: withoutPreview(root), note, snippets, collapsed: collapsed || undefined, copyTo })),
     tabs: [...state.tabs.values()].filter(t => !t.virtual).map(t => {
-      const { id, wsId, profile, name, tags, noHistory, startCwd, env, startCommand, worktree, note, tasks, agentRead, agentType, agentSessions, promptsClearedAt, stepsClearedAt } = t;
+      const { id, wsId, profile, name, tags, noHistory, startCwd, env, startCommand, worktree, note, tasks, agentRead, agentType, openedBy, agentSessions, promptsClearedAt, stepsClearedAt } = t;
       // In a window of its own: it opens in one again after a restart, where it was (windowPlaces).
       const windowed = t.detached || t.windowed || undefined;
-      return { id, wsId, profile, name, tags, noHistory, startCwd, env, startCommand, worktree, note, tasks, agentRead, agentType, agentSessions, promptsClearedAt: promptsClearedAt || undefined, stepsClearedAt: stepsClearedAt && Object.keys(stepsClearedAt).length ? stepsClearedAt : undefined, lastCwd: lastFolderOf(t) ?? undefined, windowed };
+      return { id, wsId, profile, name, tags, noHistory, startCwd, env, startCommand, worktree, note, tasks, agentRead, agentType, openedBy, agentSessions, promptsClearedAt: promptsClearedAt || undefined, stepsClearedAt: stepsClearedAt && Object.keys(stepsClearedAt).length ? stepsClearedAt : undefined, lastCwd: lastFolderOf(t) ?? undefined, windowed };
     }),
   };
 }

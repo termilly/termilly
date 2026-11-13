@@ -1,36 +1,41 @@
 // @ts-check
-// Implement's Silent: nobody is watching, so Claude Code works on a task in a hidden shell, as a schedule's agent prompt
-// does (the host's ScheduleRunner), allowed to change files. What else it needs, it asks the user for in the task's row
-// (js/todoask.js), unless To do's settings allow it all.
-// The task is In progress while it runs, and goes to Review with its reply, or back to Open, with why, when it fails or is
-// stopped. A run outlives nothing: closing Termilly ends it.
+// Implement's hidden runs: nobody is watching, so an agent (Claude Code or Codex) works in a hidden shell, as a schedule's agent
+// prompt does (the host's ScheduleRunner). A run does a task's work, reviews another agent's work on it, or fixes what a review
+// found (js/todoreview.js decides which, and what follows). What Claude Code needs beyond changing files it asks the user for in
+// the task's row (js/todoask.js), unless To do's settings allow it all. On an SSH host (the list's terminal is there) a run is
+// there, in the folder that terminal is in; nobody can be asked from there, so it's refused what it would ask for, or with Allow
+// all, gets it. A run outlives nothing: closing Termilly ends it.
 
 import { PAGE, HOST } from './protocol.js';
 import { send, onHost } from './host.js';
-import { state, on, newId, isSsh, defaultProfile, sourceOf, EVENTS } from './store.js';
-import { PROFILE_SOURCE, AGENT_STATE } from './constants.js';
+import { state, on, newId, sourceOf, EVENTS } from './store.js';
+import { PROFILE_SOURCE, PROFILE_ICON, AGENT_KIND } from './constants.js';
+import { quoteArg } from './quoting.js';
 import { addApiMethods } from './api.js';
 import { askUser, endAsking } from './todoask.js';
-import { agentCommand, readResult, AGENT_COMMAND } from './agentcli.js';
+import { agentCommand, readResult } from './agentcli.js';
 import { plainText } from './schedulereport.js';
-import { showToast, TOAST } from './toasts.js';
-import { alertReview, alertTask } from './notify.js';
-import { folderOfList, agentInstalled } from './todoactions.js';
-import { LIST_KIND, findTask, setStatus, updateTask, releaseClosed } from './todo.js';
-import { silentPrompt, tickSub, TASK_STATUS } from './todolist.js';
+import { findTask, releaseClosed } from './todo.js';
 
-/** @typedef {import('./todo.js').ListRef} ListRef */
-
-/** Who a run's reply is from, in Review. */
-export const SILENT_BY = 'Claude Code, silently';
+/** What a hidden run is for. */
+export const ROLE = Object.freeze({ work: 'work', review: 'review', fix: 'fix' });
 /** The longest a run may take before it's stopped. */
 const LIMIT_SECONDS = 3600;
-/** A summary of output that wasn't Claude Code's result: its last line. */
+/** A summary of output that wasn't the agent's result: its last line. */
 const LAST_LINE_CHARS = 200;
 
 /**
- * The runs going: by run, its task, and its sub-item's line when it's on one.
- * @type {Map<string, { taskId: string, line?: number }>}
+ * @typedef {{ folder: string, profile: SessionProfile, server: string | null }} RunPlace where a run is: server is the SSH
+ *   host's name, or null for this computer
+ * @typedef {{ taskId: string, line?: number, role: string, kind: string, resumed: boolean }} HiddenRun its task, the sub-item's
+ *   line when it's on one, what it's for (ROLE), its agent (AGENT_KIND), and whether it goes on from a session kept before
+ * @typedef {{ result: import('./agentcli.js').AgentResult | null, stopped: boolean, why: string }} RunOutcome result: what the
+ *   agent said, or null when it was stopped or gave no result; why: what to say then
+ */
+
+/**
+ * The runs going, by run.
+ * @type {Map<string, HiddenRun>}
  */
 const going = new Map();
 
@@ -38,42 +43,50 @@ const going = new Map();
 export const isRunning = run => going.has(run);
 
 /**
- * The shell a list's run goes in: its terminal's when that's on this computer, else the default one.
- * @param {ListRef} ref
+ * Who hears of a run that ended (js/todoreview.js).
+ * @type {(id: string, run: HiddenRun, outcome: RunOutcome) => void}
  */
-function profileFor(ref) {
-  const tab = ref.kind === LIST_KIND.terminal ? state.tabs.get(ref.id) : null;
-  const id = tab && !isSsh(tab) ? tab.profile : defaultProfile();
-  return state.profiles.find(p => p.id === id) ?? null;
+let ended = () => {};
+
+/** @param {typeof ended} fn */
+export function onRunEnded(fn) {
+  ended = fn;
 }
 
 /**
- * Starts Claude Code silently on a task, or one of its sub-items, in the list's folder.
- * @param {ListRef} ref
- * @param {TodoTask} task
- * @param {import('./todolist.js').DetailLine} [sub]
- * @returns {boolean} whether it started
+ * A command for an SSH host, in its user's login shell: ssh runs one without the login files, and those are what put an agent
+ * on PATH (~/.local/bin, where Claude Code's installer puts it). It reads nothing, so it doesn't wait for input that never comes.
+ * @param {string} command
  */
-export function implementSilently(ref, task, sub) {
-  const folder = folderOfList(ref);
-  const profile = profileFor(ref);
-  if (!folder || !profile || !agentInstalled()) return false;
-  const run = newId('t');
-  // A shell on this computer reaches Termilly's pipe, so Claude Code there can ask the user.
-  const ask = sourceOf(profile) === PROFILE_SOURCE.local;
-  const command = agentCommand(silentPrompt(task, sub), { shell: profile.shellIcon ?? profile.icon, changes: true, json: true, ask });
-  going.set(run, { taskId: task.id, line: sub?.at });
-  setStatus(ref, task.id, TASK_STATUS.progress, { run });
-  send(PAGE.scheduleRun, { runId: run, profile: profile.id, cwd: folder, command, limitSeconds: LIMIT_SECONDS, ask });
-  return true;
+const loginShell = command => `"$SHELL" -l -c ${quoteArg(`${command} < /dev/null`, PROFILE_ICON.ssh)}`;
+
+/**
+ * Starts an agent in a hidden shell on a task.
+ * @param {{ taskId: string, line?: number, role: string, kind: string, place: RunPlace, prompt: string, keep?: boolean,
+ *   resume?: string | null }} run a review reads and changes nothing; the work and a fix may change files. keep: its session is
+ *   kept, for a fix to go on from; resume: the session it goes on from
+ * @returns {string} the run's id
+ */
+export function runHidden({ taskId, line, role, kind, place, prompt, keep = false, resume = null }) {
+  const { folder, profile } = place;
+  const id = newId('t');
+  const review = role === ROLE.review;
+  // A shell on this computer reaches Termilly's pipe, so Claude Code there can ask the user. A reviewer has nothing to ask for.
+  const ask = !review && kind === AGENT_KIND.claude && sourceOf(profile) === PROFILE_SOURCE.local;
+  const all = !ask && state.todo.allowAll === true;
+  const agent = agentCommand(prompt, { kind, shell: profile.shellIcon ?? profile.icon, changes: !review, all, json: true, ask, review, keep, resume });
+  going.set(id, { taskId, line, role, kind, resumed: !!resume });
+  send(PAGE.scheduleRun, { runId: id, profile: profile.id, cwd: folder, command: place.server ? loginShell(agent) : agent, limitSeconds: LIMIT_SECONDS, ask });
+  return id;
 }
 
 /**
- * Stops a task's run.
+ * Stops a task's runs: the one it shows, and any other going for it (reviewers work at the same time).
  * @param {TodoTask} task
  */
 export function stopRun(task) {
-  if (task.run) send(PAGE.scheduleStop, { runId: task.run });
+  const runs = new Set([...(task.run ? [task.run] : []), ...[...going].filter(([, run]) => run.taskId === task.id).map(([id]) => id)]);
+  for (const runId of runs) send(PAGE.scheduleStop, { runId });
 }
 
 /**
@@ -83,38 +96,25 @@ export function stopRun(task) {
 const lastLine = text => (text.split(/\r?\n/).map(line => line.trim()).filter(Boolean).at(-1) ?? '').slice(0, LAST_LINE_CHARS);
 
 /**
- * A run ended: its task goes to Review with the reply, or back to Open with why.
+ * A run ended: who waits for it hears what its agent said, or why there's nothing.
  * @param {{ runId?: string, exitCode?: number | null, tail?: string, stopped?: boolean, error?: string | null }} m
  */
-async function ended(m) {
+async function runEnded(m) {
   const id = m.runId ?? '';
   const run = going.get(id);
   if (!run) return;
+  // It stays among the runs going until its output is read, so its task isn't taken for one nobody works on.
+  const text = await plainText(m.tail ?? '');
   going.delete(id);
   endAsking(id);
   // The reply is kept with the task; the host's copy of the output isn't needed.
   send(PAGE.scheduleForget, { runIds: [id] });
-  const found = findTask(run.taskId);
-  if (!found || found.task.run !== id) return;
-  const text = await plainText(m.tail ?? '');
-  const result = m.stopped || m.error ? null : readResult(text);
-  const name = `“${found.task.text}”`;
-  // Refused a tool, it still did what it could: that goes to Review, saying what it wasn't let do.
-  if (!result || result.errored) {
-    setStatus(found.ref, found.task.id, TASK_STATUS.open);
-    const why = m.stopped ? 'It was stopped.' : m.error || result?.why || lastLine(text) || `${AGENT_COMMAND} didn’t answer.`;
-    showToast({ text: `${name} is open again. ${why}`, state: m.stopped ? TOAST.done : TOAST.failed });
-    if (!m.stopped) alertTask(found.task, AGENT_STATE.error, why);
-    return;
-  }
-  const summary = [result.reply.trim(), result.failed ? result.why : ''].filter(Boolean).join('\n\n');
-  if (run.line !== undefined) updateTask(found.ref, found.task.id, { details: tickSub(found.task.details ?? '', run.line, true) });
-  setStatus(found.ref, found.task.id, TASK_STATUS.review, { review: { summary, by: SILENT_BY } });
-  alertReview(found.task, summary.split(/\r?\n/)[0] ?? '', null);
-  showToast({ text: `${name} waits for review`, state: TOAST.done });
+  const result = m.stopped || m.error ? null : readResult(text, run.kind);
+  const why = m.stopped ? 'It was stopped.' : m.error || (result?.errored ? result.why : '') || lastLine(text) || `${run.kind} didn’t answer.`;
+  ended(id, run, { result, stopped: !!m.stopped, why });
 }
 
-onHost(HOST.scheduleEnded, m => void ended(m));
+onHost(HOST.scheduleEnded, m => void runEnded(m));
 
 // Claude Code working silently asks for what it may not do (the termilly MCP server's ask_permission): the user answers in
 // the task's row, and the call waits for that.

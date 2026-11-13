@@ -75,8 +75,9 @@ npm run check                                # lint, types, JavaScript tests, ge
 
 A .NET host with the UI in a web view: WPF and WebView2 on Windows, Photino and WebKitGTK on Linux. The page is plain JavaScript modules (no framework, no bundler) on [xterm.js](https://xtermjs.org). Terminals run in ConPTY on Windows and pseudo terminals on Linux.
 
-- `src/Termilly.Desktop`: the app, its page (`wwwroot/`) and the code Linux shares.
-- `src/Termilly.Linux`: the Linux window.
+- `src/Termilly.App`: the code every platform runs: services, features, the phone server.
+- `src/Termilly.Desktop`: the Windows app and the page (`wwwroot/`).
+- `src/Termilly.Linux`: the Linux and macOS app.
 - `src/Termilly.Pty`: pseudo terminals for both systems.
 - `src/Termilly.Host`: the background host that keeps shells running while the window is closed.
 - `src/Termilly.Agent`: the `termilly` command, its MCP server, and the hooks agents call.

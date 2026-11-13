@@ -14,10 +14,11 @@ import { hereDoc } from './windows.js';
 /**
  * Asks the host for a folder (native picker). Resolves to the path, or null when cancelled.
  * @param {string} [initial]
+ * @param {string} [window] the window it's over, by its name (a detached window's, js/windows.js); the main one by default
  * @returns {Promise<string | null>}
  */
-export function pickFolder(initial) {
-  return request(PAGE.dialogPickFolder, { initial }).then(m => m.path ?? null);
+export function pickFolder(initial, window) {
+  return request(PAGE.dialogPickFolder, { initial, window }).then(m => m.path ?? null);
 }
 
 /**

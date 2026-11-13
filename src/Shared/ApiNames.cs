@@ -15,6 +15,11 @@ internal static class ApiMethods
     public const string Snippet = "snippet";
     public const string Read = "read";
     public const string Wait = "wait";
+    /// <summary>
+    /// Types a line into a terminal and waits for what it brings: the agent there ends the turn it starts, or the command
+    /// it runs ends (the MCP server's ask_terminal). It needs both reading and typing allowed.
+    /// </summary>
+    public const string Ask = "ask";
     public const string History = "history";
     public const string Capabilities = "capabilities";
     /// <summary>Termilly started again while one runs (OpenFolder.cs): that window comes to the front.</summary>
@@ -24,14 +29,35 @@ internal static class ApiMethods
     public const string Task = "task";
     public const string TaskTick = "task_tick";
     public const string TaskDone = "task_done";
+    /// <summary>An agent adds a task to its terminal's list, or its workspace's (the MCP server's add_task).</summary>
+    public const string TaskAdd = "task_add";
+    /// <summary>Schedules: listed for any agent; added, run now and turned on or off only with typing allowed.</summary>
+    public const string Schedules = "schedules";
+    public const string ScheduleAdd = "schedule_add";
+    public const string ScheduleRun = "schedule_run";
+    public const string ScheduleSet = "schedule_set";
+    /// <summary>Notepad: its pages listed and read, a page added, its text written (replaced, or added at its end or top) and renamed.</summary>
+    public const string NotepadPages = "notepad_pages";
+    public const string NotepadRead = "notepad_read";
+    public const string NotepadAdd = "notepad_add";
+    public const string NotepadWrite = "notepad_write";
+    public const string NotepadRename = "notepad_rename";
     /// <summary>
     /// Claude Code working on a task out of sight asks the user for a permission it doesn't have (the MCP server's
     /// ask_permission, its --permission-prompt-tool): it waits for Allow or Deny in the task's row.
     /// </summary>
     public const string TaskAsk = "task_ask";
+    /// <summary>
+    /// One agent asks another a question (the MCP server's ask_agent): the other runs once out of sight in the asking terminal's
+    /// folder, reading only, and its answer comes back. It waits for that answer.
+    /// </summary>
+    public const string AgentAsk = "agent_ask";
 
     /// <summary>The methods that type into a terminal: they need Settings › Terminal › API, and may wait on the user.</summary>
-    public static readonly IReadOnlyList<string> Typing = [Send, Snippet];
+    public static readonly IReadOnlyList<string> Typing = [Send, Snippet, Ask];
+
+    /// <summary>The methods that make something run later or now: they need the same setting as typing.</summary>
+    public static readonly IReadOnlyList<string> Scheduling = [ScheduleAdd, ScheduleRun, ScheduleSet];
 }
 
 /// <summary>The fields of the API's requests and replies.</summary>
@@ -62,7 +88,10 @@ internal static class ApiFields
     public const string Until = "until";
     public const string Pattern = "pattern";
     public const string TimeoutSeconds = "timeout_s";
+    public const string AfterTurn = "after_turn";
     public const string Query = "query";
+    /// <summary>What ask_agent asks the other agent.</summary>
+    public const string Question = "question";
     public const string Failed = "failed";
     public const string In = "in";
     public const string Limit = "limit";
@@ -74,6 +103,24 @@ internal static class ApiFields
     public const string Tick = "tick";
     public const string Step = "step";
     public const string Summary = "summary";
+    /// <summary>A task added: its details, its tags (comma-separated) and which list (terminal or workspace).</summary>
+    public const string Details = "details";
+    public const string Tags = "tags";
+    public const string List = "list";
+    /// <summary>A schedule: its id, whether it's on, and for a new one what it runs and when.</summary>
+    public const string Schedule = "schedule";
+    public const string On = "on";
+    public const string Prompt = "prompt";
+    public const string Snippet = ApiMethods.Snippet;
+    public const string At = "at";
+    public const string Every = "every";
+    public const string Unit = "unit";
+    public const string Days = "days";
+    public const string OnStart = "on_start";
+    /// <summary>A Notepad page: its id or name, how text is written to it (replace, append or prepend), and whether it's shown.</summary>
+    public const string Page = "page";
+    public const string Mode = "mode";
+    public const string Show = "show";
     /// <summary>A permission asked for: the run out of sight that asks, and the tool and what it would do with it.</summary>
     public const string Run = "run";
     public const string ToolName = "tool_name";
@@ -91,6 +138,8 @@ internal static class ApiFields
     public const string TimedOut = "timedOut";
     public const string ExitCode = "exitCode";
     public const string Matched = "matched";
+    /// <summary>What an agent said last, when a wait for its turn ends with it done.</summary>
+    public const string Reply = "reply";
     public const string Lines = "lines";
 }
 
@@ -108,4 +157,5 @@ internal static class ApiReadModes
     public const string Lines = ApiFields.Lines;
     public const string CommandFinished = "command_finished";
     public const string OutputMatches = "output_matches";
+    public const string AgentDone = "agent_done";
 }

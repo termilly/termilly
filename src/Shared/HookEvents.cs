@@ -17,6 +17,8 @@ internal static class HookEvents
     public const string SessionEnd = "SessionEnd";
     public const string SubagentStart = "SubagentStart";
     public const string SubagentStop = "SubagentStop";
+    /// <summary>Codex: the user interrupted a turn (Esc); no Stop follows it.</summary>
+    public const string Interrupt = "Interrupt";
 
     /// <summary>Termilly's status line reporting the plan's limits, the context and the cost (Termilly.Agent/StatusLine.cs).</summary>
     public const string StatusLine = "StatusLine";
@@ -29,6 +31,16 @@ internal static class HookEvents
         (SessionStart, false), (UserPromptSubmit, false), (PreToolUse, true), (PostToolUse, true),
         (PermissionRequest, true), (PreCompact, false), (Stop, false), (StopFailure, false), (SessionEnd, false),
         (SubagentStart, false), (SubagentStop, false),
+    ];
+
+    /// <summary>
+    /// The Codex events, with whether each is about a tool. Subagents are left out for now: a subagent's row reads its
+    /// cost from its transcript, and Codex's transcripts aren't Claude Code's.
+    /// </summary>
+    public static readonly IReadOnlyList<(string Event, bool Tools)> Codex =
+    [
+        (SessionStart, false), (UserPromptSubmit, false), (PreToolUse, true), (PostToolUse, true), (PermissionRequest, true),
+        (PreCompact, false), (Stop, false), (Interrupt, false), (SessionEnd, false),
     ];
 }
 

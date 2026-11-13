@@ -17,8 +17,8 @@
 
   <!-- The Linux keyring and the macOS keychain, shared with the app: askpass reads saved passwords from them. -->
   <ItemGroup>
-    <Compile Include="..\Termilly.Desktop\LibSecret.cs" Link="LibSecret.cs" />
-    <Compile Include="..\Termilly.Desktop\MacKeychain.cs" Link="MacKeychain.cs" />
+    <Compile Include="..\Termilly.App\LibSecret.cs" Link="LibSecret.cs" />
+    <Compile Include="..\Termilly.App\MacKeychain.cs" Link="MacKeychain.cs" />
   </ItemGroup>
 
   <ItemGroup>

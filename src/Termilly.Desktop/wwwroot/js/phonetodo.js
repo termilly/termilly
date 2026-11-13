@@ -8,8 +8,13 @@ import { send, onHost } from './host.js';
 import { state, newId, tabTitle } from './store.js';
 import { setNote } from './notes.js';
 import { listOf, noteTarget, addTasks, updateTask, removeTask, moveTask, setStatus, findTask, todoTags, tagColor } from './todo.js';
-import { AGENT_COMMAND, agentInstalled, agentWorking, folderOfList, isOnGitHub, checkRepo, implementTask, keepIssue } from './todoactions.js';
-import { implementSilently, stopRun } from './todorun.js';
+import {
+  AGENT_COMMAND, agentWorking, folderOfList, implementPlace, cantImplement, isOnGitHub, checkRepo, keepIssue,
+  implement as startImplement, planOf, agentsFor, reviewersAt,
+} from './todoactions.js';
+import { stopRun } from './todorun.js';
+import { agentKind } from './agentkinds.js';
+import { RUN, fitPlan, stageWords } from './todoplan.js';
 import { parseTask, detailLines, statusOf, splitNote, tickSub, issueBody, labelsForTags, TASK_STATUS } from './todolist.js';
 
 /** @typedef {import('./todo.js').ListRef} ListRef */
@@ -30,7 +35,11 @@ function taskForPhone(task) {
     id: task.id, text: task.text, status: statusOf(task), tags: task.tags ?? [], details: task.details ?? '',
     notes: lines.filter(line => !line.sub).map(line => line.text).join('\n').trim(),
     steps: lines.filter(line => line.sub).map(({ at, text, done }) => ({ at, text, done })),
-    agent: tab ? { id: tab.id, title: `${AGENT_COMMAND} in ${tabTitle(tab)}` } : null, working: agentWorking(task),
+    agent: tab ? { id: tab.id, title: `${task.plan ? agentKind(task.plan.by).program : AGENT_COMMAND} in ${tabTitle(tab)}` } : null, working: agentWorking(task),
+    // Implemented silently: no terminal to show, but an agent has it.
+    running: !!task.run,
+    // Who has it now, in words, while its agents work and review (js/todoplan.js).
+    now: task.plan && statusOf(task) === TASK_STATUS.progress ? stageWords(task.plan, task.stage).text : null,
     review: task.review ?? null, issue: task.issue ?? null,
   };
 }
@@ -43,7 +52,9 @@ export function listForPhone(ref) {
   const tasks = listOf(ref)?.tasks ?? [];
   const folder = folderOfList(ref);
   if (folder && tasks.length) checkRepo(folder);
-  return { tasks: tasks.map(taskForPhone), implement: !!folder && agentInstalled(), github: !!folder && isOnGitHub(folder) };
+  // What Implement's sheet on the phone picks from: the list's plan, the agents that can do the work, and those that can review.
+  const agents = agentsFor(ref).map(kind => ({ kind, name: agentKind(kind).name }));
+  return { tasks: tasks.map(taskForPhone), implement: !!implementPlace(ref), github: !!folder && isOnGitHub(folder), plan: planOf(ref), agents, reviewers: reviewersAt(ref) };
 }
 
 /** To do's tags to pick from, with their colours. */
@@ -130,19 +141,32 @@ function remove(m) {
   return {};
 }
 
-const NEEDS_FOLDER = 'Implement needs Claude Code and a folder on the PC.';
+/**
+ * The plan a phone's Implement runs: the list's, with what the phone picked instead (the agent, the reviewers, the rounds, and
+ * silent or not), fitted to the agents there are.
+ * @param {import('./todo.js').ListRef} ref
+ * @param {Record<string, any>} m
+ */
+function phonePlan(ref, m) {
+  const saved = planOf(ref);
+  const picked = {
+    by: typeof m.by === 'string' ? m.by : saved.by,
+    reviewers: Array.isArray(m.reviewers) ? m.reviewers.map(String) : saved.reviewers,
+    rounds: m.rounds === undefined ? saved.rounds : Number(m.rounds),
+    run: m.silent === undefined ? saved.run : m.silent ? RUN.silent : RUN.terminal,
+  };
+  const plan = fitPlan(picked, agentsFor(ref));
+  const can = reviewersAt(ref);
+  return { ...plan, reviewers: plan.reviewers.filter(kind => can.includes(kind)) };
+}
 
 /** @param {Record<string, any>} m */
 function implement(m) {
   const { ref, task } = taskOf(m);
   const sub = m.at === undefined ? undefined : detailLines(task.details).find(line => line.sub && line.at === Number(m.at));
-  if (m.silent) {
-    if (!implementSilently(ref, task, sub)) throw new Error(NEEDS_FOLDER);
-    return { silent: true };
-  }
-  const agent = implementTask(ref, task, sub);
-  if (!agent) throw new Error(NEEDS_FOLDER);
-  return { id: agent.id };
+  const { started, tab } = startImplement(ref, task, sub, phonePlan(ref, m));
+  if (!started) throw new Error(`${cantImplement(ref)}.`);
+  return tab ? { id: tab.id } : { silent: true };
 }
 
 /**

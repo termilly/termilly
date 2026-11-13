@@ -36,6 +36,8 @@ internal static class HookMessage
         public const string Folder = "folder";
         // UserPromptSubmit: what the user sent, for My prompts (kept in Termilly's own encrypted history).
         public const string Prompt = "prompt";
+        // Which agent sent it (AgentKinds); a message without one is Claude Code's, as all were before Codex.
+        public const string Agent = "agent";
 
         // A subagent's events, and an Agent call.
         public const string AgentId = "agentId";
@@ -108,7 +110,7 @@ internal static class PipeTimeouts
     /// <summary>How long a call to <paramref name="method"/> may take.</summary>
     public static TimeSpan ForApi(string? method) => method switch
     {
-        ApiMethods.Send or ApiMethods.Snippet or ApiMethods.Wait => ApiWaiting,
+        ApiMethods.Send or ApiMethods.Snippet or ApiMethods.Wait or ApiMethods.Ask or ApiMethods.AgentAsk => ApiWaiting,
         ApiMethods.TaskAsk => Asking,
         _ => Api,
     };
@@ -127,8 +129,22 @@ internal static class TerminalEnvironment
     public const string AgentSettings = "TERMILLY_AGENT_SETTINGS";
     /// <summary>Set by the shim for the Claude Code it starts, so a claude started from inside it isn't hooked twice.</summary>
     public const string AgentShim = "TERMILLY_AGENT_SHIM";
+    /// <summary>
+    /// The hook helper's path, set by the shim for the Codex it starts: Codex's hooks run it by this variable rather than by
+    /// its path, so their text is the same wherever Termilly is installed (Termilly.Agent/Shim.cs).
+    /// </summary>
+    public const string HookProgram = "TERMILLY_HOOK_EXE";
     /// <summary>The credential ssh's askpass helper reads (SshConnections sets it, Termilly.Agent/Askpass.cs reads it).</summary>
     public const string Credential = "TERMILLY_CREDENTIAL";
+}
+
+/// <summary>The files in the data folder's agent folder that the claude shim hands Claude Code.</summary>
+internal static class AgentFiles
+{
+    /// <summary>Termilly's hooks and status line (--settings): its path is in TERMILLY_AGENT_SETTINGS.</summary>
+    public const string ClaudeSettings = "claude-settings.json";
+    /// <summary>Termilly's MCP server (--mcp-config), next to the settings.</summary>
+    public const string ClaudeMcp = "claude-mcp.json";
 }
 
 /// <summary>
@@ -140,7 +156,9 @@ internal static class AgentExecutables
     /// <summary>What Claude Code's hooks and status line run.</summary>
     public const string Hook = "termilly-hook";
     /// <summary>The shim terminals find first on PATH: it starts the real Claude Code with Termilly's hooks.</summary>
-    public const string Claude = "claude";
+    public const string Claude = AgentKinds.Claude;
+    /// <summary>The same shim for Codex: it starts the real Codex with Termilly's hooks and MCP server.</summary>
+    public const string Codex = AgentKinds.Codex;
     /// <summary>The termilly command (the API and MCP server) for scripts and agents.</summary>
     public const string Cli = "termilly";
     /// <summary>ssh's askpass helper: answers a password prompt from the saved credential.</summary>

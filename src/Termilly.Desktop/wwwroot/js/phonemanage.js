@@ -12,6 +12,7 @@ import { connections, connectionError, IDENTITY } from './ssh.js';
 import { updateSettings } from './preferences.js';
 import { isProduction } from './environments.js';
 import { PROFILE_ID_PREFIX } from './constants.js';
+import { agentMarkHtml, BADGE_SIZE } from './ui.js';
 import { setNote, NOTE_KIND } from './notes.js';
 import { clear } from './inbox.js';
 import { createWorkspace, closeWorkspace, START_WITH } from './workspaces.js';
@@ -42,7 +43,8 @@ export function placesForPhone(badgeOf) {
   const shells = state.profiles.filter(p => !isRemoteProfile(p));
   const remote = state.profiles.filter(isRemoteProfile).sort((a, b) => rank(b) - rank(a) || a.name.localeCompare(b.name));
   return [...shells, ...remote].map(p => ({
-    id: p.id, name: p.name, description: p.description ?? '', icon: p.icon, badge: badgeOf(p.icon), source: p.source ?? '',
+    id: p.id, name: p.name, description: p.description ?? '', icon: p.icon, badge: badgeOf(p.icon), mark: agentMarkHtml(p.icon, BADGE_SIZE.large) || null,
+    source: p.source ?? '',
     remote: isRemoteProfile(p), production: isProduction(/** @type {Tab} */ ({ profile: p.id, tags: p.tags ?? [] })),
   }));
 }
@@ -58,8 +60,8 @@ function terminalOf(m) {
 }
 
 /**
- * Opens a terminal on a profile in a workspace (the PC's current one if the phone names none), in a folder if one
- * was typed; the phone opens it once it's listed.
+ * Opens a terminal on a profile in a workspace (the PC's current one if the phone names none), in a folder and with
+ * a name if they were typed (no name: the shell's own); the phone opens it once it's listed.
  * @param {Record<string, any>} m
  */
 function open(m) {
@@ -68,7 +70,8 @@ function open(m) {
   const ws = wsById(String(m.ws ?? '')) ?? wsById(state.activeId);
   if (!ws) throw new Error('That workspace is gone.');
   const cwd = typeof m.cwd === 'string' && m.cwd.trim() ? m.cwd.trim().slice(0, MAX.folder) : null;
-  const tab = newTab({ profile: profile.id, wsId: ws.id, cwd });
+  const name = typeof m.name === 'string' ? m.name.trim().slice(0, MAX.name) || null : null;
+  const tab = newTab({ profile: profile.id, wsId: ws.id, cwd, name });
   tab.openedBy = whoAsked(m);
   emit(EVENTS.tab, tab);
   leaveTrace(`${whoAsked(m)} opened a terminal in ${ws.name}`);

@@ -2,6 +2,12 @@
 // What the Schedules window (js/scheduleswindow.js) shows: a row of its list, the form, and a schedule's runs.
 
 import { escapeHtml } from './ui.js';
+import { installedAgents } from './store.js';
+import { agentKind } from './agentkinds.js';
+import { AGENT_KIND } from './constants.js';
+import { reportTextHtml } from './schedulelinks.js';
+import { reviewersFor, namesOf, fitPlan } from './todoplan.js';
+import { planRowsHtml } from './planrows.js';
 import {
   WHAT, WHERE, WHEN, UNIT, NOTIFY, MISSED, AFTER, BUSY, CLOSED, RUN, RUN_LABEL, DAY_NAMES, describeWhen, describeAt, describeTook,
 } from './schedulerules.js';
@@ -25,6 +31,8 @@ const SEGMENTS = Object.freeze({
 /** The form's fields that belong to `when`: their name has this in front. */
 export const WHEN_FIELD = 'when.';
 export const WHEN_KIND_SEGMENT = 'whenKind';
+/** The box for "every" all day long; unticked, From and To show. It's the form's, not the schedule's: all day is no hours. */
+export const ALL_DAY_FIELD = 'allDay';
 
 /**
  * What the form picks from.
@@ -69,12 +77,60 @@ const inputHtml = (name, value, placeholder = '', type = 'text') =>
 /** @param {SessionProfile[]} profiles */
 const profileOptions = profiles => profiles.map(p => /** @type {const} */ ([p.id, p.name]));
 
+/**
+ * What a run may do, as its boxes say. Nobody is asked: what it may not do is refused, and the run goes on.
+ * @param {Schedule} s
+ */
+function permissionsText(s) {
+  if (s.agent === AGENT_KIND.codex) {
+    if (!s.allowChanges) return 'Read only: it can read files and run commands that only look, in Codex’s read-only sandbox. It can’t change anything.';
+    if (s.allowAll) return 'Silent. No sandbox and no permission checks. It can run any command and change any file. Use only for prompts and folders you trust.';
+    return 'Silent. It edits files and runs commands in Codex’s sandbox, inside this folder only. Anything else is refused and it carries on.';
+  }
+  if (!s.allowChanges) return 'Read only: it can read files in its folder and fetch pages, but can’t change files or run commands. Your Claude Code settings aren’t used.';
+  if (s.allowAll) return 'Silent. No permission checks. It can run any command, change any file and use any tool. Use only for prompts and folders you trust.';
+  return 'Silent. It edits files. Safe commands run, risky ones are refused and it carries on. Your Claude Code settings still apply.';
+}
+
+/**
+ * The plan a schedule's agent prompt runs with: who runs it, who reviews it and for how many rounds at most, among the agents
+ * installed.
+ * @param {Schedule} s
+ */
+export const planOf = s => fitPlan({ by: s.agent ?? AGENT_KIND.claude, reviewers: s.reviewers ?? [], rounds: s.rounds }, installedAgents());
+
+/**
+ * What a schedule's review does, under its rounds.
+ * @param {Schedule} s
+ * @returns {(plan: import('./todoplan.js').ImplementPlan) => string}
+ */
+const reviewHint = s => plan => {
+  const many = plan.reviewers.length > 1;
+  const by = agentKind(plan.by).name;
+  const back = s.allowChanges ? `goes back to ${by} to fix` : `goes back to ${by}, which corrects its answer`;
+  const again = plan.rounds > 1 ? `, and ${many ? 'they look' : 'it looks'} again, ${plan.rounds} rounds at most` : '';
+  return `What ${namesOf(plan.reviewers)} ${many ? 'find' : 'finds'} ${back}${again}. The report has their verdict. Each agent’s run gets the time below.`;
+};
+
+/**
+ * Who runs the prompt and which agents review what it did, for how many rounds at most, picked as To do's Implement card has
+ * them (js/planrows.js). Reviewers run only out of sight.
+ * @param {Schedule} s
+ */
+function planHtml(s) {
+  const plan = planOf(s);
+  const agents = installedAgents();
+  const hidden = s.where === WHERE.hidden;
+  const note = !hidden && reviewersFor(plan.by, agents).length ? '<p class="dialog-sub">Other agents can review what it did when it runs out of sight.</p>' : '';
+  return `<div class="sch-plan">${planRowsHtml(plan, { agents, reviewers: agents, hint: reviewHint(s) }, { review: hidden })}</div>${note}`;
+}
+
 /** @param {Schedule} s */
 const agentHtml = s => `<textarea class="field snippet-command sch-prompt" name="prompt" rows="5" spellcheck="false" placeholder="Summarize what changed in this repository today">${escapeHtml(s.prompt)}</textarea>
+  ${planHtml(s)}
   <label class="note-pin"><input type="checkbox" name="allowChanges"${s.allowChanges ? ' checked' : ''}> Let it change files</label>
-  <p class="dialog-sub${s.allowChanges ? ' sch-warn' : ''}">${s.allowChanges
-    ? 'With nobody watching, it edits files without asking, and runs the commands your Claude Code settings allow. Anything else it asks for fails the run.'
-    : 'Read only: it can read files in its folder and fetch pages, but can’t change files or run commands. Your Claude Code settings aren’t used.'}</p>
+  ${s.allowChanges ? `<label class="note-pin"><input type="checkbox" name="allowAll"${s.allowAll ? ' checked' : ''}> Allow everything</label>` : ''}
+  <p class="dialog-sub${s.allowChanges ? ' sch-warn' : ''}">${permissionsText(s)}</p>
   <label class="note-pin"><input type="checkbox" name="replyInNotice"${s.replyInNotice ? ' checked' : ''}> Put its reply in the notification</label>`;
 
 /**
@@ -98,7 +154,7 @@ function whatHtml(s, choices) {
  * @param {Choices} choices
  */
 function placeHtml(s, choices) {
-  const folder = fieldHtml('Folder', inputHtml('cwd', s.cwd, 'The home folder'));
+  const folder = fieldHtml('Folder', `<span class="field-row">${inputHtml('cwd', s.cwd, 'The home folder')}<button type="button" class="btn" data-sch="browse">Browse</button></span>`);
   const shell = fieldHtml('Shell', selectHtml('profile', profileOptions(choices.shells), s.profile));
   if (s.where === WHERE.hidden) return `${shell}${folder}<p class="dialog-sub">A shell nobody sees runs it and closes. What it prints is kept as a report.</p>`;
   if (s.where === WHERE.server) {
@@ -123,14 +179,26 @@ function daysHtml(s) {
     <p class="dialog-sub">No day picked means every day.</p>`;
 }
 
-/** @param {Schedule} s */
-function whenHtml(s) {
+/**
+ * @param {Schedule} s
+ * @param {boolean} allDay whether "every" runs all day, or between From and To
+ */
+function hoursHtml(s, allDay) {
+  const box = `<label class="note-pin"><input type="checkbox" name="${ALL_DAY_FIELD}"${allDay ? ' checked' : ''}> All day</label>`;
+  return allDay ? box : `${box}<div class="sch-row">${fieldHtml('From', inputHtml('when.from', s.when.from, '9:00'))}${fieldHtml('To', inputHtml('when.to', s.when.to, '18:00'))}</div>`;
+}
+
+/**
+ * @param {Schedule} s
+ * @param {boolean} allDay
+ */
+function whenHtml(s, allDay) {
   const { when } = s;
   const units = [[UNIT.minutes, 'minutes'], [UNIT.hours, 'hours']].map(([id, label]) => /** @type {const} */ ([id, label]));
   const missed = fieldHtml('If it was missed', `${segmentHtml('missed', s.missed)}<p class="dialog-sub">Termilly wasn’t running at its time. Several missed runs run once.</p>`);
   const body = when.kind === WHEN.time ? `${fieldHtml('Time', inputHtml('when.at', when.at, '20:00'))}${daysHtml(s)}${missed}`
-    : when.kind === WHEN.every ? `<div class="sch-row">${fieldHtml('Every', inputHtml('when.every', when.every, '1', 'number'))}${fieldHtml('Unit', selectHtml('when.unit', units, when.unit))}
-        ${fieldHtml('From', inputHtml('when.from', when.from, '9:00'))}${fieldHtml('To', inputHtml('when.to', when.to, '18:00'))}</div>${daysHtml(s)}${missed}`
+    : when.kind === WHEN.every ? `<div class="sch-row">${fieldHtml('Every', inputHtml('when.every', when.every, '1', 'number'))}${fieldHtml('Unit', selectHtml('when.unit', units, when.unit))}</div>
+        ${hoursHtml(s, allDay)}${daysHtml(s)}${missed}`
       : '';
   return `<h3 class="sch-head">When</h3>${segmentHtml(WHEN_KIND_SEGMENT, when.kind)}${body}`;
 }
@@ -158,13 +226,13 @@ const afterHtml = s => `<h3 class="sch-head">After it runs</h3>
  * @param {Choices} choices
  * @param {string} problem what stops it being saved
  * @param {string} next when it runs next, as it stands
- * @param {{ isNew: boolean, dirty: boolean }} now
+ * @param {{ isNew: boolean, dirty: boolean, allDay: boolean }} now
  */
-export function formHtml(s, choices, problem, next, { isNew, dirty }) {
+export function formHtml(s, choices, problem, next, { isNew, dirty, allDay }) {
   return `<label class="dialog-field">Name<input class="field" name="name" value="${escapeHtml(s.name)}" placeholder="Back up the database" spellcheck="false"></label>
     ${whatHtml(s, choices)}
     <h3 class="sch-head">Where</h3>${segmentHtml('where', s.where)}${placeHtml(s, choices)}
-    ${whenHtml(s)}
+    ${whenHtml(s, allDay)}
     ${afterHtml(s)}
     <div class="sch-foot">
       <p class="dialog-sub sch-next">${escapeHtml(next)}</p>
@@ -233,9 +301,9 @@ export function reportHtml(run, text) {
       ${text === null ? '' : `<button class="btn small" data-sch="copy">Copy</button><button class="btn small" data-sch="terminal">Open as a terminal</button>`}
       <button class="btn small" data-sch="run">Run again</button>
     </div>
-    ${run.summary && run.status !== RUN.worked ? `<p class="sch-why">${escapeHtml(run.summary)}</p>` : ''}
+    ${run.summary && run.status !== RUN.worked ? `<p class="sch-why">${reportTextHtml(run.summary)}</p>` : ''}
     ${run.file ? `<p class="dialog-sub sch-saved">Saved to <button class="link" data-sch="file" title="Show it in its folder">${escapeHtml(run.file)}</button></p>` : ''}
     ${run.fileError ? `<p class="sch-why">Couldn’t save it to a file: ${escapeHtml(run.fileError)}</p>` : ''}
-    ${text === null ? `<p class="set-desc">${empty}</p>` : `<pre class="sch-output">${escapeHtml(text)}</pre>`}
+    ${text === null ? `<p class="set-desc">${empty}</p>` : `<pre class="sch-output">${reportTextHtml(text)}</pre>`}
   </div>`;
 }

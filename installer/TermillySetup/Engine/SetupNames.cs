@@ -22,6 +22,8 @@ internal static class Flags
     public const string NoStartMenu = "--no-start-menu";
     public const string NoExplorer = "--no-explorer";
     public const string NoAgent = "--no-agent";
+    /// <summary>Quiet file-only install: leave shortcuts, Explorer, PATH and setup/uninstall registry entries alone.</summary>
+    public const string NoWindowsIntegration = "--no-windows-integration";
     /// <summary>Setup restarted as administrator to install, with the options as their argument.</summary>
     public const string ElevatedInstall = "--elevated-install";
     /// <summary>Setup running from a temporary copy, so it can remove the folder it was installed in.</summary>

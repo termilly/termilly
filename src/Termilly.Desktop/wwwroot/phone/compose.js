@@ -1,31 +1,31 @@
 // @ts-check
-// The box under a Claude terminal for writing to Claude, as Settings › Message box says:
+// The box under an agent's terminal (Claude Code, Codex) for writing to it, as Settings › Message box says:
 // - Messages (the default): a round field with the microphone in it; the send arrow shows once there's something to
-//   send; a + holds paste, Clipboard, snippets, Claude's commands and changing its mode. The key bar stays under it while writing.
-// - One bar: the key bar and the field share one row, with a switch between keys and a message to Claude.
+//   send; a + holds paste, Clipboard, snippets, the agent's commands and changing its mode. The key bar stays under it while writing.
+// - One bar: the key bar and the field share one row, with a switch between keys and a message to the agent.
 // Other terminals get the key bar alone. terminal.js sends what's written (the words, then Enter).
 
 /** Where the phone keeps the choice, and the choices. */
 export const COMPOSE_STYLE = Object.freeze({ key: 'termilly.compose', messages: 'messages', bar: 'bar' });
-/** One bar's mode, kept between terminals. */
+/** One bar's mode, kept between terminals (the message mode is still stored as "claude", as before Codex had it). */
 const MODE_KEY = 'termilly.compose.mode';
-const MODE = Object.freeze({ keys: 'keys', claude: 'claude' });
+const MODE = Object.freeze({ keys: 'keys', message: 'claude' });
 /** The box's form (terminal.js sends from it). */
 export const COMPOSE = '.tv-compose';
 /** What its own buttons do (data-c). */
 const C = Object.freeze({ plus: 'plus', keysPlus: 'keys-plus', mic: 'mic', mode: 'mode', more: 'more', fill: 'fill', shiftTab: 'shift-tab', pasteIn: 'paste-in', clear: 'clear' });
-/** Empties Claude Code's own box (what was typed in the terminal): Ctrl+U clears a line, Backspace joins the one
+/** Empties the agent's own box (what was typed in the terminal): Ctrl+U clears a line, Backspace joins the one
  * above (the cursor is at the end); in an empty box they do nothing. Stop sends it too (terminal.js). */
 export const CLEAR_INPUT = '\x15' + '\x7f\x15'.repeat(20);
-/** Under a Claude terminal, Paste, Clipboard and Snippets are in the +, not on the key bar. */
+/** Under an agent's terminal, Paste, Clipboard and Snippets are in the +, not on the key bar. */
 const IN_PLUS = ['paste', 'clips', 'snip'];
 /** Under any other terminal, the key bar's + holds Paste and Paste from Clipboard. */
 const IN_KEYS_PLUS = ['paste', 'clips'];
 /** Where the key bar's + goes: before the snippets. */
 const PLUS_BEFORE = 'snip';
-/** Claude's commands the + offers: they go in the field, to send or change first. */
+/** The agents' commands the + offers (Claude Code and Codex both have them): they go in the field, to send or change first. */
 const COMMANDS = ['/compact', '/clear'];
-/** Shift+Tab: Claude Code's next mode (accept edits, plan). */
+/** Shift+Tab: the agent's next mode (Claude Code's accept edits and plan). */
 const SHIFT_TAB = '\x1b[Z';
 /** One bar's keys in keys mode, and the ones under its ⋯ (terminal.js BAR). */
 const FEW_KEYS = ['esc', 'tab', 'ctrl', 'up', 'down', 'bksp', 'enter'];
@@ -43,7 +43,8 @@ const ICON = Object.freeze({
   up: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg>',
 });
 
-const FIELD = '<textarea rows="1" placeholder="Message Claude" enterkeyhint="send" autocapitalize="sentences"></textarea>';
+/** @param {string} agent its name, as the field's hint says it */
+const field = agent => `<textarea rows="1" placeholder="Message ${agent}" enterkeyhint="send" autocapitalize="sentences"></textarea>`;
 
 /** How to dictate (Settings › Dictation): with the keyboard's microphone (the default; the box has none of its own and
  * iOS asks nothing; a page can't start the keyboard's) or Termilly's (no keyboard in the way, but iOS asks for the
@@ -70,30 +71,36 @@ export function composer(view, app) {
   let listening = null;
 
   const keyButtons = (/** @type {[string, string][]} */ keys) => keys.map(([key, label]) => `<button data-key="${key}">${label}</button>`).join('');
-  /** @param {boolean} [claude] Under a Claude terminal: without what the + has. */
-  const keybar = claude => `<div class="tv-foot keybar">${claude ? keyButtons(app.keys.filter(([key]) => !IN_PLUS.includes(key))) : plainKeys()}</div>`;
+  /** @param {boolean} [agent] Under an agent's terminal: without what the + has. */
+  const keybar = agent => `<div class="tv-foot keybar">${agent ? keyButtons(app.keys.filter(([key]) => !IN_PLUS.includes(key))) : plainKeys()}</div>`;
   /** Another terminal's keys: Paste and Paste from Clipboard under a + (before the snippets). */
   const plainKeys = () => app.keys.filter(([key]) => !IN_KEYS_PLUS.includes(key))
     .map(([key, label]) => `${key === PLUS_BEFORE ? `<button class="kb-plus" data-c="${C.keysPlus}" aria-label="Paste">${ICON.plus}</button>` : ''}<button data-key="${key}">${label}</button>`).join('');
 
-  /** Messages: the round field with the + and the microphone, over the key bar. */
-  const messagesHtml = () => `<form class="tv-foot tv-compose msg"><button type="button" class="m-plus" data-c="${C.plus}" aria-label="More">${ICON.plus}</button>
-    <div class="m-pill">${FIELD}${dictation() === DICTATION.termilly ? `<button type="button" class="m-mic" data-c="${C.mic}" aria-label="Dictate">${ICON.mic}</button>` : ''}<button type="submit" class="m-go" aria-label="Send" hidden>${ICON.up}</button></div></form>${keybar(true)}`;
+  /**
+   * Messages: the round field with the + and the microphone, over the key bar.
+   * @param {string} agent
+   */
+  const messagesHtml = agent => `<form class="tv-foot tv-compose msg"><button type="button" class="m-plus" data-c="${C.plus}" aria-label="More">${ICON.plus}</button>
+    <div class="m-pill">${field(agent)}${dictation() === DICTATION.termilly ? `<button type="button" class="m-mic" data-c="${C.mic}" aria-label="Dictate">${ICON.mic}</button>` : ''}<button type="submit" class="m-go" aria-label="Send" hidden>${ICON.up}</button></div></form>${keybar(true)}`;
 
-  /** One bar: the switch, then the keys or the field. The keys that don't fit wait under ⋯. */
-  function barHtml() {
-    const mode = localStorage.getItem(MODE_KEY) === MODE.claude ? MODE.claude : MODE.keys;
-    const toggle = `<span class="b-mode"><button type="button" class="${mode === MODE.keys ? 'on' : ''}" data-c="${C.mode}" data-mode="${MODE.keys}" aria-label="Keys">⌨</button><button type="button" class="claude${mode === MODE.claude ? ' on' : ''}" data-c="${C.mode}" data-mode="${MODE.claude}" aria-label="Message Claude">✻</button></span>`;
-    if (mode === MODE.claude) return `<form class="tv-foot tv-compose one-bar">${toggle}${FIELD}<button type="submit" class="b-go" aria-label="Send">${ICON.up}</button></form>`;
+  /**
+   * One bar: the switch, then the keys or the field. The keys that don't fit wait under ⋯.
+   * @param {string} agent
+   */
+  function barHtml(agent) {
+    const mode = localStorage.getItem(MODE_KEY) === MODE.message ? MODE.message : MODE.keys;
+    const toggle = `<span class="b-mode"><button type="button" class="${mode === MODE.keys ? 'on' : ''}" data-c="${C.mode}" data-mode="${MODE.keys}" aria-label="Keys">⌨</button><button type="button" class="claude${mode === MODE.message ? ' on' : ''}" data-c="${C.mode}" data-mode="${MODE.message}" aria-label="Message ${agent}">✻</button></span>`;
+    if (mode === MODE.message) return `<form class="tv-foot tv-compose one-bar">${toggle}${field(agent)}<button type="submit" class="b-go" aria-label="Send">${ICON.up}</button></form>`;
     const few = app.keys.filter(([key]) => FEW_KEYS.includes(key));
     return `<div class="tv-foot keybar one-bar">${toggle}${keyButtons(few)}<button data-c="${C.more}" aria-label="More keys">⋯</button></div>`;
   }
 
   /**
-   * The parts under the terminal: for Claude, the box as Settings says; for the rest, the key bar.
-   * @param {boolean} claude
+   * The parts under the terminal: for an agent, the box as Settings says; for the rest, the key bar.
+   * @param {string | null} agent the agent's name (Claude, Codex), or null for any other terminal
    */
-  const html = claude => (!claude ? keybar() : composeStyle() === COMPOSE_STYLE.bar ? barHtml() : messagesHtml());
+  const html = agent => (!agent ? keybar() : composeStyle() === COMPOSE_STYLE.bar ? barHtml(agent) : messagesHtml(agent));
 
   // ---- The + and ⋯ menus ----
 
@@ -107,10 +114,10 @@ export function composer(view, app) {
   }
   const closeMenu = () => view.querySelector(PART.menu)?.remove();
 
-  const field = () => /** @type {HTMLTextAreaElement | null} */ (view.querySelector(`${COMPOSE} textarea`));
+  const box = () => /** @type {HTMLTextAreaElement | null} */ (view.querySelector(`${COMPOSE} textarea`));
   /** @param {string} text */
   function fill(text) {
-    const f = field();
+    const f = box();
     if (!f) return;
     f.value = f.value ? `${f.value} ${text}` : text;
     f.focus();
@@ -119,7 +126,7 @@ export function composer(view, app) {
 
   /** The arrow shows once there's something to send, in place of the microphone; while it listens, beside it. */
   function changed() {
-    const has = !!field()?.value.trim();
+    const has = !!box()?.value.trim();
     const go = /** @type {HTMLElement | null} */ (view.querySelector(PART.go));
     const mic = /** @type {HTMLElement | null} */ (view.querySelector(PART.mic));
     if (go) go.hidden = !has;
@@ -147,17 +154,17 @@ export function composer(view, app) {
       return;
     }
     if (!Speech) {
-      field()?.focus();
+      box()?.focus();
       app.toast('Tap the microphone on the keyboard to dictate.');
       return;
     }
-    const before = field()?.value ?? '';
+    const before = box()?.value ?? '';
     listening = new Speech();
     listening.interimResults = true;
     listening.continuous = false;
     listening.onresult = (/** @type {any} */ e) => {
       const said = [...e.results].map(r => r[0].transcript).join('');
-      const f = field();
+      const f = box();
       if (f) f.value = before ? `${before} ${said}` : said;
       changed();
       // The words are final: done listening (a phone may otherwise keep its microphone on).
@@ -211,7 +218,7 @@ export function composer(view, app) {
       case C.mode:
         localStorage.setItem(MODE_KEY, el.dataset.mode ?? MODE.keys);
         app.redraw();
-        if (el.dataset.mode === MODE.claude) field()?.focus();
+        if (el.dataset.mode === MODE.message) box()?.focus();
         break;
       default: return false;
     }
@@ -223,7 +230,7 @@ export function composer(view, app) {
   // after finds the box empty.
   view.addEventListener('pointerdown', e => {
     const target = /** @type {HTMLElement} */ (e.target);
-    if (target.closest(SEND) || (target.closest(KEYBAR) && document.activeElement === field())) e.preventDefault();
+    if (target.closest(SEND) || (target.closest(KEYBAR) && document.activeElement === box())) e.preventDefault();
   });
   view.addEventListener('pointerup', e => {
     /** @type {HTMLElement} */ (e.target).closest(SEND)?.closest(COMPOSE)?.requestSubmit();
@@ -234,5 +241,5 @@ export function composer(view, app) {
   // The app goes to the background: the microphone is let go.
   document.addEventListener('visibilitychange', () => { if (document.hidden) stopListening(); });
 
-  return { html, click, changed, field, fill, stopListening };
+  return { html, click, changed, field: box, fill, stopListening };
 }

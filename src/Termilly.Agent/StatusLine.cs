@@ -19,6 +19,8 @@ internal static class StatusLine
     private static readonly TimeSpan TellTimeout = TimeSpan.FromMilliseconds(500);
     private static readonly TimeSpan TellWait = TimeSpan.FromSeconds(1);
     /// <summary>The longest session id passed on.</summary>
+    /// <summary>sh's and Git Bash's option that runs a command line.</summary>
+    private const string ShRunOption = "-c";
     private const int MaxSession = 100;
     private const double MaxPercent = 100;
 
@@ -196,7 +198,7 @@ internal static class StatusLine
         };
         if (bash is not null)
         {
-            start.ArgumentList.Add("-c");
+            start.ArgumentList.Add(ShRunOption);
             start.ArgumentList.Add(command);
         }
         else

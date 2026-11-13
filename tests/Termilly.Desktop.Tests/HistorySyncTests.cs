@@ -40,7 +40,7 @@ public sealed class HistorySyncTests : IDisposable
     }
 
     private void Run(string command) =>
-        _history.Add(JsonDocument.Parse(new JsonObject { ["command"] = command, ["exitCode"] = 0, ["cwd"] = @"C:\work" }.ToJsonString()).RootElement, redactSecrets: false);
+        _history.Add(JsonElement.Parse(new JsonObject { ["command"] = command, ["exitCode"] = 0, ["cwd"] = @"C:\work" }.ToJsonString()), redactSecrets: false);
 
     private List<(string Command, string? Host)> History() =>
         JsonNode.Parse(_history.List(30))!.AsArray().Select(e => (e!["command"]!.GetValue<string>(), e["host"]?.GetValue<string>())).ToList();

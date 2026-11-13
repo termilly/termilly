@@ -32,9 +32,7 @@ const WORKSPACES = {
           seg('interface.closeAction', [[closeAction.quit, 'Quit Termilly'], [closeAction.tray, 'Keep running in the tray']])))
       + row('Ask before quitting', 'When a command runs, or an agent works or waits for you.',
         toggle('interface.confirmQuit')))
-    + group('Project status', row('Git branch', 'Each folder’s branch and uncommitted changes, on its row.',
-        toggle('interface.gitStatus'), { keywords: 'git branch dirty changes ahead behind upstream repository worktree' })
-      + row('Listening ports', 'Ports a terminal’s programs listen on; click one to open it.', toggle('terminal.ports'), { keywords: 'port server localhost dev listening url' })),
+    + group('Project status', row('Listening ports', 'Ports a terminal’s programs listen on; click one to open it.', toggle('terminal.ports'), { keywords: 'port server localhost dev listening url' })),
   actions: {
     stopHost: async () => {
       if (await confirmDialog({ title: 'Stop background shells?', body: 'Every terminal the background process runs ends now, with whatever runs in it.', confirm: 'Stop them' })) {

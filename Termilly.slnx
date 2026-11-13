@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/Termilly.Agent/Termilly.Agent.csproj" />
+    <Project Path="src/Termilly.App/Termilly.App.csproj" />
     <Project Path="src/Termilly.Desktop/Termilly.Desktop.csproj" />
     <Project Path="src/Termilly.Host/Termilly.Host.csproj" />
     <Project Path="src/Termilly.Pty/Termilly.Pty.csproj" />

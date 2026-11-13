@@ -16,14 +16,15 @@
     <Resource Include="Assets\loader\*.png" />
   </ItemGroup>
 
+  <!-- Everything but the window and what only Windows has: the code all platforms share (src/Termilly.App). -->
   <ItemGroup>
-    <ProjectReference Include="..\Termilly.Pty\Termilly.Pty.csproj" />
+    <ProjectReference Include="..\Termilly.App\Termilly.App.csproj" />
     <InternalsVisibleTo Include="Termilly.Desktop.Tests" />
   </ItemGroup>
 
   <!--
-    The agent helper goes in agent\ next to the app, twice: termilly-hook.exe for Claude Code's hooks, and the same
-    program as claude.exe, the shim terminals find first on PATH (see AgentHooks). Both run termilly-hook.dll.
+    The agent helper goes in agent\ next to the app: termilly-hook.exe for the agents' hooks, and the same program as
+    claude.exe and codex.exe, the shims terminals find first on PATH (see AgentHooks). All run termilly-hook.dll.
   -->
   <ItemGroup>
     <ProjectReference Include="..\Termilly.Agent\Termilly.Agent.csproj" ReferenceOutputAssembly="false" />
@@ -57,6 +58,8 @@
     </ItemGroup>
     <Copy SourceFiles="@(AgentFiles)" DestinationFolder="$(OutDir)agent" SkipUnchangedFiles="true" />
     <Copy SourceFiles="$(AgentOutputDir)termilly-hook.exe" DestinationFiles="$(OutDir)agent\claude.exe" SkipUnchangedFiles="true" />
+    <!-- And as codex.exe: the same shim for Codex. -->
+    <Copy SourceFiles="$(AgentOutputDir)termilly-hook.exe" DestinationFiles="$(OutDir)agent\codex.exe" SkipUnchangedFiles="true" />
     <!-- And as termilly.exe: the termilly command (API and MCP server) for scripts and agents. -->
     <Copy SourceFiles="$(AgentOutputDir)termilly-hook.exe" DestinationFiles="$(OutDir)agent\termilly.exe" SkipUnchangedFiles="true" />
     <!-- And as termilly-askpass.exe: ssh's SSH_ASKPASS for SSH connections whose password is a reference. -->
@@ -64,11 +67,7 @@
   </Target>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.13" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4258.31" />
-    <PackageReference Include="System.IO.Ports" Version="10.0.12" />
-    <!-- Workspace layout files (.termilly.yml); see WorkspaceLayout. -->
-    <PackageReference Include="YamlDotNet" Version="16.3.0" />
   </ItemGroup>
 
   <ItemGroup>
@@ -87,9 +86,8 @@
     <None Include="Assets\loader\mark-128.png" Link="Assets\toast.png" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
-  <!-- Names on the wire and in the environment shared with the agent helper (src/Shared): one place for each. -->
+  <!-- Names on the wire and in the environment shared with the agent helper (src/Shared, built into Termilly.App). -->
   <ItemGroup>
-    <Compile Include="..\Shared\*.cs" LinkBase="Shared" />
     <Using Include="Termilly.Shared" />
   </ItemGroup>
 

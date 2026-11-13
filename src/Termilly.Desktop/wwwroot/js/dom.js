@@ -210,3 +210,14 @@ export function dragFloating(floating, e, within) {
     Object.assign(floating.style, { left: `${left}px`, top: `${top}px`, right: 'auto', bottom: 'auto' });
   });
 }
+
+/**
+ * Sets an element's markup only when it changes, so an animation in it (a spinner) doesn't restart.
+ * @param {HTMLElement} el
+ * @param {string} html
+ */
+export function setHtmlIfChanged(el, html) {
+  if (el.dataset.html === html) return;
+  el.dataset.html = html;
+  el.innerHTML = html;
+}

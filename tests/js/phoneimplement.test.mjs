@@ -2,10 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { todoTab } from '../../src/Termilly.Desktop/wwwroot/phone/todo.js';
 
-/** A phone with one task on a list that can Implement; what it asks the PC is kept. */
-function phone() {
+/** A phone with one task on a list that can Implement; what it asks the PC is kept. @param {Record<string, any>} [todo] what else the PC says of the list */
+function phone(todo = {}) {
   const task = { id: 't1', text: 'Fix the login', status: 'open', tags: [], details: '', notes: '', steps: [] };
-  const workspace = { id: 'w', name: 'Work', color: '#fff', note: null, todo: { tasks: [task], implement: true } };
+  const workspace = { id: 'w', name: 'Work', color: '#fff', note: null, todo: { tasks: [task], implement: true, ...todo } };
   const snap = { workspaces: [workspace], terminals: [], typing: true, opening: true };
   /** @type {any[]} */
   const sent = [];
@@ -25,12 +25,53 @@ test('Implement asks how first, and asks nothing of the PC yet', () => {
   assert.match(page.innerHTML, /Silent/);
 });
 
-test('Silent asks the PC for a silent run, a new terminal for none', () => {
+test('picking how asks nothing yet; Start asks the PC for a silent run, or one in a new terminal', () => {
   const { sent, tap } = phone();
   tap({ td: 'implement', task: 't1' });
   tap({ td: 'implementHow', how: 'silent' });
-  tap({ td: 'implementHow', how: 'terminal' });
+  assert.equal(sent.length, 0);
+  tap({ td: 'implementStart' });
+  tap({ td: 'implement', task: 't1' });
+  tap({ td: 'implementStart' });
   assert.deepEqual(sent.map(m => [m.action, m.task, !!m.silent]), [['taskImplement', 't1', true], ['taskImplement', 't1', false]]);
+});
+
+/** A phone whose PC has two agents, and a list whose plan is Claude Code reviewed by Codex, silently. */
+function phoneWithAgents() {
+  const made = phone({
+    plan: { by: 'claude', reviewers: ['codex'], rounds: 3, run: 'silent' },
+    agents: [{ kind: 'claude', name: 'Claude Code' }, { kind: 'codex', name: 'Codex' }], reviewers: ['claude', 'codex'],
+  });
+  made.tap({ td: 'implement', task: 't1' });
+  return made;
+}
+
+test('the sheet opens with the list\'s plan, so Start runs it', () => {
+  const { page, sent, tap } = phoneWithAgents();
+  assert.match(page.innerHTML, /Reviewed by/);
+  assert.match(page.innerHTML, /Codex reviews it before it comes to you/);
+  tap({ td: 'implementStart' });
+  assert.deepEqual(sent.map(m => [m.by, m.reviewers, m.silent]), [['claude', ['codex'], true]]);
+});
+
+test('another agent doing the work leaves the reviewers, and a reviewer is turned on and off', () => {
+  const { page, sent, tap } = phoneWithAgents();
+  tap({ td: 'implementBy', kind: 'codex' });
+  assert.doesNotMatch(page.innerHTML, /before it comes to you/);
+  tap({ td: 'implementReviewer', kind: 'claude' });
+  assert.match(page.innerHTML, /Claude Code reviews it before it comes to you/);
+  tap({ td: 'implementStart' });
+  tap({ td: 'implement', task: 't1' });
+  tap({ td: 'implementReviewer', kind: 'codex' });
+  tap({ td: 'implementStart' });
+  assert.deepEqual(sent.map(m => [m.by, m.reviewers]), [['codex', ['claude']], ['claude', []]]);
+});
+
+test('with one agent on the PC nobody is offered to review, or to pick', () => {
+  const { page, tap } = phone({ agents: [{ kind: 'claude', name: 'Claude Code' }], reviewers: [] });
+  tap({ td: 'implement', task: 't1' });
+  assert.doesNotMatch(page.innerHTML, /Reviewed by|>By</);
+  assert.match(page.innerHTML, /Claude Code works where you can watch it/);
 });
 
 test('a list opened from another tab goes back to it, one opened in To do back to To do', () => {

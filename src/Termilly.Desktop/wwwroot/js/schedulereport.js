@@ -6,6 +6,7 @@ import { PAGE, HOST } from './protocol.js';
 import { send, onHost } from './host.js';
 import { newId } from './store.js';
 import { readResult } from './agentcli.js';
+import { AGENT_KIND } from './constants.js';
 
 /** The size it's played at: wide enough for a hidden shell's lines (ScheduleRunner.Columns). */
 const COLUMNS = 160;
@@ -68,7 +69,8 @@ onHost(HOST.scheduleReport, m => {
  */
 export async function shownText(report) {
   const text = await plainText(report.output, report.columns);
-  return readResult(text)?.reply || text;
+  // Whichever agent's result it is (the report doesn't say which ran): its reply.
+  return readResult(text)?.reply || readResult(text, AGENT_KIND.codex)?.reply || text;
 }
 
 /**

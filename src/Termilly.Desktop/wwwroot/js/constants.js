@@ -25,6 +25,7 @@ export const PROFILE_ICON = Object.freeze({
   kubernetes: 'k8s',
   custom: 'custom',
   claude: 'claude',
+  codex: 'codex',
 });
 
 /** C#: ProfileIds (ProfileKinds.cs). */
@@ -99,8 +100,22 @@ export const HOOK_EVENT = Object.freeze({
   sessionEnd: 'SessionEnd',
   subagentStart: 'SubagentStart',
   subagentStop: 'SubagentStop',
+  interrupt: 'Interrupt',
   statusLine: 'StatusLine',
   edit: 'Edit',
+});
+
+/** C#: AgentKinds (../Shared/AgentLookup.cs). */
+export const AGENT_KIND = Object.freeze({
+  claude: 'claude',
+  codex: 'codex',
+  claudeName: 'Claude Code',
+  codexName: 'Codex',
+});
+
+/** C#: CodexTools (../Shared/ClaudeTools.cs). */
+export const CODEX_TOOL = Object.freeze({
+  applyPatch: 'apply_patch',
 });
 
 /** C#: ClaudeTools (../Shared/ClaudeTools.cs). */
@@ -120,6 +135,7 @@ export const CLAUDE_TOOL = Object.freeze({
   askUserQuestion: 'AskUserQuestion',
   editTools: Object.freeze(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']),
   shellTools: Object.freeze(['Bash', 'PowerShell']),
+  watchedTools: Object.freeze(['Bash', 'PowerShell', 'apply_patch']),
 });
 
 /** C#: GitActions (GitCommands.cs). */
@@ -131,6 +147,8 @@ export const GIT_ACTION = Object.freeze({
   delete: 'delete',
   ignore: 'ignore',
   switch: 'switch',
+  fetch: 'fetch',
+  newBranch: 'new-branch',
 });
 
 /** C#: DiffSides (GitCommands.cs). */
@@ -464,4 +482,5 @@ export const CLIP_FORM = Object.freeze({
 export const PRODUCT = Object.freeze({
   name: 'Termilly',
   docsUrl: 'https://termilly.com/docs/',
+  dataDirVariable: 'TERMILLY_DATA_DIR',
 });

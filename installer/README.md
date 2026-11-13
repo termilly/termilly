@@ -75,3 +75,23 @@ TermillySetup.exe --uninstall --quiet [--remove-data]
 
 Exit codes: 0 done, 1 failed (see the log), 740 run it as administrator (for all users). `--start` starts
 Termilly when it's done, installed or not: an update from inside Termilly runs setup this way, after closing it.
+
+## macOS
+
+`installer/mac/build-app.sh [arm64|x64]` (on a Mac; both by default) builds `dist/Termilly-<version>-<arch>.dmg`
+and `.zip` (what updates will download):
+
+- **Layout.** Termilly as built goes whole in `Termilly.app/Contents/Resources/app`, with one .NET runtime beside
+  it in `Contents/Resources/dotnet` (Microsoft's newest .NET 10 for macOS, checked against its SHA-512). Every launcher
+  in it finds that runtime relative to its own folder (`AppHostRelativeDotNet`), so the Mac needs no .NET installed.
+  `Contents/MacOS` holds only the app's program: a copy of termilly's launcher and a link to `termilly.dll`, so
+  Termilly runs as Termilly.app (name, icon, notifications, permissions) from its files in Resources. macOS counts
+  every file in `Contents/MacOS` as code, which is why nothing else lives there.
+- **Signing.** Every program and library, then the app, with the hardened runtime and `entitlements.plist` (what
+  .NET's JIT needs). With `MAC_SIGN_IDENTITY` set to a Developer ID Application identity it signs for release and
+  also signs the `.dmg`; without it, ad hoc, which is enough to test but macOS warns when the app is opened.
+- **Disk image.** Written with `hdiutil makehybrid` and compressed, so it doesn't mount anything (which hangs on a Mac
+  without a desktop session, such as a rented one over ssh).
+- `Info.plist`: bundle ID `com.termilly.app` (permanent: macOS ties permissions to it), macOS 15 or later (.NET 10's
+  minimum). The icon uses the Linux sizes up to 256 px plus `icons/termilly-512.png` and `-1024.png` from
+  `branding/make-icon.ps1`.

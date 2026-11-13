@@ -72,6 +72,28 @@ public sealed class UpdateInstallTests : IDisposable
         Assert.Null(UpdateCheck.Package(manifest, linux: false));
     }
 
+    [Fact]
+    public void The_update_command_preserves_the_initiating_users_paint_scope_when_elevating()
+    {
+        var scope = new string('a', 64);
+        var command = SetupCommand.For("setup.exe", new InstalledCopy(@"C:\Program Files\Termilly", AllUsers: true), scope);
+
+        Assert.Contains("--update-window " + SetupCommand.Quote(scope), command.Arguments, StringComparison.Ordinal);
+        Assert.Contains("--all-users", command.Arguments, StringComparison.Ordinal);
+        Assert.True(command.AsAdministrator);
+    }
+
+    [Fact]
+    public void The_startup_paint_signal_only_acknowledges_its_installation()
+    {
+        var scope = Termilly.Shared.UpdateSignals.Scope(_folder);
+        using var painted = Termilly.Shared.UpdateSignals.Create(scope, Termilly.Shared.UpdateSignals.Started);
+        Assert.False(painted.WaitOne(0));
+        Assert.False(Termilly.Shared.UpdateSignals.SignalStarted(_folder + "-other"));
+        Assert.True(Termilly.Shared.UpdateSignals.SignalStarted(_folder));
+        Assert.True(painted.WaitOne(0));
+    }
+
     // ---- Downloading ----
 
     [Fact]
@@ -165,7 +187,7 @@ public sealed class UpdateInstallTests : IDisposable
     {
         var command = SetupCommand.For(@"C:\Temp\TermillySetup.exe", installed: null);
 
-        Assert.Equal("--quiet --start", command.Arguments);
+        Assert.Equal("--quiet --start --update-window", command.Arguments);
         Assert.False(command.AsAdministrator);
         Assert.Equal(@"C:\Temp\TermillySetup.exe", command.File);
     }
@@ -175,7 +197,7 @@ public sealed class UpdateInstallTests : IDisposable
     {
         var command = SetupCommand.For("setup.exe", new InstalledCopy(@"C:\Users\me\AppData\Local\Programs\Termilly\", AllUsers: false));
 
-        Assert.Equal(@"--quiet --start --dir ""C:\Users\me\AppData\Local\Programs\Termilly""", command.Arguments);
+        Assert.Equal(@"--quiet --start --update-window --dir ""C:\Users\me\AppData\Local\Programs\Termilly""", command.Arguments);
         Assert.False(command.AsAdministrator);
     }
 
@@ -184,7 +206,7 @@ public sealed class UpdateInstallTests : IDisposable
     {
         var command = SetupCommand.For("setup.exe", new InstalledCopy(@"C:\Program Files\Termilly", AllUsers: true));
 
-        Assert.Equal(@"--quiet --start --all-users --dir ""C:\Program Files\Termilly""", command.Arguments);
+        Assert.Equal(@"--quiet --start --update-window --all-users --dir ""C:\Program Files\Termilly""", command.Arguments);
         Assert.True(command.AsAdministrator);
     }
 

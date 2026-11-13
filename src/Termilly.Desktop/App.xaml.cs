@@ -18,9 +18,11 @@ public partial class App : Application
     {
         CrashLog.Install();
         QuietErrors.Install(); // before anything starts a program in the background
+        StartupLog.Mark("app starting");
         base.OnStartup(e);
         var folder = OpenFolder.Argument(e.Args);
         _instance = OpenFolder.ClaimInstance(out var first);
+        StartupLog.Mark(first ? "first Termilly for this data folder" : "another Termilly has this data folder: handing over");
         // Another Termilly has this data folder (perhaps still starting): it opens the folder or comes to the front.
         if (!first && OpenFolder.TryForward(folder, HandOverTimeout))
         {

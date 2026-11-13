@@ -2,6 +2,22 @@
 
 What changed in each release. Termilly says in its title bar when a newer one is out.
 
+## 1.8.0 (2026-11-13)
+
+- **Mac support:** Termilly now runs on Mac.
+- **Codex support:** use Codex just like Claude Code.
+- **AIs talk to Termilly:** they can use your terminals, To do, schedules and Notepad.
+- **AIs work together:** one AI does a task, another checks it.
+- **New status bar:** model picker, usage meter, cost and git branch under each terminal.
+- **To do on servers:** tasks for a server get done right on that server.
+- **Faster updates:** you see the update happen, and your terminal is back first.
+
+Fixes:
+
+- **Resizing:** occasional flicker when resizing.
+- **Phone:** Codex works on the phone.
+- Many small fixes.
+
 ## 1.7.0 (2026-11-08)
 
 - **To do:** task lists for workspaces, terminals and SSH hosts; Claude Code can implement a task and send it back for your review.

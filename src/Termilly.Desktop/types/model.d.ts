@@ -46,8 +46,20 @@ interface TodoTask {
   terminal?: string;
   /** Its run out of sight (Implement, Out of sight): the hidden shell's id. */
   run?: string;
-  /** What the agent that finished it said. */
-  review?: { summary: string; by: string };
+  /** What Implement was started with (js/todoplan.js): the agent doing the work, the agents reviewing it, the rounds and how it runs. */
+  plan?: { by: string; reviewers: string[]; rounds: number; run: string };
+  /** What its agents are at while it's In progress: working, reviewing or fixing (STAGE), in which round, and how many findings are being fixed. */
+  stage?: { what: string; round: number; count?: number | null };
+  /**
+   * What the agent that finished it said, and who; with reviewers, what each said in the last round, how many rounds it took,
+   * the rounds that found something, whether they agreed, the terminal the work was done in, and the silent agent's session
+   * (one more round goes on from it).
+   */
+  review?: {
+    summary: string; by: string; kind?: string;
+    reviews?: { kind: string; agrees: boolean; count: number | null; text: string }[];
+    rounds?: number; earlier?: { round: number; found: number }[]; agreed?: boolean; terminal?: string; session?: string;
+  };
   /** What its run out of sight asks the user for and waits on (js/todoask.js): what the tool would do, and with what. */
   ask?: { verb: string; what: string };
 }
@@ -110,6 +122,8 @@ interface AgentInfo {
   folder?: string | null;
   /** Its news arrived out of sight and hasn't been looked at (store.js agentChanged). */
   unread?: boolean;
+  /** Which agent it is: one of AGENT_KIND (Claude Code when not said). */
+  kind?: string;
 }
 
 /** A terminal's pane: its element, header and body, and xterm with its fit add-on (js/panes.js, js/terminals.js). */
@@ -117,6 +131,8 @@ interface TabView {
   el: HTMLElement;
   body: HTMLElement;
   header: HTMLElement;
+  /** The bar under the terminal (js/statusbar.js): its agent's session, files changed, the git branch. */
+  status?: HTMLElement;
   term: any;
   fit: any;
 }
@@ -149,6 +165,8 @@ interface Tab {
   worktree?: { repo: string; path: string; branch: string; copied?: number } | null;
   /** Whether agents may read it, when its menu says (js/together.js). */
   agentRead?: boolean;
+  /** The terminal whose agent or script opened this one (the API's open): it may read it and type into it (js/together.js). */
+  openedBy?: string;
   /** Whether agents may type into it (js/together.js). */
   agentType?: boolean;
   /** The paired device that opened or closed it, for the trace here (js/phonemanage.js). */
@@ -185,6 +203,11 @@ interface Tab {
   /** Its shell ended (and it waits for a key to start again). */
   exited?: boolean;
   agent?: AgentInfo | null;
+  /** How many turns (prompts taken) its agent has started, for waits on them (js/agentturns.js). */
+  agentTurns?: number;
+  /** How many reports its agent has made, and its last answer with the turn it ended (js/agentturns.js). */
+  agentReports?: number;
+  agentReply?: { turn: number; text: string | null };
   /** An agent has run in it. */
   agentSeen?: boolean;
   /** The Claude Code sessions it ran, oldest first, for My prompts (js/myprompts.js). */
@@ -199,7 +222,7 @@ interface Tab {
   /** When its Replies and its Tool calls were last cleared, each on its own (by AgentStepKind): older ones are hidden. */
   stepsClearedAt?: Record<string, number>;
   /** Its agent was ended, to resume (js/hibernate.js). */
-  hibernated?: { session: string; at: number; folder?: string | null } | null;
+  hibernated?: { session: string; at: number; folder?: string | null; kind?: string } | null;
   /**
    * A terminal without a shell of its own: a tmux pane (js/tmux.js; client is its tmux client), or another Termilly
    * computer's terminal (js/remotepc.js; client is the computer). icon: what that computer says runs in it (its
@@ -241,8 +264,8 @@ interface Tab {
   takeBack?: boolean;
   /** Who has it open: the paired phones' and computers' names (js/phone.js). */
   viewers?: string[];
-  /** Its Claude Code session is resuming after a restart, until it reports in (js/resuming.js). */
-  resuming?: { session: string; command: string | null; retried: boolean; timer: number } | null;
+  /** Its agent's session (Claude Code, Codex: kind) is resuming after a restart, until it runs (js/resuming.js). */
+  resuming?: { session: string; kind: string; command: string | null; retried: boolean; timer: number } | null;
   /** What it brings back and types as its shell starts (js/terminals.js). */
   start?: import('../wwwroot/js/terminals.js').ShellStart;
   /** js/terminals.js's timers for its shell. */
@@ -298,6 +321,14 @@ interface Schedule {
   prompt: string;
   /** An agent may change files; by default it only reads. */
   allowChanges: boolean;
+  /** With allowChanges, an agent may also do anything else without asking: any command, any tool. */
+  allowAll?: boolean;
+  /** Which agent runs the prompt (AGENT_KIND); Claude Code when not said. */
+  agent?: string;
+  /** The agents that review what it did, out of sight (js/schedulereview.js); none when not said. */
+  reviewers?: string[];
+  /** The most review rounds it gets (js/todoplan.js ROUNDS). */
+  rounds?: number;
   /** An agent's reply goes in the notification. */
   replyInNotice: boolean;
   /** Each run's report goes to the top of a Notepad page, by its name (js/schedulesave.js). */

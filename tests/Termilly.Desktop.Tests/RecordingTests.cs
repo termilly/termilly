@@ -32,7 +32,7 @@ public sealed class RecordingTests : IDisposable
         using var header = JsonDocument.Parse(lines[0]);
         Assert.Equal((2, 120, 30), (header.RootElement.GetProperty("version").GetInt32(), header.RootElement.GetProperty("width").GetInt32(), header.RootElement.GetProperty("height").GetInt32()));
 
-        var events = lines[1..].Select(l => JsonDocument.Parse(l).RootElement).ToList();
+        var events = lines[1..].Select(l => JsonElement.Parse(l)).ToList();
         Assert.Equal(["o", "m", "r", "o"], events.Select(e => e[1].GetString()));
         Assert.Equal("hello \u001b[32mworld\u001b[0m\r\n", events[0][2].GetString());
         Assert.Equal("100x40", events[2][2].GetString());

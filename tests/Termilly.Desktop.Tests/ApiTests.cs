@@ -94,18 +94,33 @@ public sealed class ApiTests
         new() { ["jsonrpc"] = "2.0", ["id"] = id, ["method"] = method, ["params"] = parameters };
 
     [Fact]
-    public void Mcp_initializes_and_lists_read_only_tools_by_default()
+    public void Mcp_initializes_and_lists_every_tool_whether_typing_is_allowed_or_not()
     {
         var init = Mcp.Handle(Request("initialize", new JsonObject { ["protocolVersion"] = "2025-03-26" }), (m, a) => FakeTermilly(m, a))!;
         Assert.Equal("2025-03-26", init["result"]!["protocolVersion"]!.GetValue<string>());
+        // The instructions say how to work with other terminals, not only what the tools are.
+        Assert.Contains("ask_terminal", init["result"]!["instructions"]!.GetValue<string>());
 
-        var tools = Mcp.Handle(Request("tools/list"), (m, a) => FakeTermilly(m, a))!["result"]!["tools"]!.AsArray().Select(t => t!["name"]!.GetValue<string>()).ToList();
-        Assert.Equal(["list_terminals", "terminal_state", "search_command_history", "set_status", "read_terminal_output", "wait_for_terminal", "list_tasks", "get_task", "tick_task", "finish_task", "list_snippets"], tools);
-
+        var tools = Mcp.Handle(Request("tools/list"), (m, a) => FakeTermilly(m, a))!["result"]!["tools"]!.AsArray();
+        var names = tools.Select(t => t!["name"]!.GetValue<string>()).ToList();
+        Assert.Equal(["list_terminals", "terminal_state", "search_command_history", "set_status", "read_terminal_output", "wait_for_terminal", "list_tasks", "get_task", "tick_task", "finish_task", "add_task", "list_schedules", "add_schedule", "run_schedule", "set_schedule", "list_notepad_pages", "read_notepad_page", "add_notepad_page", "write_notepad_page", "rename_notepad_page", "ask_terminal", "run_snippet", "open_terminal", "send_to_terminal", "list_snippets", "ask_agent"], names);
+        // Listed with typing off too, so an agent knows they're there; each says what it needs.
         var withInput = Mcp.Handle(Request("tools/list"), (m, a) => FakeTermilly(m, a, allowInput: true))!["result"]!["tools"]!.AsArray();
-        Assert.Contains(withInput, t => t!["name"]!.GetValue<string>() == "send_to_terminal");
-        Assert.Contains(withInput, t => t!["name"]!.GetValue<string>() == "run_snippet");
+        Assert.Equal(names, withInput.Select(t => t!["name"]!.GetValue<string>()));
+        Assert.All(["ask_terminal", "run_snippet", "send_to_terminal", "add_schedule", "run_schedule", "set_schedule", "open_terminal"],
+            name => Assert.Contains("Let scripts and agents type", tools.Single(t => t!["name"]!.GetValue<string>() == name)!["description"]!.GetValue<string>()));
     }
+
+    [Theory]
+    [InlineData("""{ "method": "open", "command": "npm test" }""", true)]
+    [InlineData("""{ "method": "open", "argv": ["npm", "test"] }""", true)]
+    [InlineData("""{ "method": "open", "command": 5 }""", true)]
+    [InlineData("""{ "method": "open", "argv": "npm" }""", true)]
+    [InlineData("""{ "method": "open", "cwd": "C:\\src" }""", false)]
+    [InlineData("""{ "method": "open", "command": "  ", "argv": [] }""", false)]
+    [InlineData("""{ "method": "open", "command": null }""", false)]
+    public void Opening_a_terminal_runs_a_command_when_it_names_one(string request, bool runs) =>
+        Assert.Equal(runs, Features.PageApi.RunsCommand(JsonNode.Parse(request)!.AsObject()));
 
     [Fact]
     public void Mcp_tool_calls_return_text_and_failures_as_tool_errors()

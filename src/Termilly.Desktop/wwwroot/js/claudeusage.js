@@ -1,17 +1,20 @@
 // @ts-check
-// The Claude Code session on a terminal's header: model, how full the context is and tokens written, in one small
-// chip; clicking it shows the rest. The host reads the numbers from the session's transcript (ClaudeUsage.cs), and
-// the plan's 5-hour and weekly limits from Claude Code's status line (Termilly.Agent/StatusLine.cs).
+// The agent session in a terminal's status bar (Claude Code's or Codex's): the model, how full the context is, the
+// plan's 5-hour limit and the cost, in a few small items; clicking one shows the rest. The host reads the numbers from
+// the session's own file (ClaudeUsage.cs, CodexUsage.cs), and Claude's plan limits from its status line
+// (Termilly.Agent/StatusLine.cs), Codex's from its session file.
 
 import { HOST } from './protocol.js';
 import { onHost } from './host.js';
-import { state, on, emit, wsById, EVENTS } from './store.js';
-import { planLimits, currentPlan, isSubscription, PLAN_WINDOW } from './plan.js';
+import { state, on, emit, wsById, runningAgent, EVENTS } from './store.js';
+import { planLimits, anyLimits, currentPlan, isSubscription, PLAN_WINDOW } from './plan.js';
 import { formatTokens, SECOND_MS, MINUTE_MS, HOUR_MS, DAY_MS } from './util.js';
 import { costOf, costText, costTitle, costMode, dollars, workspaceCost, ledgerTotals, COST_LABEL } from './cost.js';
-import { openPopover } from './popups.js';
+import { openPopover, SIDE } from './popups.js';
 import { escapeHtml, formatWhen } from './ui.js';
-import { SETTING_VALUES } from './constants.js';
+import { SETTING_VALUES, AGENT_KIND } from './constants.js';
+import { agentKind } from './agentkinds.js';
+import { codexModelName } from './codexmodels.js';
 
 /**
  * A session's usage as the host read it from the transcript (ClaudeUsage.cs).
@@ -54,6 +57,24 @@ const FULL_PERCENT = 90;
  */
 const claudeOf = tab => (tab.claude ??= { usage: null, context: null });
 
+/**
+ * Each model's context window as Claude Code's status line gave it, so a session without those figures yet (just
+ * started, or started before the status line was set) isn't measured against the transcript's 200k guess: a model
+ * without "[1m]" in its name can still have a 1M window.
+ * @type {Map<string, number>}
+ */
+const knownWindows = new Map();
+
+/**
+ * Remembers the window of the model a terminal's session runs, once its status line has reported it.
+ * @param {Tab} tab
+ */
+function learnWindow(tab) {
+  const c = tab.claude?.context;
+  const u = tab.claude?.usage;
+  if (c?.size && u?.model && (!c.session || c.session === u.session)) knownWindows.set(u.model, c.size);
+}
+
 const redrawAll = () => {
   for (const tab of state.tabs.values()) if (tab.claude?.usage) emit(EVENTS.claudeUsage, tab);
   if (!pop.hidden && popTab) fillUsage(popTab);
@@ -63,6 +84,7 @@ onHost(HOST.claudeUsage, m => {
   const tab = state.tabs.get(m.id);
   if (!tab) return;
   claudeOf(tab).usage = m.usage;
+  learnWindow(tab);
   emit(EVENTS.claudeUsage, tab);
   if (!pop.hidden && popTab === tab) fillUsage(tab); // the details follow too
 });
@@ -75,26 +97,34 @@ onHost(HOST.claudeContext, m => {
   const tab = state.tabs.get(m.id);
   if (!tab) return;
   claudeOf(tab).context = { session: m.session ?? null, used: m.used, size: m.size, tokens: m.tokens ?? null };
+  learnWindow(tab);
   emit(EVENTS.claudeUsage, tab);
   if (!pop.hidden && popTab === tab) fillUsage(tab);
 });
 
 // The plan figures age while nobody's replies bring new ones: redraw now and then so "as of" and the dimming follow.
-setInterval(() => { if (planLimits()) redrawAll(); }, REDRAW_MS);
+setInterval(() => { if (anyLimits()) redrawAll(); }, REDRAW_MS);
 
 /** Plan figures older than this are dimmed: use elsewhere (another terminal, claude.ai) isn't in them yet. */
 const STALE_MS = 15 * MINUTE_MS;
-const limitsStale = () => !!planLimits() && Date.now() - /** @type {PlanLimits} */ (planLimits()).at > STALE_MS;
+/** @param {string} kind */
+const limitsStale = kind => !!planLimits(kind) && Date.now() - /** @type {PlanLimits} */ (planLimits(kind)).at > STALE_MS;
 /** @param {number} ms */
 const clock = ms => new Date(ms).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 
+/**
+ * The agent a terminal's session is (AGENT_KIND): Claude Code unless its hooks said otherwise.
+ * @param {Tab} tab
+ */
+export const sessionKind = tab => runningAgent(tab) ?? tab.agent?.kind ?? AGENT_KIND.claude;
 
 /**
- * A limit window still running (Claude Code drops one once it has reset), or null.
+ * A limit window of an agent's plan still running (Claude Code drops one once it has reset), or null.
  * @param {'fiveHour' | 'sevenDay'} name
+ * @param {string} [kind] the agent (AGENT_KIND)
  */
-function windowOf(name) {
-  const w = state.settings.agents.claudeLimits ? planLimits()?.[name] : null;
+export function windowOf(name, kind = AGENT_KIND.claude) {
+  const w = state.settings.agents.claudeLimits ? planLimits(kind)?.[name] : null;
   return w && (!w.resetsAt || w.resetsAt * SECOND_MS > Date.now()) ? w : null;
 }
 
@@ -117,17 +147,25 @@ function resetText(resetsAt) {
 /** @param {Plan | null} p */
 const planName = p => (p?.subscription ? `Claude ${p.subscription[0].toUpperCase()}${p.subscription.slice(1)}` : null);
 
-/** "claude-opus-5-5" → "Opus 5.5", "claude-sonnet-4-5-20250929" → "Sonnet 4.5", "claude-3-5-haiku-20241022" → "Haiku 3.5".
+/** "claude-opus-5-5" → "Opus 5.5", "claude-sonnet-4-5-20250929" → "Sonnet 4.5", "claude-3-5-haiku-20241022" → "Haiku 3.5";
+ * a Codex model by the name Codex gives it ("gpt-6.1-sol" → "GPT-6.1-Sol").
  * @param {string | null | undefined} model
  */
 export function modelName(model) {
   if (!model) return 'Claude';
+  if (!model.startsWith(AGENT_KIND.claude)) return codexModelName(model);
   const parts = model.replace(/^claude-/, '').replace(/-\d{8}$/, '').replace(/\[.*\]$/, '').split('-');
   const family = parts.find(p => /^[a-z]+$/i.test(p));
   const version = parts.filter(p => /^\d{1,2}$/.test(p)).join('.');
   return family ? `${family[0].toUpperCase()}${family.slice(1)}${version ? ` ${version}` : ''}` : model;
 }
 
+/**
+ * Whether the status bar shows this agent's session (Settings › Terminal › Status bar).
+ * @param {string} kind
+ */
+export const sessionShown = kind => !!state.settings.agents.integration
+  && !!(kind === AGENT_KIND.codex ? state.settings.agents.codexUsage : state.settings.agents.claudeUsage);
 
 /**
  * The usage for the session the terminal runs now, or null (none yet, another session, or turned off).
@@ -136,7 +174,7 @@ export function modelName(model) {
  */
 export function usageOf(tab) {
   const u = tab.claude?.usage;
-  if (!u || !tab.agent || !state.settings.agents.integration || !state.settings.agents.claudeUsage) return null;
+  if (!u || !tab.agent || !sessionShown(sessionKind(tab))) return null;
   return !tab.agent.session || tab.agent.session === u.session ? u : null;
 }
 
@@ -151,22 +189,57 @@ function contextOf(tab, u) {
   if (c && (!c.session || c.session === u.session)) {
     return { percent: Math.min(PERCENT, Math.round(c.used)), tokens: c.tokens ?? Math.round((c.used / PERCENT) * c.size), size: c.size, official: true };
   }
-  return { percent: Math.min(PERCENT, Math.round((u.context / u.contextWindow) * PERCENT)), tokens: u.context, size: u.contextWindow, official: false };
+  // Codex names its model before its first token count, which brings the window's size. For Claude, the window its
+  // status line gave for this model wins over the transcript's guess.
+  const known = u.model ? knownWindows.get(u.model) : undefined;
+  const size = known ? Math.max(known, u.context) : u.contextWindow;
+  const percent = size ? Math.min(PERCENT, Math.round((u.context / size) * PERCENT)) : 0;
+  return { percent, tokens: u.context, size, official: false };
 }
 
 /** @param {number} p */
 const level = p => (p >= FULL_PERCENT ? 'full' : p >= HIGH_PERCENT ? 'high' : '');
 
 /**
- * The chip's content: the model, and how full its context is (meter and percent). The rest is in the details.
- * @param {Tab} tab
- * @param {ClaudeUsage} u
+ * A meter (when they're on), or nothing: the status bar then shows the number alone.
+ * @param {number} percent
+ * @param {boolean} meters
  */
-export function usageChipHtml(tab, u) {
-  const { percent: p } = contextOf(tab, u);
-  const cost = costText(costOf(tab));
-  return `${cost ? `<span class="cu-cost">${escapeHtml(cost)}</span>` : ''}<span class="cu-model">${escapeHtml(modelName(u.model))}</span>
-    <span class="cu-meter ${level(p)}"><i style="width:${p}%"></i></span><span class="cu-pct">${p}%</span>`;
+const meterHtml = (percent, meters) => (meters ? `<span class="cu-meter ${level(percent)}"><i style="width:${Math.min(PERCENT, percent)}%"></i></span>` : '');
+
+/**
+ * The status bar's agent items, after its model: how full the context is, the plan's 5-hour limit and the cost; with
+ * meters off, numbers only ("ctx 38%"), coloured as the meter would be. A click on any shows the details.
+ * @param {Tab} tab
+ * @param {boolean} meters
+ */
+export function statusUsageHtml(tab, meters) {
+  const u = usageOf(tab);
+  const kind = sessionKind(tab);
+  const cost = kind === AGENT_KIND.claude ? costOf(tab) : null;
+  // The context once the session has figures; the plan's limits always (they're the account's, kept fresh: planrefresh.js).
+  const context = state.settings.terminal.statusContext !== false && u && (u.contextWindow || tab.claude?.context) ? contextOf(tab, u).percent : null;
+  return (context === null ? '' : `<button class="sb-item sb-usage ${meters ? '' : level(context)}" data-sb="usage" title="${escapeHtml(usageTitle(tab, /** @type {ClaudeUsage} */ (u)))}">${meters ? '' : 'ctx '}${meterHtml(context, meters)}<span>${context}%</span></button>`)
+    + (state.settings.terminal.statusFiveHour !== false ? planItemHtml(PLAN_WINDOW.fiveHour, kind, meters) : '')
+    + (state.settings.terminal.statusWeek !== false ? planItemHtml(PLAN_WINDOW.sevenDay, kind, meters) : '')
+    + (cost && costText(cost) ? `<span class="sb-item sb-cost" title="${escapeHtml(costTitle(cost))}">${escapeHtml(costText(cost))}</span>` : '');
+}
+
+/** The status bar's short names for the plan's windows, and the words on hover. */
+const WINDOW_LABEL = Object.freeze({ [PLAN_WINDOW.fiveHour]: ['5h', '5-hour limit'], [PLAN_WINDOW.sevenDay]: ['wk', 'Weekly limit'] });
+
+/**
+ * One of the plan's windows in the status bar: how much of it is used, and when it resets on hover.
+ * @param {'fiveHour' | 'sevenDay'} name
+ * @param {string} kind the agent (AGENT_KIND)
+ * @param {boolean} meters
+ */
+function planItemHtml(name, kind, meters) {
+  const w = windowOf(name, kind);
+  if (!w) return '';
+  const [short, long] = WINDOW_LABEL[name];
+  const title = `${agentKind(kind).short} plan, ${long.toLowerCase()}: ${Math.round(w.used)}% used${w.resetsAt ? `. ${resetText(w.resetsAt)}` : ''}. Click for details.`;
+  return `<button class="sb-item sb-plan ${meters ? '' : level(w.used)}" data-sb="usage" title="${escapeHtml(title)}">${short} ${meterHtml(w.used, meters)}<span>${Math.round(w.used)}%</span></button>`;
 }
 
 /**
@@ -174,10 +247,11 @@ export function usageChipHtml(tab, u) {
  * @param {ClaudeUsage} u
  */
 export function usageTitle(tab, u) {
+  const kind = sessionKind(tab);
   const ctx = contextOf(tab, u);
-  const five = windowOf(PLAN_WINDOW.fiveHour);
+  const five = windowOf(PLAN_WINDOW.fiveHour, kind);
   return `${modelName(u.model)} · context ${formatTokens(ctx.tokens)} of ${formatTokens(ctx.size)} · ${formatTokens(u.output)} tokens written`
-    + (five ? ` · ${Math.round(five.used)}% of the plan's 5-hour limit used, as of ${clock(/** @type {PlanLimits} */ (planLimits()).at)}` : '') + '. Click for details.';
+    + (five ? ` · ${Math.round(five.used)}% of the plan's 5-hour limit used, as of ${clock(/** @type {PlanLimits} */ (planLimits(kind)).at)}` : '') + '. Click for details.';
 }
 
 /**
@@ -199,24 +273,29 @@ function costRowsHtml(tab, row) {
     </div>`;
 }
 
-/** The plan's limits in the details: a meter and reset time per window, under the plan's name. */
-function limitsHtml() {
+/**
+ * The plan's limits in the details: a meter and reset time per window, under the plan's name.
+ * @param {string} kind the agent (AGENT_KIND)
+ */
+function limitsHtml(kind) {
   // Only the windows still running are kept.
   const windows = /** @type {[import('./plan.js').PlanWindow, string][]} */ (
     /** @type {['fiveHour' | 'sevenDay', string][]} */ ([[PLAN_WINDOW.fiveHour, 'Current session'], [PLAN_WINDOW.sevenDay, 'Current week (all models)']])
-      .map(([name, label]) => [windowOf(name), label]).filter(([w]) => w));
-  const name = planName(currentPlan());
+      .map(([name, label]) => [windowOf(name, kind), label]).filter(([w]) => w));
+  const codex = kind === AGENT_KIND.codex;
+  const name = codex ? null : planName(currentPlan());
+  const agent = agentKind(kind).short;
   if (!state.settings.agents.claudeLimits) return '';
   return `<div class="cu-plan">
       <div class="cu-plan-head">Plan usage${name ? `<b>${escapeHtml(name)}</b>` : ''}</div>
-      ${windows.length ? `<div class="cu-reset${limitsStale() ? ' stale' : ''}">As of ${clock(/** @type {PlanLimits} */ (planLimits()).at)} · updated with Claude’s replies</div>` : ''}
+      ${windows.length ? `<div class="cu-reset${limitsStale(kind) ? ' stale' : ''}">As of ${clock(/** @type {PlanLimits} */ (planLimits(kind)).at)} · ${state.settings.agents.refreshLimits ? 'kept up to date while Termilly is in front' : `updated with ${agent}’s replies`}</div>` : ''}
       ${windows.map(([w, label]) => `
         <div class="cu-limit-row"><span>${label}</span><b>${Math.round(w.used)}% used</b></div>
         <div class="cu-meter big ${level(w.used)}"><i style="width:${Math.min(PERCENT, w.used)}%"></i></div>
         <div class="cu-reset">${escapeHtml(resetText(w.resetsAt))}</div>`).join('')}
       ${windows.length
-        ? '<div class="cu-reset cu-note">Per-model limits, and the very latest figures: <code>/usage</code> in Claude.</div>'
-        : '<div class="cu-reset cu-note">The 5-hour and weekly limits come with Claude’s next reply (Pro and Max plans). If they don’t, restart <code>claude</code> in this terminal.</div>'}
+        ? `<div class="cu-reset cu-note">The very latest figures: <code>${codex ? '/status' : '/usage'}</code> in ${agent}.</div>`
+        : `<div class="cu-reset cu-note">${state.settings.agents.refreshLimits ? `Asking ${agent} for the 5-hour and weekly limits.` : `The 5-hour and weekly limits come with ${agent}’s next reply${codex ? '' : ' (Pro and Max plans)'}.`}</div>`}
     </div>`;
 }
 
@@ -228,22 +307,35 @@ pop.hidden = true;
 let popTab = null;
 
 /**
- * The session's details, under the chip.
+ * The session's details, over its status bar.
  * @param {Tab} tab
  * @param {import('./popups.js').Anchor} anchor
  */
 export function openUsage(tab, anchor) {
   if (!fillUsage(tab)) return;
   popTab = tab;
-  openPopover(pop, anchor, { dynamic: true, onClose: () => { popTab = null; } });
+  openPopover(pop, anchor, { side: SIDE.above, dynamic: true, onClose: () => { popTab = null; } });
+}
+
+/**
+ * Before the session's first reply: the agent and its plan's limits only.
+ * @param {Tab} tab
+ */
+function fillLimitsOnly(tab) {
+  const kind = sessionKind(tab);
+  if (!state.settings.agents.claudeLimits) return false;
+  pop.innerHTML = `<div class="cu-head">${escapeHtml(agentKind(kind).name)}</div>${limitsHtml(kind)}`;
+  return true;
 }
 
 /** @param {Tab} tab */
 function fillUsage(tab) {
   const u = usageOf(tab);
-  if (!u) return false;
+  if (!u) return fillLimitsOnly(tab);
   const ctx = contextOf(tab, u);
   const p = ctx.percent;
+  const kind = sessionKind(tab);
+  const claude = kind === AGENT_KIND.claude;
   /**
    * @param {string} label
    * @param {string} value
@@ -253,22 +345,22 @@ function fillUsage(tab) {
     <div class="cu-head">${escapeHtml(modelName(u.model))}<span>${escapeHtml(u.model ?? '')}</span></div>
     <div class="cu-ctx">
       <div class="cu-meter big ${level(p)}"><i style="width:${p}%"></i></div>
-      <div class="cu-ctx-text" title="${ctx.official ? 'As Claude Code reports it (its status line, after the last reply)' : 'From the transcript’s last reply; Claude Code’s own figure follows its next status line'}">Context <b>${formatTokens(ctx.tokens)}</b> of ${formatTokens(ctx.size)} · ${p}%${u.compactions ? ` · compacted ${u.compactions}×` : ''}</div>
+      <div class="cu-ctx-text" title="${!claude ? 'From Codex’s last token count' : ctx.official ? 'As Claude Code reports it (its status line, after the last reply)' : 'From the transcript’s last reply; Claude Code’s own figure follows its next status line'}">Context <b>${formatTokens(ctx.tokens)}</b> of ${formatTokens(ctx.size)} · ${p}%${u.compactions ? ` · compacted ${u.compactions}×` : ''}</div>
     </div>
     <div class="cu-rows">
       ${row('Written (output)', formatTokens(u.output))}
       ${row('Read fresh (input)', formatTokens(u.input))}
-      ${row('Cache written', formatTokens(u.cacheWrite))}
+      ${claude ? row('Cache written', formatTokens(u.cacheWrite)) : ''}
       ${row('Cache read', formatTokens(u.cacheRead))}
-      ${row('Replies', u.replies.toLocaleString())}
+      ${row(claude ? 'Replies' : 'Requests', u.replies.toLocaleString())}
     </div>
-    ${costRowsHtml(tab, row)}
-    ${limitsHtml()}
+    ${claude ? costRowsHtml(tab, row) : ''}
+    ${limitsHtml(kind)}
     <div class="cu-rows">
       ${u.started ? row('Started', escapeHtml(formatWhen(Date.parse(u.started)))) : ''}
       ${u.last ? row('Last reply', escapeHtml(formatWhen(Date.parse(u.last)))) : ''}
       ${u.branch ? row('Branch', escapeHtml(u.branch)) : ''}
-      ${u.version ? row('Claude Code', escapeHtml(u.version)) : ''}
+      ${u.version ? row(agentKind(kind).name, escapeHtml(u.version)) : ''}
       ${row('Session', `<span class="cu-id" title="${escapeHtml(u.session)}">${escapeHtml(u.session.slice(0, 8))}</span>`)}
     </div>`;
   return true;

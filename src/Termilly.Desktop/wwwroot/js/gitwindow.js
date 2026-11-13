@@ -110,7 +110,7 @@ const BRANCH_LOG_COMMITS = 50;
 const COPIED_MS = 1200;
 
 /** The window's tabs (data-gw-tab), and what the side list shows. */
-const GIT_TAB = Object.freeze({ agent: 'agent', changes: 'changes', history: 'history', branches: 'branches' });
+export const GIT_TAB = Object.freeze({ agent: 'agent', changes: 'changes', history: 'history', branches: 'branches' });
 /** The buttons in the window's head (data-gw). */
 const HEAD_BUTTON = Object.freeze({ close: 'close', refresh: 'refresh' });
 /**

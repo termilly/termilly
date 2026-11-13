@@ -1,13 +1,13 @@
 // @ts-check
 // A pane's header: shell badge, tab name (double-click to rename), tag chips, what's going on in the terminal (an
-// environment, notes, recording, results, changed files, its Claude session, broadcast), and its buttons. The tag
-// picker, the menu and renaming are modules of their own.
+// environment, notes, recording, results, broadcast), Stop while an agent works, and its buttons. Its agent's session,
+// the files it changed and the git branch are in its status bar (statusbar.js). The tag picker, the menu and renaming
+// are modules of their own.
 
-import { state, emit, on, activityOf, EVENTS, wsById } from './store.js';
+import { state, on, activityOf, EVENTS, wsById } from './store.js';
 import { tabBadgeHtml, tagChipHtml, escapeHtml, ICONS, activityHtml } from './ui.js';
 import { closeTab, setHeaderBuilder } from './panes.js';
 import { isCandidate, isReceiving, toggleReceiver } from './broadcast.js';
-import { usageOf, usageChipHtml, usageTitle, openUsage } from './claudeusage.js';
 import { notesFor, noteTitle, firstLine, editHostNote, NOTE_KIND } from './notes.js';
 import { openTodo, markedList, tabHover, terminalList, workspaceList } from './todo.js';
 import { environmentOf, ENV_CLASS, ENV_COLOR } from './environments.js';
@@ -18,10 +18,8 @@ import { isRecording, toggleRecording, recordingFile } from './replay.js';
 import { beginRename, shownName, PANE_NAME } from './rename.js';
 import { openTagPicker } from './tagpicker.js';
 import { openTabMenu, TAG_BUTTON } from './tabmenu.js';
-import { find } from './dom.js';
+import { find, setHtmlIfChanged } from './dom.js';
 import { openPrompts, hasPrompts, PROMPTS_TITLE } from './myprompts.js';
-
-const CHEVRON_DOWN = '<svg class="chev" viewBox="0 0 16 16"><path d="M4 6l4 4 4-4"/></svg>';
 
 /** The header's parts that change with the terminal (HEADER_HTML has them). */
 const PINNED_NOTE = '.pane-note';
@@ -29,8 +27,6 @@ const CAST_CHIP = '.cast-chip';
 const LOG_CHIP = '.log-chip';
 const BROADCAST_TOGGLE = '.bc-toggle';
 const STOP_BUTTON = '.agent-stop-btn';
-const USAGE_BUTTON = '.claude-usage';
-const CHANGES_BUTTON = '.changes-btn';
 const NOTE_BUTTON = '.note-btn';
 const PROMPTS_BUTTON = '.prompts-btn';
 
@@ -47,8 +43,6 @@ const HEADER_HTML = `
     <button class="bc-toggle" hidden></button>
     <span class="pane-actions">
       <button class="pane-btn agent-stop-btn" title="Stop the agent (Esc)" hidden>${ICONS.stop}<span>Stop</span></button>
-      <button class="pane-btn claude-usage" hidden></button>
-      <button class="pane-btn changes-btn" title="Files Claude changed in this terminal" hidden></button>
       <button class="pane-btn menu-btn" title="Terminal menu">${ICONS.more}</button>
       <button class="pane-btn prompts-btn" title="${PROMPTS_TITLE}" hidden>${ICONS.prompts}</button>
       <button class="pane-btn note-btn" hidden>${ICONS.todo}</button>
@@ -84,10 +78,6 @@ function wireHeader(tab, header) {
   // The same menu as a right-click on the header.
   click('.menu-btn', e => openTabMenu(tab, /** @type {HTMLElement} */ (e.currentTarget)));
   click(TAG_BUTTON, e => openTagPicker(tab, /** @type {HTMLElement} */ (e.currentTarget)));
-  // js/changes.js lists them (it can't be imported from here without a cycle through the preview).
-  click(CHANGES_BUTTON, e =>
-    emit(EVENTS.openChangedFiles, { tab, anchor: /** @type {HTMLElement} */ (e.currentTarget) }));
-  click(USAGE_BUTTON, e => openUsage(tab, /** @type {HTMLElement} */ (e.currentTarget)));
   click('.close-btn', () => closeTab(tab));
   click(BROADCAST_TOGGLE, () => toggleReceiver(tab));
   click(LOG_CHIP, e => openLogMenu(tab, /** @type {HTMLElement} */ (e.currentTarget)));
@@ -117,8 +107,6 @@ export function updateHeader(tab) {
   showNotes(tab, header);
   showStatus(tab, header);
   header.classList.toggle('no-history', !!tab.noHistory);
-  showChanges(tab, header);
-  showUsage(tab, header);
   showBroadcast(tab, header);
   showActivity(tab, header);
 }
@@ -207,35 +195,6 @@ function showStatus(tab, header) {
 }
 
 /**
- * The files Claude changed here (Settings › Change preview): shown once Claude has run in the terminal, even with
- * none yet, so it's clear the list is there.
- * @param {Tab} tab
- * @param {HTMLElement} header
- */
-function showChanges(tab, header) {
-  const changes = find(header, CHANGES_BUTTON);
-  const count = tab.changes?.length ?? 0;
-  changes.hidden = !(state.settings.changes.enabled && state.settings.changes.button && (count || tab.agentSeen));
-  changes.classList.toggle('empty', !count);
-  changes.innerHTML = `${ICONS.diff}<span>${count} changed</span>${CHEVRON_DOWN}`;
-  changes.title = count ? `Files Claude changed in this terminal (${count})` : 'Claude hasn’t changed any files in this terminal yet';
-}
-
-/**
- * The Claude Code session here: model, context and tokens (Settings › Terminal › Claude session in the header).
- * @param {Tab} tab
- * @param {HTMLElement} header
- */
-function showUsage(tab, header) {
-  const usageBtn = find(header, USAGE_BUTTON);
-  const usage = usageOf(tab);
-  usageBtn.hidden = !usage;
-  if (!usage) return;
-  setHtmlIfChanged(usageBtn, usageChipHtml(tab, usage));
-  usageBtn.title = usageTitle(tab, usage);
-}
-
-/**
  * Broadcast: terminals in scope get an in/out switch, and the ones receiving get a stripe.
  * @param {Tab} tab
  * @param {HTMLElement} header
@@ -264,19 +223,6 @@ function showActivity(tab, header) {
   if (slot) setHtmlIfChanged(slot, activityHtml(activity));
 }
 
-/**
- * Sets an element's markup only when it changes, so an animation in it (the spinner) doesn't restart.
- * @param {HTMLElement} el
- * @param {string} html
- */
-function setHtmlIfChanged(el, html) {
-  if (el.dataset.html === html) return;
-  el.dataset.html = html;
-  el.innerHTML = html;
-}
-
 on(EVENTS.tab, updateHeader);
-on(EVENTS.changes, updateHeader);
-on(EVENTS.claudeUsage, updateHeader);
 on(EVENTS.tags, () => { for (const tab of state.tabs.values()) updateHeader(tab); });
 on(EVENTS.settings, () => { for (const tab of state.tabs.values()) updateHeader(tab); });

@@ -15,6 +15,7 @@ import { agentCommand, readResult, noticeOf } from './agentcli.js';
 import { saveReport } from './schedulesave.js';
 import { addScheduleNote } from './inbox.js';
 import { plainText } from './schedulereport.js';
+import { reviewersOf, startReviews, stopReviews } from './schedulereview.js';
 import { runInNewTerminal, runInTerminal, stopInTerminal, finishTerminal, terminalsFor, TERMINAL_TURN } from './scheduleterminal.js';
 import {
   nextRun, newSchedule, statusOf, summaryOf, shouldTell, sortRuns, RUN, RUN_LABEL, WHAT, WHERE, WHEN, MISSED, GRACE_MS,
@@ -45,6 +46,12 @@ export const scheduleById = id => schedules().find(s => s.id === id) ?? null;
 export const runsOf = scheduleId => runs().filter(r => r.scheduleId === scheduleId);
 /** @param {string} id */
 const isGoing = id => [...active.values()].some(a => a.schedule.id === id);
+/**
+ * Whether a schedule's prompt runs in a terminal now: nobody is asked there, so what Claude Code would ask for it refuses
+ * by itself (agentcli.js).
+ * @param {Tab} tab
+ */
+export const nobodyAsksIn = tab => [...active.values()].some(a => a.tab === tab && a.schedule.what === WHAT.agent);
 /** The runs going on now, for the sidebar. */
 export const runningNow = () => [...active.values()].filter(a => a.run.status === RUN.running || a.run.status === RUN.waiting);
 
@@ -99,7 +106,11 @@ function tidyRuns() {
  */
 function commandOf(schedule) {
   if (schedule.what === WHAT.command) return schedule.command;
-  if (schedule.what === WHAT.agent) return agentCommand(schedule.prompt, { shell: shellOf(schedule), changes: schedule.allowChanges, json: isOutOfSight(schedule) });
+  if (schedule.what === WHAT.agent) {
+    // With reviewers, its session is kept, for their findings to go back to.
+    const keep = reviewersOf(schedule).length > 0;
+    return agentCommand(schedule.prompt, { kind: schedule.agent, shell: shellOf(schedule), changes: schedule.allowChanges, all: !!schedule.allowAll, json: isOutOfSight(schedule), keep });
+  }
   const found = [undefined, ...state.workspaces].flatMap(ws => allSnippets(ws)).find(s => s.name === schedule.snippet);
   return found ? fill(found.command, {}) : null;
 }
@@ -229,7 +240,7 @@ export function stopRun(runId) {
     end(going.run, going.schedule, { stopped: true });
   } else if (going.run.status === RUN.waiting) {
     end(going.run, going.schedule, { stopped: true });
-  } else send(PAGE.scheduleStop, { runId });
+  } else if (!stopReviews(runId)) send(PAGE.scheduleStop, { runId });
 }
 
 /**
@@ -309,22 +320,30 @@ onHost(HOST.scheduleEnded, async m => {
   const going = active.get(m.runId);
   if (!going) return;
   const text = await plainText(m.tail ?? '');
-  const agent = going.schedule.what === WHAT.agent ? readResult(text) : null;
+  const agent = going.schedule.what === WHAT.agent ? readResult(text, going.schedule.agent) : null;
   if (agent && !m.stopped) endAgent(going, m.exitCode ?? null, agent);
   else end(going.run, going.schedule, { code: m.exitCode, stopped: m.stopped, error: m.error, summary: summaryOf(text), text });
 });
 
 /**
- * An agent's run ended with its result. A run refused something failed, whatever it says: what it was asked isn't done.
+ * An agent's run ended with its result. One that was refused something still worked when it ended well: it went on without
+ * it, and its summary starts with what it was refused.
  * @param {ActiveRun} going
  * @param {number | null} code
  * @param {NonNullable<ReturnType<typeof readResult>>} agent
  */
-function endAgent({ run, schedule }, code, agent) {
+function endAgent(going, code, agent) {
+  const { run, schedule } = going;
+  const reviewers = reviewersOf(schedule);
+  // Its reviewers read it now; the run ends when they're through.
+  if (reviewers.length && !agent.errored) {
+    startReviews(going, agent, code, { reviewers, shell: shellOf(schedule), finish: how => end(run, schedule, how), changed });
+    return;
+  }
   const headline = agent.reply.split(/\r?\n/).map(line => line.trim()).find(Boolean) ?? '';
   const notice = schedule.replyInNotice ? noticeOf(agent.reply) : undefined;
-  const how = agent.failed ? { error: agent.why, code } : { code, summary: summaryOf(headline) };
-  end(run, schedule, { ...how, costUsd: agent.costUsd, notice: agent.failed ? undefined : notice, text: agent.reply });
+  const how = agent.errored ? { error: agent.why, code } : { code, summary: summaryOf([agent.why, headline].filter(Boolean).join(' ')) };
+  end(run, schedule, { ...how, costUsd: agent.costUsd, notice: agent.errored ? undefined : notice, text: agent.reply });
 }
 
 /**

@@ -9,18 +9,25 @@ import { PAGE, HOST } from './protocol.js';
 import { send, onHost } from './host.js';
 import { state, on, persist, newId, wsById, tabsOf, tabTitle, EVENTS } from './store.js';
 import { focusTab } from './panes.js';
-import { AGENT_COMMAND, agentInstalled, agentWorking, folderOfList as folderOf, isOnGitHub, checkRepo, implementTask, keepIssue } from './todoactions.js';
-import { implementSilently, stopRun } from './todorun.js';
+import {
+  AGENT_COMMAND, agentWorking, folderOfList as folderOf, implementPlace, cantImplement, offersImplement, isOnGitHub, checkRepo, keepIssue,
+  implement, anotherRound, planOf, hasOwnPlan, keepPlan, agentsFor, reviewersAt,
+} from './todoactions.js';
+import { stopRun } from './todorun.js';
+import { openImplementCard } from './todocard.js';
+import { confirmImplement, tasksWord } from './todobulk.js';
+import { agentKind } from './agentkinds.js';
+import { stageWords, verdictOf, planWords } from './todoplan.js';
 import { answerAsk, allowWaiting, ASK } from './todoask.js';
 import { openTagManager } from './todotags.js';
 import { listItems, dotHtml } from './todomenu.js';
 import { tagCompletion } from './todotagcomplete.js';
-import { escapeHtml, cssColor, tabBadgeHtml, ICONS } from './ui.js';
+import { escapeHtml, cssColor, tabBadgeHtml, badgeHtml, ICONS } from './ui.js';
 import { byId, find, targetOf, WORKSPACE_ID, DOCK_GRIP, PANEL_HEAD } from './dom.js';
 import { showMenu, openPopover, closePopover, isOpen, closeAll, SEPARATOR } from './popups.js';
 import { showToast, TOAST } from './toasts.js';
 import { setNote } from './notes.js';
-import { choiceDialog, CHOICE } from './dialogs.js';
+import { choiceDialog, confirmDialog, CHOICE } from './dialogs.js';
 import { KEY_ID } from './keymap.js';
 import { copyOut, textBoxMenu } from './textmenu.js';
 import { COPY_LABEL } from './termclipboard.js';
@@ -57,12 +64,16 @@ const COLOR_INPUT = 'color';
 /** What the code finds in the panel. */
 const TASK = '.td-task';
 const TASK_TEXT = '.td-text';
+/** The word on the button that clears active tasks, and in its question's title: Delete for those selected. */
+const CLEAR_WORD = Object.freeze({ shown: 'Clear', mine: 'Delete' });
 /** What in a task's row does something of its own, so a double click there doesn't open the editor. */
 const ROW_CONTROL = 'button, input, .td-acts';
 /** A task found in another list, while searching every list. */
 const ELSEWHERE = '[data-elsewhere]';
 const EDIT_ROW = '.td-edit';
 const EDIT_TEXT = '.td-edit-text';
+/** The edited task's details box: as tall as its text, up to a limit (CSS max-height), then it scrolls. */
+const EDIT_DETAILS = '.td-edit-details';
 /** A deletion's toast button that brings the tasks back. */
 const UNDO = 'Undo';
 const ISSUE_TITLE = '.td-issue-title';
@@ -73,9 +84,10 @@ const ACTION = Object.freeze({
   pick: 'pick', note: 'note', pin: 'pin', detach: 'detach', close: 'close', fold: 'fold', tag: 'tag', more: 'more', save: 'save',
   cancel: 'cancel', label: 'label', create: 'create', backToList: 'backToList', pickTags: 'pickTags', dropTag: 'dropTag', manageTags: 'manageTags',
   dropAddTag: 'dropAddTag',
-  implement: 'implement', issue: 'issue', openIssue: 'openIssue', status: 'status', agentTerminal: 'agentTerminal', accept: 'accept', reopen: 'reopen',
+  implement: 'implement', issue: 'issue', openIssue: 'openIssue', status: 'status', agentTerminal: 'agentTerminal', accept: 'accept', reopen: 'reopen', round: 'round',
   edit: 'edit', remove: 'remove', expand: 'expand', stopRun: 'stopRun', scope: 'scope', clearSearch: 'clearSearch', searchToggle: 'searchToggle',
   allow: 'allow', allowAll: 'allowAll', deny: 'deny', filter: 'filter', foldActive: 'foldActive', clearActive: 'clearActive', clearDone: 'clearDone', settings: 'settings',
+  implementAll: 'implementAll',
 });
 /** How long after the last key a note is saved. */
 const NOTE_SAVE_MS = 400;
@@ -110,7 +122,7 @@ panel.innerHTML = `
       <button class="pane-btn td-pin" data-td="${ACTION.pin}" title="Pin the first line to the terminal’s header">${ICONS.pin}</button>
     </div>
     <div class="td-addbar">
-      <input class="field td-add" spellcheck="false" autocomplete="off" title="A word typed as #tag or :tag: tags the task">
+      <input class="field td-add" spellcheck="false" autocomplete="off" title="Enter adds the task, Ctrl+Enter opens it to add details. A word typed as #tag or :tag: tags the task">
       <button type="button" class="pane-btn td-search-btn" data-td="${ACTION.searchToggle}" title="Search tasks (Ctrl+F)" aria-label="Search tasks" aria-expanded="false">${ICONS.search}</button>
       <button type="button" class="pane-btn td-search-btn td-filter-btn" data-td="${ACTION.filter}" title="Filter by tag" aria-label="Filter by tag" aria-haspopup="listbox">${ICONS.filter}<span class="td-filter-count" hidden></span></button>
     </div>
@@ -162,6 +174,9 @@ let hidingNote = false;
 let editing = null;
 /** @type {string[]} */
 let editTags = [];
+/** The task Ctrl+Enter in the add field made and opened in its editor: Escape there takes it back into the field. */
+/** @type {string | null} */
+let drafted = null;
 /** The task (or its sub-item, by line) an issue is being made from, and what the host said about its repository. */
 /** @type {{ taskId: string, line?: number, title: string, body: string, requestId: string, repo?: string, labels: string[], ticked: string[], error?: string, busy?: boolean, folder: string | null } | null} */
 let issue = null;
@@ -177,6 +192,10 @@ let settled = new Set();
 /** The tasks opened out in their rows (all their details, steps and what the agent said), by id. */
 /** @type {Set<string>} */
 const expanded = new Set();
+/** The tasks Ctrl+click selected, by id: the groups' Implement and Delete act on them instead of all that's shown. Only
+ * tasks shown stay selected. */
+/** @type {Set<string>} */
+const selected = new Set();
 
 const shown = () => listOf(current);
 
@@ -198,7 +217,7 @@ const chip = (tag, on = false) => `<button type="button" class="td-chip${on ? ' 
 function statusButtonHtml(task) {
   const status = statusOf(task);
   const working = agentWorking(task);
-  const name = working ? `${STATUS_NAME[status]}: ${AGENT_COMMAND} is working on it` : STATUS_NAME[status];
+  const name = working ? `${STATUS_NAME[status]}: ${agentWord(task)} is working on it` : STATUS_NAME[status];
   return `<button type="button" class="td-status st-${status}${working ? ' working' : ''}" data-td="${ACTION.status}" title="${name}. Click to change" aria-label="Status: ${name}">${working ? WORKING_ICON : STATUS_ICON[status]}</button>`;
 }
 
@@ -241,7 +260,8 @@ function metaHtml(task) {
 function rowHtml(task, elsewhere) {
   if (task.id === editing) return editorHtml(task);
   const there = elsewhere ? ` data-elsewhere title="In ${escapeHtml(elsewhere)}. Click to open it there"` : ' draggable="true"';
-  return `<div class="td-task st-${statusOf(task)}${task.done ? ' done' : ''}" data-task="${escapeHtml(task.id)}" tabindex="0"${there}>
+  const chosen = !elsewhere && selected.has(task.id);
+  return `<div class="td-task st-${statusOf(task)}${task.done ? ' done' : ''}${chosen ? ' selected' : ''}" data-task="${escapeHtml(task.id)}" tabindex="0"${chosen ? ' aria-selected="true"' : ''}${there}>
     ${statusButtonHtml(task)}
     <div class="td-body"><div class="td-text">${escapeHtml(task.text)}</div>${elsewhere ? '' : aboutHtml(task)}${elsewhere ? `<div class="td-meta"><span class="td-where">${escapeHtml(elsewhere)}</span></div>` : metaHtml(task)}</div>
     ${elsewhere ? '' : actsHtml(task.issue, false)}
@@ -250,15 +270,22 @@ function rowHtml(task, elsewhere) {
   </div>`;
 }
 
+/** The agent on a task, as its command names it (claude, codex). @param {TodoTask} task */
+const agentWord = task => (task.plan ? agentKind(task.plan.by).program : AGENT_COMMAND);
+
 /**
- * Who's working on a task: an agent in a terminal, leading to it, or one out of sight, with Stop.
+ * Who has a task now, in words under its title: the agent working, reviewing or fixing, and who's next (js/todoplan.js). A
+ * hidden run has Stop; an agent in a terminal leads to it.
  * @param {TodoTask} task
  */
 function agentHtml(task) {
-  if (task.run && statusOf(task) === TASK_STATUS.progress) {
-    return `<span class="td-agent td-hidden-run">${AGENT_COMMAND}, silently<button type="button" class="td-stop" data-td="${ACTION.stopRun}" title="Stop it: the task goes back to Open">Stop</button></span>`;
-  }
+  if (statusOf(task) !== TASK_STATUS.progress) return '';
   const tab = task.terminal ? state.tabs.get(task.terminal) : null;
+  const now = task.plan ? stageWords(task.plan, task.stage) : null;
+  const stop = task.run ? `<button type="button" class="td-stop" data-td="${ACTION.stopRun}" title="${tab ? 'Stop the review: the task stays with its terminal' : 'Stop it: the task goes back to Open'}">Stop</button>` : '';
+  const there = tab ? `<button type="button" class="td-agent" data-td="${ACTION.agentTerminal}" data-tab="${escapeHtml(tab.id)}" title="Go to its terminal">in ${escapeHtml(tabTitle(tab))}</button>` : '';
+  if (now) return `<span class="td-agent td-hidden-run td-now">${badgeHtml({ icon: agentKind(now.kind).icon })}<span>${escapeHtml(now.text)}</span>${there}${stop}</span>`;
+  if (task.run) return `<span class="td-agent td-hidden-run">${AGENT_COMMAND}, silently${stop}</span>`;
   return tab ? `<button type="button" class="td-agent" data-td="${ACTION.agentTerminal}" data-tab="${escapeHtml(tab.id)}" title="Go to its terminal">${AGENT_COMMAND} in ${escapeHtml(tabTitle(tab))}</button>` : '';
 }
 
@@ -269,15 +296,41 @@ function agentHtml(task) {
 function askHtml(task) {
   if (!task.ask || statusOf(task) !== TASK_STATUS.progress) return '';
   return `<div class="td-ask">
-    <div class="td-ask-text">${AGENT_COMMAND} ${escapeHtml(task.ask.verb)} <code>${escapeHtml(task.ask.what)}</code></div>
+    <div class="td-ask-text">${agentWord(task)} ${escapeHtml(task.ask.verb)} <code>${escapeHtml(task.ask.what)}</code></div>
     <span class="td-edit-actions"><button type="button" class="btn small" data-td="${ACTION.deny}" title="It goes on without it">Deny</button><button type="button" class="btn small" data-td="${ACTION.allowAll}" title="This, and anything else it asks for until it finishes">Allow all</button><button type="button" class="btn small primary" data-td="${ACTION.allow}">Allow</button></span>
   </div>`;
 }
 
-/** The two ways on from Review (what the agent said is in the task's details, aboutHtml). @param {TodoTask} task */
+/**
+ * The ways on from Review (what the agents said is in the task's details, aboutHtml): back to Open, Review (opens the task
+ * out to read what they said, as its arrow does), Accept, and where its reviewers didn't agree, one more round of fixing
+ * and reviewing.
+ * @param {TodoTask} task
+ */
 function reviewHtml(task) {
   if (statusOf(task) !== TASK_STATUS.review) return '';
-  return `<div class="td-review"><span class="td-edit-actions"><button type="button" class="btn small" data-td="${ACTION.reopen}">Back to open</button><button type="button" class="btn small primary" data-td="${ACTION.accept}">Accept</button></span></div>`;
+  const open = !!task.plan && !!task.review && verdictOf(task.review)?.agreed === false;
+  const round = open ? `<button type="button" class="btn small" data-td="${ACTION.round}" title="What’s still open goes back to ${escapeHtml(agentKind(task.plan?.by).name)}, and the reviewers look again">One more round</button>` : '';
+  const shown = expanded.has(task.id);
+  const read = aboutHtml(task) ? `<button type="button" class="btn small" data-td="${ACTION.expand}" aria-expanded="${shown}" title="${shown ? 'Show less' : 'Read what the agent said'}">Review</button>` : '';
+  return `<div class="td-review"><span class="td-edit-actions"><button type="button" class="btn small" data-td="${ACTION.reopen}">Back to open</button>${read}${round}<button type="button" class="btn small primary" data-td="${ACTION.accept}">Accept</button></span></div>`;
+}
+
+/**
+ * What a task's agents said, in a task opened out: the reviewers' verdict first, then the work's reply and each review, and
+ * the earlier rounds in a line. With nobody reviewing, the reply alone, as before.
+ * @param {NonNullable<TodoTask['review']>} review
+ */
+function saidHtml(review) {
+  const verdict = verdictOf(review);
+  const work = `<b>${escapeHtml(review.by)}:</b> ${escapeHtml(review.summary.trim())}`;
+  if (!verdict) return `<div class="td-result">${work}</div>`;
+  const reviews = (review.reviews ?? []).map(r => `<div class="td-said"><div class="td-by">${badgeHtml({ icon: agentKind(r.kind).icon })}<b>${escapeHtml(agentKind(r.kind).name)}</b> reviewed<span class="td-v ${r.agrees ? 'ok' : 'open'}">${r.agrees ? 'Agrees' : r.count ? `${r.count} open` : 'Doesn’t agree'}</span></div><div class="td-result">${escapeHtml(r.text)}</div></div>`).join('');
+  const earlier = (review.earlier ?? []).length
+    ? `<div class="td-earlier">${(review.earlier ?? []).map(e => `Round ${e.round}: ${e.found ? `${e.found} ${e.found === 1 ? 'finding' : 'findings'}` : 'findings'} went back`).join('. ')}</div>` : '';
+  return `<div class="td-verdict ${verdict.agreed ? 'ok' : 'open'}">${verdict.agreed ? STEP_MARK.done : ''}<b>${escapeHtml(verdict.text)}</b><span>${escapeHtml(verdict.more)}</span></div>
+    <div class="td-said"><div class="td-by">${review.kind ? badgeHtml({ icon: agentKind(review.kind).icon }) : ''}<b>${escapeHtml(review.by)}</b> did the work</div><div class="td-result">${escapeHtml(review.summary.trim())}</div></div>
+    ${reviews}${earlier}`;
 }
 
 /**
@@ -290,7 +343,10 @@ function aboutHtml(task) {
   const lines = detailLines(task.details);
   const notes = lines.filter(line => !line.sub).map(line => line.text).join('\n').trim();
   const steps = lines.filter(line => line.sub);
-  const said = task.review ? `<b>${escapeHtml(task.review.by)}:</b> ${escapeHtml(task.review.summary.trim())}` : '';
+  // Reviewed, its line leads with the verdict; else with what its agent said.
+  const verdict = task.review ? verdictOf(task.review) : null;
+  const said = verdict ? `<b>${escapeHtml(verdict.text)}</b> ${escapeHtml(verdict.more)}`
+    : task.review ? `<b>${escapeHtml(task.review.by)}:</b> ${escapeHtml(task.review.summary.trim())}` : '';
   const first = notes.split('\n')[0] || steps[0]?.text || '';
   const firstHtml = first ? escapeHtml(first) : said.split('\n')[0];
   if (!firstHtml) return '';
@@ -300,7 +356,7 @@ function aboutHtml(task) {
   return `<div class="td-about open">${toggle}<div class="td-about-all">
     ${notes ? `<div class="td-details">${escapeHtml(notes)}</div>` : ''}
     ${steps.map(stepHtml).join('')}
-    ${said ? `<div class="td-result">${said}</div>` : ''}
+    ${task.review ? saidHtml(task.review) : ''}
   </div></div>`;
 }
 
@@ -325,7 +381,18 @@ function stepHtml(line) {
 }
 
 /**
- * A task's buttons: Implement when Claude Code is installed, Edit, Create GitHub issue when the folder's repository is on
+ * Implement's button: off, saying why, when it can't run here.
+ * @param {ListRef} ref
+ */
+function implementButton(ref) {
+  const why = cantImplement(ref);
+  const server = implementPlace(ref)?.server;
+  const title = why || `Implement${server ? ` on ${server}` : ''}: ${planWords(planOf(ref))}. Click to choose and start`;
+  return `<button type="button" class="pane-btn" data-td="${ACTION.implement}" ${why ? 'disabled' : ''} title="${escapeHtml(title)}">${ICONS.play}</button>`;
+}
+
+/**
+ * A task's buttons: Implement when Claude Code is installed or the list's terminal is on an SSH host, Edit, Create GitHub issue when the folder's repository is on
  * GitHub and there's no issue yet, and Delete. A step has Implement and Create GitHub issue only.
  * @param {{ url: string, number: number } | undefined} issue
  * @param {boolean} isStep
@@ -334,7 +401,7 @@ function actsHtml(issue, isStep) {
   const folder = folderOfList();
   const canIssue = !issue && !!folder && isOnGitHub(folder);
   return `<span class="td-acts">
-    ${agentInstalled() ? `<button type="button" class="pane-btn" data-td="${ACTION.implement}" ${folder ? '' : 'disabled'} title="${folder ? 'Implement: Claude Code works on it, in a new terminal or silently' : 'Implement needs a folder on this computer'}">${ICONS.play}</button>` : ''}
+    ${current && offersImplement(current) ? implementButton(current) : ''}
     ${isStep ? '' : `<button type="button" class="pane-btn" data-td="${ACTION.edit}" title="Edit">${ICONS.rename}</button>`}
     ${canIssue ? `<button type="button" class="pane-btn" data-td="${ACTION.issue}" title="Create GitHub issue">${ICONS.git}</button>` : ''}
     ${isStep ? '' : `<button type="button" class="pane-btn" data-td="${ACTION.remove}" title="Delete">${ICONS.trash}</button>`}
@@ -391,20 +458,46 @@ function listHtml(list) {
   const empty = !list.tasks.length ? `<p class="td-empty">${list.note ? 'No tasks. Right-click the note to turn its lines into tasks.' : 'Nothing here yet.'}</p>` : '';
   const showActive = !state.todo.hideActive;
   // Active counts those not done; one done while the list is shown stays in it, ticked, until it's shown again.
-  const active = main.length ? foldHtml('Active', main.filter(task => !task.done).length, showActive, ACTION.foldActive, ACTION.clearActive, 'Clear active tasks') : '';
-  const fold = done.length ? foldHtml(STATUS_NAME[TASK_STATUS.done], done.length, !!state.todo.showDone, ACTION.fold, ACTION.clearDone, 'Clear done tasks') : '';
+  const activeActs = `${current && offersImplement(current) ? implementAllHtml(current) : ''}${clearHtml(false)}`;
+  const active = main.length ? foldHtml('Active', main.filter(task => !task.done).length, showActive, ACTION.foldActive, activeActs) : '';
+  const fold = done.length ? foldHtml(STATUS_NAME[TASK_STATUS.done], done.length, !!state.todo.showDone, ACTION.fold, clearHtml(true)) : '';
   return `${empty}${active}${showActive ? main.map(t => rowHtml(t)).join('') : ''}${fold}${state.todo.showDone ? done.map(t => rowHtml(t)).join('') : ''}`;
 }
 
 /**
- * A group's header (Active, Done): its fold, how many it has, and its clear button at the end on hover.
- * @param {string} name @param {number} count @param {boolean} open @param {string} fold @param {string} clear @param {string} clearLabel
+ * A group's header (Active, Done): its fold, how many it has, and its buttons at the end on hover.
+ * @param {string} name @param {number} count @param {boolean} open @param {string} fold @param {string} acts
  */
-function foldHtml(name, count, open, fold, clear, clearLabel) {
+function foldHtml(name, count, open, fold, acts) {
   return `<div class="td-fold-row">
     <button class="td-fold" data-td="${fold}" aria-expanded="${open}">${open ? ICONS.chevronDown : ICONS.chevronRight}${name}<span class="td-fold-count">${count}</span></button>
-    <button type="button" class="pane-btn td-fold-clear" data-td="${clear}" title="${clearLabel}" aria-label="${clearLabel}"${count ? '' : ' disabled'}>${ICONS.trash}</button>
+    ${acts}
   </div>`;
+}
+
+/**
+ * A group's Delete button: the tasks selected in it, or else all it shows.
+ * @param {boolean} done Done's, or Active's
+ */
+function clearHtml(done) {
+  const count = clearable(done).length;
+  const kind = done ? 'done' : 'active';
+  const label = !selected.size ? `Clear ${kind} tasks`
+    : count ? `Delete the ${count === 1 ? `selected ${kind} task` : `${count} selected ${kind} tasks`}` : `No ${kind} task is selected`;
+  return `<button type="button" class="pane-btn td-fold-clear" data-td="${done ? ACTION.clearDone : ACTION.clearActive}" title="${label}" aria-label="${label}"${count ? '' : ' disabled'}>${ICONS.trash}</button>`;
+}
+
+/**
+ * Active's Implement button: an agent on each open task selected, or else on each open task it shows. Off, saying why, when
+ * it can't run here or there's none.
+ * @param {ListRef} ref
+ */
+function implementAllHtml(ref) {
+  const why = cantImplement(ref);
+  const count = toImplement().length;
+  const which = selected.size ? 'selected' : 'shown';
+  const title = why || (count ? `Implement the ${count === 1 ? 'open task' : `${count} open tasks`} ${which}, one agent on each. Click to choose and start` : `No open task ${which} to implement`);
+  return `<button type="button" class="pane-btn td-fold-clear" data-td="${ACTION.implementAll}" ${why || !count ? 'disabled' : ''} title="${escapeHtml(title)}" aria-label="Implement all">${ICONS.play}</button>`;
 }
 
 /** @typedef {import('./todo.js').TodoList} TodoList */
@@ -413,6 +506,15 @@ function foldHtml(name, count, open, fold, clear, clearLabel) {
 function fitNote() {
   noteArea.style.height = 'auto';
   noteArea.style.height = `${Math.min(noteArea.scrollHeight, NOTE_MAX_ROWS * NOTE_LINE_PX + NOTE_PADDING_PX)}px`;
+}
+
+/** The edited task's details box as tall as its text, when there is one shown. */
+function fitDetails() {
+  const box = /** @type {HTMLTextAreaElement | null} */ (listEl.querySelector(EDIT_DETAILS));
+  if (!box || !box.isConnected || !box.offsetParent) return;
+  const borders = box.offsetHeight - box.clientHeight;
+  box.style.height = 'auto';
+  box.style.height = `${box.scrollHeight + borders}px`;
 }
 
 /** @param {TodoList} list */
@@ -456,6 +558,7 @@ function render() {
     pickIcon.innerHTML = '';
     listEl.innerHTML = '';
     noteButton.hidden = true;
+    selected.clear();
     return;
   }
   showPick(list);
@@ -463,8 +566,10 @@ function render() {
   renderNote(list);
   const tags = tagsIn(list.tasks);
   picked = picked.filter(t => tags.some(([tag]) => tag === t));
+  keepSelectedShown(list);
   showFilter();
   listEl.innerHTML = listHtml(list);
+  fitDetails();
   showSearch();
   find(panel, `[data-td="${ACTION.pick}"]`).title = `Pick a list. This one has ${openCount(list.tasks)} open`;
   if (issue) renderIssue(list);
@@ -509,7 +614,7 @@ function closeSearch(refocus) {
 
 // ---- Filtering by tag ----
 
-/** A tag, or Show every task, in the filter's list. */
+/** A tag, or Clear filter, in the filter's list. */
 const FILTER_ROW = '.tp-row';
 /** The filter's list of tags while it's open. */
 /** @type {HTMLElement | null} */
@@ -525,8 +630,8 @@ function showFilter() {
 }
 
 /**
- * The filter's list: the tags of this list's open tasks, ticked when picked, with how many tasks have each; and the way
- * back to every task while some are picked.
+ * The filter's list: Clear filter on top while some tags are picked, then the tags of this list's open tasks, ticked
+ * when picked, with how many tasks have each.
  * @param {HTMLElement} popover
  */
 function drawFilter(popover) {
@@ -536,8 +641,8 @@ function drawFilter(popover) {
       <span class="check${picked.includes(tag) ? ' on' : ''}"><svg viewBox="0 0 12 12"><path d="M2.5 6.5l2.5 2.5 4.5-5.5"/></svg></span>
       <span class="td-chip" ${chipStyle(tag)}>${escapeHtml(tag)}</span><span class="tp-count">${count}</span>
     </button>`);
-  const clear = picked.length ? `<div class="tp-sep"></div><button type="button" class="tp-row" data-clear><span class="menu-icon">${ICONS.close}</span>Show every task</button>` : '';
-  body.innerHTML = rows.join('') + clear || '<div class="tp-empty">No open task in this list has a tag</div>';
+  const clear = picked.length ? `<button type="button" class="tp-row" data-clear><span class="menu-icon">${ICONS.close}</span>Clear filter</button>${rows.length ? '<div class="tp-sep"></div>' : ''}` : '';
+  body.innerHTML = clear + rows.join('') || '<div class="tp-empty">No open task in this list has a tag</div>';
 }
 
 /**
@@ -622,6 +727,7 @@ function openList(ref) {
     editing = null;
     issue = null;
     settled = new Set();
+    selected.clear();
   }
   current = ref;
   state.todo.list = ref;
@@ -827,15 +933,19 @@ function saveEdit() {
   const details = /** @type {HTMLTextAreaElement} */ (find(row, '.td-edit-details')).value.trim();
   const id = editing;
   editing = null;
+  drafted = null;
   updateTask(list.ref, id, { text, details: details || undefined, tags: editTags.length ? [...editTags] : undefined });
 }
 
-/** @param {string} id */
-function beginEdit(id) {
+/**
+ * @param {string} id
+ * @param {boolean} [toDetails] the caret goes in the details box instead of the title
+ */
+function beginEdit(id, toDetails = false) {
   editing = id;
   editTags = [...(taskById(id)?.tags ?? [])];
   render();
-  /** @type {HTMLInputElement | null} */ (listEl.querySelector(EDIT_TEXT))?.focus();
+  /** @type {HTMLInputElement | HTMLTextAreaElement | null} */ (listEl.querySelector(toDetails ? EDIT_DETAILS : EDIT_TEXT))?.focus();
 }
 
 /** Draws the edited task's tags again; the rest of its form stays as typed. */
@@ -1054,12 +1164,14 @@ function statusMenu(task, at) {
 }
 
 /**
- * Review's Accept: the task goes to Done at once, saying so, with Undo back to Review.
+ * Review's Accept: the task goes to Done at once, folded (even if Review opened it out to read), saying so, with Undo back
+ * to Review.
  * @param {TodoTask} task
  */
 function acceptTask(task) {
   const ref = current;
   if (!ref) return;
+  expanded.delete(task.id);
   setStatus(ref, task.id, TASK_STATUS.done, { review: task.review });
   showToast({
     text: `“${task.text}” moved to Done`, state: TOAST.done,
@@ -1081,24 +1193,33 @@ function changeStatus(task, status) {
 }
 
 /**
- * Implement's two ways: in a new terminal, where you can watch and answer it, or Silent, as a schedule's agent runs.
+ * Implement's card (js/todocard.js): who does the work, who reviews it, and whether it's in a new terminal, where you can watch
+ * and answer it, or silent, as a schedule's agent runs. Start runs it; ticked to, it also keeps the choice as this list's.
  * @param {HTMLElement} at
  * @param {TodoTask} task
  * @param {import('./todolist.js').DetailLine} [step]
  */
-function implementMenu(at, task, step) {
+function implementCard(at, task, step) {
   const ref = current;
   if (!ref) return;
-  const asks = state.todo.allowAll ? 'gets whatever else it asks for (To do settings)' : 'asks in the task’s row for anything else';
-  showMenu([
-    { label: 'In a new terminal', icon: ICONS.terminal, title: 'Claude Code starts in a new terminal in this list’s folder, where you can watch it and answer it', action: () => implementTask(ref, task, step) },
-    {
-      label: 'Silent', icon: ICONS.play, title: `Nobody is watching: Claude Code works in a hidden shell, changes files without asking and ${asks}. The task goes to Review with its reply`,
-      action: () => {
-        if (!implementSilently(ref, task, step)) showToast({ text: 'Claude Code can’t start silently here: this list needs a folder on this computer', state: TOAST.failed });
-      },
+  openImplementCard(at, {
+    title: step?.text ?? task.text, plan: planOf(ref), agents: agentsFor(ref), reviewers: reviewersAt(ref),
+    // A list with no plan of its own yet keeps its first one, unless that's unticked.
+    keep: !hasOwnPlan(ref), where: implementPlace(ref)?.server ?? undefined,
+    start: (plan, keep) => {
+      if (keep) keepPlan(ref, plan);
+      const now = findTask(task.id)?.task ?? task;
+      if (!implement(ref, now, step, plan).started) showToast({ text: `${agentKind(plan.by).name} can’t start here. ${cantImplement(ref)}`, state: TOAST.failed });
     },
-  ], at);
+  });
+}
+
+/**
+ * One more round for a task in Review whose reviewers didn't agree.
+ * @param {TodoTask} task
+ */
+function moreRounds(task) {
+  if (current && !anotherRound(current, task)) showToast({ text: `It can’t go another round here. ${cantImplement(current)}`, state: TOAST.failed });
 }
 
 /**
@@ -1153,16 +1274,38 @@ function deleteTask(task) {
 const visibleTasks = list => withTags(list.tasks, picked).filter(task => !query || taskMatches(task, query));
 
 /**
- * This list's active tasks (open, in progress, in review) or its done ones, of those shown.
+ * Drops from the selection what isn't shown any more (filtered out, searched away, deleted, another list).
+ * @param {TodoList} list
+ */
+function keepSelectedShown(list) {
+  if (!selected.size) return;
+  const ids = new Set(visibleTasks(list).map(task => task.id));
+  for (const id of selected) if (!ids.has(id)) selected.delete(id);
+}
+
+/** The tasks selected, in the list's order. */
+function selectedTasks() {
+  const list = shown();
+  return list && selected.size ? visibleTasks(list).filter(task => selected.has(task.id)) : [];
+}
+
+/**
+ * This list's active tasks (open, in progress, in review) or its done ones: those selected, or with none selected, all those
+ * shown.
  * @param {boolean} done
  */
 function clearable(done) {
   const list = shown();
-  return list ? visibleTasks(list).filter(task => !!task.done === done) : [];
+  if (!list) return [];
+  return (selected.size ? selectedTasks() : visibleTasks(list)).filter(task => !!task.done === done);
 }
 
+/** The open tasks Implement all starts an agent on: those selected, or with none selected, all those shown. */
+const toImplement = () => clearable(false).filter(task => statusOf(task) === TASK_STATUS.open);
+
 /**
- * Clear active tasks and Clear done tasks, for the list's right-click menus: greyed out when there's none.
+ * Clear active tasks and Clear done tasks, for the list's right-click menus: greyed out when there's none. With tasks
+ * selected, they delete the selected ones.
  * @returns {import('./popups.js').MenuItem[]}
  */
 function clearItems() {
@@ -1172,57 +1315,139 @@ function clearItems() {
     const count = clearable(done).length;
     return {
       label, icon: ICONS.trash, hint: count ? String(count) : '', disabled: !count,
-      title: `Deletes this list’s ${done ? 'done' : 'open, in progress and in review'} tasks${narrowed ? ' that are shown' : ''}, with Undo`,
+      title: `Deletes this list’s ${done ? 'done' : 'open, in progress and in review'} tasks${selected.size ? ' that are selected' : narrowed ? ' that are shown' : ''}, with Undo`,
       action: () => void clearTasks(done),
     };
   };
-  return [item(false, 'Clear active tasks'), item(true, 'Clear done tasks')];
+  return selected.size
+    ? [item(false, 'Delete selected active tasks'), item(true, 'Delete selected done tasks')]
+    : [item(false, 'Clear active tasks'), item(true, 'Clear done tasks')];
 }
 
 /**
- * Which active tasks to clear: when some are in progress, the user says whether to keep those (the rest go) or clear them
- * all. Null when cancelled.
+ * Implement all, on Active's header: the card to choose who does the work, then the open tasks selected (or shown) listed
+ * with their tags to confirm, then an agent on each.
+ * @param {HTMLElement} at
+ */
+function implementAll(at) {
+  const ref = current;
+  if (!ref || !toImplement().length) return;
+  openImplementCard(at, {
+    title: tasksWord(toImplement().length), plan: planOf(ref), agents: agentsFor(ref), reviewers: reviewersAt(ref),
+    keep: !hasOwnPlan(ref), where: implementPlace(ref)?.server ?? undefined,
+    start: async (plan, keep) => {
+      const tasks = toImplement();
+      const left = clearable(false).length - tasks.length;
+      if (!tasks.length || !await confirmImplement({ tasks, by: agentKind(plan.by).name, left })) return;
+      if (keep) keepPlan(ref, plan);
+      // As they are now: they can change while the question is up.
+      const now = tasks.flatMap(task => findTask(task.id)?.task ?? []).filter(task => statusOf(task) === TASK_STATUS.open);
+      const failed = now.filter(task => !implement(ref, task, undefined, plan).started).length;
+      selected.clear();
+      render();
+      if (failed) showToast({ text: `${agentKind(plan.by).name} couldn’t start on ${tasksWord(failed)}. ${cantImplement(ref)}`, state: TOAST.failed });
+    },
+  });
+}
+
+/**
+ * Selects a task, or takes it out of the selection (Ctrl+click).
+ * @param {string} id
+ */
+function toggleSelected(id) {
+  if (!selected.delete(id)) selected.add(id);
+  render();
+  /** @type {HTMLElement | null} */ (listEl.querySelector(`[data-task="${CSS.escape(id)}"]`))?.focus();
+}
+
+/** Nothing selected any more. Whether there was something. */
+function clearSelection() {
+  if (!selected.size) return false;
+  selected.clear();
+  render();
+  return true;
+}
+
+/** Deletes every task selected, active and done, with Undo (the Delete key on one of them). */
+function deleteSelected() {
+  const tasks = selectedTasks();
+  if (current && tasks.length) dropTasks(current, tasks, `Deleted ${tasksWord(tasks.length)}`);
+}
+
+/**
+ * Which active tasks to clear, always asked first: when some are in progress, the user says whether to keep those (the rest
+ * go) or clear them all. Null when cancelled.
  * @param {TodoTask[]} tasks
+ * @param {boolean} mine the selected ones, not all those shown
  * @returns {Promise<TodoTask[] | null>}
  */
-async function activeToClear(tasks) {
+async function activeToClear(tasks, mine) {
   const busy = tasks.filter(task => statusOf(task) === TASK_STATUS.progress);
-  if (!busy.length) return tasks;
+  if (!tasks.length) return tasks;
+  if (!busy.length) return await confirmClear(tasks, mine) ? tasks : null;
   const others = tasks.length - busy.length;
   const one = busy.length === 1;
   const working = busy.some(task => task.run || agentWorking(task));
   const answer = await choiceDialog({
     title: one ? 'A task is in progress' : `${busy.length} tasks are in progress`,
-    body: `${one ? `“${busy[0].text}” is` : 'They are'} in progress${working ? `, and ${AGENT_COMMAND} is working on ${one ? 'it' : 'some'}` : ''}. `
+    body: `${one ? `“${busy[0].text}” is` : 'They are'} in progress${working ? `, and an agent is working on ${one ? 'it' : 'some'}` : ''}. `
       + (others ? `Keep ${one ? 'it' : 'them'} and clear the other ${others === 1 ? 'task' : `${others} tasks`}, or clear all ${tasks.length}?` : `Clear ${one ? 'it' : 'them'} too?`)
       + (busy.some(task => task.run) ? ' A silent run is stopped.' : ''),
     keep: others ? `Keep ${one ? 'it' : 'them'}` : undefined,
-    danger: others ? 'Clear all' : 'Clear',
+    danger: others ? 'Clear all' : CLEAR_WORD.shown,
   });
   if (answer === CHOICE.keep) return tasks.filter(task => !busy.includes(task));
   return answer === CHOICE.danger ? tasks : null;
 }
 
 /**
- * Deletes this list's active tasks, or its done ones (those shown), with Undo. Those running out of sight are stopped first.
- * Clearing active ones asks first when some are in progress.
+ * Asks before active tasks with none in progress are cleared.
+ * @param {TodoTask[]} tasks
+ * @param {boolean} mine
+ */
+function confirmClear(tasks, mine) {
+  const one = tasks.length === 1;
+  const what = `${one ? 'the' : tasks.length} ${mine ? 'selected ' : ''}active ${one ? 'task' : 'tasks'}`;
+  const word = mine ? CLEAR_WORD.mine : CLEAR_WORD.shown;
+  return confirmDialog({
+    title: `${word} ${what}?`,
+    body: `${one ? `“${tasks[0].text}” is` : 'They are'} deleted from this list. Undo in the notice brings ${one ? 'it' : 'them'} back.`,
+    confirm: word,
+  });
+}
+
+/**
+ * Deletes this list's active tasks, or its done ones (those selected, or else those shown), with Undo. Those running out of
+ * sight are stopped first. Clearing active ones always asks first (activeToClear).
  * @param {boolean} done
  */
 async function clearTasks(done) {
   const ref = current;
   if (!ref || !shown()) return;
-  const chosen = done ? clearable(done) : await activeToClear(clearable(done));
-  // The list as it is now: it can change while the question is up.
+  const mine = selected.size > 0;
+  const chosen = done ? clearable(done) : await activeToClear(clearable(done), mine);
+  if (chosen?.length) dropTasks(ref, chosen, `${mine ? 'Deleted' : 'Cleared'} ${chosen.length} ${mine ? 'selected ' : ''}${done ? 'done' : 'active'} ${chosen.length === 1 ? 'task' : 'tasks'}`);
+}
+
+/**
+ * Deletes tasks from a list, with Undo that puts them back where they were. Those running out of sight are stopped first.
+ * @param {ListRef} ref
+ * @param {TodoTask[]} chosen
+ * @param {string} text the toast's
+ */
+function dropTasks(ref, chosen, text) {
+  // The list as it is now: it can change while a question is up.
   const list = listOf(ref);
-  if (!chosen || !list) return;
+  if (!list) return;
   const gone = new Set(chosen.map(task => task.id));
   if (!gone.size) return;
+  for (const id of gone) selected.delete(id);
   // Each with where it was, to put it back there; one that was running comes back Open: its run is gone.
   const kept = list.tasks.flatMap((task, at) => (gone.has(task.id) ? [{ at, task: task.run ? { ...task, run: undefined, status: undefined } : task }] : []));
   for (const task of list.tasks) if (gone.has(task.id) && task.run) stopRun(task);
   reorderTasks(ref, tasks => void tasks.splice(0, tasks.length, ...tasks.filter(task => !gone.has(task.id))));
   showToast({
-    text: `Cleared ${gone.size} ${done ? 'done' : 'active'} ${gone.size === 1 ? 'task' : 'tasks'}`, state: TOAST.done,
+    text, state: TOAST.done,
     action: {
       label: UNDO,
       run: () => void (listOf(ref) && reorderTasks(ref, tasks => {
@@ -1326,7 +1551,8 @@ function stepOf(control, task) {
 const ON_TASK = Object.freeze({
   [ACTION.edit]: (_control, task) => beginEdit(task.id),
   [ACTION.remove]: (_control, task) => deleteTask(task),
-  [ACTION.implement]: (control, task) => implementMenu(control, task, stepOf(control, task)),
+  [ACTION.implement]: (control, task) => implementCard(control, task, stepOf(control, task)),
+  [ACTION.round]: (_control, task) => moreRounds(task),
   [ACTION.issue]: (control, task) => beginIssue(task, stepOf(control, task)),
   [ACTION.status]: (control, task) => statusMenu(task, control),
   [ACTION.accept]: (_control, task) => acceptTask(task),
@@ -1411,6 +1637,7 @@ function panelAct(control) {
       return render();
     case ACTION.clearDone: return void clearTasks(true);
     case ACTION.clearActive: return void clearTasks(false);
+    case ACTION.implementAll: return implementAll(control);
     case ACTION.scope:
     case ACTION.searchToggle:
     case ACTION.clearSearch: return searchAct(control);
@@ -1447,6 +1674,15 @@ panel.addEventListener('click', e => {
   const away = /** @type {HTMLElement | null} */ (targetOf(e).closest(ELSEWHERE));
   const found = away && findTask(/** @type {string} */ (away.dataset.task));
   if (found) return openList(found.ref);
+  // Ctrl+click (Cmd+click on a Mac) on a task selects it, or takes it out; a plain click on one ends the selection.
+  const row = /** @type {HTMLElement | null} */ (targetOf(e).closest(TASK));
+  if (row && !targetOf(e).closest(ROW_CONTROL)) {
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      return toggleSelected(/** @type {string} */ (row.dataset.task));
+    }
+    if (clearSelection()) return undefined;
+  }
   const control = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-td]'));
   if (control) act(control);
   return undefined;
@@ -1461,6 +1697,10 @@ listEl.addEventListener('mousedown', e => {
 listEl.addEventListener('dblclick', e => {
   const row = /** @type {HTMLElement | null} */ (targetOf(e).closest(TASK));
   if (row && !row.matches(ELSEWHERE) && !startedOnControl && !targetOf(e).closest(ROW_CONTROL)) beginEdit(/** @type {string} */ (row.dataset.task));
+});
+
+listEl.addEventListener('input', e => {
+  if (targetOf(e).matches(EDIT_DETAILS)) fitDetails();
 });
 
 listEl.addEventListener('contextmenu', e => {
@@ -1561,8 +1801,27 @@ addField.addEventListener('keydown', e => {
   addField.value = '';
   addTags = [];
   renderAddTags();
-  addTasks(current, [task]);
+  const [id] = addTasks(current, [task]);
+  // Ctrl+Enter opens the new task in its editor, its title and tags as typed, the caret in its details; Escape there takes it back.
+  if (id && (e.ctrlKey || e.metaKey)) {
+    drafted = id;
+    beginEdit(id, true);
+  }
 });
+
+/** Escape on a task Ctrl+Enter just made: it goes, and its title and tags go back in the add field. */
+function undraft() {
+  const task = drafted && editing === drafted ? taskById(drafted) : null;
+  drafted = null;
+  if (!task || !current) return false;
+  editing = null;
+  removeTask(current, task.id);
+  addField.value = task.text;
+  addTags = [...(task.tags ?? [])];
+  renderAddTags();
+  addField.focus();
+  return true;
+}
 
 // Lines pasted are a task each; one line is left to the field, to be edited first.
 addField.addEventListener('paste', e => {
@@ -1599,6 +1858,7 @@ listEl.addEventListener('keydown', e => {
   if (!editing) return;
   if (e.key === 'Escape') {
     e.stopPropagation();
+    if (undraft()) return;
     editing = null;
     render();
   } else if (e.key === 'Enter' && (e.ctrlKey || !targetOf(e).matches('textarea'))) {
@@ -1610,7 +1870,8 @@ listEl.addEventListener('keydown', e => {
 issueForm.addEventListener('submit', e => e.preventDefault());
 
 /**
- * Keys on a task: Space opens it out or folds it, Enter edits it, Delete deletes it, and the arrows go up and down.
+ * Keys on a task: Space opens it out or folds it, Enter edits it, Delete deletes it (every task selected, when it's one of
+ * them), Escape ends the selection, and the arrows go up and down.
  * @param {KeyboardEvent} e
  * @param {HTMLElement} row
  */
@@ -1619,7 +1880,15 @@ function rowKey(e, row) {
   if (!task) return;
   if (e.key === ' ') toggleExpanded(task);
   else if (e.key === 'Enter') beginEdit(task.id);
-  else if (e.key === 'Delete') deleteTask(task);
+  else if (e.key === 'Delete') {
+    if (selected.has(task.id)) deleteSelected();
+    else deleteTask(task);
+  } else if (e.key === 'Escape' && selected.size) {
+    e.stopPropagation();
+    const id = task.id;
+    clearSelection();
+    /** @type {HTMLElement | null} */ (listEl.querySelector(`[data-task="${CSS.escape(id)}"]`))?.focus();
+  }
   else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
     const rows = [...listEl.querySelectorAll(TASK)];
     /** @type {HTMLElement | undefined} */ (rows[rows.indexOf(row) + (e.key === 'ArrowDown' ? 1 : -1)])?.focus();

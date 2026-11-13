@@ -1,9 +1,10 @@
 // @ts-check
 // Small markup helpers shared by the header, sidebar and search.
 
-import { BADGES, PROFILE_SOURCES, state, tagColor, profileOf, runsClaude, sourceOf } from './store.js';
+import { BADGES, PROFILE_SOURCES, state, tagColor, profileOf, runningAgent, sourceOf } from './store.js';
 import { DAY_MS, WEEK_DAYS } from './util.js';
 import { PROFILE_ICON } from './constants.js';
+import { agentKind } from './agentkinds.js';
 import { RETURN_ICON } from './windows.js';
 
 /** The class of a badge at its usual size, in lists and headers. */
@@ -95,12 +96,13 @@ export const ltrPath = path => `‎${path ?? ''}‎`;
  * A profile's badge: the short mark of its icon.
  * @param {{ icon?: string } | null | undefined} profile
  * @param {string} [extraClass]
+ * @param {string} [title] its tooltip
  */
-export function badgeHtml(profile, extraClass = BADGE_SIZE.small) {
+export function badgeHtml(profile, extraClass = BADGE_SIZE.small, title) {
   const icon = profile?.icon ?? '';
-  if (icon === PROFILE_ICON.claude) return claudeBadge(extraClass);
+  if (agentMarkHtml(icon, extraClass)) return agentBadge(icon, extraClass, title);
   const word = /** @type {Record<string, string>} */ (PIXEL_WORDS)[icon];
-  return `<span class="badge ${extraClass}" data-icon="${escapeHtml(icon)}">${word ? pixelWord(word, extraClass === BADGE_SIZE.small)
+  return `<span class="badge ${extraClass}" data-icon="${escapeHtml(icon)}"${title ? ` title="${escapeHtml(title)}"` : ''}>${word ? pixelWord(word, extraClass === BADGE_SIZE.small)
     : `<span class="badge-text">${escapeHtml(/** @type {Record<string, string>} */ (BADGES)[icon] ?? '>_')}</span>`}</span>`;
 }
 
@@ -148,29 +150,77 @@ function pixelWord(word, small) {
   return `<svg class="badge-word" viewBox="0 0 ${width} ${rows}" width="${width}" height="${rows}" shape-rendering="crispEdges" aria-label="${word}"><path fill="currentColor" stroke="none" d="${d}"/></svg>`;
 }
 
+/**
+ * A picture of whole pixels ('#' for one), as an SVG at its own size, which keeps it sharp.
+ * @param {string[]} rows
+ */
+function pixelPicture(rows) {
+  let d = '';
+  rows.forEach((row, y) => [...row].forEach((p, x) => {
+    if (p === '#') d += `M${x} ${y}h1v1h-1z`;
+  }));
+  const [w, h] = [rows[0].length, rows.length];
+  return `<svg class="badge-mark" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" shape-rendering="crispEdges"><path fill="currentColor" stroke="none" d="${d}"/></svg>`;
+}
+
+/**
+ * OpenAI's knot for Codex, drawn in whole pixels from its logo: 14 for the small badge's 16 inside, 18 for the
+ * others' 24 and 26 (even sizes sit exactly in the middle).
+ */
+const CODEX_SMALL = [
+  '....####......', '...##..#####..', '..##..##..###.', '.###.##..#..#.', '##.#.#.######.', '#..#.####..##.', '#..#.#..###.##',
+  '##.###..#.#..#', '.##..####.##.#', '.######.#.####', '.#..#..##.###.', '.##...##..##..', '..#####..##...', '......####....',
+];
+const CODEX_LARGE = [
+  '......####........', '.....##..#####....', '....##...######...', '...##..###....##..', '.####.##...#...##.',
+  '.#.##.#...####..#.', '##.##.#.##...####.', '#..##.##..##...##.', '#..##.#....###..##', '##..###....#.##.##',
+  '.##...##..##.##..#', '.####...##.#.##.##', '.#..####...#.##.#.', '.##...#...##.####.', '..#.....###..##...',
+  '...######....#....', '....#####...#.....', '........####......',
+];
+
+/**
+ * Each agent's mark on its badge, by its icon (agentkinds.js): one the agent added there needs one here too.
+ * @type {Record<string, (small: boolean) => string>}
+ */
+const AGENT_MARKS = {
+  [PROFILE_ICON.claude]: () => CLAUDE_MARK,
+  [PROFILE_ICON.codex]: small => pixelPicture(small ? CODEX_SMALL : CODEX_LARGE),
+};
+
+/**
+ * An agent's mark for a badge, or '' for an icon that isn't an agent's.
+ * @param {string} icon
+ * @param {string} [extraClass] the badge's size
+ */
+export const agentMarkHtml = (icon, extraClass = BADGE_SIZE.small) => AGENT_MARKS[icon]?.(extraClass === BADGE_SIZE.small) ?? '';
+
 // A spark for Claude Code: straight bars on whole pixels (sharp at 12px), diagonal ones for the other rays.
 const CLAUDE_MARK = '<svg viewBox="0 0 12 12"><g fill="currentColor" stroke="none"><rect x="5" y="0" width="2" height="12" rx="1"/>'
   + '<rect x="0" y="5" width="12" height="2" rx="1"/><rect x="5" y="0.5" width="2" height="11" rx="1" transform="rotate(45 6 6)"/>'
   + '<rect x="5" y="0.5" width="2" height="11" rx="1" transform="rotate(-45 6 6)"/></g></svg>';
 
 /**
- * A terminal's badge: its shell's, or Claude's while Claude Code runs in it (back to the shell's when it exits).
- * Another computer's terminal shows what that computer says runs in it.
+ * A terminal's badge: its shell's, or the agent's while one runs in it, whatever terminal it started in (back to the
+ * shell's when it exits). Another computer's terminal shows what that computer says runs in it.
  * @param {Tab} tab
  * @param {string} [extraClass]
  */
 export function tabBadgeHtml(tab, extraClass = BADGE_SIZE.small) {
   if (tab.virtual?.icon) return badgeHtml({ icon: tab.virtual.icon }, extraClass);
-  return runsClaude(tab) ? claudeBadge(extraClass, 'Claude Code is running here') : badgeHtml(profileOf(tab), extraClass);
+  const agent = runningAgent(tab);
+  if (!agent) return badgeHtml(profileOf(tab), extraClass);
+  const { icon, name } = agentKind(agent);
+  return agentBadge(icon, extraClass, `${name} is running here`);
 }
 
 /**
- * Claude's badge: a Claude Code terminal, or one Claude runs in.
+ * An agent's badge: its terminal profile's (Claude Code, Codex), or a terminal it runs in.
+ * @param {string} icon
  * @param {string} extraClass
  * @param {string} [title]
  */
-function claudeBadge(extraClass, title) {
-  return `<span class="badge ${extraClass}" data-icon="${PROFILE_ICON.claude}"${title ? ` title="${title}"` : ''}>${CLAUDE_MARK}</span>`;
+function agentBadge(icon, extraClass, title) {
+  return `<span class="badge ${extraClass}" data-icon="${icon}"${title ? ` title="${escapeHtml(title)}"` : ''}>${agentMarkHtml(icon, extraClass)}</span>`;
 }
 
 /**
@@ -267,7 +317,7 @@ export const ICONS = {
   sun: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.8"/><path d="M8 1.8v1.4M8 12.8v1.4M1.8 8h1.4M12.8 8h1.4M3.6 3.6l1 1M11.4 11.4l1 1M3.6 12.4l1-1M11.4 4.6l1-1"/></svg>',
   moon: '<svg viewBox="0 0 16 16"><path d="M13 9.6A5.5 5.5 0 0 1 6.4 3 5.5 5.5 0 1 0 13 9.6z"/></svg>',
   /** A speech bubble with a prompt's chevron: what you asked an agent. */
-  prompts: '<svg viewBox="0 0 16 16"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/><path d="M5.5 5.5l2 1.5-2 1.5M8.5 8.5h2"/></svg>',
+  prompts: '<svg viewBox="0 0 16 16"><path d="M2.5 2.5h11v8h-6l-3 2.5v-2.5h-2z"/><path d="M5.5 5.5h5M5.5 7.5h3"/></svg>',
   /** Braces: a snippet (as on termilly.com). */
   snippet: '<svg viewBox="0 0 16 16"><path d="M6.5 2.5h-1a1 1 0 0 0-1 1v3L3 8l1.5 1.5v3a1 1 0 0 0 1 1h1M9.5 2.5h1a1 1 0 0 1 1 1v3L13 8l-1.5 1.5v3a1 1 0 0 1-1 1h-1"/></svg>',
   /** A lightning bolt: an action (as on termilly.com). */
@@ -300,3 +350,6 @@ export function formatWhen(ms) {
   if (days < WEEK_DAYS) return `${d.toLocaleDateString(undefined, { weekday: 'short' })} ${time}`;
   return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 }
+
+/** What a button or a toast says once something is on the clipboard. */
+export const COPIED = 'Copied';

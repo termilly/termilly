@@ -35,6 +35,15 @@ public sealed class PortsTests
     }
 
     [Fact]
+    public void An_agents_own_ports_are_left_out_but_what_it_starts_is_not()
+    {
+        // 11 is Codex in terminal t1, listening for itself; 12 is a dev server it started.
+        var owners = new Dictionary<int, string> { [10] = "t1", [11] = "t1", [12] = "t1" };
+        var ports = ListeningPorts.ByTerminal([(11, 61925), (12, 5173), (10, 3000)], owners, pid => pid == 11);
+        Assert.Equal([3000, 5173], ports["t1"]);
+    }
+
+    [Fact]
     public void Processes_started_from_a_terminal_belong_to_it()
     {
         // cmd stands in for a terminal's shell, and ping for what someone runs in it.

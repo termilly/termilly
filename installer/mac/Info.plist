@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Termilly.app's Info.plist; build-app.sh fills in @VERSION@. The bundle ID is permanent: macOS ties permissions to it. -->
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>Termilly</string>
+    <key>CFBundleDisplayName</key>
+    <string>Termilly</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.termilly.app</string>
+    <key>CFBundleExecutable</key>
+    <string>termilly</string>
+    <key>CFBundleIconFile</key>
+    <string>termilly</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>@VERSION@</string>
+    <key>CFBundleVersion</key>
+    <string>@VERSION@</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>15.0</string>
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.developer-tools</string>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>NSHumanReadableCopyright</key>
+    <string>Termilly, Apache License 2.0</string>
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>Termilly connects to SSH hosts, other computers running Termilly and your phone on this network.</string>
+</dict>
+</plist>

@@ -26,9 +26,18 @@ test('nothing it does can wait for an answer, whatever it may do, unless it asks
 });
 
 test('changes are only allowed when asked for', () => {
-  assert.match(agentCommand('x', { shell: 'bash', changes: true }), /--permission-mode acceptEdits/);
+  assert.match(agentCommand('x', { shell: 'bash', changes: true, ask: true }), /--permission-mode acceptEdits/);
+  assert.match(agentCommand('x', { shell: 'bash', changes: true }), /--permission-mode auto/);
   assert.doesNotMatch(agentCommand('x', { shell: 'bash', changes: true }), /--restricted/);
   assert.doesNotMatch(agentCommand('x', { shell: 'bash' }), /--permission-mode/);
+});
+
+test('everything is allowed only with changes and when asked for', () => {
+  const all = agentCommand('x', { shell: 'ssh', changes: true, all: true, json: true });
+  assert.match(all, /--permission-mode bypassPermissions/);
+  assert.doesNotMatch(all, /acceptEdits/);
+  assert.match(all, /--permission-prompts none/);
+  assert.doesNotMatch(agentCommand('x', { shell: 'ssh', all: true }), /bypassPermissions/);
 });
 
 test('its answer comes as JSON only when something reads it', () => {
@@ -43,7 +52,7 @@ test('a prompt stays one word in each shell', () => {
 });
 
 test('a result that worked gives its reply', () => {
-  assert.deepEqual(readResult(result()), { reply: 'All good.\nSecond line.', failed: false, errored: false, why: '', costUsd: 0.02 });
+  assert.deepEqual(readResult(result()), { reply: 'All good.\nSecond line.', failed: false, errored: false, why: '', costUsd: 0.02, session: null });
 });
 
 test('what a shell printed before it doesn\'t matter', () => {
@@ -54,12 +63,12 @@ test('a run refused a tool failed, and says which', () => {
   const r = readResult(result({ permission_denials: [{ tool_name: 'Bash' }, { tool_name: 'Bash' }, { tool_name: 'Write' }] }));
   assert.equal(r?.failed, true);
   assert.equal(r?.errored, false, 'refused, it still did what it could');
-  assert.equal(r?.why, 'It needed permission for Bash, Write.');
+  assert.equal(r?.why, 'Refused Bash, Write.');
 });
 
 test('many refused tools are not all named', () => {
   const r = readResult(result({ permission_denials: ['A', 'B', 'C', 'D', 'E'].map(tool_name => ({ tool_name })) }));
-  assert.equal(r?.why, 'It needed permission for A, B, C and 2 more.');
+  assert.equal(r?.why, 'Refused A, B, C and 2 more.');
 });
 
 test('an error says what it was', () => {

@@ -51,6 +51,15 @@ test('hours over midnight run on both sides of it', () => {
   assert.equal(nextRun(night, at(3)), at(22));
 });
 
+test('hours that start and end at the same time are the whole day', () => {
+  const allDay = every(1, UNIT.hours, { from: '0:00', to: '0:00' });
+  assert.equal(nextRun(allDay, at(9, 30)), at(10));
+  assert.equal(nextRun(allDay, at(23, 30)), at(0, 0, 6));
+  const fromNine = every(1, UNIT.hours, { from: '9:00', to: '9:00' });
+  assert.equal(nextRun(fromNine, at(3, 10)), at(4));
+  assert.equal(nextRun(fromNine, at(8, 30)), at(9));
+});
+
 test('at start has no next time, and a time that makes no sense never comes', () => {
   assert.equal(nextRun({ ...time('20:00'), kind: WHEN.start }, at(9)), null);
   assert.equal(nextRun(time('nonsense'), at(9)), null);
@@ -64,6 +73,7 @@ test('when reads as a person would say it', () => {
   assert.equal(describeWhen(time('9:00', [0, 1])), 'Mon, Sun at 9:00');
   assert.equal(describeWhen(every(1, UNIT.hours)), 'Every hour');
   assert.equal(describeWhen(every(2, UNIT.hours, { from: '9:00', to: '18:00' })), 'Every 2 hours, 9:00 to 18:00');
+  assert.equal(describeWhen(every(1, UNIT.hours, { from: '0:00', to: '00:00' })), 'Every hour');
   assert.equal(describeWhen({ ...time(''), kind: WHEN.start }), 'When Termilly starts');
 });
 

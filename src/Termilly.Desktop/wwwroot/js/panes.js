@@ -10,7 +10,7 @@ import {
   SPLIT_EVEN, TAB_WINDOW,
 } from './store.js';
 import { ICONS, tabBadgeHtml, activityHtml } from './ui.js';
-import { openTerminal, disposeTerminal, bufferLines, scheduleFit, prepareStart } from './terminals.js';
+import { openTerminal, disposeTerminal, bufferLines, scheduleFit, prepareStart, holdBack, isHeld } from './terminals.js';
 import { wake } from './hibernate.js';
 import { byId, find, targetOf, WORKSPACE_ID, CANVAS_2D, dragPointer, onMiddleClick } from './dom.js';
 import { ENV_CLASS, ENV_COLOR } from './environments.js';
@@ -104,6 +104,14 @@ let headerBuilder = () => document.createElement('div');
 export const setHeaderBuilder = fn => { headerBuilder = fn; };
 
 /**
+ * Builds a terminal's status bar, under it (statusbar.js gives it, as it sits above the panes); none until then.
+ * @type {(tab: Tab) => HTMLElement | null}
+ */
+let statusBuilder = () => null;
+/** @param {(tab: Tab) => HTMLElement} fn */
+export const setStatusBuilder = fn => { statusBuilder = fn; };
+
+/**
  * The active workspace, made if there is none (workspaces.js gives it, as it sits above the panes).
  * @type {() => Workspace | null}
  */
@@ -160,6 +168,11 @@ export function createView(tab, { draggable = true } = {}) {
   tab.view = /** @type {TabView} */ (/** @type {unknown} */ ({ el, body, term: null, fit: null })); // its header comes next
   tab.view.header = headerBuilder(tab);
   el.append(tab.view.header, body);
+  const status = statusBuilder(tab);
+  if (status) {
+    tab.view.status = status;
+    el.append(status);
+  }
   // A click in a field on the pane (its name being renamed) stays there: giving the terminal the keyboard would end
   // the edit, and a click there only moves the cursor.
   el.addEventListener('mousedown', e => { if (!targetOf(e).closest('input')) focusTab(tab); }, true);
@@ -462,6 +475,8 @@ function allDetachedNote(ws) {
  */
 export function focusTab(tab) {
   if (!tab || !state.tabs.has(tab.id)) return;
+  // Still waiting to open after a start: it opens now, ahead of the others.
+  if (isHeld(tab) && tab.view && !tab.view.term) openTerminal(tab);
   const ws = wsById(tab.wsId);
   if (!ws) {
     // The scratch terminal (scratch.js) belongs to no workspace.
@@ -603,10 +618,18 @@ export function renderWorkspace(ws) {
   drawing = null;
   for (const tab of tabsOf(ws)) {
     /** @type {TabView} */ (tab.view).el.classList.toggle('focused', tab.id === ws.focusId);
-    if (!(/** @type {TabView} */ (tab.view).term)) openTerminal(tab);
+    if (!(/** @type {TabView} */ (tab.view).term) && (opensFirst(ws, tab) || !holdBack(tab))) openTerminal(tab);
   }
   scheduleFit();
 }
+
+/**
+ * Whether a terminal opens before the page shows at start, while the others wait (holdBack): the one in focus, and one
+ * going back into a window of its own.
+ * @param {Workspace} ws
+ * @param {Tab} tab
+ */
+const opensFirst = (ws, tab) => !!tab.windowed || (ws.id === state.activeId && ws.focusId === tab.id);
 
 /**
  * A title bar lent to a group's tab goes back to the top of its pane.

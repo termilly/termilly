@@ -1,14 +1,14 @@
 // @ts-check
-// Hibernating idle agents: with more Claude Code sessions open than Settings allow (Terminal › Live agents),
+// Hibernating idle agents: with more Claude Code or Codex sessions open than Settings allow (Terminal › Live agents),
 // the ones idle longest, out of sight, are ended with /exit, keeping their session id. Opening the terminal
-// again resumes the same conversation (claude --resume <id>), so many agents can stay open without all of them
-// holding memory.
+// again resumes the same conversation (claude --resume <id>, codex resume <id>), so many agents can stay open without
+// all of them holding memory.
 
 import { PAGE } from './protocol.js';
 import { send } from './host.js';
-import { state, on, emit, activityChanged, EVENTS } from './store.js';
+import { state, on, emit, activityChanged, resumeAgentCommand, EVENTS } from './store.js';
 import { typeAtPrompt } from './terminals.js';
-import { AGENT_STATE } from './constants.js';
+import { AGENT_KIND, AGENT_STATE } from './constants.js';
 import { SECOND_MS, MINUTE_MS } from './util.js';
 
 /** How long an agent has to be idle before it may be hibernated, unless a test changes it. */
@@ -61,20 +61,22 @@ export function enforceLimit() {
 }
 
 /**
- * Marks a terminal's Claude Code session as hibernated (ended, to resume when the terminal is opened).
+ * Marks a terminal's agent session as hibernated (ended, to resume when the terminal is opened).
  * @param {Tab} tab
  * @param {string} session
  * @param {number} [at]
  * @param {string | null} [folder] the folder the session belongs to
+ * @param {string} [kind] which agent: one of AGENT_KIND
+| null} [folder] the folder the session belongs to
  */
-export function markHibernated(tab, session, at = Date.now(), folder = null) {
-  tab.hibernated = { session, at, folder };
+export function markHibernated(tab, session, at = Date.now(), folder = null, kind = AGENT_KIND.claude) {
+  tab.hibernated = { session, at, folder, kind };
 }
 
 /** @param {Tab} tab A live terminal (see live): its agent has a session id. */
 function hibernate(tab) {
   const agent = /** @type {AgentInfo} */ (tab.agent);
-  markHibernated(tab, /** @type {string} */ (agent.session), Date.now(), agent.folder);
+  markHibernated(tab, /** @type {string} */ (agent.session), Date.now(), agent.folder, agent.kind);
   // Esc clears anything half-typed at Claude Code's prompt; /exit ends the session (SessionEnd clears tab.agent).
   send(PAGE.input, { id: tab.id, data: '\x1b' });
   setTimeout(() => send(PAGE.input, { id: tab.id, data: '/exit\r' }), EXIT_DELAY_MS);
@@ -88,9 +90,9 @@ function hibernate(tab) {
  */
 export function wake(tab) {
   if (!tab.hibernated) return;
-  const { session } = tab.hibernated;
+  const { session, kind } = tab.hibernated;
   tab.hibernated = null;
-  typeAtPrompt(tab, `claude --resume ${session}`); // after a restart its shell may still be starting
+  typeAtPrompt(tab, resumeAgentCommand(session, kind)); // after a restart its shell may still be starting
   activityChanged(tab, true);
 }
 
