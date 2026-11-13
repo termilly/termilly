@@ -1452,7 +1452,12 @@ body[data-sidebar="rail"] .side-rail { opacity: 1; pointer-events: auto; }
 .pane-btn svg { width: 10px; height: 10px; stroke-width: 1.4; }
 .pane-btn:is(.menu-btn, .note-btn, .tag-btn, .prompts-btn) svg { width: 16px; height: 16px; stroke-width: 1; }
 /* Only while the terminal has a note. */
-.pane-btn:is(.note-btn, .td-note-btn, .prompts-btn)[hidden] { display: none; }
+.pane-btn:is(.note-btn, .td-note-btn, .prompts-btn, .view-btn)[hidden] { display: none; }
+/* The agent view button (compact.js): the view's 16px icon and an 8px caret, both drawn for those sizes. */
+.pane-btn.view-btn { grid-auto-flow: column; gap: 1px; width: auto; padding: 0 3px; }
+.pane-btn.view-btn > svg { width: 16px; height: 16px; stroke-width: 1; }
+.view-caret { display: grid; }
+.view-caret svg { width: 8px; height: 8px; stroke-width: 1; }
 
 /* My prompts (js/myprompts.js): by day, newest first. */
 .prompts-pop { width: 440px; padding: 0; }
@@ -3638,11 +3643,6 @@ button.sb-item:hover, button.sb-item.open { background: var(--hover); color: var
 .bp-right { margin-left: auto; }
 
 /* ---- Compact view (js/compact.js): an agent's steps one line each, over its terminal ---- */
-.compact-switch[hidden] { display: none; }
-.compact-switch { height: 22px; margin-right: 4px; padding: 2px; gap: 2px; border-radius: 6px; background: none; }
-.compact-switch button { display: inline-flex; align-items: center; padding: 0 8px; border-radius: 4px; font-size: 11px; }
-.compact-switch button:hover { color: var(--text); }
-.compact-switch button.on { background: var(--pressed); color: var(--text); box-shadow: none; }
 .compact-view { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; background: var(--surface); font-size: calc(12.5px * var(--cv-scale, 1)); }
 .compact-view[hidden] { display: none; }
 .cv-feed { flex: 1; min-height: 0; overflow: auto; padding: 10px 14px 6px; color: var(--text); font-size: 1em; line-height: 1.5; -webkit-user-select: text; user-select: text; }

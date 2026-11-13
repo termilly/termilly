@@ -10,7 +10,8 @@ import { send, onHost } from './host.js';
 import { state, on, runningAgent, runsClaude, persist, EVENTS } from './store.js';
 import { AGENT_STATE, COMPACT_LIMIT, COMPACT_VERB, CLAUDE_TOOL } from './constants.js';
 import { agentKind } from './agentkinds.js';
-import { escapeHtml } from './ui.js';
+import { escapeHtml, ICONS } from './ui.js';
+import { showMenu } from './popups.js';
 import { find } from './dom.js';
 import { agentInput } from './terminals.js';
 import { beforeEnter } from './api.js';
@@ -24,8 +25,18 @@ import { liveRow, screenRows } from './compactdrawer.js';
 
 /** @typedef {import('./compactlines.js').CompactLine} CompactLine */
 
-/** The views the header's switch picks between. */
-export const COMPACT_VIEW = Object.freeze({ minimal: 'minimal', compact: 'compact', terminal: 'terminal' });
+/** The views the header's view button picks between. */
+export const COMPACT_VIEW = Object.freeze({ minimal: 'minimal', compact: 'compact', full: 'full' });
+
+/** Each view as the view button and its menu show it. */
+const VIEWS = Object.freeze([
+  { view: COMPACT_VIEW.minimal, label: 'Minimal', icon: ICONS.viewMinimal, title: 'Only your prompts and the agent’s final answers, with a prompt box' },
+  { view: COMPACT_VIEW.compact, label: 'Compact', icon: ICONS.viewCompact, title: 'One line per step, with a prompt box' },
+  { view: COMPACT_VIEW.full, label: 'Full', icon: ICONS.viewFull, title: 'The agent’s own screen' },
+]);
+
+/** The header's view button (header.js has it). */
+export const VIEW_BUTTON = '.view-btn';
 
 /** Enter, as a terminal gets it. */
 const ENTER = '\r';
@@ -79,7 +90,7 @@ const compactOf = tab => /** @type {CompactState} */ (tab.compact ??= { lines: [
  * @param {Tab} tab
  * @returns {string} a COMPACT_VIEW
  */
-const pickedView = tab => tab.compactView === COMPACT_VIEW.minimal ? COMPACT_VIEW.minimal : tab.compactView ? COMPACT_VIEW.compact : COMPACT_VIEW.terminal;
+const pickedView = tab => tab.compactView === COMPACT_VIEW.minimal ? COMPACT_VIEW.minimal : tab.compactView ? COMPACT_VIEW.compact : COMPACT_VIEW.full;
 
 /**
  * Whether the terminal shows its compact view (or the minimal one): the user switched it on, and an agent runs there.
@@ -104,19 +115,19 @@ export const hasCompact = tab => !!runningAgent(tab);
  * @param {Tab} tab
  * @param {string} view a COMPACT_VIEW
  */
-export function setView(tab, view) {
+function setView(tab, view) {
   const was = pickedView(tab);
   if (was === view) return;
   tab.compactView = view === COMPACT_VIEW.minimal ? COMPACT_VIEW.minimal : view === COMPACT_VIEW.compact ? true : undefined;
   persist();
   // Between the two views only what the feed shows changes.
-  if (was !== COMPACT_VIEW.terminal && view !== COMPACT_VIEW.terminal) {
+  if (was !== COMPACT_VIEW.full && view !== COMPACT_VIEW.full) {
     updateSwitch(tab);
     render(tab);
     return;
   }
   apply(tab);
-  if (view !== COMPACT_VIEW.terminal) focusInput(tab);
+  if (view !== COMPACT_VIEW.full) focusInput(tab);
   else tab.view?.term?.focus();
 }
 
@@ -278,7 +289,7 @@ function build(tab) {
   el.addEventListener('click', e => {
     const target = /** @type {Element} */ (e.target);
     if (clickLink(tab, e)) return;
-    if (target.closest?.(OPEN_TERMINAL)) setView(tab, COMPACT_VIEW.terminal);
+    if (target.closest?.(OPEN_TERMINAL)) setView(tab, COMPACT_VIEW.full);
     const choice = /** @type {HTMLElement | null} */ (target.closest?.(CHOICE));
     const card = /** @type {HTMLElement | null} */ (target.closest?.(CARD));
     if (choice) pick(tab, choice.dataset.choice ?? '', card?.dataset.menu ?? '');
@@ -543,15 +554,36 @@ function updateComposer(tab, el) {
 }
 
 /**
- * The header's switch: shown where an agent runs, with the view that shows marked.
+ * The view that shows now: the one picked, or Full where the agent has left.
+ * @param {Tab} tab
+ */
+const shownView = tab => (isCompact(tab) ? pickedView(tab) : COMPACT_VIEW.full);
+
+/**
+ * The header's view button: shown where an agent runs, with the icon of the view that shows.
  * @param {Tab} tab
  */
 export function updateSwitch(tab) {
-  const box = /** @type {HTMLElement | null | undefined} */ (tab.view?.header?.querySelector('.compact-switch'));
-  if (!box) return;
-  box.hidden = !hasCompact(tab);
-  const shown = isCompact(tab) ? pickedView(tab) : COMPACT_VIEW.terminal;
-  for (const view of Object.values(COMPACT_VIEW)) find(box, `[data-view="${view}"]`).classList.toggle('on', view === shown);
+  const button = /** @type {HTMLElement | null | undefined} */ (tab.view?.header?.querySelector(VIEW_BUTTON));
+  if (!button) return;
+  button.hidden = !hasCompact(tab);
+  const shown = VIEWS.find(v => v.view === shownView(tab)) ?? VIEWS[VIEWS.length - 1];
+  const html = `${shown.icon}<span class="view-caret">${ICONS.caret}</span>`;
+  if (button.dataset.view !== shown.view) {
+    button.innerHTML = html;
+    button.dataset.view = shown.view;
+    button.title = `View: ${shown.label}. Click to pick another`;
+  }
+}
+
+/**
+ * The view button's menu: the three views, the one that shows ticked.
+ * @param {Tab} tab
+ * @param {HTMLElement} anchor
+ */
+export function openViewMenu(tab, anchor) {
+  const shown = shownView(tab);
+  showMenu(VIEWS.map(v => ({ label: v.label, icon: v.icon, title: v.title, hint: v.view === shown ? ICONS.tick : '', action: () => setView(tab, v.view) })), anchor);
 }
 
 /**
