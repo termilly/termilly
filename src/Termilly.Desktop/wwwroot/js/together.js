@@ -309,7 +309,10 @@ export function shellAnswered(tab, until) {
   });
 }
 
-/** How long a starting agent's screen stays still before it counts as ready for a prompt (Codex reports nothing until one). */
+/**
+ * How long a starting agent's screen stays still, its input line showing, before it counts as ready for a prompt (Codex
+ * reports nothing until one).
+ */
 const READY_QUIET_MS = 1000;
 /** How often a wait for a terminal to be ready looks again. */
 const READY_POLL_MS = 200;
@@ -319,7 +322,8 @@ const STARTING_MS = 30_000;
 /**
  * Whether a terminal is ready for a line: its start command typed (a terminal just opened gets it at its first prompt),
  * the agent that command starts running there, and that agent ready for a prompt: Claude Code once its hooks report in
- * (SessionStart), Codex once its screen has been still a moment, as it reports nothing until its first prompt. A shell
+ * (SessionStart), Codex once its input line shows and its screen has been still a moment, as it reports nothing until its
+ * first prompt (its start has quiet stretches before it reads keys: a line typed in one is lost). A shell
  * is ready once it has shown a prompt: marked (OSC 133), or for one without marks, something on its screen that has been
  * still a moment. Typed into a shell still starting, a line can be lost or upset it (Windows PowerShell's line editor
  * crashed on one).
@@ -337,7 +341,23 @@ function isReady(tab, quietSince) {
   if (starts && !agent) return false; // typed, its program not up yet
   const still = Date.now() - quietSince >= READY_QUIET_MS;
   if (!agent) return !!tab.lastCommand || promptAt.has(tab) || (still && bufferLines(tab).some(line => line.trim()));
-  return !!tab.agent || !agentKind(agent).hookAtStart && still;
+  const kind = agentKind(agent);
+  return !!tab.agent || !kind.hookAtStart && still && showsInput(tab, kind);
+}
+
+/**
+ * Whether an agent's input line is up (for one that has an input mark; any other counts as showing it): the row its cursor
+ * is on starts with the mark. Not any row on screen: Codex runs inline, so an earlier session's lines (› and what was
+ * asked) stay on screen when it's started again there.
+ * @param {Tab} tab
+ * @param {import('./agentkinds.js').AgentKind} kind
+ */
+function showsInput(tab, kind) {
+  const mark = kind.inputMark;
+  if (!mark) return true;
+  const buffer = tab.view?.term?.buffer.active;
+  const row = buffer?.getLine(buffer.baseY + buffer.cursorY)?.translateToString(true) ?? '';
+  return row.trimStart().startsWith(mark);
 }
 
 /**
@@ -470,7 +490,7 @@ function firstReport(tab, agent, limit) {
       if (runsClaude(tab) || !runningAgent(tab)) return void resolve();
       const fallback = 'Wait for an output line instead (until = output_matches), or read its screen.';
       if (hooksWaitForReview(tab)) reject(new Error(`${reviewWords(tab)} Until then it can't tell Termilly when its turn ends. ${fallback}`));
-      else reject(new Error(`${agentKind(agent).name} in ${tabTitle(tab)} hasn't told Termilly that it works (waited ${Math.round(limit / SECOND_MS)} seconds): its hooks are off. ${fallback}`));
+      else reject(new Error(`${agentKind(agent).name} in ${tabTitle(tab)} hasn't reported a turn (waited ${Math.round(limit / SECOND_MS)} seconds): the text may not have reached it, or its hooks are off. Its screen says which: the text in its input or its answer means the hooks are off. ${fallback}`));
     }, limit);
     turnWaiters.add(check);
   });

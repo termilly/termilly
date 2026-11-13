@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json.Nodes;
 
 namespace Termilly.Agent;
@@ -84,6 +85,19 @@ internal static class Cli
     private const int StateWidth = -14;
     private const int SnippetNameWidth = -28;
 
+    /// <summary>
+    /// The MCP server on stdin and stdout, as UTF-8 both ways (MCP's JSON lines are UTF-8). Not Console.In and Console.Out:
+    /// on Windows they use the console's OEM code page (437, 852) for a redirected stream, which turned what an agent sent
+    /// into other characters before Termilly saw it (› arrived as Γç║, accented letters likewise).
+    /// </summary>
+    private static int RunMcp()
+    {
+        var utf8 = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+        using var input = new StreamReader(Console.OpenStandardInput(), utf8);
+        using var output = new StreamWriter(Console.OpenStandardOutput(), utf8) { AutoFlush = true };
+        return Mcp.Run(input, output);
+    }
+
     public static int Run(string[] args)
     {
         try
@@ -91,7 +105,7 @@ internal static class Cli
             return args switch
             {
                 [] or [Commands.Help or Options.Help or Options.HelpShort, ..] => Print(Help),
-                [Commands.Mcp, ..] => Mcp.Run(Console.In, Console.Out),
+                [Commands.Mcp, ..] => RunMcp(),
                 [ApiMethods.List, .. var rest] => List(rest),
                 [ApiMethods.State, .. var rest] => Print(Api.Pretty(Api.Call(ApiMethods.State, new JsonObject { [ApiFields.Pane] = Pane(rest) }))),
                 [ApiMethods.Status, var text, .. var rest] => Done(Api.Call(ApiMethods.Status, new JsonObject { [ApiFields.Pane] = Pane(rest), [ApiFields.Text] = text })),
