@@ -13,7 +13,7 @@ import { agentKind } from './agentkinds.js';
 import { escapeHtml, ICONS } from './ui.js';
 import { showMenu } from './popups.js';
 import { find } from './dom.js';
-import { agentInput } from './terminals.js';
+import { agentInput, fontStack } from './terminals.js';
 import { beforeEnter } from './api.js';
 import { showsInput } from './together.js';
 import { linesHtml } from './compactlines.js';
@@ -55,8 +55,9 @@ const CHOICE = '[data-choice]';
 const REPICK_MS = 2000;
 /** Within this many pixels of the bottom, the feed counts as following the newest line. */
 const FOLLOW_SLACK_PX = 40;
-/** The view's text size: the terminals' font size, so its text is as big as the terminal's (app.css sizes the rest from it). */
+/** The view's text size and font: the terminals', so its text looks as the terminal's does (app.css sizes the rest from it). */
 const TEXT_SIZE = '--cv-size';
+const TEXT_FONT = '--cv-font';
 /** Bracketed paste: a text of several lines goes in as one, so its newlines don't send it line by line. */
 const PASTE_START = '\x1b[200~';
 const PASTE_END = '\x1b[201~';
@@ -305,11 +306,12 @@ function build(tab) {
 }
 
 /**
- * The view's text grows and shrinks with the terminals' (Ctrl + and Ctrl -, Settings › Terminal).
+ * The view's text is in the terminals' font, and grows and shrinks with it (Ctrl + and Ctrl -, Settings › Terminal).
  * @param {HTMLElement} el the view
  */
 function sizeText(el) {
   el.style.setProperty(TEXT_SIZE, `${state.settings.terminal.fontSize}px`);
+  el.style.setProperty(TEXT_FONT, fontStack(state.settings.terminal.fontFamily));
 }
 
 /**

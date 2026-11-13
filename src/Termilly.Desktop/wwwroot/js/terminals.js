@@ -109,7 +109,7 @@ const settingsOptions = () => ({
  * The chosen family first, then fallbacks so a missing font still gives a monospace terminal.
  * @param {string} family
  */
-const fontStack = family => `"${family}", Consolas, "Cascadia Mono", "DejaVu Sans Mono", monospace`;
+export const fontStack = family => `"${family}", Consolas, "Cascadia Mono", "DejaVu Sans Mono", monospace`;
 
 /**
  * How long a start command waits for a shell that marks no prompt (local shells only), and how long after the

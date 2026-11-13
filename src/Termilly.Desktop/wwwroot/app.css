@@ -3643,7 +3643,7 @@ button.sb-item:hover, button.sb-item.open { background: var(--hover); color: var
 .bp-right { margin-left: auto; }
 
 /* ---- Compact view (js/compact.js): an agent's steps one line each, over its terminal ---- */
-.compact-view { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; background: var(--surface); font-size: var(--cv-size, 14px); }
+.compact-view { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; background: var(--surface); font-size: var(--cv-size, 14px); font-family: var(--cv-font, var(--mono)); }
 .compact-view[hidden] { display: none; }
 .cv-feed { flex: 1; min-height: 0; overflow: auto; padding: 10px 14px 6px; color: var(--text); font-size: 1em; line-height: 1.5; -webkit-user-select: text; user-select: text; }
 .cv-empty { margin-top: 18px; color: var(--faint); text-align: center; }
@@ -3654,13 +3654,13 @@ button.sb-item:hover, button.sb-item.open { background: var(--hover); color: var
 .cv-link:hover { color: #76e3ea; text-decoration: underline; }
 :root[data-theme="light"] .cv-link:hover { color: #1b7c83; }
 .cv-ctrl .cv-link:hover, .cv-link[data-plain]:hover { cursor: pointer; }
-.cv-reply code { padding: 0 3px; border-radius: 3px; background: var(--raised-2); color: var(--text); font: 1em var(--mono); }
+.cv-reply code { padding: 0 3px; border-radius: 3px; background: var(--raised-2); color: var(--text); font: 1em var(--cv-font); }
 .cv-thinking { margin: 6px 0; overflow: hidden; color: var(--faint); font-style: italic; white-space: nowrap; text-overflow: ellipsis; }
 .cv-tool { display: grid; grid-template-columns: 6px 4.2em minmax(0, 1fr) auto; align-items: center; column-gap: 8px; height: 1.76em; margin: 0 -6px; padding: 0 6px; border-radius: 5px; }
 .cv-tool:hover { background: var(--hover); }
 .cv-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--faint); }
 .cv-verb { color: var(--muted); }
-.cv-subject { overflow: hidden; font: 1em var(--mono); white-space: nowrap; text-overflow: ellipsis; }
+.cv-subject { overflow: hidden; font: 1em var(--cv-font); white-space: nowrap; text-overflow: ellipsis; }
 .cv-subject i { color: var(--faint); font-style: normal; }
 .cv-detail { color: var(--faint); font-size: .92em; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .cv-add { color: var(--ok); }
@@ -3678,18 +3678,18 @@ button.sb-item:hover, button.sb-item.open { background: var(--hover); color: var
 .cv-working i { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px var(--accent-fill); animation: cv-pulse 1.4s infinite; }
 .cv-composer { flex: none; display: flex; align-items: flex-end; gap: 6px; margin: 0 8px 4px; padding: 6px 6px 6px 10px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--raised); }
 .cv-composer:focus-within { border-color: var(--accent); }
-.cv-input { flex: 1; min-height: 20px; max-height: 160px; padding: 2px 0; border: 0; outline: 0; resize: none; background: none; color: var(--text); font: 1em/1.45 var(--ui); }
+.cv-input { flex: 1; min-height: 20px; max-height: 160px; padding: 2px 0; border: 0; outline: 0; resize: none; background: none; color: var(--text); font: 1em/1.45 var(--cv-font); }
 .cv-input:disabled { color: var(--faint); }
 .cv-send { flex: none; height: 24px; padding: 0 10px; border-radius: 6px; background: var(--accent); color: var(--on-accent); font-size: .92em; font-weight: 600; }
 .cv-hint { flex: none; padding: 0 12px 6px; color: var(--faint); font-size: .84em; }
 .cv-card { margin: 10px 0; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--attention) 45%, transparent); border-radius: 8px; background: color-mix(in srgb, var(--attention) 9%, transparent); }
 .cv-question { margin-bottom: 7px; color: var(--text-strong); font-weight: 600; white-space: pre-wrap; overflow-wrap: anywhere; }
-.cv-context { max-height: 180px; margin-bottom: 9px; padding: 5px 8px; overflow: auto; border-radius: 5px; background: var(--term-bg); color: var(--term-text); font: 1em/1.45 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+.cv-context { max-height: 180px; margin-bottom: 9px; padding: 5px 8px; overflow: auto; border-radius: 5px; background: var(--term-bg); color: var(--term-text); font: 1em/1.45 var(--cv-font); white-space: pre-wrap; overflow-wrap: anywhere; }
 .cv-choices { display: flex; flex-wrap: wrap; gap: 6px; }
 .cv-choice, .cv-card .cv-open-terminal { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-height: 26px; padding: 3px 10px; border: 1px solid var(--border-strong); border-radius: 6px; color: var(--text); font-size: .92em; text-align: left; }
 .cv-choice:hover, .cv-card .cv-open-terminal:hover { background: var(--hover); }
 .cv-choice.picked { border-color: var(--accent); }
-.cv-choice kbd { color: var(--muted); font: .91em var(--mono); }
+.cv-choice kbd { color: var(--muted); font: .91em var(--cv-font); }
 .cv-choice small { color: var(--faint); font-size: .91em; }
 .cv-card .cv-open-terminal { border-color: transparent; color: var(--muted); }
 .cv-empty .cv-open-terminal { margin-top: 10px; height: 24px; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: 6px; color: var(--text); }
@@ -3700,6 +3700,6 @@ button.sb-item:hover, button.sb-item.open { background: var(--hover); color: var
 .compact-view.drawer .cv-composer, .compact-view.drawer .cv-hint, .compact-view.drawer .cv-picks { display: none; }
 .cv-picks { position: absolute; right: 8px; bottom: 58px; left: 8px; z-index: 2; max-height: 260px; padding: 4px; overflow: auto; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--raised); box-shadow: var(--shadow-pop); }
 .cv-picks[hidden] { display: none; }
-.cv-pick { display: flex; align-items: baseline; gap: 10px; padding: 4px 8px; border-radius: 5px; color: var(--text); font: .96em var(--mono); cursor: default; }
+.cv-pick { display: flex; align-items: baseline; gap: 10px; padding: 4px 8px; border-radius: 5px; color: var(--text); font: .96em var(--cv-font); cursor: default; }
 .cv-pick.on, .cv-pick:hover { background: var(--pressed); }
-.cv-pick small { overflow: hidden; color: var(--faint); font: .92em var(--ui); white-space: nowrap; text-overflow: ellipsis; }
+.cv-pick small { overflow: hidden; color: var(--faint); font: .92em var(--cv-font); white-space: nowrap; text-overflow: ellipsis; }
