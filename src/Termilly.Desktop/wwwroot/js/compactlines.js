@@ -115,7 +115,9 @@ function toolHtml(line) {
 function endHtml(end, turn) {
   const { files, added, removed } = turnChanges(turn);
   const parts = [end.detail ? escapeHtml(end.detail) : ''];
-  if (files) parts.push(`${files} file${files === 1 ? '' : 's'} ${detailHtml(`+${added} -${removed}`)}`);
+  // Only the counts there are: "+11", not "+11 -0".
+  const counts = [added && `+${added}`, removed && `-${removed}`].filter(Boolean).join(' ');
+  if (files) parts.push(`${files} file${files === 1 ? '' : 's'} ${detailHtml(counts)}`);
   return `<div class="cv-end">${parts.filter(Boolean).join('<span class="cv-sep">·</span>')}</div>`;
 }
 

@@ -298,7 +298,9 @@ export const HOST = Object.freeze({
 /** @typedef {{ text?: string, decision?: string, command?: string }} AgentRuleChoice */
 /** @typedef {{ type: string, requestId: string, fields: any }} PageCall */
 /** @typedef {{ id: string, kind: string, text: string, lines: number, chars: number, source: string, at: number, pinned: boolean, width: number, height: number, bytes: number, folder: boolean|null }} ClipView */
-/** @typedef {{ key: string, kind: string, text: string, verb?: string|null, detail?: string|null, failed?: boolean, done?: boolean }} CompactLine */
+/** @typedef {{ key: string, kind: string, text: string, verb?: string|null, detail?: string|null, failed?: boolean, done?: boolean, questions?: Array<CompactQuestion>|null, body?: string|null }} CompactLine */
+/** @typedef {{ question: string, header: string|null, multi: boolean, options: Array<CompactOption> }} CompactQuestion */
+/** @typedef {{ label: string, description: string|null }} CompactOption */
 /** @typedef {{ state: string, message: string|null }} ForwardState */
 /** @typedef {{ path?: string, name?: string }} FileCopy */
 /** @typedef {{ id?: string, name?: string }} HistoryOpenTerminal */

@@ -6,14 +6,16 @@
 
 import { PAGE, HOST } from './protocol.js';
 import { send, onHost } from './host.js';
-import { state, on, runningAgent, persist, EVENTS } from './store.js';
-import { AGENT_STATE, COMPACT_LIMIT } from './constants.js';
+import { state, on, runningAgent, runsClaude, persist, EVENTS } from './store.js';
+import { AGENT_STATE, COMPACT_LIMIT, COMPACT_VERB, CLAUDE_TOOL } from './constants.js';
 import { agentKind } from './agentkinds.js';
 import { escapeHtml } from './ui.js';
 import { find } from './dom.js';
 import { agentInput } from './terminals.js';
 import { beforeEnter } from './api.js';
+import { showsInput } from './together.js';
 import { linesHtml } from './compactlines.js';
+import { readMenu, questionMenu, cardHtml } from './compactcard.js';
 
 /** @typedef {import('./compactlines.js').CompactLine} CompactLine */
 
@@ -26,6 +28,10 @@ const SHOWN_CLASS = 'compact-on';
 const INPUT = '.cv-input';
 /** The feed's button that shows the terminal (while the agent waits on a question). */
 const OPEN_TERMINAL = '.cv-open-terminal';
+/** A card's choice buttons: data-choice holds the key that picks it. */
+const CHOICE = '[data-choice]';
+/** How many of the screen's last lines are read for the question the agent waits on. */
+const MENU_LINES = 50;
 /** Within this many pixels of the bottom, the feed counts as following the newest line. */
 const FOLLOW_SLACK_PX = 40;
 /** Bracketed paste: a text of several lines goes in as one, so its newlines don't send it line by line. */
@@ -42,14 +48,15 @@ const VIEW_HTML = `
 
 /**
  * A terminal's compact view: what the host sent of its session, the elements showing it, and the prompt being typed.
- * @typedef {{ lines: CompactLine[], session: string | null, el: HTMLElement | null, frame: number, frameWin: Window | null, sending: Promise<void> }} CompactState
+ * @typedef {{ lines: CompactLine[], session: string | null, el: HTMLElement | null, frame: number, frameWin: Window | null, sending: Promise<void>, writes: { dispose(): void } | null,
+ *   answered?: { key: string, count: number } }} CompactState
  */
 
 /**
  * @param {Tab} tab
  * @returns {CompactState}
  */
-const compactOf = tab => /** @type {CompactState} */ (tab.compact ??= { lines: [], session: null, el: null, frame: 0, frameWin: null, sending: Promise.resolve() });
+const compactOf = tab => /** @type {CompactState} */ (tab.compact ??= { lines: [], session: null, el: null, frame: 0, frameWin: null, sending: Promise.resolve(), writes: null });
 
 /**
  * Whether the terminal shows its compact view: the user switched it on, and an agent runs there.
@@ -89,6 +96,8 @@ function apply(tab) {
   const c = compactOf(tab);
   if (shown && !c.el) c.el = build(tab);
   if (c.el) c.el.hidden = !shown;
+  // While the agent waits on a question, its card follows the screen (a choice picked with the keys, a new question).
+  if (c.el && view.term && !c.writes) c.writes = view.term.onWriteParsed(() => { if (isCompact(tab) && (waitsForAnswer(tab) || !atPrompt(tab))) render(tab); });
   updateSwitch(tab);
   const session = shown ? tab.agent?.session ?? null : null;
   if (session !== c.session) {
@@ -120,7 +129,10 @@ function build(tab) {
   find(el, '.cv-send').addEventListener('click', () => submit(tab, input));
   // Buttons drawn in the feed are handled here: a terminal in a window of its own has that window's elements.
   el.addEventListener('click', e => {
-    if (/** @type {Element} */ (e.target).closest?.(OPEN_TERMINAL)) setCompact(tab, false);
+    const target = /** @type {Element} */ (e.target);
+    if (target.closest?.(OPEN_TERMINAL)) setCompact(tab, false);
+    const choice = /** @type {HTMLElement | null} */ (target.closest?.(CHOICE));
+    if (choice) pick(tab, choice.dataset.choice ?? '', choice.dataset.label ?? '');
   });
   // The terminal's right-click menu and copy-on-select (termclipboard.js) are the terminal's, not the view's.
   for (const type of ['contextmenu', 'mouseup']) el.addEventListener(type, e => e.stopPropagation());
@@ -148,16 +160,29 @@ function focusInput(tab) {
 
 /**
  * Whether the agent waits on a question of its own (a permission, a choice): what's typed would answer it, so the
- * prompt box waits too (stage 2 answers these with cards).
+ * prompt box waits too, and the feed shows the question as a card.
  * @param {Tab} tab
  */
 const waitsForAnswer = tab => tab.agent?.state === AGENT_STATE.needsInput;
 
 /**
- * Whether the prompt box's text may go to the agent now: it still runs there, and isn't asking a question of its own.
+ * Whether the agent is at its own prompt, so what's typed is a prompt: its hooks have reported (Claude Code's do as it
+ * starts), or it's Codex, whose hooks report only once it's asked something, and its input line shows. Before that an
+ * agent may show a screen of its own (Claude Code's "Do you trust this folder?"), which typing would answer.
  * @param {Tab} tab
  */
-const canSend = tab => !tab.exited && !!runningAgent(tab) && !waitsForAnswer(tab);
+function atPrompt(tab) {
+  if (runsClaude(tab)) return true;
+  const kind = agentKind(runningAgent(tab));
+  return !kind.hookAtStart && showsInput(tab, kind);
+}
+
+/**
+ * Whether the prompt box's text may go to the agent now: it still runs there, is at its prompt, and isn't asking a
+ * question of its own.
+ * @param {Tab} tab
+ */
+const canSend = tab => !tab.exited && !!runningAgent(tab) && atPrompt(tab) && !waitsForAnswer(tab);
 
 /**
  * Sends the prompt box's text to the agent. One prompt at a time per terminal: a second one sent while the first
@@ -214,20 +239,103 @@ function draw(tab) {
   if (!c.el || c.el.hidden) return;
   const feed = find(c.el, '.cv-feed');
   const following = feed.scrollHeight - feed.scrollTop - feed.clientHeight < FOLLOW_SLACK_PX;
-  feed.innerHTML = c.lines.length ? linesHtml(c.lines) + workingHtml(tab) : emptyHtml(tab);
+  feed.innerHTML = c.lines.length || waitsForAnswer(tab) ? linesHtml(c.lines) + workingHtml(tab) : emptyHtml(tab);
   if (following) feed.scrollTop = feed.scrollHeight;
   updateComposer(tab, c.el);
 }
 
 /**
- * The agent's state under the newest line: working, or waiting for the user.
+ * The menu on the agent's screen now (its question and numbered choices); null when it shows none it can read.
+ * @param {Tab} tab
+ */
+function screenMenu(tab) {
+  const buffer = tab.view?.term?.buffer.active;
+  if (!buffer) return null;
+  // Row by row, not joined where a row runs on: a rule across the whole width counts as running on into the next.
+  const rows = [];
+  for (let y = Math.max(0, buffer.length - MENU_LINES); y < buffer.length; y++) rows.push(buffer.getLine(y)?.translateToString(true) ?? '');
+  return readMenu(rows);
+}
+
+/**
+ * Claude Code's question (AskUserQuestion) the agent waits on: its line in the feed, which has its questions.
+ * @param {Tab} tab
+ */
+function pendingQuestion(tab) {
+  if (tab.agent?.tool !== CLAUDE_TOOL.askUserQuestion) return null;
+  return compactOf(tab).lines.findLast(line => line.verb === COMPACT_VERB.ask && !line.done && line.questions?.length) ?? null;
+}
+
+/**
+ * The plan Claude Code asks the user to approve (ExitPlanMode), as the host read it from its file; null for none.
+ * @param {Tab} tab
+ */
+function pendingPlan(tab) {
+  if (tab.agent?.tool !== CLAUDE_TOOL.exitPlanMode) return null;
+  return compactOf(tab).lines.findLast(line => line.verb === COMPACT_VERB.plan && !line.done)?.body ?? null;
+}
+
+/**
+ * The question the agent waits on, as the card shows it. Claude Code's own questions come from the session file, as
+ * the agent asked them, since a short terminal scrolls their choices out of sight: the one on screen when its title
+ * shows, else the next one the card hasn't answered. Questions with several picks, the review after the last
+ * question, and everything else (permissions, plan approval's choices, Codex's approvals) are read off the screen.
+ * @param {Tab} tab
+ * @returns {import('./compactcard.js').Menu & { from?: string, last?: boolean } | null}
+ */
+function menuOf(tab) {
+  const screen = screenMenu(tab);
+  // A plan up for approval: its choices from the screen, the plan itself from its file (the screen has room for neither).
+  const plan = pendingPlan(tab);
+  if (plan && screen) return { ...screen, context: plan.split('\n') };
+  const ask = pendingQuestion(tab);
+  if (!ask?.questions) return screen;
+  const c = compactOf(tab);
+  const answered = c.answered?.key === ask.key ? c.answered.count : 0;
+  const shown = screen ? ask.questions.find(q => q.question === screen.title) : undefined;
+  const question = shown ?? ask.questions[answered];
+  if (!question || question.multi) return screen;
+  return { ...questionMenu(question), from: ask.key, last: ask.questions.length === 1 };
+}
+
+/**
+ * Picks a choice of the question the agent waits on, by pressing its number as the user would; only while the agent
+ * still waits and still offers that choice (the user may have answered in the terminal meanwhile).
+ * @param {Tab} tab
+ * @param {string} key
+ * @param {string} label
+ */
+function pick(tab, key, label) {
+  if (!waitsForAnswer(tab) || tab.exited) return;
+  const menu = menuOf(tab);
+  if (!menu?.choices.some(c => c.key === key && c.label === label)) {
+    render(tab);
+    return;
+  }
+  // One of Claude Code's questions answered: the card goes on to the next (its screen may not show which it is).
+  if (menu.from) {
+    const c = compactOf(tab);
+    c.answered = { key: menu.from, count: (c.answered?.key === menu.from ? c.answered.count : 0) + 1 };
+  }
+  send(PAGE.input, { id: tab.id, data: key });
+  // Answered, as from the keyboard: no longer waiting. Not while Claude Code goes on to its next question.
+  if (!menu.from || menu.last) agentInput(tab, key);
+}
+
+/**
+ * The card for the question the agent waits on.
+ * @param {Tab} tab
+ * @param {string} name the agent's short name, escaped
+ */
+const cardOf = (tab, name) => cardHtml(menuOf(tab), name, OPEN_TERMINAL.slice(1));
+
+/**
+ * The agent's state under the newest line: working, or the card for the question it waits on.
  * @param {Tab} tab
  */
 function workingHtml(tab) {
   const name = escapeHtml(agentKind(runningAgent(tab)).short);
-  if (waitsForAnswer(tab)) {
-    return `<div class="cv-needs"><span>${name} needs you</span><button class="${OPEN_TERMINAL.slice(1)}">Open terminal</button></div>`;
-  }
+  if (waitsForAnswer(tab)) return cardOf(tab, name);
   return tab.agent?.state === AGENT_STATE.working ? `<div class="cv-working"><i></i>${name} is working</div>` : '';
 }
 
@@ -237,7 +345,10 @@ function workingHtml(tab) {
  */
 function emptyHtml(tab) {
   const name = escapeHtml(agentKind(runningAgent(tab)).short);
-  return `<div class="cv-empty">${compactOf(tab).session ? `Nothing yet. Ask ${name} something below.` : `Waiting for ${name} to start its session.`}</div>`;
+  if (!atPrompt(tab)) {
+    return `<div class="cv-empty">${name} is starting. Anything it asks first is in the terminal.<br><button class="${OPEN_TERMINAL.slice(1)}">Open terminal</button></div>`;
+  }
+  return `<div class="cv-empty">${compactOf(tab).session ? `Nothing yet. Ask ${name} something below.` : `Ask ${name} something below.`}</div>`;
 }
 
 /**
@@ -249,8 +360,9 @@ function updateComposer(tab, el) {
   const name = agentKind(runningAgent(tab)).short;
   const input = /** @type {HTMLTextAreaElement} */ (find(el, INPUT));
   const waiting = waitsForAnswer(tab);
-  input.placeholder = waiting ? `${name} is waiting for your answer in the terminal` : `Message ${name}`;
-  input.disabled = waiting || !!tab.exited;
+  const starting = !atPrompt(tab);
+  input.placeholder = waiting ? `${name} is waiting for your answer above` : starting ? `${name} is starting` : `Message ${name}`;
+  input.disabled = waiting || starting || !!tab.exited;
 }
 
 /**
@@ -299,5 +411,6 @@ onHost(HOST.compactLines, m => {
 on(EVENTS.agent, apply);
 on(EVENTS.terminalOpened, apply);
 on(EVENTS.tabClosed, tab => {
+  tab.compact?.writes?.dispose();
   if (tab.compact?.session) send(PAGE.compactWatch, { id: tab.id, session: null });
 });

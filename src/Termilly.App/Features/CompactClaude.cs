@@ -1,4 +1,6 @@
+using System.IO;
 using System.Text.Json.Nodes;
+using Termilly.Desktop.Services;
 using Termilly.Desktop.Messaging;
 using Termilly.Shared;
 
@@ -31,6 +33,7 @@ internal sealed class CompactClaude : ICompactReader
         public const string Cwd = "cwd";
         public const string DurationMs = "durationMs";
         public const string ToolUseResult = "toolUseResult";
+        public const string FilePath = "file_path";
     }
 
     private static class Types
@@ -51,6 +54,14 @@ internal sealed class CompactClaude : ICompactReader
 
     /// <summary>Lines worth parsing say one of these; the rest (requests, snapshots, settings) are passed over unread.</summary>
     private static readonly byte[][] Wanted = ["\"type\":\"user\""u8.ToArray(), "\"type\":\"assistant\""u8.ToArray(), "\"turn_duration\""u8.ToArray()];
+
+    /// <summary>A plan's text is cut to this for the card (the terminal and the plan's file have it all).</summary>
+    private const int MaxPlan = 20000;
+    /// <summary>Claude Code writes its plan in plan mode to a file of its own, in a folder by this name.</summary>
+    private const string PlansFolder = "/.claude/plans/";
+
+    /// <summary>The plan file Claude wrote or edited last: the plan it then asks the user to approve.</summary>
+    private string? _plan;
 
     /// <summary>The calls waiting for their results, by id; a call leaves once its result is read.</summary>
     private readonly Dictionary<string, ClaudeCall> _calls = new(StringComparer.Ordinal);
@@ -116,13 +127,43 @@ internal sealed class CompactClaude : ICompactReader
                     // A line whose result came already (the transcript repeats a call) keeps it.
                     if (log.Find(id) is not { Done: true })
                     {
-                        var call = ClaudeToolLine.Call(name, block[Fields.Input] as JsonObject, cwd);
+                        var input = block[Fields.Input] as JsonObject;
+                        var call = ClaudeToolLine.Call(name, input, cwd);
                         _calls[id] = call;
-                        log.Put(new CompactLine(id, CompactKinds.Tool, call.Subject, call.Verb, Done: false));
+                        NotePlan(name, input);
+                        var plan = name == ClaudeTools.ExitPlanMode ? PlanText() : null;
+                        log.Put(new CompactLine(id, CompactKinds.Tool, call.Subject, call.Verb, Done: false, Questions: call.Questions, Body: plan));
                         ForgetLost(log);
                     }
                     break;
             }
+        }
+    }
+
+    /// <summary>A Write or Edit of a file in Claude Code's plans folder: the plan it will ask about.</summary>
+    private void NotePlan(string name, JsonObject? input)
+    {
+        if (name is ClaudeTools.Write or ClaudeTools.Edit && input?[Fields.FilePath].AsText() is { } path
+            && path.Replace('\\', '/').Contains(PlansFolder, StringComparison.OrdinalIgnoreCase))
+        {
+            _plan = path;
+        }
+    }
+
+    /// <summary>The plan's text, read from its file as it is now; null when there's none to read.</summary>
+    private string? PlanText()
+    {
+        if (_plan is null)
+        {
+            return null;
+        }
+        try
+        {
+            return CompactText.Cut(File.ReadAllText(_plan).Trim(), MaxPlan);
+        }
+        catch (Exception e) when (Storage.IsFileError(e))
+        {
+            return null;
         }
     }
 

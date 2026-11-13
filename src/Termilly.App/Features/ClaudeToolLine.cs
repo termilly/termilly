@@ -23,6 +23,10 @@ internal static class ClaudeToolLine
         public const string SubagentType = "subagent_type";
         public const string Questions = "questions";
         public const string Question = "question";
+        public const string Header = "header";
+        public const string MultiSelect = "multiSelect";
+        public const string Options = "options";
+        public const string Label = "label";
         public const string Todos = "todos";
         public const string Status = "status";
     }
@@ -43,6 +47,7 @@ internal static class ClaudeToolLine
         public const string Create = "create";
         public const string FilesMode = "files_with_matches";
         public const string Completed = "completed";
+        public const string Answers = "answers";
     }
 
     private const string McpSeparator = "__";
@@ -57,7 +62,8 @@ internal static class ClaudeToolLine
     {
         var (verb, subject) = Describe(name, input, cwd);
         var command = name is ClaudeTools.Bash or ClaudeTools.PowerShell ? input?[Input.Command].AsText() : null;
-        return new ClaudeCall(name, verb, subject, command, name == ClaudeTools.TodoWrite ? TodoProgress(input) : null);
+        var questions = name == ClaudeTools.AskUserQuestion ? QuestionsOf(input) : null;
+        return new ClaudeCall(name, verb, subject, command, name == ClaudeTools.TodoWrite ? TodoProgress(input) : null, questions);
     }
 
     /// <summary>The verb and the subject: what kind of step, and what on.</summary>
@@ -99,9 +105,10 @@ internal static class ClaudeToolLine
             ClaudeTools.Bash or ClaudeTools.PowerShell => CommandResult(call.Command, details, output),
             ClaudeTools.WebFetch => details?[Details.Code].AsLong() is { } code and >= HttpErrors ? $"HTTP {code}" : "fetched",
             ClaudeTools.TodoWrite => call.Progress,
+            ClaudeTools.AskUserQuestion => AnswersOf(details),
             _ => null,
         };
-        return new CompactLine(id, CompactKinds.Tool, call.Subject, verb, detail ?? CompactText.Done);
+        return new CompactLine(id, CompactKinds.Tool, call.Subject, verb, detail ?? CompactText.Done, Questions: call.Questions);
     }
 
     private static string In(string what, string where) => string.IsNullOrEmpty(where) ? what : $"{what} in {where}";
@@ -115,6 +122,29 @@ internal static class ClaudeToolLine
         var rest = name[ClaudeTools.McpPrefix.Length..];
         var split = rest.IndexOf(McpSeparator, StringComparison.Ordinal);
         return split < 0 ? rest : $"{rest[..split]}: {rest[(split + McpSeparator.Length)..]}";
+    }
+
+    /// <summary>What the user answered an AskUserQuestion (its answers by question): "Spaces, Dark".</summary>
+    private static string? AnswersOf(JsonObject? details)
+    {
+        var answers = (details?[Details.Answers] as JsonObject)?.Select(a => a.Value.AsText()).OfType<string>().ToList();
+        return answers is { Count: > 0 } ? CompactText.Cut(string.Join(", ", answers), CompactText.MaxSubject) : null;
+    }
+
+    /// <summary>An AskUserQuestion's questions and their choices; null when it has none that can be read.</summary>
+    private static List<CompactQuestion>? QuestionsOf(JsonObject? input)
+    {
+        var questions = (input?[Input.Questions] as JsonArray)?.OfType<JsonObject>()
+            .Select(q => new CompactQuestion(
+                q[Input.Question].AsText() ?? "",
+                q[Input.Header].AsText(),
+                q[Input.MultiSelect].AsBool() == true,
+                (q[Input.Options] as JsonArray)?.OfType<JsonObject>()
+                    .Select(o => new CompactOption(o[Input.Label].AsText() ?? "", o[Input.Description].AsText()))
+                    .Where(o => o.Label.Length > 0).ToList() ?? []))
+            .Where(q => q.Question.Length > 0 && q.Options.Count > 0)
+            .ToList();
+        return questions is { Count: > 0 } ? questions : null;
     }
 
     private static string FirstQuestion(JsonObject? input) =>
@@ -190,4 +220,4 @@ internal static class ClaudeToolLine
 }
 
 /// <summary>A Claude Code tool call waiting for its result: its tool, its line's verb and subject, and what its result is read with.</summary>
-internal sealed record ClaudeCall(string Name, string Verb, string Subject, string? Command, string? Progress);
+internal sealed record ClaudeCall(string Name, string Verb, string Subject, string? Command, string? Progress, IReadOnlyList<CompactQuestion>? Questions = null);

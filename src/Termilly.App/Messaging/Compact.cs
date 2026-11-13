@@ -18,9 +18,17 @@ internal static partial class FromPage
 /// <summary>
 /// One line of the compact view. <see cref="Key"/> tells it apart within its session: a line sent again with the same key
 /// replaces it (a tool's result arrived). <see cref="Text"/> is the words (a prompt, a reply, thinking) or what a tool
-/// worked on; <see cref="Detail"/> what came of it ("12 hits", "+9 -2", "41 passed").
+/// worked on; <see cref="Detail"/> what came of it ("12 hits", "+9 -2", "41 passed"). A question the agent asks the
+/// user (Claude Code's AskUserQuestion) carries its <see cref="Questions"/>, and a plan up for approval (ExitPlanMode)
+/// the plan as <see cref="Body"/>, for the view's card.
 /// </summary>
-internal sealed record CompactLine(string Key, string Kind, string Text, string? Verb = null, string? Detail = null, bool Failed = false, bool Done = true);
+internal sealed record CompactLine(string Key, string Kind, string Text, string? Verb = null, string? Detail = null, bool Failed = false, bool Done = true, IReadOnlyList<CompactQuestion>? Questions = null, string? Body = null);
+
+/// <summary>A question the agent asks the user, with its choices (one, or several with <see cref="Multi"/>).</summary>
+internal sealed record CompactQuestion(string Question, string? Header, bool Multi, IReadOnlyList<CompactOption> Options);
+
+/// <summary>A choice of a <see cref="CompactQuestion"/>.</summary>
+internal sealed record CompactOption(string Label, string? Description);
 
 /// <summary>The kinds of <see cref="CompactLine"/>.</summary>
 internal static class CompactKinds

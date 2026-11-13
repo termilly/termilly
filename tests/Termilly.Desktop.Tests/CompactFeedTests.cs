@@ -92,6 +92,38 @@ public sealed class CompactFeedTests : IDisposable
             lines.Select(l => (l.Kind, l.Text)));
     }
 
+    [Fact]
+    public void A_claude_question_carries_its_choices_for_the_card_and_its_answers_once_given()
+    {
+        var log = new CompactLog();
+        var reader = new CompactClaude();
+        reader.Read(Encoding.UTF8.GetBytes(Assistant("a1", """{"type":"tool_use","id":"q1","name":"AskUserQuestion","input":{"questions":[{"question":"Tabs or spaces?","header":"Indent","multiSelect":false,"options":[{"label":"Tabs","description":"Tab characters."},{"label":"Spaces"}]}]}}""")), log);
+        var asked = log.Find("q1")!;
+        Assert.Equal((CompactVerbs.Ask, "Tabs or spaces?", false), (asked.Verb, asked.Text, asked.Done));
+        var question = Assert.Single(asked.Questions!);
+        Assert.Equal(("Indent", false), (question.Header, question.Multi));
+        Assert.Equal([new CompactOption("Tabs", "Tab characters."), new CompactOption("Spaces", null)], question.Options);
+
+        reader.Read(Encoding.UTF8.GetBytes(Result("r1", "q1", """{"questions":[],"answers":{"Tabs or spaces?":"Spaces"}}""")), log);
+        Assert.Equal((true, "Spaces"), (log.Find("q1")!.Done, log.Find("q1")!.Detail));
+    }
+
+    [Fact]
+    public void A_plan_up_for_approval_carries_the_plan_from_the_file_claude_wrote_it_to()
+    {
+        var plans = Directory.CreateDirectory(Path.Combine(_dir, ".claude", "plans")).FullName;
+        var plan = Path.Combine(plans, "short-plan.md");
+        File.WriteAllText(plan, "# Plan\n\n- Append Done. to hello.txt\n");
+        var json = System.Text.Json.JsonSerializer.Serialize(plan);
+        var lines = Lines(new CompactClaude(),
+            Assistant("a1", $$$"""{"type":"tool_use","id":"w1","name":"Write","input":{"file_path":{{{json}}},"content":"x"}}"""),
+            Assistant("a2", """{"type":"tool_use","id":"p1","name":"ExitPlanMode","input":{}}"""));
+
+        var asked = lines.Single(l => l.Key == "p1");
+        Assert.Equal((CompactVerbs.Plan, "# Plan\n\n- Append Done. to hello.txt"), (asked.Verb, asked.Body));
+        Assert.Null(lines.Single(l => l.Key == "w1").Body);
+    }
+
     private static string Item(string item) =>
         $$$"""{"timestamp":"2026-11-13T18:11:37.093Z","type":"event_msg","payload":{"type":"item_completed","item":{{{item}}}}}""";
 
