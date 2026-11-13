@@ -136,3 +136,8 @@ test('a menu is known by all its prompt says, not only the lines the card shows;
   assert.notEqual(menuKey(readMenu(prompt('rm -rf a'))), menuKey(readMenu(prompt('rm -rf b'))));
   assert.equal(menuKey(readMenu(prompt('rm -rf a').slice(1))), '');
 });
+
+test('blank lines inside a command do not end the prompt where a rule starts it', () => {
+  const prompt = command => ['─'.repeat(20), 'Bash command', command, '', '', 'echo done', '', 'Do you want to proceed?', '> 1. Yes', '  2. No'];
+  assert.notEqual(menuKey(readMenu(prompt('rm -rf a'))), menuKey(readMenu(prompt('rm -rf b'))));
+});

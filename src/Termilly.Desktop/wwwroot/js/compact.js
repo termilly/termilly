@@ -118,7 +118,8 @@ function onScreen(tab) {
   if (!isCompact(tab)) return;
   const c = compactOf(tab);
   const ready = atPrompt(tab);
-  if (waitsForAnswer(tab) || ready !== c.ready) render(tab);
+  // While it starts, anything it draws may be a menu of its own (a trust question): drawn as it comes.
+  if (waitsForAnswer(tab) || !ready || ready !== c.ready) render(tab);
   c.ready = ready;
 }
 

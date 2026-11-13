@@ -69,17 +69,20 @@ export function readMenu(lines) {
 }
 
 /**
- * Where the prompt above a menu starts: the line after its rule (Claude Code) or its gap of blank lines (Codex); -1
- * when neither is on the screen.
+ * Where the prompt above a menu starts: the line after its rule (Claude Code draws one; blank lines inside the
+ * prompt, in a command, don't end it), or else after its gap of blank lines (Codex draws no rule); -1 when neither
+ * is on the screen.
  * @param {string[]} rows
  * @param {number} first
  */
 function promptStart(rows, first) {
+  for (let i = first - 1; i >= 0; i--) {
+    if (RULE.test(rows[i].trim())) return i + 1;
+  }
   let blanks = 0;
   for (let i = first - 1; i >= 0; i--) {
-    const row = rows[i].trim();
-    blanks = row ? 0 : blanks + 1;
-    if (RULE.test(row) || blanks === GAP) return i + 1;
+    blanks = rows[i].trim() ? 0 : blanks + 1;
+    if (blanks === GAP) return i + 1;
   }
   return -1;
 }
