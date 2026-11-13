@@ -204,8 +204,8 @@ main.tabbed { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
 .swatch.none { background: linear-gradient(135deg, #f3f3f5 50%, #0d0d10 50%); }
 .tick { flex: none; width: 18px; color: var(--accent); font-weight: 700; }
 .hint { margin: 8px 8px 0; font-size: 13px; }
-/* A Claude terminal's message box (terminal.js), above the key bar: the keyboard's mic dictates into it. */
-/* The box for writing to Claude (compose.js): Messages, or One bar. */
+/* An agent's message box (terminal.js), above the key bar: the keyboard's mic dictates into it. */
+/* The box for writing to an agent (compose.js): Messages, or One bar. */
 .tv-compose { position: relative; display: flex; flex: none; gap: 8px; align-items: flex-end; margin: 0; padding: 7px 8px 5px; border-top: 1px solid var(--line); background: var(--raised); }
 .tv-compose textarea { flex: 1; min-width: 0; min-height: 34px; max-height: 120px; padding: 7px 0 6px; border: 0; background: none; color: var(--text); font-family: inherit; font-size: 16px; line-height: 1.3; resize: none; outline: none; field-sizing: content; }
 .tv-compose + .keybar { border-top: 0; }
