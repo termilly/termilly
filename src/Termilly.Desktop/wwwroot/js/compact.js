@@ -572,7 +572,7 @@ export function updateSwitch(tab) {
   if (button.dataset.view !== shown.view) {
     button.innerHTML = html;
     button.dataset.view = shown.view;
-    button.title = `View: ${shown.label}. Click to pick another`;
+    button.title = `View: ${shown.label}`;
   }
 }
 
