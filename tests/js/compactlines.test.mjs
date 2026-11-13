@@ -77,3 +77,41 @@ test('a tool line links its subject and a prompt its web address', () => {
   assert.match(html, /check <span class="cv-link" data-link="https:\/\/e\.x\/a" data-web/);
   assert.match(html, /<span class="cv-subject"><span class="cv-link" data-link="src\/a &lt;b&gt;\.js"[^>]*>src\/a &lt;b&gt;\.js<\/span><\/span>/);
 });
+
+const line = (key, kind, text = '', extra = {}) => ({ key, kind, text, failed: false, done: true, ...extra });
+const NONE = { paths: () => [], plainClick: false };
+
+test('the minimal view shows each prompt and the final answer after the last tool, with the footer still summing every change', () => {
+  const html = linesHtml([
+    line('p1', 'prompt', 'Fix it'),
+    line('t', 'thinking', 'hmm'),
+    line('r1', 'reply', 'Let me look'),
+    tool('1', 'Edit', 'a.cs', '+2 -1'),
+    line('r2', 'reply', 'Fixed a.cs.'),
+    line('r3', 'reply', 'Tests pass.'),
+    line('e', 'end', '', { detail: '41s' }),
+  ], NONE, { minimal: true });
+  assert.match(html, /cv-prompt">Fix it<\/div><div class="cv-reply">Fixed a\.cs\.<\/div><div class="cv-reply">Tests pass\.<\/div><div class="cv-end">41s/);
+  assert.match(html, /1 file <span class="cv-add">\+2<\/span>/);
+  assert.doesNotMatch(html, /Let me look|cv-tool|cv-thinking/);
+});
+
+test('the minimal view keeps the last reply of a turn that ended on a tool, and nothing but the prompt of the turn still running', () => {
+  const html = linesHtml([
+    line('p1', 'prompt', 'One'),
+    line('r1', 'reply', 'Done, summary'),
+    tool('1', 'MCP', 'finish_task', 'ok'),
+    line('p2', 'prompt', 'Two'),
+    line('r2', 'reply', 'Looking'),
+    tool('2', 'Read', 'b.cs', '3 lines'),
+    line('r3', 'reply', 'So far so good'),
+  ], NONE, { minimal: true, live: true });
+  assert.match(html, /cv-prompt">One<\/div><div class="cv-reply">Done, summary<\/div><div class="cv-prompt">Two<\/div>$/);
+});
+
+test('the minimal view shows the newest turn once the agent is done with it, even with no footer', () => {
+  const lines = [line('p', 'prompt', 'Hi'), line('r1', 'reply', 'Hello')];
+  assert.match(linesHtml(lines, NONE, { minimal: true }), /cv-reply">Hello/);
+  assert.doesNotMatch(linesHtml(lines, NONE, { minimal: true, live: true }), /Hello/);
+  assert.match(linesHtml([...lines, line('x', 'interrupted')], NONE, { minimal: true, live: true }), /Hello<\/div><div class="cv-note">Stopped/);
+});

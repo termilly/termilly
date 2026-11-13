@@ -210,8 +210,8 @@ interface Tab {
   agentReply?: { turn: number; text: string | null };
   /** An agent has run in it. */
   agentSeen?: boolean;
-  /** It shows its agent's compact view instead of the terminal (js/compact.js); kept across restarts. */
-  compactView?: boolean;
+  /** It shows its agent's compact view (true) or minimal view ('minimal') instead of the terminal (js/compact.js); kept across restarts. */
+  compactView?: boolean | 'minimal';
   /** Its compact view's lines and elements (js/compact.js). */
   compact?: import('../wwwroot/js/compact.js').CompactState;
   /** The Claude Code sessions it ran, oldest first, for My prompts (js/myprompts.js). */

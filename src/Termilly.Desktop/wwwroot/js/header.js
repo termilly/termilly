@@ -20,7 +20,7 @@ import { openTagPicker } from './tagpicker.js';
 import { openTabMenu, TAG_BUTTON } from './tabmenu.js';
 import { find, setHtmlIfChanged } from './dom.js';
 import { openPrompts, hasPrompts, PROMPTS_TITLE } from './myprompts.js';
-import { setCompact, updateSwitch, COMPACT_VIEW } from './compact.js';
+import { setView, updateSwitch, COMPACT_VIEW } from './compact.js';
 
 /** The header's parts that change with the terminal (HEADER_HTML has them). */
 const PINNED_NOTE = '.pane-note';
@@ -43,7 +43,7 @@ const HEADER_HTML = `
     <button class="rec-chip log-chip" title="Logging to a file" hidden><span class="rec-dot"></span>LOG</button>
     <button class="bc-toggle" hidden></button>
     <span class="pane-actions">
-      <span class="seg compact-switch" hidden><button data-view="${COMPACT_VIEW.compact}" title="One line per step, with a prompt box">Compact</button><button data-view="${COMPACT_VIEW.terminal}" title="The agent’s own screen">Terminal</button></span>
+      <span class="seg compact-switch" hidden><button data-view="${COMPACT_VIEW.minimal}" title="Only your prompts and the agent’s final answers, with a prompt box">Minimal</button><button data-view="${COMPACT_VIEW.compact}" title="One line per step, with a prompt box">Compact</button><button data-view="${COMPACT_VIEW.terminal}" title="The agent’s own screen">Terminal</button></span>
       <button class="pane-btn agent-stop-btn" title="Stop the agent (Esc)" hidden>${ICONS.stop}<span>Stop</span></button>
       <button class="pane-btn menu-btn" title="Terminal menu">${ICONS.more}</button>
       <button class="pane-btn prompts-btn" title="${PROMPTS_TITLE}" hidden>${ICONS.prompts}</button>
@@ -86,8 +86,7 @@ function wireHeader(tab, header) {
   click(CAST_CHIP, () => toggleRecording(tab));
   click(STOP_BUTTON, () => stopAgent(tab));
   click(NOTE_BUTTON, () => openTodo(markedList(tab) ?? terminalList(tab)));
-  click(`[data-view="${COMPACT_VIEW.compact}"]`, () => setCompact(tab, true));
-  click(`[data-view="${COMPACT_VIEW.terminal}"]`, () => setCompact(tab, false));
+  for (const view of Object.values(COMPACT_VIEW)) click(`[data-view="${view}"]`, () => setView(tab, view));
   click(PROMPTS_BUTTON, e => openPrompts(tab, /** @type {HTMLElement} */ (e.currentTarget)));
   click(PINNED_NOTE, e => openPinned(tab, /** @type {string} */ (/** @type {HTMLElement} */ (e.currentTarget).dataset.kind)));
   header.addEventListener('contextmenu', e => {

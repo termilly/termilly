@@ -1,7 +1,8 @@
 // @ts-check
 // The compact view's lines as HTML (js/compact.js shows them): the user's prompt at the top of each turn, the agent's
 // words, its thinking as one dim line, a line per tool with what came of it, and a footer when the turn ends with how
-// long it took and what it changed. Reads in a row fold into one line ("+2 files"). Pure: lines in, HTML out.
+// long it took and what it changed. Reads in a row fold into one line ("+2 files"). The minimal view keeps only the
+// prompts and the final answers. Pure: lines in, HTML out.
 
 import { escapeHtml } from './ui.js';
 import { findWebLinks } from './webaddress.js';
@@ -207,18 +208,59 @@ function lineHtml(line, turn, links) {
 }
 
 /**
- * Every line as HTML, oldest first.
+ * The lines split into turns, each starting at a prompt (lines before the first prompt are a turn of their own).
+ * @template {CompactLine} T
+ * @param {T[]} lines
+ * @returns {T[][]}
+ */
+function turnsOf(lines) {
+  /** @type {T[][]} */
+  const turns = [];
+  for (const line of lines) {
+    if (line.kind === COMPACT_KIND.prompt || !turns.length) turns.push([]);
+    turns[turns.length - 1].push(line);
+  }
+  return turns;
+}
+
+/**
+ * What the minimal view shows of a turn: its prompt and, once it's over, the agent's final answer and how it ended.
+ * The answer is the replies after its last tool; when it ended on a tool (a last call after its summary), its last
+ * reply. A turn is over when it ended or was stopped, when a newer one follows, or when the agent no longer works on it.
+ * @template {CompactLine} T
+ * @param {T[]} turn
+ * @param {boolean} live whether the agent still works on this turn
+ * @returns {T[]}
+ */
+function finalOf(turn, live) {
+  const prompt = turn.filter(line => line.kind === COMPACT_KIND.prompt);
+  const ending = turn.filter(line => line.kind === COMPACT_KIND.end || line.kind === COMPACT_KIND.interrupted);
+  if (live && !ending.length) return prompt;
+  const lastTool = turn.findLastIndex(line => line.kind === COMPACT_KIND.tool);
+  let answer = turn.slice(lastTool + 1).filter(line => line.kind === COMPACT_KIND.reply);
+  if (!answer.length) answer = turn.filter(line => line.kind === COMPACT_KIND.reply).slice(-1);
+  return [...prompt, ...answer, ...ending];
+}
+
+/**
+ * Every line as HTML, oldest first. The minimal view shows only the prompts and the agents' final answers (finalOf);
+ * a turn's footer still sums up all it changed.
  * @param {CompactLine[]} lines
  * @param {LineLinks} [links] the paths found in them, and how web addresses open
+ * @param {{ minimal?: boolean, live?: boolean }} [how] minimal: the minimal view; live: the agent works on the newest turn
  */
-export function linesHtml(lines, links = NO_LINKS) {
-  /** @type {CompactLine[]} */
-  let turn = [];
+export function linesHtml(lines, links = NO_LINKS, how = {}) {
+  const turns = turnsOf(foldLines(lines));
+  /** @type {string[]} */
   const html = [];
-  for (const line of foldLines(lines)) {
-    if (line.kind === COMPACT_KIND.prompt) turn = [];
-    html.push(lineHtml(line, turn, links));
-    turn.push(line);
-  }
+  turns.forEach((turn, i) => {
+    const shown = how.minimal ? new Set(finalOf(turn, !!how.live && i === turns.length - 1)) : null;
+    /** @type {CompactLine[]} */
+    const before = [];
+    for (const line of turn) {
+      if (!shown || shown.has(line)) html.push(lineHtml(line, before, links));
+      before.push(line);
+    }
+  });
   return html.join('');
 }

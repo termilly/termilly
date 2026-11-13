@@ -2,7 +2,8 @@
 // The compact view of an agent terminal (Claude Code or Codex): instead of the terminal, one line per step, read from
 // the agent's session file by the host (Features/CompactFeed.cs) and drawn by compactlines.js, with a prompt box of
 // its own that types into the agent. The terminal keeps running underneath at its size, so switching never redraws
-// the agent; a switch in the pane's header (header.js) flips between the two, remembered per terminal.
+// the agent; a switch in the pane's header (header.js) flips between the views, remembered per terminal. The minimal
+// view is the same with only the prompts and the agent's final answers (no tools, thinking or words in between).
 
 import { PAGE, HOST } from './protocol.js';
 import { send, onHost } from './host.js';
@@ -23,8 +24,8 @@ import { liveRow, screenRows } from './compactdrawer.js';
 
 /** @typedef {import('./compactlines.js').CompactLine} CompactLine */
 
-/** The two views the header's switch picks between. */
-export const COMPACT_VIEW = Object.freeze({ compact: 'compact', terminal: 'terminal' });
+/** The views the header's switch picks between. */
+export const COMPACT_VIEW = Object.freeze({ minimal: 'minimal', compact: 'compact', terminal: 'terminal' });
 
 /** Enter, as a terminal gets it. */
 const ENTER = '\r';
@@ -74,10 +75,23 @@ const VIEW_HTML = `
 const compactOf = tab => /** @type {CompactState} */ (tab.compact ??= { lines: [], session: null, el: null, frame: 0, frameWin: null, sending: Promise.resolve(), writes: null });
 
 /**
- * Whether the terminal shows its compact view: the user switched it on, and an agent runs there.
+ * The view the user picked for the terminal (saved as true for the compact view, as before there was a minimal one).
+ * @param {Tab} tab
+ * @returns {string} a COMPACT_VIEW
+ */
+const pickedView = tab => tab.compactView === COMPACT_VIEW.minimal ? COMPACT_VIEW.minimal : tab.compactView ? COMPACT_VIEW.compact : COMPACT_VIEW.terminal;
+
+/**
+ * Whether the terminal shows its compact view (or the minimal one): the user switched it on, and an agent runs there.
  * @param {Tab} tab
  */
 export const isCompact = tab => !!tab.compactView && !!runningAgent(tab);
+
+/**
+ * Whether the view shows only the prompts and the final answers.
+ * @param {Tab} tab
+ */
+const isMinimal = tab => pickedView(tab) === COMPACT_VIEW.minimal;
 
 /**
  * Whether the header shows the switch: an agent runs in the terminal.
@@ -86,16 +100,23 @@ export const isCompact = tab => !!tab.compactView && !!runningAgent(tab);
 export const hasCompact = tab => !!runningAgent(tab);
 
 /**
- * Switches the terminal between its compact view and the terminal.
+ * Switches the terminal between its minimal view, its compact view and the terminal.
  * @param {Tab} tab
- * @param {boolean} compact
+ * @param {string} view a COMPACT_VIEW
  */
-export function setCompact(tab, compact) {
-  if (!!tab.compactView === compact) return;
-  tab.compactView = compact || undefined;
+export function setView(tab, view) {
+  const was = pickedView(tab);
+  if (was === view) return;
+  tab.compactView = view === COMPACT_VIEW.minimal ? COMPACT_VIEW.minimal : view === COMPACT_VIEW.compact ? true : undefined;
   persist();
+  // Between the two views only what the feed shows changes.
+  if (was !== COMPACT_VIEW.terminal && view !== COMPACT_VIEW.terminal) {
+    updateSwitch(tab);
+    render(tab);
+    return;
+  }
   apply(tab);
-  if (compact) focusInput(tab);
+  if (view !== COMPACT_VIEW.terminal) focusInput(tab);
   else tab.view?.term?.focus();
 }
 
@@ -257,7 +278,7 @@ function build(tab) {
   el.addEventListener('click', e => {
     const target = /** @type {Element} */ (e.target);
     if (clickLink(tab, e)) return;
-    if (target.closest?.(OPEN_TERMINAL)) setCompact(tab, false);
+    if (target.closest?.(OPEN_TERMINAL)) setView(tab, COMPACT_VIEW.terminal);
     const choice = /** @type {HTMLElement | null} */ (target.closest?.(CHOICE));
     const card = /** @type {HTMLElement | null} */ (target.closest?.(CARD));
     if (choice) pick(tab, choice.dataset.choice ?? '', card?.dataset.menu ?? '');
@@ -383,7 +404,8 @@ function draw(tab) {
   const feed = find(c.el, '.cv-feed');
   const following = feed.scrollHeight - feed.scrollTop - feed.clientHeight < FOLLOW_SLACK_PX;
   const html = c.lines.length || waitsForAnswer(tab)
-    ? linesHtml(c.lines, lineLinks(tab, c.lines, () => render(tab))) + workingHtml(tab)
+    ? linesHtml(c.lines, lineLinks(tab, c.lines, () => render(tab)), { minimal: isMinimal(tab), live: waitsForAnswer(tab) || tab.agent?.state === AGENT_STATE.working })
+      + workingHtml(tab)
     : emptyHtml(tab);
   // Drawn again only when it changed: new elements under a pressed mouse button would lose its click (a press on a
   // card moves the focus about, which draws the view again), and a selection in the feed would be lost.
@@ -528,9 +550,8 @@ export function updateSwitch(tab) {
   const box = /** @type {HTMLElement | null | undefined} */ (tab.view?.header?.querySelector('.compact-switch'));
   if (!box) return;
   box.hidden = !hasCompact(tab);
-  const compact = isCompact(tab);
-  find(box, `[data-view="${COMPACT_VIEW.compact}"]`).classList.toggle('on', compact);
-  find(box, `[data-view="${COMPACT_VIEW.terminal}"]`).classList.toggle('on', !compact);
+  const shown = isCompact(tab) ? pickedView(tab) : COMPACT_VIEW.terminal;
+  for (const view of Object.values(COMPACT_VIEW)) find(box, `[data-view="${view}"]`).classList.toggle('on', view === shown);
 }
 
 /**
