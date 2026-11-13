@@ -20,6 +20,7 @@ internal sealed class CompactCodex : ICompactReader
         public const string Id = "id";
         public const string Cwd = "cwd";
         public const string Content = "content";
+        public const string Phase = "phase";
         public const string SummaryText = "summary_text";
         public const string ParsedCmd = "parsed_cmd";
         public const string Cmd = "cmd";
@@ -131,7 +132,7 @@ internal sealed class CompactCodex : ICompactReader
                 Words(log, id, CompactKinds.Prompt, CompactJson.Texts(item[Fields.Content]));
                 break;
             case Types.AgentMessage:
-                Words(log, id, CompactKinds.Reply, CompactJson.Texts(item[Fields.Content]));
+                Words(log, id, CompactKinds.Reply, CompactJson.Texts(item[Fields.Content]), IsFinal(item[Fields.Phase].AsText()));
                 break;
             case Types.Reasoning:
                 Words(log, id, CompactKinds.Thinking, string.Join("\n", (item[Fields.SummaryText] as JsonArray)?.Select(s => s.AsText()).OfType<string>() ?? []));
@@ -154,12 +155,27 @@ internal sealed class CompactCodex : ICompactReader
         }
     }
 
-    private static void Words(CompactLog log, string id, string kind, string text)
+    private static void Words(CompactLog log, string id, string kind, string text, bool? final = null)
     {
         if (!string.IsNullOrWhiteSpace(text))
         {
-            log.Put(new CompactLine(id, kind, CompactText.Cut(text.Trim(), CompactText.MaxWords)));
+            log.Put(new CompactLine(id, kind, CompactText.Cut(text.Trim(), CompactText.MaxWords), Final: final));
         }
+    }
+
+    /// <summary>Whether a message is Codex's answer by its phase: final_answer, or commentary on the way; null without one.</summary>
+    internal static bool? IsFinal(string? phase) => phase switch
+    {
+        Phases.FinalAnswer => true,
+        Phases.Commentary => false,
+        _ => null,
+    };
+
+    /// <summary>How Codex marks its messages.</summary>
+    private static class Phases
+    {
+        public const string FinalAnswer = "final_answer";
+        public const string Commentary = "commentary";
     }
 
     /// <summary>A command, as Codex parsed it: a read, a search or a listing by what it worked on; anything else as typed.</summary>

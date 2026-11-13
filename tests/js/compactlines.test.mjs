@@ -115,3 +115,29 @@ test('the minimal view shows the newest turn once the agent is done with it, eve
   assert.doesNotMatch(linesHtml(lines, NONE, { minimal: true, live: true }), /Hello/);
   assert.match(linesHtml([...lines, line('x', 'interrupted')], NONE, { minimal: true, live: true }), /Hello<\/div><div class="cv-note">Stopped/);
 });
+
+test('the minimal view takes the agent\'s own marks: only replies marked final, none when all are words on the way', () => {
+  const marked = linesHtml([
+    line('p', 'prompt', 'Hi'),
+    line('r1', 'reply', 'Checking first', { final: false }),
+    line('r2', 'reply', 'Still checking', { final: false }),
+    line('r3', 'reply', 'The answer', { final: true }),
+  ], NONE, { minimal: true });
+  assert.match(marked, /cv-prompt">Hi<\/div><div class="cv-reply">The answer<\/div>$/);
+  const stopped = linesHtml([
+    line('p', 'prompt', 'Hi'),
+    line('r1', 'reply', 'Checking first', { final: false }),
+    line('x', 'interrupted'),
+  ], NONE, { minimal: true });
+  assert.doesNotMatch(stopped, /Checking/);
+});
+
+test('the minimal view shows no words from before the last tool of a stopped turn in a file without marks', () => {
+  const html = linesHtml([
+    line('p', 'prompt', 'Hi'),
+    line('r1', 'reply', 'Let me look'),
+    tool('1', 'Read', 'a.cs', '3 lines'),
+    line('x', 'interrupted'),
+  ], NONE, { minimal: true });
+  assert.match(html, /cv-prompt">Hi<\/div><div class="cv-note">Stopped<\/div>$/);
+});

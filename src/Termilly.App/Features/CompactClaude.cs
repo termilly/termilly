@@ -34,6 +34,7 @@ internal sealed class CompactClaude : ICompactReader
         public const string DurationMs = "durationMs";
         public const string ToolUseResult = "toolUseResult";
         public const string FilePath = "file_path";
+        public const string StopReason = "stop_reason";
     }
 
     private static class Types
@@ -44,6 +45,8 @@ internal sealed class CompactClaude : ICompactReader
         public const string TurnDuration = "turn_duration";
         public const string ToolUse = "tool_use";
         public const string ToolResult = "tool_result";
+        /// <summary>A stop reason that says the message goes on (to its tool calls, or a server tool's pause).</summary>
+        public const string PauseTurn = "pause_turn";
     }
 
     /// <summary>How Claude Code marks a turn the user stopped, at the start of the user line it writes.</summary>
@@ -94,6 +97,17 @@ internal sealed class CompactClaude : ICompactReader
         }
     }
 
+    /// <summary>
+    /// Whether a message's words are Claude's answer: it stopped for good (end_turn, a stop sequence, its token limit), not
+    /// to call a tool; null when the transcript doesn't say.
+    /// </summary>
+    internal static bool? IsFinal(string? stopReason) => stopReason switch
+    {
+        null => null,
+        Types.ToolUse or Types.PauseTurn => false,
+        _ => true,
+    };
+
     private static bool Wants(ReadOnlySpan<byte> line)
     {
         foreach (var mark in Wanted)
@@ -113,6 +127,7 @@ internal sealed class CompactClaude : ICompactReader
         {
             return;
         }
+        var final = IsFinal(root[Fields.Message]?[Fields.StopReason].AsText());
         var i = 0;
         foreach (var block in blocks.OfType<JsonObject>())
         {
@@ -120,7 +135,7 @@ internal sealed class CompactClaude : ICompactReader
             switch (block[Fields.Type].AsText())
             {
                 case Fields.Text when block[Fields.Text].AsText() is { } text && !string.IsNullOrWhiteSpace(text):
-                    log.Put(new CompactLine(part, CompactKinds.Reply, CompactText.Cut(text.Trim(), CompactText.MaxWords)));
+                    log.Put(new CompactLine(part, CompactKinds.Reply, CompactText.Cut(text.Trim(), CompactText.MaxWords), Final: final));
                     break;
                 case Fields.Thinking when block[Fields.Thinking].AsText() is { } thought && !string.IsNullOrWhiteSpace(thought):
                     log.Put(new CompactLine(part, CompactKinds.Thinking, CompactText.Cut(thought.Trim(), CompactText.MaxWords)));

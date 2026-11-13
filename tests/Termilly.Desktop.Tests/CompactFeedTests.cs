@@ -157,6 +157,24 @@ public sealed class CompactFeedTests : IDisposable
     }
 
     [Fact]
+    public void A_reply_says_whether_the_agent_marked_it_its_answer()
+    {
+        static string Said(string uuid, string text, string stop) =>
+            $$$"""{"type":"assistant","uuid":"{{{uuid}}}","cwd":"{{{Cwd}}}","message":{"role":"assistant","content":[{"type":"text","text":"{{{text}}}"}]{{{stop}}}}}""";
+        var claude = Lines(new CompactClaude(),
+            Said("a1", "Checking first.", ",\"stop_reason\":\"tool_use\""),
+            Said("a2", "Done.", ",\"stop_reason\":\"end_turn\""),
+            Said("a3", "Old file.", ""));
+        Assert.Equal([(bool?)false, true, null], claude.Select(l => l.Final));
+
+        var codex = Lines(new CompactCodex(),
+            Item("""{"type":"AgentMessage","id":"m1","content":[{"type":"Text","text":"Looking."}],"phase":"commentary"}"""),
+            Item("""{"type":"AgentMessage","id":"m2","content":[{"type":"Text","text":"Found it."}],"phase":"final_answer"}"""),
+            Item("""{"type":"AgentMessage","id":"m3","content":[{"type":"Text","text":"Older rollout."}]}"""));
+        Assert.Equal([(bool?)false, true, null], codex.Select(l => l.Final));
+    }
+
+    [Fact]
     public void A_view_gets_every_line_when_switched_on_then_only_what_changed()
     {
         var path = Path.Combine(_dir, "s.jsonl");

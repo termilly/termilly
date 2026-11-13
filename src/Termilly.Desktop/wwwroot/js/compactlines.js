@@ -225,8 +225,7 @@ function turnsOf(lines) {
 
 /**
  * What the minimal view shows of a turn: its prompt and, once it's over, the agent's final answer and how it ended.
- * The answer is the replies after its last tool; when it ended on a tool (a last call after its summary), its last
- * reply. A turn is over when it ended or was stopped, when a newer one follows, or when the agent no longer works on it.
+ * A turn is over when it ended or was stopped, when a newer one follows, or when the agent no longer works on it.
  * @template {CompactLine} T
  * @param {T[]} turn
  * @param {boolean} live whether the agent still works on this turn
@@ -236,10 +235,26 @@ function finalOf(turn, live) {
   const prompt = turn.filter(line => line.kind === COMPACT_KIND.prompt);
   const ending = turn.filter(line => line.kind === COMPACT_KIND.end || line.kind === COMPACT_KIND.interrupted);
   if (live && !ending.length) return prompt;
+  return [...prompt, ...answerOf(turn, ending), ...ending];
+}
+
+/**
+ * A turn's final answer. The agent marks its replies (final): the ones it marked its answer, and none when it marked
+ * them all as words on the way (a turn stopped before its answer). A file that doesn't mark them (an older one): the
+ * replies after the last tool, or the last reply when it ended on a tool (a last call after its summary), but nothing
+ * of a stopped turn's words before its last tool.
+ * @template {CompactLine} T
+ * @param {T[]} turn
+ * @param {T[]} ending its end or interrupted line
+ * @returns {T[]}
+ */
+function answerOf(turn, ending) {
+  const replies = turn.filter(line => line.kind === COMPACT_KIND.reply);
+  if (replies.some(line => line.final != null)) return replies.filter(line => line.final === true);
   const lastTool = turn.findLastIndex(line => line.kind === COMPACT_KIND.tool);
-  let answer = turn.slice(lastTool + 1).filter(line => line.kind === COMPACT_KIND.reply);
-  if (!answer.length) answer = turn.filter(line => line.kind === COMPACT_KIND.reply).slice(-1);
-  return [...prompt, ...answer, ...ending];
+  const after = turn.slice(lastTool + 1).filter(line => line.kind === COMPACT_KIND.reply);
+  if (after.length || ending.some(line => line.kind === COMPACT_KIND.interrupted)) return after;
+  return replies.slice(-1);
 }
 
 /**

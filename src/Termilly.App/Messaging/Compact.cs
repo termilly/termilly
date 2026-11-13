@@ -26,9 +26,11 @@ internal static partial class FromPage
 /// replaces it (a tool's result arrived). <see cref="Text"/> is the words (a prompt, a reply, thinking) or what a tool
 /// worked on; <see cref="Detail"/> what came of it ("12 hits", "+9 -2", "41 passed"). A question the agent asks the
 /// user (Claude Code's AskUserQuestion) carries its <see cref="Questions"/>, and a plan up for approval (ExitPlanMode)
-/// the plan as <see cref="Body"/>, for the view's card.
+/// the plan as <see cref="Body"/>, for the view's card. A reply says with <see cref="Final"/> whether the agent marked it
+/// its answer (true) or words on the way (false; Claude Code went on to a tool, Codex called it commentary); null when
+/// the file doesn't say.
 /// </summary>
-internal sealed record CompactLine(string Key, string Kind, string Text, string? Verb = null, string? Detail = null, bool Failed = false, bool Done = true, IReadOnlyList<CompactQuestion>? Questions = null, string? Body = null);
+internal sealed record CompactLine(string Key, string Kind, string Text, string? Verb = null, string? Detail = null, bool Failed = false, bool Done = true, IReadOnlyList<CompactQuestion>? Questions = null, string? Body = null, bool? Final = null);
 
 /// <summary>A question the agent asks the user, with its choices (one, or several with <see cref="Multi"/>).</summary>
 internal sealed record CompactQuestion(string Question, string? Header, bool Multi, IReadOnlyList<CompactOption> Options);
