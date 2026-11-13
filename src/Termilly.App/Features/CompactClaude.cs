@@ -118,8 +118,8 @@ internal sealed class CompactClaude : ICompactReader
                     {
                         var call = ClaudeToolLine.Call(name, block[Fields.Input] as JsonObject, cwd);
                         _calls[id] = call;
-                        ForgetLost(log);
                         log.Put(new CompactLine(id, CompactKinds.Tool, call.Subject, call.Verb, Done: false));
+                        ForgetLost(log);
                     }
                     break;
             }

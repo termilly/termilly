@@ -42,14 +42,14 @@ const VIEW_HTML = `
 
 /**
  * A terminal's compact view: what the host sent of its session, the elements showing it, and the prompt being typed.
- * @typedef {{ lines: CompactLine[], session: string | null, el: HTMLElement | null, frame: number, sending: Promise<void> }} CompactState
+ * @typedef {{ lines: CompactLine[], session: string | null, el: HTMLElement | null, frame: number, frameWin: Window | null, sending: Promise<void> }} CompactState
  */
 
 /**
  * @param {Tab} tab
  * @returns {CompactState}
  */
-const compactOf = tab => /** @type {CompactState} */ (tab.compact ??= { lines: [], session: null, el: null, frame: 0, sending: Promise.resolve() });
+const compactOf = tab => /** @type {CompactState} */ (tab.compact ??= { lines: [], session: null, el: null, frame: 0, frameWin: null, sending: Promise.resolve() });
 
 /**
  * Whether the terminal shows its compact view: the user switched it on, and an agent runs there.
@@ -195,9 +195,13 @@ async function typePrompt(tab, text) {
  */
 function render(tab) {
   const c = compactOf(tab);
-  if (!c.el || c.frame) return;
-  // The frame of the window it shows in: one of its own may be in front while the main window is minimized.
+  if (!c.el) return;
+  // The frame of the window it shows in: one of its own may be in front while the main window is minimized. A frame
+  // asked of another window (the pane came back from one that closed) may never come: it's asked again here.
   const win = c.el.ownerDocument.defaultView ?? window;
+  if (c.frame && c.frameWin === win) return;
+  if (c.frame && c.frameWin && !c.frameWin.closed) c.frameWin.cancelAnimationFrame(c.frame);
+  c.frameWin = win;
   c.frame = win.requestAnimationFrame(() => {
     c.frame = 0;
     draw(tab);
