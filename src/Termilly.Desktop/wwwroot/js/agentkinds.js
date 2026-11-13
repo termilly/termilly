@@ -13,7 +13,9 @@ import { AGENT_KIND, PROFILE_ICON } from './constants.js';
  * @property {string} program the command that starts it, which is its program's name too
  * @property {(session: string) => string} resume what resumes one of its sessions
  * @property {boolean} hookAtStart whether its hooks report in as it starts (Claude Code's SessionStart), so a resumed
- *   session is back when they do; Codex's first hook waits for a prompt, so its screen going quiet says it instead
+ *   session is back when they do; Codex's first hook waits for a prompt, so its input line on a still screen says it instead
+ * @property {string | null} inputMark what its input line starts with once it reads a prompt (Codex's ›), for an agent
+ *   whose hooks don't report its start: until that line shows, a line typed into it can be lost
  * @property {boolean} enterAfterQuiet whether Enter typed after a text must wait for its screen to settle: Codex takes
  *   fast typing for a paste, and an Enter arriving while a long one is still going in becomes a new line in it
  */
@@ -22,11 +24,11 @@ import { AGENT_KIND, PROFILE_ICON } from './constants.js';
 export const AGENTS = Object.freeze({
   [AGENT_KIND.claude]: {
     name: AGENT_KIND.claudeName, short: 'Claude', icon: PROFILE_ICON.claude, program: AGENT_KIND.claude,
-    resume: session => `claude --resume ${session}`, hookAtStart: true, enterAfterQuiet: false,
+    resume: session => `claude --resume ${session}`, hookAtStart: true, inputMark: null, enterAfterQuiet: false,
   },
   [AGENT_KIND.codex]: {
     name: AGENT_KIND.codexName, short: AGENT_KIND.codexName, icon: PROFILE_ICON.codex, program: AGENT_KIND.codex,
-    resume: session => `codex resume ${session}`, hookAtStart: false, enterAfterQuiet: true,
+    resume: session => `codex resume ${session}`, hookAtStart: false, inputMark: '\u203a', enterAfterQuiet: true,
   },
 });
 
