@@ -44,8 +44,8 @@ function snapshot() {
   /** @type {Record<string, object>} */
   const tabs = {};
   for (const tab of state.tabs.values()) {
-    // A terminal still waiting to open after a start keeps what it was going to show.
-    const waiting = isHeld(tab) ? (tab.start?.output ?? { lines: [], scroll: null }) : null;
+    // A terminal still waiting to open after a start keeps what it was going to show; so does one set aside since.
+    const waiting = isHeld(tab) || (tab.setAside && !tab.view?.term) ? (tab.start?.output ?? { lines: [], scroll: null }) : null;
     if ((!tab.view?.term && !waiting) || tab.noHistory) continue;
     // A session still waiting to resume (its shell hasn't shown a prompt yet) is kept for the next start too.
     const session = tab.agent?.session ?? tab.hibernated?.session ?? tab.start?.resumeSession;
@@ -109,7 +109,8 @@ export function applySnapshot(saved) {
     // The session resumes in its own folder: the shell may have moved on from it (`cd x && claude`) before the
     // prompt that would have said so. Over SSH that folder is typed (resume.js), so it's checked here.
     if (folder) tab.lastCwd = folder;
-    if (session && s.hibernated) {
+    // One set aside resumes only when it's brought back, as a hibernated one does when it's opened.
+    if (session && (s.hibernated || tab.setAside)) {
       markHibernated(tab, session, saved.savedAt, folder, kindOf(s));
     } else if (session) {
       prepareStart(tab, { resumeSession: session, resumeKind: kindOf(s), command: resumeAgentCommand(session, kindOf(s)) });

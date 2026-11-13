@@ -1213,6 +1213,14 @@ body[data-sidebar="rail"] .side-rail { opacity: 1; pointer-events: auto; }
 .tab-row.collapsed .more-tags { display: inline-flex; }
 .menu.tags-menu { width: auto; min-width: 170px; max-width: 260px; }
 .tab-empty { padding: 4px 6px; color: var(--faint); font-size: 12px; }
+/* Terminals set aside (js/panes.js setAsideTab): under a heading of their own that folds, dimmed until hovered. */
+.aside-head { display: flex; align-items: center; gap: 5px; width: 100%; margin-top: 4px; padding: 3px 6px 3px 2px; border-radius: 6px; color: var(--faint); font-size: 11px; letter-spacing: .03em; text-transform: uppercase; }
+.aside-head:hover { background: var(--hover); color: var(--text); }
+.aside-head svg { flex: none; width: 11px; height: 11px; stroke-width: 1.7; transition: transform 0.15s; }
+.aside-head.open svg { transform: rotate(90deg); }
+.aside-head .ws-count { text-transform: none; }
+.aside-rows .tab-row { opacity: .6; }
+.aside-rows .tab-row:hover { opacity: 1; }
 
 .attn {
   width: 6px;

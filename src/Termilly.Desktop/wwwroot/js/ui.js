@@ -263,6 +263,8 @@ export const ICONS = {
   // Drawn on the pixel grid for 16px at a 1px stroke (menus show them that way): straight lines sit on .5, dots
   // are whole-pixel squares, so they stay sharp instead of smearing across two pixels.
   cross: '<svg viewBox="0 0 16 16"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></svg>',
+  // Set aside (js/panes.js setAsideTab): a line low down, as a window's minimize, into the workspace's list.
+  setAside: '<svg viewBox="0 0 16 16"><path d="M3.5 11.5h9"/></svg>',
   more: '<svg viewBox="0 0 16 16"><rect x="3" y="7" width="2" height="2" rx=".5" fill="currentColor" stroke="none"/><rect x="7" y="7" width="2" height="2" rx=".5" fill="currentColor" stroke="none"/><rect x="11" y="7" width="2" height="2" rx=".5" fill="currentColor" stroke="none"/></svg>',
   hash: '<svg viewBox="0 0 16 16"><path d="M6.5 3v10M10.5 3v10M3 6.5h10M3 10.5h10"/></svg>',
   puzzle: '<svg viewBox="0 0 16 16"><path d="M6.5 3a1.5 1.5 0 0 1 3 0v1.5h3v3H11a1.5 1.5 0 0 0 0 3h1.5v3h-3V12a1.5 1.5 0 0 0-3 0v1.5h-4v-3H4a1.5 1.5 0 0 0 0-3H2.5v-3h4z"/></svg>',

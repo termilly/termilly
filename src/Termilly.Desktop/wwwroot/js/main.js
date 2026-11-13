@@ -13,7 +13,7 @@ import { setKeyHandler, scheduleFit, clearActivity, keptRunning, holdOpening, op
 import { consoleDefaults } from './consolecolors.js';
 import {
   newTab, closeTab, focusedTab, splitFocused, moveFocus, renderAll, switchWorkspace, restoreFocus, noteOutput,
-  cycleGroupTab, moveAllToTabs, reopenWindows, DIRECTION,
+  cycleGroupTab, moveAllToTabs, reopenWindows, setAsideTab, DIRECTION,
 } from './panes.js';
 import { initSidebar, toggleSidebar } from './sidebar.js';
 import { initToolbar } from './toolbar.js';
@@ -141,6 +141,7 @@ const commands = {
   splitRight: () => splitFocused(SPLIT.row),
   splitDown: () => splitFocused(SPLIT.column),
   closeTerminal: () => { const tab = focusedTab(); if (tab) closeTab(tab); },
+  setAsideTerminal: () => { const tab = focusedTab(); if (tab) setAsideTab(tab); },
   renameTerminal: () => { const tab = focusedTab(); if (tab) beginRename(tab); },
   tagTerminal: () => {
     const tab = focusedTab();
@@ -188,6 +189,7 @@ setCommands(() => [
   { label: 'Rename terminal', keywords: 'tab name title', hint: keyHint(KEY_ID.renameTerminal), run: commands.renameTerminal },
   { label: 'Tag terminal', keywords: 'label tags', run: commands.tagTerminal },
   { label: 'Close terminal', keywords: 'tab kill', hint: keyHint(KEY_ID.closeTerminal), run: commands.closeTerminal },
+  { label: 'Set aside terminal', keywords: 'hide park keep later pause minimize', run: commands.setAsideTerminal },
   { label: 'New workspace', keywords: 'project group', hint: keyHint(KEY_ID.newWorkspace), run: commands.newWorkspace },
   { label: 'Toggle workspace sidebar', keywords: 'navigator hide show rail', hint: keyHint(KEY_ID.toggleSidebar), run: commands.toggleSidebar },
   { label: 'Agents: next terminal that needs me', keywords: 'inbox waiting attention jump claude', hint: keyHint(KEY_ID.nextNeedingMe), run: () => setTimeout(commands.nextNeedingMe) },

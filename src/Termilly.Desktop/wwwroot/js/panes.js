@@ -5,13 +5,13 @@
 import { PAGE } from './protocol.js';
 import { send, request, platform, PLATFORM } from './host.js';
 import {
-  state, on, emit, persist, newId, activeWs, wsById, tabsOf, tabTitle, defaultProfile, ensureTag, activityOf, leaves,
+  state, on, emit, persist, newId, activeWs, isAway, firstShown, wsById, tabsOf, tabTitle, defaultProfile, ensureTag, activityOf, leaves,
   replaceNode, findLeaf, detachLeaf, groupOf, firstTabOf, markSeen, findPreview, withoutPreview, EVENTS, NODE, SPLIT,
   SPLIT_EVEN, TAB_WINDOW,
 } from './store.js';
 import { ICONS, tabBadgeHtml, activityHtml } from './ui.js';
 import { openTerminal, disposeTerminal, bufferLines, scheduleFit, prepareStart, holdBack, isHeld } from './terminals.js';
-import { wake } from './hibernate.js';
+import { wake, restAside } from './hibernate.js';
 import { byId, find, targetOf, WORKSPACE_ID, CANVAS_2D, dragPointer, onMiddleClick } from './dom.js';
 import { ENV_CLASS, ENV_COLOR } from './environments.js';
 import { detach, closeWindow, focusWindow, setWindowTitle, OFFSET_PX, MIN_WIDTH_PX } from './windows.js';
@@ -284,7 +284,7 @@ export function closeTab(tab) {
   disposeTerminal(tab);
   tab.view?.el.remove();
   state.tabs.delete(tab.id);
-  if (ws.focusId === tab.id) ws.focusId = sibling ? firstTabOf(sibling) ?? tabsOf(ws)[0]?.id ?? null : null;
+  if (ws.focusId === tab.id) ws.focusId = sibling ? shownIn(sibling) ?? firstShown(ws)?.id ?? null : null;
   renderWorkspace(ws);
   if (ws.id === state.activeId) {
     const next = state.tabs.get(/** @type {string} */ (ws.focusId));
@@ -292,6 +292,16 @@ export function closeTab(tab) {
   }
   emit(EVENTS.workspaces);
   persist();
+}
+
+/**
+ * The terminal a part of the layout puts in focus: its shown one (a group's tab), else its first, that isn't set aside.
+ * @param {LayoutNode} node
+ */
+function shownIn(node) {
+  const first = firstTabOf(node);
+  if (first && !state.tabs.get(first)?.setAside) return first;
+  return [...leaves(node)].find(leaf => !state.tabs.get(leaf.tabId)?.setAside)?.tabId ?? null;
 }
 
 /** @param {Tab} tab */
@@ -336,7 +346,7 @@ export function moveTab(tab, targetWsId) {
   if (!to || from === to) return;
   const sibling = detachLeaf(from, tab.id);
   dropLonePreview(from);
-  if (from.focusId === tab.id) from.focusId = sibling ? firstTabOf(sibling) ?? tabsOf(from)[0]?.id ?? null : null;
+  if (from.focusId === tab.id) from.focusId = sibling ? shownIn(sibling) ?? firstShown(from)?.id ?? null : null;
   tab.wsId = to.id;
   insertLeaf(to, tab);
   to.focusId = tab.id;
@@ -456,18 +466,93 @@ function rehome(tab) {
 }
 
 /**
- * What a workspace shows while all its terminals are in windows of their own: a button that brings them back.
+ * What a workspace shows while all its terminals are away (in windows of their own, or set aside): a button that brings
+ * them back.
  * @param {Workspace} ws
  */
-function allDetachedNote(ws) {
+function allAwayNote(ws) {
   const el = document.createElement('div');
   el.className = 'empty';
-  el.innerHTML = '<p>This workspace’s terminals are in windows of their own</p><button>Bring them back</button>';
-  find(el, 'button').addEventListener('click', () => { for (const tab of tabsOf(ws)) attachTab(tab); });
+  const tabs = tabsOf(ws);
+  const where = tabs.every(t => t.setAside) ? 'are set aside'
+    : tabs.some(t => t.setAside) ? 'are set aside or in windows of their own' : 'are in windows of their own';
+  el.innerHTML = `<p>This workspace’s terminals ${where}</p><button>Bring them back</button>`;
+  find(el, 'button').addEventListener('click', () => {
+    for (const tab of tabsOf(ws)) {
+      if (tab.setAside) bringBack(tab, false); else attachTab(tab);
+    }
+    focusTab(state.tabs.get(/** @type {string} */ (ws.focusId)) ?? tabsOf(ws)[0]);
+  });
   return el;
 }
 
+// ---- Set aside ----
+
+/** The menu entry that sets a terminal aside, and the pane's button for it (js/tabmenu.js, js/header.js). */
+export const SET_ASIDE_LABEL = 'Set aside';
+export const SET_ASIDE_TITLE = 'Set aside: out of the layout, kept in the workspace’s list';
+
+/**
+ * Sets a terminal aside: out of its workspace's layout (it keeps its place there), listed under the workspace until
+ * it's brought back. A shell keeps running; an agent ends once it's idle, keeping its session, to resume when the
+ * terminal comes back (hibernate.js).
+ * @param {Tab} tab
+ */
+export function setAsideTab(tab) {
+  const ws = wsById(tab.wsId);
+  if (!ws || tab.setAside || !state.tabs.has(tab.id)) return;
+  if (tab.detached) {
+    // Out of its window first: set aside, it's in none.
+    tab.detached = false;
+    closeWindow(windowKey(tab), { quiet: true });
+  }
+  tab.setAside = Date.now();
+  if (ws.focusId === tab.id) ws.focusId = tabsOf(ws).find(t => !isAway(t))?.id ?? null;
+  renderWorkspace(ws);
+  if (ws.id === state.activeId) {
+    const next = state.tabs.get(/** @type {string} */ (ws.focusId));
+    if (next) focusTab(next); else restoreFocus();
+  }
+  restAside(tab);
+  emit(EVENTS.tab, tab);
+  emit(EVENTS.workspaces);
+  persist();
+}
+
+/**
+ * Puts a set-aside terminal back in its workspace's layout, where it was; its agent resumes when it's focused (wake).
+ * @param {Tab} tab
+ * @param {boolean} [focus] focus it too (false while bringing several back)
+ */
+export function bringBack(tab, focus = true) {
+  const ws = wsById(tab.wsId);
+  if (!tab.setAside || !ws) return;
+  tab.setAside = undefined;
+  renderWorkspace(ws);
+  rehome(tab);
+  emit(EVENTS.tab, tab);
+  emit(EVENTS.workspaces);
+  persist();
+  if (focus) focusTab(tab);
+}
+
 // ---- Focus and workspaces ----
+
+/**
+ * Focuses a terminal in a window of its own: that window comes to the front, and the workspace keeps its own focused
+ * terminal.
+ * @param {Tab} tab
+ */
+function focusDetached(tab) {
+  markSeen(tab);
+  wake(tab);
+  focusWindow(windowKey(tab));
+  tab.view?.term?.focus();
+  if (tab.attention) {
+    tab.attention = false;
+    emit(EVENTS.tab, tab);
+  }
+}
 
 /**
  * Focuses a tab, switching to its workspace if needed. Looking at a tab clears its attention dot.
@@ -475,6 +560,11 @@ function allDetachedNote(ws) {
  */
 export function focusTab(tab) {
   if (!tab || !state.tabs.has(tab.id)) return;
+  // Set aside: going to it brings it back (the sidebar's list, the palette, a notification).
+  if (tab.setAside) {
+    bringBack(tab);
+    return;
+  }
   // Still waiting to open after a start: it opens now, ahead of the others.
   if (isHeld(tab) && tab.view && !tab.view.term) openTerminal(tab);
   const ws = wsById(tab.wsId);
@@ -485,15 +575,7 @@ export function focusTab(tab) {
     return;
   }
   if (tab.detached) {
-    // In a window of its own: that window comes to the front, and the workspace keeps its own focused terminal.
-    markSeen(tab);
-    wake(tab);
-    focusWindow(windowKey(tab));
-    tab.view?.term?.focus();
-    if (tab.attention) {
-      tab.attention = false;
-      emit(EVENTS.tab, tab);
-    }
+    focusDetached(tab);
     return;
   }
   const wsChanged = ws.id !== state.activeId;
@@ -533,7 +615,7 @@ export function switchWorkspace(id) {
   emit(EVENTS.workspaces);
   persist();
   scheduleFit();
-  const tab = state.tabs.get(/** @type {string} */ (ws.focusId)) ?? tabsOf(ws)[0];
+  const tab = state.tabs.get(/** @type {string} */ (ws.focusId)) ?? firstShown(ws);
   if (tab) {
     ws.focusId = tab.id;
     focusTab(tab);
@@ -569,7 +651,7 @@ export function moveFocus(direction) {
   let best = null;
   let bestDistance = Infinity;
   for (const t of tabsOf(/** @type {Workspace} */ (activeWs()))) {
-    if (t === current || t.detached || /** @type {TabView} */ (t.view).el.classList.contains(TAB_HIDDEN)) continue;
+    if (t === current || isAway(t) || /** @type {TabView} */ (t.view).el.classList.contains(TAB_HIDDEN)) continue;
     const b = /** @type {TabView} */ (t.view).el.getBoundingClientRect();
     const overlapsY = b.top < a.bottom && b.bottom > a.top;
     const overlapsX = b.left < a.right && b.right > a.left;
@@ -614,10 +696,12 @@ export function renderWorkspace(ws) {
     takeBackHeader(tab);
   }
   drawing = ws;
-  layer.replaceChildren(renderNode(ws.root) ?? allDetachedNote(ws));
+  layer.replaceChildren(renderNode(ws.root) ?? allAwayNote(ws));
   drawing = null;
   for (const tab of tabsOf(ws)) {
     /** @type {TabView} */ (tab.view).el.classList.toggle('focused', tab.id === ws.focusId);
+    // One set aside opens once it's brought back: it isn't on the page to be measured.
+    if (tab.setAside) continue;
     if (!(/** @type {TabView} */ (tab.view).term) && (opensFirst(ws, tab) || !holdBack(tab))) openTerminal(tab);
   }
   scheduleFit();
@@ -712,7 +796,7 @@ function dropLonePreview(ws) {
 function renderNode(node) {
   if (node.kind === NODE.leaf) {
     const tab = /** @type {Tab} */ (state.tabs.get(node.tabId));
-    return tab.detached ? null : /** @type {TabView} */ (tab.view).el;
+    return isAway(tab) ? null : /** @type {TabView} */ (tab.view).el;
   }
   if (node.kind === NODE.preview) return previewElement(drawing);
   if (node.kind === NODE.tabs) return renderGroup(node);
@@ -767,7 +851,7 @@ const groupElements = new WeakMap(); // a tabs node -> its element, while render
  */
 function renderGroup(node) {
   // Its terminals in windows of their own aren't in it while they're away; the group shows another as its tab.
-  const items = node.items.filter(item => !state.tabs.get(item.tabId)?.detached);
+  const items = node.items.filter(item => !isAway(state.tabs.get(item.tabId)));
   if (!items.length) return null;
   if (!items.some(item => item.tabId === node.active)) node.active = items[0].tabId;
   const group = document.createElement('div');
@@ -931,8 +1015,11 @@ export function cycleGroupTab(step) {
   const ws = activeWs();
   const group = ws ? groupOf(ws, /** @type {string} */ (ws.focusId)) : null;
   if (!group) return false;
-  const at = group.items.findIndex(i => i.tabId === group.active);
-  focusTab(state.tabs.get(group.items[(at + step + group.items.length) % group.items.length].tabId));
+  // Those away (set aside, in a window of their own) aren't among its tabs now.
+  const items = group.items.filter(i => !isAway(state.tabs.get(i.tabId)));
+  const at = items.findIndex(i => i.tabId === group.active);
+  if (!items.length) return false;
+  focusTab(state.tabs.get(items[(at + step + items.length) % items.length].tabId));
   return true;
 }
 
@@ -944,7 +1031,7 @@ function showGroupTab(node) {
   const group = groupElements.get(node);
   if (!group) return;
   for (const item of node.items) {
-    if (state.tabs.get(item.tabId)?.detached) continue;
+    if (isAway(state.tabs.get(item.tabId))) continue;
     const shown = item.tabId === node.active;
     state.tabs.get(item.tabId)?.view?.el.classList.toggle(TAB_HIDDEN, !shown);
     const tabEl = /** @type {HTMLElement | null} */ (group.querySelector(`.tab-strip > [data-tab="${item.tabId}"]`));
