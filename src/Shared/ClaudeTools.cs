@@ -18,6 +18,13 @@ internal static class ClaudeTools
     public const string Task = "Task";
     /// <summary>Claude asking the user a question: it needs them, though no permission is involved.</summary>
     public const string AskUserQuestion = "AskUserQuestion";
+    /// <summary>Claude's plan, ready for the user's approval (plan mode).</summary>
+    public const string ExitPlanMode = "ExitPlanMode";
+    public const string TodoWrite = "TodoWrite";
+    public const string WebFetch = "WebFetch";
+    public const string WebSearch = "WebSearch";
+    /// <summary>An MCP server's tool is named mcp__&lt;server&gt;__&lt;tool&gt;.</summary>
+    public const string McpPrefix = "mcp__";
 
     /// <summary>The tools that change a file; Termilly's change preview follows these.</summary>
     public static readonly IReadOnlyList<string> EditTools = [Edit, Write, MultiEdit, NotebookEdit];

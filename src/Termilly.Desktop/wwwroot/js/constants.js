@@ -70,6 +70,35 @@ export const AGENT_STEP = Object.freeze({
   all: Object.freeze(['reply', 'tool']),
 });
 
+/** C#: CompactKinds (Messaging/Compact.cs). */
+export const COMPACT_KIND = Object.freeze({
+  prompt: 'prompt',
+  reply: 'reply',
+  thinking: 'thinking',
+  tool: 'tool',
+  end: 'end',
+  interrupted: 'interrupted',
+  all: Object.freeze(['prompt', 'reply', 'thinking', 'tool', 'end', 'interrupted']),
+});
+
+/** C#: CompactVerbs (Messaging/Compact.cs). */
+export const COMPACT_VERB = Object.freeze({
+  search: 'Search',
+  read: 'Read',
+  list: 'List',
+  edit: 'Edit',
+  write: 'Write',
+  run: 'Run',
+  test: 'Test',
+  web: 'Web',
+  agent: 'Agent',
+  plan: 'Plan',
+  ask: 'Ask',
+  mcp: 'MCP',
+  tool: 'Tool',
+  all: Object.freeze(['Search', 'Read', 'List', 'Edit', 'Write', 'Run', 'Test', 'Web', 'Agent', 'Plan', 'Ask', 'MCP', 'Tool']),
+});
+
 /** C#: ChangeSources (Changes/ChangeModel.cs). */
 export const CHANGE_SOURCE = Object.freeze({
   snapshot: 'snapshot',
@@ -133,6 +162,11 @@ export const CLAUDE_TOOL = Object.freeze({
   agent: 'Agent',
   task: 'Task',
   askUserQuestion: 'AskUserQuestion',
+  exitPlanMode: 'ExitPlanMode',
+  todoWrite: 'TodoWrite',
+  webFetch: 'WebFetch',
+  webSearch: 'WebSearch',
+  mcpPrefix: 'mcp__',
   editTools: Object.freeze(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']),
   shellTools: Object.freeze(['Bash', 'PowerShell']),
   watchedTools: Object.freeze(['Bash', 'PowerShell', 'apply_patch']),
