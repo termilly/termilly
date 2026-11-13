@@ -16,12 +16,14 @@ namespace Termilly.Shared;
 
 /// <summary>Paint acknowledgements between the updater and the app, in this Windows session only.</summary>
 #if !NETFRAMEWORK
-[SupportedOSPlatform("windows")]
+[SupportedOSPlatform(OsPlatforms.Windows)]
 #endif
 internal static class UpdateSignals
 {
     public const string Shown = "shown";
     public const string Started = "started";
+    /// <summary>A scope's length: a SHA-256 hash in hex.</summary>
+    private const int ScopeLength = 64;
     private const uint EventAccess = 0x00100002; // SYNCHRONIZE | EVENT_MODIFY_STATE
     private const int SddlRevision = 1;
 
@@ -50,7 +52,7 @@ internal static class UpdateSignals
 
     public static bool IsScope(string? scope)
     {
-        if (scope is null || scope.Length != 64)
+        if (scope is null || scope.Length != ScopeLength)
         {
             return false;
         }

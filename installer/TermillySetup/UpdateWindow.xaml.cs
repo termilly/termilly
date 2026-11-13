@@ -13,6 +13,9 @@ namespace Termilly.Setup;
 public partial class UpdateWindow : Window
 {
     private static readonly TimeSpan StartupWait = TimeSpan.FromSeconds(30);
+    /// <summary>The most of a failure's reason the window shows; a longer one is cut, with "..." after it.</summary>
+    private const int ReasonMax = 240;
+    private const string Cut = "...";
     private bool _finished;
     private int _exitCode = ExitCodes.Failed;
 
@@ -27,32 +30,42 @@ public partial class UpdateWindow : Window
         ContentRendered += RunUpdate;
     }
 
+    /// <summary>
+    /// Tells the app this window is up (its Shown event) and returns the event the new version's start-up screen sets
+    /// (Started), or null when the events can't be had: the window then waits the whole StartupWait.
+    /// </summary>
+    private static EventWaitHandle? SignalShown()
+    {
+        // The app passes its scope so UAC with another administrator's credentials uses the same events.
+        var scope = SetupApp.Args.Value(SetupFlags.UpdateWindow);
+        if (!UpdateSignals.IsScope(scope))
+        {
+            var dir = SetupApp.Args.Value(Flags.Dir) ?? InstalledTermilly.Find()?.Dir ?? SetupOptions.DefaultDir(SetupApp.Has(Flags.AllUsers));
+            scope = UpdateSignals.Scope(Path.GetFullPath(Environment.ExpandEnvironmentVariables(dir)));
+        }
+        try
+        {
+            var started = UpdateSignals.Create(scope!, UpdateSignals.Started);
+            started.Reset();
+            using var shown = UpdateSignals.Create(scope!, UpdateSignals.Shown);
+            shown.Set();
+            Log.Write("update window painted");
+            return started;
+        }
+        catch (Exception error) when (error is Win32Exception or UnauthorizedAccessException or IOException)
+        {
+            Log.Write($"update paint signals unavailable: {error.Message}");
+            return null;
+        }
+    }
+
     private async void RunUpdate(object? sender, EventArgs e)
     {
         ContentRendered -= RunUpdate;
         EventWaitHandle? started = null;
         try
         {
-            // The app passes its scope so UAC with another administrator's credentials uses the same events.
-            var scope = SetupApp.Args.Value(SetupFlags.UpdateWindow);
-            if (!UpdateSignals.IsScope(scope))
-            {
-                var dir = SetupApp.Args.Value(Flags.Dir) ?? InstalledTermilly.Find()?.Dir ?? SetupOptions.DefaultDir(SetupApp.Has(Flags.AllUsers));
-                scope = UpdateSignals.Scope(Path.GetFullPath(Environment.ExpandEnvironmentVariables(dir)));
-            }
-            try
-            {
-                started = UpdateSignals.Create(scope!, UpdateSignals.Started);
-                started.Reset();
-                using var shown = UpdateSignals.Create(scope!, UpdateSignals.Shown);
-                shown.Set();
-                Log.Write("update window painted");
-            }
-            catch (Exception error) when (error is Win32Exception or UnauthorizedAccessException or IOException)
-            {
-                Log.Write($"update paint signals unavailable: {error.Message}");
-            }
-
+            started = SignalShown();
             var version = Payload.Open(SetupApp.ExePath)?.Version;
             Status.Text = version is null ? "Updating Termilly" : "Updating Termilly to " + version;
             string? failure = null;
@@ -90,7 +103,7 @@ public partial class UpdateWindow : Window
         _exitCode = ExitCodes.Failed;
         Status.Text = "Termilly could not be updated";
         var shortReason = reason.Replace('\r', ' ').Replace('\n', ' ');
-        Reason.Text = shortReason.Length > 240 ? shortReason.Substring(0, 237) + "..." : shortReason;
+        Reason.Text = shortReason.Length > ReasonMax ? shortReason.Substring(0, ReasonMax - Cut.Length) + Cut : shortReason;
         Reason.Visibility = LogLabel.Visibility = LogPath.Visibility = CloseButton.Visibility = Visibility.Visible;
         LogPath.Text = Log.FilePath;
         Busy.Visibility = Visibility.Collapsed;

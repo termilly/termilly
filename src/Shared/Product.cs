@@ -6,6 +6,8 @@ internal static class Product
     public const string Name = "Termilly";
     /// <summary>The docs on the website; a section is its #id (Settings’ help button opens one).</summary>
     public const string DocsUrl = "https://termilly.com/docs/";
+    /// <summary>The environment variable that puts the data folder elsewhere (test runs, test installs).</summary>
+    public const string DataDirVariable = "TERMILLY_DATA_DIR";
 }
 
 /// <summary>The platform names .NET's platform attributes take (SupportedOSPlatform and its kin).</summary>

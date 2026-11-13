@@ -482,4 +482,5 @@ export const CLIP_FORM = Object.freeze({
 export const PRODUCT = Object.freeze({
   name: 'Termilly',
   docsUrl: 'https://termilly.com/docs/',
+  dataDirVariable: 'TERMILLY_DATA_DIR',
 });

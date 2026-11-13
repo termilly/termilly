@@ -84,14 +84,7 @@ public partial class MainWindow : Window
         Loader.MouseLeftButtonDown += (_, _) => DragMove();
         _loader.Start();
 
-        // Never leave the window stuck on the start-up screen, even if the page fails to report in.
-        _revealFallback = new DispatcherTimer { Interval = RevealTimeout };
-        _revealFallback.Tick += (_, _) =>
-        {
-            StartupLog.Mark($"page not ready after {RevealTimeout.TotalSeconds:0} s: shown anyway");
-            RevealPage();
-        };
-        _revealFallback.Start();
+        _revealFallback = StartRevealFallback();
 
         Loaded += async (_, _) =>
         {
@@ -106,23 +99,6 @@ public partial class MainWindow : Window
     }
 
     private AppSettings Settings => _settings.Current;
-
-    private void OnStartupScreenPainted(object? sender, EventArgs e)
-    {
-        ContentRendered -= OnStartupScreenPainted;
-        StartupLog.Mark("window shown (start-up screen)");
-        try
-        {
-            if (UpdateSignals.SignalStarted(AppContext.BaseDirectory))
-            {
-                StartupLog.Mark("update startup screen paint signalled");
-            }
-        }
-        catch (Exception error) when (error is System.ComponentModel.Win32Exception or UnauthorizedAccessException or IOException)
-        {
-            StartupLog.Mark($"update startup screen signal unavailable: {error.Message}");
-        }
-    }
 
     /// <summary>The whole app's size (Settings' zoom) as WebView2 takes it: 1 is as designed.</summary>
     private double Zoom => Settings.Interface.Zoom / (double)InterfaceSettings.DefaultZoom;

@@ -21,6 +21,8 @@ import { barSideOf, DOCK_SIDE } from './dom.js';
 
 /** A menu entry that draws a line between groups of entries. */
 export const SEPARATOR = 'separator';
+/** The class of a menu a dropdown button opens (its items' width follows the button). */
+export const DROPDOWN_MENU = 'dropdown-menu';
 
 /**
  * Which side of its anchor a popover opens on: below it, or to its right (a submenu). Left and above are for the title
@@ -401,7 +403,7 @@ function openDropdown(select, button) {
       },
     })),
   ]);
-  const menu = showMenu(items, button, { className: 'dropdown-menu' });
+  const menu = showMenu(items, button, { className: DROPDOWN_MENU });
   menu.style.minWidth = `${button.offsetWidth}px`;
   /** @type {HTMLElement | null} */
   const current = menu.querySelector('[aria-checked="true"]');

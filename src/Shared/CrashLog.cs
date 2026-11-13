@@ -91,7 +91,7 @@ internal static class CrashLog
 internal static class DataFolder
 {
     public static string Path { get; } =
-        Environment.GetEnvironmentVariable("TERMILLY_DATA_DIR") is { Length: > 0 } overridden
+        Environment.GetEnvironmentVariable(Product.DataDirVariable) is { Length: > 0 } overridden
             ? overridden
             : System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), Product.Name);
 }

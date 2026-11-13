@@ -7,7 +7,7 @@ using static Termilly.Pty.Windows.Native;
 namespace Termilly.Pty.Windows;
 
 /// <summary>Windows pseudo console (ConPTY) backed <see cref="IPty"/>.</summary>
-[SupportedOSPlatform("windows")]
+[SupportedOSPlatform(Platform)]
 public sealed class ConPty : IPty
 {
     private readonly SafeWaitHandle _process;

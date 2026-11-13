@@ -5,6 +5,9 @@ namespace Termilly.Pty.Windows;
 
 internal static class Native
 {
+    /// <summary>The platform ConPTY runs on, as .NET's platform attributes name it.</summary>
+    internal const string Platform = "windows";
+
     internal const uint EXTENDED_STARTUPINFO_PRESENT = 0x00080000;
     internal const uint CREATE_UNICODE_ENVIRONMENT = 0x00000400;
     /// <summary>The shell gets Windows' own error mode, not Termilly's quiet one (QuietErrors).</summary>
