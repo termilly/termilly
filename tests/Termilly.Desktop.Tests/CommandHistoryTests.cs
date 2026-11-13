@@ -67,11 +67,11 @@ public sealed class CommandHistoryTests : IDisposable
     {
         var closed = new HistoryStore(_vault);
         var old = DateTimeOffset.UtcNow.AddDays(-400).ToUnixTimeMilliseconds();
-        closed.Add(JsonDocument.Parse($$"""{"id":"old","closedAt":{{old}},"lines":["kept a long time"]}""").RootElement, redactSecrets: false);
+        closed.Add(JsonElement.Parse($$"""{"id":"old","closedAt":{{old}},"lines":["kept a long time"]}"""), redactSecrets: false);
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         for (var i = 0; i < 320; i++)
         {
-            closed.Add(JsonDocument.Parse($$"""{"id":"t{{i}}","closedAt":{{now - i}}}""").RootElement, redactSecrets: false);
+            closed.Add(JsonElement.Parse($$"""{"id":"t{{i}}","closedAt":{{now - i}}}"""), redactSecrets: false);
         }
 
         using (var forever = closed.List(SettingValues.HistoryDays.Forever))

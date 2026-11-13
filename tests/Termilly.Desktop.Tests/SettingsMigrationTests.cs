@@ -141,7 +141,7 @@ public sealed class SettingsMigrationTests : IDisposable
     public void A_group_from_the_page_replaces_that_group_and_is_checked()
     {
         var before = new AppSettings { Notifications = new() { JumpHotkey = true } };
-        var values = JsonDocument.Parse("""{ "source": "git", "context": 7 }""").RootElement;
+        var values = JsonElement.Parse("""{ "source": "git", "context": 7 }""");
 
         var after = before.WithGroup("changes", values);
 

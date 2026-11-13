@@ -155,7 +155,7 @@ internal sealed class HistoryHandler(
     {
         var json = NoEntries;
         Storage.Try(() => json = vault.IsLocked ? NoEntries : commands.List(settings.Current.Session.HistoryDays));
-        page.Post(new ToPage.CommandList(JsonDocument.Parse(json).RootElement));
+        page.Post(new ToPage.CommandList(JsonElement.Parse(json)));
     }
 }
 

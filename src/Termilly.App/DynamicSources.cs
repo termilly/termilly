@@ -80,7 +80,7 @@ internal sealed partial class DynamicSources(IProcessRunner runner)
             JsonElement c;
             try
             {
-                c = JsonDocument.Parse(line).RootElement;
+                c = JsonElement.Parse(line);
             }
             catch (JsonException)
             {
@@ -116,7 +116,7 @@ internal sealed partial class DynamicSources(IProcessRunner runner)
         JsonElement items;
         try
         {
-            items = JsonDocument.Parse(json).RootElement.GetProperty(PodFields.Items);
+            items = JsonElement.Parse(json).GetProperty(PodFields.Items);
         }
         catch (Exception e) when (e is JsonException or KeyNotFoundException or InvalidOperationException)
         {

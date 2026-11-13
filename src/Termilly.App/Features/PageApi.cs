@@ -148,13 +148,20 @@ internal sealed class PageApi(PageChannel page, ISettingsStore settings, IAppWin
         var answer = new TaskCompletionSource<FromPage.ApiResult>(TaskCreationOptions.RunContinuationsAsynchronously);
         _calls[requestId] = answer;
         page.PostJson(new ToPage.PageCall(type, requestId, fields).Json());
-        var finished = await Task.WhenAny(answer.Task, Task.Delay(wait ?? PageWait)).ConfigureAwait(false);
-        _calls.TryRemove(requestId, out _);
-        if (finished != answer.Task)
+        FromPage.ApiResult reply;
+        try
+        {
+            // WaitAsync, not Task.WhenAny with Task.Delay: its timer ends with the answer (CA2027).
+            reply = await answer.Task.WaitAsync(wait ?? PageWait).ConfigureAwait(false);
+        }
+        catch (TimeoutException)
         {
             throw new InvalidOperationException("Termilly's window didn't answer.");
         }
-        var reply = answer.Task.Result;
+        finally
+        {
+            _calls.TryRemove(requestId, out _);
+        }
         return reply.Error is { Length: > 0 } error
             ? throw new InvalidOperationException(error)
             : reply.Result is { } result ? JsonNode.Parse(result.GetRawText()) : null;
