@@ -16,12 +16,16 @@ import { beforeEnter } from './api.js';
 import { showsInput } from './together.js';
 import { linesHtml } from './compactlines.js';
 import { readMenu, questionMenu, cardHtml, menuKey } from './compactcard.js';
+import { wireInput } from './compactinput.js';
+import { liveRow, screenRows } from './compactdrawer.js';
 
 /** @typedef {import('./compactlines.js').CompactLine} CompactLine */
 
 /** The two views the header's switch picks between. */
 export const COMPACT_VIEW = Object.freeze({ compact: 'compact', terminal: 'terminal' });
 
+/** The view's class while its drawer shows the terminal's own rows under it. */
+const DRAWER_CLASS = 'drawer';
 /** The pane's class while it shows the compact view (the terminal is hidden under it). */
 const SHOWN_CLASS = 'compact-on';
 /** The prompt box. */
@@ -40,6 +44,8 @@ const PASTE_END = '\x1b[201~';
 
 const VIEW_HTML = `
   <div class="cv-feed" tabindex="-1"></div>
+  <div class="cv-live">Live terminal below: keys go to the agent</div>
+  <div class="cv-picks" hidden></div>
   <div class="cv-composer">
     <textarea class="cv-input" rows="1" spellcheck="false"></textarea>
     <button class="cv-send" title="Send (Enter)">Send</button>
@@ -49,7 +55,7 @@ const VIEW_HTML = `
 /**
  * A terminal's compact view: what the host sent of its session, the elements showing it, and the prompt being typed.
  * @typedef {{ lines: CompactLine[], session: string | null, el: HTMLElement | null, frame: number, frameWin: Window | null, sending: Promise<void>, writes: { dispose(): void } | null,
- *   picked?: { menu: string, at: number }, ready?: boolean }} CompactState
+ *   picked?: { menu: string, at: number }, ready?: boolean, drawer?: boolean, drawerFrame?: number }} CompactState
  */
 
 /**
@@ -106,6 +112,7 @@ function apply(tab) {
     send(PAGE.compactWatch, { id: tab.id, session, agent: runningAgent(tab) });
   }
   if (shown) render(tab);
+  placeDrawerSoon(tab);
 }
 
 /**
@@ -121,6 +128,64 @@ function onScreen(tab) {
   // While it starts, anything it draws may be a menu of its own (a trust question): drawn as it comes.
   if (waitsForAnswer(tab) || !ready || ready !== c.ready) render(tab);
   c.ready = ready;
+  placeDrawerSoon(tab);
+}
+
+/**
+ * Places the drawer on the next frame (the screen changes in bursts).
+ * @param {Tab} tab
+ */
+function placeDrawerSoon(tab) {
+  const c = compactOf(tab);
+  if (c.drawerFrame || !c.el) return;
+  const win = c.el.ownerDocument.defaultView ?? window;
+  c.drawerFrame = win.requestAnimationFrame(() => {
+    c.drawerFrame = 0;
+    placeDrawer(tab);
+  });
+}
+
+/**
+ * Opens the drawer on the terminal's own rows when the agent's screen wants keys the view doesn't draw (compactdrawer.js),
+ * by leaving the bottom of the pane uncovered from that row down, with the keyboard in the terminal; closes it, and
+ * gives the prompt box the keyboard back, once the agent is back at its plain prompt.
+ * @param {Tab} tab
+ */
+function placeDrawer(tab) {
+  const c = compactOf(tab);
+  const view = tab.view;
+  if (!c.el || !view?.term) return;
+  const row = isCompact(tab) ? liveRow(tab) : -1;
+  const open = row >= 0;
+  c.el.style.bottom = open ? `${Math.max(0, view.body.clientHeight - rowTop(view, row))}px` : '';
+  c.el.classList.toggle(DRAWER_CLASS, open);
+  if (open === !!c.drawer) return;
+  c.drawer = open;
+  if (open) view.term.focus();
+  else if (isCompact(tab) && view.body.contains(view.body.ownerDocument.activeElement)) focusInput(tab);
+}
+
+/**
+ * Where a screen row's top is in the pane's body (pixels from its top).
+ * @param {TabView} view
+ * @param {number} row
+ */
+function rowTop(view, row) {
+  const screen = view.term.element?.querySelector('.xterm-screen');
+  if (!screen) return 0;
+  const box = screen.getBoundingClientRect();
+  return box.top - view.body.getBoundingClientRect().top + row * (box.height / view.term.rows);
+}
+
+/**
+ * A key the prompt box passes on, typed into the agent as its terminal would get it; Enter answers what it waits on.
+ * @param {Tab} tab
+ * @param {string} data
+ */
+function passKey(tab, data) {
+  if (tab.exited || !runningAgent(tab)) return;
+  send(PAGE.input, { id: tab.id, data });
+  agentInput(tab, data);
 }
 
 /**
@@ -134,11 +199,11 @@ function build(tab) {
   el.innerHTML = VIEW_HTML;
   view.body.append(el);
   const input = /** @type {HTMLTextAreaElement} */ (find(el, INPUT));
-  input.addEventListener('keydown', e => {
-    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
-      e.preventDefault();
-      submit(tab, input);
-    }
+  wireInput(tab, el, {
+    submit: () => submit(tab, input),
+    passKey: data => passKey(tab, data),
+    agent: () => runningAgent(tab),
+    folder: () => tab.agent?.folder ?? tab.cwd ?? tab.lastCwd ?? null,
   });
   input.addEventListener('input', () => fitInput(input));
   find(el, '.cv-send').addEventListener('click', () => submit(tab, input));
@@ -155,7 +220,7 @@ function build(tab) {
   // The terminal underneath still takes the focus when its pane is clicked or focused (panes.js): the prompt box
   // takes it instead while the view shows.
   view.body.addEventListener('focusin', e => {
-    if (isCompact(tab) && !el.contains(/** @type {Node} */ (e.target))) focusInput(tab);
+    if (isCompact(tab) && !compactOf(tab).drawer && !el.contains(/** @type {Node} */ (e.target))) focusInput(tab);
   });
   return el;
 }
@@ -265,13 +330,9 @@ function draw(tab) {
  * @param {Tab} tab
  */
 function screenMenu(tab) {
-  const buffer = tab.view?.term?.buffer.active;
-  if (!buffer) return null;
-  // The screen as it shows now, not the lines scrolled above it (an earlier menu, a list in the agent's words). Row
-  // by row, not joined where a row runs on: a rule across the whole width counts as running on into the next.
-  const rows = [];
-  for (let y = buffer.baseY; y < buffer.length; y++) rows.push(buffer.getLine(y)?.translateToString(true) ?? '');
-  return readMenu(rows);
+  const term = tab.view?.term;
+  // The screen as it shows now, not the lines scrolled above it (an earlier menu, a list in the agent's words).
+  return term ? readMenu(screenRows(term)) : null;
 }
 
 /**
@@ -385,7 +446,8 @@ function updateComposer(tab, el) {
   const waiting = waitsForAnswer(tab);
   const starting = !atPrompt(tab);
   input.placeholder = waiting ? `${name} is waiting for your answer above` : starting ? `${name} is starting` : `Message ${name}`;
-  input.disabled = waiting || starting || !!tab.exited;
+  // Read-only, not disabled: its keys still go to the agent (Esc, Up and Down, Enter on a question's choices).
+  input.readOnly = waiting || starting || !!tab.exited;
 }
 
 /**

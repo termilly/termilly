@@ -3690,3 +3690,12 @@ button.sb-item:hover, button.sb-item.open { background: var(--hover); color: var
 .cv-card .cv-open-terminal { border-color: transparent; color: var(--muted); }
 .cv-empty .cv-open-terminal { margin-top: 10px; height: 24px; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: 6px; color: var(--text); }
 .cv-empty .cv-open-terminal:hover { background: var(--hover); }
+.cv-input[readonly] { color: var(--faint); }
+.cv-live { display: none; flex: none; padding: 3px 12px; border-top: 1px solid var(--border-strong); background: var(--header); color: var(--faint); font-size: 10.5px; letter-spacing: .04em; text-transform: uppercase; }
+.compact-view.drawer .cv-live { display: block; }
+.compact-view.drawer .cv-composer, .compact-view.drawer .cv-hint, .compact-view.drawer .cv-picks { display: none; }
+.cv-picks { position: absolute; right: 8px; bottom: 58px; left: 8px; z-index: 2; max-height: 260px; padding: 4px; overflow: auto; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--raised); box-shadow: var(--shadow-pop); }
+.cv-picks[hidden] { display: none; }
+.cv-pick { display: flex; align-items: baseline; gap: 10px; padding: 4px 8px; border-radius: 5px; color: var(--text); font: 12px var(--mono); cursor: default; }
+.cv-pick.on, .cv-pick:hover { background: var(--pressed); }
+.cv-pick small { overflow: hidden; color: var(--faint); font: 11px var(--ui); white-space: nowrap; text-overflow: ellipsis; }

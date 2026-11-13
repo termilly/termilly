@@ -34,7 +34,8 @@ test('a Claude Code permission prompt: its question, the command, and its three 
     ' Esc to cancel · Tab to amend',
   ]);
   assert.ok(menu?.whole);
-  assert.deepEqual({ ...menu, whole: undefined }, {
+  assert.deepEqual({ ...menu, whole: undefined, start: undefined }, {
+    start: undefined,
     whole: undefined,
     title: 'Do you want to proceed?',
     context: ['PowerShell command', 'Initialize a git repository', 'git init', 'This command requires approval'],

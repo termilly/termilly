@@ -37,9 +37,10 @@ const UNDER_CHOICE = 3;
 
 /**
  * @typedef {{ key: string, label: string, detail: string, picked: boolean }} MenuChoice
- * @typedef {{ title: string, context: string[], choices: MenuChoice[], whole?: string | null }} Menu
+ * @typedef {{ title: string, context: string[], choices: MenuChoice[], whole?: string | null, start?: number }} Menu
  *   whole: everything the prompt says, from where it starts (not cut for showing), which tells it from another; null
- *   when its start is off the screen (the menu can't be told apart, so the card offers only the terminal)
+ *   when its start is off the screen (the menu can't be told apart, so the card offers only the terminal); start:
+ *   the row the prompt starts on, -1 when that's off the screen
  */
 
 /**
@@ -65,7 +66,7 @@ export function readMenu(lines) {
   const { title, context } = questionAbove(rows, first);
   const start = promptStart(rows, first);
   const whole = start < 0 ? null : JSON.stringify([rows.slice(start, first).map(r => r.trim()), choices.map(c => [c.key, c.label, c.detail])]);
-  return { title, context, choices, whole };
+  return { title, context, choices, whole, start };
 }
 
 /**

@@ -13,6 +13,12 @@ internal static partial class FromPage
     {
         public static string Type => "compact:watch";
     }
+
+    /// <summary>The files under <see cref="Dir"/> whose path holds <see cref="Text"/>, for the view's @ picker.</summary>
+    internal sealed record CompactFiles(string? RequestId = null, string? Dir = null, string? Text = null) : IPageMessage
+    {
+        public static string Type => "compact:files";
+    }
 }
 
 /// <summary>
@@ -83,5 +89,11 @@ internal static partial class ToPage
     internal sealed record CompactLines(string Id, string Session, IReadOnlyList<CompactLine> Lines, bool Reset) : IHostMessage
     {
         public static string Type => "compact:lines";
+    }
+
+    /// <summary>The files the @ picker asked for, best first, relative to its folder.</summary>
+    internal sealed record CompactFilesFound(string? RequestId, IReadOnlyList<string> Paths) : IHostMessage
+    {
+        public static string Type => "compact:filesFound";
     }
 }

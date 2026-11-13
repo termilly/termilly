@@ -83,6 +83,7 @@ internal static class Composition
         .AddHandler<ChangesHandler>()
         .AddHandler<PromptsHandler>()
         .AddHandler<CompactFeed>()
+        .AddHandler<CompactFiles>()
         .AddHandler<GitHandler>()
         .AddHandler<WorktreeHandler>()
         .AddHandler<LayoutHandler>()
