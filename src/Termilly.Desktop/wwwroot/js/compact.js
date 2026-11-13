@@ -34,6 +34,8 @@ const SHOWN_CLASS = 'compact-on';
 const INPUT = '.cv-input';
 /** The feed's button that shows the terminal (while the agent waits on a question). */
 const OPEN_TERMINAL = '.cv-open-terminal';
+/** A card in the feed: data-menu holds the key of the menu it shows. */
+const CARD = '.cv-card';
 /** A card's choice buttons: data-choice holds the key that picks it. */
 const CHOICE = '[data-choice]';
 /** A choice picked on a card isn't pressed again on the same menu for this long (the agent takes a moment to move on). */
@@ -58,7 +60,7 @@ const VIEW_HTML = `
  * A terminal's compact view: what the host sent of its session, the elements showing it, and the prompt being typed.
  * @typedef {{ lines: CompactLine[], session: string | null, el: HTMLElement | null, frame: number, frameWin: Window | null, sending: Promise<void>, writes: { dispose(): void } | null,
  *   picked?: { menu: string, at: number }, ready?: boolean, drawer?: boolean, drawerFrame?: number, drawerWin?: Window,
- *   resizes?: { dispose(): void } }} CompactState
+ *   resizes?: { dispose(): void }, drawerRow?: number }} CompactState
  */
 
 /**
@@ -164,7 +166,13 @@ function placeDrawer(tab) {
   const c = compactOf(tab);
   const view = tab.view;
   if (!c.el || !view?.term) return;
-  const row = isCompact(tab) ? liveRow(tab) : -1;
+  // Open, it stays open while the user works in the terminal and the agent waits (the cursor moved home in what
+  // they typed, or onto its second line, says nothing of whether there are words there).
+  const stays = !!c.drawer && view.term.element?.contains(view.body.ownerDocument.activeElement) && !tab.exited
+    && tab.agent?.state !== AGENT_STATE.working && tab.agent?.state !== AGENT_STATE.needsInput;
+  const found = isCompact(tab) ? liveRow(tab) : -1;
+  const row = found < 0 && stays && isCompact(tab) ? c.drawerRow ?? -1 : found;
+  c.drawerRow = row;
   const open = row >= 0;
   c.el.style.bottom = open ? `${Math.max(0, view.body.clientHeight - rowTop(view, row))}px` : '';
   c.el.classList.toggle(DRAWER_CLASS, open);
@@ -195,7 +203,10 @@ function rowTop(view, row) {
  */
 function shownMenu(tab) {
   const menu = waitsForAnswer(tab) ? menuOf(tab) : !atPrompt(tab) ? screenMenu(tab) : null;
-  return menu && menuKey(menu) ? menu : null;
+  const key = menu ? menuKey(menu) : '';
+  // The card drawn now, not only the menu read now: a new question waits a frame for its card.
+  const drawn = /** @type {HTMLElement | null | undefined} */ (compactOf(tab).el?.querySelector(CARD))?.dataset.menu;
+  return key && key === drawn ? menu : null;
 }
 
 /**
@@ -235,7 +246,7 @@ function build(tab) {
     const target = /** @type {Element} */ (e.target);
     if (target.closest?.(OPEN_TERMINAL)) setCompact(tab, false);
     const choice = /** @type {HTMLElement | null} */ (target.closest?.(CHOICE));
-    const card = /** @type {HTMLElement | null} */ (target.closest?.('.cv-card'));
+    const card = /** @type {HTMLElement | null} */ (target.closest?.(CARD));
     if (choice) pick(tab, choice.dataset.choice ?? '', card?.dataset.menu ?? '');
   });
   // The terminal's right-click menu and copy-on-select (termclipboard.js) are the terminal's, not the view's.
