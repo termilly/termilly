@@ -27,7 +27,7 @@ import { byId, find, targetOf, WORKSPACE_ID, DOCK_GRIP, PANEL_HEAD } from './dom
 import { showMenu, openPopover, closePopover, isOpen, closeAll, SEPARATOR } from './popups.js';
 import { showToast, TOAST } from './toasts.js';
 import { setNote } from './notes.js';
-import { choiceDialog, CHOICE } from './dialogs.js';
+import { choiceDialog, confirmDialog, CHOICE } from './dialogs.js';
 import { KEY_ID } from './keymap.js';
 import { copyOut, textBoxMenu } from './textmenu.js';
 import { COPY_LABEL } from './termclipboard.js';
@@ -64,6 +64,8 @@ const COLOR_INPUT = 'color';
 /** What the code finds in the panel. */
 const TASK = '.td-task';
 const TASK_TEXT = '.td-text';
+/** The word on the button that clears active tasks, and in its question's title: Delete for those selected. */
+const CLEAR_WORD = Object.freeze({ shown: 'Clear', mine: 'Delete' });
 /** What in a task's row does something of its own, so a double click there doesn't open the editor. */
 const ROW_CONTROL = 'button, input, .td-acts';
 /** A task found in another list, while searching every list. */
@@ -1373,14 +1375,16 @@ function deleteSelected() {
 }
 
 /**
- * Which active tasks to clear: when some are in progress, the user says whether to keep those (the rest go) or clear them
- * all. Null when cancelled.
+ * Which active tasks to clear, always asked first: when some are in progress, the user says whether to keep those (the rest
+ * go) or clear them all. Null when cancelled.
  * @param {TodoTask[]} tasks
+ * @param {boolean} mine the selected ones, not all those shown
  * @returns {Promise<TodoTask[] | null>}
  */
-async function activeToClear(tasks) {
+async function activeToClear(tasks, mine) {
   const busy = tasks.filter(task => statusOf(task) === TASK_STATUS.progress);
-  if (!busy.length) return tasks;
+  if (!tasks.length) return tasks;
+  if (!busy.length) return await confirmClear(tasks, mine) ? tasks : null;
   const others = tasks.length - busy.length;
   const one = busy.length === 1;
   const working = busy.some(task => task.run || agentWorking(task));
@@ -1390,22 +1394,38 @@ async function activeToClear(tasks) {
       + (others ? `Keep ${one ? 'it' : 'them'} and clear the other ${others === 1 ? 'task' : `${others} tasks`}, or clear all ${tasks.length}?` : `Clear ${one ? 'it' : 'them'} too?`)
       + (busy.some(task => task.run) ? ' A silent run is stopped.' : ''),
     keep: others ? `Keep ${one ? 'it' : 'them'}` : undefined,
-    danger: others ? 'Clear all' : 'Clear',
+    danger: others ? 'Clear all' : CLEAR_WORD.shown,
   });
   if (answer === CHOICE.keep) return tasks.filter(task => !busy.includes(task));
   return answer === CHOICE.danger ? tasks : null;
 }
 
 /**
+ * Asks before active tasks with none in progress are cleared.
+ * @param {TodoTask[]} tasks
+ * @param {boolean} mine
+ */
+function confirmClear(tasks, mine) {
+  const one = tasks.length === 1;
+  const what = `${one ? 'the' : tasks.length} ${mine ? 'selected ' : ''}active ${one ? 'task' : 'tasks'}`;
+  const word = mine ? CLEAR_WORD.mine : CLEAR_WORD.shown;
+  return confirmDialog({
+    title: `${word} ${what}?`,
+    body: `${one ? `“${tasks[0].text}” is` : 'They are'} deleted from this list. Undo in the notice brings ${one ? 'it' : 'them'} back.`,
+    confirm: word,
+  });
+}
+
+/**
  * Deletes this list's active tasks, or its done ones (those selected, or else those shown), with Undo. Those running out of
- * sight are stopped first. Clearing active ones asks first when some are in progress.
+ * sight are stopped first. Clearing active ones always asks first (activeToClear).
  * @param {boolean} done
  */
 async function clearTasks(done) {
   const ref = current;
   if (!ref || !shown()) return;
   const mine = selected.size > 0;
-  const chosen = done ? clearable(done) : await activeToClear(clearable(done));
+  const chosen = done ? clearable(done) : await activeToClear(clearable(done), mine);
   if (chosen?.length) dropTasks(ref, chosen, `${mine ? 'Deleted' : 'Cleared'} ${chosen.length} ${mine ? 'selected ' : ''}${done ? 'done' : 'active'} ${chosen.length === 1 ? 'task' : 'tasks'}`);
 }
 
