@@ -24,6 +24,8 @@ import { liveRow, screenRows } from './compactdrawer.js';
 /** The two views the header's switch picks between. */
 export const COMPACT_VIEW = Object.freeze({ compact: 'compact', terminal: 'terminal' });
 
+/** Enter, as a terminal gets it. */
+const ENTER = '\r';
 /** The view's class while its drawer shows the terminal's own rows under it. */
 const DRAWER_CLASS = 'drawer';
 /** The pane's class while it shows the compact view (the terminal is hidden under it). */
@@ -55,7 +57,8 @@ const VIEW_HTML = `
 /**
  * A terminal's compact view: what the host sent of its session, the elements showing it, and the prompt being typed.
  * @typedef {{ lines: CompactLine[], session: string | null, el: HTMLElement | null, frame: number, frameWin: Window | null, sending: Promise<void>, writes: { dispose(): void } | null,
- *   picked?: { menu: string, at: number }, ready?: boolean, drawer?: boolean, drawerFrame?: number }} CompactState
+ *   picked?: { menu: string, at: number }, ready?: boolean, drawer?: boolean, drawerFrame?: number, drawerWin?: Window,
+ *   resizes?: { dispose(): void } }} CompactState
  */
 
 /**
@@ -104,6 +107,8 @@ function apply(tab) {
   if (c.el) c.el.hidden = !shown;
   // While the agent waits on a question, its card follows the screen (a choice picked with the keys, a new question).
   if (c.el && view.term && !c.writes) c.writes = view.term.onWriteParsed(() => onScreen(tab));
+  // A resized pane moves the terminal's rows: the drawer follows them.
+  if (c.el && view.term && !c.resizes) c.resizes = view.term.onResize(() => placeDrawerSoon(tab));
   updateSwitch(tab);
   const session = shown ? tab.agent?.session ?? null : null;
   if (session !== c.session) {
@@ -137,8 +142,12 @@ function onScreen(tab) {
  */
 function placeDrawerSoon(tab) {
   const c = compactOf(tab);
-  if (c.drawerFrame || !c.el) return;
+  if (!c.el) return;
+  // As with the feed's frames: one asked of another window (the pane moved between windows) is asked again here.
   const win = c.el.ownerDocument.defaultView ?? window;
+  if (c.drawerFrame && c.drawerWin === win) return;
+  if (c.drawerFrame && c.drawerWin && !c.drawerWin.closed) c.drawerWin.cancelAnimationFrame(c.drawerFrame);
+  c.drawerWin = win;
   c.drawerFrame = win.requestAnimationFrame(() => {
     c.drawerFrame = 0;
     placeDrawer(tab);
@@ -161,8 +170,10 @@ function placeDrawer(tab) {
   c.el.classList.toggle(DRAWER_CLASS, open);
   if (open === !!c.drawer) return;
   c.drawer = open;
-  if (open) view.term.focus();
-  else if (isCompact(tab) && view.body.contains(view.body.ownerDocument.activeElement)) focusInput(tab);
+  // Only a pane that has the keyboard hands it over: a drawer opening in another pane mustn't take what's typed here.
+  const here = view.body.contains(view.body.ownerDocument.activeElement);
+  if (open && here) view.term.focus();
+  else if (!open && here && isCompact(tab)) focusInput(tab);
 }
 
 /**
@@ -178,12 +189,24 @@ function rowTop(view, row) {
 }
 
 /**
+ * The menu a card shows now, when it can be told apart (it has a key): the question the agent waits on, or the menu it
+ * shows as it starts; null when there's none.
+ * @param {Tab} tab
+ */
+function shownMenu(tab) {
+  const menu = waitsForAnswer(tab) ? menuOf(tab) : !atPrompt(tab) ? screenMenu(tab) : null;
+  return menu && menuKey(menu) ? menu : null;
+}
+
+/**
  * A key the prompt box passes on, typed into the agent as its terminal would get it; Enter answers what it waits on.
  * @param {Tab} tab
  * @param {string} data
  */
 function passKey(tab, data) {
   if (tab.exited || !runningAgent(tab)) return;
+  // Enter picks: only what a card shows (the user sees what it picks), never a question the view can't show.
+  if (data === ENTER && !shownMenu(tab)) return;
   send(PAGE.input, { id: tab.id, data });
   agentInput(tab, data);
 }
@@ -497,5 +520,6 @@ on(EVENTS.agent, apply);
 on(EVENTS.terminalOpened, apply);
 on(EVENTS.tabClosed, tab => {
   tab.compact?.writes?.dispose();
+  tab.compact?.resizes?.dispose();
   if (tab.compact?.session) send(PAGE.compactWatch, { id: tab.id, session: null });
 });

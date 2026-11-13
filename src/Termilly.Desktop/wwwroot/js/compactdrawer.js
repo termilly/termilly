@@ -30,28 +30,22 @@ export function liveRow(tab) {
   const term = tab.view?.term;
   const state = tab.agent?.state;
   if (!term || state === AGENT_STATE.working || state === AGENT_STATE.needsInput) return -1;
-  // A list of its own (/model, /resume): from the rule above it.
+  // A list of its own (/model, /resume): from the line above its start.
   const menu = readMenu(screenRows(term));
-  const start = menu?.start ?? -1;
-  if (start >= 0) return Math.max(0, start - 1);
-  // Words in its input line, as the user typed them (not the dim hint an empty one shows): from the line above.
+  // A list whose top is off a short screen: the whole screen.
+  if (menu) return Math.max(0, (menu.start ?? 0) - 1);
+  // Words in its input line, as the user typed them (not the hint an empty one shows): from the line above.
   const buffer = term.buffer.active;
-  return typedAt(buffer, buffer.cursorY) ? Math.max(0, buffer.cursorY - 1) : -1;
+  return typedAt(buffer) ? Math.max(0, buffer.cursorY - 1) : -1;
 }
 
 /**
- * Whether the screen row holds words typed after the input mark: a character that isn't a space and isn't dim.
+ * Whether the agent's input line, the cursor's row, holds words the user typed: the cursor stands past its mark. Its
+ * hint on an empty line ('Try "how does it work?"') is drawn as plain text, with the cursor before it.
  * @param {any} buffer xterm's IBuffer
- * @param {number} y a screen row
  */
-function typedAt(buffer, y) {
-  const line = buffer.getLine(buffer.baseY + y);
-  if (!line) return false;
-  const from = INPUT_MARK.exec(line.translateToString(false))?.[0].length ?? 0;
-  if (!from) return false; // not an input line
-  for (let x = from; x < line.length; x++) {
-    const cell = line.getCell(x);
-    if (cell && cell.getChars().trim() && !cell.isDim()) return true;
-  }
-  return false;
+function typedAt(buffer) {
+  const line = buffer.getLine(buffer.baseY + buffer.cursorY);
+  const from = line ? INPUT_MARK.exec(line.translateToString(false))?.[0].length ?? 0 : 0;
+  return from > 0 && buffer.cursorX > from;
 }

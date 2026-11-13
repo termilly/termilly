@@ -65,7 +65,9 @@ export function wireInput(tab, el, hooks) {
   const s = { tab, input, list: find(el, '.cv-picks'), picks: [], at: 0, word: null, timer: 0, asked: 0 };
   input.addEventListener('keydown', e => onKey(s, e, hooks));
   input.addEventListener('input', () => findWord(s, hooks));
-  input.addEventListener('blur', () => close(s));
+  // A click in the list moves the focus about (the pane gives its terminal the focus, which hands it back to the box):
+  // the list closes only if the box is left for good.
+  input.addEventListener('blur', () => setTimeout(() => { if (input.ownerDocument.activeElement !== input) close(s); }));
   s.list.addEventListener('mousedown', e => {
     const item = /** @type {HTMLElement | null} */ (/** @type {Element} */ (e.target).closest('[data-pick]'));
     if (!item) return;
@@ -129,6 +131,9 @@ function findWord(s, hooks) {
     show(s, (COMMANDS[hooks.agent() ?? ''] ?? []).filter(([name]) => name.startsWith(typed)).map(([name, detail]) => ({ value: name, label: name, detail })));
   } else if (file && hooks.folder()) {
     s.word = { kind: WORD.file, start: before.length - file[2].length - 1 };
+    // What was found for the word before it changed is no answer to it: gone at once, and any answer still to come.
+    s.asked++;
+    show(s, []);
     s.timer = window.setTimeout(() => findFiles(s, /** @type {string} */ (hooks.folder()), file[2]), FILE_DELAY_MS);
   } else close(s);
 }
