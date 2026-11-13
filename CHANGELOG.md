@@ -4,23 +4,19 @@ What changed in each release. Termilly says in its title bar when a newer one is
 
 ## 1.8.0 (2026-11-13)
 
-- **Termilly for Mac:** signed and notarized, for Apple Silicon and Intel Macs.
-- **Codex:** works like Claude Code, with its status, prompts and replies, message box, phone and MCP.
-- **Implement with any agent:** To do and Schedules hand work to Claude Code or Codex.
-- **Status bar:** model, context, plan limits and cost under each agent terminal, with model and branch pickers.
-- **MCP:** agents drive Termilly's terminals, To do, schedules and Notepad.
-- **To do on SSH hosts.**
-- **Faster updates:** an update window, and the terminal in focus opens first.
+- **Mac support:** Termilly now runs on Mac.
+- **Codex support:** use Codex just like Claude Code.
+- **AIs talk to Termilly:** they can use your terminals, To do, schedules and Notepad.
+- **AIs work together:** one AI does a task, another checks it.
+- **New status bar:** model picker, usage meter, cost and git branch under each terminal.
+- **To do on servers:** tasks for a server get done right on that server.
+- **Faster updates:** you see the update happen, and your terminal is back first.
 
 Fixes:
 
-- The context meter matches /context.
-- Resizing no longer makes agents redraw over and over.
-- Detached windows and Browse.
-- Schedules "every N" can run all day.
-- **Phone:** Codex terminals can be typed in and have the same message box as Claude's.
-- **To do:** Clear active tasks asks first.
-- Various smaller improvements and bug fixes.
+- **Resizing:** occasional flicker when resizing.
+- **Phone:** Codex works on the phone.
+- Many small fixes.
 
 ## 1.7.0 (2026-11-08)
 
