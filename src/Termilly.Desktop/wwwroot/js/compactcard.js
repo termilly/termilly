@@ -28,6 +28,10 @@ const BOX = /^\s*[│┃]\s?|\s?[│┃]$/g;
 const GAP = 2;
 /** At most this many lines say what the question is about (a long plan is cut; the terminal has it all). */
 const MAX_CONTEXT = 12;
+/** A menu's key is a 32-bit FNV-1a hash of what it says (and its length), written in base 36. */
+const HASH_SEED = 0x811c9dc5;
+const HASH_PRIME = 0x01000193;
+const HASH_BASE = 36;
 /** Indented at least this much under a choice, a line belongs to it (a description, or its wrapped words). */
 const UNDER_CHOICE = 3;
 
@@ -43,8 +47,9 @@ const UNDER_CHOICE = 3;
 const clean = line => line.replace(BOX, '').trimEnd();
 
 /**
- * The menu at the bottom of a screen, or null when there's none: the last run of choices numbered from 1, what they
- * say (a choice's own wrapped words and description under it), and the question above them.
+ * The menu at the bottom of a screen, or null when there's none: the last run of choices numbered from 1 with the
+ * agent's pointer on one of them, what they say (a choice's own wrapped words and description under it), and the
+ * question above them.
  * @param {string[]} lines the screen's lines, top to bottom
  * @returns {Menu | null}
  */
@@ -53,7 +58,8 @@ export function readMenu(lines) {
   const first = lastFirstChoice(rows);
   if (first < 0) return null;
   const choices = choicesFrom(rows, first);
-  if (choices.length < 2) return null;
+  // A menu the agent waits on has its pointer on one choice; a numbered list in its words has none.
+  if (choices.length < 2 || !choices.some(c => c.picked)) return null;
   const { title, context } = questionAbove(rows, first);
   return { title, context, choices };
 }
@@ -166,12 +172,32 @@ export function questionMenu(question) {
  * @param {string} openClass the class of the button that shows the terminal
  */
 export function cardHtml(menu, name, openClass) {
+  if (menu) return menuCardHtml(menu, openClass);
+  return `<div class="cv-card"><div class="cv-question">${name} needs you</div><div class="cv-choices"><button class="${openClass}">Open terminal</button></div></div>`;
+}
+
+/**
+ * What tells one menu from another: its question, what it's about and its choices (not which one the pointer is on,
+ * which the user moves with the keys). A card's buttons press only while the screen shows the menu with its key.
+ * @param {Menu} menu
+ */
+export function menuKey(menu) {
+  const text = JSON.stringify([menu.title, menu.context, menu.choices.map(c => [c.key, c.label, c.detail])]);
+  let hash = HASH_SEED;
+  for (let i = 0; i < text.length; i++) hash = (Math.imul(hash, HASH_PRIME) ^ text.charCodeAt(i)) >>> 0;
+  return `${hash.toString(HASH_BASE)}:${text.length}`;
+}
+
+/**
+ * @param {Menu} menu
+ * @param {string} openClass
+ */
+function menuCardHtml(menu, openClass) {
   const open = `<button class="${openClass}">Open terminal</button>`;
-  if (!menu) return `<div class="cv-card"><div class="cv-question">${name} needs you</div><div class="cv-choices">${open}</div></div>`;
   // A plan's blank lines keep its paragraphs apart.
   const context = menu.context.map(line => (line ? `<div>${escapeHtml(line)}</div>` : '<br>')).join('');
-  const choices = menu.choices.map(c => `<button class="cv-choice${c.picked ? ' picked' : ''}" data-choice="${c.key}" data-label="${escapeHtml(c.label)}" title="${escapeHtml(c.detail || c.label)}">`
+  const choices = menu.choices.map(c => `<button class="cv-choice${c.picked ? ' picked' : ''}" data-choice="${c.key}" title="${escapeHtml(c.detail || c.label)}">`
     + `<kbd>${c.key}</kbd>${escapeHtml(c.label)}${c.detail ? `<small>${escapeHtml(c.detail)}</small>` : ''}</button>`).join('');
-  return `<div class="cv-card"><div class="cv-question">${menu.title ? escapeHtml(menu.title) : `${name} needs you`}</div>`
+  return `<div class="cv-card" data-menu="${menuKey(menu)}"><div class="cv-question">${escapeHtml(menu.title)}</div>`
     + `${context ? `<div class="cv-context">${context}</div>` : ''}<div class="cv-choices">${choices}${open}</div></div>`;
 }

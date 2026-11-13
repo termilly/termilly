@@ -9,7 +9,7 @@ globalThis.window = /** @type {any} */ ({ addEventListener() {}, external: { rec
 globalThis.document = /** @type {any} */ ({ documentElement: { dataset: {} }, addEventListener() {}, querySelector: () => null, querySelectorAll: () => [] });
 globalThis.localStorage = /** @type {any} */ ({ getItem: () => null, setItem() {} });
 globalThis.addEventListener = () => {};
-const { readMenu } = await import('../../src/Termilly.Desktop/wwwroot/js/compactcard.js');
+const { readMenu, menuKey } = await import('../../src/Termilly.Desktop/wwwroot/js/compactcard.js');
 
 test('a Claude Code permission prompt: its question, the command, and its three choices', () => {
   const menu = readMenu([
@@ -116,6 +116,15 @@ test('a question right under a command, which is drawn in a box: the question st
 
 test('no menu: a numbered list in the conversation is not one unless it starts at 1 and has a second choice', () => {
   assert.equal(readMenu(['Steps:', '  3. Build', '  4. Test']), null);
-  assert.equal(readMenu(['Only:', '  1. One thing']), null);
+  // A list in the agent's words: numbered from 1, but with no pointer on a choice.
+  assert.equal(readMenu(['Next steps:', '  1. Build', '  2. Test']), null);
+  assert.equal(readMenu(['Only:', '> 1. One thing']), null);
   assert.equal(readMenu(['> ', '  ctx 5%']), null);
+});
+
+test('a menu keeps its key while the pointer moves, and another question gets another key', () => {
+  const at = pointer => readMenu(['Do you want to proceed?', `${pointer === 1 ? '>' : ' '} 1. Yes`, `${pointer === 2 ? '>' : ' '} 2. No`]);
+  const other = readMenu(['Do you want to make this edit?', '> 1. Yes', '  2. No']);
+  assert.equal(menuKey(at(1)), menuKey(at(2)));
+  assert.notEqual(menuKey(at(1)), menuKey(other));
 });

@@ -15,7 +15,7 @@ import { agentInput } from './terminals.js';
 import { beforeEnter } from './api.js';
 import { showsInput } from './together.js';
 import { linesHtml } from './compactlines.js';
-import { readMenu, questionMenu, cardHtml } from './compactcard.js';
+import { readMenu, questionMenu, cardHtml, menuKey } from './compactcard.js';
 
 /** @typedef {import('./compactlines.js').CompactLine} CompactLine */
 
@@ -30,8 +30,8 @@ const INPUT = '.cv-input';
 const OPEN_TERMINAL = '.cv-open-terminal';
 /** A card's choice buttons: data-choice holds the key that picks it. */
 const CHOICE = '[data-choice]';
-/** How many of the screen's last lines are read for the question the agent waits on. */
-const MENU_LINES = 50;
+/** A choice picked on a card isn't pressed again on the same menu for this long (the agent takes a moment to move on). */
+const REPICK_MS = 2000;
 /** Within this many pixels of the bottom, the feed counts as following the newest line. */
 const FOLLOW_SLACK_PX = 40;
 /** Bracketed paste: a text of several lines goes in as one, so its newlines don't send it line by line. */
@@ -49,7 +49,7 @@ const VIEW_HTML = `
 /**
  * A terminal's compact view: what the host sent of its session, the elements showing it, and the prompt being typed.
  * @typedef {{ lines: CompactLine[], session: string | null, el: HTMLElement | null, frame: number, frameWin: Window | null, sending: Promise<void>, writes: { dispose(): void } | null,
- *   answered?: { key: string, count: number } }} CompactState
+ *   picked?: { menu: string, at: number }, ready?: boolean }} CompactState
  */
 
 /**
@@ -97,7 +97,7 @@ function apply(tab) {
   if (shown && !c.el) c.el = build(tab);
   if (c.el) c.el.hidden = !shown;
   // While the agent waits on a question, its card follows the screen (a choice picked with the keys, a new question).
-  if (c.el && view.term && !c.writes) c.writes = view.term.onWriteParsed(() => { if (isCompact(tab) && (waitsForAnswer(tab) || !atPrompt(tab))) render(tab); });
+  if (c.el && view.term && !c.writes) c.writes = view.term.onWriteParsed(() => onScreen(tab));
   updateSwitch(tab);
   const session = shown ? tab.agent?.session ?? null : null;
   if (session !== c.session) {
@@ -106,6 +106,20 @@ function apply(tab) {
     send(PAGE.compactWatch, { id: tab.id, session, agent: runningAgent(tab) });
   }
   if (shown) render(tab);
+}
+
+/**
+ * The agent's screen changed: the card follows it while the agent waits on a question (a choice picked with the
+ * keys, the next question), and the prompt box comes on once the agent is at its prompt (Codex reports nothing
+ * before its first prompt, so its screen is all there is to go by).
+ * @param {Tab} tab
+ */
+function onScreen(tab) {
+  if (!isCompact(tab)) return;
+  const c = compactOf(tab);
+  const ready = atPrompt(tab);
+  if (waitsForAnswer(tab) || ready !== c.ready) render(tab);
+  c.ready = ready;
 }
 
 /**
@@ -132,7 +146,8 @@ function build(tab) {
     const target = /** @type {Element} */ (e.target);
     if (target.closest?.(OPEN_TERMINAL)) setCompact(tab, false);
     const choice = /** @type {HTMLElement | null} */ (target.closest?.(CHOICE));
-    if (choice) pick(tab, choice.dataset.choice ?? '', choice.dataset.label ?? '');
+    const card = /** @type {HTMLElement | null} */ (target.closest?.('.cv-card'));
+    if (choice) pick(tab, choice.dataset.choice ?? '', card?.dataset.menu ?? '');
   });
   // The terminal's right-click menu and copy-on-select (termclipboard.js) are the terminal's, not the view's.
   for (const type of ['contextmenu', 'mouseup']) el.addEventListener(type, e => e.stopPropagation());
@@ -251,9 +266,10 @@ function draw(tab) {
 function screenMenu(tab) {
   const buffer = tab.view?.term?.buffer.active;
   if (!buffer) return null;
-  // Row by row, not joined where a row runs on: a rule across the whole width counts as running on into the next.
+  // The screen as it shows now, not the lines scrolled above it (an earlier menu, a list in the agent's words). Row
+  // by row, not joined where a row runs on: a rule across the whole width counts as running on into the next.
   const rows = [];
-  for (let y = Math.max(0, buffer.length - MENU_LINES); y < buffer.length; y++) rows.push(buffer.getLine(y)?.translateToString(true) ?? '');
+  for (let y = buffer.baseY; y < buffer.length; y++) rows.push(buffer.getLine(y)?.translateToString(true) ?? '');
   return readMenu(rows);
 }
 
@@ -277,11 +293,12 @@ function pendingPlan(tab) {
 
 /**
  * The question the agent waits on, as the card shows it. Claude Code's own questions come from the session file, as
- * the agent asked them, since a short terminal scrolls their choices out of sight: the one on screen when its title
- * shows, else the next one the card hasn't answered. Questions with several picks, the review after the last
- * question, and everything else (permissions, plan approval's choices, Codex's approvals) are read off the screen.
+ * the agent asked them, since a short terminal scrolls their choices out of sight: the one whose title the screen
+ * shows, or the only one there is. Questions with several picks, a question the screen doesn't name, the review
+ * after the last question, and everything else (permissions, plan approval's choices, Codex's approvals) are read
+ * off the screen.
  * @param {Tab} tab
- * @returns {import('./compactcard.js').Menu & { from?: string, last?: boolean } | null}
+ * @returns {import('./compactcard.js').Menu & { last?: boolean } | null}
  */
 function menuOf(tab) {
   const screen = screenMenu(tab);
@@ -290,36 +307,35 @@ function menuOf(tab) {
   if (plan && screen) return { ...screen, context: plan.split('\n') };
   const ask = pendingQuestion(tab);
   if (!ask?.questions) return screen;
-  const c = compactOf(tab);
-  const answered = c.answered?.key === ask.key ? c.answered.count : 0;
-  const shown = screen ? ask.questions.find(q => q.question === screen.title) : undefined;
-  const question = shown ?? ask.questions[answered];
+  const only = ask.questions.length === 1 ? ask.questions[0] : undefined;
+  const question = (screen ? ask.questions.find(q => q.question === screen.title) : undefined) ?? only;
   if (!question || question.multi) return screen;
-  return { ...questionMenu(question), from: ask.key, last: ask.questions.length === 1 };
+  // Claude Code goes on to its next question, or to its review of them, after this one; the last one is answered.
+  return { ...questionMenu(question), last: question === only };
 }
 
 /**
- * Picks a choice of the question the agent waits on, by pressing its number as the user would; only while the agent
- * still waits and still offers that choice (the user may have answered in the terminal meanwhile).
+ * Picks a choice of the question the agent waits on, by pressing its number as the user would: only while the agent
+ * still waits on the very menu the card showed (the screen may have moved on to another question with a "1. Yes" of
+ * its own), and once per menu (its number pressed twice would answer the next question too).
  * @param {Tab} tab
  * @param {string} key
- * @param {string} label
+ * @param {string} shown the card's menu, by menuKey
  */
-function pick(tab, key, label) {
+function pick(tab, key, shown) {
   if (!waitsForAnswer(tab) || tab.exited) return;
   const menu = menuOf(tab);
-  if (!menu?.choices.some(c => c.key === key && c.label === label)) {
+  const c = compactOf(tab);
+  const now = menu ? menuKey(menu) : '';
+  if (!menu || now !== shown || !menu.choices.some(choice => choice.key === key)
+      || (c.picked?.menu === now && Date.now() - c.picked.at < REPICK_MS)) {
     render(tab);
     return;
   }
-  // One of Claude Code's questions answered: the card goes on to the next (its screen may not show which it is).
-  if (menu.from) {
-    const c = compactOf(tab);
-    c.answered = { key: menu.from, count: (c.answered?.key === menu.from ? c.answered.count : 0) + 1 };
-  }
+  c.picked = { menu: now, at: Date.now() };
   send(PAGE.input, { id: tab.id, data: key });
-  // Answered, as from the keyboard: no longer waiting. Not while Claude Code goes on to its next question.
-  if (!menu.from || menu.last) agentInput(tab, key);
+  // Answered, as from the keyboard: no longer waiting. Not while Claude Code goes on to its next question or review.
+  if (menu.last !== false) agentInput(tab, key);
 }
 
 /**

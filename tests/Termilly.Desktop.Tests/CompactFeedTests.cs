@@ -22,6 +22,7 @@ public sealed class CompactFeedTests : IDisposable
         {
             reader.Read(Encoding.UTF8.GetBytes(line), log);
         }
+        reader.Settle(log);
         return log.All().ToList();
     }
 

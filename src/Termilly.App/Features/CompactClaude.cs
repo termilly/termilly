@@ -62,6 +62,8 @@ internal sealed class CompactClaude : ICompactReader
 
     /// <summary>The plan file Claude wrote or edited last: the plan it then asks the user to approve.</summary>
     private string? _plan;
+    /// <summary>The plan approval (ExitPlanMode) that waits for its answer, and its plan's file.</summary>
+    private (string Call, string? File)? _asking;
 
     /// <summary>The calls waiting for their results, by id; a call leaves once its result is read.</summary>
     private readonly Dictionary<string, ClaudeCall> _calls = new(StringComparer.Ordinal);
@@ -131,8 +133,11 @@ internal sealed class CompactClaude : ICompactReader
                         var call = ClaudeToolLine.Call(name, input, cwd);
                         _calls[id] = call;
                         NotePlan(name, input);
-                        var plan = name == ClaudeTools.ExitPlanMode ? PlanText() : null;
-                        log.Put(new CompactLine(id, CompactKinds.Tool, call.Subject, call.Verb, Done: false, Questions: call.Questions, Body: plan));
+                        if (name == ClaudeTools.ExitPlanMode)
+                        {
+                            _asking = (id, _plan);
+                        }
+                        log.Put(new CompactLine(id, CompactKinds.Tool, call.Subject, call.Verb, Done: false, Questions: call.Questions));
                         ForgetLost(log);
                     }
                     break;
@@ -150,16 +155,32 @@ internal sealed class CompactClaude : ICompactReader
         }
     }
 
-    /// <summary>The plan's text, read from its file as it is now; null when there's none to read.</summary>
-    private string? PlanText()
+    /// <summary>
+    /// After a read: the plan approval that still waits gets its plan, read from its file now. Only that one: earlier
+    /// approvals in the transcript have their answers, and their files may hold a later plan.
+    /// </summary>
+    public void Settle(CompactLog log)
     {
-        if (_plan is null)
+        if (_asking is not ({ } call, { } file) || log.Find(call) is not { Done: false, Body: null } line)
         {
-            return null;
+            return;
         }
+        _asking = null;
+        if (PlanText(file) is { } plan)
+        {
+            log.Put(line with { Body = plan });
+        }
+    }
+
+    /// <summary>A plan's text, at most <see cref="MaxPlan"/> characters of it; null when it can't be read.</summary>
+    private static string? PlanText(string file)
+    {
         try
         {
-            return CompactText.Cut(File.ReadAllText(_plan).Trim(), MaxPlan);
+            using var reader = new StreamReader(file);
+            var buffer = new char[MaxPlan + 1];
+            var read = reader.ReadBlock(buffer, 0, buffer.Length);
+            return CompactText.Cut(new string(buffer, 0, read).Trim(), MaxPlan);
         }
         catch (Exception e) when (Storage.IsFileError(e))
         {
@@ -224,6 +245,10 @@ internal sealed class CompactClaude : ICompactReader
         if (result[Fields.ToolUseId].AsText() is not { } id || !_calls.Remove(id, out var call))
         {
             return;
+        }
+        if (_asking?.Call == id)
+        {
+            _asking = null;
         }
         var failed = result[Fields.IsError].AsBool() == true;
         var output = CompactJson.Texts(result[Fields.Content]);

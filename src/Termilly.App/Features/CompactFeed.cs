@@ -114,6 +114,7 @@ internal sealed class CompactFeed : IMessageHandler, IDisposable
             follow.Reader.Read(line, follow.Log);
             return true;
         });
+        follow.Reader.Settle(follow.Log);
         if (follow.TakeSendAll())
         {
             follow.Log.ClearChanged();

@@ -66,6 +66,11 @@ internal interface ICompactReader
 {
     /// <summary>One whole line of the file; one that isn't JSON, or not about the session's steps, is passed over.</summary>
     void Read(ReadOnlySpan<byte> line, CompactLog log);
+
+    /// <summary>After the lines read at once: anything that needs the reading done first (by default, nothing).</summary>
+    void Settle(CompactLog log)
+    {
+    }
 }
 
 /// <summary>What the readers share: parsing a line that may not be JSON, and reading its fields.</summary>
