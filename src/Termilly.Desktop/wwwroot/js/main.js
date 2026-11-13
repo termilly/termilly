@@ -402,6 +402,9 @@ function runShortcut(e) {
 
 let swallowKeypress = false;
 
+/** The compact view's prompt box (js/compact.js). */
+const COMPACT_INPUT = '.cv-input';
+
 /** xterm's key hook. Returns false to stop xterm from sending the key to the shell. */
 setKeyHandler(e => {
   if (e.type === 'keypress' && swallowKeypress) {
@@ -415,10 +418,11 @@ setKeyHandler(e => {
 });
 
 // Shortcuts when no terminal has focus (e.g. an empty workspace), except while typing in a field; in a detached
-// window too.
+// window too. The compact view's prompt box stands in for its terminal, so they work there as in the terminal.
 inEachDocument(doc => doc.addEventListener('keydown', e => {
-  // The target may be the document itself, which has no closest().
-  if (/** @type {HTMLElement} */ (e.target).closest?.('.xterm, input, select, textarea')) return;
+  // The target may be the document itself, which has no closest(). The prompt box is inside its terminal's element.
+  const target = /** @type {HTMLElement} */ (e.target);
+  if (!target.closest?.(COMPACT_INPUT) && target.closest?.('.xterm, input, select, textarea')) return;
   if (runShortcut(e)) e.preventDefault();
 }));
 

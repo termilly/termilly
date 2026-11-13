@@ -14,6 +14,7 @@ import { find } from './dom.js';
 import { agentInput } from './terminals.js';
 import { beforeEnter } from './api.js';
 import { showsInput } from './together.js';
+import { DEFAULT_FONT_SIZE } from './preferences.js';
 import { linesHtml } from './compactlines.js';
 import { lineLinks, clickLink, wireCtrl } from './compactlinks.js';
 import { readMenu, questionMenu, cardHtml, menuKey } from './compactcard.js';
@@ -43,6 +44,8 @@ const CHOICE = '[data-choice]';
 const REPICK_MS = 2000;
 /** Within this many pixels of the bottom, the feed counts as following the newest line. */
 const FOLLOW_SLACK_PX = 40;
+/** The view's text size, as a share of its own at the terminals' default font size (app.css). */
+const TEXT_SCALE = '--cv-scale';
 /** Bracketed paste: a text of several lines goes in as one, so its newlines don't send it line by line. */
 const PASTE_START = '\x1b[200~';
 const PASTE_END = '\x1b[201~';
@@ -240,6 +243,7 @@ function build(tab) {
   el.className = 'compact-view';
   el.innerHTML = VIEW_HTML;
   view.body.append(el);
+  sizeText(el);
   const input = /** @type {HTMLTextAreaElement} */ (find(el, INPUT));
   wireInput(tab, el, {
     submit: () => submit(tab, input),
@@ -267,6 +271,14 @@ function build(tab) {
     if (isCompact(tab) && !compactOf(tab).drawer && !el.contains(/** @type {Node} */ (e.target))) focusInput(tab);
   });
   return el;
+}
+
+/**
+ * The view's text grows and shrinks with the terminals' (Ctrl + and Ctrl -, Settings › Terminal).
+ * @param {HTMLElement} el the view
+ */
+function sizeText(el) {
+  el.style.setProperty(TEXT_SCALE, String(state.settings.terminal.fontSize / DEFAULT_FONT_SIZE));
 }
 
 /**
@@ -553,6 +565,15 @@ onHost(HOST.compactLines, m => {
 // The agent started, changed session (a /clear, a resume), changed state or left: the view follows.
 on(EVENTS.agent, apply);
 on(EVENTS.terminalOpened, apply);
+on(EVENTS.settings, () => {
+  for (const tab of state.tabs.values()) {
+    const c = tab.compact;
+    if (c?.el) {
+      sizeText(c.el);
+      fitInput(/** @type {HTMLTextAreaElement} */ (find(c.el, INPUT)));
+    }
+  }
+});
 // Termilly saw the agent's program start or stop (a session restored at start: Codex reports nothing before its first
 // prompt), so the view comes or goes with it.
 on(EVENTS.tab, tab => {
