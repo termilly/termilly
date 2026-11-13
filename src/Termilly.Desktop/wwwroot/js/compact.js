@@ -15,6 +15,7 @@ import { agentInput } from './terminals.js';
 import { beforeEnter } from './api.js';
 import { showsInput } from './together.js';
 import { linesHtml } from './compactlines.js';
+import { lineLinks, clickLink, wireCtrl } from './compactlinks.js';
 import { readMenu, questionMenu, cardHtml, menuKey } from './compactcard.js';
 import { wireInput } from './compactinput.js';
 import { liveRow, screenRows } from './compactdrawer.js';
@@ -244,11 +245,13 @@ function build(tab) {
   // Buttons drawn in the feed are handled here: a terminal in a window of its own has that window's elements.
   el.addEventListener('click', e => {
     const target = /** @type {Element} */ (e.target);
+    if (clickLink(tab, e)) return;
     if (target.closest?.(OPEN_TERMINAL)) setCompact(tab, false);
     const choice = /** @type {HTMLElement | null} */ (target.closest?.(CHOICE));
     const card = /** @type {HTMLElement | null} */ (target.closest?.(CARD));
     if (choice) pick(tab, choice.dataset.choice ?? '', card?.dataset.menu ?? '');
   });
+  wireCtrl(el);
   // The terminal's right-click menu and copy-on-select (termclipboard.js) are the terminal's, not the view's.
   for (const type of ['contextmenu', 'mouseup']) el.addEventListener(type, e => e.stopPropagation());
   // The terminal underneath still takes the focus when its pane is clicked or focused (panes.js): the prompt box
@@ -354,7 +357,9 @@ function draw(tab) {
   if (!c.el || c.el.hidden) return;
   const feed = find(c.el, '.cv-feed');
   const following = feed.scrollHeight - feed.scrollTop - feed.clientHeight < FOLLOW_SLACK_PX;
-  feed.innerHTML = c.lines.length || waitsForAnswer(tab) ? linesHtml(c.lines) + workingHtml(tab) : emptyHtml(tab);
+  feed.innerHTML = c.lines.length || waitsForAnswer(tab)
+    ? linesHtml(c.lines, lineLinks(tab, c.lines, () => render(tab))) + workingHtml(tab)
+    : emptyHtml(tab);
   if (following) feed.scrollTop = feed.scrollHeight;
   updateComposer(tab, c.el);
 }

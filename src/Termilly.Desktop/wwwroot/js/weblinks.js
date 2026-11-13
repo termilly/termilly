@@ -10,7 +10,8 @@ import { SETTING_VALUES } from './constants.js';
 import { registerLinks, COPY_HINT } from './termlinks.js';
 import { findWebLinks } from './webaddress.js';
 
-const plainClick = () => state.settings.terminal.linkClick === SETTING_VALUES.linkClick.click;
+/** Whether a plain click opens a web address (Settings › Terminal), or it takes Ctrl+click. */
+export const plainClick = () => state.settings.terminal.linkClick === SETTING_VALUES.linkClick.click;
 
 on(EVENTS.terminalOpened, tab => registerLinks(tab.view.term, tab.view.body, {
   find: findWebLinks,

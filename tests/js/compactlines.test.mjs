@@ -50,3 +50,30 @@ test('a turn shows its prompt, its steps and a footer with its time and changes'
   assert.match(html, /cv-prompt">Fix it</);
   assert.match(html, /cv-end">41s<span class="cv-sep">·<\/span>1 file <span class="cv-add">\+2<\/span> <span class="cv-del">-1<\/span>/);
 });
+
+test('web addresses in a reply are links, with what a sentence puts after them left out, inside code too', () => {
+  const html = wordsHtml('Open http://localhost:5173/. Or `https://a.b/c?x=1&y=2`');
+  assert.match(html, /<span class="cv-link" data-link="http:\/\/localhost:5173\/" data-web title="[^"]*Ctrl\+click[^"]*">http:\/\/localhost:5173\/<\/span>\. Or /);
+  assert.match(html, /<code><span class="cv-link" data-link="https:\/\/a\.b\/c\?x=1&amp;y=2" data-web/);
+});
+
+test('a plain click opens web addresses when the setting says so', () => {
+  assert.match(wordsHtml('see https://a.b', [], true), /data-web data-plain title="https:\/\/a\.b\nClick to open/);
+});
+
+test('paths found in a line are links; a path inside a web address is left to the address', () => {
+  const text = 'Wrote src/a.js, see https://x.y/src/a.js';
+  const paths = [{ start: 6, end: 14, text: 'src/a.js', title: 'Ctrl+click' }, { start: 32, end: 40, text: 'src/a.js' }];
+  const html = linesHtml([{ key: '1', kind: 'reply', text }], { paths: () => paths, plainClick: false });
+  assert.equal((html.match(/class="cv-link"/g) ?? []).length, 2);
+  assert.match(html, /Wrote <span class="cv-link" data-link="src\/a\.js" title="Ctrl\+click">src\/a\.js<\/span>, see <span class="cv-link" data-link="https:\/\/x\.y\/src\/a\.js" data-web/);
+});
+
+test('a tool line links its subject and a prompt its web address', () => {
+  const html = linesHtml([
+    { key: '1', kind: 'prompt', text: 'check https://e.x/a' },
+    tool('2', 'Read', 'src/a <b>.js', '3 lines'),
+  ], { paths: l => (l.kind === 'tool' ? [{ start: 0, end: 12, text: l.text }] : []), plainClick: false });
+  assert.match(html, /check <span class="cv-link" data-link="https:\/\/e\.x\/a" data-web/);
+  assert.match(html, /<span class="cv-subject"><span class="cv-link" data-link="src\/a &lt;b&gt;\.js"[^>]*>src\/a &lt;b&gt;\.js<\/span><\/span>/);
+});

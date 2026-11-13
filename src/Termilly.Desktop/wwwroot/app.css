@@ -3650,6 +3650,10 @@ button.sb-item:hover, button.sb-item.open { background: var(--hover); color: var
 .cv-prompt { margin: 12px 0 10px; padding: 7px 10px; border-left: 2px solid var(--accent); border-radius: 0 6px 6px 0; background: var(--accent-fill); color: var(--text-strong); white-space: pre-wrap; overflow-wrap: anywhere; }
 .cv-prompt:first-child { margin-top: 2px; }
 .cv-reply { margin: 8px 0 6px; max-width: 80ch; white-space: pre-wrap; overflow-wrap: anywhere; }
+/* Links in the compact view, as in the terminal: underlined and coloured under the mouse, the hand when a click opens. */
+.cv-link:hover { color: #76e3ea; text-decoration: underline; }
+:root[data-theme="light"] .cv-link:hover { color: #1b7c83; }
+.cv-ctrl .cv-link:hover, .cv-link[data-plain]:hover { cursor: pointer; }
 .cv-reply code { padding: 0 3px; border-radius: 3px; background: var(--raised-2); color: var(--text); font: 11.5px var(--mono); }
 .cv-thinking { margin: 6px 0; overflow: hidden; color: var(--faint); font-style: italic; white-space: nowrap; text-overflow: ellipsis; }
 .cv-tool { display: grid; grid-template-columns: 6px 52px minmax(0, 1fr) auto; align-items: center; column-gap: 8px; height: 22px; margin: 0 -6px; padding: 0 6px; border-radius: 5px; }

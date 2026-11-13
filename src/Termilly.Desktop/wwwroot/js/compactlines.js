@@ -4,6 +4,7 @@
 // long it took and what it changed. Reads in a row fold into one line ("+2 files"). Pure: lines in, HTML out.
 
 import { escapeHtml } from './ui.js';
+import { findWebLinks } from './webaddress.js';
 import { COMPACT_KIND, COMPACT_VERB } from './constants.js';
 
 /** @typedef {import('./protocol.js').Host_compactLines['lines'][number]} CompactLine */
@@ -73,14 +74,78 @@ export function turnChanges(turn) {
 }
 
 /**
- * A reply's words, escaped, with **bold** and `code` drawn as such (the rest of Markdown is left as written).
- * @param {string} text
+ * A link in a line's text, by character offset: a web address, or a path that leads somewhere (js/compactlinks.js
+ * finds those), with its tooltip.
+ * @typedef {{ start: number, end: number, text: string, title?: string, web?: boolean }} TextLink
  */
-export function wordsHtml(text) {
-  return escapeHtml(text)
-    .replace(/`([^`\n]+)`/g, '<code>$1</code>')
-    .replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>');
+/**
+ * What the lines' links are: the paths found in a line so far, and how a web address is opened.
+ * @typedef {{ paths: (line: CompactLine) => TextLink[], plainClick: boolean }} LineLinks
+ */
+
+export const LINK_CLASS = 'cv-link';
+/** A link's attribute when it's a web address. */
+export const WEB_ATTR = 'data-web';
+/** Stands in a text for its link while the rest is escaped and marked up: a character no text holds. */
+const HOLDER = '';
+const HOLDERS = new RegExp(`${HOLDER}(\\d+)${HOLDER}`, 'g');
+/** No links: the paths aren't known, and web addresses open on Ctrl+click. */
+const NO_LINKS = Object.freeze({ paths: () => [], plainClick: false });
+
+/**
+ * A text's links: its web addresses, and the paths that don't overlap one, in the text's order.
+ * @param {string} text
+ * @param {TextLink[]} paths
+ * @returns {TextLink[]}
+ */
+function linksIn(text, paths) {
+  const web = findWebLinks(text).map(w => ({ ...w, web: true }));
+  return [...web, ...paths.filter(p => !web.some(w => p.start < w.end && p.end > w.start))].sort((a, b) => a.start - b.start);
 }
+
+/**
+ * A link as HTML: its text, what it opens, and whether a plain click opens it.
+ * @param {string} shown
+ * @param {TextLink} link
+ * @param {boolean} plainClick
+ */
+function linkHtml(shown, link, plainClick) {
+  const plain = link.web && plainClick;
+  const title = link.title ?? `${link.text}\n${plain ? 'Click' : 'Ctrl+click'} to open in your browser`;
+  return `<span class="${LINK_CLASS}" data-link="${escapeHtml(link.text)}"${link.web ? ` ${WEB_ATTR}` : ''}${plain ? ' data-plain' : ''}`
+    + ` title="${escapeHtml(title)}">${escapeHtml(shown)}</span>`;
+}
+
+/**
+ * A text as HTML with its links marked; a reply's with **bold** and `code` drawn as such too (the rest of Markdown is
+ * left as written).
+ * @param {string} text
+ * @param {TextLink[]} paths
+ * @param {{ words?: boolean, plainClick?: boolean }} [how]
+ */
+export function linkedHtml(text, paths, how = {}) {
+  const links = linksIn(text, paths);
+  let held = '';
+  let at = 0;
+  links.forEach((l, i) => {
+    held += `${text.slice(at, l.start)}${HOLDER}${i}${HOLDER}`;
+    at = l.end;
+  });
+  let html = escapeHtml(held + text.slice(at));
+  if (how.words) html = html.replace(/`([^`\n]+)`/g, '<code>$1</code>').replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>');
+  return html.replace(HOLDERS, (whole, i) => {
+    const l = links[Number(i)];
+    return l ? linkHtml(text.slice(l.start, l.end), l, !!how.plainClick) : whole;
+  });
+}
+
+/**
+ * A reply's words, escaped, with **bold** and `code` drawn as such and its web addresses linked.
+ * @param {string} text
+ * @param {TextLink[]} [paths]
+ * @param {boolean} [plainClick]
+ */
+export const wordsHtml = (text, paths = [], plainClick = false) => linkedHtml(text, paths, { words: true, plainClick });
 
 /**
  * A result, with a patch's counts coloured.
@@ -98,13 +163,15 @@ function detailHtml(detail) {
 /**
  * A tool's line: its state (running, failed), verb, what it worked on and what came of it.
  * @param {CompactLine & { more?: number }} line
+ * @param {LineLinks} links
  */
-function toolHtml(line) {
+function toolHtml(line, links) {
   const state = !line.done ? STATE.running : line.failed ? STATE.failed : STATE.worked;
   const more = line.more ? ` <i>+${line.more} file${line.more === 1 ? '' : 's'}</i>` : '';
   const detail = line.done ? detailHtml(line.detail) : STATE.running;
+  const subject = linkedHtml(line.text, links.paths(line), { plainClick: links.plainClick });
   return `<div class="cv-tool ${state}" title="${escapeHtml(line.text)}"><span class="cv-dot"></span><span class="cv-verb">${escapeHtml(line.verb ?? '')}</span>`
-    + `<span class="cv-subject">${escapeHtml(line.text)}${more}</span><span class="cv-detail">${detail}</span></div>`;
+    + `<span class="cv-subject">${subject}${more}</span><span class="cv-detail">${detail}</span></div>`;
 }
 
 /**
@@ -125,13 +192,14 @@ function endHtml(end, turn) {
  * One line as HTML.
  * @param {CompactLine & { more?: number }} line
  * @param {CompactLine[]} turn the lines of its turn so far (a footer sums them up)
+ * @param {LineLinks} links
  */
-function lineHtml(line, turn) {
+function lineHtml(line, turn, links) {
   switch (line.kind) {
-    case COMPACT_KIND.prompt: return `<div class="cv-prompt">${escapeHtml(line.text)}</div>`;
-    case COMPACT_KIND.reply: return `<div class="cv-reply">${wordsHtml(line.text)}</div>`;
+    case COMPACT_KIND.prompt: return `<div class="cv-prompt">${linkedHtml(line.text, links.paths(line), { plainClick: links.plainClick })}</div>`;
+    case COMPACT_KIND.reply: return `<div class="cv-reply">${wordsHtml(line.text, links.paths(line), links.plainClick)}</div>`;
     case COMPACT_KIND.thinking: return `<div class="cv-thinking" title="${escapeHtml(line.text)}">${escapeHtml(line.text.split('\n')[0])}</div>`;
-    case COMPACT_KIND.tool: return toolHtml(line);
+    case COMPACT_KIND.tool: return toolHtml(line, links);
     case COMPACT_KIND.end: return endHtml(line, turn);
     case COMPACT_KIND.interrupted: return '<div class="cv-note">Stopped</div>';
     default: return '';
@@ -141,14 +209,15 @@ function lineHtml(line, turn) {
 /**
  * Every line as HTML, oldest first.
  * @param {CompactLine[]} lines
+ * @param {LineLinks} [links] the paths found in them, and how web addresses open
  */
-export function linesHtml(lines) {
+export function linesHtml(lines, links = NO_LINKS) {
   /** @type {CompactLine[]} */
   let turn = [];
   const html = [];
   for (const line of foldLines(lines)) {
     if (line.kind === COMPACT_KIND.prompt) turn = [];
-    html.push(lineHtml(line, turn));
+    html.push(lineHtml(line, turn, links));
     turn.push(line);
   }
   return html.join('');
