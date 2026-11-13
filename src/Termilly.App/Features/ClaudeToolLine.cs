@@ -49,6 +49,17 @@ internal static class ClaudeToolLine
     /// <summary>An HTTP status from here on is an error.</summary>
     private const int HttpErrors = 400;
 
+    /// <summary>
+    /// A call as its line needs it until its result lands: not its whole input (a Write's file, an Edit's text), only
+    /// what the line says and what its result is read with (a command, the to do list's progress).
+    /// </summary>
+    public static ClaudeCall Call(string name, JsonObject? input, string? cwd)
+    {
+        var (verb, subject) = Describe(name, input, cwd);
+        var command = name is ClaudeTools.Bash or ClaudeTools.PowerShell ? input?[Input.Command].AsText() : null;
+        return new ClaudeCall(name, verb, subject, command, name == ClaudeTools.TodoWrite ? TodoProgress(input) : null);
+    }
+
     /// <summary>The verb and the subject: what kind of step, and what on.</summary>
     public static (string Verb, string Subject) Describe(string name, JsonObject? input, string? cwd)
     {
@@ -75,21 +86,22 @@ internal static class ClaudeToolLine
     }
 
     /// <summary>The line once the tool's result is in (one that didn't fail).</summary>
-    public static CompactLine Result(string id, string name, JsonObject? input, string verb, string subject, JsonObject? details, string output)
+    public static CompactLine Result(string id, ClaudeCall call, JsonObject? details, string output)
     {
-        var detail = name switch
+        var verb = call.Verb;
+        var detail = call.Name switch
         {
             ClaudeTools.Read or ClaudeTools.NotebookRead => details?[Details.File]?[Details.NumLines].AsLong() is { } n ? CompactText.LineCount(n) : null,
             ClaudeTools.Grep => SearchResult(details),
             ClaudeTools.Glob => details?[Details.NumFiles].AsLong() is { } files ? CompactText.FileCount(files) : null,
             ClaudeTools.Edit or ClaudeTools.MultiEdit or ClaudeTools.NotebookEdit => PatchResult(details),
             ClaudeTools.Write => WriteResult(details, ref verb),
-            ClaudeTools.Bash or ClaudeTools.PowerShell => CommandResult(input, details, output),
+            ClaudeTools.Bash or ClaudeTools.PowerShell => CommandResult(call.Command, details, output),
             ClaudeTools.WebFetch => details?[Details.Code].AsLong() is { } code and >= HttpErrors ? $"HTTP {code}" : "fetched",
-            ClaudeTools.TodoWrite => TodoResult(input),
+            ClaudeTools.TodoWrite => call.Progress,
             _ => null,
         };
-        return new CompactLine(id, CompactKinds.Tool, subject, verb, detail ?? CompactText.Done);
+        return new CompactLine(id, CompactKinds.Tool, call.Subject, verb, detail ?? CompactText.Done);
     }
 
     private static string In(string what, string where) => string.IsNullOrEmpty(where) ? what : $"{what} in {where}";
@@ -156,17 +168,17 @@ internal static class ClaudeToolLine
     }
 
     /// <summary>A command's output: a test run's counts, or how many lines it printed; "stopped" when the user stopped it.</summary>
-    private static string CommandResult(JsonObject? input, JsonObject? details, string output)
+    private static string CommandResult(string? command, JsonObject? details, string output)
     {
         if (details?[Details.Interrupted].AsBool() == true)
         {
             return "stopped";
         }
-        return CompactText.Output(input?[Input.Command].AsText() ?? "", details?[Details.Stdout].AsText() ?? output);
+        return CompactText.Output(command ?? "", details?[Details.Stdout].AsText() ?? output);
     }
 
     /// <summary>The to do list's progress as Claude wrote it: "3 of 5".</summary>
-    private static string? TodoResult(JsonObject? input)
+    private static string? TodoProgress(JsonObject? input)
     {
         if (input?[Input.Todos] is not JsonArray todos || todos.Count == 0)
         {
@@ -176,3 +188,6 @@ internal static class ClaudeToolLine
         return $"{done} of {todos.Count}";
     }
 }
+
+/// <summary>A Claude Code tool call waiting for its result: its tool, its line's verb and subject, and what its result is read with.</summary>
+internal sealed record ClaudeCall(string Name, string Verb, string Subject, string? Command, string? Progress);

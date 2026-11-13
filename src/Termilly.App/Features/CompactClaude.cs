@@ -52,8 +52,8 @@ internal sealed class CompactClaude : ICompactReader
     /// <summary>Lines worth parsing say one of these; the rest (requests, snapshots, settings) are passed over unread.</summary>
     private static readonly byte[][] Wanted = ["\"type\":\"user\""u8.ToArray(), "\"type\":\"assistant\""u8.ToArray(), "\"turn_duration\""u8.ToArray()];
 
-    /// <summary>The tool each call was, by its id: its result is read according to it.</summary>
-    private readonly Dictionary<string, (string Name, JsonObject? Input)> _calls = new(StringComparer.Ordinal);
+    /// <summary>The calls waiting for their results, by id; a call leaves once its result is read.</summary>
+    private readonly Dictionary<string, ClaudeCall> _calls = new(StringComparer.Ordinal);
 
     public void Read(ReadOnlySpan<byte> line, CompactLog log)
     {
@@ -73,7 +73,7 @@ internal sealed class CompactClaude : ICompactReader
                 ReadAssistant(root, key, cwd, log);
                 break;
             case Types.User when root[Fields.IsMeta].AsBool() != true && root[Fields.IsCompactSummary].AsBool() != true:
-                ReadUser(root, key, cwd, log);
+                ReadUser(root, key, log);
                 break;
             case Types.System when root[Fields.Subtype].AsText() == Types.TurnDuration && root[Fields.DurationMs].AsLong() is { } ms:
                 log.Put(new CompactLine(key, CompactKinds.End, "", Detail: CompactText.Duration(ms)));
@@ -113,28 +113,44 @@ internal sealed class CompactClaude : ICompactReader
                     log.Put(new CompactLine(part, CompactKinds.Thinking, CompactText.Cut(thought.Trim(), CompactText.MaxWords)));
                     break;
                 case Types.ToolUse when block[Fields.Id].AsText() is { } id && block[Fields.Name].AsText() is { } name:
-                    var input = block[Fields.Input] as JsonObject;
-                    _calls[id] = (name, input);
-                    var (verb, subject) = ClaudeToolLine.Describe(name, input, cwd);
-                    // A line that came back already (the transcript was read again) keeps its result.
+                    // A line whose result came already (the transcript repeats a call) keeps it.
                     if (log.Find(id) is not { Done: true })
                     {
-                        log.Put(new CompactLine(id, CompactKinds.Tool, subject, verb, Done: false));
+                        var call = ClaudeToolLine.Call(name, block[Fields.Input] as JsonObject, cwd);
+                        _calls[id] = call;
+                        ForgetLost(log);
+                        log.Put(new CompactLine(id, CompactKinds.Tool, call.Subject, call.Verb, Done: false));
                     }
                     break;
             }
         }
     }
 
+    /// <summary>
+    /// Calls whose result never came (a turn stopped mid-call) are forgotten once there are more waiting than the view
+    /// keeps lines: those whose line is gone.
+    /// </summary>
+    private void ForgetLost(CompactLog log)
+    {
+        if (_calls.Count <= CompactLimits.MaxLines)
+        {
+            return;
+        }
+        foreach (var lost in _calls.Keys.Where(k => log.Find(k) is null).ToList())
+        {
+            _calls.Remove(lost);
+        }
+    }
+
     /// <summary>What the user typed (a prompt, or a slash command), a turn they stopped, or tools' results.</summary>
-    private void ReadUser(JsonObject root, string key, string? cwd, CompactLog log)
+    private void ReadUser(JsonObject root, string key, CompactLog log)
     {
         var content = root[Fields.Message]?[Fields.Content];
         if (content is JsonArray blocks && blocks.OfType<JsonObject>().Any(b => b[Fields.Type].AsText() == Types.ToolResult))
         {
             foreach (var result in blocks.OfType<JsonObject>().Where(b => b[Fields.Type].AsText() == Types.ToolResult))
             {
-                ReadResult(result, root[Fields.ToolUseResult], cwd, log);
+                ReadResult(result, root[Fields.ToolUseResult], log);
             }
             return;
         }
@@ -162,18 +178,17 @@ internal sealed class CompactClaude : ICompactReader
     }
 
     /// <summary>A tool's result: its line says what came of it, or why it failed.</summary>
-    private void ReadResult(JsonObject result, JsonNode? details, string? cwd, CompactLog log)
+    private void ReadResult(JsonObject result, JsonNode? details, CompactLog log)
     {
-        if (result[Fields.ToolUseId].AsText() is not { } id || !_calls.TryGetValue(id, out var call))
+        if (result[Fields.ToolUseId].AsText() is not { } id || !_calls.Remove(id, out var call))
         {
             return;
         }
-        var (verb, subject) = ClaudeToolLine.Describe(call.Name, call.Input, cwd);
         var failed = result[Fields.IsError].AsBool() == true;
         var output = CompactJson.Texts(result[Fields.Content]);
         var line = failed
-            ? new CompactLine(id, CompactKinds.Tool, subject, verb, CompactText.Reason(output), Failed: true)
-            : ClaudeToolLine.Result(id, call.Name, call.Input, verb, subject, details as JsonObject, output);
+            ? new CompactLine(id, CompactKinds.Tool, call.Subject, call.Verb, CompactText.Reason(output), Failed: true)
+            : ClaudeToolLine.Result(id, call, details as JsonObject, output);
         log.Put(line);
     }
 }

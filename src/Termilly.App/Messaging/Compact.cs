@@ -40,6 +40,13 @@ internal static class CompactKinds
     public static readonly IReadOnlyList<string> All = [Prompt, Reply, Thinking, Tool, End, Interrupted];
 }
 
+/// <summary>How much of a session the compact view keeps, the host and the page alike.</summary>
+internal static class CompactLimits
+{
+    /// <summary>The newest this many lines; older ones go.</summary>
+    public const int MaxLines = 2000;
+}
+
 /// <summary>What a tool line says the agent did, the same words for Claude Code and Codex.</summary>
 internal static class CompactVerbs
 {

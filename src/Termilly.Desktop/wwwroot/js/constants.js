@@ -99,6 +99,11 @@ export const COMPACT_VERB = Object.freeze({
   all: Object.freeze(['Search', 'Read', 'List', 'Edit', 'Write', 'Run', 'Test', 'Web', 'Agent', 'Plan', 'Ask', 'MCP', 'Tool']),
 });
 
+/** C#: CompactLimits (Messaging/Compact.cs). */
+export const COMPACT_LIMIT = Object.freeze({
+  maxLines: 2000,
+});
+
 /** C#: ChangeSources (Changes/ChangeModel.cs). */
 export const CHANGE_SOURCE = Object.freeze({
   snapshot: 'snapshot',

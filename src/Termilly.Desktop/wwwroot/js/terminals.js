@@ -946,6 +946,9 @@ function wireDropAndPaste(tab, term) {
     }
   });
   body.addEventListener('paste', e => {
+    // Only a paste into the terminal: a field over it (the compact view's prompt box) takes its own. Not instanceof:
+    // a terminal in a window of its own has that window's Node.
+    if (!term.element?.contains(/** @type {Node | null} */ (e.target))) return;
     if (!checkPaste(tab, e.clipboardData?.getData('text/plain') ?? '')) return;
     e.preventDefault();
     e.stopImmediatePropagation();

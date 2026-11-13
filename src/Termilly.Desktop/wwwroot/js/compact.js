@@ -7,7 +7,7 @@
 import { PAGE, HOST } from './protocol.js';
 import { send, onHost } from './host.js';
 import { state, on, runningAgent, persist, EVENTS } from './store.js';
-import { AGENT_STATE } from './constants.js';
+import { AGENT_STATE, COMPACT_LIMIT } from './constants.js';
 import { agentKind } from './agentkinds.js';
 import { escapeHtml } from './ui.js';
 import { find } from './dom.js';
@@ -24,6 +24,8 @@ export const COMPACT_VIEW = Object.freeze({ compact: 'compact', terminal: 'termi
 const SHOWN_CLASS = 'compact-on';
 /** The prompt box. */
 const INPUT = '.cv-input';
+/** The feed's button that shows the terminal (while the agent waits on a question). */
+const OPEN_TERMINAL = '.cv-open-terminal';
 /** Within this many pixels of the bottom, the feed counts as following the newest line. */
 const FOLLOW_SLACK_PX = 40;
 /** Bracketed paste: a text of several lines goes in as one, so its newlines don't send it line by line. */
@@ -36,18 +38,18 @@ const VIEW_HTML = `
     <textarea class="cv-input" rows="1" spellcheck="false"></textarea>
     <button class="cv-send" title="Send (Enter)">Send</button>
   </div>
-  <div class="cv-hint"></div>`;
+  <div class="cv-hint">Enter sends, Shift+Enter adds a line</div>`;
 
 /**
- * A terminal's compact view: what the host sent of its session, and the elements showing it.
- * @typedef {{ lines: CompactLine[], session: string | null, el: HTMLElement | null, frame: number }} CompactState
+ * A terminal's compact view: what the host sent of its session, the elements showing it, and the prompt being typed.
+ * @typedef {{ lines: CompactLine[], session: string | null, el: HTMLElement | null, frame: number, sending: Promise<void> }} CompactState
  */
 
 /**
  * @param {Tab} tab
  * @returns {CompactState}
  */
-const compactOf = tab => /** @type {CompactState} */ (tab.compact ??= { lines: [], session: null, el: null, frame: 0 });
+const compactOf = tab => /** @type {CompactState} */ (tab.compact ??= { lines: [], session: null, el: null, frame: 0, sending: Promise.resolve() });
 
 /**
  * Whether the terminal shows its compact view: the user switched it on, and an agent runs there.
@@ -116,6 +118,12 @@ function build(tab) {
   });
   input.addEventListener('input', () => fitInput(input));
   find(el, '.cv-send').addEventListener('click', () => submit(tab, input));
+  // Buttons drawn in the feed are handled here: a terminal in a window of its own has that window's elements.
+  el.addEventListener('click', e => {
+    if (/** @type {Element} */ (e.target).closest?.(OPEN_TERMINAL)) setCompact(tab, false);
+  });
+  // The terminal's right-click menu and copy-on-select (termclipboard.js) are the terminal's, not the view's.
+  for (const type of ['contextmenu', 'mouseup']) el.addEventListener(type, e => e.stopPropagation());
   // The terminal underneath still takes the focus when its pane is clicked or focused (panes.js): the prompt box
   // takes it instead while the view shows.
   view.body.addEventListener('focusin', e => {
@@ -135,8 +143,7 @@ function fitInput(input) {
 
 /** @param {Tab} tab */
 function focusInput(tab) {
-  const input = compactOf(tab).el?.querySelector(INPUT);
-  if (input instanceof HTMLTextAreaElement) input.focus();
+  /** @type {HTMLTextAreaElement | null | undefined} */ (compactOf(tab).el?.querySelector(INPUT))?.focus();
 }
 
 /**
@@ -147,19 +154,37 @@ function focusInput(tab) {
 const waitsForAnswer = tab => tab.agent?.state === AGENT_STATE.needsInput;
 
 /**
- * Types the prompt box's text into the agent and presses Enter, as the user would. Claude Code and Codex both take a
- * prompt while they work, and queue it.
+ * Whether the prompt box's text may go to the agent now: it still runs there, and isn't asking a question of its own.
+ * @param {Tab} tab
+ */
+const canSend = tab => !tab.exited && !!runningAgent(tab) && !waitsForAnswer(tab);
+
+/**
+ * Sends the prompt box's text to the agent. One prompt at a time per terminal: a second one sent while the first
+ * waits for its Enter would run into it.
  * @param {Tab} tab
  * @param {HTMLTextAreaElement} input
  */
-async function submit(tab, input) {
+function submit(tab, input) {
   const text = input.value.trim();
-  if (!text || tab.exited || waitsForAnswer(tab)) return;
+  if (!text || !canSend(tab)) return;
   input.value = '';
   fitInput(input);
+  const c = compactOf(tab);
+  c.sending = c.sending.then(() => typePrompt(tab, text));
+}
+
+/**
+ * Types a prompt into the agent and presses Enter, as the user would (Claude Code and Codex both take a prompt while
+ * they work, and queue it). Checked again before each part: the agent may have left, or asked something, meanwhile.
+ * @param {Tab} tab
+ * @param {string} text
+ */
+async function typePrompt(tab, text) {
+  if (!canSend(tab)) return;
   send(PAGE.input, { id: tab.id, data: text.includes('\n') ? `${PASTE_START}${text}${PASTE_END}` : text });
   await beforeEnter(tab);
-  if (tab.exited) return;
+  if (!canSend(tab)) return;
   send(PAGE.input, { id: tab.id, data: '\r' });
   agentInput(tab, '\r');
 }
@@ -171,7 +196,9 @@ async function submit(tab, input) {
 function render(tab) {
   const c = compactOf(tab);
   if (!c.el || c.frame) return;
-  c.frame = requestAnimationFrame(() => {
+  // The frame of the window it shows in: one of its own may be in front while the main window is minimized.
+  const win = c.el.ownerDocument.defaultView ?? window;
+  c.frame = win.requestAnimationFrame(() => {
     c.frame = 0;
     draw(tab);
   });
@@ -195,7 +222,7 @@ function draw(tab) {
 function workingHtml(tab) {
   const name = escapeHtml(agentKind(runningAgent(tab)).short);
   if (waitsForAnswer(tab)) {
-    return `<div class="cv-needs"><span>${name} needs you</span><button class="cv-open-terminal">Open terminal</button></div>`;
+    return `<div class="cv-needs"><span>${name} needs you</span><button class="${OPEN_TERMINAL.slice(1)}">Open terminal</button></div>`;
   }
   return tab.agent?.state === AGENT_STATE.working ? `<div class="cv-working"><i></i>${name} is working</div>` : '';
 }
@@ -220,9 +247,6 @@ function updateComposer(tab, el) {
   const waiting = waitsForAnswer(tab);
   input.placeholder = waiting ? `${name} is waiting for your answer in the terminal` : `Message ${name}`;
   input.disabled = waiting || !!tab.exited;
-  find(el, '.cv-hint').textContent = 'Enter sends, Shift+Enter adds a line';
-  const open = el.querySelector('.cv-open-terminal');
-  if (open instanceof HTMLButtonElement) open.onclick = () => setCompact(tab, false);
 }
 
 /**
@@ -230,30 +254,40 @@ function updateComposer(tab, el) {
  * @param {Tab} tab
  */
 export function updateSwitch(tab) {
-  const header = tab.view?.header;
-  const box = header?.querySelector('.compact-switch');
-  if (!(box instanceof HTMLElement)) return;
+  const box = /** @type {HTMLElement | null | undefined} */ (tab.view?.header?.querySelector('.compact-switch'));
+  if (!box) return;
   box.hidden = !hasCompact(tab);
   const compact = isCompact(tab);
   find(box, `[data-view="${COMPACT_VIEW.compact}"]`).classList.toggle('on', compact);
   find(box, `[data-view="${COMPACT_VIEW.terminal}"]`).classList.toggle('on', !compact);
 }
 
-// The host's lines: all of them (the view was switched on, or the session is new), or what changed since.
+/**
+ * The host's lines: all of them (the view was switched on, or the session is new), or what changed since. The view
+ * keeps as many as the host does, so it shows the same ones when it's switched on again.
+ * @param {CompactState} c
+ * @param {import('./protocol.js').Host_compactLines} m
+ */
+function takeLines(c, m) {
+  if (m.reset) {
+    c.lines = [...m.lines];
+    return;
+  }
+  const at = new Map(c.lines.map((line, i) => [line.key, i]));
+  for (const line of m.lines) {
+    const i = at.get(line.key);
+    if (i === undefined) c.lines.push(line);
+    else c.lines[i] = line;
+  }
+  if (c.lines.length > COMPACT_LIMIT.maxLines) c.lines.splice(0, c.lines.length - COMPACT_LIMIT.maxLines);
+}
+
 onHost(HOST.compactLines, m => {
   const tab = state.tabs.get(m.id);
   if (!tab) return;
   const c = compactOf(tab);
   if (m.session !== c.session) return; // an answer for a session the view has left
-  if (m.reset) c.lines = [...m.lines];
-  else {
-    const at = new Map(c.lines.map((line, i) => [line.key, i]));
-    for (const line of m.lines) {
-      const i = at.get(line.key);
-      if (i === undefined) c.lines.push(line);
-      else c.lines[i] = line;
-    }
-  }
+  takeLines(c, m);
   render(tab);
 });
 

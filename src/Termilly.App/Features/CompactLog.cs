@@ -6,14 +6,12 @@ using Termilly.Desktop.Messaging;
 namespace Termilly.Desktop.Features;
 
 /// <summary>
-/// A session's lines in the compact view, oldest first, at most <see cref="MaxLines"/> (the oldest go). A line added
+/// A session's lines in the compact view, oldest first, at most <see cref="CompactLimits.MaxLines"/> (the oldest go). A line added
 /// again under its key replaces it in place (a tool's result arrived); what changed since the last
 /// <see cref="TakeChanged"/> is kept, in order, for the next message to the page.
 /// </summary>
 internal sealed class CompactLog
 {
-    public const int MaxLines = 2000;
-
     private readonly Dictionary<string, CompactLine> _lines = new(StringComparer.Ordinal);
     private readonly LinkedList<string> _order = new();
     private readonly List<string> _changed = [];
@@ -27,7 +25,7 @@ internal sealed class CompactLog
         if (!_lines.ContainsKey(line.Key))
         {
             _order.AddLast(line.Key);
-            if (_order.Count > MaxLines && _order.First is { } oldest)
+            if (_order.Count > CompactLimits.MaxLines && _order.First is { } oldest)
             {
                 _lines.Remove(oldest.Value);
                 _order.RemoveFirst();
