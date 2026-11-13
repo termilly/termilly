@@ -113,7 +113,7 @@ function apply(tab) {
   // A resized pane moves the terminal's rows: the drawer follows them.
   if (c.el && view.term && !c.resizes) c.resizes = view.term.onResize(() => placeDrawerSoon(tab));
   updateSwitch(tab);
-  const session = shown ? tab.agent?.session ?? null : null;
+  const session = shown ? sessionOf(tab) : null;
   if (session !== c.session) {
     c.session = session;
     c.lines = [];
@@ -122,6 +122,13 @@ function apply(tab) {
   if (shown) render(tab);
   placeDrawerSoon(tab);
 }
+
+/**
+ * The session the view follows: the one the agent reported, or else the one Termilly resumed in it (Codex reports
+ * nothing before its first prompt, so a session restored at start would show nothing until then).
+ * @param {Tab} tab
+ */
+const sessionOf = tab => tab.agent?.session ?? tab.start?.resumeSession ?? null;
 
 /**
  * The agent's screen changed: the card follows it while the agent waits on a question (a choice picked with the
@@ -546,6 +553,11 @@ onHost(HOST.compactLines, m => {
 // The agent started, changed session (a /clear, a resume), changed state or left: the view follows.
 on(EVENTS.agent, apply);
 on(EVENTS.terminalOpened, apply);
+// Termilly saw the agent's program start or stop (a session restored at start: Codex reports nothing before its first
+// prompt), so the view comes or goes with it.
+on(EVENTS.tab, tab => {
+  if (tab.view && isCompact(tab) !== tab.view.el.classList.contains(SHOWN_CLASS)) apply(tab);
+});
 on(EVENTS.tabClosed, tab => {
   tab.compact?.writes?.dispose();
   tab.compact?.resizes?.dispose();
