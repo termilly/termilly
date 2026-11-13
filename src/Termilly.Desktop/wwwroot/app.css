@@ -3643,7 +3643,7 @@ button.sb-item:hover, button.sb-item.open { background: var(--hover); color: var
 .bp-right { margin-left: auto; }
 
 /* ---- Compact view (js/compact.js): an agent's steps one line each, over its terminal ---- */
-.compact-view { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; background: var(--surface); font-size: calc(12.5px * var(--cv-scale, 1)); }
+.compact-view { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; background: var(--surface); font-size: var(--cv-size, 14px); }
 .compact-view[hidden] { display: none; }
 .cv-feed { flex: 1; min-height: 0; overflow: auto; padding: 10px 14px 6px; color: var(--text); font-size: 1em; line-height: 1.5; -webkit-user-select: text; user-select: text; }
 .cv-empty { margin-top: 18px; color: var(--faint); text-align: center; }
@@ -3654,13 +3654,13 @@ button.sb-item:hover, button.sb-item.open { background: var(--hover); color: var
 .cv-link:hover { color: #76e3ea; text-decoration: underline; }
 :root[data-theme="light"] .cv-link:hover { color: #1b7c83; }
 .cv-ctrl .cv-link:hover, .cv-link[data-plain]:hover { cursor: pointer; }
-.cv-reply code { padding: 0 3px; border-radius: 3px; background: var(--raised-2); color: var(--text); font: .92em var(--mono); }
+.cv-reply code { padding: 0 3px; border-radius: 3px; background: var(--raised-2); color: var(--text); font: 1em var(--mono); }
 .cv-thinking { margin: 6px 0; overflow: hidden; color: var(--faint); font-style: italic; white-space: nowrap; text-overflow: ellipsis; }
 .cv-tool { display: grid; grid-template-columns: 6px 4.2em minmax(0, 1fr) auto; align-items: center; column-gap: 8px; height: 1.76em; margin: 0 -6px; padding: 0 6px; border-radius: 5px; }
 .cv-tool:hover { background: var(--hover); }
 .cv-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--faint); }
 .cv-verb { color: var(--muted); }
-.cv-subject { overflow: hidden; font: .92em var(--mono); white-space: nowrap; text-overflow: ellipsis; }
+.cv-subject { overflow: hidden; font: 1em var(--mono); white-space: nowrap; text-overflow: ellipsis; }
 .cv-subject i { color: var(--faint); font-style: normal; }
 .cv-detail { color: var(--faint); font-size: .92em; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .cv-add { color: var(--ok); }
@@ -3684,7 +3684,7 @@ button.sb-item:hover, button.sb-item.open { background: var(--hover); color: var
 .cv-hint { flex: none; padding: 0 12px 6px; color: var(--faint); font-size: .84em; }
 .cv-card { margin: 10px 0; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--attention) 45%, transparent); border-radius: 8px; background: color-mix(in srgb, var(--attention) 9%, transparent); }
 .cv-question { margin-bottom: 7px; color: var(--text-strong); font-weight: 600; white-space: pre-wrap; overflow-wrap: anywhere; }
-.cv-context { max-height: 180px; margin-bottom: 9px; padding: 5px 8px; overflow: auto; border-radius: 5px; background: var(--term-bg); color: var(--term-text); font: .92em/1.45 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+.cv-context { max-height: 180px; margin-bottom: 9px; padding: 5px 8px; overflow: auto; border-radius: 5px; background: var(--term-bg); color: var(--term-text); font: 1em/1.45 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
 .cv-choices { display: flex; flex-wrap: wrap; gap: 6px; }
 .cv-choice, .cv-card .cv-open-terminal { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-height: 26px; padding: 3px 10px; border: 1px solid var(--border-strong); border-radius: 6px; color: var(--text); font-size: .92em; text-align: left; }
 .cv-choice:hover, .cv-card .cv-open-terminal:hover { background: var(--hover); }
