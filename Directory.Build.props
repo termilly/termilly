@@ -7,7 +7,7 @@
     <AnalysisLevel>latest-recommended</AnalysisLevel>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <!-- The version setup installs and Apps & features shows (installer/build.ps1 reads it from Termilly.exe). -->
-    <Version>1.8.0.1</Version>
+    <Version>1.8.0.2</Version>
     <Company>Termilly</Company>
     <Product>Termilly</Product>
   </PropertyGroup>

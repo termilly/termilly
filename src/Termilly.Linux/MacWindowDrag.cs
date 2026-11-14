@@ -85,6 +85,51 @@ internal static class MacWindowDrag
 
     private const string MouseEventWith = "mouseEventWithType:location:modifierFlags:timestamp:windowNumber:context:eventNumber:clickCount:pressure:";
 
+    /// <summary>How far down from a window's top a click is on its title bar (the page's header), in page pixels.</summary>
+    private const double TitleBarHeight = 42;
+    private const string AcceptsFirstMouse = "acceptsFirstMouse:";
+
+    /// <summary>acceptsFirstMouse:'s shape: answers a BOOL.</summary>
+    [System.Runtime.InteropServices.UnmanagedFunctionPointer(System.Runtime.InteropServices.CallingConvention.Cdecl)]
+    private delegate byte FirstMouse(IntPtr self, IntPtr selector, IntPtr mouseDown);
+
+    // Kept alive as long as the app runs: WebKit calls them.
+    private static FirstMouse? _firstMouse, _webKits;
+    private static Func<double> _zoom = () => 1;
+
+    /// <summary>
+    /// Lets a click on a window's title bar while another app is in front reach the page, as a native title bar takes
+    /// it: else macOS spends it on bringing Termilly to the front, and the window can only be moved by a second one.
+    /// Clicks anywhere else stay WebKit's (a first click only brings the window forward). All the app's web views
+    /// (WKWebView, Photino's and the page's own windows'); <paramref name="zoom"/> is the page's zoom now.
+    /// </summary>
+    public static void TakeFirstClickOnTitleBar(Func<double> zoom)
+    {
+        var webView = Class("WKWebView");
+        if (webView == IntPtr.Zero || _firstMouse is not null)
+        {
+            return;
+        }
+        _zoom = zoom;
+        var webKits = class_getMethodImplementation(webView, Sel(AcceptsFirstMouse));
+        _webKits = webKits == IntPtr.Zero ? null : System.Runtime.InteropServices.Marshal.GetDelegateForFunctionPointer<FirstMouse>(webKits);
+        _firstMouse = (self, selector, mouseDown) =>
+            OnTitleBar(self, mouseDown) ? (byte)1 : _webKits?.Invoke(self, selector, mouseDown) ?? 0;
+        AddMethod(webView, AcceptsFirstMouse, _firstMouse, "B@:@");
+    }
+
+    /// <summary>Whether a mouse-down is on the title bar of the view's window (Cocoa's y grows upwards).</summary>
+    private static bool OnTitleBar(IntPtr view, IntPtr mouseDown)
+    {
+        if (mouseDown == IntPtr.Zero)
+        {
+            return false;
+        }
+        var at = objc_msgSend_point(mouseDown, Sel("locationInWindow"));
+        var height = SendRect(Send(Send(view, "window"), Cocoa.ContentView), Cocoa.Frame).Height;
+        return at.Y >= height - TitleBarHeight * _zoom();
+    }
+
     /// <summary>Resizes the window from one edge or corner, until the button is let go; never below <paramref name="min"/>.</summary>
     public static void BeginResize(IntPtr window, string edge, Size min, Action<Action> onMain, Action? done = null)
     {
@@ -158,6 +203,9 @@ internal static class MacWindowDrag
     // Two doubles come back in registers on arm64 and x86_64 alike, so plain objc_msgSend (not _stret) returns them.
     [System.Runtime.InteropServices.DllImport("/usr/lib/libobjc.A.dylib", EntryPoint = "objc_msgSend")]
     private static extern Point2 objc_msgSend_point(IntPtr receiver, IntPtr selector);
+
+    [System.Runtime.InteropServices.DllImport("/usr/lib/libobjc.A.dylib")]
+    private static extern IntPtr class_getMethodImplementation(IntPtr cls, IntPtr selector);
 
     [System.Runtime.InteropServices.DllImport("/usr/lib/libobjc.A.dylib", EntryPoint = "objc_msgSend")]
     private static extern IntPtr msgSend_mouseEvent(IntPtr receiver, IntPtr selector, nuint type, Point2 location, nuint flags,
