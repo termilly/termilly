@@ -3643,6 +3643,45 @@ button.sb-item:hover, button.sb-item.open { background: var(--hover); color: var
 .bp-foot button:hover { background: var(--hover); color: var(--text); }
 .bp-foot svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.2; }
 .bp-right { margin-left: auto; }
+/* The snippets list under the title bar's button (js/snippetpick.js): a quick pick, grouped by where each comes from. */
+.sp-pop { width: 560px; max-width: calc(100vw - 24px); padding: 0; overflow: hidden; }
+.sp-where { padding: 0 12px 6px; overflow: hidden; color: var(--faint); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.sp-where:empty { display: none; }
+.sp-where b { color: var(--muted); font-weight: 600; }
+.sp-where code, .sp-group code { font: 10.5px var(--term-font); }
+.sp-list { max-height: min(420px, 60vh); padding: 0 4px 4px; overflow: auto; }
+.sp-group { display: flex; align-items: center; gap: 8px; padding: 8px 8px 3px; color: var(--faint); font-size: 10.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+.sp-group::after { flex: 1; order: 1; height: 1px; background: var(--border); content: ""; }
+.sp-group code { order: 2; font-weight: 400; letter-spacing: 0; text-transform: none; }
+.sp-row { display: flex; align-items: center; gap: 9px; height: 28px; padding: 0 6px 0 8px; border-radius: 5px; cursor: pointer; }
+.sp-row:hover, .sp-row.sel { background: var(--hover); }
+.sp-row.sel { box-shadow: inset 2px 0 0 var(--accent); }
+.sp-icon { display: grid; flex: none; place-items: center; width: 16px; color: var(--muted); }
+.sp-icon svg, .sp-acts svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1; }
+.sp-text { display: flex; flex: 1; align-items: baseline; gap: 10px; min-width: 0; }
+.sp-name { flex: none; max-width: 60%; overflow: hidden; color: var(--text); text-overflow: ellipsis; white-space: nowrap; }
+.sp-row.sel .sp-name { color: var(--text-strong); }
+.sp-cmd { min-width: 0; overflow: hidden; color: var(--muted); font: 11.5px var(--term-font); text-overflow: ellipsis; white-space: nowrap; }
+.sp-row mark { border-radius: 2px; background: var(--mark-bg); color: inherit; }
+.sp-meta { flex: none; color: var(--faint); font-size: 11px; }
+.sp-acts { display: none; flex: none; gap: 2px; }
+.sp-row.sel .sp-acts { display: flex; }
+.sp-row.sel .sp-meta { display: none; }
+.sp-acts button { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 4px; color: var(--muted); }
+.sp-acts button:hover { background: var(--hover); color: var(--text); }
+.sp-empty { margin: 4px 6px 6px; padding: 9px 11px; border: 1px dashed var(--border-strong); border-radius: 6px; color: var(--muted); font-size: 12px; }
+.sp-empty code { font: 11px var(--term-font); }
+.sp-foot { display: flex; align-items: center; gap: 12px; padding: 5px 6px 5px 12px; border-top: 1px solid var(--border); color: var(--faint); font-size: 11px; }
+.sp-foot kbd { padding: 0 4px; border: 1px solid var(--border-strong); border-radius: 3px; color: var(--muted); font: 10px var(--term-font); }
+.sp-foot .spacer { flex: 1; }
+.sp-foot button { height: 24px; padding: 0 9px; border-radius: 5px; color: var(--muted); }
+.sp-foot button:hover { background: var(--hover); color: var(--text); }
+.sw-group { display: flex; align-items: baseline; gap: 8px; }
+.sw-group span { overflow: hidden; text-overflow: ellipsis; }
+.sw-group code { margin-left: auto; color: var(--faint); font: 10px var(--term-font); letter-spacing: 0; text-transform: none; }
+.sw-row.from-file .sw-name { color: var(--muted); }
+.sw-title { margin: 0 0 2px; color: var(--text-strong); font-size: 15px; font-weight: 600; }
+.sw-note { margin: 10px 0 0; padding: 8px 10px; border-left: 2px solid var(--accent); background: var(--accent-fill); color: var(--muted); font-size: 12px; }
 
 /* ---- Compact view (js/compact.js): an agent's steps one line each, over its terminal ---- */
 .compact-view { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; background: var(--surface); font-size: var(--cv-size, 14px); font-family: var(--cv-font, var(--mono)); }

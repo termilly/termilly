@@ -308,6 +308,8 @@ interface SettingsData {
   costLedger: Record<string, CostDay> | null;
   /** Each snippet's variables, as last filled in. */
   snippetValues: Record<string, Record<string, string>> | null;
+  /** When each snippet or task was last run (Unix ms), for the snippets list's order. */
+  snippetUsed: Record<string, number> | null;
 }
 
 /** A theme's colours for the window and start-up loader (#RRGGBB), and whether it's a light theme. */

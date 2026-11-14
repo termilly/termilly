@@ -86,7 +86,7 @@ const JPEG = 'image/jpeg';
  * What newTab is given: all of it optional. restore is a reopened terminal's saved output.
  * @typedef {{ profile?: string | null, wsId?: string | null, dir?: 'row' | 'column', name?: string | null,
  *   tags?: string[], restore?: { lines: string[], closedAt: number }, cwd?: string | null, command?: string | null,
- *   note?: Note | null, tasks?: TodoTask[], virtual?: Tab['virtual'] }} NewTabOptions
+ *   note?: Note | null, tasks?: TodoTask[], virtual?: Tab['virtual'], env?: Record<string, string> | null }} NewTabOptions
  */
 
 /**
@@ -184,14 +184,14 @@ export function createView(tab, { draggable = true } = {}) {
  * focused tab. dir 'row' puts it to the right, 'column' below; with no dir, it splits along the longer side.
  * @param {NewTabOptions} [options]
  */
-export function newTab({ profile = defaultProfile(), wsId = state.activeId, dir, name = null, tags = [], restore, cwd = null, command = null, note = null, tasks, virtual = null } = {}) {
+export function newTab({ profile = defaultProfile(), wsId = state.activeId, dir, name = null, tags = [], restore, cwd = null, command = null, note = null, tasks, virtual = null, env = null } = {}) {
   const ws = /** @type {Workspace} */ (wsById(wsId) ?? activeWorkspace());
   // A fresh terminal starts with its profile's tags (an SSH host to production gets "prod").
   if (!restore && !tags.length) tags = state.profiles.find(p => p.id === profile)?.tags ?? [];
   for (const tag of tags) ensureTag(tag);
   const tab = /** @type {Tab} */ ({
     id: newId('t'), wsId: ws.id, profile, name, tags: [...tags], noHistory: !!virtual, attention: false, startedAt: Date.now(), view: null, note, ...(tasks?.length ? { tasks } : {}),
-    startCwd: cwd, virtual,
+    startCwd: cwd, virtual, ...(env ? { env } : {}),
   });
   // A reopened terminal's output; a command from the API (termilly open), or the profile's own (Claude Code: claude).
   prepareStart(tab, { output: restore ?? null, command: command ?? (restore ? null : state.profiles.find(p => p.id === profile)?.startCommand ?? null) });
