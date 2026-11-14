@@ -84,6 +84,8 @@ interface Workspace {
   snippets?: SnippetSetting[];
   /** Folded in the sidebar. */
   collapsed?: boolean;
+  /** Its set-aside terminals folded in the sidebar. */
+  asideCollapsed?: boolean;
   /** Where "Copy to" last copied from here (js/copyto.js): the terminal picked, and the folder picked in each. */
   copyTo?: { tab: string | null; dirs: Record<string, string> };
   /** Another Termilly computer's terminals open here (js/remotepc.js): its id. Not listed with this PC's; never saved. */
@@ -210,6 +212,12 @@ interface Tab {
   agentReply?: { turn: number; text: string | null };
   /** An agent has run in it. */
   agentSeen?: boolean;
+  /** It shows its agent's compact view (true) or minimal view ('minimal') instead of the terminal (js/compact.js); kept across restarts. */
+  compactView?: boolean | 'minimal';
+  /** Set aside (js/panes.js setAsideTab): out of the layout, listed under its workspace until brought back; when. */
+  setAside?: number;
+  /** Its compact view's lines and elements (js/compact.js). */
+  compact?: import('../wwwroot/js/compact.js').CompactState;
   /** The Claude Code sessions it ran, oldest first, for My prompts (js/myprompts.js). */
   agentSessions?: string[];
   /**

@@ -109,7 +109,7 @@ const settingsOptions = () => ({
  * The chosen family first, then fallbacks so a missing font still gives a monospace terminal.
  * @param {string} family
  */
-const fontStack = family => `"${family}", Consolas, "Cascadia Mono", "DejaVu Sans Mono", monospace`;
+export const fontStack = family => `"${family}", Consolas, "Cascadia Mono", "DejaVu Sans Mono", monospace`;
 
 /**
  * How long a start command waits for a shell that marks no prompt (local shells only), and how long after the
@@ -946,6 +946,9 @@ function wireDropAndPaste(tab, term) {
     }
   });
   body.addEventListener('paste', e => {
+    // Only a paste into the terminal: a field over it (the compact view's prompt box) takes its own. Not instanceof:
+    // a terminal in a window of its own has that window's Node.
+    if (!term.element?.contains(/** @type {Node | null} */ (e.target))) return;
     if (!checkPaste(tab, e.clipboardData?.getData('text/plain') ?? '')) return;
     e.preventDefault();
     e.stopImmediatePropagation();

@@ -6,7 +6,8 @@
 
 import { PAGE, HOST } from './protocol.js';
 import { send, onHost } from './host.js';
-import { state, tabTitle, saveNow } from './store.js';
+import { state, tabTitle, saveNow, runningAgent } from './store.js';
+import { agentKind } from './agentkinds.js';
 import { modal, CONFIRM_DIALOG } from './dialogs.js';
 import { escapeHtml } from './ui.js';
 import { AGENT_STATE, QUIT_ANSWER } from './constants.js';
@@ -25,7 +26,7 @@ const SECOND_MS = 1000;
 function busyTerminals() {
   return [...state.tabs.values()]
     .filter(tab => !tab.virtual && (tab.busy || AGENT_BUSY.has(tab.agent?.state ?? '')))
-    .map(tab => `${tabTitle(tab)} (${tab.busy || 'Claude Code'})`);
+    .map(tab => `${tabTitle(tab)} (${tab.busy || agentKind(tab.agent?.kind ?? runningAgent(tab)).name})`);
 }
 
 /** @param {string[]} busy */

@@ -82,6 +82,8 @@ internal static class Composition
         .AddHandler<PlanRefreshHandler>()
         .AddHandler<ChangesHandler>()
         .AddHandler<PromptsHandler>()
+        .AddHandler<CompactFeed>()
+        .AddHandler<CompactFiles>()
         .AddHandler<GitHandler>()
         .AddHandler<WorktreeHandler>()
         .AddHandler<LayoutHandler>()

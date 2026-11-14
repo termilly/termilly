@@ -352,7 +352,7 @@ function isReady(tab, quietSince) {
  * @param {Tab} tab
  * @param {import('./agentkinds.js').AgentKind} kind
  */
-function showsInput(tab, kind) {
+export function showsInput(tab, kind) {
   const mark = kind.inputMark;
   if (!mark) return true;
   const buffer = tab.view?.term?.buffer.active;

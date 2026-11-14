@@ -442,12 +442,27 @@ const NEWS = new Set([AGENT_STATE.done, AGENT_STATE.error, AGENT_STATE.attention
 
 /**
  * Whether the user can see a terminal now: its workspace is showing and the window is in front (the host's word,
- * js/windowshown.js, as well as the page's focus). One in a window of its own: that window has the focus.
+ * js/windowshown.js, as well as the page's focus). One in a window of its own: that window has the focus. One set aside
+ * isn't on screen at all.
  * @param {Tab} tab
  */
-export const isInView = tab => (tab.detached
+export const isInView = tab => (tab.setAside ? false : tab.detached
   ? !!tab.view?.el.ownerDocument.hasFocus()
   : tab.wsId === state.activeId && windowInFront() && document.hasFocus());
+
+/**
+ * Whether a terminal is out of its workspace's layout: in a window of its own, or set aside (the layout is drawn
+ * without it, and keeps its place).
+ * @param {Tab | undefined} tab
+ */
+export const isAway = tab => !!tab && (!!tab.detached || !!tab.setAside);
+
+/**
+ * The terminal a workspace focuses when it has none in focus: its first one that isn't set aside (focusing that would
+ * bring it back).
+ * @param {Workspace} ws
+ */
+export const firstShown = ws => tabsOf(ws).find(t => !t.setAside);
 
 /**
  * Whether an agent runs in this terminal now (Claude Code or Codex, tab.agent.kind): its hooks or the `claude agents`
@@ -809,12 +824,12 @@ function serialize() {
     windowPlaces: state.windowPlaces,
     windowsOnTop: state.windowsOnTop,
     // tmux windows aren't saved: they're tmux's, and attaching again brings them back (tmux.js).
-    workspaces: state.workspaces.filter(w => !w.tmux).map(({ id, name, color, cwd, focusId, root, note, tasks, snippets, collapsed, copyTo }) => ({ id, name, color, cwd, focusId, tasks, root: withoutPreview(root), note, snippets, collapsed: collapsed || undefined, copyTo })),
+    workspaces: state.workspaces.filter(w => !w.tmux).map(({ id, name, color, cwd, focusId, root, note, tasks, snippets, collapsed, asideCollapsed, copyTo }) => ({ id, name, color, cwd, focusId, tasks, root: withoutPreview(root), note, snippets, collapsed: collapsed || undefined, asideCollapsed: asideCollapsed || undefined, copyTo })),
     tabs: [...state.tabs.values()].filter(t => !t.virtual).map(t => {
-      const { id, wsId, profile, name, tags, noHistory, startCwd, env, startCommand, worktree, note, tasks, agentRead, agentType, openedBy, agentSessions, promptsClearedAt, stepsClearedAt } = t;
+      const { id, wsId, profile, name, tags, noHistory, startCwd, env, startCommand, worktree, note, tasks, agentRead, agentType, openedBy, agentSessions, promptsClearedAt, stepsClearedAt, compactView, setAside } = t;
       // In a window of its own: it opens in one again after a restart, where it was (windowPlaces).
       const windowed = t.detached || t.windowed || undefined;
-      return { id, wsId, profile, name, tags, noHistory, startCwd, env, startCommand, worktree, note, tasks, agentRead, agentType, openedBy, agentSessions, promptsClearedAt: promptsClearedAt || undefined, stepsClearedAt: stepsClearedAt && Object.keys(stepsClearedAt).length ? stepsClearedAt : undefined, lastCwd: lastFolderOf(t) ?? undefined, windowed };
+      return { id, wsId, profile, name, tags, noHistory, startCwd, env, startCommand, worktree, note, tasks, agentRead, agentType, openedBy, agentSessions, promptsClearedAt: promptsClearedAt || undefined, stepsClearedAt: stepsClearedAt && Object.keys(stepsClearedAt).length ? stepsClearedAt : undefined, lastCwd: lastFolderOf(t) ?? undefined, windowed, compactView, setAside };
     }),
   };
 }
@@ -884,7 +899,7 @@ export function restore(saved) {
     for (const leaf of [...leaves(ws.root)]) {
       if (!state.tabs.has(leaf.tabId)) detachLeaf(ws, leaf.tabId);
     }
-    if (!ws.focusId || !state.tabs.has(ws.focusId)) ws.focusId = tabsOf(ws)[0]?.id ?? null;
+    if (!ws.focusId || !state.tabs.has(ws.focusId)) ws.focusId = firstShown(ws)?.id ?? null;
     // Stacking (one column of title bars) gave way to tabs: a stacked workspace opens with its terminals as tabs.
     if (ws.stacked) {
       const all = tabsOf(ws);

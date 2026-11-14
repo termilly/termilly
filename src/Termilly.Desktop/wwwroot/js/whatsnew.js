@@ -1,7 +1,7 @@
 // @ts-check
 // What's new: the first start after an update shows what changed, from the CHANGELOG.md the app ships with (js/changelog.js
-// reads it). The newest version is open, with an Open button on each topic that has a window of its own (it does what that
-// title bar button does); its fixes are folded, and so is each version skipped in between. Settings › About and the palette
+// reads it). The newest version is open, a row per topic: its name, and what it is beside it. Its fixes are folded, and so
+// is each version skipped in between, with the same rows inside. Settings › About and the palette
 // bring it back for the version you have. A first start gets the tour instead, and nothing shows twice for a version.
 
 import { PAGE } from './protocol.js';
@@ -12,7 +12,6 @@ import { updateSettings } from './preferences.js';
 import { updateStatus, onUpdateStatus } from './update.js';
 import { modal } from './dialogs.js';
 import { escapeHtml, ICONS } from './ui.js';
-import { byId } from './dom.js';
 import { SECOND_MS } from './util.js';
 import { parseChangelog, releasesSince } from './changelog.js';
 
@@ -24,14 +23,6 @@ const CHANGELOG_URL = 'CHANGELOG.md';
 /** Each version's notes on the site. */
 const SITE_CHANGELOG = 'https://termilly.com/changelog/#v';
 const DIALOG = 'whats-new';
-/**
- * Topics that have a window of their own, by name as the changelog writes them: Open does what their title bar button does,
- * and the topic shows its icon.
- */
-const OPENS = Object.freeze({
-  'to do': 'todo-button', schedules: 'schedules-button', notepad: 'notepad-button',
-  clipboard: 'clips-button', snippets: 'snippets-button', files: 'files-button',
-});
 /** How many quiet seconds in a row before it opens by itself: the terminals are back and nothing else is showing. */
 const QUIET_SECONDS = 3;
 
@@ -45,7 +36,7 @@ function longDate(date) {
 /** A changelog line as HTML: its **bold** and `code`. @param {string} text */
 const inline = text => escapeHtml(text).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/`(.+?)`/g, '<code>$1</code>');
 
-/** A topic's line on its own under its name, so it starts a sentence. @param {string} text */
+/** A topic's line on its own beside its name, so it starts a sentence. @param {string} text */
 const sentence = text => text.charAt(0).toUpperCase() + text.slice(1);
 /** Folded parts open with a chevron that turns. */
 const CARET = `<span class="wn-caret">${ICONS.chevronRight}</span>`;
@@ -64,29 +55,20 @@ async function allReleases() {
   return releases;
 }
 
-/** @param {Topic} topic */
-const buttonOf = topic => {
-  const id = /** @type {Record<string, string>} */ (OPENS)[topic.name.toLowerCase()];
-  return id ? byId(id) : null;
-};
+/** A row: the topic's name, and its line beside it (a line with no name has the row to itself). @param {Topic} topic */
+const rowHtml = topic => `<li class="wn-row">${topic.name ? `<b>${inline(topic.name)}</b>` : ''}<span>${inline(sentence(topic.text))}</span></li>`;
 
-/** @param {Topic} topic */
-function topicHtml(topic) {
-  const button = buttonOf(topic);
-  const icon = button?.querySelector('svg')?.outerHTML ?? '<span class="wn-dot"></span>';
-  const open = button ? `<button type="button" class="btn small" data-open="${escapeHtml(button.id)}">Open</button>` : '';
-  const name = topic.name ? `<b>${inline(topic.name)}</b>` : '';
-  return `<li class="wn-topic"><span class="wn-icon">${icon}</span><span class="wn-what">${name}<span>${inline(topic.name ? sentence(topic.text) : topic.text)}</span></span>${open}</li>`;
-}
+/** Rows between thin lines. @param {Topic[]} topics */
+const rowsHtml = topics => `<ul class="wn-rows">${topics.map(rowHtml).join('')}</ul>`;
 
 /** @param {Topic[]} fixes */
 const fixesHtml = fixes => (fixes.length
-  ? `<details class="wn-fixes"><summary>${CARET}${fixes.length} ${fixes.length === 1 ? 'fix' : 'fixes'}</summary><ul>${fixes.map(f => `<li>${f.name ? `<b>${inline(f.name)}:</b> ` : ''}${inline(f.text)}</li>`).join('')}</ul></details>`
+  ? `<details class="wn-fixes"><summary>${CARET}${fixes.length} ${fixes.length === 1 ? 'fix' : 'fixes'}</summary>${rowsHtml(fixes)}</details>`
   : '');
 
-/** An older version, folded: its topics as plain lines. @param {Release} r */
+/** An older version, folded: its topics and fixes as rows. @param {Release} r */
 const olderHtml = r => `<details class="wn-older"><summary>${CARET}<b>${r.version}</b><span>${longDate(r.date)}</span></summary>
-  <ul>${[...r.topics, ...r.fixes].map(t => `<li>${t.name ? `<b>${inline(t.name)}:</b> ` : ''}${inline(t.text)}</li>`).join('')}</ul></details>`;
+  ${rowsHtml([...r.topics, ...r.fixes])}</details>`;
 
 /**
  * Shows What's new for these versions, newest first.
@@ -101,13 +83,12 @@ function openWindow(shown, from) {
   const on = !state.settings.uiState.whatsNewOff;
   return modal(DIALOG, `
     <div class="wn-head">
-      <img src="assets/mark-40.png" width="36" height="36" alt="">
       <div><h3>${escapeHtml(title)}</h3><p class="dialog-sub">${escapeHtml(sub)}</p></div>
       <button type="button" class="pane-btn" data-cancel title="Close" aria-label="Close">${ICONS.close}</button>
     </div>
     <div class="wn-body">
       ${older.length ? `<p class="wn-version"><b>${newest.version}</b><span>${longDate(newest.date)}</span></p>` : ''}
-      <ul class="wn-topics">${newest.topics.map(topicHtml).join('')}</ul>
+      ${rowsHtml(newest.topics)}
       ${fixesHtml(newest.fixes)}
       ${older.map(olderHtml).join('')}
     </div>
@@ -121,12 +102,6 @@ function openWindow(shown, from) {
       updateSettings(GROUPS.uiState, { whatsNewOff: !(/** @type {HTMLInputElement} */ (e.target).checked) });
     });
     dialog.querySelector('[data-site]')?.addEventListener('click', () => send(PAGE.openUrl, { url: SITE_CHANGELOG + newest.version }));
-    for (const b of dialog.querySelectorAll('[data-open]')) {
-      b.addEventListener('click', () => {
-        close(null);
-        byId(/** @type {HTMLElement} */ (b).dataset.open ?? '')?.click();
-      });
-    }
     return { submit: () => close(null) };
   });
 }
