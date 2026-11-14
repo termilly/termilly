@@ -2,6 +2,16 @@
 
 What changed in each release. Termilly says in its title bar when a newer one is out.
 
+## 1.8.1 (2026-11-14)
+
+- **Compact and Minimal views:** follow an agent one line per step, or see only your prompts and its answers. Pick one with the new button in the terminal's title bar.
+- **Set aside:** a new button in the terminal's title bar takes the terminal out of the layout without closing it. Bring it back from the sidebar, agents included.
+
+Fixes:
+
+- **Mac:** drag the window to another display, or while another app is in front.
+- Many small fixes.
+
 ## 1.8.0 (2026-11-13)
 
 - **Mac support:** Termilly now runs on Mac.
