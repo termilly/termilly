@@ -506,6 +506,7 @@ export function setAsideTab(tab) {
     tab.detached = false;
     closeWindow(windowKey(tab), { quiet: true });
   }
+  keepScroll(tab);
   tab.setAside = Date.now();
   if (ws.focusId === tab.id) ws.focusId = tabsOf(ws).find(t => !isAway(t))?.id ?? null;
   renderWorkspace(ws);
@@ -534,6 +535,42 @@ export function bringBack(tab, focus = true) {
   emit(EVENTS.workspaces);
   persist();
   if (focus) focusTab(tab);
+  restoreScroll(tab);
+}
+
+/**
+ * Where each set-aside terminal was scrolled to: a marker on the top line it showed (it moves with the lines as
+ * output comes and old lines go), or null when it was at the bottom, where it goes back to whatever came meanwhile.
+ * @type {WeakMap<Tab, { line: number, isDisposed: boolean, dispose(): void } | null>}
+ */
+const asideScroll = new WeakMap();
+
+/**
+ * Notes where a terminal is scrolled to as it's set aside: off the page, its scroll is lost.
+ * @param {Tab} tab
+ */
+function keepScroll(tab) {
+  const term = tab.view?.term;
+  if (!term) return;
+  const b = term.buffer.active;
+  asideScroll.set(tab, b.viewportY >= b.baseY ? null : term.registerMarker(b.viewportY - (b.baseY + b.cursorY)) ?? null);
+}
+
+/**
+ * Scrolls a terminal brought back to where it was, once it's drawn on the page again.
+ * @param {Tab} tab
+ */
+function restoreScroll(tab) {
+  if (!asideScroll.has(tab)) return;
+  const marker = asideScroll.get(tab);
+  asideScroll.delete(tab);
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    const term = tab.view?.term;
+    if (term && !tab.setAside) {
+      if (!marker || marker.isDisposed) term.scrollToBottom(); else term.scrollToLine(marker.line);
+    }
+    marker?.dispose();
+  }));
 }
 
 // ---- Focus and workspaces ----
