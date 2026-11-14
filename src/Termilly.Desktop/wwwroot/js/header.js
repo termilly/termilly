@@ -6,7 +6,7 @@
 
 import { state, on, activityOf, EVENTS, wsById } from './store.js';
 import { tabBadgeHtml, tagChipHtml, escapeHtml, ICONS, activityHtml } from './ui.js';
-import { closeTab, setAsideTab, setHeaderBuilder, SET_ASIDE_TITLE } from './panes.js';
+import { closeTab, setAsideTab, setHeaderBuilder, SET_ASIDE_LABEL } from './panes.js';
 import { isCandidate, isReceiving, toggleReceiver } from './broadcast.js';
 import { notesFor, noteTitle, firstLine, editHostNote, NOTE_KIND } from './notes.js';
 import { openTodo, markedList, tabHover, terminalList, workspaceList } from './todo.js';
@@ -53,7 +53,7 @@ const HEADER_HTML = `
       <button class="pane-btn prompts-btn" title="${PROMPTS_TITLE}" hidden>${ICONS.prompts}</button>
       <button class="pane-btn note-btn" hidden>${ICONS.todo}</button>
       <button class="pane-btn tag-btn" title="Tags">${ICONS.tag}</button>
-      <button class="pane-btn aside-btn" title="${SET_ASIDE_TITLE}">${ASIDE_ICON}</button>
+      <button class="pane-btn aside-btn" title="${SET_ASIDE_LABEL}">${ASIDE_ICON}</button>
       <button class="pane-btn close-btn" title="Close terminal (Ctrl+Shift+W)">${ICONS.close}</button>
     </span>`;
 
