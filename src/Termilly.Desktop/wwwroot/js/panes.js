@@ -544,12 +544,16 @@ export function bringBack(tab, focus = true) {
  * @type {WeakMap<Tab, { line: number, isDisposed: boolean, dispose(): void } | null>}
  */
 const asideScroll = new WeakMap();
+/** And where what scrolls in its pane was (its agent view's feed). */
+/** @type {WeakMap<Tab, Array<[Element, number, number]>>} */
+const asideScrolled = new WeakMap();
 
 /**
  * Notes where a terminal is scrolled to as it's set aside: off the page, its scroll is lost.
  * @param {Tab} tab
  */
 function keepScroll(tab) {
+  if (tab.view) asideScrolled.set(tab, scrolledIn(tab.view.el));
   const term = tab.view?.term;
   if (!term) return;
   const b = term.buffer.active;
@@ -561,6 +565,8 @@ function keepScroll(tab) {
  * @param {Tab} tab
  */
 function restoreScroll(tab) {
+  rescroll(asideScrolled.get(tab) ?? []);
+  asideScrolled.delete(tab);
   if (!asideScroll.has(tab)) return;
   const marker = asideScroll.get(tab);
   asideScroll.delete(tab);
@@ -677,6 +683,36 @@ export function restoreFocus() {
   }
 }
 
+/** What may be scrolled in a pane: anything (an agent view's feed, a card's context, the change preview). */
+const SCROLLERS = '*';
+
+/**
+ * The elements under one that are scrolled, and where to: an element off the page loses its scroll, so it's noted
+ * before the layout is drawn again (or a terminal set aside) and put back after.
+ * @param {Element} root
+ * @returns {Array<[Element, number, number]>}
+ */
+function scrolledIn(root) {
+  /** @type {Array<[Element, number, number]>} */
+  const found = [];
+  for (const el of root.querySelectorAll(SCROLLERS)) {
+    if (el.scrollTop || el.scrollLeft) found.push([el, el.scrollTop, el.scrollLeft]);
+  }
+  return found;
+}
+
+/**
+ * Puts back where the elements were scrolled to, those on the page again.
+ * @param {Array<[Element, number, number]>} scrolled
+ */
+function rescroll(scrolled) {
+  for (const [el, top, left] of scrolled) {
+    if (!el.isConnected) continue;
+    el.scrollTop = top;
+    el.scrollLeft = left;
+  }
+}
+
 /**
  * Moves focus to the nearest pane on the given side of the focused one.
  * @param {string} direction
@@ -733,7 +769,10 @@ export function renderWorkspace(ws) {
     takeBackHeader(tab);
   }
   drawing = ws;
+  // Taken off the page and put back, everything in the panes that scrolls (an agent view's feed) would be at its top.
+  const scrolled = scrolledIn(layer);
   layer.replaceChildren(renderNode(ws.root) ?? allAwayNote(ws));
+  rescroll(scrolled);
   drawing = null;
   for (const tab of tabsOf(ws)) {
     /** @type {TabView} */ (tab.view).el.classList.toggle('focused', tab.id === ws.focusId);
