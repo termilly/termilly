@@ -32,20 +32,26 @@ internal sealed class RepoSnippetsHandler(PageChannel page) : IMessageHandler, I
                 Watch(root);
             }
         }));
-        router.On<FromPage.RepoSnippetsSave>(m => Task.Run(() =>
-        {
-            string? error = null;
-            try
-            {
-                RepoSnippets.Write(m.Root ?? "", m.Snippets ?? [], m.OnlyMe);
-            }
-            catch (Exception e) when (Storage.IsFileError(e) || e is ArgumentException)
-            {
-                error = e.Message;
-            }
-            page.Post(new ToPage.RepoSnippetsSaved(m.RequestId, error));
-        }));
+        router.On<FromPage.RepoSnippetsSave>(m => _saves.Add(m));
     }
+
+    /// <summary>
+    /// Saves one at a time, in the order they came: two quick saves to a file finish in the order they were made (the
+    /// newer one last), and never write the same temporary file at once.
+    /// </summary>
+    private readonly InOrder<FromPage.RepoSnippetsSave> _saves = new(m =>
+    {
+        string? error = null;
+        try
+        {
+            RepoSnippets.Write(m.Root ?? "", m.Snippets ?? [], m.OnlyMe);
+        }
+        catch (Exception e) when (Storage.IsFileError(e) || e is ArgumentException)
+        {
+            error = e.Message;
+        }
+        page.Post(new ToPage.RepoSnippetsSaved(m.RequestId, error));
+    });
 
     private void Watch(string root)
     {

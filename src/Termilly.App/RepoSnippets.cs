@@ -60,10 +60,8 @@ internal static class RepoSnippets
         }
         var warnings = new List<string>();
         var snippets = Text(SnippetsPath(root), warnings) is { } own ? WorkspaceLayout.SnippetsOf(own, warnings) : [];
-        // The layout file in the repository's folder, and in the folder asked about when that's further down.
-        var layouts = new[] { root, Path.GetFullPath(folder) }.Distinct(ChangePaths.Comparer)
-            .Select(dir => Text(Path.Combine(dir, WorkspaceLayout.FileName), warnings)).OfType<string>();
-        var shared = layouts.SelectMany(yaml => WorkspaceLayout.SnippetsOf(yaml, warnings)).ToList();
+        // The layout file in the repository's folder only: what's read is the repository's, the same for every folder in it.
+        var shared = Text(Path.Combine(root, WorkspaceLayout.FileName), warnings) is { } layout ? WorkspaceLayout.SnippetsOf(layout, warnings) : [];
         var (tasks, inputs) = Text(TasksPath(root), warnings) is { } json ? VsCodeTasks.Parse(json, root, warnings) : ([], []);
         return new(requestId, root, snippets, shared, tasks, inputs, IsOnlyMe(root), warnings);
     }

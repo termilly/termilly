@@ -148,6 +148,17 @@ public sealed class RepoSnippetsTests : IDisposable
     }
 
     [Fact]
+    public void An_arg_is_quoted_after_its_variables_are_filled_and_an_empty_one_is_kept()
+    {
+        var root = Path.Combine(_repo, "my repo");
+        var (tasks, _) = VsCodeTasks.Parse("""
+            { "tasks": [ { "label": "run", "command": "node", "args": ["${workspaceFolder}/build.js", ""] } ] }
+            """, root, []);
+
+        Assert.Equal($"node \"{root}/build.js\" \"\"", Assert.Single(tasks).Command);
+    }
+
+    [Fact]
     public void A_task_takes_this_systems_command()
     {
         var os = OperatingSystem.IsWindows() ? "windows" : OperatingSystem.IsMacOS() ? "osx" : "linux";

@@ -94,7 +94,7 @@ internal static partial class VsCodeTasks
         {
             return null;
         }
-        var command = CommandLine(os?[Keys.Command] ?? task[Keys.Command], os?[Keys.Args] ?? task[Keys.Args]);
+        var command = CommandLine(os?[Keys.Command] ?? task[Keys.Command], os?[Keys.Args] ?? task[Keys.Args], root);
         var dependsOn = DependsOn(task[Keys.DependsOn]);
         if (command.Length == 0 && dependsOn.Count == 0)
         {
@@ -104,20 +104,23 @@ internal static partial class VsCodeTasks
         var cwd = options?[Keys.Cwd] is JsonValue c ? Fill(c.ToString(), root) : null;
         var env = (options?[Keys.Env] as JsonObject)?.ToDictionary(kv => kv.Key, kv => Fill(kv.Value?.ToString() ?? "", root));
         var (group, isDefault) = Group(task[Keys.Group]);
-        return new RepoTask(label, Fill(command, root), cwd, env, group, isDefault, Flag(task[Keys.Hide]), dependsOn);
+        return new RepoTask(label, command, cwd, env, group, isDefault, Flag(task[Keys.Hide]), dependsOn);
     }
 
-    /// <summary>The command and its args as one line: an arg with spaces or shell characters in double quotes.</summary>
-    private static string CommandLine(JsonNode? command, JsonNode? args)
+    /// <summary>
+    /// The command and its args as one line, variables filled in first: an arg with spaces or shell characters (a
+    /// folder filled in can have them), or an empty one, in double quotes.
+    /// </summary>
+    private static string CommandLine(JsonNode? command, JsonNode? args, string root)
     {
         var parts = new List<string>();
         if (Value(command) is { Length: > 0 } c)
         {
-            parts.Add(c);
+            parts.Add(Fill(c, root));
         }
-        foreach (var arg in (args as JsonArray ?? []).Select(Value).OfType<string>())
+        foreach (var arg in (args as JsonArray ?? []).Select(Value).OfType<string>().Select(a => Fill(a, root)))
         {
-            parts.Add(NeedsQuotes().IsMatch(arg) && !IsQuoted(arg) ? $"\"{arg.Replace("\"", "\\\"")}\"" : arg);
+            parts.Add((arg.Length == 0 || NeedsQuotes().IsMatch(arg)) && !IsQuoted(arg) ? $"\"{arg.Replace("\"", "\\\"")}\"" : arg);
         }
         return string.Join(' ', parts).Trim();
     }

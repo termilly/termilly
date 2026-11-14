@@ -272,9 +272,11 @@ async function save() {
     return false;
   }
   const { where, onlyMe } = read();
+  const saved = await write(next.id, next, where, onlyMe);
+  // Not written (a file that can't be): the editor keeps what was typed.
+  if (!saved.ok) return false;
   if (e.isDraft) draft = null;
-  const id = await write(next.id, next, where, onlyMe);
-  selectedId = id ?? next.id;
+  selectedId = saved.id ?? next.id;
   renderList();
   renderEditor();
   return true;
@@ -283,7 +285,7 @@ async function save() {
 let saving = false;
 
 /**
- * Saves through snippets.js without the window redrawing itself from the change it made; resolves the snippet's id.
+ * Saves through snippets.js without the window redrawing itself from the change it made; resolves what it did.
  * @param {string} id
  * @param {SnippetSetting | null} next
  * @param {string} where
@@ -367,9 +369,10 @@ async function duplicate() {
   const e = current();
   if (!e || e.isDraft || isFromFile(e)) return;
   const copy = { ...e.s, id: newSnippetId(), name: `${e.s.name} copy` };
-  const id = await write(copy.id, /** @type {SnippetSetting} */ (copy), e.where);
+  const saved = await write(copy.id, /** @type {SnippetSetting} */ (copy), e.where);
+  if (!saved.ok) return;
   selectedId = null;
-  select(id ?? copy.id);
+  select(saved.id ?? copy.id);
   /** @type {HTMLInputElement | null} */ (editEl.querySelector('[name="name"]'))?.select();
 }
 

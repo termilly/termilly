@@ -40,6 +40,12 @@ const rootOf = new Map();
 const repos = new Map();
 /** @type {Map<string, Promise<Repo | null>>} */
 const loading = new Map();
+/**
+ * Saves on their way to the host (per repository), and how many have finished: a read that started before one
+ * finished doesn't replace what was saved.
+ * @type {{ pending: Map<string, number>, done: number }}
+ */
+const saves = { pending: new Map(), done: 0 };
 
 /**
  * A folder whose repository can be read here: not on a network share (slow to walk up).
@@ -126,9 +132,12 @@ export function loadRepo(folder) {
   if (!readable(folder)) return Promise.resolve(null);
   const asked = loading.get(folder);
   if (asked) return asked;
+  const asOf = saves.done;
   const answer = request(PAGE.reposnippetsGet, { folder }).then(m => {
     loading.delete(folder);
-    const repo = m.root ? toRepo(m) : null;
+    let repo = m.root ? toRepo(m) : null;
+    // Read before a save finished (or while one is on its way): what's kept, as saved, is newer. The save reads again.
+    if (repo && (asOf !== saves.done || saves.pending.has(repo.root)) && repos.has(repo.root)) repo = /** @type {Repo} */ (repos.get(repo.root));
     const before = rootOf.has(folder) ? shape(rootOf.get(folder) ? repos.get(/** @type {string} */ (rootOf.get(folder))) : null) : null;
     rootOf.set(folder, repo?.root ?? null);
     if (repo) repos.set(repo.root, repo);
@@ -181,10 +190,23 @@ export async function saveRepo(root, list, onlyMe) {
     repo.onlyMe = onlyMe;
     emit(EVENTS.snippets);
   }
+  saves.pending.set(root, (saves.pending.get(root) ?? 0) + 1);
   const m = await request(PAGE.reposnippetsSave, {
     root, onlyMe,
     snippets: list.map(s => ({ name: s.name, command: s.command, description: s.description || null, enter: s.enter === false ? false : null })),
   });
+  const left = /** @type {number} */ (saves.pending.get(root)) - 1;
+  if (left) saves.pending.set(root, left);
+  else saves.pending.delete(root);
+  saves.done++;
+  // The last save is written (or failed): read the file as it is now.
+  if (!left) {
+    for (const [folder, at] of rootOf) {
+      if (at !== root) continue;
+      loading.delete(folder); // a read already asked for began before the save, and keeps what was there
+      loadRepo(folder);
+    }
+  }
   return m.error ?? null;
 }
 

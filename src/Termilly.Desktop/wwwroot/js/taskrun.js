@@ -73,13 +73,37 @@ function openWith(snippet, values, { cwd, env }) {
 export async function runTask(snippet, mode = RUN_MODE.newTerminal) {
   const task = /** @type {RepoTask} */ (snippet.task);
   const chain = taskChain(task.label, repoByRoot(snippet.root)?.allTasks ?? [task]);
-  const run = { ...snippet, command: chain.map(t => t.command).filter(Boolean).join('\n') };
+  const tab = focusedTab();
+  const fresh = mode === RUN_MODE.newTerminal || !tab;
+  const start = fresh ? inRepo(task.cwd, snippet.root) : folderOfTab(tab);
+  const run = { ...snippet, command: chainLines(chain, start, snippet.root).join('\n') };
   const values = await valuesFor(run, snippet.inputs);
   if (!values) return null;
-  const tab = focusedTab();
-  if (mode === RUN_MODE.newTerminal || !tab) return openWith(run, values, { cwd: inRepo(task.cwd, snippet.root), env: task.env });
+  // Each task's variables, the one asked for last (it wins over what it depends on).
+  if (fresh) return openWith(run, values, { cwd: start, env: Object.assign({}, ...chain.map(t => t.env ?? {})) });
   markUsed(snippet.id);
-  return sendSnippet({ ...run, enter: mode !== RUN_MODE.typeOnly }, values, [tab]);
+  return sendSnippet({ ...run, enter: mode !== RUN_MODE.typeOnly }, values, [/** @type {Tab} */ (tab)]);
+}
+
+/**
+ * The lines a chain of tasks types: each task's command, after a cd to its own folder when it isn't where the one
+ * before it ran (a dependency can have a folder of its own).
+ * @param {RepoTask[]} chain
+ * @param {string | null} start the folder the terminal is in
+ * @param {string | undefined} root
+ */
+export function chainLines(chain, start, root) {
+  const lines = [];
+  let here = start;
+  for (const t of chain) {
+    const dir = inRepo(t.cwd, root);
+    if (dir && dir !== here) {
+      lines.push(`cd "${dir}"`);
+      here = dir;
+    }
+    if (t.command) lines.push(t.command);
+  }
+  return lines;
 }
 
 /**

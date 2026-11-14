@@ -334,39 +334,71 @@ function put(list, id, next) {
 }
 
 /**
+ * What a save did: the snippet's id now (a repository's snippet is known by its name), and whether it was written.
+ * @typedef {{ id: string | null, ok: boolean }} Saved
+ */
+
+/**
+ * Puts a snippet into this computer's (or takes it out, `next` null): in the state at once, for whoever draws the list
+ * next; settings.js saves it a moment later.
+ * @param {string} id
+ * @param {SnippetSetting | null} next
+ * @returns {Saved}
+ */
+function inComputer(id, next) {
+  const snippets = put(state.settings.commands.snippets ?? [], id, next);
+  state.settings.commands = { ...state.settings.commands, snippets };
+  updateSettings(GROUPS.commands, { snippets });
+  return { id: next?.id ?? null, ok: true };
+}
+
+/**
+ * Puts a snippet into a repository's file (or takes it out, `next` null), and waits until it's written.
+ * @param {string} root
+ * @param {string} id
+ * @param {SnippetSetting | null} next
+ * @param {boolean} [onlyMe] keep the file out of git (as it was, when not given)
+ * @returns {Promise<Saved>}
+ */
+async function inRepository(root, id, next, onlyMe) {
+  const repo = repoAt(root) ?? await loadRepo(root);
+  if (!repo) return { id: null, ok: false };
+  const list = put(repo.snippets, id, next);
+  const at = next ? list.indexOf(next) : -1;
+  const error = await saveRepo(root, list, onlyMe ?? repo.onlyMe);
+  if (error) {
+    showToast({ text: `Couldn’t save ${REPO_FILE}: ${error}` });
+    return { id: null, ok: false };
+  }
+  return { id: at >= 0 ? repo.snippets[at]?.id ?? null : null, ok: true };
+}
+
+/**
  * Saves a snippet by id where it's to be kept ('global', or IN_REPO and a repository's folder), taking it out of where
  * it was; deletes it when `next` is null. One that stays keeps its place in its list; one that moves goes to the end.
- * Resolves the snippet's id now (a repository's snippet is known by its name).
+ * A move writes where it goes first, and takes it out of where it was only once that's written: a file that can't be
+ * written leaves the snippet where it was, never nowhere.
  * @param {string} id
  * @param {SnippetSetting | null} next
  * @param {string} where
  * @param {{ onlyMe?: boolean }} [options] keep the repository's file out of git (as it was, when not given)
+ * @returns {Promise<Saved>}
  */
 export async function saveSnippet(id, next, where, { onlyMe } = {}) {
   const fromRoot = rootOfId(id);
   const toRoot = where.startsWith(IN_REPO) ? where.slice(IN_REPO.length) : null;
   // A repository's snippet moved to this computer gets an id of its own (a repository's is its name).
   if (next && !toRoot && fromRoot) next = { ...next, id: newSnippetId() };
-  const global = state.settings.commands.snippets ?? [];
-  if (!toRoot || global.some(x => x.id === id)) {
-    const nextGlobal = put(global, id, toRoot ? null : next);
-    // In the state at once, for whoever draws the list next; settings.js saves it a moment later.
-    state.settings.commands = { ...state.settings.commands, snippets: nextGlobal };
-    updateSettings(GROUPS.commands, { snippets: nextGlobal });
-  }
-  let newId = toRoot ? null : next?.id ?? null;
-  for (const root of new Set([fromRoot, toRoot].filter(r => r !== null))) {
-    const repo = repoAt(root) ?? await loadRepo(root);
-    if (!repo) continue;
-    const list = put(repo.snippets, id, root === toRoot ? next : null);
-    const at = list.findIndex(x => x === next);
-    const error = await saveRepo(root, list, root === toRoot ? onlyMe ?? repo.onlyMe : repo.onlyMe);
-    if (error) showToast({ text: `Couldn’t save ${REPO_FILE}: ${error}` });
-    if (root === toRoot) newId = repo.snippets[at]?.id ?? null;
+  let saved = /** @type {Saved} */ ({ id: null, ok: true });
+  if (next) saved = toRoot ? await inRepository(toRoot, id, next, onlyMe) : inComputer(id, next);
+  // Out of where it was: deleted, or moved and now written where it went.
+  if (saved.ok && (!next || fromRoot !== toRoot)) {
+    if (fromRoot) await inRepository(fromRoot, id, null);
+    else if ((state.settings.commands.snippets ?? []).some(x => x.id === id)) inComputer(id, null);
   }
   persist();
   emit(EVENTS.snippets);
-  return newId;
+  return saved;
 }
 
 export { newSnippetId };
@@ -380,7 +412,8 @@ export const saveAsSnippet = command => editSnippet({ command });
 /**
  * Snippets that belonged to a workspace (before repositories kept them) go to the repository its folder is in, or to
  * this computer's when it's in none; one of the same name already there isn't copied (a .termilly.yml's were copied
- * into its workspace, and are read from the file now).
+ * into its workspace, and are read from the file now). One that couldn't be written stays with its workspace, for the
+ * next start.
  */
 export async function moveWorkspaceSnippets() {
   for (const ws of state.workspaces.filter(w => w.snippets?.length)) {
@@ -388,10 +421,14 @@ export async function moveWorkspaceSnippets() {
     const repo = await loadRepo(ws.cwd);
     const have = new Set((repo ? repoSnippets(repo) : globalSnippets()).map(s => s.name.toLowerCase()));
     const where = repo ? `${IN_REPO}${repo.root}` : SOURCE.global;
+    /** @type {SnippetSetting[]} */
+    const left = [];
     for (const s of old.filter(x => !have.has(x.name.toLowerCase()))) {
-      await saveSnippet(newSnippetId(), { ...s, id: newSnippetId() }, where);
+      const copy = { ...s, id: newSnippetId() };
+      if (!(await saveSnippet(copy.id, copy, where)).ok) left.push(s);
     }
-    delete ws.snippets;
+    if (left.length) ws.snippets = left;
+    else delete ws.snippets;
     persist();
   }
 }
