@@ -73,7 +73,7 @@ internal static class MacWindowDrag
     {
         var current = Send(Send(Class(Cocoa.Application), Cocoa.SharedApplication), "currentEvent");
         var type = current == IntPtr.Zero ? 0 : (nuint)Send(current, "type");
-        if (type is not (LeftMouseDown or LeftMouseDragged) || Send(current, "window") != window)
+        if (type is not (LeftMouseDown or LeftMouseDragged) || Send(current, WindowOf) != window)
         {
             var frame = SendRect(window, Cocoa.Frame);
             var uptime = SendDouble(Send(Class("NSProcessInfo"), "processInfo"), "systemUptime");
@@ -88,6 +88,8 @@ internal static class MacWindowDrag
     /// <summary>How far down from a window's top a click is on its title bar (the page's header), in page pixels.</summary>
     private const double TitleBarHeight = 42;
     private const string AcceptsFirstMouse = "acceptsFirstMouse:";
+    /// <summary>An event's or a view's window.</summary>
+    private const string WindowOf = "window";
 
     /// <summary>acceptsFirstMouse:'s shape: answers a BOOL.</summary>
     [System.Runtime.InteropServices.UnmanagedFunctionPointer(System.Runtime.InteropServices.CallingConvention.Cdecl)]
@@ -126,7 +128,7 @@ internal static class MacWindowDrag
             return false;
         }
         var at = objc_msgSend_point(mouseDown, Sel("locationInWindow"));
-        var height = SendRect(Send(Send(view, "window"), Cocoa.ContentView), Cocoa.Frame).Height;
+        var height = SendRect(Send(Send(view, WindowOf), Cocoa.ContentView), Cocoa.Frame).Height;
         return at.Y >= height - TitleBarHeight * _zoom();
     }
 
