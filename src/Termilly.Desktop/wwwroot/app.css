@@ -3653,7 +3653,8 @@ button.sb-item:hover, button.sb-item.open { background: var(--hover); color: var
 /* ---- Compact view (js/compact.js): an agent's steps one line each, over its terminal ---- */
 .compact-view { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; background: var(--surface); font-size: var(--cv-size, 14px); font-family: var(--cv-font, var(--mono)); }
 .compact-view[hidden] { display: none; }
-.cv-feed { flex: 1; min-height: 0; overflow: auto; padding: 10px 14px 6px; color: var(--text); font-size: 1em; line-height: 1.5; -webkit-user-select: text; user-select: text; }
+/* The feed ends 4px above the prompt box, so its scrollbars (the horizontal one and the vertical one's end) sit up off the edge. */
+.cv-feed { flex: 1; min-height: 0; margin-bottom: 4px; overflow: auto; padding: 10px 14px 6px; color: var(--text); font-size: 1em; line-height: 1.5; -webkit-user-select: text; user-select: text; }
 .cv-empty { margin-top: 18px; color: var(--faint); text-align: center; }
 .cv-prompt { margin: 12px 0 10px; padding: 7px 10px; border-left: 2px solid var(--accent); border-radius: 0 6px 6px 0; background: var(--accent-fill); color: var(--text-strong); white-space: pre-wrap; overflow-wrap: anywhere; }
 .cv-prompt:first-child { margin-top: 2px; }
