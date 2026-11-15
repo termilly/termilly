@@ -52,7 +52,9 @@ import { exportLayout, importLayout } from './layouts.js';
 import { isBroadcasting, startBroadcast, stopBroadcast, openCompose, BROADCAST_SCOPE } from './broadcast.js';
 import { cycleWorkspace } from './workspaces.js';
 
-import { openSnippets, snippetCommands } from './snippets.js';
+import { snippetCommands, moveWorkspaceSnippets } from './snippets.js';
+import { openSnippetPick, toggleSnippetPick } from './snippetpick.js';
+import { readWorkspaceRepos } from './reposnippets.js';
 import { actionCommands, runActionShortcut } from './actions.js';
 import './sshsave.js';
 import './weblinks.js';
@@ -204,7 +206,7 @@ setCommands(() => [
   { label: 'Open a recording', keywords: 'replay asciicast cast asciinema recording play', run: () => setTimeout(openRecordings) },
   { label: 'Rewind this terminal', keywords: 'replay instant back history screen earlier', run: () => setTimeout(() => focusedTab() && openRewind(/** @type {Tab} */ (focusedTab()))) },
   { label: 'Attach tmux', keywords: 'tmux control mode -CC attach session server remote panes windows wsl ssh', run: () => setTimeout(openAttach) },
-  { label: 'Run a snippet', keywords: 'snippets saved commands run snippet macro button bar', run: () => setTimeout(openSnippets) },
+  { label: 'Run a snippet or task', keywords: 'snippets saved commands run snippet macro button bar vs code tasks repo', hint: keyHint(KEY_ID.snippets), run: () => setTimeout(openSnippetPick) },
   { label: 'Schedules', keywords: 'schedule cron timer run on time report recurring nightly', hint: keyHint(KEY_ID.schedules), run: () => setTimeout(toggleSchedules) },
   { label: 'Copy Claude Code’s allowed commands to Codex', keywords: 'permissions rules allow approve approved codex claude share sync same agents', run: () => setTimeout(openAgentRules) },
   { label: 'Manage snippets', keywords: 'snippets explorer window edit new delete saved commands', run: () => setTimeout(openSnippetsWindow) },
@@ -356,7 +358,7 @@ const RUN = {
   [KEY_ID.inbox]: commands.inbox, [KEY_ID.search]: commands.search, [KEY_ID.commandHistory]: commands.commandHistory,
   [KEY_ID.previousPrompt]: commands.previousPrompt, [KEY_ID.nextPrompt]: commands.nextPrompt, [KEY_ID.goTo]: commands.goTo,
   [KEY_ID.settings]: commands.settings, [KEY_ID.hints]: toggleHints, [KEY_ID.scratch]: toggleScratch, [KEY_ID.notepad]: toggleNotepadFromKeys, [KEY_ID.todo]: toggleTodo,
-  [KEY_ID.schedules]: toggleSchedules, [KEY_ID.clips]: toggleClips, [KEY_ID.files]: () => toggleFiles(), [KEY_ID.git]: openGitHere,
+  [KEY_ID.schedules]: toggleSchedules, [KEY_ID.clips]: toggleClips, [KEY_ID.snippets]: toggleSnippetPick, [KEY_ID.files]: () => toggleFiles(), [KEY_ID.git]: openGitHere,
   [KEY_ID.agentChanges]: () => {
     if (!changeShortcutOn()) return false;
     if (isPreviewOpen()) closePreview(); else openAgentChanges(focusedTab());
@@ -616,6 +618,8 @@ function boot(saved, snapshot, liveSessions = []) {
   // Terminals that were in windows of their own when Termilly closed open in them again; the Snippets window too.
   if (restored) reopenWindows();
   initSnippetsWindow();
+  readWorkspaceRepos();
+  moveWorkspaceSnippets();
   initSchedules();
   initSchedulesWindow();
   if (!restored) newTab();

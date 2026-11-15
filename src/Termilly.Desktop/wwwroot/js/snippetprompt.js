@@ -7,7 +7,7 @@
 // Only at a prompt the shell marked (shell integration) with nothing typed since (or all of it deleted again), on
 // the normal screen (not vim's), in a terminal with its own shell (not a tmux pane).
 
-import { on, wsById, EVENTS } from './store.js';
+import { on, EVENTS } from './store.js';
 import { setInputHook, isTerminalReply } from './terminals.js';
 import { allSnippets, placeholders, runSnippetIn, scopeLabel } from './snippets.js';
 import { escapeHtml } from './ui.js';
@@ -60,7 +60,7 @@ const canStart = (tab, term) => (untouched.has(tab) || inputEmpty(tab)) && !!tab
   && term.buffer.active.type === NORMAL_BUFFER;
 
 /** The snippets that match what's typed after `snippet:`. */
-const matches = () => matchSnippets(allSnippets(wsById(/** @type {Tab} */ (held.tab).wsId)), held.text.slice(SNIPPET_PREFIX.length));
+const matches = () => matchSnippets(allSnippets(/** @type {Tab} */ (held.tab)), held.text.slice(SNIPPET_PREFIX.length));
 
 function clear() {
   held = { tab: null, term: null, text: '', index: 0 };

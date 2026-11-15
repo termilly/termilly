@@ -521,6 +521,8 @@ internal sealed record SettingsData
     public IReadOnlyDictionary<string, CostDay>? CostLedger { get; init; }
     /// <summary>Each snippet's variables, as last filled in.</summary>
     public IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>>? SnippetValues { get; init; }
+    /// <summary>When each snippet or task was last run (Unix ms), for the snippets list's order.</summary>
+    public IReadOnlyDictionary<string, long>? SnippetUsed { get; init; }
 
     public SettingsData Normalize() => this;
 }

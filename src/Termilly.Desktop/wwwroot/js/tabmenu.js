@@ -15,7 +15,8 @@ import { openCleanup } from './worktree.js';
 import { openTodo, terminalList } from './todo.js';
 import { editHostNote, profileNote } from './notes.js';
 import { isLogging, toggleLog, toggleProfileLogging } from './logging.js';
-import { openSnippets, saveAsSnippet } from './snippets.js';
+import { saveAsSnippet } from './snippets.js';
+import { openSnippetPick } from './snippetpick.js';
 import { portsOf, openPort, repoOf } from './gitstatus.js';
 import { openViewer } from './viewer.js';
 import { togetherMenuItems } from './together.js';
@@ -65,7 +66,7 @@ export function openTabMenu(tab, at, from = RENAME_IN.header) {
     ...toolItems(tab),
     ...commandItems(tab),
     ...togetherMenuItems(tab),
-    { label: 'Run snippet', icon: ICONS.snippet, action: () => openSnippets() },
+    { label: 'Run snippet', icon: ICONS.snippet, action: () => openSnippetPick() },
     ...snippetItems(tab),
     alertItem(tab),
     broadcastItem(tab),

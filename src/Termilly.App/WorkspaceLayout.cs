@@ -3,6 +3,7 @@ using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using YamlDotNet.Core;
 using YamlDotNet.RepresentationModel;
+using Termilly.Desktop.Messaging;
 
 namespace Termilly.Desktop;
 
@@ -101,21 +102,8 @@ internal static partial class WorkspaceLayout
     public static LayoutResult Parse(string yaml, string baseDirectory)
     {
         var warnings = new List<string>();
-        JsonNode? root;
-        try
+        if (!TryLoad(yaml, warnings, out var root))
         {
-            var stream = new YamlStream();
-            stream.Load(new StringReader(yaml));
-            root = stream.Documents.Count == 0 ? null : ToJson(stream.Documents[0].RootNode);
-        }
-        catch (YamlException e)
-        {
-            warnings.Add($"Not valid YAML (line {e.Start.Line}): {e.Message}");
-            return new(null, warnings);
-        }
-        catch (Exception e) when (e is ArgumentException or InvalidCastException)
-        {
-            warnings.Add("A key is written twice in the same place, or a key isn't plain text.");
             return new(null, warnings);
         }
         if (root is not JsonObject top)
@@ -124,6 +112,43 @@ internal static partial class WorkspaceLayout
             return new(null, warnings);
         }
         return Normalize(top, baseDirectory, warnings);
+    }
+
+    /// <summary>
+    /// The snippets: list of a YAML file (a repository's .termilly/snippets.yml, or a layout's), checked as a layout's
+    /// are; none when the file has none.
+    /// </summary>
+    public static IReadOnlyList<RepoSnippet> SnippetsOf(string yaml, List<string> warnings)
+    {
+        if (!TryLoad(yaml, warnings, out var root) || root is not JsonObject top || top[Keys.Snippets] is not JsonArray list)
+        {
+            return [];
+        }
+        return [.. Snippets(list, warnings).OfType<JsonObject>().Select(s => new RepoSnippet(
+            s[Keys.Name]?.ToString() ?? "", s[Keys.Command]?.ToString() ?? "", s[Keys.Description]?.ToString(),
+            s[Keys.Enter] is JsonValue enter && enter.TryGetValue<bool>(out var press) ? press : null))];
+    }
+
+    /// <summary>A YAML file as JSON (null when it's empty); false, with why in the warnings, when it isn't valid.</summary>
+    private static bool TryLoad(string yaml, List<string> warnings, out JsonNode? root)
+    {
+        root = null;
+        try
+        {
+            var stream = new YamlStream();
+            stream.Load(new StringReader(yaml));
+            root = stream.Documents.Count == 0 ? null : ToJson(stream.Documents[0].RootNode);
+            return true;
+        }
+        catch (YamlException e)
+        {
+            warnings.Add($"Not valid YAML (line {e.Start.Line}): {e.Message}");
+        }
+        catch (Exception e) when (e is ArgumentException or InvalidCastException)
+        {
+            warnings.Add("A key is written twice in the same place, or a key isn't plain text.");
+        }
+        return false;
     }
 
     /// <summary>Checks a layout (from a file or from the page) and resolves its folders.</summary>

@@ -1,37 +1,47 @@
 // @ts-check
-// The snippets window: every snippet, the global ones and each workspace's, in one place to manage them. The list
-// on the left (searchable, grouped by where each one is kept), the selected snippet's editor on the right, saved
-// with Save (leaving a snippet with changes not saved asks about them). It opens from the titlebar's snippets
-// button, the palette, and Edit or New in the snippets list (js/snippets.js).
+// The snippets window: the snippets of the repository the focused terminal is in, this computer's, and the
+// repository's VS Code tasks, in one place to manage them. The list on the left (searchable, grouped by where each
+// one comes from), the selected snippet's editor on the right, saved with Save (leaving a snippet with changes not
+// saved asks about them). A task, and a snippet the repository's .termilly.yml lists, are shown as they are: they're
+// changed in their file. It opens from the snippets list's New and Manage (js/snippetpick.js) and the palette.
 
-import { state, on, wsById, persist, EVENTS } from './store.js';
+import { state, on, persist, EVENTS } from './store.js';
 import { focusedTab, restoreFocus } from './panes.js';
 import { closeAll, dropdown } from './popups.js';
-import { escapeHtml } from './ui.js';
+import { escapeHtml, ICONS } from './ui.js';
 import { modal, CONFIRM_DIALOG } from './dialogs.js';
 import { fuzzyMatch } from './fuzzy.js';
+import { PAGE } from './protocol.js';
+import { send } from './host.js';
 import {
-  placeholders, runSnippet, saveSnippet, newSnippetId, SNIPPET_SCOPE, SNIPPET_FIELD, NAME_WORDS, RUN_LABEL,
+  placeholders, saveSnippet, newSnippetId, globalSnippets, repoHere, whereHtml, whereOf, readEditor,
+  SNIPPET_SCOPE, SNIPPET_FIELD, IN_REPO, RUN_LABEL, THIS_COMPUTER,
 } from './snippets.js';
+import { REPO_FILE, LAYOUT_FILE, TASKS_FILE } from './reposnippets.js';
+import { runAny } from './taskrun.js';
+import { toggleSnippetPick, SNIPPETS_BUTTON } from './snippetpick.js';
 import { byId, find, targetOf } from './dom.js';
 import { detach, closeWindow, focusWindow, isDetached } from './windows.js';
 
+/** @typedef {import('./reposnippets.js').ListedSnippet} ListedSnippet */
+
 /**
- * A new snippet not saved yet, with where it's to be kept ('global' or a workspace's id).
+ * A new snippet not saved yet, with where it's to be kept ('global', or IN_REPO and a repository's folder).
  * @typedef {{ id: string, name: string, command: string, description?: string | null, enter: boolean,
  *   where: string }} Draft
  */
 
 /**
- * A row of the list: a snippet, where it's kept, and whether it's the new one not saved yet.
- * @typedef {{ s: SnippetSetting | Draft, where: string, isDraft?: boolean }} Entry
+ * A row of the list: a snippet, where it's kept ('global', IN_REPO and its repository, or SNIPPET_SCOPE's shared or
+ * task for the ones changed in their file), and whether it's the new one not saved yet.
+ * @typedef {{ s: ListedSnippet | Draft, where: string, isDraft?: boolean }} Entry
  */
 
 const CLOSE = '<svg viewBox="0 0 12 12"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7"/></svg>';
 
 /** The window's buttons (their data-sw). */
 const ACTION = Object.freeze({
-  new: 'new', close: 'close', save: 'save', delete: 'delete', duplicate: 'duplicate', run: 'run',
+  new: 'new', close: 'close', save: 'save', delete: 'delete', duplicate: 'duplicate', run: 'run', openFile: 'open-file', copy: 'copy',
 });
 /** Its window when it's in one of its own (js/windows.js). */
 const WINDOW_KEY = 'snippets';
@@ -56,7 +66,7 @@ layer.innerHTML = `
     </div>
     <div class="cw-main">
       <div class="cw-side sw-side">
-        <div class="cw-filter"><input class="field" data-sw-search placeholder="Search snippets" spellcheck="false" autocomplete="off"></div>
+        <div class="cw-filter"><input class="field" data-sw-search placeholder="Search snippets and tasks" spellcheck="false" autocomplete="off"></div>
         <div class="sw-list" tabindex="0" role="listbox" aria-label="Snippets"></div>
       </div>
       <div class="sw-edit"></div>
@@ -76,35 +86,50 @@ const listEl = $('.sw-list');
 const editEl = $('.sw-edit');
 /** Its header: its title bar in a window of its own, and what drags it out into one. */
 const head = $('.set-head');
-/** The title bar's button that opens it. */
-const openButton = byId('snippets-button');
+/** The title bar's button that opens the snippets list. */
+const openButton = byId(SNIPPETS_BUTTON);
 
 /** @type {string | null} */
 let selectedId = null;
 /** @type {Draft | null} */
 let draft = null; // a new snippet not saved yet: { id, name, command, description, enter, where }
 /** @type {Entry[]} */
-let shown = []; // the rows in the list's order
+let shown = []; // the rows in the list's order (not those in a closed group)
+/** The groups closed by hand (their where); while searching, every group with a match is open. */
+const collapsed = new Set();
 
 const isOpen = () => !layer.hidden || isDetached(WINDOW_KEY);
 
+/** Whether a row is changed in its file rather than here (a task, a .termilly.yml snippet). */
+const isFromFile = (/** @type {Entry} */ e) => e.where === SNIPPET_SCOPE.task || e.where === SNIPPET_SCOPE.shared;
+
 /**
- * Every snippet with where it's kept: the global ones, then each workspace's, the one on screen first.
+ * Every snippet with where it's kept: the focused terminal's repository's, this computer's, then its tasks.
  * @returns {Entry[]}
  */
 function everySnippet() {
-  /** @type {Entry[]} */
-  const list = (state.settings.commands.snippets ?? []).map(s => ({ s, where: SNIPPET_SCOPE.global }));
-  // true - false: the booleans count as 1 and 0.
-  const spaces = [...state.workspaces].filter(w => !w.tmux).sort((a, b) =>
-    /** @type {number} */ (/** @type {unknown} */ (b.id === state.activeId))
-    - /** @type {number} */ (/** @type {unknown} */ (a.id === state.activeId)));
-  for (const ws of spaces) for (const s of ws.snippets ?? []) list.push({ s, where: ws.id });
-  return list;
+  const repo = repoHere();
+  return [
+    ...(repo?.snippets ?? []).map(s => ({ s, where: whereOf(s) })),
+    ...(repo?.shared ?? []).map(s => ({ s, where: SNIPPET_SCOPE.shared })),
+    ...globalSnippets().map(s => ({ s, where: SNIPPET_SCOPE.global })),
+    ...(repo?.tasks ?? []).map(s => ({ s, where: SNIPPET_SCOPE.task })),
+  ];
 }
 
-/** @param {string} where */
-const whereName = where => (where === SNIPPET_SCOPE.global ? 'All workspaces' : wsById(where)?.name ?? 'Workspace');
+/**
+ * A group's heading: where its snippets come from, how many, and the file; a click opens or closes it.
+ * @param {string} where
+ * @param {number} count
+ * @param {boolean} open
+ */
+function groupHtml(where, count, open) {
+  const repo = repoHere();
+  const [title, file] = where === SNIPPET_SCOPE.global ? [THIS_COMPUTER, '']
+    : where === SNIPPET_SCOPE.task ? ['VS Code tasks', TASKS_FILE]
+      : where === SNIPPET_SCOPE.shared ? [repo?.name ?? 'This repo', LAYOUT_FILE] : [repo?.name ?? 'This repo', REPO_FILE];
+  return `<div class="sw-group${open ? ' open' : ''}" data-group="${escapeHtml(where)}" role="button" aria-expanded="${open}"><span class="cw-chev">${ICONS.chevronRight}</span><span class="sw-group-name">${escapeHtml(title)}</span><span class="sw-group-count">${count}</span>${file ? `<code>${file}</code>` : ''}</div>`;
+}
 
 /** @returns {Entry | null} */
 function current() {
@@ -114,29 +139,64 @@ function current() {
 
 // ---- The list ----
 
+/** @param {Entry} e */
+const rowHtml = e => `<div class="sw-row${e.s.id === selectedId ? ' selected' : ''}${isFromFile(e) ? ' from-file' : ''}" role="option" data-id="${escapeHtml(e.s.id)}" aria-selected="${e.s.id === selectedId}">
+      <span class="sw-name">${escapeHtml(e.s.name || 'New snippet')}</span>
+      <code class="sw-cmd">${escapeHtml(e.s.command || ' ')}</code>
+    </div>`;
+
+/**
+ * The rows that match, by group in their order.
+ * @param {Entry[]} rows
+ * @returns {Map<string, Entry[]>}
+ */
+function byGroup(rows) {
+  const groups = new Map();
+  for (const e of rows) groups.set(e.where, [...(groups.get(e.where) ?? []), e]);
+  return groups;
+}
+
 function renderList() {
   const q = searchEl.value.trim();
   const all = everySnippet();
   if (draft) all.unshift({ s: draft, where: draft.where, isDraft: true });
-  shown = all.filter(e => e.isDraft || !q || fuzzyMatch(q, `${e.s.name} ${e.s.command} ${e.s.description ?? ''}`));
-  const saved = all.filter(e => !e.isDraft).length;
+  const matching = all.filter(e => e.isDraft || !q || fuzzyMatch(q, `${e.s.name} ${e.s.command} ${e.s.description ?? ''}`));
+  const saved = all.filter(e => !e.isDraft && !isFromFile(e)).length;
   $('.sw-count').textContent = `${saved} snippet${saved === 1 ? '' : 's'}`;
-  /** @type {string | null} */
-  let group = null;
-  listEl.innerHTML = shown.length ? shown.map(e => {
-    const head = e.where !== group ? `<div class="sw-group">${escapeHtml(whereName(e.where))}</div>` : '';
-    group = e.where;
-    return `${head}<div class="sw-row${e.s.id === selectedId ? ' selected' : ''}" role="option" data-id="${escapeHtml(e.s.id)}" aria-selected="${e.s.id === selectedId}">
-      <span class="sw-name">${escapeHtml(e.s.name || 'New snippet')}</span>
-      <code class="sw-cmd">${escapeHtml(e.s.command || ' ')}</code>
-    </div>`;
-  }).join('') : `<p class="set-desc sw-empty">${q ? 'No snippet matches.' : 'No snippets yet. Make one with New snippet, or use “Save the last command as a snippet” in a terminal’s menu.'}</p>`;
+  shown = [];
+  let html = '';
+  for (const [where, rows] of byGroup(matching)) {
+    const open = !!q || !collapsed.has(where);
+    html += groupHtml(where, rows.length, open);
+    if (open) html += rows.map(rowHtml).join('');
+    if (open) shown.push(...rows);
+  }
+  listEl.innerHTML = matching.length ? html : `<p class="set-desc sw-empty">${q ? 'No snippet matches.' : 'No snippets yet. Make one with New snippet, or use “Save the last command as a snippet” in a terminal’s menu.'}</p>`;
   listEl.querySelector('.sw-row.selected')?.scrollIntoView({ block: 'nearest' });
+}
+
+/**
+ * Opens a closed group, or closes an open one.
+ * @param {string} where
+ */
+function toggleGroup(where) {
+  if (!collapsed.delete(where)) collapsed.add(where);
+  renderList();
+}
+
+/**
+ * Opens the group a snippet is in (one picked from elsewhere, or a new one).
+ * @param {string | null} id
+ */
+function openGroupOf(id) {
+  const e = id && (draft?.id === id ? { where: draft.where } : everySnippet().find(x => x.s.id === id));
+  if (e) collapsed.delete(e.where);
 }
 
 /** @param {string | null} id */
 function select(id) {
   if (id === selectedId) return;
+  openGroupOf(id);
   // A new snippet that's left (saved or not) is done with.
   if (draft && draft.id === selectedId) draft = null;
   selectedId = id;
@@ -146,24 +206,45 @@ function select(id) {
 
 // ---- The editor ----
 
+/**
+ * A task or a .termilly.yml snippet: shown as it is, with its file to open, a copy to make here, and Run.
+ * @param {Entry} e
+ */
+function fileEntryHtml(e) {
+  const s = /** @type {ListedSnippet} */ (e.s);
+  const task = e.where === SNIPPET_SCOPE.task;
+  return `
+    <h3 class="sw-title">${escapeHtml(s.name)}</h3>
+    <p class="dialog-sub">${task ? 'VS Code task' : 'Listed in the workspace layout'} · <code>${task ? TASKS_FILE : LAYOUT_FILE}</code></p>
+    <label class="dialog-field">Command<textarea class="field snippet-command" rows="5" readonly>${escapeHtml(s.command)}</textarea></label>
+    ${task && s.task?.dependsOn.length ? `<p class="dialog-sub">Runs first: ${s.task.dependsOn.map(escapeHtml).join(', ')}</p>` : ''}
+    ${task && s.task?.cwd ? `<p class="dialog-sub">Runs in <code>${escapeHtml(s.task.cwd)}</code></p>` : ''}
+    <p class="sw-note">Termilly doesn’t change this file. Edit it, or copy this as a snippet to change it here.</p>
+    <div class="dialog-actions">
+      <button class="btn" data-sw="${ACTION.openFile}">Open ${task ? 'tasks.json' : LAYOUT_FILE}</button>
+      <button class="btn" data-sw="${ACTION.copy}">Copy as snippet</button>
+      <span class="spacer"></span>
+      <button class="btn primary" data-sw="${ACTION.run}">${RUN_LABEL}</button>
+    </div>`;
+}
+
 function renderEditor() {
   const e = current();
   if (!e) {
     editEl.innerHTML = `<p class="set-desc sw-none">${shown.length ? 'Pick a snippet on the left.' : ''}</p>`;
     return;
   }
+  if (isFromFile(e)) {
+    editEl.innerHTML = fileEntryHtml(e);
+    return;
+  }
   const { s, where } = e;
-  const spaces = state.workspaces.filter(w => !w.tmux);
   editEl.innerHTML = `
     <label class="dialog-field">Name<input class="field" name="name" value="${escapeHtml(s.name)}" placeholder="Tail pod logs" spellcheck="false"></label>
     <label class="dialog-field">Command<textarea class="field snippet-command" name="command" rows="5" spellcheck="false" placeholder="kubectl logs -f {{pod}} -n {{namespace=default}}">${escapeHtml(s.command)}</textarea></label>
     <p class="dialog-sub">Write <code>{{name}}</code> for a value to ask for when it runs, <code>{{name=default}}</code> with a default. Don’t put secrets in a snippet.</p>
     <label class="dialog-field">Description<input class="field" name="description" value="${escapeHtml(s.description ?? '')}" placeholder="optional"></label>
-    <label class="dialog-field">Keep it in
-      <select class="field" name="where">
-        <option value="${SNIPPET_SCOPE.global}"${where === SNIPPET_SCOPE.global ? ' selected' : ''}>All workspaces</option>
-        ${spaces.map(w => `<option value="${escapeHtml(w.id)}"${where === w.id ? ' selected' : ''}>${escapeHtml(w.name)} (saved in its layout file too)</option>`).join('')}
-      </select></label>
+    ${whereHtml(where, repoHere())}
     <label class="note-pin"><input type="checkbox" name="enter" ${s.enter === false ? '' : 'checked'}> Press Enter after it</label>
     <div class="sw-vars"></div>
     <div class="dialog-actions">
@@ -173,39 +254,42 @@ function renderEditor() {
       <button class="btn" data-sw="${ACTION.save}" title="Save (Ctrl+S)">Save</button>
       <button class="btn primary" data-sw="${ACTION.run}">${RUN_LABEL}</button>
     </div>`;
-  dropdown(/** @type {HTMLSelectElement} */ (editEl.querySelector('select[name="where"]')));
+  dropdown(/** @type {HTMLSelectElement} */ (editEl.querySelector(`select[name="${SNIPPET_FIELD.where}"]`)));
   renderState();
 }
 
+/**
+ * The editor's field by its name; the inputs, textarea and select all have a value.
+ * @param {string} name
+ */
+const field = name => /** @type {HTMLInputElement} */ (editEl.querySelector(`[name="${name}"]`));
+
 function read() {
-  /**
-   * The editor's field by its name; the inputs, textarea and select all have a value.
-   * @param {string} name
-   */
-  const field = name => /** @type {HTMLInputElement} */ (editEl.querySelector(`[name="${name}"]`));
   return {
     name: field(SNIPPET_FIELD.name).value.trim(),
     command: field(SNIPPET_FIELD.command).value.trim(),
     description: field(SNIPPET_FIELD.description).value.trim() || undefined,
     enter: field(SNIPPET_FIELD.enter).checked,
-    where: field('where').value,
+    where: field(SNIPPET_FIELD.where).value,
+    onlyMe: field(SNIPPET_FIELD.onlyMe)?.checked ?? false,
   };
 }
 
 /** Whether the editor holds anything not saved: a new snippet with something in it, or a changed one. */
 function isDirty() {
   const e = current();
-  if (!e || !editEl.querySelector('[name="command"]')) return false;
+  if (!e || !editEl.querySelector('[name="name"]')) return false;
   const now = read();
   if (e.isDraft) return !!(now.name || now.command || now.description);
   return now.name !== e.s.name || now.command !== e.s.command || (now.description ?? '') !== (e.s.description ?? '')
-    || now.enter !== (e.s.enter !== false) || now.where !== e.where;
+    || now.enter !== (e.s.enter !== false) || now.where !== e.where || now.onlyMe !== (repoHere()?.onlyMe ?? false);
 }
 
-/** The variables the command uses, and what Save and Run can do now. */
+/** The variables the command uses, "Only for me" only for a repository, and what Save and Run can do now. */
 function renderState() {
-  if (!editEl.querySelector('[name="command"]')) return;
-  const { command, enter } = read();
+  if (!editEl.querySelector('[name="name"]')) return;
+  const { command, enter, where } = read();
+  editEl.querySelector('[data-only-me]')?.toggleAttribute('hidden', !where.startsWith(IN_REPO));
   const vars = placeholders(command);
   find(editEl, '.sw-vars').innerHTML = vars.length
     ? `<span class="sw-vars-head">Variables used</span>${vars.map(v => `<code class="sw-var">${escapeHtml(v.name)}${v.def ? ` = ${escapeHtml(v.def)}` : ''}</code>`).join('')}` : '';
@@ -218,18 +302,20 @@ function renderState() {
 }
 
 /** Saves what the editor holds; false when it can't (no command). The name falls back to the command's first words. */
-function save() {
+async function save() {
   const e = current();
   if (!e) return false;
-  const { name, command, description, enter, where } = read();
-  if (!command) {
+  const next = readEditor(field, e.s.id);
+  if (!next) {
     find(editEl, '[name="command"]').focus();
     return false;
   }
-  // Saved as it is: a description left empty isn't kept (undefined isn't written).
-  const next = /** @type {SnippetSetting} */ ({ id: e.s.id, name: name || command.split(/\s+/).slice(0, NAME_WORDS).join(' '), command, description, enter });
+  const { where, onlyMe } = read();
+  const saved = await write(next.id, next, where, onlyMe);
+  // Not written (a file that can't be): the editor keeps what was typed.
+  if (!saved.ok) return false;
   if (e.isDraft) draft = null;
-  write(next.id, next, where);
+  selectedId = saved.id ?? next.id;
   renderList();
   renderEditor();
   return true;
@@ -238,14 +324,15 @@ function save() {
 let saving = false;
 
 /**
- * Saves through snippets.js without the window redrawing itself from the change it made.
+ * Saves through snippets.js without the window redrawing itself from the change it made; resolves what it did.
  * @param {string} id
  * @param {SnippetSetting | null} next
  * @param {string} where
+ * @param {boolean} [onlyMe]
  */
-function write(id, next, where) {
+async function write(id, next, where, onlyMe) {
   saving = true;
-  try { saveSnippet(id, next, where); } finally { saving = false; }
+  try { return await saveSnippet(id, next, where, { onlyMe }); } finally { saving = false; }
 }
 
 editEl.addEventListener('input', renderState);
@@ -291,21 +378,26 @@ async function go(id, { focusList = false } = {}) {
   if (focusList) listEl.focus();
 }
 
-async function newSnippet() {
+/**
+ * A new snippet, kept in the focused terminal's repository when it's in one.
+ * @param {Partial<Draft>} [from] what it starts with (a copy of a task)
+ */
+async function newSnippet(from = {}) {
   if (!(await leave())) return;
-  draft = { id: newSnippetId(), name: '', command: '', description: undefined, enter: true, where: SNIPPET_SCOPE.global };
+  const repo = repoHere();
+  draft = { id: newSnippetId(), name: '', command: '', description: undefined, enter: true, where: repo ? `${IN_REPO}${repo.root}` : SNIPPET_SCOPE.global, ...from };
   searchEl.value = '';
   selectedId = null;
   select(draft.id);
   /** @type {HTMLElement | null} */ (editEl.querySelector('[name="name"]'))?.focus();
 }
 
-function remove() {
+async function remove() {
   const e = current();
-  if (!e) return;
+  if (!e || isFromFile(e)) return;
   const at = shown.findIndex(x => x.s.id === e.s.id);
   if (e.isDraft) draft = null;
-  else write(e.s.id, null, e.where);
+  else await write(e.s.id, null, e.where);
   const rest = shown.filter(x => x.s.id !== e.s.id);
   selectedId = null;
   select(rest[Math.min(at, rest.length - 1)]?.s.id ?? null);
@@ -314,21 +406,35 @@ function remove() {
 async function duplicate() {
   if (!(await leave())) return;
   const e = current();
-  if (!e || e.isDraft) return;
+  if (!e || e.isDraft || isFromFile(e)) return;
   const copy = { ...e.s, id: newSnippetId(), name: `${e.s.name} copy` };
-  // Not the new one (that has no copy), so a saved snippet.
-  write(copy.id, /** @type {SnippetSetting} */ (copy), e.where);
+  const saved = await write(copy.id, /** @type {SnippetSetting} */ (copy), e.where);
+  if (!saved.ok) return;
   selectedId = null;
-  select(copy.id);
+  select(saved.id ?? copy.id);
   /** @type {HTMLInputElement | null} */ (editEl.querySelector('[name="name"]'))?.select();
 }
 
-/** Runs the snippet shown in the terminal focused in the main window; the window stays open for the next one. */
+/** Runs the snippet shown (a task in a new terminal); the window stays open for the next one. */
 function run() {
   const e = current();
-  const tab = focusedTab();
-  if (!e || e.isDraft || isDirty() || !tab || !e.s.command) return;
-  runSnippet(/** @type {SnippetSetting} */ (e.s), { tab });
+  if (!e || e.isDraft || isDirty() || !e.s.command) return;
+  runAny(/** @type {ListedSnippet} */ (e.s));
+}
+
+/** A task's or .termilly.yml snippet's file, opened in the app that opens it. */
+function openFile() {
+  const e = current();
+  const root = /** @type {ListedSnippet | undefined} */ (e?.s)?.root;
+  if (!e || !root) return;
+  send(PAGE.openPath, { path: `${root}/${e.where === SNIPPET_SCOPE.task ? TASKS_FILE : LAYOUT_FILE}` });
+}
+
+/** A task or .termilly.yml snippet copied as a new snippet, to change here. */
+function copyAsSnippet() {
+  const e = current();
+  if (!e) return;
+  newSnippet({ name: e.s.name, command: e.s.command, description: e.where === SNIPPET_SCOPE.task ? undefined : e.s.description });
 }
 
 // ---- Opening and closing ----
@@ -460,20 +566,25 @@ on(EVENTS.snippets, () => {
   renderList();
   if (!current()) select(shown[0]?.s.id ?? null);
 });
+// The focused terminal moved to another repository: its snippets.
 on(EVENTS.workspaces, () => { if (isOpen() && !saving) renderList(); });
 
 // ---- Mouse and keys ----
 
 box.addEventListener('click', e => {
+  const group = /** @type {HTMLElement | null} */ (targetOf(e).closest('.sw-group'));
+  if (group) { toggleGroup(/** @type {string} */ (group.dataset.group)); return; }
   const row = /** @type {HTMLElement | null} */ (targetOf(e).closest('.sw-row'));
   if (row) { go(/** @type {string} */ (row.dataset.id), { focusList: true }); return; }
   const action = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-sw]'))?.dataset.sw;
   if (action === ACTION.close) closeSnippetsWindow();
   if (action === ACTION.new) newSnippet();
+  else if (action === ACTION.delete) remove();
   if (action === ACTION.save) save();
-  if (action === ACTION.delete) remove();
   if (action === ACTION.duplicate) duplicate();
   if (action === ACTION.run) run();
+  if (action === ACTION.openFile) openFile();
+  if (action === ACTION.copy) copyAsSnippet();
 });
 layer.addEventListener('mousedown', e => {
   if (e.target === layer) closeSnippetsWindow();
@@ -519,7 +630,7 @@ box.addEventListener('keydown', e => {
   e.stopPropagation();
 });
 
-openButton.addEventListener('click', toggleSnippetsWindow);
+openButton.addEventListener('click', () => toggleSnippetPick());
 
 // Its title bar starts with the toolbar button's icon, as a window's does.
 $('.sw-icon').innerHTML = /** @type {Element} */ (openButton.firstElementChild).outerHTML;
