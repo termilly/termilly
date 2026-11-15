@@ -221,3 +221,14 @@ export function setHtmlIfChanged(el, html) {
   el.dataset.html = html;
   el.innerHTML = html;
 }
+
+/**
+ * Types text into a text box where its caret is, as Ctrl+V there does: Ctrl+Z takes it back, and the box's input event
+ * fires. Its own window's document when it's detached: the command acts on the focus there.
+ * @param {HTMLTextAreaElement | HTMLInputElement} box
+ * @param {string} text
+ */
+export function typeInto(box, text) {
+  box.focus();
+  box.ownerDocument.execCommand('insertText', false, text);
+}

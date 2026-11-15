@@ -20,6 +20,7 @@ import { linesHtml } from './compactlines.js';
 import { lineLinks, clickLink, wireCtrl } from './compactlinks.js';
 import { readMenu, questionMenu, cardHtml, menuKey } from './compactcard.js';
 import { wireInput } from './compactinput.js';
+import { wireViewMenu } from './termclipboard.js';
 import { liveRow, screenRows } from './compactdrawer.js';
 
 /** @typedef {import('./compactlines.js').CompactLine} CompactLine */
@@ -295,8 +296,10 @@ function build(tab) {
     if (choice) pick(tab, choice.dataset.choice ?? '', card?.dataset.menu ?? '');
   });
   wireCtrl(el);
-  // The terminal's right-click menu and copy-on-select (termclipboard.js) are the terminal's, not the view's.
-  for (const type of ['contextmenu', 'mouseup']) el.addEventListener(type, e => e.stopPropagation());
+  // Copy-on-select is the terminal's (termclipboard.js); the right-click menu is the terminal's too, with the view's
+  // selection and links, and pasting into the prompt box.
+  el.addEventListener('mouseup', e => e.stopPropagation());
+  wireViewMenu(el, view.body, input);
   // The terminal underneath still takes the focus when its pane is clicked or focused (panes.js): the prompt box
   // takes it instead while the view shows.
   view.body.addEventListener('focusin', e => {
