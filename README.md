@@ -7,7 +7,12 @@ Termilly groups your terminals into workspaces, brings them back after a restart
 
 <p align="center"><a href="https://termilly.com">termilly.com</a> · <a href="https://termilly.com/downloads/">Download</a> · <a href="https://termilly.com/docs/">Docs</a></p>
 
-<p align="center"><b>Get it:</b> <a href="https://termilly.com/downloads/latest/TermillySetup.exe">Windows</a> · <a href="https://termilly.com/downloads/latest/Termilly-arm64.dmg">macOS (Apple silicon)</a> · <a href="https://termilly.com/downloads/latest/Termilly-x64.dmg">macOS (Intel)</a> · <a href="https://termilly.com/downloads/latest/termilly_amd64.deb">Debian and Ubuntu</a></p>
+<p align="center">
+  <a href="https://termilly.com/downloads/latest/TermillySetup.exe"><img src="https://img.shields.io/badge/Windows-Installer-0078D4?style=for-the-badge&logoColor=white&logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNiAxNiI%2BPHBhdGggZmlsbD0iI2ZmZiIgZD0iTTAgMGg3LjV2Ny41SDB6TTguNSAwSDE2djcuNUg4LjV6TTAgOC41aDcuNVYxNkgwek04LjUgOC41SDE2VjE2SDguNXoiLz48L3N2Zz4%3D" alt="Download for Windows"></a>
+  <a href="https://termilly.com/downloads/latest/Termilly-arm64.dmg"><img src="https://img.shields.io/badge/macOS-Apple%20silicon-000000?style=for-the-badge&logoColor=white&logo=apple" alt="Download for macOS (Apple silicon)"></a>
+  <a href="https://termilly.com/downloads/latest/Termilly-x64.dmg"><img src="https://img.shields.io/badge/macOS-Intel-000000?style=for-the-badge&logoColor=white&logo=apple" alt="Download for macOS (Intel)"></a>
+  <a href="https://termilly.com/downloads/latest/termilly_amd64.deb"><img src="https://img.shields.io/badge/Debian%20%2F%20Ubuntu-.deb-E95420?style=for-the-badge&logoColor=white&logo=ubuntu" alt="Download for Debian and Ubuntu"></a>
+</p>
 
 <p align="center">
   <a href="https://github.com/termilly/termilly/releases/latest"><img src="https://img.shields.io/github/v/release/termilly/termilly?label=release" alt="Latest release"></a>
