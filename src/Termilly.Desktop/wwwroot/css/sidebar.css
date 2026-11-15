@@ -1,0 +1,309 @@
+/* The sidebar, its icon rail and Remote. */
+
+/* ---- Body: sidebar + workspace ---- */
+
+#app-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  padding: 0 var(--gap) var(--gap);
+}
+
+/* ---- Sidebar (open, or the icon rail) ---- */
+
+#sidebar {
+  --sidebar-width: 236px;
+  position: relative;
+  flex: none;
+  width: var(--sidebar-width);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  transition: width 0.22s var(--ease), margin 0.22s var(--ease), opacity 0.18s, border-color 0.2s;
+}
+body[data-sidebar="rail"] #sidebar { width: 52px; }
+
+/* No width animation while dragging the edge, so the sidebar follows the pointer. */
+body.resizing-sidebar #sidebar { transition: none; }
+body.resizing-sidebar, body.resizing-sidebar * { cursor: col-resize !important; -webkit-user-select: none; user-select: none; }
+/* The gap between sidebar and terminals doubles as the resize handle (while the sidebar is open). */
+#sidebar-gap {
+  position: relative;
+  flex: none;
+  width: var(--gap);
+}
+body[data-sidebar="open"] #sidebar-gap { cursor: col-resize; }
+#sidebar-gap::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 2px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+body[data-sidebar="open"] #sidebar-gap:hover::after, body.resizing-sidebar #sidebar-gap::after { opacity: 1; }
+
+.side-open, .side-rail {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  transition: opacity 0.15s;
+}
+.side-open { width: calc(var(--sidebar-width) - 2px); }
+.side-rail { opacity: 0; pointer-events: none; }
+body:not([data-sidebar="open"]) .side-open { opacity: 0; pointer-events: none; }
+body[data-sidebar="rail"] .side-rail { opacity: 1; pointer-events: auto; }
+
+.side-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 3px 8px 8px 14px; /* centred on the 30px terminal title bar beside it */
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.side-actions { display: flex; gap: 2px; }
+.side-btn { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 6px; color: var(--muted); }
+.side-btn:hover { background: var(--hover); color: var(--text); }
+/* Drawn on a 14-unit grid at 14 px: one unit per pixel, lines on half pixels, centred on whole pixels. */
+.side-btn svg { width: 14px; height: 14px; stroke-width: 1.3; }
+
+.side-list { flex: 1; padding: 0 6px 6px; overflow-y: auto; }
+
+/* ---- Remote (js/remote.js): SSH hosts, WSL, containers, pods and serial ports below the workspaces ---- */
+.remote { position: relative; display: flex; flex: 0 1 auto; flex-direction: column; min-height: 0; max-height: 45%; border-top: 1px solid var(--border); }
+/* Its top edge: drag to make it taller or shorter (js/remote.js); its list scrolls inside. */
+.remote.sized { flex: none; max-height: none; }
+.rm-grip { position: absolute; top: -3px; right: 0; left: 0; z-index: 2; height: 6px; cursor: row-resize; }
+.rm-grip:hover, .rm-grip.dragging { background: color-mix(in srgb, var(--accent) 45%, transparent); }
+.remote.folded .rm-grip { display: none; }
+.remote[hidden] { display: none; }
+.rm-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 8px 4px; }
+.rm-fold {
+  display: flex; align-items: center; gap: 6px; height: 24px; padding: 0 6px; border-radius: 6px;
+  color: var(--muted); font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+}
+.rm-fold:hover { color: var(--text); }
+.rm-chev { width: 12px; height: 12px; stroke-width: 1.2; transform: rotate(90deg); transition: transform 0.15s; }
+.remote.folded .rm-chev { transform: none; }
+.rm-count { color: var(--faint); font-weight: 500; letter-spacing: 0; }
+.rm-filter { flex: none; height: 26px; margin: 2px 8px 6px; font-size: 12px; }
+.rm-filter[hidden] { display: none; }
+.rm-body { min-height: 0; padding: 0 6px 6px; overflow-y: auto; }
+.rm-body::-webkit-scrollbar { width: 6px; }
+.rm-body::-webkit-scrollbar-thumb { border-radius: 3px; background: var(--scroll-thumb); }
+/* Other Termilly computers (js/remotepc.js): a tree of each computer, its workspaces and their terminals. */
+.pc-chev { display: grid; flex: none; place-items: center; width: 12px; color: var(--faint); }
+.pc-chev svg { width: 12px; height: 12px; transition: transform 0.15s; }
+.pc-chev.open svg { transform: rotate(90deg); }
+.pc-icon { display: grid; place-items: center; color: var(--muted); }
+.pc-icon svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1; }
+.pc-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
+.pc-dot.on { background: #3fb950; }
+.rm-row.pc-ws { padding-left: 22px; }
+.pc-wsdot { width: 8px; height: 8px; border-radius: 3px; }
+.rm-row.pc-term { padding-left: 44px; }
+/* The computer's terminal in front here: selected, as this PC's terminal in focus is in the sidebar. */
+.rm-row.pc-term.on { background: var(--hover); color: var(--text); }
+.pc-add { color: var(--muted); }
+.pc-add svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.2; }
+/* The section's own groups (Termilly computers, Discovered): headings that fold; what's inside sits a little in. */
+.rm-group-fold { display: flex; gap: 6px; align-items: center; width: 100%; border: 0; background: none; cursor: pointer; text-align: left; }
+.rm-group-fold:hover { color: var(--muted); }
+.rm-group-fold .rm-count { margin-left: auto; font-weight: 500; letter-spacing: 0; }
+.rm-sub { padding-left: 8px; }
+.rm-sub .rm-group { padding-top: 6px; font-size: 10px; }
+.rm-group { padding: 8px 8px 3px; color: var(--faint); font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.rm-row {
+  display: flex; align-items: center; gap: 7px; width: 100%; padding: 4px 6px; border-radius: 6px;
+  color: var(--muted); font-size: 12.5px; text-align: left; white-space: nowrap;
+}
+.rm-row:hover { background: var(--hover); color: var(--text); }
+.rm-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.rm-row.env .rm-name { color: color-mix(in srgb, var(--env) 70%, var(--text)); }
+.rm-chips { display: flex; flex: none; align-items: center; gap: 4px; margin-left: auto; }
+.rm-env {
+  padding: 0 5px; border-radius: 4px; font-size: 10.5px; line-height: 16px;
+  background: color-mix(in srgb, var(--env) 18%, transparent); color: color-mix(in srgb, var(--env) 80%, var(--text));
+}
+/* How many terminals are open on it; a click goes to the next one. */
+.rm-open {
+  min-width: 18px; padding: 0 5px; border-radius: 9px; text-align: center;
+  background: var(--accent-fill); color: var(--accent); font-size: 10.5px; line-height: 16px;
+}
+.rm-open:hover { background: var(--accent); color: #fff; }
+/* The pin shows on hover, and stays when the place is pinned. Drawn at 16px, centred in 18px: whole pixels. */
+.rm-pin { display: grid; place-items: center; width: 18px; height: 18px; border-radius: 4px; color: var(--faint); opacity: 0; }
+.rm-row:hover .rm-pin, .rm-pin.on { opacity: 1; }
+.rm-pin.on { color: var(--accent); }
+.rm-pin:hover { background: var(--hover); color: var(--text); }
+.rm-pin svg { width: 16px; height: 16px; stroke-width: 1; }
+.rm-empty { padding: 6px 8px; color: var(--faint); font-size: 12px; }
+.rail-remote { display: grid; flex: none; place-items: center; width: 34px; height: 34px; border-radius: 9px; color: var(--muted); }
+.rail-remote:hover, .rail-remote.open { background: var(--hover); color: var(--text); }
+.rail-remote svg { width: 16px; height: 16px; stroke-width: 1; }
+.menu-icon .badge.small { width: 16px; height: 16px; border-radius: 4px; font-size: 7.5px; }
+/* A pixel word (COM, SSH, WSL) or mark (Codex) keeps its own size: stretched to the menu's 16px icons, it outgrew its tile. */
+.menu-icon .badge-word, .menu-icon .badge-mark { width: auto; height: auto; }
+.side-list::-webkit-scrollbar { width: 6px; }
+.side-list::-webkit-scrollbar-thumb { border-radius: 3px; background: var(--scroll-thumb); }
+
+.ws-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px 5px 4px;
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.ws-row:hover { background: var(--hover); color: var(--text); }
+.ws-row.active { background: var(--accent-fill); color: var(--text-strong); }
+.ws-chev { display: grid; flex: none; place-items: center; width: 18px; height: 18px; border-radius: 5px; color: var(--faint); transition: transform 0.15s; }
+.ws-chev:hover { background: var(--hover); color: var(--text); }
+.ws-chev svg { width: 11px; height: 11px; stroke-width: 1.7; }
+.ws-row.open .ws-chev { transform: rotate(90deg); }
+.ws-dot { width: 9px; height: 9px; flex: none; border-radius: 3px; }
+.ws-name { overflow: hidden; text-overflow: ellipsis; }
+.ws-count { margin-left: auto; color: var(--faint); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.ws-row.active .ws-count { color: var(--accent); }
+.ws-key { display: none; margin-left: auto; }
+.ws-key kbd { min-width: 0; padding: 0 3px; font-size: 9.5px; }
+.ws-row:hover .ws-key { display: inline-flex; gap: 2px; }
+.ws-row:hover .ws-count { display: none; }
+:is(.ws-row, .tab-row) .rename-input { flex: 1; min-width: 0; }
+.rename-error { padding: 2px 8px 6px 30px; color: var(--danger-text); font-size: 11.5px; white-space: normal; }
+:is(.rename-input, .field).invalid { border-color: var(--danger); box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 22%, transparent); }
+
+.tab-tree { margin: 2px 0 8px 17px; padding-left: 8px; border-left: 1px solid var(--border-strong); }
+.tab-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 4px 6px;
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 12.5px;
+  text-align: left;
+  white-space: nowrap;
+  transition: background 0.12s, color 0.12s;
+}
+.tab-row:hover, .tab-row.focused { background: var(--hover); color: var(--text); }
+.tab-row .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.tab-row .chips { display: flex; flex: none; align-items: center; gap: 3px; margin-left: auto; }
+/* All tags show while they fit; a narrow sidebar keeps the first tag and a "+N" that opens the full list. */
+.tab-row .more-tags { --c: var(--muted); display: none; cursor: pointer; }
+.tab-row .more-tags:hover { --c: var(--text); }
+.tab-row.collapsed .chips > .tag ~ .tag:not(.more-tags) { display: none; }
+.tab-row.collapsed .more-tags { display: inline-flex; }
+.menu.tags-menu { width: auto; min-width: 170px; max-width: 260px; }
+.tab-empty { padding: 4px 6px; color: var(--faint); font-size: 12px; }
+/* Terminals set aside (js/panes.js setAsideTab): under a heading of their own that folds, dimmed until hovered. */
+.aside-head { display: flex; align-items: center; gap: 5px; width: 100%; margin-top: 4px; padding: 3px 6px 3px 2px; border-radius: 6px; color: var(--faint); font-size: 11px; letter-spacing: .03em; text-transform: uppercase; }
+.aside-head:hover { background: var(--hover); color: var(--text); }
+.aside-head svg { flex: none; width: 11px; height: 11px; stroke-width: 1.7; transition: transform 0.15s; }
+.aside-head.open svg { transform: rotate(90deg); }
+.aside-head .ws-count { text-transform: none; }
+.aside-rows .tab-row { opacity: .6; }
+.aside-rows .tab-row:hover { opacity: 1; }
+
+.attn {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--attention);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--attention) 15%, transparent);
+}
+
+.side-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 14px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  white-space: nowrap;
+}
+.side-foot:hover { background: var(--hover); color: var(--text); }
+.side-foot svg { width: 14px; height: 14px; flex: none; stroke-width: 1.5; }
+
+/* Same spot as the header's toggle, so reopening is where closing was (give or take the rail's width). */
+.rail-toggle { flex: none; align-self: center; margin-top: 12px; }
+.rail-list { display: flex; flex: 1; flex-direction: column; align-items: center; gap: 8px; padding: 10px 0; overflow-y: auto; }
+.rail-tile {
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1.5px solid color-mix(in srgb, var(--c) 35%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--c) 12%, transparent);
+  color: var(--c);
+  font: 700 12px var(--ui-font);
+  transition: transform 0.12s, border-color 0.12s, background-color 0.12s;
+}
+.rail-tile:hover { transform: translateY(-1px); }
+/* One square: the open workspace gets a solid border and a stronger fill, not a second ring around it. */
+.rail-tile.active { border-color: var(--c); background: color-mix(in srgb, var(--c) 26%, transparent); }
+.rail-tile .attn { position: absolute; top: -3px; right: -3px; box-shadow: 0 0 0 2px var(--surface); }
+/* Agent news nobody has looked at: bold in the sidebar, and a ring on the rail tile. */
+.tab-row.unread .name, .ws-row.unread .ws-name { color: var(--text-strong); font-weight: 600; }
+.rail-tile.unread, .rail-tile.active.unread { border-color: var(--attention); }
+.rail-count {
+  position: absolute;
+  right: -5px;
+  bottom: -4px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--raised-2);
+  color: var(--muted);
+  font: 600 9px/13px var(--ui-font);
+}
+.rail-sep { width: 22px; height: 1px; margin: 2px 0; background: var(--border-strong); }
+.rail-add { display: grid; place-items: center; width: 34px; height: 34px; flex: none; border: 1px dashed var(--border-strong); border-radius: 9px; color: var(--muted); }
+.rail-add:hover { color: var(--text); border-color: var(--hover-border); }
+.rail-add svg { width: 14px; height: 14px; stroke-width: 1.3; }
+.rail-foot { display: grid; place-items: center; padding: 10px 0; border-top: 1px solid var(--border); color: var(--muted); }
+.rail-foot:hover { color: var(--text); }
+.rail-foot svg { width: 15px; height: 15px; stroke-width: 1.5; }
+
+/* Rail flyout: a workspace's tabs, shown when hovering its tile. */
+.ws-flyout {
+  position: fixed;
+  z-index: 1700;
+  width: 250px;
+  padding: 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--raised);
+  box-shadow: var(--shadow-pop);
+  opacity: 0;
+  transform: translateX(-4px);
+  pointer-events: none;
+  transition: opacity 0.12s, transform 0.12s var(--ease);
+}
+.ws-flyout.show { opacity: 1; transform: none; pointer-events: auto; }
+.fly-head { display: flex; align-items: center; gap: 8px; padding: 6px 8px 8px; font-size: 13px; font-weight: 600; }
+.fly-key { display: flex; gap: 2px; margin-left: auto; font-weight: 400; }
+.fly-key kbd { min-width: 0; padding: 0 3px; font-size: 9.5px; }

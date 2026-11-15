@@ -1,0 +1,145 @@
+/* The Git window and its search. */
+
+/* ---- Big windows with a list and a side beside it: the Git window (its Agent changes are a tree), snippets ---- */
+
+.settings.changes-win { flex-direction: column; width: min(1400px, calc(100vw - 48px)); height: min(900px, calc(100vh - 60px)); }
+.changes-win .set-head { flex: none; gap: 10px; }
+.changes-win .set-close { margin-left: 0; }
+.cw-sub { overflow: hidden; color: var(--muted); font-size: 12.5px; text-overflow: ellipsis; white-space: nowrap; }
+.cw-main { display: flex; flex: 1; min-height: 0; }
+.cw-side { display: flex; flex: none; flex-direction: column; width: 320px; min-width: 200px; background: var(--surface); }
+.cw-filter { display: flex; align-items: center; gap: 4px; padding: 10px; border-bottom: 1px solid var(--border); }
+.cw-filter .field { flex: 1; min-width: 0; }
+.cw-grip { flex: none; width: 5px; margin-left: -2px; border-left: 1px solid var(--border); cursor: ew-resize; }
+.cw-grip:hover { border-left-color: var(--accent); }
+.gw-preview { display: flex; flex: 1; min-width: 0; }
+.gw-preview[hidden], .gw-right[hidden] { display: none; }
+.cw-row { display: flex; align-items: center; gap: 6px; height: 26px; padding-right: 8px; border-radius: 6px; color: var(--text); font-size: 12.5px; cursor: pointer; white-space: nowrap; }
+.cw-row:hover { background: var(--hover); }
+.cw-row.selected { background: var(--accent-fill); color: var(--text-strong); }
+.cw-chev { display: grid; flex: none; place-items: center; width: 12px; color: var(--faint); }
+.cw-chev svg { width: 10px; height: 10px; stroke-width: 1.5; transition: transform 0.1s; }
+.cw-folder.open .cw-chev svg { transform: rotate(90deg); }
+.cw-icon { display: grid; flex: none; place-items: center; color: var(--muted); }
+.cw-icon svg { width: 13px; height: 13px; stroke-width: 1.4; }
+.cw-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.cw-folder .cw-name { color: var(--muted); }
+.cw-count { flex: none; padding: 0 6px; border-radius: 8px; background: var(--hover); color: var(--muted); font-size: 10.5px; font-variant-numeric: tabular-nums; }
+.cw-what { flex: none; font: 11px var(--mono); }
+.cw-what .pv-badge { margin: 0; }
+.preview-pane.in-window { flex: 1; min-width: 0; border: 0; border-radius: 0; }
+
+/* ---- Git window (js/gitwindow.js): the Changed files window's frame, a list on the left, a diff or a commit on the right ---- */
+
+.git-win .set-head { gap: 10px; }
+.gw-mark { display: grid; place-items: center; color: var(--accent); }
+.gw-mark svg, .gw-refresh svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1; }
+.gw-branch { display: inline-flex; align-items: center; gap: 6px; min-width: 0; color: var(--muted); font: 12px var(--mono); white-space: nowrap; }
+.gw-branch-name { overflow: hidden; text-overflow: clip; }
+.gw-ab { flex: none; color: var(--attention); font: 11px var(--mono); }
+.gw-tabs { margin-left: auto; padding: 2px; }
+.gw-tabs button { padding: 2px 12px; font-size: 12px; }
+.gw-tabs button[hidden] { display: none; }
+.gw-refresh { width: 28px; height: 28px; opacity: 1; }
+.gw-side { width: 380px; }
+.gw-list { flex: 1; min-height: 0; padding: 4px; overflow: auto; outline: none; }
+.gw-list::-webkit-scrollbar { width: 8px; }
+.gw-list::-webkit-scrollbar-thumb { border: 2px solid var(--surface); border-radius: 4px; background: var(--scroll-thumb); }
+.gw-list:focus-visible .cw-row.cursor, .gw-list:focus .cw-row.cursor { box-shadow: inset 0 0 0 1px var(--accent); }
+.gw-empty { padding: 18px 12px; color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+.gw-section { margin-top: 6px; color: var(--muted); font-size: 11.5px; font-weight: 600; }
+.gw-section:first-child { margin-top: 0; }
+.gw-section.open .cw-chev svg { transform: rotate(90deg); }
+.gw-file { padding-left: 18px; }
+.gw-status { flex: none; width: 14px; color: var(--muted); font: 600 11px var(--mono); text-align: center; }
+.gw-status[data-s="M"], .gw-status[data-s="T"] { color: var(--attention); }
+.gw-status[data-s="A"], .gw-status[data-s="U"], .gw-status[data-s="C"] { color: var(--ok); }
+.gw-status[data-s="D"], .gw-status[data-s="conflict"] { color: var(--danger-text); }
+.gw-status[data-s="R"] { color: var(--accent); }
+.gw-file .cw-name { flex: 0 1 auto; }
+.gw-dir { flex: 1 1 0; min-width: 0; overflow: hidden; color: var(--faint); font-size: 11.5px; text-overflow: ellipsis; direction: rtl; text-align: left; }
+.gw-commit { flex-direction: column; align-items: stretch; gap: 1px; height: auto; padding: 5px 8px; }
+.gw-commit-main { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.gw-subject { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.gw-subject.current { color: var(--accent); font-weight: 600; }
+.gw-commit-meta { display: flex; gap: 10px; min-width: 0; overflow: hidden; color: var(--faint); font-size: 11px; }
+.gw-commit-meta > span:nth-child(2) { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.gw-commit-meta > span:last-child { flex: none; margin-left: auto; }
+.gw-hash { flex: none; font-family: var(--mono); }
+.gw-ref { flex: none; max-width: 140px; overflow: hidden; padding: 0 5px; border-radius: 4px; background: var(--hover); color: var(--muted); font-size: 10.5px; line-height: 16px; text-overflow: ellipsis; }
+.gw-ref.head { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--text-strong); }
+.gw-ref.is-tag { background: color-mix(in srgb, var(--attention) 18%, transparent); color: var(--attention); }
+.gw-ref.remote { color: var(--faint); }
+.gw-more { justify-content: center; color: var(--accent); }
+
+/* The search (js/gitsearch.js): its filter chips, and rows with the line that matched under them. */
+.gw-filters { gap: 4px; padding: 8px 10px; }
+.gw-filters[hidden] { display: none; }
+.gw-filters .fchip { height: 22px; padding: 0 9px; font-size: 11.5px; }
+.gw-hit .gw-dir { flex: 1 1 0; }
+.gw-hit-line { display: flex; gap: 6px; min-width: 0; margin-top: 2px; color: var(--muted); font: 11px/1.45 var(--mono); }
+.gw-hit-line.add { color: color-mix(in srgb, var(--ok) 75%, var(--text)); }
+.gw-hit-line.del { color: var(--danger-text); }
+.gw-line-no { flex: none; min-width: 3ch; color: var(--faint); text-align: right; }
+.gw-hit-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: pre; }
+.gw-why { flex: none; color: var(--faint); font-size: 11px; }
+.gw-search-status { justify-content: center; gap: 8px; color: var(--faint); cursor: default; }
+.gw-searching { display: inline-flex; gap: 8px; align-items: center; }
+.fchip .busy-spin { display: inline-block; margin-right: 6px; vertical-align: -1px; }
+.gw-search-status:hover { background: none; }
+.gw-right { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; outline: none; }
+.gw-message { padding: 28px 20px; color: var(--muted); font-size: 13px; text-align: center; }
+/* What git said when an action failed (js/gitwindow.js), in its own words, in a popup. */
+.git-error-text { max-height: 260px; margin: 0 0 16px; padding: 10px 12px; overflow: auto; border-radius: 8px; background: color-mix(in srgb, var(--danger) 10%, var(--surface)); color: var(--danger-text); font: 12px/1.45 Consolas, "Cascadia Mono", monospace; white-space: pre-wrap; }
+.gw-diff-head { display: flex; flex: none; align-items: center; gap: 8px; min-height: 36px; padding: 0 12px; border-bottom: 1px solid var(--border); background: var(--header); }
+.gw-side-label { flex: none; padding: 0 6px; border-radius: 4px; background: var(--hover); color: var(--muted); font-size: 11px; }
+.gw-diff-path { flex: 1; min-width: 0; overflow: hidden; color: var(--text); font: 12px var(--mono); text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
+.gw-diff-head .pv-badge { flex: none; margin: 0; }
+.gw-diff { flex: 1; }
+/* An image's versions (js/gitwindow.js imagesHtml): side by side, fitted, on a checkerboard so transparency shows. */
+.gw-images { display: flex; flex-wrap: wrap; gap: 16px; padding: 16px; border-bottom: 1px solid var(--border); }
+.gw-images:last-child { border-bottom: 0; }
+.gw-image { display: flex; flex: 1 1 240px; flex-direction: column; align-items: center; gap: 8px; min-width: 0; margin: 0; }
+.gw-image-box { display: flex; align-items: center; justify-content: center; max-width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 6px;
+  background: repeating-conic-gradient(var(--hover) 0 25%, var(--surface) 0 50%) 0 0 / 16px 16px; }
+.gw-image-box img { display: block; max-width: 100%; max-height: 60vh; object-fit: contain; image-rendering: auto; }
+.gw-image figcaption { color: var(--muted); font-size: 12px; text-align: center; }
+.gw-image figcaption b { color: var(--text); font-weight: 600; }
+.gw-commit-info { flex: none; padding: 12px 14px 10px; border-bottom: 1px solid var(--border); }
+.gw-commit-subject { color: var(--text-strong); font-size: 14px; font-weight: 600; line-height: 1.4; }
+.gw-commit-body { max-height: 140px; margin: 8px 0 0; overflow: auto; color: var(--text); font: 12px/1.5 var(--mono); white-space: pre-wrap; }
+.gw-commit-facts { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; margin-top: 8px; color: var(--muted); font-size: 12px; }
+.gw-commit-facts .btn.small { padding: 1px 8px; }
+.gw-link { padding: 0; border: 0; background: none; color: var(--accent); font: 12px var(--mono); cursor: pointer; }
+.gw-link:hover { text-decoration: underline; }
+.gw-commit-files { flex: none; max-height: 28%; padding: 4px; overflow: auto; border-bottom: 1px solid var(--border); }
+.gw-commit-files .gw-file { padding-left: 8px; }
+.gw-commit-files .cw-name { flex: 1; direction: rtl; text-align: left; }
+.gw-counts { flex: none; font: 11px var(--mono); }
+.gw-binary { color: var(--faint); }
+.gw-commit-diff { display: flex; flex: 1; flex-direction: column; min-height: 0; }
+.gw-branch-log { flex: 1; min-height: 0; padding: 4px; overflow: auto; }
+.cu-meter { position: relative; width: 26px; height: 4px; overflow: hidden; border-radius: 2px; background: var(--border-strong); }
+.cu-meter i { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: var(--accent); }
+.cu-meter.high i { background: var(--attention, #f2cc60); }
+.cu-meter.full i { background: var(--danger, #ff7b72); }
+.cu-meter.big { width: 100%; height: 6px; border-radius: 3px; }
+.cu-pop { width: 280px; padding: 0; font-size: 12px; }
+.cu-head { display: flex; align-items: baseline; gap: 8px; padding: 10px 12px 8px; color: var(--text-strong); font-size: 13px; font-weight: 600; }
+.cu-head span { overflow: hidden; color: var(--faint); font: 11px var(--mono); text-overflow: ellipsis; white-space: nowrap; }
+.cu-ctx { display: grid; gap: 6px; padding: 0 12px 10px; }
+.cu-ctx-text { color: var(--muted); }
+.cu-ctx-text b { color: var(--text); font-weight: 600; }
+.cu-rows { padding: 6px 12px; border-top: 1px solid var(--border); }
+.cu-row { display: flex; justify-content: space-between; gap: 12px; padding: 2px 0; color: var(--muted); }
+.cu-row b { color: var(--text); font-weight: 500; font-variant-numeric: tabular-nums; }
+.cu-id { font-family: var(--mono); cursor: text; -webkit-user-select: all; user-select: all; }
+.cu-plan { display: grid; gap: 4px; padding: 8px 12px 10px; border-top: 1px solid var(--border); }
+.cu-plan-head { display: flex; justify-content: space-between; margin-bottom: 2px; color: var(--faint); font-size: 11px; font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase; }
+.cu-plan-head b { color: var(--accent); font-weight: 600; letter-spacing: 0; text-transform: none; }
+.cu-limit-row { display: flex; justify-content: space-between; margin-top: 4px; color: var(--muted); }
+.cu-limit-row b { color: var(--text); font-weight: 500; font-variant-numeric: tabular-nums; }
+.cu-reset { color: var(--faint); font-size: 11px; }
+.cu-reset.stale { opacity: 0.55; }
+.cu-note { margin-top: 6px; line-height: 1.45; }
+.cu-note code { font: 10.5px var(--mono); color: var(--muted); }

@@ -1,0 +1,94 @@
+/* Hints, dropped files, the paste check, the guided tour, and Settings › Plugins and Sync. */
+
+/* ---- Hints, dropped files, paste check (js/hints.js, terminals.js) ---- */
+
+.hint-layer { position: absolute; inset: 0; z-index: 20; pointer-events: none; }
+.hint {
+  position: absolute;
+  padding: 0 3px;
+  border-radius: 3px;
+  background: var(--attention);
+  color: #0b0b0b;
+  font: 700 11px/14px var(--mono);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+  transform: translateY(1px);
+}
+.hint.hint-url { background: #79c0ff; }
+.hint.hint-hash { background: #d2a8ff; }
+.hint.dim { opacity: 0.25; }
+.pane-body.file-over { outline: 2px dashed var(--accent); outline-offset: -4px; }
+.dialog.paste-check { width: 560px; }
+.paste-preview { max-height: 200px; margin: 8px 0 10px; padding: 8px 10px; overflow: auto; border-radius: 8px; background: var(--term-bg); color: var(--term-text); font: 12px/1.45 var(--mono); white-space: pre; }
+.paste-never { display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: 12.5px; }
+
+/* ---- Guided tour (js/tour.js) ---- */
+
+/* The lit target: a ring, and everything else dimmed by its shadow. Clicks pass through to the app. */
+.tour-light {
+  position: fixed;
+  z-index: 2990;
+  border-radius: 8px;
+  box-shadow: 0 0 0 2px var(--accent), 0 0 0 9999px rgba(0, 0, 0, 0.42);
+  pointer-events: none;
+  transition: left .18s ease, top .18s ease, width .18s ease, height .18s ease;
+}
+.tour-light[hidden] { display: none; }
+.tour-light.tried { box-shadow: 0 0 0 2px var(--accent); }
+.tour-card {
+  position: fixed;
+  z-index: 3000;
+  width: 340px;
+  padding: 14px 16px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--raised);
+  box-shadow: var(--shadow-pop);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.5;
+  transition: left .18s ease, top .18s ease;
+}
+.tour-card::before { /* the arrow, pointing at the target */
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border: 1px solid var(--border-strong);
+  background: var(--raised);
+  content: "";
+  transform: rotate(45deg);
+}
+.tour-card[data-side="below"]::before { top: -7px; left: calc(var(--arrow) - 6px); border-right: 0; border-bottom: 0; }
+.tour-card[data-side="above"]::before { bottom: -7px; left: calc(var(--arrow) - 6px); border-top: 0; border-left: 0; }
+.tour-card[data-side="right"]::before { top: calc(var(--arrow) - 6px); left: -7px; border-top: 0; border-right: 0; }
+.tour-card[data-side="left"]::before { top: calc(var(--arrow) - 6px); right: -7px; border-bottom: 0; border-left: 0; }
+.tour-card[data-side="center"]::before, .tour-card[data-side="inside"]::before, .tour-card.no-arrow::before { display: none; }
+.tour-top { display: flex; align-items: center; justify-content: space-between; }
+.tour-count { color: var(--faint); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.tour-skip { padding: 0; border: 0; background: none; color: var(--muted); font: inherit; font-size: 12px; cursor: pointer; }
+.tour-skip:hover { color: var(--text); }
+.tour-card h3 { margin: 4px 0 6px; font-size: 15px; }
+.tour-card p { margin: 0 0 8px; color: var(--muted); }
+.tour-card p b, .tour-card code { color: var(--text); }
+.tour-try { display: flex; gap: 8px; align-items: baseline; padding: 7px 9px; border-radius: 8px; background: var(--accent-fill); color: var(--text) !important; }
+.tour-try-mark { flex: none; width: 8px; height: 8px; border: 2px solid var(--accent); border-radius: 50%; }
+.tour-card[data-done="true"] .tour-try-mark { border-color: var(--success, #3fb950); background: var(--success, #3fb950); }
+.tour-hint { font-size: 12px; }
+.tour-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
+.tour-card[data-done="true"] [data-tour="next"] { animation: tour-nudge 1.2s ease 2; }
+@keyframes tour-nudge { 50% { box-shadow: 0 0 0 4px var(--accent-fill); } }
+@media (prefers-reduced-motion: reduce) {
+  .tour-light, .tour-card { transition: none; }
+  .tour-card[data-done="true"] [data-tour="next"] { animation: none; }
+}
+
+/* ---- Settings › Plugins (js/plugins.js) ---- */
+
+.plugin-row { display: flex; gap: 16px; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.plugin-row:last-child { border-bottom: 0; }
+.plugin-text { min-width: 0; }
+.plugin-error { color: var(--danger-text); }
+
+/* ---- Settings › Sync between PCs (js/sync.js) ---- */
+
+.sync-devices { display: flex; flex-direction: column; gap: 4px; width: 100%; }
+.sync-device { display: flex; justify-content: space-between; gap: 12px; font-size: 12.5px; }

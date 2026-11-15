@@ -1,0 +1,139 @@
+/* Settings › SSH, captured lines, the "Needs me" inbox and the window's resize edges. */
+
+/* ---- Settings › SSH (js/ssh.js) ---- */
+
+.ssh-row { display: flex; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.ssh-row:last-of-type { margin-bottom: 10px; }
+.ssh-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.ssh-name { color: var(--text); font-size: 13px; }
+.ssh-sub { overflow: hidden; color: var(--muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.ssh-error { color: var(--danger-text); font-size: 12px; }
+.fwd-dot { width: 8px; height: 8px; flex: none; border-radius: 50%; background: var(--faint); }
+.fwd-dot.running { background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 20%, transparent); }
+.fwd-dot.starting { background: var(--attention); }
+.fwd-dot.failed { background: var(--danger); }
+.dialog.ssh-conn, .dialog.ssh-fwd, .dialog.ssh-import { width: 560px; }
+.dialog-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+.row-inline { display: flex; gap: 8px; align-items: center; }
+.row-inline .field { flex: 1; }
+[data-show][hidden], [data-dest][hidden] { display: none; }
+.import-list { max-height: 300px; overflow-y: auto; margin: 6px 0 10px; }
+.import-item { display: flex; gap: 10px; align-items: center; padding: 6px 2px; font-size: 13px; }
+
+/* ---- Captured lines (js/triggers.js) ---- */
+
+[data-open-captures][hidden] { display: none; }
+.cap-count { margin-left: auto; color: var(--attention); font-variant-numeric: tabular-nums; }
+.rail-captures { position: relative; }
+.rail-captures .cap-count { position: absolute; top: 4px; right: 8px; font-size: 9px; }
+.cap-item { display: flex; flex-direction: column; gap: 3px; width: 100%; padding: 7px 8px; border-radius: 8px; text-align: left; }
+.cap-item:hover { background: var(--hover); }
+.cap-text { overflow: hidden; font-family: var(--mono); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.cap-meta { color: var(--faint); font-size: 11px; }
+.trigger-row { display: grid; grid-template-columns: auto 1fr 150px 160px auto; gap: 8px; align-items: center; margin-bottom: 8px; }
+.trigger-row .field { width: 100%; min-width: 0; }
+.trigger-row .field.mono { font-family: var(--mono); font-size: 12.5px; }
+.trigger-row .field.invalid { border-color: var(--danger); }
+.trigger-presets { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+/* Settings › Terminal › Sounds: a sound's dropdown and its play button. */
+.sound-pick { display: flex; width: 300px; gap: 6px; align-items: center; }
+.sound-pick .dropdown { flex: 1; width: auto; }
+.sound-device + .dropdown { width: 300px; }
+.act-row { display: grid; gap: 8px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.act-line { display: flex; gap: 8px; align-items: center; }
+.act-line .field { flex: 1 1 0; min-width: 0; }
+.act-line .field.mono { font-family: var(--mono); font-size: 12.5px; }
+.act-menu { display: flex; flex: none; gap: 6px; align-items: center; color: var(--muted); font-size: 12px; white-space: nowrap; cursor: pointer; }
+.act-keys { flex: none; min-width: 96px; justify-content: center; }
+.act-keys.capturing { border-color: var(--accent); color: var(--accent); }
+/* Settings › Keyboard: a shortcut's keys (in the accent once changed) and its way back to the default. */
+.key-set { display: flex; flex: none; gap: 4px; align-items: center; }
+.act-keys.changed { border-color: color-mix(in srgb, var(--accent) 60%, transparent); }
+.key-reset svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.2; }
+/* An action with changes not saved: a mark on its left, and its Save button in the accent. */
+.act-row.unsaved { box-shadow: inset 2px 0 0 var(--accent); padding-left: 8px; }
+.act-save { color: var(--accent); }
+.act-line .btn.small svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1; }
+.act-vars { margin: 6px 0 2px; }
+
+/* ---- "Needs me" inbox (js/inbox.js) ---- */
+
+.inbox-button, #todo-button, #schedules-button { position: relative; }
+/* To do's open tasks while it's closed: the notification centre's count, in the accent (news, not a call for
+   attention). */
+#schedules-button .tool-count { background: var(--accent); }
+.inbox-button.has-items { color: var(--attention); }
+.tool-count {
+  position: absolute;
+  top: 2px;
+  right: 1px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--attention);
+  color: var(--on-accent);
+  font: 700 9.5px/15px var(--ui-font);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.tool-count[hidden] { display: none; }
+.popover.inbox { width: 380px; padding: 0; }
+.inbox-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 10px 8px 12px; }
+.inbox-head .section-head { margin: 0; }
+.inbox-head .seg button { padding: 2px 9px; font-size: 12px; }
+.inbox-list { max-height: min(420px, 60vh); overflow-y: auto; padding: 0 6px 6px; }
+.inbox-item {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  width: 100%;
+  padding: 8px;
+  border-radius: 8px;
+  text-align: left;
+}
+.inbox-item:hover, .inbox-item:focus-visible { background: var(--hover); outline: none; }
+.inbox-item .inbox-state { margin-top: 4px; }
+.inbox-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+.inbox-title { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 13px; }
+.inbox-title .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inbox-item.unread .inbox-title .name { color: var(--text-strong); font-weight: 600; }
+.inbox-ws { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); font-size: 11.5px; white-space: nowrap; }
+.inbox-ws .ws-dot { width: 7px; height: 7px; }
+.inbox-tag { padding: 0 5px; border-radius: 4px; background: var(--hover); color: var(--muted); font-size: 10.5px; }
+.inbox-age { margin-left: auto; color: var(--faint); font-size: 11px; font-variant-numeric: tabular-nums; }
+.inbox-detail {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.inbox-empty { padding: 18px 12px 22px; color: var(--muted); font-size: 12.5px; text-align: center; }
+.inbox-foot { padding: 8px 12px; border-top: 1px solid var(--border); color: var(--faint); font-size: 11.5px; }
+.inbox-foot kbd { font-size: 10px; }
+
+.window-controls svg { width: 12px; height: 12px; stroke-width: 1.3; }
+.window-controls button.close:hover { background: var(--danger); color: #ffffff; }
+
+.icon-restore { display: none; }
+body.maximized .icon-restore { display: block; }
+body.maximized .icon-maximize { display: none; }
+
+/* ---- Window resize edges (forwarded to the host) ---- */
+
+.edge { position: fixed; z-index: 1000; }
+.edge.n, .edge.s { left: 6px; right: 6px; height: 5px; cursor: ns-resize; }
+.edge.w, .edge.e { top: 6px; bottom: 6px; width: 5px; cursor: ew-resize; }
+.edge.n { top: 0; }
+.edge.s { bottom: 0; }
+.edge.w { left: 0; }
+.edge.e { right: 0; }
+.edge.nw, .edge.ne, .edge.sw, .edge.se { width: 8px; height: 8px; }
+.edge.nw { top: 0; left: 0; cursor: nwse-resize; }
+.edge.se { bottom: 0; right: 0; cursor: nwse-resize; }
+.edge.ne { top: 0; right: 0; cursor: nesw-resize; }
+.edge.sw { bottom: 0; left: 0; cursor: nesw-resize; }
+body.maximized .edge { display: none; }

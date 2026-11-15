@@ -1,0 +1,63 @@
+/* A window of its own: a terminal, the Notepad or the Snippets window. */
+
+/* ---- A window of its own (js/windows.js): a terminal, the Notepad or the Snippets window moved in
+   fills it, with no frame of its own (the window has one). ---- */
+body.detached-window > * { flex: 1; min-width: 0; min-height: 0; }
+body.detached-window > .pane, body.detached-window > .notepad-panel, body.detached-window > .snippets-win {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  animation: none;
+}
+body.detached-window > .pane.focused, body.detached-window > .notepad-panel { box-shadow: none; }
+/* Its docked width is set on the element (dragged with its grip): the window’s width wins. */
+body.detached-window > .notepad-panel { position: static; width: auto !important; height: auto !important; min-height: 0; max-width: none; max-height: none; }
+body.detached-window > .notepad-panel > .files-grip { display: none; }
+body.detached-window > .snippets-win { width: auto; height: auto; }
+/* Its header is the window’s title bar (js/windows.js): Return, Minimize, Maximize and Close at its end, in place of
+   its own close and detach buttons; it moves the window, so no pane drag cursor. */
+body.detached-window .pane-header > .pane-actions > .close-btn,
+body.detached-window [data-np="detach"], body.detached-window [data-np="close"],
+body.detached-window [data-sw="detach"], body.detached-window [data-sw="close"] { display: none; }
+body.detached-window .pane-header { cursor: default; }
+/* Its environment (a production tag’s chip) stays with its tags after the name, not again before it. */
+body.detached-window .pane-header .env-chip { display: none; }
+.detached-controls { display: flex; flex: none; gap: 2px; align-items: center; margin-left: -6px; padding-bottom: 1px; }
+/* As a terminal's buttons: 22px, so a hovered or lit one has the same room above and below in the 30px title bar. */
+.detached-controls > button { width: 22px; height: 22px; padding: 0; border-radius: 6px; }
+/* The Notepad's divider after New page, as the one before the window's buttons. */
+body.detached-window .files-head .np-sep { height: 18px; margin: 0 0 0 1px; background: var(--border-strong); }
+/* As far from the icon on each side: Return's reaches 2px nearer its button's edge than Minimize's. */
+.detached-controls > .separator { margin: 0 0 0 2px; }
+/* The pin while the window is kept on top. */
+.detached-controls > button.on { background: var(--pressed); color: var(--accent); }
+/* The Notepad's and the Snippets window's title bars are a terminal's (.pane-header, .pane-title, .pane-btn). */
+.notepad-panel > .files-head, .snippets-win > .set-head {
+  flex: none;
+  gap: 8px;
+  height: 30px;
+  padding: 0 6px 0 8px;
+  border-bottom: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0 0;
+  background: var(--header);
+}
+.notepad-panel > .files-head > .title-icon, .snippets-win > .set-head > .title-icon { margin-right: 0; }
+.notepad-panel > .files-head .files-title, .snippets-win > .set-head > h2 {
+  overflow: hidden;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color 0.15s;
+}
+.notepad-panel:focus-within .files-title, .snippets-win:focus-within > .set-head > h2 { color: var(--text); }
+.notepad-panel:focus-within { border-color: var(--border-strong); box-shadow: 0 0 0 1px var(--accent-soft); }
+.notepad-panel > .files-head > .files-tools { padding-bottom: 1px; }
+.snippets-win > .set-head > .cw-sub { font-size: 12px; }
+.snippets-win > .set-head > .btn.small { height: 22px; }
+.snippets-win > .set-head > .set-close { width: 22px; height: 22px; border-radius: 6px; }
+.snippets-win > .set-head > .set-close svg { width: 10px; height: 10px; }
+.snippets-win { background: var(--surface); }
+.detached-controls svg[viewBox="0 0 16 16"] { width: 16px; height: 16px; stroke-width: 1; }
