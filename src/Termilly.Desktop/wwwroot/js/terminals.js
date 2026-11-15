@@ -355,7 +355,9 @@ function createTerminal(tab) {
   term.loadAddon(new Unicode11Addon.Unicode11Addon());
   term.unicode.activeVersion = '11';
   // On the GPU while it's on screen (Settings › Appearance › GPU rendering).
-  wireGpu(tab, term, () => fit.fit());
+  // Not while a phone or another computer gives it its size: fitting it to the pane would give the program its pane's
+  // size again behind their back (a GPU context comes back after sleep or a lock), and they'd draw it garbled.
+  wireGpu(tab, term, () => { if (!tab.phoneSize) fit.fit(); });
   wireDropAndPaste(tab, term);
   /** @type {TabView} */ (tab.view).term = term;
   /** @type {TabView} */ (tab.view).fit = fit;

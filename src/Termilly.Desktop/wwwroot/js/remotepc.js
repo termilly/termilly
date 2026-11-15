@@ -271,6 +271,8 @@ function settleSize(tab) {
   if (told.get(tab.id) === key) return;
   told.set(tab.id, key);
   send(PAGE.pcSize, { tab: tab.id, ...size });
+  // What it showed came at its old size there: what it shows, again, once it has redrawn at this one.
+  if (size.cols) setTimeout(() => send(PAGE.pcRefresh, { tab: tab.id }), REDRAWN_MS);
 }
 
 /** Its terminal here at the size it has there, as that computer last said. @param {Tab} tab */
