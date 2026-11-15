@@ -263,8 +263,11 @@ export const ICONS = {
   // Drawn on the pixel grid for 16px at a 1px stroke (menus show them that way): straight lines sit on .5, dots
   // are whole-pixel squares, so they stay sharp instead of smearing across two pixels.
   cross: '<svg viewBox="0 0 16 16"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></svg>',
-  // Set aside (js/panes.js setAsideTab): a line low down, as a window's minimize, into the workspace's list.
-  setAside: '<svg viewBox="0 0 16 16"><path d="M3.5 11.5h9"/></svg>',
+  // Set aside (js/panes.js setAsideTab): a line low down, as a window's minimize, into the workspace's list. On the
+  // bottom row of the 10px-tall box the terminal header's icons share (rows 3 to 12), as are close, tag and prompts.
+  setAside: '<svg viewBox="0 0 16 16"><path d="M3.5 12.5h9"/></svg>',
+  /** Closing a terminal, from its header: as tall as the header's other icons (ICONS.close is the 10px one panels use). */
+  closeTerminal: '<svg viewBox="0 0 16 16"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9"/></svg>',
   more: '<svg viewBox="0 0 16 16"><rect x="3" y="7" width="2" height="2" rx=".5" fill="currentColor" stroke="none"/><rect x="7" y="7" width="2" height="2" rx=".5" fill="currentColor" stroke="none"/><rect x="11" y="7" width="2" height="2" rx=".5" fill="currentColor" stroke="none"/></svg>',
   hash: '<svg viewBox="0 0 16 16"><path d="M6.5 3v10M10.5 3v10M3 6.5h10M3 10.5h10"/></svg>',
   puzzle: '<svg viewBox="0 0 16 16"><path d="M6.5 3a1.5 1.5 0 0 1 3 0v1.5h3v3H11a1.5 1.5 0 0 0 0 3h1.5v3h-3V12a1.5 1.5 0 0 0-3 0v1.5h-4v-3H4a1.5 1.5 0 0 0 0-3H2.5v-3h4z"/></svg>',
@@ -278,7 +281,7 @@ export const ICONS = {
   stop: '<svg viewBox="0 0 16 16"><rect x="4.5" y="4.5" width="7" height="7" rx="1.5"/></svg>',
   chevronDown: '<svg viewBox="0 0 16 16"><path d="M3.5 6L8 10.5 12.5 6"/></svg>',
   pin: '<svg viewBox="0 0 16 16"><path d="M5.5 2.5h5M6.5 2.5v5l-2 2v1h7v-1l-2-2v-5M8 10.5v4"/></svg>',
-  todo: '<svg viewBox="0 0 16 16"><path d="M1.5 3.5l1 1 2-2M1.5 8.5l1 1 2-2M1.5 13.5l1 1 2-2M7.5 3.5h7M7.5 8.5h7M7.5 13.5h7"/></svg>',
+  todo: '<svg viewBox="0 0 16 16"><path d="M2.5 5.5l1 1 2-2M2.5 8.5l1 1 2-2M2.5 11.5l1 1 2-2M7.5 5.5h6M7.5 8.5h6M7.5 11.5h6"/></svg>',
   chevronLeft: '<svg viewBox="0 0 16 16"><path d="M10 3.5L5.5 8l4.5 4.5"/></svg>',
   chevronRight: '<svg viewBox="0 0 16 16"><path d="M6 3.5L10.5 8 6 12.5"/></svg>',
   folder: '<svg viewBox="0 0 16 16"><path d="M2.5 4.5a1 1 0 0 1 1-1h3l1 1h5a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1z"/></svg>',
@@ -293,7 +296,7 @@ export const ICONS = {
   /** A speech bubble: asking an agent. */
   ask: '<svg viewBox="0 0 16 16"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/><path d="M5.5 6.5h5M5.5 8.5h3"/></svg>',
   broadcast: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="1.5"/><path d="M5 5a4.2 4.2 0 0 0 0 6M11 5a4.2 4.2 0 0 1 0 6M3 3a7 7 0 0 0 0 10M13 3a7 7 0 0 1 0 10"/></svg>',
-  tag: '<svg viewBox="0 0 16 16"><path d="M2.5 2.5h5l6 6-5 5-6-6z"/><circle cx="5.5" cy="5.5" r="1"/></svg>',
+  tag: '<svg viewBox="0 0 16 16"><path d="M3.5 3.5h4l5 5-4 4-5-5z"/><rect x="5" y="5" width="2" height="2" rx=".5" fill="currentColor" stroke="none"/></svg>',
   rename: '<svg viewBox="0 0 16 16"><path d="M2.5 12.5H6l6.5-6.5-3-3-7 7z"/></svg>',
   // Into a window of its own (an arrow leaving a frame open at its corner), and back (an arrow going in).
   detach: '<svg viewBox="0 0 16 16"><path d="M7.5 2.5h-5v11h11v-5"/><path d="M10.5 2.5h3v3M13.5 2.5l-6 6"/></svg>',
@@ -319,10 +322,15 @@ export const ICONS = {
   sun: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.8"/><path d="M8 1.8v1.4M8 12.8v1.4M1.8 8h1.4M12.8 8h1.4M3.6 3.6l1 1M11.4 11.4l1 1M3.6 12.4l1-1M11.4 4.6l1-1"/></svg>',
   moon: '<svg viewBox="0 0 16 16"><path d="M13 9.6A5.5 5.5 0 0 1 6.4 3 5.5 5.5 0 1 0 13 9.6z"/></svg>',
   /** A speech bubble with a prompt's chevron: what you asked an agent. */
+  /** The agent views (compact.js), one window each: Minimal, a prompt and an answer; Compact, a dot and a line per step; Full, the shell prompt. */
+  viewMinimal: '<svg viewBox="0 0 16 16"><path d="M2.5 3.5h11v9h-11z"/><path d="M8.5 6.5h3M4.5 9.5h5"/></svg>',
+  viewCompact: '<svg viewBox="0 0 16 16"><path d="M2.5 3.5h11v9h-11z"/><rect x="4" y="5" width="1" height="1" fill="currentColor" stroke="none"/><rect x="4" y="7" width="1" height="1" fill="currentColor" stroke="none"/><rect x="4" y="9" width="1" height="1" fill="currentColor" stroke="none"/><path d="M6.5 5.5h5M6.5 7.5h4M6.5 9.5h5"/></svg>',
+  viewFull: '<svg viewBox="0 0 16 16"><path d="M2.5 3.5h11v9h-11z"/><path d="M5 6.5l1.5 1.5L5 9.5M8.5 9.5h2.5"/></svg>',
   /** A small caret beside a button's icon: it opens a menu. Drawn for 8px. */
   caret: '<svg viewBox="0 0 8 8"><path d="M1.5 3l2.5 2.5L6.5 3"/></svg>',
   /** A tick in a menu's hint column, drawn for 12px. */
   tick: '<svg viewBox="0 0 12 12"><path d="M2.5 6.5l2 2 5-5"/></svg>',
+  prompts: '<svg viewBox="0 0 16 16"><path d="M2.5 3.5h11v6h-6l-3 3v-3h-2z"/><path d="M5.5 5.5h5M5.5 7.5h3"/></svg>',
   /** Braces: a snippet (as on termilly.com). */
   snippet: '<svg viewBox="0 0 16 16"><path d="M6.5 2.5h-1a1 1 0 0 0-1 1v3L3 8l1.5 1.5v3a1 1 0 0 0 1 1h1M9.5 2.5h1a1 1 0 0 1 1 1v3L13 8l-1.5 1.5v3a1 1 0 0 1-1 1h-1"/></svg>',
   /** A lightning bolt: an action (as on termilly.com). */
@@ -339,31 +347,6 @@ export const ICONS = {
   launch: '<svg viewBox="0 0 16 16"><path d="M7.5 3.5h-4v9h9v-4M9.5 3.5h3v3M12.5 3.5l-5 5"/></svg>',
   monitor: '<svg viewBox="0 0 16 16"><rect x="1.5" y="2.5" width="13" height="8.5" rx="1.5"/><path d="M5.5 13.5h5M8 11v2.5"/></svg>',
 };
-
-/**
- * A terminal's header buttons (header.js) and its view menu (compact.js): one rounded set, 1px lines on half pixels,
- * all the same height: rows 3 to 13 (line centres 3.5 to 13.5), columns 2 to 14, centred on 8.5. Round ends and joins
- * (class round, app.css).
- * @param {string} paths
- */
-const roundIcon = paths => `<svg class="round" viewBox="0 0 16 16">${paths}</svg>`;
-/** The window every agent view is drawn in: the box's full height. */
-const VIEW_FRAME = '<rect x="2.5" y="3.5" width="12" height="10" rx="2.5"/>';
-export const HEADER_ICONS = Object.freeze({
-  more: roundIcon('<circle cx="3.5" cy="8.5" r="1.5" fill="currentColor" stroke="none"/><circle cx="8.5" cy="8.5" r="1.5" fill="currentColor" stroke="none"/><circle cx="13.5" cy="8.5" r="1.5" fill="currentColor" stroke="none"/>'),
-  // The agent views, one window each: Minimal, a prompt and an answer; Compact, a dot and a line per step; Full, the shell prompt.
-  viewMinimal: roundIcon(`${VIEW_FRAME}<path d="M9.5 6.5h3M4.5 10.5h4"/>`),
-  viewCompact: roundIcon(`${VIEW_FRAME}<path d="M4.5 6.5h0M4.5 8.5h0M4.5 10.5h0M6.5 6.5h6M6.5 8.5h3M6.5 10.5h4"/>`),
-  viewFull: roundIcon(`${VIEW_FRAME}<path d="M5.5 6.5l2 2-2 2M9.5 10.5h3"/>`),
-  /** A speech bubble with lines: what you asked an agent. Its tail reaches the box's bottom row. */
-  prompts: roundIcon('<path d="M4.5 3.5h8a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-4l-3 3v-3h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2z"/><path d="M5.5 5.5h6M5.5 8.5h3"/>'),
-  todo: roundIcon('<circle cx="3.5" cy="4.5" r="1" fill="currentColor"/><circle cx="3.5" cy="8.5" r="1"/><circle cx="3.5" cy="12.5" r="1"/><path d="M7.5 4.5h7M7.5 8.5h7M7.5 12.5h5"/>'),
-  tag: roundIcon('<path d="M2.5 6.5v-3h5l6 6-4 4z"/><circle cx="5.5" cy="6.5" r="1"/>'),
-  /** Set aside: an arrow down onto a line, into the workspace's list. */
-  aside: roundIcon('<path d="M8.5 3.5v7M5.5 7.5l3 3 3-3M2.5 13.5h12"/>'),
-  close: roundIcon('<path d="M3.5 3.5l10 10M13.5 3.5l-10 10"/>'),
-  stop: roundIcon('<rect x="5" y="5" width="7" height="7" rx="2" fill="currentColor" stroke="none"/>'),
-});
 
 /**
  * Formats a past timestamp: "14:05" today, "yesterday 18:40", "Mon 09:12", or a date.

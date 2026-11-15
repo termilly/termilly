@@ -10,7 +10,7 @@ import { send, onHost } from './host.js';
 import { state, on, runningAgent, runsClaude, persist, EVENTS } from './store.js';
 import { AGENT_STATE, COMPACT_LIMIT, COMPACT_VERB, CLAUDE_TOOL } from './constants.js';
 import { agentKind } from './agentkinds.js';
-import { escapeHtml, ICONS, HEADER_ICONS } from './ui.js';
+import { escapeHtml, ICONS } from './ui.js';
 import { showMenu } from './popups.js';
 import { find } from './dom.js';
 import { agentInput, fontStack } from './terminals.js';
@@ -29,9 +29,9 @@ export const COMPACT_VIEW = Object.freeze({ minimal: 'minimal', compact: 'compac
 
 /** Each view as the view button and its menu show it. */
 const VIEWS = Object.freeze([
-  { view: COMPACT_VIEW.minimal, label: 'Minimal', icon: HEADER_ICONS.viewMinimal, title: 'Only your prompts and the agent’s final answers, with a prompt box' },
-  { view: COMPACT_VIEW.compact, label: 'Compact', icon: HEADER_ICONS.viewCompact, title: 'One line per step, with a prompt box' },
-  { view: COMPACT_VIEW.full, label: 'Full', icon: HEADER_ICONS.viewFull, title: 'The agent’s own screen' },
+  { view: COMPACT_VIEW.minimal, label: 'Minimal', icon: ICONS.viewMinimal, title: 'Only your prompts and the agent’s final answers, with a prompt box' },
+  { view: COMPACT_VIEW.compact, label: 'Compact', icon: ICONS.viewCompact, title: 'One line per step, with a prompt box' },
+  { view: COMPACT_VIEW.full, label: 'Full', icon: ICONS.viewFull, title: 'The agent’s own screen' },
 ]);
 
 /** The header's view button (header.js has it). */
