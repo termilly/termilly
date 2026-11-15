@@ -50,17 +50,17 @@ export const TENTHS_BELOW_MS = 10 * SECOND_MS;
  * A terminal's tab.commands: its prompts (xterm markers), the latest, the input start, the reported command line and
  * the last finished commands.
  * @typedef {{ prompts: any[], promptMarker: any, input: InputStart | null, reported: string | null,
- *   log: CommandRun[], shell: string | null }} CommandsState
+ *   log: CommandRun[], shell?: string | null }} CommandsState
  */
 
 /**
  * What the shell's marks have told this module about a terminal, kept here: its prompts (for jumping), the latest
  * one, where the typed input started, the command line the shell reported (bash's PS0), the last commands, and the
- * kind of shell the latest prompt said it was (SHELL_KIND).
+ * kind of shell the latest prompt said it was (SHELL_KIND; null when it didn't say, undefined before any prompt).
  * @param {Tab} tab
  * @returns {CommandsState}
  */
-const commandsOf = tab => (tab.commands ??= { prompts: [], promptMarker: null, input: null, reported: null, log: [], shell: null });
+const commandsOf = tab => (tab.commands ??= { prompts: [], promptMarker: null, input: null, reported: null, log: [] });
 
 /**
  * The shell reported the command line it's about to run (OSC 633;E): it beats reading what was typed.
@@ -97,26 +97,33 @@ export function promptStarted(tab, mark = '') {
 }
 
 /**
- * The kind of shell at a terminal's prompt (SHELL_KIND): what its prompt said, or else what its profile starts; null
- * when neither tells (a custom profile).
+ * The kind of shell at a terminal's prompt (SHELL_KIND): what its prompt said; before any prompt, what its profile
+ * starts. Null when that isn't known: a prompt that doesn't say (Termilly's own integrations all do, so it's another
+ * shell, such as one on a server ssh went to, or fish's own marks), or a custom profile.
  * @param {Tab} tab
  * @returns {string | null}
  */
 export function shellKind(tab) {
-  if (tab.commands?.shell) return tab.commands.shell;
+  if (tab.commands && tab.commands.shell !== undefined) return tab.commands.shell;
   const icon = state.profiles.find(p => p.id === tab.profile)?.icon ?? '';
   return KIND_OF_ICON[/** @type {keyof typeof KIND_OF_ICON} */ (icon)] ?? null;
 }
 
 /**
  * Whether a terminal waits at a cmd prompt: cmd marks its prompt and input but not when a command starts or ends
- * (cmdcommands.js has Enter start it).
+ * (cmdcommands.js has Enter start it). The cursor is still on the line typed after the prompt (or rows it wrapped
+ * onto): a command sent some other way (a paste, a snippet) has moved it on, and Enter in the program it started
+ * isn't a command.
  * @param {Tab} tab
  */
 export function atCmdPrompt(tab) {
   const input = tab.commands?.input;
-  return tab.commands?.shell === SHELL_KIND.cmd && !tab.running && !!input?.marker && !input.marker.isDisposed
-    && tab.view?.term?.buffer.active.type === NORMAL_BUFFER;
+  const buffer = tab.view?.term?.buffer.active;
+  if (tab.commands?.shell !== SHELL_KIND.cmd || tab.running || !input?.marker || input.marker.isDisposed || buffer?.type !== NORMAL_BUFFER) return false;
+  const row = buffer.baseY + buffer.cursorY;
+  if (row < input.marker.line) return false;
+  for (let y = input.marker.line + 1; y <= row; y++) if (!buffer.getLine(y)?.isWrapped) return false;
+  return true;
 }
 
 /**

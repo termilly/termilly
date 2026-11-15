@@ -81,11 +81,11 @@ test('words on the screen: newest first, unique, without quotes or brackets, sta
 
 test('a shell gets its own commands, never only another shell\'s, and older ones without a shell after its own', () => {
   const index = indexRuns([
-    { command: 'dir /s', cwd: 'C:\a', exitCode: 0, at: now - 5 * hour, shell: 'cmd' },
-    { command: 'Get-ChildItem -Recurse', cwd: 'C:\a', exitCode: 0, at: now - 60_000, shell: 'powershell' },
-    { command: 'dir /b', cwd: 'C:\a', exitCode: 0, at: now - 60_000, shell: null },
+    { command: 'dir /s', cwd: 'C:/a', exitCode: 0, at: now - 5 * hour, shell: 'cmd' },
+    { command: 'Get-ChildItem -Recurse', cwd: 'C:/a', exitCode: 0, at: now - 60_000, shell: 'powershell' },
+    { command: 'dir /b', cwd: 'C:/a', exitCode: 0, at: now - 60_000, shell: null },
   ]);
-  const where = { cwd: 'C:\a', now };
+  const where = { cwd: 'C:/a', now };
   assert.deepEqual(suggest(index, 'dir', { ...where, shell: 'cmd', limit: 5 }).map(s => s.command), ['dir /s', 'dir /b']);
   assert.equal(bestFor(index, 'Get', { ...where, shell: 'cmd' }), null);
   assert.equal(bestFor(index, 'Get', { ...where, shell: 'powershell' })?.command, 'Get-ChildItem -Recurse');
