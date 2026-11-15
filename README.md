@@ -21,7 +21,7 @@ Termilly groups your terminals into workspaces, brings them back after a restart
   <a href="https://github.com/termilly/termilly/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/termilly/termilly/ci.yml?branch=main&label=CI" alt="CI"></a>
 </p>
 
-![Termilly with a workspace of four terminals: a dev server, tests, git and a production database](docs/images/workspace.png)
+<p align="center"><a href="https://termilly.com"><img src="docs/images/tour.gif" alt="A tour of Termilly: agents working together, To do, Files, Notepad, Clipboard, Snippets and customizing it"></a></p>
 
 ## What it does
 
