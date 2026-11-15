@@ -263,6 +263,8 @@ export const ICONS = {
   // Drawn on the pixel grid for 16px at a 1px stroke (menus show them that way): straight lines sit on .5, dots
   // are whole-pixel squares, so they stay sharp instead of smearing across two pixels.
   cross: '<svg viewBox="0 0 16 16"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></svg>',
+  // Set aside (js/panes.js setAsideTab): a line low down, as a window's minimize, into the workspace's list.
+  setAside: '<svg viewBox="0 0 16 16"><path d="M3.5 11.5h9"/></svg>',
   more: '<svg viewBox="0 0 16 16"><rect x="3" y="7" width="2" height="2" rx=".5" fill="currentColor" stroke="none"/><rect x="7" y="7" width="2" height="2" rx=".5" fill="currentColor" stroke="none"/><rect x="11" y="7" width="2" height="2" rx=".5" fill="currentColor" stroke="none"/></svg>',
   hash: '<svg viewBox="0 0 16 16"><path d="M6.5 3v10M10.5 3v10M3 6.5h10M3 10.5h10"/></svg>',
   puzzle: '<svg viewBox="0 0 16 16"><path d="M6.5 3a1.5 1.5 0 0 1 3 0v1.5h3v3H11a1.5 1.5 0 0 0 0 3h1.5v3h-3V12a1.5 1.5 0 0 0-3 0v1.5h-4v-3H4a1.5 1.5 0 0 0 0-3H2.5v-3h4z"/></svg>',
@@ -317,6 +319,14 @@ export const ICONS = {
   sun: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.8"/><path d="M8 1.8v1.4M8 12.8v1.4M1.8 8h1.4M12.8 8h1.4M3.6 3.6l1 1M11.4 11.4l1 1M3.6 12.4l1-1M11.4 4.6l1-1"/></svg>',
   moon: '<svg viewBox="0 0 16 16"><path d="M13 9.6A5.5 5.5 0 0 1 6.4 3 5.5 5.5 0 1 0 13 9.6z"/></svg>',
   /** A speech bubble with a prompt's chevron: what you asked an agent. */
+  /** The agent views (compact.js): Minimal, a prompt and an answer; Compact, a dot and a line per step; Full, the terminal. */
+  viewMinimal: '<svg viewBox="0 0 16 16"><path d="M7.5 3.5h6M2.5 8.5h11M2.5 11.5h8"/></svg>',
+  viewCompact: '<svg viewBox="0 0 16 16"><rect x="2" y="3" width="2" height="1" fill="currentColor" stroke="none"/><rect x="2" y="6" width="2" height="1" fill="currentColor" stroke="none"/><rect x="2" y="9" width="2" height="1" fill="currentColor" stroke="none"/><rect x="2" y="12" width="2" height="1" fill="currentColor" stroke="none"/><path d="M5.5 3.5h8M5.5 6.5h6M5.5 9.5h8M5.5 12.5h5"/></svg>',
+  viewFull: '<svg viewBox="0 0 16 16"><path d="M2.5 3.5h11v9h-11z"/><path d="M5 6.5l1.5 1.5L5 9.5M8.5 9.5h2.5"/></svg>',
+  /** A small caret beside a button's icon: it opens a menu. Drawn for 8px. */
+  caret: '<svg viewBox="0 0 8 8"><path d="M1.5 3l2.5 2.5L6.5 3"/></svg>',
+  /** A tick in a menu's hint column, drawn for 12px. */
+  tick: '<svg viewBox="0 0 12 12"><path d="M2.5 6.5l2 2 5-5"/></svg>',
   prompts: '<svg viewBox="0 0 16 16"><path d="M2.5 2.5h11v8h-6l-3 2.5v-2.5h-2z"/><path d="M5.5 5.5h5M5.5 7.5h3"/></svg>',
   /** Braces: a snippet (as on termilly.com). */
   snippet: '<svg viewBox="0 0 16 16"><path d="M6.5 2.5h-1a1 1 0 0 0-1 1v3L3 8l1.5 1.5v3a1 1 0 0 0 1 1h1M9.5 2.5h1a1 1 0 0 1 1 1v3L13 8l-1.5 1.5v3a1 1 0 0 1-1 1h-1"/></svg>',

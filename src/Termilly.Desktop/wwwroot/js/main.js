@@ -13,7 +13,7 @@ import { setKeyHandler, scheduleFit, clearActivity, keptRunning, holdOpening, op
 import { consoleDefaults } from './consolecolors.js';
 import {
   newTab, closeTab, focusedTab, splitFocused, moveFocus, renderAll, switchWorkspace, restoreFocus, noteOutput,
-  cycleGroupTab, moveAllToTabs, reopenWindows, DIRECTION,
+  cycleGroupTab, moveAllToTabs, reopenWindows, setAsideTab, DIRECTION,
 } from './panes.js';
 import { initSidebar, toggleSidebar } from './sidebar.js';
 import { initToolbar } from './toolbar.js';
@@ -141,6 +141,7 @@ const commands = {
   splitRight: () => splitFocused(SPLIT.row),
   splitDown: () => splitFocused(SPLIT.column),
   closeTerminal: () => { const tab = focusedTab(); if (tab) closeTab(tab); },
+  setAsideTerminal: () => { const tab = focusedTab(); if (tab) setAsideTab(tab); },
   renameTerminal: () => { const tab = focusedTab(); if (tab) beginRename(tab); },
   tagTerminal: () => {
     const tab = focusedTab();
@@ -188,6 +189,7 @@ setCommands(() => [
   { label: 'Rename terminal', keywords: 'tab name title', hint: keyHint(KEY_ID.renameTerminal), run: commands.renameTerminal },
   { label: 'Tag terminal', keywords: 'label tags', run: commands.tagTerminal },
   { label: 'Close terminal', keywords: 'tab kill', hint: keyHint(KEY_ID.closeTerminal), run: commands.closeTerminal },
+  { label: 'Set aside terminal', keywords: 'hide park keep later pause minimize', run: commands.setAsideTerminal },
   { label: 'New workspace', keywords: 'project group', hint: keyHint(KEY_ID.newWorkspace), run: commands.newWorkspace },
   { label: 'Toggle workspace sidebar', keywords: 'navigator hide show rail', hint: keyHint(KEY_ID.toggleSidebar), run: commands.toggleSidebar },
   { label: 'Agents: next terminal that needs me', keywords: 'inbox waiting attention jump claude', hint: keyHint(KEY_ID.nextNeedingMe), run: () => setTimeout(commands.nextNeedingMe) },
@@ -402,6 +404,9 @@ function runShortcut(e) {
 
 let swallowKeypress = false;
 
+/** The compact view's prompt box (js/compact.js). */
+const COMPACT_INPUT = '.cv-input';
+
 /** xterm's key hook. Returns false to stop xterm from sending the key to the shell. */
 setKeyHandler(e => {
   if (e.type === 'keypress' && swallowKeypress) {
@@ -415,10 +420,11 @@ setKeyHandler(e => {
 });
 
 // Shortcuts when no terminal has focus (e.g. an empty workspace), except while typing in a field; in a detached
-// window too.
+// window too. The compact view's prompt box stands in for its terminal, so they work there as in the terminal.
 inEachDocument(doc => doc.addEventListener('keydown', e => {
-  // The target may be the document itself, which has no closest().
-  if (/** @type {HTMLElement} */ (e.target).closest?.('.xterm, input, select, textarea')) return;
+  // The target may be the document itself, which has no closest(). The prompt box is inside its terminal's element.
+  const target = /** @type {HTMLElement} */ (e.target);
+  if (!target.closest?.(COMPACT_INPUT) && target.closest?.('.xterm, input, select, textarea')) return;
   if (runShortcut(e)) e.preventDefault();
 }));
 

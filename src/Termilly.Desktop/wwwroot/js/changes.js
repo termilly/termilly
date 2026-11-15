@@ -82,12 +82,20 @@ export function resolveIn(place, text) {
  * @param {string} text
  */
 export function openChange(tab, text) {
-  resolvePath(tab, text).then(reply => {
-    if (reply.folder && reply.path) send(PAGE.openPath, { path: reply.path });
-    else if (reply.path && WEB_PAGE.test(reply.path)) send(PAGE.openPage, { path: reply.path });
-    else if (reply.path) showChange(tab, reply.path, { line: reply.line ?? null });
-    else showMessage(tab, reply.error ?? 'File not found.');
-  });
+  resolvePath(tab, text).then(reply => openResolved(tab, reply));
+}
+
+/**
+ * Opens what a path was found to lead to: a file's change in the preview, a folder in the file manager, a web page in
+ * the browser; says so when it leads nowhere.
+ * @param {Tab} tab
+ * @param {import('./protocol.js').Host_changesResolved} reply
+ */
+export function openResolved(tab, reply) {
+  if (reply.folder && reply.path) send(PAGE.openPath, { path: reply.path });
+  else if (reply.path && WEB_PAGE.test(reply.path)) send(PAGE.openPage, { path: reply.path });
+  else if (reply.path) showChange(tab, reply.path, { line: reply.line ?? null });
+  else showMessage(tab, reply.error ?? 'File not found.');
 }
 
 /**

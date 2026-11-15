@@ -103,6 +103,7 @@ internal static class MacWindows
                 Main = window;
                 _mainView = view;
                 Zoom(view, _zoom);
+                MacWindowDrag.TakeFirstClickOnTitleBar(() => _zoom);
                 Round(window, true);
                 MacPlacement.Restore(window);
                 var preferences = Send(Send(view, "configuration"), "preferences");

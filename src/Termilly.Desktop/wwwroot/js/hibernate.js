@@ -7,7 +7,8 @@
 import { PAGE } from './protocol.js';
 import { send } from './host.js';
 import { state, on, emit, activityChanged, resumeAgentCommand, EVENTS } from './store.js';
-import { typeAtPrompt } from './terminals.js';
+import { typeAtPrompt, prepareStart } from './terminals.js';
+import { beforeEnter } from './enterwait.js';
 import { AGENT_KIND, AGENT_STATE } from './constants.js';
 import { SECOND_MS, MINUTE_MS } from './util.js';
 
@@ -15,6 +16,8 @@ import { SECOND_MS, MINUTE_MS } from './util.js';
 const DEFAULT_IDLE_MS = 5 * MINUTE_MS;
 /** How long after the Esc that clears Claude Code's prompt /exit is typed. */
 const EXIT_DELAY_MS = 150;
+/** What ends Claude Code's and Codex's session. */
+const EXIT_COMMAND = '/exit';
 /** How often the agents are checked against the limit, besides when workspaces or agents change. */
 const CHECK_EVERY_MS = 30 * SECOND_MS;
 
@@ -77,11 +80,28 @@ export function markHibernated(tab, session, at = Date.now(), folder = null, kin
 function hibernate(tab) {
   const agent = /** @type {AgentInfo} */ (tab.agent);
   markHibernated(tab, /** @type {string} */ (agent.session), Date.now(), agent.folder, agent.kind);
-  // Esc clears anything half-typed at Claude Code's prompt; /exit ends the session (SessionEnd clears tab.agent).
+  // Esc clears anything half-typed at Claude Code's prompt; /exit ends the session (SessionEnd clears tab.agent). Its
+  // Enter goes after it, as the API types a prompt: Codex takes text and Enter written together for a paste, and the
+  // Enter only makes a new line there.
   send(PAGE.input, { id: tab.id, data: '\x1b' });
-  setTimeout(() => send(PAGE.input, { id: tab.id, data: '/exit\r' }), EXIT_DELAY_MS);
+  setTimeout(async () => {
+    send(PAGE.input, { id: tab.id, data: EXIT_COMMAND });
+    await beforeEnter(tab);
+    send(PAGE.input, { id: tab.id, data: '\r' });
+  }, EXIT_DELAY_MS);
   activityChanged(tab, true);
   emit(EVENTS.tab, tab);
+}
+
+/**
+ * A terminal set aside (panes.js setAsideTab): its agent ends now if it's between turns, keeping its session, or once
+ * it is (one at work finishes first, one asking waits for its answer). One that never had a turn has nothing to resume,
+ * so it keeps running.
+ * @param {Tab} tab
+ */
+export function restAside(tab) {
+  const now = tab.agent?.state;
+  if (tab.setAside && live(tab) && resumable(tab) && (now === AGENT_STATE.idle || now === AGENT_STATE.done)) hibernate(tab);
 }
 
 /**
@@ -93,9 +113,13 @@ export function wake(tab) {
   const { session, kind } = tab.hibernated;
   tab.hibernated = null;
   typeAtPrompt(tab, resumeAgentCommand(session, kind)); // after a restart its shell may still be starting
+  // Known as the terminal's session until the agent says so itself (Codex does only after a prompt): set aside or
+  // restarted before then, it isn't lost.
+  prepareStart(tab, { resumeSession: session, resumeKind: kind });
   activityChanged(tab, true);
 }
 
 on(EVENTS.workspaces, enforceLimit);
 on(EVENTS.agent, enforceLimit);
+on(EVENTS.agent, tab => { if (tab?.setAside) restAside(tab); });
 setInterval(enforceLimit, CHECK_EVERY_MS);

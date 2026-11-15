@@ -126,6 +126,23 @@ function tabRowHtml(tab, ws) {
   </button>${showsLine(tab) ? `<div class="agent-line ${escapeHtml(/** @type {AgentInfo} */ (tab.agent).state)}" data-tab="${escapeHtml(tab.id)}" title="${escapeHtml(/** @type {AgentInfo} */ (tab.agent).line)}">${escapeHtml(/** @type {AgentInfo} */ (tab.agent).line)}</div>` : ''}${subagentRowsHtml(tab)}`;
 }
 
+/**
+ * A workspace's terminals in the list: those in its layout, then those set aside (panes.js setAsideTab) under a heading
+ * of their own that folds; a click on one brings it back.
+ * @param {Workspace} ws
+ * @param {Tab[]} tabs
+ */
+function treeHtml(ws, tabs) {
+  if (!tabs.length) return '<div class="tab-empty">No terminals</div>';
+  const shown = tabs.filter(t => !t.setAside);
+  const aside = tabs.filter(t => t.setAside);
+  if (!aside.length) return shown.map(t => tabRowHtml(t, ws)).join('');
+  const open = !ws.asideCollapsed;
+  return `${shown.map(t => tabRowHtml(t, ws)).join('')}
+    <button class="aside-head${open ? ' open' : ''}" data-aside="${escapeHtml(ws.id)}" title="${open ? 'Hide' : 'Show'} the terminals set aside. Click one to bring it back" tabindex="-1">${CHEVRON}<span>Set aside</span><span class="ws-count">${aside.length}</span></button>
+    ${open ? `<div class="aside-rows">${aside.map(t => tabRowHtml(t, ws)).join('')}</div>` : ''}`;
+}
+
 /** A tab name keeps at least this much room before its tags collapse to the first one and "+N". */
 const MIN_NAME_WIDTH = 72;
 
@@ -189,7 +206,7 @@ export function render() {
           ${costMode() === costDisplay.cost && workspaceCost(ws) >= 0.005 ? `<span class="ws-cost" title="What this workspace’s agents have cost so far">${dollars(workspaceCost(ws))}</span>` : ''}<span class="ws-count">${tabs.length}</span>
           ${i < 9 ? `<span class="ws-key"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>${i + 1}</kbd></span>` : ''}
         </div>
-        ${open ? `<div class="tab-tree">${tabs.length ? tabs.map(t => tabRowHtml(t, ws)).join('') : '<div class="tab-empty">No terminals</div>'}</div>` : ''}
+        ${open ? `<div class="tab-tree">${treeHtml(ws, tabs)}</div>` : ''}
       </div>`;
   }).join('');
 
@@ -240,7 +257,7 @@ function showFlyout(tile) {
   flyout.dataset.ws = ws.id;
   flyout.innerHTML = `<div class="fly-head"><span class="ws-dot" style="background:${cssColor(ws.color)}"></span>${escapeHtml(ws.name)}
       ${i < 9 ? `<span class="fly-key"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>${i + 1}</kbd></span>` : ''}</div>
-    ${tabs.length ? tabs.map(t => tabRowHtml(t, ws)).join('') : '<div class="tab-empty">No terminals</div>'}`;
+    ${treeHtml(ws, tabs)}`;
   const r = tile.getBoundingClientRect();
   flyout.style.left = `${r.right + 10}px`;
   flyout.style.top = `${Math.min(r.top - 6, innerHeight - flyout.offsetHeight - 8)}px`;
@@ -389,6 +406,20 @@ function onNoteClick(e) {
   return true;
 }
 
+/**
+ * Folds or unfolds a workspace's terminals set aside; true when the click was on their heading.
+ * @param {MouseEvent} e
+ */
+function onAsideClick(e) {
+  const head = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-aside]'));
+  const ws = head ? wsById(head.dataset.aside) : undefined;
+  if (!ws) return false;
+  ws.asideCollapsed = !ws.asideCollapsed || undefined;
+  render();
+  persist();
+  return true;
+}
+
 /** @param {MouseEvent} e */
 function onTabClick(e) {
   const port = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-port]'));
@@ -418,7 +449,7 @@ list.addEventListener('click', e => {
     }
     return;
   }
-  if (onNoteClick(e) || onMoreTagsClick(e) || onTabClick(e)) return;
+  if (onAsideClick(e) || onNoteClick(e) || onMoreTagsClick(e) || onTabClick(e)) return;
   const row = /** @type {HTMLElement | null} */ (targetOf(e).closest(WS_ROW));
   if (row && !targetOf(e).closest('input')) switchWorkspace(/** @type {string} */ (row.dataset.ws));
 });
@@ -468,7 +499,7 @@ flyout.addEventListener('mouseleave', e => {
   if (!sidebar.contains(/** @type {Node | null} */ (e.relatedTarget))) hideFlyout();
 });
 flyout.addEventListener('click', e => {
-  if (onMoreTagsClick(e)) return;
+  if (onMoreTagsClick(e) || onAsideClick(e)) return;
   if (onNoteClick(e) || onTabClick(e)) hideFlyout();
 });
 
