@@ -65,6 +65,8 @@ import './phone.js';
 import './snippetprompt.js';
 // After snippetprompt.js: while `snippet:` keys are held there, autocomplete doesn't see them.
 import { toggleSuggestions } from './autocomplete.js';
+// After autocomplete.js: Enter its list takes doesn't start a cmd command.
+import './cmdcommands.js';
 import './cost.js';
 import './quit.js';
 import './gitstatus.js';

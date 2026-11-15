@@ -343,7 +343,7 @@ public sealed class SessionProfileTests : IDisposable
         // Quiet where Termilly's own integration is installed (a WSL distribution set up), which reports them itself.
         Assert.StartsWith("""$([ -n "$__termilly_loaded" ] || printf '\e]633;E;%s\a\e]133;C\a' "$(HISTTIMEFORMAT=""", vars["PS0"]);
         Assert.Contains("""[ -n "$__termilly_loaded" ] || { """, vars["PROMPT_COMMAND"]);
-        Assert.Contains("""printf '\033]133;D;%s\007\033]133;A\007' "$__termilly_status"; }""", vars["PROMPT_COMMAND"]);
+        Assert.Contains("""printf '\033]133;D;%s\007\033]133;A;shell=bash\007' "$__termilly_status"; }""", vars["PROMPT_COMMAND"]);
         // bash before 4.4 has no PS0: the first prompt sets a DEBUG trap that marks commands instead; a prompt arms it.
         Assert.Contains("-lt 404", vars["PROMPT_COMMAND"]);
         Assert.EndsWith("__termilly_ready=1", vars["PROMPT_COMMAND"]);
@@ -470,8 +470,8 @@ public sealed class SessionProfileTests : IDisposable
         var noScript = Path.Combine(_dir, "missing.ps1");
         var (commandLine, vars) = SessionLaunch.WithShellIntegration(cmd, new Dictionary<string, string> { ["PROMPT"] = "$T $P$G" }, noScript);
         Assert.Equal("cmd.exe", commandLine);
-        Assert.Equal(@"$e]133;A$e\$T $P$G$e]133;B$e\", vars["PROMPT"]);
-        Assert.Equal(@"$e]133;A$e\$P$G$e]133;B$e\", SessionLaunch.CmdPrompt(null));
+        Assert.Equal(@"$e]133;A;shell=cmd$e\$T $P$G$e]133;B$e\", vars["PROMPT"]);
+        Assert.Equal(@"$e]133;A;shell=cmd$e\$P$G$e]133;B$e\", SessionLaunch.CmdPrompt(null));
     }
 
     [Fact]

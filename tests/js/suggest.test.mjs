@@ -78,3 +78,17 @@ test('words on the screen: newest first, unique, without quotes or brackets, sta
   assert.deepEqual(screenWords(lines, '', 2), ['api-7d9f8c6b5-x2kqp', 'worker-5c8d7f9b4-lm3nz']);
   assert.deepEqual(screenWords(['ab ok', '---- ===='], '', 5), []);
 });
+
+test('a shell gets its own commands, never only another shell\'s, and older ones without a shell after its own', () => {
+  const index = indexRuns([
+    { command: 'dir /s', cwd: 'C:\a', exitCode: 0, at: now - 5 * hour, shell: 'cmd' },
+    { command: 'Get-ChildItem -Recurse', cwd: 'C:\a', exitCode: 0, at: now - 60_000, shell: 'powershell' },
+    { command: 'dir /b', cwd: 'C:\a', exitCode: 0, at: now - 60_000, shell: null },
+  ]);
+  const where = { cwd: 'C:\a', now };
+  assert.deepEqual(suggest(index, 'dir', { ...where, shell: 'cmd', limit: 5 }).map(s => s.command), ['dir /s', 'dir /b']);
+  assert.equal(bestFor(index, 'Get', { ...where, shell: 'cmd' }), null);
+  assert.equal(bestFor(index, 'Get', { ...where, shell: 'powershell' })?.command, 'Get-ChildItem -Recurse');
+  // A shell nobody can tell (a custom profile) gets everything.
+  assert.equal(suggest(index, '', { ...where, limit: 5 }).length, 3);
+});

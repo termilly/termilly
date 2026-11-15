@@ -22,24 +22,27 @@ const WORD_EDGE = /^[\s"'`([{<]+|[\s"'`)\]}>,;:.!?]+$/g;
 
 /**
  * A command from the history (CommandHistory.cs), as the host sends it.
- * @typedef {{ command: string, exitCode?: number | null, at: number, cwd?: string | null, host?: string | null }} RanCommand
+ * @typedef {{ command: string, exitCode?: number | null, at: number, cwd?: string | null, host?: string | null,
+ *   shell?: string | null }} RanCommand
  */
 
 /**
  * Everything known about one command line: how often and when it ran, the folders it ran in (as folderKey has them),
- * and whether it worked.
+ * whether it worked, the kinds of shell that ran it, and whether a run didn't say (older history).
  * @typedef {{ command: string, count: number, lastAt: number, ok: boolean, lastFailed: boolean,
- *   folders: Set<string>, here: boolean }} Known
+ *   folders: Set<string>, here: boolean, shells: Set<string>, anyShell: boolean }} Known
  */
 
 /**
  * A suggestion: the command, its score, and what the list says about it.
- * @typedef {{ command: string, score: number, here: boolean, failed: boolean, count: number, at: number, elsewhere: boolean }} Suggestion
+ * otherShell: it's not known to have run in this kind of shell (older history), so it comes after those that did.
+ * @typedef {{ command: string, score: number, here: boolean, failed: boolean, count: number, at: number, elsewhere: boolean,
+ *   otherShell: boolean }} Suggestion
  */
 
 /**
- * Where the terminal is, for ranking: its folder and repository, and the time.
- * @typedef {{ cwd?: string | null, root?: string | null, now: number }} Where
+ * Where the terminal is, for ranking: its folder and repository, its kind of shell, and the time.
+ * @typedef {{ cwd?: string | null, root?: string | null, shell?: string | null, now: number }} Where
  */
 
 /** @returns {Map<string, Known>} */
@@ -66,7 +69,7 @@ const folderKey = path => path.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCa
 export function addRun(index, run) {
   const command = run.command?.trim();
   if (!suggestible(command)) return;
-  const known = index.get(command) ?? { command, count: 0, lastAt: 0, ok: false, lastFailed: false, folders: new Set(), here: false };
+  const known = index.get(command) ?? { command, count: 0, lastAt: 0, ok: false, lastFailed: false, folders: new Set(), here: false, shells: new Set(), anyShell: false };
   known.count++;
   const failed = !!run.exitCode;
   if (!failed) known.ok = true;
@@ -76,6 +79,8 @@ export function addRun(index, run) {
   }
   if (!run.host) known.here = true;
   if (run.cwd) known.folders.add(folderKey(run.cwd));
+  if (run.shell) known.shells.add(run.shell);
+  else known.anyShell = true;
   index.set(command, known);
 }
 
@@ -93,14 +98,17 @@ export function indexRuns(runs) {
  * Where, with its folders as folderKey has them (worked out once for a whole index).
  * @param {Where} where
  */
-const keyed = ({ cwd, root, now }) => ({ cwd: cwd ? folderKey(cwd) : '', root: root ? folderKey(root) : '', now });
+const keyed = ({ cwd, root, shell, now }) => ({ cwd: cwd ? folderKey(cwd) : '', root: root ? folderKey(root) : '', shell: shell ?? '', now });
 
 /**
  * @param {Known} known
- * @param {{ cwd: string, root: string, now: number }} where folders as folderKey has them
- * @returns {Suggestion}
+ * Null for a command only other kinds of shell ran (PowerShell's Get-ChildItem at cmd's prompt).
+ * @param {{ cwd: string, root: string, shell: string, now: number }} where folders as folderKey has them
+ * @returns {Suggestion | null}
  */
-function scored(known, { cwd, root, now }) {
+function scored(known, { cwd, root, shell, now }) {
+  const otherShell = !!shell && !known.shells.has(shell);
+  if (otherShell && !known.anyShell) return null;
   const here = !!cwd && known.folders.has(cwd);
   const repo = !!root && [...known.folders].some(f => f === root || f.startsWith(`${root}/`));
   const recency = 2 ** (-(now - known.lastAt) / HALF_LIFE_MS);
@@ -108,11 +116,12 @@ function scored(known, { cwd, root, now }) {
   const elsewhere = !known.here;
   const score = (here ? HERE_BONUS : repo ? REPO_BONUS : 0) + Math.log2(1 + known.count) + 2 * recency
     - (failed ? FAILED_PENALTY : known.lastFailed ? 1 : 0) - (elsewhere ? ELSEWHERE_PENALTY : 0);
-  return { command: known.command, score, here, failed: known.lastFailed, count: known.count, at: known.lastAt, elsewhere };
+  return { command: known.command, score, here, failed: known.lastFailed, count: known.count, at: known.lastAt, elsewhere, otherShell };
 }
 
-/** Better first: the higher score, then the newer. */
-const better = (/** @type {Suggestion} */ a, /** @type {Suggestion} */ b) => b.score - a.score || b.at - a.at;
+/** Better first: one known in this kind of shell, then the higher score, then the newer. */
+const better = (/** @type {Suggestion} */ a, /** @type {Suggestion} */ b) =>
+  Number(a.otherShell) - Number(b.otherShell) || b.score - a.score || b.at - a.at;
 
 /**
  * The commands for what's typed, best first: those that start with it (more than it), then, for the list, those
@@ -124,13 +133,17 @@ const better = (/** @type {Suggestion} */ a, /** @type {Suggestion} */ b) => b.s
  */
 export function suggest(index, typed, { limit, anywhere = false, ...where }) {
   const at = keyed(where);
+  /** @type {Suggestion[]} */
   const starts = [];
+  /** @type {Suggestion[]} */
   const contains = [];
   const lower = typed.toLowerCase();
   for (const known of index.values()) {
     if (known.command === typed) continue;
-    if (known.command.startsWith(typed)) starts.push(scored(known, at));
-    else if (anywhere && typed.trim() && known.command.toLowerCase().includes(lower)) contains.push(scored(known, at));
+    const into = known.command.startsWith(typed) ? starts
+      : anywhere && typed.trim() && known.command.toLowerCase().includes(lower) ? contains : null;
+    const s = into && scored(known, at);
+    if (s) into.push(s);
   }
   return [...starts.sort(better), ...contains.sort(better)].slice(0, limit);
 }
@@ -149,7 +162,7 @@ export function bestFor(index, typed, where) {
   for (const known of index.values()) {
     if (known.command === typed || !known.command.startsWith(typed)) continue;
     const s = scored(known, at);
-    if (!best || better(s, best) < 0) best = s;
+    if (s && (!best || better(s, best) < 0)) best = s;
   }
   return best;
 }

@@ -15,7 +15,7 @@ __termilly_precmd() {
     PATH="$TERMILLY_AGENT_DIR:$PATH"
   fi
   printf '\033]7;file://%s%s\007' "$HOST" "$PWD"
-  printf '\033]133;D;%s\007\033]133;A\007' "$st"
+  printf '\033]133;D;%s\007\033]133;A;shell=zsh\007' "$st"
 }
 
 # Before each command: its line (on one line: the mark ends at a newline), then the command starts.

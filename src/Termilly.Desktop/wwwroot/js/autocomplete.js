@@ -16,6 +16,7 @@ import { escapeHtml } from './ui.js';
 import { find, XTERM_SCREEN } from './dom.js';
 import { timeAgo } from './util.js';
 import { repoAt, folderOfTab } from './reposnippets.js';
+import { shellKind } from './commands.js';
 import { newIndex, indexRuns, addRun, bestFor, suggest, nextWord, partialWord, screenWords } from './suggest.js';
 
 /** How many commands and screen words the list shows. */
@@ -84,7 +85,7 @@ onHost(HOST.history, () => { history.loaded = false; });
 // A command run here counts at once, before the history is read again.
 on(EVENTS.commandEnding, (/** @type {{ tab: Tab, exitCode: number | null }} */ { tab, exitCode }) => {
   const run = tab.running;
-  if (run?.command && !tab.noHistory) addRun(history.index, { command: run.command, exitCode, at: run.startedAt, cwd: run.cwd });
+  if (run?.command && !tab.noHistory) addRun(history.index, { command: run.command, exitCode, at: run.startedAt, cwd: run.cwd, shell: shellKind(tab) });
 });
 on(EVENTS.commandStarted, (/** @type {Tab} */ tab) => {
   if (ghost.tab === tab) hideGhost();
@@ -119,7 +120,7 @@ export function lineAt(tab) {
 }
 
 /** @param {Tab} tab */
-const whereOf = tab => ({ cwd: tab.cwd ?? null, root: repoAt(folderOfTab(tab))?.root ?? null, now: Date.now() });
+const whereOf = tab => ({ cwd: tab.cwd ?? null, root: repoAt(folderOfTab(tab))?.root ?? null, shell: shellKind(tab), now: Date.now() });
 
 /** Works the grey text and the list out again once the terminal has drawn what came. */
 function schedule() {

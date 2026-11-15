@@ -885,7 +885,7 @@ function shellMark(tab, data) {
       commandEnded(tab, code === undefined || code === '' ? null : Number(code));
     } else {
       if (tab.running) commandEnded(tab, null); // a prompt without an end mark: the command ended unreported
-      promptStarted(tab);
+      promptStarted(tab, data);
       remotePrompt(tab);
     }
     endCommand(tab);
