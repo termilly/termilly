@@ -263,8 +263,11 @@ export const ICONS = {
   // Drawn on the pixel grid for 16px at a 1px stroke (menus show them that way): straight lines sit on .5, dots
   // are whole-pixel squares, so they stay sharp instead of smearing across two pixels.
   cross: '<svg viewBox="0 0 16 16"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></svg>',
-  // Set aside (js/panes.js setAsideTab): a line low down, as a window's minimize, into the workspace's list.
-  setAside: '<svg viewBox="0 0 16 16"><path d="M3.5 11.5h9"/></svg>',
+  // Set aside (js/panes.js setAsideTab): a line low down, as a window's minimize, into the workspace's list. On the
+  // bottom row of the 10px-tall box the terminal header's icons share (rows 3 to 12), as are close, tag and prompts.
+  setAside: '<svg viewBox="0 0 16 16"><path d="M3.5 12.5h9"/></svg>',
+  /** Closing a terminal, from its header: as tall as the header's other icons (ICONS.close is the 10px one panels use). */
+  closeTerminal: '<svg viewBox="0 0 16 16"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9"/></svg>',
   more: '<svg viewBox="0 0 16 16"><rect x="3" y="7" width="2" height="2" rx=".5" fill="currentColor" stroke="none"/><rect x="7" y="7" width="2" height="2" rx=".5" fill="currentColor" stroke="none"/><rect x="11" y="7" width="2" height="2" rx=".5" fill="currentColor" stroke="none"/></svg>',
   hash: '<svg viewBox="0 0 16 16"><path d="M6.5 3v10M10.5 3v10M3 6.5h10M3 10.5h10"/></svg>',
   puzzle: '<svg viewBox="0 0 16 16"><path d="M6.5 3a1.5 1.5 0 0 1 3 0v1.5h3v3H11a1.5 1.5 0 0 0 0 3h1.5v3h-3V12a1.5 1.5 0 0 0-3 0v1.5h-4v-3H4a1.5 1.5 0 0 0 0-3H2.5v-3h4z"/></svg>',
@@ -278,7 +281,7 @@ export const ICONS = {
   stop: '<svg viewBox="0 0 16 16"><rect x="4.5" y="4.5" width="7" height="7" rx="1.5"/></svg>',
   chevronDown: '<svg viewBox="0 0 16 16"><path d="M3.5 6L8 10.5 12.5 6"/></svg>',
   pin: '<svg viewBox="0 0 16 16"><path d="M5.5 2.5h5M6.5 2.5v5l-2 2v1h7v-1l-2-2v-5M8 10.5v4"/></svg>',
-  todo: '<svg viewBox="0 0 16 16"><path d="M1.5 3.5l1 1 2-2M1.5 8.5l1 1 2-2M1.5 13.5l1 1 2-2M7.5 3.5h7M7.5 8.5h7M7.5 13.5h7"/></svg>',
+  todo: '<svg viewBox="0 0 16 16"><path d="M2.5 5.5l1 1 2-2M2.5 8.5l1 1 2-2M2.5 11.5l1 1 2-2M7.5 5.5h6M7.5 8.5h6M7.5 11.5h6"/></svg>',
   chevronLeft: '<svg viewBox="0 0 16 16"><path d="M10 3.5L5.5 8l4.5 4.5"/></svg>',
   chevronRight: '<svg viewBox="0 0 16 16"><path d="M6 3.5L10.5 8 6 12.5"/></svg>',
   folder: '<svg viewBox="0 0 16 16"><path d="M2.5 4.5a1 1 0 0 1 1-1h3l1 1h5a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1z"/></svg>',
@@ -293,7 +296,7 @@ export const ICONS = {
   /** A speech bubble: asking an agent. */
   ask: '<svg viewBox="0 0 16 16"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/><path d="M5.5 6.5h5M5.5 8.5h3"/></svg>',
   broadcast: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="1.5"/><path d="M5 5a4.2 4.2 0 0 0 0 6M11 5a4.2 4.2 0 0 1 0 6M3 3a7 7 0 0 0 0 10M13 3a7 7 0 0 1 0 10"/></svg>',
-  tag: '<svg viewBox="0 0 16 16"><path d="M2.5 2.5h5l6 6-5 5-6-6z"/><circle cx="5.5" cy="5.5" r="1"/></svg>',
+  tag: '<svg viewBox="0 0 16 16"><path d="M3.5 3.5h4l5 5-4 4-5-5z"/><rect x="5" y="5" width="2" height="2" rx=".5" fill="currentColor" stroke="none"/></svg>',
   rename: '<svg viewBox="0 0 16 16"><path d="M2.5 12.5H6l6.5-6.5-3-3-7 7z"/></svg>',
   // Into a window of its own (an arrow leaving a frame open at its corner), and back (an arrow going in).
   detach: '<svg viewBox="0 0 16 16"><path d="M7.5 2.5h-5v11h11v-5"/><path d="M10.5 2.5h3v3M13.5 2.5l-6 6"/></svg>',
@@ -327,7 +330,7 @@ export const ICONS = {
   caret: '<svg viewBox="0 0 8 8"><path d="M1.5 3l2.5 2.5L6.5 3"/></svg>',
   /** A tick in a menu's hint column, drawn for 12px. */
   tick: '<svg viewBox="0 0 12 12"><path d="M2.5 6.5l2 2 5-5"/></svg>',
-  prompts: '<svg viewBox="0 0 16 16"><path d="M2.5 2.5h11v8h-6l-3 2.5v-2.5h-2z"/><path d="M5.5 5.5h5M5.5 7.5h3"/></svg>',
+  prompts: '<svg viewBox="0 0 16 16"><path d="M2.5 3.5h11v6h-6l-3 3v-3h-2z"/><path d="M5.5 5.5h5M5.5 7.5h3"/></svg>',
   /** Braces: a snippet (as on termilly.com). */
   snippet: '<svg viewBox="0 0 16 16"><path d="M6.5 2.5h-1a1 1 0 0 0-1 1v3L3 8l1.5 1.5v3a1 1 0 0 0 1 1h1M9.5 2.5h1a1 1 0 0 1 1 1v3L13 8l-1.5 1.5v3a1 1 0 0 1-1 1h-1"/></svg>',
   /** A lightning bolt: an action (as on termilly.com). */
