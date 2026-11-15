@@ -11,6 +11,7 @@ import { state, on, EVENTS } from './store.js';
 import { PAGE, HOST } from './protocol.js';
 import { send, onHost } from './host.js';
 import { addInputHook } from './terminals.js';
+import { chordOf, commandOf } from './keymap.js';
 import { escapeHtml } from './ui.js';
 import { find, XTERM_SCREEN } from './dom.js';
 import { timeAgo } from './util.js';
@@ -41,11 +42,12 @@ const history = { index: newIndex(), loaded: false, asked: false };
 /**
  * The grey text: the terminal it's in and the rest of the command it shows. The terminal typed in last is the one
  * that gets it.
- * waiting: a key went to the shell and its echo hasn't come yet, so the line on screen is out of date and nothing
- * is offered (→ right after a letter would otherwise take the rest of the old line).
- * @type {{ tab: Tab | null, rest: string, active: Tab | null, waiting: boolean, timer: number }}
+ * pending: keys (and text taken from here) gone to the shell whose echo hasn't come yet; while there are any, the line
+ * on screen is out of date and nothing is offered (→ right after a letter would otherwise take the rest of the old
+ * line). Each write the terminal draws counts as one echo; a timer clears the rest (a key with no echo).
+ * @type {{ tab: Tab | null, rest: string, active: Tab | null, pending: number, timer: number }}
  */
-const ghost = { tab: null, rest: '', active: null, waiting: false, timer: 0 };
+const ghost = { tab: null, rest: '', active: null, pending: 0, timer: 0 };
 /** @type {WeakMap<Tab, HTMLElement>} */
 const ghostEls = new WeakMap();
 
@@ -131,7 +133,7 @@ function schedule() {
 function update() {
   if (list.tab) renderList();
   const tab = ghost.active;
-  if (!tab || !hasFocus(tab) || ghost.waiting) return hideGhost();
+  if (!tab || !hasFocus(tab) || ghost.pending) return hideGhost();
   const line = lineAt(tab);
   if (line) askHistory();
   const best = line && !line.after ? bestFor(history.index, line.typed, whereOf(tab)) : null;
@@ -209,7 +211,9 @@ function hideGhost() {
  */
 function type(tab, text) {
   hideGhost();
-  if (text) /** @type {TabView} */ (tab.view).term.input(text, true);
+  if (!text) return;
+  waitForEcho();
+  /** @type {TabView} */ (tab.view).term.input(text, true);
 }
 
 /**
@@ -269,9 +273,6 @@ export function toggleSuggestions(focused) {
   }
   const line = lineAt(tab);
   if (!line || line.after) return false;
-  // Its own keys didn't go to the shell: there's no echo to wait for.
-  clearTimeout(ghost.timer);
-  ghost.waiting = false;
   askHistory();
   Object.assign(list, { tab, index: 0 });
   ghost.active = tab;
@@ -303,7 +304,7 @@ function renderList() {
   const line = tab && lineAt(tab);
   if (!tab || !line || line.after || !hasFocus(tab)) return closeList();
   // Until the echo of the last key has come, the rows stay as they are (and can't be taken).
-  if (ghost.waiting) return;
+  if (ghost.pending) return;
   list.typed = line.typed;
   list.items = itemsFor(tab, line.typed);
   list.index = Math.min(list.index, Math.max(0, list.items.length - 1));
@@ -338,7 +339,7 @@ function take(i) {
   const tab = list.tab;
   const line = tab && lineAt(tab);
   // The line changed since the rows were worked out: they're worked out again first.
-  if (tab && line && !line.after && (ghost.waiting || line.typed !== list.typed)) {
+  if (tab && line && !line.after && (ghost.pending || line.typed !== list.typed)) {
     renderList();
     return;
   }
@@ -382,7 +383,8 @@ addInputHook((tab, term, e) => {
   ghost.active = tab;
   const used = (list.tab === tab && listKey(e)) || (ghost.tab === tab && !!ghost.rest && ghostKey(tab, e));
   if (!used) {
-    if (!MODIFIER_KEYS.has(e.key)) waitForEcho();
+    // A modifier alone changes nothing, and an app shortcut (this list's own) doesn't go to the shell.
+    if (!MODIFIER_KEYS.has(e.key) && !commandOf(chordOf(e))) waitForEcho();
     return true;
   }
   e.preventDefault();
@@ -392,14 +394,19 @@ addInputHook((tab, term, e) => {
 /** A key is on its way to the shell: the grey text goes until what it changed is on screen. */
 function waitForEcho() {
   hideGhost();
-  ghost.waiting = true;
+  ghost.pending++;
   clearTimeout(ghost.timer);
-  ghost.timer = window.setTimeout(echoed, ECHO_WAIT_MS);
+  ghost.timer = window.setTimeout(() => echoed(ghost.pending), ECHO_WAIT_MS);
 }
 
-function echoed() {
+/**
+ * Echoes came: once none is awaited, the grey text and the list are worked out again.
+ * @param {number} count
+ */
+function echoed(count) {
+  ghost.pending = Math.max(0, ghost.pending - count);
+  if (ghost.pending) return;
   clearTimeout(ghost.timer);
-  ghost.waiting = false;
   schedule();
 }
 
@@ -411,7 +418,7 @@ on(EVENTS.terminalOpened, (/** @type {Tab} */ tab) => {
     if (ghost.active === tab || list.tab === tab) schedule();
   };
   term.onWriteParsed(() => {
-    if (ghost.waiting && ghost.active === tab) echoed();
+    if (ghost.pending && ghost.active === tab) echoed(1);
     changed();
   });
   term.onCursorMove(changed);
