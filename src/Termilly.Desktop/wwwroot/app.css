@@ -1458,8 +1458,9 @@ body[data-sidebar="rail"] .side-rail { opacity: 1; pointer-events: auto; }
 .pane:hover .pane-btn, .pane.focused .pane-btn { opacity: 1; }
 .pane-btn:hover, .pane-btn.open { background: var(--hover); color: var(--text); opacity: 1; }
 .pane-btn svg { width: 10px; height: 10px; stroke-width: 1.4; }
-/* The terminal header's icons (js/header.js) are drawn for 16px at a 1px line, all in the same 10px-tall box. */
-.pane-btn:is(.menu-btn, .note-btn, .tag-btn, .prompts-btn, .aside-btn, .close-btn) svg { width: 16px; height: 16px; stroke-width: 1; }
+/* The header's rounded set (js/ui.js HEADER_ICONS): every one 16px at a 1px line, Stop and close too, all as tall. */
+svg.round, .pane-header .view-caret svg { stroke-linecap: round; stroke-linejoin: round; }
+.pane-header .pane-btn svg.round { width: 16px; height: 16px; stroke-width: 1; }
 /* Only while the terminal has a note. */
 .pane-btn:is(.note-btn, .td-note-btn, .prompts-btn, .view-btn)[hidden] { display: none; }
 /* The agent view button (compact.js): the view's 16px icon and an 8px caret, both drawn for those sizes. */

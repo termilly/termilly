@@ -5,7 +5,7 @@
 // are modules of their own.
 
 import { state, on, activityOf, EVENTS, wsById } from './store.js';
-import { tabBadgeHtml, tagChipHtml, escapeHtml, ICONS, activityHtml } from './ui.js';
+import { tabBadgeHtml, tagChipHtml, escapeHtml, ICONS, HEADER_ICONS, activityHtml } from './ui.js';
 import { closeTab, setAsideTab, setHeaderBuilder, SET_ASIDE_LABEL } from './panes.js';
 import { isCandidate, isReceiving, toggleReceiver } from './broadcast.js';
 import { notesFor, noteTitle, firstLine, editHostNote, NOTE_KIND } from './notes.js';
@@ -43,14 +43,14 @@ const HEADER_HTML = `
     <button class="rec-chip log-chip" title="Logging to a file" hidden><span class="rec-dot"></span>LOG</button>
     <button class="bc-toggle" hidden></button>
     <span class="pane-actions">
-      <button class="pane-btn agent-stop-btn" title="Stop the agent (Esc)" hidden>${ICONS.stop}<span>Stop</span></button>
-      <button class="pane-btn menu-btn" title="Terminal menu">${ICONS.more}</button>
+      <button class="pane-btn agent-stop-btn" title="Stop the agent (Esc)" hidden>${HEADER_ICONS.stop}<span>Stop</span></button>
+      <button class="pane-btn menu-btn" title="Terminal menu">${HEADER_ICONS.more}</button>
       <button class="pane-btn view-btn" aria-haspopup="menu" hidden></button>
-      <button class="pane-btn prompts-btn" title="${PROMPTS_TITLE}" hidden>${ICONS.prompts}</button>
-      <button class="pane-btn note-btn" hidden>${ICONS.todo}</button>
-      <button class="pane-btn tag-btn" title="Tags">${ICONS.tag}</button>
-      <button class="pane-btn aside-btn" title="${SET_ASIDE_LABEL}">${ICONS.setAside}</button>
-      <button class="pane-btn close-btn" title="Close terminal (Ctrl+Shift+W)">${ICONS.closeTerminal}</button>
+      <button class="pane-btn prompts-btn" title="${PROMPTS_TITLE}" hidden>${HEADER_ICONS.prompts}</button>
+      <button class="pane-btn note-btn" hidden>${HEADER_ICONS.todo}</button>
+      <button class="pane-btn tag-btn" title="Tags">${HEADER_ICONS.tag}</button>
+      <button class="pane-btn aside-btn" title="${SET_ASIDE_LABEL}">${HEADER_ICONS.aside}</button>
+      <button class="pane-btn close-btn" title="Close terminal (Ctrl+Shift+W)">${HEADER_ICONS.close}</button>
     </span>`;
 
 setHeaderBuilder(tab => buildHeader(tab));
