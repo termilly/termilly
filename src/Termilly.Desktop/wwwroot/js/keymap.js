@@ -33,6 +33,7 @@ export const KEYMAP = Object.freeze([
   ['renameTerminal', 'Terminals', 'Rename terminal', 'Ctrl+Shift+R'],
   ['splitRight', 'Terminals', 'Split right', 'Alt+Shift+='],
   ['splitDown', 'Terminals', 'Split down', 'Alt+Shift+-'],
+  ['suggestions', 'Terminals', 'Command suggestions at the prompt', 'Ctrl+Shift+Space'],
   ['broadcastWorkspace', 'Terminals', 'Broadcast input to the workspace (on / off)', 'Ctrl+Shift+I'],
   ['newWorkspace', 'Workspaces', 'New workspace', 'Ctrl+Shift+N'],
   ['toggleSidebar', 'Workspaces', 'Show or hide the sidebar', 'Ctrl+Shift+B'],
