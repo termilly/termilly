@@ -3670,8 +3670,12 @@ button.sb-item:hover, button.sb-item.open { background: var(--hover); color: var
 .sp-foot .spacer { flex: 1; }
 .sp-foot button { height: 24px; padding: 0 9px; border-radius: 5px; color: var(--muted); }
 .sp-foot button:hover { background: var(--hover); color: var(--text); }
-.sw-group { display: flex; align-items: baseline; gap: 8px; }
-.sw-group span { overflow: hidden; text-overflow: ellipsis; }
+.sw-group { display: flex; align-items: center; gap: 6px; border-radius: 6px; cursor: pointer; user-select: none; }
+.sw-group:hover { color: var(--text); }
+.sw-group .cw-chev svg { fill: none; stroke: currentColor; }
+.sw-group.open .cw-chev svg { transform: rotate(90deg); }
+.sw-group-name { overflow: hidden; text-overflow: ellipsis; }
+.sw-group-count { color: var(--faint); font-weight: 400; letter-spacing: 0; }
 .sw-group code { margin-left: auto; color: var(--faint); font: 10px var(--term-font); letter-spacing: 0; text-transform: none; }
 .sw-row.from-file .sw-name { color: var(--muted); }
 .sw-title { margin: 0 0 2px; color: var(--text-strong); font-size: 15px; font-weight: 600; }

@@ -8,7 +8,7 @@
 import { state, on, persist, EVENTS } from './store.js';
 import { focusedTab, restoreFocus } from './panes.js';
 import { closeAll, dropdown } from './popups.js';
-import { escapeHtml } from './ui.js';
+import { escapeHtml, ICONS } from './ui.js';
 import { modal, CONFIRM_DIALOG } from './dialogs.js';
 import { fuzzyMatch } from './fuzzy.js';
 import { PAGE } from './protocol.js';
@@ -94,7 +94,9 @@ let selectedId = null;
 /** @type {Draft | null} */
 let draft = null; // a new snippet not saved yet: { id, name, command, description, enter, where }
 /** @type {Entry[]} */
-let shown = []; // the rows in the list's order
+let shown = []; // the rows in the list's order (not those in a closed group)
+/** The groups closed by hand (their where); while searching, every group with a match is open. */
+const collapsed = new Set();
 
 const isOpen = () => !layer.hidden || isDetached(WINDOW_KEY);
 
@@ -116,15 +118,17 @@ function everySnippet() {
 }
 
 /**
- * A group's heading: where its snippets come from, and the file.
+ * A group's heading: where its snippets come from, how many, and the file; a click opens or closes it.
  * @param {string} where
+ * @param {number} count
+ * @param {boolean} open
  */
-function groupHtml(where) {
+function groupHtml(where, count, open) {
   const repo = repoHere();
   const [title, file] = where === SNIPPET_SCOPE.global ? [THIS_COMPUTER, '']
     : where === SNIPPET_SCOPE.task ? ['VS Code tasks', TASKS_FILE]
       : where === SNIPPET_SCOPE.shared ? [repo?.name ?? 'This repo', LAYOUT_FILE] : [repo?.name ?? 'This repo', REPO_FILE];
-  return `<div class="sw-group"><span>${escapeHtml(title)}</span>${file ? `<code>${file}</code>` : ''}</div>`;
+  return `<div class="sw-group${open ? ' open' : ''}" data-group="${escapeHtml(where)}" role="button" aria-expanded="${open}"><span class="cw-chev">${ICONS.chevronRight}</span><span class="sw-group-name">${escapeHtml(title)}</span><span class="sw-group-count">${count}</span>${file ? `<code>${file}</code>` : ''}</div>`;
 }
 
 /** @returns {Entry | null} */
@@ -135,29 +139,64 @@ function current() {
 
 // ---- The list ----
 
+/** @param {Entry} e */
+const rowHtml = e => `<div class="sw-row${e.s.id === selectedId ? ' selected' : ''}${isFromFile(e) ? ' from-file' : ''}" role="option" data-id="${escapeHtml(e.s.id)}" aria-selected="${e.s.id === selectedId}">
+      <span class="sw-name">${escapeHtml(e.s.name || 'New snippet')}</span>
+      <code class="sw-cmd">${escapeHtml(e.s.command || ' ')}</code>
+    </div>`;
+
+/**
+ * The rows that match, by group in their order.
+ * @param {Entry[]} rows
+ * @returns {Map<string, Entry[]>}
+ */
+function byGroup(rows) {
+  const groups = new Map();
+  for (const e of rows) groups.set(e.where, [...(groups.get(e.where) ?? []), e]);
+  return groups;
+}
+
 function renderList() {
   const q = searchEl.value.trim();
   const all = everySnippet();
   if (draft) all.unshift({ s: draft, where: draft.where, isDraft: true });
-  shown = all.filter(e => e.isDraft || !q || fuzzyMatch(q, `${e.s.name} ${e.s.command} ${e.s.description ?? ''}`));
+  const matching = all.filter(e => e.isDraft || !q || fuzzyMatch(q, `${e.s.name} ${e.s.command} ${e.s.description ?? ''}`));
   const saved = all.filter(e => !e.isDraft && !isFromFile(e)).length;
   $('.sw-count').textContent = `${saved} snippet${saved === 1 ? '' : 's'}`;
-  /** @type {string | null} */
-  let group = null;
-  listEl.innerHTML = shown.length ? shown.map(e => {
-    const heading = e.where !== group ? groupHtml(e.where) : '';
-    group = e.where;
-    return `${heading}<div class="sw-row${e.s.id === selectedId ? ' selected' : ''}${isFromFile(e) ? ' from-file' : ''}" role="option" data-id="${escapeHtml(e.s.id)}" aria-selected="${e.s.id === selectedId}">
-      <span class="sw-name">${escapeHtml(e.s.name || 'New snippet')}</span>
-      <code class="sw-cmd">${escapeHtml(e.s.command || ' ')}</code>
-    </div>`;
-  }).join('') : `<p class="set-desc sw-empty">${q ? 'No snippet matches.' : 'No snippets yet. Make one with New snippet, or use “Save the last command as a snippet” in a terminal’s menu.'}</p>`;
+  shown = [];
+  let html = '';
+  for (const [where, rows] of byGroup(matching)) {
+    const open = !!q || !collapsed.has(where);
+    html += groupHtml(where, rows.length, open);
+    if (open) html += rows.map(rowHtml).join('');
+    if (open) shown.push(...rows);
+  }
+  listEl.innerHTML = matching.length ? html : `<p class="set-desc sw-empty">${q ? 'No snippet matches.' : 'No snippets yet. Make one with New snippet, or use “Save the last command as a snippet” in a terminal’s menu.'}</p>`;
   listEl.querySelector('.sw-row.selected')?.scrollIntoView({ block: 'nearest' });
+}
+
+/**
+ * Opens a closed group, or closes an open one.
+ * @param {string} where
+ */
+function toggleGroup(where) {
+  if (!collapsed.delete(where)) collapsed.add(where);
+  renderList();
+}
+
+/**
+ * Opens the group a snippet is in (one picked from elsewhere, or a new one).
+ * @param {string | null} id
+ */
+function openGroupOf(id) {
+  const e = id && (draft?.id === id ? { where: draft.where } : everySnippet().find(x => x.s.id === id));
+  if (e) collapsed.delete(e.where);
 }
 
 /** @param {string | null} id */
 function select(id) {
   if (id === selectedId) return;
+  openGroupOf(id);
   // A new snippet that's left (saved or not) is done with.
   if (draft && draft.id === selectedId) draft = null;
   selectedId = id;
@@ -533,6 +572,8 @@ on(EVENTS.workspaces, () => { if (isOpen() && !saving) renderList(); });
 // ---- Mouse and keys ----
 
 box.addEventListener('click', e => {
+  const group = /** @type {HTMLElement | null} */ (targetOf(e).closest('.sw-group'));
+  if (group) { toggleGroup(/** @type {string} */ (group.dataset.group)); return; }
   const row = /** @type {HTMLElement | null} */ (targetOf(e).closest('.sw-row'));
   if (row) { go(/** @type {string} */ (row.dataset.id), { focusList: true }); return; }
   const action = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-sw]'))?.dataset.sw;
