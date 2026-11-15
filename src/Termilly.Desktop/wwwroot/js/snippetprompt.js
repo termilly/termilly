@@ -8,7 +8,7 @@
 // the normal screen (not vim's), in a terminal with its own shell (not a tmux pane).
 
 import { on, EVENTS } from './store.js';
-import { setInputHook, isTerminalReply } from './terminals.js';
+import { addInputHook, isTerminalReply } from './terminals.js';
 import { allSnippets, placeholders, runSnippetIn, scopeLabel } from './snippets.js';
 import { escapeHtml } from './ui.js';
 import { find, XTERM_SCREEN } from './dom.js';
@@ -86,7 +86,7 @@ function take() {
   runSnippetIn(snippet, tab).then(sent => { if (sent) untouched.delete(tab); });
 }
 
-setInputHook((tab, term, e) => {
+addInputHook((tab, term, e) => {
   if (e.type !== 'keydown' || e.isComposing) return true;
   if (held.tab && held.tab !== tab) release();
   const keep = held.tab ? holdKey(e) : startHolding(tab, term, e);

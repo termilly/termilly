@@ -1,5 +1,5 @@
 // @ts-check
-// Settings › Change preview: how Claude's edits are shown, where from, and how.
+// Settings › Change preview: how agents' edits are shown, where from, and how.
 
 import { state } from '../store.js';
 import { ICONS } from '../ui.js';
@@ -19,9 +19,9 @@ const CHANGES = {
   html: () => {
     const s = state.settings;
     return group('', row('Change preview',
-      'See Claude’s whole edit, coloured for the file’s language.',
+      'See the agent’s whole edit, coloured for the file’s language.',
       toggle('changes.enabled'))
-      + (s.agents.integration ? '' : `<p class="set-desc set-note">Agent integration is off (Terminal), so Termilly doesn’t hear about Claude’s edits.
+      + (s.agents.integration ? '' : `<p class="set-desc set-note">Agent integration is off (Terminal), so Termilly doesn’t hear about agents’ edits.
         Ctrl+click on a path still works, comparing the file with the last commit.</p>`))
       + `<div class="${s.changes.enabled ? '' : 'set-off'}">`
       + group('Open it from', row('Ctrl+click a path', 'Paths in a terminal’s output open the preview.', toggle('changes.links'))
@@ -29,19 +29,19 @@ const CHANGES = {
         + row('Shortcut and palette', 'Ctrl+Shift+D shows the last change.', toggle('changes.shortcut')))
       + group('Where it opens', row('Placement', 'A pane, a panel over the right edge, or a window.',
         seg('changes.placement', [[changePlacement.split, 'Pane'], [changePlacement.panel, 'Side panel'], [changePlacement.float, 'Floating']]))
-        + row('When Claude changes another file', 'Offer the new file, or switch to it.',
+        + row('When the agent changes another file', 'Offer the new file, or switch to it.',
           seg('changes.follow', [[changeFollow.offer, 'Offer it'], [changeFollow.follow, 'Follow']])))
       + group('Where changes come from', row('Source',
-        'Copies around each edit, Git, or Claude’s own edit text.',
+        'Copies around each edit, Git, or the agent’s own edit text (Claude Code).',
         seg('changes.source', [[changeSource.path, 'File path'], [changeSource.git, 'Git'], [changeSource.fullEdits, 'Full edit']]), { stack: true })
         + row('Files changed by shell commands',
-          'Also list files Claude changes with a command.',
+          'Also list files the agent changes with a command.',
           toggle('changes.shellFiles')))
-      + group('View', row('Compare', 'All of Claude’s edits since the first, or the last one (the Git window’s Agent changes).',
+      + group('View', row('Compare', 'All of the agent’s edits since the first, or the last one (the Git window’s Agent changes).',
           seg('changes.compare', [[changeCompare.session, 'All edits'], [changeCompare.lastEdit, 'Last edit']]))
         + row('New files open as', 'The file itself, or a diff with every line added.',
           seg('changes.newFile', [[changeNewFile.file, 'The file'], [changeNewFile.diff, 'A diff']]))
-        + row('Keep the list', 'Until you clear it, or also when Claude starts a new session.',
+        + row('Keep the list', 'Until you clear it, or also when the agent starts a new session.',
           seg('changes.keep', [[changeKeep.terminal, 'Until I clear it'], [changeKeep.perSession, 'Per session']]))
         + row('Lines around a change', '', seg('changes.context', choices(changeContext.all, String)))
         + row('Layout', 'Side by side shows the old and new text in two columns.', seg('changes.layout', [[changeLayout.inline, 'Inline'], [changeLayout.sideBySide, 'Side by side']]))

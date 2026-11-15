@@ -33,6 +33,10 @@ internal sealed record TerminalSettings
     public bool ProgramClipboard { get; init; } = true;
     /// <summary>Selecting text in a terminal copies it.</summary>
     public bool CopyOnSelect { get; init; }
+    /// <summary>At a shell prompt, the rest of a command from history in grey after the cursor (js/autocomplete.js).</summary>
+    public bool Autocomplete { get; init; } = true;
+    /// <summary>The autocomplete list also offers words on the screen.</summary>
+    public bool AutocompleteScreenWords { get; init; } = true;
     /// <summary>What opens a web address in a terminal’s output (js/weblinks.js): Ctrl+click, or a plain click.</summary>
     public string LinkClick { get; init; } = SettingValues.LinkClick.Default;
     /// <summary>The terminal colour scheme's id (js/themes.js); null: the theme's own.</summary>

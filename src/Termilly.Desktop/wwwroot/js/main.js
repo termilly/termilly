@@ -63,6 +63,10 @@ import './subagents.js';
 import './notify.js';
 import './phone.js';
 import './snippetprompt.js';
+// After snippetprompt.js: while `snippet:` keys are held there, autocomplete doesn't see them.
+import { toggleSuggestions } from './autocomplete.js';
+// After autocomplete.js: Enter its list takes doesn't start a cmd command.
+import './cmdcommands.js';
 import './cost.js';
 import './quit.js';
 import './gitstatus.js';
@@ -358,7 +362,8 @@ const RUN = {
   [KEY_ID.inbox]: commands.inbox, [KEY_ID.search]: commands.search, [KEY_ID.commandHistory]: commands.commandHistory,
   [KEY_ID.previousPrompt]: commands.previousPrompt, [KEY_ID.nextPrompt]: commands.nextPrompt, [KEY_ID.goTo]: commands.goTo,
   [KEY_ID.settings]: commands.settings, [KEY_ID.hints]: toggleHints, [KEY_ID.scratch]: toggleScratch, [KEY_ID.notepad]: toggleNotepadFromKeys, [KEY_ID.todo]: toggleTodo,
-  [KEY_ID.schedules]: toggleSchedules, [KEY_ID.clips]: toggleClips, [KEY_ID.snippets]: toggleSnippetPick, [KEY_ID.files]: () => toggleFiles(), [KEY_ID.git]: openGitHere,
+  [KEY_ID.schedules]: toggleSchedules, [KEY_ID.clips]: toggleClips, [KEY_ID.snippets]: toggleSnippetPick, [KEY_ID.suggestions]: () => toggleSuggestions(focusedTab()),
+   [KEY_ID.files]: () => toggleFiles(), [KEY_ID.git]: openGitHere,
   [KEY_ID.agentChanges]: () => {
     if (!changeShortcutOn()) return false;
     if (isPreviewOpen()) closePreview(); else openAgentChanges(focusedTab());

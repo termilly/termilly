@@ -152,6 +152,15 @@ export function cantImplement(ref) {
   return tab && isSsh(tab) ? `Implement needs the folder this terminal is in on ${profileOf(tab)?.name ?? 'the server'}: set Termilly up there` : 'Implement needs a folder on this computer';
 }
 
+/** What Implement says on a task an agent already has: it's In progress until the agent finishes or it's taken off. */
+export const ALREADY_IMPLEMENTING = 'An agent is already on this task. Wait for it to finish, or set the task back to Open';
+
+/**
+ * Whether Implement has started on a task, so it can't start again: the task is In progress.
+ * @param {TodoTask} task
+ */
+export const implementing = task => statusOf(task) === TASK_STATUS.progress;
+
 /** Whether a list's To do shows Implement: an agent is installed here, or the list's terminal is on an SSH host. @param {ListRef} ref */
 export function offersImplement(ref) {
   const tab = ref.kind === LIST_KIND.terminal ? state.tabs.get(ref.id) : null;
@@ -224,7 +233,7 @@ export function implementTask(ref, task, sub, plan = planOf(ref)) {
  */
 export function implement(ref, task, sub, plan = planOf(ref)) {
   const place = implementPlace(ref);
-  if (!place) return { started: false, tab: null };
+  if (!place || implementing(task)) return { started: false, tab: null };
   if (plan.run === RUN.silent) {
     implementSilently(ref, task, sub, plan, place);
     return { started: true, tab: null };

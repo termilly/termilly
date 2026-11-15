@@ -7,7 +7,8 @@
 
 import { PAGE } from './protocol.js';
 import { request } from './host.js';
-import { state, wsById, defaultProfile, persist, emit, EVENTS } from './store.js';
+import { state, wsById, defaultProfile, persist, emit, EVENTS, installedAgents } from './store.js';
+import { AGENTS, agentOfProgram } from './agentkinds.js';
 import { escapeHtml, profileOptionsHtml } from './ui.js';
 import { modal, pickFolder, CONFIRM_DIALOG, FORM_DIALOG } from './dialogs.js';
 import { newTab, closeTab, focusedTab } from './panes.js';
@@ -24,6 +25,21 @@ const CLOSE_GRACE_MS = 800;
 
 function lastCommand() {
   try { return localStorage.getItem(LAST_COMMAND_KEY) ?? DEFAULT_COMMAND; } catch { return DEFAULT_COMMAND; }
+}
+
+/**
+ * The Run dropdown: the agents installed here (every agent Termilly knows when none is found), then just a shell. The
+ * one picked last time is chosen; a command remembered from before the dropdown counts as its agent.
+ */
+function agentOptionsHtml() {
+  const installed = installedAgents();
+  const kinds = installed.length ? installed : Object.keys(AGENTS);
+  const last = lastCommand();
+  const lastKind = last ? agentOfProgram(last.trim().split(/\s+/)[0]) : null;
+  const chosen = last && lastKind && kinds.includes(lastKind) ? AGENTS[lastKind].program : last ? AGENTS[kinds[0]].program : '';
+  const option = (/** @type {string} */ value, /** @type {string} */ label) =>
+    `<option value="${escapeHtml(value)}"${value === chosen ? ' selected' : ''}>${escapeHtml(label)}</option>`;
+  return [...kinds.map(kind => option(AGENTS[kind].program, AGENTS[kind].name)), option('', 'Nothing (just a shell)')].join('');
 }
 
 /**
@@ -45,7 +61,7 @@ function newWorktreeHtml(folder) {
     </label>
     <div class="dialog-field">Run
       <span class="field-row">
-        <input class="field" name="${FIELD.command}" value="${escapeHtml(lastCommand())}" placeholder="Nothing (just a shell)" spellcheck="false">
+        <select class="field" name="${FIELD.command}" aria-label="Agent">${agentOptionsHtml()}</select>
         <select class="field" name="${FIELD.profile}" aria-label="Shell">${profileOptionsHtml(defaultProfile())}</select>
       </span>
     </div>

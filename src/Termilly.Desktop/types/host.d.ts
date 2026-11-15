@@ -58,6 +58,10 @@ interface TerminalSettings {
   programClipboard: boolean;
   /** Selecting text in a terminal copies it. */
   copyOnSelect: boolean;
+  /** At a shell prompt, the rest of a command from history in grey after the cursor (js/autocomplete.js). */
+  autocomplete: boolean;
+  /** The autocomplete list also offers words on the screen. */
+  autocompleteScreenWords: boolean;
   /** What opens a web address in a terminal’s output (js/weblinks.js): Ctrl+click, or a plain click. */
   linkClick: string;
   /** The terminal colour scheme's id (js/themes.js); null: the theme's own. */

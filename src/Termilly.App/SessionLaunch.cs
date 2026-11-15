@@ -237,7 +237,7 @@ internal static class SessionLaunch
                                  $$"""[[ -n "${{Variables.AgentDir}}" && "$PATH" != "${{Variables.AgentDir}}":* ]] && PATH="${{Variables.AgentDir}}:$PATH"; """ +
                                  $"{BashMarks.Unless} {{ " +
                                  (OperatingSystem.IsWindows() ? "" : @"printf '\033]7;file://%s%s\007' ""$HOSTNAME"" ""$PWD""; ") +
-                                 @"printf '\033]133;D;%s\007\033]133;A\007' ""$__termilly_status""; }; " +
+                                 @"printf '\033]133;D;%s\007\033]133;A;shell=bash\007' ""$__termilly_status""; }; " +
                                  BashMarks.OldBashPreexec;
     }
 
@@ -369,11 +369,11 @@ internal static class SessionLaunch
 
     /// <summary>
     /// cmd's PROMPT with the marks around <paramref name="own"/> (the user's PROMPT, or cmd's default): a prompt
-    /// starts (A), and input starts (B). $e is Esc and $e\ ends each sequence. cmd can't run anything before a
+    /// starts (A, saying it's cmd's), and input starts (B). $e is Esc and $e\ ends each sequence. cmd can't run anything before a
     /// command or say how the last one ended, so there's no C or D: the host still sees its commands run.
     /// </summary>
     internal static string CmdPrompt(string? own) =>
-        $@"$e]133;A$e\{(string.IsNullOrEmpty(own) ? CmdMarks.Default : own)}$e]133;B$e\";
+        $@"$e]133;A;shell=cmd$e\{(string.IsNullOrEmpty(own) ? CmdMarks.Default : own)}$e]133;B$e\";
 
     /// <summary>
     /// cmd's command line with a doskey macro for each of <see cref="CmdMarks.PowerShells"/>: typed on its own at the

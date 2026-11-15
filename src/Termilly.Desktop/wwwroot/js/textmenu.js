@@ -7,6 +7,7 @@ import { send } from './host.js';
 import { ICONS } from './ui.js';
 import { showMenu, SEPARATOR } from './popups.js';
 import { COPY_LABEL as COPY, PASTE_LABEL, MENU_KEYS } from './termclipboard.js';
+import { typeInto } from './dom.js';
 
 const LF = '\n';
 const CRLF = '\r\n';
@@ -53,12 +54,7 @@ export function textBoxMenu(e, area, source, own) {
   const selected = start !== end;
   const selection = area.value.slice(start, end);
   /** @param {string} text */
-  const insert = text => {
-    area.focus();
-    // Types where the caret is, so Ctrl+Z takes it back. Its own window's document when it's detached: the command acts
-    // on the focus there.
-    area.ownerDocument.execCommand('insertText', false, text);
-  };
+  const insert = text => typeInto(area, text);
   /** @param {(text: string) => string} [clean] */
   const paste = (clean = t => t) => navigator.clipboard.readText().then(text => { if (text) insert(clean(text)); }).catch(() => {});
   showMenu([

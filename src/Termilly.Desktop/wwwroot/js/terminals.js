@@ -151,12 +151,19 @@ export const isTerminalReply = data => TERMINAL_REPLY.test(data);
 let keyHandler = () => true;
 
 /**
- * Keys a feature takes before the shell sees them (`snippet:` at a prompt, snippetprompt.js); false keeps a key.
- * @type {(tab: Tab, term: any, e: KeyboardEvent) => boolean}
+ * Keys features take before the shell sees them (`snippet:` at a prompt, snippetprompt.js; autocomplete,
+ * autocomplete.js), asked in the order they were added; false from one keeps a key.
+ * @type {Array<(tab: Tab, term: any, e: KeyboardEvent) => boolean>}
  */
-let inputHook = () => true;
+const inputHooks = [];
 /** @param {(tab: Tab, term: any, e: KeyboardEvent) => boolean} fn */
-export const setInputHook = fn => { inputHook = fn; };
+export const addInputHook = fn => { inputHooks.push(fn); };
+/**
+ * @param {Tab} tab
+ * @param {any} term
+ * @param {KeyboardEvent} e
+ */
+const inputHook = (tab, term, e) => inputHooks.every(hook => hook(tab, term, e));
 
 /**
  * Where typing in a terminal without its own shell goes, by its kind: a tmux pane (tmux.js), another computer's
@@ -878,7 +885,7 @@ function shellMark(tab, data) {
       commandEnded(tab, code === undefined || code === '' ? null : Number(code));
     } else {
       if (tab.running) commandEnded(tab, null); // a prompt without an end mark: the command ended unreported
-      promptStarted(tab);
+      promptStarted(tab, data);
       remotePrompt(tab);
     }
     endCommand(tab);
