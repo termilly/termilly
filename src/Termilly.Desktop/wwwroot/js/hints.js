@@ -19,7 +19,8 @@ import { find, XTERM_SCREEN } from './dom.js';
 
 const KINDS = [
   { kind: 'url', re: /\bhttps?:\/\/[^\s"'<>`]+/g },
-  { kind: 'path', re: /(?:\b[A-Za-z]:\\|\\\\)[^\s"'<>|*?]+/g },
+  // C:\..., C:/... (as Node, Git and many tools print it) or \\server\...
+  { kind: 'path', re: /(?:\b[A-Za-z]:[\\/]|\\\\)[^\s"'<>|*?]+/g },
   { kind: 'path', re: /(?:^|[\s(])((?:~|\.{1,2})?\/[\w.\-@+]+(?:\/[\w.\-@+]+)+)/g, group: 1 },
   { kind: 'hash', re: /\b[0-9a-f]{7,40}\b/g },
 ];
