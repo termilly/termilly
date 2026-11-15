@@ -39,7 +39,7 @@ export const KEYMAP = Object.freeze([
   ['toggleSidebar', 'Workspaces', 'Show or hide the sidebar', 'Ctrl+Shift+B'],
   ['nextNeedingMe', 'Agents', 'Next terminal that needs you', 'Ctrl+Shift+J'],
   ['inbox', 'Agents', 'Open the notification center', 'Ctrl+Shift+A'],
-  ['agentChanges', 'Agents', 'Show the last file Claude changed here (turn on in Change preview)', 'Ctrl+Shift+D'],
+  ['agentChanges', 'Agents', 'Show the last file the agent changed here (turn on in Change preview)', 'Ctrl+Shift+D'],
   ['search', 'App', 'Search terminals, history and output', 'Ctrl+Shift+F'],
   ['commandHistory', 'App', 'Command history (failed, in:folder)', 'Ctrl+Shift+H'],
   ['previousPrompt', 'App', 'Previous prompt', 'Ctrl+Shift+Up'],
