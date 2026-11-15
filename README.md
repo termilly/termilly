@@ -5,7 +5,11 @@
 <p align="center"><b>Every shell. One window.</b><br>
 Termilly groups your terminals into workspaces, brings them back after a restart with their output, and shows you which coding agent is waiting on you.</p>
 
-<p align="center"><a href="https://termilly.com">termilly.com</a> · <a href="https://termilly.com/downloads/">Download</a> · <a href="https://termilly.com/docs/">Docs</a></p>
+<p align="center">
+  <a href="https://termilly.com"><img src="docs/images/link-website.svg" alt="termilly.com"></a>
+  <a href="https://termilly.com/features/"><img src="docs/images/link-features.svg" alt="Features"></a>
+  <a href="https://termilly.com/docs/"><img src="docs/images/link-docs.svg" alt="Docs"></a>
+</p>
 
 <p align="center">
   <a href="https://termilly.com/downloads/latest/TermillySetup.exe"><img src="https://img.shields.io/badge/Windows-Installer-0078D4?style=for-the-badge&logoColor=white&logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNiAxNiI%2BPHBhdGggZmlsbD0iI2ZmZiIgZD0iTTAgMGg3LjV2Ny41SDB6TTguNSAwSDE2djcuNUg4LjV6TTAgOC41aDcuNVYxNkgwek04LjUgOC41SDE2VjE2SDguNXoiLz48L3N2Zz4%3D" alt="Download for Windows"></a>
