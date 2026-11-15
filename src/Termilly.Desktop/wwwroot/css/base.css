@@ -1,0 +1,210 @@
+/* Colours, the dark and light themes, fonts and the page's defaults. */
+
+:root {
+  --bg: #000000;
+  --surface: #0a0a0a;
+  --header: #0f0f0f;
+  --raised: #121212;
+  --raised-2: #171717;
+  --border: #1c1c1c;
+  --border-strong: #2e2e2e;
+  --hover: rgba(255, 255, 255, 0.07);
+  --pressed: rgba(255, 255, 255, 0.12);
+  --text: #e6e6e6;
+  --muted: #7a7a7a;
+  --faint: #555555;
+  --accent: #8b7bff;
+  --accent-soft: rgba(139, 123, 255, 0.35);
+  --accent-fill: rgba(139, 123, 255, 0.16);
+  --attention: #f2cc60;
+  --danger: #e5484d;
+  --danger-text: #ff8a8d;
+  --ok: #7ee787;
+  --text-strong: #ffffff;
+  --on-accent: #0b0b0b;
+  --hover-border: #3c3c3c;
+  --scroll-thumb: #2a2a2a;
+  --track: #2a2a2a;
+  --thumb: #ffffff;
+  --dock-fill: #4a4a4a;
+  --chip-bg: rgba(0, 0, 0, 0.75);
+  --tag-default: #8a8a8a;
+  --scrim: rgba(0, 0, 0, 0.62);
+  --shadow-pop: 0 16px 40px rgba(0, 0, 0, 0.7);
+  --shadow-modal: 0 30px 80px rgba(0, 0, 0, 0.8);
+  --term-bg: #070707;
+  --term-text: #cfcfcf;
+  --mark-bg: rgba(242, 204, 96, 0.28);
+  --hit-bg: rgba(242, 204, 96, 0.08);
+  color-scheme: dark;
+  --radius: 10px;
+  --gap: 6px;
+  --mono: Consolas, "Cascadia Mono", "DejaVu Sans Mono", monospace;
+  /* The app's own text; Settings › Appearance › App font puts a chosen family in front (settings.js). */
+  --ui-default-font: Corbel, "Segoe UI", "Noto Sans", Ubuntu, system-ui, sans-serif;
+  --ui-font: var(--ui-default-font);
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+/* Light theme (Settings › Appearance). The host window uses the same --bg, --text and --accent. */
+:root[data-theme="light"] {
+  --bg: #f3f3f5;
+  --surface: #ffffff;
+  --header: #f7f7f9;
+  --raised: #ffffff;
+  --raised-2: #f0f0f3;
+  --border: #e4e4e9;
+  --border-strong: #d0d0d8;
+  --hover: rgba(20, 20, 40, 0.06);
+  --pressed: rgba(20, 20, 40, 0.1);
+  --text: #1d1d22;
+  --muted: #686874;
+  --faint: #9b9ba6;
+  --accent: #6d5cf0;
+  --accent-soft: rgba(109, 92, 240, 0.35);
+  --accent-fill: rgba(109, 92, 240, 0.12);
+  --attention: #c98a00;
+  --danger: #d93a40;
+  --danger-text: #c4282e;
+  --ok: #1f9d3a;
+  --text-strong: #111114;
+  --on-accent: #ffffff;
+  --hover-border: #b4b4bf;
+  --scroll-thumb: #d0d0d8;
+  --track: #dcdce2;
+  --thumb: var(--accent);
+  --dock-fill: #c4c4cc;
+  --chip-bg: rgba(255, 255, 255, 0.92);
+  --tag-default: #7a7a86;
+  --scrim: rgba(30, 30, 45, 0.28);
+  --shadow-pop: 0 12px 32px rgba(30, 30, 60, 0.16);
+  --shadow-modal: 0 24px 64px rgba(30, 30, 60, 0.22);
+  --term-bg: #fafafb;
+  --term-text: #2a2a30;
+  --mark-bg: rgba(245, 190, 40, 0.38);
+  --hit-bg: rgba(245, 190, 40, 0.14);
+  color-scheme: light;
+}
+/* Tag, workspace and shell colours are pastel for a dark background; darken their text on white. */
+:root[data-theme="light"] :is(.tag, .rail-tile, .ws-tile) { color: color-mix(in srgb, var(--c) 58%, #000); }
+:root[data-theme="light"] .badge { color: color-mix(in srgb, var(--tint) 58%, #000); }
+:root[data-theme="light"] .badge[data-icon="cmd"] { --tint: #8a8a96; }
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+  font: 12px var(--ui-font);
+  /* Corbel draws old-style figures (3, 4, 9 dropping below the line); counts and times want lining ones. */
+  font-feature-settings: "lnum";
+  -webkit-font-smoothing: antialiased;
+  -webkit-user-select: none; user-select: none;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+/* One focus ring for both engines: WebKitGTK (Linux) draws its own orange one otherwise. */
+:where(button):focus { outline: none; }
+:where(button):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+kbd {
+  display: inline-block;
+  min-width: 18px;
+  padding: 1px 5px;
+  border: 1px solid var(--border-strong);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  color: var(--muted);
+  font: 10.5px var(--ui-font);
+  text-align: center;
+}
+
+code { font: 11px var(--mono); color: var(--muted); }
+
+.field {
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  outline: none;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  -webkit-user-select: text; user-select: text;
+}
+.field:focus { border-color: var(--accent); }
+select.field { padding-right: 6px; }
+.field.dropdown { display: inline-flex; align-items: center; gap: 8px; padding-right: 8px; text-align: left; cursor: default; -webkit-user-select: none; user-select: none; }
+.field.dropdown:hover { background: var(--hover); }
+.field.dropdown.open { border-color: var(--accent); }
+.dropdown-label { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.dropdown-chevron { display: grid; flex: none; place-items: center; color: var(--muted); }
+.dropdown-chevron svg { width: 12px; height: 12px; stroke-width: 1.6; }
+.popover.dropdown-menu { z-index: 3100; max-height: min(360px, calc(100vh - 32px)); overflow-y: auto; }
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  color: var(--text);
+  white-space: nowrap;
+}
+.btn:hover { background: var(--hover); }
+.btn.small { height: 26px; font-size: 12px; }
+.btn.primary { border-color: var(--accent); background: var(--accent); color: var(--on-accent); font-weight: 600; }
+.btn.primary:hover { filter: brightness(1.1); }
+.btn.primary kbd { border-color: color-mix(in srgb, var(--on-accent) 30%, transparent); color: var(--on-accent); }
+.btn.danger { border-color: var(--danger); background: var(--danger); color: #fff; font-weight: 600; }
+
+.seg { display: inline-flex; gap: 3px; padding: 3px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface); }
+.seg button { padding: 4px 12px; border-radius: 6px; color: var(--muted); }
+.seg button.on { background: var(--raised-2); color: var(--text-strong); box-shadow: inset 0 0 0 1px var(--border-strong); }
+.seg.wide { display: flex; }
+.seg.wide button { flex: 1; }
+/* The theme picker (settings.js themeCards): a small window in each theme's colours, its name under it. */
+.seg.theme-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 8px; width: 100%; padding: 0; border: 0; background: none; }
+.seg.theme-cards button { display: flex; flex-direction: column; align-items: stretch; gap: 6px; padding: 5px; border-radius: 9px; color: var(--muted); box-shadow: inset 0 0 0 1px var(--border); }
+.seg.theme-cards button:hover { background: var(--hover); color: var(--text); }
+.seg.theme-cards button.on { background: var(--accent-fill); color: var(--text-strong); box-shadow: inset 0 0 0 2px var(--accent); }
+.tc-name { overflow: hidden; padding: 0 2px; font-size: 12px; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
+.tc-win { display: flex; gap: 4px; width: 100%; height: 58px; padding: 4px; border: 1px solid var(--p-line); border-radius: 5px; background: var(--p-bg); }
+.tc-side { display: flex; flex: none; flex-direction: column; gap: 4px; width: 26px; padding: 4px; border-radius: 3px; background: var(--p-side); }
+.tc-side i { height: 3px; border-radius: 1px; background: var(--p-text); opacity: 0.6; }
+.tc-side i.on { background: var(--p-accent); opacity: 1; }
+.tc-term { display: flex; flex: 1; flex-direction: column; gap: 5px; padding: 6px; border: 1px solid var(--p-line); border-radius: 3px; background: var(--p-term); }
+.tc-term i { height: 3px; border-radius: 1px; }
+.tc-split { display: grid; width: 100%; }
+.tc-split .tc-win { grid-area: 1 / 1; }
+.tc-split .tc-win + .tc-win { clip-path: inset(0 0 0 50%); }
+
+
+.swatches { display: flex; gap: 6px; }
+.swatch { width: 18px; height: 18px; border-radius: 5px; }
+.swatch.on { outline: 2px solid var(--text); outline-offset: 2px; }
+.swatch.custom { position: relative; overflow: hidden; background: conic-gradient(#ff7b72, #f2cc60, #7ee787, #76e3ea, #79c0ff, #d2a8ff, #ff7b72); cursor: pointer; }
+.swatch.custom input { position: absolute; inset: 0; width: 100%; height: 100%; padding: 0; border: 0; opacity: 0; cursor: pointer; }

@@ -1,0 +1,272 @@
+/* The Git window; Linux and macOS window frames, the loader; settings search, updates, notes, production safety and logging. */
+
+/* ---- Big windows with a list and a side beside it: the Git window (its Agent changes are a tree), snippets ---- */
+
+.settings.changes-win { flex-direction: column; width: min(1400px, calc(100vw - 48px)); height: min(900px, calc(100vh - 60px)); }
+.changes-win .set-head { flex: none; gap: 10px; }
+.changes-win .set-close { margin-left: 0; }
+.cw-sub { overflow: hidden; color: var(--muted); font-size: 12.5px; text-overflow: ellipsis; white-space: nowrap; }
+.cw-main { display: flex; flex: 1; min-height: 0; }
+.cw-side { display: flex; flex: none; flex-direction: column; width: 320px; min-width: 200px; background: var(--surface); }
+.cw-filter { display: flex; align-items: center; gap: 4px; padding: 10px; border-bottom: 1px solid var(--border); }
+.cw-filter .field { flex: 1; min-width: 0; }
+.cw-grip { flex: none; width: 5px; margin-left: -2px; border-left: 1px solid var(--border); cursor: ew-resize; }
+.cw-grip:hover { border-left-color: var(--accent); }
+.gw-preview { display: flex; flex: 1; min-width: 0; }
+.gw-preview[hidden], .gw-right[hidden] { display: none; }
+.cw-row { display: flex; align-items: center; gap: 6px; height: 26px; padding-right: 8px; border-radius: 6px; color: var(--text); font-size: 12.5px; cursor: pointer; white-space: nowrap; }
+.cw-row:hover { background: var(--hover); }
+.cw-row.selected { background: var(--accent-fill); color: var(--text-strong); }
+.cw-chev { display: grid; flex: none; place-items: center; width: 12px; color: var(--faint); }
+.cw-chev svg { width: 10px; height: 10px; stroke-width: 1.5; transition: transform 0.1s; }
+.cw-folder.open .cw-chev svg { transform: rotate(90deg); }
+.cw-icon { display: grid; flex: none; place-items: center; color: var(--muted); }
+.cw-icon svg { width: 13px; height: 13px; stroke-width: 1.4; }
+.cw-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.cw-folder .cw-name { color: var(--muted); }
+.cw-count { flex: none; padding: 0 6px; border-radius: 8px; background: var(--hover); color: var(--muted); font-size: 10.5px; font-variant-numeric: tabular-nums; }
+.cw-what { flex: none; font: 11px var(--mono); }
+.cw-what .pv-badge { margin: 0; }
+.preview-pane.in-window { flex: 1; min-width: 0; border: 0; border-radius: 0; }
+
+/* ---- Git window (js/gitwindow.js): the Changed files window's frame, a list on the left, a diff or a commit on the right ---- */
+
+.git-win .set-head { gap: 10px; }
+.gw-mark { display: grid; place-items: center; color: var(--accent); }
+.gw-mark svg, .gw-refresh svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1; }
+.gw-branch { display: inline-flex; align-items: center; gap: 6px; min-width: 0; color: var(--muted); font: 12px var(--mono); white-space: nowrap; }
+.gw-branch-name { overflow: hidden; text-overflow: clip; }
+.gw-ab { flex: none; color: var(--attention); font: 11px var(--mono); }
+.gw-tabs { margin-left: auto; padding: 2px; }
+.gw-tabs button { padding: 2px 12px; font-size: 12px; }
+.gw-tabs button[hidden] { display: none; }
+.gw-refresh { width: 28px; height: 28px; opacity: 1; }
+.gw-side { width: 380px; }
+.gw-list { flex: 1; min-height: 0; padding: 4px; overflow: auto; outline: none; }
+.gw-list::-webkit-scrollbar { width: 8px; }
+.gw-list::-webkit-scrollbar-thumb { border: 2px solid var(--surface); border-radius: 4px; background: var(--scroll-thumb); }
+.gw-list:focus-visible .cw-row.cursor, .gw-list:focus .cw-row.cursor { box-shadow: inset 0 0 0 1px var(--accent); }
+.gw-empty { padding: 18px 12px; color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+.gw-section { margin-top: 6px; color: var(--muted); font-size: 11.5px; font-weight: 600; }
+.gw-section:first-child { margin-top: 0; }
+.gw-section.open .cw-chev svg { transform: rotate(90deg); }
+.gw-file { padding-left: 18px; }
+.gw-status { flex: none; width: 14px; color: var(--muted); font: 600 11px var(--mono); text-align: center; }
+.gw-status[data-s="M"], .gw-status[data-s="T"] { color: var(--attention); }
+.gw-status[data-s="A"], .gw-status[data-s="U"], .gw-status[data-s="C"] { color: var(--ok); }
+.gw-status[data-s="D"], .gw-status[data-s="conflict"] { color: var(--danger-text); }
+.gw-status[data-s="R"] { color: var(--accent); }
+.gw-file .cw-name { flex: 0 1 auto; }
+.gw-dir { flex: 1 1 0; min-width: 0; overflow: hidden; color: var(--faint); font-size: 11.5px; text-overflow: ellipsis; direction: rtl; text-align: left; }
+.gw-commit { flex-direction: column; align-items: stretch; gap: 1px; height: auto; padding: 5px 8px; }
+.gw-commit-main { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.gw-subject { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.gw-subject.current { color: var(--accent); font-weight: 600; }
+.gw-commit-meta { display: flex; gap: 10px; min-width: 0; overflow: hidden; color: var(--faint); font-size: 11px; }
+.gw-commit-meta > span:nth-child(2) { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.gw-commit-meta > span:last-child { flex: none; margin-left: auto; }
+.gw-hash { flex: none; font-family: var(--mono); }
+.gw-ref { flex: none; max-width: 140px; overflow: hidden; padding: 0 5px; border-radius: 4px; background: var(--hover); color: var(--muted); font-size: 10.5px; line-height: 16px; text-overflow: ellipsis; }
+.gw-ref.head { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--text-strong); }
+.gw-ref.is-tag { background: color-mix(in srgb, var(--attention) 18%, transparent); color: var(--attention); }
+.gw-ref.remote { color: var(--faint); }
+.gw-more { justify-content: center; color: var(--accent); }
+
+/* The search (js/gitsearch.js): its filter chips, and rows with the line that matched under them. */
+.gw-filters { gap: 4px; padding: 8px 10px; }
+.gw-filters[hidden] { display: none; }
+.gw-filters .fchip { height: 22px; padding: 0 9px; font-size: 11.5px; }
+.gw-hit .gw-dir { flex: 1 1 0; }
+.gw-hit-line { display: flex; gap: 6px; min-width: 0; margin-top: 2px; color: var(--muted); font: 11px/1.45 var(--mono); }
+.gw-hit-line.add { color: color-mix(in srgb, var(--ok) 75%, var(--text)); }
+.gw-hit-line.del { color: var(--danger-text); }
+.gw-line-no { flex: none; min-width: 3ch; color: var(--faint); text-align: right; }
+.gw-hit-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: pre; }
+.gw-why { flex: none; color: var(--faint); font-size: 11px; }
+.gw-search-status { justify-content: center; gap: 8px; color: var(--faint); cursor: default; }
+.gw-searching { display: inline-flex; gap: 8px; align-items: center; }
+.fchip .busy-spin { display: inline-block; margin-right: 6px; vertical-align: -1px; }
+.gw-search-status:hover { background: none; }
+.gw-right { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; outline: none; }
+.gw-message { padding: 28px 20px; color: var(--muted); font-size: 13px; text-align: center; }
+/* What git said when an action failed (js/gitwindow.js), in its own words, in a popup. */
+.git-error-text { max-height: 260px; margin: 0 0 16px; padding: 10px 12px; overflow: auto; border-radius: 8px; background: color-mix(in srgb, var(--danger) 10%, var(--surface)); color: var(--danger-text); font: 12px/1.45 Consolas, "Cascadia Mono", monospace; white-space: pre-wrap; }
+.gw-diff-head { display: flex; flex: none; align-items: center; gap: 8px; min-height: 36px; padding: 0 12px; border-bottom: 1px solid var(--border); background: var(--header); }
+.gw-side-label { flex: none; padding: 0 6px; border-radius: 4px; background: var(--hover); color: var(--muted); font-size: 11px; }
+.gw-diff-path { flex: 1; min-width: 0; overflow: hidden; color: var(--text); font: 12px var(--mono); text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
+.gw-diff-head .pv-badge { flex: none; margin: 0; }
+.gw-diff { flex: 1; }
+/* An image's versions (js/gitwindow.js imagesHtml): side by side, fitted, on a checkerboard so transparency shows. */
+.gw-images { display: flex; flex-wrap: wrap; gap: 16px; padding: 16px; border-bottom: 1px solid var(--border); }
+.gw-images:last-child { border-bottom: 0; }
+.gw-image { display: flex; flex: 1 1 240px; flex-direction: column; align-items: center; gap: 8px; min-width: 0; margin: 0; }
+.gw-image-box { display: flex; align-items: center; justify-content: center; max-width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 6px;
+  background: repeating-conic-gradient(var(--hover) 0 25%, var(--surface) 0 50%) 0 0 / 16px 16px; }
+.gw-image-box img { display: block; max-width: 100%; max-height: 60vh; object-fit: contain; image-rendering: auto; }
+.gw-image figcaption { color: var(--muted); font-size: 12px; text-align: center; }
+.gw-image figcaption b { color: var(--text); font-weight: 600; }
+.gw-commit-info { flex: none; padding: 12px 14px 10px; border-bottom: 1px solid var(--border); }
+.gw-commit-subject { color: var(--text-strong); font-size: 14px; font-weight: 600; line-height: 1.4; }
+.gw-commit-body { max-height: 140px; margin: 8px 0 0; overflow: auto; color: var(--text); font: 12px/1.5 var(--mono); white-space: pre-wrap; }
+.gw-commit-facts { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; margin-top: 8px; color: var(--muted); font-size: 12px; }
+.gw-commit-facts .btn.small { padding: 1px 8px; }
+.gw-link { padding: 0; border: 0; background: none; color: var(--accent); font: 12px var(--mono); cursor: pointer; }
+.gw-link:hover { text-decoration: underline; }
+.gw-commit-files { flex: none; max-height: 28%; padding: 4px; overflow: auto; border-bottom: 1px solid var(--border); }
+.gw-commit-files .gw-file { padding-left: 8px; }
+.gw-commit-files .cw-name { flex: 1; direction: rtl; text-align: left; }
+.gw-counts { flex: none; font: 11px var(--mono); }
+.gw-binary { color: var(--faint); }
+.gw-commit-diff { display: flex; flex: 1; flex-direction: column; min-height: 0; }
+.gw-branch-log { flex: 1; min-height: 0; padding: 4px; overflow: auto; }
+.cu-meter { position: relative; width: 26px; height: 4px; overflow: hidden; border-radius: 2px; background: var(--border-strong); }
+.cu-meter i { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: var(--accent); }
+.cu-meter.high i { background: var(--attention, #f2cc60); }
+.cu-meter.full i { background: var(--danger, #ff7b72); }
+.cu-meter.big { width: 100%; height: 6px; border-radius: 3px; }
+.cu-pop { width: 280px; padding: 0; font-size: 12px; }
+.cu-head { display: flex; align-items: baseline; gap: 8px; padding: 10px 12px 8px; color: var(--text-strong); font-size: 13px; font-weight: 600; }
+.cu-head span { overflow: hidden; color: var(--faint); font: 11px var(--mono); text-overflow: ellipsis; white-space: nowrap; }
+.cu-ctx { display: grid; gap: 6px; padding: 0 12px 10px; }
+.cu-ctx-text { color: var(--muted); }
+.cu-ctx-text b { color: var(--text); font-weight: 600; }
+.cu-rows { padding: 6px 12px; border-top: 1px solid var(--border); }
+.cu-row { display: flex; justify-content: space-between; gap: 12px; padding: 2px 0; color: var(--muted); }
+.cu-row b { color: var(--text); font-weight: 500; font-variant-numeric: tabular-nums; }
+.cu-id { font-family: var(--mono); cursor: text; -webkit-user-select: all; user-select: all; }
+.cu-plan { display: grid; gap: 4px; padding: 8px 12px 10px; border-top: 1px solid var(--border); }
+.cu-plan-head { display: flex; justify-content: space-between; margin-bottom: 2px; color: var(--faint); font-size: 11px; font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase; }
+.cu-plan-head b { color: var(--accent); font-weight: 600; letter-spacing: 0; text-transform: none; }
+.cu-limit-row { display: flex; justify-content: space-between; margin-top: 4px; color: var(--muted); }
+.cu-limit-row b { color: var(--text); font-weight: 500; font-variant-numeric: tabular-nums; }
+.cu-reset { color: var(--faint); font-size: 11px; }
+.cu-reset.stale { opacity: 0.55; }
+.cu-note { margin-top: 6px; line-height: 1.45; }
+.cu-note code { font: 10.5px var(--mono); color: var(--muted); }
+
+/* Linux (Photino): the window has no title bar or frame of its own, as on Windows. The page's title bar and edges
+   move and resize it; this draws the 1px frame the Windows window has (#262626 / #D4D4DA), except when maximised. */
+:root[data-platform="linux"] body:not(.maximized)::after {
+  content: ""; position: fixed; inset: 0; z-index: 2999; pointer-events: none;
+  border: 1px solid #262626;
+}
+:root[data-platform="linux"][data-theme="light"] body:not(.maximized)::after { border-color: #d4d4da; }
+:root[data-platform="linux"] body.maximized .edge { display: none; }
+/* Linux: the windows are see-through (LinuxWindow, DetachedWindows), and the page rounds their corners as the panes'
+   (not when maximised). */
+:root[data-corners="round"] { background: transparent; }
+/* contain: paint clips what's fixed over the whole window too (a dialog's dimmed layer, the loader) to the corners. */
+:root[data-corners="round"] body:not(.maximized) { border-radius: var(--radius); contain: paint; }
+:root[data-corners="round"] body:not(.maximized)::after { border-radius: var(--radius); }
+
+/* macOS: the host rounds the windows' corners (MacWindows; square while maximized), and the 1px frame follows them. */
+:root[data-os="mac"] body:not(.maximized)::after { border-radius: var(--radius); }
+
+/* macOS: the traffic lights (js/macwindow.js) at the start of the title bar and of a detached window's header: red,
+   yellow and green circles whose signs show while the pointer is over them, grey while the window isn't in front. */
+:root[data-os="mac"] .mac-lights { align-items: center; gap: 8px; }
+:root[data-os="mac"] #titlebar .mac-lights { margin: 0 14px 0 12px; }
+:root[data-os="mac"] #titlebar .brand { display: none; } /* no icon, name or version: the Finder shows them (Termilly.app) */
+:root[data-os="mac"] #titlebar .tb-right > .separator:last-child { display: none; }
+:root[data-os="mac"] .detached-window .mac-lights { flex: none; margin: 0 10px 0 4px; }
+:root[data-os="mac"] .mac-lights button {
+  width: 12px; height: 12px; padding: 0; border-radius: 50%;
+  box-shadow: inset 0 0 0 0.5px rgb(0 0 0 / 0.2); color: transparent; transition: none;
+}
+:root[data-os="mac"] .mac-lights button[data-window="close"],
+:root[data-os="mac"] .mac-lights button[data-window="close"]:hover { background: #ff5f57; }
+:root[data-os="mac"] .mac-lights button[data-window="minimize"],
+:root[data-os="mac"] .mac-lights button[data-window="minimize"]:hover { background: #febc2e; }
+:root[data-os="mac"] .mac-lights button[data-window="maximize"],
+:root[data-os="mac"] .mac-lights button[data-window="maximize"]:hover { background: #28c840; }
+:root[data-os="mac"] .mac-lights:hover button { color: rgb(0 0 0 / 0.55); }
+:root[data-os="mac"] .mac-lights button:active { filter: brightness(0.82); }
+:root[data-os="mac"] body.window-inactive .mac-lights:not(:hover) button { background: var(--border-strong); box-shadow: none; }
+:root[data-os="mac"] .mac-lights svg { width: 12px; height: 12px; stroke-width: 1.2; }
+:root[data-os="mac"] .mac-lights svg .fill { fill: currentColor; stroke: none; }
+
+/* Start-up loader (Linux; js/loader.js). Matches the one the Windows window draws: the logo over a typed
+   "Loading..." and a blinking caret, on the page's background. */
+#loader {
+  position: fixed; inset: 0; z-index: 3000;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: var(--bg); cursor: default; -webkit-user-select: none; user-select: none;
+}
+#loader[hidden] { display: none; }
+#loader img { margin-bottom: 14px; }
+/* Sized for the full "Loading..." so typing grows rightwards instead of re-centring on every letter. */
+/* As wide as "Loading..." and its caret (the hidden copy), centred under the mark; the typed line grows from its left. */
+.loader-line { display: grid; font: 15px var(--ui-font); color: var(--text); }
+.loader-size, .loader-typed { grid-area: 1 / 1; display: flex; align-items: center; white-space: nowrap; }
+.loader-size { visibility: hidden; }
+.loader-caret { width: 2px; height: 17px; margin-left: 2px; background: var(--accent); animation: loader-caret 1.1s steps(1) infinite; }
+@keyframes loader-caret { 50% { opacity: 0; } }
+
+/* Settings search (js/settings.js): the box in the nav, results grouped by section, the picked match. */
+.set-search { width: 100%; margin: 0 0 10px; }
+.set-nav-items { display: flex; flex-direction: column; gap: 2px; }
+.set-result-head { display: flex; align-items: center; gap: 8px; margin: 18px 0 2px; color: var(--text-strong); font-size: 13px; font-weight: 600; }
+.set-result-head:first-child { margin-top: 10px; }
+.set-result-head svg { width: 14px; height: 14px; color: var(--accent); stroke-width: 1.4; }
+.set-result-head:hover span { text-decoration: underline; }
+mark.set-hit { border-radius: 2px; background: var(--accent-soft); color: inherit; }
+.set-row.hit-current { margin: 0 -10px; padding-left: 10px; padding-right: 10px; border-radius: 8px; background: var(--accent-fill); }
+.set-row.set-flash { animation: set-flash 1.6s ease-out; border-radius: 8px; }
+@keyframes set-flash { 0%, 40% { background: var(--accent-fill); } 100% { background: transparent; } }
+.set-empty { padding: 24px 0; }
+@media (max-width: 720px) { .set-search { display: none; } }
+
+/* Update notice in the title bar (js/update.js). */
+.update-chip { display: inline-flex; align-items: center; gap: 6px; height: 24px; margin-right: 6px; padding: 0 10px; border: 1px solid var(--accent-soft); border-radius: 12px; background: var(--accent-fill); color: var(--text-strong); font-size: 12px; white-space: nowrap; }
+.update-chip[hidden] { display: none; }
+/* In the brand row, which ignores the mouse (it drags the window) and sets the name’s bold: the chip takes clicks and its own text. */
+.brand .update-chip { margin-right: 0; font-weight: 400; letter-spacing: 0; pointer-events: auto; }
+.update-chip:hover:not(:disabled), .update-chip.open { border-color: var(--accent); }
+.update-chip:disabled { cursor: default; opacity: 0.7; }
+.update-chip svg { width: 13px; height: 13px; color: var(--accent); stroke-width: 1.6; }
+.update-about { display: block; }
+.update-command { margin: 4px 0 14px; padding: 8px 10px; overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; background: var(--term-bg); color: var(--term-text); font: 12px/1.5 var(--mono); white-space: pre; -webkit-user-select: text; user-select: text; }
+@media (max-width: 900px) { .update-chip span { display: none; } }
+
+/* Notes (js/notes.js): the mark on sidebar rows, the pinned line in a terminal's header, the editor. */
+.note-mark { display: inline-flex; flex: none; align-items: center; margin-left: 4px; color: var(--muted); cursor: pointer; }
+.note-mark:hover { color: var(--text); }
+.note-mark svg { width: 12px; height: 12px; stroke-width: 1.4; }
+.note-mark span { position: relative; top: 1px; margin-left: 2px; font-size: 10px; line-height: 1; font-variant-numeric: tabular-nums; }
+.pane-note { display: inline-flex; align-items: center; gap: 5px; min-width: 0; max-width: 40%; height: 20px; margin-left: 6px; padding: 0 8px;
+  border: 1px solid color-mix(in srgb, var(--attention, #f2cc60) 40%, transparent); border-radius: 10px;
+  background: color-mix(in srgb, var(--attention, #f2cc60) 10%, transparent); color: var(--text); font-size: 11.5px; }
+.pane-note[hidden] { display: none; }
+.pane-note span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pane-note svg { width: 12px; height: 12px; flex: none; color: var(--attention, #f2cc60); stroke-width: 1.5; }
+/* Big enough for a runbook, and resizable from its corner (the text box grows with it). */
+.dialog.note-editor { display: flex; flex-direction: column; width: min(760px, 90vw); min-width: 420px; height: min(560px, 80vh); min-height: 300px; max-width: 96vw; max-height: 92vh; overflow: hidden; resize: both; }
+textarea.field.note-text { flex: 1; width: 100%; min-height: 120px; resize: none; font: 12.5px/1.5 var(--mono); }
+.note-pin { display: flex; align-items: center; gap: 8px; margin-top: 10px; color: var(--muted); font-size: 12.5px; }
+.note-editor .dialog-actions .spacer { flex: 1; }
+
+/* Production safety (js/environments.js): a frame in the environment's colour, a tinted header, a chip, and the
+   same colour on the sidebar row. Activity colours (needs you, error) still win while they show. */
+.pane.env:not([data-activity="needs"]):not([data-activity="error"]) { border-color: var(--env); box-shadow: 0 0 0 1px color-mix(in srgb, var(--env) 55%, transparent); }
+.pane.env .pane-header { background: color-mix(in srgb, var(--env) 14%, var(--header)); }
+.pane.env-tint .pane-body { background: color-mix(in srgb, var(--env) 6%, transparent); }
+.env-chip { flex: none; padding: 0 6px; border-radius: 4px; background: var(--env, #ff5c5c); color: #fff; font-size: 10px; font-weight: 700; letter-spacing: 0.06em; line-height: 16px; }
+.env-chip[hidden] { display: none; }
+.pane.env .env-chip { background: var(--env); }
+/* A straight line in the environment's colour beside the row: in the workspace's tree it lies on the tree's
+   vertical line (1px border, 8px padding away) and is a pixel wider, so it reads as that line taking the colour. */
+.tab-row.env { position: relative; }
+.tab-row.env::before { content: ''; position: absolute; top: 0; bottom: 0; left: 0; width: 2px; background: var(--env); }
+.tab-tree > .tab-row.env::before { left: -9px; }
+.tab-row.env .name { color: color-mix(in srgb, var(--env) 70%, var(--text)); }
+.prod-confirm h3 { display: flex; align-items: center; gap: 8px; }
+.prod-confirm .env-chip { font-size: 11px; line-height: 18px; }
+.env-patterns { width: 260px; border-left: 3px solid var(--env); }
+
+/* Session logging (js/logging.js): the REC chip on a logging terminal's header. */
+.rec-chip { display: inline-flex; flex: none; align-items: center; gap: 4px; padding: 0 6px; border-radius: 4px; color: var(--danger, #ff7b72); font-size: 10px; font-weight: 700; letter-spacing: 0.06em; line-height: 16px; }
+.rec-chip[hidden] { display: none; }
+.rec-chip:hover { background: color-mix(in srgb, var(--danger, #ff7b72) 15%, transparent); }
+.rec-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; animation: rec-blink 1.6s ease-in-out infinite; }
+@keyframes rec-blink { 50% { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) { .rec-dot { animation: none; } }

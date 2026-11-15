@@ -1,0 +1,243 @@
+/* Activity, the change preview and "N files changed". */
+
+/* ---- Activity: a terminal running a command, or an app reporting progress (OSC 9;4) ---- */
+
+.activity {
+  --size: 11px;
+  --c: var(--accent);
+  display: inline-block;
+  flex: none;
+  box-sizing: border-box;
+  width: var(--size);
+  height: var(--size);
+  border-radius: 50%;
+}
+.activity.mini { --size: 9px; }
+/* Working, no percentage: a rotating arc. */
+.activity.spin {
+  border: 2px solid color-mix(in srgb, var(--c) 20%, transparent);
+  border-top-color: var(--c);
+  border-right-color: var(--c);
+  animation: activity-spin 0.8s linear infinite;
+}
+/* A percentage: a ring filled that far (red for an error, amber when paused). */
+.activity.percent, .activity.error, .activity.paused {
+  background: conic-gradient(var(--c) calc(var(--p) * 1%), color-mix(in srgb, var(--c) 22%, transparent) 0);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1.5px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1.5px));
+}
+.activity.error { --c: var(--danger); }
+/* A hibernated agent: a crescent moon. */
+.activity.hibernated { border-radius: 50%; box-shadow: inset -3px -1px 0 0 var(--muted); transform: rotate(-20deg); }
+.activity.paused { --c: var(--attention); }
+/* An agent waiting for the user: a pulsing amber dot with a ring around it. */
+.activity.needs {
+  --c: var(--attention);
+  background: var(--c);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--c) 30%, transparent);
+  animation: activity-pulse 1.2s ease-in-out infinite;
+}
+/* An agent that finished its turn: a green tick. */
+.activity.done {
+  --c: var(--ok);
+  border: solid var(--c);
+  border-width: 0 2px 2px 0;
+  border-radius: 0;
+  width: calc(var(--size) * 0.5);
+  height: var(--size);
+  transform: translateY(-1px) rotate(45deg);
+  margin: 0 calc(var(--size) * 0.25);
+}
+.activity-slot:empty { display: none; }
+.activity-slot { display: inline-flex; }
+/* On a rail tile, the top-left corner (attention is top-right, the count bottom-right). */
+.rail-activity { position: absolute; top: -3px; left: -3px; box-shadow: 0 0 0 2px var(--surface); background: var(--surface); }
+
+@keyframes activity-spin { to { transform: rotate(360deg); } }
+@keyframes activity-pulse { 50% { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) {
+  .activity.spin { border-color: var(--c); animation: activity-pulse 1.6s ease-in-out infinite; }
+}
+
+/* ---- Change preview (js/preview.js, js/highlight.js) ---- */
+
+/* Syntax colours: the terminal's own ANSI palette (js/terminals.js), so code looks like it does in the terminals. */
+:root {
+  --hl-keyword: #ff7b72;
+  --hl-string: #a5d6ff;
+  --hl-comment: #6e6e6e;
+  --hl-number: #79c0ff;
+  --hl-title: #d2a8ff;
+  --hl-type: #f2cc60;
+  --hl-attr: #76e3ea;
+  --hl-tag: #7ee787;
+  --hl-meta: #8b8b8b;
+}
+:root[data-theme="light"] {
+  --hl-keyword: #cf222e;
+  --hl-string: #0a3069;
+  --hl-comment: #6e7781;
+  --hl-number: #0969da;
+  --hl-title: #8250df;
+  --hl-type: #8a5d00;
+  --hl-attr: #1b7c83;
+  --hl-tag: #116329;
+  --hl-meta: #57606a;
+}
+.hljs-keyword, .hljs-selector-tag, .hljs-doctag, .hljs-template-tag { color: var(--hl-keyword); }
+.hljs-string, .hljs-regexp, .hljs-char.escape_, .hljs-template-variable { color: var(--hl-string); }
+.hljs-comment, .hljs-quote { color: var(--hl-comment); font-style: italic; }
+.hljs-number, .hljs-literal, .hljs-symbol, .hljs-bullet { color: var(--hl-number); }
+.hljs-title, .hljs-title.function_, .hljs-section { color: var(--hl-title); }
+.hljs-type, .hljs-title.class_, .hljs-built_in, .hljs-variable.language_ { color: var(--hl-type); }
+.hljs-attr, .hljs-attribute, .hljs-property, .hljs-params, .hljs-selector-class, .hljs-selector-id { color: var(--hl-attr); }
+.hljs-name, .hljs-tag, .hljs-selector-pseudo, .hljs-link { color: var(--hl-tag); }
+.hljs-meta, .hljs-meta .hljs-keyword, .hljs-subst { color: var(--hl-meta); }
+.hljs-addition { color: var(--ok); }
+.hljs-deletion { color: var(--danger-text); }
+.hljs-emphasis { font-style: italic; }
+.hljs-strong { font-weight: 700; }
+
+.preview-pane { outline: none; }
+.preview-pane .pv-head { gap: 8px; cursor: default; }
+.preview-pane .pv-icon svg { width: 13px; height: 13px; margin-right: 6px; color: var(--accent); stroke-width: 1.4; vertical-align: -2px; }
+.preview-pane .pv-name { color: var(--text); font-weight: 600; }
+.pv-badge { margin-left: 6px; padding: 0 6px; border-radius: 5px; background: var(--hover); color: var(--muted); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.03em; }
+.pv-badge[hidden] { display: none; }
+.pv-badge[data-kind="created"] { background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ok); }
+.pv-badge[data-kind="deleted"], .pv-badge[data-kind="missing"] { background: color-mix(in srgb, var(--danger) 18%, transparent); color: var(--danger-text); }
+.pv-path { overflow: hidden; min-width: 0; color: var(--faint); font: 11.5px var(--mono); text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
+.pv-stats { flex: none; font: 11.5px var(--mono); }
+.pv-plus { color: var(--ok); }
+.pv-minus { color: var(--danger-text); }
+.preview-pane .pane-actions { align-items: center; gap: 4px; }
+.preview-pane .pane-btn { opacity: 1; }
+.pv-seg { padding: 2px; }
+.pv-seg[hidden], .pv-btn[hidden] { display: none; }
+.pv-seg button { padding: 1px 8px; font-size: 11.5px; }
+.pv-note { flex: none; padding: 6px 12px; border-bottom: 1px solid var(--border); background: color-mix(in srgb, var(--attention) 8%, transparent); color: var(--muted); font-size: 12px; }
+.pv-note[hidden] { display: none; }
+
+.pv-scroll { position: relative; flex: 1; min-height: 0; overflow: auto; background: var(--term-surface, var(--term-bg)); color: var(--term-text); }
+.pv-spacer { position: relative; min-width: max-content; }
+.pv-spacer[hidden] { display: none; }
+.pv-rows { min-width: max-content; will-change: transform; }
+.pv-message { padding: 28px 20px; color: var(--muted); font-size: 13px; text-align: center; }
+.pv-message[hidden] { display: none; }
+/* Code in the terminals' font and size (Settings › Appearance; settings.js sets these). */
+.pv-row { display: flex; min-height: 1.5em; font: var(--term-font-size, 12.5px)/1.5 var(--term-font, var(--mono)); white-space: pre; }
+.pv-no { flex: none; width: 4.5ch; padding-right: 1ch; color: var(--faint); text-align: right; -webkit-user-select: none; user-select: none; }
+.pv-sign { flex: none; width: 2ch; color: var(--faint); text-align: center; -webkit-user-select: none; user-select: none; }
+.pv-code { flex: 1; padding-right: 16px; -webkit-user-select: text; user-select: text; }
+.pv-row.add { background: color-mix(in srgb, var(--ok) 13%, transparent); }
+.pv-row.add .pv-sign, .pv-half.add .pv-no { color: var(--ok); }
+.pv-row.del { background: color-mix(in srgb, var(--danger) 14%, transparent); }
+.pv-row.del .pv-sign, .pv-half.del .pv-no { color: var(--danger-text); }
+.pv-row.pv-target { box-shadow: inset 3px 0 0 var(--accent); }
+.pv-fold, .pv-delmark { padding-left: 6ch; color: var(--muted); cursor: pointer; -webkit-user-select: none; user-select: none; }
+.pv-fold { background: var(--hover); }
+.pv-delmark { background: color-mix(in srgb, var(--danger) 8%, transparent); color: var(--danger-text); font-size: 11.5px; }
+.pv-fold:hover, .pv-delmark:hover { color: var(--text); }
+.pv-pair { min-width: 100%; }
+.pv-half { display: flex; flex: 1 1 50%; min-width: 0; overflow: hidden; }
+.pv-half + .pv-half { border-left: 1px solid var(--border); }
+.pv-half.add { background: color-mix(in srgb, var(--ok) 13%, transparent); }
+.pv-half.del { background: color-mix(in srgb, var(--danger) 14%, transparent); }
+.pv-half.empty { background: var(--hover); }
+.preview-pane.wrap .pv-row, .gw-diff.wrap .pv-row { white-space: pre-wrap; word-break: break-all; }
+.preview-pane.wrap .pv-spacer, .preview-pane.wrap .pv-rows, .gw-diff.wrap .pv-rows { min-width: 0; }
+
+.preview-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 55;
+  display: flex;
+  width: min(56vw, 900px);
+  min-width: 320px;
+  box-shadow: var(--shadow-pop);
+  border-radius: var(--radius);
+}
+.preview-panel[hidden], .preview-float[hidden] { display: none; }
+.preview-panel .preview-pane { border-color: var(--border-strong); }
+.pv-grip { position: absolute; top: 0; bottom: 0; left: -3px; z-index: 1; width: 6px; cursor: ew-resize; }
+.preview-float {
+  position: absolute;
+  top: 48px;
+  right: 24px;
+  z-index: 60;
+  display: flex;
+  width: min(820px, 70%);
+  height: min(560px, 70%);
+  min-width: 360px;
+  min-height: 200px;
+  overflow: hidden;
+  resize: both;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-pop);
+}
+.preview-float .preview-pane { border-color: var(--accent-soft); }
+.preview-float .pv-head { cursor: move; }
+
+/* "N files changed" on a terminal's header (js/changes.js) */
+/* The changed-files list on a terminal's header (js/changes.js). */
+.changes-pop { width: 400px; padding: 0; }
+.changes-pop .inbox-head { justify-content: flex-start; gap: 6px; }
+.changes-pop .inbox-head .section-head { margin-right: auto; }
+.changes-pop .inbox-head .btn[hidden] { display: none; }
+.changes-pop .inbox-list { max-height: min(420px, 60vh); }
+.change-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto auto 20px; align-items: center; gap: 8px;
+  padding: 6px 6px 6px 8px; border-radius: 8px; cursor: pointer; outline: none;
+}
+.change-row:hover, .change-row:focus-visible, .change-row:focus { background: var(--hover); }
+.change-text { display: flex; flex-direction: column; min-width: 0; }
+.change-text b { overflow: hidden; color: var(--text); font-weight: 600; font-size: 12.5px; text-overflow: ellipsis; white-space: nowrap; }
+.change-folder { overflow: hidden; color: var(--faint); font: 11px var(--mono); text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
+.change-what { font: 11.5px var(--mono); white-space: nowrap; }
+.change-what .pv-badge { margin: 0; }
+.change-ago { color: var(--faint); font-size: 11px; font-variant-numeric: tabular-nums; }
+.change-remove { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 5px; color: var(--muted); opacity: 0; }
+.change-remove svg { width: 8px; height: 8px; stroke-width: 1.5; }
+.change-row:hover .change-remove, .change-row:focus .change-remove { opacity: 1; }
+.change-remove:hover { background: var(--hover); color: var(--danger-text); }
+.change-empty { margin: 0; padding: 16px 14px; color: var(--muted); font-size: 12.5px; }
+.set-off { opacity: 0.45; pointer-events: none; }
+/* The file's name keeps its room; its path gives way first. */
+.preview-pane .pane-title { flex: none; gap: 0; }
+.preview-pane .pv-name { overflow: visible; cursor: default; }
+.pv-path { flex: 1 1 auto; }
+/* Side by side: the two columns share the width, and long lines are cut rather than pushing the new side away. */
+.preview-pane.sbs .pv-spacer, .preview-pane.sbs .pv-rows { min-width: 0; }
+.preview-pane.sbs .pv-half, .gw-diff.sbs .pv-half { flex: 1 1 0; }
+.gw-diff.sbs .pv-rows { min-width: 0; }
+.preview-pane.sbs .pv-half .pv-code { overflow: hidden; }
+/* "Claude changed another file" with a button to show it (Settings › Change preview › Offer it). */
+.pv-newer { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 5px 8px 5px 12px; border-bottom: 1px solid var(--border); background: var(--accent-fill); color: var(--text); font-size: 12px; }
+.pv-newer[hidden] { display: none; }
+/* The preview's tabs: one per file open (js/preview.js); a changed file's is amber, a deleted one's struck through. */
+.pv-tabs { display: flex; flex: none; gap: 2px; overflow-x: auto; padding: 4px 6px 0; border-bottom: 1px solid var(--border); scrollbar-width: none; }
+.pv-tabs[hidden] { display: none; }
+.pv-tab { display: flex; flex: none; align-items: center; gap: 4px; max-width: 200px; height: 26px; padding: 0 4px 0 10px; border: 1px solid transparent; border-bottom: 0; border-radius: 6px 6px 0 0; color: var(--muted); font-size: 12px; cursor: pointer; }
+.pv-tab:hover { background: var(--hover); color: var(--text); }
+.pv-tab.on { border-color: var(--border); background: var(--raised-2); color: var(--text-strong); }
+/* Changed on disk since it was read: shown as it was until Reload. */
+.pv-tab.changed .pv-tab-name { color: var(--attention); }
+.pv-tab.gone .pv-tab-name { color: var(--danger-text); text-decoration: line-through; }
+.pv-changed { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 5px 8px 5px 12px; border-bottom: 1px solid var(--border); background: color-mix(in srgb, var(--attention) 12%, transparent); color: var(--text); font-size: 12px; }
+.pv-changed[hidden] { display: none; }
+.pv-tab-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pv-tab-close { display: grid; flex: none; width: 18px; height: 18px; place-items: center; padding: 0; border: 0; border-radius: 4px; background: none; color: var(--faint); opacity: 0; }
+.pv-tab:hover .pv-tab-close, .pv-tab.on .pv-tab-close { opacity: 1; }
+.pv-tab-close:hover { background: var(--hover); color: var(--text); }
+.pv-tab-close svg { width: 10px; height: 10px; stroke-width: 1.4; }
+.pv-newer span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pv-newer .btn { flex: none; }
+/* "Show all N files…" at the end of the changed-files list. */
+/* It stays in sight at the bottom while the ten rows above it scroll. */
+.change-row.change-all {
+  position: sticky; bottom: 0; display: block; padding: 8px; border-top: 1px solid var(--border); border-radius: 0 0 8px 8px;
+  background: var(--raised); color: var(--accent); font-size: 12.5px; font-weight: 600; text-align: center;
+}
+.change-row.change-all:hover, .change-row.change-all:focus { background: color-mix(in srgb, var(--accent) 12%, var(--raised)); }

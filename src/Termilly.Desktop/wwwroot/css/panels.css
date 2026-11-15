@@ -1,0 +1,250 @@
+/* The docked panels: Files, Clipboard, the Notepad and Copy to; Settings › Phone. */
+
+/* ---- The Files side panel (js/filepanel.js) ---- */
+
+/* Docked on the right: the terminals end where it starts (--files-dock on #workspace, set by js/filepanel.js). Dragged
+   wider it stays at most half the terminals' area, also when the window shrinks later. */
+.files-panel {
+  position: absolute;
+  top: calc(var(--notepad-dock-top, 0px) + var(--todo-dock-top, 0px));
+  right: calc(var(--notepad-dock, 0px) + var(--todo-dock, 0px) + var(--clips-dock, 0px));
+  bottom: calc(var(--notepad-dock-bottom, 0px) + var(--todo-dock-bottom, 0px));
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  width: 340px;
+  min-width: 260px;
+  max-width: 50%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--raised);
+}
+.files-panel[hidden] { display: none; }
+.files-grip { position: absolute; top: 0; bottom: 0; left: -3px; z-index: 1; width: 6px; cursor: ew-resize; }
+.files-drive { width: 16px; height: 16px; margin-right: 6px; stroke-width: 1; vertical-align: -3px; }
+.files-grip:hover { background: var(--accent); opacity: .5; }
+.files-panel.drop { outline: 2px dashed var(--accent); outline-offset: -6px; }
+/* Icon and title on the left, tools on the right (a window's buttons after them, in a window of its own). */
+.files-head { display: flex; align-items: center; padding: 8px 10px 4px 12px; }
+.files-head > .files-tools { margin-left: auto; }
+/* A panel's title bar starts with its toolbar button's icon (the Notepad's, the Snippets window's), as a window's does. */
+.title-icon { display: flex; flex: none; align-items: center; margin-right: 8px; color: var(--accent); }
+.title-icon > svg { display: block; width: 16px; height: 16px; }
+.files-title { overflow: hidden; color: var(--text); font-size: 12.5px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.files-ws { margin-left: 4px; color: var(--faint); font-weight: 400; }
+/* Refresh, New folder and Collapse before the ×: 16px icons at a 1px stroke, on the pixel grid. */
+.files-tools { display: flex; flex-shrink: 0; gap: 2px; align-items: center; }
+.files-tools .pane-btn { opacity: 1; }
+.files-tools .pane-btn:disabled { opacity: 0.35; }
+.files-tools .pane-btn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1; }
+.files-tools .pane-btn:last-child svg { width: 10px; height: 10px; stroke-width: 1.4; }
+.files-bar { display: flex; gap: 6px; align-items: center; padding: 4px 10px 6px; }
+.files-search { flex: 1; min-width: 0; height: 26px; }
+.files-list { flex: 1; overflow-y: auto; padding: 0 6px; }
+.files-item { display: flex; gap: 8px; align-items: center; height: 28px; padding: 0 6px; border-radius: 6px; font-size: 12.5px; }
+.files-item:hover { background: var(--hover); }
+.files-item.selected { background: var(--accent-fill); }
+.files-name { overflow: hidden; flex: 1; text-overflow: ellipsis; white-space: nowrap; }
+.files-size { color: var(--faint); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.files-actions { display: none; gap: 2px; }
+.files-item:hover .files-actions { display: flex; }
+.files-error { color: var(--danger-text); }
+/* The tree: rows indented by their depth (js/foldertree.js), the shell's folder in the accent, the folder files
+   dragged over go into lit. */
+.files-list .files-item { gap: 4px; height: 26px; cursor: default; -webkit-user-select: none; user-select: none; }
+.files-item.cwd > .files-name { color: var(--accent); font-weight: 600; }
+.files-item.drop-here { outline: 1px solid var(--accent); outline-offset: -1px; }
+.files-note { color: var(--faint); }
+.files-hint { margin: 2px 10px 6px 12px; padding: 6px 8px; border-radius: 6px; background: var(--surface); color: var(--muted); font-size: 12px; line-height: 1.4; }
+.files-none { margin: 24px 16px; color: var(--muted); font-size: 12.5px; line-height: 1.5; text-align: center; }
+.files-note:hover { background: none; }
+/* The search's line above what it found: one line, cut short; the folder's whole path is its tooltip. */
+.files-status { display: flex; gap: 8px; align-items: center; height: 26px; padding: 0 6px; overflow: hidden; color: var(--muted); font-size: 12px; white-space: nowrap; text-overflow: ellipsis; }
+.files-panel:focus { outline: none; }
+
+/* ---- Clipboard (js/clipboard.js): docked on the right, between the Notepad (on the edge) and the Files panel
+   (--clips-dock on #workspace). It borrows the Files panel's head, grip and search box. ---- */
+.clips-panel {
+  position: absolute;
+  top: calc(var(--notepad-dock-top, 0px) + var(--todo-dock-top, 0px));
+  right: calc(var(--notepad-dock, 0px) + var(--todo-dock, 0px));
+  bottom: calc(var(--notepad-dock-bottom, 0px) + var(--todo-dock-bottom, 0px));
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  width: 330px;
+  min-width: 280px;
+  max-width: 50%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--raised);
+}
+.clips-panel[hidden] { display: none; }
+.clips-panel:focus { outline: none; }
+.clips-list { flex: 1; overflow-y: auto; padding: 0 6px 8px; }
+.clips-group { margin: 8px 6px 4px; color: var(--faint); font-size: 10.5px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; }
+.clips-empty { margin: 16px 8px; color: var(--muted); font-size: 12.5px; }
+.clip-row { display: flex; gap: 9px; align-items: center; padding: 6px 6px; border-radius: 7px; cursor: pointer; -webkit-user-select: none; user-select: none; }
+.clip-row:hover { background: var(--hover); }
+.clip-row.selected { background: var(--accent-fill); }
+.clip-pic.selected { outline: 2px solid var(--accent); outline-offset: -1px; }
+/* The selected clip in full: a few lines high, scrolling; a long one says how much more pastes. */
+.clip-preview { margin: 2px 6px 6px 43px; }
+.clip-preview pre { max-height: 180px; margin: 0; padding: 6px 8px; overflow: auto; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); font: 11.5px/1.45 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; -webkit-user-select: text; user-select: text; }
+.clip-cut { margin-top: 4px; color: var(--faint); font-size: 11px; }
+.clip-kind { display: grid; flex: none; place-items: center; width: 28px; height: 28px; border-radius: 7px; background: var(--hover); color: var(--muted); }
+.clip-kind svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1; }
+.k-command { color: var(--ok, #7ee787); }
+.k-path { color: #e6b450; }
+.k-url { color: #76e3ea; }
+.k-secret { color: var(--danger-text); }
+:root[data-theme="light"] .k-path { color: #a8741a; }
+:root[data-theme="light"] .k-url { color: #1b7c83; }
+.clip-body { display: flex; flex: 1; flex-direction: column; min-width: 0; }
+.clip-text { overflow: hidden; color: var(--text); font-size: 12.5px; text-overflow: ellipsis; white-space: nowrap; }
+.clip-text.mono { font: 12px var(--mono); }
+.clip-meta { overflow: hidden; color: var(--faint); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.clip-acts { display: none; flex: none; gap: 1px; }
+.clip-row:hover .clip-acts { display: flex; }
+/* An expanded clip keeps its collapse button on screen. */
+.clip-row:has(.clip-expand.on) .clip-acts { display: flex; }
+.clip-row:has(.clip-expand.on):not(:hover) .clip-acts .pane-btn:not(.clip-expand) { display: none; }
+.clip-acts .pane-btn { opacity: 1; }
+.clip-acts .pane-btn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1; }
+.clip-acts .pane-btn.on { color: var(--accent); }
+.clips-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 6px; padding: 0 4px; }
+.clip-pic { display: grid; place-items: center; height: 72px; overflow: hidden; border: 1px solid var(--border); border-radius: 7px; background: var(--hover); color: var(--muted); cursor: pointer; }
+.clip-pic:hover { border-color: var(--accent); }
+.clip-pic.pinned { border-color: var(--accent); }
+.clip-pic img { width: 100%; height: 100%; object-fit: cover; }
+.clip-pic svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1; }
+#clips-button.paused svg { opacity: .45; }
+
+/* ---- Settings › Phone (js/settings/phone.js): the setup page's QR code, and the pairing code to type ---- */
+.pair-qr { display: grid; place-items: center; width: 200px; height: 200px; margin: 4px 0 0; padding: 8px; border-radius: 10px; background: #fff; }
+.pair-qr svg { width: 100%; height: 100%; }
+.pair-url { overflow-wrap: anywhere; font-size: 11px; }
+.pair-code { padding: 1px 6px; border-radius: 4px; background: var(--hover); color: var(--text-strong); font-size: 14px; letter-spacing: .12em; }
+
+/* ---- The Notepad (js/notepad.js): docked on an edge, the right one at first, the Files panel and the terminals beside it
+   (--notepad-dock on #workspace, with -left, -top or -bottom). It borrows the Files panel's head and grip, the File Explorer's tabs and a tab group's < and >. ---- */
+.notepad-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  width: 360px;
+  min-width: 280px;
+  max-width: 50%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.notepad-panel[hidden] { display: none; }
+.notepad-panel.dock-away { visibility: hidden; }
+.notepad-panel[data-side="left"] { right: auto; left: 0; }
+.notepad-panel[data-side="top"], .notepad-panel[data-side="bottom"] { left: 0; width: auto !important; height: 260px; min-width: 0; min-height: 180px; max-width: none; max-height: 50%; }
+.notepad-panel[data-side="top"] { bottom: auto; }
+.notepad-panel[data-side="bottom"] { top: auto; }
+.notepad-panel[data-side="left"] > .files-grip { right: -3px; left: auto; }
+.notepad-panel[data-side="top"] > .files-grip, .notepad-panel[data-side="bottom"] > .files-grip { right: 0; left: 0; width: auto; height: 6px; cursor: ns-resize; }
+.notepad-panel[data-side="top"] > .files-grip { top: auto; bottom: -3px; }
+.notepad-panel[data-side="bottom"] > .files-grip { top: -3px; bottom: auto; }
+/* The tabs, with < and > when they don't fit (js/panes.js stripBar). */
+.np-tabbar { height: auto; padding: 0 4px; border-bottom: 1px solid var(--border); }
+.np-tabbar .np-tabs { flex: 1; min-width: 0; padding: 4px 2px 0; border-bottom: 0; }
+/* The page: a text box over a layer that draws its text with the links coloured (js/notepadlinks.js). Both have the
+   same font, padding and wrapping, so each character sits in the same place; with links on, the box's own text is
+   clear and its caret and selection show over the layer. While Ctrl is held the layer takes the mouse. */
+.np-editor { position: relative; display: flex; flex: 1; min-height: 0; }
+/* Close under the toolbar, as an editor's text is. */
+.np-text, .np-layer, .np-measure { margin: 0; padding: 8px 4px 8px 14px; font: var(--np-size, 13px)/1.5 var(--mono); tab-size: 4; white-space: pre-wrap; overflow-wrap: break-word; }
+.np-text { position: relative; z-index: 1; flex: 1; min-width: 0; border: 0; outline: none; background: transparent; color: var(--text); resize: none; }
+/* The page's toolbar under the tabs (its file, copying to a note, its view switches) and its status bar at the foot. */
+.np-toolbar { padding: 3px 6px; border-bottom: 1px solid var(--border); }
+.np-toolbar .pane-btn:last-child svg { width: 16px; height: 16px; stroke-width: 1; }
+.np-toolbar[hidden], .np-tabbar[hidden], .np-status[hidden] { display: none; }
+.np-sep { flex: none; width: 1px; height: 16px; margin: 0 4px; background: var(--border-strong); }
+.np-status {
+  display: flex; flex-wrap: wrap; gap: 2px 14px; padding: 4px 12px; border-top: 1px solid var(--border);
+  border-radius: 0 0 var(--radius) var(--radius); color: var(--muted); font-size: 11.5px; font-variant-numeric: tabular-nums;
+}
+/* Where each line starts is measured in a hidden copy of the text (js/notepadview.js); line numbers show in a column
+   on the left, the text moved over for it, and the caret's line is marked behind the text. */
+.np-measure { position: absolute; top: 0; left: 0; box-sizing: border-box; visibility: hidden; pointer-events: none; }
+.np-gutter { position: absolute; top: 0; bottom: 0; left: 0; display: none; width: var(--np-gutter); overflow: hidden; z-index: 2; color: var(--faint); font: var(--np-size, 13px)/1.5 var(--mono); pointer-events: none; }
+.np-gutter span { position: absolute; right: 0; }
+.np-gutter span.on { color: var(--text); }
+.np-editor.with-numbers .np-gutter { display: block; }
+/* The numbers are the text's left margin: their column is painted over the text (the box still spans the panel, so
+   its scroll bar does too), and a long line scrolled sideways (no word wrap) goes under it, 8px after the numbers.
+   The column stops above the box's scroll bar (js/notepadview.js), and the caret's line is marked over both. */
+.np-editor.with-numbers { --np-margin: calc(var(--np-gutter) + 8px); }
+.np-editor.with-numbers .np-gutter { width: var(--np-margin); z-index: 3; background: var(--surface); }
+.np-editor.with-numbers .np-gutter span { right: 8px; }
+.np-editor.with-numbers .np-text, .np-editor.with-numbers .np-layer, .np-editor.with-numbers .np-measure { padding-left: calc(var(--np-margin) + 4px); }
+.np-band { position: absolute; left: 0; right: 0; z-index: 4; background: var(--hover); pointer-events: none; }
+.np-band[hidden] { display: none; }
+/* macOS shows a box's own scroll bars only while it scrolls (overlay scroll bars): drawn ones stay, so a long line
+   (no word wrap) shows there's more to the right, as on Windows and Linux. */
+:root[data-os="mac"] .np-text::-webkit-scrollbar { width: 10px; height: 10px; }
+:root[data-os="mac"] .np-text::-webkit-scrollbar-thumb { border: 2px solid var(--surface); border-radius: 5px; background: var(--scroll-thumb); }
+:root[data-os="mac"] .np-text::-webkit-scrollbar-thumb:hover { background: var(--faint); }
+:root[data-os="mac"] .np-text::-webkit-scrollbar-corner { background: var(--surface); }
+.np-text:disabled { opacity: .5; }
+.np-text[hidden] { display: none; }
+/* No pages: New page and Open a file, in the middle of the panel. */
+.np-empty { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--muted); }
+.np-empty[hidden] { display: none; }
+.np-empty p { margin: 0; font-size: 13px; }
+.np-empty-actions { display: flex; gap: 8px; }
+.np-layer { position: absolute; top: 0; left: 0; box-sizing: border-box; overflow: hidden; color: var(--text); pointer-events: none; }
+.np-editor:not(.with-links) .np-layer { display: none; }
+.np-editor.with-links .np-text { color: transparent; caret-color: var(--text); }
+.np-editor.nowrap .np-text, .np-editor.nowrap .np-layer, .np-editor.nowrap .np-measure { white-space: pre; overflow-wrap: normal; }
+.np-link { color: #76e3ea; }
+:root[data-theme="light"] .np-link { color: #1b7c83; }
+.np-editor.np-ctrl .np-text { pointer-events: none; }
+.np-editor.np-ctrl .np-layer { z-index: 2; }
+.np-editor.np-ctrl .np-link { pointer-events: auto; cursor: pointer; }
+.np-editor.np-ctrl .np-link:hover { text-decoration: underline; }
+/* The view switches (links, word wrap, line numbers, the caret's line): lit while on. */
+.files-tools .np-toggle[aria-pressed="true"] { background: var(--pressed); color: var(--text); }
+/* Clipboard's header switches (js/clipboard.js): a short label and a small switch, the Settings one made smaller. */
+.clips-switch {
+  display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 4px; margin-right: 2px;
+  border-radius: 4px; color: var(--muted); font-size: 11px; white-space: nowrap;
+}
+.clips-switch:hover:not(:disabled) { background: var(--hover); color: var(--text); }
+.clips-switch:disabled { opacity: 0.4; cursor: default; }
+.clips-switch .switch { width: 24px; height: 14px; border-radius: 7px; }
+.clips-switch .switch span { top: 2px; left: 2px; width: 10px; height: 10px; }
+.clips-switch[aria-checked="true"] .switch { background: var(--accent); }
+.clips-switch[aria-checked="true"] .switch span { transform: translateX(10px); }
+
+/* "Copy to" (js/copyto.js): terminals on the left, the chosen one's folders on the right */
+.dialog.copyto-dialog { width: 920px; }
+.copyto { display: grid; grid-template-columns: 1fr 1.3fr; gap: 12px; margin-top: 12px; }
+.copyto-side { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.copyto-list { height: min(460px, 60vh); overflow-y: auto; padding: 4px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); }
+.copyto-ws { padding: 6px 6px 2px; color: var(--faint); font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; }
+.copyto-term { display: flex; gap: 8px; align-items: center; height: 28px; padding: 0 6px; border-radius: 6px; font-size: 12.5px; cursor: pointer; }
+.copyto-term:hover { background: var(--hover); }
+.copyto-term.on { background: var(--accent-fill); }
+.copyto-host { color: var(--faint); font-size: 11.5px; }
+.copyto-bar { display: flex; gap: 6px; align-items: center; min-height: 30px; }
+.copyto-list .files-item { cursor: default; -webkit-user-select: none; user-select: none; }
+.copyto-list .files-item .field { height: 24px; }
+/* The tree: rows indented by their depth (js/copyto.js), a + or − box before a folder with folders in it. */
+.copyto-tree .files-item { gap: 4px; height: 26px; }
+.copyto-tree .files-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tree-twist { display: flex; flex: none; align-items: center; justify-content: center; width: 16px; height: 16px; cursor: pointer; }
+.tree-sign { width: 9px; height: 9px; fill: none; stroke: var(--muted); stroke-width: 1; shape-rendering: crispEdges; }
+.tree-twist:hover .tree-sign { stroke: var(--text); }
+.files-list .files-name > svg:not(.files-drive), .copyto-tree .files-name > svg:not(.files-drive) { width: 16px; height: 16px; margin-right: 4px; fill: none; stroke: currentColor; stroke-width: 1; vertical-align: -3px; }
+.copyto-target { overflow: hidden; flex: 1; margin-right: 8px; color: var(--muted); font: 12px var(--mono); text-overflow: ellipsis; white-space: nowrap; }
+.copyto-clashes { max-height: 180px; overflow-y: auto; margin: 0 0 10px; padding: 8px 12px; border-radius: 8px; background: var(--bg); font-size: 12.5px; line-height: 1.7; list-style: none; }
+.copyto-more { color: var(--faint); }
