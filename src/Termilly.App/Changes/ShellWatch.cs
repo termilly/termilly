@@ -20,6 +20,15 @@ internal sealed class ShellWatch : IDisposable
     private const int WatcherBuffer = 64 * 1024;
     /// <summary>How long the watchers are given to catch up with a command's last writes in subfolders.</summary>
     private static readonly TimeSpan CatchUp = TimeSpan.FromMilliseconds(100);
+    /// <summary>
+    /// While reports still come in after that, the wait goes on until none has come for this long, up to the most it
+    /// waits: on a busy machine a watcher's reports can come late.
+    /// </summary>
+    private static readonly TimeSpan Quiet = TimeSpan.FromMilliseconds(100);
+    private static readonly TimeSpan MaxCatchUp = TimeSpan.FromMilliseconds(500);
+    private static readonly TimeSpan CatchUpStep = TimeSpan.FromMilliseconds(25);
+    /// <summary>The most subfolders looked through again for files a watcher's report may have missed.</summary>
+    private const int MaxRecheckedFolders = 50;
 
     private readonly List<FileSystemWatcher> _watchers = [];
     /// <summary>Files directly in the watched folders at the start, and those copied below them: size and last write.</summary>
@@ -27,6 +36,8 @@ internal sealed class ShellWatch : IDisposable
     private readonly List<string> _folders = [];
     /// <summary>Paths the watchers reported, with whether the first report was a new file.</summary>
     private readonly ConcurrentDictionary<string, bool> _touched = new(ChangePaths.Comparer);
+    /// <summary>When the watchers last reported anything (Stopwatch ticks).</summary>
+    private long _lastReport = Stopwatch.GetTimestamp();
     /// <summary>
     /// Folders the command names that didn't exist yet, as the first missing folder under one that did (d:\temp\proj
     /// for d:\temp\proj\sub$i): whatever is in them afterwards, the command made.
@@ -126,11 +137,11 @@ internal sealed class ShellWatch : IDisposable
                 NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.Size,
                 InternalBufferSize = WatcherBuffer,
             };
-            watcher.Created += (_, a) => _touched.TryAdd(a.FullPath, true);
-            watcher.Changed += (_, a) => _touched.TryAdd(a.FullPath, false);
+            watcher.Created += (_, a) => Reported(a.FullPath, true);
+            watcher.Changed += (_, a) => Reported(a.FullPath, false);
             // sed -i and many editors write a temporary file and rename it over the original: a rename onto a path is
             // a change to it, not a new file (git tells the two apart later, see ChangeStore.List and Get).
-            watcher.Renamed += (_, a) => _touched.TryAdd(a.FullPath, false);
+            watcher.Renamed += (_, a) => Reported(a.FullPath, false);
             watcher.EnableRaisingEvents = true;
             _watchers.Add(watcher);
         }
@@ -170,9 +181,10 @@ internal sealed class ShellWatch : IDisposable
     {
         if (_watchers.Any(w => w.IncludeSubdirectories))
         {
-            Thread.Sleep(CatchUp); // let the watcher catch up with the command's last writes in subfolders
+            WaitForReports(); // let the watcher catch up with the command's last writes in subfolders
         }
         var found = new Dictionary<string, bool>(_touched, ChangePaths.Comparer);
+        AddWrittenBeside(found);
         foreach (var folder in _folders)
         {
             try
@@ -210,6 +222,52 @@ internal sealed class ShellWatch : IDisposable
             }
         }
         return found;
+    }
+
+    /// <summary>A watcher's report (internal: tests stand in for a watcher with it).</summary>
+    internal void Reported(string path, bool created)
+    {
+        _touched.TryAdd(path, created);
+        Interlocked.Exchange(ref _lastReport, Stopwatch.GetTimestamp());
+    }
+
+    /// <summary>The catch-up time, then on while reports still come in, up to the most it waits.</summary>
+    private void WaitForReports()
+    {
+        var waited = Stopwatch.StartNew();
+        Thread.Sleep(CatchUp);
+        while (waited.Elapsed < MaxCatchUp && Stopwatch.GetElapsedTime(Interlocked.Read(ref _lastReport)) < Quiet)
+        {
+            Thread.Sleep(CatchUpStep);
+        }
+    }
+
+    /// <summary>
+    /// The files written since the command started in the subfolders a watcher reported something in: a report for one
+    /// of them may come too late, but the one that came says where to look. Listed as changed, so git says whether
+    /// each is new (ChangeStore.FinishWatch).
+    /// </summary>
+    private void AddWrittenBeside(Dictionary<string, bool> found)
+    {
+        var folders = _touched.Keys.Select(Path.GetDirectoryName).OfType<string>()
+            .Where(f => !_folders.Contains(f, ChangePaths.Comparer) && !ChangePaths.Ignored().IsMatch(f + ChangePaths.Separator))
+            .Distinct(ChangePaths.Comparer).Take(MaxRecheckedFolders);
+        foreach (var folder in folders)
+        {
+            try
+            {
+                foreach (var info in new DirectoryInfo(folder).EnumerateFiles().Take(ChangePaths.MaxWalk))
+                {
+                    if (info.LastWriteTimeUtc >= Started)
+                    {
+                        found.TryAdd(info.FullName, false);
+                    }
+                }
+            }
+            catch (Exception ex) when (Storage.IsFileError(ex))
+            {
+            }
+        }
     }
 
     /// <summary>Folders the command made: named by it, or new in Claude's folder.</summary>
