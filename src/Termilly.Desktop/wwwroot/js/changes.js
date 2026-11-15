@@ -273,6 +273,22 @@ const LINK_PATTERNS = [
   ...PATH_PATTERNS,
 ];
 
+/** Punctuation after a link that ends the sentence or closes a bracket around it. */
+const TRAILING = /[.,;!?)\]}'"]+$/;
+/** The same, but not a closing bracket: what may follow a line number in brackets. */
+const TRAILING_NOT_BRACKET = /[.,;!?\]}'"]+$/;
+/** A line and column in brackets at the end, as compilers print them: a.cs(12,5). */
+const LINE_IN_BRACKETS = /\(\d+(?:,\s*\d+)?\)$/;
+
+/**
+ * A link without the punctuation after it, keeping a (line,column) ending whole.
+ * @param {string} link
+ */
+function withoutTrailing(link) {
+  const kept = link.replace(TRAILING_NOT_BRACKET, '');
+  return LINE_IN_BRACKETS.test(kept) ? kept : link.replace(TRAILING, '');
+}
+
 /**
  * The links in one logical line of text: { start, end, text } by character offset, without overlaps.
  * @param {string} text
@@ -288,7 +304,7 @@ export function findLinks(text) {
       let link = group ? m[group] : m[0];
       if (!link) continue;
       const start = m.index + (group ? m[0].indexOf(link) : 0);
-      link = link.replace(/[.,;!?)\]}'"]+$/, '');
+      link = withoutTrailing(link);
       const end = start + link.length;
       if (link.length < MIN_LINK_CHARS || [...found, ...addresses].some(f => start < f.end && end > f.start)) continue;
       found.push({ start, end, text: link });
