@@ -1,0 +1,70 @@
+/* Settings search, the update notice, notes, production safety and session logging. */
+
+/* Settings search (js/settings.js): the box in the nav, results grouped by section, the picked match. */
+.set-search { width: 100%; margin: 0 0 10px; }
+.set-nav-items { display: flex; flex-direction: column; gap: 2px; }
+.set-result-head { display: flex; align-items: center; gap: 8px; margin: 18px 0 2px; color: var(--text-strong); font-size: 13px; font-weight: 600; }
+.set-result-head:first-child { margin-top: 10px; }
+.set-result-head svg { width: 14px; height: 14px; color: var(--accent); stroke-width: 1.4; }
+.set-result-head:hover span { text-decoration: underline; }
+mark.set-hit { border-radius: 2px; background: var(--accent-soft); color: inherit; }
+.set-row.hit-current { margin: 0 -10px; padding-left: 10px; padding-right: 10px; border-radius: 8px; background: var(--accent-fill); }
+.set-row.set-flash { animation: set-flash 1.6s ease-out; border-radius: 8px; }
+@keyframes set-flash { 0%, 40% { background: var(--accent-fill); } 100% { background: transparent; } }
+.set-empty { padding: 24px 0; }
+@media (max-width: 720px) { .set-search { display: none; } }
+
+/* Update notice in the title bar (js/update.js). */
+.update-chip { display: inline-flex; align-items: center; gap: 6px; height: 24px; margin-right: 6px; padding: 0 10px; border: 1px solid var(--accent-soft); border-radius: 12px; background: var(--accent-fill); color: var(--text-strong); font-size: 12px; white-space: nowrap; }
+.update-chip[hidden] { display: none; }
+/* In the brand row, which ignores the mouse (it drags the window) and sets the name’s bold: the chip takes clicks and its own text. */
+.brand .update-chip { margin-right: 0; font-weight: 400; letter-spacing: 0; pointer-events: auto; }
+.update-chip:hover:not(:disabled), .update-chip.open { border-color: var(--accent); }
+.update-chip:disabled { cursor: default; opacity: 0.7; }
+.update-chip svg { width: 13px; height: 13px; color: var(--accent); stroke-width: 1.6; }
+.update-about { display: block; }
+.update-command { margin: 4px 0 14px; padding: 8px 10px; overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; background: var(--term-bg); color: var(--term-text); font: 12px/1.5 var(--mono); white-space: pre; -webkit-user-select: text; user-select: text; }
+@media (max-width: 900px) { .update-chip span { display: none; } }
+
+/* Notes (js/notes.js): the mark on sidebar rows, the pinned line in a terminal's header, the editor. */
+.note-mark { display: inline-flex; flex: none; align-items: center; margin-left: 4px; color: var(--muted); cursor: pointer; }
+.note-mark:hover { color: var(--text); }
+.note-mark svg { width: 12px; height: 12px; stroke-width: 1.4; }
+.note-mark span { position: relative; top: 1px; margin-left: 2px; font-size: 10px; line-height: 1; font-variant-numeric: tabular-nums; }
+.pane-note { display: inline-flex; align-items: center; gap: 5px; min-width: 0; max-width: 40%; height: 20px; margin-left: 6px; padding: 0 8px;
+  border: 1px solid color-mix(in srgb, var(--attention, #f2cc60) 40%, transparent); border-radius: 10px;
+  background: color-mix(in srgb, var(--attention, #f2cc60) 10%, transparent); color: var(--text); font-size: 11.5px; }
+.pane-note[hidden] { display: none; }
+.pane-note span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pane-note svg { width: 12px; height: 12px; flex: none; color: var(--attention, #f2cc60); stroke-width: 1.5; }
+/* Big enough for a runbook, and resizable from its corner (the text box grows with it). */
+.dialog.note-editor { display: flex; flex-direction: column; width: min(760px, 90vw); min-width: 420px; height: min(560px, 80vh); min-height: 300px; max-width: 96vw; max-height: 92vh; overflow: hidden; resize: both; }
+textarea.field.note-text { flex: 1; width: 100%; min-height: 120px; resize: none; font: 12.5px/1.5 var(--mono); }
+.note-pin { display: flex; align-items: center; gap: 8px; margin-top: 10px; color: var(--muted); font-size: 12.5px; }
+.note-editor .dialog-actions .spacer { flex: 1; }
+
+/* Production safety (js/environments.js): a frame in the environment's colour, a tinted header, a chip, and the
+   same colour on the sidebar row. Activity colours (needs you, error) still win while they show. */
+.pane.env:not([data-activity="needs"]):not([data-activity="error"]) { border-color: var(--env); box-shadow: 0 0 0 1px color-mix(in srgb, var(--env) 55%, transparent); }
+.pane.env .pane-header { background: color-mix(in srgb, var(--env) 14%, var(--header)); }
+.pane.env-tint .pane-body { background: color-mix(in srgb, var(--env) 6%, transparent); }
+.env-chip { flex: none; padding: 0 6px; border-radius: 4px; background: var(--env, #ff5c5c); color: #fff; font-size: 10px; font-weight: 700; letter-spacing: 0.06em; line-height: 16px; }
+.env-chip[hidden] { display: none; }
+.pane.env .env-chip { background: var(--env); }
+/* A straight line in the environment's colour beside the row: in the workspace's tree it lies on the tree's
+   vertical line (1px border, 8px padding away) and is a pixel wider, so it reads as that line taking the colour. */
+.tab-row.env { position: relative; }
+.tab-row.env::before { content: ''; position: absolute; top: 0; bottom: 0; left: 0; width: 2px; background: var(--env); }
+.tab-tree > .tab-row.env::before { left: -9px; }
+.tab-row.env .name { color: color-mix(in srgb, var(--env) 70%, var(--text)); }
+.prod-confirm h3 { display: flex; align-items: center; gap: 8px; }
+.prod-confirm .env-chip { font-size: 11px; line-height: 18px; }
+.env-patterns { width: 260px; border-left: 3px solid var(--env); }
+
+/* Session logging (js/logging.js): the REC chip on a logging terminal's header. */
+.rec-chip { display: inline-flex; flex: none; align-items: center; gap: 4px; padding: 0 6px; border-radius: 4px; color: var(--danger, #ff7b72); font-size: 10px; font-weight: 700; letter-spacing: 0.06em; line-height: 16px; }
+.rec-chip[hidden] { display: none; }
+.rec-chip:hover { background: color-mix(in srgb, var(--danger, #ff7b72) 15%, transparent); }
+.rec-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; animation: rec-blink 1.6s ease-in-out infinite; }
+@keyframes rec-blink { 50% { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) { .rec-dot { animation: none; } }
