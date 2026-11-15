@@ -19,7 +19,6 @@ import { runAny, RUN_MODE } from './taskrun.js';
 /** @typedef {import('./reposnippets.js').ListedSnippet} ListedSnippet */
 /** @typedef {{ key: string, title: string, file: string, rows: ListedSnippet[], empty?: string }} Group */
 
-const TASK_ICON = '<svg viewBox="0 0 16 16"><path d="M5.5 4.5l-3 3.5 3 3.5M10.5 4.5l3 3.5-3 3.5"/></svg>';
 const EDIT_ICON = ICONS.rename;
 const NEW_TERMINAL_ICON = ICONS.terminal;
 /** The row's buttons and the footer's (data-sp). */
@@ -37,7 +36,6 @@ pop.className = 'popover sp-pop';
 pop.hidden = true;
 pop.innerHTML = `
   <div class="bp-search">${ICONS.search}<input type="text" spellcheck="false" autocomplete="off" placeholder="Search snippets and tasks"></div>
-  <div class="sp-where"></div>
   <div class="sp-list" role="listbox"></div>
   <div class="sp-foot">
     <span><kbd>Enter</kbd> run</span><span><kbd>Alt</kbd>+<kbd>Enter</kbd> type only</span><span><kbd>Ctrl</kbd>+<kbd>Enter</kbd> new terminal</span>
@@ -47,7 +45,6 @@ pop.innerHTML = `
 
 const input = field(pop, 'input');
 const listEl = find(pop, '.sp-list');
-const whereEl = find(pop, '.sp-where');
 
 /**
  * What the list shows, flat in its order, the row picked, and whether it's open.
@@ -81,16 +78,6 @@ function groups() {
   return list;
 }
 
-/** The line under the search box: which repository the list is for, or why there's none. */
-function whereHtml() {
-  const tab = focusedTab();
-  const repo = repoOfTab(tab);
-  const folder = folderOfTab(tab);
-  if (repo) return `Repo <b>${escapeHtml(repo.name)}</b> from the focused terminal, <code>${escapeHtml(repo.root)}</code>`;
-  if (folder) return `<code>${escapeHtml(folder)}</code> isn’t in a repo`;
-  return tab ? 'The focused terminal isn’t on this computer' : '';
-}
-
 /**
  * @param {string} text
  * @param {string} q
@@ -108,7 +95,6 @@ function marked(text, q) {
 function rowHtml(s, i, q) {
   const meta = s.scope === SOURCE.shared ? LAYOUT_FILE : s.scope === SOURCE.task ? s.description ?? '' : '';
   return `<div class="sp-row${i === pick.cursor ? ' sel' : ''}" data-i="${i}" role="option" title="${escapeHtml(`${s.command}${s.description ? `\n${s.description}` : ''}`)}">
-    <span class="sp-icon">${s.task ? TASK_ICON : ICONS.snippet}</span>
     <span class="sp-text"><span class="sp-name">${marked(s.name, q)}</span><code class="sp-cmd">${marked(s.command, q)}</code></span>
     ${meta ? `<span class="sp-meta">${escapeHtml(meta)}</span>` : ''}
     <span class="sp-acts">${s.task || s.scope === SOURCE.shared ? '' : `<button data-sp="${ACT.edit}" title="Edit">${EDIT_ICON}</button>`}<button data-sp="${ACT.newTerminal}" title="Run in a new terminal (Ctrl+Enter)">${NEW_TERMINAL_ICON}</button></span>
@@ -149,7 +135,6 @@ function matching(q) {
 function render() {
   if (!pick.open) return;
   const q = input.value.trim();
-  whereEl.innerHTML = whereHtml();
   let html = '';
   pick.shown = [];
   for (const g of matching(q)) {
