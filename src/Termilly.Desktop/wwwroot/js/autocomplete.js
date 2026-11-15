@@ -41,19 +41,25 @@ const history = { index: newIndex(), loaded: false, asked: false };
 /**
  * The grey text: the terminal it's in and the rest of the command it shows. The terminal typed in last is the one
  * that gets it.
- * @type {{ tab: Tab | null, rest: string, active: Tab | null }}
+ * waiting: a key went to the shell and its echo hasn't come yet, so the line on screen is out of date and nothing
+ * is offered (→ right after a letter would otherwise take the rest of the old line).
+ * @type {{ tab: Tab | null, rest: string, active: Tab | null, waiting: boolean, timer: number }}
  */
-const ghost = { tab: null, rest: '', active: null };
+const ghost = { tab: null, rest: '', active: null, waiting: false, timer: 0 };
 /** @type {WeakMap<Tab, HTMLElement>} */
 const ghostEls = new WeakMap();
 
-/** The list: its terminal (null while closed), its rows and the one picked. */
-const list = { tab: /** @type {Tab | null} */ (null), items: /** @type {Item[]} */ ([]), index: 0 };
+/** The list: its terminal (null while closed), its rows, the one picked, and the line they were worked out for. */
+const list = { tab: /** @type {Tab | null} */ (null), items: /** @type {Item[]} */ ([]), index: 0, typed: '' };
 const listEl = document.createElement('div');
 listEl.className = 'popover ac-list';
 listEl.hidden = true;
 
 let frame = 0;
+/** A key with no echo (→ at the end of the line) stops the wait after this long. */
+const ECHO_WAIT_MS = 1000;
+/** Keys that are only modifiers: they change nothing on the line. */
+const MODIFIER_KEYS = new Set(['Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'AltGraph']);
 
 const enabled = () => state.settings.terminal?.autocomplete !== false;
 const wordsOn = () => state.settings.terminal?.autocompleteScreenWords !== false;
@@ -96,7 +102,8 @@ export function lineAt(tab) {
   if (!term || !enabled() || !tab.shellMarks || tab.running || tab.virtual || tab.exited || !input?.marker || input.marker.isDisposed) return null;
   const buffer = term.buffer.active;
   const row = buffer.baseY + buffer.cursorY;
-  if (buffer.type !== NORMAL_BUFFER || buffer.viewportY !== buffer.baseY || row < input.marker.line) return null;
+  // At the right edge (a wrap pending) the grey text would have no room to show.
+  if (buffer.type !== NORMAL_BUFFER || buffer.viewportY !== buffer.baseY || row < input.marker.line || buffer.cursorX >= term.cols) return null;
   let typed = '';
   for (let y = input.marker.line; y <= row; y++) {
     const line = buffer.getLine(y);
@@ -124,7 +131,7 @@ function schedule() {
 function update() {
   if (list.tab) renderList();
   const tab = ghost.active;
-  if (!tab || !hasFocus(tab)) return hideGhost();
+  if (!tab || !hasFocus(tab) || ghost.waiting) return hideGhost();
   const line = lineAt(tab);
   if (line) askHistory();
   const best = line && !line.after ? bestFor(history.index, line.typed, whereOf(tab)) : null;
@@ -260,7 +267,11 @@ export function toggleSuggestions(focused) {
     closeList();
     return true;
   }
-  if (!lineAt(tab)) return false;
+  const line = lineAt(tab);
+  if (!line || line.after) return false;
+  // Its own keys didn't go to the shell: there's no echo to wait for.
+  clearTimeout(ghost.timer);
+  ghost.waiting = false;
   askHistory();
   Object.assign(list, { tab, index: 0 });
   ghost.active = tab;
@@ -290,7 +301,10 @@ function rowHtml(item, i, typed) {
 function renderList() {
   const tab = list.tab;
   const line = tab && lineAt(tab);
-  if (!tab || !line || !hasFocus(tab)) return closeList();
+  if (!tab || !line || line.after || !hasFocus(tab)) return closeList();
+  // Until the echo of the last key has come, the rows stay as they are (and can't be taken).
+  if (ghost.waiting) return;
+  list.typed = line.typed;
   list.items = itemsFor(tab, line.typed);
   list.index = Math.min(list.index, Math.max(0, list.items.length - 1));
   const commands = list.items.filter(i => i.kind === KIND.command).length;
@@ -323,8 +337,13 @@ function take(i) {
   const item = list.items[i];
   const tab = list.tab;
   const line = tab && lineAt(tab);
+  // The line changed since the rows were worked out: they're worked out again first.
+  if (tab && line && !line.after && (ghost.waiting || line.typed !== list.typed)) {
+    renderList();
+    return;
+  }
   closeList();
-  if (!item || !tab || !line) return;
+  if (!item || !tab || !line || line.after) return;
   if (item.kind === KIND.word) type(tab, item.text.slice(partialWord(line.typed).length));
   else if (item.text.startsWith(line.typed)) type(tab, item.text.slice(line.typed.length));
   else type(tab, BACKSPACE.repeat([...line.typed].length) + item.text);
@@ -335,7 +354,7 @@ function take(i) {
  * @param {KeyboardEvent} e
  */
 function listKey(e) {
-  if (e.ctrlKey || e.altKey || e.metaKey) return false;
+  if (e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) return false;
   const count = list.items.length;
   if (e.key === KEY.down || e.key === KEY.up) {
     if (count) list.index = (list.index + (e.key === KEY.down ? 1 : -1) + count) % count;
@@ -362,10 +381,27 @@ addInputHook((tab, term, e) => {
   if (e.type !== 'keydown' || e.isComposing) return true;
   ghost.active = tab;
   const used = (list.tab === tab && listKey(e)) || (ghost.tab === tab && !!ghost.rest && ghostKey(tab, e));
-  if (!used) return true;
+  if (!used) {
+    if (!MODIFIER_KEYS.has(e.key)) waitForEcho();
+    return true;
+  }
   e.preventDefault();
   return false;
 });
+
+/** A key is on its way to the shell: the grey text goes until what it changed is on screen. */
+function waitForEcho() {
+  hideGhost();
+  ghost.waiting = true;
+  clearTimeout(ghost.timer);
+  ghost.timer = window.setTimeout(echoed, ECHO_WAIT_MS);
+}
+
+function echoed() {
+  clearTimeout(ghost.timer);
+  ghost.waiting = false;
+  schedule();
+}
 
 on(EVENTS.terminalOpened, (/** @type {Tab} */ tab) => {
   const { term } = /** @type {TabView} */ (tab.view);
@@ -374,7 +410,10 @@ on(EVENTS.terminalOpened, (/** @type {Tab} */ tab) => {
     if (hasFocus(tab)) ghost.active = tab;
     if (ghost.active === tab || list.tab === tab) schedule();
   };
-  term.onWriteParsed(changed);
+  term.onWriteParsed(() => {
+    if (ghost.waiting && ghost.active === tab) echoed();
+    changed();
+  });
   term.onCursorMove(changed);
   term.onResize(changed);
   term.onScroll(changed);

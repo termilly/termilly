@@ -26,14 +26,20 @@ const WORD_EDGE = /^[\s"'`([{<]+|[\s"'`)\]}>,;:.!?]+$/g;
  */
 
 /**
- * Everything known about one command line: how often and when it ran, where, and whether it worked.
+ * Everything known about one command line: how often and when it ran, the folders it ran in (as folderKey has them),
+ * and whether it worked.
  * @typedef {{ command: string, count: number, lastAt: number, ok: boolean, lastFailed: boolean,
- *   folders: Map<string, number>, here: boolean }} Known
+ *   folders: Set<string>, here: boolean }} Known
  */
 
 /**
  * A suggestion: the command, its score, and what the list says about it.
  * @typedef {{ command: string, score: number, here: boolean, failed: boolean, count: number, at: number, elsewhere: boolean }} Suggestion
+ */
+
+/**
+ * Where the terminal is, for ranking: its folder and repository, and the time.
+ * @typedef {{ cwd?: string | null, root?: string | null, now: number }} Where
  */
 
 /** @returns {Map<string, Known>} */
@@ -47,6 +53,12 @@ export const newIndex = () => new Map();
 const suggestible = command => !!command && !command.includes('\n') && !command.includes(REDACTED) && !!command.trim();
 
 /**
+ * The same folder, whatever the slashes and (on Windows) the case.
+ * @param {string} path
+ */
+const folderKey = path => path.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+
+/**
  * Adds one run to the index.
  * @param {Map<string, Known>} index
  * @param {RanCommand} run
@@ -54,7 +66,7 @@ const suggestible = command => !!command && !command.includes('\n') && !command.
 export function addRun(index, run) {
   const command = run.command?.trim();
   if (!suggestible(command)) return;
-  const known = index.get(command) ?? { command, count: 0, lastAt: 0, ok: false, lastFailed: false, folders: new Map(), here: false };
+  const known = index.get(command) ?? { command, count: 0, lastAt: 0, ok: false, lastFailed: false, folders: new Set(), here: false };
   known.count++;
   const failed = !!run.exitCode;
   if (!failed) known.ok = true;
@@ -63,7 +75,7 @@ export function addRun(index, run) {
     known.lastFailed = failed;
   }
   if (!run.host) known.here = true;
-  if (run.cwd) known.folders.set(run.cwd, (known.folders.get(run.cwd) ?? 0) + 1);
+  if (run.cwd) known.folders.add(folderKey(run.cwd));
   index.set(command, known);
 }
 
@@ -78,20 +90,19 @@ export function indexRuns(runs) {
 }
 
 /**
- * The same folder, whatever the slashes and (on Windows) the case.
- * @param {string} path
+ * Where, with its folders as folderKey has them (worked out once for a whole index).
+ * @param {Where} where
  */
-const folderKey = path => path.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+const keyed = ({ cwd, root, now }) => ({ cwd: cwd ? folderKey(cwd) : '', root: root ? folderKey(root) : '', now });
 
 /**
  * @param {Known} known
- * @param {{ cwd?: string | null, root?: string | null, now: number }} where
+ * @param {{ cwd: string, root: string, now: number }} where folders as folderKey has them
  * @returns {Suggestion}
  */
 function scored(known, { cwd, root, now }) {
-  const folders = [...known.folders.keys()].map(folderKey);
-  const here = !!cwd && folders.includes(folderKey(cwd));
-  const repo = !!root && folders.some(f => f === folderKey(root) || f.startsWith(`${folderKey(root)}/`));
+  const here = !!cwd && known.folders.has(cwd);
+  const repo = !!root && [...known.folders].some(f => f === root || f.startsWith(`${root}/`));
   const recency = 2 ** (-(now - known.lastAt) / HALF_LIFE_MS);
   const failed = !known.ok;
   const elsewhere = !known.here;
@@ -100,36 +111,47 @@ function scored(known, { cwd, root, now }) {
   return { command: known.command, score, here, failed: known.lastFailed, count: known.count, at: known.lastAt, elsewhere };
 }
 
+/** Better first: the higher score, then the newer. */
+const better = (/** @type {Suggestion} */ a, /** @type {Suggestion} */ b) => b.score - a.score || b.at - a.at;
+
 /**
  * The commands for what's typed, best first: those that start with it (more than it), then, for the list, those
  * that have it elsewhere.
  * @param {Map<string, Known>} index
  * @param {string} typed
- * @param {{ cwd?: string | null, root?: string | null, now: number, limit: number, anywhere?: boolean }} options
+ * @param {Where & { limit: number, anywhere?: boolean }} options
  * @returns {Suggestion[]}
  */
 export function suggest(index, typed, { limit, anywhere = false, ...where }) {
+  const at = keyed(where);
   const starts = [];
   const contains = [];
   const lower = typed.toLowerCase();
   for (const known of index.values()) {
     if (known.command === typed) continue;
-    if (known.command.startsWith(typed)) starts.push(scored(known, where));
-    else if (anywhere && typed.trim() && known.command.toLowerCase().includes(lower)) contains.push(scored(known, where));
+    if (known.command.startsWith(typed)) starts.push(scored(known, at));
+    else if (anywhere && typed.trim() && known.command.toLowerCase().includes(lower)) contains.push(scored(known, at));
   }
-  const best = (/** @type {Suggestion} */ a, /** @type {Suggestion} */ b) => b.score - a.score || b.at - a.at;
-  return [...starts.sort(best), ...contains.sort(best)].slice(0, limit);
+  return [...starts.sort(better), ...contains.sort(better)].slice(0, limit);
 }
 
 /**
- * The best command to finish the line with (the grey text), or null.
+ * The best command to finish the line with (the grey text), or null: one pass, nothing sorted.
  * @param {Map<string, Known>} index
  * @param {string} typed
- * @param {{ cwd?: string | null, root?: string | null, now: number }} where
+ * @param {Where} where
  */
 export function bestFor(index, typed, where) {
   if (!typed.trim()) return null;
-  return suggest(index, typed, { ...where, limit: 1 })[0] ?? null;
+  const at = keyed(where);
+  /** @type {Suggestion | null} */
+  let best = null;
+  for (const known of index.values()) {
+    if (known.command === typed || !known.command.startsWith(typed)) continue;
+    const s = scored(known, at);
+    if (!best || better(s, best) < 0) best = s;
+  }
+  return best;
 }
 
 /**

@@ -40,7 +40,6 @@ import { chordOf, commandOf, keyHint, KEY_ID } from './keymap.js';
 import { openNewWorktree } from './worktree.js';
 import { openChangedFiles } from './changes.js';
 import { openSnippetsWindow, initSnippetsWindow } from './snippetswindow.js';
-import { toggleSuggestions } from './autocomplete.js';
 import { initSchedules, nobodyAsksIn } from './schedules.js';
 import { toggleSchedules, initSchedulesWindow } from './scheduleswindow.js';
 import { THEMES } from './themes.js';
@@ -64,6 +63,8 @@ import './subagents.js';
 import './notify.js';
 import './phone.js';
 import './snippetprompt.js';
+// After snippetprompt.js: while `snippet:` keys are held there, autocomplete doesn't see them.
+import { toggleSuggestions } from './autocomplete.js';
 import './cost.js';
 import './quit.js';
 import './gitstatus.js';
