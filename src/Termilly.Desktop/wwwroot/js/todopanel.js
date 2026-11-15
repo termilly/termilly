@@ -10,7 +10,7 @@ import { send, onHost } from './host.js';
 import { state, on, persist, newId, wsById, tabsOf, tabTitle, EVENTS } from './store.js';
 import { focusTab } from './panes.js';
 import {
-  AGENT_COMMAND, agentWorking, folderOfList as folderOf, implementPlace, cantImplement, offersImplement, isOnGitHub, checkRepo, keepIssue,
+  AGENT_COMMAND, agentWorking, folderOfList as folderOf, implementPlace, cantImplement, offersImplement, implementing, ALREADY_IMPLEMENTING, isOnGitHub, checkRepo, keepIssue,
   implement, anotherRound, planOf, hasOwnPlan, keepPlan, agentsFor, reviewersAt,
 } from './todoactions.js';
 import { stopRun } from './todorun.js';
@@ -264,7 +264,7 @@ function rowHtml(task, elsewhere) {
   return `<div class="td-task st-${statusOf(task)}${task.done ? ' done' : ''}${chosen ? ' selected' : ''}" data-task="${escapeHtml(task.id)}" tabindex="0"${chosen ? ' aria-selected="true"' : ''}${there}>
     ${statusButtonHtml(task)}
     <div class="td-body"><div class="td-text">${escapeHtml(task.text)}</div>${elsewhere ? '' : aboutHtml(task)}${elsewhere ? `<div class="td-meta"><span class="td-where">${escapeHtml(elsewhere)}</span></div>` : metaHtml(task)}</div>
-    ${elsewhere ? '' : actsHtml(task.issue, false)}
+    ${elsewhere ? '' : actsHtml(task, task.issue, false)}
     ${elsewhere ? '' : reviewHtml(task)}
     ${elsewhere ? '' : askHtml(task)}
   </div>`;
@@ -355,7 +355,7 @@ function aboutHtml(task) {
   if (!open) return `<div class="td-about">${toggle}<span class="td-about-line">${firstHtml}</span></div>`;
   return `<div class="td-about open">${toggle}<div class="td-about-all">
     ${notes ? `<div class="td-details">${escapeHtml(notes)}</div>` : ''}
-    ${steps.map(stepHtml).join('')}
+    ${steps.map(line => stepHtml(task, line)).join('')}
     ${task.review ? saidHtml(task.review) : ''}
   </div></div>`;
 }
@@ -371,21 +371,23 @@ const STEP_MARK = Object.freeze({
 
 /**
  * A step in a task opened out: done or not (ticked by an agent, or in Edit), its text, and Implement and Create GitHub issue for it.
+ * @param {TodoTask} task
  * @param {import('./todolist.js').DetailLine} line
  */
-function stepHtml(line) {
+function stepHtml(task, line) {
   return `<div class="td-step${line.done ? ' done' : ''}" data-sub="${line.at}">
     <span class="td-step-mark">${line.done ? STEP_MARK.done : STEP_MARK.open}</span>
-    <span class="td-step-text">${escapeHtml(line.text)}${issueChip(line.issue)}</span>${actsHtml(line.issue, true)}
+    <span class="td-step-text">${escapeHtml(line.text)}${issueChip(line.issue)}</span>${actsHtml(task, line.issue, true)}
   </div>`;
 }
 
 /**
- * Implement's button: off, saying why, when it can't run here.
+ * Implement's button: off, saying why, when it can't run here or an agent is already on the task.
  * @param {ListRef} ref
+ * @param {TodoTask} task
  */
-function implementButton(ref) {
-  const why = cantImplement(ref);
+function implementButton(ref, task) {
+  const why = cantImplement(ref) || (implementing(task) ? ALREADY_IMPLEMENTING : '');
   const server = implementPlace(ref)?.server;
   const title = why || `Implement${server ? ` on ${server}` : ''}: ${planWords(planOf(ref))}. Click to choose and start`;
   return `<button type="button" class="pane-btn" data-td="${ACTION.implement}" ${why ? 'disabled' : ''} title="${escapeHtml(title)}">${ICONS.play}</button>`;
@@ -394,14 +396,15 @@ function implementButton(ref) {
 /**
  * A task's buttons: Implement when Claude Code is installed or the list's terminal is on an SSH host, Edit, Create GitHub issue when the folder's repository is on
  * GitHub and there's no issue yet, and Delete. A step has Implement and Create GitHub issue only.
+ * @param {TodoTask} task the task, or the step's
  * @param {{ url: string, number: number } | undefined} issue
  * @param {boolean} isStep
  */
-function actsHtml(issue, isStep) {
+function actsHtml(task, issue, isStep) {
   const folder = folderOfList();
   const canIssue = !issue && !!folder && isOnGitHub(folder);
   return `<span class="td-acts">
-    ${current && offersImplement(current) ? implementButton(current) : ''}
+    ${current && offersImplement(current) ? implementButton(current, task) : ''}
     ${isStep ? '' : `<button type="button" class="pane-btn" data-td="${ACTION.edit}" title="Edit">${ICONS.rename}</button>`}
     ${canIssue ? `<button type="button" class="pane-btn" data-td="${ACTION.issue}" title="Create GitHub issue">${ICONS.git}</button>` : ''}
     ${isStep ? '' : `<button type="button" class="pane-btn" data-td="${ACTION.remove}" title="Delete">${ICONS.trash}</button>`}
@@ -1209,6 +1212,11 @@ function implementCard(at, task, step) {
     start: (plan, keep) => {
       if (keep) keepPlan(ref, plan);
       const now = findTask(task.id)?.task ?? task;
+      // It may have started while the card was up (from the phone, or another click).
+      if (implementing(now)) {
+        showToast({ text: `${ALREADY_IMPLEMENTING}.`, state: TOAST.failed });
+        return;
+      }
       if (!implement(ref, now, step, plan).started) showToast({ text: `${agentKind(plan.by).name} can’t start here. ${cantImplement(ref)}`, state: TOAST.failed });
     },
   });
@@ -1551,7 +1559,7 @@ function stepOf(control, task) {
 const ON_TASK = Object.freeze({
   [ACTION.edit]: (_control, task) => beginEdit(task.id),
   [ACTION.remove]: (_control, task) => deleteTask(task),
-  [ACTION.implement]: (control, task) => implementCard(control, task, stepOf(control, task)),
+  [ACTION.implement]: (control, task) => !implementing(task) && implementCard(control, task, stepOf(control, task)),
   [ACTION.round]: (_control, task) => moreRounds(task),
   [ACTION.issue]: (control, task) => beginIssue(task, stepOf(control, task)),
   [ACTION.status]: (control, task) => statusMenu(task, control),
