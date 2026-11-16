@@ -3,7 +3,6 @@
 /* ---- Big windows with a list and a side beside it: the Git window (its Agent changes are a tree), snippets ---- */
 
 .settings.changes-win { flex-direction: column; width: min(1400px, calc(100vw - 48px)); height: min(900px, calc(100vh - 60px)); }
-.changes-win .set-head { flex: none; gap: 10px; }
 .changes-win .set-close { margin-left: 0; }
 .cw-sub { overflow: hidden; color: var(--muted); font-size: 12.5px; text-overflow: ellipsis; white-space: nowrap; }
 .cw-main { display: flex; flex: 1; min-height: 0; }
@@ -31,16 +30,19 @@
 
 /* ---- Git window (js/gitwindow.js): the Changed files window's frame, a list on the left, a diff or a commit on the right ---- */
 
-.git-win .set-head { gap: 10px; }
-.gw-mark { display: grid; place-items: center; color: var(--accent); }
-.gw-mark svg, .gw-refresh svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1; }
-.gw-branch { display: inline-flex; align-items: center; gap: 6px; min-width: 0; color: var(--muted); font: 12px var(--mono); white-space: nowrap; }
+.git-win { background: var(--surface); }
+.git-win > .set-head > .spacer { flex: 1; }
+/* Refresh as the Notepad's tools: its 16px icon drawn at a 1px line. */
+.git-win > .set-head > .gw-refresh { opacity: 1; }
+.git-win > .set-head > .gw-refresh svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1; }
+.git-win > .set-head > .gw-actions { gap: 4px; }
+.gw-branch { display: inline-flex; align-items: center; gap: 6px; min-width: 0; color: var(--muted); font: 11.5px var(--mono); white-space: nowrap; }
 .gw-branch-name { overflow: hidden; text-overflow: clip; }
 .gw-ab { flex: none; color: var(--attention); font: 11px var(--mono); }
-.gw-tabs { margin-left: auto; padding: 2px; }
+.gw-tabbar { display: flex; flex: none; align-items: center; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+.gw-tabs { padding: 2px; }
 .gw-tabs button { padding: 2px 12px; font-size: 12px; }
 .gw-tabs button[hidden] { display: none; }
-.gw-refresh { width: 28px; height: 28px; opacity: 1; }
 .gw-side { width: 380px; }
 .gw-list { flex: 1; min-height: 0; padding: 4px; overflow: auto; outline: none; }
 .gw-list::-webkit-scrollbar { width: 8px; }

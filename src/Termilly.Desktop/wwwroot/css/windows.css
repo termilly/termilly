@@ -34,8 +34,8 @@ body.detached-window .files-head .np-sep { height: 18px; margin: 0 0 0 1px; back
 .detached-controls > .separator { margin: 0 0 0 2px; }
 /* The pin while the window is kept on top. */
 .detached-controls > button.on { background: var(--pressed); color: var(--accent); }
-/* The Notepad's and the Snippets window's title bars are a terminal's (.pane-header, .pane-title, .pane-btn). */
-.notepad-panel > .files-head, .snippets-win > .set-head {
+/* The Notepad's, the Snippets, Schedules and Git windows' title bars are a terminal's (.pane-header, .pane-title, .pane-btn). */
+.notepad-panel > .files-head, .snippets-win > .set-head, .git-win > .set-head {
   flex: none;
   gap: 8px;
   height: 30px;
@@ -44,8 +44,8 @@ body.detached-window .files-head .np-sep { height: 18px; margin: 0 0 0 1px; back
   border-radius: calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0 0;
   background: var(--header);
 }
-.notepad-panel > .files-head > .title-icon, .snippets-win > .set-head > .title-icon { margin-right: 0; }
-.notepad-panel > .files-head .files-title, .snippets-win > .set-head > h2 {
+.notepad-panel > .files-head > .title-icon, .snippets-win > .set-head > .title-icon, .git-win > .set-head > .title-icon { margin-right: 0; }
+.notepad-panel > .files-head .files-title, .snippets-win > .set-head > h2, .git-win > .set-head > h2 {
   overflow: hidden;
   margin: 0;
   color: var(--muted);
@@ -55,12 +55,12 @@ body.detached-window .files-head .np-sep { height: 18px; margin: 0 0 0 1px; back
   white-space: nowrap;
   transition: color 0.15s;
 }
-.notepad-panel:focus-within .files-title, .snippets-win:focus-within > .set-head > h2 { color: var(--text); }
+.notepad-panel:focus-within .files-title, .snippets-win:focus-within > .set-head > h2, .git-win:focus-within > .set-head > h2 { color: var(--text); }
 .notepad-panel:focus-within { border-color: var(--border-strong); box-shadow: 0 0 0 1px var(--accent-soft); }
 .notepad-panel > .files-head > .files-tools { padding-bottom: 1px; }
-.snippets-win > .set-head > .cw-sub { font-size: 12px; }
-.snippets-win > .set-head > .btn.small { height: 22px; }
-.snippets-win > .set-head > .set-close { width: 22px; height: 22px; border-radius: 6px; }
-.snippets-win > .set-head > .set-close svg { width: 10px; height: 10px; }
+.snippets-win > .set-head > .cw-sub, .git-win > .set-head > .cw-sub { font-size: 12px; }
+.snippets-win > .set-head > .btn.small, .git-win > .set-head > .gw-actions > .btn.small { height: 22px; }
+.snippets-win > .set-head > .set-close, .git-win > .set-head > .set-close { width: 22px; height: 22px; border-radius: 6px; }
+.snippets-win > .set-head > .set-close svg, .git-win > .set-head > .set-close svg { width: 10px; height: 10px; }
 .snippets-win { background: var(--surface); }
 .detached-controls svg[viewBox="0 0 16 16"] { width: 16px; height: 16px; stroke-width: 1; }

@@ -26,7 +26,7 @@ import { keepEarlierOfOpen } from './earlier.js';
 import { toggleCaptures } from './triggers.js';
 import { toggleHints } from './hints.js';
 import { toggleScratch } from './scratch.js';
-import { openGitWindow, openAgentChanges, gitFolderOf, onServer, openRemoteGitNotice } from './gitwindow.js';
+import { openGitWindow, openAgentChanges, GIT_BUTTON_ID, gitFolderOf, onServer, openRemoteGitNotice } from './gitwindow.js';
 import { toggleFiles, initFiles } from './filepanel.js';
 import { toggleNotepad, toggleNotepadFromKeys, initNotepad } from './notepad.js';
 import { toggleTodo, initTodo } from './todopanel.js';
@@ -349,7 +349,7 @@ function openGitHere() {
   else if (onServer(tab)) openRemoteGitNotice();
   else openGitWindow(gitFolderOf(tab, ws), { agent: tab });
 }
-byId('git-button').addEventListener('click', openGitHere);
+byId(GIT_BUTTON_ID).addEventListener('click', openGitHere);
 
 /**
  * What each shortcut of the keymap does (keymap.js; its keys are Settings › Keyboard's). One answering false doesn't

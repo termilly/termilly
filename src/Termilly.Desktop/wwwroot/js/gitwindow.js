@@ -16,11 +16,11 @@ import { debounce } from './util.js';
 import { restoreFocus } from './panes.js';
 import { closeAll, showMenu, SEPARATOR } from './popups.js';
 import { confirmDialog, modal } from './dialogs.js';
-import { escapeHtml, highlight, ICONS } from './ui.js';
+import { escapeHtml, highlight } from './ui.js';
 import { buildDiffRows, diffRowHtml, DIFF_SCROLL } from './diffrows.js';
 import { remoteGit } from './remotehost.js';
 import { SETTING_VALUES, CHANGE_KIND, DIFF_SIDE, GIT_ACTION, GITHUB_UNAVAILABLE } from './constants.js';
-import { find, field, targetOf, resizeByGrip } from './dom.js';
+import { byId, find, field, targetOf, resizeByGrip } from './dom.js';
 import { ownWindow } from './ownwindow.js';
 import {
   ITEM, CONFLICT, found, searching, clearSearch, runSearch, searchCode, searchItems, searchEmptyText, searchRowHtml,
@@ -123,6 +123,8 @@ const SIDE = Object.freeze({ ...DIFF_SIDE, conflict: CONFLICT });
 const BRANCH_GROUP = Object.freeze({ current: 'Current', local: 'Local', remote: 'Remote' });
 /** The window's title before (or without) a repository. */
 const GIT_TITLE = 'Git';
+/** The toolbar's Git button (index.html), which opens the window (main.js) and lends it its icon. */
+export const GIT_BUTTON_ID = 'git-button';
 /** The Git window's own window: its name, and where it was left. */
 const WINDOW_KEY = 'git';
 /** A conflicted file's status title, and its side's label over its diff. */
@@ -155,9 +157,16 @@ layer.hidden = true;
 layer.innerHTML = `
   <div class="settings changes-win git-win" role="dialog" aria-modal="true" aria-labelledby="gw-title">
     <div class="set-head">
-      <span class="gw-mark">${ICONS.git}</span>
-      <h2 id="gw-title"></h2>
+      <span class="title-icon gw-icon"></span>
+      <h2 id="gw-title">${GIT_TITLE}</h2>
+      <span class="cw-sub gw-repo"></span>
       <span class="gw-branch"></span>
+      <span class="spacer"></span>
+      <span class="gw-actions"></span>
+      <button class="pane-btn gw-refresh" data-gw="${HEAD_BUTTON.refresh}" title="Refresh (F5)">${REFRESH}</button>
+      <button class="set-close" data-gw="${HEAD_BUTTON.close}" title="Close (Esc)">${CLOSE}</button>
+    </div>
+    <div class="gw-tabbar">
       <span class="seg gw-tabs" role="tablist">
         <button data-gw-tab="${GIT_TAB.agent}" role="tab" title="The files Claude changed in this terminal" hidden>${AGENT_TITLE}</button>
         <button data-gw-tab="${GIT_TAB.changes}" role="tab">Changes</button>
@@ -165,9 +174,6 @@ layer.innerHTML = `
         <button data-gw-tab="${GIT_TAB.branches}" role="tab">Branches</button>
         <button data-gw-tab="${GIT_TAB.issues}" role="tab" title="The repository's issues on GitHub" hidden>Issues</button>
       </span>
-      <span class="gw-actions"></span>
-      <button class="pane-btn gw-refresh" data-gw="${HEAD_BUTTON.refresh}" title="Refresh">${REFRESH}</button>
-      <button class="set-close" data-gw="${HEAD_BUTTON.close}" title="Close (Esc)">${CLOSE}</button>
     </div>
     <div class="cw-main">
       <div class="cw-side gw-side">
@@ -189,7 +195,9 @@ layer.innerHTML = `
 document.body.append(layer);
 
 const box = find(layer, '.git-win');
-const titleEl = find(box, '#gw-title');
+// Its title bar starts with its toolbar button's icon, as the other windows of their own do.
+find(box, '.gw-icon').innerHTML = /** @type {Element} */ (byId(GIT_BUTTON_ID).firstElementChild).outerHTML;
+const repoEl = find(box, '.gw-repo');
 const previewEl = find(layer, '.gw-preview');
 const branchEl = find(layer, '.gw-branch');
 const searchEl = field(layer, '.gw-search input');
@@ -214,10 +222,15 @@ const frame = ownWindow({
 });
 const isOpen = frame.isOpen;
 
-/** @param {string} text the window's title: the repository's name, or what it shows without one */
+/**
+ * What the title bar says after Git, as Schedules says its count: the repository's name, or what it shows without
+ * one; the window's own title (the taskbar's) starts with it.
+ * @param {string} text
+ */
 function showTitle(text) {
-  titleEl.textContent = text;
-  frame.setTitle(text);
+  const shown = text === GIT_TITLE ? '' : text;
+  repoEl.textContent = shown;
+  frame.setTitle(shown ? `${shown} - ${GIT_TITLE}` : GIT_TITLE);
 }
 
 // ---- Asking the host ----
@@ -498,7 +511,7 @@ async function refresh() {
 /** The head: the repository's name and branch (called with a status in hand). */
 function renderHead() {
   showTitle(/** @type {RepoStatus} */ (repo).name);
-  titleEl.title = /** @type {RepoStatus} */ (repo).root;
+  repoEl.title = /** @type {RepoStatus} */ (repo).root;
   const ab = [/** @type {RepoStatus} */ (repo).ahead ? `↑${/** @type {RepoStatus} */ (repo).ahead}` : '',
     /** @type {RepoStatus} */ (repo).behind ? `↓${/** @type {RepoStatus} */ (repo).behind}` : '']
     .filter(Boolean).join(' ');
@@ -555,7 +568,7 @@ function showAgentOnly() {
   repo = null;
   tab = GIT_TAB.agent;
   showTitle(AGENT_TITLE);
-  titleEl.title = '';
+  repoEl.title = '';
   branchEl.textContent = agent.tab ? tabTitle(agent.tab) : '';
   branchEl.title = '';
   renderTabs();
