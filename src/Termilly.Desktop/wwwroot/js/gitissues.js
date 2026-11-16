@@ -9,7 +9,7 @@ import { send } from './host.js';
 import { escapeHtml } from './ui.js';
 import { modal, confirmDialog, FORM_DIALOG } from './dialogs.js';
 import { find, showError, targetOf } from './dom.js';
-import { showToast, TOAST } from './toasts.js';
+import { toastHere, TOAST } from './toasts.js';
 import { askGitHub } from './github.js';
 import { filterIssues } from './githubtext.js';
 import { ago } from './gitsearch.js';
@@ -74,6 +74,17 @@ export async function loadIssues(ctx) {
   issues.error = error;
   issues.loaded = true;
   return true;
+}
+
+/**
+ * GitHub can't be used for the repository (gh missing, signed out, no answer): the list says why, in place of issues.
+ * @param {string} why
+ */
+export function cantLoadIssues(why) {
+  listAsked++;
+  issues.list = [];
+  issues.error = why;
+  issues.loaded = true;
 }
 
 /** Forgets the issues (another repository, the window closed, or Refresh): an answer on its way is dropped. */
@@ -248,7 +259,7 @@ async function setIssueState(issue, ctx, action) {
     await askGitHub(PAGE.githubIssueAct, { root: ctx.root, number: issue.number, action });
     return true;
   } catch (e) {
-    showToast({ text: /** @type {Error} */ (e).message, state: TOAST.failed });
+    toastHere({ text: /** @type {Error} */ (e).message, state: TOAST.failed });
     return false;
   }
 }

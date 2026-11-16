@@ -36,6 +36,7 @@ const WHY = Object.freeze({
   [GITHUB_UNAVAILABLE.missing]: 'Issues and pull requests need the GitHub CLI (gh). Install it from cli.github.com, then refresh.',
   [GITHUB_UNAVAILABLE.signedOut]: 'Sign in to GitHub first: run gh auth login in a terminal, then refresh.',
   [GITHUB_UNAVAILABLE.notGitHub]: 'This repository\'s origin isn\'t on GitHub.',
+  [GITHUB_UNAVAILABLE.unreachable]: 'GitHub didn\'t answer for this repository. Refresh (F5) to try again.',
 });
 
 /** By repository root: what GitHub said, or is saying. */

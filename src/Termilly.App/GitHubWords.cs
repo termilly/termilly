@@ -9,6 +9,7 @@ internal static class GitHubWords
     public const string Repo = "repo";
     public const string Auth = "auth";
     public const string Status = "status";
+    public const string Token = "token";
     public const string RepoName = "nameWithOwner";
     public const string Jq = "--jq";
     public const string Limit = "--limit";

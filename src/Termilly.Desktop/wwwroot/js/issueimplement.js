@@ -10,7 +10,7 @@ import { state, activeWs } from './store.js';
 import { escapeHtml } from './ui.js';
 import { modal, FORM_DIALOG } from './dialogs.js';
 import { find, field, showError } from './dom.js';
-import { showToast, TOAST } from './toasts.js';
+import { toastHere, TOAST } from './toasts.js';
 import { addTasks, updateTask, findTask, findIssueTask, workspaceList, openTodo } from './todo.js';
 import { implement, implementPlace, implementing, cantImplement, planOf, ALREADY_IMPLEMENTING } from './todoactions.js';
 import { planWords } from './todoplan.js';
@@ -57,7 +57,7 @@ export function addIssueTask(issue, ctx) {
   const [id] = addTasks(ref, [{ text: `#${issue.number} ${issue.title}`, details: issueDetails(issue, DETAILS_MOST) }]);
   updateTask(ref, id, { issue: { repo: ctx.repo, number: issue.number, url: issue.url } });
   const found = /** @type {NonNullable<ReturnType<typeof findTask>>} */ (findTask(id));
-  showToast({ text: `#${issue.number} is in To do`, state: TOAST.done, action: { label: 'Show', run: () => openTodo(ref) } });
+  toastHere({ text: `#${issue.number} is in To do`, state: TOAST.done, action: { label: 'Show', run: () => openTodo(ref) } });
   return found;
 }
 
@@ -154,5 +154,5 @@ function startOn(issue, ctx, worktree) {
  * @param {import('./protocol.js').Host_worktreeReply_0 | null} worktree
  */
 function worktreeLeft(worktree) {
-  if (worktree) showToast({ text: `Cancelled. The worktree ${worktree.path} was already made: git worktree remove takes it away.`, state: TOAST.failed, stay: true });
+  if (worktree) toastHere({ text: `Cancelled. The worktree ${worktree.path} was already made: git worktree remove takes it away.`, state: TOAST.failed, stay: true });
 }

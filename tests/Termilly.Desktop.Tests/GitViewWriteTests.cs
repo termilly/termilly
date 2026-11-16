@@ -99,14 +99,38 @@ public sealed class GitViewWriteTests : IDisposable
     [InlineData("missing")]
     [InlineData("signedOut")]
     [InlineData("notGitHub")]
+    [InlineData("unreachable")]
     public void GitHub_status_reports_unavailability(string reason)
     {
-        var runner = new RecordingRunner(request => reason == "missing"
-            ? throw new ProgramMissingException("gh", new IOException())
-            : new ProcessResult(reason == "signedOut" ? 1 : 0, [], "", false));
+        if (reason != "notGitHub")
+        {
+            Git("remote", "set-url", "origin", "https://github.com/a/b.git");
+        }
+        var runner = new RecordingRunner(request => reason switch
+        {
+            "missing" => throw new ProgramMissingException("gh", new IOException()),
+            "signedOut" => new ProcessResult(1, [], "", false),
+            // Signed in (gh keeps that on this computer), but GitHub doesn't answer.
+            "unreachable" => new ProcessResult(request.Arguments[0] == "auth" ? 0 : 1, [], "dial tcp: timeout", false),
+            _ => new ProcessResult(0, [], "", false),
+        });
         var result = new GitHub(runner, TestServices.GitRunner).Status(Repo);
         Assert.False(result.Available);
         Assert.Equal(reason, result.Reason);
+    }
+
+    [Fact]
+    public void GitHub_status_stays_usable_when_only_the_login_lookup_fails()
+    {
+        Git("remote", "set-url", "origin", "https://github.com/a/b.git");
+        var runner = new RecordingRunner(request => request.Arguments[0] switch
+        {
+            "repo" => new ProcessResult(0, Encoding.UTF8.GetBytes("{\"nameWithOwner\":\"a/b\",\"defaultBranchRef\":{\"name\":\"main\"},\"isPrivate\":true}"), "", false),
+            "api" => new ProcessResult(1, [], "dial tcp: timeout", false),
+            _ => new ProcessResult(0, [], "", false),
+        });
+        var result = new GitHub(runner, TestServices.GitRunner).Status(Repo);
+        Assert.Equal(new GitHubAvailability(true, Repo: "a/b", DefaultBranch: "main", IsPublic: false, Login: null), result);
     }
 
     [Fact]

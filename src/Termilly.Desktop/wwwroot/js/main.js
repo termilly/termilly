@@ -349,6 +349,7 @@ function openGitHere() {
   else if (onServer(tab)) openRemoteGitNotice();
   else openGitWindow(gitFolderOf(tab, ws), { agent: tab });
 }
+byId('git-button').addEventListener('click', openGitHere);
 
 /**
  * What each shortcut of the keymap does (keymap.js; its keys are Settings › Keyboard's). One answering false doesn't

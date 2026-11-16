@@ -3,7 +3,8 @@
 /* ---- A window of its own (js/windows.js): a terminal, the Notepad or the Snippets window moved in
    fills it, with no frame of its own (the window has one). ---- */
 body.detached-window > * { flex: 1; min-width: 0; min-height: 0; }
-body.detached-window > .pane, body.detached-window > .notepad-panel, body.detached-window > .snippets-win {
+body.detached-window > .pane, body.detached-window > .notepad-panel, body.detached-window > .snippets-win,
+body.detached-window > .git-win {
   border: 0;
   border-radius: 0;
   box-shadow: none;
@@ -14,6 +15,8 @@ body.detached-window > .pane.focused, body.detached-window > .notepad-panel { bo
 body.detached-window > .notepad-panel { position: static; width: auto !important; height: auto !important; min-height: 0; max-width: none; max-height: none; }
 body.detached-window > .notepad-panel > .files-grip { display: none; }
 body.detached-window > .snippets-win { width: auto; height: auto; }
+/* The Git window always opens in a window of its own: the window sets its size. */
+body.detached-window > .git-win { width: auto; height: auto; max-width: none; max-height: none; }
 /* Its header is the window’s title bar (js/windows.js): Return, Minimize, Maximize and Close at its end, in place of
    its own close and detach buttons; it moves the window, so no pane drag cursor. */
 body.detached-window .pane-header > .pane-actions > .close-btn,

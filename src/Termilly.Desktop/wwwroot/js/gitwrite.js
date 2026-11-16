@@ -9,7 +9,7 @@ import { send } from './host.js';
 import { escapeHtml } from './ui.js';
 import { modal, confirmDialog, FORM_DIALOG } from './dialogs.js';
 import { find, field, showError } from './dom.js';
-import { showToast, TOAST } from './toasts.js';
+import { toastHere, TOAST } from './toasts.js';
 import { askGitHub } from './github.js';
 import { pullRequestDraft } from './githubtext.js';
 
@@ -81,7 +81,7 @@ export async function commitFrom(box, ctx) {
     const { hash } = await ctx.ask(PAGE.gitviewCommitCreate, { root: ctx.repo.root, message: message.value, all });
     message.value = '';
     drafts.delete(ctx.repo.root);
-    showToast({ text: `Committed ${String(hash).slice(0, 7)}`, state: TOAST.done });
+    toastHere({ text: `Committed ${String(hash).slice(0, 7)}`, state: TOAST.done });
   } catch (e) {
     await ctx.showGitError(/** @type {Error} */ (e).message);
   } finally {
@@ -227,7 +227,7 @@ export async function openPush(ctx) {
   if (!pushed) return;
   // What git and the repository's hooks said stays one click away: a hook's warning doesn't stop a push. With a
   // hook, the note stays until it's closed, so what it said can't be missed.
-  showToast({
+  toastHere({
     text: `Pushed ${info.branch}`, state: TOAST.done, stay: info.hasPrePushHook && !!pushed.output.trim(),
     action: pushed.output.trim() ? { label: 'Show output', run: () => showOutput(info.branch, pushed.output) } : null,
   });
@@ -317,6 +317,6 @@ export async function openPullRequest(ctx, issue = null) {
     return { submit };
   });
   if (!created) return;
-  showToast({ text: `Pull request #${created.number} created`, state: TOAST.done, action: { label: OPEN_LABEL, run: () => send(PAGE.openUrl, { url: created.url }) } });
+  toastHere({ text: `Pull request #${created.number} created`, state: TOAST.done, action: { label: OPEN_LABEL, run: () => send(PAGE.openUrl, { url: created.url }) } });
   await ctx.refresh();
 }

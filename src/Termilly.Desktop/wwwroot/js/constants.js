@@ -7,6 +7,7 @@ export const GITHUB_UNAVAILABLE = Object.freeze({
   missing: 'missing',
   signedOut: 'signedOut',
   notGitHub: 'notGitHub',
+  unreachable: 'unreachable',
 });
 
 /** C#: GitHubIssueStates (GitHub.cs). */

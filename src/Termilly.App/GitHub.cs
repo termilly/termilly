@@ -13,7 +13,9 @@ internal static class GitHubUnavailable
     public const string Missing = "missing";
     public const string SignedOut = "signedOut";
     public const string NotGitHub = "notGitHub";
-    public static readonly string[] All = [Missing, SignedOut, NotGitHub];
+    /// <summary>The repository is on GitHub, but GitHub didn't answer for it (offline, a timeout, no access).</summary>
+    public const string Unreachable = "unreachable";
+    public static readonly string[] All = [Missing, SignedOut, NotGitHub, Unreachable];
 }
 
 internal static class GitHubIssueStates
@@ -60,30 +62,55 @@ internal sealed class GitHub(IProcessRunner runner, LocalGitRunner git) : IGitHu
     public GitHubAvailability Status(string root)
     {
         root = git.CheckRoot(root);
+        // What this computer knows comes first (the remote, the sign-in gh keeps): a slow or lost network then
+        // reads as GitHub not answering, never as a repository that isn't on GitHub or a user who isn't signed in.
+        if (!HasGitHubOrigin(root))
+        {
+            return new(false, GitHubUnavailable.NotGitHub);
+        }
         try
         {
-            if (!Run(root, [GitHubWords.Auth, GitHubWords.Status, GitHubWords.Hostname, GitHubWords.Host]).Succeeded)
+            if (!Run(root, [GitHubWords.Auth, GitHubWords.Token, GitHubWords.Hostname, GitHubWords.Host]).Succeeded)
             {
                 return new(false, GitHubUnavailable.SignedOut);
             }
-            var origin = GitView.Text(git, root, GitCommands.Remote, GitCommands.Options.GetUrl, GitCommands.Origin);
-            if (!GitHubOutput.IsGitHubRemote(origin))
-            {
-                return new(false, GitHubUnavailable.NotGitHub);
-            }
             var repo = Parse(Checked(root, [GitHubWords.Repo, GitHubWords.View, GitHubWords.Json, "nameWithOwner,defaultBranchRef,isPrivate"]))!;
-            var login = Checked(root, [GitHubWords.Api, GitHubWords.User, GitHubWords.Hostname, GitHubWords.Host, GitHubWords.Jq, ".login"]).Trim();
             return new(true, Repo: repo[GitHubWords.RepoName].AsText()!,
                 DefaultBranch: repo[GitHubWords.DefaultBranch]?[GitHubWords.Name].AsText(),
-                IsPublic: !repo[GitHubWords.Private].AsBool()!.Value, Login: login);
+                IsPublic: !repo[GitHubWords.Private].AsBool()!.Value, Login: LoginOrNull(root));
         }
         catch (ProgramMissingException e) when (e.Program == Program)
         {
             return new(false, GitHubUnavailable.Missing);
         }
+        catch (IOException)
+        {
+            return new(false, GitHubUnavailable.Unreachable);
+        }
+    }
+
+    private bool HasGitHubOrigin(string root)
+    {
+        try
+        {
+            return GitHubOutput.IsGitHubRemote(GitView.Text(git, root, GitCommands.Remote, GitCommands.Options.GetUrl, GitCommands.Origin));
+        }
         catch (GitFailedException)
         {
-            return new(false, GitHubUnavailable.NotGitHub);
+            return false; // no origin
+        }
+    }
+
+    /// <summary>Who is signed in: only a detail, so GitHub not answering for it leaves the rest usable.</summary>
+    private string? LoginOrNull(string root)
+    {
+        try
+        {
+            return Checked(root, [GitHubWords.Api, GitHubWords.User, GitHubWords.Hostname, GitHubWords.Host, GitHubWords.Jq, ".login"]).Trim();
+        }
+        catch (IOException)
+        {
+            return null;
         }
     }
 

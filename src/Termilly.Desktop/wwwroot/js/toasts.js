@@ -5,6 +5,7 @@
 
 import { escapeHtml, ICONS } from './ui.js';
 import { targetOf, announce } from './dom.js';
+import { hereDoc } from './windows.js';
 
 /** How long a finished note stays, in milliseconds. */
 const SHOWN_MS = 5000;
@@ -24,19 +25,34 @@ export const SHOW = 'Show';
  * @typedef {{ update: (content: ToastContent) => void, close: () => void }} Toast
  */
 
-const area = document.createElement('div');
-area.className = 'toasts';
-area.setAttribute('role', 'status');
-announce(area);
-document.body.append(area);
+/** Each page's notes: the main window's, and a window of its own's (the Git window's) once a note goes there. */
+/** @type {WeakMap<Document, HTMLElement>} */
+const areas = new WeakMap();
+
+/** @param {Document} doc */
+function areaIn(doc) {
+  const known = areas.get(doc);
+  if (known) return known;
+  const area = doc.createElement('div');
+  area.className = 'toasts';
+  area.setAttribute('role', 'status');
+  announce(area);
+  doc.body.append(area);
+  areas.set(doc, area);
+  return area;
+}
+areaIn(document);
 
 /**
- * Shows a note. A running one stays until it's updated as done or failed.
+ * Shows a note, in the main window or in the page given (a window of its own the user works in). A running one stays
+ * until it's updated as done or failed.
  * @param {ToastContent} content
+ * @param {Document} [doc]
  * @returns {Toast}
  */
-export function showToast(content) {
-  const el = document.createElement('div');
+export function showToast(content, doc = document) {
+  const area = areaIn(doc);
+  const el = doc.createElement('div');
   el.className = 'toast';
   /** @type {(() => void) | null} */
   let run = null;
@@ -74,3 +90,9 @@ export function showToast(content) {
   while (area.children.length > MOST) area.firstElementChild?.remove();
   return { update, close };
 }
+
+/**
+ * A note in the window the user is in: a window of its own (the Git window) gets its notes there, not behind it.
+ * @param {ToastContent} content
+ */
+export const toastHere = content => showToast(content, hereDoc());

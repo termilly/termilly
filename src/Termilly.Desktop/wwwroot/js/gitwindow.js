@@ -19,8 +19,9 @@ import { confirmDialog, modal } from './dialogs.js';
 import { escapeHtml, highlight, ICONS } from './ui.js';
 import { buildDiffRows, diffRowHtml, DIFF_SCROLL } from './diffrows.js';
 import { remoteGit } from './remotehost.js';
-import { SETTING_VALUES, CHANGE_KIND, DIFF_SIDE, GIT_ACTION } from './constants.js';
+import { SETTING_VALUES, CHANGE_KIND, DIFF_SIDE, GIT_ACTION, GITHUB_UNAVAILABLE } from './constants.js';
 import { find, field, targetOf, resizeByGrip } from './dom.js';
+import { ownWindow } from './ownwindow.js';
 import {
   ITEM, CONFLICT, found, searching, clearSearch, runSearch, searchCode, searchItems, searchEmptyText, searchRowHtml,
   filtersHtml, stepView, setView, hitKey, markInDiff, ago,
@@ -30,9 +31,9 @@ import {
   hostPreview, showAgentFile, showFirstAgentFile, keepAgentFile, forgetAgentFile,
 } from './gitagent.js';
 import { samePath } from './changetree.js';
-import { gitHubOf, forgetGitHub, askGitHub } from './github.js';
+import { gitHubOf, forgetGitHub, askGitHub, whyNoGitHub } from './github.js';
 import {
-  ISSUE_ITEM, issues, loadIssues, resetIssues, issueItems, issuesEmptyText, issueRowHtml, issueStatesHtml, stateClicked,
+  ISSUE_ITEM, issues, loadIssues, cantLoadIssues, resetIssues, issueItems, issuesEmptyText, issueRowHtml, issueStatesHtml, stateClicked,
   showIssue, forgetIssue, issueClicked,
 } from './gitissues.js';
 import {
@@ -122,6 +123,8 @@ const SIDE = Object.freeze({ ...DIFF_SIDE, conflict: CONFLICT });
 const BRANCH_GROUP = Object.freeze({ current: 'Current', local: 'Local', remote: 'Remote' });
 /** The window's title before (or without) a repository. */
 const GIT_TITLE = 'Git';
+/** The Git window's own window: its name, and where it was left. */
+const WINDOW_KEY = 'git';
 /** A conflicted file's status title, and its side's label over its diff. */
 const CONFLICT_LABEL = 'Conflict';
 const RESTORE_LABEL = 'Restore';
@@ -185,7 +188,8 @@ layer.innerHTML = `
   </div>`;
 document.body.append(layer);
 
-const titleEl = find(layer, '#gw-title');
+const box = find(layer, '.git-win');
+const titleEl = find(box, '#gw-title');
 const previewEl = find(layer, '.gw-preview');
 const branchEl = find(layer, '.gw-branch');
 const searchEl = field(layer, '.gw-search input');
@@ -197,7 +201,24 @@ const actionsEl = find(layer, '.gw-actions');
 const issueBarEl = find(layer, '.gw-issue-bar');
 const commitBoxEl = find(layer, '.gw-commitbox');
 
-const isOpen = () => !layer.hidden;
+/** The window of its own the Git window always opens in (over the main window where there can be none). */
+const frame = ownWindow({
+  key: WINDOW_KEY, title: GIT_TITLE, layer, box, header: /** @type {HTMLElement} */ (box.firstElementChild),
+  close: () => closeGitWindow(),
+  onShown: win => {
+    // Coming back to the window, as to the main one, looks at the working tree again.
+    win?.addEventListener('focus', refreshSoon);
+    listEl.focus();
+  },
+  onGone: () => closed(),
+});
+const isOpen = frame.isOpen;
+
+/** @param {string} text the window's title: the repository's name, or what it shows without one */
+function showTitle(text) {
+  titleEl.textContent = text;
+  frame.setTitle(text);
+}
 
 // ---- Asking the host ----
 
@@ -262,8 +283,11 @@ const issueContext = () => ({
   branch: repo?.branch ?? null,
 });
 
-/** Whether GitHub is there for the repository: gh runs on this PC only. */
-const onGitHub = () => !server && !!github?.available;
+/**
+ * Whether the repository is on GitHub, so the Issues tab shows (gh runs on this PC only). When GitHub can't be used
+ * (gh missing, signed out, no answer), the tab says why rather than going away.
+ */
+const onGitHub = () => !server && !!github && (github.available || (!!github.reason && github.reason !== GITHUB_UNAVAILABLE.notGitHub));
 
 /** Counts the window's openings and closings: an answer from GitHub for an earlier one is dropped. */
 let opening = 0;
@@ -297,6 +321,10 @@ async function loadGitHub() {
 /** The Issues tab: the state filter over the list, the issues loaded, the one picked (or the first) shown. */
 async function showIssuesTab() {
   issueBarEl.innerHTML = issueStatesHtml();
+  if (github && !github.available) {
+    cantLoadIssues(whyNoGitHub(github));
+    return renderList();
+  }
   if (!issues.loaded) {
     renderList();
     if (!await loadIssues(issueContext())) return; // a newer loading draws instead
@@ -350,8 +378,8 @@ export async function openGitWindow(forFolder, { show = GIT_TAB.changes, remote 
   resetIssues();
   forgetIssue();
   opening++;
-  layer.hidden = false;
-  titleEl.textContent = GIT_TITLE;
+  frame.show();
+  showTitle(GIT_TITLE);
   branchEl.innerHTML = '';
   actionsEl.innerHTML = '';
   commitBoxEl.innerHTML = '';
@@ -375,8 +403,8 @@ export function openRemoteGitNotice() {
   selection = null;
   diffState = null;
   cursor = -1;
-  layer.hidden = false;
-  titleEl.textContent = GIT_TITLE;
+  frame.show();
+  showTitle(GIT_TITLE);
   branchEl.innerHTML = '';
   listEl.innerHTML = '<div class="gw-empty">This terminal\'s server hasn\'t said which repository it\'s in. Set up Termilly on this host (in the terminal\'s menu), then cd into a repository.</div>';
   rightEl.innerHTML = '';
@@ -384,9 +412,14 @@ export function openRemoteGitNotice() {
 }
 
 export function closeGitWindow() {
-  if (layer.hidden) return;
+  if (!isOpen()) return;
+  frame.hide();
+  closed();
+}
+
+/** What closing leaves: nothing open, and the answers on their way dropped. */
+function closed() {
   opening++;
-  layer.hidden = true;
   useRight(false);
   startAgent(null);
   forgetIssue();
@@ -422,7 +455,7 @@ async function refresh() {
   } catch (e) {
     repo = null;
     if (agent.tab) return showAgentOnly(); // a terminal's changes, outside a repository
-    titleEl.textContent = GIT_TITLE;
+    showTitle(GIT_TITLE);
     branchEl.innerHTML = '';
     listEl.innerHTML = `<div class="gw-empty">${escapeHtml(/** @type {Error} */ (e).message)}</div>`;
     rightEl.innerHTML = `<div class="gw-message">${escapeHtml(
@@ -464,7 +497,7 @@ async function refresh() {
 
 /** The head: the repository's name and branch (called with a status in hand). */
 function renderHead() {
-  titleEl.textContent = /** @type {RepoStatus} */ (repo).name;
+  showTitle(/** @type {RepoStatus} */ (repo).name);
   titleEl.title = /** @type {RepoStatus} */ (repo).root;
   const ab = [/** @type {RepoStatus} */ (repo).ahead ? `↑${/** @type {RepoStatus} */ (repo).ahead}` : '',
     /** @type {RepoStatus} */ (repo).behind ? `↓${/** @type {RepoStatus} */ (repo).behind}` : '']
@@ -474,7 +507,7 @@ function renderHead() {
   branchEl.title = /** @type {RepoStatus} */ (repo).upstream
     ? `Tracking ${/** @type {RepoStatus} */ (repo).upstream}` : 'No upstream';
   const n = changeCount();
-  find(layer, `[data-gw-tab="${GIT_TAB.changes}"]`).textContent = n ? `Changes ${n}` : 'Changes';
+  find(box, `[data-gw-tab="${GIT_TAB.changes}"]`).textContent = n ? `Changes ${n}` : 'Changes';
   const ctx = writeContext();
   actionsEl.innerHTML = ctx ? headActionsHtml(ctx, pullRequest) : '';
 }
@@ -483,7 +516,7 @@ const changeCount = () => repo ? repo.staged.length + repo.unstaged.length + rep
 
 function renderTabs() {
   // While searching, the list is the search's: no tab is on (a click on one ends the search).
-  for (const b of /** @type {NodeListOf<HTMLElement>} */ (layer.querySelectorAll('[data-gw-tab]'))) {
+  for (const b of /** @type {NodeListOf<HTMLElement>} */ (box.querySelectorAll('[data-gw-tab]'))) {
     b.classList.toggle('on', b.dataset.gwTab === tab && !searching());
     b.setAttribute('aria-selected', String(b.dataset.gwTab === tab && !searching()));
     // Agent changes with a terminal (in a repository, once Claude changed something or when asked for); the rest
@@ -493,9 +526,9 @@ function renderTabs() {
       : !repo && !!agent.tab;
   }
   // Issues only where gh can reach the repository's GitHub.
-  find(layer, `[data-gw-tab="${GIT_TAB.issues}"]`).hidden = !onGitHub();
+  find(box, `[data-gw-tab="${GIT_TAB.issues}"]`).hidden = !onGitHub();
   const n = agentCount();
-  find(layer, `[data-gw-tab="${GIT_TAB.agent}"]`).textContent = n ? `${AGENT_TITLE} ${n}` : AGENT_TITLE;
+  find(box, `[data-gw-tab="${GIT_TAB.agent}"]`).textContent = n ? `${AGENT_TITLE} ${n}` : AGENT_TITLE;
   searchEl.placeholder = tab === GIT_TAB.issues ? SEARCH_ISSUES : repo || !agent.tab ? SEARCH_REPO : SEARCH_AGENT;
   listEl.setAttribute('aria-label', /** @type {Record<string, string>} */ (
     { agent: 'Files Claude changed', changes: 'Changed files', history: 'Commits', branches: 'Branches', issues: 'Issues' })[tab]);
@@ -521,7 +554,7 @@ wireCommitBox(commitBoxEl, writeContext);
 function showAgentOnly() {
   repo = null;
   tab = GIT_TAB.agent;
-  titleEl.textContent = AGENT_TITLE;
+  showTitle(AGENT_TITLE);
   titleEl.title = '';
   branchEl.textContent = agent.tab ? tabTitle(agent.tab) : '';
   branchEl.title = '';
@@ -1348,7 +1381,7 @@ function agentTreeKey(e) {
   return true;
 }
 
-layer.addEventListener('click', e => {
+box.addEventListener('click', e => {
   const t = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-gw-tab]'));
   if (t) return switchTab(/** @type {string} */ (t.dataset.gwTab));
   const button = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-gw]'));
@@ -1391,7 +1424,7 @@ layer.addEventListener('mousedown', e => {
 });
 
 // Keys in the window stay in it (no app shortcuts, no terminal); Escape closes it.
-layer.addEventListener('keydown', e => {
+box.addEventListener('keydown', e => {
   if (e.key === 'Escape' && !e.defaultPrevented) {
     e.preventDefault();
     closeGitWindow();
@@ -1406,7 +1439,7 @@ layer.addEventListener('keydown', e => {
   e.stopPropagation();
 });
 
-resizeByGrip(find(layer, GRIP), sideEl, SIDE_MIN_PX, SIDE_MAX_PX);
+resizeByGrip(find(box, GRIP), sideEl, SIDE_MIN_PX, SIDE_MAX_PX);
 
 // ---- Keeping up ----
 
