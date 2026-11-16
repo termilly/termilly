@@ -195,15 +195,16 @@ export async function openPush(ctx) {
     await ctx.showGitError(/** @type {Error} */ (e).message);
     return;
   }
-  const thenPr = await modal(FORM_DIALOG, pushHtml(info, ctx), (dialog, close) => {
+  /** @type {{ thenPr: boolean, output: string } | null} */
+  const pushed = await modal(FORM_DIALOG, pushHtml(info, ctx), (dialog, close) => {
     const ok = /** @type {HTMLButtonElement} */ (find(dialog, '[data-ok]'));
     const submit = async () => {
       if (ok.disabled) return;
       ok.disabled = true;
       ok.textContent = 'Pushing…';
       try {
-        await ctx.ask(PAGE.gitviewPush, { root: ctx.repo.root });
-        close(!!/** @type {HTMLInputElement | null} */ (dialog.querySelector('[name=then-pr]'))?.checked);
+        const { output } = await ctx.ask(PAGE.gitviewPush, { root: ctx.repo.root });
+        close({ thenPr: !!/** @type {HTMLInputElement | null} */ (dialog.querySelector('[name=then-pr]'))?.checked, output: String(output ?? '') });
       } catch (e) {
         showError(find(dialog, '[data-error]'), /** @type {Error} */ (e).message);
         ok.disabled = false;
@@ -213,7 +214,24 @@ export async function openPush(ctx) {
     return { submit };
   });
   await ctx.refresh();
-  if (thenPr) await openPullRequest(ctx);
+  if (!pushed) return;
+  // What git and the repository's hooks said stays one click away: a hook's warning doesn't stop a push.
+  showToast({
+    text: `Pushed ${info.branch}`, state: TOAST.done,
+    action: pushed.output.trim() ? { label: 'Show output', run: () => showOutput(info.branch, pushed.output) } : null,
+  });
+  if (pushed.thenPr) await openPullRequest(ctx);
+}
+
+/**
+ * What a push printed, git's lines and the hooks' alike, in a dialog.
+ * @param {string} branch
+ * @param {string} output
+ */
+function showOutput(branch, output) {
+  return modal(FORM_DIALOG, `<h3>Pushed ${escapeHtml(branch)}</h3>
+    <pre class="gw-push-output">${escapeHtml(output.trim())}</pre>
+    <div class="dialog-actions"><button class="btn primary" data-ok autofocus>OK</button></div>`, (_dialog, close) => ({ submit: () => close(true) }));
 }
 
 // ---- Pull request ----

@@ -265,28 +265,55 @@ const issueContext = () => ({
 /** Whether GitHub is there for the repository: gh runs on this PC only. */
 const onGitHub = () => !server && !!github?.available;
 
-/** Asks once whether the repository is on GitHub, and whether the branch has a pull request (only one that could). */
+/** Counts the window's openings and closings: an answer from GitHub for an earlier one is dropped. */
+let opening = 0;
+
+/**
+ * Asks, beside git and without holding it up, whether the repository is on GitHub (once a window opening) and
+ * whether the branch has a pull request (only one that could); then the head and the tabs show what it said.
+ */
 async function loadGitHub() {
   if (server || !repo) return;
-  github = await gitHubOf(repo.root);
+  const { root } = repo;
+  const asked = opening;
+  const still = () => asked === opening && repo?.root === root;
+  const status = await gitHubOf(root);
+  if (!still()) return;
+  github = status;
   const ctx = writeContext();
-  if (!ctx || !github.available || pullRequestOf === (repo.branch ?? '')) return;
-  pullRequestOf = repo.branch ?? '';
-  pullRequest = canOpenPullRequest(ctx) || (!!repo.upstream && !!repo.ahead)
-    ? await askGitHub(PAGE.githubPrFor, { root: repo.root, branch: repo.branch }).catch(() => null) // only a hint
-    : null;
+  if (ctx && github.available && pullRequestOf !== (repo.branch ?? '')) {
+    pullRequestOf = repo.branch ?? '';
+    const pr = canOpenPullRequest(ctx) || (!!repo.upstream && !!repo.ahead)
+      ? await askGitHub(PAGE.githubPrFor, { root, branch: repo.branch }).catch(() => null) // only a hint
+      : null;
+    if (!still()) return;
+    pullRequest = pr;
+  }
+  renderHead();
+  renderTabs();
 }
 
-/** The Issues tab: the state filter over the list, the issues loaded, the first one shown. */
+/** The Issues tab: the state filter over the list, the issues loaded, the one picked (or the first) shown. */
 async function showIssuesTab() {
   issueBarEl.innerHTML = issueStatesHtml();
   if (!issues.loaded) {
     renderList();
-    await loadIssues(issueContext());
+    if (!await loadIssues(issueContext())) return; // a newer loading draws instead
   }
-  if (tab !== GIT_TAB.issues) return;
+  if (tab !== GIT_TAB.issues || !isOpen()) return;
   renderList();
-  if (!selection) selectFirst();
+  const at = items.findIndex(i => i.kind === ISSUE_ITEM.issue && i.issue.number === selection?.number);
+  if (at >= 0) openItem(at); else selectFirst();
+}
+
+/** Refresh (its button, F5): GitHub is asked again too, and the issues loaded anew. */
+function refreshAll() {
+  forgetGitHub();
+  pullRequestOf = null;
+  const { filter } = issues;
+  resetIssues();
+  issues.filter = filter; // what the box says still filters
+  return refresh();
 }
 
 // ---- Opening ----
@@ -321,10 +348,12 @@ export async function openGitWindow(forFolder, { show = GIT_TAB.changes, remote 
   forgetGitHub();
   resetIssues();
   forgetIssue();
+  opening++;
   layer.hidden = false;
   titleEl.textContent = GIT_TITLE;
   branchEl.innerHTML = '';
   actionsEl.innerHTML = '';
+  commitBoxEl.innerHTML = '';
   listEl.innerHTML = '<div class="gw-empty">Loading</div>';
   rightEl.innerHTML = '';
   renderTabs();
@@ -355,6 +384,7 @@ export function openRemoteGitNotice() {
 
 export function closeGitWindow() {
   if (layer.hidden) return;
+  opening++;
   layer.hidden = true;
   useRight(false);
   startAgent(null);
@@ -399,8 +429,7 @@ async function refresh() {
         ? `Not in a git repository: ${folder}` : /** @type {Error} */ (e).message)}</div>`;
     return;
   }
-  await loadGitHub();
-  if (!isOpen()) return;
+  loadGitHub(); // draws the head and tabs again when GitHub answers
   if (tab === GIT_TAB.issues && !onGitHub()) tab = GIT_TAB.changes;
   renderHead();
   renderTabs();
@@ -473,10 +502,13 @@ function renderTabs() {
   showCommitBox();
 }
 
-/** The commit box under Changes, while there's something to commit; drawn anew only when it wasn't showing. */
+/**
+ * The commit box under Changes, while there's something to commit. It's drawn once a window opening, so a message
+ * being written stays through other tabs and searches (a commit empties it).
+ */
 function showCommitBox() {
   const show = tab === GIT_TAB.changes && !searching() && !!repo && changeCount() > repo.conflicted.length;
-  if (show && commitBoxEl.hidden) commitBoxEl.innerHTML = commitBoxHtml(/** @type {RepoStatus} */ (repo));
+  if (show && !commitBoxEl.firstElementChild) commitBoxEl.innerHTML = commitBoxHtml(/** @type {RepoStatus} */ (repo));
   commitBoxEl.hidden = !show;
 }
 
@@ -536,7 +568,10 @@ const searchScope = () => ({
 /** @param {string} next */
 async function switchTab(next) {
   if ((next === tab && !searching()) || (!repo && next !== GIT_TAB.agent)) return;
-  if (searching() || tab === GIT_TAB.issues) endSearch(); // the box filtered the issues
+  // The box is the repository's search on the other tabs and the issues' filter on Issues: it starts empty on
+  // either, and a search still waiting for its keys is dropped.
+  if (searching() || searchEl.value || tab === GIT_TAB.issues || next === GIT_TAB.issues) endSearch();
+  forgetIssue();
   tab = next;
   selection = null;
   diffState = null;
@@ -787,7 +822,7 @@ function searchChanged() {
 
 /** Searches a moment after the last key; an empty box ends the search at once. */
 const searchLater = debounce(() => {
-  if (!isOpen() || !canSearch()) return;
+  if (!isOpen() || !canSearch() || tab === GIT_TAB.issues) return;
   cursor = -1;
   if (!searching()) {
     // What the tab showed has nothing to do with the search.
@@ -1319,7 +1354,7 @@ layer.addEventListener('click', e => {
   const action = button?.dataset.gw;
   const ctx = writeContext();
   if (action === HEAD_BUTTON.close) closeGitWindow();
-  else if (action === HEAD_BUTTON.refresh) refresh();
+  else if (action === HEAD_BUTTON.refresh) refreshAll();
   else if (action === WRITE_BUTTON.push && ctx) openPush(ctx);
   else if (action === WRITE_BUTTON.pr && ctx) openPullRequest(ctx);
   else if (action === WRITE_BUTTON.openPr && button?.dataset.url) send(PAGE.openUrl, { url: button.dataset.url });
@@ -1359,7 +1394,7 @@ layer.addEventListener('keydown', e => {
     closeGitWindow();
   } else if (e.key === 'F5' || (e.ctrlKey && e.key.toLowerCase() === 'r')) {
     e.preventDefault();
-    refresh();
+    refreshAll();
   } else if (e.ctrlKey && e.key.toLowerCase() === 'f') {
     e.preventDefault();
     searchEl.focus();

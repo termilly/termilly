@@ -43,3 +43,4 @@
 .gw-push-commit { display: flex; gap: 8px; overflow: hidden; font-size: 12.5px; line-height: 22px; text-overflow: ellipsis; white-space: nowrap; }
 .gw-push-checks { margin: 10px 0 0; padding-left: 18px; color: var(--muted); font-size: 12.5px; line-height: 1.6; }
 .gw-push-checks .gw-warn { color: var(--attention); }
+.gw-push-output { max-height: 50vh; margin: 0 0 12px; padding: 8px 10px; overflow: auto; border-radius: 6px; background: var(--surface); font: 12px/1.45 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }

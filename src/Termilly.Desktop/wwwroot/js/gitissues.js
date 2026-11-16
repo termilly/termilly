@@ -50,23 +50,35 @@ export const issues = {
   error: null,
 };
 
+/** Which loading of the list is the newest: an answer to an older one (another state, another repository) is dropped. */
+let listAsked = 0;
+
 /**
- * Loads the repository's issues in the state picked.
+ * Loads the repository's issues in the state picked. False when a newer loading (or a reset) came meanwhile, and
+ * this one's answer was dropped.
  * @param {IssueContext} ctx
  */
 export async function loadIssues(ctx) {
+  const asked = ++listAsked;
+  /** @type {IssueRow[]} */
+  let list = [];
+  /** @type {string | null} */
+  let error = null;
   try {
-    issues.list = await askGitHub(PAGE.githubIssues, { root: ctx.root, state: issues.state });
-    issues.error = null;
+    list = await askGitHub(PAGE.githubIssues, { root: ctx.root, state: issues.state });
   } catch (e) {
-    issues.list = [];
-    issues.error = /** @type {Error} */ (e).message;
+    error = /** @type {Error} */ (e).message;
   }
+  if (asked !== listAsked) return false;
+  issues.list = list;
+  issues.error = error;
   issues.loaded = true;
+  return true;
 }
 
-/** Forgets the issues (another repository, or the window closed). */
+/** Forgets the issues (another repository, the window closed, or Refresh): an answer on its way is dropped. */
 export function resetIssues() {
+  listAsked++;
   issues.list = [];
   issues.loaded = false;
   issues.error = null;
@@ -123,6 +135,8 @@ export function issueRowHtml(item, i, selected) {
 /** The issue on show, and the window's context for it. */
 /** @type {{ issue: Issue, ctx: IssueContext, el: HTMLElement } | null} */
 let shown = null;
+/** Which showing of an issue is the newest: an older one's answer is dropped. */
+let issueAsked = 0;
 
 /**
  * The buttons over an issue: Implement and Add to To do, or the task it already is; then the rest.
@@ -165,15 +179,19 @@ function issueHtml(issue) {
  * @param {IssueContext} ctx
  */
 export async function showIssue(el, number, ctx) {
+  const asked = ++issueAsked;
+  shown = null;
   el.innerHTML = `<div class="gw-message">${LOADING}</div>`;
   /** @type {Issue} */
   let issue;
   try {
     issue = await askGitHub(PAGE.githubIssue, { root: ctx.root, number });
   } catch (e) {
-    el.innerHTML = `<div class="gw-message">${escapeHtml(/** @type {Error} */ (e).message)}</div>`;
+    if (asked === issueAsked) el.innerHTML = `<div class="gw-message">${escapeHtml(/** @type {Error} */ (e).message)}</div>`;
     return;
   }
+  // Another issue was picked meanwhile, or the tab or the window changed: this answer is no longer wanted.
+  if (asked !== issueAsked) return;
   shown = { issue, ctx, el };
   el.innerHTML = issueHtml(issue);
   drawActions();
@@ -186,8 +204,11 @@ function drawActions() {
   if (at) at.innerHTML = issueActionsHtml(shown.issue, shown.ctx);
 }
 
-/** The issue shown is gone from the right side. */
-export const forgetIssue = () => { shown = null; };
+/** The issue shown is gone from the right side, and one on its way won't be shown. */
+export function forgetIssue() {
+  shown = null;
+  issueAsked++;
+}
 
 /**
  * A comment on the issue, written in a dialog.

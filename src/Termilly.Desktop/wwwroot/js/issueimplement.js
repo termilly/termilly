@@ -12,7 +12,7 @@ import { modal, FORM_DIALOG } from './dialogs.js';
 import { find, field, showError } from './dom.js';
 import { showToast, TOAST } from './toasts.js';
 import { addTasks, updateTask, findTask, findIssueTask, workspaceList, openTodo } from './todo.js';
-import { implement, implementPlace, cantImplement, planOf } from './todoactions.js';
+import { implement, implementPlace, implementing, cantImplement, planOf, ALREADY_IMPLEMENTING } from './todoactions.js';
 import { planWords } from './todoplan.js';
 import { markWorktree } from './worktree.js';
 import { issueBranch, issueDetails } from './githubtext.js';
@@ -29,12 +29,18 @@ const FIELD = Object.freeze({ branch: 'branch', base: 'base', worktree: 'worktre
 const folderKey = path => path.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
 
 /**
+ * Whether a folder is the repository's, or inside it (not a sibling that only starts the same: app-other for app).
+ * @param {string} folder
+ * @param {string} root
+ */
+const inRepository = (folder, root) => folderKey(folder) === folderKey(root) || folderKey(folder).startsWith(`${folderKey(root)}/`);
+
+/**
  * The To do list an issue's task goes in: the workspace whose folder is in the repository, else the one in front.
  * @param {string} root
  */
 function listFor(root) {
-  const key = folderKey(root);
-  const ws = state.workspaces.find(w => w.cwd && folderKey(w.cwd).startsWith(key)) ?? activeWs() ?? state.workspaces[0];
+  const ws = state.workspaces.find(w => w.cwd && inRepository(w.cwd, root)) ?? activeWs() ?? state.workspaces[0];
   return workspaceList(ws);
 }
 
@@ -95,29 +101,55 @@ async function makeWorktree(dialog, ctx) {
  * @param {IssueContext} ctx
  */
 export function openImplementIssue(issue, ctx) {
-  const ref = listFor(ctx.root);
-  const plan = planOf(ref);
-  return modal(FORM_DIALOG, implementHtml(issue, ctx, planWords(plan)), (dialog, close) => {
+  // The plan shown is the list the task would go in; a task linked already keeps its own list (and that list's plan).
+  const shownPlan = planOf(findIssueTask(ctx.repo, issue.number)?.ref ?? listFor(ctx.root));
+  return modal(FORM_DIALOG, implementHtml(issue, ctx, planWords(shownPlan)), (dialog, close) => {
     const ok = /** @type {HTMLButtonElement} */ (find(dialog, '[data-ok]'));
+    const error = find(dialog, '[data-error]');
     const inWorktree = () => /** @type {HTMLInputElement} */ (find(dialog, `[name=${FIELD.worktree}]`)).checked;
     find(dialog, `[name=${FIELD.worktree}]`).addEventListener('change', () => {
       find(dialog, '.gh-branch-fields').hidden = !inWorktree();
     });
     const submit = async () => {
-      const place = implementPlace(ref);
       if (ok.disabled) return;
-      if (!place) return showError(find(dialog, '[data-error]'), cantImplement(ref));
+      if (!implementPlace(listFor(ctx.root))) return showError(error, cantImplement(listFor(ctx.root)));
       ok.disabled = true;
       const worktree = inWorktree() ? await makeWorktree(dialog, ctx) : null;
+      // Cancelled while the worktree was being made: nothing starts, and the folder made is said.
+      if (!dialog.isConnected) return worktreeLeft(worktree);
       if (inWorktree() && !worktree) {
         ok.disabled = false;
         return;
       }
-      const { task } = addIssueTask(issue, ctx);
-      const { started, tab } = implement(ref, task, undefined, plan, { ...place, folder: worktree?.path ?? ctx.root });
-      if (tab && worktree) markWorktree(tab, worktree);
-      close(started);
+      const started = startOn(issue, ctx, worktree);
+      if (started) close(true);
+      else showError(error, started === null ? cantImplement(listFor(ctx.root)) : ALREADY_IMPLEMENTING);
     };
     return { submit };
   });
+}
+
+/**
+ * The issue's task (made now, or the one it already is), and its list's plan started on it, in the worktree when
+ * there's one. True when it started; false when an agent is on the task already; null when it can't run there.
+ * @param {Issue} issue
+ * @param {IssueContext} ctx
+ * @param {import('./protocol.js').Host_worktreeReply_0 | null} worktree
+ */
+function startOn(issue, ctx, worktree) {
+  const { ref, task } = addIssueTask(issue, ctx);
+  const place = implementPlace(ref);
+  if (!place) return null;
+  if (implementing(task)) return false;
+  const { started, tab } = implement(ref, task, undefined, planOf(ref), { ...place, folder: worktree?.path ?? ctx.root });
+  if (tab && worktree) markWorktree(tab, worktree);
+  return started || null;
+}
+
+/**
+ * Says where a worktree made for a cancelled Implement is, so it can be removed.
+ * @param {import('./protocol.js').Host_worktreeReply_0 | null} worktree
+ */
+function worktreeLeft(worktree) {
+  if (worktree) showToast({ text: `Cancelled. The worktree ${worktree.path} was already made: git worktree remove takes it away.`, state: TOAST.failed, stay: true });
 }
