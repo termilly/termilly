@@ -36,6 +36,7 @@ const LOG_DIALOG = 'git-log-dialog';
 /** How much of a log goes into a task's details (the agent can read the rest with gh). */
 const DETAILS_MOST = 12000;
 /** Conclusions that count as a failure. */
+/** @type {Set<string>} */
 const FAILED = new Set([GITHUB_RUN_CONCLUSION.failure, GITHUB_RUN_CONCLUSION.timedOut, GITHUB_RUN_CONCLUSION.startupFailure]);
 
 /** The repository's latest runs, by commit. */

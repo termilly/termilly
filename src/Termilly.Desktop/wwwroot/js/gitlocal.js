@@ -9,7 +9,8 @@ import { SNAPSHOT_REASON, BACKUP_EVENT } from './constants.js';
 import { escapeHtml } from './ui.js';
 import { targetOf } from './dom.js';
 import { ago } from './gitsearch.js';
-import { toastHere, TOAST } from './toasts.js';
+import { toastHere, TOAST, UNDO } from './toasts.js';
+import { LOADING } from './gitissues.js';
 
 /** @typedef {import('./gitsafety.js').Snapshot} Snapshot */
 /** @typedef {{ id: string, at: string, event: string, branch: string, hash: string, subject: string }} Backup */
@@ -27,7 +28,7 @@ import { toastHere, TOAST } from './toasts.js';
 /** The tab's row kinds, so gitwindow.js can tell them apart. */
 export const LOCAL_ITEM = Object.freeze({ snapshot: 'snapshot', backup: 'backup', heading: 'localHeading' });
 
-/** Why a snapshot was taken, in words. */
+/** Why a snapshot was taken, in words. @type {Readonly<Record<string, string>>} */
 const REASON_WORDS = Object.freeze({
   [SNAPSHOT_REASON.timer]: 'Kept while an agent worked',
   [SNAPSHOT_REASON.agentStart]: 'Before an agent started',
@@ -36,7 +37,7 @@ const REASON_WORDS = Object.freeze({
   [SNAPSHOT_REASON.beforeRemove]: 'Before a worktree was removed',
   [SNAPSHOT_REASON.manual]: 'Kept by hand',
 });
-/** What a backup was taken before, in words. */
+/** What a backup was taken before, in words. @type {Readonly<Record<string, string>>} */
 const EVENT_WORDS = Object.freeze({
   [BACKUP_EVENT.prune]: 'Before cleaning up branches',
   [BACKUP_EVENT.undoCommit]: 'Before undoing a commit',
@@ -53,11 +54,12 @@ export const local = {
   error: null,
 };
 
+let asked = 0;
+
 /**
  * Loads the snapshots and backups; true when this was the latest asking.
  * @param {LocalContext} ctx
  */
-let asked = 0;
 export async function loadLocal(ctx) {
   const mine = ++asked;
   try {
@@ -91,7 +93,7 @@ export function localItems() {
 
 /** What the list says with no rows. */
 export const localEmptyText = () => local.error
-  ?? (local.loaded ? 'Nothing kept yet. Uncommitted work is kept here before an agent starts, every 10 minutes while one works, and before anything is thrown away.' : 'Loading');
+  ?? (local.loaded ? 'Nothing kept yet. Uncommitted work is kept here before an agent starts, every 10 minutes while one works, and before anything is thrown away.' : LOADING);
 
 /** @param {string} iso */
 const when = iso => new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
@@ -150,7 +152,7 @@ async function putBack(ctx, s, paths) {
     const what = paths?.length === 1 ? paths[0].split('/').pop() : 'The files';
     toastHere({
       text: `${what} put back as they were ${ago(s.at)}`, state: TOAST.done,
-      action: before ? { label: 'Undo', run: () => ctx.ask(PAGE.gitviewSnapshotRestore, { root: ctx.root, id: before, paths }).then(() => ctx.refresh(), e => ctx.showError(e.message)) } : null,
+      action: before ? { label: UNDO, run: () => ctx.ask(PAGE.gitviewSnapshotRestore, { root: ctx.root, id: before, paths }).then(() => ctx.refresh(), e => ctx.showError(e.message)) } : null,
     });
   } catch (e) {
     ctx.showError(/** @type {Error} */ (e).message);

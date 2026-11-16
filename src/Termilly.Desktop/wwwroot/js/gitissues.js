@@ -32,7 +32,7 @@ const ISSUE_ACT = Object.freeze({
   implement: 'implement', todo: 'todo', showTask: 'show-task', comment: 'comment', close: 'close', reopen: 'reopen',
   open: 'open', state: 'state',
 });
-const LOADING = 'Loading';
+export const LOADING = 'Loading';
 const CLOSE_LABEL = 'Close';
 const REOPEN_LABEL = 'Reopen';
 /** The state filter's choices, in order. */

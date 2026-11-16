@@ -15,6 +15,8 @@ const MOST = 4;
 export const TOAST = Object.freeze({ running: 'running', done: 'done', failed: 'failed' });
 /** A toast's button that shows what it's about: the files, the tasks. */
 export const SHOW = 'Show';
+/** A toast's button that takes back what it reports. */
+export const UNDO = 'Undo';
 
 /**
  * What a note says: its text, its state, and a button. One that stays waits for its button or its ×.

@@ -25,7 +25,7 @@ import { tagCompletion } from './todotagcomplete.js';
 import { escapeHtml, cssColor, tabBadgeHtml, badgeHtml, ICONS } from './ui.js';
 import { byId, find, targetOf, WORKSPACE_ID, DOCK_GRIP, PANEL_HEAD } from './dom.js';
 import { showMenu, openPopover, closePopover, isOpen, closeAll, SEPARATOR } from './popups.js';
-import { showToast, TOAST } from './toasts.js';
+import { showToast, TOAST, UNDO } from './toasts.js';
 import { setNote } from './notes.js';
 import { choiceDialog, confirmDialog, CHOICE } from './dialogs.js';
 import { KEY_ID } from './keymap.js';
@@ -74,8 +74,6 @@ const EDIT_ROW = '.td-edit';
 const EDIT_TEXT = '.td-edit-text';
 /** The edited task's details box: as tall as its text, up to a limit (CSS max-height), then it scrolls. */
 const EDIT_DETAILS = '.td-edit-details';
-/** A deletion's toast button that brings the tasks back. */
-const UNDO = 'Undo';
 const ISSUE_TITLE = '.td-issue-title';
 const ISSUE_BODY = '.td-issue-body';
 const WINDOW_KEY = 'todo';

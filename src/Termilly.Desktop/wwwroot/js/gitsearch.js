@@ -10,7 +10,7 @@ import { PAGE } from './protocol.js';
 import { request } from './host.js';
 import { escapeHtml, highlight, snippet } from './ui.js';
 import { timeAgo } from './util.js';
-import { DIFF_ROW, DIFF_LINE, DIFF_TARGET } from './diffrows.js';
+import { DIFF_ROW, DIFF_LINE, DIFF_TARGET, DIFF_LINE_NO } from './diffrows.js';
 import { GIT_MATCH } from './constants.js';
 
 // What GitView.cs and GitSearch.cs answer with.
@@ -434,7 +434,7 @@ export function markInDiff(container, line = 0) {
     for (const node of nodes) marks.push(...markText(node, needle));
   }
   if (line) {
-    const row = [...container.querySelectorAll(DIFF_LINE)].find(r => r.querySelector('.pv-no')?.textContent === String(line));
+    const row = [...container.querySelectorAll(DIFF_LINE)].find(r => r.querySelector(DIFF_LINE_NO)?.textContent === String(line));
     if (row) {
       row.classList.add(DIFF_TARGET);
       return row;

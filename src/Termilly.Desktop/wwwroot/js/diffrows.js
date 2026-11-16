@@ -19,6 +19,9 @@ export const DIFF_ROW = Object.freeze({
 });
 /** The scrolling box the rows are drawn in, in the change preview and the Git window. */
 export const DIFF_SCROLL = '.pv-scroll';
+/** The drawn rows' box, and a row's line number. */
+export const DIFF_ROWS = '.pv-rows';
+export const DIFF_LINE_NO = '.pv-no';
 /** A drawn line (any row), and the class that marks the one a jump went to. */
 export const DIFF_LINE = '.pv-row';
 export const DIFF_TARGET = 'pv-target';

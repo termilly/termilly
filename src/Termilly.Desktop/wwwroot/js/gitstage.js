@@ -6,11 +6,11 @@
 // stageLines). Discarding keeps the lines in local history first, so it offers Undo.
 
 import { PAGE } from './protocol.js';
-import { DIFF_ROW } from './diffrows.js';
+import { DIFF_ROW, DIFF_LINE_NO, DIFF_ROWS } from './diffrows.js';
 import { DIFF_SIDE, STAGE_LINE_ACTION, CHANGE_KIND } from './constants.js';
 import { escapeHtml } from './ui.js';
 import { targetOf } from './dom.js';
-import { toastHere, TOAST } from './toasts.js';
+import { toastHere, TOAST, UNDO } from './toasts.js';
 import { undoDiscard } from './gitsafety.js';
 
 /** @typedef {import('./diffrows.js').DiffRow} DiffRow */
@@ -24,6 +24,8 @@ import { undoDiscard } from './gitsafety.js';
  *   showError: (text: string) => unknown }} StageContext
  */
 
+/** Taking a file's or its lines' changes out of the next commit. */
+export const UNSTAGE_LABEL = 'Unstage';
 /** A drawn line's own data (its kind and numbers), set on it here. */
 const LINE = '[data-l]';
 /** A picked line's class (git.css). */
@@ -57,6 +59,7 @@ function changesOf(row) {
 export function changeBlocks(rows) {
   /** @type {Array<{ first: number, lines: PickedLines }>} */
   const blocks = [];
+  /** @type {{ first: number, lines: PickedLines } | null} */
   let open = null;
   rows.forEach((row, i) => {
     const changes = changesOf(row);
@@ -75,7 +78,7 @@ export function changeBlocks(rows) {
 
 /** @param {string} side */
 const actionsOf = side => (side === DIFF_SIDE.staged
-  ? [[STAGE_LINE_ACTION.unstage, 'Unstage']]
+  ? [[STAGE_LINE_ACTION.unstage, UNSTAGE_LABEL]]
   : [[STAGE_LINE_ACTION.stage, 'Stage'], [STAGE_LINE_ACTION.discard, 'Discard']]);
 
 /**
@@ -160,7 +163,7 @@ async function run(ctx, action, lines) {
   if (action !== STAGE_LINE_ACTION.discard) return;
   toastHere({
     text: `Discarded ${n} line${n === 1 ? '' : 's'}`, state: TOAST.done,
-    action: { label: 'Undo', run: () => undoDiscard(ctx.ask, ctx.root, [ctx.path]).then(() => ctx.refresh(), e => ctx.showError(e.message)) },
+    action: { label: UNDO, run: () => undoDiscard(ctx.ask, ctx.root, [ctx.path]).then(() => ctx.refresh(), e => ctx.showError(e.message)) },
   });
 }
 
@@ -192,7 +195,7 @@ export function stagingClicked(e, target, rows, ctx) {
     clearPicked(target, ctx.side);
     return true;
   }
-  const line = /** @type {HTMLElement | null} */ (t.closest('.pv-no')?.closest(LINE) ?? null);
+  const line = /** @type {HTMLElement | null} */ (t.closest(DIFF_LINE_NO)?.closest(LINE) ?? null);
   if (!line) return false;
   const all = /** @type {HTMLElement[]} */ ([...target.querySelectorAll(LINE)]);
   const at = all.indexOf(line);
@@ -232,7 +235,7 @@ export const canStageParts = (side, kind, renamed) => (side === DIFF_SIDE.unstag
  * @param {string} side
  */
 export function setUpStaging(target, rows, side) {
-  const rowsEl = /** @type {HTMLElement | null} */ (target.querySelector('.pv-rows'));
+  const rowsEl = /** @type {HTMLElement | null} */ (target.querySelector(DIFF_ROWS));
   if (!rowsEl) return;
   lastPicked = -1;
   decorate(rowsEl, rows, side);

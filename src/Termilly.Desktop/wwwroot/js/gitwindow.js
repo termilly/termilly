@@ -28,7 +28,7 @@ import {
 } from './gitlocal.js';
 import { checks, loadChecks, resetChecks, checkDotHtml, checksSlotHtml, fillChecks, checksClicked } from './gitchecks.js';
 import { WORKTREE_ITEM, worktreeRowHtml, worktreeHtml, worktreeClicked, openPrune } from './gitcleanup.js';
-import { canStageParts, setUpStaging, stagingClicked, clearPicked } from './gitstage.js';
+import { canStageParts, setUpStaging, stagingClicked, clearPicked, UNSTAGE_LABEL } from './gitstage.js';
 import {
   ITEM, CONFLICT, found, searching, clearSearch, runSearch, searchCode, searchItems, searchEmptyText, searchRowHtml,
   filtersHtml, stepView, setView, hitKey, markInDiff, ago,
@@ -1181,7 +1181,7 @@ function drawDiff() {
     + `<div class="pv-scroll gw-diff${sideBySide && !whole ? ' sbs' : ''}${wrap ? ' wrap' : ''}">${pictures}<div class="pv-rows">${rows.map(diffRowHtml).join('')}</div></div>`;
   if (pictures) measureImages(target);
   // Blocks and lines can be staged on their own where the diff is of the working tree, shown as a diff.
-  const parts = !wholeFile && !rows.plain && canStageParts(/** @type {DiffState} */ (diffState).request.side ?? '', data.kind, !!(/** @type {DiffState} */ (diffState).request.oldPath));
+  const parts = !wholeFile && !rows.plain && canStageParts(/** @type {DiffState} */ (diffState).request.side ?? '', data.kind ?? '', !!(/** @type {DiffState} */ (diffState).request.oldPath));
   /** @type {DiffState} */ (diffState).rows = parts ? rows : null;
   if (parts) setUpStaging(/** @type {HTMLElement} */ (target), rows, /** @type {string} */ ((/** @type {DiffState} */ (diffState)).request.side));
   return hit && searching() ? markInDiff(target, hit.line) : null;
@@ -1392,7 +1392,7 @@ function fileMenu(item) {
   }
   if (item.side === SIDE.staged) {
     return [
-      { label: 'Unstage', action: () => act(GIT_ACTION.unstage, { path: item.path }) },
+      { label: UNSTAGE_LABEL, action: () => act(GIT_ACTION.unstage, { path: item.path }) },
       ...(item.status !== 'A' && /** @type {RepoStatus} */ (repo).hasCommits !== false ? [{
         label: RESTORE_LABEL, danger: true,
         action: async () => {

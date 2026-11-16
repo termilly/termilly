@@ -11,7 +11,7 @@ import { modal, confirmDialog, CONFIRM_DIALOG } from './dialogs.js';
 import { find, showError } from './dom.js';
 import { newTab, closeTab } from './panes.js';
 import { tabsIn, CLOSE_GRACE_MS } from './worktree.js';
-import { toastHere, TOAST } from './toasts.js';
+import { toastHere, TOAST, UNDO } from './toasts.js';
 import { ago } from './gitsearch.js';
 
 /**
@@ -29,7 +29,7 @@ import { ago } from './gitsearch.js';
 export const WORKTREE_ITEM = 'worktree';
 /** The prune dialog's class (dialogs.js). */
 const PRUNE_DIALOG = 'git-prune';
-/** Why a branch is offered, in words. */
+/** Why a branch is offered, in words. @type {Readonly<Record<string, string>>} */
 const REASON_WORDS = Object.freeze({
   [PRUNE_REASON.merged]: 'merged',
   [PRUNE_REASON.gone]: 'gone from the remote',
@@ -157,7 +157,7 @@ export async function openPrune(ctx) {
         const { deleted, backups } = await ctx.ask(PAGE.gitviewPruneBranches, { root: ctx.root, branches: picked });
         close(true);
         await ctx.refresh();
-        toastHere({ text: `Deleted ${deleted.length} branch${deleted.length === 1 ? '' : 'es'}`, state: TOAST.done, action: { label: 'Undo', run: () => putBranchesBack(ctx, backups) } });
+        toastHere({ text: `Deleted ${deleted.length} branch${deleted.length === 1 ? '' : 'es'}`, state: TOAST.done, action: { label: UNDO, run: () => putBranchesBack(ctx, backups) } });
       } catch (e) {
         showError(find(dialog, '[data-error]'), /** @type {Error} */ (e).message);
       }

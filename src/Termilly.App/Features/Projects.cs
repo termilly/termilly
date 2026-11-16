@@ -148,7 +148,8 @@ internal sealed class GitHandler(
     private void RegisterSafety(MessageRouter router)
     {
         router.On<FromPage.GitViewSnapshot>(m => Answer(m.RequestId, m.Remote, true,
-            git => GitSnapshots.Take(git.CheckRoot(m.Root), m.Reason ?? "", git)));
+            // Asked for with a terminal's folder too (an agent starting, the timer), which may be inside the repository.
+            git => GitSnapshots.Take(git.CheckRoot(git.RootOf(m.Root) ?? m.Root), m.Reason ?? "", git)));
         router.On<FromPage.GitViewSnapshots>(m => Answer(m.RequestId, m.Remote, true,
             git => GitSnapshots.List(git.CheckRoot(m.Root), git)));
         router.On<FromPage.GitViewSnapshotRestore>(m => Answer(m.RequestId, m.Remote, true,
