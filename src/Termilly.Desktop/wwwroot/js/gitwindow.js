@@ -274,9 +274,10 @@ let opening = 0;
  */
 async function loadGitHub() {
   if (server || !repo) return;
-  const { root } = repo;
+  const { root, branch } = repo;
   const asked = opening;
-  const still = () => asked === opening && repo?.root === root;
+  // The same window opening, repository and branch: else the answer is for what was there before.
+  const still = () => asked === opening && repo?.root === root && repo.branch === branch;
   const status = await gitHubOf(root);
   if (!still()) return;
   github = status;
@@ -1366,6 +1367,8 @@ issueBarEl.addEventListener('click', async e => {
   issueBarEl.innerHTML = issueStatesHtml();
   issues.loaded = false;
   selection = null;
+  forgetIssue(); // the issue on its way was the other state's
+  showNothing();
   await showIssuesTab();
 });
 rightEl.addEventListener('click', e => {

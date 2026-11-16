@@ -122,8 +122,11 @@ export function openImplementIssue(issue, ctx) {
         return;
       }
       const started = startOn(issue, ctx, worktree);
-      if (started) close(true);
-      else showError(error, started === null ? cantImplement(listFor(ctx.root)) : ALREADY_IMPLEMENTING);
+      if (started) return close(true);
+      // It couldn't start after all (the list's place changed, or an agent took the task meanwhile).
+      const why = started === null ? cantImplement(listFor(ctx.root)) : ALREADY_IMPLEMENTING;
+      showError(error, worktree ? `${why}. The worktree ${worktree.path} was made: git worktree remove takes it away.` : why);
+      ok.disabled = false;
     };
     return { submit };
   });

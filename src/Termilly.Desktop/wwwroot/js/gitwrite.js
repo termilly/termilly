@@ -46,13 +46,17 @@ const PUSH_LIST_MOST = 8;
 
 // ---- Commit ----
 
+/** By repository root: a commit message being written, kept until it's committed (the window may close meanwhile). */
+/** @type {Map<string, string>} */
+const drafts = new Map();
+
 /**
  * The commit box under the Changes list: a message, and whether everything goes in (on when nothing is staged).
  * @param {import('./gitsearch.js').RepoStatus} repo
  */
 export function commitBoxHtml(repo) {
   const nothingStaged = !repo.staged.length;
-  return `<textarea class="field gw-commit-msg" data-commit="${BOX.message}" rows="3" placeholder="Commit message" spellcheck="true"></textarea>
+  return `<textarea class="field gw-commit-msg" data-commit="${BOX.message}" rows="3" placeholder="Commit message" spellcheck="true">${escapeHtml(drafts.get(repo.root) ?? '')}</textarea>
     <div class="gw-commit-row">
       <label class="gw-commit-all" title="Stages every change and new file first"><input type="checkbox" data-commit="${BOX.all}"${nothingStaged ? ' checked' : ''}> All changes</label>
       <button class="btn small primary" data-commit="${BOX.go}" title="Commit (Ctrl+Enter)">Commit</button>
@@ -76,6 +80,7 @@ export async function commitFrom(box, ctx) {
   try {
     const { hash } = await ctx.ask(PAGE.gitviewCommitCreate, { root: ctx.repo.root, message: message.value, all });
     message.value = '';
+    drafts.delete(ctx.repo.root);
     showToast({ text: `Committed ${String(hash).slice(0, 7)}`, state: TOAST.done });
   } catch (e) {
     await ctx.showGitError(/** @type {Error} */ (e).message);
@@ -101,6 +106,11 @@ export function wireCommitBox(box, context) {
       e.preventDefault();
       commitFrom(box, ctx);
     }
+  });
+  box.addEventListener('input', e => {
+    const ctx = context();
+    const typed = /** @type {HTMLElement} */ (e.target);
+    if (ctx && typed.matches(`[data-commit="${BOX.message}"]`)) drafts.set(ctx.repo.root, /** @type {HTMLTextAreaElement} */ (typed).value);
   });
 }
 
@@ -215,9 +225,10 @@ export async function openPush(ctx) {
   });
   await ctx.refresh();
   if (!pushed) return;
-  // What git and the repository's hooks said stays one click away: a hook's warning doesn't stop a push.
+  // What git and the repository's hooks said stays one click away: a hook's warning doesn't stop a push. With a
+  // hook, the note stays until it's closed, so what it said can't be missed.
   showToast({
-    text: `Pushed ${info.branch}`, state: TOAST.done,
+    text: `Pushed ${info.branch}`, state: TOAST.done, stay: info.hasPrePushHook && !!pushed.output.trim(),
     action: pushed.output.trim() ? { label: 'Show output', run: () => showOutput(info.branch, pushed.output) } : null,
   });
   if (pushed.thenPr) await openPullRequest(ctx);
