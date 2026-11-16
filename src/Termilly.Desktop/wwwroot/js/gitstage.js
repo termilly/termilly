@@ -111,6 +111,16 @@ function decorate(rowsEl, rows, side) {
     const [c] = changesOf(row);
     if (c) el.dataset.l = c.removed ? `r${c.removed}` : `a${c.added}`;
   });
+  // Each changed line's number is a box to tick, from the keyboard too.
+  for (const el of /** @type {NodeListOf<HTMLElement>} */ (rowsEl.querySelectorAll(LINE))) {
+    const no = /** @type {HTMLElement | null} */ (el.querySelector(DIFF_LINE_NO));
+    if (!no) continue;
+    const l = /** @type {string} */ (el.dataset.l);
+    Object.assign(no, { tabIndex: 0 });
+    no.setAttribute('role', 'checkbox');
+    no.setAttribute('aria-checked', String(false));
+    no.setAttribute('aria-label', `${l[0] === 'r' ? 'Removed' : 'Added'} line ${l.slice(1)}`);
+  }
   changeBlocks(rows).forEach((block, k) => {
     els[block.first]?.insertAdjacentHTML('beforebegin', `<div class="${BLOCK_BAR}" data-block="${k}">${buttonsHtml(side, 'data-block-act')}</div>`);
   });
@@ -154,16 +164,19 @@ function showPickBar(target, side) {
  */
 async function run(ctx, action, lines) {
   const n = lines.removed.length + lines.added.length;
+  /** @type {{ kept?: string | null }} */
+  let done;
   try {
-    await ctx.ask(PAGE.gitviewStageLines, { root: ctx.root, path: ctx.path, side: ctx.side, action, ...lines });
+    done = await ctx.ask(PAGE.gitviewStageLines, { root: ctx.root, path: ctx.path, side: ctx.side, action, ...lines });
   } catch (e) {
     return ctx.showError(/** @type {Error} */ (e).message);
   }
   await ctx.refresh();
   if (action !== STAGE_LINE_ACTION.discard) return;
+  const { kept } = done;
   toastHere({
     text: `Discarded ${n} line${n === 1 ? '' : 's'}`, state: TOAST.done,
-    action: { label: UNDO, run: () => undoDiscard(ctx.ask, ctx.root, [ctx.path]).then(() => ctx.refresh(), e => ctx.showError(e.message)) },
+    action: kept ? { label: UNDO, run: () => undoDiscard(ctx.ask, ctx.root, kept, [ctx.path]).then(() => ctx.refresh(), e => ctx.showError(e.message)) } : null,
   });
 }
 
@@ -197,15 +210,42 @@ export function stagingClicked(e, target, rows, ctx) {
   }
   const line = /** @type {HTMLElement | null} */ (t.closest(DIFF_LINE_NO)?.closest(LINE) ?? null);
   if (!line) return false;
+  pickLine(line, e.shiftKey, target, ctx.side);
+  return true;
+}
+
+/**
+ * Picks a line, or lets it go; with shift, the run from the line picked last.
+ * @param {HTMLElement} line
+ * @param {boolean} run
+ * @param {HTMLElement} target
+ * @param {string} side
+ */
+function pickLine(line, run, target, side) {
   const all = /** @type {HTMLElement[]} */ ([...target.querySelectorAll(LINE)]);
   const at = all.indexOf(line);
-  if (e.shiftKey && lastPicked >= 0) {
+  if (run && lastPicked >= 0) {
     for (let i = Math.min(at, lastPicked); i <= Math.max(at, lastPicked); i++) all[i].classList.add(PICKED);
   } else {
     line.classList.toggle(PICKED);
   }
+  for (const el of all) el.querySelector(DIFF_LINE_NO)?.setAttribute('aria-checked', String(el.classList.contains(PICKED)));
   lastPicked = at;
-  showPickBar(target, ctx.side);
+  showPickBar(target, side);
+}
+
+/**
+ * Space or Enter on a line's number picks it, as a click does (shift: the run). True when the key was staging's.
+ * @param {KeyboardEvent} e
+ * @param {HTMLElement} target
+ * @param {string} side
+ */
+export function stagingKey(e, target, side) {
+  if (e.key !== ' ' && e.key !== 'Enter') return false;
+  const line = /** @type {HTMLElement | null} */ (/** @type {Element} */ (e.target).closest?.(DIFF_LINE_NO)?.closest(LINE) ?? null);
+  if (!line || !target.contains(line)) return false;
+  e.preventDefault();
+  pickLine(line, e.shiftKey, target, side);
   return true;
 }
 
@@ -216,6 +256,7 @@ export function stagingClicked(e, target, rows, ctx) {
  */
 export function clearPicked(target, side) {
   for (const el of target.querySelectorAll(`.${PICKED}`)) el.classList.remove(PICKED);
+  for (const no of target.querySelectorAll('[aria-checked="true"]')) no.setAttribute('aria-checked', String(false));
   lastPicked = -1;
   showPickBar(target, side);
 }

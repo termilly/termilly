@@ -140,8 +140,8 @@ internal sealed class GitHandler(
         RegisterSafety(router);
         router.On<FromPage.GitViewAct>(m => Answer(m.RequestId, m.Remote, action: true, git =>
         {
-            GitView.Act(git.CheckRoot(m.Root), m.Action ?? "", m.Path, m.Ref, m.HasCommits, git);
-            return new GitActionDone(Ok: true);
+            var kept = GitView.Act(git.CheckRoot(m.Root), m.Action ?? "", m.Path, m.Ref, m.HasCommits, git);
+            return new GitActionDone(Ok: true, Kept: kept);
         }));
     }
 
@@ -151,7 +151,7 @@ internal sealed class GitHandler(
             // Asked for with a terminal's folder too (an agent starting, the timer), which may be inside the repository.
             git => GitSnapshots.Take(git.CheckRoot(git.RootOf(m.Root) ?? m.Root), m.Reason ?? "", git)));
         router.On<FromPage.GitViewSnapshots>(m => Answer(m.RequestId, m.Remote, true,
-            git => GitSnapshots.List(git.CheckRoot(m.Root), git)));
+            git => GitSnapshots.List(git.CheckRoot(m.Root), git, removed: true)));
         router.On<FromPage.GitViewSnapshotRestore>(m => Answer(m.RequestId, m.Remote, true,
             git => GitSnapshots.Restore(git.CheckRoot(m.Root), m.Id, m.Paths, git)));
         router.On<FromPage.GitViewBackups>(m => Answer(m.RequestId, m.Remote, true,

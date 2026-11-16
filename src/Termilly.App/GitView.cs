@@ -30,7 +30,8 @@ internal sealed record GitCommitDetail(
 internal sealed record GitDiffTarget(string Path, string? OldPath, string Side, string? Hash = null);
 
 /// <summary>A Git window action's answer when it worked (a failure answers with git's error instead).</summary>
-internal sealed record GitActionDone(bool Ok);
+/// <summary>An action done; <see cref="Kept"/> is the local history snapshot holding what it threw away, for its Undo.</summary>
+internal sealed record GitActionDone(bool Ok, string? Kept = null);
 
 /// <summary>A branch in the Branches tab.</summary>
 internal sealed record GitBranchInfo(
@@ -297,25 +298,26 @@ internal static partial class GitView
     /// git's own refusals (changes a switch would overwrite, a branch that already exists, a name git won't take)
     /// come back as they are.
     /// </summary>
-    public static void Act(string root, string action, string? path, string? reference, bool hasCommits, GitRunner git)
+    /// <returns>The snapshot holding what a discard threw away; null for the other actions.</returns>
+    public static string? Act(string root, string action, string? path, string? reference, bool hasCommits, GitRunner git)
     {
         switch (action)
         {
             case GitActions.Switch:
                 SwitchTo(root, reference, git);
-                return;
+                return null;
             case GitActions.NewBranch:
                 git.Run(root, [GitCommands.Switch, GitCommands.Options.Create, NewBranchName(reference)]);
-                return;
+                return null;
             case GitActions.Fetch:
                 git.Run(root, [GitCommands.Fetch, GitCommands.Options.AllRemotes]);
-                return;
+                return null;
         }
         var file = git.CheckPath(root, path);
         if (action == GitActions.Ignore)
         {
             git.AppendLine(root, GitCommands.GitIgnore, "/" + file);
-            return;
+            return null;
         }
         string[] args = action switch
         {
@@ -327,11 +329,10 @@ internal static partial class GitView
             GitActions.Delete => [GitCommands.Clean, "-f", GitCommands.Options.Quiet, GitCommands.Options.Paths, file],
             _ => throw new ArgumentException("Unknown action."),
         };
-        if (action is GitActions.Discard or GitActions.DiscardAll or GitActions.Delete)
-        {
-            GitSnapshots.Before(root, SnapshotReasons.BeforeDiscard, git);
-        }
+        var kept = action is GitActions.Discard or GitActions.DiscardAll or GitActions.Delete
+            ? GitSnapshots.Before(root, SnapshotReasons.BeforeDiscard, git) : null;
         git.Run(root, args);
+        return kept;
     }
 
     /// <summary>Checks out a branch git listed; a remote one as a new local branch that tracks it.</summary>

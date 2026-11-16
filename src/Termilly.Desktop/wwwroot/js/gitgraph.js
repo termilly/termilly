@@ -10,7 +10,10 @@ export const LANE_COLOURS = 8;
 const LANE_PX = 12;
 /** A commit's dot. */
 const DOT_RADIUS = 3.5;
-/** Lanes drawn at most; a busier history's further lanes are cut at the column's edge. */
+/**
+ * Lanes shown at most: a busier history's further lanes run on past the column's edge (cut off there, never drawn
+ * on top of another lane), and a commit on one of them shows as a hollow dot at the edge.
+ */
 const MOST_LANES = 14;
 
 /**
@@ -61,7 +64,7 @@ export function graphRows(commits) {
 }
 
 /** @param {number} lane */
-const xOf = lane => LANE_PX / 2 + Math.min(lane, MOST_LANES) * LANE_PX;
+const xOf = lane => LANE_PX / 2 + lane * LANE_PX;
 
 /**
  * A line from one point to another, bending halfway when it changes lanes.
@@ -77,7 +80,7 @@ function line(x1, y1, x2, y2, lane) {
  * How wide the graph's column is for these rows: their busiest one.
  * @param {GraphRow[]} rows
  */
-export const graphWidth = rows => xOf(Math.max(0, ...rows.map(r => Math.max(r.above.length, r.below.length, r.lane + 1))) - 1) + LANE_PX / 2;
+export const graphWidth = rows => xOf(Math.min(MOST_LANES, Math.max(1, ...rows.map(r => Math.max(r.above.length, r.below.length, r.lane + 1)))) - 1) + LANE_PX / 2;
 
 /**
  * One row's piece of the graph, as SVG: lanes passing by, those ending at the commit, its dot and the lines to its
@@ -98,6 +101,7 @@ export function graphSvg(row, hash, width, height, head) {
     else if (row.below[i] === h) parts.push(line(xOf(i), 0, xOf(i), height, i));
   });
   for (const to of row.toParents) parts.push(line(x, mid, xOf(to), height, to));
-  const dot = `<circle class="gw-lane-${row.lane % LANE_COLOURS}${head ? ' head' : ''}" cx="${x}" cy="${mid}" r="${DOT_RADIUS}"/>`;
+  const far = row.lane >= MOST_LANES;
+  const dot = `<circle class="gw-lane-${row.lane % LANE_COLOURS}${head || far ? ' head' : ''}" cx="${far ? width - DOT_RADIUS : x}" cy="${mid}" r="${DOT_RADIUS}"/>`;
   return `<svg class="gw-graph" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" aria-hidden="true">${parts.join('')}${dot}</svg>`;
 }

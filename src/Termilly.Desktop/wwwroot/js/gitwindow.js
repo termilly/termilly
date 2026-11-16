@@ -28,7 +28,9 @@ import {
 } from './gitlocal.js';
 import { checks, loadChecks, resetChecks, checkDotHtml, checksSlotHtml, fillChecks, checksClicked } from './gitchecks.js';
 import { WORKTREE_ITEM, worktreeRowHtml, worktreeHtml, worktreeClicked, openPrune } from './gitcleanup.js';
-import { canStageParts, setUpStaging, stagingClicked, clearPicked, UNSTAGE_LABEL } from './gitstage.js';
+import { undoDiscard } from './gitsafety.js';
+import { toastHere, TOAST, UNDO } from './toasts.js';
+import { canStageParts, setUpStaging, stagingClicked, stagingKey, clearPicked, UNSTAGE_LABEL } from './gitstage.js';
 import {
   ITEM, CONFLICT, found, searching, clearSearch, runSearch, searchCode, searchItems, searchEmptyText, searchRowHtml,
   filtersHtml, stepView, setView, hitKey, markInDiff, ago,
@@ -256,10 +258,27 @@ function showTitle(text) {
  * @returns {Promise<any>}
  */
 async function ask(type, payload) {
-  const m = await request(type, { ...payload, remote: server ?? undefined });
+  return askOn(server, type, payload);
+}
+
+/**
+ * The same, on a machine named now: what an Undo or a dialog keeps, so it acts where it was offered even after the
+ * window moved to another repository (this PC's, or a server's).
+ * @param {string | null} on
+ * @param {any} type
+ * @param {any} payload
+ */
+async function askOn(on, type, payload) {
+  const m = await request(type, { ...payload, remote: on ?? undefined });
   if (m.error) throw new Error(m.error);
   return m.data;
 }
+
+/** An ask tied to the machine the window is on now. @returns {import('./gitsafety.js').Ask} */
+const askHere = () => {
+  const on = server;
+  return (type, payload) => askOn(on, type, payload);
+};
 
 // ---- State ----
 
@@ -366,7 +385,7 @@ async function showIssuesTab() {
 }
 
 /** What the Local history tab (gitlocal.js) works with. @returns {import('./gitlocal.js').LocalContext} */
-const localContext = () => ({ ask, root: /** @type {RepoStatus} */ (repo).root, refresh: () => refresh(), showError: showGitError });
+const localContext = () => ({ ask: askHere(), root: /** @type {RepoStatus} */ (repo).root, remote: !!server, refresh: () => refresh(), showError: showGitError });
 
 /** The Local history tab: what was kept, loaded once a window opening (Refresh and changes load it again). */
 async function showLocalTab() {
@@ -874,7 +893,7 @@ function openItem(i) {
   if (item.kind === WORKTREE_ITEM) {
     useRight(false);
     selection = { kind: WORKTREE_ITEM, path: item.worktree.path };
-    rightEl.innerHTML = worktreeHtml(item.worktree);
+    rightEl.innerHTML = worktreeHtml(item.worktree, !!server);
     return renderList();
   }
   if (item.kind === LOCAL_ITEM.snapshot || item.kind === LOCAL_ITEM.backup) {
@@ -1188,16 +1207,20 @@ function drawDiff() {
 }
 
 /** What the checks (gitchecks.js) work with. @returns {import('./gitchecks.js').ChecksContext} */
-const checksContext = () => ({
-  root: /** @type {RepoStatus} */ (repo).root, showError: showGitError,
-  folderFor: async branch => {
-    const r = /** @type {RepoStatus} */ (repo);
-    if (!branch || branch === r.branch) return r.root;
-    /** @type {import('./gitcleanup.js').Worktree[]} */
-    const list = await ask(PAGE.gitviewWorktrees, { root: r.root }).catch(() => []);
-    return list.find(w => w.branch === branch)?.path ?? null;
-  },
-});
+const checksContext = () => {
+  // The repository and machine as they are now: a fix asked for here stays here, whatever the window shows later.
+  const { root, branch: current } = /** @type {RepoStatus} */ (repo);
+  const on = askHere();
+  return {
+    root, showError: showGitError,
+    folderFor: async branch => {
+      if (!branch || branch === current) return root;
+      /** @type {import('./gitcleanup.js').Worktree[]} */
+      const list = await on(PAGE.gitviewWorktrees, { root }).catch(() => []);
+      return list.find(w => w.branch === branch)?.path ?? null;
+    },
+  };
+};
 
 /** The snapshot or backup the right side shows, in the Local history tab. */
 function shownLocal() {
@@ -1212,7 +1235,7 @@ function shownLocal() {
  * @returns {import('./gitstage.js').StageContext}
  */
 const stageContext = shown => ({
-  ask, root: /** @type {RepoStatus} */ (repo).root, path: shown.request.path ?? '', side: shown.request.side ?? '',
+  ask: askHere(), root: /** @type {RepoStatus} */ (repo).root, path: shown.request.path ?? '', side: shown.request.side ?? '',
   refresh: () => refresh(), showError: showGitError,
 });
 
@@ -1361,15 +1384,29 @@ async function showBranch(b) {
  * @param {{ path?: string, ref?: string }} [extra]
  */
 async function act(action, extra) {
+  const root = /** @type {RepoStatus} */ (repo).root;
+  const on = askHere();
+  /** @type {{ kept?: string | null } | null} */
+  let done = null;
   try {
-    await ask(PAGE.gitviewAct, { root: /** @type {RepoStatus} */ (repo).root, action,
-      hasCommits: /** @type {RepoStatus} */ (repo).hasCommits !== false, ...extra });
+    done = await ask(PAGE.gitviewAct, { root, action, hasCommits: /** @type {RepoStatus} */ (repo).hasCommits !== false, ...extra });
   } catch (e) {
     await showGitError(/** @type {Error} */ (e).message);
   }
   emit(EVENTS.gitChanged); // the sidebar's chips (gitstatus.js)
   await refresh();
+  // What a Restore or Delete threw away was kept in local history first: Undo puts it back.
+  const kept = done?.kept;
+  const path = extra?.path;
+  if (!kept || !path) return;
+  toastHere({
+    text: `${action === GIT_ACTION.delete ? 'Deleted' : 'Restored'} ${path.split('/').pop()}`, state: TOAST.done,
+    action: { label: UNDO, run: () => undoDiscard(on, root, kept, [path]).then(() => refresh(), e => showGitError(e.message)) },
+  });
 }
+
+/** Whether what a Restore or Delete throws away comes back: local history keeps it on this computer only. */
+const undoNote = () => (server ? 'This can\x27t be undone.' : 'Local history keeps a copy first, so Undo brings it back.');
 
 /**
  * What a changed, staged, untracked or conflicted file's menu offers.
@@ -1396,7 +1433,7 @@ function fileMenu(item) {
       ...(item.status !== 'A' && /** @type {RepoStatus} */ (repo).hasCommits !== false ? [{
         label: RESTORE_LABEL, danger: true,
         action: async () => {
-          if (await confirmDialog({ title: `Restore ${name}?`, body: `Its staged and unsaved changes are undone, back to the last commit. This can't be undone.`, confirm: RESTORE_LABEL })) act(GIT_ACTION.discardAll, { path: item.path });
+          if (await confirmDialog({ title: `Restore ${name}?`, body: `Its staged and unsaved changes are undone, back to the last commit. ${undoNote()}`, confirm: RESTORE_LABEL })) act(GIT_ACTION.discardAll, { path: item.path });
         },
       }] : []),
       SEPARATOR, ...histories, copy,
@@ -1409,7 +1446,7 @@ function fileMenu(item) {
       {
         label: 'Delete', danger: true,
         action: async () => {
-          if (await confirmDialog({ title: `Delete ${name}?`, body: `git doesn't have this file, so it can't be brought back.`, confirm: 'Delete' })) act(GIT_ACTION.delete, { path: item.path });
+          if (await confirmDialog({ title: `Delete ${name}?`, body: server ? `git doesn't have this file, so it can't be brought back.` : undoNote(), confirm: 'Delete' })) act(GIT_ACTION.delete, { path: item.path });
         },
       },
       SEPARATOR, copy,
@@ -1420,7 +1457,7 @@ function fileMenu(item) {
     {
       label: RESTORE_LABEL, danger: true,
       action: async () => {
-        if (await confirmDialog({ title: `Restore ${name}?`, body: `Its changes that aren't staged are undone. This can't be undone.`, confirm: RESTORE_LABEL })) act(GIT_ACTION.discard, { path: item.path });
+        if (await confirmDialog({ title: `Restore ${name}?`, body: `Its changes that aren't staged are undone. ${undoNote()}`, confirm: RESTORE_LABEL })) act(GIT_ACTION.discard, { path: item.path });
       },
     },
     SEPARATOR, ...histories, copy,
@@ -1575,6 +1612,10 @@ layer.addEventListener('mousedown', e => {
 
 // Keys in the window stay in it (no app shortcuts, no terminal); Escape closes it.
 box.addEventListener('keydown', e => {
+  if (diffState?.rows && stagingKey(e, /** @type {HTMLElement} */ (diffState.target), diffState.request.side ?? '')) {
+    e.stopPropagation(); // keys in the window stay in it
+    return;
+  }
   const picked = diffState?.rows ? diffState.target.querySelector('.picked') : null;
   if (e.key === 'Escape' && !e.defaultPrevented && picked && diffState) {
     // The first Escape lets go of the lines picked; the next one closes the window.

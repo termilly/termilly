@@ -48,8 +48,13 @@ internal static class GitSnapshots
         return Prefix + Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(normalized)))[..KeyLength] + "/";
     }
 
-    // SSH actions remain available; local refs cannot protect files on another computer.
-    internal static Snapshot? Before(string root, string reason, GitRunner git) => git is LocalGitRunner ? Take(root, reason, git) : null;
+    /// <summary>
+    /// Keeps what's there before an action throws it away: the snapshot holding it (the one taken now, or the newest when
+    /// nothing changed since, which holds the same), for that action's Undo. Null over SSH: local refs can't keep files
+    /// on another computer, and the action stays available there without Undo.
+    /// </summary>
+    internal static string? Before(string root, string reason, GitRunner git) =>
+        git is LocalGitRunner ? Take(root, reason, git)?.Id ?? (List(root, git) is [var newest, ..] ? newest.Id : null) : null;
 
     public static Snapshot? Take(string root, string reason, GitRunner git)
     {
@@ -149,13 +154,23 @@ internal static class GitSnapshots
         }
     }
 
-    public static IReadOnlyList<Snapshot> List(string root, GitRunner git)
+    /// <summary>
+    /// This worktree's snapshots, newest first; with <paramref name="removed"/>, also those kept from worktrees removed
+    /// with changes in them (their own folder is gone, so they're put back here or nowhere).
+    /// </summary>
+    public static IReadOnlyList<Snapshot> List(string root, GitRunner git, bool removed = false)
     {
         RequireLocal(git);
-        return GitView.Text(git, root, GitCommands.ForEachRef, "--format=%(refname)", Namespace(root))
-            .Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
-            .OrderDescending(StringComparer.Ordinal).Select(id => Read(root, id, git)).ToList();
+        var own = Namespace(root);
+        var ids = Ids(root, git, removed ? Prefix : own);
+        return ids.Select(id => Read(root, id, git))
+            .Where(s => s.Id.StartsWith(own, StringComparison.Ordinal) || s.Reason == SnapshotReasons.BeforeRemove)
+            .OrderByDescending(s => s.At, StringComparer.Ordinal).ToList();
     }
+
+    private static string[] Ids(string root, GitRunner git, string prefix) =>
+        GitView.Text(git, root, GitCommands.ForEachRef, "--format=%(refname)", prefix)
+            .Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
 
     private static Snapshot Read(string root, string id, GitRunner git)
     {
@@ -172,7 +187,7 @@ internal static class GitSnapshots
         RequireLocal(git);
         lock (Gate)
         {
-            var snapshot = List(root, git).FirstOrDefault(s => s.Id == id) ?? throw new ArgumentException("That snapshot isn't in this worktree.");
+            var snapshot = List(root, git, removed: true).FirstOrDefault(s => s.Id == id) ?? throw new ArgumentException("That snapshot isn't in this worktree.");
             var revision = GitView.Text(git, root, GitCommands.RevParse, snapshot.Id).Trim();
             var tree = GitView.Text(git, root, GitCommands.ListTree, GitCommands.Recursive, GitCommands.NameOnly, GitCommands.Options.NulTerminated, snapshot.Id).Split('\0', StringSplitOptions.RemoveEmptyEntries).ToHashSet(StringComparer.Ordinal);
             var available = tree.Union(snapshot.Files.Select(f => f.Path)).ToHashSet(StringComparer.Ordinal);
@@ -184,7 +199,9 @@ internal static class GitSnapshots
             foreach (var path in selected)
             {
                 git.CheckPath(root, path);
-                if (paths is not null && (!available.Contains(path) || ignored.Contains(path)))
+                // Undo of a restore puts back a file's absence too: one the snapshot before restoring didn't have goes.
+                var absenceAllowed = metadata.Reason == SnapshotReasons.BeforeRestore;
+                if (paths is not null && ((!available.Contains(path) && !absenceAllowed) || ignored.Contains(path)))
                 {
                     throw new ArgumentException("That file isn't in the snapshot.");
                 }

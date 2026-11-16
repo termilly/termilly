@@ -53,9 +53,10 @@ internal static class GitStageLines
         }
         Check(root, file, current, git);
         var text = Pick(current.Before!, current.After!, removed ?? [], added ?? [], action == StageLineActions.Stage);
+        string? kept = null;
         if (action == StageLineActions.Discard)
         {
-            GitSnapshots.Before(root, SnapshotReasons.BeforeDiscard, git);
+            kept = GitSnapshots.Before(root, SnapshotReasons.BeforeDiscard, git);
             EnsureSame(root, file, side!, current, preview.MaxBytes, git);
             var original = git.ReadFile(root, file, preview.MaxBytes).Bytes ?? throw new InvalidOperationException(Changed);
             git.WriteFile(root, file, Blob.EncodeLike(original, text));
@@ -69,7 +70,7 @@ internal static class GitStageLines
             git.Run(root, ["update-index", "--cacheinfo", entry, hash, file]);
         }
         cache.TryRemove((git.Identity, root, file, side!), out _);
-        return new GitActionDone(true);
+        return new GitActionDone(true, kept);
     }
 
     private static void EnsureSame(string root, string file, string side, ChangeView expected, long maxBytes, GitRunner git)

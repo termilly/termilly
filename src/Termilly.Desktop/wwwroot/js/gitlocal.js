@@ -16,7 +16,8 @@ import { LOADING } from './gitissues.js';
 /** @typedef {{ id: string, at: string, event: string, branch: string, hash: string, subject: string }} Backup */
 /**
  * What the tab works with from the window: its ask, the repository, what to do after a change, git's errors.
- * @typedef {{ ask: import('./gitsafety.js').Ask, root: string, refresh: () => unknown, showError: (text: string) => unknown }} LocalContext
+ * @typedef {{ ask: import('./gitsafety.js').Ask, root: string, remote: boolean, refresh: () => unknown,
+ *   showError: (text: string) => unknown }} LocalContext
  */
 
 /**
@@ -143,7 +144,7 @@ export const backupHtml = b => `<div class="gw-commit-info"><div class="gw-commi
  * Puts a snapshot's files back (all of them, or some), with Undo: the snapshot restoring took of what was there.
  * @param {LocalContext} ctx
  * @param {Snapshot} s
- * @param {string[] | null} paths
+ * @param {string[]} paths
  */
 async function putBack(ctx, s, paths) {
   try {
@@ -169,7 +170,8 @@ export function localClicked(e, shown, ctx) {
   const t = targetOf(e);
   if (shown?.snapshot) {
     const s = shown.snapshot;
-    if (t.closest('[data-local-restore-all]')) return putBack(ctx, s, null), true;
+    // All of them is the files it lists, never the whole folder: what was made or changed since, elsewhere, stays.
+    if (t.closest('[data-local-restore-all]')) return putBack(ctx, s, s.files.map(f => f.path)), true;
     const one = /** @type {HTMLElement | null} */ (t.closest('[data-local-restore]'));
     if (one) return putBack(ctx, s, [s.files[Number(one.dataset.localRestore)].path]), true;
   }

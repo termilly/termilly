@@ -36,19 +36,14 @@ export async function takeSnapshot(root, reason) {
 }
 
 /**
- * Puts the files back as the newest snapshot has them: Undo for what the host just threw away (it kept them first).
- * The snapshot that restoring takes in turn is the way back again.
+ * Undo for what the host just threw away: the files put back as the snapshot it kept first has them (its id came
+ * with the action's answer). Restoring keeps what's there in turn, so this can be undone too.
  * @param {Ask} ask
  * @param {string} root
+ * @param {string} kept
  * @param {string[]} paths
  */
-export async function undoDiscard(ask, root, paths) {
-  /** @type {Snapshot[]} */
-  const snapshots = await ask(PAGE.gitviewSnapshots, { root });
-  const kept = snapshots.find(s => s.reason === SNAPSHOT_REASON.beforeDiscard);
-  if (!kept) throw new Error('Local history has nothing to bring back.');
-  await ask(PAGE.gitviewSnapshotRestore, { root, id: kept.id, paths });
-}
+export const undoDiscard = (ask, root, kept, paths) => ask(PAGE.gitviewSnapshotRestore, { root, id: kept, paths });
 
 /**
  * The folders on this computer where an agent is working now (a terminal's agent mid-turn).

@@ -64,6 +64,21 @@ public sealed class GitSafetyTests : IDisposable
     }
 
     [Fact]
+    public void Undoing_one_restored_file_that_was_not_there_before_removes_it()
+    {
+        File.WriteAllText(Path.Combine(_root, "new.txt"), "kept");
+        var saved = GitSnapshots.Take(_root, SnapshotReasons.Manual, Runner)!;
+        File.Delete(Path.Combine(_root, "new.txt"));
+
+        var result = GitSnapshots.Restore(_root, saved.Id, ["new.txt"], Runner);
+        Assert.Equal("kept", File.ReadAllText(Path.Combine(_root, "new.txt")));
+        GitSnapshots.Restore(_root, result.Before, ["new.txt"], Runner);
+        Assert.False(File.Exists(Path.Combine(_root, "new.txt")));
+        // Any other snapshot still refuses a file it doesn't have.
+        Assert.Throws<ArgumentException>(() => GitSnapshots.Restore(_root, saved.Id, ["other.txt"], Runner));
+    }
+
+    [Fact]
     public void Snapshot_omits_large_files_and_ignored_files()
     {
         File.WriteAllText(Path.Combine(_root, ".gitignore"), "ignored\n");
@@ -186,6 +201,11 @@ public sealed class GitSafetyTests : IDisposable
             Assert.False(Directory.Exists(linked));
             Assert.Contains("topic", Git("branch", "--list"));
             Assert.Contains("beforeRemove", Git("log", "--all", "--format=%B"));
+            // Its work shows in the main worktree's Local history, and comes back there.
+            var kept = Assert.Single(GitSnapshots.List(_root, Runner, removed: true), s => s.Reason == SnapshotReasons.BeforeRemove);
+            Assert.DoesNotContain(GitSnapshots.List(_root, Runner), s => s.Id == kept.Id);
+            GitSnapshots.Restore(_root, kept.Id, ["new"], Runner);
+            Assert.Equal("work", File.ReadAllText(Path.Combine(_root, "new")));
         }
         finally
         {

@@ -22,7 +22,7 @@ import { ago } from './gitsearch.js';
 /** @typedef {{ name: string, reasons: string[], lastDate: string, unmerged: number, worktree: string | null }} PruneCandidate */
 /**
  * What tidying up works with from the window.
- * @typedef {{ ask: import('./gitsafety.js').Ask, root: string, refresh: () => unknown, showError: (text: string) => unknown }} CleanupContext
+ * @typedef {import('./gitlocal.js').LocalContext} CleanupContext
  */
 
 /** The Branches tab's worktree rows' kind. */
@@ -56,13 +56,16 @@ export function worktreeRowHtml(w, i, selected) {
 /**
  * A worktree on the right: where it is, and its buttons.
  * @param {Worktree} w
+ * @param {boolean} remote whether it's on a server
  */
-export function worktreeHtml(w) {
+export function worktreeHtml(w, remote) {
   const remove = w.main || w.current ? '' : '<button class="btn small danger-outline" data-wt-remove>Remove worktree</button>';
+  // A server's folder opens in a terminal on that server, from its own terminal: not from here.
+  const terminal = remote ? '' : '<button class="btn small" data-wt-terminal>Open terminal here</button>';
   return `<div class="gw-commit-info"><div class="gw-commit-subject">${escapeHtml(folderName(w.path))}</div>`
     + `<div class="gw-commit-facts"><span>${escapeHtml(w.path)}</span>${w.branch ? `<span>on ${escapeHtml(w.branch)}</span>` : ''}`
     + `<span>${w.changes ? `${w.changes} uncommitted change${w.changes === 1 ? '' : 's'}` : 'No uncommitted changes'}</span></div>`
-    + `<div class="gw-commit-facts"><button class="btn small" data-wt-terminal>Open terminal here</button>${remove}</div></div>`;
+    + `<div class="gw-commit-facts">${terminal}${remove}</div></div>`;
 }
 
 /**
@@ -72,9 +75,11 @@ export function worktreeHtml(w) {
  * @param {CleanupContext} ctx
  */
 async function removeWorktree(w, ctx) {
-  const terminals = tabsIn(w);
+  // Termilly's terminals in it are this computer's; local history too.
+  const terminals = ctx.remote ? [] : tabsIn(w);
+  const changes = `${w.changes} uncommitted change${w.changes === 1 ? '' : 's'}`;
   const body = [
-    w.changes ? `Its ${w.changes} uncommitted change${w.changes === 1 ? ' is' : 's are'} kept in Local history first.` : '',
+    w.changes ? (ctx.remote ? `Its ${changes} will be lost.` : `Its ${changes} ${w.changes === 1 ? 'is' : 'are'} kept in Local history first.`) : '',
     terminals.length ? `${terminals.length === 1 ? 'Its terminal closes' : `Its ${terminals.length} terminals close`}.` : '',
     w.branch ? `The branch ${w.branch} stays.` : '',
   ].filter(Boolean).join(' ');
@@ -98,7 +103,7 @@ async function removeWorktree(w, ctx) {
  */
 export function worktreeClicked(t, w, ctx) {
   if (!w) return false;
-  if (t.closest('[data-wt-terminal]')) return newTab({ cwd: w.path }), true;
+  if (t.closest('[data-wt-terminal]') && !ctx.remote) return newTab({ cwd: w.path }), true;
   if (t.closest('[data-wt-remove]')) return removeWorktree(w, ctx), true;
   return false;
 }

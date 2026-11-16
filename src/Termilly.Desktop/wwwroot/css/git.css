@@ -79,7 +79,7 @@
 }
 .gw-graph-row { flex-direction: row; align-items: center; gap: 6px; padding: 0 8px 0 2px; border-radius: 0; }
 .gw-commit-text { display: flex; flex: 1; flex-direction: column; gap: 1px; min-width: 0; }
-.gw-graph { flex: none; overflow: visible; }
+.gw-graph { flex: none; overflow: hidden; }
 .gw-graph path { fill: none; stroke: currentColor; stroke-width: 1.5; }
 .gw-graph circle { fill: currentColor; stroke: none; }
 .gw-graph circle.head { fill: var(--surface); stroke: currentColor; stroke-width: 2; }
