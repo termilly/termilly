@@ -8,7 +8,7 @@
 // repository it shows only a terminal's Agent changes.
 
 import { PAGE } from './protocol.js';
-import { request } from './host.js';
+import { request, send } from './host.js';
 import { state, on, emit, isSsh, wsById, tabTitle, EVENTS } from './store.js';
 import { toggleWrap } from './preview.js';
 import { imagesHtml, measureImages } from './pictures.js';
@@ -30,6 +30,14 @@ import {
   hostPreview, showAgentFile, showFirstAgentFile, keepAgentFile, forgetAgentFile,
 } from './gitagent.js';
 import { samePath } from './changetree.js';
+import { gitHubOf, forgetGitHub, askGitHub } from './github.js';
+import {
+  ISSUE_ITEM, issues, loadIssues, resetIssues, issueItems, issuesEmptyText, issueRowHtml, issueStatesHtml, stateClicked,
+  showIssue, forgetIssue, issueClicked,
+} from './gitissues.js';
+import {
+  WRITE_BUTTON, commitBoxHtml, wireCommitBox, headActionsHtml, openPush, openPullRequest, undoCommit, canOpenPullRequest,
+} from './gitwrite.js';
 
 /** The choices of the settings used here (C#'s SettingValues). */
 const { changeLayout, changeNewFile, changeView } = SETTING_VALUES;
@@ -66,16 +74,17 @@ const { changeLayout, changeNewFile, changeView } = SETTING_VALUES;
  * A row of the side list: a section's head, a file, a commit, a branch, "Load more commits", or the search's.
  * @typedef {{ kind: 'section', key: string, label: string, count: number, fixed?: boolean } | FileItem
  *   | { kind: 'commit', commit: Commit } | { kind: 'branch', branch: Branch } | { kind: 'more' }
- *   | import('./gitsearch.js').SearchItem | import('./gitagent.js').AgentItem} ListItem
+ *   | import('./gitsearch.js').SearchItem | import('./gitagent.js').AgentItem | import('./gitissues.js').IssueItem} ListItem
  */
 /**
  * A file whose diff can be shown: a changed file's row, or a file in a commit.
  * @typedef {{ path: string, oldPath?: string | null, side?: string, conflict?: boolean }} ShownFile
  */
 /**
- * What the right side shows: a file (by side and path), a commit (by hash) or a branch (by ref); and the search's
- * row it was opened from (its hitKey).
- * @typedef {{ kind: string, side?: string, path?: string, hash?: string, ref?: string, hit?: string | null }} Selection
+ * What the right side shows: a file (by side and path), a commit (by hash), a branch (by ref) or an issue (by
+ * number); and the search's row it was opened from (its hitKey).
+ * @typedef {{ kind: string, side?: string, path?: string, hash?: string, ref?: string, number?: number,
+ *   hit?: string | null }} Selection
  */
 /**
  * A diff as GitView.cs sends it: the change preview's data, and what's said about it. An image comes as pictures
@@ -110,7 +119,7 @@ const BRANCH_LOG_COMMITS = 50;
 const COPIED_MS = 1200;
 
 /** The window's tabs (data-gw-tab), and what the side list shows. */
-export const GIT_TAB = Object.freeze({ agent: 'agent', changes: 'changes', history: 'history', branches: 'branches' });
+export const GIT_TAB = Object.freeze({ agent: 'agent', changes: 'changes', history: 'history', branches: 'branches', issues: 'issues' });
 /** The buttons in the window's head (data-gw). */
 const HEAD_BUTTON = Object.freeze({ close: 'close', refresh: 'refresh' });
 /**
@@ -138,12 +147,13 @@ const SIDE_MAX_PX = 720;
 const SEARCH_DELAY = 300;
 /** Rows a search's arrow keys show as they reach them (the rest, like "Show all", wait for Enter). */
 /** @type {Set<string>} */
-const PREVIEWED = new Set([ITEM.file, ITEM.commit, ITEM.branch, ITEM.fileHit, ITEM.commitHit, ITEM.tag, ITEM.agentHit, AGENT_ITEM.file]);
+const PREVIEWED = new Set([ITEM.file, ITEM.commit, ITEM.branch, ITEM.fileHit, ITEM.commitHit, ITEM.tag, ITEM.agentHit, AGENT_ITEM.file, ISSUE_ITEM.issue]);
 /** The window's title with Agent changes alone (outside a repository). */
 const AGENT_TITLE = 'Agent changes';
 /** What the search box says it looks through: a repository, or (outside one) only Claude's changes. */
 const SEARCH_REPO = 'Search changes, commits, code, branches and tags';
 const SEARCH_AGENT = 'Search the files Claude changed';
+const SEARCH_ISSUES = 'Filter issues by number, title, label or author';
 
 const layer = document.createElement('div');
 layer.className = 'modal-layer settings-layer changes-layer git-layer';
@@ -159,7 +169,9 @@ layer.innerHTML = `
         <button data-gw-tab="${GIT_TAB.changes}" role="tab">Changes</button>
         <button data-gw-tab="${GIT_TAB.history}" role="tab">History</button>
         <button data-gw-tab="${GIT_TAB.branches}" role="tab">Branches</button>
+        <button data-gw-tab="${GIT_TAB.issues}" role="tab" title="The repository's issues on GitHub" hidden>Issues</button>
       </span>
+      <span class="gw-actions"></span>
       <button class="pane-btn gw-refresh" data-gw="${HEAD_BUTTON.refresh}" title="Refresh">${REFRESH}</button>
       <button class="set-close" data-gw="${HEAD_BUTTON.close}" title="Close (Esc)">${CLOSE}</button>
     </div>
@@ -171,7 +183,9 @@ layer.innerHTML = `
             spellcheck="false" autocomplete="off">
         </div>
         <div class="pal-filters gw-filters" hidden></div>
+        <div class="gw-issue-bar" hidden></div>
         <div class="gw-list" tabindex="0" role="listbox" aria-label="Files"></div>
+        <div class="gw-commitbox" hidden></div>
       </div>
       <div class="cw-grip" title="Drag to resize"></div>
       <div class="gw-right" tabindex="-1"></div>
@@ -188,6 +202,9 @@ const filtersEl = find(layer, '.gw-filters');
 const listEl = find(layer, '.gw-list');
 const sideEl = find(layer, '.gw-side');
 const rightEl = find(layer, '.gw-right');
+const actionsEl = find(layer, '.gw-actions');
+const issueBarEl = find(layer, '.gw-issue-bar');
+const commitBoxEl = find(layer, '.gw-commitbox');
 
 const isOpen = () => !layer.hidden;
 
@@ -230,6 +247,56 @@ const collapsedSections = new Set();
 let selection = null; // what the right side shows: a file, a commit, a branch
 /** @type {DiffState | null} */
 let diffState = null; // { request, data, expanded }
+/** @type {import('./github.js').GitHubStatus | null} */
+let github = null; // the repository on GitHub, through gh on this PC; null on a server or until it's known
+/** @type {{ number: number, url: string, state: string } | null} */
+let pullRequest = null; // the branch's open pull request, when it has one
+/** @type {string | null} */
+let pullRequestOf = null; // the branch it was asked for: asked again only for another branch, or after a write
+
+// ---- GitHub and writing ----
+
+/** Looks again after a write: a push or a new pull request changes what the head offers. */
+const refreshAfterWrite = () => {
+  pullRequestOf = null;
+  return refresh();
+};
+
+/** What the write side (gitwrite.js) works with. @returns {import('./gitwrite.js').WriteContext | null} */
+const writeContext = () => (repo ? { repo, ask, refresh: refreshAfterWrite, showGitError, github } : null);
+
+/** What the Issues tab (gitissues.js) works with. @returns {import('./gitissues.js').IssueContext} */
+const issueContext = () => ({
+  root: /** @type {RepoStatus} */ (repo).root, repo: github?.repo ?? '', defaultBranch: github?.defaultBranch ?? null,
+  branch: repo?.branch ?? null,
+});
+
+/** Whether GitHub is there for the repository: gh runs on this PC only. */
+const onGitHub = () => !server && !!github?.available;
+
+/** Asks once whether the repository is on GitHub, and whether the branch has a pull request (only one that could). */
+async function loadGitHub() {
+  if (server || !repo) return;
+  github = await gitHubOf(repo.root);
+  const ctx = writeContext();
+  if (!ctx || !github.available || pullRequestOf === (repo.branch ?? '')) return;
+  pullRequestOf = repo.branch ?? '';
+  pullRequest = canOpenPullRequest(ctx) || (!!repo.upstream && !!repo.ahead)
+    ? await askGitHub(PAGE.githubPrFor, { root: repo.root, branch: repo.branch }).catch(() => null) // only a hint
+    : null;
+}
+
+/** The Issues tab: the state filter over the list, the issues loaded, the first one shown. */
+async function showIssuesTab() {
+  issueBarEl.innerHTML = issueStatesHtml();
+  if (!issues.loaded) {
+    renderList();
+    await loadIssues(issueContext());
+  }
+  if (tab !== GIT_TAB.issues) return;
+  renderList();
+  if (!selection) selectFirst();
+}
 
 // ---- Opening ----
 
@@ -257,9 +324,16 @@ export async function openGitWindow(forFolder, { show = GIT_TAB.changes, remote 
   selection = null;
   diffState = null;
   cursor = -1;
+  github = null;
+  pullRequest = null;
+  pullRequestOf = null;
+  forgetGitHub();
+  resetIssues();
+  forgetIssue();
   layer.hidden = false;
   titleEl.textContent = GIT_TITLE;
   branchEl.innerHTML = '';
+  actionsEl.innerHTML = '';
   listEl.innerHTML = '<div class="gw-empty">Loading</div>';
   rightEl.innerHTML = '';
   renderTabs();
@@ -293,6 +367,7 @@ export function closeGitWindow() {
   layer.hidden = true;
   useRight(false);
   startAgent(null);
+  forgetIssue();
   listEl.innerHTML = '';
   rightEl.innerHTML = '';
   repo = null;
@@ -333,6 +408,9 @@ async function refresh() {
         ? `Not in a git repository: ${folder}` : /** @type {Error} */ (e).message)}</div>`;
     return;
   }
+  await loadGitHub();
+  if (!isOpen()) return;
+  if (tab === GIT_TAB.issues && !onGitHub()) tab = GIT_TAB.changes;
   renderHead();
   renderTabs();
   if (searching()) {
@@ -354,6 +432,8 @@ async function refresh() {
     commits = [];
     historyDone = false;
     await loadHistory();
+  } else if (tab === GIT_TAB.issues) {
+    await showIssuesTab();
   } else {
     await loadBranches();
   }
@@ -374,6 +454,8 @@ function renderHead() {
     ? `Tracking ${/** @type {RepoStatus} */ (repo).upstream}` : 'No upstream';
   const n = changeCount();
   find(layer, `[data-gw-tab="${GIT_TAB.changes}"]`).textContent = n ? `Changes ${n}` : 'Changes';
+  const ctx = writeContext();
+  actionsEl.innerHTML = ctx ? headActionsHtml(ctx, pullRequest) : '';
 }
 
 const changeCount = () => repo ? repo.staged.length + repo.unstaged.length + repo.untracked.length + repo.conflicted.length : 0;
@@ -389,12 +471,25 @@ function renderTabs() {
       ? !agent.tab || (!!repo && !agentCount() && tab !== GIT_TAB.agent)
       : !repo && !!agent.tab;
   }
+  // Issues only where gh can reach the repository's GitHub.
+  find(layer, `[data-gw-tab="${GIT_TAB.issues}"]`).hidden = !onGitHub();
   const n = agentCount();
   find(layer, `[data-gw-tab="${GIT_TAB.agent}"]`).textContent = n ? `${AGENT_TITLE} ${n}` : AGENT_TITLE;
-  searchEl.placeholder = repo || !agent.tab ? SEARCH_REPO : SEARCH_AGENT;
+  searchEl.placeholder = tab === GIT_TAB.issues ? SEARCH_ISSUES : repo || !agent.tab ? SEARCH_REPO : SEARCH_AGENT;
   listEl.setAttribute('aria-label', /** @type {Record<string, string>} */ (
-    { agent: 'Files Claude changed', changes: 'Changed files', history: 'Commits', branches: 'Branches' })[tab]);
+    { agent: 'Files Claude changed', changes: 'Changed files', history: 'Commits', branches: 'Branches', issues: 'Issues' })[tab]);
+  issueBarEl.hidden = tab !== GIT_TAB.issues;
+  showCommitBox();
 }
+
+/** The commit box under Changes, while there's something to commit; drawn anew only when it wasn't showing. */
+function showCommitBox() {
+  const show = tab === GIT_TAB.changes && !searching() && !!repo && changeCount() > repo.conflicted.length;
+  if (show && commitBoxEl.hidden) commitBoxEl.innerHTML = commitBoxHtml(/** @type {RepoStatus} */ (repo));
+  commitBoxEl.hidden = !show;
+}
+
+wireCommitBox(commitBoxEl, writeContext);
 
 /**
  * Outside a repository (or without a folder): the terminal's Agent changes are all the window shows.
@@ -450,7 +545,7 @@ const searchScope = () => ({
 /** @param {string} next */
 async function switchTab(next) {
   if ((next === tab && !searching()) || (!repo && next !== GIT_TAB.agent)) return;
-  if (searching()) endSearch();
+  if (searching() || tab === GIT_TAB.issues) endSearch(); // the box filtered the issues
   tab = next;
   selection = null;
   diffState = null;
@@ -464,6 +559,8 @@ async function switchTab(next) {
     selectFirst();
   } else if (tab === GIT_TAB.history) {
     if (!commits.length) await loadHistory(); else renderList();
+  } else if (tab === GIT_TAB.issues) {
+    await showIssuesTab();
   } else {
     await loadBranches();
   }
@@ -517,6 +614,12 @@ function renderList() {
       listEl.innerHTML = `<div class="gw-empty">${repo?.hasCommits === false ? 'No commits yet, and nothing to add.' : 'Nothing to commit: the working tree is clean.'}</div>`;
       return;
     }
+  } else if (tab === GIT_TAB.issues) {
+    items = issueItems();
+    if (!items.length) {
+      listEl.innerHTML = `<div class="gw-empty">${escapeHtml(issuesEmptyText())}</div>`;
+      return;
+    }
   } else if (tab === GIT_TAB.history) {
     items = commits.map(c => ({ kind: ITEM.commit, commit: c }));
     if (!historyDone && commits.length) items.push({ kind: ITEM.more });
@@ -553,6 +656,7 @@ function rowHtml(item, i) {
   const hit = searchRowHtml(item, i, !!selection?.hit && selection.hit === hitKey(/** @type {any} */ (item)))
     ?? agentRowHtml(item, i);
   if (hit !== null) return hit;
+  if (item.kind === ISSUE_ITEM.issue) return issueRowHtml(item, i, selection?.kind === ISSUE_ITEM.issue && selection.number === item.issue.number);
   if (item.kind === ITEM.section) {
     const open = item.fixed || !collapsedSections.has(item.key);
     return `<div class="cw-row gw-section${open ? ' open' : ''}" data-i="${i}"><span class="cw-chev">${item.fixed ? '' : CHEVRON}</span><span class="cw-name">${escapeHtml(item.label)}</span><span class="cw-count">${item.count}</span></div>`;
@@ -642,7 +746,11 @@ function openItem(i) {
     showAgentFile(item.file.path);
     return renderList();
   }
-  if (item.kind === ITEM.file) showFile(item);
+  if (item.kind === ISSUE_ITEM.issue) {
+    useRight(false);
+    selection = { kind: ISSUE_ITEM.issue, number: item.issue.number };
+    showIssue(rightEl, item.issue.number, issueContext());
+  } else if (item.kind === ITEM.file) showFile(item);
   else if (item.kind === ITEM.commit) showCommit(item.commit.hash);
   else if (item.kind === ITEM.branch) showBranch(item.branch);
   else openHit(item);
@@ -692,6 +800,13 @@ const searchLater = debounce(() => {
 }, SEARCH_DELAY);
 
 searchEl.addEventListener('input', () => {
+  if (tab === GIT_TAB.issues) {
+    // Issues are filtered here, from what GitHub sent: the repository's search has nothing to add.
+    issues.filter = searchEl.value;
+    cursor = -1;
+    renderList();
+    return;
+  }
   if (searchEl.value.trim()) {
     searchLater();
     return;
@@ -706,6 +821,7 @@ function endSearch() {
   searchLater.cancel();
   clearSearch();
   searchEl.value = '';
+  issues.filter = '';
   selection = null;
   cursor = -1;
   renderTabs();
@@ -722,6 +838,9 @@ function showTab() {
   } else if (tab === GIT_TAB.history && commits.length) {
     renderList();
     openItem(0);
+  } else if (tab === GIT_TAB.issues) {
+    renderList();
+    selectFirst();
   } else {
     refresh();
   }
@@ -746,7 +865,7 @@ searchEl.addEventListener('keydown', e => {
   if (e.key === 'ArrowDown' || e.key === 'Enter') {
     e.preventDefault();
     listEl.focus();
-    if (searchEl.value.trim() && searchEl.value.trim() !== found.text && canSearch()) {
+    if (tab !== GIT_TAB.issues && searchEl.value.trim() && searchEl.value.trim() !== found.text && canSearch()) {
       // Enter before the search started: it starts now (its rows open as usual once they're in).
       searchLater.cancel();
       runSearch(searchEl.value.trim(), searchScope(), ask, searchChanged);
@@ -929,6 +1048,15 @@ rightEl.addEventListener('click', e => {
 /** @type {CommitDetail | null} */
 let currentCommit = null;
 
+const UNDO_COMMIT_LABEL = 'Undo this commit';
+
+/**
+ * Whether a commit can be undone here: the branch's newest, not pushed yet (the host checks no remote has it).
+ * @param {string} hash
+ */
+const canUndo = hash => !!repo && !repo.detached && commits[0]?.hash === hash
+  && !!commits[0].refs?.some(r => r.startsWith('HEAD')) && (!repo.upstream || !!repo.ahead);
+
 /**
  * A commit: its message, author, date and parents, the files it changed, and the selected file's diff below (the
  * first, or `path`). While searching, what was found is marked.
@@ -969,6 +1097,7 @@ async function showCommit(hash, { path = null } = {}) {
         <span class="gw-hash">${escapeHtml(c.hash.slice(0, 12))}</span><button class="btn small" data-copy="${escapeHtml(c.hash)}" title="Copy the full hash">${COPY_LABEL}</button>
         ${c.parents.length ? `<span>Parent${c.parents.length > 1 ? 's' : ''} ${c.parents.map(p => `<button class="gw-link" data-show-commit="${escapeHtml(p)}">${escapeHtml(p.slice(0, 7))}</button>`).join(' ')}</span>` : '<span>First commit</span>'}
         ${c.committer !== c.author ? `<span>Committed by ${escapeHtml(c.committer)}</span>` : ''}
+        ${canUndo(c.hash) ? `<button class="btn small" data-undo-commit title="Takes it off the branch; its changes stay staged">${UNDO_COMMIT_LABEL}</button>` : ''}
       </div>
     </div>
     <div class="gw-commit-files">${c.files.length ? files : '<div class="gw-empty">No files changed.</div>'}</div>
@@ -1186,9 +1315,37 @@ function agentTreeKey(e) {
 layer.addEventListener('click', e => {
   const t = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-gw-tab]'));
   if (t) return switchTab(/** @type {string} */ (t.dataset.gwTab));
-  const action = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-gw]'))?.dataset.gw;
+  const button = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-gw]'));
+  const action = button?.dataset.gw;
+  const ctx = writeContext();
   if (action === HEAD_BUTTON.close) closeGitWindow();
   else if (action === HEAD_BUTTON.refresh) refresh();
+  else if (action === WRITE_BUTTON.push && ctx) openPush(ctx);
+  else if (action === WRITE_BUTTON.pr && ctx) openPullRequest(ctx);
+  else if (action === WRITE_BUTTON.openPr && button?.dataset.url) send(PAGE.openUrl, { url: button.dataset.url });
+});
+
+// The Issues tab's state filter, and the buttons over an issue (GitHub changed: the list and the issue again).
+issueBarEl.addEventListener('click', async e => {
+  if (!stateClicked(e) || !repo) return;
+  issueBarEl.innerHTML = issueStatesHtml();
+  issues.loaded = false;
+  selection = null;
+  await showIssuesTab();
+});
+rightEl.addEventListener('click', e => {
+  const ctx = writeContext();
+  if (ctx && currentCommit && targetOf(e).closest('[data-undo-commit]')) {
+    undoCommit(ctx, currentCommit.message.split('\n')[0]);
+    return;
+  }
+  if (tab !== GIT_TAB.issues || !repo) return;
+  issueClicked(e, async () => {
+    await loadIssues(issueContext());
+    renderList();
+    const at = items.findIndex(i => i.kind === ISSUE_ITEM.issue && i.issue.number === selection?.number);
+    if (at >= 0) openItem(at); else selectFirst();
+  });
 });
 
 layer.addEventListener('mousedown', e => {

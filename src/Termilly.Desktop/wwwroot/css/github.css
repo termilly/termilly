@@ -1,0 +1,45 @@
+/* The Git window's write side and its GitHub parts (js/gitwrite.js, js/gitissues.js, js/issueimplement.js): the
+   head's Push and pull request buttons, the commit box under Changes, the Issues tab, and their dialogs. */
+
+/* ---- Head ---- */
+
+.gw-actions { display: inline-flex; flex: none; gap: 6px; }
+.gw-actions:empty { display: none; }
+
+/* ---- Commit box (Changes) ---- */
+
+.gw-commitbox { display: flex; flex: none; flex-direction: column; gap: 6px; padding: 8px 10px 10px; border-top: 1px solid var(--border); }
+.gw-commitbox[hidden] { display: none; }
+.gw-commit-msg { min-height: 56px; resize: vertical; font-size: 12.5px; line-height: 1.4; }
+.gw-commit-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.gw-commit-all { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; cursor: pointer; }
+
+/* ---- Issues ---- */
+
+.gw-issue-bar { flex: none; padding: 8px 10px 0; }
+.gw-issue-bar[hidden] { display: none; }
+.gw-issue-states button { padding: 2px 10px; font-size: 12px; }
+.gw-issue-row .gw-subject { overflow: hidden; text-overflow: ellipsis; }
+.gh-num { flex: none; color: var(--ok); font: 11.5px var(--mono); }
+.gh-num.closed { color: var(--faint); }
+.gw-commit-subject .gh-num { color: var(--muted); font-size: 13px; }
+.gh-label { flex: none; max-width: 120px; overflow: hidden; padding: 0 6px; border-radius: 8px; background: color-mix(in srgb, var(--label, var(--muted)) 22%, transparent); color: var(--text); font-size: 10.5px; line-height: 16px; text-overflow: ellipsis; }
+.gh-state { padding: 0 8px; border-radius: 8px; background: color-mix(in srgb, var(--ok) 20%, transparent); color: var(--text-strong); font-size: 11px; line-height: 18px; text-transform: capitalize; }
+.gh-state[data-state="closed"] { background: var(--hover); color: var(--muted); }
+.gh-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; }
+.gh-linked { color: var(--muted); font-size: 12px; }
+.gh-thread { flex: 1; min-height: 0; padding: 4px 16px 16px; overflow: auto; }
+.gh-body { margin: 10px 0; color: var(--text); font: 12.5px/1.5 var(--sans, inherit); white-space: pre-wrap; overflow-wrap: anywhere; }
+.gh-comment { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); }
+.gh-comment-head { display: flex; gap: 8px; color: var(--muted); font-size: 12px; }
+.gh-comment-head b { color: var(--text-strong); font-weight: 600; }
+
+/* ---- Dialogs: push, pull request, Implement ---- */
+
+.dialog-check { display: flex; align-items: center; gap: 8px; margin: 10px 0; color: var(--text); font-size: 12.5px; cursor: pointer; }
+.gh-branch-fields { display: grid; grid-template-columns: 3fr 2fr; gap: 10px; }
+.gh-branch-fields[hidden] { display: none; }
+.gw-push-list { max-height: 180px; padding: 6px 8px; overflow: auto; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); }
+.gw-push-commit { display: flex; gap: 8px; overflow: hidden; font-size: 12.5px; line-height: 22px; text-overflow: ellipsis; white-space: nowrap; }
+.gw-push-checks { margin: 10px 0 0; padding-left: 18px; color: var(--muted); font-size: 12.5px; line-height: 1.6; }
+.gw-push-checks .gw-warn { color: var(--attention); }

@@ -195,10 +195,10 @@ onHost(HOST.todoRepoChecked, m => {
  * @param {TodoTask} task
  * @param {import('./todolist.js').DetailLine} [sub]
  * @param {import('./todoplan.js').ImplementPlan} [plan] the list's, when not given
+ * @param {ImplementPlace | null} [place] the list's, when not given; another folder for work in a worktree
  * @returns {Tab | null} its terminal, or null when it can't start here
  */
-export function implementTask(ref, task, sub, plan = planOf(ref)) {
-  const place = implementPlace(ref);
+export function implementTask(ref, task, sub, plan = planOf(ref), place = implementPlace(ref)) {
   if (!place) return null;
   const { program } = agentKind(plan.by);
   const tab = ref.kind === LIST_KIND.terminal ? state.tabs.get(ref.id) : null;
@@ -229,16 +229,16 @@ export function implementTask(ref, task, sub, plan = planOf(ref)) {
  * @param {TodoTask} task
  * @param {import('./todolist.js').DetailLine | undefined} sub
  * @param {import('./todoplan.js').ImplementPlan} [plan] the list's, when not given
+ * @param {ImplementPlace | null} [place] the list's, when not given; another folder for work in a worktree
  * @returns {{ started: boolean, tab: Tab | null }} tab: its terminal, when it has one
  */
-export function implement(ref, task, sub, plan = planOf(ref)) {
-  const place = implementPlace(ref);
+export function implement(ref, task, sub, plan = planOf(ref), place = implementPlace(ref)) {
   if (!place || implementing(task)) return { started: false, tab: null };
   if (plan.run === RUN.silent) {
     implementSilently(ref, task, sub, plan, place);
     return { started: true, tab: null };
   }
-  const tab = implementTask(ref, task, sub, plan);
+  const tab = implementTask(ref, task, sub, plan, place);
   return { started: !!tab, tab };
 }
 

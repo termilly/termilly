@@ -347,8 +347,25 @@ function allLists() {
  * @returns {{ ref: ListRef, task: TodoTask } | null}
  */
 export function findTask(id) {
+  return findTaskWhere(t => t.id === id);
+}
+
+/**
+ * The task linked to a GitHub issue (made from it, or that made it), wherever it is, and its list.
+ * @param {string} repo owner/name
+ * @param {number} number
+ */
+export const findIssueTask = (repo, number) =>
+  findTaskWhere(t => t.issue?.number === number && t.issue.repo.toLowerCase() === repo.toLowerCase());
+
+/**
+ * The first task a test picks, and its list.
+ * @param {(task: TodoTask) => boolean} test
+ * @returns {{ ref: ListRef, task: TodoTask } | null}
+ */
+function findTaskWhere(test) {
   for (const ref of allLists()) {
-    const task = tasksOf(ref).find(t => t.id === id);
+    const task = tasksOf(ref).find(test);
     if (task) return { ref, task };
   }
   return null;

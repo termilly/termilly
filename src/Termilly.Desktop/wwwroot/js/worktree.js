@@ -116,12 +116,20 @@ export function openNewWorktree() {
  */
 function openAgentTab(m, { command, profile, wsId }) {
   try { localStorage.setItem(LAST_COMMAND_KEY, command); } catch { /* a convenience only */ }
-  const created = newTab({ profile, wsId, name: m.branch, cwd: m.path, command: command || null });
-  created.worktree = { repo: m.repo, path: m.path, branch: m.branch };
-  if (m.copied) created.worktree.copied = m.copied;
+  return markWorktree(newTab({ profile, wsId, name: m.branch, cwd: m.path, command: command || null }), m);
+}
+
+/**
+ * Marks a terminal as working in a worktree the host made, so Clean up worktree finds it.
+ * @param {Tab} tab
+ * @param {import('./protocol.js').Host_worktreeReply_0} m the host's answer: the worktree it made
+ */
+export function markWorktree(tab, m) {
+  tab.worktree = { repo: m.repo, path: m.path, branch: m.branch };
+  if (m.copied) tab.worktree.copied = m.copied;
   persist();
-  emit(EVENTS.tab, created);
-  return created;
+  emit(EVENTS.tab, tab);
+  return tab;
 }
 
 /**
