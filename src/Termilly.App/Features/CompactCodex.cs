@@ -159,7 +159,7 @@ internal sealed class CompactCodex : ICompactReader
     {
         if (!string.IsNullOrWhiteSpace(text))
         {
-            log.Put(new CompactLine(id, kind, CompactText.Cut(text.Trim(), CompactText.MaxWords), Final: final));
+            log.Put(CompactText.Words(id, kind, text, final));
         }
     }
 

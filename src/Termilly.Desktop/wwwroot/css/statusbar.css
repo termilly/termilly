@@ -138,6 +138,7 @@ button.sb-item:hover, button.sb-item.open { background: var(--hover); color: var
 .cv-end { display: flex; flex-wrap: wrap; gap: 4px 0; margin: 10px 0 14px; padding-top: 7px; border-top: 1px dashed var(--border-strong); color: var(--faint); font-size: .88em; font-variant-numeric: tabular-nums; }
 .cv-sep { margin: 0 8px; }
 .cv-note { margin: 6px 0 10px; color: var(--faint); font-size: .92em; }
+.cv-note .link-btn { font-size: inherit; }
 .cv-working { display: flex; align-items: center; gap: 8px; margin: 8px 0 4px; color: var(--accent); font-size: .92em; }
 .cv-working i { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px var(--accent-fill); animation: cv-pulse 1.4s infinite; }
 .cv-composer { flex: none; display: flex; align-items: flex-end; gap: 6px; margin: 0 8px 4px; padding: 6px 6px 6px 10px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--raised); }

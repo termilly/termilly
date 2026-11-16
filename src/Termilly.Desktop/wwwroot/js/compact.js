@@ -16,7 +16,7 @@ import { find } from './dom.js';
 import { agentInput, fontStack } from './terminals.js';
 import { beforeEnter } from './api.js';
 import { showsInput } from './together.js';
-import { linesHtml } from './compactlines.js';
+import { linesHtml, OPEN_TERMINAL } from './compactlines.js';
 import { lineLinks, clickLink, wireCtrl } from './compactlinks.js';
 import { readMenu, questionMenu, cardHtml, menuKey } from './compactcard.js';
 import { wireInput } from './compactinput.js';
@@ -46,8 +46,6 @@ const DRAWER_CLASS = 'drawer';
 const SHOWN_CLASS = 'compact-on';
 /** The prompt box. */
 const INPUT = '.cv-input';
-/** The feed's button that shows the terminal (while the agent waits on a question). */
-const OPEN_TERMINAL = '.cv-open-terminal';
 /** A card in the feed: data-menu holds the key of the menu it shows. */
 const CARD = '.cv-card';
 /** A card's choice buttons: data-choice holds the key that picks it. */
