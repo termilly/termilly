@@ -39,7 +39,7 @@ const inRepository = (folder, root) => folderKey(folder) === folderKey(root) || 
  * The To do list an issue's task goes in: the workspace whose folder is in the repository, else the one in front.
  * @param {string} root
  */
-function listFor(root) {
+export function listFor(root) {
   const ws = state.workspaces.find(w => w.cwd && inRepository(w.cwd, root)) ?? activeWs() ?? state.workspaces[0];
   return workspaceList(ws);
 }

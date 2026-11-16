@@ -21,7 +21,7 @@ const DEFAULT_COMMAND = 'claude';
 /** The New agent in worktree dialog's fields (their names). */
 const FIELD = Object.freeze({ folder: 'folder', branch: 'branch', command: 'command', profile: 'profile' });
 /** How long the worktree's terminals get to close before it's removed: a shell still in the folder would hold it. */
-const CLOSE_GRACE_MS = 800;
+export const CLOSE_GRACE_MS = 800;
 
 function lastCommand() {
   try { return localStorage.getItem(LAST_COMMAND_KEY) ?? DEFAULT_COMMAND; } catch { return DEFAULT_COMMAND; }
@@ -136,7 +136,7 @@ export function markWorktree(tab, m) {
  * The terminals working in a worktree.
  * @param {{ path: string }} worktree
  */
-const tabsIn = worktree => [...state.tabs.values()].filter(t => t.worktree?.path === worktree.path);
+export const tabsIn = worktree => [...state.tabs.values()].filter(t => t.worktree?.path === worktree.path);
 
 /**
  * Clean up worktree: its state, then closing its terminals and removing it.

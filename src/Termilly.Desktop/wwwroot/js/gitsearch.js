@@ -27,7 +27,7 @@ import { GIT_MATCH } from './constants.js';
 /**
  * A commit in a log.
  * @typedef {{ hash: string, short: string, subject: string, author: string, date: string,
- *   refs?: string[] | null }} Commit
+ *   refs?: string[] | null, parents?: string[] | null }} Commit
  */
 /**
  * A branch, local or remote, with its last commit.

@@ -22,6 +22,13 @@ import { remoteGit } from './remotehost.js';
 import { SETTING_VALUES, CHANGE_KIND, DIFF_SIDE, GIT_ACTION, GITHUB_UNAVAILABLE } from './constants.js';
 import { byId, find, field, targetOf, resizeByGrip } from './dom.js';
 import { ownWindow } from './ownwindow.js';
+import { history, historyRowHtml, historyBarHtml, refChips, isHead } from './githistory.js';
+import {
+  LOCAL_ITEM, local, loadLocal, resetLocal, localItems, localEmptyText, localRowHtml, snapshotHtml, backupHtml, localClicked,
+} from './gitlocal.js';
+import { checks, loadChecks, resetChecks, checkDotHtml, checksSlotHtml, fillChecks, checksClicked } from './gitchecks.js';
+import { WORKTREE_ITEM, worktreeRowHtml, worktreeHtml, worktreeClicked, openPrune } from './gitcleanup.js';
+import { canStageParts, setUpStaging, stagingClicked, clearPicked } from './gitstage.js';
 import {
   ITEM, CONFLICT, found, searching, clearSearch, runSearch, searchCode, searchItems, searchEmptyText, searchRowHtml,
   filtersHtml, stepView, setView, hitKey, markInDiff, ago,
@@ -66,7 +73,8 @@ const { changeLayout, changeNewFile, changeView } = SETTING_VALUES;
  * A row of the side list: a section's head, a file, a commit, a branch, "Load more commits", or the search's.
  * @typedef {{ kind: 'section', key: string, label: string, count: number, fixed?: boolean } | FileItem
  *   | { kind: 'commit', commit: Commit } | { kind: 'branch', branch: Branch } | { kind: 'more' }
- *   | import('./gitsearch.js').SearchItem | import('./gitagent.js').AgentItem | import('./gitissues.js').IssueItem} ListItem
+ *   | import('./gitsearch.js').SearchItem | import('./gitagent.js').AgentItem | import('./gitissues.js').IssueItem
+ *   | import('./gitlocal.js').LocalItem | { kind: 'worktree', worktree: import('./gitcleanup.js').Worktree }} ListItem
  */
 /**
  * A file whose diff can be shown: a changed file's row, or a file in a commit.
@@ -75,7 +83,7 @@ const { changeLayout, changeNewFile, changeView } = SETTING_VALUES;
 /**
  * What the right side shows: a file (by side and path), a commit (by hash), a branch (by ref) or an issue (by
  * number); and the search's row it was opened from (its hitKey).
- * @typedef {{ kind: string, side?: string, path?: string, hash?: string, ref?: string, number?: number,
+ * @typedef {{ kind: string, side?: string, path?: string, hash?: string, ref?: string, number?: number, id?: string,
  *   hit?: string | null }} Selection
  */
 /**
@@ -89,7 +97,7 @@ const { changeLayout, changeNewFile, changeView } = SETTING_VALUES;
  * The diff shown: what was asked, the answer, the folds opened, and where it's drawn; for a search's hit, the whole
  * file (to show a line that didn't change) and what it found marked.
  * @typedef {{ request: import('./protocol.js').Page_gitviewDiff, data: GitDiff, expanded: Set<string>,
- *   target: Element, label: string | null, find: Find | null }} DiffState
+ *   target: Element, label: string | null, find: Find | null, rows?: import('./diffrows.js').DiffRow[] | null }} DiffState
  */
 /**
  * A search's hit in a diff: the line to show (the file's, 0 for the first match), and whether the whole file shows.
@@ -111,7 +119,7 @@ const BRANCH_LOG_COMMITS = 50;
 const COPIED_MS = 1200;
 
 /** The window's tabs (data-gw-tab), and what the side list shows. */
-export const GIT_TAB = Object.freeze({ agent: 'agent', changes: 'changes', history: 'history', branches: 'branches', issues: 'issues' });
+export const GIT_TAB = Object.freeze({ agent: 'agent', changes: 'changes', history: 'history', branches: 'branches', local: 'local', issues: 'issues' });
 /** The buttons in the window's head (data-gw). */
 const HEAD_BUTTON = Object.freeze({ close: 'close', refresh: 'refresh' });
 /**
@@ -119,6 +127,8 @@ const HEAD_BUTTON = Object.freeze({ close: 'close', refresh: 'refresh' });
  * side. 'conflict' is the Conflicts section's own, whose files are unstaged.
  */
 const SIDE = Object.freeze({ ...DIFF_SIDE, conflict: CONFLICT });
+/** The Branches tab's bar: tidying branches up. */
+const PRUNE_BUTTON = '<button class="btn small" data-prune title="Delete branches whose work is done, with Undo">Clean up branches</button>';
 /** The Branches tab's sections. */
 const BRANCH_GROUP = Object.freeze({ current: 'Current', local: 'Local', remote: 'Remote' });
 /** The window's title before (or without) a repository. */
@@ -172,6 +182,7 @@ layer.innerHTML = `
         <button data-gw-tab="${GIT_TAB.changes}" role="tab">Changes</button>
         <button data-gw-tab="${GIT_TAB.history}" role="tab">History</button>
         <button data-gw-tab="${GIT_TAB.branches}" role="tab">Branches</button>
+        <button data-gw-tab="${GIT_TAB.local}" role="tab" title="Uncommitted work kept before it could be lost, and branch backups">Local history</button>
         <button data-gw-tab="${GIT_TAB.issues}" role="tab" title="The repository's issues on GitHub" hidden>Issues</button>
       </span>
     </div>
@@ -184,6 +195,7 @@ layer.innerHTML = `
         </div>
         <div class="pal-filters gw-filters" hidden></div>
         <div class="gw-issue-bar" hidden></div>
+        <div class="gw-history-bar" hidden></div>
         <div class="gw-list" tabindex="0" role="listbox" aria-label="Files"></div>
         <div class="gw-commitbox" hidden></div>
       </div>
@@ -207,6 +219,7 @@ const sideEl = find(layer, '.gw-side');
 const rightEl = find(layer, '.gw-right');
 const actionsEl = find(layer, '.gw-actions');
 const issueBarEl = find(layer, '.gw-issue-bar');
+const historyBarEl = find(layer, '.gw-history-bar');
 const commitBoxEl = find(layer, '.gw-commitbox');
 
 /** The window of its own the Git window always opens in (over the main window where there can be none). */
@@ -266,6 +279,8 @@ let commits = []; // History, as loaded so far
 let historyDone = false;
 /** @type {Branch[]} */
 let branches = [];
+/** @type {import('./gitcleanup.js').Worktree[]} */
+let worktrees = []; // the Branches tab's, with them
 /** @type {Set<string>} */
 const collapsedSections = new Set();
 /** @type {Selection | null} */
@@ -318,6 +333,8 @@ async function loadGitHub() {
   const status = await gitHubOf(root);
   if (!still()) return;
   github = status;
+  // The checks on the latest commits, for History's dots: once a window opening (Refresh asks again).
+  if (status.available && !checks.loaded) loadChecks(root).then(fresh => { if (fresh && still() && tab === GIT_TAB.history) renderList(); });
   const ctx = writeContext();
   if (ctx && github.available && pullRequestOf !== (repo.branch ?? '')) {
     pullRequestOf = repo.branch ?? '';
@@ -348,9 +365,26 @@ async function showIssuesTab() {
   if (at >= 0) openItem(at); else selectFirst();
 }
 
+/** What the Local history tab (gitlocal.js) works with. @returns {import('./gitlocal.js').LocalContext} */
+const localContext = () => ({ ask, root: /** @type {RepoStatus} */ (repo).root, refresh: () => refresh(), showError: showGitError });
+
+/** The Local history tab: what was kept, loaded once a window opening (Refresh and changes load it again). */
+async function showLocalTab() {
+  if (!local.loaded) {
+    renderList();
+    if (!await loadLocal(localContext())) return; // a newer loading draws instead
+  }
+  if (tab !== GIT_TAB.local || !isOpen()) return;
+  renderList();
+  const at = items.findIndex(i => (i.kind === LOCAL_ITEM.snapshot && i.snapshot.id === selection?.id) || (i.kind === LOCAL_ITEM.backup && i.backup.id === selection?.id));
+  if (at >= 0) openItem(at); else selectFirst();
+}
+
 /** Refresh (its button, F5): GitHub is asked again too, and the issues loaded anew. */
 function refreshAll() {
   forgetGitHub();
+  resetLocal();
+  resetChecks();
   pullRequestOf = null;
   const { filter } = issues;
   resetIssues();
@@ -390,6 +424,9 @@ export async function openGitWindow(forFolder, { show = GIT_TAB.changes, remote 
   forgetGitHub();
   resetIssues();
   forgetIssue();
+  history.path = null; // another repository's history starts whole
+  resetLocal();
+  resetChecks();
   opening++;
   frame.show();
   showTitle(GIT_TITLE);
@@ -501,6 +538,9 @@ async function refresh() {
     await loadHistory();
   } else if (tab === GIT_TAB.issues) {
     await showIssuesTab();
+  } else if (tab === GIT_TAB.local) {
+    resetLocal(); // what was kept may have grown since (a discard, the timer)
+    await showLocalTab();
   } else {
     await loadBranches();
   }
@@ -540,12 +580,17 @@ function renderTabs() {
   }
   // Issues only where gh can reach the repository's GitHub.
   find(box, `[data-gw-tab="${GIT_TAB.issues}"]`).hidden = !onGitHub();
+  // Local history is kept on this computer only.
+  find(box, `[data-gw-tab="${GIT_TAB.local}"]`).hidden = !repo || !!server;
   const n = agentCount();
   find(box, `[data-gw-tab="${GIT_TAB.agent}"]`).textContent = n ? `${AGENT_TITLE} ${n}` : AGENT_TITLE;
   searchEl.placeholder = tab === GIT_TAB.issues ? SEARCH_ISSUES : repo || !agent.tab ? SEARCH_REPO : SEARCH_AGENT;
   listEl.setAttribute('aria-label', /** @type {Record<string, string>} */ (
-    { agent: 'Files Claude changed', changes: 'Changed files', history: 'Commits', branches: 'Branches', issues: 'Issues' })[tab]);
+    { agent: 'Files Claude changed', changes: 'Changed files', history: 'Commits', branches: 'Branches', local: 'Local history', issues: 'Issues' })[tab]);
   issueBarEl.hidden = tab !== GIT_TAB.issues;
+  // History's switches, and Branches' Clean up (its backups are kept on this computer only).
+  historyBarEl.hidden = searching() || !(tab === GIT_TAB.history || (tab === GIT_TAB.branches && !server));
+  if (!historyBarEl.hidden) historyBarEl.innerHTML = tab === GIT_TAB.history ? historyBarHtml() : PRUNE_BUTTON;
   showCommitBox();
 }
 
@@ -634,6 +679,8 @@ async function switchTab(next) {
     if (!commits.length) await loadHistory(); else renderList();
   } else if (tab === GIT_TAB.issues) {
     await showIssuesTab();
+  } else if (tab === GIT_TAB.local) {
+    await showLocalTab();
   } else {
     await loadBranches();
   }
@@ -693,6 +740,12 @@ function renderList() {
       listEl.innerHTML = `<div class="gw-empty">${escapeHtml(issuesEmptyText())}</div>`;
       return;
     }
+  } else if (tab === GIT_TAB.local) {
+    items = localItems();
+    if (!items.length) {
+      listEl.innerHTML = `<div class="gw-empty">${escapeHtml(localEmptyText())}</div>`;
+      return;
+    }
   } else if (tab === GIT_TAB.history) {
     items = commits.map(c => ({ kind: ITEM.commit, commit: c }));
     if (!historyDone && commits.length) items.push({ kind: ITEM.more });
@@ -722,6 +775,11 @@ function branchItems() {
     out.push({ kind: ITEM.section, key: `b-${label}`, label, count: list.length, fixed: true });
     for (const b of list) out.push({ kind: ITEM.branch, branch: b });
   }
+  // Worktrees once there's more than the repository's own folder.
+  if (worktrees.length > 1) {
+    out.push({ kind: ITEM.section, key: 'b-worktrees', label: 'Worktrees', count: worktrees.length, fixed: true });
+    for (const w of worktrees) out.push({ kind: WORKTREE_ITEM, worktree: w });
+  }
   return out;
 }
 
@@ -736,6 +794,10 @@ function rowHtml(item, i) {
   const hit = searchRowHtml(item, i, !!selection?.hit && selection.hit === hitKey(/** @type {any} */ (item)))
     ?? agentRowHtml(item, i);
   if (hit !== null) return hit;
+  if (item.kind === LOCAL_ITEM.snapshot || item.kind === LOCAL_ITEM.backup || item.kind === LOCAL_ITEM.heading) {
+    return localRowHtml(item, i, !!selection?.id && selection.id === (item.kind === LOCAL_ITEM.snapshot ? item.snapshot.id : item.kind === LOCAL_ITEM.backup ? item.backup.id : null));
+  }
+  if (item.kind === WORKTREE_ITEM) return worktreeRowHtml(item.worktree, i, selection?.kind === WORKTREE_ITEM && selection.path === item.worktree.path);
   if (item.kind === ISSUE_ITEM.issue) return issueRowHtml(item, i, selection?.kind === ISSUE_ITEM.issue && selection.number === item.issue.number);
   if (item.kind === ITEM.section) {
     const open = item.fixed || !collapsedSections.has(item.key);
@@ -753,11 +815,8 @@ function rowHtml(item, i) {
       + `<span class="cw-name">${escapeHtml(name)}</span><span class="gw-dir">${escapeHtml(item.oldPath ? `from ${item.oldPath}` : dir)}</span></div>`;
   }
   if (item.kind === ITEM.commit) {
-    const c = item.commit;
-    const sel = selection?.kind === ITEM.commit && selection.hash === c.hash;
-    return `<div class="cw-row gw-commit${sel ? ' selected' : ''}" data-i="${i}" role="option">`
-      + `<span class="gw-commit-main"><span class="gw-subject">${escapeHtml(c.subject || '(no message)')}</span>${refChips(c.refs)}</span>`
-      + `<span class="gw-commit-meta"><span class="gw-hash">${escapeHtml(c.short)}</span><span>${escapeHtml(c.author)}</span><span>${ago(c.date)}</span></span></div>`;
+    const at = commits.indexOf(item.commit);
+    return historyRowHtml(commits, at, i, selection?.kind === ITEM.commit && selection.hash === item.commit.hash, checkDotHtml(item.commit.hash));
   }
   if (item.kind === ITEM.branch) {
     const b = item.branch;
@@ -768,21 +827,6 @@ function rowHtml(item, i) {
       + `<span class="gw-commit-meta"><span class="gw-hash">${escapeHtml(b.short)}</span><span>${escapeHtml(b.subject)}</span><span>${ago(b.date)}</span></span></div>`;
   }
   return `<div class="cw-row gw-more" data-i="${i}">Load more commits</div>`;
-}
-
-/**
- * Branch and tag chips on a commit: HEAD's branch first and marked.
- * @param {string[] | null | undefined} refs
- */
-function refChips(refs) {
-  if (!refs?.length) return '';
-  return refs.map(r => {
-    if (r.startsWith('HEAD -> ')) return `<span class="gw-ref head" title="The checked-out branch">${escapeHtml(r.slice(8))}</span>`;
-    if (r === HEAD_REF) return '<span class="gw-ref head">HEAD</span>';
-    if (r.startsWith('tag: ')) return `<span class="gw-ref is-tag">${escapeHtml(r.slice(5))}</span>`;
-    if (r.startsWith('remote: ')) return `<span class="gw-ref remote">${escapeHtml(r.slice(8))}</span>`;
-    return `<span class="gw-ref">${escapeHtml(r)}</span>`;
-  }).join('');
 }
 
 function markCursor() {
@@ -826,7 +870,18 @@ function openItem(i) {
     showAgentFile(item.file.path);
     return renderList();
   }
-  if (item.kind === ISSUE_ITEM.issue) {
+  if (item.kind === LOCAL_ITEM.heading) return markCursor();
+  if (item.kind === WORKTREE_ITEM) {
+    useRight(false);
+    selection = { kind: WORKTREE_ITEM, path: item.worktree.path };
+    rightEl.innerHTML = worktreeHtml(item.worktree);
+    return renderList();
+  }
+  if (item.kind === LOCAL_ITEM.snapshot || item.kind === LOCAL_ITEM.backup) {
+    useRight(false);
+    selection = { kind: item.kind, id: item.kind === LOCAL_ITEM.snapshot ? item.snapshot.id : item.backup.id };
+    rightEl.innerHTML = item.kind === LOCAL_ITEM.snapshot ? snapshotHtml(item.snapshot) : backupHtml(item.backup);
+  } else if (item.kind === ISSUE_ITEM.issue) {
     useRight(false);
     selection = { kind: ISSUE_ITEM.issue, number: item.issue.number };
     showIssue(rightEl, item.issue.number, issueContext());
@@ -968,9 +1023,12 @@ searchEl.addEventListener('keydown', e => {
 // ---- History and branches ----
 
 async function loadHistory() {
+  const loading = commits;
   try {
-    const page = await ask(PAGE.gitviewLog,
-      { root: /** @type {RepoStatus} */ (repo).root, skip: commits.length, limit: HISTORY_PAGE });
+    const page = await ask(PAGE.gitviewLog, {
+      root: /** @type {RepoStatus} */ (repo).root, skip: commits.length, limit: HISTORY_PAGE, all: history.all, path: history.path ?? undefined,
+    });
+    if (loading !== commits) return; // History started again meanwhile (All branches, another path)
     commits.push(...page);
     historyDone = page.length < HISTORY_PAGE;
   } catch (e) {
@@ -981,9 +1039,45 @@ async function loadHistory() {
   if (!selection && commits.length) openItem(0);
 }
 
+/** History again from its start: All branches switched, or another path's history picked. */
+async function reloadHistory() {
+  commits = [];
+  historyDone = false;
+  selection = null;
+  cursor = -1;
+  showNothing();
+  if (tab !== GIT_TAB.history) return switchTab(GIT_TAB.history);
+  renderTabs();
+  await loadHistory();
+}
+
+/**
+ * A file's or a folder's history, in History.
+ * @param {string} path
+ */
+function showPathHistory(path) {
+  history.path = path;
+  reloadHistory();
+}
+
+historyBarEl.addEventListener('change', e => {
+  const box = /** @type {HTMLInputElement} */ (e.target);
+  if (!box.matches('[data-history-all]')) return;
+  history.all = box.checked;
+  reloadHistory();
+});
+
+historyBarEl.addEventListener('click', e => {
+  if (targetOf(e).closest('[data-prune]')) return void openPrune(localContext());
+  if (!targetOf(e).closest('[data-history-whole]')) return;
+  history.path = null;
+  reloadHistory();
+});
+
 async function loadBranches() {
   try {
-    branches = await ask(PAGE.gitviewBranches, { root: /** @type {RepoStatus} */ (repo).root });
+    const root = /** @type {RepoStatus} */ (repo).root;
+    [branches, worktrees] = await Promise.all([ask(PAGE.gitviewBranches, { root }), ask(PAGE.gitviewWorktrees, { root }).catch(() => [])]);
   } catch (e) {
     branches = [];
     rightEl.innerHTML = `<div class="gw-message">${escapeHtml(/** @type {Error} */ (e).message)}</div>`;
@@ -1086,11 +1180,48 @@ function drawDiff() {
   target.innerHTML = `${head}${wrapButton}</div>${notes.length ? `<div class="pv-note">${escapeHtml(notes.join(' '))}</div>` : ''}`
     + `<div class="pv-scroll gw-diff${sideBySide && !whole ? ' sbs' : ''}${wrap ? ' wrap' : ''}">${pictures}<div class="pv-rows">${rows.map(diffRowHtml).join('')}</div></div>`;
   if (pictures) measureImages(target);
+  // Blocks and lines can be staged on their own where the diff is of the working tree, shown as a diff.
+  const parts = !wholeFile && !rows.plain && canStageParts(/** @type {DiffState} */ (diffState).request.side ?? '', data.kind, !!(/** @type {DiffState} */ (diffState).request.oldPath));
+  /** @type {DiffState} */ (diffState).rows = parts ? rows : null;
+  if (parts) setUpStaging(/** @type {HTMLElement} */ (target), rows, /** @type {string} */ ((/** @type {DiffState} */ (diffState)).request.side));
   return hit && searching() ? markInDiff(target, hit.line) : null;
 }
 
+/** What the checks (gitchecks.js) work with. @returns {import('./gitchecks.js').ChecksContext} */
+const checksContext = () => ({
+  root: /** @type {RepoStatus} */ (repo).root, showError: showGitError,
+  folderFor: async branch => {
+    const r = /** @type {RepoStatus} */ (repo);
+    if (!branch || branch === r.branch) return r.root;
+    /** @type {import('./gitcleanup.js').Worktree[]} */
+    const list = await ask(PAGE.gitviewWorktrees, { root: r.root }).catch(() => []);
+    return list.find(w => w.branch === branch)?.path ?? null;
+  },
+});
+
+/** The snapshot or backup the right side shows, in the Local history tab. */
+function shownLocal() {
+  if (selection?.kind === LOCAL_ITEM.snapshot) return { snapshot: local.snapshots.find(s => s.id === selection?.id) };
+  if (selection?.kind === LOCAL_ITEM.backup) return { backup: local.backups.find(b => b.id === selection?.id) };
+  return null;
+}
+
+/**
+ * What staging part of the shown file works with.
+ * @param {DiffState} shown
+ * @returns {import('./gitstage.js').StageContext}
+ */
+const stageContext = shown => ({
+  ask, root: /** @type {RepoStatus} */ (repo).root, path: shown.request.path ?? '', side: shown.request.side ?? '',
+  refresh: () => refresh(), showError: showGitError,
+});
+
 // A folded run of unchanged lines opens on a click.
 rightEl.addEventListener('click', e => {
+  if (tab === GIT_TAB.local && localClicked(e, shownLocal(), localContext())) return;
+  if (repo && checksClicked(e, checksContext())) return;
+  if (selection?.kind === WORKTREE_ITEM && worktreeClicked(targetOf(e), worktrees.find(w => w.path === selection?.path), localContext())) return;
+  if (diffState?.rows && stagingClicked(e, /** @type {HTMLElement} */ (diffState.target), diffState.rows, stageContext(diffState))) return;
   if (targetOf(e).closest('[data-gw-wrap]')) {
     toggleWrap(); // the diff redraws on the change (below)
     return;
@@ -1129,15 +1260,13 @@ rightEl.addEventListener('click', e => {
 let currentCommit = null;
 
 const UNDO_COMMIT_LABEL = 'Undo this commit';
-/** The checked-out commit's ref, as git log names it ("HEAD -> main", or "HEAD" when detached). */
-const HEAD_REF = 'HEAD';
 
 /**
  * Whether a commit can be undone here: the branch's newest, not pushed yet (the host checks no remote has it).
  * @param {string} hash
  */
-const canUndo = hash => !!repo && !repo.detached && commits[0]?.hash === hash
-  && !!commits[0].refs?.some(r => r.startsWith(HEAD_REF)) && (!repo.upstream || !!repo.ahead);
+const canUndo = hash => !!repo && !repo.detached && !history.path && commits.find(c => isHead(c.refs))?.hash === hash
+  && (!repo.upstream || !!repo.ahead);
 
 /**
  * A commit: its message, author, date and parents, the files it changed, and the selected file's diff below (the
@@ -1182,12 +1311,14 @@ async function showCommit(hash, { path = null } = {}) {
         ${canUndo(c.hash) ? `<button class="btn small" data-undo-commit title="Takes it off the branch; its changes stay staged">${UNDO_COMMIT_LABEL}</button>` : ''}
       </div>
     </div>
+    ${onGitHub() ? checksSlotHtml(c.hash) : ''}
     <div class="gw-commit-files">${c.files.length ? files : '<div class="gw-empty">No files changed.</div>'}</div>
     <div class="gw-commit-diff"></div>`;
   // The first file (or the one asked for) opens at once.
   const at = Math.max(0, c.files.findIndex(f => f.path === path));
   const first = /** @type {HTMLElement | null} */ (rightEl.querySelector(`[data-commit-file="${at}"]`));
   if (first) first.click();
+  if (onGitHub()) fillChecks(rightEl, c.hash, /** @type {RepoStatus} */ (repo).root);
 }
 
 /**
@@ -1250,8 +1381,14 @@ function fileMenu(item) {
   const sep = server || !/** @type {RepoStatus} */ (repo).root.includes('\\') ? '/' : '\\';
   const where = /** @type {RepoStatus} */ (repo).root.replace(/[\\/]+$/, '') + sep + item.path.split('/').join(sep);
   const copy = { label: 'Copy path', action: () => navigator.clipboard.writeText(where) };
+  const folder = item.path.includes('/') ? item.path.slice(0, item.path.lastIndexOf('/')) : null;
+  // Its history, and its folder's: only what git has (an untracked file has none).
+  const histories = item.side === SIDE.untracked ? [] : [
+    { label: 'History of this file', action: () => showPathHistory(item.path) },
+    ...(folder ? [{ label: 'History of its folder', action: () => showPathHistory(folder) }] : []),
+  ];
   if (item.conflict) {
-    return [{ label: 'Mark as resolved', action: () => act(GIT_ACTION.stage, { path: item.path }) }, SEPARATOR, copy];
+    return [{ label: 'Mark as resolved', action: () => act(GIT_ACTION.stage, { path: item.path }) }, SEPARATOR, ...histories, copy];
   }
   if (item.side === SIDE.staged) {
     return [
@@ -1262,7 +1399,7 @@ function fileMenu(item) {
           if (await confirmDialog({ title: `Restore ${name}?`, body: `Its staged and unsaved changes are undone, back to the last commit. This can't be undone.`, confirm: RESTORE_LABEL })) act(GIT_ACTION.discardAll, { path: item.path });
         },
       }] : []),
-      SEPARATOR, copy,
+      SEPARATOR, ...histories, copy,
     ];
   }
   if (item.side === SIDE.untracked) {
@@ -1286,7 +1423,7 @@ function fileMenu(item) {
         if (await confirmDialog({ title: `Restore ${name}?`, body: `Its changes that aren't staged are undone. This can't be undone.`, confirm: RESTORE_LABEL })) act(GIT_ACTION.discard, { path: item.path });
       },
     },
-    SEPARATOR, copy,
+    SEPARATOR, ...histories, copy,
   ];
 }
 
@@ -1438,7 +1575,12 @@ layer.addEventListener('mousedown', e => {
 
 // Keys in the window stay in it (no app shortcuts, no terminal); Escape closes it.
 box.addEventListener('keydown', e => {
-  if (e.key === 'Escape' && !e.defaultPrevented) {
+  const picked = diffState?.rows ? diffState.target.querySelector('.picked') : null;
+  if (e.key === 'Escape' && !e.defaultPrevented && picked && diffState) {
+    // The first Escape lets go of the lines picked; the next one closes the window.
+    e.preventDefault();
+    clearPicked(/** @type {HTMLElement} */ (diffState.target), diffState.request.side ?? '');
+  } else if (e.key === 'Escape' && !e.defaultPrevented) {
     e.preventDefault();
     closeGitWindow();
   } else if (e.key === 'F5' || (e.ctrlKey && e.key.toLowerCase() === 'r')) {

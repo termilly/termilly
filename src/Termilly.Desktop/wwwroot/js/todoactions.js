@@ -15,7 +15,8 @@ import { commandLine } from './quoting.js';
 import { resumeCommand } from './resume.js';
 import { AGENT_COMMAND } from './agentcli.js';
 import { agentKind } from './agentkinds.js';
-import { AGENT_STATE, PROFILE_ICON } from './constants.js';
+import { AGENT_STATE, PROFILE_ICON, SNAPSHOT_REASON } from './constants.js';
+import { takeSnapshot } from './gitsafety.js';
 import { KNOWN_AGENTS, RUN, STAGE, fitPlan } from './todoplan.js';
 import { implementSilently, watchWork, workDone, oneMoreRound } from './todoreview.js';
 import { alertReview } from './notify.js';
@@ -234,6 +235,10 @@ export function implementTask(ref, task, sub, plan = planOf(ref), place = implem
  */
 export function implement(ref, task, sub, plan = planOf(ref), place = implementPlace(ref)) {
   if (!place || implementing(task)) return { started: false, tab: null };
+  // What's uncommitted there is kept first, so whatever the agent does to it can be undone (the Git window's Local
+  // history). Not waited for: an agent takes longer to start than the snapshot takes, and a folder that isn't a
+  // repository simply has none.
+  if (!place.server) takeSnapshot(place.folder, SNAPSHOT_REASON.agentStart);
   if (plan.run === RUN.silent) {
     implementSilently(ref, task, sub, plan, place);
     return { started: true, tab: null };

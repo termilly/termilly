@@ -44,3 +44,28 @@
 .gw-push-checks { margin: 10px 0 0; padding-left: 18px; color: var(--muted); font-size: 12.5px; line-height: 1.6; }
 .gw-push-checks .gw-warn { color: var(--attention); }
 .gw-push-output { max-height: 50vh; margin: 0 0 12px; padding: 8px 10px; overflow: auto; border-radius: 6px; background: var(--surface); font: 12px/1.45 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* Checks (js/gitchecks.js): a dot per commit in History, and a commit's checks in its details. */
+.gw-check { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--faint); }
+.gw-check[data-check="failing"] { background: var(--danger); }
+.gw-check[data-check="running"] { background: var(--attention); }
+.gw-check[data-check="passing"] { background: var(--ok); }
+.gw-checks:empty { display: none; }
+.gw-checks { display: flex; flex: none; flex-direction: column; gap: 4px; padding: 8px 14px 10px; border-bottom: 1px solid var(--border); font-size: 12px; }
+.gw-checks-head { display: flex; align-items: center; gap: 8px; color: var(--text); font-weight: 600; }
+.gw-check-run, .gw-check-job { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.gw-check-job { padding-left: 16px; }
+.gw-check-name { flex: 1; min-width: 0; overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
+.gw-check-run .btn.small, .gw-check-job .btn.small { height: 22px; padding: 0 8px; font-size: 11.5px; }
+.git-log-dialog { width: min(900px, calc(100vw - 48px)); }
+.gw-check-log { max-height: 50vh; margin: 8px 0; padding: 10px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; background: var(--term-bg); color: var(--term-text); font: 12px/1.45 var(--mono); white-space: pre-wrap; }
+/* Clean up branches (js/gitcleanup.js). */
+.git-prune { width: min(640px, calc(100vw - 48px)); }
+.gw-prune-list { display: flex; flex-direction: column; max-height: 50vh; overflow: auto; }
+.gw-prune-row { margin: 4px 0; }
+.gw-prune-name { font: 12.5px var(--mono); }
+.gw-prune-why { min-width: 0; overflow: hidden; color: var(--muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+/* Local history (js/gitlocal.js). */
+.gw-local-files { flex: 1; min-height: 0; padding: 4px; overflow: auto; }
+.gw-local-file .btn.small { flex: none; height: 22px; margin-left: auto; padding: 0 8px; font-size: 11.5px; }
+.gw-local-note { padding: 6px 10px; color: var(--muted); font-size: 12px; }
