@@ -75,7 +75,7 @@ internal sealed class RepoSnippetsHandler(PageChannel page) : IMessageHandler, I
     }
 
     /// <summary>
-    /// The repository's folder (its .termilly.yml, and .termilly or .vscode made or removed) and those two folders.
+    /// The repository's folder (its .termilly.yml and workspace files, and .termilly or .vscode made or removed) and those two folders.
     /// Not the whole tree: a build writes thousands of files a second.
     /// </summary>
     private List<FileSystemWatcher> Watchers(string root)
@@ -92,7 +92,12 @@ internal sealed class RepoSnippetsHandler(PageChannel page) : IMessageHandler, I
             watcher.Changed += touched;
             watcher.Created += touched;
             watcher.Deleted += touched;
-            watcher.Renamed += (_, e) => Touched(root, e.FullPath);
+            // Either name: a file renamed away (a.code-workspace to a.bak) is gone from the list too.
+            watcher.Renamed += (_, e) =>
+            {
+                Touched(root, e.OldFullPath);
+                Touched(root, e.FullPath);
+            };
             try
             {
                 watcher.EnableRaisingEvents = true;
@@ -111,7 +116,7 @@ internal sealed class RepoSnippetsHandler(PageChannel page) : IMessageHandler, I
     {
         var name = Path.GetFileName(path);
         var relevant = name is RepoSnippets.Folder or VsCodeTasks.Folder or RepoSnippets.FileName or VsCodeTasks.FileName
-            || name == WorkspaceLayout.FileName;
+            || name == WorkspaceLayout.FileName || VsCodeWorkspace.IsWorkspaceFile(name);
         if (!relevant)
         {
             return;

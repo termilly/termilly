@@ -17,7 +17,7 @@ import {
   placeholders, saveSnippet, newSnippetId, globalSnippets, repoHere, whereHtml, whereOf, readEditor,
   SNIPPET_SCOPE, SNIPPET_FIELD, IN_REPO, RUN_LABEL, THIS_COMPUTER,
 } from './snippets.js';
-import { REPO_FILE, LAYOUT_FILE, TASKS_FILE } from './reposnippets.js';
+import { REPO_FILE, LAYOUT_FILE, TASKS_FILE, taskFiles } from './reposnippets.js';
 import { runAny } from './taskrun.js';
 import { toggleSnippetPick, SNIPPETS_BUTTON } from './snippetpick.js';
 import { byId, find, targetOf } from './dom.js';
@@ -126,9 +126,9 @@ function everySnippet() {
 function groupHtml(where, count, open) {
   const repo = repoHere();
   const [title, file] = where === SNIPPET_SCOPE.global ? [THIS_COMPUTER, '']
-    : where === SNIPPET_SCOPE.task ? ['VS Code tasks', TASKS_FILE]
+    : where === SNIPPET_SCOPE.task ? ['VS Code tasks', taskFiles(repo?.allTasks ?? [])]
       : where === SNIPPET_SCOPE.shared ? [repo?.name ?? 'This repo', LAYOUT_FILE] : [repo?.name ?? 'This repo', REPO_FILE];
-  return `<div class="sw-group${open ? ' open' : ''}" data-group="${escapeHtml(where)}" role="button" aria-expanded="${open}"><span class="cw-chev">${ICONS.chevronRight}</span><span class="sw-group-name">${escapeHtml(title)}</span><span class="sw-group-count">${count}</span>${file ? `<code>${file}</code>` : ''}</div>`;
+  return `<div class="sw-group${open ? ' open' : ''}" data-group="${escapeHtml(where)}" role="button" aria-expanded="${open}"><span class="cw-chev">${ICONS.chevronRight}</span><span class="sw-group-name">${escapeHtml(title)}</span><span class="sw-group-count">${count}</span>${file ? `<code>${escapeHtml(file)}</code>` : ''}</div>`;
 }
 
 /** @returns {Entry | null} */
@@ -213,15 +213,16 @@ function select(id) {
 function fileEntryHtml(e) {
   const s = /** @type {ListedSnippet} */ (e.s);
   const task = e.where === SNIPPET_SCOPE.task;
+  const file = fileOf(e);
   return `
     <h3 class="sw-title">${escapeHtml(s.name)}</h3>
-    <p class="dialog-sub">${task ? 'VS Code task' : 'Listed in the workspace layout'} · <code>${task ? TASKS_FILE : LAYOUT_FILE}</code></p>
+    <p class="dialog-sub">${task ? 'VS Code task' : 'Listed in the workspace layout'} · <code>${escapeHtml(file)}</code></p>
     <label class="dialog-field">Command<textarea class="field snippet-command" rows="5" readonly>${escapeHtml(s.command)}</textarea></label>
     ${task && s.task?.dependsOn.length ? `<p class="dialog-sub">Runs first: ${s.task.dependsOn.map(escapeHtml).join(', ')}</p>` : ''}
     ${task && s.task?.cwd ? `<p class="dialog-sub">Runs in <code>${escapeHtml(s.task.cwd)}</code></p>` : ''}
     <p class="sw-note">Termilly doesn’t change this file. Edit it, or copy this as a snippet to change it here.</p>
     <div class="dialog-actions">
-      <button class="btn" data-sw="${ACTION.openFile}">Open ${task ? 'tasks.json' : LAYOUT_FILE}</button>
+      <button class="btn" data-sw="${ACTION.openFile}">Open ${escapeHtml(file.split('/').pop() ?? file)}</button>
       <button class="btn" data-sw="${ACTION.copy}">Copy as snippet</button>
       <span class="spacer"></span>
       <button class="btn primary" data-sw="${ACTION.run}">${RUN_LABEL}</button>
@@ -427,8 +428,14 @@ function openFile() {
   const e = current();
   const root = /** @type {ListedSnippet | undefined} */ (e?.s)?.root;
   if (!e || !root) return;
-  send(PAGE.openPath, { path: `${root}/${e.where === SNIPPET_SCOPE.task ? TASKS_FILE : LAYOUT_FILE}` });
+  send(PAGE.openPath, { path: `${root}/${fileOf(e)}` });
 }
+
+/**
+ * The file a task or .termilly.yml snippet is in, relative to the repository.
+ * @param {Entry} e
+ */
+const fileOf = e => (e.where === SNIPPET_SCOPE.task ? /** @type {ListedSnippet} */ (e.s).task?.file ?? TASKS_FILE : LAYOUT_FILE);
 
 /** A task or .termilly.yml snippet copied as a new snippet, to change here. */
 function copyAsSnippet() {

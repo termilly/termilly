@@ -8,7 +8,8 @@ namespace Termilly.Desktop;
 
 /// <summary>
 /// A repository's snippets and tasks: those it keeps in .termilly/snippets.yml (shared through git, or kept out of it
-/// with .git/info/exclude), those its .termilly.yml shares, and its VS Code tasks. The repository is the folder with
+/// with .git/info/exclude), those its .termilly.yml shares, and its VS Code tasks (.vscode/tasks.json and its
+/// *.code-workspace files). The repository is the folder with
 /// .git (a folder, or a worktree's file) at or above the one asked about.
 /// </summary>
 internal static class RepoSnippets
@@ -63,7 +64,24 @@ internal static class RepoSnippets
         // The layout file in the repository's folder only: what's read is the repository's, the same for every folder in it.
         var shared = Text(Path.Combine(root, WorkspaceLayout.FileName), warnings) is { } layout ? WorkspaceLayout.SnippetsOf(layout, warnings) : [];
         var (tasks, inputs) = Text(TasksPath(root), warnings) is { } json ? VsCodeTasks.Parse(json, root, warnings) : ([], []);
-        return new(requestId, root, snippets, shared, tasks, inputs, IsOnlyMe(root), warnings);
+        var (more, moreInputs) = WorkspaceTasks(root, warnings);
+        return new(requestId, root, snippets, shared, [.. tasks, .. more], [.. inputs, .. moreInputs], IsOnlyMe(root), warnings);
+    }
+
+    /// <summary>The tasks of the workspace files in the repository's folder, file by file.</summary>
+    private static (List<RepoTask> Tasks, List<TaskInput> Inputs) WorkspaceTasks(string root, List<string> warnings)
+    {
+        var (tasks, inputs) = (new List<RepoTask>(), new List<TaskInput>());
+        foreach (var file in VsCodeWorkspace.FilesIn(root, warnings))
+        {
+            if (Text(file, warnings) is { } json)
+            {
+                var (more, moreInputs) = VsCodeWorkspace.Parse(json, file, warnings);
+                tasks.AddRange(more);
+                inputs.AddRange(moreInputs);
+            }
+        }
+        return (tasks, inputs);
     }
 
     /// <summary>

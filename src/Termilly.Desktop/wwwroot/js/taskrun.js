@@ -16,18 +16,20 @@ import { repoByRoot, folderOfTab } from './reposnippets.js';
 export const RUN_MODE = Object.freeze({ newTerminal: 'new', focused: 'focused', typeOnly: 'type' });
 
 /**
- * The tasks to run for one, in order: what it depends on first, each once.
- * @param {string} label
+ * The tasks to run for one, in order: what it depends on first (by label, in its own file), each once.
+ * @param {RepoTask} task
  * @param {RepoTask[]} tasks
  * @param {Set<string>} [seen]
  * @returns {RepoTask[]}
  */
-export function taskChain(label, tasks, seen = new Set()) {
-  if (seen.has(label)) return [];
-  seen.add(label);
-  const task = tasks.find(t => t.label === label);
-  if (!task) return [];
-  return [...task.dependsOn.flatMap(d => taskChain(d, tasks, seen)), task];
+export function taskChain(task, tasks, seen = new Set()) {
+  if (seen.has(task.label)) return [];
+  seen.add(task.label);
+  const own = tasks.filter(t => t.file === task.file);
+  return [...task.dependsOn.flatMap(d => {
+    const next = own.find(t => t.label === d);
+    return next ? taskChain(next, own, seen) : [];
+  }), task];
 }
 
 /**
@@ -72,7 +74,7 @@ function openWith(snippet, values, { cwd, env }) {
  */
 export async function runTask(snippet, mode = RUN_MODE.newTerminal) {
   const task = /** @type {RepoTask} */ (snippet.task);
-  const chain = taskChain(task.label, repoByRoot(snippet.root)?.allTasks ?? [task]);
+  const chain = taskChain(task, repoByRoot(snippet.root)?.allTasks ?? [task]);
   const tab = focusedTab();
   const fresh = mode === RUN_MODE.newTerminal || !tab;
   const start = fresh ? inRepo(task.cwd, snippet.root) : folderOfTab(tab);

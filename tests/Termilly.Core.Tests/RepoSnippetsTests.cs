@@ -170,6 +170,137 @@ public sealed class RepoSnippetsTests : IDisposable
     }
 
     [Fact]
+    public void A_workspace_files_tasks_run_in_its_first_folder_with_its_named_folders_filled()
+    {
+        var api = Directory.CreateDirectory(Path.Combine(_repo, "services", "api")).FullName;
+        var web = Directory.CreateDirectory(Path.Combine(_repo, "web")).FullName;
+        Write("app.code-workspace", """
+            // VS Code's own file: comments and trailing commas
+            {
+              "folders": [ { "path": "services/api" }, { "name": "Front end", "path": "./web/" }, ],
+              "settings": {},
+              "tasks": {
+                "version": "2.0.0",
+                "tasks": [
+                  { "label": "build", "command": "dotnet build ${workspaceFolder}", "group": "build" },
+                  { "label": "web", "command": "npm start", "options": { "cwd": "${workspaceFolder:Front end}" } },
+                  { "label": "docs", "command": "make", "options": { "cwd": "docs" } },
+                  { "label": "where", "command": "echo ${workspaceFolderBasename} ${workspaceFolder:api} ${workspaceFolder:nope}" },
+                  { "label": "both", "dependsOn": ["build", "web"] },
+                ],
+                "inputs": [ { "id": "port", "type": "promptString" } ],
+              },
+            }
+            """);
+
+        var found = RepoSnippets.Read(null, _repo);
+
+        Assert.Empty(found.Warnings);
+        Assert.Equal(["build", "web", "docs", "where", "both"], found.Tasks.Select(t => t.Label));
+        Assert.All(found.Tasks, t => Assert.Equal("app.code-workspace", t.File));
+        Assert.Equal($"dotnet build {api}", found.Tasks[0].Command);
+        Assert.Equal(api, found.Tasks[0].Cwd);
+        Assert.Equal(web, found.Tasks[1].Cwd);
+        Assert.Equal(Path.Combine(api, "docs"), found.Tasks[2].Cwd);
+        Assert.Equal($"echo api {api} ${{workspaceFolder:nope}}", found.Tasks[3].Command);
+        Assert.Equal("app.code-workspace", Assert.Single(found.Inputs).File);
+    }
+
+    [Fact]
+    public void Tasks_json_and_workspace_tasks_are_listed_each_with_its_own_file()
+    {
+        Write(".vscode/tasks.json", """{ "tasks": [ { "label": "build", "command": "make" } ], "inputs": [ { "id": "a", "type": "promptString" } ] }""");
+        Write("b.CODE-WORKSPACE", """{ "folders": [ { "path": "." } ], "tasks": { "tasks": [ { "label": "build", "command": "make all" } ] } }""");
+        Write("a.code-workspace", """{ "folders": [] }""");
+        Write("sub/c.code-workspace", """{ "tasks": { "tasks": [ { "label": "deep", "command": "x" } ] } }""");
+
+        var found = RepoSnippets.Read(null, _repo);
+
+        Assert.Equal([(".vscode/tasks.json", "make"), ("b.CODE-WORKSPACE", "make all")], found.Tasks.Select(t => (t.File, t.Command)));
+        Assert.Null(found.Tasks[0].Cwd);
+        Assert.Equal(_repo, found.Tasks[1].Cwd);
+        Assert.Equal(".vscode/tasks.json", Assert.Single(found.Inputs).File);
+    }
+
+    [Fact]
+    public void A_folder_name_is_taken_as_written_and_a_folder_listed_again_is_left_out()
+    {
+        Directory.CreateDirectory(Path.Combine(_repo, "api"));
+        Write("n.code-workspace", """
+            { "folders": [ { "name": " API ", "path": "api" }, { "name": "again", "path": "api/" } ],
+              "tasks": { "tasks": [ { "label": "x", "command": "${workspaceFolder: API } ${workspaceFolder:API} ${workspaceFolder:again}" } ] } }
+            """);
+
+        var api = Path.Combine(_repo, "api");
+        Assert.Equal($"{api} ${{workspaceFolder:API}} ${{workspaceFolder:again}}", Assert.Single(RepoSnippets.Read(null, _repo).Tasks).Command);
+    }
+
+    [Fact]
+    public void A_workspace_without_folders_leaves_its_folder_variables_as_written()
+    {
+        Write("bare.code-workspace", """{ "tasks": { "tasks": [ { "label": "x", "command": "ls ${workspaceFolder}" } ] } }""");
+
+        var task = Assert.Single(RepoSnippets.Read(null, _repo).Tasks);
+
+        Assert.Equal("ls ${workspaceFolder}", task.Command);
+        Assert.Null(task.Cwd);
+    }
+
+    [Fact]
+    public void A_workspace_folder_can_be_a_file_uri_and_others_are_left_out()
+    {
+        var lib = Directory.CreateDirectory(Path.Combine(_repo, "my lib")).FullName;
+        var uri = new Uri(lib).AbsoluteUri;
+        Write("u.code-workspace", $$"""
+            { "folders": [ { "uri": "vscode-remote://ssh-remote+box/home/me/x" }, { "uri": "{{uri}}" } ],
+              "tasks": { "tasks": [ { "label": "x", "command": "ls" } ] } }
+            """);
+
+        Assert.Equal(lib, Assert.Single(RepoSnippets.Read(null, _repo).Tasks).Cwd);
+    }
+
+    [Fact]
+    public void A_windows_drive_uri_as_vs_code_writes_it_is_that_drives_folder()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+        var drive = _repo[..1].ToLowerInvariant();
+        var rest = _repo[2..].Replace('\\', '/');
+        Write("w.code-workspace", $$"""
+            { "folders": [ { "uri": "file:///{{drive}}%3A{{rest}}" } ], "tasks": { "tasks": [ { "label": "x", "command": "ls" } ] } }
+            """);
+
+        Assert.Equal(_repo, Assert.Single(RepoSnippets.Read(null, _repo).Tasks).Cwd, ignoreCase: true);
+    }
+
+    [Fact]
+    public void A_broken_workspace_file_is_a_warning_naming_it()
+    {
+        Write("team.code-workspace", "{ \"tasks\": ");
+
+        var found = RepoSnippets.Read(null, _repo);
+
+        Assert.Empty(found.Tasks);
+        Assert.Contains(found.Warnings, w => w.Contains("team.code-workspace", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Past_the_most_workspace_files_read_a_warning_says_so()
+    {
+        for (var i = 0; i <= VsCodeWorkspace.MaxFiles; i++)
+        {
+            Write($"w{i}.code-workspace", $$"""{ "tasks": { "tasks": [ { "label": "t{{i}}", "command": "x" } ] } }""");
+        }
+
+        var found = RepoSnippets.Read(null, _repo);
+
+        Assert.Equal(VsCodeWorkspace.MaxFiles, found.Tasks.Count);
+        Assert.Single(found.Warnings);
+    }
+
+    [Fact]
     public void A_broken_tasks_file_is_a_warning_not_a_failure()
     {
         Write(".vscode/tasks.json", "{ \"tasks\": [ ");
