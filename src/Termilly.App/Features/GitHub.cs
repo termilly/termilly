@@ -8,6 +8,7 @@ internal sealed class GitHubHandler(PageChannel page, IGitHub github) : IMessage
 {
     public void Register(MessageRouter router)
     {
+        RegisterChecks(router);
         router.On<FromPage.GitHubStatus>(m => Answer(m.RequestId, () => github.Status(m.Root ?? "")));
         router.On<FromPage.GitHubIssues>(m => Answer(m.RequestId, () => github.Issues(m.Root ?? "", m.State, m.Search)));
         router.On<FromPage.GitHubIssue>(m => Answer(m.RequestId, () => github.Issue(m.Root ?? "", m.Number)));
@@ -19,6 +20,20 @@ internal sealed class GitHubHandler(PageChannel page, IGitHub github) : IMessage
         router.On<FromPage.GitHubPrFor>(m => Answer(m.RequestId, () => github.PrFor(m.Root ?? "", m.Branch)));
         router.On<FromPage.GitHubPrCreate>(m => Answer(m.RequestId, () => github.PrCreate(m.Root ?? "", m)));
     }
+
+    private void RegisterChecks(MessageRouter router)
+    {
+        router.On<FromPage.GitHubRuns>(m => Answer(m.RequestId, () => github.Runs(LocalRoot(m.Remote, m.Root), m.Branch)));
+        router.On<FromPage.GitHubRunJobs>(m => Answer(m.RequestId, () => github.RunJobs(LocalRoot(m.Remote, m.Root), m.RunId)));
+        router.On<FromPage.GitHubFailedLog>(m => Answer(m.RequestId, () => github.FailedLog(LocalRoot(m.Remote, m.Root), m.RunId, m.JobId)));
+        router.On<FromPage.GitHubRerunFailed>(m => Answer(m.RequestId, () =>
+        {
+            github.RerunFailed(LocalRoot(m.Remote, m.Root), m.RunId);
+            return null;
+        }));
+    }
+
+    private static string LocalRoot(string? remote, string? root) => remote is null ? root ?? "" : throw new ArgumentException("GitHub checks work on this computer's repositories.");
 
     private void Answer(string? requestId, Func<object?> work) => _ = Task.Run(() =>
     {

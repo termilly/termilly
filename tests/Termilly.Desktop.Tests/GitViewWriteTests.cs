@@ -180,6 +180,57 @@ public sealed class GitViewWriteTests : IDisposable
         Assert.Contains("$safe", runner.Requests[0].CommandLine!);
     }
 
+    [Fact]
+    public void GitHub_checks_use_origin_and_bounded_arguments_and_map_jobs()
+    {
+        Git("remote", "set-url", "origin", "https://github.com/a/b.git");
+        var runner = new RecordingRunner(request => new ProcessResult(0, Encoding.UTF8.GetBytes(request.Arguments.Contains("list")
+            ? "[]" : request.Arguments.Contains("--log-failed") ? "failed step" : request.Arguments.Contains("jobs")
+            ? "{\"jobs\":[{\"databaseId\":9,\"name\":\"build\",\"status\":\"completed\",\"conclusion\":\"failure\",\"url\":\"https://github.com/a/b/actions/runs/7/job/9\",\"steps\":[{\"name\":\"test\",\"conclusion\":\"failure\"}]}]}"
+            : "{\"url\":\"https://github.com/a/b/actions/runs/7\"}"), "", false));
+        var github = new GitHub(runner, TestServices.GitRunner);
+        Assert.Empty(github.Runs(Repo, "topic"));
+        Assert.Contains("--limit", runner.Requests[0].Arguments);
+        Assert.Contains("100", runner.Requests[0].Arguments);
+        Assert.Contains("topic", runner.Requests[0].Arguments);
+        Assert.Equal("https://github.com/a/b.git", runner.Requests[0].Environment!["GH_REPO"]);
+        Assert.Equal("test", Assert.Single(github.RunJobs(Repo, 7)).FailedStep);
+        var log = github.FailedLog(Repo, 7, 9);
+        Assert.Equal("failed step", log.Text);
+        Assert.False(log.Cut);
+        Assert.Equal(["run", "view", "7", "--log-failed", "--job", "9"], runner.Requests[^1].Arguments);
+        github.RerunFailed(Repo, 7);
+        Assert.Equal(["run", "rerun", "7", "--failed"], runner.Requests[^1].Arguments);
+        Assert.Throws<ArgumentException>(() => github.RerunFailed(Repo, 0));
+    }
+
+    [Fact]
+    public void GitHub_failed_log_keeps_a_bounded_unicode_tail()
+    {
+        var log = GitHub.TrimLog(string.Join('\n', Enumerable.Range(0, 500)) + "\nlast", "url");
+        Assert.True(log.Cut);
+        Assert.EndsWith("last", log.Text);
+        Assert.Equal(400, log.Text.Split('\n').Length);
+        var unicode = GitHub.TrimLog(new string('\u754c', 100000), "url");
+        Assert.True(unicode.Cut);
+        Assert.True(Encoding.UTF8.GetByteCount(unicode.Text) <= 64 * 1024);
+        Assert.DoesNotContain("\uFFFD", unicode.Text);
+    }
+
+    [Fact]
+    public void GitHub_run_fields_match_the_page_contract_and_failures_are_reported()
+    {
+        Git("remote", "set-url", "origin", "https://github.com/a/b.git");
+        var runner = new RecordingRunner(_ => new ProcessResult(0, Encoding.UTF8.GetBytes(
+            "[{\"databaseId\":7,\"workflowName\":\"CI\",\"displayTitle\":\"Fix\",\"status\":\"queued\",\"conclusion\":\"\",\"event\":\"push\",\"headBranch\":\"topic\",\"headSha\":\"abc\",\"url\":\"url\",\"createdAt\":\"2026-01-01T00:00:00Z\"}]"), "", false));
+        var github = new GitHub(runner, TestServices.GitRunner);
+        var run = Assert.Single(github.Runs(Repo, null));
+        Assert.Equal(new GitHubRun(7, "CI", "Fix", "queued", null, "push", "topic", "abc", "url", "2026-01-01T00:00:00Z"), run);
+        Assert.DoesNotContain("--branch", runner.Requests[0].Arguments);
+        var failed = new GitHub(new RecordingRunner(_ => new ProcessResult(1, [], "gh failed", false)), TestServices.GitRunner);
+        Assert.Contains("gh failed", Assert.Throws<IOException>(() => failed.RerunFailed(Repo, 7)).Message);
+    }
+
     private sealed class RecordingRunner(Func<ProcessRequest, ProcessResult> run) : IProcessRunner
     {
         public List<ProcessRequest> Requests { get; } = [];

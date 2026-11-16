@@ -51,6 +51,7 @@ internal static partial class GitView
 
     /// <summary>The most commits one page of history asks for.</summary>
     private const int MaxLog = 500;
+    private const string OneCommit = "-n1";
     /// <summary>git's message for a log of a repository without commits: an empty history.</summary>
     private const string NoCommits = "does not have any commits";
     private const long BytesPerKb = 1024;
@@ -88,7 +89,7 @@ internal static partial class GitView
     /// A file's diff in the change preview's shape: staged (last commit against the index), unstaged (index against
     /// the disk), untracked (the new file) or in a commit (its first parent against it).
     /// </summary>
-    public static ChangeView Diff(string root, GitDiffTarget target, long maxBytes, GitRunner git)
+    public static ChangeView Diff(string root, GitDiffTarget target, long maxBytes, GitRunner git, bool remember = true)
     {
         var path = git.CheckPath(root, target.Path);
         var from = target.OldPath is null ? path : git.CheckPath(root, target.OldPath);
@@ -124,6 +125,10 @@ internal static partial class GitView
                 throw new ArgumentException("Unknown kind of change.");
         }
         var view = View(path, target.OldPath is null ? path : $"{from} → {path}", before, after);
+        if (remember)
+        {
+            GitStageLines.Remember(root, target, git, view, maxBytes);
+        }
         return image is null ? view : ChangePictures.With(view, image, before, after);
     }
 
@@ -184,10 +189,22 @@ internal static partial class GitView
     // ---- History ----
 
     /// <summary>Commits, newest first, from HEAD or from one of the repository's refs.</summary>
-    public static IReadOnlyList<GitCommit> Log(string root, int skip, int limit, string? reference, GitRunner git)
+    public static IReadOnlyList<GitCommit> Log(string root, int skip, int limit, string? reference, GitRunner git, bool all = false, string? path = null)
     {
         var args = new List<string> { GitCommands.Log, GitOutput.LogFormat, FullDecorations,
             $"--skip={Math.Max(0, skip)}", $"-n{Math.Clamp(limit, 1, MaxLog)}" };
+        if (all)
+        {
+            args.AddRange(["--branches", "--remotes", "--tags", "--date-order"]);
+        }
+        if (path is not null)
+        {
+            path = git.CheckPath(root, path);
+            if (IsHistoryFile(root, path, git))
+            {
+                args.Add("--follow");
+            }
+        }
         if (reference is not null)
         {
             // Only a ref git itself listed, and after --end-of-options so it can't be taken for an option.
@@ -198,7 +215,29 @@ internal static partial class GitView
             args.Add(GitCommands.Options.EndOfOptions);
             args.Add(reference);
         }
+        if (path is not null)
+        {
+            args.AddRange([GitCommands.Options.Paths, path]);
+        }
         return ReadLog(git, root, args);
+    }
+
+    private static bool IsHistoryFile(string root, string path, GitRunner git)
+    {
+        if (git.ReadFile(root, path, 1).Exists)
+        {
+            return true;
+        }
+        try
+        {
+            // A deleted file still needs rename following; a folder's last change names its children instead.
+            return Text(git, root, GitCommands.Log, OneCommit, "--format=", GitCommands.NameOnly, GitCommands.Options.NulTerminated, GitCommands.Options.Paths, path)
+                .Split('\0', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).Contains(path, StringComparer.Ordinal);
+        }
+        catch (GitFailedException e) when (e.Message.Contains(NoCommits, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
     }
 
     /// <summary>git log's commits; none for a repository without commits.</summary>
@@ -220,7 +259,7 @@ internal static partial class GitView
         try
         {
             var full = Text(git, root, GitCommands.RevParse, "--verify", GitCommands.Options.Quiet, $"{hash}^{{commit}}").Trim();
-            var found = GitOutput.Log(Text(git, root, GitCommands.Log, GitOutput.LogFormat, FullDecorations, "-n1", CheckHash(full)));
+            var found = GitOutput.Log(Text(git, root, GitCommands.Log, GitOutput.LogFormat, FullDecorations, OneCommit, CheckHash(full)));
             return found.Count > 0 ? found[0] : null;
         }
         catch (IOException)
@@ -288,6 +327,10 @@ internal static partial class GitView
             GitActions.Delete => [GitCommands.Clean, "-f", GitCommands.Options.Quiet, GitCommands.Options.Paths, file],
             _ => throw new ArgumentException("Unknown action."),
         };
+        if (action is GitActions.Discard or GitActions.DiscardAll or GitActions.Delete)
+        {
+            GitSnapshots.Before(root, SnapshotReasons.BeforeDiscard, git);
+        }
         git.Run(root, args);
     }
 
