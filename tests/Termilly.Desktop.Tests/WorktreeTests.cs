@@ -37,6 +37,16 @@ public sealed class WorktreeTests : IDisposable
         }
     }
 
+    [Fact]
+    public void Base_selects_the_start_commit_instead_of_the_current_branch()
+    {
+        var first = TestServices.Git.Text(Repo, "rev-parse", "HEAD");
+        TestServices.Git.Text(Repo, "commit", "--allow-empty", "-m", "second");
+        var created = TestServices.Worktrees.Create(Repo, "from-first", first);
+        Assert.Equal(first, TestServices.Git.Text(created.Path, "rev-parse", "HEAD"));
+        Assert.Throws<IOException>(() => TestServices.Worktrees.Create(Repo, "bad-base", "--help"));
+    }
+
     [Theory]
     [InlineData("agent/fix login", "agent/fix-login")]
     [InlineData("  feature: new?! ", "feature-new")]

@@ -33,6 +33,12 @@ internal abstract class GitRunner(IProcessRunner runner)
     /// <summary>git's output for <paramref name="args"/> in <paramref name="root"/>; IOException with git's message when it fails.</summary>
     public abstract byte[] Run(string root, IReadOnlyList<string> args);
 
+    /// <summary>Uses git's hook path so linked worktrees and core.hooksPath are respected.</summary>
+    public abstract bool HasPrePushHook(string root);
+
+    /// <summary>Keeps both output streams so hooks can explain a rejected write.</summary>
+    public abstract string Write(string root, IReadOnlyList<string> args, TimeSpan timeout);
+
     /// <summary>
     /// A file in the working tree, at most <paramref name="maxBytes"/>; missing when it isn't there. With
     /// <paramref name="keepBytes"/>, its bytes are kept even when it's binary (<see cref="Blob.Raw"/>).
@@ -64,6 +70,18 @@ internal abstract class GitRunner(IProcessRunner runner)
     }
 
     /// <summary>Runs git (or ssh) to its end: its output, or <see cref="GitFailedException"/> with all it wrote to stderr.</summary>
+    protected string CollectWrite(ProcessRequest request)
+    {
+        var result = runner.Run(request);
+        var output = result.Text + result.Error;
+        if (!result.Succeeded)
+        {
+            var message = result.FirstErrorLine ?? "Git failed.";
+            throw new GitFailedException(result.ExitCode, message, string.IsNullOrWhiteSpace(output) ? message : output);
+        }
+        return output;
+    }
+
     protected byte[] Collect(ProcessRequest request, string what)
     {
         var result = runner.Run(request);
@@ -93,6 +111,15 @@ internal sealed class LocalGitRunner(IProcessRunner runner) : GitRunner(runner)
 {
     public override byte[] Run(string root, IReadOnlyList<string> args) =>
         Collect(new ProcessRequest(GitCommands.Program, [.. Options, .. args]) { WorkingDirectory = root, Environment = Environment }, GitCommands.Program);
+
+    public override bool HasPrePushHook(string root)
+    {
+        var path = Encoding.UTF8.GetString(Run(root, [GitCommands.RevParse, GitCommands.GitPath, GitCommands.PrePushHook])).Trim();
+        return File.Exists(Path.GetFullPath(path, root));
+    }
+
+    public override string Write(string root, IReadOnlyList<string> args, TimeSpan timeout) =>
+        CollectWrite(new ProcessRequest(GitCommands.Program, [.. Options, .. args]) { WorkingDirectory = root, Environment = Environment, Timeout = timeout });
 
     public override Blob ReadFile(string root, string path, long maxBytes, bool keepBytes = false) =>
         Blob.Read(Path.Combine(root, path), maxBytes, keepBytes);
@@ -198,6 +225,16 @@ internal sealed class SshGitRunner(IProcessRunner runner, string sshArguments, I
         string.Concat(Environment.Select(v => $"{v.Key}={v.Value} ")) + GitCommands.Program + " -C " + Quote(root) + " " + string.Join(' ', Options.Concat(args).Select(Quote));
 
     public override byte[] Run(string root, IReadOnlyList<string> args) => Remote(GitCommand(root, args));
+
+    public override bool HasPrePushHook(string root)
+    {
+        var path = Encoding.UTF8.GetString(Run(root, [GitCommands.RevParse, GitCommands.GitPath, GitCommands.PrePushHook])).Trim();
+        var full = path.StartsWith('/') ? path : root.TrimEnd('/') + "/" + path;
+        return Encoding.UTF8.GetString(Remote($"if [ -f {Quote(full)} ]; then printf 1; fi")) == "1";
+    }
+
+    public override string Write(string root, IReadOnlyList<string> args, TimeSpan timeout) =>
+        CollectWrite(new ProcessRequest(SessionProfiles.SshCommand, []) { CommandLine = Arguments(GitCommand(root, args)), Environment = environment, Timeout = timeout });
 
     public override Blob ReadFile(string root, string path, long maxBytes, bool keepBytes = false)
     {

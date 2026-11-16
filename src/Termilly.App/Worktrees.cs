@@ -46,7 +46,7 @@ internal sealed partial class Worktrees(LocalGit git)
     }
 
     /// <summary>Creates the branch (from what the repository has checked out) and its worktree, and copies the included files.</summary>
-    public WorktreeInfo Create(string folder, string typedBranch)
+    public WorktreeInfo Create(string folder, string typedBranch, string? start = null)
     {
         var repo = git.Text(folder, GitCommands.RevParse, GitCommands.Options.ShowTopLevel).Replace('/', '\\');
         var branch = BranchName(typedBranch);
@@ -59,7 +59,12 @@ internal sealed partial class Worktrees(LocalGit git)
         {
             throw new IOException($"{path} already exists.");
         }
-        git.Text(repo, GitCommands.Worktree, GitCommands.Add, "-b", branch, path);
+        var arguments = new List<string> { GitCommands.Worktree, GitCommands.Add, "-b", branch, path };
+        if (!string.IsNullOrWhiteSpace(start))
+        {
+            arguments.Add(git.Text(repo, GitCommands.RevParse, GitCommands.Verify, GitCommands.Options.EndOfOptions, start + "^{commit}"));
+        }
+        git.Text(repo, [.. arguments]);
         var copied = CopyIncluded(repo, path);
         return new WorktreeInfo(repo, path, branch, copied);
     }

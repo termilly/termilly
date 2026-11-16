@@ -6,6 +6,12 @@ namespace Termilly.Desktop;
 /// </summary>
 internal static class GitCommands
 {
+    public const string Verify = "--verify";
+    public const string QuietLong = "--quiet";
+    public const string Push = "push";
+    public const string GitPath = "--git-path";
+    public const string PrePushHook = "hooks/pre-push";
+
     public const string Program = "git";
     /// <summary>A repository's own folder (a file in a worktree).</summary>
     public const string DotGit = ".git";
