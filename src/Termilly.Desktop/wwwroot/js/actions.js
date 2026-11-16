@@ -18,6 +18,7 @@ import { sendToAgent } from './together.js';
 import { setMenuExtras } from './termclipboard.js';
 import { copyToNotepadItem } from './notepad.js';
 import { addToTodoItem } from './todomenu.js';
+import { webAddressAlone } from './webaddress.js';
 
 const { ctrl: CTRL, alt: ALT } = ACTION_MODIFIERS;
 /** Re-exported for Settings › Actions and Keyboard. */
@@ -155,7 +156,9 @@ export function pathActions(tab, path, folder, image = null) {
  */
 function openableOf(selection, folder) {
   const text = selection?.trim() ?? '';
-  if (URL_ONLY.test(text)) return { label: 'Open link', icon: ICONS.link, action: () => send(PAGE.openUrl, { url: text }) };
+  // A selected address opens without the sentence or Markdown around it ("**https://a.b/c**.").
+  const address = webAddressAlone(text);
+  if (address) return { label: 'Open link', icon: ICONS.link, action: () => send(PAGE.openUrl, { url: address }) };
   if (!PATH_ONLY.test(text)) return null;
   const path = text.replace(PATH_LINE, '');
   const full = ABSOLUTE_PATH.test(path) ? path : folder && `${folder}/${path}`;

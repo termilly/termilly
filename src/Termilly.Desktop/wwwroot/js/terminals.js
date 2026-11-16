@@ -28,6 +28,7 @@ import { agentKind, agentOfProgram } from './agentkinds.js';
 import { clipboardKey, wireClipboard, PASTE_LABEL } from './termclipboard.js';
 import { selectionKey } from './keyselect.js';
 import { hoverMarkedLink, COPY_HINT } from './termlinks.js';
+import { cleanWebAddress } from './webaddress.js';
 import { wireGpu, dropGpu, applyGpu } from './gpu.js';
 
 /**
@@ -809,11 +810,14 @@ function clipboardWrite(data) {
  * @param {Tab} tab
  */
 function linkHandler(tab) {
+  // A program can mark a link from Markdown it read, closing "**" and all; it opens, shows and copies without them.
+  const target = (/** @type {string} */ uri) => (WEB_URI.test(uri) ? cleanWebAddress(uri) : uri);
   return {
     allowNonHttpProtocols: true,
-    activate: (/** @type {MouseEvent} */ event, /** @type {string} */ uri) => {
+    activate: (/** @type {MouseEvent} */ event, /** @type {string} */ marked) => {
       if (!event.ctrlKey) return;
-      if (/^https?:\/\//i.test(uri)) send(PAGE.openUrl, { url: uri });
+      const uri = target(marked);
+      if (WEB_URI.test(uri)) send(PAGE.openUrl, { url: uri });
       else if (/^file:\/\//i.test(uri)) {
         let path = uri.replace(/^file:\/\/[^/]*/i, '');
         try { path = decodeURIComponent(path); } catch { /* keep it as sent */ }
@@ -822,7 +826,8 @@ function linkHandler(tab) {
         send(/\.html?$/i.test(path) ? PAGE.openPage : PAGE.openPath, { path });
       }
     },
-    hover: (/** @type {MouseEvent} */ _event, /** @type {string} */ uri) => {
+    hover: (/** @type {MouseEvent} */ _event, /** @type {string} */ marked) => {
+      const uri = target(marked);
       hoverMarkedLink(uri);
       /** @type {TabView} */ (tab.view).body.title = `${uri}\nCtrl+click to open\n${COPY_HINT}`;
     },
@@ -832,6 +837,9 @@ function linkHandler(tab) {
     },
   };
 }
+
+/** A marked link to a web page, rather than a file. */
+const WEB_URI = /^https?:\/\//i;
 
 /** Keys that answer a permission prompt or question: Enter, Esc, or an option's number (not moving between options). */
 const ANSWER = /^(\r|\x1b|[1-9])$/;
