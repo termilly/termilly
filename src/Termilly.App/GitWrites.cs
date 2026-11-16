@@ -12,7 +12,12 @@ internal static class GitWrites
 {
     private const string Origin = GitCommands.Origin;
     private const string Parent = "HEAD~1";
+    /// <summary>
+    /// How long a push or a commit may take: the repository's own hooks (pre-commit, pre-push) run inside them and can
+    /// run a project's checks, which take far longer than git itself.
+    /// </summary>
     private static readonly TimeSpan PushTimeout = TimeSpan.FromMinutes(2);
+    private static readonly TimeSpan CommitTimeout = PushTimeout;
 
     public static GitPushInfo PushInfo(string root, GitRunner git)
     {
@@ -50,7 +55,7 @@ internal static class GitWrites
         {
             git.Write(root, [GitCommands.Add, "--all"], ProcessRunner.DefaultTimeout);
         }
-        git.Write(root, ["commit", "--message", message], ProcessRunner.DefaultTimeout);
+        git.Write(root, ["commit", "--message", message], CommitTimeout);
         return new GitCreatedCommit(GitView.Text(git, root, GitCommands.RevParse, GitCommands.Head).Trim());
     }
 

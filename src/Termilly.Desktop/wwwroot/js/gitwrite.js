@@ -39,6 +39,8 @@ const PUSH_LABEL = 'Push';
 const CREATE_PR_LABEL = 'Create pull request';
 /** The toast's button that opens the new pull request. */
 const OPEN_LABEL = 'Open';
+/** A pull request's state while it's open, as gh says it (lower-cased). */
+const PR_OPEN = 'open';
 /** Commits a push dialog lists before it says how many more. */
 const PUSH_LIST_MOST = 8;
 
@@ -144,7 +146,8 @@ export const canOpenPullRequest = ctx => !!ctx.github?.available && !!ctx.repo.u
  */
 export function headActionsHtml(ctx, pr) {
   if (canPush(ctx.repo)) return `<button class="btn small" data-gw="${WRITE_BUTTON.push}" title="Push this branch">${PUSH_LABEL}${ctx.repo.ahead ? ` ${ctx.repo.ahead}` : ''}</button>`;
-  if (pr) return `<button class="btn small" data-gw="${WRITE_BUTTON.openPr}" data-url="${escapeHtml(pr.url)}" title="Open it on GitHub">Pull request #${pr.number}</button>`;
+  // gh lists merged and closed ones too: only an open one stands in for Create pull request.
+  if (pr?.state.toLowerCase() === PR_OPEN) return `<button class="btn small" data-gw="${WRITE_BUTTON.openPr}" data-url="${escapeHtml(pr.url)}" title="Open it on GitHub">Pull request #${pr.number}</button>`;
   return canOpenPullRequest(ctx) ? `<button class="btn small" data-gw="${WRITE_BUTTON.pr}">${CREATE_PR_LABEL}</button>` : '';
 }
 
