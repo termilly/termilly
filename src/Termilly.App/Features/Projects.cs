@@ -136,11 +136,24 @@ internal sealed class GitHandler(
             git => GitSearch.SearchCode(git.CheckRoot(m.Root), m.Query, m.Batch, git)));
         router.On<FromPage.GitViewBranches>(m => Answer(m.RequestId, m.Remote, action: false,
             git => GitView.Branches(git.CheckRoot(m.Root), git)));
+        RegisterWrites(router);
         router.On<FromPage.GitViewAct>(m => Answer(m.RequestId, m.Remote, action: true, git =>
         {
             GitView.Act(git.CheckRoot(m.Root), m.Action ?? "", m.Path, m.Ref, m.HasCommits, git);
             return new GitActionDone(Ok: true);
         }));
+    }
+
+    private void RegisterWrites(MessageRouter router)
+    {
+        router.On<FromPage.GitViewPushInfo>(m => Answer(m.RequestId, m.Remote, false,
+            git => GitWrites.PushInfo(git.CheckRoot(m.Root), git)));
+        router.On<FromPage.GitViewPush>(m => Answer(m.RequestId, m.Remote, true,
+            git => GitWrites.Push(git.CheckRoot(m.Root), git)));
+        router.On<FromPage.GitViewCommitCreate>(m => Answer(m.RequestId, m.Remote, true,
+            git => GitWrites.Commit(git.CheckRoot(m.Root), m.Message, m.All, git)));
+        router.On<FromPage.GitViewUndoCommit>(m => Answer(m.RequestId, m.Remote, true,
+            git => GitWrites.Undo(git.CheckRoot(m.Root), git)));
     }
 
     /// <summary>The repositories these folders are in, for the sidebar.</summary>
@@ -154,7 +167,7 @@ internal sealed class GitHandler(
     /// <summary>Runs a Git window request off the UI thread and answers it as gitview:result with the request's id.</summary>
     /// <param name="server">The SSH terminal whose server the repository is on (git runs there, through its host); null for this PC.</param>
     /// <param name="action">An action from a menu: its failure shows all git said; a view's, its first line.</param>
-    private void Answer(string? requestId, string? server, bool action, Func<GitRunner, object> read) => _ = Task.Run(() =>
+    private void Answer(string? requestId, string? server, bool action, Func<GitRunner, object?> read) => _ = Task.Run(() =>
     {
         object? data = null;
         string? error = null;
@@ -193,7 +206,7 @@ internal sealed class WorktreeHandler(PageChannel page, Worktrees worktrees) : I
             {
                 throw new IOException("Pick a folder inside a git repository.");
             }
-            var created = worktrees.Create(m.Folder, m.Branch ?? "");
+            var created = worktrees.Create(m.Folder, m.Branch ?? "", m.Base);
             page.Post(new ToPage.WorktreeCreated(m.RequestId, created.Repo, created.Path, created.Branch, created.Copied));
         }));
         router.On<FromPage.WorktreeStatus>(m => Answer(m.RequestId, () =>

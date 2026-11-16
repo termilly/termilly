@@ -127,7 +127,27 @@ internal static partial class FromPage
         public static string Type => "gitview:act";
     }
 
-    internal sealed record WorktreeCreate(string? RequestId = null, string? Folder = null, string? Branch = null) : IPageMessage
+    internal sealed record GitViewPushInfo(string? RequestId = null, string? Remote = null, string? Root = null) : IPageMessage
+    {
+        public static string Type => "gitview:pushInfo";
+    }
+
+    internal sealed record GitViewPush(string? RequestId = null, string? Remote = null, string? Root = null) : IPageMessage
+    {
+        public static string Type => "gitview:push";
+    }
+
+    internal sealed record GitViewCommitCreate(string? RequestId = null, string? Remote = null, string? Root = null, string? Message = null, bool All = false) : IPageMessage
+    {
+        public static string Type => "gitview:commitCreate";
+    }
+
+    internal sealed record GitViewUndoCommit(string? RequestId = null, string? Remote = null, string? Root = null) : IPageMessage
+    {
+        public static string Type => "gitview:undoCommit";
+    }
+
+    internal sealed record WorktreeCreate(string? RequestId = null, string? Folder = null, string? Branch = null, string? Base = null) : IPageMessage
     {
         public static string Type => "worktree:create";
     }

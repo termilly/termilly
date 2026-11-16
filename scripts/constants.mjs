@@ -17,6 +17,9 @@ const typesTarget = path.join(desktop, 'types/host.d.ts');
 
 /** The C# classes the page gets, and the name each has there. A class with nested classes becomes nested objects. */
 const SOURCES = [
+  { file: 'GitHub.cs', cls: 'GitHubUnavailable', js: 'GITHUB_UNAVAILABLE' },
+  { file: 'GitHub.cs', cls: 'GitHubIssueStates', js: 'GITHUB_ISSUE_STATE' },
+  { file: 'GitHub.cs', cls: 'GitHubIssueActions', js: 'GITHUB_ISSUE_ACTION' },
   { file: 'ProfileKinds.cs', cls: 'ProfileSources', js: 'PROFILE_SOURCE' },
   { file: 'ProfileKinds.cs', cls: 'ProfileIcons', js: 'PROFILE_ICON' },
   { file: 'ProfileKinds.cs', cls: 'ProfileIds', js: 'PROFILE_ID_PREFIX' },
