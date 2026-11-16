@@ -1,7 +1,8 @@
 namespace Termilly.Desktop.Messaging;
 
 // A repository's snippets and tasks (RepoSnippets.cs, js/reposnippets.js): the snippets it keeps in
-// .termilly/snippets.yml, the ones its .termilly.yml shares, and its VS Code tasks (.vscode/tasks.json).
+// .termilly/snippets.yml, the ones its .termilly.yml shares, and its VS Code tasks (.vscode/tasks.json and the
+// workspace files in its folder, *.code-workspace).
 
 /// <summary>A saved command as a repository keeps it: name and command, optionally a description and enter: false.</summary>
 internal sealed record RepoSnippet(string Name, string Command, string? Description = null, bool? Enter = null);
@@ -13,12 +14,14 @@ internal sealed record RepoSnippet(string Name, string Command, string? Descript
 /// <param name="Cwd">options.cwd, with its variables filled in; null for the repository's folder.</param>
 /// <param name="Group">Its group's kind ("build", "test"), or null.</param>
 /// <param name="Hidden">hide: true. It isn't listed, but a task that depends on it still runs it.</param>
-/// <param name="DependsOn">The labels of the tasks that run before it, in order.</param>
+/// <param name="DependsOn">The labels of the tasks that run before it, in order (tasks of its own file).</param>
+/// <param name="File">The file it's in, relative to the repository with "/": .vscode/tasks.json or a workspace file.</param>
 internal sealed record RepoTask(string Label, string Command, string? Cwd, IReadOnlyDictionary<string, string>? Env,
-    string? Group, bool IsDefault, bool Hidden, IReadOnlyList<string> DependsOn);
+    string? Group, bool IsDefault, bool Hidden, IReadOnlyList<string> DependsOn, string File);
 
 /// <summary>A task's ${input:id}: what to ask (promptString), or what to pick from (pickString).</summary>
-internal sealed record TaskInput(string Id, string? Description, string? Default, IReadOnlyList<string>? Options, bool Password);
+/// <param name="File">The file it's in: it's asked for that file's tasks only.</param>
+internal sealed record TaskInput(string Id, string? Description, string? Default, IReadOnlyList<string>? Options, bool Password, string File);
 
 internal static partial class FromPage
 {

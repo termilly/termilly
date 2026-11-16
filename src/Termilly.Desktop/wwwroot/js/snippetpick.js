@@ -13,7 +13,7 @@ import { escapeHtml, ICONS } from './ui.js';
 import { fuzzyMatch, highlightPositions } from './fuzzy.js';
 import { byId, find, field, targetOf } from './dom.js';
 import { globalSnippets, editSnippet } from './snippets.js';
-import { SOURCE, REPO_FILE, LAYOUT_FILE, TASKS_FILE, repoOfTab, folderOfTab, loadRepo } from './reposnippets.js';
+import { SOURCE, REPO_FILE, LAYOUT_FILE, taskFiles, repoOfTab, folderOfTab, loadRepo } from './reposnippets.js';
 import { runAny, RUN_MODE } from './taskrun.js';
 
 /** @typedef {import('./reposnippets.js').ListedSnippet} ListedSnippet */
@@ -74,7 +74,7 @@ function groups() {
     });
   }
   list.push({ key: SOURCE.global, title: 'This computer', file: '', rows: byUse(globalSnippets()) });
-  if (repo?.tasks.length) list.push({ key: SOURCE.task, title: 'VS Code tasks', file: TASKS_FILE, rows: byUse(repo.tasks) });
+  if (repo?.tasks.length) list.push({ key: SOURCE.task, title: 'VS Code tasks', file: taskFiles(repo.allTasks), rows: byUse(repo.tasks) });
   return list;
 }
 
@@ -140,7 +140,7 @@ function render() {
   for (const g of matching(q)) {
     const rows = g.rows;
     if (!rows.length && (q || !g.empty)) continue;
-    html += `<div class="sp-group"><span>${escapeHtml(g.title)}</span>${g.file ? `<code>${g.file}</code>` : ''}</div>`;
+    html += `<div class="sp-group"><span>${escapeHtml(g.title)}</span>${g.file ? `<code>${escapeHtml(g.file)}</code>` : ''}</div>`;
     if (!rows.length) html += `<div class="sp-empty">${g.empty}</div>`;
     for (const s of rows) html += rowHtml(s, pick.shown.push(s) - 1, q);
   }

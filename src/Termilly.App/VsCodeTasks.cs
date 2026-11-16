@@ -6,11 +6,23 @@ using Termilly.Desktop.Messaging;
 
 namespace Termilly.Desktop;
 
+/// <summary>Where a list of tasks comes from, and what its folder variables mean.</summary>
+/// <param name="File">The file, relative to the repository with "/" (".vscode/tasks.json", "app.code-workspace").</param>
+/// <param name="Folder">${workspaceFolder}; null when there's none (a workspace file without folders): it stays as written.</param>
+/// <param name="Folders">${workspaceFolder:name}'s folders, by name.</param>
+/// <param name="DefaultCwd">Where a task runs without options.cwd, and what a relative one is in; null for the repository's folder.</param>
+internal sealed record TaskSource(string File, string? Folder, IReadOnlyDictionary<string, string> Folders, string? DefaultCwd)
+{
+    /// <summary>The repository's .vscode/tasks.json: VS Code with the repository's folder open.</summary>
+    public static TaskSource ForFolder(string root) =>
+        new(VsCodeTasks.Folder + "/" + VsCodeTasks.FileName, root, new Dictionary<string, string> { [Path.GetFileName(root)] = root }, null);
+}
+
 /// <summary>
-/// A repository's VS Code tasks (.vscode/tasks.json, JSON with comments), as commands Termilly can type: shell and
-/// process tasks, with this OS's overrides (windows, linux, osx), args quoted, variables filled in and each
-/// ${input:id} a {{id}} placeholder the run form asks for. Tasks of other types (npm, gulp and the like, which VS Code's
-/// extensions run) are left out.
+/// A repository's VS Code tasks (.vscode/tasks.json, or a workspace file's tasks; JSON with comments), as commands
+/// Termilly can type: shell and process tasks, with this OS's overrides (windows, linux, osx), args quoted, variables
+/// filled in and each ${input:id} a {{id}} placeholder the run form asks for. Tasks of other types (npm, gulp and the
+/// like, which VS Code's extensions run) are left out.
 /// </summary>
 internal static partial class VsCodeTasks
 {
@@ -19,6 +31,7 @@ internal static partial class VsCodeTasks
     private const int MaxTasks = 200;
     private const string EnvPrefix = "env:";
     private const string InputPrefix = "input:";
+    private const string FolderPrefix = "workspaceFolder:";
 
     private static class Keys
     {
@@ -60,32 +73,36 @@ internal static partial class VsCodeTasks
     [GeneratedRegex(@"[\s""'&|<>;()]")]
     private static partial Regex NeedsQuotes();
 
-    /// <summary>The file's tasks and inputs; what couldn't be read is said in <paramref name="warnings"/>.</summary>
-    public static (IReadOnlyList<RepoTask> Tasks, IReadOnlyList<TaskInput> Inputs) Parse(string json, string root, List<string> warnings)
+    /// <summary>A repository's tasks.json: its tasks and inputs; what couldn't be read is said in <paramref name="warnings"/>.</summary>
+    public static (IReadOnlyList<RepoTask> Tasks, IReadOnlyList<TaskInput> Inputs) Parse(string json, string root, List<string> warnings) =>
+        ParseJson(json, FileName, warnings) is { } top ? Parse(top, TaskSource.ForFolder(root)) : ([], []);
+
+    /// <summary>A file of JSON with comments; null when it isn't valid (said in <paramref name="warnings"/>) or isn't an object.</summary>
+    public static JsonObject? ParseJson(string json, string fileName, List<string> warnings)
     {
-        JsonNode? doc;
         try
         {
-            doc = JsonNode.Parse(json, documentOptions: Jsonc);
+            return JsonNode.Parse(json, documentOptions: Jsonc) as JsonObject;
         }
         catch (JsonException e)
         {
-            warnings.Add($"{FileName} isn't valid JSON: {e.Message}");
-            return ([], []);
+            warnings.Add($"{fileName} isn't valid JSON: {e.Message}");
+            return null;
         }
-        if (doc is not JsonObject top)
-        {
-            return ([], []);
-        }
+    }
+
+    /// <summary>The tasks and inputs of a tasks object: { version, tasks, inputs, options, windows, linux, osx }.</summary>
+    public static (IReadOnlyList<RepoTask> Tasks, IReadOnlyList<TaskInput> Inputs) Parse(JsonObject top, TaskSource source)
+    {
         // Options for every task (the file's own, then this OS's), under each task's own.
         var shared = Overlay(Pick(top, Keys.Options), Pick(top[PlatformKey] as JsonObject, Keys.Options));
         var tasks = (top[Keys.Tasks] as JsonArray ?? []).OfType<JsonObject>().Take(MaxTasks)
-            .Select(t => Task(t, shared, root)).OfType<RepoTask>().ToList();
-        var inputs = (top[Keys.Inputs] as JsonArray ?? []).OfType<JsonObject>().Select(Input).OfType<TaskInput>().ToList();
+            .Select(t => Task(t, shared, source)).OfType<RepoTask>().ToList();
+        var inputs = (top[Keys.Inputs] as JsonArray ?? []).OfType<JsonObject>().Select(i => Input(i, source.File)).OfType<TaskInput>().ToList();
         return (tasks, inputs);
     }
 
-    private static RepoTask? Task(JsonObject task, JsonObject? sharedOptions, string root)
+    private static RepoTask? Task(JsonObject task, JsonObject? sharedOptions, TaskSource source)
     {
         var os = task[PlatformKey] as JsonObject;
         var type = Text(task, Keys.Type) ?? CommandTypes[0];
@@ -94,31 +111,40 @@ internal static partial class VsCodeTasks
         {
             return null;
         }
-        var command = CommandLine(os?[Keys.Command] ?? task[Keys.Command], os?[Keys.Args] ?? task[Keys.Args], root);
+        var command = CommandLine(os?[Keys.Command] ?? task[Keys.Command], os?[Keys.Args] ?? task[Keys.Args], source);
         var dependsOn = DependsOn(task[Keys.DependsOn]);
         if (command.Length == 0 && dependsOn.Count == 0)
         {
             return null;
         }
         var options = Overlay(Overlay(sharedOptions, Pick(task, Keys.Options)), Pick(os, Keys.Options));
-        var cwd = options?[Keys.Cwd] is JsonValue c ? Fill(c.ToString(), root) : null;
-        var env = (options?[Keys.Env] as JsonObject)?.ToDictionary(kv => kv.Key, kv => Fill(kv.Value?.ToString() ?? "", root));
+        var cwd = Cwd(options?[Keys.Cwd] is JsonValue c ? Fill(c.ToString(), source) : null, source);
+        var env = (options?[Keys.Env] as JsonObject)?.ToDictionary(kv => kv.Key, kv => Fill(kv.Value?.ToString() ?? "", source));
         var (group, isDefault) = Group(task[Keys.Group]);
-        return new RepoTask(label, command, cwd, env, group, isDefault, Flag(task[Keys.Hide]), dependsOn);
+        return new RepoTask(label, command, cwd, env, group, isDefault, Flag(task[Keys.Hide]), dependsOn, source.File);
     }
+
+    /// <summary>
+    /// Where a task runs: its own folder, one relative to the source's default folder made whole, or the default
+    /// (null for tasks.json: the repository's folder).
+    /// </summary>
+    private static string? Cwd(string? cwd, TaskSource source) =>
+        source.DefaultCwd is not { } folder ? cwd
+        : string.IsNullOrWhiteSpace(cwd) ? folder
+        : Path.IsPathRooted(cwd) || cwd.StartsWith("${", StringComparison.Ordinal) ? cwd : Path.Combine(folder, cwd);
 
     /// <summary>
     /// The command and its args as one line, variables filled in first: an arg with spaces or shell characters (a
     /// folder filled in can have them), or an empty one, in double quotes.
     /// </summary>
-    private static string CommandLine(JsonNode? command, JsonNode? args, string root)
+    private static string CommandLine(JsonNode? command, JsonNode? args, TaskSource source)
     {
         var parts = new List<string>();
         if (Value(command) is { Length: > 0 } c)
         {
-            parts.Add(Fill(c, root));
+            parts.Add(Fill(c, source));
         }
-        foreach (var arg in (args as JsonArray ?? []).Select(Value).OfType<string>().Select(a => Fill(a, root)))
+        foreach (var arg in (args as JsonArray ?? []).Select(Value).OfType<string>().Select(a => Fill(a, source)))
         {
             parts.Add((arg.Length == 0 || NeedsQuotes().IsMatch(arg)) && !IsQuoted(arg) ? $"\"{arg.Replace("\"", "\\\"")}\"" : arg);
         }
@@ -151,21 +177,22 @@ internal static partial class VsCodeTasks
         _ => (null, false),
     };
 
-    private static TaskInput? Input(JsonObject input)
+    private static TaskInput? Input(JsonObject input, string file)
     {
         if (Text(input, Keys.Id) is not { } id || !InputTypes.Contains(Text(input, Keys.Type)))
         {
             return null;
         }
         var options = (input[Keys.Options] as JsonArray)?.Select(o => o is JsonObject x ? Value(x[Keys.Value]) : Value(o)).OfType<string>().ToList();
-        return new TaskInput(id, Text(input, Keys.Description), Text(input, Keys.Default), options, Flag(input[Keys.Password]));
+        return new TaskInput(id, Text(input, Keys.Description), Text(input, Keys.Default), options, Flag(input[Keys.Password]), file);
     }
 
     /// <summary>
-    /// Fills in the variables Termilly knows: the repository's folder and name, the home folder, the path separator and
-    /// environment variables; ${input:id} becomes {{id}}. Others (${file} and the editor's) stay as they are.
+    /// Fills in the variables Termilly knows: the source's folders and their names, the home folder, the path separator
+    /// and environment variables; ${input:id} becomes {{id}}. Others (${file} and the editor's, a folder the source
+    /// hasn't got) stay as they are.
     /// </summary>
-    public static string Fill(string text, string root) => Variable().Replace(text, m =>
+    public static string Fill(string text, TaskSource source) => Variable().Replace(text, m =>
     {
         var name = m.Groups[1].Value;
         if (name.StartsWith(EnvPrefix, StringComparison.Ordinal))
@@ -176,10 +203,14 @@ internal static partial class VsCodeTasks
         {
             return $"{{{{{name[InputPrefix.Length..]}}}}}";
         }
+        if (name.StartsWith(FolderPrefix, StringComparison.Ordinal))
+        {
+            return source.Folders.GetValueOrDefault(name[FolderPrefix.Length..]) ?? m.Value;
+        }
         return name switch
         {
-            "workspaceFolder" or "workspaceRoot" or "cwd" => root,
-            "workspaceFolderBasename" => Path.GetFileName(root),
+            "workspaceFolder" or "workspaceRoot" or "cwd" => source.Folder ?? m.Value,
+            "workspaceFolderBasename" => source.Folder is { } folder ? Path.GetFileName(folder) : m.Value,
             "userHome" => Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
             "pathSeparator" or "/" => Path.DirectorySeparatorChar.ToString(),
             _ => m.Value,

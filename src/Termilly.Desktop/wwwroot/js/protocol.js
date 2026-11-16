@@ -321,8 +321,8 @@ export const HOST = Object.freeze({
 /** @typedef {{ version: string, date: string|null, notes: string|null, installable: boolean, endsShells: boolean, linux: boolean }} UpdateAvailable */
 /** @typedef {{ state: string, percent: number, message: string|null, command: string|null }} UpdateProgress */
 /** @typedef {{ name: string, command: string, description?: string|null, enter?: boolean|null }} RepoSnippet */
-/** @typedef {{ label: string, command: string, cwd: string|null, env: Object<string, string>|null, group: string|null, isDefault: boolean, hidden: boolean, dependsOn: Array<string> }} RepoTask */
-/** @typedef {{ id: string, description: string|null, default: string|null, options: Array<string>|null, password: boolean }} TaskInput */
+/** @typedef {{ label: string, command: string, cwd: string|null, env: Object<string, string>|null, group: string|null, isDefault: boolean, hidden: boolean, dependsOn: Array<string>, file: string }} RepoTask */
+/** @typedef {{ id: string, description: string|null, default: string|null, options: Array<string>|null, password: boolean, file: string }} TaskInput */
 
 /** @typedef {{  }} Page_actionDefaults */
 /** @typedef {{ id?: string|null, selection?: string|null, folder?: string|null, port?: number|null, image?: string|null }} Page_actionRun */

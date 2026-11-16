@@ -1,6 +1,7 @@
 // @ts-check
 // A repository's snippets and tasks (RepoSnippets.cs): the snippets it keeps in .termilly/snippets.yml (shared through
-// git, or kept out of it), the ones its .termilly.yml shares, and its VS Code tasks (.vscode/tasks.json). The
+// git, or kept out of it), the ones its .termilly.yml shares, and its VS Code tasks (.vscode/tasks.json and the
+// *.code-workspace files in its folder, each its own: a task runs what it depends on and asks for inputs from its file). The
 // repository is the one the focused terminal's folder is in, on this PC (a terminal on a server, in WSL or a container
 // has none here). Read when asked and kept; the host watches the files and says when they change, so a git pull
 // shows at once.
@@ -16,7 +17,7 @@ import { remoteGit } from './remotehost.js';
 
 /**
  * A snippet or task as the lists show it: where it comes from ('repo', 'shared', 'task', or 'global' for this
- * computer's), the repository's folder, and for a task, what tasks.json said.
+ * computer's), the repository's folder, and for a task, what its file said.
  * @typedef {SnippetSetting & { scope: string, root?: string, task?: RepoTask, inputs?: TaskInput[] }} ListedSnippet
  */
 
@@ -104,11 +105,23 @@ function listedTasks(root, tasks, inputs) {
   const seen = new Set();
   return tasks.filter(t => !t.hidden)
     .sort((a, b) => Number(b.isDefault) - Number(a.isDefault))
-    .map(t => ({
-      id: idOf(SOURCE.task, root, t.label, seen), name: t.label, command: t.command,
-      description: t.isDefault && t.group ? `default ${t.group}` : t.group ?? null, enter: true, scope: SOURCE.task, root, task: t, inputs,
-    }));
+    .map(t => {
+      const own = t.file === TASKS_FILE;
+      const group = t.isDefault && t.group ? `default ${t.group}` : t.group;
+      return {
+        // A tasks.json task keeps the id it always had (and so its uses); a workspace file's has the file in its source.
+        id: idOf(own ? SOURCE.task : `${SOURCE.task}@${t.file}`, root, t.label, seen), name: t.label, command: t.command,
+        description: [group, own ? null : t.file].filter(Boolean).join(' · ') || null, enter: true, scope: SOURCE.task, root,
+        task: t, inputs: inputs.filter(i => i.file === t.file),
+      };
+    });
 }
+
+/**
+ * The files a repository's tasks come from, as the lists name them: tasks.json, its workspace files.
+ * @param {RepoTask[]} tasks
+ */
+export const taskFiles = tasks => [...new Set(tasks.map(t => t.file))].join(', ') || TASKS_FILE;
 
 /** @param {import('./protocol.js').HostMessages['reposnippets:found']} m */
 function toRepo(m) {
