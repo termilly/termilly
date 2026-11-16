@@ -8,6 +8,56 @@ namespace Termilly.Desktop.Messaging;
 
 internal static partial class FromPage
 {
+    internal sealed record GitViewSnapshot(string? RequestId = null, string? Remote = null, string? Root = null, string? Reason = null) : IPageMessage
+    {
+        public static string Type => "gitview:snapshot";
+    }
+
+    internal sealed record GitViewSnapshots(string? RequestId = null, string? Remote = null, string? Root = null) : IPageMessage
+    {
+        public static string Type => "gitview:snapshots";
+    }
+
+    internal sealed record GitViewSnapshotRestore(string? RequestId = null, string? Remote = null, string? Root = null, string? Id = null, IReadOnlyList<string>? Paths = null) : IPageMessage
+    {
+        public static string Type => "gitview:snapshotRestore";
+    }
+
+    internal sealed record GitViewBackups(string? RequestId = null, string? Remote = null, string? Root = null) : IPageMessage
+    {
+        public static string Type => "gitview:backups";
+    }
+
+    internal sealed record GitViewBackupRestore(string? RequestId = null, string? Remote = null, string? Root = null, string? Id = null) : IPageMessage
+    {
+        public static string Type => "gitview:backupRestore";
+    }
+
+    internal sealed record GitViewStageLines(string? RequestId = null, string? Remote = null, string? Root = null, string? Path = null, string? Side = null, string? Action = null, IReadOnlyList<int>? Removed = null, IReadOnlyList<int>? Added = null) : IPageMessage
+    {
+        public static string Type => "gitview:stageLines";
+    }
+
+    internal sealed record GitViewWorktrees(string? RequestId = null, string? Remote = null, string? Root = null) : IPageMessage
+    {
+        public static string Type => "gitview:worktrees";
+    }
+
+    internal sealed record GitViewWorktreeRemove(string? RequestId = null, string? Remote = null, string? Root = null, string? Path = null, bool Force = false) : IPageMessage
+    {
+        public static string Type => "gitview:worktreeRemove";
+    }
+
+    internal sealed record GitViewPruneCandidates(string? RequestId = null, string? Remote = null, string? Root = null) : IPageMessage
+    {
+        public static string Type => "gitview:pruneCandidates";
+    }
+
+    internal sealed record GitViewPruneBranches(string? RequestId = null, string? Remote = null, string? Root = null, IReadOnlyList<string>? Branches = null) : IPageMessage
+    {
+        public static string Type => "gitview:pruneBranches";
+    }
+
     internal sealed record LayoutExport(string? Name = null, JsonElement Layout = default) : IPageMessage
     {
         public static string Type => "layout:export";
@@ -90,7 +140,7 @@ internal static partial class FromPage
     }
 
     internal sealed record GitViewLog(string? RequestId = null, string? Remote = null, string? Root = null, int Skip = 0,
-        int Limit = GitViewLog.DefaultLimit, string? Ref = null) : IPageMessage
+        int Limit = GitViewLog.DefaultLimit, string? Ref = null, bool All = false, string? Path = null) : IPageMessage
     {
         public const int DefaultLimit = 100;
 

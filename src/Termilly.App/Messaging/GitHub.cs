@@ -2,6 +2,26 @@ namespace Termilly.Desktop.Messaging;
 
 internal static partial class FromPage
 {
+    internal sealed record GitHubRuns(string? RequestId = null, string? Remote = null, string? Root = null, string? Branch = null) : IPageMessage
+    {
+        public static string Type => "github:runs";
+    }
+
+    internal sealed record GitHubRunJobs(string? RequestId = null, string? Remote = null, string? Root = null, long RunId = 0) : IPageMessage
+    {
+        public static string Type => "github:runJobs";
+    }
+
+    internal sealed record GitHubFailedLog(string? RequestId = null, string? Remote = null, string? Root = null, long RunId = 0, long? JobId = null) : IPageMessage
+    {
+        public static string Type => "github:failedLog";
+    }
+
+    internal sealed record GitHubRerunFailed(string? RequestId = null, string? Remote = null, string? Root = null, long RunId = 0) : IPageMessage
+    {
+        public static string Type => "github:rerunFailed";
+    }
+
     internal sealed record GitHubStatus(string? RequestId = null, string? Root = null) : IPageMessage
     {
         public static string Type => "github:status";

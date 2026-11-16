@@ -17,6 +17,11 @@ const typesTarget = path.join(desktop, 'types/host.d.ts');
 
 /** The C# classes the page gets, and the name each has there. A class with nested classes becomes nested objects. */
 const SOURCES = [
+  { file: 'GitSnapshots.cs', cls: 'SnapshotReasons', js: 'SNAPSHOT_REASON' },
+  { file: 'GitBackups.cs', cls: 'BackupEvents', js: 'BACKUP_EVENT' },
+  { file: 'GitCleanup.cs', cls: 'PruneReasons', js: 'PRUNE_REASON' },
+  { file: 'GitHubChecks.cs', cls: 'GitHubRunStatus', js: 'GITHUB_RUN_STATUS' },
+  { file: 'GitHubChecks.cs', cls: 'GitHubRunConclusion', js: 'GITHUB_RUN_CONCLUSION' },
   { file: 'GitHub.cs', cls: 'GitHubUnavailable', js: 'GITHUB_UNAVAILABLE' },
   { file: 'GitHub.cs', cls: 'GitHubIssueStates', js: 'GITHUB_ISSUE_STATE' },
   { file: 'GitHub.cs', cls: 'GitHubIssueActions', js: 'GITHUB_ISSUE_ACTION' },
@@ -37,6 +42,7 @@ const SOURCES = [
   { file: '../Shared/ClaudeTools.cs', cls: 'CodexTools', js: 'CODEX_TOOL' },
   { file: '../Shared/ClaudeTools.cs', cls: 'ClaudeTools', js: 'CLAUDE_TOOL' },
   { file: 'GitCommands.cs', cls: 'GitActions', js: 'GIT_ACTION' },
+  { file: 'GitStageLines.cs', cls: 'StageLineActions', js: 'STAGE_LINE_ACTION' },
   { file: 'GitCommands.cs', cls: 'DiffSides', js: 'DIFF_SIDE' },
   { file: 'GitSearch.cs', cls: 'GitSearchMatches', js: 'GIT_MATCH' },
   { file: 'Messaging/Connections.cs', cls: 'ForwardStates', js: 'FORWARD_STATE' },

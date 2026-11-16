@@ -41,6 +41,10 @@ internal sealed record GitHubCreatedPr(int Number, string Url);
 
 internal interface IGitHub
 {
+    IReadOnlyList<GitHubRun> Runs(string root, string? branch);
+    IReadOnlyList<GitHubJob> RunJobs(string root, long runId);
+    GitHubFailedLog FailedLog(string root, long runId, long? jobId);
+    void RerunFailed(string root, long runId);
     GitHubAvailability Status(string root);
     JsonNode Issues(string root, string state, string? search);
     JsonNode Issue(string root, int number);
@@ -49,7 +53,7 @@ internal interface IGitHub
     GitHubCreatedPr PrCreate(string root, FromPage.GitHubPrCreate message);
 }
 
-internal sealed class GitHub(IProcessRunner runner, LocalGitRunner git) : IGitHub
+internal sealed partial class GitHub(IProcessRunner runner, LocalGitRunner git) : IGitHub
 {
     internal const string Program = "gh";
     private const string IssueFields = "number,title,state,labels,author,updatedAt,comments,url";

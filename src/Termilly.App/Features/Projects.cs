@@ -127,7 +127,7 @@ internal sealed class GitHandler(
                 git => GitView.Diff(git.CheckRoot(m.Root), new GitDiffTarget(m.Path ?? "", m.OldPath, m.Side ?? "", m.Hash), maxBytes, git));
         });
         router.On<FromPage.GitViewLog>(m => Answer(m.RequestId, m.Remote, action: false,
-            git => GitView.Log(git.CheckRoot(m.Root), m.Skip, m.Limit, m.Ref, git)));
+            git => GitView.Log(git.CheckRoot(m.Root), m.Skip, m.Limit, m.Ref, git, m.All, m.Path)));
         router.On<FromPage.GitViewCommit>(m => Answer(m.RequestId, m.Remote, action: false,
             git => GitView.Commit(git.CheckRoot(m.Root), m.Hash ?? "", git)));
         router.On<FromPage.GitViewSearch>(m => Answer(m.RequestId, m.Remote, action: false,
@@ -137,11 +137,36 @@ internal sealed class GitHandler(
         router.On<FromPage.GitViewBranches>(m => Answer(m.RequestId, m.Remote, action: false,
             git => GitView.Branches(git.CheckRoot(m.Root), git)));
         RegisterWrites(router);
+        RegisterSafety(router);
         router.On<FromPage.GitViewAct>(m => Answer(m.RequestId, m.Remote, action: true, git =>
         {
             GitView.Act(git.CheckRoot(m.Root), m.Action ?? "", m.Path, m.Ref, m.HasCommits, git);
             return new GitActionDone(Ok: true);
         }));
+    }
+
+    private void RegisterSafety(MessageRouter router)
+    {
+        router.On<FromPage.GitViewSnapshot>(m => Answer(m.RequestId, m.Remote, true,
+            git => GitSnapshots.Take(git.CheckRoot(m.Root), m.Reason ?? "", git)));
+        router.On<FromPage.GitViewSnapshots>(m => Answer(m.RequestId, m.Remote, true,
+            git => GitSnapshots.List(git.CheckRoot(m.Root), git)));
+        router.On<FromPage.GitViewSnapshotRestore>(m => Answer(m.RequestId, m.Remote, true,
+            git => GitSnapshots.Restore(git.CheckRoot(m.Root), m.Id, m.Paths, git)));
+        router.On<FromPage.GitViewBackups>(m => Answer(m.RequestId, m.Remote, true,
+            git => GitBackups.List(git.CheckRoot(m.Root), git)));
+        router.On<FromPage.GitViewBackupRestore>(m => Answer(m.RequestId, m.Remote, true,
+            git => GitBackups.Restore(git.CheckRoot(m.Root), m.Id, git)));
+        router.On<FromPage.GitViewStageLines>(m => Answer(m.RequestId, m.Remote, true,
+            git => GitStageLines.Apply(git.CheckRoot(m.Root), m.Path, m.Side, m.Action, m.Removed, m.Added, git)));
+        router.On<FromPage.GitViewWorktrees>(m => Answer(m.RequestId, m.Remote, true,
+            git => GitCleanup.Worktrees(git.CheckRoot(m.Root), git)));
+        router.On<FromPage.GitViewWorktreeRemove>(m => Answer(m.RequestId, m.Remote, true,
+            git => GitCleanup.Remove(git.CheckRoot(m.Root), m.Path, m.Force, git)));
+        router.On<FromPage.GitViewPruneCandidates>(m => Answer(m.RequestId, m.Remote, true,
+            git => GitCleanup.Candidates(git.CheckRoot(m.Root), git)));
+        router.On<FromPage.GitViewPruneBranches>(m => Answer(m.RequestId, m.Remote, true,
+            git => GitCleanup.Prune(git.CheckRoot(m.Root), m.Branches, git)));
     }
 
     private void RegisterWrites(MessageRouter router)
@@ -175,7 +200,7 @@ internal sealed class GitHandler(
         {
             data = read(server is null ? localGit : ServerGit(server));
         }
-        catch (Exception e) when (Storage.IsFileError(e) || e is ArgumentException or InvalidOperationException)
+        catch (Exception e) when (Storage.IsFileError(e) || e is ArgumentException or InvalidOperationException or JsonException or FormatException)
         {
             error = action && e is GitFailedException failed ? failed.Detail : e.Message;
         }

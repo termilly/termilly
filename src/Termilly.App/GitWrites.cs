@@ -21,7 +21,7 @@ internal static class GitWrites
 
     public static GitPushInfo PushInfo(string root, GitRunner git)
     {
-        var branch = GitView.Text(git, root, "symbolic-ref", GitCommands.QuietLong, "--short", GitCommands.Head).Trim();
+        var branch = GitView.Text(git, root, GitCommands.SymbolicRef, GitCommands.QuietLong, GitCommands.Short, GitCommands.Head).Trim();
         var upstream = GitView.Text(git, root, GitCommands.ForEachRef, "--format=%(upstream:short)", "refs/heads/" + branch).Trim();
         var remote = upstream.Length == 0 ? Origin : GitView.Text(git, root, "config", "--get", "branch." + branch + ".remote").Trim();
         var url = GitView.Text(git, root, GitCommands.Remote, GitCommands.Options.GetUrl, "--push", remote).Trim();
@@ -65,6 +65,15 @@ internal static class GitWrites
         if (GitView.Text(git, root, GitCommands.ForEachRef, "--contains=HEAD", "--format=%(refname)", "refs/remotes/").Trim().Length > 0)
         {
             throw new InvalidOperationException("This commit is already on a remote branch.");
+        }
+        var branch = GitView.Text(git, root, GitCommands.Branch, GitCommands.Options.ShowCurrent).Trim();
+        if (branch.Length == 0)
+        {
+            throw new InvalidOperationException("Check out a branch before undoing a commit.");
+        }
+        if (git is LocalGitRunner)
+        {
+            GitBackups.Take(root, branch, BackupEvents.UndoCommit, git);
         }
         git.Write(root, ["reset", "--soft", Parent], ProcessRunner.DefaultTimeout);
         return null;
