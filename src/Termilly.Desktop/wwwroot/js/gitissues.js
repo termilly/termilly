@@ -18,23 +18,12 @@ import { findIssueTask, openTodo } from './todo.js';
 import { statusOf, STATUS_NAME } from './todolist.js';
 import { openImplementIssue, addIssueTask } from './issueimplement.js';
 
-/**
- * An issue in the list, as gh lists it.
- * @typedef {{ number: number, title: string, state: string, labels: { name: string, color?: string }[],
- *   author: string, updatedAt: string, comments: number, url: string }} IssueRow
- */
-/**
- * An issue in full, with its comments.
- * @typedef {IssueRow & { body: string, createdAt: string,
- *   comments: { author: string, body: string, createdAt: string }[] }} Issue
- */
+/** @typedef {import('./github.js').IssueRow} IssueRow */
+/** @typedef {import('./github.js').Issue} Issue */
+/** @typedef {import('./github.js').IssueContext} IssueContext */
 /**
  * The tab's row kind, so gitwindow.js can tell them apart.
  * @typedef {{ kind: 'issue', issue: IssueRow }} IssueItem
- */
-/**
- * What the tab needs from the window: the repository and its GitHub name.
- * @typedef {{ root: string, repo: string, defaultBranch: string | null, branch: string | null }} IssueContext
  */
 
 export const ISSUE_ITEM = Object.freeze({ issue: 'issue' });
@@ -43,6 +32,9 @@ const ISSUE_ACT = Object.freeze({
   implement: 'implement', todo: 'todo', showTask: 'show-task', comment: 'comment', close: 'close', reopen: 'reopen',
   open: 'open', state: 'state',
 });
+const LOADING = 'Loading';
+const CLOSE_LABEL = 'Close';
+const REOPEN_LABEL = 'Reopen';
 /** The state filter's choices, in order. */
 const STATE_CHOICES = [[GITHUB_ISSUE_STATE.open, 'Open'], [GITHUB_ISSUE_STATE.closed, 'Closed'], [GITHUB_ISSUE_STATE.all, 'All']];
 
@@ -50,6 +42,7 @@ const STATE_CHOICES = [[GITHUB_ISSUE_STATE.open, 'Open'], [GITHUB_ISSUE_STATE.cl
 export const issues = {
   /** @type {IssueRow[]} */
   list: [],
+  /** @type {string} */
   state: GITHUB_ISSUE_STATE.open,
   filter: '',
   loaded: false,
@@ -86,7 +79,7 @@ export const issueItems = () => filterIssues(issues.list, issues.filter).map(iss
 /** What the list says when it has no rows. */
 export function issuesEmptyText() {
   if (issues.error) return issues.error;
-  if (!issues.loaded) return 'Loading';
+  if (!issues.loaded) return LOADING;
   if (issues.filter) return 'No issue matches the search.';
   return issues.state === GITHUB_ISSUE_STATE.open ? 'No open issues.' : 'No issues.';
 }
@@ -145,7 +138,7 @@ function issueActionsHtml(issue, ctx) {
     open && !linked ? button(ISSUE_ACT.implement, 'Implement', true) + button(ISSUE_ACT.todo, 'Add to To do') : '',
     linked ? `<span class="gh-linked">In To do: ${STATUS_NAME[statusOf(linked.task)]}</span>${button(ISSUE_ACT.showTask, 'Show task')}` : '',
     button(ISSUE_ACT.comment, 'Comment'),
-    button(open ? ISSUE_ACT.close : ISSUE_ACT.reopen, open ? 'Close' : 'Reopen'),
+    button(open ? ISSUE_ACT.close : ISSUE_ACT.reopen, open ? CLOSE_LABEL : REOPEN_LABEL),
     button(ISSUE_ACT.open, 'Open on GitHub'),
   ].join('');
 }
@@ -172,7 +165,7 @@ function issueHtml(issue) {
  * @param {IssueContext} ctx
  */
 export async function showIssue(el, number, ctx) {
-  el.innerHTML = '<div class="gw-message">Loading</div>';
+  el.innerHTML = `<div class="gw-message">${LOADING}</div>`;
   /** @type {Issue} */
   let issue;
   try {

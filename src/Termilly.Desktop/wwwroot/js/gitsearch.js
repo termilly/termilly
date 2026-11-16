@@ -15,6 +15,16 @@ import { GIT_MATCH } from './constants.js';
 
 // What GitView.cs and GitSearch.cs answer with.
 /**
+ * A file in the working tree's status: its path (and where it was renamed from), and git's status letter.
+ * @typedef {{ path: string, oldPath?: string | null, status: string }} GitFile
+ */
+/**
+ * A repository's status: where it is, its branch against its upstream, and its files by state.
+ * @typedef {{ root: string, name: string, branch?: string | null, detached?: boolean, upstream?: string | null,
+ *   ahead?: number, behind?: number, hasCommits?: boolean, staged: GitFile[], unstaged: GitFile[],
+ *   untracked: GitFile[], conflicted: GitFile[] }} RepoStatus
+ */
+/**
  * A commit in a log.
  * @typedef {{ hash: string, short: string, subject: string, author: string, date: string,
  *   refs?: string[] | null }} Commit

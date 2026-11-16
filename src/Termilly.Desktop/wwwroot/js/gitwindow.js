@@ -43,16 +43,7 @@ import {
 const { changeLayout, changeNewFile, changeView } = SETTING_VALUES;
 
 // What GitView.cs answers with, and what this window keeps.
-/**
- * A file in the working tree's status: its path (and where it was renamed from), and git's status letter.
- * @typedef {{ path: string, oldPath?: string | null, status: string }} GitFile
- */
-/**
- * A repository's status: where it is, its branch against its upstream, and its files by state.
- * @typedef {{ root: string, name: string, branch?: string | null, detached?: boolean, upstream?: string | null,
- *   ahead?: number, behind?: number, hasCommits?: boolean, staged: GitFile[], unstaged: GitFile[],
- *   untracked: GitFile[], conflicted: GitFile[] }} RepoStatus
- */
+/** @typedef {import('./gitsearch.js').RepoStatus} RepoStatus */
 /** @typedef {import('./gitsearch.js').Commit} Commit */
 /** @typedef {import('./gitsearch.js').Branch} Branch */
 /**
@@ -628,14 +619,7 @@ function renderList() {
       return;
     }
   } else {
-    items = [];
-    /** @type {Array<[string, Branch[]]>} */
-    const groups = [[BRANCH_GROUP.current, branches.filter(b => b.current)], [BRANCH_GROUP.local, branches.filter(b => !b.current && !b.remote)], [BRANCH_GROUP.remote, branches.filter(b => b.remote)]];
-    for (const [label, list] of groups) {
-      if (!list.length) continue;
-      items.push({ kind: ITEM.section, key: `b-${label}`, label, count: list.length, fixed: true });
-      for (const b of list) items.push({ kind: ITEM.branch, branch: b });
-    }
+    items = branchItems();
     if (!items.length) {
       listEl.innerHTML = '<div class="gw-empty">No branches yet.</div>';
       return;
@@ -643,6 +627,20 @@ function renderList() {
   }
   listEl.innerHTML = items.map((item, i) => rowHtml(item, i)).join('');
   markCursor();
+}
+
+/** The Branches tab's rows: the current branch, then local ones, then remote ones, each under its heading. */
+function branchItems() {
+  /** @type {ListItem[]} */
+  const out = [];
+  /** @type {Array<[string, Branch[]]>} */
+  const groups = [[BRANCH_GROUP.current, branches.filter(b => b.current)], [BRANCH_GROUP.local, branches.filter(b => !b.current && !b.remote)], [BRANCH_GROUP.remote, branches.filter(b => b.remote)]];
+  for (const [label, list] of groups) {
+    if (!list.length) continue;
+    out.push({ kind: ITEM.section, key: `b-${label}`, label, count: list.length, fixed: true });
+    for (const b of list) out.push({ kind: ITEM.branch, branch: b });
+  }
+  return out;
 }
 
 /** @type {Record<string, string>} */
@@ -698,7 +696,7 @@ function refChips(refs) {
   if (!refs?.length) return '';
   return refs.map(r => {
     if (r.startsWith('HEAD -> ')) return `<span class="gw-ref head" title="The checked-out branch">${escapeHtml(r.slice(8))}</span>`;
-    if (r === 'HEAD') return '<span class="gw-ref head">HEAD</span>';
+    if (r === HEAD_REF) return '<span class="gw-ref head">HEAD</span>';
     if (r.startsWith('tag: ')) return `<span class="gw-ref is-tag">${escapeHtml(r.slice(5))}</span>`;
     if (r.startsWith('remote: ')) return `<span class="gw-ref remote">${escapeHtml(r.slice(8))}</span>`;
     return `<span class="gw-ref">${escapeHtml(r)}</span>`;
@@ -1049,13 +1047,15 @@ rightEl.addEventListener('click', e => {
 let currentCommit = null;
 
 const UNDO_COMMIT_LABEL = 'Undo this commit';
+/** The checked-out commit's ref, as git log names it ("HEAD -> main", or "HEAD" when detached). */
+const HEAD_REF = 'HEAD';
 
 /**
  * Whether a commit can be undone here: the branch's newest, not pushed yet (the host checks no remote has it).
  * @param {string} hash
  */
 const canUndo = hash => !!repo && !repo.detached && commits[0]?.hash === hash
-  && !!commits[0].refs?.some(r => r.startsWith('HEAD')) && (!repo.upstream || !!repo.ahead);
+  && !!commits[0].refs?.some(r => r.startsWith(HEAD_REF)) && (!repo.upstream || !!repo.ahead);
 
 /**
  * A commit: its message, author, date and parents, the files it changed, and the selected file's diff below (the

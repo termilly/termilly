@@ -17,8 +17,8 @@ import { planWords } from './todoplan.js';
 import { markWorktree } from './worktree.js';
 import { issueBranch, issueDetails } from './githubtext.js';
 
-/** @typedef {import('./gitissues.js').Issue} Issue */
-/** @typedef {import('./gitissues.js').IssueContext} IssueContext */
+/** @typedef {import('./github.js').Issue} Issue */
+/** @typedef {import('./github.js').IssueContext} IssueContext */
 
 /** How much of an issue's text goes into its task's details (the agent can read the rest on GitHub). */
 const DETAILS_MOST = 4000;

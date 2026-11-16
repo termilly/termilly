@@ -13,8 +13,25 @@ import { GITHUB_UNAVAILABLE } from './constants.js';
  * @typedef {{ available: boolean, reason?: string | null, repo?: string | null, defaultBranch?: string | null,
  *   isPublic?: boolean, login?: string | null }} GitHubStatus
  */
+/**
+ * An issue in a list, as gh lists it: its comments counted.
+ * @typedef {{ number: number, title: string, state: string, labels: { name: string, color?: string }[],
+ *   author: string, updatedAt: string, comments: number, url: string }} IssueRow
+ */
+/**
+ * An issue in full, with its comments.
+ * @typedef {Omit<IssueRow, 'comments'> & { body: string, createdAt: string,
+ *   comments: { author: string, body: string, createdAt: string }[] }} Issue
+ */
+/**
+ * Where an issue is: the repository's root here, its GitHub name, its default branch and the branch checked out.
+ * @typedef {{ root: string, repo: string, defaultBranch: string | null, branch: string | null }} IssueContext
+ */
 
-/** Why GitHub isn't there, in words, by GitHubUnavailable reason. */
+/**
+ * Why GitHub isn't there, in words, by GitHubUnavailable reason.
+ * @type {Readonly<Record<string, string>>}
+ */
 const WHY = Object.freeze({
   [GITHUB_UNAVAILABLE.missing]: 'Issues and pull requests need the GitHub CLI (gh). Install it from cli.github.com, then refresh.',
   [GITHUB_UNAVAILABLE.signedOut]: 'Sign in to GitHub first: run gh auth login in a terminal, then refresh.',

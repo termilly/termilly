@@ -17,7 +17,7 @@ import { pullRequestDraft } from './githubtext.js';
  * What the write side needs from the window: the repository, asking git about it, looking again, git's errors, and
  * GitHub when it's there.
  * @typedef {object} WriteContext
- * @property {import('./gitwindow.js').RepoStatus} repo
+ * @property {import('./gitsearch.js').RepoStatus} repo
  * @property {(type: any, payload: any) => Promise<any>} ask git through the host, on this PC or the terminal's server
  * @property {() => Promise<void>} refresh
  * @property {(text: string) => Promise<void>} showGitError
@@ -37,6 +37,8 @@ const PR_FIELD = Object.freeze({ base: 'base', title: 'title', body: 'body', dra
 export const WRITE_BUTTON = Object.freeze({ push: 'push', pr: 'pr', openPr: 'open-pr' });
 const PUSH_LABEL = 'Push';
 const CREATE_PR_LABEL = 'Create pull request';
+/** The toast's button that opens the new pull request. */
+const OPEN_LABEL = 'Open';
 /** Commits a push dialog lists before it says how many more. */
 const PUSH_LIST_MOST = 8;
 
@@ -44,7 +46,7 @@ const PUSH_LIST_MOST = 8;
 
 /**
  * The commit box under the Changes list: a message, and whether everything goes in (on when nothing is staged).
- * @param {import('./gitwindow.js').RepoStatus} repo
+ * @param {import('./gitsearch.js').RepoStatus} repo
  */
 export function commitBoxHtml(repo) {
   const nothingStaged = !repo.staged.length;
@@ -123,7 +125,7 @@ export async function undoCommit(ctx, subject) {
 
 /**
  * Whether the branch has commits to push: ahead of its upstream, or none yet.
- * @param {import('./gitwindow.js').RepoStatus} repo
+ * @param {import('./gitsearch.js').RepoStatus} repo
  */
 export const canPush = repo => !!repo.branch && !repo.detached && repo.hasCommits !== false && (!repo.upstream || !!repo.ahead);
 
@@ -283,6 +285,6 @@ export async function openPullRequest(ctx, issue = null) {
     return { submit };
   });
   if (!created) return;
-  showToast({ text: `Pull request #${created.number} created`, state: TOAST.done, action: { label: 'Open', run: () => send(PAGE.openUrl, { url: created.url }) } });
+  showToast({ text: `Pull request #${created.number} created`, state: TOAST.done, action: { label: OPEN_LABEL, run: () => send(PAGE.openUrl, { url: created.url }) } });
   await ctx.refresh();
 }
