@@ -83,6 +83,14 @@ step('switching workspaces keeps the strip, the window buttons and the dock as t
   await pause(1500);
   await app.screenshot('02b-second-workspace');
   const second = await look();
+  // The workspace left behind prints something: news there is not a terminal needing you.
+  await app.eval(async t => {
+    const { state } = await t.import('store.js');
+    const { noteOutput } = await t.import('panes.js');
+    for (const tab of state.tabs.values()) if (tab.wsId !== state.activeId) noteOutput(tab);
+  });
+  const whileAway = await app.eval(t => t.$('.mini-needs').hidden);
+  assert.equal(whileAway, true, 'news in another workspace is not "needs you"');
   await app.eval(async t => {
     const { state } = await t.import('store.js');
     const { switchWorkspace } = await t.import('panes.js');
