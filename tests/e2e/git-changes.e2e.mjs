@@ -50,7 +50,7 @@ after(async () => {
 step('the Git button opens the Git window in a window of its own, on the repository', async () => {
   await openGit(app);
   await app.waitFor('.git-win .gw-repo', { text: path.basename(repo.path) });
-  const own = await app.eval(t => t.$('.git-win').ownerDocument !== document);
+  const own = await app.eval(t => t.$('.git-win').ownerDocument !== t.$('.xterm').ownerDocument);
   assert.equal(own, true, 'the Git window should be in its own window');
 });
 
