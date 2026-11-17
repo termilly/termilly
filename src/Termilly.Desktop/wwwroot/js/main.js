@@ -48,6 +48,7 @@ import { pluginCommands, reloadPlugins } from './plugins.js';
 import { startTour, offerTourOnce } from './tour.js';
 import { showWhatsNew, offerWhatsNewOnce } from './whatsnew.js';
 import './api.js';
+import './testdriver.js';
 import { exportLayout, importLayout } from './layouts.js';
 import { isBroadcasting, startBroadcast, stopBroadcast, openCompose, BROADCAST_SCOPE } from './broadcast.js';
 import { cycleWorkspace } from './workspaces.js';
@@ -494,6 +495,7 @@ function signalReady() {
   if (readySent) return;
   readySent = true;
   send(PAGE.ready);
+  send(PAGE.testReady);
   openHeld();
   const loader = document.getElementById(LOADER_ID); // Linux's (js/loader.js); Windows's is the window's own
   if (loader) {

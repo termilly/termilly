@@ -69,6 +69,8 @@ internal static class Composition
         .AddStartable<RetiredAssistantKey>()
         .AddStartable<RetiredPhonePairings>()
         // Each feature's messages.
+        .AddSingleton(_ => TestDriverOptions.FromEnvironment())
+        .AddHandler<TestDriver>()
         .AddHandler<WindowHandler>()
         .AddHandler<PageApi>()
         .AddHandler<TerminalHandler>()
