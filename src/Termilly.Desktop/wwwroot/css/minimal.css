@@ -6,7 +6,8 @@ body[data-layout="minimal"] { --gap: 1px; --strip: 32px; }
 
 /* ---- The strip ---- */
 
-body[data-layout="minimal"] #titlebar { position: relative; height: var(--strip); gap: 8px; }
+/* Two columns, not Normal's three: with the search box gone from the middle one, the window's buttons would move into it. */
+body[data-layout="minimal"] #titlebar { position: relative; grid-template-columns: minmax(0, 1fr) max-content; height: var(--strip); gap: 8px; }
 body[data-layout="minimal"] #titlebar :is(.brand, .searchbox),
 body[data-layout="minimal"] #titlebar .tb-right > .separator,
 body[data-layout="minimal"] .bar-dock,
