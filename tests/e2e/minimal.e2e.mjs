@@ -168,7 +168,7 @@ step('on hover, the bar shows near a terminal\'s top only, and typing hides it',
 
 step('on hover, an agent terminal in its compact view shows its bar over the view', async () => {
   // An agent's terminal in the compact view: the view is drawn over the terminal, and the bar must be over both.
-  await app.eval(async t => {
+  const dbg = await app.eval(async t => { try {
     const { state } = await t.import('store.js');
     const { openViewMenu } = await t.import('compact.js');
     const tab = [...state.tabs.values()].find(x => x.view?.el.closest('.ws-layer.active'));
@@ -178,7 +178,9 @@ step('on hover, an agent terminal in its compact view shows its bar over the vie
     await t.waitFor('.menu-row');
     [...t.$('.menu-row')].find(r => r.textContent.includes('Compact')).click();
     await t.waitFor('.ws-layer.active .compact-view:not([hidden])');
-  });
+    return 'fine';
+  } catch (e) { return String(e.stack); } });
+  console.log('DBG', dbg);
   const pane = await app.eval(() => { const r = globalThis.document.querySelector('.ws-layer.active .pane.compact-on').getBoundingClientRect(); return { x: r.left + r.width / 2, top: r.top }; });
   await pointTo(pane.x, pane.top + 12);
   await pause(300);
