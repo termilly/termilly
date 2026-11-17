@@ -4,7 +4,7 @@
 // the nearest edge; right-click picks the edge and whether it hides. Hidden, it's a short line on its edge (amber while a
 // terminal needs you) and comes back when the pointer reaches it there.
 
-import { state, persist, on, wsById, tabsOf, EVENTS } from './store.js';
+import { state, persist, on, wsById, tabsOf, activityOf, EVENTS, ACTIVITY } from './store.js';
 import { showMenu, anyOpen, closeAll, SEPARATOR, SIDE } from './popups.js';
 import { setToolbarHost } from './toolbar.js';
 import { switchWorkspace } from './panes.js';
@@ -71,10 +71,17 @@ function sideNow() {
 /** Whether it hides to a line when not in use: on unless turned off. */
 const hides = () => state.dock.hide !== false;
 
+/**
+ * Whether a terminal waits for the user: an agent asking (a permission, a question) or wanting attention, as its
+ * header and the sidebar show it. Not tab.attention, which only says a hidden workspace printed something new.
+ * @param {Tab} tab
+ */
+export const needsYou = tab => activityOf(tab)?.kind === ACTIVITY.needs;
+
 /** Whether any of a workspace's terminals needs the user, or else works. @param {Workspace} ws */
 function stateOf(ws) {
   const tabs = tabsOf(ws);
-  if (tabs.some(t => t.attention)) return AGENT_STATE.needsInput;
+  if (tabs.some(needsYou)) return AGENT_STATE.needsInput;
   return tabs.some(t => t.agent?.state === AGENT_STATE.working) ? AGENT_STATE.working : '';
 }
 
@@ -88,7 +95,7 @@ function drawWorkspace() {
   const worst = others.includes(AGENT_STATE.needsInput) ? AGENT_STATE.needsInput : others.includes(AGENT_STATE.working) ? AGENT_STATE.working : '';
   badge.hidden = !worst;
   badge.dataset.state = worst;
-  line.classList.toggle('needs', [...state.tabs.values()].some(t => t.attention));
+  line.classList.toggle('needs', [...state.tabs.values()].some(needsYou));
 }
 
 /** Shows it, or its line, where it is now. */
@@ -225,3 +232,4 @@ find(dock, '.dock-search').addEventListener('click', () => openPalette());
 
 on(EVENTS.workspaces, drawWorkspace);
 on(EVENTS.tab, drawWorkspace);
+on(EVENTS.agent, drawWorkspace);

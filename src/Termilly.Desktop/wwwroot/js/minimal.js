@@ -10,7 +10,7 @@ import { bringBack } from './panes.js';
 import { jumpToNext } from './inbox.js';
 import { shownName } from './rename.js';
 import { scheduleFit } from './terminals.js';
-import { showDock } from './dock.js';
+import { showDock, needsYou } from './dock.js';
 import { isMinimal, PANE_HEADER } from './panebar.js';
 import { find, targetOf } from './dom.js';
 import { SETTING_VALUES } from './constants.js';
@@ -39,7 +39,7 @@ function drawStrip() {
   const aside = asideTabs();
   asideButton.hidden = !aside.length;
   find(asideButton, 'span').textContent = `${aside.length} set aside`;
-  const needing = [...state.tabs.values()].filter(t => t.attention);
+  const needing = [...state.tabs.values()].filter(needsYou);
   needsButton.hidden = !needing.length;
   if (needing.length) {
     const more = needing.length > 1 ? `, ${needing.length - 1} more` : '';
@@ -90,6 +90,7 @@ document.addEventListener('keydown', () => showBarOn(null), { capture: true });
 on(EVENTS.settings, applyLayout);
 on(EVENTS.workspaces, drawStrip);
 on(EVENTS.tab, drawStrip);
+on(EVENTS.agent, drawStrip);
 
 /** Applies the saved layout (main.js, once the settings and saved state are in). */
 export const initMinimal = applyLayout;
