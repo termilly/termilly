@@ -135,7 +135,8 @@ body[data-layout="minimal"][data-pane-names="hover"] .pane > .pane-header:has(.a
 .dock-line[hidden] { display: none; }
 .dock-line.needs { background: var(--attention); box-shadow: 0 0 8px color-mix(in srgb, var(--attention) 60%, transparent); }
 .dock-line:is([data-side="top"], [data-side="bottom"]) { left: 50%; width: 120px; height: 3px; transform: translateX(-50%); }
-.dock-line[data-side="top"] { top: calc(var(--strip) + 3px); }
+/* On top it's the window's own top edge, over the strip, where the pointer goes for it. */
+.dock-line[data-side="top"] { top: 2px; }
 .dock-line[data-side="bottom"] { bottom: 4px; }
 .dock-line:is([data-side="left"], [data-side="right"]) { top: 50%; width: 3px; height: 120px; transform: translateY(-50%); }
 .dock-line[data-side="left"] { left: 4px; }
