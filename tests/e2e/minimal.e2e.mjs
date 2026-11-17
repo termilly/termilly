@@ -22,15 +22,15 @@ const step = (name, run) => test(name, async () => {
 
 /** Changes interface settings the way Settings does. @param {Record<string, string>} patch */
 const setInterface = patch => app.eval(async (t, p) => {
-  const prefs = await import(new URL('js/preferences.js', location.href).href);
+  const prefs = await import(new URL('js/preferences.js', globalThis.location.href).href);
   prefs.updateSettings('interface', p);
 }, patch);
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 /** Moves the pointer to a point, as the mouse would. */
 const pointTo = (x, y) => app.eval((t, x, y) => {
-  const target = document.elementFromPoint(x, y) ?? document.body;
+  const target = globalThis.document.elementFromPoint(x, y) ?? globalThis.document.body;
   for (const type of ['pointermove', 'mousemove']) {
-    const Ev = type === 'pointermove' ? PointerEvent : MouseEvent;
+    const Ev = type === 'pointermove' ? globalThis.PointerEvent : globalThis.MouseEvent;
     target.dispatchEvent(new Ev(type, { clientX: x, clientY: y, bubbles: true }));
   }
 }, x, y);
@@ -39,9 +39,9 @@ before(async () => {
   app = await startApp({ name: 'minimal' });
   await app.waitFor('.pane .xterm');
   // The welcome tour a first start offers would sit over everything.
-  await app.eval(async t => {
-    for (let i = 0; i < 20 && !document.querySelector('.tour-skip, [data-tour="skip"]'); i++) await new Promise(r => setTimeout(r, 100));
-    const skip = [...document.querySelectorAll('button, a, span')].find(el => el.textContent.trim() === 'Skip tour');
+  await app.eval(async () => {
+    for (let i = 0; i < 20 && !globalThis.document.querySelector('.tour-skip, [data-tour="skip"]'); i++) await new Promise(r => setTimeout(r, 100));
+    const skip = [...globalThis.document.querySelectorAll('button, a, span')].find(el => el.textContent.trim() === 'Skip tour');
     skip?.click();
   });
 });
@@ -53,20 +53,20 @@ step('Minimal moves the toolbar into a hidden dock and the sidebar away', async 
   await setInterface({ layout: 'minimal' });
   await app.waitFor('#dock:not([hidden])');
   const shown = await app.eval(() => ({
-    toolbarInDock: !!document.querySelector('#dock .toolbar'),
-    sidebar: getComputedStyle(document.getElementById('sidebar')).display,
-    search: getComputedStyle(document.getElementById('search-button')).display,
-    tucked: document.getElementById('dock').classList.contains('tucked'),
-    line: !document.querySelector('.dock-line').hidden,
-    side: document.getElementById('dock').dataset.side,
-    strip: document.getElementById('titlebar').getBoundingClientRect().height,
+    toolbarInDock: !!globalThis.document.querySelector('#dock .toolbar'),
+    sidebar: globalThis.getComputedStyle(globalThis.document.getElementById('sidebar')).display,
+    search: globalThis.getComputedStyle(globalThis.document.getElementById('search-button')).display,
+    tucked: globalThis.document.getElementById('dock').classList.contains('tucked'),
+    line: !globalThis.document.querySelector('.dock-line').hidden,
+    side: globalThis.document.getElementById('dock').dataset.side,
+    strip: globalThis.document.getElementById('titlebar').getBoundingClientRect().height,
   }));
   assert.deepEqual(shown, { toolbarInDock: true, sidebar: 'none', search: 'none', tucked: true, line: true, side: 'top', strip: 32 });
   await app.screenshot('02-minimal-hidden');
 });
 
 step('the hidden dock comes back at its edge and lists the workspaces', async () => {
-  const box = await app.eval(() => { const r = document.querySelector('.dock-line').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + 4 }; });
+  const box = await app.eval(() => { const r = globalThis.document.querySelector('.dock-line').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + 4 }; });
   await pointTo(box.x, box.y);
   await app.waitFor('#dock:not(.tucked)');
   await app.click('.dock-ws');
@@ -81,50 +81,50 @@ step('the hidden dock comes back at its edge and lists the workspaces', async ()
 step('a split shows two name lines, the one in focus with its buttons', async () => {
   await app.click('#dock [data-command="splitRight"]');
   await pause(800);
-  const lines = await app.eval(() => [...document.querySelectorAll('.ws-layer.active .pane > .pane-header')].map(h => Math.round(h.getBoundingClientRect().height)));
+  const lines = await app.eval(() => [...globalThis.document.querySelectorAll('.ws-layer.active .pane > .pane-header')].map(h => Math.round(h.getBoundingClientRect().height)));
   assert.ok(lines.length >= 2 && lines.every(h => h === 24), JSON.stringify(lines));
-  const edge = await app.eval(() => getComputedStyle(document.querySelector('.ws-layer.active .pane.focused'), '::after').boxShadow);
+  const edge = await app.eval(() => globalThis.getComputedStyle(globalThis.document.querySelector('.ws-layer.active .pane.focused'), '::after').boxShadow);
   assert.match(edge, /2px 0px 0px 0px inset|inset 2px 0px 0px/);
   await app.screenshot('04-line');
 });
 
 step('right-click on a name line picks its parts; a part turned off goes from every line', async () => {
-  const at = await app.eval(() => { const r = document.querySelector('.ws-layer.active .pane > .pane-header').getBoundingClientRect(); return { x: r.left + 40, y: r.top + 10 }; });
-  await app.eval((t, at) => document.querySelector('.ws-layer.active .pane > .pane-header').dispatchEvent(new MouseEvent('contextmenu', { clientX: at.x, clientY: at.y, bubbles: true })), at);
+  const at = await app.eval(() => { const r = globalThis.document.querySelector('.ws-layer.active .pane > .pane-header').getBoundingClientRect(); return { x: r.left + 40, y: r.top + 10 }; });
+  await app.eval((t, at) => globalThis.document.querySelector('.ws-layer.active .pane > .pane-header').dispatchEvent(new globalThis.MouseEvent('contextmenu', { clientX: at.x, clientY: at.y, bubbles: true })), at);
   await app.waitFor('.context-menu .menu-row');
   const labels = await app.eval(t => t.$$('.context-menu .menu-label').map(el => el.textContent));
   assert.ok(labels.includes('Agent view switch') && labels.includes('Terminal menu') && !labels.includes('Close'), labels.join(', '));
   await pause(300);
   await app.screenshot('05-line-menu');
   await app.eval(t => [...t.$$('.context-menu .menu-row')].find(r => r.textContent.includes('Tag button')).click());
-  const off = await app.eval(() => [...document.querySelectorAll('.ws-layer.active .pane-header .tag-btn')].every(b => getComputedStyle(b).display === 'none'));
+  const off = await app.eval(() => [...globalThis.document.querySelectorAll('.ws-layer.active .pane-header .tag-btn')].every(b => globalThis.getComputedStyle(b).display === 'none'));
   assert.equal(off, true);
 });
 
 step('on hover, the bar shows near a terminal\'s top only, and typing hides it', async () => {
   await setInterface({ paneNames: 'hover' });
   await pause(300);
-  const pane = await app.eval(() => { const r = document.querySelector('.ws-layer.active .pane').getBoundingClientRect(); return { x: r.left + r.width / 2, top: r.top, bottom: r.bottom }; });
+  const pane = await app.eval(() => { const r = globalThis.document.querySelector('.ws-layer.active .pane').getBoundingClientRect(); return { x: r.left + r.width / 2, top: r.top, bottom: r.bottom }; });
   await pointTo(pane.x, pane.bottom - 60);
-  const far = await app.eval(() => getComputedStyle(document.querySelector('.ws-layer.active .pane > .pane-header')).opacity);
+  const far = await app.eval(() => globalThis.getComputedStyle(globalThis.document.querySelector('.ws-layer.active .pane > .pane-header')).opacity);
   await pointTo(pane.x, pane.top + 12);
   await pause(300);
-  const near = await app.eval(() => getComputedStyle(document.querySelector('.ws-layer.active .pane > .pane-header')).opacity);
+  const near = await app.eval(() => globalThis.getComputedStyle(globalThis.document.querySelector('.ws-layer.active .pane > .pane-header')).opacity);
   assert.deepEqual({ far, near }, { far: '0', near: '1' });
   await app.screenshot('06-hover-bar');
-  await app.eval(() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'a' })));
-  assert.equal(await app.eval(() => document.querySelector('.pane.bar-near')), null);
+  await app.eval(() => globalThis.document.dispatchEvent(new globalThis.KeyboardEvent('keydown', { key: 'a' })));
+  assert.equal(await app.eval(() => globalThis.document.querySelector('.pane.bar-near')), null);
 });
 
 step('the dock moves to another edge from its menu, and stays shown with hiding off', async () => {
-  await app.eval(() => document.getElementById('dock').dispatchEvent(new MouseEvent('contextmenu', { clientX: 600, clientY: 60, bubbles: true })));
+  await app.eval(() => globalThis.document.getElementById('dock').dispatchEvent(new globalThis.MouseEvent('contextmenu', { clientX: 600, clientY: 60, bubbles: true })));
   await app.waitFor('.context-menu .menu-row');
   await app.eval(t => [...t.$$('.context-menu .menu-row')].find(r => r.textContent.trim().startsWith('Right')).click());
-  await app.eval(() => document.getElementById('dock').dispatchEvent(new MouseEvent('contextmenu', { clientX: 600, clientY: 60, bubbles: true })));
+  await app.eval(() => globalThis.document.getElementById('dock').dispatchEvent(new globalThis.MouseEvent('contextmenu', { clientX: 600, clientY: 60, bubbles: true })));
   await app.waitFor('.context-menu .menu-row');
   await app.eval(t => [...t.$$('.context-menu .menu-row')].find(r => r.textContent.includes('Hide when not in use')).click());
   await pause(400);
-  const dock = await app.eval(() => ({ side: document.getElementById('dock').dataset.side, tucked: document.getElementById('dock').classList.contains('tucked') }));
+  const dock = await app.eval(() => ({ side: globalThis.document.getElementById('dock').dataset.side, tucked: globalThis.document.getElementById('dock').classList.contains('tucked') }));
   assert.deepEqual(dock, { side: 'right', tucked: false });
   await app.screenshot('07-dock-right');
 });
@@ -133,10 +133,10 @@ step('Normal gives the title bar, sidebar and toolbar back', async () => {
   await setInterface({ layout: 'normal' });
   await pause(400);
   const back = await app.eval(() => ({
-    toolbarInTitle: !!document.querySelector('#titlebar .toolbar'),
-    dock: document.getElementById('dock').hidden,
-    sidebar: getComputedStyle(document.getElementById('sidebar')).display !== 'none',
-    header: Math.round(document.querySelector('.ws-layer.active .pane > .pane-header').getBoundingClientRect().height),
+    toolbarInTitle: !!globalThis.document.querySelector('#titlebar .toolbar'),
+    dock: globalThis.document.getElementById('dock').hidden,
+    sidebar: globalThis.getComputedStyle(globalThis.document.getElementById('sidebar')).display !== 'none',
+    header: Math.round(globalThis.document.querySelector('.ws-layer.active .pane > .pane-header').getBoundingClientRect().height),
   }));
   assert.deepEqual(back, { toolbarInTitle: true, dock: true, sidebar: true, header: 30 });
   await app.screenshot('08-normal-again');
