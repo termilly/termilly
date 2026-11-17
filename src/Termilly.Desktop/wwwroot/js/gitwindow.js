@@ -46,7 +46,7 @@ import {
   showIssue, forgetIssue, issueClicked,
 } from './gitissues.js';
 import {
-  WRITE_BUTTON, commitBoxHtml, wireCommitBox, headActionsHtml, openPush, openPullRequest, undoCommit, canOpenPullRequest,
+  WRITE_BUTTON, commitBoxHtml, wireCommitBox, followStaged, headActionsHtml, openPush, openPullRequest, undoCommit, canOpenPullRequest,
 } from './gitwrite.js';
 
 /** The choices of the settings used here (C#'s SettingValues). */
@@ -620,6 +620,7 @@ function renderTabs() {
 function showCommitBox() {
   const show = tab === GIT_TAB.changes && !searching() && !!repo && changeCount() > repo.conflicted.length;
   if (show && !commitBoxEl.firstElementChild) commitBoxEl.innerHTML = commitBoxHtml(/** @type {RepoStatus} */ (repo));
+  if (show) followStaged(commitBoxEl, /** @type {RepoStatus} */ (repo));
   commitBoxEl.hidden = !show;
 }
 
@@ -699,6 +700,7 @@ async function switchTab(next) {
   } else if (tab === GIT_TAB.issues) {
     await showIssuesTab();
   } else if (tab === GIT_TAB.local) {
+    resetLocal(); // kept since it was last shown: a discard, the timer, a removed worktree
     await showLocalTab();
   } else {
     await loadBranches();

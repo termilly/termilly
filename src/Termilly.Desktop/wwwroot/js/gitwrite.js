@@ -81,6 +81,7 @@ export async function commitFrom(box, ctx) {
     const { hash } = await ctx.ask(PAGE.gitviewCommitCreate, { root: ctx.repo.root, message: message.value, all });
     message.value = '';
     drafts.delete(ctx.repo.root);
+    delete find(box, `[data-commit="${BOX.all}"]`).dataset.set; // the next commit's tick follows what's staged again
     toastHere({ text: `Committed ${String(hash).slice(0, 7)}`, state: TOAST.done });
   } catch (e) {
     await ctx.showGitError(/** @type {Error} */ (e).message);
@@ -88,6 +89,17 @@ export async function commitFrom(box, ctx) {
     button.disabled = false;
   }
   await ctx.refresh();
+}
+
+/**
+ * All changes follows what's staged: ticked while nothing is (a commit of everything), unticked once something is (a
+ * commit of just that), until it's set by hand.
+ * @param {HTMLElement} box
+ * @param {import('./gitsearch.js').RepoStatus} repo
+ */
+export function followStaged(box, repo) {
+  const all = /** @type {HTMLInputElement | null} */ (box.querySelector(`[data-commit="${BOX.all}"]`));
+  if (all && all.dataset.set === undefined) all.checked = !repo.staged.length;
 }
 
 /**
@@ -106,6 +118,11 @@ export function wireCommitBox(box, context) {
       e.preventDefault();
       commitFrom(box, ctx);
     }
+  });
+  // Ticked or unticked by hand, All changes stays as set until the commit (followStaged).
+  box.addEventListener('change', e => {
+    const changed = /** @type {HTMLElement} */ (e.target);
+    if (changed.matches(`[data-commit="${BOX.all}"]`)) changed.dataset.set = '';
   });
   box.addEventListener('input', e => {
     const ctx = context();
