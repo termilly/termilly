@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Net;
+using System.Net.Http;
 using System.Net.Sockets;
 using System.Text.Json;
 using Termilly.Desktop.Features;
@@ -39,6 +40,39 @@ public sealed class TestDriverTests
         Assert.False(fixture.Driver.Ready);
         fixture.Dispatch("""{"type":"test:ready"}""");
         Assert.True(fixture.Driver.Ready);
+    }
+
+    [Fact]
+    public async Task Requests_need_the_token_and_a_known_path_and_ready_says_whether_the_page_is()
+    {
+        using var fixture = new Fixture();
+        static LoopbackRequest Get(string path, string? token) =>
+            new("GET", path, token is null ? new Dictionary<string, string>() : new() { ["x-termilly-test-token"] = token }, []);
+        Assert.Equal(HttpStatusCode.Forbidden, (await fixture.Driver.HandleAsync(Get("/ready", "wrong"))).Code);
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, (await fixture.Driver.HandleAsync(Get("/ready", Fixture.Token))).Code);
+        fixture.Dispatch("""{"type":"test:ready"}""");
+        Assert.Equal(HttpStatusCode.OK, (await fixture.Driver.HandleAsync(Get("/ready", Fixture.Token))).Code);
+        Assert.Equal(HttpStatusCode.NotFound, (await fixture.Driver.HandleAsync(Get("/other", Fixture.Token))).Code);
+    }
+
+    [Fact]
+    public async Task The_loopback_server_answers_over_a_real_connection_and_one_waiting_from_the_start()
+    {
+        using var reservation = new TcpListener(IPAddress.Loopback, 0);
+        reservation.Start();
+        var port = ((IPEndPoint)reservation.LocalEndpoint).Port;
+        reservation.Stop();
+        using var server = new LoopbackHttp(port, request => Task.FromResult(new LoopbackResponse(HttpStatusCode.OK,
+            JsonSerializer.Serialize(new { request.Method, request.Path, Body = System.Text.Encoding.UTF8.GetString(request.Body) }))));
+        server.Start();
+        using var http = new HttpClient();
+        // Several at once, as a test polling /ready right after the app starts: none may bring it down.
+        var answers = await Task.WhenAll(Enumerable.Range(0, 8).Select(i =>
+            http.PostAsync($"http://127.0.0.1:{port}/eval?x={i}", new StringContent($"body {i}"))));
+        Assert.All(answers, a => Assert.Equal(HttpStatusCode.OK, a.StatusCode));
+        var json = await answers[3].Content.ReadAsStringAsync();
+        Assert.Contains("\"Path\":\"/eval\"", json);
+        Assert.Contains("\"Body\":\"body 3\"", json);
     }
 
     [Fact]

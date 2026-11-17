@@ -14,12 +14,10 @@ internal sealed class TestDriver(PageChannel page, TestDriverOptions options) : 
     private const string EvalPath = "/eval";
     private const string GetMethod = "GET";
     private const string PostMethod = "POST";
-    private const string JsonContent = "application/json";
     private const int DefaultTimeoutMs = 30000;
-    private readonly HttpListener _listener = new();
+    private LoopbackHttp? _server;
     private readonly ConcurrentDictionary<string, TaskCompletionSource<FromPage.TestResult>> _calls = new();
     private volatile bool _ready;
-    private bool _started;
 
     public void Register(MessageRouter router)
     {
@@ -35,85 +33,44 @@ internal sealed class TestDriver(PageChannel page, TestDriverOptions options) : 
 
     public void Start()
     {
-        if (_started || !options.Enabled)
+        if (_server is not null || !options.Enabled)
         {
             return;
         }
-        _started = true;
-        _listener.Prefixes.Add($"http://127.0.0.1:{options.Port}/");
-        _listener.Start();
-        _ = ListenAsync();
+        _server = new LoopbackHttp(options.Port, HandleAsync);
+        _server.Start();
     }
 
-    private async Task ListenAsync()
+    /// <summary>A request: the token first, then /ready (whether the page said so) or /eval (code run in the page).</summary>
+    internal async Task<LoopbackResponse> HandleAsync(LoopbackRequest request)
     {
-        try
+        if (!Authorized(request.Headers.GetValueOrDefault(TokenHeader.ToLowerInvariant())))
         {
-            while (_listener.IsListening)
-            {
-                var context = await _listener.GetContextAsync().ConfigureAwait(false);
-                _ = RespondAsync(context);
-            }
+            return LoopbackResponse.Status(HttpStatusCode.Forbidden);
         }
-        catch (Exception e) when (e is HttpListenerException or ObjectDisposedException)
+        if (request.Method == GetMethod && request.Path == ReadyPath)
         {
-            // Closing the instance ends the pending accept.
+            return LoopbackResponse.Status(_ready ? HttpStatusCode.OK : HttpStatusCode.ServiceUnavailable);
         }
-    }
-
-    private async Task RespondAsync(HttpListenerContext context)
-    {
-        try
+        if (request.Method != PostMethod || request.Path != EvalPath)
         {
-            await HandleAsync(context).ConfigureAwait(false);
-        }
-        catch (Exception e) when (e is HttpListenerException or System.IO.IOException or ObjectDisposedException)
-        {
-            // A test may time out and disconnect before its page answers.
-        }
-        finally
-        {
-            context.Response.Close();
-        }
-    }
-
-    private async Task HandleAsync(HttpListenerContext context)
-    {
-        var request = context.Request;
-        var response = context.Response;
-        if (!Authorized(request.Headers[TokenHeader]))
-        {
-            response.StatusCode = (int)HttpStatusCode.Forbidden;
-            return;
-        }
-        if (request.HttpMethod == GetMethod && request.Url?.AbsolutePath == ReadyPath)
-        {
-            response.StatusCode = (int)(_ready ? HttpStatusCode.OK : HttpStatusCode.ServiceUnavailable);
-            return;
-        }
-        if (request.HttpMethod != PostMethod || request.Url?.AbsolutePath != EvalPath)
-        {
-            response.StatusCode = (int)HttpStatusCode.NotFound;
-            return;
+            return LoopbackResponse.Status(HttpStatusCode.NotFound);
         }
         TestEvalRequest? evaluation;
         try
         {
-            evaluation = await JsonSerializer.DeserializeAsync<TestEvalRequest>(request.InputStream, PageChannel.Json).ConfigureAwait(false);
+            evaluation = JsonSerializer.Deserialize<TestEvalRequest>(request.Body, PageChannel.Json);
         }
         catch (JsonException)
         {
-            response.StatusCode = (int)HttpStatusCode.BadRequest;
-            return;
+            return LoopbackResponse.Status(HttpStatusCode.BadRequest);
         }
         if (evaluation?.Code is null || evaluation.TimeoutMs <= 0)
         {
-            response.StatusCode = (int)HttpStatusCode.BadRequest;
-            return;
+            return LoopbackResponse.Status(HttpStatusCode.BadRequest);
         }
         var result = await EvaluateAsync(evaluation).ConfigureAwait(false);
-        response.ContentType = JsonContent;
-        await JsonSerializer.SerializeAsync(response.OutputStream, result, PageChannel.Json).ConfigureAwait(false);
+        return new LoopbackResponse(HttpStatusCode.OK, JsonSerializer.Serialize(result, PageChannel.Json));
     }
 
     internal bool Authorized(string? token) => options.Enabled && token == options.Token;
@@ -146,7 +103,7 @@ internal sealed class TestDriver(PageChannel page, TestDriverOptions options) : 
 
     public void Dispose()
     {
-        _listener.Close();
+        _server?.Dispose();
         foreach (var (id, waiting) in _calls)
         {
             waiting.TrySetResult(new FromPage.TestResult(id, Error: "The test driver stopped."));
