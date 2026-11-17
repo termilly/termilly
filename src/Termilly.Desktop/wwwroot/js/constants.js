@@ -276,6 +276,18 @@ export const SETTING_VALUES = Object.freeze({
     system: 'system',
     default: 'dark',
   }),
+  layout: Object.freeze({
+    normal: 'normal',
+    minimal: 'minimal',
+    default: 'normal',
+    all: Object.freeze(['normal', 'minimal']),
+  }),
+  paneNames: Object.freeze({
+    line: 'line',
+    hover: 'hover',
+    default: 'line',
+    all: Object.freeze(['line', 'hover']),
+  }),
   cursorStyle: Object.freeze({
     bar: 'bar',
     block: 'block',
