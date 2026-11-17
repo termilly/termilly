@@ -42,7 +42,9 @@ test('resuming a session that is gone ends the spinner, with Claude\'s words lef
     const after = await app.eval(async t => {
       const { state } = await t.import('./store.js');
       const tab = [...state.tabs.values()][0];
-      return { resuming: !!tab.resuming, session: tab.start?.resumeSession ?? null, text: t.text('.xterm-rows') };
+      const buffer = tab.view.term.buffer.active;
+      const lines = Array.from({ length: buffer.length }, (_, y) => buffer.getLine(y)?.translateToString(true) ?? '');
+      return { resuming: !!tab.resuming, session: tab.start?.resumeSession ?? null, text: lines.join(' ') };
     });
     assert.equal(after.resuming, false);
     assert.equal(after.session, null);
