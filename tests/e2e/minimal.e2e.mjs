@@ -60,8 +60,10 @@ step('Minimal moves the toolbar into a hidden dock and the sidebar away', async 
     line: !globalThis.document.querySelector('.dock-line').hidden,
     side: globalThis.document.getElementById('dock').dataset.side,
     strip: globalThis.document.getElementById('titlebar').getBoundingClientRect().height,
+    // The window's buttons stay at the strip's right end (not in the middle, where the search box was).
+    controlsAtRight: globalThis.innerWidth - globalThis.document.querySelector('#titlebar .window-controls').getBoundingClientRect().right < 20,
   }));
-  assert.deepEqual(shown, { toolbarInDock: true, sidebar: 'none', search: 'none', tucked: true, line: true, side: 'top', strip: 32 });
+  assert.deepEqual(shown, { toolbarInDock: true, sidebar: 'none', search: 'none', tucked: true, line: true, side: 'top', strip: 32, controlsAtRight: true });
   await app.screenshot('02-minimal-hidden');
 });
 
