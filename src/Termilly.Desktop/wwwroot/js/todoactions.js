@@ -139,9 +139,23 @@ export function implementPlace(ref) {
     return folder && profile ? { folder, profile, server: profile.name } : null;
   }
   const folder = folderOfList(ref);
-  const id = tab?.profile ?? defaultProfile();
-  const profile = state.profiles.find(p => p.id === id);
-  return folder && profile && agentInstalled() ? { folder, profile, server: null } : null;
+  return folder ? implementPlaceIn(ref, folder) : null;
+}
+
+/**
+ * Where Implement runs a list's task in a folder on this computer known from elsewhere (a repository the Git window
+ * shows, a worktree made for the task), whatever folder the list has, or none: its terminal's profile (else the
+ * default one), when an agent is installed here. Null for a list on an SSH host, whose folders aren't this
+ * computer's.
+ * @param {ListRef} ref
+ * @param {string} folder
+ * @returns {ImplementPlace | null}
+ */
+export function implementPlaceIn(ref, folder) {
+  const tab = ref.kind === LIST_KIND.terminal ? state.tabs.get(ref.id) : null;
+  if (tab && isSsh(tab)) return null;
+  const profile = state.profiles.find(p => p.id === (tab?.profile ?? defaultProfile()));
+  return profile && agentInstalled() ? { folder, profile, server: null } : null;
 }
 
 /**

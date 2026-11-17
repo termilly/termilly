@@ -12,7 +12,7 @@ import { modal, FORM_DIALOG } from './dialogs.js';
 import { find, field, showError } from './dom.js';
 import { toastHere, TOAST } from './toasts.js';
 import { addTasks, updateTask, findTask, findIssueTask, workspaceList, openTodo } from './todo.js';
-import { implement, implementPlace, implementing, cantImplement, planOf, ALREADY_IMPLEMENTING } from './todoactions.js';
+import { implement, implementPlaceIn, implementing, cantImplement, planOf, ALREADY_IMPLEMENTING } from './todoactions.js';
 import { planWords } from './todoplan.js';
 import { markWorktree } from './worktree.js';
 import { issueBranch, issueDetails } from './githubtext.js';
@@ -112,7 +112,7 @@ export function openImplementIssue(issue, ctx) {
     });
     const submit = async () => {
       if (ok.disabled) return;
-      if (!implementPlace(listFor(ctx.root))) return showError(error, cantImplement(listFor(ctx.root)));
+      if (!implementPlaceIn(listFor(ctx.root), ctx.root)) return showError(error, cantImplement(listFor(ctx.root)));
       ok.disabled = true;
       const worktree = inWorktree() ? await makeWorktree(dialog, ctx) : null;
       // Cancelled while the worktree was being made: nothing starts, and the folder made is said.
@@ -141,10 +141,11 @@ export function openImplementIssue(issue, ctx) {
  */
 function startOn(issue, ctx, worktree) {
   const { ref, task } = addIssueTask(issue, ctx);
-  const place = implementPlace(ref);
+  // In the repository (or its new worktree): the list's own folder, if it has one, doesn't matter here.
+  const place = implementPlaceIn(ref, worktree?.path ?? ctx.root);
   if (!place) return null;
   if (implementing(task)) return false;
-  const { started, tab } = implement(ref, task, undefined, planOf(ref), { ...place, folder: worktree?.path ?? ctx.root });
+  const { started, tab } = implement(ref, task, undefined, planOf(ref), place);
   if (tab && worktree) markWorktree(tab, worktree);
   return started || null;
 }

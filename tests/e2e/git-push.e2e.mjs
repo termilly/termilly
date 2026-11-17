@@ -92,6 +92,7 @@ step('Undo this commit takes a commit that isn\'t pushed off the branch, its cha
   await clickText(app, '.gw-graph-row', 'Not pushed yet');
   await app.waitFor('[data-undo-commit]');
   await app.click('[data-undo-commit]');
+  await confirm(app);
   await until(async () => (await repo.git('log', '-1', '--format=%s')) === 'Topic work', 'the commit taken off');
   assert.match(await repo.git('diff', '--cached', '--name-only'), /b\.txt/);
 });

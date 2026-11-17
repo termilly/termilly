@@ -13,7 +13,7 @@ import { targetOf } from './dom.js';
 import { askGitHub } from './github.js';
 import { toastHere, TOAST } from './toasts.js';
 import { addTasks, findTask } from './todo.js';
-import { implement, implementPlace, planOf, cantImplement } from './todoactions.js';
+import { implement, implementPlaceIn, planOf, cantImplement } from './todoactions.js';
 import { listFor } from './issueimplement.js';
 
 /**
@@ -182,14 +182,14 @@ async function fixWithAgent(ctx, run, job, log) {
   const folder = await ctx.folderFor(run.branch);
   if (!folder) return ctx.showError(`${run.branch} isn't checked out anywhere. Check it out, or make a worktree for it, first.`);
   const ref = listFor(ctx.root);
-  const place = implementPlace(ref);
+  const place = implementPlaceIn(ref, folder);
   if (!place) return ctx.showError(cantImplement(ref));
   const text = `Fix the failing check: ${run.workflow} / ${job.name}${run.branch ? ` on ${run.branch}` : ''}`;
   const details = `${job.url}\n\nThe end of its log:\n\n${log.slice(-DETAILS_MOST)}`;
   const [id] = addTasks(ref, [{ text, details }]);
   const found = findTask(id);
   if (!found) return null;
-  const { started } = implement(ref, found.task, undefined, planOf(ref), { ...place, folder });
+  const { started } = implement(ref, found.task, undefined, planOf(ref), place);
   toastHere({ text: started ? 'An agent is on it, from To do' : 'The task is in To do', state: TOAST.done });
   return started;
 }
