@@ -35,10 +35,13 @@ body[data-layout="minimal"] .mini-needs { position: absolute; left: 50%; transfo
 /* ---- Terminals: a 1px line between them, no frames ---- */
 
 body[data-layout="minimal"] #workspace { background: var(--border); }
-body[data-layout="minimal"] .pane { border: 0; border-radius: 0; box-shadow: none; }
-body[data-layout="minimal"] .pane.focused { box-shadow: inset 2px 0 0 var(--accent); }
-body[data-layout="minimal"] .pane[data-activity="needs"] { animation: none; box-shadow: inset 0 0 0 1px var(--attention); }
-body[data-layout="minimal"] .pane[data-activity="error"] { box-shadow: inset 0 0 0 1px var(--danger); }
+body[data-layout="minimal"] .pane { border: 0; border-radius: 0; box-shadow: none; animation: none; }
+/* Drawn over the terminal (its canvas would cover a shadow on the pane): the accent edge of the one in focus, and the
+   amber or red frame of one that needs you or failed. */
+body[data-layout="minimal"] .pane::after { content: ""; position: absolute; inset: 0; z-index: 5; pointer-events: none; }
+body[data-layout="minimal"] .pane.focused::after { box-shadow: inset 2px 0 0 var(--accent); }
+body[data-layout="minimal"] .pane[data-activity="needs"]::after { box-shadow: inset 0 0 0 1px var(--attention); }
+body[data-layout="minimal"] .pane[data-activity="error"]::after { box-shadow: inset 0 0 0 1px var(--danger); }
 /* The 1px gap is too thin to grab: the divider's handle reaches 3px either side of it. */
 body[data-layout="minimal"] .divider::before { content: ""; position: absolute; inset: 0 -3px; z-index: 2; }
 body[data-layout="minimal"] .split.column > .divider::before { inset: -3px 0; }
