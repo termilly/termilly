@@ -89,6 +89,8 @@ step('Undo this commit takes a commit that isn\'t pushed off the branch, its cha
   await repo.git('commit', '-qm', 'Not pushed yet');
   await tab(app, 'History');
   await app.click('.gw-refresh');
+  // History reads the branch again: the new commit shows once it has.
+  await app.waitFor('.gw-graph-row', { text: 'Not pushed yet' });
   await clickText(app, '.gw-graph-row', 'Not pushed yet');
   await app.waitFor('[data-undo-commit]');
   await app.click('[data-undo-commit]');
