@@ -52,12 +52,13 @@ body[data-layout="minimal"] .bar-off { display: none !important; }
 body[data-layout="minimal"][data-pane-names="line"] .pane > .pane-header { height: 24px; padding: 0 4px 0 10px; background: var(--surface); }
 body[data-layout="minimal"][data-pane-names="line"] .pane:not(.focused):not(:hover) .pane-actions > :not(.agent-stop-btn) { visibility: hidden; }
 
-/* A bar on hover: over the terminal's top right, shown while the mouse is near the top or on it (js/minimal.js). */
+/* A bar on hover: over the terminal's top right, shown while the mouse is near the top or on it (js/minimal.js). It sits
+   over an agent's compact view too (statusbar.css, z-index 5) and the pane's frame drawn above. */
 body[data-layout="minimal"][data-pane-names="hover"] .pane > .pane-header {
   position: absolute;
   top: 6px;
   right: 8px;
-  z-index: 4;
+  z-index: 6;
   max-width: calc(100% - 16px);
   height: 28px;
   padding: 0 4px 0 10px;
