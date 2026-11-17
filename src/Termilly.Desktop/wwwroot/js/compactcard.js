@@ -152,13 +152,28 @@ function nextIsChoice(rows, from, last) {
  * @param {number} first
  */
 function questionAbove(rows, first) {
+  const near = paragraphsAbove(rows, first);
+  // Nothing between the choices and the prompt's start (a prompt drawn in a way this doesn't know): the nearest
+  // paragraph above that start, so a card never shows choices with nothing to say what they answer.
+  const all = near.all.length ? near.all : paragraphsAbove(rows, skipBlank(rows, near.stop)).all.slice(-1);
+  const question = all.find(p => p[p.length - 1].endsWith('?')) ?? all[all.length - 1] ?? [];
+  return { title: question.join(' '), context: all.filter(p => p !== question).flat().slice(-MAX_CONTEXT) };
+}
+
+/**
+ * The paragraphs above a row, up to the prompt's start: the rule (Claude Code) or gap of blank lines (Codex) that
+ * starts it, where what's above is the conversation; and the row it stopped at.
+ * @param {string[]} rows
+ * @param {number} first
+ */
+function paragraphsAbove(rows, first) {
   /** @type {string[][]} */
   const paragraphs = [[]];
   let blanks = 0;
   let count = 0;
-  for (let i = first - 1; i >= 0 && count < MAX_CONTEXT + 1; i--) {
+  let i = first - 1;
+  for (; i >= 0 && count < MAX_CONTEXT + 1; i--) {
     const row = rows[i].trim();
-    // The prompt starts below a rule (Claude Code) or a gap of blank lines (Codex): what's above is the conversation.
     blanks = row ? 0 : blanks + 1;
     if (RULE.test(row) || blanks === GAP) break;
     // A blank line or a dashed rule (around a command) ends a paragraph.
@@ -169,9 +184,18 @@ function questionAbove(rows, first) {
       count++;
     }
   }
-  const all = paragraphs.filter(p => p.length);
-  const question = all.find(p => p[p.length - 1].endsWith('?')) ?? all[all.length - 1] ?? [];
-  return { title: question.join(' '), context: all.filter(p => p !== question).flat().slice(-MAX_CONTEXT) };
+  return { all: paragraphs.filter(p => p.length), stop: Math.max(0, i) };
+}
+
+/**
+ * The row just below the first line above `from` with words in it (blank lines and rules skipped), for reading on.
+ * @param {string[]} rows
+ * @param {number} from
+ */
+function skipBlank(rows, from) {
+  let i = from;
+  while (i > 0 && (!rows[i - 1].trim() || RULE.test(rows[i - 1].trim()))) i--;
+  return i;
 }
 
 /**
@@ -196,7 +220,7 @@ export function questionMenu(question) {
  * @param {string} openClass the class of the button that shows the terminal
  */
 export function cardHtml(menu, name, openClass) {
-  if (menu) return menuCardHtml(menu, openClass);
+  if (menu) return menuCardHtml(menu, name, openClass);
   return `<div class="cv-card"><div class="cv-question">${name} needs you</div><div class="cv-choices"><button class="${openClass}">Open terminal</button></div></div>`;
 }
 
@@ -216,15 +240,16 @@ export function menuKey(menu) {
 
 /**
  * @param {Menu} menu
+ * @param {string} name the agent's short name, escaped
  * @param {string} openClass
  */
-function menuCardHtml(menu, openClass) {
+function menuCardHtml(menu, name, openClass) {
   const open = `<button class="${openClass}">Open terminal</button>`;
   // A plan's blank lines keep its paragraphs apart.
   const context = menu.context.map(line => (line ? `<div>${escapeHtml(line)}</div>` : '<br>')).join('');
   // A menu that can't be told from another (its start is off a short screen) gets no buttons: the terminal answers it.
   const choices = menuKey(menu) ? menu.choices.map(c => `<button class="cv-choice${c.picked ? ' picked' : ''}" data-choice="${c.key}" title="${escapeHtml(c.detail || c.label)}">`
     + `<kbd>${c.key}</kbd>${escapeHtml(c.label)}${c.detail ? `<small>${escapeHtml(c.detail)}</small>` : ''}</button>`).join('') : '';
-  return `<div class="cv-card" data-menu="${menuKey(menu)}"><div class="cv-question">${escapeHtml(menu.title)}</div>`
+  return `<div class="cv-card" data-menu="${menuKey(menu)}"><div class="cv-question">${menu.title ? escapeHtml(menu.title) : `${name} asks`}</div>`
     + `${context ? `<div class="cv-context">${context}</div>` : ''}<div class="cv-choices">${choices}${open}</div></div>`;
 }

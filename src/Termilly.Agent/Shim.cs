@@ -125,10 +125,13 @@ internal static class Shim
             args.Add(ConfigOption);
             args.Add($"hooks.{name}=[{{{matcher}hooks=[{{type='command',command={Toml(command)},timeout={CodexHookTimeoutSeconds}}}]}}]");
         }
-        // Codex passes MCP servers only the variables named: these say which terminal and Termilly window it's in.
+        // Codex passes MCP servers only the variables named: these say which terminal and Termilly window it's in. Its tools
+        // are approved, as Claude Code uses them: they guard themselves (typing into a terminal or running something works
+        // only when Termilly's Settings allow it), so Codex asking first on each was a question with no new answer.
         args.Add(ConfigOption);
         args.Add($"mcp_servers.{CodexMcpServer}={{command={Toml(cliExe)},args=['{AgentCommands.Mcp}']," +
-            $"env_vars=['{Protocol.PaneVariable}','{Protocol.PipeVariable}'],tool_timeout_sec={CodexToolTimeoutSeconds}}}");
+            $"env_vars=['{Protocol.PaneVariable}','{Protocol.PipeVariable}'],tool_timeout_sec={CodexToolTimeoutSeconds}," +
+            $"default_tools_approval_mode='{CodexApproveTools}'}}");
         // Inline, as Claude Code is, rather than on the alternate screen: there Codex takes the mouse, so Termilly's
         // right-click menu, its file and web links, selecting and the scrollback (searching it, history) didn't work.
         // A -c of the user's own after these still wins.
@@ -136,6 +139,9 @@ internal static class Shim
         args.Add($"{CodexAltScreen}='{CodexAltScreenNever}'");
         return args;
     }
+
+    /// <summary>Codex's MCP approval mode (auto, prompt, writes, approve) that runs a server's tools without asking.</summary>
+    private const string CodexApproveTools = "approve";
 
     /// <summary>Codex's setting for the alternate screen (auto, always, never), and the value that keeps it inline.</summary>
     private const string CodexAltScreen = "tui.alternate_screen";

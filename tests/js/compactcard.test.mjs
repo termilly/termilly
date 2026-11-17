@@ -142,3 +142,18 @@ test('blank lines inside a command do not end the prompt where a rule starts it'
   const prompt = command => ['─'.repeat(20), 'Bash command', command, '', '', 'echo done', '', 'Do you want to proceed?', '> 1. Yes', '  2. No'];
   assert.notEqual(menuKey(readMenu(prompt('rm -rf a'))), menuKey(readMenu(prompt('rm -rf b'))));
 });
+
+test('a prompt with its question above a gap still says what it asks: the nearest paragraph above', () => {
+  const menu = readMenu([
+    '• Checking the To do list.',
+    ' ',
+    '  Allow the termilly MCP server to run tool "list_tasks"?',
+    ' ',
+    ' ',
+    '› 1. Allow',
+    '  2. Allow for this session',
+    '  3. Cancel',
+  ]);
+  assert.equal(menu?.title, 'Allow the termilly MCP server to run tool "list_tasks"?');
+  assert.deepEqual(menu?.choices.map(c => c.label), ['Allow', 'Allow for this session', 'Cancel']);
+});

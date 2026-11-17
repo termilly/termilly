@@ -20,6 +20,7 @@ import { linesHtml } from './compactlines.js';
 import { lineLinks, clickLink, wireCtrl } from './compactlinks.js';
 import { readMenu, questionMenu, cardHtml, menuKey } from './compactcard.js';
 import { wireInput } from './compactinput.js';
+import { cardKey } from './compactcardkeys.js';
 import { wireViewMenu } from './termclipboard.js';
 import { liveRow, screenRows } from './compactdrawer.js';
 
@@ -283,6 +284,7 @@ function build(tab) {
     passKey: data => passKey(tab, data),
     agent: () => runningAgent(tab),
     folder: () => tab.agent?.folder ?? tab.cwd ?? tab.lastCwd ?? null,
+    cardKey: e => cardKey(el, e, (key, menu) => pick(tab, key, menu)),
   });
   input.addEventListener('input', () => fitInput(input));
   find(el, '.cv-send').addEventListener('click', () => submit(tab, input));

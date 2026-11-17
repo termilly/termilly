@@ -50,7 +50,8 @@ const COMMANDS = Object.freeze({
  * @typedef {{ value: string, label: string, detail: string }} Pick
  * @typedef {{ tab: Tab, input: HTMLTextAreaElement, list: HTMLElement, picks: Pick[], at: number,
  *   word: { kind: string, start: number } | null, timer: number, asked: number }} InputState
- * @typedef {{ submit: () => void, passKey: (data: string) => void, agent: () => string | null, folder: () => string | null }} InputHooks
+ * @typedef {{ submit: () => void, passKey: (data: string) => void, agent: () => string | null, folder: () => string | null,
+ *   cardKey: (e: KeyboardEvent) => boolean }} InputHooks
  */
 
 /**
@@ -88,6 +89,11 @@ function onKey(s, e, hooks) {
     return;
   }
   const empty = !s.input.value;
+  // A question waiting on its card takes the keys of an empty box: its choices, by arrows, Enter or number.
+  if (empty && hooks.cardKey(e)) {
+    e.preventDefault();
+    return;
+  }
   if (e.key === 'Tab' && e.shiftKey && empty) {
     e.preventDefault();
     hooks.passKey(BACK_TAB);

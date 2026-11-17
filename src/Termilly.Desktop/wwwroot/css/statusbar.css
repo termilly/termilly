@@ -153,6 +153,9 @@ button.sb-item:hover, button.sb-item.open { background: var(--hover); color: var
 .cv-choice, .cv-card .cv-open-terminal { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-height: 26px; padding: 3px 10px; border: 1px solid var(--border-strong); border-radius: 6px; color: var(--text); font-size: .92em; text-align: left; }
 .cv-choice:hover, .cv-card .cv-open-terminal:hover { background: var(--hover); }
 .cv-choice.picked { border-color: var(--accent); }
+/* The choice the arrow keys are on (compactcardkeys.js): it alone is lit, over the agent's own pointer. */
+.cv-choice.keyed { border-color: var(--accent); background: var(--accent-fill); }
+.cv-choices:has(.keyed) .cv-choice.picked:not(.keyed) { border-color: var(--border-strong); }
 .cv-choice kbd { color: var(--muted); font: .91em var(--cv-font); }
 .cv-choice small { color: var(--faint); font-size: .91em; }
 .cv-card .cv-open-terminal { border-color: transparent; color: var(--muted); }
