@@ -56,15 +56,19 @@ export function filesIn(app, section) {
  * @param {object} [options] the harness's click options (shift, button)
  */
 export async function clickText(app, selector, text, options) {
-  const marked = await app.eval((t, sel, want) => {
-    const el = t.$$(sel).find(e => e.textContent.includes(want));
+  // Found and clicked in one go: the list can be drawn again between two steps.
+  const clicked = await app.eval((t, sel, want, how) => {
+    const el = t.$(sel).find(e => e.textContent.includes(want));
     if (!el) return false;
     el.setAttribute('data-e2e-target', '');
+    try {
+      t.click('[data-e2e-target]', how);
+    } finally {
+      el.removeAttribute('data-e2e-target');
+    }
     return true;
-  }, selector, text);
-  if (!marked) throw new Error(`No ${selector} with "${text}"`);
-  await app.click('[data-e2e-target]', options);
-  await app.eval(t => t.$$('[data-e2e-target]').forEach(e => e.removeAttribute('data-e2e-target')));
+  }, selector, text, options ?? {});
+  if (!clicked) throw new Error(`No ${selector} with "${text}"`);
 }
 
 /**
@@ -74,20 +78,23 @@ export async function clickText(app, selector, text, options) {
  * @param {string} name
  */
 export async function openFile(app, section, name) {
-  const marked = await app.eval((t, sec, file) => {
+  const clicked = await app.eval((t, sec, file) => {
     let current = null;
-    for (const row of t.$$('.gw-list > .cw-row')) {
+    for (const row of t.$('.gw-list > .cw-row')) {
       if (row.classList.contains('gw-section')) current = row.querySelector('.cw-name')?.textContent;
       else if (current === sec && row.querySelector('.cw-name')?.textContent === file) {
         row.setAttribute('data-e2e-target', '');
+        try {
+          t.click('[data-e2e-target]');
+        } finally {
+          row.removeAttribute('data-e2e-target');
+        }
         return true;
       }
     }
     return false;
   }, section, name);
-  if (!marked) throw new Error(`${name} isn't under ${section}`);
-  await app.click('[data-e2e-target]');
-  await app.eval(t => t.$$('[data-e2e-target]').forEach(e => e.removeAttribute('data-e2e-target')));
+  if (!clicked) throw new Error(`${name} isn't under ${section}`);
   await app.waitFor('.gw-diff-path', { text: name });
 }
 
@@ -112,14 +119,15 @@ export async function confirm(app) {
  */
 export async function noteAction(app, text) {
   await app.waitFor('.toast', { text });
-  const marked = await app.eval((t, want) => {
-    const toast = t.$$('.toast').find(e => e.textContent.includes(want));
+  const pressed = await app.eval((t, want) => {
+    const toast = t.$('.toast').find(e => e.textContent.includes(want));
     const button = toast?.querySelector('[data-toast-action]');
-    button?.setAttribute('data-e2e-target', '');
-    return !!button;
+    if (!button) return false;
+    button.setAttribute('data-e2e-target', '');
+    t.click('[data-e2e-target]');
+    return true;
   }, text);
-  if (!marked) throw new Error(`The note "${text}" has no button`);
-  await app.click('[data-e2e-target]');
+  if (!pressed) throw new Error(`The note "${text}" has no button`);
 }
 
 /** Switches the Git window to a tab by its name (Changes, History, Branches, Local history, Issues). */
