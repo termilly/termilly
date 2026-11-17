@@ -1,3 +1,4 @@
+import { spawn } from 'node:child_process';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, writeFile, rm, access } from 'node:fs/promises';
@@ -65,5 +66,37 @@ test('fake agents use configured output and record argv without shell interpolat
     assert.equal(call.agent, 'claude');
     assert.deepEqual(call.args, args.slice(1));
     assert.equal(path.resolve(call.cwd), path.resolve(folder));
+  } finally { await rm(folder, { recursive: true, force: true }); }
+});
+
+
+test('fake prompt draws lines, logs parsed stdin keys and exits on a pick or timeout', async () => {
+  const folder = await mkdtemp(path.join(tmpdir(), 'termilly-prompt-test-'));
+  try {
+    const scripts = path.join(folder, 'agents.json'), log = path.join(folder, 'keys.jsonl');
+    const lines = ['', '', 'Run command?', '› 1. Yes', '  2. No'];
+    for (const pick of [true, false]) {
+      await writeFile(log, '');
+      await writeFile(scripts, JSON.stringify({ codex: { stdout: '', prompt: { lines, timeoutMs: pick ? 5000 : 30 } } }));
+      const child = spawn(process.execPath, [path.join(fakes, 'agent.mjs'), 'codex'], {
+        env: { ...process.env, E2E_AGENTS: scripts, E2E_AGENT_KEYS_LOG: log }, stdio: ['pipe', 'pipe', 'pipe'],
+      });
+      let output = '', sent = false, stderr = '';
+      child.stderr.on('data', chunk => { stderr += chunk; });
+      child.stdout.on('data', chunk => {
+        output += chunk;
+        if (pick && !sent && output.includes('2. No')) { sent = true; child.stdin.write('\x1b[B2'); }
+      });
+      try {
+        const code = await new Promise((resolve, reject) => { child.once('error', reject); child.once('close', resolve); });
+        assert.equal(code, 0, stderr);
+        assert.equal(output, '\x1b[2J\x1b[H' + lines.join('\r\n') + '\r\n');
+        const events = (await readFile(log, 'utf8')).trim().split('\n').map(JSON.parse);
+        assert.equal(events[0].event, 'ready');
+        assert.deepEqual(events.filter(e => e.event === 'key').map(e => e.sequence), pick ? ['\x1b[B', '2'] : []);
+        assert.equal(events.at(-1).reason, pick ? 'pick' : 'timeout');
+        assert.equal(events.at(-1).pick, pick ? '2' : null);
+      } finally { child.kill(); }
+    }
   } finally { await rm(folder, { recursive: true, force: true }); }
 });
