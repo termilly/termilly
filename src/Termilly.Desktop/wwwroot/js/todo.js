@@ -363,7 +363,7 @@ export const findIssueTask = (repo, number) =>
  * @param {(task: TodoTask) => boolean} test
  * @returns {{ ref: ListRef, task: TodoTask } | null}
  */
-function findTaskWhere(test) {
+export function findTaskWhere(test) {
   for (const ref of allLists()) {
     const task = tasksOf(ref).find(test);
     if (task) return { ref, task };
