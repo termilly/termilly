@@ -124,7 +124,7 @@ export function issuesEmptyText() {
 export function issueBarHtml() {
   const states = STATE_CHOICES.map(([value, label]) =>
     `<button data-issue="${ISSUE_ACT.state}" data-state="${value}" class="${issues.state === value ? 'on' : ''}" aria-pressed="${issues.state === value}">${label}</button>`).join('');
-  const range = issues.list.length ? `${issues.first.toLocaleString()}–${lastShown().toLocaleString()} of ` : '';
+  const range = issues.pages > 1 ? `${issues.first.toLocaleString()}–${lastShown().toLocaleString()} of ` : '';
   const count = issues.loaded && !issues.error ? `${range}${issues.total.toLocaleString()} ${COUNT_WORD[issues.state]}` : '';
   return `<span class="seg gw-issue-states">${states}</span><span class="gw-issue-count" title="Newest first">${count}</span>`;
 }

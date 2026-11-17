@@ -81,7 +81,7 @@ const step = (name, run) => test(name, async () => {
 /** The numbers of the issues listed, in order. */
 const listed = () => app.eval((t, s) => t.$$(s).map(el => Number(/#(\d+)/.exec(el.textContent)?.[1])), ROW);
 /** The pager's buttons, in order. */
-const pager = () => app.eval(t => t.$('.gw-issue-pager .gw-page').map(b => b.textContent));
+const pager = () => app.eval(t => t.$$('.gw-issue-pager .gw-page').map(b => b.textContent));
 /** The pages gh was asked for, with the query's state and words. */
 const asked = async () => (await app.ghCalls()).filter(a => a[3] === 'search/issues').map(a => `${a[5]} ${a[13]}`);
 
