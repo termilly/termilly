@@ -166,6 +166,31 @@ step('on hover, the bar shows near a terminal\'s top only, and typing hides it',
   assert.equal(await app.eval(() => globalThis.document.querySelector('.pane.bar-near')), null);
 });
 
+step('on hover, an agent terminal in its compact view shows its bar over the view', async () => {
+  // An agent's terminal in the compact view: the view is drawn over the terminal, and the bar must be over both.
+  await app.eval(async t => {
+    const { state } = await t.import('store.js');
+    const { openViewMenu } = await t.import('compact.js');
+    const tab = [...state.tabs.values()].find(x => x.view?.el.closest('.ws-layer.active'));
+    tab.compact = { lines: [{ kind: 'prompt', text: 'hello' }], session: null, el: null, frame: 0, frameWin: null, sending: Promise.resolve(), writes: null };
+    tab.agent = { source: 'hooks', kind: 'claude', state: 'idle' };
+    openViewMenu(tab, tab.view.header.querySelector('.menu-btn'));
+    await t.waitFor('.menu-row');
+    [...t.$$('.menu-row')].find(r => r.textContent.includes('Compact')).click();
+    await t.waitFor('.ws-layer.active .compact-view:not([hidden])');
+  });
+  const pane = await app.eval(() => { const r = globalThis.document.querySelector('.ws-layer.active .pane.compact-on').getBoundingClientRect(); return { x: r.left + r.width / 2, top: r.top }; });
+  await pointTo(pane.x, pane.top + 12);
+  await pause(300);
+  const onTop = await app.eval(() => {
+    const bar = globalThis.document.querySelector('.ws-layer.active .pane.compact-on > .pane-header').getBoundingClientRect();
+    const hit = globalThis.document.elementFromPoint(bar.left + bar.width / 2, bar.top + bar.height / 2);
+    return !!hit?.closest('.pane-header');
+  });
+  assert.equal(onTop, true, 'the bar is the topmost thing where it shows');
+  await app.screenshot('06b-hover-bar-compact');
+});
+
 step('the dock moves to another edge from its menu, and stays shown with hiding off', async () => {
   await app.eval(() => globalThis.document.getElementById('dock').dispatchEvent(new globalThis.MouseEvent('contextmenu', { clientX: 600, clientY: 60, bubbles: true })));
   await app.waitFor('.context-menu .menu-row');
