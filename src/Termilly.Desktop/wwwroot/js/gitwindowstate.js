@@ -29,6 +29,7 @@ import { request } from './host.js';
  * @typedef {{ kind: 'section', key: string, label: string, count: number, fixed?: boolean } | FileItem
  *   | { kind: 'commit', commit: Commit } | { kind: 'branch', branch: Branch } | { kind: 'more' }
  *   | import('./gitsearch.js').SearchItem | import('./gitagent.js').AgentItem | import('./gitissues.js').IssueItem
+ *   | import('./gitissues.js').IssueMoreItem
  *   | import('./gitlocal.js').LocalItem | { kind: 'worktree', worktree: import('./gitcleanup.js').Worktree }} ListItem
  */
 /**
@@ -110,6 +111,10 @@ export const ui = {
   showAgentTab: () => {},
   /** @type {() => Promise<void>} */
   loadHistory: later,
+  /** Issues' next page, onto the list. @type {() => Promise<void>} */
+  loadMoreIssues: later,
+  /** Issues from their first page again: another state, or other search words. @type {() => Promise<void>} */
+  reloadIssues: later,
   /** Closes the window (its Close, Escape, its window's X). @type {() => void} */
   close: () => {},
   /** What closing leaves: also when the window went without asking. @type {() => void} */

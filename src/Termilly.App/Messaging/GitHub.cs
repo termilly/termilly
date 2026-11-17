@@ -27,7 +27,7 @@ internal static partial class FromPage
         public static string Type => "github:status";
     }
 
-    internal sealed record GitHubIssues(string? RequestId = null, string? Root = null, string State = "open", string? Search = null) : IPageMessage
+    internal sealed record GitHubIssues(string? RequestId = null, string? Root = null, string State = "open", string? Search = null, int Page = 1) : IPageMessage
     {
         public static string Type => "github:issues";
     }

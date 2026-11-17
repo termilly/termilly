@@ -16,23 +16,52 @@ public sealed class GitHubTests
     }
 
     [Fact]
-    public void Issue_queries_are_bounded_and_sorted()
+    public void Issues_are_asked_a_page_at_a_time_newest_first_in_this_repository_only()
     {
-        Assert.Equal(["issue", "list", "--state", "all", "--limit", "100", "--search", "bug sort:updated-desc", "--json",
-            "number,title,state,labels,author,updatedAt,comments,url"], GitHub.IssuesArguments("all", "bug"));
-        Assert.Throws<ArgumentException>(() => GitHub.IssuesArguments("invalid", null));
+        Assert.Equal(["api", "-X", "GET", "search/issues", "-f", "q=repo:a/b is:issue is:open bug label:ui 12", "-f", "sort=created",
+            "-f", "order=desc", "-f", "per_page=50", "-f", "page=3"], GitHubIssueSearch.Arguments("a/b", "open", "bug repo:x/y -is:pr label:ui #12", 3));
+        Assert.Equal("q=repo:a/b is:issue", GitHubIssueSearch.Arguments("a/b", "all", "  ", 1)[5]);
+        Assert.Throws<ArgumentException>(() => GitHubIssueSearch.Arguments("a/b", "invalid", null, 1));
+        Assert.Throws<ArgumentException>(() => GitHubIssueSearch.Arguments("a/b", "open", null, 0));
+        Assert.Throws<ArgumentException>(() => GitHubIssueSearch.Arguments("a/b", "open", null, 21)); // past GitHub's first thousand
         Assert.Throws<ArgumentException>(() => GitHub.IssueActArguments(1, "delete", null));
         Assert.Throws<ArgumentException>(() => GitHub.IssueActArguments(0, "close", null));
     }
 
-    [Fact]
-    public void Lists_flatten_authors_and_count_comments()
+    [Theory]
+    [InlineData(50, 120, 1, true)]
+    [InlineData(50, 120, 3, false)] // a page past the count
+    [InlineData(20, 120, 1, false)] // a short page is the last
+    [InlineData(50, 5000, 20, false)] // GitHub answers no further than a thousand
+    public void A_page_says_whether_another_follows(int rows, int total, int page, bool more)
     {
-        var issues = GitHub.ParseIssues("""[{"number":7,"title":"Fix","state":"OPEN","author":{"login":"a"},"labels":[{"name":"bug","color":"ff0000"}],"comments":[{},{}],"updatedAt":"today","url":"https://github.com/a/b/issues/7"}]""");
-        Assert.Equal("a", issues[0]!["author"].AsText());
-        Assert.Equal("open", issues[0]!["state"].AsText());
-        Assert.Equal(2, issues[0]!["comments"].AsInt());
+        var items = string.Join(",", Enumerable.Range(1, rows).Select(n => $$"""{"number":{{n}},"title":"T","state":"open"}"""));
+        var list = GitHubIssueSearch.Parse($$"""{"total_count":{{total}},"items":[{{items}}]}""", page);
+        Assert.Equal(more, list["more"].AsBool());
+        Assert.Equal(total, list["total"].AsInt());
+        Assert.Equal(rows, list["issues"]!.AsArray().Count);
     }
+
+    [Fact]
+    public void Rows_flatten_the_author_and_take_the_list_names()
+    {
+        var list = GitHubIssueSearch.Parse("""{"total_count":1,"items":[{"number":7,"title":"Fix","state":"OPEN","user":{"login":"a"},"labels":[{"name":"bug","color":"ff0000","id":3}],"comments":2,"created_at":"2026-11-01T10:00:00Z","updated_at":"2026-11-02T10:00:00Z","html_url":"https://github.com/a/b/issues/7","body":"long"}]}""", 1);
+        var issue = list["issues"]![0]!;
+        Assert.Equal("a", issue["author"].AsText());
+        Assert.Equal("open", issue["state"].AsText());
+        Assert.Equal(2, issue["comments"].AsInt());
+        Assert.Equal("2026-11-01T10:00:00Z", issue["createdAt"].AsText());
+        Assert.Equal("https://github.com/a/b/issues/7", issue["url"].AsText());
+        Assert.Equal("""[{"name":"bug","color":"ff0000"}]""", issue["labels"]!.ToJsonString());
+        Assert.Null(issue["body"]); // the list doesn't carry what only the issue shows
+    }
+
+    [Theory]
+    [InlineData("https://github.com/openclaw/openclaw.git", "openclaw/openclaw")]
+    [InlineData("git@github.com:a/b", "a/b")]
+    [InlineData("ssh://git@github.com/a/b.c.git/", "a/b.c")]
+    [InlineData("https://gitlab.com/a/b.git", null)]
+    public void The_repository_is_read_from_its_origin(string origin, string? repo) => Assert.Equal(repo, GitHubOutput.RepoName(origin));
 
     [Fact]
     public void Details_flatten_comment_authors_and_allow_deleted_users()

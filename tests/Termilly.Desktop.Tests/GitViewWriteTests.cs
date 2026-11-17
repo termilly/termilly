@@ -148,9 +148,10 @@ public sealed class GitViewWriteTests : IDisposable
     {
         Git("remote", "set-url", "origin", "https://github.com/a/b.git");
         var runner = new RecordingRunner(request => new ProcessResult(0,
-            Encoding.UTF8.GetBytes(request.Arguments.Contains("create") ? "https://github.com/a/b/pull/7\n" : "[]"), "", false));
+            Encoding.UTF8.GetBytes(request.Arguments.Contains("create") ? "https://github.com/a/b/pull/7\n" : """{"total_count":0,"items":[]}"""), "", false));
         var github = new GitHub(runner, TestServices.GitRunner);
-        Assert.Empty(github.Issues(Repo, "open", null).AsArray());
+        Assert.Empty(github.Issues(Repo, "open", null, 1)["issues"]!.AsArray());
+        Assert.Contains("q=repo:a/b is:issue is:open", runner.Requests[0].Arguments);
         Assert.Equal(TimeSpan.FromSeconds(30), runner.Requests[0].Timeout);
         Assert.Equal("https://github.com/a/b.git", runner.Requests[0].Environment!["GH_REPO"]);
         var pr = github.PrCreate(Repo, new FromPage.GitHubPrCreate(Base: "main", Head: "fix", Title: "Fix"));

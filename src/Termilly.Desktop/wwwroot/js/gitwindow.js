@@ -25,7 +25,8 @@ import { ITEM, found, searching, clearSearch, runSearch } from './gitsearch.js';
 import { agent, startAgent, agentCount, showAgentFile, showFirstAgentFile, keepAgentFile } from './gitagent.js';
 import { samePath } from './changetree.js';
 import { gitHubOf, forgetGitHub, askGitHub } from './github.js';
-import { issues, resetIssues, forgetIssue } from './gitissues.js';
+import { issues, resetIssues } from './gitissues.js';
+import { forgetIssue } from './gitissueview.js';
 import { commitBoxHtml, wireCommitBox, followStaged, headActionsHtml, canOpenPullRequest } from './gitwrite.js';
 import { gw, ui, ask, repoNow, changeCount, GIT_TAB } from './gitwindowstate.js';
 import {

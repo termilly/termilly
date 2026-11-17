@@ -397,7 +397,7 @@ export const HOST = Object.freeze({
 /** @typedef {{ requestId?: string|null, remote?: string|null, root?: string|null, runId?: number, jobId?: number|null }} Page_githubFailedLog */
 /** @typedef {{ requestId?: string|null, root?: string|null, number?: number }} Page_githubIssue */
 /** @typedef {{ requestId?: string|null, root?: string|null, number?: number, action?: string|null, body?: string|null }} Page_githubIssueAct */
-/** @typedef {{ requestId?: string|null, root?: string|null, state?: string, search?: string|null }} Page_githubIssues */
+/** @typedef {{ requestId?: string|null, root?: string|null, state?: string, search?: string|null, page?: number }} Page_githubIssues */
 /** @typedef {{ requestId?: string|null, root?: string|null, base?: string|null, head?: string|null, title?: string|null, body?: string|null, draft?: boolean }} Page_githubPrCreate */
 /** @typedef {{ requestId?: string|null, root?: string|null, branch?: string|null }} Page_githubPrFor */
 /** @typedef {{ requestId?: string|null, remote?: string|null, root?: string|null, runId?: number }} Page_githubRerunFailed */

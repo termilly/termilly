@@ -17,7 +17,7 @@ const refreshAfterWrite = () => {
 /** What the write side works with. @returns {import('./gitwrite.js').WriteContext | null} */
 export const writeContext = () => (gw.repo ? { repo: gw.repo, ask, refresh: refreshAfterWrite, showGitError, github: gw.github } : null);
 
-/** What the Issues tab works with. @returns {import('./gitissues.js').IssueContext} */
+/** What the Issues tab works with. @returns {import('./github.js').IssueContext} */
 export const issueContext = () => ({
   root: repoNow().root, repo: gw.github?.repo ?? '', defaultBranch: gw.github?.defaultBranch ?? null,
   branch: gw.repo?.branch ?? null,

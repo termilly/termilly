@@ -17,13 +17,17 @@ const ISSUE = {
   url: 'https://github.com/acme/demo/issues/12', body: 'Signing in shows "Something went wrong".',
 };
 
+/** The issue as GitHub's search lists it. */
+const SEARCH_ROW = { number: 12, title: ISSUE.title, state: 'open', labels: ISSUE.labels, user: ISSUE.author, comments: 0,
+  created_at: ISSUE.createdAt, updated_at: ISSUE.updatedAt, html_url: ISSUE.url };
+
 /** What gh answers for the repository acme/demo, with one open issue and one failed run on HEAD. @param {string} head */
 function scenario(head) {
   return [
     { prefix: ['auth', 'token'], response: 'gho_fake' },
     { prefix: ['repo', 'view'], response: { json: { nameWithOwner: 'acme/demo', defaultBranchRef: { name: 'main' }, isPrivate: false } } },
     { prefix: ['api', 'user'], response: 'tester' },
-    { prefix: ['issue', 'list'], response: { json: [ISSUE] } },
+    { prefix: ['api', '-X', 'GET', 'search/issues'], response: { json: { total_count: 1, items: [SEARCH_ROW] } } },
     { prefix: ['issue', 'view', '12'], response: { json: ISSUE } },
     { prefix: ['issue', 'comment', '12'], response: '' },
     { prefix: ['pr', 'list'], response: { json: [] } },
@@ -82,7 +86,7 @@ step('the Issues tab lists the repository\'s issues, and one opens with its text
   await tab(app, 'Issues');
   await app.waitFor('.gw-list .cw-row', { text: ISSUE.title });
   await clickText(app, '.gw-list .cw-row', ISSUE.title);
-  await app.waitFor('.gh-body', { text: 'Something went wrong' });
+  await app.waitFor('.gh-md', { text: 'Something went wrong' });
 });
 
 step('a comment on the issue goes to GitHub through gh', async () => {

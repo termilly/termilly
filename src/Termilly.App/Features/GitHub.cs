@@ -10,7 +10,7 @@ internal sealed class GitHubHandler(PageChannel page, IGitHub github) : IMessage
     {
         RegisterChecks(router);
         router.On<FromPage.GitHubStatus>(m => Answer(m.RequestId, () => github.Status(m.Root ?? "")));
-        router.On<FromPage.GitHubIssues>(m => Answer(m.RequestId, () => github.Issues(m.Root ?? "", m.State, m.Search)));
+        router.On<FromPage.GitHubIssues>(m => Answer(m.RequestId, () => github.Issues(m.Root ?? "", m.State, m.Search, m.Page)));
         router.On<FromPage.GitHubIssue>(m => Answer(m.RequestId, () => github.Issue(m.Root ?? "", m.Number)));
         router.On<FromPage.GitHubIssueAct>(m => Answer(m.RequestId, () =>
         {

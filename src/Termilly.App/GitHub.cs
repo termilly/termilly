@@ -46,7 +46,8 @@ internal interface IGitHub
     GitHubFailedLog FailedLog(string root, long runId, long? jobId);
     void RerunFailed(string root, long runId);
     GitHubAvailability Status(string root);
-    JsonNode Issues(string root, string state, string? search);
+    /// <summary>A page (from 1) of the repository's issues, newest first: { total, more, issues }.</summary>
+    JsonNode Issues(string root, string state, string? search, int page);
     JsonNode Issue(string root, int number);
     void IssueAct(string root, int number, string? action, string? body);
     GitHubPullRequest? PrFor(string root, string? branch);
@@ -56,10 +57,8 @@ internal interface IGitHub
 internal sealed partial class GitHub(IProcessRunner runner, LocalGitRunner git) : IGitHub
 {
     internal const string Program = "gh";
-    private const string IssueFields = "number,title,state,labels,author,updatedAt,comments,url";
     private const string DetailFields = "number,title,state,body,labels,author,createdAt,url,comments";
     private const string PrFields = "number,url,state";
-    private const int MaxIssues = 100;
     private static readonly TimeSpan ReadTimeout = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan CreateTimeout = TimeSpan.FromSeconds(60);
 
@@ -118,8 +117,13 @@ internal sealed partial class GitHub(IProcessRunner runner, LocalGitRunner git) 
         }
     }
 
-    public JsonNode Issues(string root, string state, string? search) =>
-        ParseIssues(Checked(git.CheckRoot(root), IssuesArguments(state, search)));
+    public JsonNode Issues(string root, string state, string? search, int page)
+    {
+        root = git.CheckRoot(root);
+        var origin = GitHubOrigin(root);
+        var repo = GitHubOutput.RepoName(origin) ?? throw new ArgumentException("This repository's origin doesn't name a GitHub repository.");
+        return GitHubIssueSearch.Parse(Checked(root, origin, GitHubIssueSearch.Arguments(repo, state, search, page), null), page);
+    }
 
     public JsonNode Issue(string root, int number) =>
         ParseIssue(Checked(git.CheckRoot(root), [GitHubWords.Issue, GitHubWords.View, Number(number), GitHubWords.Json, DetailFields]));
@@ -139,16 +143,6 @@ internal sealed partial class GitHub(IProcessRunner runner, LocalGitRunner git) 
         var pr = GitHubOutput.ParseAddress(output, pullRequest: true)
             ?? throw new IOException("GitHub did not return a pull request address.");
         return new(pr.Number, pr.Url);
-    }
-
-    internal static IReadOnlyList<string> IssuesArguments(string state, string? search)
-    {
-        if (!GitHubIssueStates.Values.Contains(state))
-        {
-            throw new ArgumentException("Unknown issue state.");
-        }
-        var query = string.IsNullOrWhiteSpace(search) ? "sort:updated-desc" : search + " sort:updated-desc";
-        return [GitHubWords.Issue, GitHubWords.List, GitHubWords.StateFlag, state, GitHubWords.Limit, MaxIssues.ToString(CultureInfo.InvariantCulture), GitHubWords.Search, query, GitHubWords.Json, IssueFields];
     }
 
     internal static IReadOnlyList<string> IssueActArguments(int number, string? action, string? body)
@@ -172,24 +166,14 @@ internal sealed partial class GitHub(IProcessRunner runner, LocalGitRunner git) 
         return args;
     }
 
-    internal static JsonNode ParseIssues(string json)
-    {
-        var issues = Parse(json)!.AsArray();
-        foreach (var issue in issues)
-        {
-            NormalizeIssue(issue!, false);
-        }
-        return issues;
-    }
-
     internal static JsonNode ParseIssue(string json)
     {
         var issue = Parse(json)!;
-        NormalizeIssue(issue, true);
+        NormalizeIssue(issue);
         return issue;
     }
 
-    private static void NormalizeIssue(JsonNode? issue, bool detail)
+    private static void NormalizeIssue(JsonNode? issue)
     {
         if (issue is not JsonObject)
         {
@@ -201,17 +185,10 @@ internal sealed partial class GitHub(IProcessRunner runner, LocalGitRunner git) 
         }
         issue[GitHubWords.Author] = issue[GitHubWords.Author]?[GitHubWords.Login].AsText() ?? "";
         issue[GitHubWords.State] = (issue[GitHubWords.State].AsText() ?? throw new JsonException("GitHub returned no issue state.")).ToLowerInvariant();
-        if (detail)
+        foreach (var comment in Comments(issue))
         {
-            foreach (var comment in Comments(issue))
-            {
-                KeepFields(comment, [GitHubWords.Author, GitHubWords.BodyField, GitHubWords.CreatedAt]);
-                comment![GitHubWords.Author] = comment[GitHubWords.Author]?[GitHubWords.Login].AsText() ?? "";
-            }
-        }
-        else
-        {
-            issue[GitHubWords.Comments] = Comments(issue).Count;
+            KeepFields(comment, [GitHubWords.Author, GitHubWords.BodyField, GitHubWords.CreatedAt]);
+            comment![GitHubWords.Author] = comment[GitHubWords.Author]?[GitHubWords.Login].AsText() ?? "";
         }
     }
 
@@ -238,13 +215,17 @@ internal sealed partial class GitHub(IProcessRunner runner, LocalGitRunner git) 
     private ProcessResult Run(string root, IReadOnlyList<string> args, TimeSpan? timeout = null) =>
         runner.Run(new ProcessRequest(Program, args) { WorkingDirectory = root, Timeout = timeout ?? ReadTimeout });
 
-    private string Checked(string root, IReadOnlyList<string> args, TimeSpan? timeout = null)
+    private string Checked(string root, IReadOnlyList<string> args, TimeSpan? timeout = null) => Checked(root, GitHubOrigin(root), args, timeout);
+
+    /// <summary>The repository's origin, which gh is pointed at; only one on GitHub.</summary>
+    private string GitHubOrigin(string root)
     {
         var origin = GitView.Text(git, root, GitCommands.Remote, GitCommands.Options.GetUrl, GitCommands.Origin).Trim();
-        if (!GitHubOutput.IsGitHubRemote(origin))
-        {
-            throw new ArgumentException("This repository's origin is not on GitHub.");
-        }
+        return GitHubOutput.IsGitHubRemote(origin) ? origin : throw new ArgumentException("This repository's origin is not on GitHub.");
+    }
+
+    private string Checked(string root, string origin, IReadOnlyList<string> args, TimeSpan? timeout)
+    {
         var result = runner.Run(new ProcessRequest(Program, args)
         {
             WorkingDirectory = root, Timeout = timeout ?? ReadTimeout,

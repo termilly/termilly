@@ -9,7 +9,8 @@ import {
 } from './gitsearch.js';
 import { AGENT_ITEM, agent, agentItems, agentRowHtml, agentEmptyText, toggleFolder, showAgentFile } from './gitagent.js';
 import { samePath } from './changetree.js';
-import { ISSUE_ITEM, issueItems, issuesEmptyText, issueRowHtml, showIssue } from './gitissues.js';
+import { ISSUE_ITEM, issueItems, issuesEmptyText, issueRowHtml, issueMoreHtml } from './gitissues.js';
+import { showIssue } from './gitissueview.js';
 import { LOCAL_ITEM, localItems, localEmptyText, localRowHtml, snapshotHtml, backupHtml } from './gitlocal.js';
 import { WORKTREE_ITEM, worktreeRowHtml, worktreeHtml } from './gitcleanup.js';
 import { historyRowHtml } from './githistory.js';
@@ -149,6 +150,7 @@ function rowHtml(item, i) {
   }
   if (item.kind === WORKTREE_ITEM) return worktreeRowHtml(item.worktree, i, sel?.kind === WORKTREE_ITEM && sel.path === item.worktree.path);
   if (item.kind === ISSUE_ITEM.issue) return issueRowHtml(item, i, sel?.kind === ISSUE_ITEM.issue && sel.number === item.issue.number);
+  if (item.kind === ISSUE_ITEM.more) return issueMoreHtml(i);
   if (item.kind === ITEM.section) {
     const open = item.fixed || !gw.collapsedSections.has(item.key);
     return `<div class="cw-row gw-section${open ? ' open' : ''}" data-i="${i}"><span class="cw-chev">${item.fixed ? '' : CHEVRON}</span><span class="cw-name">${escapeHtml(item.label)}</span><span class="cw-count">${item.count}</span></div>`;
@@ -202,6 +204,7 @@ function listRow(item) {
     return renderList(), true;
   }
   if (item.kind === ITEM.more) return ui.loadHistory(), true;
+  if (item.kind === ISSUE_ITEM.more) return ui.loadMoreIssues(), true;
   if (item.kind === ITEM.showAll) {
     setView(item.view);
     gw.cursor = -1;

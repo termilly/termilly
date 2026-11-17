@@ -7,7 +7,8 @@ import { PAGE } from './protocol.js';
 import { escapeHtml } from './ui.js';
 import { targetOf } from './dom.js';
 import { history } from './githistory.js';
-import { ISSUE_ITEM, issues, loadIssues, cantLoadIssues, issueStatesHtml, stateClicked, forgetIssue, issueClicked } from './gitissues.js';
+import { ISSUE_ITEM, issues, loadIssues, loadMoreIssues, cantLoadIssues, issueBarHtml, stateClicked } from './gitissues.js';
+import { forgetIssue, issueClicked } from './gitissueview.js';
 import { whyNoGitHub } from './github.js';
 import { LOCAL_ITEM, local, loadLocal, localClicked } from './gitlocal.js';
 import { WORKTREE_ITEM, worktreeClicked, openPrune } from './gitcleanup.js';
@@ -75,13 +76,13 @@ historyBarEl.addEventListener('click', e => {
   reloadHistory();
 });
 
-// History loads its next page as its end comes near.
+// History and Issues load their next page as their end comes near.
 listEl.addEventListener('scroll', () => {
+  if (listEl.scrollTop + listEl.clientHeight <= listEl.scrollHeight - LOAD_MORE_PX) return;
+  if (gw.tab === GIT_TAB.issues) return void moreIssues();
   if (gw.tab !== GIT_TAB.history || gw.historyDone || gw.loadingMore) return;
-  if (listEl.scrollTop + listEl.clientHeight > listEl.scrollHeight - LOAD_MORE_PX) {
-    gw.loadingMore = true;
-    loadHistory().finally(() => { gw.loadingMore = false; });
-  }
+  gw.loadingMore = true;
+  loadHistory().finally(() => { gw.loadingMore = false; });
 });
 
 /** Branches, with the repository's worktrees. */
@@ -105,7 +106,7 @@ function reopen(is) {
 
 /** The Issues tab: the state filter over the list, the issues loaded, the one picked (or the first) shown. */
 export async function showIssuesTab() {
-  issueBarEl.innerHTML = issueStatesHtml();
+  issueBarEl.innerHTML = issueBarHtml();
   if (gw.github && !gw.github.available) {
     cantLoadIssues(whyNoGitHub(gw.github));
     return renderList();
@@ -115,6 +116,7 @@ export async function showIssuesTab() {
     if (!await loadIssues(issueContext())) return; // a newer loading draws instead
   }
   if (gw.tab !== GIT_TAB.issues || !isOpen()) return;
+  issueBarEl.innerHTML = issueBarHtml(); // with how many there are
   renderList();
   reopen(i => i.kind === ISSUE_ITEM.issue && i.issue.number === gw.selection?.number);
 }
@@ -138,15 +140,28 @@ function shownLocal() {
   return null;
 }
 
-// The Issues tab's state filter (the list again, in that state).
-issueBarEl.addEventListener('click', async e => {
-  if (!stateClicked(e) || !gw.repo) return;
-  issueBarEl.innerHTML = issueStatesHtml();
-  issues.loaded = false;
+/** Issues' next page, onto the list: its last row says it's loading meanwhile. */
+async function moreIssues() {
+  const loading = loadMoreIssues(issueContext());
+  renderList();
+  await loading;
+  if (gw.tab === GIT_TAB.issues && isOpen()) renderList();
+}
+
+/** Issues from their first page again, for another state or other search words. */
+async function reloadIssues() {
+  if (!gw.repo) return;
+  Object.assign(issues, { list: [], more: false, loaded: false });
   gw.selection = null;
-  forgetIssue(); // the issue on its way was the other state's
+  gw.cursor = -1;
+  forgetIssue(); // the issue on its way was the other list's
   showNothing();
   await showIssuesTab();
+}
+
+// The Issues tab's state filter (the list again, in that state).
+issueBarEl.addEventListener('click', e => {
+  if (stateClicked(e)) reloadIssues();
 });
 
 // The right side's buttons for a snapshot or backup, a worktree, and an issue (GitHub changed: the list and the issue again).
@@ -157,7 +172,10 @@ rightEl.addEventListener('click', e => {
   if (gw.tab !== GIT_TAB.issues || !gw.repo) return;
   issueClicked(e, async () => {
     await loadIssues(issueContext());
+    issueBarEl.innerHTML = issueBarHtml();
     renderList();
     reopen(i => i.kind === ISSUE_ITEM.issue && i.issue.number === gw.selection?.number);
   });
 });
+
+Object.assign(ui, { loadMoreIssues: moreIssues, reloadIssues });

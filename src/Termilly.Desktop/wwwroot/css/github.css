@@ -14,25 +14,72 @@
 .gw-commit-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .gw-commit-all { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; cursor: pointer; }
 
-/* ---- Issues ---- */
+/* ---- Issues (js/gitissues.js: the list; js/gitissueview.js: the one picked) ---- */
 
-.gw-issue-bar { flex: none; padding: 8px 10px 0; }
+.gw-issue-bar { display: flex; flex: none; align-items: center; gap: 10px; padding: 10px 12px 6px; }
 .gw-issue-bar[hidden] { display: none; }
-.gw-issue-states button { padding: 2px 10px; font-size: 12px; }
-.gw-issue-row .gw-subject { overflow: hidden; text-overflow: ellipsis; }
-.gh-num { flex: none; color: var(--ok); font: 11.5px var(--mono); }
-.gh-num.closed { color: var(--faint); }
-.gw-commit-subject .gh-num { color: var(--muted); font-size: 13px; }
-.gh-label { flex: none; max-width: 120px; overflow: hidden; padding: 0 6px; border-radius: 8px; background: color-mix(in srgb, var(--label, var(--muted)) 22%, transparent); color: var(--text); font-size: 10.5px; line-height: 16px; text-overflow: ellipsis; }
-.gh-state { padding: 0 8px; border-radius: 8px; background: color-mix(in srgb, var(--ok) 20%, transparent); color: var(--text-strong); font-size: 11px; line-height: 18px; text-transform: capitalize; }
-.gh-state[data-state="closed"] { background: var(--hover); color: var(--muted); }
-.gh-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; }
+.gw-issue-states button { padding: 3px 12px; font-size: 12px; }
+.gw-issue-count { margin-left: auto; color: var(--muted); font-size: 12px; white-space: nowrap; }
+.gh-label { flex: none; max-width: 160px; overflow: hidden; padding: 0 8px; border-radius: 10px; background: color-mix(in srgb, var(--label, var(--muted)) 22%, transparent); color: var(--text); font-size: 11px; line-height: 18px; text-overflow: ellipsis; white-space: nowrap; }
+
+/* A row: the state's icon, then the title over the labels and who opened it when; the comments to the right. */
+.gw-issue-row { align-items: flex-start; gap: 10px; height: auto; margin-bottom: 2px; padding: 10px 12px; white-space: normal; }
+.gh-state-icon { display: flex; flex: none; margin-top: 1px; color: var(--ok); }
+.gh-state-icon[data-state="closed"] { color: var(--muted); }
+.gh-row-text { display: flex; flex: 1; flex-direction: column; gap: 5px; min-width: 0; }
+.gh-row-title { display: -webkit-box; overflow: hidden; color: var(--text-strong); font-size: 13px; font-weight: 500; line-height: 1.4; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; }
+.gh-row-labels { display: flex; flex-wrap: wrap; gap: 4px; }
+.gh-row-meta { overflow: hidden; color: var(--muted); font-size: 11.5px; text-overflow: ellipsis; white-space: nowrap; }
+.gh-row-comments { display: flex; flex: none; align-items: center; gap: 4px; margin-top: 1px; color: var(--muted); font-size: 11.5px; }
+
+/* The issue picked: its head stays while its thread scrolls. */
+.gh-issue-head { flex: none; padding: 18px 22px 16px; border-bottom: 1px solid var(--border); }
+.gh-issue-title { color: var(--text-strong); font-size: 18px; font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
+.gh-issue-num { color: var(--muted); font-weight: 400; }
+.gh-issue-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 10px; color: var(--muted); font-size: 12.5px; }
+.gh-issue-sub b { color: var(--text); font-weight: 600; }
+.gh-state { display: inline-flex; align-items: center; gap: 5px; padding: 3px 12px 3px 9px; border-radius: 14px; background: var(--ok); color: var(--on-accent); font-size: 12.5px; font-weight: 600; }
+.gh-state[data-state="closed"] { background: var(--hover); color: var(--text); }
+.gh-labels { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.gh-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 14px; }
 .gh-linked { color: var(--muted); font-size: 12px; }
-.gh-thread { flex: 1; min-height: 0; padding: 4px 16px 16px; overflow: auto; }
-.gh-body { margin: 10px 0; color: var(--text); font: 12.5px/1.5 var(--sans, inherit); white-space: pre-wrap; overflow-wrap: anywhere; }
-.gh-comment { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); }
-.gh-comment-head { display: flex; gap: 8px; color: var(--muted); font-size: 12px; }
-.gh-comment-head b { color: var(--text-strong); font-weight: 600; }
+.gh-thread { display: flex; flex: 1; flex-direction: column; gap: 16px; min-height: 0; padding: 18px 22px 28px; overflow: auto; }
+
+/* A post: the issue's text or a comment, its author and time over what they wrote. */
+.gh-post { flex: none; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); }
+.gh-post-head { display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-bottom: 1px solid var(--border); border-radius: 8px 8px 0 0; background: var(--surface); color: var(--muted); font-size: 12.5px; }
+.gh-post-head b { color: var(--text-strong); font-weight: 600; }
+.gh-avatar { display: grid; flex: none; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: hsl(var(--hue) 45% 42%); color: #fff; font-size: 11px; font-weight: 600; }
+.gh-badge { margin-left: auto; padding: 0 8px; border: 1px solid var(--border); border-radius: 10px; font-size: 11px; line-height: 18px; }
+.gh-none { color: var(--muted); font-style: italic; }
+
+/* What was written, drawn as GitHub draws it (js/markdown.js). */
+.gh-md { padding: 14px 16px; color: var(--text); font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+.gh-md > :first-child { margin-top: 0; }
+.gh-md > :last-child { margin-bottom: 0; }
+.gh-md p, .gh-md ul, .gh-md ol, .gh-md blockquote, .gh-md .md-table, .gh-md .md-code { margin: 0 0 12px; }
+.gh-md h1, .gh-md h2, .gh-md h3, .gh-md h4, .gh-md h5, .gh-md h6 { margin: 18px 0 8px; color: var(--text-strong); font-weight: 600; line-height: 1.3; }
+.gh-md h1 { padding-bottom: 6px; border-bottom: 1px solid var(--border); font-size: 18px; }
+.gh-md h2 { padding-bottom: 5px; border-bottom: 1px solid var(--border); font-size: 16px; }
+.gh-md h3 { font-size: 14.5px; }
+.gh-md h4, .gh-md h5, .gh-md h6 { font-size: 13px; }
+.gh-md ul, .gh-md ol { padding-left: 24px; }
+.gh-md li + li, .gh-md li > ul, .gh-md li > ol { margin-top: 4px; }
+.gh-md li > ul, .gh-md li > ol { margin-bottom: 0; }
+.gh-md .md-task { list-style: none; }
+.gh-md .md-task input { margin: 0 6px 0 -20px; vertical-align: -2px; }
+.gh-md blockquote { padding: 0 12px; border-left: 3px solid var(--border-strong); color: var(--muted); }
+.gh-md hr { height: 1px; margin: 16px 0; border: 0; background: var(--border); }
+.gh-md code { padding: 1px 5px; border-radius: 4px; background: var(--hover); font: 12px var(--mono); }
+.gh-md .md-code { padding: 10px 12px; overflow: auto; border-radius: 6px; background: var(--term-bg); color: var(--term-text); font: 12px/1.5 var(--mono); white-space: pre; }
+.gh-md .md-code code { padding: 0; background: none; font: inherit; }
+.gh-md .md-table { overflow: auto; }
+.gh-md table { border-collapse: collapse; font-size: 12.5px; }
+.gh-md th, .gh-md td { padding: 5px 10px; border: 1px solid var(--border); text-align: left; }
+.gh-md th { background: var(--surface); font-weight: 600; }
+.gh-md .md-link { color: var(--accent); cursor: pointer; text-decoration: none; }
+.gh-md .md-link:hover { text-decoration: underline; }
+.gh-md .md-mention { color: var(--text-strong); font-weight: 600; }
 
 /* ---- Dialogs: push, pull request, Implement ---- */
 

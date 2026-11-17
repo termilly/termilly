@@ -14,13 +14,18 @@ import { GITHUB_UNAVAILABLE } from './constants.js';
  *   isPublic?: boolean, login?: string | null }} GitHubStatus
  */
 /**
- * An issue in a list, as gh lists it: its comments counted.
+ * An issue in a list: its comments counted.
  * @typedef {{ number: number, title: string, state: string, labels: { name: string, color?: string }[],
- *   author: string, updatedAt: string, comments: number, url: string }} IssueRow
+ *   author: string, createdAt: string, updatedAt: string, comments: number, url: string }} IssueRow
+ */
+/**
+ * A page of a repository's issues: how many GitHub has (up to the thousand its search answers), whether another page
+ * follows, and the page's issues.
+ * @typedef {{ total: number, more: boolean, issues: IssueRow[] }} IssuePage
  */
 /**
  * An issue in full, with its comments.
- * @typedef {Omit<IssueRow, 'comments'> & { body: string, createdAt: string,
+ * @typedef {Omit<IssueRow, 'comments' | 'updatedAt'> & { body: string,
  *   comments: { author: string, body: string, createdAt: string }[] }} Issue
  */
 /**

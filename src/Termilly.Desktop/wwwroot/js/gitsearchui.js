@@ -1,6 +1,6 @@
 // @ts-check
 // The Git window's search box (js/gitwindow.js; js/gitsearch.js does the searching): typing searches the repository
-// a moment after the last key (or filters the issues on Issues), Enter goes to the first row, Tab steps through the
+// a moment after the last key (or GitHub's issues on Issues), Enter goes to the first row, Tab steps through the
 // search's views, Escape ends it, and the open tab's own list comes back.
 
 import { debounce } from './util.js';
@@ -40,11 +40,19 @@ const searchLater = debounce(() => {
   runSearch(searchEl.value.trim(), searchScope(), ask, searchChanged);
 }, SEARCH_DELAY);
 
+/** Issues are searched on GitHub, a moment after the last key. */
+const searchIssuesLater = debounce(() => {
+  if (isOpen() && gw.tab === GIT_TAB.issues) ui.reloadIssues();
+}, SEARCH_DELAY);
+
 /** Ends the search: the box empties and the tab's own list comes back (the caller draws it). */
 export function endSearch() {
   searchLater.cancel();
+  searchIssuesLater.cancel();
   clearSearch();
   searchEl.value = '';
+  // The issues GitHub found for the words: the whole list is loaded again.
+  if (issues.filter.trim()) Object.assign(issues, { list: [], more: false, loaded: false });
   issues.filter = '';
   gw.selection = null;
   gw.cursor = -1;
@@ -56,6 +64,8 @@ function showTab() {
   showNothing();
   if (gw.tab === GIT_TAB.agent) {
     ui.showAgentTab();
+  } else if (gw.tab === GIT_TAB.issues && !issues.loaded) {
+    ui.reloadIssues();
   } else if (gw.tab === GIT_TAB.changes || gw.tab === GIT_TAB.issues) {
     renderList();
     selectFirst();
@@ -76,10 +86,9 @@ export function stepSearchView(by) {
 
 searchEl.addEventListener('input', () => {
   if (gw.tab === GIT_TAB.issues) {
-    // Issues are filtered here, from what GitHub sent: the repository's search has nothing to add.
+    // GitHub searches the issues: the repository's search has nothing to add.
     issues.filter = searchEl.value;
-    gw.cursor = -1;
-    renderList();
+    searchIssuesLater();
     return;
   }
   if (searchEl.value.trim()) {

@@ -39,4 +39,9 @@ internal static class GitHubWords
     public const string Private = "isPrivate";
     public const string Number = "number";
     public const string Url = "url";
+    public const string TitleField = "title";
+    public const string UpdatedAt = "updatedAt";
+    public const string Method = "-X";
+    public const string Get = "GET";
+    public const string Field = "-f";
 }
