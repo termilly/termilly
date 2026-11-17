@@ -110,7 +110,8 @@ step('Why? shows the end of the failed log', async () => {
 
 step('Fix with an agent adds a To do task with the log and starts the agent in the repository', async () => {
   await app.click('[data-check-fix]');
-  const call = await until(async () => (await app.agentCalls()).find(c => c.agent === 'claude'), 'the agent started');
+  // The call with the task in it: Termilly also runs claude --version on its own, to see that it's installed.
+  const call = await until(async () => (await app.agentCalls()).find(c => c.agent === 'claude' && c.args.some(x => x.includes('failing check'))), 'the agent started on the task');
   assert.equal(call.cwd.replace(/\/+$/, ''), repo.path.replace(/\/+$/, ''));
   const task = await app.eval(async t => {
     const { findTaskWhere } = await t.import('todo.js');
