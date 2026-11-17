@@ -40,7 +40,7 @@ const SIDE_MAX_PX = 720;
 /** What the search box says it looks through: a repository, or (outside one) only Claude's changes, or issues. */
 export const SEARCH_REPO = 'Search changes, commits, code, branches and tags';
 export const SEARCH_AGENT = 'Search the files Claude changed';
-export const SEARCH_ISSUES = 'Filter issues by number, title, label or author';
+export const SEARCH_ISSUES = 'Search issues on GitHub';
 
 export const layer = document.createElement('div');
 layer.className = 'modal-layer settings-layer changes-layer git-layer';
