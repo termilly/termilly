@@ -61,12 +61,18 @@ export async function startApp({ folder, gh = {}, agents = {}, env = {}, name = 
   let appProcess, xvfb, display, stopped = false, evaluationFailed = false;
   const token = randomBytes(32).toString('hex'), port = await freePort();
   const gitConfig = path.join(dataDir, 'gitconfig');
+  // A home of its own: the app's shells never read the real ~/.profile (which can put the real claude ahead of the
+  // fakes on PATH) and Termilly's agent setup never touches the real ~/.claude or ~/.codex.
+  const home = path.join(dataDir, 'home');
   const appEnv = { ...process.env, GIT_CONFIG_GLOBAL: gitConfig, GIT_CONFIG_NOSYSTEM: '1', ...env,
+    HOME: home, XDG_CONFIG_HOME: path.join(home, '.config'), XDG_DATA_HOME: path.join(home, '.local', 'share'),
+    XDG_CACHE_HOME: path.join(home, '.cache'), USERPROFILE: home,
     PATH: `${fakes}${path.delimiter}${env.PATH ?? process.env.PATH ?? ''}`,
     TERMILLY_DATA_DIR: dataDir, TERMILLY_TEST_DRIVER: String(port), TERMILLY_TEST_TOKEN: token,
     E2E_GH_SCENARIO: scenario, E2E_GH_LOG: ghLog, E2E_AGENTS: agentScripts, E2E_AGENT_LOG: agentLog };
   const app = makeApp();
   try {
+    await mkdir(home, { recursive: true });
     await Promise.all([writeFile(gitConfig, ''), writeFile(scenario, JSON.stringify(gh)), writeFile(agentScripts, JSON.stringify(agents))]);
     if (process.platform !== 'win32') await Promise.all(['gh', 'claude', 'codex'].map(file => chmod(path.join(fakes, file), 0o755)));
     ({ display, child: xvfb } = await displayFor(appEnv, xvfbLogs));
