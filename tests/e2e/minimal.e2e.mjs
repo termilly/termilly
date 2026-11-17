@@ -172,6 +172,7 @@ step('on hover, an agent terminal in its compact view shows its bar over the vie
     const { state } = await t.import('store.js');
     const { openViewMenu } = await t.import('compact.js');
     const tab = [...state.tabs.values()].find(x => x.view?.el.closest('.ws-layer.active'));
+    tab.compact = { lines: [{ kind: 'prompt', text: 'hello' }], session: null, el: null, frame: 0, frameWin: null, sending: Promise.resolve(), writes: null };
     tab.agent = { source: 'hooks', kind: 'claude', state: 'idle' };
     openViewMenu(tab, tab.view.header.querySelector('.menu-btn'));
     await t.waitFor('.menu-row');
