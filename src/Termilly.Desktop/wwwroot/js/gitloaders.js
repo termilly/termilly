@@ -7,7 +7,7 @@ import { PAGE } from './protocol.js';
 import { escapeHtml } from './ui.js';
 import { targetOf } from './dom.js';
 import { history } from './githistory.js';
-import { ISSUE_ITEM, issues, loadIssues, loadMoreIssues, cantLoadIssues, issueBarHtml, stateClicked } from './gitissues.js';
+import { ISSUE_ITEM, issues, loadIssues, cantLoadIssues, issueBarHtml, issuePagerHtml, stateClicked, pageClicked } from './gitissues.js';
 import { forgetIssue, issueClicked } from './gitissueview.js';
 import { whyNoGitHub } from './github.js';
 import { LOCAL_ITEM, local, loadLocal, localClicked } from './gitlocal.js';
@@ -21,7 +21,7 @@ import { renderList, openItem, selectFirst } from './gitlist.js';
 const HISTORY_PAGE = 100;
 /** How near the side list's end (in pixels) History's scroll gets before its next page loads. */
 const LOAD_MORE_PX = 200;
-const { listEl, rightEl, historyBarEl, issueBarEl } = els;
+const { listEl, rightEl, historyBarEl, issueBarEl, issuePagerEl } = els;
 
 /** History's next page; the first one opens its newest commit. */
 export async function loadHistory() {
@@ -76,13 +76,13 @@ historyBarEl.addEventListener('click', e => {
   reloadHistory();
 });
 
-// History and Issues load their next page as their end comes near.
+// History loads its next page as its end comes near.
 listEl.addEventListener('scroll', () => {
-  if (listEl.scrollTop + listEl.clientHeight <= listEl.scrollHeight - LOAD_MORE_PX) return;
-  if (gw.tab === GIT_TAB.issues) return void moreIssues();
   if (gw.tab !== GIT_TAB.history || gw.historyDone || gw.loadingMore) return;
-  gw.loadingMore = true;
-  loadHistory().finally(() => { gw.loadingMore = false; });
+  if (listEl.scrollTop + listEl.clientHeight > listEl.scrollHeight - LOAD_MORE_PX) {
+    gw.loadingMore = true;
+    loadHistory().finally(() => { gw.loadingMore = false; });
+  }
 });
 
 /** Branches, with the repository's worktrees. */
@@ -106,7 +106,7 @@ function reopen(is) {
 
 /** The Issues tab: the state filter over the list, the issues loaded, the one picked (or the first) shown. */
 export async function showIssuesTab() {
-  issueBarEl.innerHTML = issueBarHtml();
+  drawIssueBars();
   if (gw.github && !gw.github.available) {
     cantLoadIssues(whyNoGitHub(gw.github));
     return renderList();
@@ -116,7 +116,7 @@ export async function showIssuesTab() {
     if (!await loadIssues(issueContext())) return; // a newer loading draws instead
   }
   if (gw.tab !== GIT_TAB.issues || !isOpen()) return;
-  issueBarEl.innerHTML = issueBarHtml(); // with how many there are
+  drawIssueBars(); // with how many there are, and the pages
   renderList();
   reopen(i => i.kind === ISSUE_ITEM.issue && i.issue.number === gw.selection?.number);
 }
@@ -140,18 +140,20 @@ function shownLocal() {
   return null;
 }
 
-/** Issues' next page, onto the list: its last row says it's loading meanwhile. */
-async function moreIssues() {
-  const loading = loadMoreIssues(issueContext());
-  renderList();
-  await loading;
-  if (gw.tab === GIT_TAB.issues && isOpen()) renderList();
+/** The bar over the issues (the state, which ones of how many) and the pages under them. */
+function drawIssueBars() {
+  issueBarEl.innerHTML = issueBarHtml();
+  issuePagerEl.innerHTML = issuePagerHtml();
 }
 
-/** Issues from their first page again, for another state or other search words. */
-async function reloadIssues() {
+/**
+ * Issues from a page again (the first: another state, or other search words), the list at its top.
+ * @param {number} [page]
+ */
+async function reloadIssues(page = 1) {
   if (!gw.repo) return;
-  Object.assign(issues, { list: [], more: false, loaded: false });
+  Object.assign(issues, { list: [], pages: 0, page, loaded: false });
+  listEl.scrollTop = 0;
   gw.selection = null;
   gw.cursor = -1;
   forgetIssue(); // the issue on its way was the other list's
@@ -164,6 +166,12 @@ issueBarEl.addEventListener('click', e => {
   if (stateClicked(e)) reloadIssues();
 });
 
+// A page of the issues, picked under the list.
+issuePagerEl.addEventListener('click', e => {
+  const page = pageClicked(e);
+  if (page) reloadIssues(page);
+});
+
 // The right side's buttons for a snapshot or backup, a worktree, and an issue (GitHub changed: the list and the issue again).
 rightEl.addEventListener('click', e => {
   if (gw.tab === GIT_TAB.local && localClicked(e, shownLocal(), localContext())) return;
@@ -172,10 +180,10 @@ rightEl.addEventListener('click', e => {
   if (gw.tab !== GIT_TAB.issues || !gw.repo) return;
   issueClicked(e, async () => {
     await loadIssues(issueContext());
-    issueBarEl.innerHTML = issueBarHtml();
+    drawIssueBars();
     renderList();
     reopen(i => i.kind === ISSUE_ITEM.issue && i.issue.number === gw.selection?.number);
   });
 });
 
-Object.assign(ui, { loadMoreIssues: moreIssues, reloadIssues });
+Object.assign(ui, { reloadIssues: () => reloadIssues() });

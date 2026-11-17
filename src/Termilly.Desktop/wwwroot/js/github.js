@@ -19,9 +19,9 @@ import { GITHUB_UNAVAILABLE } from './constants.js';
  *   author: string, createdAt: string, updatedAt: string, comments: number, url: string }} IssueRow
  */
 /**
- * A page of a repository's issues: how many GitHub has (up to the thousand its search answers), whether another page
- * follows, and the page's issues.
- * @typedef {{ total: number, more: boolean, issues: IssueRow[] }} IssuePage
+ * A page of a repository's issues: how many GitHub has, which page this is of how many it can show, the number of
+ * its first issue, whether GitHub stops short of them all (its search shows a thousand), and the page's issues.
+ * @typedef {{ total: number, page: number, pages: number, first: number, capped: boolean, issues: IssueRow[] }} IssuePage
  */
 /**
  * An issue in full, with its comments.

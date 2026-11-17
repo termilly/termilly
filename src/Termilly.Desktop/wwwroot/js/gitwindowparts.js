@@ -78,6 +78,7 @@ layer.innerHTML = `
         <div class="gw-issue-bar" hidden></div>
         <div class="gw-history-bar" hidden></div>
         <div class="gw-list" tabindex="0" role="listbox" aria-label="Files"></div>
+        <div class="gw-issue-pager" hidden></div>
         <div class="gw-commitbox" hidden></div>
       </div>
       <div class="cw-grip" title="Drag to resize"></div>
@@ -104,6 +105,7 @@ export const els = Object.freeze({
   rightEl: find(layer, '.gw-right'),
   actionsEl: find(layer, '.gw-actions'),
   issueBarEl: find(layer, '.gw-issue-bar'),
+  issuePagerEl: find(layer, '.gw-issue-pager'),
   historyBarEl: find(layer, '.gw-history-bar'),
   commitBoxEl: find(layer, '.gw-commitbox'),
 });

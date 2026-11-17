@@ -19,10 +19,14 @@ internal sealed record GitCommit(string Hash, string Short, IReadOnlyList<string
 /// <summary>A file a commit changed, with its line counts (null for a binary file).</summary>
 internal sealed record GitCommitFile(string Path, string? OldPath, string Status, int? Added, int? Removed);
 
-/// <summary>One commit in full: its message, who wrote and committed it, and the files it changed.</summary>
+/// <summary>
+/// One commit in full: its message, who wrote and committed it, and the files it changed: all of them with their line
+/// counts, or for a very big commit (a shallow clone's only commit adds every file) the first ones without counts, and
+/// how many there are.
+/// </summary>
 internal sealed record GitCommitDetail(
     string Hash, IReadOnlyList<string> Parents, string Author, string AuthorDate, string Committer, string CommitDate, string Message,
-    IReadOnlyList<GitCommitFile> Files);
+    IReadOnlyList<GitCommitFile> Files, int TotalFiles = 0, bool Counted = true);
 
 /// <summary>
 /// Which change of a file to show: its path (and its old path when renamed), the side (one of <see cref="DiffSides"/>)
@@ -63,6 +67,8 @@ internal static partial class GitView
 
     internal static readonly string[] StatusCommand = [GitCommands.Status, GitCommands.Options.PorcelainV2, GitCommands.Options.NulTerminated, GitCommands.Options.WithBranch, "--untracked-files=all"];
     /// <summary>A commit's files, renames found, against <c>range</c>: their status letters, or their line counts.</summary>
+    /// <summary>A commit's files listed at most, and counted only up to: more is a commit to read elsewhere.</summary>
+    internal const int MostCommitFiles = 1000;
     private static readonly string[] CommitNames = [GitCommands.DiffTree, "-r", GitCommands.Options.NulTerminated, "-M", "--name-status", "--no-commit-id"];
     private static readonly string[] CommitCounts = [GitCommands.DiffTree, "-r", GitCommands.Options.NulTerminated, "-M", "--numstat", "--no-commit-id"];
     private static readonly string[] BranchRefs = [GitCommands.Refs.Heads, GitCommands.Refs.Remotes];
@@ -276,9 +282,15 @@ internal static partial class GitView
         var head = GitOutput.CommitHead(Text(git, root, GitCommands.Show, GitCommands.Options.SizeOnly, GitOutput.CommitFormat, GitCommands.Options.EndOfOptions, hash));
         // Against the first parent (a merge's changes as the branch received them); the first commit against nothing.
         string[] range = head.Parents.Count > 0 ? [head.Parents[0], head.Hash] : ["--root", head.Hash];
-        var status = git.Run(root, [.. CommitNames, .. range]);
+        var names = Encoding.UTF8.GetString(git.Run(root, [.. CommitNames, .. range]));
+        var all = GitOutput.CommitFiles(names, "");
+        if (all.Count > MostCommitFiles)
+        {
+            // Counting every file's lines would take seconds, and the page couldn't show them all anyway.
+            return head with { Files = [.. all.Take(MostCommitFiles)], TotalFiles = all.Count, Counted = false };
+        }
         var numstat = git.Run(root, [.. CommitCounts, .. range]);
-        return head with { Files = GitOutput.CommitFiles(Encoding.UTF8.GetString(status), Encoding.UTF8.GetString(numstat)) };
+        return head with { Files = GitOutput.CommitFiles(names, Encoding.UTF8.GetString(numstat)), TotalFiles = all.Count };
     }
 
     // ---- Actions ----

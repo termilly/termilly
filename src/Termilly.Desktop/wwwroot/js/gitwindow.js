@@ -51,7 +51,7 @@ const PRUNE_BUTTON = '<button class="btn small" data-prune title="Delete branche
 const REFRESH_DELAY = 600;
 /** What the side list is called, by tab, for screen readers. */
 const LIST_LABEL = Object.freeze({ agent: 'Files Claude changed', changes: 'Changed files', history: 'Commits', branches: 'Branches', local: 'Local history', issues: 'Issues' });
-const { box, repoEl, branchEl, searchEl, listEl, rightEl, actionsEl, issueBarEl, historyBarEl, commitBoxEl } = els;
+const { box, repoEl, branchEl, searchEl, listEl, rightEl, actionsEl, issueBarEl, issuePagerEl, historyBarEl, commitBoxEl } = els;
 
 /**
  * Asks, beside git and without holding it up, whether the repository is on GitHub (once a window opening) and
@@ -287,6 +287,7 @@ function renderTabs() {
   searchEl.placeholder = tab === GIT_TAB.issues ? SEARCH_ISSUES : repo || !agent.tab ? SEARCH_REPO : SEARCH_AGENT;
   listEl.setAttribute('aria-label', /** @type {Record<string, string>} */ (LIST_LABEL)[tab]);
   issueBarEl.hidden = tab !== GIT_TAB.issues;
+  issuePagerEl.hidden = tab !== GIT_TAB.issues;
   // History's switches, and Branches' Clean up (its backups are kept on this computer only).
   historyBarEl.hidden = searching() || !(tab === GIT_TAB.history || (tab === GIT_TAB.branches && !gw.server));
   if (!historyBarEl.hidden) historyBarEl.innerHTML = tab === GIT_TAB.history ? historyBarHtml() : PRUNE_BUTTON;

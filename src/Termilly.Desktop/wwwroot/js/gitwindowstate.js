@@ -15,9 +15,10 @@ import { request } from './host.js';
  *   removed?: number | null }} CommitFile
  */
 /**
- * A commit in full: its message, people, parents and files.
+ * A commit in full: its message, people, parents and files (a very big commit's first ones, uncounted: totalFiles
+ * says how many it has).
  * @typedef {{ hash: string, message: string, author: string, committer: string, authorDate: string,
- *   parents: string[], files: CommitFile[] }} CommitDetail
+ *   parents: string[], files: CommitFile[], totalFiles: number, counted: boolean }} CommitDetail
  */
 /**
  * A changed file's row: which list it's in (staged, unstaged, untracked), and whether it's in conflict.
@@ -29,7 +30,6 @@ import { request } from './host.js';
  * @typedef {{ kind: 'section', key: string, label: string, count: number, fixed?: boolean } | FileItem
  *   | { kind: 'commit', commit: Commit } | { kind: 'branch', branch: Branch } | { kind: 'more' }
  *   | import('./gitsearch.js').SearchItem | import('./gitagent.js').AgentItem | import('./gitissues.js').IssueItem
- *   | import('./gitissues.js').IssueMoreItem
  *   | import('./gitlocal.js').LocalItem | { kind: 'worktree', worktree: import('./gitcleanup.js').Worktree }} ListItem
  */
 /**
@@ -111,8 +111,6 @@ export const ui = {
   showAgentTab: () => {},
   /** @type {() => Promise<void>} */
   loadHistory: later,
-  /** Issues' next page, onto the list. @type {() => Promise<void>} */
-  loadMoreIssues: later,
   /** Issues from their first page again: another state, or other search words. @type {() => Promise<void>} */
   reloadIssues: later,
   /** Closes the window (its Close, Escape, its window's X). @type {() => void} */

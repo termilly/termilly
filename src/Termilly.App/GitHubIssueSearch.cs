@@ -26,7 +26,10 @@ internal static class GitHubIssueSearch
     private const string UpdatedField = "updated_at";
     private const string WebAddress = "html_url";
     private const string Total = "total";
-    private const string More = "more";
+    private const string Page = "page";
+    private const string Pages = "pages";
+    private const string First = "first";
+    private const string Capped = "capped";
     private const string Issues = "issues";
     /// <summary>Search words that would widen or change what's searched: the list is this repository's issues.</summary>
     private static readonly string[] ScopeQualifiers = ["repo:", "org:", "user:", "is:", "type:", "state:"];
@@ -55,17 +58,22 @@ internal static class GitHubIssueSearch
         .Where(word => !ScopeQualifiers.Any(q => word.TrimStart('-').StartsWith(q, StringComparison.OrdinalIgnoreCase)))
         .Select(word => word.Length > 1 && word[0] == '#' && word.Skip(1).All(char.IsAsciiDigit) ? word[1..] : word));
 
-    /// <summary>GitHub's answer as the page's list: how many there are, whether another page follows, and the rows.</summary>
+    /// <summary>
+    /// GitHub's answer as the page's list: how many there are, which page this is and how many pages GitHub can show
+    /// (its search stops at a thousand: capped says there are more than that), where this page starts, and the rows.
+    /// </summary>
     internal static JsonObject Parse(string json, int page)
     {
         var answer = JsonNode.Parse(json) as JsonObject ?? throw new JsonException("GitHub returned no issues.");
         var total = answer[TotalCount].AsInt() ?? throw new JsonException("GitHub returned no issue count.");
         var items = answer[Items] as JsonArray ?? throw new JsonException("GitHub returned no issues.");
-        var more = items.Count == PageSize && page * PageSize < Math.Min(total, MostResults);
         return new JsonObject
         {
             [Total] = total,
-            [More] = more,
+            [Page] = page,
+            [Pages] = (Math.Min(total, MostResults) + PageSize - 1) / PageSize,
+            [First] = (page - 1) * PageSize + 1,
+            [Capped] = total > MostResults,
             [Issues] = new JsonArray([.. items.Select(Row)]),
         };
     }

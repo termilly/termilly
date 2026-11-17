@@ -1,30 +1,28 @@
 // @ts-check
 // The Git window's Issues tab: a GitHub repository's issues, newest first as GitHub lists them, a page at a time
-// (the next one as the list scrolls to its end): open, closed or all, and the window's search box searches them on
-// GitHub. The one picked shows on the right (js/gitissueview.js). gh does the GitHub part through the host;
+// with numbered pages under the list: open, closed or all, and the window's search box searches them on GitHub. The one picked shows on the right (js/gitissueview.js). gh does the GitHub part through the host;
 // gitwindow.js draws the tab's list with the rows made here.
 
 import { PAGE } from './protocol.js';
 import { escapeHtml } from './ui.js';
 import { targetOf } from './dom.js';
-import { toastHere, TOAST } from './toasts.js';
 import { askGitHub } from './github.js';
 import { ago } from './gitsearch.js';
 import { GITHUB_ISSUE_STATE } from './constants.js';
+import { pageNumbers } from './githubtext.js';
 
 /** @typedef {import('./github.js').IssueRow} IssueRow */
 /** @typedef {import('./github.js').IssuePage} IssuePage */
 /**
- * The tab's rows, so gitwindow.js can tell them apart: an issue, and the row that loads the next page.
+ * The tab's rows, so gitwindow.js can tell them apart.
  * @typedef {{ kind: 'issue', issue: IssueRow }} IssueItem
- * @typedef {{ kind: 'issue-more' }} IssueMoreItem
  */
 
-export const ISSUE_ITEM = Object.freeze({ issue: 'issue', more: 'issue-more' });
+export const ISSUE_ITEM = Object.freeze({ issue: 'issue' });
 /** What the buttons over and on an issue do (data-issue). */
 export const ISSUE_ACT = Object.freeze({
   implement: 'implement', todo: 'todo', showTask: 'show-task', comment: 'comment', close: 'close', reopen: 'reopen',
-  open: 'open', state: 'state',
+  open: 'open', state: 'state', page: 'page',
 });
 export const LOADING = 'Loading';
 /** The state filter's choices, in order, and what a count of each is called. */
@@ -37,16 +35,18 @@ const CLOSED_ICON = '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden
 const COMMENT_ICON = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M2.5 3.5h11v7.5h-6l-3 2.5v-2.5h-2z" fill="none" stroke="currentColor" stroke-linejoin="round"/></svg>';
 
 /**
- * The tab's state: the issues loaded so far, how many GitHub has, whether more follow, which state they're in, what
- * the search asked GitHub for, and why there are none.
+ * The tab's state: the page of issues shown, how many GitHub has, which page this is of how many, where it starts,
+ * whether GitHub stops short of them all, which state they're in, what the search asked GitHub for, and why there
+ * are none.
  */
 export const issues = {
   /** @type {IssueRow[]} */
   list: [],
   total: 0,
-  more: false,
-  page: 0,
-  loadingMore: false,
+  page: 1,
+  pages: 0,
+  first: 1,
+  capped: false,
   /** @type {string} */
   state: GITHUB_ISSUE_STATE.open,
   filter: '',
@@ -73,7 +73,8 @@ export const stateIconHtml = closed => (closed ? CLOSED_ICON : OPEN_ICON);
 const askPage = (ctx, page) => askGitHub(PAGE.githubIssues, { root: ctx.root, state: issues.state, search: issues.filter.trim() || null, page });
 
 /**
- * Loads the first page. False when a newer loading (or a reset) came meanwhile, and this one's answer was dropped.
+ * Loads the page picked (issues.page). False when a newer loading (or a reset) came meanwhile, and this one's answer
+ * was dropped.
  * @param {{ root: string }} ctx
  */
 export async function loadIssues(ctx) {
@@ -83,38 +84,14 @@ export async function loadIssues(ctx) {
   /** @type {string | null} */
   let error = null;
   try {
-    page = await askPage(ctx, 1);
+    page = await askPage(ctx, issues.page);
   } catch (e) {
     error = /** @type {Error} */ (e).message;
   }
   if (asked !== listAsked) return false;
-  Object.assign(issues, { list: page?.issues ?? [], total: page?.total ?? 0, more: !!page?.more, page: 1, error, loaded: true });
+  Object.assign(issues, { list: page?.issues ?? [], total: page?.total ?? 0, pages: page?.pages ?? 0, first: page?.first ?? 1,
+    capped: !!page?.capped, error, loaded: true });
   return true;
-}
-
-/**
- * Loads the next page onto the list; true when it came (and is still wanted). One that fails says why and can be
- * asked again.
- * @param {{ root: string }} ctx
- */
-export async function loadMoreIssues(ctx) {
-  if (!issues.more || issues.loadingMore) return false;
-  const asked = listAsked;
-  issues.loadingMore = true;
-  try {
-    const page = await askPage(ctx, issues.page + 1);
-    if (asked !== listAsked) return false;
-    // An issue opened meanwhile moves the rest down a place: one already listed isn't listed twice.
-    const listed = new Set(issues.list.map(i => i.number));
-    issues.list.push(...page.issues.filter(i => !listed.has(i.number)));
-    Object.assign(issues, { page: issues.page + 1, more: page.more, total: page.total });
-    return true;
-  } catch (e) {
-    if (asked === listAsked) toastHere({ text: /** @type {Error} */ (e).message, state: TOAST.failed });
-    return false;
-  } finally {
-    issues.loadingMore = false;
-  }
 }
 
 /**
@@ -123,22 +100,17 @@ export async function loadMoreIssues(ctx) {
  */
 export function cantLoadIssues(why) {
   listAsked++;
-  Object.assign(issues, { list: [], total: 0, more: false, error: why, loaded: true });
+  Object.assign(issues, { list: [], total: 0, pages: 0, error: why, loaded: true });
 }
 
 /** Forgets the issues (another repository, the window closed, or Refresh): an answer on its way is dropped. */
 export function resetIssues() {
   listAsked++;
-  Object.assign(issues, { list: [], total: 0, more: false, page: 0, loaded: false, error: null, filter: '' });
+  Object.assign(issues, { list: [], total: 0, pages: 0, page: 1, loaded: false, error: null, filter: '' });
 }
 
-/** The list's rows: the issues loaded, then the row that loads more. @returns {Array<IssueItem | IssueMoreItem>} */
-export function issueItems() {
-  /** @type {Array<IssueItem | IssueMoreItem>} */
-  const rows = issues.list.map(issue => ({ kind: ISSUE_ITEM.issue, issue }));
-  if (issues.more && issues.list.length) rows.push({ kind: ISSUE_ITEM.more });
-  return rows;
-}
+/** The list's rows: the page's issues. @returns {IssueItem[]} */
+export const issueItems = () => issues.list.map(issue => ({ kind: ISSUE_ITEM.issue, issue }));
 
 /** What the list says when it has no rows. */
 export function issuesEmptyText() {
@@ -148,12 +120,49 @@ export function issuesEmptyText() {
   return issues.state === GITHUB_ISSUE_STATE.open ? 'No open issues.' : 'No issues.';
 }
 
-/** The bar over the list: the state filter, and how many issues GitHub has in that state. */
+/** The bar over the list: the state filter, and which issues the page shows of how many GitHub has in that state. */
 export function issueBarHtml() {
   const states = STATE_CHOICES.map(([value, label]) =>
     `<button data-issue="${ISSUE_ACT.state}" data-state="${value}" class="${issues.state === value ? 'on' : ''}" aria-pressed="${issues.state === value}">${label}</button>`).join('');
-  const count = issues.loaded && !issues.error ? `${issues.total.toLocaleString()} ${COUNT_WORD[issues.state]}` : '';
+  const range = issues.list.length ? `${issues.first.toLocaleString()}–${lastShown().toLocaleString()} of ` : '';
+  const count = issues.loaded && !issues.error ? `${range}${issues.total.toLocaleString()} ${COUNT_WORD[issues.state]}` : '';
   return `<span class="seg gw-issue-states">${states}</span><span class="gw-issue-count" title="Newest first">${count}</span>`;
+}
+
+/** The number of the page's last issue, counted from the newest. */
+const lastShown = () => issues.first + issues.list.length - 1;
+
+/**
+ * A pager button: a page's number, or Previous or Next (which can't go past the ends).
+ * @param {number} to
+ * @param {string} label
+ * @param {{ name?: string, on?: boolean }} [how]
+ */
+function pageButtonHtml(to, label, { name, on = false } = {}) {
+  const off = to < 1 || to > issues.pages;
+  return `<button class="gw-page${on ? ' on' : ''}" data-issue="${ISSUE_ACT.page}" data-page="${to}"${name ? ` aria-label="${name}"` : ''}`
+    + `${on ? ' aria-current="page"' : ''}${off ? ' disabled' : ''}>${label}</button>`;
+}
+
+/** The numbered pages under the list (none for one page), and a word on the last when GitHub shows no further. */
+export function issuePagerHtml() {
+  if (!issues.loaded || issues.pages <= 1) return '';
+  const { page, pages } = issues;
+  const numbers = pageNumbers(page, pages).map(p => (p === null ? '<span class="gw-page-gap">…</span>'
+    : pageButtonHtml(p, String(p), { on: p === page })));
+  const capped = issues.capped && page === pages
+    ? `<div class="gw-page-note">GitHub shows the first ${lastShown().toLocaleString()}. Search to find older ones.</div>` : '';
+  return `<div class="gw-pages">${pageButtonHtml(page - 1, '‹', { name: 'Previous page' })}${numbers.join('')}`
+    + `${pageButtonHtml(page + 1, '›', { name: 'Next page' })}</div>${capped}`;
+}
+
+/**
+ * The page a click in the pager picks, or null when it wasn't on one.
+ * @param {MouseEvent} e
+ */
+export function pageClicked(e) {
+  const button = /** @type {HTMLButtonElement | null} */ (targetOf(e).closest(`[data-issue="${ISSUE_ACT.page}"]`));
+  return button && !button.disabled ? Number(button.dataset.page) : null;
 }
 
 /**
@@ -189,6 +198,3 @@ export function issueRowHtml(item, i, selected) {
     + `<span class="gh-row-meta">#${issue.number} opened ${escapeHtml(ago(issue.createdAt))}${issue.author ? ` by ${escapeHtml(issue.author)}` : ''}</span></span>`
     + `${comments}</div>`;
 }
-
-/** The row that loads the next page. @param {number} i */
-export const issueMoreHtml = i => `<div class="cw-row gw-more" data-i="${i}">${issues.loadingMore ? LOADING : 'Load more issues'}</div>`;

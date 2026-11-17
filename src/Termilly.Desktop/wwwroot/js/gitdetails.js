@@ -46,12 +46,13 @@ const canUndo = hash => !!gw.repo && !gw.repo.detached && gw.repo.head === hash 
  * @param {CommitDetail} c
  */
 const filesHtml = c => c.files.map((f, i) => {
-  const counts = f.added == null ? '<span class="gw-binary">binary</span>'
+  const counts = !c.counted ? '' : f.added == null ? '<span class="gw-binary">binary</span>'
     : `<span class="pv-plus">+${f.added}</span> <span class="pv-minus">−${f.removed}</span>`;
   return `<div class="cw-row gw-file" data-commit-file="${i}" title="${escapeHtml(f.oldPath ? `${f.oldPath} → ${f.path}` : f.path)}">`
     + `<span class="gw-status" data-s="${f.status}">${escapeHtml(f.status)}</span><span class="cw-name">${escapeHtml(f.path)}</span>`
     + `<span class="gw-counts">${counts}</span></div>`;
-}).join('');
+}).join('') + (c.totalFiles > c.files.length
+  ? `<div class="gw-empty">The first ${c.files.length.toLocaleString()} of ${c.totalFiles.toLocaleString()} files.</div>` : '');
 
 /**
  * A commit's head: its message (what a search found marked), people, date, hash and parents.

@@ -1,15 +1,15 @@
 // The Git window's Issues tab, end to end, against a fake gh (tests/e2e/fakes/gh.mjs) for a repository with 120 open
-// issues: newest first, 50 at a time (the next page as the list scrolls to its end), how many there are, a state
-// asked again from its first page, GitHub searching for the search box's words, and an issue's text drawn from its
-// Markdown with nothing in it reaching the page as HTML.
+// issues: newest first, 50 at a time with numbered pages under the list (no loading on scroll), which ones of how
+// many, a state asked again from its first page, GitHub searching for the search box's words, and an issue's text
+// drawn from its Markdown with nothing in it reaching the page as HTML.
 // Run with: npm run e2e (on Linux, under Xvfb; see tests/e2e/harness.mjs).
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { startApp } from './harness.mjs';
 import { makeRepo } from './repo.mjs';
-import { until, openGit, tab, clickText } from './gitsteps.mjs';
+import { openGit, tab, clickText } from './gitsteps.mjs';
 
-const TOTAL = 120;
+const OPEN_ISSUES = 120;
 const PAGE_SIZE = 50;
 const ROW = '.gw-list .gw-issue-row';
 const BODY = [
@@ -39,9 +39,9 @@ const searchArgs = (query, page) => ['api', '-X', 'GET', 'search/issues', '-f', 
 
 /** The open issues' pages: 120 down to 71, 70 down to 21, 20 down to 1. @param {number} page */
 const openPage = page => {
-  const from = TOTAL - (page - 1) * PAGE_SIZE;
+  const from = OPEN_ISSUES - (page - 1) * PAGE_SIZE;
   const numbers = Array.from({ length: Math.min(PAGE_SIZE, from) }, (_, i) => from - i);
-  return { json: { total_count: TOTAL, items: numbers.map(searchRow) } };
+  return { json: { total_count: OPEN_ISSUES, items: numbers.map(searchRow) } };
 };
 
 function scenario() {
@@ -80,6 +80,8 @@ const step = (name, run) => test(name, async () => {
 
 /** The numbers of the issues listed, in order. */
 const listed = () => app.eval((t, s) => t.$$(s).map(el => Number(/#(\d+)/.exec(el.textContent)?.[1])), ROW);
+/** The pager's buttons, in order. */
+const pager = () => app.eval(t => t.$('.gw-issue-pager .gw-page').map(b => b.textContent));
 /** The pages gh was asked for, with the query's state and words. */
 const asked = async () => (await app.ghCalls()).filter(a => a[3] === 'search/issues').map(a => `${a[5]} ${a[13]}`);
 
@@ -102,20 +104,26 @@ step('Issues lists the first 50, newest first, and says how many there are', asy
   const numbers = await listed();
   assert.equal(numbers.length, PAGE_SIZE);
   assert.deepEqual(numbers.slice(0, 3), [120, 119, 118]);
-  assert.equal(await app.text('.gw-issue-count'), '120 open');
+  assert.equal(await app.text('.gw-issue-count'), '1–50 of 120 open');
   assert.deepEqual(await asked(), ['q=repo:acme/demo is:issue is:open page=1']);
-  await app.waitFor('.gw-list .gw-more', { text: 'Load more issues' });
+  assert.deepEqual(await pager(), ['‹', '1', '2', '3', '›']);
 });
 
-step('scrolling to the end loads the next page, until there are no more', async () => {
-  for (const expected of [100, 120]) {
-    await app.eval((t, s) => { const list = t.$(s); list.scrollTop = list.scrollHeight; list.dispatchEvent(new Event('scroll')); }, '.gw-list');
-    await until(async () => (await listed()).length === expected, `${expected} issues listed`);
-  }
-  const numbers = await listed();
-  assert.deepEqual([numbers[0], numbers.at(-1)], [120, 1]);
-  assert.equal(new Set(numbers).size, TOTAL);
-  assert.equal(await app.eval((t, s) => t.$$(s).length, '.gw-list .gw-more'), 0);
+step('scrolling to the end loads nothing more; the pages under the list go back and forth', async () => {
+  await app.eval((t, s) => { const list = t.$(s); list.scrollTop = list.scrollHeight; list.dispatchEvent(new Event('scroll')); }, '.gw-list');
+  await new Promise(resolve => setTimeout(resolve, 1000));
+  assert.equal((await asked()).length, 1);
+  await clickText(app, '.gw-page', '3');
+  await app.waitFor(ROW, { text: 'Issue number 20' });
+  assert.deepEqual(await listed(), Array.from({ length: 20 }, (_, i) => 20 - i));
+  assert.equal(await app.text('.gw-issue-count'), '101–120 of 120 open');
+  assert.equal(await app.eval(t => t.$('.gw-page[aria-label="Next page"]').disabled), true);
+  await app.click('.gw-page[aria-label="Previous page"]');
+  await app.waitFor(ROW, { text: 'Issue number 70' });
+  assert.deepEqual((await listed()).slice(0, 1), [70]);
+  assert.equal(await app.text('.gw-page.on'), '2');
+  await clickText(app, '.gw-page', '1');
+  await app.waitFor(ROW, { text: 'Issue number 120' });
 });
 
 step('an issue opens with its Markdown drawn and nothing in it running', async () => {

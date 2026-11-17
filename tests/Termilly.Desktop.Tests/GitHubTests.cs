@@ -29,16 +29,20 @@ public sealed class GitHubTests
     }
 
     [Theory]
-    [InlineData(50, 120, 1, true)]
-    [InlineData(50, 120, 3, false)] // a page past the count
-    [InlineData(20, 120, 1, false)] // a short page is the last
-    [InlineData(50, 5000, 20, false)] // GitHub answers no further than a thousand
-    public void A_page_says_whether_another_follows(int rows, int total, int page, bool more)
+    [InlineData(50, 120, 1, 3, 1, false)]
+    [InlineData(20, 120, 3, 3, 101, false)] // the last page, shorter
+    [InlineData(0, 0, 1, 0, 1, false)] // none at all
+    [InlineData(50, 100, 2, 2, 51, false)] // pages that come out even
+    [InlineData(50, 2196, 20, 20, 951, true)] // GitHub shows no further than a thousand
+    public void A_page_says_where_it_starts_and_how_many_pages_there_are(int rows, int total, int page, int pages, int first, bool capped)
     {
         var items = string.Join(",", Enumerable.Range(1, rows).Select(n => $$"""{"number":{{n}},"title":"T","state":"open"}"""));
         var list = GitHubIssueSearch.Parse($$"""{"total_count":{{total}},"items":[{{items}}]}""", page);
-        Assert.Equal(more, list["more"].AsBool());
         Assert.Equal(total, list["total"].AsInt());
+        Assert.Equal(page, list["page"].AsInt());
+        Assert.Equal(pages, list["pages"].AsInt());
+        Assert.Equal(first, list["first"].AsInt());
+        Assert.Equal(capped, list["capped"].AsBool());
         Assert.Equal(rows, list["issues"]!.AsArray().Count);
     }
 

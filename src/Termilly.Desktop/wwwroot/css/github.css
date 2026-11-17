@@ -32,6 +32,17 @@
 .gh-row-meta { overflow: hidden; color: var(--muted); font-size: 11.5px; text-overflow: ellipsis; white-space: nowrap; }
 .gh-row-comments { display: flex; flex: none; align-items: center; gap: 4px; margin-top: 1px; color: var(--muted); font-size: 11.5px; }
 
+/* The numbered pages under the list. */
+.gw-issue-pager { flex: none; padding: 8px 10px 10px; border-top: 1px solid var(--border); }
+.gw-issue-pager:empty, .gw-issue-pager[hidden] { display: none; }
+.gw-pages { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 4px; }
+.gw-page { min-width: 28px; height: 28px; padding: 0 6px; border: 1px solid transparent; border-radius: 6px; background: none; color: var(--text); font: inherit; font-size: 12.5px; cursor: pointer; }
+.gw-page:hover:not(:disabled) { border-color: var(--border); background: var(--hover); }
+.gw-page.on { border-color: var(--accent); background: var(--accent); color: var(--on-accent); font-weight: 600; }
+.gw-page:disabled { color: var(--faint); cursor: default; }
+.gw-page-gap { min-width: 16px; color: var(--muted); text-align: center; }
+.gw-page-note { margin-top: 6px; color: var(--muted); font-size: 11.5px; text-align: center; }
+
 /* The issue picked: its head stays while its thread scrolls. */
 .gh-issue-head { flex: none; padding: 18px 22px 16px; border-bottom: 1px solid var(--border); }
 .gh-issue-title { color: var(--text-strong); font-size: 18px; font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }

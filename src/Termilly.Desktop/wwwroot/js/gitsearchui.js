@@ -52,7 +52,7 @@ export function endSearch() {
   clearSearch();
   searchEl.value = '';
   // The issues GitHub found for the words: the whole list is loaded again.
-  if (issues.filter.trim()) Object.assign(issues, { list: [], more: false, loaded: false });
+  if (issues.filter.trim()) Object.assign(issues, { list: [], pages: 0, page: 1, loaded: false });
   issues.filter = '';
   gw.selection = null;
   gw.cursor = -1;

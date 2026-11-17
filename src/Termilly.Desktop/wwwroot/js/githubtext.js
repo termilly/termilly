@@ -74,3 +74,28 @@ export function issueDetails(issue, most) {
   const cut = body.length > most ? `${body.slice(0, most).trimEnd()} (the rest is on GitHub)` : body;
   return [issue.url, cut].filter(Boolean).join('\n');
 }
+
+/** Pages shown on each side of the current one in a list of page numbers. */
+const PAGES_AROUND = 2;
+
+/**
+ * The page numbers a pager shows, as GitHub's does: the first and the last, the current one with a couple on each
+ * side, and a gap (null) where pages are left out; a gap of one page shows that page instead.
+ * @param {number} current
+ * @param {number} last
+ * @returns {Array<number | null>}
+ */
+export function pageNumbers(current, last) {
+  const shown = new Set([1, last]);
+  for (let p = current - PAGES_AROUND; p <= current + PAGES_AROUND; p++) if (p >= 1 && p <= last) shown.add(p);
+  /** @type {Array<number | null>} */
+  const out = [];
+  let before = 0;
+  for (const p of [...shown].sort((a, b) => a - b)) {
+    if (p - before === 2) out.push(p - 1);
+    else if (p - before > 2) out.push(null);
+    out.push(p);
+    before = p;
+  }
+  return out;
+}
