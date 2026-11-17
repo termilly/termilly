@@ -67,6 +67,33 @@ step('Minimal moves the toolbar into a hidden dock and the sidebar away', async 
   await app.screenshot('02-minimal-hidden');
 });
 
+step('switching workspaces keeps the strip, the window buttons and the dock as they were', async () => {
+  const look = () => app.eval(() => ({
+    controlsAtRight: globalThis.innerWidth - globalThis.document.querySelector('#titlebar .window-controls').getBoundingClientRect().right < 20,
+    strip: globalThis.document.getElementById('titlebar').getBoundingClientRect().height,
+    sidebar: globalThis.getComputedStyle(globalThis.document.getElementById('sidebar')).display,
+    toolbarInDock: !!globalThis.document.querySelector('#dock .toolbar'),
+    needs: !globalThis.document.querySelector('.mini-needs').hidden,
+  }));
+  const before = await look();
+  await app.eval(async t => {
+    const { createWorkspace } = await t.import('workspaces.js');
+    createWorkspace({ name: 'second' });
+  });
+  await pause(1500);
+  await app.screenshot('02b-second-workspace');
+  const second = await look();
+  await app.eval(async t => {
+    const { state } = await t.import('store.js');
+    const { switchWorkspace } = await t.import('panes.js');
+    switchWorkspace(state.workspaces[0].id);
+  });
+  await pause(800);
+  const back = await look();
+  const expected = { controlsAtRight: true, strip: 32, sidebar: 'none', toolbarInDock: true, needs: false };
+  assert.deepEqual({ before, second, back }, { before: expected, second: expected, back: expected });
+});
+
 step('the hidden dock comes back at its edge and lists the workspaces', async () => {
   const box = await app.eval(() => { const r = globalThis.document.querySelector('.dock-line').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + 4 }; });
   await pointTo(box.x, box.y);
