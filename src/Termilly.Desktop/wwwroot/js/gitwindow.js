@@ -1125,6 +1125,13 @@ function showNothing() {
 }
 
 /**
+ * Whether two of the host's diffs of a file say the same (nothing changed between two looks).
+ * @param {GitDiff} a
+ * @param {GitDiff} b
+ */
+const sameDiff = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+/**
  * A file's diff: staged, unstaged or untracked (Changes), or in a commit.
  * @param {ShownFile} item
  * @param {{ keepScroll?: boolean, inCommit?: string | null, find?: Find | null }} [options]
@@ -1146,6 +1153,10 @@ async function showFile(item, { keepScroll = false, inCommit = null, find: hit =
     return;
   }
   // A refresh keeps how the file was shown, and what was found in it.
+  // Looked at again (a command ended, the window came back) and the same: it stays as drawn, with its folds open and
+  // the lines picked for staging still picked.
+  if (keepScroll && diffState?.target === target && diffState.request.path === request.path
+    && diffState.request.side === request.side && sameDiff(diffState.data, data)) return;
   const shown = keepScroll ? diffState?.find ?? null : hit;
   diffState = { request, data, expanded: new Set(), target, label: inCommit ? null : sideLabel(item), find: shown };
   const at = drawDiff();
