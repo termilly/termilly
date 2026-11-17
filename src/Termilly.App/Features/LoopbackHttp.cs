@@ -18,6 +18,8 @@ internal sealed class LoopbackHttp(int port, Func<LoopbackRequest, Task<Loopback
     private const int MaxHeaderBytes = 16 * 1024;
     private const int MaxBodyBytes = 16 * 1024 * 1024;
     private const string ContentLength = "content-length";
+    /// <summary>The blank line that ends a request's head.</summary>
+    private static readonly byte[] EndOfHead = "\r\n\r\n"u8.ToArray();
     private static readonly Encoding Latin1 = Encoding.Latin1;
     private readonly TcpListener _listener = new(IPAddress.Loopback, port);
     private readonly CancellationTokenSource _stop = new();
@@ -66,21 +68,14 @@ internal sealed class LoopbackHttp(int port, Func<LoopbackRequest, Task<Loopback
     private static async Task<LoopbackRequest?> ReadAsync(NetworkStream stream)
     {
         var head = new MemoryStream();
-        var last = new byte[4];
-        while (head.Length < MaxHeaderBytes)
+        var one = new byte[1];
+        while (head.Length < MaxHeaderBytes && !head.GetBuffer().AsSpan(0, (int)head.Length).EndsWith(EndOfHead))
         {
-            var b = stream.ReadByte();
-            if (b < 0)
+            if (await stream.ReadAsync(one).ConfigureAwait(false) == 0)
             {
                 return null;
             }
-            head.WriteByte((byte)b);
-            Array.Copy(last, 1, last, 0, 3);
-            last[3] = (byte)b;
-            if (last is [(byte)'\r', (byte)'\n', (byte)'\r', (byte)'\n'])
-            {
-                break;
-            }
+            head.WriteByte(one[0]);
         }
         var lines = Latin1.GetString(head.ToArray()).Split("\r\n", StringSplitOptions.RemoveEmptyEntries);
         var start = lines.FirstOrDefault()?.Split(' ');

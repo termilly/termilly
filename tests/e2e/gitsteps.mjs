@@ -56,8 +56,9 @@ export function filesIn(app, section) {
  * @param {object} [options] the harness's click options (shift, button)
  */
 export async function clickText(app, selector, text, options) {
-  // Found and clicked in one go: the list can be drawn again between two steps.
-  const clicked = await app.eval((t, sel, want, how) => {
+  // Found and clicked in one go (the list can be drawn again between two steps), once it shows: a list still
+  // loading gets the time a person would give it.
+  const clicked = await until(() => app.eval((t, sel, want, how) => {
     const el = t.$$(sel).find(e => e.textContent.includes(want));
     if (!el) return false;
     el.setAttribute('data-e2e-target', '');
@@ -67,7 +68,7 @@ export async function clickText(app, selector, text, options) {
       el.removeAttribute('data-e2e-target');
     }
     return true;
-  }, selector, text, options ?? {});
+  }, selector, text, options ?? {}), `${selector} with "${text}"`);
   if (!clicked) throw new Error(`No ${selector} with "${text}"`);
 }
 
