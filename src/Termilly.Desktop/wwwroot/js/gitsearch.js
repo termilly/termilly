@@ -22,7 +22,7 @@ import { GIT_MATCH } from './constants.js';
  * A repository's status: where it is, its branch against its upstream, and its files by state.
  * @typedef {{ root: string, name: string, branch?: string | null, detached?: boolean, upstream?: string | null,
  *   ahead?: number, behind?: number, hasCommits?: boolean, staged: GitFile[], unstaged: GitFile[],
- *   untracked: GitFile[], conflicted: GitFile[] }} RepoStatus
+ *   untracked: GitFile[], conflicted: GitFile[], head?: string | null }} RepoStatus
  */
 /**
  * A commit in a log.

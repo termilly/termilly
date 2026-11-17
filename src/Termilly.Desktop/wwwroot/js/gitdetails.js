@@ -7,7 +7,7 @@ import { PAGE } from './protocol.js';
 import { escapeHtml, highlight } from './ui.js';
 import { targetOf } from './dom.js';
 import { ITEM, found, searching, ago } from './gitsearch.js';
-import { history, refChips, isHead } from './githistory.js';
+import { refChips } from './githistory.js';
 import { checksSlotHtml, fillChecks, checksClicked } from './gitchecks.js';
 import { undoCommit } from './gitwrite.js';
 import { gw, ask, repoNow } from './gitwindowstate.js';
@@ -35,11 +35,11 @@ const { rightEl } = els;
 export const switchLabel = b => (b.remote ? `Switch to ${b.name.replace(/^[^/]+\//, '')} (tracking ${b.name})` : `Switch to ${b.name}`);
 
 /**
- * Whether a commit can be undone here: the branch's newest, not pushed yet (the host checks no remote has it).
+ * Whether a commit can be undone here: the one the branch is on (as the status says, not History's list, which a
+ * refresh can be loading again), not pushed yet (the host checks no remote has it).
  * @param {string} hash
  */
-const canUndo = hash => !!gw.repo && !gw.repo.detached && !history.path && gw.commits.find(c => isHead(c.refs))?.hash === hash
-  && (!gw.repo.upstream || !!gw.repo.ahead);
+const canUndo = hash => !!gw.repo && !gw.repo.detached && gw.repo.head === hash && (!gw.repo.upstream || !!gw.repo.ahead);
 
 /**
  * A commit's files, each to open below it.

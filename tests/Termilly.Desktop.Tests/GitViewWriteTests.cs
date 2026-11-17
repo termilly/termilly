@@ -33,6 +33,16 @@ public sealed class GitViewWriteTests : IDisposable
     }
 
     [Fact]
+    public void The_status_says_which_commit_head_is_on()
+    {
+        Assert.Equal(Git("rev-parse", "HEAD").Trim(), GitView.Status(Repo, TestServices.GitRunner).Head);
+        var unborn = Path.Combine(_root, "unborn");
+        Directory.CreateDirectory(unborn);
+        TestServices.Git.Text(unborn, "init", "-q");
+        Assert.Null(GitView.Status(unborn, TestServices.GitRunner).Head);
+    }
+
+    [Fact]
     public void First_push_sets_upstream_and_returns_hook_output()
     {
         Hook("echo hook-output >&2");

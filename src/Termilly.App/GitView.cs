@@ -10,7 +10,8 @@ internal sealed record GitFile(string Path, string? OldPath, string Status);
 /// <summary>What the Git window's Changes tab lists (js/gitwindow.js).</summary>
 internal sealed record GitWorkingTree(
     string Root, string Name, string? Branch, bool Detached, string? Upstream, int Ahead, int Behind, bool HasCommits,
-    IReadOnlyList<GitFile> Staged, IReadOnlyList<GitFile> Unstaged, IReadOnlyList<GitFile> Untracked, IReadOnlyList<GitFile> Conflicted);
+    IReadOnlyList<GitFile> Staged, IReadOnlyList<GitFile> Unstaged, IReadOnlyList<GitFile> Untracked, IReadOnlyList<GitFile> Conflicted,
+    string? Head = null);
 
 /// <summary>A commit in the History tab.</summary>
 internal sealed record GitCommit(string Hash, string Short, IReadOnlyList<string> Parents, string Author, string Date, string Subject, IReadOnlyList<string> Refs);
