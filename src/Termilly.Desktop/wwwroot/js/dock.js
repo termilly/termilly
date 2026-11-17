@@ -121,13 +121,16 @@ export function showDock(on) {
   draw();
 }
 
-/** Whether the pointer is at the edge the hidden dock is on, alongside it. @param {PointerEvent} e */
+/**
+ * Whether the pointer is at the edge the hidden dock is on, alongside it. On top that's the window's top edge, over the
+ * strip; once shown, the strip between that edge and the dock under it counts too, so the way down to it keeps it.
+ * @param {PointerEvent} e
+ */
 function atEdge(e) {
   const box = dock.getBoundingClientRect();
-  const strip = byId(TITLEBAR_ID).getBoundingClientRect().bottom;
   const along = (/** @type {number} */ at, /** @type {number} */ from, /** @type {number} */ to) => at >= from - WAKE_ALONG_PX && at <= to + WAKE_ALONG_PX;
   switch (sideNow()) {
-    case DOCK_SIDE.top: return e.clientY >= strip && e.clientY <= strip + WAKE_PX && along(e.clientX, box.left, box.right);
+    case DOCK_SIDE.top: return e.clientY <= (near ? byId(TITLEBAR_ID).getBoundingClientRect().bottom : WAKE_PX) && along(e.clientX, box.left, box.right);
     case DOCK_SIDE.bottom: return e.clientY >= innerHeight - WAKE_PX && along(e.clientX, box.left, box.right);
     case DOCK_SIDE.left: return e.clientX <= WAKE_PX && along(e.clientY, box.top, box.bottom);
     default: return e.clientX >= innerWidth - WAKE_PX && along(e.clientY, box.top, box.bottom);
@@ -139,7 +142,9 @@ document.addEventListener('pointermove', e => {
   if (!shown || !hides()) return;
   const over = dock.contains(/** @type {Node} */ (e.target)) || (near && dock.matches(HOVER));
   if (over || atEdge(e)) {
+    // Back on it before it hid: the hiding is off, and a later leaving starts it again.
     clearTimeout(hideTimer);
+    hideTimer = 0;
     if (!near) {
       near = true;
       draw();
