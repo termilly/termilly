@@ -104,8 +104,21 @@ step('switching workspaces keeps the strip, the window buttons and the dock as t
 
 step('the hidden dock comes back at its edge and lists the workspaces', async () => {
   const box = await app.eval(() => { const r = globalThis.document.querySelector('.dock-line').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + 4 }; });
+  assert.ok(box.y < 10, `the line is at the window's top edge, over the strip (y ${box.y})`);
   await pointTo(box.x, box.y);
   await app.waitFor('#dock:not(.tucked)');
+  // On to it, off it again: it hides a moment later, however often that happens.
+  const on = await app.eval(() => { const r = globalThis.document.getElementById('dock').getBoundingClientRect(); return { x: r.left + 20, y: r.top + r.height / 2 }; });
+  for (let round = 0; round < 2; round++) {
+    await pointTo(box.x, 20);
+    await pointTo(on.x, on.y);
+    await pointTo(on.x, 500);
+    await pause(1200);
+    await pointTo(on.x, 520);
+    assert.equal(await app.eval(() => globalThis.document.getElementById('dock').classList.contains('tucked')), true, `hidden again after leaving it (round ${round + 1})`);
+    await pointTo(box.x, box.y);
+    await app.waitFor('#dock:not(.tucked)');
+  }
   await app.click('.dock-ws');
   await app.waitFor('.context-menu .menu-row');
   const rows = await app.eval(t => t.$$('.context-menu .menu-label').map(el => el.textContent));
