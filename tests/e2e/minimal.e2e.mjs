@@ -84,7 +84,7 @@ step('a split shows two name lines, the one in focus with its buttons', async ()
   const lines = await app.eval(() => [...document.querySelectorAll('.ws-layer.active .pane > .pane-header')].map(h => Math.round(h.getBoundingClientRect().height)));
   assert.ok(lines.length >= 2 && lines.every(h => h === 24), JSON.stringify(lines));
   const edge = await app.eval(() => getComputedStyle(document.querySelector('.ws-layer.active .pane.focused'), '::after').boxShadow);
-  assert.match(edge, /inset 2px 0px 0px/);
+  assert.match(edge, /2px 0px 0px 0px inset|inset 2px 0px 0px/);
   await app.screenshot('04-line');
 });
 
