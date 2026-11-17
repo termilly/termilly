@@ -93,7 +93,7 @@ export async function openFile(app, section, name) {
 
 /** Opens a row's menu (right click) and picks an entry by its words. */
 export async function menu(app, rowSelector, label) {
-  await app.contextmenu(rowSelector);
+  await app.eval((t, sel) => t.contextmenu(sel), rowSelector);
   await app.waitFor('.menu-row');
   await clickText(app, '.menu-row', label);
 }
