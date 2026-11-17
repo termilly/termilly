@@ -27,7 +27,7 @@ export async function until(check, what) {
 /** Opens the Git window from the toolbar's Git button, and waits for its list. @param {any} app */
 export async function openGit(app) {
   await app.click('#git-button');
-  await app.waitFor('.git-win .gw-list .cw-row');
+  await app.waitFor('.git-win .gw-list > .cw-row, .git-win .gw-list > .gw-empty:not(:empty)');
 }
 
 /**
