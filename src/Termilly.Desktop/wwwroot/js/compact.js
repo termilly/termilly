@@ -25,6 +25,14 @@ import { liveRow, screenRows } from './compactdrawer.js';
 
 /** @typedef {import('./compactlines.js').CompactLine} CompactLine */
 
+/** The feed's lines a jump from My prompts can land on (a tool's and thinking's whole text is their title). */
+const FINDABLE = '.cv-prompt, .cv-reply, .cv-tool, .cv-thinking';
+const TITLED = '.cv-tool, .cv-thinking';
+/** How many of its first characters a line is matched by, and how long the one found stays marked (ms). */
+const FIND_CHARS = 60;
+const FOUND_CLASS = 'cv-found';
+const FOUND_MS = 1600;
+
 /** The views the header's view button picks between. */
 export const COMPACT_VIEW = Object.freeze({ minimal: 'minimal', compact: 'compact', full: 'full' });
 
@@ -430,6 +438,35 @@ function draw(tab) {
   }
   if (following) feed.scrollTop = feed.scrollHeight;
   updateComposer(tab, c.el);
+}
+
+/** @param {string} s */
+const flat = s => s.replace(/s+/g, ' ').trim().toLowerCase();
+
+/**
+ * Scrolls the compact or minimal view to a prompt or step and marks it for a moment (My prompts' jump: the terminal it
+ * would scroll is hidden under the view). False when the terminal shows its own screen, or the view doesn't have that
+ * line (the minimal view leaves out tools and words on the way).
+ * @param {Tab} tab
+ * @param {string} text
+ * @param {number} nth which of the lines starting so, oldest first (a prompt sent twice)
+ */
+export function revealInView(tab, text, nth) {
+  const c = compactOf(tab);
+  if (!isCompact(tab) || !c.el || c.el.hidden) return false;
+  draw(tab);
+  const want = flat(text).slice(0, FIND_CHARS);
+  if (!want) return false;
+  const hits = [.../** @type {NodeListOf<HTMLElement>} */ (c.el.querySelectorAll(FINDABLE))].filter(el => {
+    const shown = flat((el.matches(TITLED) ? el.title : el.textContent) ?? '');
+    return shown.startsWith(want) || (shown.length >= FIND_CHARS / 2 && want.startsWith(shown));
+  });
+  const hit = hits[Math.min(nth, hits.length - 1)];
+  if (!hit) return false;
+  hit.scrollIntoView({ block: 'center' });
+  hit.classList.add(FOUND_CLASS);
+  setTimeout(() => hit.classList.remove(FOUND_CLASS), FOUND_MS);
+  return true;
 }
 
 /**
