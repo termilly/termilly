@@ -64,7 +64,8 @@
 .sw-empty { padding: 14px 8px; }
 .sw-edit { display: flex; flex: 1; flex-direction: column; gap: 4px; min-width: 0; padding: 18px 24px 20px; overflow-y: auto; }
 .sw-edit .dialog-field .field { width: 100%; }
-.sw-edit .snippet-command { min-height: 96px; }
+/* Its own height, not squeezed by the column when the editor scrolls: otherwise dragging its corner does nothing. */
+.sw-edit .snippet-command { flex: none; min-height: 96px; }
 .sw-edit .dialog-actions { margin-top: auto; padding-top: 12px; }
 .sw-edit .dialog-actions .spacer { flex: 1; }
 .sw-none { margin: auto; }
