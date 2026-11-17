@@ -101,7 +101,12 @@ export async function openFile(app, section, name) {
 
 /** Opens a row's menu (right click) and picks an entry by its words. */
 export async function menu(app, rowSelector, label) {
-  await app.eval((t, sel) => t.contextmenu(sel), rowSelector);
+  // Found and right-clicked in one go, once it shows: a refresh can draw the list again between two steps.
+  await until(() => app.eval((t, sel) => {
+    if (!t.$(sel)) return false;
+    t.contextmenu(sel);
+    return true;
+  }, rowSelector), `${rowSelector} to right-click`);
   await app.waitFor('.menu-row');
   await clickText(app, '.menu-row', label);
 }
