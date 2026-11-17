@@ -69,7 +69,9 @@ export async function startApp({ folder, gh = {}, agents = {}, env = {}, name = 
     XDG_CACHE_HOME: path.join(home, '.cache'), USERPROFILE: home,
     PATH: `${fakes}${path.delimiter}${env.PATH ?? process.env.PATH ?? ''}`,
     TERMILLY_DATA_DIR: dataDir, TERMILLY_TEST_DRIVER: String(port), TERMILLY_TEST_TOKEN: token,
-    E2E_GH_SCENARIO: scenario, E2E_GH_LOG: ghLog, E2E_AGENTS: agentScripts, E2E_AGENT_LOG: agentLog };
+    E2E_GH_SCENARIO: scenario, E2E_GH_LOG: ghLog, E2E_AGENTS: agentScripts, E2E_AGENT_LOG: agentLog,
+    // What a fake agent drawing a prompt received from its terminal, key by key (compact.e2e.mjs reads it).
+    E2E_AGENT_KEYS_LOG: path.join(dataDir, 'keys.jsonl') };
   const app = makeApp();
   try {
     await mkdir(home, { recursive: true });
