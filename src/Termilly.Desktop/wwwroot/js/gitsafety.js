@@ -20,6 +20,20 @@ import { state, runningAgent, profileOf, REMOTE_SOURCES } from './store.js';
  * @typedef {(type: any, payload: any) => Promise<any>} Ask
  */
 
+/** The longest an agent's start waits for the snapshot before it (a huge repository): it starts anyway after. */
+const SNAPSHOT_WAIT_MS = 10 * 1000;
+
+/**
+ * Keeps a folder's uncommitted work before an agent starts there; settles when it's kept, when there's nothing to
+ * keep (not a repository), or after SNAPSHOT_WAIT_MS, whichever comes first. Never rejects.
+ * @param {string} folder
+ * @returns {Promise<unknown>}
+ */
+export const keepBeforeAgent = folder => Promise.race([
+  takeSnapshot(folder, SNAPSHOT_REASON.agentStart).catch(() => null),
+  new Promise(resolve => { setTimeout(resolve, SNAPSHOT_WAIT_MS); }),
+]);
+
 /** How often a repository where an agent works is kept. */
 const SNAPSHOT_EVERY_MS = 10 * 60 * 1000;
 

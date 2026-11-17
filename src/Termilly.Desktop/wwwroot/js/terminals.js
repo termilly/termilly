@@ -656,6 +656,23 @@ onHost(HOST.startFolder, m => {
 const startOf = tab => (tab.start ??= { output: null, command: null, resumeSession: null, done: false });
 
 /**
+ * What a terminal's start command waits for besides its prompt, by terminal: Implement's snapshot of the folder, so
+ * the agent starts on work that's already kept. Kept here, not in tab.start, which is saved with the terminal.
+ * @type {Map<string, Promise<unknown>>}
+ */
+const holds = new Map();
+
+/**
+ * Holds a terminal's start command until `until` settles (whichever way).
+ * @param {Tab} tab
+ * @param {Promise<unknown>} until
+ */
+export function holdStart(tab, until) {
+  const held = until.finally(() => { if (holds.get(tab.id) === held) holds.delete(tab.id); });
+  holds.set(tab.id, held);
+}
+
+/**
  * Sets what a terminal does as its shell starts (any of output, command, resumeSession): from a layout, the API, a
  * reopened terminal, a restart (snapshot.js) or a reconnect.
  * @param {Tab} tab
@@ -868,6 +885,11 @@ function runPendingCommand(tab) {
   const start = startOf(tab);
   const { command } = start;
   if (!command || tab.exited) return;
+  const held = holds.get(tab.id);
+  if (held) {
+    held.then(() => runPendingCommand(tab));
+    return;
+  }
   const resuming = start.resumeSession;
   start.command = null;
   start.typed = { command, at: Date.now() };
