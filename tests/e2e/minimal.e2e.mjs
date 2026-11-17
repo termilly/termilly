@@ -38,6 +38,12 @@ const pointTo = (x, y) => app.eval((t, x, y) => {
 before(async () => {
   app = await startApp({ name: 'minimal' });
   await app.waitFor('.pane .xterm');
+  // The welcome tour a first start offers would sit over everything.
+  await app.eval(async t => {
+    for (let i = 0; i < 20 && !document.querySelector('.tour-skip, [data-tour="skip"]'); i++) await new Promise(r => setTimeout(r, 100));
+    const skip = [...document.querySelectorAll('button, a, span')].find(el => el.textContent.trim() === 'Skip tour');
+    skip?.click();
+  });
 });
 
 after(async () => { await app?.stop({ failed }); });
@@ -73,34 +79,33 @@ step('the hidden dock comes back at its edge and lists the workspaces', async ()
 
 step('a split shows two name lines, the one in focus with its buttons', async () => {
   await app.click('#dock [data-command="splitRight"]');
-  await app.eval(async t => { await t.waitFor('.pane:nth-of-type(1)'); });
   await pause(800);
-  const lines = await app.eval(() => [...document.querySelectorAll('.pane > .pane-header')].map(h => Math.round(h.getBoundingClientRect().height)));
+  const lines = await app.eval(() => [...document.querySelectorAll('.ws-layer.active .pane > .pane-header')].map(h => Math.round(h.getBoundingClientRect().height)));
   assert.ok(lines.length >= 2 && lines.every(h => h === 24), JSON.stringify(lines));
   await app.screenshot('04-line');
 });
 
 step('right-click on a name line picks its parts; a part turned off goes from every line', async () => {
-  const at = await app.eval(() => { const r = document.querySelector('.pane > .pane-header').getBoundingClientRect(); return { x: r.left + 40, y: r.top + 10 }; });
-  await app.eval((t, at) => document.querySelector('.pane > .pane-header').dispatchEvent(new MouseEvent('contextmenu', { clientX: at.x, clientY: at.y, bubbles: true })), at);
+  const at = await app.eval(() => { const r = document.querySelector('.ws-layer.active .pane > .pane-header').getBoundingClientRect(); return { x: r.left + 40, y: r.top + 10 }; });
+  await app.eval((t, at) => document.querySelector('.ws-layer.active .pane > .pane-header').dispatchEvent(new MouseEvent('contextmenu', { clientX: at.x, clientY: at.y, bubbles: true })), at);
   await app.waitFor('.context-menu .menu-row');
   const labels = await app.eval(t => t.$$('.context-menu .menu-label').map(el => el.textContent));
   assert.ok(labels.includes('Agent view switch') && labels.includes('Terminal menu') && !labels.includes('Close'), labels.join(', '));
   await app.screenshot('05-line-menu');
   await app.eval(t => [...t.$$('.context-menu .menu-row')].find(r => r.textContent.includes('Tag button')).click());
-  const off = await app.eval(() => [...document.querySelectorAll('.pane-header .tag-btn')].every(b => getComputedStyle(b).display === 'none'));
+  const off = await app.eval(() => [...document.querySelectorAll('.ws-layer.active .pane-header .tag-btn')].every(b => getComputedStyle(b).display === 'none'));
   assert.equal(off, true);
 });
 
 step('on hover, the bar shows near a terminal\'s top only, and typing hides it', async () => {
   await setInterface({ paneNames: 'hover' });
   await pause(300);
-  const pane = await app.eval(() => { const r = document.querySelector('.pane').getBoundingClientRect(); return { x: r.left + r.width / 2, top: r.top, bottom: r.bottom }; });
+  const pane = await app.eval(() => { const r = document.querySelector('.ws-layer.active .pane').getBoundingClientRect(); return { x: r.left + r.width / 2, top: r.top, bottom: r.bottom }; });
   await pointTo(pane.x, pane.bottom - 60);
-  const far = await app.eval(() => getComputedStyle(document.querySelector('.pane > .pane-header')).opacity);
+  const far = await app.eval(() => getComputedStyle(document.querySelector('.ws-layer.active .pane > .pane-header')).opacity);
   await pointTo(pane.x, pane.top + 12);
   await pause(300);
-  const near = await app.eval(() => getComputedStyle(document.querySelector('.pane > .pane-header')).opacity);
+  const near = await app.eval(() => getComputedStyle(document.querySelector('.ws-layer.active .pane > .pane-header')).opacity);
   assert.deepEqual({ far, near }, { far: '0', near: '1' });
   await app.screenshot('06-hover-bar');
   await app.eval(() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'a' })));
@@ -127,7 +132,7 @@ step('Normal gives the title bar, sidebar and toolbar back', async () => {
     toolbarInTitle: !!document.querySelector('#titlebar .toolbar'),
     dock: document.getElementById('dock').hidden,
     sidebar: getComputedStyle(document.getElementById('sidebar')).display !== 'none',
-    header: Math.round(document.querySelector('.pane > .pane-header').getBoundingClientRect().height),
+    header: Math.round(document.querySelector('.ws-layer.active .pane > .pane-header').getBoundingClientRect().height),
   }));
   assert.deepEqual(back, { toolbarInTitle: true, dock: true, sidebar: true, header: 30 });
   await app.screenshot('08-normal-again');
