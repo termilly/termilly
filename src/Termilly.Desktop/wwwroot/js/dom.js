@@ -109,8 +109,34 @@ export const DOCK_SIDE = Object.freeze({ right: 'right', left: 'left', top: 'top
 /** @param {string} side */
 export const isAcross = side => side === DOCK_SIDE.top || side === DOCK_SIDE.bottom;
 
+/**
+ * The window's edge nearest a point (a bar or dock dragged there).
+ * @param {number} x
+ * @param {number} y
+ */
+export function nearestEdge(x, y) {
+  const edges = /** @type {[string, number][]} */ ([
+    [DOCK_SIDE.top, y], [DOCK_SIDE.bottom, innerHeight - y], [DOCK_SIDE.left, x], [DOCK_SIDE.right, innerWidth - x],
+  ]);
+  return edges.reduce((near, edge) => (edge[1] < near[1] ? edge : near))[0];
+}
+
+/** The click that ends a drag on a button doesn't click it. */
+export function swallowNextClick() {
+  /** @param {MouseEvent} e */
+  const swallow = e => {
+    e.stopPropagation();
+    e.preventDefault();
+  };
+  window.addEventListener('click', swallow, { capture: true, once: true });
+  setTimeout(() => window.removeEventListener('click', swallow, true));
+}
+
+
 /** The title bar's buttons, New terminal to Settings (js/toolbar.js). */
 export const TOOLBAR = '.toolbar';
+/** The title bar's id (index.html): the strip, in Minimal. */
+export const TITLEBAR_ID = 'titlebar';
 /**
  * The edge of the window the title bar's buttons are docked on, when `el` is one of them (else the top): what opens
  * from one of them opens away from that edge.

@@ -80,6 +80,10 @@ internal sealed record InterfaceSettings
     private const int MaxThemeId = 40;
 
     public string Theme { get; init; } = SettingValues.Theme.FirstStart;
+    /// <summary>Normal or Minimal (<see cref="SettingValues.Layout"/>).</summary>
+    public string Layout { get; init; } = SettingValues.Layout.Default;
+    /// <summary>In Minimal, a terminal's name on a line over it or on a bar shown on hover (<see cref="SettingValues.PaneNames"/>).</summary>
+    public string PaneNames { get; init; } = SettingValues.PaneNames.Default;
     /// <summary>The app's font; null: the system's.</summary>
     public string? Font { get; init; }
     public bool ShowActivity { get; init; } = true;
@@ -117,6 +121,8 @@ internal sealed record InterfaceSettings
     public InterfaceSettings Normalize() => this with
     {
         Theme = IsThemeId(Theme) ? Theme : SettingValues.Theme.FirstStart,
+        Layout = SettingChecks.OneOf(Layout, SettingValues.Layout.All, SettingValues.Layout.Default),
+        PaneNames = SettingChecks.OneOf(PaneNames, SettingValues.PaneNames.All, SettingValues.PaneNames.Default),
         MinimizeTo = SettingChecks.OneOf(MinimizeTo, SettingValues.MinimizeTo.All, SettingValues.MinimizeTo.Default),
         CloseAction = SettingChecks.OneOf(CloseAction, SettingValues.CloseAction.All, SettingValues.CloseAction.Default),
         Font = SettingChecks.Trimmed(Font),

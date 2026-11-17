@@ -21,6 +21,7 @@ import { openTabMenu, TAG_BUTTON } from './tabmenu.js';
 import { find, setHtmlIfChanged } from './dom.js';
 import { openPrompts, hasPrompts, PROMPTS_TITLE } from './myprompts.js';
 import { updateSwitch, openViewMenu, VIEW_BUTTON } from './compact.js';
+import { isMinimal, markBarParts, openPaneBarMenu } from './panebar.js';
 
 /** The header's parts that change with the terminal (HEADER_HTML has them). */
 const PINNED_NOTE = '.pane-note';
@@ -91,9 +92,11 @@ function wireHeader(tab, header) {
   click(VIEW_BUTTON, e => openViewMenu(tab, /** @type {HTMLElement} */ (e.currentTarget)));
   click(PROMPTS_BUTTON, e => openPrompts(tab, /** @type {HTMLElement} */ (e.currentTarget)));
   click(PINNED_NOTE, e => openPinned(tab, /** @type {string} */ (/** @type {HTMLElement} */ (e.currentTarget).dataset.kind)));
+  // In Minimal (the main window) it picks what the name line shows; its last item is this menu.
   header.addEventListener('contextmenu', e => {
     e.preventDefault();
-    openTabMenu(tab, { x: e.clientX, y: e.clientY });
+    if (isMinimal() && !tab.detached) openPaneBarMenu(tab, { x: e.clientX, y: e.clientY });
+    else openTabMenu(tab, { x: e.clientX, y: e.clientY });
   });
 }
 
@@ -115,6 +118,7 @@ export function updateHeader(tab) {
   header.classList.toggle('no-history', !!tab.noHistory);
   showBroadcast(tab, header);
   showActivity(tab, header);
+  markBarParts(header);
 }
 
 /**
