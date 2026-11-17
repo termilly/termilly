@@ -58,7 +58,7 @@ export function filesIn(app, section) {
 export async function clickText(app, selector, text, options) {
   // Found and clicked in one go: the list can be drawn again between two steps.
   const clicked = await app.eval((t, sel, want, how) => {
-    const el = t.$(sel).find(e => e.textContent.includes(want));
+    const el = t.$$(sel).find(e => e.textContent.includes(want));
     if (!el) return false;
     el.setAttribute('data-e2e-target', '');
     try {
@@ -80,7 +80,7 @@ export async function clickText(app, selector, text, options) {
 export async function openFile(app, section, name) {
   const clicked = await app.eval((t, sec, file) => {
     let current = null;
-    for (const row of t.$('.gw-list > .cw-row')) {
+    for (const row of t.$$('.gw-list > .cw-row')) {
       if (row.classList.contains('gw-section')) current = row.querySelector('.cw-name')?.textContent;
       else if (current === sec && row.querySelector('.cw-name')?.textContent === file) {
         row.setAttribute('data-e2e-target', '');
@@ -120,7 +120,7 @@ export async function confirm(app) {
 export async function noteAction(app, text) {
   await app.waitFor('.toast', { text });
   const pressed = await app.eval((t, want) => {
-    const toast = t.$('.toast').find(e => e.textContent.includes(want));
+    const toast = t.$$('.toast').find(e => e.textContent.includes(want));
     const button = toast?.querySelector('[data-toast-action]');
     if (!button) return false;
     button.setAttribute('data-e2e-target', '');
