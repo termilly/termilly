@@ -72,11 +72,20 @@ body[data-layout="minimal"][data-pane-names="hover"] .pane > .pane-header {
   pointer-events: none;
   transition: opacity 0.12s;
 }
-body[data-layout="minimal"][data-pane-names="hover"] .pane:is(.bar-near, :focus-within:has(.pane-header .open)) > .pane-header,
-body[data-layout="minimal"][data-pane-names="hover"] .pane > .pane-header:is(:hover, :focus-within) { opacity: 1; pointer-events: auto; }
+/* Shown while the mouse is near the top or on the bar, a menu from it is open, or its name is being edited (not any
+   focus left in it after a click: that kept a bar shown for good). */
+body[data-layout="minimal"][data-pane-names="hover"] .pane.bar-near > .pane-header,
+body[data-layout="minimal"][data-pane-names="hover"] .pane > .pane-header:is(:hover, :has(.open), :has(input:focus)) { opacity: 1; pointer-events: auto; }
 body[data-layout="minimal"][data-pane-names="hover"] .pane > .pane-header .pane-btn { opacity: 1; }
-/* A working agent's Stop stays in reach without pointing. */
-body[data-layout="minimal"][data-pane-names="hover"] .pane > .pane-header:has(.agent-stop-btn:not([hidden])) { opacity: 1; pointer-events: auto; }
+/* Hidden while an agent works, its Stop stays in reach: alone at the bar's right end, with no bar around it. */
+body[data-layout="minimal"][data-pane-names="hover"] .pane:not(.bar-near) > .pane-header:not(:hover, :has(.open), :has(input:focus)):has(.agent-stop-btn:not([hidden])) {
+  border-color: transparent;
+  background: none;
+  box-shadow: none;
+  opacity: 1;
+}
+body[data-layout="minimal"][data-pane-names="hover"] .pane:not(.bar-near) > .pane-header:not(:hover, :has(.open), :has(input:focus)):has(.agent-stop-btn:not([hidden])) > * { visibility: hidden; }
+body[data-layout="minimal"][data-pane-names="hover"] .pane:not(.bar-near) > .pane-header:not(:hover, :has(.open), :has(input:focus)) .agent-stop-btn { visibility: visible; pointer-events: auto; background: var(--raised); }
 
 /* ---- The dock ---- */
 
