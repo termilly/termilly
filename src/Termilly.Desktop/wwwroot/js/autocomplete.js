@@ -16,7 +16,7 @@ import { escapeHtml } from './ui.js';
 import { find, XTERM_SCREEN } from './dom.js';
 import { timeAgo } from './util.js';
 import { repoAt, folderOfTab } from './reposnippets.js';
-import { shellKind } from './commands.js';
+import { shellKind, typingAtPrompt } from './commands.js';
 import { newIndex, indexRuns, addRun, bestFor, suggest, nextWord, partialWord, screenWords } from './suggest.js';
 
 /** How many commands and screen words the list shows. */
@@ -381,6 +381,7 @@ listEl.addEventListener('mousedown', e => {
 
 addInputHook((tab, term, e) => {
   if (e.type !== 'keydown' || e.isComposing) return true;
+  typingAtPrompt(tab);
   ghost.active = tab;
   const used = (list.tab === tab && listKey(e)) || (ghost.tab === tab && !!ghost.rest && ghostKey(tab, e));
   if (!used) {
