@@ -18,7 +18,7 @@ import { plainText } from './schedulereport.js';
 import { reviewersOf, startReviews, stopReviews } from './schedulereview.js';
 import { runInNewTerminal, runInTerminal, stopInTerminal, finishTerminal, terminalsFor, TERMINAL_TURN } from './scheduleterminal.js';
 import {
-  nextRun, newSchedule, statusOf, summaryOf, shouldTell, sortRuns, RUN, RUN_LABEL, WHAT, WHERE, WHEN, MISSED, GRACE_MS,
+  nextRun, newSchedule, statusOf, summaryOf, shouldTell, sortRuns, clearRuns, RUN, RUN_LABEL, WHAT, WHERE, WHEN, MISSED, GRACE_MS,
 } from './schedulerules.js';
 
 const MINUTE_S = 60;
@@ -94,9 +94,25 @@ export function setScheduleOn(id, on) {
 
 /** Runs past their time go, and what was kept of them. */
 function tidyRuns() {
-  const { keep, gone } = sortRuns(runs(), schedules(), Date.now());
+  forget(sortRuns(runs(), schedules(), Date.now()));
+}
+
+/**
+ * The runs that stay are kept, and the reports of those that go are deleted.
+ * @param {{ keep: ScheduleRunRecord[], gone: ScheduleRunRecord[] }} sorted
+ */
+function forget({ keep, gone }) {
   state.schedules.runs = keep;
   if (gone.length) send(PAGE.scheduleForget, { runIds: gone.map(r => r.id) });
+}
+
+/**
+ * The Clear button: a schedule's past runs go, with their reports. A run going on stays.
+ * @param {string} scheduleId
+ */
+export function clearPastRuns(scheduleId) {
+  forget(clearRuns(runs(), scheduleId));
+  changed();
 }
 
 /**

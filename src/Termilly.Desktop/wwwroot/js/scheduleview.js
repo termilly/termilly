@@ -9,7 +9,7 @@ import { reportTextHtml } from './schedulelinks.js';
 import { reviewersFor, namesOf, fitPlan } from './todoplan.js';
 import { planRowsHtml } from './planrows.js';
 import {
-  WHAT, WHERE, WHEN, UNIT, NOTIFY, MISSED, AFTER, BUSY, CLOSED, RUN, RUN_LABEL, DAY_NAMES, describeWhen, describeAt, describeTook,
+  WHAT, WHERE, WHEN, UNIT, NOTIFY, MISSED, AFTER, BUSY, CLOSED, RUN, RUN_LABEL, DAY_NAMES, describeWhen, describeAt, describeTook, hasEnded,
 } from './schedulerules.js';
 
 /** How many of a schedule's last runs its row shows. */
@@ -279,7 +279,9 @@ function whenItRan(at) {
  */
 export function runsHtml(runs, open) {
   if (!runs.length) return '<p class="set-desc sw-none">No runs yet.</p>';
-  return `<div class="sch-runs">${runs.map(r => `<button class="sch-run${r.id === open ? ' selected' : ''}" data-run="${escapeHtml(r.id)}">
+  const clear = runs.some(hasEnded)
+    ? `<div class="sch-runs-head"><button class="btn small" data-sch="clear" title="Delete the past runs and their reports">Clear</button></div>` : '';
+  return `${clear}<div class="sch-runs">${runs.map(r => `<button class="sch-run${r.id === open ? ' selected' : ''}" data-run="${escapeHtml(r.id)}">
     <i class="sch-square ${escapeHtml(r.status)}"></i><span class="sch-run-when">${escapeHtml(whenItRan(r.at))}</span>
     <span class="sch-run-status">${escapeHtml(RUN_LABEL[r.status])}${r.ms ? `, ${escapeHtml(describeTook(r.ms))}` : ''}</span>
     <span class="sch-run-text">${escapeHtml(r.summary)}</span></button>`).join('')}</div>`;
@@ -291,7 +293,7 @@ export function runsHtml(runs, open) {
  * @param {string | null} text its output; null with none kept
  */
 export function reportHtml(run, text) {
-  const going = run.status === RUN.running || run.status === RUN.waiting;
+  const going = !hasEnded(run);
   const empty = going ? 'It’s still running.' : 'No output was kept for this run.';
   return `<div class="sch-report">
     <div class="sch-report-head">

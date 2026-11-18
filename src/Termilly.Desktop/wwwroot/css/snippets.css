@@ -104,6 +104,7 @@
 .sch-square.worked { background: #7ee787; }
 .sch-square.failed, .sch-square.stopped { background: #ff7b72; }
 .sch-square.running, .sch-square.waiting { background: var(--accent); }
+.sch-runs-head { display: flex; flex: none; justify-content: flex-end; margin-bottom: 6px; }
 .sch-runs { display: flex; flex-direction: column; gap: 2px; min-height: 0; }
 .sch-run { display: flex; flex: none; align-items: center; gap: 10px; width: 100%; padding: 6px 8px; border-radius: 6px; color: var(--text); font-size: 12.5px; text-align: left; }
 .sch-run:hover { background: var(--hover); }
