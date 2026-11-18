@@ -97,9 +97,10 @@ public sealed class AgentTests : IDisposable
         var seen = new System.Text.StringBuilder();
         var buffer = new byte[4096];
         using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-        async Task Until(string text)
+        Task Until(string text) => UntilSeen(s => s.Contains(text, StringComparison.Ordinal));
+        async Task UntilSeen(Func<string, bool> done)
         {
-            while (!seen.ToString().Contains(text, StringComparison.Ordinal))
+            while (!done(seen.ToString()))
             {
                 var read = await pty.Output.ReadAsync(buffer, cancel.Token);
                 if (read == 0)
@@ -116,7 +117,10 @@ public sealed class AgentTests : IDisposable
                 }
             }
         }
-        await Until("\e]133;B"); // pwsh's prompt: only its integration marks where input starts
+        // pwsh's prompt, from its start to where input starts: bash's own prompt marks where input starts too.
+        const string pwshPrompt = "\e]133;A;shell=powershell";
+        await UntilSeen(s => s.IndexOf(pwshPrompt, StringComparison.Ordinal) is var at and >= 0
+            && s.IndexOf("\e]133;B", at, StringComparison.Ordinal) >= 0);
         seen.Clear();
         await pty.Input.WriteAsync(System.Text.Encoding.UTF8.GetBytes("Start-Sleep -Milliseconds 100; 'slept-' + (2+3)\r"));
         await pty.Input.FlushAsync();
