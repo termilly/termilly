@@ -70,10 +70,10 @@ async function buttonsInReach(app) {
   await app.waitFor('[data-np="new"]');
   const opacity = () => app.eval(t => globalThis.getComputedStyle(t.$('[data-np="new"]')).opacity);
   await app.eval(t => t.$('.xterm textarea').focus());
-  assert.equal(await opacity(), '0', 'faded while another terminal is in use');
+  await until(async () => (await opacity()) === '0', 'faded while another terminal is in use');
   await app.eval(t => t.$('[data-np="new"]').focus());
   assert.equal(await app.eval(t => globalThis.document.activeElement === t.$('[data-np="new"]')), true, 'Tab can reach it');
-  assert.equal(await opacity(), '1', 'shown once it has the focus');
+  await until(async () => (await opacity()) === '1', 'shown once it has the focus');
   await toggle(app, NOTEPAD);
 }
 
