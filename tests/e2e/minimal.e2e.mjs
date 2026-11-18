@@ -225,10 +225,10 @@ step('on hover, a bar a button was clicked in hides again, and a working agent k
     const stop = header.querySelector('.agent-stop-btn');
     const pane = header.parentElement.getBoundingClientRect();
     return {
-      stop: globalThis.getComputedStyle(stop).visibility === 'visible' && !stop.hidden,
+      stop: globalThis.getComputedStyle(stop).display !== 'none' && globalThis.getComputedStyle(header).opacity === '1',
       stopAtRight: pane.right - stop.getBoundingClientRect().right < 24,
-      menu: globalThis.getComputedStyle(header.querySelector('.menu-btn')).visibility,
-      name: globalThis.getComputedStyle(header.querySelector('.pane-title')).visibility,
+      menu: globalThis.getComputedStyle(header.querySelector('.menu-btn')).display === 'none' ? 'hidden' : 'visible',
+      name: globalThis.getComputedStyle(header.querySelector('.pane-title')).display === 'none' ? 'hidden' : 'visible',
     };
   });
   assert.deepEqual(await look(), { stop: true, stopAtRight: true, menu: 'hidden', name: 'hidden' });
