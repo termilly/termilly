@@ -117,6 +117,7 @@ step('"needs you" sits before the window buttons, ends with a divider, and goes 
     return { rightHalf: needs.left > globalThis.innerWidth / 2, beforeControls: needs.right <= controls.left, divider };
   });
   assert.deepEqual(place, { rightHalf: true, beforeControls: true, divider: '1px' });
+  await pause(300);
   await app.screenshot('02c-needs-you');
   await app.click('#titlebar .mini-needs');
   const went = await app.eval(async t => {
