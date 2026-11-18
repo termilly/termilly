@@ -61,11 +61,11 @@ const clean = line => line.replace(BOX, '').trimEnd();
  * the screen is read whole; its choices must reach the screen (the first ones may have scrolled above it). Up there,
  * the agent's own kind of start is looked for (an earlier rule in the conversation isn't a Codex prompt's start).
  * @param {string[]} lines the lines, top to bottom: the screen's, or some above it and then the screen's
- * @param {{ screenTop?: number, startsAt?: string, atTop?: boolean }} [where] screenTop: the first line that is on
- *   the screen; startsAt: a PROMPT_START; atTop: the lines start at the top of all the terminal has (nothing above)
+ * @param {{ screenTop?: number, startsAt?: string }} [where] screenTop: the first line that is on the screen;
+ *   startsAt: a PROMPT_START
  * @returns {Menu | null}
  */
-export function readMenu(lines, { screenTop = 0, startsAt = PROMPT_START.either, atTop = false } = {}) {
+export function readMenu(lines, { screenTop = 0, startsAt = PROMPT_START.either } = {}) {
   const rows = lines.map(clean);
   const first = lastFirstChoice(rows);
   if (first < 0) return null;
@@ -74,8 +74,10 @@ export function readMenu(lines, { screenTop = 0, startsAt = PROMPT_START.either,
   if (end < screenTop) return null;
   // A menu the agent waits on has its pointer on one choice; a numbered list in its words has none.
   if (choices.length < 2 || !choices.some(c => c.picked)) return null;
-  const { title, context } = questionAbove(rows, first);
-  const start = promptStart(rows, first, startsAt, atTop);
+  // A Codex approval is known by its title; without it (cut off, or one this doesn't know) its start isn't known.
+  const codex = startsAt === PROMPT_START.gap ? codexHeader(rows, first) : null;
+  const { title, context } = codex ? { title: codex.title, context: bodyAbove(rows, codex.end, first) } : questionAbove(rows, first);
+  const start = codex ? codex.start : promptStart(rows, first, startsAt);
   const whole = start < 0 ? null : JSON.stringify([rows.slice(start, first).map(r => r.trim()), choices.map(c => [c.key, c.label, c.detail])]);
   return { title, context, choices, whole, start: start < screenTop ? -1 : start - screenTop, prompt: dedent(rows.slice(Math.max(start, 0), first)) };
 }
@@ -121,18 +123,16 @@ export function previewLines(menu) {
 /**
  * Where the prompt above a menu starts: the line after its rule (Claude Code draws one; blank lines inside the
  * prompt, in a command, don't end it), or else after its gap of blank lines (Codex draws no rule), or only the kind
- * asked for; -1 when there's none in the lines.
+ * asked for (a Codex approval's is its title, codexHeader); -1 when there's none in the lines.
  * @param {string[]} rows
  * @param {number} first
  * @param {string} startsAt a PROMPT_START
- * @param {boolean} atTop the lines start at the top of all the terminal has
  */
-function promptStart(rows, first, startsAt, atTop) {
+function promptStart(rows, first, startsAt) {
   for (let i = first - 1; i >= 0 && startsAt !== PROMPT_START.gap; i--) {
     if (RULE.test(rows[i].trim())) return i + 1;
   }
-  if (startsAt === PROMPT_START.rule) return -1;
-  return startsAt === PROMPT_START.gap ? codexStart(rows, first, atTop) : nearestGap(rows, first);
+  return startsAt === PROMPT_START.either ? nearestGap(rows, first) : -1;
 }
 
 /**
@@ -150,40 +150,47 @@ function nearestGap(rows, first) {
 }
 
 /**
- * Where a Codex prompt starts. It opens with its question, above any command it shows, and a command may have blank
- * lines of its own: so the highest gap whose first line asks a question, else the nearest gap (a prompt that asks
- * none). Codex indents all of a prompt and starts its conversation at the margin ("• Ran", "› a prompt"), where the
- * search stops; lines that run out before the margin (and aren't the top of all the terminal has) may go on above,
- * so the start is not known there (-1).
- * @param {string[]} rows
- * @param {number} first
- * @param {boolean} atTop the lines start at the top of all the terminal has
+ * The titles Codex (0.167, approval_overlay.rs) gives its approvals, once a wrapped one's rows are joined: running a
+ * command, typing into a terminal, network access, permissions, edits, a tool or an MCP server asking.
  */
-function codexStart(rows, first, atTop) {
-  let blanks = 0;
-  let nearest = -1;
-  let question = -1;
-  for (let i = first - 1; i >= 0; i--) {
-    const text = rows[i].trim();
-    if (text && !INDENTED.test(rows[i])) return question >= 0 ? question : nearest;
-    blanks = text ? 0 : blanks + 1;
-    if (blanks !== GAP) continue;
-    if (nearest < 0) nearest = i + 1;
-    if (firstText(rows, i + 1, first).endsWith('?')) question = i + 1;
-  }
-  return atTop ? (question >= 0 ? question : nearest) : -1;
-}
+const CODEX_TITLE = /^(?:Would you like to .+\?|Do you want to approve network access to .+\?|Allow .+\?|.+ needs your approval\.)$/;
 
 /** A line that starts indented. */
 const INDENTED = /^\s/;
 
 /**
- * The first line with words in it, from one line to another (empty for none).
+ * A Codex approval's title above its choices: where it starts, the line after it, and what it says; null when it
+ * isn't there. Codex draws the title (wrapped over rows when long) and a blank line, then what it's about (a command
+ * may have blank lines and questions of its own). It indents all of an approval and starts its conversation at the
+ * margin ("• Ran", "› a prompt"), where the search stops; above that, the highest title is the approval's.
+ * @param {string[]} rows
+ * @param {number} first
+ * @returns {{ start: number, end: number, title: string } | null}
+ */
+function codexHeader(rows, first) {
+  let found = null;
+  let bottom = first;
+  for (let i = first - 1; i >= -1; i--) {
+    const row = i < 0 ? '' : rows[i];
+    const margin = !!row.trim() && !INDENTED.test(row);
+    if (row.trim() && !margin) continue;
+    // A blank line, the margin or the top: the paragraph below it is whole.
+    const lines = rows.slice(i + 1, bottom).map(line => line.trim());
+    const title = lines.join(' ');
+    if (lines.length && CODEX_TITLE.test(title)) found = { start: i + 1, end: bottom, title };
+    if (margin) break;
+    bottom = i;
+  }
+  return found;
+}
+
+/**
+ * What a Codex approval is about, under its title: its lines with words in them, the last ones the card has room for.
  * @param {string[]} rows
  * @param {number} from
- * @param {number} to
+ * @param {number} first
  */
-const firstText = (rows, from, to) => rows.slice(from, to).find(row => row.trim())?.trim() ?? '';
+const bodyAbove = (rows, from, first) => rows.slice(from, first).map(row => row.trim()).filter(text => text && !DASHES.test(text)).slice(-MAX_CONTEXT);
 
 /**
  * Where the last "1." that starts a menu is.

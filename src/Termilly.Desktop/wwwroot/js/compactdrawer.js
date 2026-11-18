@@ -18,15 +18,15 @@ export const screenRows = term => rowsFrom(term, term.buffer.active.baseY);
 
 /**
  * The screen's rows with up to this many of the scrollback's above them (a prompt taller than the screen), and which
- * of them is the screen's first, and whether they start at the top of all the terminal has.
+ * of them is the screen's first.
  * @param {any} term xterm's Terminal
  * @param {number} above
- * @returns {{ rows: string[], screenTop: number, atTop: boolean }}
+ * @returns {{ rows: string[], screenTop: number }}
  */
 export function rowsWithScrollback(term, above) {
   const base = term.buffer.active.baseY;
   const from = Math.max(0, base - above);
-  return { rows: rowsFrom(term, from), screenTop: base - from, atTop: from === 0 };
+  return { rows: rowsFrom(term, from), screenTop: base - from };
 }
 
 /**
