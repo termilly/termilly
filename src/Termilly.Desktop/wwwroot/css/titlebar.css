@@ -138,7 +138,7 @@ body.moving-bar .toolbar .tool { background: none; color: var(--text); }
   --tool-icon-stroke: 1.1;
   /* How far the icons go from the muted grey toward the text colour: higher stands out more (darker in Light themes,
      brighter in Dark). Hover and open still use the full text colour. */
-  --tool-icon-strength: 40%;
+  --tool-icon-strength: 35%;
 }
 .tool svg { width: 16px; height: 16px; stroke-width: var(--tool-icon-stroke); }
 .tool { color: color-mix(in srgb, var(--text) var(--tool-icon-strength), var(--muted)); }
