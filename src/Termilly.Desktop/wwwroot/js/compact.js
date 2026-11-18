@@ -166,11 +166,18 @@ function apply(tab) {
   view.el.classList.toggle(SHOWN_CLASS, shown);
   const c = compactOf(tab);
   if (shown && !c.el) c.el = build(tab);
+  const showing = !!c.el && shown && c.el.hidden;
   if (c.el) c.el.hidden = !shown;
+  // Shown again: its prompt box takes the height its text needs at the pane's size now.
+  if (showing && c.el) refitInput(c.el);
   // While the agent waits on a question, its card follows the screen (a choice picked with the keys, a new question).
   if (c.el && view.term && !c.writes) c.writes = view.term.onWriteParsed(() => onScreen(tab));
-  // A resized pane moves the terminal's rows: the drawer follows them.
-  if (c.el && view.term && !c.resizes) c.resizes = view.term.onResize(() => placeDrawerSoon(tab));
+  // A resized pane moves the terminal's rows: the drawer follows them. Its prompt box is wider or narrower too, so a
+  // text that wrapped may fit on fewer lines now (or need more): the box takes its height again, not at the next key.
+  if (c.el && view.term && !c.resizes) c.resizes = view.term.onResize(() => {
+    placeDrawerSoon(tab);
+    if (c.el) refitInput(c.el);
+  });
   updateSwitch(tab);
   const session = shown ? sessionOf(tab) : null;
   if (session !== c.session) {
@@ -345,16 +352,24 @@ function sizeText(el) {
 
 /**
  * The prompt box grows with its text, up to a few lines (CSS caps it). The feed above it shrinks: one that followed
- * the newest line still does, so a question's card stays in sight.
+ * the newest line still does, so a question's card stays in sight. Not while the view is hidden (the terminal shows):
+ * nothing has a size then; it's fitted again when the view shows.
  * @param {HTMLTextAreaElement} input
  * @param {HTMLElement} feed
  */
 function fitInput(input, feed) {
+  if (!input.offsetParent) return;
   const following = isFollowing(feed);
   input.style.height = 'auto';
   input.style.height = `${input.scrollHeight}px`;
   if (following) feed.scrollTop = feed.scrollHeight;
 }
+
+/**
+ * Fits a view's prompt box to its text again (the pane's size or the font changed).
+ * @param {HTMLElement} el the view
+ */
+const refitInput = el => fitInput(/** @type {HTMLTextAreaElement} */ (find(el, INPUT)), find(el, FEED));
 
 /**
  * Whether the feed shows its newest line (scrolled to its end, or nearly).
@@ -775,7 +790,7 @@ on(EVENTS.settings, () => {
     const c = tab.compact;
     if (c?.el) {
       sizeText(c.el);
-      fitInput(/** @type {HTMLTextAreaElement} */ (find(c.el, INPUT)), find(c.el, FEED));
+      refitInput(c.el);
     }
   }
 });

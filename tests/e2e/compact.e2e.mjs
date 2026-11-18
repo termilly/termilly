@@ -142,3 +142,18 @@ test('the card stays in sight while the prompt box grows and the feed scrolls', 
   await app.eval(t => { t.$('.cv-feed').scrollTop = 0; });
   assert.ok(await choiceInSight(app), 'with the feed scrolled up');
 }, { waiting: true }));
+
+test('the prompt box takes its height again when its pane gets narrower or wider, without a key', () => scenario('compact-box-resize', approval, async app => {
+  const height = () => app.eval(t => t.$('.cv-input').offsetHeight);
+  await app.eval(t => {
+    const input = t.$('.cv-input');
+    input.value = 'word '.repeat(30).trim();
+    input.dispatchEvent(new Event('input'));
+  });
+  const wide = await height();
+  // The terminals' area narrower, as when a panel opens beside it: the text wraps onto more lines.
+  await app.eval(t => { t.$('.ws-layer.active').style.right = '60%'; });
+  await until(async () => (await height()) > wide, 'taller once narrower');
+  await app.eval(t => { t.$('.ws-layer.active').style.right = ''; });
+  await until(async () => (await height()) === wide, 'back to its height once wider');
+}, { waiting: true }));
