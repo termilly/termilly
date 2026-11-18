@@ -156,6 +156,20 @@ test('choices only in the scrollback are not a menu on the screen', () => {
   assert.equal(readMenu(['──────────', 'Do you want to proceed?', '> 1. Yes', '  2. No', 'Done.', '> '], { screenTop: 4 }), null);
 });
 
+test('a menu whose first choices scrolled above a short screen is still read, with all its choices', () => {
+  const menu = readMenu(['──────────', 'Do you want to proceed?', '> 1. Yes', '  2. No', '', 'Esc to cancel'], { screenTop: 3 });
+  assert.deepEqual(menu?.choices.map(c => [c.key, c.picked]), [['1', true], ['2', false]]);
+  assert.notEqual(menuKey(/** @type {any} */ (menu)), '');
+});
+
+test('a Codex command with two blank lines of its own: the prompt starts at the gap above its question', () => {
+  const rows = ['• Ran ls', '', '', '  Would you like to run the following command?', '', '  $ cat <<EOF', '  one', '', '', '  two', '  EOF', '› 1. Yes', '  2. No'];
+  assert.equal(readMenu(rows, { startsAt: PROMPT_START.gap })?.prompt?.[0], 'Would you like to run the following command?');
+  // A prompt that asks nothing starts at its nearest gap, and the search stops at the conversation's margin.
+  const plain = ['• Ran ls', 'Is this a question?', '', '', '  Allow this', '› 1. Yes', '  2. No'];
+  assert.equal(readMenu(plain, { startsAt: PROMPT_START.gap })?.prompt?.[0], 'Allow this');
+});
+
 test('a prompt cut off at the top is known by what shows and what the agent said it is about, and gets its buttons', () => {
   const prompt = command => ['Bash command', command, ...Array.from({ length: 13 }, (_, i) => `# line ${i}`), '', 'Do you want to proceed?', '> 1. Yes', '  2. No'];
   const cut = readMenu(prompt('rm -rf a').slice(1));
@@ -165,7 +179,7 @@ test('a prompt cut off at the top is known by what shows and what the agent said
   assert.notEqual(menuKey(keyed), menuKey(keyedByWhatShows(cut, ['Bash', 'rm -rf b'])));
   assert.notEqual(menuKey(keyed), menuKey(keyedByWhatShows(cut, ['Bash', 'rm -rf a', 2])), 'the next question that looks the same');
   assert.match(cardHtml(keyed, 'Claude', { open: 'o', preview: 'p' }), /data-choice="1"/);
-  assert.equal(previewLines(keyed)[0], '(The start of this prompt is no longer in the terminal.)');
+  assert.equal(previewLines(keyed)[0], '(The start of this prompt could not be found.)');
   const whole = readMenu(['──────────', ...prompt('rm -rf a')]);
   assert.ok(whole);
   assert.equal(keyedByWhatShows(whole, ['x']), whole);

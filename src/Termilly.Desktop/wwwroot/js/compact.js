@@ -502,14 +502,14 @@ function screenMenu(tab) {
   const startsAt = waiting ? PROMPT_STARTS[runningAgent(tab) ?? ''] ?? PROMPT_START.either : PROMPT_START.either;
   const menu = readMenu(screenRows(term), { startsAt });
   // An agent starting has said nothing of what it asks: a menu cut off at the top offers the terminal, as before.
-  if (!menu || menu.whole !== null || !waiting) return menu;
-  // A question taller than the screen: read on up the scrollback (its choices still on the screen).
+  if (!waiting || (menu && menu.whole !== null)) return menu;
+  // A question taller than the screen, or whose first choices scrolled above it: read on up the scrollback.
   const { rows, screenTop } = rowsWithScrollback(term, SCROLLBACK_ROWS);
   const deeper = readMenu(rows, { screenTop, startsAt });
-  if (deeper && deeper.whole !== null) return deeper;
-  // Not there either (cleared, or further up): known by what the screen shows and what the hook said it's about (and
-  // which question it is, menuOf).
-  return keyedByWhatShows(menu, [tab.agent?.tool, tab.agent?.target]);
+  if (!deeper || deeper.whole !== null) return deeper ?? menu;
+  // Its start not found (further up, or no longer in the terminal): all of it that was read, known by that and what
+  // the hook said it's about (and which question it is, menuOf).
+  return keyedByWhatShows(deeper, [tab.agent?.tool, tab.agent?.target]);
 }
 
 /**
