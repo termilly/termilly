@@ -162,24 +162,34 @@ test('a menu whose first choices scrolled above a short screen is still read, wi
   assert.notEqual(menuKey(/** @type {any} */ (menu)), '');
 });
 
-test('a Codex command with two blank lines of its own: the prompt starts at the gap above its question', () => {
-  const rows = ['• Ran ls', '', '', '  Would you like to run the following command?', '', '  $ cat <<EOF', '  one', '', '', '  two', '  EOF', '› 1. Yes', '  2. No'];
-  assert.equal(readMenu(rows, { startsAt: PROMPT_START.gap })?.prompt?.[0], 'Would you like to run the following command?');
-  // A prompt that asks nothing starts at its nearest gap, and the search stops at the conversation's margin.
-  const plain = ['• Ran ls', 'Is this a question?', '', '', '  Allow this', '› 1. Yes', '  2. No'];
-  assert.equal(readMenu(plain, { startsAt: PROMPT_START.gap })?.prompt?.[0], 'Allow this');
-  // A command line after its own gap that ends in "?" isn't the question: that's the highest one.
-  const asking = ['• Ran ls', '', '', '  Would you like to run the following command?', '', '  $ cat <<EOF', '', '', '  is this two?', '  EOF', '› 1. Yes', '  2. No'];
-  assert.equal(readMenu(asking, { startsAt: PROMPT_START.gap })?.prompt?.[0], 'Would you like to run the following command?');
+const COMMAND_TITLE = 'Would you like to run the following command?';
+
+test('a Codex approval starts at its title: blank lines and questions inside its command are not its start', () => {
+  const rows = ['• Ran ls', '', '', `  ${COMMAND_TITLE}`, '', '  $ cat <<EOF', '  one', '', '', '  is this two?', '  EOF', '› 1. Yes', '  2. No'];
+  const menu = readMenu(rows, { startsAt: PROMPT_START.gap });
+  assert.equal(menu?.prompt?.[0], COMMAND_TITLE);
+  // The card says the same: its title is the approval's, what it's about the rest.
+  assert.equal(menu?.title, COMMAND_TITLE);
+  assert.deepEqual(menu?.context, ['$ cat <<EOF', 'one', 'is this two?', 'EOF']);
+  // An indented question in the conversation above isn't one either: the search stops at its margin.
+  const above = ['• Ran ls', '  Prior output?', '', '', `  ${COMMAND_TITLE}`, '', '  $ ls', '› 1. Yes', '  2. No'];
+  assert.equal(readMenu(above, { startsAt: PROMPT_START.gap })?.prompt?.[0], COMMAND_TITLE);
 });
 
-test('a Codex prompt whose question is above the lines read has no known start, so the scrollback is read', () => {
-  const tail = ['  $ cat <<EOF', '  one', '', '', '  two', '  EOF', '› 1. Yes', '  2. No'];
+test('a wrapped Codex title is read across its rows, also at the top of what was read', () => {
+  const rows = ['  Do you want to approve network access to', '  "example.com"?', '', '  $ curl example.com', '› 1. Yes', '  2. No'];
+  const menu = readMenu(rows, { startsAt: PROMPT_START.gap });
+  assert.equal(menu?.title, 'Do you want to approve network access to "example.com"?');
+  assert.notEqual(menu?.whole, null);
+});
+
+test('a Codex approval whose title is not in the lines read has no known start, so the scrollback is read', () => {
+  const tail = ['  $ cat <<EOF', '  one', '', '', '  is this two?', '  EOF', '› 1. Yes', '  2. No'];
   assert.equal(readMenu(tail, { startsAt: PROMPT_START.gap })?.whole, null);
-  const whole = readMenu(['', '', '  Would you like to run the following command?', '', ...tail], { startsAt: PROMPT_START.gap, screenTop: 4, atTop: true });
-  assert.equal(whole?.prompt?.[0], 'Would you like to run the following command?');
-  // At the top of all the terminal has, a prompt that asks nothing starts at its nearest gap.
-  assert.equal(readMenu(['', '', '  Allow this', '› 1. Yes', '  2. No'], { startsAt: PROMPT_START.gap, atTop: true })?.prompt?.[0], 'Allow this');
+  const whole = readMenu([`  ${COMMAND_TITLE}`, '', ...tail], { startsAt: PROMPT_START.gap, screenTop: 2 });
+  assert.equal(whole?.prompt?.[0], COMMAND_TITLE);
+  // Half a wrapped title (its start evicted) is no evidence: still not known.
+  assert.equal(readMenu(['  "example.com"?', '', ...tail], { startsAt: PROMPT_START.gap })?.whole, null);
 });
 
 test('a prompt cut off at the top is known by what shows and what the agent said it is about, and gets its buttons', () => {
@@ -198,8 +208,8 @@ test('a prompt cut off at the top is known by what shows and what the agent said
   assert.equal(previewLines(whole)[0], 'Bash command');
 });
 
-test('up the scrollback, a Codex prompt starts at its gap, not at a rule further up in the conversation', () => {
-  const rows = ['──────────', 'an earlier answer', '', '', '  Would you like to run the following command?', ...Array.from({ length: 20 }, (_, i) => `  $ step ${i}`), '› 1. Yes', '  2. No'];
+test('up the scrollback, a Codex prompt starts at its title, not at a rule further up in the conversation', () => {
+  const rows = ['──────────', 'an earlier answer', '', '', '  Would you like to run the following command?', '', ...Array.from({ length: 20 }, (_, i) => `  $ step ${i}`), '› 1. Yes', '  2. No'];
   const codex = readMenu(rows, { screenTop: 10, startsAt: PROMPT_START.gap });
   assert.equal(codex?.prompt?.[0], 'Would you like to run the following command?');
   assert.equal(readMenu(rows, { screenTop: 10, startsAt: PROMPT_START.rule })?.prompt?.[0], 'an earlier answer');
