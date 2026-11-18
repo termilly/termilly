@@ -105,6 +105,8 @@ function draw() {
   line.dataset.side = side;
   const tucked = hides() && !near && !anyOpen() && !dock.classList.contains(MOVING);
   dock.classList.toggle(TUCKED, tucked);
+  // Hidden, its buttons are out of reach of Tab and Enter too, not only of the mouse.
+  dock.inert = tucked;
   line.hidden = !shown || !tucked;
   setToolbarHost(shown ? { el: tools, side } : null);
 }

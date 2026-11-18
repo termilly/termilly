@@ -29,8 +29,10 @@ body[data-layout="minimal"] :is(.mini-aside, .mini-needs):not([hidden]) {
 }
 body[data-layout="minimal"] :is(.mini-aside, .mini-needs):hover { background: var(--hover); color: var(--text); }
 .mini-aside svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1; }
-/* Who needs you sits in the middle of the strip, where the search box is in Normal. */
-body[data-layout="minimal"] .mini-needs { position: absolute; left: 50%; transform: translateX(-50%); }
+/* Who needs you: at the right, before the window's buttons, ending with a divider (none on macOS, whose buttons are
+   on the left). */
+body[data-layout="minimal"] .mini-needs:not([hidden])::after { content: ""; width: 1px; height: 16px; margin-left: 6px; background: var(--border-strong); }
+:root[data-os="mac"] body[data-layout="minimal"] .mini-needs::after { display: none; }
 .mini-needs-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--attention); }
 
 /* ---- Terminals: a 1px line between them, no frames ---- */
@@ -92,7 +94,8 @@ body[data-layout="minimal"][data-pane-names="hover"] .pane > .pane-header:has(.a
   transition: opacity 0.16s, transform 0.16s var(--ease);
 }
 .dock[hidden] { display: none; }
-.dock[data-side="top"] { top: calc(var(--strip) + 8px); left: 50%; transform: translateX(-50%); }
+/* On top it drops to a few pixels under the window's edge, over the strip. */
+.dock[data-side="top"] { top: 6px; left: 50%; transform: translateX(-50%); }
 .dock[data-side="bottom"] { bottom: 12px; left: 50%; transform: translateX(-50%); }
 .dock[data-side="left"] { left: 10px; top: 50%; transform: translateY(-50%); flex-direction: column; }
 .dock[data-side="right"] { right: 10px; top: 50%; transform: translateY(-50%); flex-direction: column; }

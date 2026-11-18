@@ -102,11 +102,48 @@ step('switching workspaces keeps the strip, the window buttons and the dock as t
   assert.deepEqual({ before, second, back }, { before: expected, second: expected, back: expected });
 });
 
+step('"needs you" sits before the window buttons, ends with a divider, and goes to the terminal it names', async () => {
+  await app.eval(async t => {
+    const { state, emit, EVENTS } = await t.import('store.js');
+    const waiting = [...state.tabs.values()].find(tab => tab.wsId !== state.activeId);
+    waiting.agent = { source: 'hooks', kind: 'claude', state: 'needs-input', at: Date.now() };
+    emit(EVENTS.tab, waiting);
+  });
+  await app.waitFor('#titlebar .mini-needs:not([hidden])');
+  const place = await app.eval(() => {
+    const needs = globalThis.document.querySelector('#titlebar .mini-needs').getBoundingClientRect();
+    const controls = globalThis.document.querySelector('#titlebar .window-controls').getBoundingClientRect();
+    const divider = globalThis.getComputedStyle(globalThis.document.querySelector('#titlebar .mini-needs'), '::after').width;
+    return { rightHalf: needs.left > globalThis.innerWidth / 2, beforeControls: needs.right <= controls.left, divider };
+  });
+  assert.deepEqual(place, { rightHalf: true, beforeControls: true, divider: '1px' });
+  await app.screenshot('02c-needs-you');
+  await app.click('#titlebar .mini-needs');
+  const went = await app.eval(async t => {
+    const { state, focusedTab } = await t.import('store.js');
+    const waiting = [...state.tabs.values()].find(tab => tab.agent?.state === 'needs-input');
+    return { workspace: waiting.wsId === state.activeId, focused: focusedTab?.() === waiting || waiting.view?.el.classList.contains('focused') };
+  });
+  assert.deepEqual(went, { workspace: true, focused: true });
+  await app.eval(async t => {
+    const { state, emit, EVENTS } = await t.import('store.js');
+    const { switchWorkspace } = await t.import('panes.js');
+    for (const tab of state.tabs.values()) if (tab.agent) { tab.agent = null; emit(EVENTS.tab, tab); }
+    switchWorkspace(state.workspaces[0].id);
+  });
+  await pause(500);
+});
+
 step('the hidden dock comes back at its edge and lists the workspaces', async () => {
   const box = await app.eval(() => { const r = globalThis.document.querySelector('.dock-line').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + 4 }; });
   assert.ok(box.y < 10, `the line is at the window's top edge, over the strip (y ${box.y})`);
+  assert.equal(await app.eval(() => globalThis.document.getElementById('dock').inert), true, 'hidden, its buttons are out of reach of Tab');
   await pointTo(box.x, box.y);
   await app.waitFor('#dock:not(.tucked)');
+  await pause(300);
+  const dockTop = await app.eval(() => Math.round(globalThis.document.getElementById('dock').getBoundingClientRect().top));
+  assert.ok(dockTop <= 10, `shown, it sits a few pixels under the window's edge (top ${dockTop})`);
+  assert.equal(await app.eval(() => globalThis.document.getElementById('dock').inert), false);
   // On to it, off it again: it hides a moment later, however often that happens.
   const on = await app.eval(() => { const r = globalThis.document.getElementById('dock').getBoundingClientRect(); return { x: r.left + 20, y: r.top + r.height / 2 }; });
   for (let round = 0; round < 2; round++) {
