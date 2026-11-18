@@ -1,0 +1,296 @@
+// Minimal layout, end to end: the strip and dock take over from the title bar and sidebar and give them back, the dock
+// hides to a line and comes back at its edge, its workspace button lists the workspaces, it moves to another edge from
+// its menu, and a terminal's name shows on a line or on a bar near its top, whose right-click picks its parts.
+// Run with: npm run e2e (on Linux, under Xvfb; see tests/e2e/harness.mjs).
+import { test, before, after } from 'node:test';
+import assert from 'node:assert/strict';
+import { startApp } from './harness.mjs';
+
+let app;
+let failed = false;
+
+/** A test that marks the run failed (with a screenshot of the moment) when it throws. @param {string} name @param {() => Promise<void>} run */
+const step = (name, run) => test(name, async () => {
+  try {
+    await run();
+  } catch (e) {
+    failed = true;
+    await app?.screenshot(name.replace(/\W+/g, '-')).catch(() => null);
+    throw e;
+  }
+});
+
+/** Changes interface settings the way Settings does. @param {Record<string, string>} patch */
+const setInterface = patch => app.eval(async (t, p) => {
+  const prefs = await import(new URL('js/preferences.js', globalThis.location.href).href);
+  prefs.updateSettings('interface', p);
+}, patch);
+const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
+/** Moves the pointer to a point, as the mouse would. */
+const pointTo = (x, y) => app.eval((t, x, y) => {
+  const target = globalThis.document.elementFromPoint(x, y) ?? globalThis.document.body;
+  for (const type of ['pointermove', 'mousemove']) {
+    const Ev = type === 'pointermove' ? globalThis.PointerEvent : globalThis.MouseEvent;
+    target.dispatchEvent(new Ev(type, { clientX: x, clientY: y, bubbles: true }));
+  }
+}, x, y);
+
+before(async () => {
+  app = await startApp({ name: 'minimal' });
+  await app.waitFor('.pane .xterm');
+  // The welcome tour a first start offers would sit over everything.
+  await app.eval(async () => {
+    for (let i = 0; i < 20 && !globalThis.document.querySelector('.tour-skip, [data-tour="skip"]'); i++) await new Promise(r => setTimeout(r, 100));
+    const skip = [...globalThis.document.querySelectorAll('button, a, span')].find(el => el.textContent.trim() === 'Skip tour');
+    skip?.click();
+  });
+});
+
+after(async () => { await app?.stop({ failed }); });
+
+step('Minimal moves the toolbar into a hidden dock and the sidebar away', async () => {
+  await app.screenshot('01-normal');
+  await setInterface({ layout: 'minimal' });
+  await app.waitFor('#dock:not([hidden])');
+  const shown = await app.eval(() => ({
+    toolbarInDock: !!globalThis.document.querySelector('#dock .toolbar'),
+    sidebar: globalThis.getComputedStyle(globalThis.document.getElementById('sidebar')).display,
+    search: globalThis.getComputedStyle(globalThis.document.getElementById('search-button')).display,
+    tucked: globalThis.document.getElementById('dock').classList.contains('tucked'),
+    line: !globalThis.document.querySelector('.dock-line').hidden,
+    side: globalThis.document.getElementById('dock').dataset.side,
+    strip: globalThis.document.getElementById('titlebar').getBoundingClientRect().height,
+    // The window's buttons stay at the strip's right end (not in the middle, where the search box was).
+    controlsAtRight: globalThis.innerWidth - globalThis.document.querySelector('#titlebar .window-controls').getBoundingClientRect().right < 20,
+  }));
+  assert.deepEqual(shown, { toolbarInDock: true, sidebar: 'none', search: 'none', tucked: true, line: true, side: 'top', strip: 32, controlsAtRight: true });
+  await app.screenshot('02-minimal-hidden');
+});
+
+step('switching workspaces keeps the strip, the window buttons and the dock as they were', async () => {
+  const look = () => app.eval(() => ({
+    controlsAtRight: globalThis.innerWidth - globalThis.document.querySelector('#titlebar .window-controls').getBoundingClientRect().right < 20,
+    strip: globalThis.document.getElementById('titlebar').getBoundingClientRect().height,
+    sidebar: globalThis.getComputedStyle(globalThis.document.getElementById('sidebar')).display,
+    toolbarInDock: !!globalThis.document.querySelector('#dock .toolbar'),
+    needs: !globalThis.document.querySelector('.mini-needs').hidden,
+  }));
+  const before = await look();
+  await app.eval(async t => {
+    const { createWorkspace } = await t.import('workspaces.js');
+    createWorkspace({ name: 'second' });
+  });
+  await pause(1500);
+  await app.screenshot('02b-second-workspace');
+  const second = await look();
+  // The workspace left behind prints something: news there is not a terminal needing you.
+  await app.eval(async t => {
+    const { state } = await t.import('store.js');
+    const { noteOutput } = await t.import('panes.js');
+    for (const tab of state.tabs.values()) if (tab.wsId !== state.activeId) noteOutput(tab);
+  });
+  const whileAway = await app.eval(t => t.$('.mini-needs').hidden);
+  assert.equal(whileAway, true, 'news in another workspace is not "needs you"');
+  await app.eval(async t => {
+    const { state } = await t.import('store.js');
+    const { switchWorkspace } = await t.import('panes.js');
+    switchWorkspace(state.workspaces[0].id);
+  });
+  await pause(800);
+  const back = await look();
+  const expected = { controlsAtRight: true, strip: 32, sidebar: 'none', toolbarInDock: true, needs: false };
+  assert.deepEqual({ before, second, back }, { before: expected, second: expected, back: expected });
+});
+
+step('"needs you" sits before the window buttons, ends with a divider, and goes to the terminal it names', async () => {
+  await app.eval(async t => {
+    const { state, emit, EVENTS } = await t.import('store.js');
+    const waiting = [...state.tabs.values()].find(tab => tab.wsId !== state.activeId);
+    waiting.agent = { source: 'hooks', kind: 'claude', state: 'needs-input', at: Date.now() };
+    emit(EVENTS.tab, waiting);
+  });
+  await app.waitFor('#titlebar .mini-needs:not([hidden])');
+  const place = await app.eval(() => {
+    const needs = globalThis.document.querySelector('#titlebar .mini-needs').getBoundingClientRect();
+    const controls = globalThis.document.querySelector('#titlebar .window-controls').getBoundingClientRect();
+    const divider = globalThis.getComputedStyle(globalThis.document.querySelector('#titlebar .mini-needs'), '::after').width;
+    return { rightHalf: needs.left > globalThis.innerWidth / 2, beforeControls: needs.right <= controls.left, divider };
+  });
+  assert.deepEqual(place, { rightHalf: true, beforeControls: true, divider: '1px' });
+  await pause(300);
+  await app.screenshot('02c-needs-you');
+  await app.click('#titlebar .mini-needs');
+  const went = await app.eval(async t => {
+    const { state, focusedTab } = await t.import('store.js');
+    const waiting = [...state.tabs.values()].find(tab => tab.agent?.state === 'needs-input');
+    return { workspace: waiting.wsId === state.activeId, focused: focusedTab?.() === waiting || waiting.view?.el.classList.contains('focused') };
+  });
+  assert.deepEqual(went, { workspace: true, focused: true });
+  await app.eval(async t => {
+    const { state, emit, EVENTS } = await t.import('store.js');
+    const { switchWorkspace } = await t.import('panes.js');
+    for (const tab of state.tabs.values()) if (tab.agent) { tab.agent = null; emit(EVENTS.tab, tab); }
+    switchWorkspace(state.workspaces[0].id);
+  });
+  await pause(500);
+});
+
+step('the hidden dock comes back at its edge and lists the workspaces', async () => {
+  const box = await app.eval(() => { const r = globalThis.document.querySelector('.dock-line').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + 4 }; });
+  assert.ok(box.y < 10, `the line is at the window's top edge, over the strip (y ${box.y})`);
+  assert.equal(await app.eval(() => globalThis.document.getElementById('dock').inert), true, 'hidden, its buttons are out of reach of Tab');
+  await pointTo(box.x, box.y);
+  await app.waitFor('#dock:not(.tucked)');
+  await pause(300);
+  const dockTop = await app.eval(() => Math.round(globalThis.document.getElementById('dock').getBoundingClientRect().top));
+  assert.ok(dockTop <= 10, `shown, it sits a few pixels under the window's edge (top ${dockTop})`);
+  assert.equal(await app.eval(() => globalThis.document.getElementById('dock').inert), false);
+  // On to it, off it again: it hides a moment later, however often that happens.
+  const on = await app.eval(() => { const r = globalThis.document.getElementById('dock').getBoundingClientRect(); return { x: r.left + 20, y: r.top + r.height / 2 }; });
+  for (let round = 0; round < 2; round++) {
+    await pointTo(box.x, 20);
+    await pointTo(on.x, on.y);
+    await pointTo(on.x, 500);
+    await pause(1200);
+    await pointTo(on.x, 520);
+    assert.equal(await app.eval(() => globalThis.document.getElementById('dock').classList.contains('tucked')), true, `hidden again after leaving it (round ${round + 1})`);
+    await pointTo(box.x, box.y);
+    await app.waitFor('#dock:not(.tucked)');
+  }
+  await app.click('.dock-ws');
+  await app.waitFor('.context-menu .menu-row');
+  const rows = await app.eval(t => t.$$('.context-menu .menu-label').map(el => el.textContent));
+  assert.ok(rows.includes('New workspace'), rows.join(', '));
+  await pause(300);
+  await app.screenshot('03-dock-workspaces');
+  await app.key('.context-menu', 'Escape');
+});
+
+step('a split shows two name lines, the one in focus with its buttons', async () => {
+  await app.click('#dock [data-command="splitRight"]');
+  await pause(800);
+  const lines = await app.eval(() => [...globalThis.document.querySelectorAll('.ws-layer.active .pane > .pane-header')].map(h => Math.round(h.getBoundingClientRect().height)));
+  assert.ok(lines.length >= 2 && lines.every(h => h === 24), JSON.stringify(lines));
+  const edge = await app.eval(() => globalThis.getComputedStyle(globalThis.document.querySelector('.ws-layer.active .pane.focused'), '::after').boxShadow);
+  assert.match(edge, /2px 0px 0px 0px inset|inset 2px 0px 0px/);
+  await app.screenshot('04-line');
+});
+
+step('right-click on a name line picks its parts; a part turned off goes from every line', async () => {
+  const at = await app.eval(() => { const r = globalThis.document.querySelector('.ws-layer.active .pane > .pane-header').getBoundingClientRect(); return { x: r.left + 40, y: r.top + 10 }; });
+  await app.eval((t, at) => globalThis.document.querySelector('.ws-layer.active .pane > .pane-header').dispatchEvent(new globalThis.MouseEvent('contextmenu', { clientX: at.x, clientY: at.y, bubbles: true })), at);
+  await app.waitFor('.context-menu .menu-row');
+  const labels = await app.eval(t => t.$$('.context-menu .menu-label').map(el => el.textContent));
+  assert.ok(labels.includes('Agent view switch') && labels.includes('Terminal menu') && !labels.includes('Close'), labels.join(', '));
+  await pause(300);
+  await app.screenshot('05-line-menu');
+  await app.eval(t => [...t.$$('.context-menu .menu-row')].find(r => r.textContent.includes('Tag button')).click());
+  const off = await app.eval(() => [...globalThis.document.querySelectorAll('.ws-layer.active .pane-header .tag-btn')].every(b => globalThis.getComputedStyle(b).display === 'none'));
+  assert.equal(off, true);
+});
+
+step('on hover, the bar shows near a terminal\'s top only, and typing hides it', async () => {
+  await setInterface({ paneNames: 'hover' });
+  await pause(300);
+  const pane = await app.eval(() => { const r = globalThis.document.querySelector('.ws-layer.active .pane').getBoundingClientRect(); return { x: r.left + r.width / 2, top: r.top, bottom: r.bottom }; });
+  await pointTo(pane.x, pane.bottom - 60);
+  const far = await app.eval(() => globalThis.getComputedStyle(globalThis.document.querySelector('.ws-layer.active .pane > .pane-header')).opacity);
+  await pointTo(pane.x, pane.top + 12);
+  await pause(300);
+  const near = await app.eval(() => globalThis.getComputedStyle(globalThis.document.querySelector('.ws-layer.active .pane > .pane-header')).opacity);
+  assert.deepEqual({ far, near }, { far: '0', near: '1' });
+  await app.screenshot('06-hover-bar');
+  await app.eval(() => globalThis.document.dispatchEvent(new globalThis.KeyboardEvent('keydown', { key: 'a' })));
+  assert.equal(await app.eval(() => globalThis.document.querySelector('.pane.bar-near')), null);
+});
+
+step('on hover, a bar a button was clicked in hides again, and a working agent keeps only Stop, at the right', async () => {
+  const pane = await app.eval(() => { const r = globalThis.document.querySelector('.ws-layer.active .pane').getBoundingClientRect(); return { x: r.left + r.width / 2, top: r.top, bottom: r.bottom, right: r.right }; });
+  // Focus left on one of its buttons kept the bar shown for good.
+  await pointTo(pane.x, pane.top + 12);
+  // As a click leaves it: focused, but not by the keyboard (keyboard focus shows the bar).
+  await app.eval(() => globalThis.document.querySelector('.ws-layer.active .pane > .pane-header .menu-btn').focus({ focusVisible: false }));
+  await pointTo(pane.x, pane.bottom - 60);
+  await pause(300);
+  assert.equal(await app.eval(() => globalThis.getComputedStyle(globalThis.document.querySelector('.ws-layer.active .pane > .pane-header')).opacity), '0');
+  // An agent at work: hidden, the bar leaves its Stop alone at the right end; near the top, the whole bar again.
+  await app.eval(async t => {
+    const { state, emit, EVENTS } = await t.import('store.js');
+    const tab = [...state.tabs.values()].find(x => x.view?.el === globalThis.document.querySelector('.ws-layer.active .pane'));
+    tab.agent = { source: 'hooks', kind: 'claude', state: 'working', at: Date.now() };
+    emit(EVENTS.tab, tab);
+  });
+  await pause(300);
+  const look = () => app.eval(() => {
+    const header = globalThis.document.querySelector('.ws-layer.active .pane > .pane-header');
+    const stop = header.querySelector('.agent-stop-btn');
+    const pane = header.parentElement.getBoundingClientRect();
+    return {
+      stop: globalThis.getComputedStyle(stop).display !== 'none' && globalThis.getComputedStyle(header).opacity === '1',
+      stopAtRight: pane.right - stop.getBoundingClientRect().right < 24,
+      menu: globalThis.getComputedStyle(header.querySelector('.menu-btn')).display === 'none' ? 'hidden' : 'visible',
+      name: globalThis.getComputedStyle(header.querySelector('.pane-title')).display === 'none' ? 'hidden' : 'visible',
+    };
+  });
+  assert.deepEqual(await look(), { stop: true, stopAtRight: true, menu: 'hidden', name: 'hidden' });
+  await app.screenshot('06c-stop-alone');
+  await pointTo(pane.x, pane.top + 12);
+  await pause(300);
+  // The whole bar again, Stop where it was (the last button), so a click aimed at it still lands on it.
+  assert.deepEqual(await look(), { stop: true, stopAtRight: true, menu: 'visible', name: 'visible' });
+  await app.eval(async t => {
+    const { state, emit, EVENTS } = await t.import('store.js');
+    for (const tab of state.tabs.values()) if (tab.agent) { tab.agent = null; emit(EVENTS.tab, tab); }
+  });
+});
+
+step('on hover, an agent terminal in its compact view shows its bar over the view', async () => {
+  // An agent's terminal in the compact view: the view is drawn over the terminal, and the bar must be over both.
+  await app.eval(async t => {
+    const { state } = await t.import('store.js');
+    const { openViewMenu } = await t.import('compact.js');
+    const tab = [...state.tabs.values()].find(x => x.view?.el.closest('.ws-layer.active'));
+    tab.compact = { lines: [{ kind: 'prompt', text: 'hello' }], session: null, el: null, frame: 0, frameWin: null, sending: Promise.resolve(), writes: null };
+    tab.agent = { source: 'hooks', kind: 'claude', state: 'idle' };
+    openViewMenu(tab, tab.view.header.querySelector('.menu-btn'));
+    await t.waitFor('.menu-row');
+    [...t.$$('.menu-row')].find(r => r.textContent.includes('Compact')).click();
+    await t.waitFor('.ws-layer.active .compact-view:not([hidden])');
+  });
+  const pane = await app.eval(() => { const r = globalThis.document.querySelector('.ws-layer.active .pane.compact-on').getBoundingClientRect(); return { x: r.left + r.width / 2, top: r.top }; });
+  await pointTo(pane.x, pane.top + 12);
+  await pause(300);
+  const onTop = await app.eval(() => {
+    const bar = globalThis.document.querySelector('.ws-layer.active .pane.compact-on > .pane-header').getBoundingClientRect();
+    const hit = globalThis.document.elementFromPoint(bar.left + bar.width / 2, bar.top + bar.height / 2);
+    return !!hit?.closest('.pane-header');
+  });
+  assert.equal(onTop, true, 'the bar is the topmost thing where it shows');
+  await app.screenshot('06b-hover-bar-compact');
+});
+
+step('the dock moves to another edge from its menu, and stays shown with hiding off', async () => {
+  await app.eval(() => globalThis.document.getElementById('dock').dispatchEvent(new globalThis.MouseEvent('contextmenu', { clientX: 600, clientY: 60, bubbles: true })));
+  await app.waitFor('.context-menu .menu-row');
+  await app.eval(t => [...t.$$('.context-menu .menu-row')].find(r => r.textContent.trim().startsWith('Right')).click());
+  await app.eval(() => globalThis.document.getElementById('dock').dispatchEvent(new globalThis.MouseEvent('contextmenu', { clientX: 600, clientY: 60, bubbles: true })));
+  await app.waitFor('.context-menu .menu-row');
+  await app.eval(t => [...t.$$('.context-menu .menu-row')].find(r => r.textContent.includes('Hide when not in use')).click());
+  await pause(400);
+  const dock = await app.eval(() => ({ side: globalThis.document.getElementById('dock').dataset.side, tucked: globalThis.document.getElementById('dock').classList.contains('tucked') }));
+  assert.deepEqual(dock, { side: 'right', tucked: false });
+  await app.screenshot('07-dock-right');
+});
+
+step('Normal gives the title bar, sidebar and toolbar back', async () => {
+  await setInterface({ layout: 'normal' });
+  await pause(400);
+  const back = await app.eval(() => ({
+    toolbarInTitle: !!globalThis.document.querySelector('#titlebar .toolbar'),
+    dock: globalThis.document.getElementById('dock').hidden,
+    sidebar: globalThis.getComputedStyle(globalThis.document.getElementById('sidebar')).display !== 'none',
+    header: Math.round(globalThis.document.querySelector('.ws-layer.active .pane > .pane-header').getBoundingClientRect().height),
+  }));
+  assert.deepEqual(back, { toolbarInTitle: true, dock: true, sidebar: true, header: 30 });
+  await app.screenshot('08-normal-again');
+});

@@ -85,6 +85,10 @@ interface TerminalSettings {
 /** The app around the terminals: theme, its own font, the sidebar's activity and git status, updates, plugins. */
 interface InterfaceSettings {
   theme: string;
+  /** Normal or Minimal (). */
+  layout: string;
+  /** In Minimal, a terminal's name on a line over it or on a bar shown on hover (). */
+  paneNames: string;
   /** The app's font; null: the system's. */
   font: string | null;
   showActivity: boolean;

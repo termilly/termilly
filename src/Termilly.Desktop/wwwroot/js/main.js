@@ -17,6 +17,7 @@ import {
 } from './panes.js';
 import { initSidebar, toggleSidebar } from './sidebar.js';
 import { initToolbar } from './toolbar.js';
+import { initMinimal } from './minimal.js';
 import './remotepc.js';
 import { openPalette, setCommands, openGoTo, openCommandHistory, PALETTE_VIEW } from './palette.js';
 import { jumpToPrompt, copyLastOutput } from './commands.js';
@@ -91,7 +92,7 @@ import { recordReport } from './agentturns.js';
 import { inEachDocument } from './windows.js';
 import { rememberSession, recordPrompt } from './myprompts.js';
 import './tooltips.js';
-import { byId, find, targetOf, WORKSPACE_ID } from './dom.js';
+import { byId, find, targetOf, WORKSPACE_ID, TITLEBAR_ID } from './dom.js';
 
 /** @typedef {import('./protocol.js').Host_agent_1} Host_agent_1 */
 
@@ -447,7 +448,7 @@ byId(WORKSPACE_ID).addEventListener('wheel', e => {
 
 // ---- Window chrome (forwarded to the host) ----
 
-const titlebar = byId('titlebar');
+const titlebar = byId(TITLEBAR_ID);
 // Title bar buttons must not steal keyboard focus from the terminal.
 titlebar.addEventListener('mousedown', e => {
   if (targetOf(e).closest('button')) e.preventDefault();
@@ -621,6 +622,7 @@ function boot(saved, snapshot, liveSessions = []) {
   initTodo();
   initClips();
   applySettings();
+  initMinimal();
   if (state.activeId) switchWorkspace(state.activeId);
   initFiles();
   // Terminals that were in windows of their own when Termilly closed open in them again; the Snippets window too.

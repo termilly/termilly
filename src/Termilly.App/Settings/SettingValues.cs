@@ -22,6 +22,30 @@ internal static class SettingValues
         public static string FirstStart => OperatingSystem.IsWindows() ? Dark : System;
     }
 
+    /// <summary>
+    /// The window around the terminals (Settings › Appearance): Normal, with the title bar, sidebar and toolbar; or
+    /// Minimal, a thin strip and a floating dock, the terminals taking the rest (js/minimal.js).
+    /// </summary>
+    public static class Layout
+    {
+        public const string Normal = "normal";
+        public const string Minimal = "minimal";
+        public const string Default = Normal;
+        public static readonly IReadOnlyList<string> All = [Normal, Minimal];
+    }
+
+    /// <summary>
+    /// How Minimal shows a terminal's name and buttons: on a quiet line over it, or on a bar that shows while the
+    /// mouse is near its top.
+    /// </summary>
+    public static class PaneNames
+    {
+        public const string Line = "line";
+        public const string Hover = "hover";
+        public const string Default = Line;
+        public static readonly IReadOnlyList<string> All = [Line, Hover];
+    }
+
     public static class CursorStyle
     {
         public const string Bar = "bar";

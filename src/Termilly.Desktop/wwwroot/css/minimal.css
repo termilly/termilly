@@ -1,0 +1,160 @@
+/* Minimal (js/minimal.js, js/dock.js, js/panebar.js): a strip for a title bar, no sidebar, a floating dock, and
+   terminals that meet on a 1px line with a quiet name line or a bar shown on hover. Everything here is scoped to
+   body[data-layout="minimal"], so Normal is untouched. */
+
+body[data-layout="minimal"] { --gap: 1px; --strip: 32px; }
+
+/* ---- The strip ---- */
+
+/* Two columns, not Normal's three: with the search box gone from the middle one, the window's buttons would move into it. */
+body[data-layout="minimal"] #titlebar { position: relative; grid-template-columns: minmax(0, 1fr) max-content; height: var(--strip); gap: 8px; }
+body[data-layout="minimal"] #titlebar :is(.brand, .searchbox),
+body[data-layout="minimal"] #titlebar .tb-right > .separator,
+body[data-layout="minimal"] .bar-dock,
+body[data-layout="minimal"] :is(#sidebar, #sidebar-gap) { display: none; }
+/* The workspace on screen, always (Normal shows it only while the sidebar is closed). */
+body[data-layout="minimal"] .crumb { height: 22px; margin-left: 4px; padding: 0 6px; border: 0; opacity: 1; transform: none; }
+body[data-layout="minimal"] .crumb-name { font-weight: 600; }
+.mini-aside, .mini-needs { display: none; }
+body[data-layout="minimal"] :is(.mini-aside, .mini-needs):not([hidden]) {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+body[data-layout="minimal"] :is(.mini-aside, .mini-needs):hover { background: var(--hover); color: var(--text); }
+.mini-aside svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1; }
+/* Who needs you: at the right, before the window's buttons, ending with a divider (none on macOS, whose buttons are
+   on the left). */
+body[data-layout="minimal"] .mini-needs:not([hidden])::after { content: ""; width: 1px; height: 16px; margin-left: 6px; background: var(--border-strong); }
+:root[data-os="mac"] body[data-layout="minimal"] .mini-needs::after { display: none; }
+.mini-needs-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--attention); }
+
+/* ---- Terminals: a 1px line between them, no frames ---- */
+
+body[data-layout="minimal"] #workspace { background: var(--border); }
+body[data-layout="minimal"] .pane { border: 0; border-radius: 0; box-shadow: none; animation: none; }
+/* Drawn over the terminal (its canvas would cover a shadow on the pane): the accent edge of the one in focus, and the
+   amber or red frame of one that needs you or failed. */
+body[data-layout="minimal"] .pane::after { content: ""; position: absolute; inset: 0; z-index: 5; pointer-events: none; }
+body[data-layout="minimal"] .pane.focused::after { box-shadow: inset 2px 0 0 var(--accent); }
+body[data-layout="minimal"] .pane[data-activity="needs"]::after { box-shadow: inset 0 0 0 1px var(--attention); }
+body[data-layout="minimal"] .pane[data-activity="error"]::after { box-shadow: inset 0 0 0 1px var(--danger); }
+/* The 1px gap is too thin to grab: the divider's handle reaches 3px either side of it. */
+body[data-layout="minimal"] .divider::before { content: ""; position: absolute; inset: 0 -3px; z-index: 2; }
+body[data-layout="minimal"] .split.column > .divider::before { inset: -3px 0; }
+body[data-layout="minimal"] .bar-off { display: none !important; }
+
+/* A name line: 24px, dim, its buttons only on the terminal you're in or the one under the mouse (Stop always). */
+body[data-layout="minimal"][data-pane-names="line"] .pane > .pane-header { height: 24px; padding: 0 4px 0 10px; background: var(--surface); }
+body[data-layout="minimal"][data-pane-names="line"] .pane:not(.focused):not(:hover) .pane-actions > :not(.agent-stop-btn) { visibility: hidden; }
+
+/* A bar on hover: over the terminal's top right, shown while the mouse is near the top or on it (js/minimal.js). It sits
+   over an agent's compact view too (statusbar.css, z-index 5) and the pane's frame drawn above. */
+body[data-layout="minimal"][data-pane-names="hover"] .pane > .pane-header {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  z-index: 6;
+  max-width: calc(100% - 16px);
+  height: 28px;
+  padding: 0 4px 0 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--raised);
+  box-shadow: var(--shadow-pop);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s;
+}
+/* Shown while the mouse is near the top or on the bar, a menu from it is open, its name is being edited, or the keyboard
+   is on one of its buttons (not any focus left in it after a click: that kept a bar shown for good). */
+body[data-layout="minimal"][data-pane-names="hover"] .pane.bar-near > .pane-header,
+body[data-layout="minimal"][data-pane-names="hover"] .pane > .pane-header:is(:hover, :has(.open), :has(input:focus, :focus-visible)) { opacity: 1; pointer-events: auto; }
+body[data-layout="minimal"][data-pane-names="hover"] .pane > .pane-header .pane-btn { opacity: 1; }
+/* Stop is the last button, so it stays where it is when the hidden bar (only Stop) opens out as the mouse comes near. */
+body[data-layout="minimal"][data-pane-names="hover"] .pane-actions > .agent-stop-btn { order: 1; }
+/* Hidden while an agent works, its Stop stays in reach: alone at the bar's right end, with no bar around it. */
+body[data-layout="minimal"][data-pane-names="hover"] .pane:not(.bar-near) > .pane-header:not(:hover, :has(.open), :has(input:focus, :focus-visible)):has(.agent-stop-btn:not([hidden])) {
+  border-color: transparent;
+  background: none;
+  box-shadow: none;
+  opacity: 1;
+}
+/* The rest leaves the layout (not only the view), so Stop ends up at the right end where the bar's buttons end. */
+body[data-layout="minimal"][data-pane-names="hover"] .pane:not(.bar-near) > .pane-header:not(:hover, :has(.open), :has(input:focus, :focus-visible)):has(.agent-stop-btn:not([hidden])) > :not(.pane-actions),
+body[data-layout="minimal"][data-pane-names="hover"] .pane:not(.bar-near) > .pane-header:not(:hover, :has(.open), :has(input:focus, :focus-visible)) .pane-actions > :not(.agent-stop-btn) { display: none; }
+body[data-layout="minimal"][data-pane-names="hover"] .pane:not(.bar-near) > .pane-header:not(:hover, :has(.open), :has(input:focus, :focus-visible)) .agent-stop-btn { pointer-events: auto; background: var(--raised); }
+
+/* ---- The dock ---- */
+
+.dock {
+  position: fixed;
+  z-index: 900;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--raised);
+  box-shadow: var(--shadow-pop);
+  transition: opacity 0.16s, transform 0.16s var(--ease);
+}
+.dock[hidden] { display: none; }
+/* On top it drops to a few pixels under the window's edge, over the strip. */
+.dock[data-side="top"] { top: 6px; left: 50%; transform: translateX(-50%); }
+.dock[data-side="bottom"] { bottom: 12px; left: 50%; transform: translateX(-50%); }
+.dock[data-side="left"] { left: 10px; top: 50%; transform: translateY(-50%); flex-direction: column; }
+.dock[data-side="right"] { right: 10px; top: 50%; transform: translateY(-50%); flex-direction: column; }
+.dock.tucked { opacity: 0; pointer-events: none; }
+.dock.tucked[data-side="top"] { transform: translate(-50%, -8px); }
+.dock.tucked[data-side="bottom"] { transform: translate(-50%, 8px); }
+.dock.tucked[data-side="left"] { transform: translate(-8px, -50%); }
+.dock.tucked[data-side="right"] { transform: translate(8px, -50%); }
+.dock.moving { cursor: grabbing; box-shadow: 0 0 0 1px var(--accent), var(--shadow-pop); }
+.dock .toolbar { flex: none; }
+.dock-tools { display: contents; }
+.dock-sep { flex: none; width: 1px; height: 18px; margin: 0 4px; background: var(--border-strong); }
+.dock:is([data-side="left"], [data-side="right"]) .dock-sep { width: 18px; height: 1px; margin: 4px 0; }
+
+.dock-ws {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 30px;
+  padding: 0 8px 0 10px;
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+.dock-ws:hover { background: var(--hover); }
+.dock-ws-dot { width: 9px; height: 9px; border-radius: 3px; }
+.dock-chev { width: 8px; height: 8px; fill: none; stroke: var(--muted); stroke-width: 1; }
+/* Standing on a side, the workspace button is its colour and first letters only. */
+.dock:is([data-side="left"], [data-side="right"]) .dock-ws { justify-content: center; width: 30px; padding: 0; }
+.dock:is([data-side="left"], [data-side="right"]) :is(.dock-ws-name, .dock-chev) { display: none; }
+.dock:is([data-side="left"], [data-side="right"]) .dock-ws-dot { width: 14px; height: 14px; border-radius: 4px; }
+/* Another workspace works (accent) or needs you (amber). */
+.dock-badge { position: absolute; top: 2px; right: 2px; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+.dock-badge[data-state="needs-input"] { background: var(--attention); }
+.dock-badge[hidden] { display: none; }
+
+/* Hidden, the dock is a short line on its edge. */
+.dock-line { position: fixed; z-index: 900; border-radius: 2px; background: var(--border-strong); pointer-events: none; }
+.dock-line[hidden] { display: none; }
+.dock-line.needs { background: var(--attention); box-shadow: 0 0 8px color-mix(in srgb, var(--attention) 60%, transparent); }
+.dock-line:is([data-side="top"], [data-side="bottom"]) { left: 50%; width: 120px; height: 3px; transform: translateX(-50%); }
+/* On top it's the window's own top edge, over the strip, where the pointer goes for it. */
+.dock-line[data-side="top"] { top: 2px; }
+.dock-line[data-side="bottom"] { bottom: 4px; }
+.dock-line:is([data-side="left"], [data-side="right"]) { top: 50%; width: 3px; height: 120px; transform: translateY(-50%); }
+.dock-line[data-side="left"] { left: 4px; }
+.dock-line[data-side="right"] { right: 4px; }
