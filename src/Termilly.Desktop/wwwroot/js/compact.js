@@ -252,6 +252,8 @@ function placeDrawer(tab) {
   c.el.classList.toggle(DRAWER_CLASS, open);
   if (open === !!c.drawer) return;
   c.drawer = open;
+  // The prompt box shows again (the drawer hid it, and it wasn't fitted to a resize meanwhile): its height for its text.
+  if (!open) refitInput(c.el);
   // Only a pane that has the keyboard hands it over: a drawer opening in another pane mustn't take what's typed here.
   const here = view.body.contains(view.body.ownerDocument.activeElement);
   if (open && here) view.term.focus();

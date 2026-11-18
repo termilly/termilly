@@ -143,21 +143,46 @@ test('the card stays in sight while the prompt box grows and the feed scrolls', 
   assert.ok(await choiceInSight(app), 'with the feed scrolled up');
 }, { waiting: true }));
 
-test('the prompt box takes its height again when its pane gets narrower or wider, without a key', () => scenario('compact-box-resize', approval, async app => {
-  const height = () => app.eval(t => t.$('.cv-input').offsetHeight);
+/** The prompt box's height now. */
+const boxHeight = app => app.eval(t => t.$('.cv-input').offsetHeight);
+
+/** Puts a line in the prompt box long enough to wrap in a narrow pane, as typing it would; its height then. */
+async function fillBox(app) {
   await app.eval(t => {
     const input = t.$('.cv-input');
     input.value = 'word '.repeat(30).trim();
     input.dispatchEvent(new Event('input'));
   });
-  const wide = await height();
-  // The terminals' area narrower, as when a panel opens beside it (which refits the terminals): the text wraps onto more lines.
-  const narrow = right => app.eval(async (t, r) => {
-    t.$('.ws-layer.active').style.right = r;
-    (await t.import('terminals.js')).scheduleFit();
-  }, right);
-  await narrow('60%');
-  await until(async () => (await height()) > wide, 'taller once narrower');
-  await narrow('');
-  await until(async () => (await height()) === wide, 'back to its height once wider');
+  return boxHeight(app);
+}
+
+/** Narrows the terminals' area (or gives it back with ''), refitting them as a panel opening beside them does. */
+const narrowTerminals = (app, right) => app.eval(async (t, r) => {
+  t.$('.ws-layer.active').style.right = r;
+  (await t.import('terminals.js')).scheduleFit();
+}, right);
+
+/** Picks a view from the terminal's view button, as the user does. */
+async function pickView(app, label) {
+  await app.click('.view-btn');
+  await clickText(app, '.menu-row', label);
+}
+
+test('the prompt box takes its height again when its pane gets narrower or wider, without a key', () => scenario('compact-box-resize', approval, async app => {
+  const wide = await fillBox(app);
+  await narrowTerminals(app, '60%');
+  await until(async () => (await boxHeight(app)) > wide, 'taller once narrower');
+  await narrowTerminals(app, '');
+  await until(async () => (await boxHeight(app)) === wide, 'back to its height once wider');
+}, { waiting: true }));
+
+test('a prompt box hidden while its pane got narrower fits its text when its view shows again', () => scenario('compact-box-hidden', approval, async app => {
+  const wide = await fillBox(app);
+  await pickView(app, 'Full');
+  await app.waitFor('.compact-view', { gone: true });
+  await narrowTerminals(app, '60%');
+  // Back in the minimal view (the compact one's twin): the box there is the same one.
+  await pickView(app, 'Minimal');
+  await app.waitFor('.cv-input');
+  await until(async () => (await boxHeight(app)) > wide, 'taller once shown in the narrower pane');
 }, { waiting: true }));
