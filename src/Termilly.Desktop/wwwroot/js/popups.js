@@ -75,7 +75,20 @@ export function openPopover(el, anchor, { side = SIDE.below, nested = false, onC
   keepWheel(el);
   const where = anchorEl && side === SIDE.below ? AWAY_FROM_BAR[barSideOf(anchorEl)] ?? side : side;
   place(el, anchorEl ? anchorEl.getBoundingClientRect() : /** @type {DOMRect | { x: number, y: number }} */ (anchor), where);
-  stack.push({ el, anchorEl, onClose, dynamic, refocus, side: where });
+  stack.push({ el, anchorEl, onClose, dynamic, refocus: refocus ?? focusBackIn(el.ownerDocument), side: where });
+}
+
+/**
+ * In a detached window, where the focus goes back to when a popover there closes: what had it in that window (its
+ * terminal), not the main page's terminal. That would take the focus out of the window, and a paste picked from the
+ * menu reads the clipboard, which refuses a window without the focus. The main page's popovers are left to restoreFocus.
+ * @param {Document} doc
+ * @returns {(() => void) | undefined}
+ */
+function focusBackIn(doc) {
+  if (doc === document) return undefined;
+  const had = /** @type {HTMLElement | null} */ (doc.activeElement);
+  return () => { if (had?.isConnected) had.focus(); };
 }
 
 /**

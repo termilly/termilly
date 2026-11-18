@@ -12,6 +12,7 @@ import { confirmDialog, modal, CONFIRM_DIALOG } from './dialogs.js';
 import { escapeHtml, formatWhen } from './ui.js';
 import { byId } from './dom.js';
 import { updateSettings } from './preferences.js';
+import { systemClipboard } from './sysclipboard.js';
 
 /**
  * The host's last word: { current, checkedAt, failed, checking, available, progress }.
@@ -111,7 +112,7 @@ function installByHand(/** @type {string} */ command) {
     <div class="dialog-actions">
       <button class="btn" data-cancel>Close</button>
       <button class="btn primary" data-ok autofocus>Copy command</button>
-    </div>`, (dialog, close) => ({ submit: () => navigator.clipboard.writeText(command).then(() => close(true)) }));
+    </div>`, (dialog, close) => ({ submit: () => systemClipboard().writeText(command).then(() => close(true)) }));
 }
 
 /**

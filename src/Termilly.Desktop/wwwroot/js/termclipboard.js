@@ -9,6 +9,7 @@ import { underlinedLink, linkUnderMouse } from './termlinks.js';
 import { showToast } from './toasts.js';
 import { ICONS } from './ui.js';
 import { typeInto } from './dom.js';
+import { systemClipboard } from './sysclipboard.js';
 
 /** The word for pasting, on the menu and on the production question (terminals.js). */
 export const PASTE_LABEL = 'Paste';
@@ -67,7 +68,7 @@ export function setMenuExtras(fn) {
 function copySelection(term, body = null) {
   const text = term.getSelection();
   if (!text) return;
-  navigator.clipboard.writeText(text).catch(() => {});
+  systemClipboard().writeText(text).catch(() => {});
   copied(text, body, false);
 }
 
@@ -83,7 +84,7 @@ export function clipboardKey(term, e) {
   const link = !term.hasSelection() && clipboardAction(e, true) === CLIPBOARD_ACTION.copy && !e.shiftKey ? underlinedLink() : null;
   if (link) {
     e.preventDefault();
-    navigator.clipboard.writeText(link).catch(() => {});
+    systemClipboard().writeText(link).catch(() => {});
     copied(link, term.element?.parentElement ?? null, true);
     showToast({ text: `Copied ${link}` });
     return false;
@@ -128,14 +129,14 @@ export function wireClipboard(term, body, paste, agentHere = () => false) {
 function showTerminalMenu(e, body, { selection, link, paste }) {
   /** @param {string} text @param {boolean} isLink */
   const copy = (text, isLink) => {
-    navigator.clipboard.writeText(text).catch(() => {});
+    systemClipboard().writeText(text).catch(() => {});
     copied(text, body, isLink);
   };
   showMenu([
     !selection && link
       ? { label: 'Copy link', icon: ICONS.copy, action: () => { copy(link, true); showToast({ text: `Copied ${link}` }); } }
       : { label: COPY_LABEL, icon: ICONS.copy, hint: MENU_KEYS.copy, disabled: !selection, action: () => copy(selection, false) },
-    { label: PASTE_LABEL, icon: ICONS.paste, hint: MENU_KEYS.paste, action: () => navigator.clipboard.readText().then(text => { if (text) paste(text); }).catch(() => {}) },
+    { label: PASTE_LABEL, icon: ICONS.paste, hint: MENU_KEYS.paste, action: () => systemClipboard().readText().then(text => { if (text) paste(text); }).catch(() => {}) },
     ...clipEntries(body, paste),
     ...menuExtras(body, { selection: selection || null, link }),
   ], { x: e.clientX, y: e.clientY });

@@ -9,6 +9,7 @@ import { state, wsById, tabTitle, emit, EVENTS } from './store.js';
 import { PROFILE_ICON } from './constants.js';
 import { commandFinished, scanOutput, scanFrom } from './triggers.js';
 import { SECOND_MS, MINUTE_MS } from './util.js';
+import { systemClipboard } from './sysclipboard.js';
 
 const MAX_PROMPTS = 500;
 /**
@@ -290,7 +291,7 @@ export function lastOutput(tab) {
 export async function copyLastOutput(tab) {
   const text = lastOutput(tab);
   if (text === null) return null;
-  await navigator.clipboard.writeText(text);
+  await systemClipboard().writeText(text);
   return text ? text.split('\r\n').length : 0;
 }
 

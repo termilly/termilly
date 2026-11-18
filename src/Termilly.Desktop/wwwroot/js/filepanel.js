@@ -24,6 +24,7 @@ import { parentOf, isInside, DRIVE_ICON, DRIVES_NAME, folderName, sizeText, hasF
 import { rootOf, childPath, signHtml, indentRows, readFolders, pathDown } from './foldertree.js';
 import { planCopy, planInto } from './copyto.js';
 import { JOB_KIND, FILE_MANAGER, BIN, newRequestId, startJob, expectJob } from './filejobs.js';
+import { systemClipboard } from './sysclipboard.js';
 
 /** @typedef {import('./foldertree.js').FileEntry} FileEntry */
 /** @typedef {import('./foldertree.js').TreeNode} TreeNode */
@@ -689,7 +690,7 @@ function terminalItems(tab, items) {
 }
 
 /** @param {string} text */
-const copyText = text => navigator.clipboard.writeText(text);
+const copyText = text => systemClipboard().writeText(text);
 
 /**
  * Opens what was double-clicked: a folder (or drive) opens or closes, a file here shows in the preview.

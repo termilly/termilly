@@ -18,6 +18,7 @@ import { showToast, TOAST } from './toasts.js';
 import { AGENT_STEP } from './constants.js';
 import { shownSteps, placeSteps, stepRowHtml, GONE_TITLE } from './agentsteps.js';
 import { isCompact, revealInView } from './compact.js';
+import { systemClipboard } from './sysclipboard.js';
 
 /** A terminal keeps this many of its Claude Code sessions' ids (a /clear starts a new one). */
 const KEPT_SESSIONS = 20;
@@ -402,7 +403,7 @@ pop.addEventListener('click', e => {
   }
   const copyBtn = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-reader-copy]'));
   if (copyBtn) {
-    navigator.clipboard.writeText(reading).then(() => { copyBtn.textContent = COPIED; }, () => { copyBtn.textContent = 'Couldn’t copy'; });
+    systemClipboard().writeText(reading).then(() => { copyBtn.textContent = COPIED; }, () => { copyBtn.textContent = 'Couldn’t copy'; });
     setTimeout(() => { copyBtn.textContent = COPY; }, COPIED_MS);
     return;
   }
@@ -442,7 +443,7 @@ listEl.addEventListener('click', e => {
   if (stepClick(e)) return;
   const copy = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-copy]'));
   if (copy) {
-    navigator.clipboard.writeText(open.found[Number(copy.dataset.copy)].prompt.text);
+    systemClipboard().writeText(open.found[Number(copy.dataset.copy)].prompt.text);
     return;
   }
   const row = /** @type {HTMLElement | null} */ (targetOf(e).closest('.prompt-row'));
@@ -467,7 +468,7 @@ function stepClick(e) {
   const copy = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-copy-step]'));
   if (copy) {
     const { step } = o.steps[Number(copy.dataset.copyStep)];
-    navigator.clipboard.writeText(step.kind === AGENT_STEP.tool ? String(step.tool) + "(" + step.text + ")" : step.text);
+    systemClipboard().writeText(step.kind === AGENT_STEP.tool ? String(step.tool) + "(" + step.text + ")" : step.text);
     return true;
   }
   const row = /** @type {HTMLElement | null} */ (targetOf(e).closest('.step-row'));

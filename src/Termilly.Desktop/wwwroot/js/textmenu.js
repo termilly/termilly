@@ -8,6 +8,7 @@ import { ICONS } from './ui.js';
 import { showMenu, SEPARATOR } from './popups.js';
 import { COPY_LABEL as COPY, PASTE_LABEL, MENU_KEYS } from './termclipboard.js';
 import { typeInto } from './dom.js';
+import { systemClipboard } from './sysclipboard.js';
 
 const LF = '\n';
 const CRLF = '\r\n';
@@ -37,7 +38,7 @@ const plainText = text => text
  * @param {string} source who copied it, as Clipboard shows it
  */
 export function copyOut(text, source) {
-  navigator.clipboard.writeText(text).catch(() => {});
+  systemClipboard().writeText(text).catch(() => {});
   send(PAGE.clipCopied, { text, source });
 }
 
@@ -56,7 +57,7 @@ export function textBoxMenu(e, area, source, own) {
   /** @param {string} text */
   const insert = text => typeInto(area, text);
   /** @param {(text: string) => string} [clean] */
-  const paste = (clean = t => t) => navigator.clipboard.readText().then(text => { if (text) insert(clean(text)); }).catch(() => {});
+  const paste = (clean = t => t) => systemClipboard().readText().then(text => { if (text) insert(clean(text)); }).catch(() => {});
   showMenu([
     { label: 'Cut', icon: MENU_ICONS.cut, hint: 'Ctrl+X', disabled: !selected, action: () => { copyOut(selection, source); insert(''); } },
     { label: COPY, icon: ICONS.copy, hint: MENU_KEYS.copy, disabled: !selected, action: () => copyOut(selection, source) },

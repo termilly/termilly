@@ -30,6 +30,7 @@ import { selectionKey } from './keyselect.js';
 import { hoverMarkedLink, COPY_HINT } from './termlinks.js';
 import { cleanWebAddress } from './webaddress.js';
 import { wireGpu, dropGpu, applyGpu } from './gpu.js';
+import { systemClipboard } from './sysclipboard.js';
 
 /**
  * A theme plugin's terminal colours (state.pluginThemes).
@@ -548,7 +549,7 @@ function wireProgramRequests(tab, term) {
   // are honoured: a read ('?') would hand the clipboard to whatever runs in the terminal.
   term.parser.registerOscHandler(OSC.clipboard, (/** @type {string} */ data) => {
     const text = clipboardWrite(data);
-    if (text !== null && state.settings.terminal.programClipboard !== false) navigator.clipboard.writeText(text).catch(() => {});
+    if (text !== null && state.settings.terminal.programClipboard !== false) systemClipboard().writeText(text).catch(() => {});
     return true;
   });
   // XTVERSION (CSI > 0 q): which terminal this is, so programs can use what it supports.

@@ -8,6 +8,7 @@ import { PAGE } from './protocol.js';
 import { focusedTab } from './panes.js';
 import { find, XTERM_SCREEN } from './dom.js';
 import { findWebLinks } from './webaddress.js';
+import { systemClipboard } from './sysclipboard.js';
 
 /**
  * A link, path or hash on the screen: what it is, and the row and column it starts at.
@@ -141,5 +142,5 @@ function onKey(e) {
 function act(hint, shift) {
   if (hint.kind === URL_KIND && !shift) send(PAGE.openUrl, { url: hint.text });
   else if (hint.kind === 'path' && shift) send(PAGE.openPath, { path: hint.text });
-  else navigator.clipboard.writeText(hint.text);
+  else systemClipboard().writeText(hint.text);
 }

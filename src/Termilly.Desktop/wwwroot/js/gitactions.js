@@ -18,6 +18,7 @@ import { els, ROW, SIDE, showGitError } from './gitwindowparts.js';
 import { switchLabel } from './gitdetails.js';
 import { openItem } from './gitlist.js';
 import { showPathHistory } from './gitloaders.js';
+import { systemClipboard } from './sysclipboard.js';
 
 /** @typedef {import('./gitwindowstate.js').FileItem} FileItem */
 /** @typedef {import('./gitwindowstate.js').Branch} Branch */
@@ -83,7 +84,7 @@ function fileEntries(item) {
     { label: 'History of this file', action: () => showPathHistory(item.path) },
     ...(folder ? [{ label: 'History of its folder', action: () => showPathHistory(folder) }] : []),
   ];
-  return [...histories, { label: 'Copy path', action: () => navigator.clipboard.writeText(where) }];
+  return [...histories, { label: 'Copy path', action: () => systemClipboard().writeText(where) }];
 }
 
 /**

@@ -14,6 +14,7 @@ import { gw, ask, repoNow } from './gitwindowstate.js';
 import { els, useRight, onGitHub } from './gitwindowparts.js';
 import { writeContext, checksContext } from './gitcontexts.js';
 import { showFile } from './gitdiffview.js';
+import { systemClipboard } from './sysclipboard.js';
 
 /** @typedef {import('./gitwindowstate.js').Branch} Branch */
 /** @typedef {import('./gitwindowstate.js').Commit} Commit */
@@ -151,7 +152,7 @@ rightEl.addEventListener('click', e => {
   }
   const copy = /** @type {HTMLElement | null} */ (t.closest('[data-copy]'));
   if (copy) {
-    navigator.clipboard.writeText(/** @type {string} */ (copy.dataset.copy));
+    systemClipboard().writeText(/** @type {string} */ (copy.dataset.copy));
     copy.textContent = COPIED_LABEL;
     setTimeout(() => { copy.textContent = COPY_LABEL; }, COPIED_MS);
     return;

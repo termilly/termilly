@@ -15,6 +15,7 @@ import { toastHere, TOAST } from './toasts.js';
 import { addTasks, findTask } from './todo.js';
 import { implement, implementPlaceIn, planOf, cantImplement } from './todoactions.js';
 import { listFor } from './issueimplement.js';
+import { systemClipboard } from './sysclipboard.js';
 
 /**
  * A workflow run as gh lists it.
@@ -213,7 +214,7 @@ async function showWhy(ctx, run, job) {
     <div class="dialog-actions"><button class="btn" data-copy-log>Copy log</button><button class="btn" data-open-job>Open on GitHub</button><span class="spacer"></span>
     <button class="btn" data-cancel>Close</button><button class="btn primary" data-ok>Fix with an agent</button></div>`, (dialog, close) => {
     dialog.addEventListener('click', e => {
-      if (targetOf(e).closest('[data-copy-log]')) navigator.clipboard.writeText(log.text);
+      if (targetOf(e).closest('[data-copy-log]')) systemClipboard().writeText(log.text);
       if (targetOf(e).closest('[data-open-job]')) send(PAGE.openUrl, { url: job.url || log.url });
     });
     return { submit: async () => close(await fixWithAgent(ctx, run, job, log.text) !== null) };
