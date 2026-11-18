@@ -17,6 +17,14 @@ import { SETTING_VALUES } from './constants.js';
 
 /** How near a terminal's top the mouse has to be for its bar to show, on hover (px). */
 const BAR_NEAR_PX = 36;
+/**
+ * A file preview's bar is long and its top holds the preview's tabs: it shows only from a square in its top right
+ * corner, where the bar's Close is, so the tabs stay in reach. Its size is minimal.css's, where the tabs end before it.
+ */
+const PREVIEW_CORNER = '--preview-corner';
+/** The file preview pane (js/preview.js), and one of its file tabs. */
+const PREVIEW_PANE = 'preview-pane';
+const FILE_TAB = '.pv-tab';
 /** A terminal's class while its bar shows (app.css). */
 const BAR_NEAR = 'bar-near';
 const { paneNames, layout } = SETTING_VALUES;
@@ -94,9 +102,26 @@ document.addEventListener('mousemove', e => {
   if (body.dataset.layout !== layout.minimal || body.dataset.paneNames !== paneNames.hover) return;
   const pane = /** @type {HTMLElement | null} */ (targetOf(e).closest('.pane'));
   const onBar = !!targetOf(e).closest(PANE_HEADER);
-  const near = pane && (onBar || e.clientY - pane.getBoundingClientRect().top < BAR_NEAR_PX);
-  showBarOn(near ? pane : null);
+  showBarOn(pane && (onBar || nearTop(pane, e)) ? pane : null);
 }, { passive: true });
+
+/** The preview's corner size, once read (px). */
+let previewCorner = 0;
+
+/**
+ * Whether the mouse is where a pane's bar shows from: near its top, or for a file preview, its top right corner when
+ * not on a file tab (one scrolled into the corner by hand).
+ * @param {HTMLElement} pane
+ * @param {MouseEvent} e
+ */
+function nearTop(pane, e) {
+  const box = pane.getBoundingClientRect();
+  if (!pane.classList.contains(PREVIEW_PANE)) return e.clientY - box.top < BAR_NEAR_PX;
+  // Read once: it's minimal.css's, the same while the bar shows on hover (the only time this is asked).
+  previewCorner ||= parseFloat(getComputedStyle(pane).getPropertyValue(PREVIEW_CORNER)) || 0;
+  return e.clientY - box.top < previewCorner && box.right - e.clientX < previewCorner && !targetOf(e).closest(FILE_TAB);
+}
+
 document.addEventListener('keydown', () => showBarOn(null), { capture: true });
 
 on(EVENTS.settings, applyLayout);
