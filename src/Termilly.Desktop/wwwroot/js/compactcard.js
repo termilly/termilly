@@ -38,11 +38,11 @@ const UNDER_CHOICE = 3;
 
 /**
  * @typedef {{ key: string, label: string, detail: string, picked: boolean }} MenuChoice
- * @typedef {{ title: string, context: string[], choices: MenuChoice[], whole?: string | null, start?: number, prompt?: string[], cut?: boolean }} Menu
+ * @typedef {{ title: string, context: string[], choices: MenuChoice[], whole?: string | null, start?: number, prompt?: string[], cut?: boolean, asked?: number }} Menu
  *   whole: everything the prompt says, from where it starts (not cut for showing), which tells it from another; null
  *   when its start is off the lines read (keyedByWhatShows gives it one); start: the row of the screen the prompt
  *   starts on, -1 when that's off the screen; prompt: its lines above the choices as drawn, uncut, for its preview;
- *   cut: its start is lost, so prompt has only what shows
+ *   cut: its start is lost, so prompt has only what shows; asked: which of the agent's questions it is, when known
  */
 
 /** What starts a prompt above its choices: Claude Code's rule, Codex's gap of blank lines, or either (a rule first). */
@@ -92,10 +92,10 @@ function dedent(lines) {
 
 /**
  * A menu whose start is off the lines read, keyed by what shows of it and by what the agent said it asks about (its
- * hook's tool and target, and which time it asked), so a prompt taller than the screen still gets its buttons, and
- * a card or preview left over from an earlier question doesn't answer the next one that looks the same.
+ * hook's tool and target), so a prompt taller than the screen still gets its buttons; which question it is (asked)
+ * keeps a card left over from an earlier one off the next one that looks the same.
  * @param {Menu} menu
- * @param {Array<string | number | null | undefined>} about
+ * @param {Array<string | null | undefined>} about
  * @returns {Menu}
  */
 export function keyedByWhatShows(menu, about) {
@@ -288,7 +288,9 @@ export const choiceHtml = choice => `<button class="cv-choice${choice.picked ? '
  */
 export function menuKey(menu) {
   if (menu.whole === null) return '';
-  const text = menu.whole ?? JSON.stringify([menu.title, menu.context, menu.choices.map(c => [c.key, c.label, c.detail])]);
+  const said = menu.whole ?? JSON.stringify([menu.title, menu.context, menu.choices.map(c => [c.key, c.label, c.detail])]);
+  // Which question it is, where that's known: the next one may say the same, and a card left over mustn't answer it.
+  const text = menu.asked === undefined ? said : `${menu.asked}#${said}`;
   let hash = HASH_SEED;
   for (let i = 0; i < text.length; i++) hash = (Math.imul(hash, HASH_PRIME) ^ text.charCodeAt(i)) >>> 0;
   return `${hash.toString(HASH_BASE)}:${text.length}`;

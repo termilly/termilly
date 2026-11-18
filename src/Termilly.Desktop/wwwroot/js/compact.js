@@ -455,11 +455,39 @@ function draw(tab) {
   // Drawn again only when it changed: new elements under a pressed mouse button would lose its click (a press on a
   // card moves the focus about, which draws the view again), and a selection in the feed would be lost.
   if (drawn.get(feed) !== html) {
+    const scrolled = cardScroll(feed);
     feed.innerHTML = html;
     drawn.set(feed, html);
+    keepCardScroll(feed, scrolled);
   }
   if (following) feed.scrollTop = feed.scrollHeight;
   updateComposer(tab, c.el);
+}
+
+/** The parts of a card that scroll on their own: the card itself (in a short feed), and what it's about. */
+const CARD_SCROLLERS = Object.freeze([CARD, `${CARD} .cv-context`]);
+
+/**
+ * How far a card's parts are scrolled, and which menu it shows: drawn again (the agent's pointer moved), the same
+ * card stays where the user scrolled it.
+ * @param {HTMLElement} feed
+ */
+function cardScroll(feed) {
+  const card = /** @type {HTMLElement | null} */ (feed.querySelector(CARD));
+  return { menu: card?.dataset.menu, tops: CARD_SCROLLERS.map(part => feed.querySelector(part)?.scrollTop ?? 0) };
+}
+
+/**
+ * @param {HTMLElement} feed
+ * @param {{ menu: string | undefined, tops: number[] }} scrolled
+ */
+function keepCardScroll(feed, scrolled) {
+  const card = /** @type {HTMLElement | null} */ (feed.querySelector(CARD));
+  if (!card || card.dataset.menu !== scrolled.menu) return;
+  CARD_SCROLLERS.forEach((part, i) => {
+    const el = feed.querySelector(part);
+    if (el) el.scrollTop = scrolled.tops[i];
+  });
 }
 
 /**
@@ -477,9 +505,10 @@ function screenMenu(tab) {
   const { rows, screenTop } = rowsWithScrollback(term, SCROLLBACK_ROWS);
   const deeper = readMenu(rows, { screenTop, startsAt: PROMPT_STARTS[runningAgent(tab) ?? ''] ?? PROMPT_START.either });
   if (deeper && deeper.whole !== null) return deeper;
-  // Not there either (cleared, or further up): known by what the screen shows, what the agent said it asks about,
-  // and which time it asked.
-  return keyedByWhatShows(menu, waitsForAnswer(tab) ? [tab.agent?.tool, tab.agent?.target, compactOf(tab).asked] : []);
+  // Not there either (cleared, or further up). A question its hook named is known by what the screen shows and what
+  // the hook said it's about (and which question it is, menuOf); an agent starting has said nothing, so its card
+  // offers the terminal, as before.
+  return waitsForAnswer(tab) ? keyedByWhatShows(menu, [tab.agent?.tool, tab.agent?.target]) : menu;
 }
 
 /**
@@ -527,6 +556,16 @@ function pendingPlan(tab) {
  * @returns {import('./compactcard.js').Menu & { last?: boolean } | null}
  */
 function menuOf(tab) {
+  const menu = questionOf(tab);
+  return menu && waitsForAnswer(tab) ? { ...menu, asked: compactOf(tab).asked ?? 0 } : menu;
+}
+
+/**
+ * The question the agent waits on, as read (menuOf adds which question it is).
+ * @param {Tab} tab
+ * @returns {import('./compactcard.js').Menu & { last?: boolean } | null}
+ */
+function questionOf(tab) {
   const screen = screenMenu(tab);
   // A plan up for approval: its choices from the screen, the plan itself from its file (the screen has room for neither).
   const plan = pendingPlan(tab);
