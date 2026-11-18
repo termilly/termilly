@@ -38,11 +38,15 @@ const UNDER_CHOICE = 3;
 
 /**
  * @typedef {{ key: string, label: string, detail: string, picked: boolean }} MenuChoice
- * @typedef {{ title: string, context: string[], choices: MenuChoice[], whole?: string | null, start?: number, prompt?: string[] }} Menu
+ * @typedef {{ title: string, context: string[], choices: MenuChoice[], whole?: string | null, start?: number, prompt?: string[], cut?: boolean }} Menu
  *   whole: everything the prompt says, from where it starts (not cut for showing), which tells it from another; null
  *   when its start is off the lines read (keyedByWhatShows gives it one); start: the row of the screen the prompt
- *   starts on, -1 when that's off the screen; prompt: its lines above the choices as drawn, uncut, for its preview
+ *   starts on, -1 when that's off the screen; prompt: its lines above the choices as drawn, uncut, for its preview;
+ *   cut: its start is lost, so prompt has only what shows
  */
+
+/** What starts a prompt above its choices: Claude Code's rule, Codex's gap of blank lines, or either (a rule first). */
+export const PROMPT_START = Object.freeze({ either: 'either', rule: 'rule', gap: 'gap' });
 
 /**
  * A line as text, without the box it may be drawn in.
@@ -54,12 +58,14 @@ const clean = line => line.replace(BOX, '').trimEnd();
  * The menu at the bottom of a screen, or null when there's none: the last run of choices numbered from 1 with the
  * agent's pointer on one of them, what they say (a choice's own wrapped words and description under it), and the
  * question above them. The lines may start above the screen (the terminal's scrollback), so a prompt taller than
- * the screen is read whole; its choices are looked for on the screen only.
+ * the screen is read whole; its choices are looked for on the screen only. Up there, the agent's own kind of start
+ * is looked for (an earlier rule in the conversation isn't a Codex prompt's start).
  * @param {string[]} lines the lines, top to bottom: the screen's, or some above it and then the screen's
- * @param {number} [screenTop] the first of them that is on the screen
+ * @param {{ screenTop?: number, startsAt?: string }} [where] screenTop: the first line that is on the screen;
+ *   startsAt: a PROMPT_START
  * @returns {Menu | null}
  */
-export function readMenu(lines, screenTop = 0) {
+export function readMenu(lines, { screenTop = 0, startsAt = PROMPT_START.either } = {}) {
   const rows = lines.map(clean);
   const first = lastFirstChoice(rows);
   if (first < screenTop) return null;
@@ -67,7 +73,7 @@ export function readMenu(lines, screenTop = 0) {
   // A menu the agent waits on has its pointer on one choice; a numbered list in its words has none.
   if (choices.length < 2 || !choices.some(c => c.picked)) return null;
   const { title, context } = questionAbove(rows, first);
-  const start = promptStart(rows, first);
+  const start = promptStart(rows, first, startsAt);
   const whole = start < 0 ? null : JSON.stringify([rows.slice(start, first).map(r => r.trim()), choices.map(c => [c.key, c.label, c.detail])]);
   return { title, context, choices, whole, start: start < screenTop ? -1 : start - screenTop, prompt: dedent(rows.slice(Math.max(start, 0), first)) };
 }
@@ -86,36 +92,43 @@ function dedent(lines) {
 
 /**
  * A menu whose start is off the lines read, keyed by what shows of it and by what the agent said it asks about (its
- * hook's tool and target, when it gave them), so a prompt taller than the screen still gets its buttons. Two prompts
- * alike in all that shows and in what they're about are taken for one: the card shows the same for both, and a
- * choice isn't pressed twice on one key within a moment (js/compact.js).
+ * hook's tool and target, and which time it asked), so a prompt taller than the screen still gets its buttons, and
+ * a card or preview left over from an earlier question doesn't answer the next one that looks the same.
  * @param {Menu} menu
- * @param {Array<string | null | undefined>} about
+ * @param {Array<string | number | null | undefined>} about
  * @returns {Menu}
  */
 export function keyedByWhatShows(menu, about) {
   if (menu.whole !== null) return menu;
-  return { ...menu, whole: JSON.stringify([about, menu.prompt ?? menu.context, menu.choices.map(c => [c.key, c.label, c.detail])]) };
+  return { ...menu, cut: true, whole: JSON.stringify([about, menu.prompt ?? menu.context, menu.choices.map(c => [c.key, c.label, c.detail])]) };
 }
+
+/** The preview's first line for a prompt whose start is lost. */
+const CUT_NOTE = '(The start of this prompt is no longer in the terminal.)';
 
 /**
  * All the menu says, for its preview: the prompt as drawn (the command, the diff), else its question and what it's
  * about (a plan, from its file).
  * @param {Menu} menu
  */
-export const previewLines = menu => (menu.prompt?.length ? menu.prompt : [menu.title, ...(menu.context.length ? ['', ...menu.context] : [])]);
+export function previewLines(menu) {
+  const lines = menu.prompt?.length ? menu.prompt : [menu.title, ...(menu.context.length ? ['', ...menu.context] : [])];
+  return menu.cut ? [CUT_NOTE, '', ...lines] : lines;
+}
 
 /**
  * Where the prompt above a menu starts: the line after its rule (Claude Code draws one; blank lines inside the
- * prompt, in a command, don't end it), or else after its gap of blank lines (Codex draws no rule); -1 when neither
- * is on the screen.
+ * prompt, in a command, don't end it), or else after its gap of blank lines (Codex draws no rule), or only the kind
+ * asked for; -1 when there's none in the lines.
  * @param {string[]} rows
  * @param {number} first
+ * @param {string} startsAt a PROMPT_START
  */
-function promptStart(rows, first) {
-  for (let i = first - 1; i >= 0; i--) {
+function promptStart(rows, first, startsAt) {
+  for (let i = first - 1; i >= 0 && startsAt !== PROMPT_START.gap; i--) {
     if (RULE.test(rows[i].trim())) return i + 1;
   }
+  if (startsAt === PROMPT_START.rule) return -1;
   let blanks = 0;
   for (let i = first - 1; i >= 0; i--) {
     blanks = rows[i].trim() ? 0 : blanks + 1;
@@ -291,7 +304,8 @@ function menuCardHtml(menu, name, classes) {
   // A plan's blank lines keep its paragraphs apart.
   const context = menu.context.map(line => (line ? `<div>${escapeHtml(line)}</div>` : '<br>')).join('');
   // A menu that can't be told from another gets no buttons: the terminal answers it.
-  const choices = menuKey(menu) ? menu.choices.map(choiceHtml).join('') : '';
-  return `<div class="cv-card" data-menu="${menuKey(menu)}"><div class="cv-question">${menu.title ? escapeHtml(menu.title) : `${name} asks`}</div>`
+  const key = menuKey(menu);
+  const choices = key ? menu.choices.map(choiceHtml).join('') : '';
+  return `<div class="cv-card" data-menu="${key}"><div class="cv-question">${menu.title ? escapeHtml(menu.title) : `${name} asks`}</div>`
     + `${context ? `<div class="cv-context">${context}</div>` : ''}<div class="cv-choices">${choices}${tools}</div></div>`;
 }

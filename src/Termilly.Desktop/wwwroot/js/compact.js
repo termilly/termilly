@@ -18,7 +18,7 @@ import { beforeEnter } from './api.js';
 import { showsInput } from './together.js';
 import { linesHtml } from './compactlines.js';
 import { lineLinks, clickLink, wireCtrl } from './compactlinks.js';
-import { readMenu, questionMenu, cardHtml, menuKey, keyedByWhatShows } from './compactcard.js';
+import { readMenu, questionMenu, cardHtml, menuKey, keyedByWhatShows, PROMPT_START } from './compactcard.js';
 import { wireInput } from './compactinput.js';
 import { cardKey } from './compactcardkeys.js';
 import { wireViewMenu } from './termclipboard.js';
@@ -87,7 +87,9 @@ const VIEW_HTML = `
  * A terminal's compact view: what the host sent of its session, the elements showing it, and the prompt being typed.
  * @typedef {{ lines: CompactLine[], session: string | null, el: HTMLElement | null, frame: number, frameWin: Window | null, sending: Promise<void>, writes: { dispose(): void } | null,
  *   picked?: { menu: string, at: number }, ready?: boolean, drawer?: boolean, drawerFrame?: number, drawerWin?: Window,
- *   resizes?: { dispose(): void }, drawerRow?: number }} CompactState
+ *   resizes?: { dispose(): void }, drawerRow?: number, asked?: number, waiting?: boolean,
+ *   deep?: { at: string, menu: import('./compactcard.js').Menu } }} CompactState
+ *   asked: how many questions the agent has asked; deep: the last menu read up the scrollback, and for which screen
  */
 
 /**
@@ -149,6 +151,7 @@ function setView(tab, view) {
 function apply(tab) {
   const view = tab.view;
   if (!view) return;
+  countAsked(tab);
   const shown = isCompact(tab);
   view.el.classList.toggle(SHOWN_CLASS, shown);
   const c = compactOf(tab);
@@ -464,12 +467,38 @@ function screenMenu(tab) {
   // The screen as it shows now, not the lines scrolled above it (an earlier menu, a list in the agent's words).
   const menu = readMenu(screenRows(term));
   if (!menu || menu.whole !== null) return menu;
-  // A prompt taller than the screen: its start is up the scrollback (its choices are still looked for on the screen).
+  // A prompt taller than the screen: read again with the scrollback while the screen stays as it is (the card is
+  // drawn on every write while the agent waits).
+  const c = compactOf(tab);
+  const at = JSON.stringify([term.buffer.active.baseY, menu.prompt, menu.choices, c.asked]);
+  if (c.deep?.at !== at) c.deep = { at, menu: deeperMenu(tab, term, menu) };
+  return c.deep.menu;
+}
+
+/**
+ * A menu whose start is above the screen: read on up the scrollback for the agent's own kind of start (its choices
+ * still on the screen); not there either (cleared, or further up), known by what the screen shows, what the agent
+ * said it asks about, and which time it asked.
+ * @param {Tab} tab
+ * @param {any} term xterm's Terminal
+ * @param {import('./compactcard.js').Menu} menu as read off the screen
+ */
+function deeperMenu(tab, term, menu) {
   const { rows, screenTop } = rowsWithScrollback(term, SCROLLBACK_ROWS);
-  const deeper = readMenu(rows, screenTop);
+  const deeper = readMenu(rows, { screenTop, startsAt: runsClaude(tab) ? PROMPT_START.rule : PROMPT_START.gap });
   if (deeper && deeper.whole !== null) return deeper;
-  // Not there either (cleared, or further up): known by what the screen shows, and what the agent said it's about.
-  return keyedByWhatShows(menu, waitsForAnswer(tab) ? [tab.agent?.tool, tab.agent?.target] : []);
+  return keyedByWhatShows(menu, waitsForAnswer(tab) ? [tab.agent?.tool, tab.agent?.target, compactOf(tab).asked] : []);
+}
+
+/**
+ * Counts the questions the agent asks (each time it starts to wait on one), so a cut prompt's key changes with each.
+ * @param {Tab} tab
+ */
+function countAsked(tab) {
+  const c = compactOf(tab);
+  const waiting = waitsForAnswer(tab);
+  if (waiting && !c.waiting) c.asked = (c.asked ?? 0) + 1;
+  c.waiting = waiting;
 }
 
 /**

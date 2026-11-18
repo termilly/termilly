@@ -13,8 +13,8 @@ const DIALOG_CLASS = 'cv-preview';
 const CHOICE = '[data-choice]';
 
 /**
- * Shows the preview; a choice picked in it closes it and is passed on (the caller checks the agent still waits on
- * this question).
+ * Shows the preview; a choice picked in it (a click, or Enter on it: data-no-enter keeps the dialog's Enter off it)
+ * closes it and is passed on (the caller checks the agent still waits on this question).
  * @param {import('./compactcard.js').Menu} menu
  * @param {string} name the agent's short name
  * @param {(key: string) => void} pick
@@ -24,7 +24,7 @@ export function showPreview(menu, name, pick) {
   return modal(DIALOG_CLASS, `
     <h3>${escapeHtml(name)} asks</h3>
     <pre class="cv-preview-text">${escapeHtml(previewLines(menu).join('\n'))}</pre>
-    ${choices ? `<div class="cv-choices">${choices}</div>` : ''}
+    ${choices ? `<div class="cv-choices" data-no-enter>${choices}</div>` : ''}
     <div class="dialog-actions"><button class="btn" data-cancel autofocus>Close</button></div>`, (dialog, close) => {
     dialog.addEventListener('click', e => {
       const choice = /** @type {HTMLElement | null} */ (targetOf(e).closest(CHOICE));
