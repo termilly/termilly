@@ -71,8 +71,17 @@ async function buttonsInReach(app) {
   const opacity = () => app.eval(t => globalThis.getComputedStyle(t.$('[data-np="new"]')).opacity);
   await app.eval(t => t.$('.xterm textarea').focus());
   await until(async () => (await opacity()) === '0', 'faded while another terminal is in use');
+  // In the Tab order while faded: shown to the browser (not hidden or left out), with no negative tabindex. The
+  // harness's keys are synthetic and move no focus, so a real Tab can't be pressed here.
+  const order = await app.eval(t => {
+    const button = t.$('[data-np="new"]');
+    const style = globalThis.getComputedStyle(button);
+    return { visibility: style.visibility, display: style.display, tabIndex: button.tabIndex };
+  });
+  assert.equal(order.visibility, 'visible', 'in the Tab order: not hidden');
+  assert.notEqual(order.display, 'none', 'in the Tab order: not left out');
+  assert.equal(order.tabIndex, 0, 'in the Tab order: no negative tabindex');
   await app.eval(t => t.$('[data-np="new"]').focus());
-  assert.equal(await app.eval(t => globalThis.document.activeElement === t.$('[data-np="new"]')), true, 'Tab can reach it');
   await until(async () => (await opacity()) === '1', 'shown once it has the focus');
   await toggle(app, NOTEPAD);
 }
