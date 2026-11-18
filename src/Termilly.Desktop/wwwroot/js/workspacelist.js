@@ -91,14 +91,36 @@ function workspaceRows(pc, actions) {
   return withLast(rows, actions.newWorkspace(pc));
 }
 
-/** @param {Pc} pc @param {string} wsId @param {PcRowActions} actions @returns {MenuEntry[]} */
+/**
+ * A workspace's terminals, after Open all terminals when it has any, then New terminal there.
+ * @param {Pc} pc
+ * @param {string} wsId
+ * @param {PcRowActions} actions
+ * @returns {MenuEntry[]}
+ */
 function terminalRows(pc, wsId, actions) {
   /** @type {MenuEntry[]} */
   const rows = actions.stateOf(pc).terminals.filter(t => t.ws === wsId).map(t => ({
     label: t.title, hint: escapeHtml(stateWord(stateThere(t))), checked: actions.inFront(pc, t.id),
     title: `Open ${t.title} from ${pc.name} here`, action: () => openIfThere(pc.id, t.id, actions),
   }));
-  return withLast(rows, actions.newTerminal(pc, wsId));
+  const all = { label: OPEN_ALL, action: () => openAllThere(pc.id, wsId, actions) };
+  return withLast(rows.length ? [all, SEPARATOR, ...rows] : rows, actions.newTerminal(pc, wsId));
+}
+
+/** The row that opens all of a workspace's terminals here. */
+const OPEN_ALL = 'Open all terminals';
+
+/**
+ * Opens here every terminal the workspace has there now (one closed since the menu opened isn't, one opened since is).
+ * @param {string} id
+ * @param {string} wsId
+ * @param {PcRowActions} actions
+ */
+function openAllThere(id, wsId, actions) {
+  const now = actions.computer(id);
+  if (!now?.online) return;
+  for (const t of actions.stateOf(now).terminals.filter(x => x.ws === wsId)) actions.open(now, t.id);
 }
 
 /**

@@ -60,9 +60,24 @@ test('a workspace lists its terminals with what their agents do, the one shown h
   const site = computerRows([laptop], a)[0].submenu()[0];
   const rows = site.submenu();
   assert.deepEqual(rows.map(r => (r === SEPARATOR ? '-' : [r.label, r.hint ?? '', !!r.checked])),
-    [['claude', 'needs you', false], ['build', 'working', false], ['shell', '', true], '-', ['New terminal in w1', '', false]]);
-  rows[1].action();
+    [['Open all terminals', '', false], '-', ['claude', 'needs you', false], ['build', 'working', false], ['shell', '', true], '-', ['New terminal in w1', '', false]]);
+  rows[3].action();
   assert.deepEqual(a.asked, [['open', 'pc1', 't2']]);
+});
+
+test('Open all terminals opens every terminal the workspace has there when it is picked', () => {
+  const a = actions();
+  const openAll = computerRows([laptop], a)[0].submenu()[0].submenu()[0];
+  const saved = there.terminals;
+  there.terminals = [...saved.filter(t => t.id !== 't2'), { id: 't4', ws: 'w1', title: 'new one', activity: null }, { id: 't5', ws: 'w2', title: 'elsewhere' }];
+  openAll.action();
+  there.terminals = saved;
+  assert.deepEqual(a.asked, [['open', 'pc1', 't1'], ['open', 'pc1', 't3'], ['open', 'pc1', 't4']]);
+  // Not while the computer can't be reached.
+  a.asked.length = 0;
+  a.now[0] = { ...laptop, online: false };
+  openAll.action();
+  assert.deepEqual(a.asked, []);
 });
 
 test('an empty workspace offers only New terminal, and no computers add no rows', () => {
@@ -90,7 +105,7 @@ test('a terminal closed there since the menu opened is not opened', () => {
   const rows = computerRows([laptop], a)[0].submenu()[0].submenu();
   const saved = there.terminals;
   there.terminals = saved.filter(t => t.id !== 't1');
-  rows[0].action();
+  rows[2].action();
   there.terminals = saved;
   assert.deepEqual(a.asked, []);
 });
