@@ -11,11 +11,11 @@ import { entryDetail } from './inbox.js';
 import { AGENT_STATE } from './constants.js';
 import { windowInFront } from './windowshown.js';
 
-/** The class that lights the pane a notification click went to (panes.css), so the eye finds it at once. */
+/** The glow laid over the pane a notification click went to (panes.css), so the eye finds it at once. */
 const ARRIVED_CLASS = 'pane-arrived';
-/** How long it stays lit: a little over its animation, so it also goes when the animation never runs (a hidden pane). */
+/** How long the glow stays: a little over its animation. */
 const ARRIVED_MS = 900;
-/** Each lit pane's timer, so a second click restarts the light rather than cutting it short. */
+/** Each lit pane's timer, so a second click starts a fresh glow rather than having the old timer cut it short. */
 const arrivedTimers = new WeakMap();
 
 /**
@@ -127,11 +127,13 @@ onHost(HOST.focusTerminal, m => {
 function flashArrived(tab) {
   const el = tab.view?.el;
   if (!el) return;
-  el.classList.remove(ARRIVED_CLASS);
-  void el.offsetWidth; // a reflow, so taking the class off and on again restarts the animation
-  el.classList.add(ARRIVED_CLASS);
+  // Its own element, not a pseudo-element: the pane's ::before is the broadcast stripe and its ::after Minimal's edge.
+  el.querySelector(`:scope > .${ARRIVED_CLASS}`)?.remove();
   clearTimeout(arrivedTimers.get(el));
-  arrivedTimers.set(el, setTimeout(() => el.classList.remove(ARRIVED_CLASS), ARRIVED_MS));
+  const glow = document.createElement('div');
+  glow.className = ARRIVED_CLASS;
+  el.append(glow);
+  arrivedTimers.set(el, setTimeout(() => glow.remove(), ARRIVED_MS));
 }
 
 
