@@ -61,11 +61,11 @@ const clean = line => line.replace(BOX, '').trimEnd();
  * the screen is read whole; its choices must reach the screen (the first ones may have scrolled above it). Up there,
  * the agent's own kind of start is looked for (an earlier rule in the conversation isn't a Codex prompt's start).
  * @param {string[]} lines the lines, top to bottom: the screen's, or some above it and then the screen's
- * @param {{ screenTop?: number, startsAt?: string }} [where] screenTop: the first line that is on the screen;
- *   startsAt: a PROMPT_START
+ * @param {{ screenTop?: number, startsAt?: string, atTop?: boolean }} [where] screenTop: the first line that is on
+ *   the screen; startsAt: a PROMPT_START; atTop: the lines start at the top of all the terminal has (nothing above)
  * @returns {Menu | null}
  */
-export function readMenu(lines, { screenTop = 0, startsAt = PROMPT_START.either } = {}) {
+export function readMenu(lines, { screenTop = 0, startsAt = PROMPT_START.either, atTop = false } = {}) {
   const rows = lines.map(clean);
   const first = lastFirstChoice(rows);
   if (first < 0) return null;
@@ -75,7 +75,7 @@ export function readMenu(lines, { screenTop = 0, startsAt = PROMPT_START.either 
   // A menu the agent waits on has its pointer on one choice; a numbered list in its words has none.
   if (choices.length < 2 || !choices.some(c => c.picked)) return null;
   const { title, context } = questionAbove(rows, first);
-  const start = promptStart(rows, first, startsAt);
+  const start = promptStart(rows, first, startsAt, atTop);
   const whole = start < 0 ? null : JSON.stringify([rows.slice(start, first).map(r => r.trim()), choices.map(c => [c.key, c.label, c.detail])]);
   return { title, context, choices, whole, start: start < screenTop ? -1 : start - screenTop, prompt: dedent(rows.slice(Math.max(start, 0), first)) };
 }
@@ -125,50 +125,65 @@ export function previewLines(menu) {
  * @param {string[]} rows
  * @param {number} first
  * @param {string} startsAt a PROMPT_START
+ * @param {boolean} atTop the lines start at the top of all the terminal has
  */
-function promptStart(rows, first, startsAt) {
+function promptStart(rows, first, startsAt, atTop) {
   for (let i = first - 1; i >= 0 && startsAt !== PROMPT_START.gap; i--) {
     if (RULE.test(rows[i].trim())) return i + 1;
   }
   if (startsAt === PROMPT_START.rule) return -1;
-  return gapStart(rows, first, startsAt === PROMPT_START.gap);
+  return startsAt === PROMPT_START.gap ? codexStart(rows, first, atTop) : nearestGap(rows, first);
 }
 
 /**
- * Where the prompt starts after a gap of blank lines: the nearest one; or, for Codex (pastGaps), the nearest whose
- * prompt asks its question, since a command it shows may have blank lines of its own. Codex indents all of a prompt,
- * and its conversation starts at the margin ("• Ran", "› a prompt"), so the search stops there.
+ * The line after the nearest gap of blank lines above the choices; -1 for none.
  * @param {string[]} rows
  * @param {number} first
- * @param {boolean} pastGaps
  */
-function gapStart(rows, first, pastGaps) {
+function nearestGap(rows, first) {
+  let blanks = 0;
+  for (let i = first - 1; i >= 0; i--) {
+    blanks = rows[i].trim() ? 0 : blanks + 1;
+    if (blanks === GAP) return i + 1;
+  }
+  return -1;
+}
+
+/**
+ * Where a Codex prompt starts. It opens with its question, above any command it shows, and a command may have blank
+ * lines of its own: so the highest gap whose first line asks a question, else the nearest gap (a prompt that asks
+ * none). Codex indents all of a prompt and starts its conversation at the margin ("• Ran", "› a prompt"), where the
+ * search stops; lines that run out before the margin (and aren't the top of all the terminal has) may go on above,
+ * so the start is not known there (-1).
+ * @param {string[]} rows
+ * @param {number} first
+ * @param {boolean} atTop the lines start at the top of all the terminal has
+ */
+function codexStart(rows, first, atTop) {
   let blanks = 0;
   let nearest = -1;
+  let question = -1;
   for (let i = first - 1; i >= 0; i--) {
-    const row = rows[i];
-    if (row.trim()) {
-      blanks = 0;
-      if (nearest >= 0 && !INDENTED.test(row)) break;
-      continue;
-    }
-    if (++blanks !== GAP) continue;
-    if (!pastGaps || asks(rows, i + 1, first)) return i + 1;
+    const text = rows[i].trim();
+    if (text && !INDENTED.test(rows[i])) return question >= 0 ? question : nearest;
+    blanks = text ? 0 : blanks + 1;
+    if (blanks !== GAP) continue;
     if (nearest < 0) nearest = i + 1;
+    if (firstText(rows, i + 1, first).endsWith('?')) question = i + 1;
   }
-  return nearest;
+  return atTop ? (question >= 0 ? question : nearest) : -1;
 }
 
 /** A line that starts indented. */
 const INDENTED = /^\s/;
 
 /**
- * Whether the lines from one to another ask a question (one of them ends in "?").
+ * The first line with words in it, from one line to another (empty for none).
  * @param {string[]} rows
  * @param {number} from
  * @param {number} to
  */
-const asks = (rows, from, to) => rows.slice(from, to).some(row => row.trim().endsWith('?'));
+const firstText = (rows, from, to) => rows.slice(from, to).find(row => row.trim())?.trim() ?? '';
 
 /**
  * Where the last "1." that starts a menu is.

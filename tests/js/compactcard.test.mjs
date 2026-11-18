@@ -168,6 +168,18 @@ test('a Codex command with two blank lines of its own: the prompt starts at the 
   // A prompt that asks nothing starts at its nearest gap, and the search stops at the conversation's margin.
   const plain = ['• Ran ls', 'Is this a question?', '', '', '  Allow this', '› 1. Yes', '  2. No'];
   assert.equal(readMenu(plain, { startsAt: PROMPT_START.gap })?.prompt?.[0], 'Allow this');
+  // A command line after its own gap that ends in "?" isn't the question: that's the highest one.
+  const asking = ['• Ran ls', '', '', '  Would you like to run the following command?', '', '  $ cat <<EOF', '', '', '  is this two?', '  EOF', '› 1. Yes', '  2. No'];
+  assert.equal(readMenu(asking, { startsAt: PROMPT_START.gap })?.prompt?.[0], 'Would you like to run the following command?');
+});
+
+test('a Codex prompt whose question is above the lines read has no known start, so the scrollback is read', () => {
+  const tail = ['  $ cat <<EOF', '  one', '', '', '  two', '  EOF', '› 1. Yes', '  2. No'];
+  assert.equal(readMenu(tail, { startsAt: PROMPT_START.gap })?.whole, null);
+  const whole = readMenu(['', '', '  Would you like to run the following command?', '', ...tail], { startsAt: PROMPT_START.gap, screenTop: 4, atTop: true });
+  assert.equal(whole?.prompt?.[0], 'Would you like to run the following command?');
+  // At the top of all the terminal has, a prompt that asks nothing starts at its nearest gap.
+  assert.equal(readMenu(['', '', '  Allow this', '› 1. Yes', '  2. No'], { startsAt: PROMPT_START.gap, atTop: true })?.prompt?.[0], 'Allow this');
 });
 
 test('a prompt cut off at the top is known by what shows and what the agent said it is about, and gets its buttons', () => {

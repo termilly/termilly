@@ -500,12 +500,12 @@ function screenMenu(tab) {
   // one); a menu as an agent starts is read as before.
   const waiting = waitsForAnswer(tab);
   const startsAt = waiting ? PROMPT_STARTS[runningAgent(tab) ?? ''] ?? PROMPT_START.either : PROMPT_START.either;
-  const menu = readMenu(screenRows(term), { startsAt });
+  const menu = readMenu(screenRows(term), { startsAt, atTop: term.buffer.active.baseY === 0 });
   // An agent starting has said nothing of what it asks: a menu cut off at the top offers the terminal, as before.
   if (!waiting || (menu && menu.whole !== null)) return menu;
   // A question taller than the screen, or whose first choices scrolled above it: read on up the scrollback.
-  const { rows, screenTop } = rowsWithScrollback(term, SCROLLBACK_ROWS);
-  const deeper = readMenu(rows, { screenTop, startsAt });
+  const { rows, screenTop, atTop } = rowsWithScrollback(term, SCROLLBACK_ROWS);
+  const deeper = readMenu(rows, { screenTop, startsAt, atTop });
   if (!deeper || deeper.whole !== null) return deeper ?? menu;
   // Its start not found (further up, or no longer in the terminal): all of it that was read, known by that and what
   // the hook said it's about (and which question it is, menuOf).
