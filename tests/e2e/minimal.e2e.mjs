@@ -245,13 +245,14 @@ step('on hover, a bar a button was clicked in hides again, and a working agent k
     for (const tab of state.tabs.values()) if (tab.agent) { tab.agent = null; emit(EVENTS.tab, tab); }
   });
   await pause(300);
-  const keyboard = await app.eval(() => {
+  await app.eval(() => {
     const button = globalThis.document.querySelector('.ws-layer.active .pane > .pane-header .menu-btn');
     button.blur();
     button.focus({ focusVisible: true });
-    return globalThis.getComputedStyle(button.closest('.pane-header')).opacity;
   });
-  assert.equal(keyboard, '1', 'a button the keyboard is on shows its bar');
+  await pause(300);
+  const keyboardShown = await app.eval(() => globalThis.getComputedStyle(globalThis.document.querySelector('.ws-layer.active .pane > .pane-header')).opacity);
+  assert.equal(keyboardShown, '1', 'a button the keyboard is on shows its bar');
   await app.eval(async t => {
     const { state, emit, EVENTS } = await t.import('store.js');
     for (const tab of state.tabs.values()) if (tab.agent) { tab.agent = null; emit(EVENTS.tab, tab); }
