@@ -18,7 +18,7 @@ import { showToast, TOAST } from './toasts.js';
 import { FOLDER_PATH, SETTING_VALUES } from './constants.js';
 import { showAtSize } from './phone.js';
 import { setDockWorkspaces } from './dock.js';
-import { computerRows } from './workspacelist.js';
+import { computerRows, offlineRow } from './workspacelist.js';
 
 /** @typedef {import('./protocol.js').PcView} Pc */
 /** @typedef {import('./popups.js').MenuEntry} MenuEntry */
@@ -492,10 +492,21 @@ async function closeThere(pc, name, terminals, args) {
  * @returns {MenuEntry}
  */
 function newTerminalItem(pc, wsId) {
-  const s = stateOf(pc);
-  const why = refusal(pc, s.opening);
-  return { label: 'New terminal', icon: ICONS.plus, disabled: !!why, title: why,
-    submenu: why ? undefined : () => (s.places ?? []).map(p => ({ label: p.name, action: () => { manage(pc, { action: MANAGE.open, profile: p.id, ws: wsId }); } })) };
+  const why = refusal(pc, stateOf(pc).opening);
+  return { label: 'New terminal', icon: ICONS.plus, disabled: !!why, title: why, submenu: why ? undefined : () => placesNow(pc, wsId) };
+}
+
+/**
+ * The shells a computer offers for a new terminal, as it is now (it may have gone offline, or been forgotten, since
+ * the menu with New terminal opened).
+ * @param {Pc} pc
+ * @param {string} wsId
+ * @returns {MenuEntry[]}
+ */
+function placesNow(pc, wsId) {
+  const now = pcs.find(p => p.id === pc.id);
+  if (!now?.online) return [offlineRow(now ?? pc, COMPUTER_ICON)];
+  return (stateOf(now).places ?? []).map(p => ({ label: p.name, action: () => { manage(now, { action: MANAGE.open, profile: p.id, ws: wsId }); } }));
 }
 
 /**

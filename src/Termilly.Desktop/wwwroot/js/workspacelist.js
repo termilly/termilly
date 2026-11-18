@@ -60,15 +60,15 @@ const withLast = (rows, last) => [...rows, ...(rows.length ? /** @type {MenuEntr
  */
 export const computerRows = (pcs, actions) => pcs.map(pc => (pc.online
   ? { label: pc.name, icon: actions.icon, submenu: () => reachable(pc, actions, now => workspaceRows(now, actions)) }
-  : offlineRow(pc, actions)));
+  : offlineRow(pc, actions.icon)));
 
 /**
  * A computer that can't be reached: greyed, saying so, and why when it's known.
  * @param {Pc} pc
- * @param {PcRowActions} actions
+ * @param {string} icon
  * @returns {MenuEntry}
  */
-const offlineRow = (pc, actions) => ({ label: pc.name, icon: actions.icon, hint: OFFLINE, disabled: true, title: pc.error ?? undefined });
+export const offlineRow = (pc, icon) => ({ label: pc.name, icon, hint: OFFLINE, disabled: true, title: pc.error ?? undefined });
 
 /**
  * A submenu's rows from the computer as it is now, or its offline row when it went away since the menu opened.
@@ -79,7 +79,7 @@ const offlineRow = (pc, actions) => ({ label: pc.name, icon: actions.icon, hint:
  */
 function reachable(pc, actions, rows) {
   const now = actions.computer(pc.id);
-  return now?.online ? rows(now) : [offlineRow(now ?? pc, actions)];
+  return now?.online ? rows(now) : [offlineRow(now ?? pc, actions.icon)];
 }
 
 /** @param {Pc} pc @param {PcRowActions} actions @returns {MenuEntry[]} */
