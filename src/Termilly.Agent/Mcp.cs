@@ -199,7 +199,7 @@ internal static class Mcp
             Properties((ApiFields.Task, Types.String, TaskId)), [ApiFields.Task]);
         yield return Tool(ToolNames.TickTask, "Ticks a task's steps as you finish them (their numbers, from 1).",
             Properties((ApiFields.Task, Types.String, TaskId), (ApiFields.Tick, Types.String, "Step numbers, comma-separated: 1,3")), [ApiFields.Task, ApiFields.Tick]);
-        yield return Tool(ToolNames.FinishTask, "Says you finished a task: what you did, in a line. The user reviews it. If you were given one step, name it: the task stays in progress until its steps are done.",
+        yield return Tool(ToolNames.FinishTask, "Says you finished a task: what you did, in a line. Call it as your very last step, once everything else is done (tests, reviews, pushes): the user reviews it then. If you were given one step, name it: the task stays in progress until its steps are done.",
             Properties((ApiFields.Task, Types.String, TaskId), (ApiFields.Summary, Types.String, "What you did, one line"), (ApiFields.Step, Types.String, "The step you were given, if any")), [ApiFields.Task, ApiFields.Summary]);
         yield return Tool(ToolNames.AddTask, "Adds a task to the user's To do list: your terminal's list, or its workspace's (list = workspace). Add one only when the user asks you to. Lines in details written as '[ ] text' become its steps.",
             Properties((ApiFields.Title, Types.String, "The task, one line"), (ApiFields.Details, Types.String, "More about it; '[ ] text' lines are steps"),

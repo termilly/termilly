@@ -350,6 +350,12 @@ export function subProgress(details) {
 const oneLine = text => text.replace(/\s+/g, ' ').trim();
 
 /**
+ * Said after each ask to call finish_task: finishing sends the work to review and tells the user it's done, so an
+ * agent that calls it before its tests, reviews or pushes reports done too soon.
+ */
+export const FINISH_LAST = ' Do that as your very last step, once everything else is done (tests, reviews, pushes): it sends your work to review.';
+
+/**
  * What Implement asks an agent: a task, with what its details say and the sub-items still to do, or one sub-item of it.
  * @param {TodoTask} task
  * @param {DetailLine} [sub]
@@ -358,11 +364,11 @@ export function implementPrompt(task, sub) {
   const lines = detailLines(task.details);
   if (sub) {
     const step = lines.filter(line => line.sub).findIndex(line => line.at === sub.at) + 1;
-    return `Work on this step from my Termilly To do list: '${oneLine(sub.text)}'. It is step ${step} of task ${task.id}, '${oneLine(task.text)}'. When you finish, call the termilly MCP tool finish_task with that task, step ${step} and a one-line summary, or run: termilly tasks done ${task.id} --step ${step} --summary 'what you did'`;
+    return `Work on this step from my Termilly To do list: '${oneLine(sub.text)}'. It is step ${step} of task ${task.id}, '${oneLine(task.text)}'. When you finish, call the termilly MCP tool finish_task with that task, step ${step} and a one-line summary, or run: termilly tasks done ${task.id} --step ${step} --summary 'what you did'.${FINISH_LAST}`;
   }
   const notes = oneLine(lines.filter(line => !line.sub).map(line => line.text).join(' '));
   const steps = lines.filter(line => line.sub && !line.done).map((line, i) => `${i + 1}) ${oneLine(line.text)}`);
-  return `Work on this task from my Termilly To do list: '${oneLine(task.text)}'.${notes ? ` Details: ${notes}` : ''}${steps.length ? ` Steps: ${steps.join(' ')}. Tick each with the termilly MCP tool tick_task, or run: termilly tasks tick ${task.id} N` : ''} This is task ${task.id}. When you finish, call the termilly MCP tool finish_task with a one-line summary, or run: termilly tasks done ${task.id} --summary 'what you did'`;
+  return `Work on this task from my Termilly To do list: '${oneLine(task.text)}'.${notes ? ` Details: ${notes}` : ''}${steps.length ? ` Steps: ${steps.join(' ')}. Tick each with the termilly MCP tool tick_task, or run: termilly tasks tick ${task.id} N` : ''} This is task ${task.id}. When you finish, call the termilly MCP tool finish_task with a one-line summary, or run: termilly tasks done ${task.id} --summary 'what you did'.${FINISH_LAST}`;
 }
 
 /** What a reply that goes to Review is asked to say. */

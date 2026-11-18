@@ -15,7 +15,7 @@ import { beforeEnter } from './api.js';
 import { showToast, TOAST } from './toasts.js';
 import { alertReview, alertTask } from './notify.js';
 import { findTask, setStatus, updateTask } from './todo.js';
-import { silentPrompt, detailLines, tickSub, statusOf, TASK_STATUS } from './todolist.js';
+import { silentPrompt, detailLines, tickSub, statusOf, TASK_STATUS, FINISH_LAST } from './todolist.js';
 import { runHidden, onRunEnded, ROLE } from './todorun.js';
 import { STAGE, RUN, reviewPrompt, fixPrompt, readReview } from './todoplan.js';
 
@@ -192,7 +192,7 @@ function startFix(loop, open) {
     const tab = state.tabs.get(loop.terminal);
     if (!tab || !runningAgent(tab)) return false;
     loop.earlier.push({ round: loop.round, found: found_ });
-    void typeTo(tab, fixPrompt(words, open, ` When you finish, call the termilly MCP tool finish_task with task ${found.task.id} and a one-line summary again.`));
+    void typeTo(tab, fixPrompt(words, open, ` When you finish, call the termilly MCP tool finish_task with task ${found.task.id} and a one-line summary again.${FINISH_LAST}`));
     setStatus(found.ref, loop.taskId, TASK_STATUS.progress, { terminal: loop.terminal, plan: loop.plan, stage });
     return true;
   }
