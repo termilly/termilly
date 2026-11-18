@@ -86,3 +86,39 @@ test('a prompt with no question falls back to Codex asks', () => scenario('compa
 }));
 
 
+const tall = ['', '', `  ${question}`, '', ...Array.from({ length: 70 }, (_, i) => `  $ step ${i}`), ...choices, '  Press enter to confirm or esc to cancel'];
+
+/** Whether choice 3's button shows inside the feed. */
+const choiceInSight = app => app.eval(t => {
+  const feed = t.$('.cv-feed').getBoundingClientRect(), button = t.$('.cv-choice[data-choice="3"]').getBoundingClientRect();
+  return button.top >= feed.top - 1 && button.bottom <= feed.bottom + 1;
+});
+
+test('a prompt taller than the screen keeps its choices, and Preview shows all of it and picks', () => scenario('compact-tall', tall, async app => {
+  const rows = await app.eval(async t => {
+    const { state } = await t.import('store.js');
+    return [...state.tabs.values()].find(tab => tab.view?.term).view.term.rows;
+  });
+  assert.ok(rows < tall.length, 'the prompt is taller than the terminal');
+  await app.click('.cv-preview-btn');
+  await app.waitFor('.cv-preview .cv-preview-text');
+  const text = await app.text('.cv-preview-text');
+  assert.ok(text.startsWith(question), text.slice(0, 80));
+  assert.ok(text.includes('$ step 0') && text.trimEnd().endsWith('$ step 69'));
+  await app.click('.cv-preview .cv-choice[data-choice="3"]');
+  await app.waitFor('.cv-preview', { gone: true });
+  await received(app, '3');
+}));
+
+test('the card stays in sight while the prompt box grows and the feed scrolls', () => scenario('compact-grow', tall, async app => {
+  assert.ok(await choiceInSight(app), 'at first');
+  await app.eval(t => {
+    const input = t.$('.cv-input');
+    input.value = 'one\ntwo\nthree\nfour\nfive\nsix';
+    input.dispatchEvent(new Event('input'));
+  });
+  assert.ok(await app.eval(t => t.$('.cv-input').offsetHeight) > 60, 'the prompt box grew');
+  assert.ok(await choiceInSight(app), 'with the prompt box grown');
+  await app.eval(t => { t.$('.cv-feed').scrollTop = 0; });
+  assert.ok(await choiceInSight(app), 'with the feed scrolled up');
+}));
