@@ -199,7 +199,8 @@ async function renderRuns() {
     if (openRunId !== asked || view !== VIEW.runs || editing?.id !== id) return;
     report = reportHtml(open, reportShown);
   }
-  const html = runsHtml(runs, openRunId);
+  // The runs as they are now: they may have been cleared while the report was read.
+  const html = runsHtml(runsOf(id), openRunId);
   const whole = html + report;
   if (whole === runsShown) return;
   runsShown = whole;
