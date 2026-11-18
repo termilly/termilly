@@ -151,9 +151,13 @@ test('the prompt box takes its height again when its pane gets narrower or wider
     input.dispatchEvent(new Event('input'));
   });
   const wide = await height();
-  // The terminals' area narrower, as when a panel opens beside it: the text wraps onto more lines.
-  await app.eval(t => { t.$('.ws-layer.active').style.right = '60%'; });
+  // The terminals' area narrower, as when a panel opens beside it (which refits the terminals): the text wraps onto more lines.
+  const narrow = right => app.eval(async (t, r) => {
+    t.$('.ws-layer.active').style.right = r;
+    (await t.import('terminals.js')).scheduleFit();
+  }, right);
+  await narrow('60%');
   await until(async () => (await height()) > wide, 'taller once narrower');
-  await app.eval(t => { t.$('.ws-layer.active').style.right = ''; });
+  await narrow('');
   await until(async () => (await height()) === wide, 'back to its height once wider');
 }, { waiting: true }));
