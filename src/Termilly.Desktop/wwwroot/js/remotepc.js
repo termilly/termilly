@@ -17,6 +17,8 @@ import { renderRemote, setRemoteExtra, REMOTE_ID, REMOTE_GROUP, groupHead, isGro
 import { showToast, TOAST } from './toasts.js';
 import { FOLDER_PATH, SETTING_VALUES } from './constants.js';
 import { showAtSize } from './phone.js';
+import { setDockWorkspaces } from './dock.js';
+import { computerRows } from './workspacelist.js';
 
 /** @typedef {import('./protocol.js').PcView} Pc */
 /** @typedef {import('./popups.js').MenuEntry} MenuEntry */
@@ -166,6 +168,11 @@ const groupHtml = () => groupHead(REMOTE_GROUP.computers, 'Termilly computers', 
   <button class="rm-row pc-add" data-pc-add>${ICONS.plus}<span class="rm-name">Add a computer</span></button></div>`);
 
 setRemoteExtra(groupHtml);
+
+// Minimal hides the sidebar, so its dock lists the computers' workspaces too, with what the tree's rows and menus do.
+setDockWorkspaces(() => computerRows(pcs, {
+  stateOf, icon: COMPUTER_ICON, open: openTerminal, inFront, newWorkspace: newWorkspaceItem, newTerminal: newTerminalItem,
+}));
 
 /** Pairs with another computer: its address and the code it shows. */
 function addComputer() {
