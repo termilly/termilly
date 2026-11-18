@@ -58,8 +58,8 @@ const clean = line => line.replace(BOX, '').trimEnd();
  * The menu at the bottom of a screen, or null when there's none: the last run of choices numbered from 1 with the
  * agent's pointer on one of them, what they say (a choice's own wrapped words and description under it), and the
  * question above them. The lines may start above the screen (the terminal's scrollback), so a prompt taller than
- * the screen is read whole; its choices are looked for on the screen only. Up there, the agent's own kind of start
- * is looked for (an earlier rule in the conversation isn't a Codex prompt's start).
+ * the screen is read whole; its choices must reach the screen (the first ones may have scrolled above it). Up there,
+ * the agent's own kind of start is looked for (an earlier rule in the conversation isn't a Codex prompt's start).
  * @param {string[]} lines the lines, top to bottom: the screen's, or some above it and then the screen's
  * @param {{ screenTop?: number, startsAt?: string }} [where] screenTop: the first line that is on the screen;
  *   startsAt: a PROMPT_START
@@ -68,8 +68,10 @@ const clean = line => line.replace(BOX, '').trimEnd();
 export function readMenu(lines, { screenTop = 0, startsAt = PROMPT_START.either } = {}) {
   const rows = lines.map(clean);
   const first = lastFirstChoice(rows);
-  if (first < screenTop) return null;
-  const choices = choicesFrom(rows, first);
+  if (first < 0) return null;
+  const { choices, end } = choicesFrom(rows, first);
+  // A menu left in the scrollback isn't the one on the screen.
+  if (end < screenTop) return null;
   // A menu the agent waits on has its pointer on one choice; a numbered list in its words has none.
   if (choices.length < 2 || !choices.some(c => c.picked)) return null;
   const { title, context } = questionAbove(rows, first);
@@ -103,8 +105,8 @@ export function keyedByWhatShows(menu, about) {
   return { ...menu, cut: true, whole: JSON.stringify([about, menu.prompt ?? menu.context, menu.choices.map(c => [c.key, c.label, c.detail])]) };
 }
 
-/** The preview's first line for a prompt whose start is lost. */
-const CUT_NOTE = '(The start of this prompt is no longer in the terminal.)';
+/** The preview's first line for a prompt whose start wasn't found (further up, or no longer in the terminal). */
+const CUT_NOTE = '(The start of this prompt could not be found.)';
 
 /**
  * All the menu says, for its preview: the prompt as drawn (the command, the diff), else its question and what it's
@@ -129,13 +131,44 @@ function promptStart(rows, first, startsAt) {
     if (RULE.test(rows[i].trim())) return i + 1;
   }
   if (startsAt === PROMPT_START.rule) return -1;
-  let blanks = 0;
-  for (let i = first - 1; i >= 0; i--) {
-    blanks = rows[i].trim() ? 0 : blanks + 1;
-    if (blanks === GAP) return i + 1;
-  }
-  return -1;
+  return gapStart(rows, first, startsAt === PROMPT_START.gap);
 }
+
+/**
+ * Where the prompt starts after a gap of blank lines: the nearest one; or, for Codex (pastGaps), the nearest whose
+ * prompt asks its question, since a command it shows may have blank lines of its own. Codex indents all of a prompt,
+ * and its conversation starts at the margin ("• Ran", "› a prompt"), so the search stops there.
+ * @param {string[]} rows
+ * @param {number} first
+ * @param {boolean} pastGaps
+ */
+function gapStart(rows, first, pastGaps) {
+  let blanks = 0;
+  let nearest = -1;
+  for (let i = first - 1; i >= 0; i--) {
+    const row = rows[i];
+    if (row.trim()) {
+      blanks = 0;
+      if (nearest >= 0 && !INDENTED.test(row)) break;
+      continue;
+    }
+    if (++blanks !== GAP) continue;
+    if (!pastGaps || asks(rows, i + 1, first)) return i + 1;
+    if (nearest < 0) nearest = i + 1;
+  }
+  return nearest;
+}
+
+/** A line that starts indented. */
+const INDENTED = /^\s/;
+
+/**
+ * Whether the lines from one to another ask a question (one of them ends in "?").
+ * @param {string[]} rows
+ * @param {number} from
+ * @param {number} to
+ */
+const asks = (rows, from, to) => rows.slice(from, to).some(row => row.trim().endsWith('?'));
 
 /**
  * Where the last "1." that starts a menu is.
@@ -154,11 +187,12 @@ function lastFirstChoice(rows) {
  * draws "Chat about this" under a rule); the menu ends at a hint, or at anything that isn't a choice after them.
  * @param {string[]} rows
  * @param {number} first
- * @returns {MenuChoice[]}
+ * @returns {{ choices: MenuChoice[], end: number }} end: the last line they take
  */
 function choicesFrom(rows, first) {
   /** @type {MenuChoice[]} */
   const choices = [];
+  let end = first;
   for (let i = first; i < rows.length; i++) {
     const row = rows[i];
     const text = row.trim();
@@ -166,15 +200,17 @@ function choicesFrom(rows, first) {
     const last = choices[choices.length - 1];
     if (found && (!last || Number(found[1]) > Number(last.key))) {
       choices.push({ key: found[1], label: found[2], detail: '', picked: POINTER.test(row) });
+      end = i;
     } else if (!text || RULE.test(text)) {
       if (!nextIsChoice(rows, i + 1, last)) break;
     } else if (HINT.test(text) || !last || row.length - row.trimStart().length < UNDER_CHOICE) {
       break;
     } else {
       last.detail = last.detail ? `${last.detail} ${text}` : text;
+      end = i;
     }
   }
-  return choices;
+  return { choices, end };
 }
 
 /**
