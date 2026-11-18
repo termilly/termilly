@@ -24,15 +24,13 @@ const step = (name, run) => test(name, async () => {
 });
 
 /**
- * Adds a task to the first terminal's list and takes it to Review as Implement does, out of sight in a folder when one is
+ * Adds a task to the list in front and takes it to Review as Implement does, out of sight in a folder when one is
  * given; its id.
  */
 const reviewed = (title, folder) => app.eval(async (t, title, folder) => {
-  const { state } = await t.import('store.js');
-  const { addTasks, setStatus, terminalList, listOf, workedIn } = await t.import('todo.js');
+  const { addTasks, setStatus, listInFront, listOf, workedIn } = await t.import('todo.js');
   const { TASK_STATUS } = await t.import('todolist.js');
-  const tab = [...state.tabs.values()].find(x => x.view?.term);
-  const ref = terminalList(tab);
+  const ref = listInFront();
   addTasks(ref, [{ text: title }]);
   const task = listOf(ref).tasks.find(x => x.text === title);
   const plan = { by: 'claude', reviewers: [], rounds: 1, run: 'silent' };
@@ -41,12 +39,10 @@ const reviewed = (title, folder) => app.eval(async (t, title, folder) => {
   return task.id;
 }, title, folder);
 
-/** A task of the first terminal's list as it is now. @param {string} id */
+/** A task of the list in front as it is now. @param {string} id */
 const taskById = id => app.eval(async (t, id) => {
-  const { state } = await t.import('store.js');
-  const { terminalList, listOf } = await t.import('todo.js');
-  const tab = [...state.tabs.values()].find(x => x.view?.term);
-  return listOf(terminalList(tab)).tasks.find(x => x.id === id) ?? null;
+  const { listInFront, listOf } = await t.import('todo.js');
+  return listOf(listInFront()).tasks.find(x => x.id === id) ?? null;
 }, id);
 
 /** A task's row in the To do panel. @param {string} id */
@@ -87,6 +83,8 @@ step('Git changes opens the Git window on the folder, with the changed file', as
 
 step('Accept lets the place go', async () => {
   await app.eval(async t => (await t.import('gitwindow.js')).closeGitWindow());
+  await app.waitFor('.git-win', { gone: true });
+  await app.screenshot('review-row');
   await app.click(`${row(withPlace)} [data-td="accept"]`);
   assert.equal((await taskById(withPlace)).workedIn, undefined);
 });
