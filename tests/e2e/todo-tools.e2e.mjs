@@ -31,7 +31,7 @@ const call = (method, args) => app.eval(async (t, method, args) => {
   }
 }, method, args);
 
-/** The first terminal's tasks: title, details and tags, in order. */
+/** The first terminal's tasks: title, details and tags, in order (a new one goes on top). */
 const tasks = () => app.eval(async t => {
   const { state } = await t.import('store.js');
   const { listOf, terminalList } = await t.import('todo.js');
@@ -49,31 +49,34 @@ before(async () => {
 
 after(async () => { await app?.stop({ failed }); });
 
+/** A task of the first terminal's, by its title. @param {string} text */
+const named = async text => (await tasks()).find(task => task.text === text);
+
 step('edit_task changes what it is given and keeps the rest', async () => {
-  const [first] = await tasks();
+  const first = await named('First');
   const edited = await call('task_edit', { task: first.id, title: 'First, renamed', tags: 'two, #three' });
   assert.equal(edited.title, 'First, renamed');
-  assert.deepEqual((await tasks())[0], { id: first.id, text: 'First, renamed', details: 'Old notes', tags: ['two', 'three'] });
+  assert.deepEqual(await named('First, renamed'), { id: first.id, text: 'First, renamed', details: 'Old notes', tags: ['two', 'three'] });
   await call('task_edit', { task: first.id, details: '', tags: '' });
-  assert.deepEqual((await tasks())[0], { id: first.id, text: 'First, renamed', details: null, tags: null });
+  assert.deepEqual(await named('First, renamed'), { id: first.id, text: 'First, renamed', details: null, tags: null });
   assert.match((await call('task_edit', { task: first.id })).error, /Give a title, details or tags/);
   assert.match((await call('task_edit', { task: first.id, title: '  ' })).error, /needs a title/);
 });
 
 step('delete_task deletes it with a notice, and Undo puts it back where it was', async () => {
-  const before = await tasks();
-  const second = before[1];
-  const done = await call('task_delete', { task: second.id });
+  const order = (await tasks()).map(task => task.text);
+  assert.deepEqual(order, ['Third', 'Second', 'First, renamed']);
+  const done = await call('task_delete', { task: (await named('Second')).id });
   assert.equal(done.deleted.title, 'Second');
-  assert.deepEqual((await tasks()).map(task => task.text), ['First, renamed', 'Third']);
+  assert.deepEqual((await tasks()).map(task => task.text), ['Third', 'First, renamed']);
   await app.waitFor('.toast', { text: 'deleted “Second”' });
   await app.screenshot('deleted-toast');
   await app.eval(t => [...t.$$('.toast button')].find(b => b.textContent.trim() === 'Undo').click());
-  assert.deepEqual((await tasks()).map(task => task.text), ['First, renamed', 'Second', 'Third']);
+  assert.deepEqual((await tasks()).map(task => task.text), order);
 });
 
 step('a task being worked on, or in another terminal\'s list, is not deleted', async () => {
-  const [, , third] = await tasks();
+  const third = await named('Third');
   await app.eval(async (t, id) => {
     const { state } = await t.import('store.js');
     const { updateTask, terminalList } = await t.import('todo.js');
