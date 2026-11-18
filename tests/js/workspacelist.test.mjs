@@ -90,7 +90,7 @@ test('a computer that goes away while the menu is open shows as offline, and its
   const a = actions([laptop]);
   const [row] = computerRows([laptop], a);
   const site = row.submenu()[0];
-  const claude = site.submenu()[0];
+  const claude = site.submenu()[2];
   a.now[0] = { ...laptop, online: false, error: 'Not reachable' };
   assert.deepEqual(row.submenu().map(r => [r.label, r.hint, r.disabled]), [['Laptop', 'offline', true]]);
   assert.deepEqual(site.submenu().map(r => r.hint), ['offline']);
