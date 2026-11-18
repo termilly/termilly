@@ -13,6 +13,7 @@ import { openPalette } from './palette.js';
 import { escapeHtml, cssColor } from './ui.js';
 import { targetOf, find, byId, nearestEdge, swallowNextClick, DOCK_SIDE, TITLEBAR_ID } from './dom.js';
 import { AGENT_STATE } from './constants.js';
+import { workspaceSwatch, stateWord } from './workspacelist.js';
 
 /** @typedef {import('./popups.js').MenuEntry} MenuEntry */
 
@@ -214,23 +215,37 @@ dock.addEventListener('contextmenu', e => {
   showMenu(items, { x: e.clientX, y: e.clientY });
 });
 
-/** A workspace's colour, as a 16px swatch for its row in the list. @param {Workspace} ws */
-const swatch = ws => `<svg viewBox="0 0 16 16"><rect x="4.5" y="4.5" width="7" height="7" rx="2" fill="${escapeHtml(cssColor(ws.color))}" stroke="none"/></svg>`;
-
-/** What a workspace's row says after its name: who needs the user or works there, and how many terminals. @param {Workspace} ws */
+/**
+ * What a workspace's row says after its name: who needs the user or works there, and how many terminals.
+ * @param {Workspace} ws
+ */
 function rowHint(ws) {
-  const now = stateOf(ws);
-  const word = now === AGENT_STATE.needsInput ? 'needs you · ' : now === AGENT_STATE.working ? 'working · ' : '';
-  return `${word}${tabsOf(ws).length}`;
+  const word = stateWord(stateOf(ws));
+  const count = tabsOf(ws).length;
+  return escapeHtml(word ? `${word} · ${count}` : `${count}`);
 }
 
-// The workspace on screen opens the list of them all, and New workspace.
+/**
+ * More rows for the workspace list, after this PC's: other computers' workspaces (js/remotepc.js), which the sidebar
+ * lists under Remote but Minimal hides with the sidebar.
+ * @type {() => MenuEntry[]}
+ */
+let moreWorkspaces = () => [];
+
+/** @param {() => MenuEntry[]} rows */
+export function setDockWorkspaces(rows) {
+  moreWorkspaces = rows;
+}
+
+// The workspace on screen opens the list of them all, other computers' too, and New workspace.
 wsButton.addEventListener('click', () => {
   /** @type {MenuEntry[]} */
   const items = state.workspaces.map(ws => ({
-    label: ws.name, icon: swatch(ws), hint: escapeHtml(rowHint(ws)), checked: ws.id === state.activeId,
+    label: ws.name, icon: workspaceSwatch(ws.color), hint: rowHint(ws), checked: ws.id === state.activeId,
     action: () => switchWorkspace(ws.id),
   }));
+  const more = moreWorkspaces();
+  if (more.length) items.push(SEPARATOR, ...more);
   items.push(SEPARATOR, { label: 'New workspace', hint: 'Ctrl+Shift+N', action: () => openNewWorkspace() });
   showMenu(items, wsButton, { side: AWAY[sideNow()] });
 });

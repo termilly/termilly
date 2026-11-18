@@ -2,7 +2,8 @@
    terminals that meet on a 1px line with a quiet name line or a bar shown on hover. Everything here is scoped to
    body[data-layout="minimal"], so Normal is untouched. */
 
-body[data-layout="minimal"] { --gap: 1px; --strip: 32px; }
+/* What terminals and the tools beside them share: the name line's height and insets, and the edge of the one in use. */
+body[data-layout="minimal"] { --gap: 1px; --strip: 32px; --name-line: 24px; --name-line-pad: 0 4px 0 10px; --in-use-edge: inset 2px 0 0 var(--accent); }
 
 /* ---- The strip ---- */
 
@@ -42,7 +43,7 @@ body[data-layout="minimal"] .pane { border: 0; border-radius: 0; box-shadow: non
 /* Drawn over the terminal (its canvas would cover a shadow on the pane): the accent edge of the one in focus, and the
    amber or red frame of one that needs you or failed. */
 body[data-layout="minimal"] .pane::after { content: ""; position: absolute; inset: 0; z-index: 5; pointer-events: none; }
-body[data-layout="minimal"] .pane.focused::after { box-shadow: inset 2px 0 0 var(--accent); }
+body[data-layout="minimal"] .pane.focused::after { box-shadow: var(--in-use-edge); }
 body[data-layout="minimal"] .pane[data-activity="needs"]::after { box-shadow: inset 0 0 0 1px var(--attention); }
 body[data-layout="minimal"] .pane[data-activity="error"]::after { box-shadow: inset 0 0 0 1px var(--danger); }
 /* The 1px gap is too thin to grab: the divider's handle reaches 3px either side of it. */
@@ -51,7 +52,7 @@ body[data-layout="minimal"] .split.column > .divider::before { inset: -3px 0; }
 body[data-layout="minimal"] .bar-off { display: none !important; }
 
 /* A name line: 24px, dim, its buttons only on the terminal you're in or the one under the mouse (Stop always). */
-body[data-layout="minimal"][data-pane-names="line"] .pane > .pane-header { height: 24px; padding: 0 4px 0 10px; background: var(--surface); }
+body[data-layout="minimal"][data-pane-names="line"] .pane > .pane-header { height: var(--name-line); padding: var(--name-line-pad); background: var(--surface); }
 body[data-layout="minimal"][data-pane-names="line"] .pane:not(.focused):not(:hover) .pane-actions > :not(.agent-stop-btn) { visibility: hidden; }
 
 /* A bar on hover: over the terminal's top right, shown while the mouse is near the top or on it (js/minimal.js). It sits
@@ -63,7 +64,7 @@ body[data-layout="minimal"][data-pane-names="hover"] .pane > .pane-header {
   z-index: 6;
   max-width: calc(100% - 16px);
   height: 28px;
-  padding: 0 4px 0 10px;
+  padding: var(--name-line-pad);
   border: 1px solid var(--border-strong);
   border-radius: 8px;
   background: var(--raised);
@@ -158,3 +159,29 @@ body[data-layout="minimal"][data-pane-names="hover"] .pane:not(.bar-near) > .pan
 .dock-line:is([data-side="left"], [data-side="right"]) { top: 50%; width: 3px; height: 120px; transform: translateY(-50%); }
 .dock-line[data-side="left"] { left: 4px; }
 .dock-line[data-side="right"] { right: 4px; }
+
+/* ---- Tools beside the terminals: Notepad, To do, Clipboard, Files and the File Explorer (not in a window of their own) ---- */
+
+/* Flush against the terminals with the same 1px line between them (the workspace showing through the gap), no frame. */
+body[data-layout="minimal"] :is(.notepad-panel, .clips-panel, .files-panel) { border: 0; border-radius: 0; background: var(--surface); }
+/* In use, the accent edge a terminal in use has (not Normal's ring), drawn over what fills the tool. */
+body[data-layout="minimal"] :is(.notepad-panel, .clips-panel, .files-panel):focus-within { box-shadow: none; }
+body[data-layout="minimal"] :is(.notepad-panel, .clips-panel, .files-panel)::after { content: ""; position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+body[data-layout="minimal"] :is(.notepad-panel, .clips-panel, .files-panel):focus-within::after { box-shadow: var(--in-use-edge); }
+/* Their title bar is a name line like a terminal's: 24px, the name dim until the tool is in use. */
+body[data-layout="minimal"] :is(.notepad-panel, .clips-panel, .files-panel) > .files-head {
+  height: var(--name-line);
+  padding: var(--name-line-pad);
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: var(--surface);
+}
+body[data-layout="minimal"] :is(.notepad-panel, .clips-panel, .files-panel) > .files-head .files-title { color: var(--muted); font-size: 12px; font-weight: 500; }
+body[data-layout="minimal"] :is(.notepad-panel, .clips-panel, .files-panel):focus-within > .files-head .files-title { color: var(--text); }
+/* Its buttons show on the tool in use or under the mouse, as a terminal's do (switches stay: they show a state). */
+/* Faded, not taken away, so Tab still reaches them (and its focus shows them). */
+body[data-layout="minimal"] :is(.notepad-panel, .clips-panel, .files-panel):not(:hover, :focus-within) > .files-head .files-tools > :is(.pane-btn, .np-sep) { opacity: 0; pointer-events: none; }
+/* The File Explorer over the right edge: a 1px line against the terminals, not a floating card. */
+body[data-layout="minimal"] .preview-panel { border-radius: 0; box-shadow: -1px 0 0 var(--border); }
+/* Its name as a terminal's on its line, not bold. */
+body[data-layout="minimal"] .preview-pane .pv-name { font-weight: 500; }

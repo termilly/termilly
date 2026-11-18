@@ -11,7 +11,7 @@ import { shownName } from './rename.js';
 import { scheduleFit } from './terminals.js';
 import { showDock, needsYou } from './dock.js';
 import { isMinimal, PANE_HEADER } from './panebar.js';
-import { find, targetOf } from './dom.js';
+import { find, targetOf, refreshDockedPanels } from './dom.js';
 import { SETTING_VALUES } from './constants.js';
 
 /** How near a terminal's top the mouse has to be for its bar to show, on hover (px). */
@@ -61,8 +61,10 @@ function applyLayout() {
   body.dataset.paneNames = names;
   showDock(minimal);
   drawStrip();
-  // The terminals' room changes with the title bar, sidebar and headers.
-  if (changed) scheduleFit();
+  // The terminals' room changes with the title bar, sidebar and headers, and the docked tools' with the gap beside them.
+  if (!changed) return;
+  refreshDockedPanels();
+  scheduleFit();
 }
 
 asideButton.addEventListener('click', () => {

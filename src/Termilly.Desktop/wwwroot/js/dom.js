@@ -161,6 +161,17 @@ export function edgeAt(area, x, y, band) {
 }
 
 /**
+ * Each docked panel's refresh (dockRight): the room it takes includes the gap between panes, which the layout sets.
+ * @type {Set<() => void>}
+ */
+const dockedPanels = new Set();
+
+/** The layout changed the gap between panes (Normal's 6px, Minimal's 1px line): the docked panels take their room again. */
+export function refreshDockedPanels() {
+  for (const refresh of dockedPanels) refresh();
+}
+
+/**
  * A panel docked on an edge of the workspace, the right one unless `side` says otherwise (the Files panel, the
  * Notepad): the terminals end where it starts (its size and the gap between panes, in the CSS variable `dockVar` on
  * the workspace, with -left, -top or -bottom after it on those edges), and its grip resizes it, up to half the workspace.
@@ -172,7 +183,8 @@ export function edgeAt(area, x, y, band) {
  */
 export function dockRight(panel, { dockVar, minWidth, minHeight = minWidth, side = () => DOCK_SIDE.right, resized, dragged }) {
   const workspace = byId(WORKSPACE_ID);
-  const gap = () => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--gap')) || 0;
+  // The gap as the terminals have it: Minimal's 1px line is set on the body, under the page's own 6px.
+  const gap = () => parseFloat(getComputedStyle(workspace).getPropertyValue('--gap')) || 0;
   // In a window of its own (js/windows.js), or hidden, it takes no room here.
   const refresh = () => {
     const docked = !panel.hidden && !panel.classList.contains(DOCK_AWAY) && workspace.contains(panel);
@@ -184,6 +196,7 @@ export function dockRight(panel, { dockVar, minWidth, minHeight = minWidth, side
     resized();
   };
   new ResizeObserver(refresh).observe(panel);
+  dockedPanels.add(refresh);
   panel.addEventListener('pointerdown', e => {
     if (!targetOf(e).classList.contains(DOCK_GRIP)) return;
     e.preventDefault();

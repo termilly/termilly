@@ -325,7 +325,9 @@ function menuRow(menu, item) {
     const openSub = () => {
       if (button.classList.contains('open')) return;
       closeSubmenus();
-      showMenu(submenu(), button, { side: SIDE.right, nested: true });
+      // A menu opened leftwards (from a dock on the window's right edge) goes on that way, not back over itself.
+      const side = stack.find(entry => entry.el === menu)?.side === SIDE.left ? SIDE.left : SIDE.right;
+      showMenu(submenu(), button, { side, nested: true });
     };
     button.addEventListener('mouseenter', openSub);
     button.addEventListener('click', openSub);
