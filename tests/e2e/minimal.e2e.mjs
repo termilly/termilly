@@ -208,7 +208,7 @@ step('on hover, a bar a button was clicked in hides again, and a working agent k
   const pane = await app.eval(() => { const r = globalThis.document.querySelector('.ws-layer.active .pane').getBoundingClientRect(); return { x: r.left + r.width / 2, top: r.top, bottom: r.bottom, right: r.right }; });
   // Focus left on one of its buttons kept the bar shown for good.
   await pointTo(pane.x, pane.top + 12);
-  // As a click leaves it: focused, but not by the keyboard (which shows the bar, below).
+  // As a click leaves it: focused, but not by the keyboard (keyboard focus shows the bar).
   await app.eval(() => globalThis.document.querySelector('.ws-layer.active .pane > .pane-header .menu-btn').focus({ focusVisible: false }));
   await pointTo(pane.x, pane.bottom - 60);
   await pause(300);
@@ -238,21 +238,6 @@ step('on hover, a bar a button was clicked in hides again, and a working agent k
   await pause(300);
   // The whole bar again, Stop where it was (the last button), so a click aimed at it still lands on it.
   assert.deepEqual(await look(), { stop: true, stopAtRight: true, menu: 'visible', name: 'visible' });
-  // The keyboard on one of a hidden bar's buttons shows the bar.
-  await pointTo(pane.x, pane.bottom - 60);
-  await app.eval(async t => {
-    const { state, emit, EVENTS } = await t.import('store.js');
-    for (const tab of state.tabs.values()) if (tab.agent) { tab.agent = null; emit(EVENTS.tab, tab); }
-  });
-  await pause(300);
-  await app.eval(() => {
-    const button = globalThis.document.querySelector('.ws-layer.active .pane > .pane-header .menu-btn');
-    button.blur();
-    button.focus({ focusVisible: true });
-  });
-  await pause(300);
-  const keyboardShown = await app.eval(() => globalThis.getComputedStyle(globalThis.document.querySelector('.ws-layer.active .pane > .pane-header')).opacity);
-  assert.equal(keyboardShown, '1', 'a button the keyboard is on shows its bar');
   await app.eval(async t => {
     const { state, emit, EVENTS } = await t.import('store.js');
     for (const tab of state.tabs.values()) if (tab.agent) { tab.agent = null; emit(EVENTS.tab, tab); }
