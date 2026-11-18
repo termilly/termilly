@@ -131,6 +131,9 @@ test('a menu keeps its key while the pointer moves, and another question gets an
   const other = readMenu(['──────────', 'Do you want to make this edit?', '> 1. Yes', '  2. No']);
   assert.equal(menuKey(at(1)), menuKey(at(2)));
   assert.notEqual(menuKey(at(1)), menuKey(other));
+  const menu = /** @type {any} */ (at(1));
+  assert.notEqual(menuKey({ ...menu, asked: 1 }), menuKey({ ...menu, asked: 2 }), 'the next question that says the same');
+  assert.equal(menuKey({ ...menu, asked: 1 }), menuKey({ ...at(2), asked: 1 }));
 });
 
 test('a menu is known by all its prompt says, not only the lines the card shows; one whose start is off the screen has no key', () => {
