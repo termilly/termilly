@@ -2,7 +2,8 @@
 // The question an agent waits on, read off its screen for the compact view's card (js/compact.js): Claude Code's
 // permission prompts, its questions (AskUserQuestion) and plan approval, and Codex's approvals all draw a question
 // and numbered choices, and a choice's number picks it. The card shows the question, what it's about (the command,
-// the plan) and a button per choice that presses that number. Pure: screen lines in, a menu out; a menu in, HTML out.
+// the plan) and a button per choice that presses that number, and Preview shows all the prompt says. Pure: screen
+// lines in, a menu out; a menu in, HTML out.
 
 import { escapeHtml } from './ui.js';
 
@@ -37,10 +38,10 @@ const UNDER_CHOICE = 3;
 
 /**
  * @typedef {{ key: string, label: string, detail: string, picked: boolean }} MenuChoice
- * @typedef {{ title: string, context: string[], choices: MenuChoice[], whole?: string | null, start?: number }} Menu
+ * @typedef {{ title: string, context: string[], choices: MenuChoice[], whole?: string | null, start?: number, prompt?: string[] }} Menu
  *   whole: everything the prompt says, from where it starts (not cut for showing), which tells it from another; null
- *   when its start is off the screen (the menu can't be told apart, so the card offers only the terminal); start:
- *   the row the prompt starts on, -1 when that's off the screen
+ *   when its start is off the lines read (keyedByWhatShows gives it one); start: the row of the screen the prompt
+ *   starts on, -1 when that's off the screen; prompt: its lines above the choices as drawn, uncut, for its preview
  */
 
 /**
@@ -52,22 +53,57 @@ const clean = line => line.replace(BOX, '').trimEnd();
 /**
  * The menu at the bottom of a screen, or null when there's none: the last run of choices numbered from 1 with the
  * agent's pointer on one of them, what they say (a choice's own wrapped words and description under it), and the
- * question above them.
- * @param {string[]} lines the screen's lines, top to bottom
+ * question above them. The lines may start above the screen (the terminal's scrollback), so a prompt taller than
+ * the screen is read whole; its choices are looked for on the screen only.
+ * @param {string[]} lines the lines, top to bottom: the screen's, or some above it and then the screen's
+ * @param {number} [screenTop] the first of them that is on the screen
  * @returns {Menu | null}
  */
-export function readMenu(lines) {
+export function readMenu(lines, screenTop = 0) {
   const rows = lines.map(clean);
   const first = lastFirstChoice(rows);
-  if (first < 0) return null;
+  if (first < screenTop) return null;
   const choices = choicesFrom(rows, first);
   // A menu the agent waits on has its pointer on one choice; a numbered list in its words has none.
   if (choices.length < 2 || !choices.some(c => c.picked)) return null;
   const { title, context } = questionAbove(rows, first);
   const start = promptStart(rows, first);
   const whole = start < 0 ? null : JSON.stringify([rows.slice(start, first).map(r => r.trim()), choices.map(c => [c.key, c.label, c.detail])]);
-  return { title, context, choices, whole, start };
+  return { title, context, choices, whole, start: start < screenTop ? -1 : start - screenTop, prompt: dedent(rows.slice(Math.max(start, 0), first)) };
 }
+
+/**
+ * Lines without the blank ones at either end, and without the indent they all share.
+ * @param {string[]} lines
+ */
+function dedent(lines) {
+  const from = lines.findIndex(line => line.trim());
+  if (from < 0) return [];
+  const kept = lines.slice(from, lines.findLastIndex(line => line.trim()) + 1);
+  const indent = Math.min(...kept.filter(line => line.trim()).map(line => line.length - line.trimStart().length));
+  return kept.map(line => line.slice(indent));
+}
+
+/**
+ * A menu whose start is off the lines read, keyed by what shows of it and by what the agent said it asks about (its
+ * hook's tool and target, when it gave them), so a prompt taller than the screen still gets its buttons. Two prompts
+ * alike in all that shows and in what they're about are taken for one: the card shows the same for both, and a
+ * choice isn't pressed twice on one key within a moment (js/compact.js).
+ * @param {Menu} menu
+ * @param {Array<string | null | undefined>} about
+ * @returns {Menu}
+ */
+export function keyedByWhatShows(menu, about) {
+  if (menu.whole !== null) return menu;
+  return { ...menu, whole: JSON.stringify([about, menu.prompt ?? menu.context, menu.choices.map(c => [c.key, c.label, c.detail])]) };
+}
+
+/**
+ * All the menu says, for its preview: the prompt as drawn (the command, the diff), else its question and what it's
+ * about (a plan, from its file).
+ * @param {Menu} menu
+ */
+export const previewLines = menu => (menu.prompt?.length ? menu.prompt : [menu.title, ...(menu.context.length ? ['', ...menu.context] : [])]);
 
 /**
  * Where the prompt above a menu starts: the line after its rule (Claude Code draws one; blank lines inside the
@@ -190,15 +226,22 @@ export function questionMenu(question) {
 
 /**
  * The card for a question: the question, what it's about, a button per choice that carries its key and words (to
- * check them again before pressing it), and the terminal for what the card can't show.
+ * check them again before pressing it), Preview for all the prompt says, and the terminal for what the card can't show.
  * @param {Menu | null} menu
  * @param {string} name the agent's short name, escaped
- * @param {string} openClass the class of the button that shows the terminal
+ * @param {{ open: string, preview: string }} classes the classes of the buttons that show the terminal and the preview
  */
-export function cardHtml(menu, name, openClass) {
-  if (menu) return menuCardHtml(menu, openClass);
-  return `<div class="cv-card"><div class="cv-question">${name} needs you</div><div class="cv-choices"><button class="${openClass}">Open terminal</button></div></div>`;
+export function cardHtml(menu, name, classes) {
+  if (menu) return menuCardHtml(menu, classes);
+  return `<div class="cv-card"><div class="cv-question">${name} needs you</div><div class="cv-choices"><button class="${classes.open}">Open terminal</button></div></div>`;
 }
+
+/**
+ * A choice's button: its number and words, and what it says under them.
+ * @param {MenuChoice} choice
+ */
+export const choiceHtml = choice => `<button class="cv-choice${choice.picked ? ' picked' : ''}" data-choice="${choice.key}" title="${escapeHtml(choice.detail || choice.label)}">`
+  + `<kbd>${choice.key}</kbd>${escapeHtml(choice.label)}${choice.detail ? `<small>${escapeHtml(choice.detail)}</small>` : ''}</button>`;
 
 /**
  * What tells one menu from another: all its prompt says and its choices (not which one the pointer is on, which the
@@ -216,15 +259,14 @@ export function menuKey(menu) {
 
 /**
  * @param {Menu} menu
- * @param {string} openClass
+ * @param {{ open: string, preview: string }} classes
  */
-function menuCardHtml(menu, openClass) {
-  const open = `<button class="${openClass}">Open terminal</button>`;
+function menuCardHtml(menu, classes) {
+  const tools = `<button class="${classes.preview}" title="All the prompt says">Preview</button><button class="${classes.open}">Open terminal</button>`;
   // A plan's blank lines keep its paragraphs apart.
   const context = menu.context.map(line => (line ? `<div>${escapeHtml(line)}</div>` : '<br>')).join('');
-  // A menu that can't be told from another (its start is off a short screen) gets no buttons: the terminal answers it.
-  const choices = menuKey(menu) ? menu.choices.map(c => `<button class="cv-choice${c.picked ? ' picked' : ''}" data-choice="${c.key}" title="${escapeHtml(c.detail || c.label)}">`
-    + `<kbd>${c.key}</kbd>${escapeHtml(c.label)}${c.detail ? `<small>${escapeHtml(c.detail)}</small>` : ''}</button>`).join('') : '';
+  // A menu that can't be told from another gets no buttons: the terminal answers it.
+  const choices = menuKey(menu) ? menu.choices.map(choiceHtml).join('') : '';
   return `<div class="cv-card" data-menu="${menuKey(menu)}"><div class="cv-question">${escapeHtml(menu.title)}</div>`
-    + `${context ? `<div class="cv-context">${context}</div>` : ''}<div class="cv-choices">${choices}${open}</div></div>`;
+    + `${context ? `<div class="cv-context">${context}</div>` : ''}<div class="cv-choices">${choices}${tools}</div></div>`;
 }

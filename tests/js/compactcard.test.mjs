@@ -9,7 +9,7 @@ globalThis.window = /** @type {any} */ ({ addEventListener() {}, external: { rec
 globalThis.document = /** @type {any} */ ({ documentElement: { dataset: {} }, addEventListener() {}, querySelector: () => null, querySelectorAll: () => [] });
 globalThis.localStorage = /** @type {any} */ ({ getItem: () => null, setItem() {} });
 globalThis.addEventListener = () => {};
-const { readMenu, menuKey } = await import('../../src/Termilly.Desktop/wwwroot/js/compactcard.js');
+const { readMenu, menuKey, keyedByWhatShows, previewLines, cardHtml } = await import('../../src/Termilly.Desktop/wwwroot/js/compactcard.js');
 
 test('a Claude Code permission prompt: its question, the command, and its three choices', () => {
   const menu = readMenu([
@@ -34,9 +34,10 @@ test('a Claude Code permission prompt: its question, the command, and its three 
     ' Esc to cancel · Tab to amend',
   ]);
   assert.ok(menu?.whole);
-  assert.deepEqual({ ...menu, whole: undefined, start: undefined }, {
+  assert.deepEqual({ ...menu, whole: undefined, start: undefined, prompt: undefined }, {
     start: undefined,
     whole: undefined,
+    prompt: undefined,
     title: 'Do you want to proceed?',
     context: ['PowerShell command', 'Initialize a git repository', 'git init', 'This command requires approval'],
     choices: [
@@ -136,6 +137,41 @@ test('a menu is known by all its prompt says, not only the lines the card shows;
   const prompt = command => ['────────────────────', 'Bash command', command, ...Array.from({ length: 13 }, (_, i) => `# line ${i}`), '', 'Do you want to proceed?', '> 1. Yes', '  2. No'];
   assert.notEqual(menuKey(readMenu(prompt('rm -rf a'))), menuKey(readMenu(prompt('rm -rf b'))));
   assert.equal(menuKey(readMenu(prompt('rm -rf a').slice(1))), '');
+});
+
+test('a prompt taller than the screen is read whole from the scrollback above it, with the same key as on a tall screen', () => {
+  const prompt = ['> earlier', '', '────────────────────', ' Bash command', '', '   rm -rf a', ...Array.from({ length: 13 }, (_, i) => `   # line ${i}`), '', ' Do you want to proceed?', ' > 1. Yes', '   2. No'];
+  const screenTop = 6;
+  const deeper = readMenu(prompt, screenTop);
+  assert.equal(menuKey(deeper), menuKey(readMenu(prompt.slice(2))));
+  assert.equal(deeper?.start, -1);
+  assert.deepEqual(deeper?.prompt?.slice(0, 3), ['Bash command', '', '  rm -rf a']);
+  assert.equal(deeper?.prompt?.at(-1), 'Do you want to proceed?');
+});
+
+test('choices only in the scrollback are not a menu on the screen', () => {
+  assert.equal(readMenu(['──────────', 'Do you want to proceed?', '> 1. Yes', '  2. No', 'Done.', '> '], 4), null);
+});
+
+test('a prompt cut off at the top is known by what shows and what the agent said it is about, and gets its buttons', () => {
+  const prompt = command => ['Bash command', command, ...Array.from({ length: 13 }, (_, i) => `# line ${i}`), '', 'Do you want to proceed?', '> 1. Yes', '  2. No'];
+  const cut = readMenu(prompt('rm -rf a').slice(1));
+  assert.ok(cut);
+  const keyed = keyedByWhatShows(cut, ['Bash', 'rm -rf a']);
+  assert.notEqual(menuKey(keyed), '');
+  assert.notEqual(menuKey(keyed), menuKey(keyedByWhatShows(cut, ['Bash', 'rm -rf b'])));
+  assert.match(cardHtml(keyed, 'Claude', { open: 'o', preview: 'p' }), /data-choice="1"/);
+  const whole = readMenu(['──────────', ...prompt('rm -rf a')]);
+  assert.ok(whole);
+  assert.equal(keyedByWhatShows(whole, ['x']), whole);
+});
+
+test('the preview has all the prompt says; a question without one has its title and what it is about', () => {
+  const menu = readMenu(['──────────', ...Array.from({ length: 20 }, (_, i) => `  line ${i}`), '', '  Do you want to proceed?', '  > 1. Yes', '    2. No']);
+  assert.equal(menu?.context.length, 12);
+  assert.equal(previewLines(/** @type {any} */ (menu)).length, 22);
+  assert.deepEqual(previewLines({ title: 'Ready?', context: ['# Plan', '', 'Step'], choices: [] }), ['Ready?', '', '# Plan', '', 'Step']);
+  assert.match(cardHtml(/** @type {any} */ (menu), 'Claude', { open: 'o', preview: 'p' }), /class="p"[^>]*>Preview</);
 });
 
 test('blank lines inside a command do not end the prompt where a rule starts it', () => {
