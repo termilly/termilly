@@ -293,8 +293,8 @@ step('on hover, a file preview\'s long bar shows only from its top right corner,
   const bar = () => app.eval(() => globalThis.getComputedStyle(globalThis.document.querySelector('.preview-pane > .pane-header')).opacity);
   const hoverAt = async point => { await pointTo(point.x, point.y); await pause(300); return bar(); };
   const overTabs = await hoverAt(at.firstTab);
-  // The last tab's Close, in the corner: still a tab, so the bar stays away.
-  const lastClose = at.lastClose.x > at.right - 40 && at.lastClose.y < at.top + 40 ? await hoverAt(at.lastClose) : 'not in the corner';
+  // The tabs end before the corner, so the last tab's Close is out of it and the bar stays away there.
+  const lastClose = await hoverAt(at.lastClose);
   const inCorner = await hoverAt(at.corner);
   await app.screenshot('06c-preview-corner');
   // Along the bar, leftward from the corner, it stays.

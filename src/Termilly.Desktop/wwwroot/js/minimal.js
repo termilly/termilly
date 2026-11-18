@@ -18,13 +18,12 @@ import { SETTING_VALUES } from './constants.js';
 /** How near a terminal's top the mouse has to be for its bar to show, on hover (px). */
 const BAR_NEAR_PX = 36;
 /**
- * A file preview's bar is long and its top holds the preview's tabs: it shows only from a square this big in its top
- * right corner, where the bar's Close is, so the tabs (and their close buttons) stay in reach (px).
+ * A file preview's bar is long and its top holds the preview's tabs: it shows only from a square in its top right
+ * corner, where the bar's Close is, so the tabs stay in reach. Its size is minimal.css's, where the tabs end before it.
  */
-const PREVIEW_CORNER_PX = 40;
-/** The file preview pane (js/preview.js), and one of its file tabs. */
+const PREVIEW_CORNER = '--preview-corner';
+/** The file preview pane (js/preview.js). */
 const PREVIEW_PANE = 'preview-pane';
-const FILE_TAB = '.pv-tab';
 /** A terminal's class while its bar shows (app.css). */
 const BAR_NEAR = 'bar-near';
 const { paneNames, layout } = SETTING_VALUES;
@@ -106,15 +105,15 @@ document.addEventListener('mousemove', e => {
 }, { passive: true });
 
 /**
- * Whether the mouse is where a pane's bar shows from: near its top, or for a file preview, its top right corner, not
- * on a file tab (the last one's Close is in that corner when the tabs are scrolled to their end).
+ * Whether the mouse is where a pane's bar shows from: near its top, or for a file preview, its top right corner.
  * @param {HTMLElement} pane
  * @param {MouseEvent} e
  */
 function nearTop(pane, e) {
   const box = pane.getBoundingClientRect();
   if (!pane.classList.contains(PREVIEW_PANE)) return e.clientY - box.top < BAR_NEAR_PX;
-  return e.clientY - box.top < PREVIEW_CORNER_PX && box.right - e.clientX < PREVIEW_CORNER_PX && !targetOf(e).closest(FILE_TAB);
+  const corner = parseFloat(getComputedStyle(pane).getPropertyValue(PREVIEW_CORNER)) || BAR_NEAR_PX;
+  return e.clientY - box.top < corner && box.right - e.clientX < corner;
 }
 document.addEventListener('keydown', () => showBarOn(null), { capture: true });
 

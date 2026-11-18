@@ -185,3 +185,7 @@ body[data-layout="minimal"] :is(.notepad-panel, .clips-panel, .files-panel):not(
 body[data-layout="minimal"] .preview-panel { border-radius: 0; box-shadow: -1px 0 0 var(--border); }
 /* Its name as a terminal's on its line, not bold. */
 body[data-layout="minimal"] .preview-pane .pv-name { font-weight: 500; }
+/* On hover, the preview's long bar shows only from this square in its top right corner (js/minimal.js), where its
+   Close is; the file tabs end before it, so the last tab's Close is never under the bar. */
+body[data-layout="minimal"][data-pane-names="hover"] .preview-pane { --preview-corner: 40px; }
+body[data-layout="minimal"][data-pane-names="hover"] .preview-pane .pv-tabs::after { content: ''; flex: none; width: var(--preview-corner); }
