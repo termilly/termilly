@@ -101,7 +101,7 @@
 /* A gentle fade instead of a flash. */
 @media (prefers-reduced-motion: reduce) {
   .pane > .pane-arrived { animation: pane-arrived-calm 0.8s ease-out forwards; }
-  @keyframes pane-arrived-calm { 0% { opacity: 0.8; } 100% { opacity: 0; } }
+  @keyframes pane-arrived-calm { 0% { opacity: 0; } 40% { opacity: 0.45; } 100% { opacity: 0; } }
 }
 
 /* An app reported an error or a pause (OSC 9;4), or an agent stopped with an error: the whole pane says so. */
