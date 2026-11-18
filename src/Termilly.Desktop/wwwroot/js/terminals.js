@@ -10,6 +10,7 @@ import {
 import { inputTargets } from './broadcast.js';
 import { promptStarted, inputStarted, commandStarted, commandEnded, commandReported } from './commands.js';
 import { scanOutput, scanFrom, screenCleared } from './triggers.js';
+import { sizeTold } from './reprint.js';
 import { quotePaths } from './quoting.js';
 import { isWsl } from './filepaths.js';
 import { remoteReport, remoteHook, remotePrompt, watchRemote } from './remotehost.js';
@@ -415,6 +416,7 @@ function wireInput(tab, term) {
       if (!state.tabs.has(tab.id)) return; // closed meanwhile
       // ConPTY repaints after a resize; that output isn't news, so it mustn't raise an attention dot.
       quiet(tab);
+      sizeTold(tab, term, () => quiet(tab));
       send(PAGE.resize, { id: tab.id, cols, rows });
     }, RESIZE_SETTLE_MS));
   });
