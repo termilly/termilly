@@ -128,7 +128,7 @@ test('a prompt taller than the screen keeps its choices, and Preview shows all o
 
 test('a menu cut off at the top while Codex starts offers the terminal, with no choices or preview', () => scenario('compact-tall-start', tall, async app => {
   assert.equal(await app.eval(t => t.$$('.cv-choice, .cv-preview-btn').length), 0);
-}, { waiting: false, ready: '.cv-card .cv-open-terminal' }));
+}, { waiting: false, ready: '.cv-empty .cv-open-terminal' }));
 
 test('the card stays in sight while the prompt box grows and the feed scrolls', () => scenario('compact-grow', tall, async app => {
   assert.ok(await choiceInSight(app), 'at first');
