@@ -204,6 +204,44 @@ step('on hover, the bar shows near a terminal\'s top only, and typing hides it',
   assert.equal(await app.eval(() => globalThis.document.querySelector('.pane.bar-near')), null);
 });
 
+step('on hover, a bar a button was clicked in hides again, and a working agent keeps only Stop, at the right', async () => {
+  const pane = await app.eval(() => { const r = globalThis.document.querySelector('.ws-layer.active .pane').getBoundingClientRect(); return { x: r.left + r.width / 2, top: r.top, bottom: r.bottom, right: r.right }; });
+  // Focus left on one of its buttons kept the bar shown for good.
+  await pointTo(pane.x, pane.top + 12);
+  await app.eval(() => globalThis.document.querySelector('.ws-layer.active .pane > .pane-header .menu-btn').focus());
+  await pointTo(pane.x, pane.bottom - 60);
+  await pause(300);
+  assert.equal(await app.eval(() => globalThis.getComputedStyle(globalThis.document.querySelector('.ws-layer.active .pane > .pane-header')).opacity), '0');
+  // An agent at work: hidden, the bar leaves its Stop alone at the right end; near the top, the whole bar again.
+  await app.eval(async t => {
+    const { state, emit, EVENTS } = await t.import('store.js');
+    const tab = [...state.tabs.values()].find(x => x.view?.el === globalThis.document.querySelector('.ws-layer.active .pane'));
+    tab.agent = { source: 'hooks', kind: 'claude', state: 'working', at: Date.now() };
+    emit(EVENTS.tab, tab);
+  });
+  await pause(300);
+  const look = () => app.eval(() => {
+    const header = globalThis.document.querySelector('.ws-layer.active .pane > .pane-header');
+    const stop = header.querySelector('.agent-stop-btn');
+    const pane = header.parentElement.getBoundingClientRect();
+    return {
+      stop: globalThis.getComputedStyle(stop).visibility === 'visible' && !stop.hidden,
+      stopAtRight: pane.right - stop.getBoundingClientRect().right < 24,
+      menu: globalThis.getComputedStyle(header.querySelector('.menu-btn')).visibility,
+      name: globalThis.getComputedStyle(header.querySelector('.pane-title')).visibility,
+    };
+  });
+  assert.deepEqual(await look(), { stop: true, stopAtRight: true, menu: 'hidden', name: 'hidden' });
+  await app.screenshot('06c-stop-alone');
+  await pointTo(pane.x, pane.top + 12);
+  await pause(300);
+  assert.deepEqual(await look(), { stop: true, stopAtRight: true, menu: 'visible', name: 'visible' });
+  await app.eval(async t => {
+    const { state, emit, EVENTS } = await t.import('store.js');
+    for (const tab of state.tabs.values()) if (tab.agent) { tab.agent = null; emit(EVENTS.tab, tab); }
+  });
+});
+
 step('on hover, an agent terminal in its compact view shows its bar over the view', async () => {
   // An agent's terminal in the compact view: the view is drawn over the terminal, and the bar must be over both.
   await app.eval(async t => {
