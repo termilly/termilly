@@ -6,7 +6,8 @@
 
 import { state, on, wsById, tabsOf, EVENTS } from './store.js';
 import { showMenu } from './popups.js';
-import { bringBack, focusTab, switchWorkspace } from './panes.js';
+import { bringBack, switchWorkspace } from './panes.js';
+import { arriveAt } from './arrived.js';
 import { shownName } from './rename.js';
 import { scheduleFit } from './terminals.js';
 import { showDock, needsYou } from './dock.js';
@@ -74,7 +75,7 @@ asideButton.addEventListener('click', () => {
 needsButton.addEventListener('click', () => {
   if (!needsShown) return;
   if (needsShown.wsId !== state.activeId) switchWorkspace(needsShown.wsId);
-  focusTab(needsShown);
+  arriveAt(needsShown);
 });
 
 /** The terminal whose bar shows now, on hover. @type {HTMLElement | null} */

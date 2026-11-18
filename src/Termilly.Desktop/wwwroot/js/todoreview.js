@@ -14,7 +14,7 @@ import { agentKind } from './agentkinds.js';
 import { beforeEnter } from './api.js';
 import { showToast, TOAST } from './toasts.js';
 import { alertReview, alertTask } from './notify.js';
-import { findTask, setStatus, updateTask } from './todo.js';
+import { findTask, setStatus, updateTask, workedIn } from './todo.js';
 import { silentPrompt, detailLines, tickSub, statusOf, TASK_STATUS, FINISH_LAST } from './todolist.js';
 import { runHidden, onRunEnded, ROLE } from './todorun.js';
 import { STAGE, RUN, reviewPrompt, fixPrompt, readReview } from './todoplan.js';
@@ -101,7 +101,7 @@ export function implementSilently(ref, task, sub, plan, place) {
   // With reviewers its session is kept, for the fixes to go on from; with none, nothing would.
   const run = runHidden({ taskId: task.id, line: sub?.at, role: ROLE.work, kind: plan.by, place, prompt: silentPrompt(task, sub), keep: plan.reviewers.length > 0 });
   watchWork(task, plan, place, { line: sub?.at });
-  setStatus(ref, task.id, TASK_STATUS.progress, { run, plan, stage: { what: STAGE.working, round: 0 } });
+  setStatus(ref, task.id, TASK_STATUS.progress, { run, plan, stage: { what: STAGE.working, round: 0 }, workedIn: workedIn(place) });
 }
 
 /**

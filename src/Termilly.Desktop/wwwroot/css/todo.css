@@ -110,7 +110,9 @@ button.td-agent:hover { text-decoration: underline; }
 .td-hidden-run { cursor: default; }
 .td-stop { height: 16px; padding: 0 6px; border: 1px solid var(--border); border-radius: 4px; background: none; color: var(--muted); font: inherit; font-size: 10.5px; cursor: pointer; }
 .td-stop:hover { border-color: var(--danger); color: var(--text); }
-.td-review { grid-column: 2 / -1; display: flex; margin-top: 4px; }
+.td-review { grid-column: 2 / -1; display: flex; min-width: 0; margin-top: 4px; }
+/* A narrow panel puts the buttons on two lines rather than cutting off Accept. */
+.td-review .td-edit-actions { flex-wrap: wrap; justify-content: flex-start; row-gap: 4px; }
 /* What a run out of sight asks for (js/todoask.js), with its answers: it waits on the user, so it stands out. */
 .td-ask { grid-column: 2 / -1; display: flex; flex-direction: column; gap: 6px; margin-top: 4px; padding: 6px 8px; border: 1px solid color-mix(in srgb, var(--attention) 45%, transparent); border-radius: 6px; background: color-mix(in srgb, var(--attention) 8%, transparent); }
 .td-ask-text { color: var(--text); font-size: 12.5px; overflow-wrap: anywhere; }

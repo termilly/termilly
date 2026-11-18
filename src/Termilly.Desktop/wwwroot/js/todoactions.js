@@ -18,10 +18,11 @@ import { agentKind } from './agentkinds.js';
 import { AGENT_STATE, PROFILE_ICON } from './constants.js';
 import { keepBeforeAgent } from './gitsafety.js';
 import { holdStart } from './terminals.js';
+import { remoteGit } from './remotehost.js';
 import { KNOWN_AGENTS, RUN, STAGE, fitPlan } from './todoplan.js';
 import { implementSilently, watchWork, workDone, oneMoreRound } from './todoreview.js';
 import { alertReview } from './notify.js';
-import { LIST_KIND, findTask, setStatus, updateTask } from './todo.js';
+import { LIST_KIND, findTask, setStatus, updateTask, workedIn } from './todo.js';
 import { implementPrompt, remotePrompt, linkSub, statusOf, tickSub, TASK_STATUS } from './todolist.js';
 
 /** @typedef {import('./todo.js').ListRef} ListRef */
@@ -184,6 +185,35 @@ export function offersImplement(ref) {
 }
 
 /**
+ * Review's Git changes: the terminal the work was done in, when it's still open, and the repository its server reported.
+ * A folder on an SSH host is only reached through its terminal, once Termilly there says which repository it's in.
+ * @param {TodoTask} task
+ */
+function changesPlace(task) {
+  const where = task.workedIn;
+  const tab = where?.terminal ? state.tabs.get(where.terminal) ?? null : null;
+  const remote = where?.server ? remoteGit(tab) : null;
+  return { where, tab, remote, shown: !!where && (!where.server || !!remote) };
+}
+
+/** Whether Review offers Git changes for a task. @param {TodoTask} task */
+export const offersChanges = task => changesPlace(task).shown;
+
+/**
+ * Opens the Git window on what Implement changed: the files its agent edited in its terminal when they were tracked, else
+ * the folder's changes (a run out of sight has no terminal); on an SSH host, the host repository's changes, as edits
+ * there aren't tracked here.
+ * @param {TodoTask} task
+ */
+export function showChanges(task) {
+  const { where, tab, remote, shown } = changesPlace(task);
+  if (!where || !shown) return;
+  if (remote && tab) emit(EVENTS.openGit, { folder: remote.root, remote: tab.id });
+  else if (tab?.changes?.length) emit(EVENTS.openAgentChanges, { tab });
+  else emit(EVENTS.openGit, { folder: where.folder });
+}
+
+/**
  * Whether an issue can be made in a folder, as far as is known.
  * @param {string} folder
  */
@@ -235,7 +265,7 @@ export function implementTask(ref, task, sub, plan = planOf(ref), place = implem
     agent = newTab({ wsId, profile: profile.id, cwd: folder, name, command: commandLine([program, prompt], profile.shellIcon ?? profile.icon) });
   }
   watchWork(task, plan, place, { line: sub?.at, terminal: agent.id });
-  setStatus(ref, task.id, TASK_STATUS.progress, { terminal: agent.id, plan, stage: { what: STAGE.working, round: 0 } });
+  setStatus(ref, task.id, TASK_STATUS.progress, { terminal: agent.id, plan, stage: { what: STAGE.working, round: 0 }, workedIn: workedIn(place, agent.id) });
   return agent;
 }
 
@@ -278,7 +308,9 @@ export function implement(ref, task, sub, plan = planOf(ref), place = implementP
  * @param {TodoTask} task
  */
 export function anotherRound(ref, task) {
-  const place = implementPlace(ref);
+  // In the folder the work was done in (a worktree made for it, say), not wherever the list is now.
+  const worked = task.workedIn;
+  const place = worked && !worked.server ? implementPlaceIn(ref, worked.folder) : implementPlace(ref);
   return !!place && oneMoreRound(ref, task, place);
 }
 

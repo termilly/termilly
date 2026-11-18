@@ -80,6 +80,30 @@
   .pane[data-activity="needs"] { animation: none; }
 }
 
+/* Arrived from a notification click: one accent flash over the pane, so the eye finds it. Above the terminal,
+   out of the mouse's way, and its own layer so it doesn't fight the needs-you ring's animation. */
+.pane > .pane-arrived {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+  border-radius: inherit;
+  opacity: 0;
+  background: color-mix(in srgb, var(--accent) 32%, transparent);
+  box-shadow: inset 0 0 0 3px var(--accent), inset 0 0 32px color-mix(in srgb, var(--accent) 70%, transparent);
+  animation: pane-arrived 0.22s ease-out forwards;
+}
+@keyframes pane-arrived {
+  0% { opacity: 0; }
+  15% { opacity: 1; }
+  100% { opacity: 0; }
+}
+/* A gentle fade instead of a flash. */
+@media (prefers-reduced-motion: reduce) {
+  .pane > .pane-arrived { animation: pane-arrived-calm 0.8s ease-out forwards; }
+  @keyframes pane-arrived-calm { 0% { opacity: 0; } 40% { opacity: 0.45; } 100% { opacity: 0; } }
+}
+
 /* An app reported an error or a pause (OSC 9;4), or an agent stopped with an error: the whole pane says so. */
 .pane[data-activity="error"] { border-color: var(--danger); box-shadow: 0 0 0 1px color-mix(in srgb, var(--danger) 45%, transparent); }
 .pane[data-activity="paused"] { border-color: var(--attention); box-shadow: 0 0 0 1px color-mix(in srgb, var(--attention) 40%, transparent); }
