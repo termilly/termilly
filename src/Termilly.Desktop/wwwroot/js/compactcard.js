@@ -302,12 +302,14 @@ export function menuKey(menu) {
  * @param {{ open: string, preview: string }} classes
  */
 function menuCardHtml(menu, name, classes) {
-  const tools = `<button class="${classes.preview}" title="All the prompt says">Preview</button><button class="${classes.open}">Open terminal</button>`;
   // A plan's blank lines keep its paragraphs apart.
   const context = menu.context.map(line => (line ? `<div>${escapeHtml(line)}</div>` : '<br>')).join('');
-  // A menu that can't be told from another gets no buttons: the terminal answers it.
+  // A menu that can't be told from another gets no buttons, nor a preview (it opens only on a card it can check):
+  // the terminal answers it.
   const key = menuKey(menu);
   const choices = key ? menu.choices.map(choiceHtml).join('') : '';
+  const preview = key ? `<button class="${classes.preview}" title="All the prompt says">Preview</button>` : '';
+  const tools = `${preview}<button class="${classes.open}">Open terminal</button>`;
   return `<div class="cv-card" data-menu="${key}"><div class="cv-question">${menu.title ? escapeHtml(menu.title) : `${name} asks`}</div>`
     + `${context ? `<div class="cv-context">${context}</div>` : ''}<div class="cv-choices">${choices}${tools}</div></div>`;
 }

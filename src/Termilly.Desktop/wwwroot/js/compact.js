@@ -464,8 +464,8 @@ function draw(tab) {
   updateComposer(tab, c.el);
 }
 
-/** The parts of a card that scroll on their own: the card itself (in a short feed), and what it's about. */
-const CARD_SCROLLERS = Object.freeze([CARD, `${CARD} .cv-context`]);
+/** The parts of a card that scroll on their own: the card itself (in a short feed), its question and what it's about. */
+const CARD_SCROLLERS = Object.freeze([CARD, `${CARD} .cv-question`, `${CARD} .cv-context`]);
 
 /**
  * How far a card's parts are scrolled, and which menu it shows: drawn again (the agent's pointer moved), the same
@@ -483,7 +483,7 @@ function cardScroll(feed) {
  */
 function keepCardScroll(feed, scrolled) {
   const card = /** @type {HTMLElement | null} */ (feed.querySelector(CARD));
-  if (!card || card.dataset.menu !== scrolled.menu) return;
+  if (!card?.dataset.menu || card.dataset.menu !== scrolled.menu) return;
   CARD_SCROLLERS.forEach((part, i) => {
     const el = feed.querySelector(part);
     if (el) el.scrollTop = scrolled.tops[i];
@@ -499,16 +499,16 @@ function screenMenu(tab) {
   if (!term) return null;
   // The screen as it shows now, not the lines scrolled above it (an earlier menu, a list in the agent's words).
   const menu = readMenu(screenRows(term));
-  if (!menu || menu.whole !== null) return menu;
-  // A prompt taller than the screen: read on up the scrollback for the agent's own kind of start (its choices still
-  // on the screen).
+  // An agent starting has said nothing of what it asks: a menu cut off at the top offers the terminal, as before.
+  if (!menu || menu.whole !== null || !waitsForAnswer(tab)) return menu;
+  // A question taller than the screen: read on up the scrollback for the agent's own kind of start (its choices
+  // still on the screen).
   const { rows, screenTop } = rowsWithScrollback(term, SCROLLBACK_ROWS);
   const deeper = readMenu(rows, { screenTop, startsAt: PROMPT_STARTS[runningAgent(tab) ?? ''] ?? PROMPT_START.either });
   if (deeper && deeper.whole !== null) return deeper;
-  // Not there either (cleared, or further up). A question its hook named is known by what the screen shows and what
-  // the hook said it's about (and which question it is, menuOf); an agent starting has said nothing, so its card
-  // offers the terminal, as before.
-  return waitsForAnswer(tab) ? keyedByWhatShows(menu, [tab.agent?.tool, tab.agent?.target]) : menu;
+  // Not there either (cleared, or further up): known by what the screen shows and what the hook said it's about (and
+  // which question it is, menuOf).
+  return keyedByWhatShows(menu, [tab.agent?.tool, tab.agent?.target]);
 }
 
 /**
