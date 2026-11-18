@@ -8,7 +8,7 @@
 import { PAGE, HOST } from './protocol.js';
 import { send, onHost } from './host.js';
 import { state, on, runningAgent, runsClaude, persist, EVENTS } from './store.js';
-import { AGENT_STATE, COMPACT_LIMIT, COMPACT_VERB, CLAUDE_TOOL } from './constants.js';
+import { AGENT_STATE, AGENT_KIND, COMPACT_LIMIT, COMPACT_VERB, CLAUDE_TOOL, HOOK_EVENT } from './constants.js';
 import { agentKind } from './agentkinds.js';
 import { escapeHtml, ICONS } from './ui.js';
 import { showMenu } from './popups.js';
@@ -18,11 +18,12 @@ import { beforeEnter } from './api.js';
 import { showsInput } from './together.js';
 import { linesHtml, OPEN_TERMINAL } from './compactlines.js';
 import { lineLinks, clickLink, wireCtrl } from './compactlinks.js';
-import { readMenu, questionMenu, cardHtml, menuKey } from './compactcard.js';
+import { readMenu, questionMenu, cardHtml, menuKey, keyedByWhatShows, PROMPT_START } from './compactcard.js';
 import { wireInput } from './compactinput.js';
 import { cardKey } from './compactcardkeys.js';
 import { wireViewMenu } from './termclipboard.js';
-import { liveRow, screenRows } from './compactdrawer.js';
+import { liveRow, screenRows, rowsWithScrollback } from './compactdrawer.js';
+import { showPreview } from './compactpreview.js';
 
 /** @typedef {import('./compactlines.js').CompactLine} CompactLine */
 
@@ -55,6 +56,19 @@ const DRAWER_CLASS = 'drawer';
 const SHOWN_CLASS = 'compact-on';
 /** The prompt box. */
 const INPUT = '.cv-input';
+/** The feed: the lines, and the card for a question. */
+const FEED = '.cv-feed';
+/** A card's button that shows all its question says. */
+const PREVIEW = '.cv-preview-btn';
+/** The classes of a card's buttons that show the terminal and the preview. */
+const CARD_BUTTONS = Object.freeze({ open: OPEN_TERMINAL.slice(1), preview: PREVIEW.slice(1) });
+/** A prompt taller than the screen is looked for this many rows up the terminal's scrollback. */
+const SCROLLBACK_ROWS = 500;
+/**
+ * What starts each agent's prompts, up the scrollback (another agent's: either).
+ * @type {Readonly<Record<string, string>>}
+ */
+const PROMPT_STARTS = Object.freeze({ [AGENT_KIND.claude]: PROMPT_START.rule, [AGENT_KIND.codex]: PROMPT_START.gap });
 /** A card in the feed: data-menu holds the key of the menu it shows. */
 const CARD = '.cv-card';
 /** A card's choice buttons: data-choice holds the key that picks it. */
@@ -84,7 +98,8 @@ const VIEW_HTML = `
  * A terminal's compact view: what the host sent of its session, the elements showing it, and the prompt being typed.
  * @typedef {{ lines: CompactLine[], session: string | null, el: HTMLElement | null, frame: number, frameWin: Window | null, sending: Promise<void>, writes: { dispose(): void } | null,
  *   picked?: { menu: string, at: number }, ready?: boolean, drawer?: boolean, drawerFrame?: number, drawerWin?: Window,
- *   resizes?: { dispose(): void }, drawerRow?: number }} CompactState
+ *   resizes?: { dispose(): void }, drawerRow?: number, asked?: number, askedBy?: object | null, waiting?: boolean }} CompactState
+ *   asked: how many questions the agent has asked; askedBy: the report that asked the last one
  */
 
 /**
@@ -146,6 +161,7 @@ function setView(tab, view) {
 function apply(tab) {
   const view = tab.view;
   if (!view) return;
+  countAsked(tab);
   const shown = isCompact(tab);
   view.el.classList.toggle(SHOWN_CLASS, shown);
   const c = compactOf(tab);
@@ -267,8 +283,9 @@ function shownMenu(tab) {
  */
 function passKey(tab, data) {
   if (tab.exited || !runningAgent(tab)) return;
-  // Enter picks: only what a card shows (the user sees what it picks), never a question the view can't show.
-  if (data === ENTER && !shownMenu(tab)) return;
+  // Enter picks: only what a card shows (the user sees what it picks), never a question the view can't show. Nor one
+  // cut off at the top: Enter takes whatever the agent's pointer is on, which its card can't vouch for there.
+  if (data === ENTER && (shownMenu(tab)?.cut ?? true)) return;
   send(PAGE.input, { id: tab.id, data });
   agentInput(tab, data);
 }
@@ -292,7 +309,7 @@ function build(tab) {
     folder: () => tab.agent?.folder ?? tab.cwd ?? tab.lastCwd ?? null,
     cardKey: e => cardKey(el, e, (key, menu) => pick(tab, key, menu)),
   });
-  input.addEventListener('input', () => fitInput(input));
+  input.addEventListener('input', () => fitInput(input, find(el, FEED)));
   find(el, '.cv-send').addEventListener('click', () => submit(tab, input));
   // Buttons drawn in the feed are handled here: a terminal in a window of its own has that window's elements.
   el.addEventListener('click', e => {
@@ -302,6 +319,7 @@ function build(tab) {
     const choice = /** @type {HTMLElement | null} */ (target.closest?.(CHOICE));
     const card = /** @type {HTMLElement | null} */ (target.closest?.(CARD));
     if (choice) pick(tab, choice.dataset.choice ?? '', card?.dataset.menu ?? '');
+    if (target.closest?.(PREVIEW)) preview(tab, card?.dataset.menu ?? '');
   });
   wireCtrl(el);
   // Copy-on-select is the terminal's (termclipboard.js); the right-click menu is the terminal's too, with the view's
@@ -326,13 +344,23 @@ function sizeText(el) {
 }
 
 /**
- * The prompt box grows with its text, up to a few lines (CSS caps it).
+ * The prompt box grows with its text, up to a few lines (CSS caps it). The feed above it shrinks: one that followed
+ * the newest line still does, so a question's card stays in sight.
  * @param {HTMLTextAreaElement} input
+ * @param {HTMLElement} feed
  */
-function fitInput(input) {
+function fitInput(input, feed) {
+  const following = isFollowing(feed);
   input.style.height = 'auto';
   input.style.height = `${input.scrollHeight}px`;
+  if (following) feed.scrollTop = feed.scrollHeight;
 }
+
+/**
+ * Whether the feed shows its newest line (scrolled to its end, or nearly).
+ * @param {HTMLElement} feed
+ */
+const isFollowing = feed => feed.scrollHeight - feed.scrollTop - feed.clientHeight < FOLLOW_SLACK_PX;
 
 /** @param {Tab} tab */
 function focusInput(tab) {
@@ -374,9 +402,9 @@ const canSend = tab => !tab.exited && !!runningAgent(tab) && atPrompt(tab) && !w
 function submit(tab, input) {
   const text = input.value.trim();
   if (!text || !canSend(tab)) return;
-  input.value = '';
-  fitInput(input);
   const c = compactOf(tab);
+  input.value = '';
+  if (c.el) fitInput(input, find(c.el, FEED));
   c.sending = c.sending.then(() => typePrompt(tab, text));
 }
 
@@ -424,8 +452,8 @@ const drawn = new WeakMap();
 function draw(tab) {
   const c = compactOf(tab);
   if (!c.el || c.el.hidden) return;
-  const feed = find(c.el, '.cv-feed');
-  const following = feed.scrollHeight - feed.scrollTop - feed.clientHeight < FOLLOW_SLACK_PX;
+  const feed = find(c.el, FEED);
+  const following = isFollowing(feed);
   const html = c.lines.length || waitsForAnswer(tab)
     ? linesHtml(c.lines, lineLinks(tab, c.lines, () => render(tab)), { minimal: isMinimal(tab), live: waitsForAnswer(tab) || tab.agent?.state === AGENT_STATE.working })
       + workingHtml(tab)
@@ -433,8 +461,10 @@ function draw(tab) {
   // Drawn again only when it changed: new elements under a pressed mouse button would lose its click (a press on a
   // card moves the focus about, which draws the view again), and a selection in the feed would be lost.
   if (drawn.get(feed) !== html) {
+    const scrolled = cardScroll(feed);
     feed.innerHTML = html;
     drawn.set(feed, html);
+    keepCardScroll(feed, scrolled);
   }
   if (following) feed.scrollTop = feed.scrollHeight;
   updateComposer(tab, c.el);
@@ -469,14 +499,71 @@ export function revealInView(tab, text, nth) {
   return true;
 }
 
+/** The parts of a card that scroll on their own: the card itself (in a short feed), its question and what it's about. */
+const CARD_SCROLLERS = Object.freeze([CARD, `${CARD} .cv-question`, `${CARD} .cv-context`]);
+
+/**
+ * How far a card's parts are scrolled, and which menu it shows: drawn again (the agent's pointer moved), the same
+ * card stays where the user scrolled it.
+ * @param {HTMLElement} feed
+ */
+function cardScroll(feed) {
+  const card = /** @type {HTMLElement | null} */ (feed.querySelector(CARD));
+  return { menu: card?.dataset.menu, tops: CARD_SCROLLERS.map(part => feed.querySelector(part)?.scrollTop ?? 0) };
+}
+
+/**
+ * @param {HTMLElement} feed
+ * @param {{ menu: string | undefined, tops: number[] }} scrolled
+ */
+function keepCardScroll(feed, scrolled) {
+  const card = /** @type {HTMLElement | null} */ (feed.querySelector(CARD));
+  if (!card?.dataset.menu || card.dataset.menu !== scrolled.menu) return;
+  CARD_SCROLLERS.forEach((part, i) => {
+    const el = feed.querySelector(part);
+    if (el) el.scrollTop = scrolled.tops[i];
+  });
+}
+
 /**
  * The menu on the agent's screen now (its question and numbered choices); null when it shows none it can read.
  * @param {Tab} tab
  */
 function screenMenu(tab) {
   const term = tab.view?.term;
+  if (!term) return null;
   // The screen as it shows now, not the lines scrolled above it (an earlier menu, a list in the agent's words).
-  return term ? readMenu(screenRows(term)) : null;
+  // A question the agent waits on starts at its own kind of start (two blank lines in a Claude Code command aren't
+  // one); a menu as an agent starts is read as before.
+  const waiting = waitsForAnswer(tab);
+  const startsAt = waiting ? PROMPT_STARTS[runningAgent(tab) ?? ''] ?? PROMPT_START.either : PROMPT_START.either;
+  const menu = readMenu(screenRows(term), { startsAt });
+  // An agent starting has said nothing of what it asks: a menu cut off at the top offers the terminal, as before.
+  if (!waiting || (menu && menu.whole !== null)) return menu;
+  // A question taller than the screen, or whose first choices scrolled above it: read on up the scrollback.
+  const { rows, screenTop } = rowsWithScrollback(term, SCROLLBACK_ROWS);
+  const deeper = readMenu(rows, { screenTop, startsAt });
+  if (!deeper || deeper.whole !== null) return deeper ?? menu;
+  // Its start not found (further up, or no longer in the terminal): all of it that was read, known by that and what
+  // the hook said it's about (and which question it is, menuOf).
+  return keyedByWhatShows(deeper, [tab.agent?.tool, tab.agent?.target]);
+}
+
+/**
+ * Counts the questions the agent asks, so a cut prompt's key changes with each: it starts to wait, or asks for a
+ * permission again while it still seemed to wait (the last one answered elsewhere). Its other reports while it waits
+ * (a notification) are the same question.
+ * @param {Tab} tab
+ */
+function countAsked(tab) {
+  const c = compactOf(tab);
+  const agent = tab.agent;
+  const waiting = waitsForAnswer(tab);
+  if (waiting && (!c.waiting || (agent?.event === HOOK_EVENT.permissionRequest && agent !== c.askedBy))) {
+    c.asked = (c.asked ?? 0) + 1;
+    c.askedBy = agent;
+  }
+  c.waiting = waiting;
 }
 
 /**
@@ -507,10 +594,20 @@ function pendingPlan(tab) {
  * @returns {import('./compactcard.js').Menu & { last?: boolean } | null}
  */
 function menuOf(tab) {
+  const menu = questionOf(tab);
+  return menu && waitsForAnswer(tab) ? { ...menu, asked: compactOf(tab).asked ?? 0 } : menu;
+}
+
+/**
+ * The question the agent waits on, as read (menuOf adds which question it is).
+ * @param {Tab} tab
+ * @returns {import('./compactcard.js').Menu & { last?: boolean } | null}
+ */
+function questionOf(tab) {
   const screen = screenMenu(tab);
   // A plan up for approval: its choices from the screen, the plan itself from its file (the screen has room for neither).
   const plan = pendingPlan(tab);
-  if (plan && screen) return { ...screen, context: plan.split('\n') };
+  if (plan && screen) return { ...screen, context: plan.split('\n'), prompt: undefined };
   const ask = pendingQuestion(tab);
   if (!ask?.questions) return screen;
   const only = ask.questions.length === 1 ? ask.questions[0] : undefined;
@@ -552,7 +649,21 @@ function pick(tab, key, shown) {
  * @param {Tab} tab
  * @param {string} name the agent's short name, escaped
  */
-const cardOf = (tab, name) => cardHtml(menuOf(tab), name, OPEN_TERMINAL.slice(1));
+const cardOf = (tab, name) => cardHtml(menuOf(tab), name, CARD_BUTTONS);
+
+/**
+ * Shows all the question on a card says, with its choices: only while the agent still shows the menu the card did.
+ * @param {Tab} tab
+ * @param {string} shown the card's menu, by menuKey
+ */
+function preview(tab, shown) {
+  const menu = shownMenu(tab);
+  if (!menu || menuKey(menu) !== shown) {
+    render(tab);
+    return;
+  }
+  showPreview(menu, agentKind(runningAgent(tab)).short, key => pick(tab, key, shown));
+}
 
 /**
  * The agent's state under the newest line: working, or the card for the question it waits on.
@@ -573,7 +684,7 @@ function emptyHtml(tab) {
   if (!atPrompt(tab)) {
     // A menu of its own as it starts (Codex's "Trust and continue"): a card too.
     const menu = screenMenu(tab);
-    if (menu && menuKey(menu)) return cardHtml(menu, name, OPEN_TERMINAL.slice(1));
+    if (menu && menuKey(menu)) return cardHtml(menu, name, CARD_BUTTONS);
     return `<div class="cv-empty">${name} is starting. Anything it asks first is in the terminal.<br><button class="${OPEN_TERMINAL.slice(1)}">Open terminal</button></div>`;
   }
   return `<div class="cv-empty">${compactOf(tab).session ? `Nothing yet. Ask ${name} something below.` : `Ask ${name} something below.`}</div>`;
@@ -664,7 +775,7 @@ on(EVENTS.settings, () => {
     const c = tab.compact;
     if (c?.el) {
       sizeText(c.el);
-      fitInput(/** @type {HTMLTextAreaElement} */ (find(c.el, INPUT)));
+      fitInput(/** @type {HTMLTextAreaElement} */ (find(c.el, INPUT)), find(c.el, FEED));
     }
   }
 });
