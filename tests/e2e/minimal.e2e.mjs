@@ -208,7 +208,8 @@ step('on hover, a bar a button was clicked in hides again, and a working agent k
   const pane = await app.eval(() => { const r = globalThis.document.querySelector('.ws-layer.active .pane').getBoundingClientRect(); return { x: r.left + r.width / 2, top: r.top, bottom: r.bottom, right: r.right }; });
   // Focus left on one of its buttons kept the bar shown for good.
   await pointTo(pane.x, pane.top + 12);
-  await app.eval(() => globalThis.document.querySelector('.ws-layer.active .pane > .pane-header .menu-btn').focus());
+  // As a click leaves it: focused, but not by the keyboard (which shows the bar, below).
+  await app.eval(() => globalThis.document.querySelector('.ws-layer.active .pane > .pane-header .menu-btn').focus({ focusVisible: false }));
   await pointTo(pane.x, pane.bottom - 60);
   await pause(300);
   assert.equal(await app.eval(() => globalThis.getComputedStyle(globalThis.document.querySelector('.ws-layer.active .pane > .pane-header')).opacity), '0');
