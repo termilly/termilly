@@ -8,7 +8,7 @@
 import { PAGE, HOST } from './protocol.js';
 import { send, onHost } from './host.js';
 import { state, on, runningAgent, runsClaude, persist, EVENTS } from './store.js';
-import { AGENT_STATE, COMPACT_LIMIT, COMPACT_VERB, CLAUDE_TOOL } from './constants.js';
+import { AGENT_STATE, AGENT_KIND, COMPACT_LIMIT, COMPACT_VERB, CLAUDE_TOOL, HOOK_EVENT } from './constants.js';
 import { agentKind } from './agentkinds.js';
 import { escapeHtml, ICONS } from './ui.js';
 import { showMenu } from './popups.js';
@@ -57,6 +57,11 @@ const PREVIEW = '.cv-preview-btn';
 const CARD_BUTTONS = Object.freeze({ open: OPEN_TERMINAL.slice(1), preview: PREVIEW.slice(1) });
 /** A prompt taller than the screen is looked for this many rows up the terminal's scrollback. */
 const SCROLLBACK_ROWS = 500;
+/**
+ * What starts each agent's prompts, up the scrollback (another agent's: either).
+ * @type {Readonly<Record<string, string>>}
+ */
+const PROMPT_STARTS = Object.freeze({ [AGENT_KIND.claude]: PROMPT_START.rule, [AGENT_KIND.codex]: PROMPT_START.gap });
 /** A card in the feed: data-menu holds the key of the menu it shows. */
 const CARD = '.cv-card';
 /** A card's choice buttons: data-choice holds the key that picks it. */
@@ -86,9 +91,8 @@ const VIEW_HTML = `
  * A terminal's compact view: what the host sent of its session, the elements showing it, and the prompt being typed.
  * @typedef {{ lines: CompactLine[], session: string | null, el: HTMLElement | null, frame: number, frameWin: Window | null, sending: Promise<void>, writes: { dispose(): void } | null,
  *   picked?: { menu: string, at: number }, ready?: boolean, drawer?: boolean, drawerFrame?: number, drawerWin?: Window,
- *   resizes?: { dispose(): void }, drawerRow?: number, asked?: number, waiting?: boolean,
- *   deep?: { at: string, menu: import('./compactcard.js').Menu } }} CompactState
- *   asked: how many questions the agent has asked; deep: the last menu read up the scrollback, and for which screen
+ *   resizes?: { dispose(): void }, drawerRow?: number, asked?: number, askedBy?: object | null, waiting?: boolean }} CompactState
+ *   asked: how many questions the agent has asked; askedBy: the report that asked the last one
  */
 
 /**
@@ -272,8 +276,9 @@ function shownMenu(tab) {
  */
 function passKey(tab, data) {
   if (tab.exited || !runningAgent(tab)) return;
-  // Enter picks: only what a card shows (the user sees what it picks), never a question the view can't show.
-  if (data === ENTER && !shownMenu(tab)) return;
+  // Enter picks: only what a card shows (the user sees what it picks), never a question the view can't show. Nor one
+  // cut off at the top: Enter takes whatever the agent's pointer is on, which its card can't vouch for there.
+  if (data === ENTER && (shownMenu(tab)?.cut ?? true)) return;
   send(PAGE.input, { id: tab.id, data });
   agentInput(tab, data);
 }
@@ -465,37 +470,30 @@ function screenMenu(tab) {
   // The screen as it shows now, not the lines scrolled above it (an earlier menu, a list in the agent's words).
   const menu = readMenu(screenRows(term));
   if (!menu || menu.whole !== null) return menu;
-  // A prompt taller than the screen: read again with the scrollback while the screen stays as it is (the card is
-  // drawn on every write while the agent waits).
-  const c = compactOf(tab);
-  const at = JSON.stringify([term.buffer.active.baseY, menu.prompt, menu.choices, c.asked]);
-  if (c.deep?.at !== at) c.deep = { at, menu: deeperMenu(tab, term, menu) };
-  return c.deep.menu;
-}
-
-/**
- * A menu whose start is above the screen: read on up the scrollback for the agent's own kind of start (its choices
- * still on the screen); not there either (cleared, or further up), known by what the screen shows, what the agent
- * said it asks about, and which time it asked.
- * @param {Tab} tab
- * @param {any} term xterm's Terminal
- * @param {import('./compactcard.js').Menu} menu as read off the screen
- */
-function deeperMenu(tab, term, menu) {
+  // A prompt taller than the screen: read on up the scrollback for the agent's own kind of start (its choices still
+  // on the screen).
   const { rows, screenTop } = rowsWithScrollback(term, SCROLLBACK_ROWS);
-  const deeper = readMenu(rows, { screenTop, startsAt: runsClaude(tab) ? PROMPT_START.rule : PROMPT_START.gap });
+  const deeper = readMenu(rows, { screenTop, startsAt: PROMPT_STARTS[runningAgent(tab) ?? ''] ?? PROMPT_START.either });
   if (deeper && deeper.whole !== null) return deeper;
+  // Not there either (cleared, or further up): known by what the screen shows, what the agent said it asks about,
+  // and which time it asked.
   return keyedByWhatShows(menu, waitsForAnswer(tab) ? [tab.agent?.tool, tab.agent?.target, compactOf(tab).asked] : []);
 }
 
 /**
- * Counts the questions the agent asks (each time it starts to wait on one), so a cut prompt's key changes with each.
+ * Counts the questions the agent asks, so a cut prompt's key changes with each: it starts to wait, or asks for a
+ * permission again while it still seemed to wait (the last one answered elsewhere). Its other reports while it waits
+ * (a notification) are the same question.
  * @param {Tab} tab
  */
 function countAsked(tab) {
   const c = compactOf(tab);
+  const agent = tab.agent;
   const waiting = waitsForAnswer(tab);
-  if (waiting && !c.waiting) c.asked = (c.asked ?? 0) + 1;
+  if (waiting && (!c.waiting || (agent?.event === HOOK_EVENT.permissionRequest && agent !== c.askedBy))) {
+    c.asked = (c.asked ?? 0) + 1;
+    c.askedBy = agent;
+  }
   c.waiting = waiting;
 }
 
