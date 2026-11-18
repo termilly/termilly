@@ -134,5 +134,11 @@ body.moving-bar .toolbar .tool { background: none; color: var(--text); }
 .tool.open { background: var(--pressed); }
 /* The toolbar icons' line width. 1 keeps them crisp: their lines sit on half pixels, so a 1px line fills whole pixels;
    anything between 1 and 2 blurs every edge. */
-:root { --tool-icon-stroke: 1; }
+:root {
+  --tool-icon-stroke: 1.1;
+  /* How far the icons go from the muted grey toward the text colour: higher stands out more (darker in Light themes,
+     brighter in Dark). Hover and open still use the full text colour. */
+  --tool-icon-strength: 35%;
+}
 .tool svg { width: 16px; height: 16px; stroke-width: var(--tool-icon-stroke); }
+.tool { color: color-mix(in srgb, var(--text) var(--tool-icon-strength), var(--muted)); }
