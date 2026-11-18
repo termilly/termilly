@@ -9,7 +9,7 @@ globalThis.window = /** @type {any} */ ({ addEventListener() {}, external: { rec
 globalThis.document = /** @type {any} */ ({ documentElement: { dataset: {} }, addEventListener() {}, querySelector: () => null, querySelectorAll: () => [] });
 globalThis.localStorage = /** @type {any} */ ({ getItem: () => null, setItem() {} });
 globalThis.addEventListener = () => {};
-const { readMenu, menuKey, keyedByWhatShows, previewLines, cardHtml } = await import('../../src/Termilly.Desktop/wwwroot/js/compactcard.js');
+const { readMenu, menuKey, keyedByWhatShows, previewLines, cardHtml, PROMPT_START } = await import('../../src/Termilly.Desktop/wwwroot/js/compactcard.js');
 
 test('a Claude Code permission prompt: its question, the command, and its three choices', () => {
   const menu = readMenu([
@@ -142,7 +142,7 @@ test('a menu is known by all its prompt says, not only the lines the card shows;
 test('a prompt taller than the screen is read whole from the scrollback above it, with the same key as on a tall screen', () => {
   const prompt = ['> earlier', '', '────────────────────', ' Bash command', '', '   rm -rf a', ...Array.from({ length: 13 }, (_, i) => `   # line ${i}`), '', ' Do you want to proceed?', ' > 1. Yes', '   2. No'];
   const screenTop = 6;
-  const deeper = readMenu(prompt, screenTop);
+  const deeper = readMenu(prompt, { screenTop });
   assert.equal(menuKey(deeper), menuKey(readMenu(prompt.slice(2))));
   assert.equal(deeper?.start, -1);
   assert.deepEqual(deeper?.prompt?.slice(0, 3), ['Bash command', '', '  rm -rf a']);
@@ -150,7 +150,7 @@ test('a prompt taller than the screen is read whole from the scrollback above it
 });
 
 test('choices only in the scrollback are not a menu on the screen', () => {
-  assert.equal(readMenu(['──────────', 'Do you want to proceed?', '> 1. Yes', '  2. No', 'Done.', '> '], 4), null);
+  assert.equal(readMenu(['──────────', 'Do you want to proceed?', '> 1. Yes', '  2. No', 'Done.', '> '], { screenTop: 4 }), null);
 });
 
 test('a prompt cut off at the top is known by what shows and what the agent said it is about, and gets its buttons', () => {
@@ -160,10 +160,20 @@ test('a prompt cut off at the top is known by what shows and what the agent said
   const keyed = keyedByWhatShows(cut, ['Bash', 'rm -rf a']);
   assert.notEqual(menuKey(keyed), '');
   assert.notEqual(menuKey(keyed), menuKey(keyedByWhatShows(cut, ['Bash', 'rm -rf b'])));
+  assert.notEqual(menuKey(keyed), menuKey(keyedByWhatShows(cut, ['Bash', 'rm -rf a', 2])), 'the next question that looks the same');
   assert.match(cardHtml(keyed, 'Claude', { open: 'o', preview: 'p' }), /data-choice="1"/);
+  assert.equal(previewLines(keyed)[0], '(The start of this prompt is no longer in the terminal.)');
   const whole = readMenu(['──────────', ...prompt('rm -rf a')]);
   assert.ok(whole);
   assert.equal(keyedByWhatShows(whole, ['x']), whole);
+  assert.equal(previewLines(whole)[0], 'Bash command');
+});
+
+test('up the scrollback, a Codex prompt starts at its gap, not at a rule further up in the conversation', () => {
+  const rows = ['──────────', 'an earlier answer', '', '', '  Would you like to run the following command?', ...Array.from({ length: 20 }, (_, i) => `  $ step ${i}`), '› 1. Yes', '  2. No'];
+  const codex = readMenu(rows, { screenTop: 10, startsAt: PROMPT_START.gap });
+  assert.equal(codex?.prompt?.[0], 'Would you like to run the following command?');
+  assert.equal(readMenu(rows, { screenTop: 10, startsAt: PROMPT_START.rule })?.prompt?.[0], 'an earlier answer');
 });
 
 test('the preview has all the prompt says; a question without one has its title and what it is about', () => {
