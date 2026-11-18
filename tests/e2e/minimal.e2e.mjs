@@ -235,9 +235,22 @@ step('on hover, a bar a button was clicked in hides again, and a working agent k
   await app.screenshot('06c-stop-alone');
   await pointTo(pane.x, pane.top + 12);
   await pause(300);
-  // The whole bar again, Stop in its usual place among the buttons.
-  const whole = await look();
-  assert.deepEqual({ stop: whole.stop, menu: whole.menu, name: whole.name }, { stop: true, menu: 'visible', name: 'visible' });
+  // The whole bar again, Stop where it was (the last button), so a click aimed at it still lands on it.
+  assert.deepEqual(await look(), { stop: true, stopAtRight: true, menu: 'visible', name: 'visible' });
+  // The keyboard on one of a hidden bar's buttons shows the bar.
+  await pointTo(pane.x, pane.bottom - 60);
+  await app.eval(async t => {
+    const { state, emit, EVENTS } = await t.import('store.js');
+    for (const tab of state.tabs.values()) if (tab.agent) { tab.agent = null; emit(EVENTS.tab, tab); }
+  });
+  await pause(300);
+  await app.key('.ws-layer.active .pane > .pane-header .menu-btn', 'Tab');
+  const keyboard = await app.eval(() => {
+    const button = globalThis.document.querySelector('.ws-layer.active .pane > .pane-header .menu-btn');
+    button.focus({ focusVisible: true });
+    return globalThis.getComputedStyle(button.closest('.pane-header')).opacity;
+  });
+  assert.equal(keyboard, '1', 'a button the keyboard is on shows its bar');
   await app.eval(async t => {
     const { state, emit, EVENTS } = await t.import('store.js');
     for (const tab of state.tabs.values()) if (tab.agent) { tab.agent = null; emit(EVENTS.tab, tab); }
