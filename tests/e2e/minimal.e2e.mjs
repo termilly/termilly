@@ -269,6 +269,32 @@ step('on hover, an agent terminal in its compact view shows its bar over the vie
   await app.screenshot('06b-hover-bar-compact');
 });
 
+step('on hover, a file preview\'s long bar shows only from its top right corner, so its tabs stay in reach', async () => {
+  await app.eval(async t => {
+    const { state } = await t.import('store.js');
+    const tab = [...state.tabs.values()].find(x => x.view?.term);
+    (await t.import('preview.js')).showMessage(tab, 'Nothing to show yet');
+  });
+  await app.waitFor('.preview-pane .pv-name');
+  await pause(300);
+  const box = await app.eval(() => { const r = globalThis.document.querySelector('.preview-pane').getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top }; });
+  const bar = () => app.eval(() => globalThis.getComputedStyle(globalThis.document.querySelector('.preview-pane > .pane-header')).opacity);
+  await pointTo(box.left + 60, box.top + 12); // over its tabs
+  await pause(300);
+  const overTabs = await bar();
+  await pointTo(box.right - 12, box.top + 12); // the corner, where the bar's Close is
+  await pause(300);
+  const inCorner = await bar();
+  await app.screenshot('06c-preview-corner');
+  // A terminal's bar still shows anywhere along its top.
+  const pane = await app.eval(() => { const r = globalThis.document.querySelector('.ws-layer.active .pane:not(.preview-pane)').getBoundingClientRect(); return { x: r.left + 40, top: r.top }; });
+  await pointTo(pane.x, pane.top + 12);
+  await pause(300);
+  const terminal = await app.eval(() => globalThis.document.querySelector('.ws-layer.active .pane:not(.preview-pane)').classList.contains('bar-near'));
+  await app.eval(async t => (await t.import('preview.js')).closePreview());
+  assert.deepEqual({ overTabs, inCorner, terminal }, { overTabs: '0', inCorner: '1', terminal: true });
+});
+
 step('the dock moves to another edge from its menu, and stays shown with hiding off', async () => {
   await app.eval(() => globalThis.document.getElementById('dock').dispatchEvent(new globalThis.MouseEvent('contextmenu', { clientX: 600, clientY: 60, bubbles: true })));
   await app.waitFor('.context-menu .menu-row');

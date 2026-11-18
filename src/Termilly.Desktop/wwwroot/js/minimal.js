@@ -17,6 +17,13 @@ import { SETTING_VALUES } from './constants.js';
 
 /** How near a terminal's top the mouse has to be for its bar to show, on hover (px). */
 const BAR_NEAR_PX = 36;
+/**
+ * A file preview's bar is long and its top holds the preview's tabs: it shows only from a square this big in its top
+ * right corner, where the bar's Close is, so the tabs (and their close buttons) stay in reach (px).
+ */
+const PREVIEW_CORNER_PX = 40;
+/** The file preview pane (js/preview.js). */
+const PREVIEW_PANE = 'preview-pane';
 /** A terminal's class while its bar shows (app.css). */
 const BAR_NEAR = 'bar-near';
 const { paneNames, layout } = SETTING_VALUES;
@@ -94,9 +101,19 @@ document.addEventListener('mousemove', e => {
   if (body.dataset.layout !== layout.minimal || body.dataset.paneNames !== paneNames.hover) return;
   const pane = /** @type {HTMLElement | null} */ (targetOf(e).closest('.pane'));
   const onBar = !!targetOf(e).closest(PANE_HEADER);
-  const near = pane && (onBar || e.clientY - pane.getBoundingClientRect().top < BAR_NEAR_PX);
-  showBarOn(near ? pane : null);
+  showBarOn(pane && (onBar || nearTop(pane, e)) ? pane : null);
 }, { passive: true });
+
+/**
+ * Whether the mouse is where a pane's bar shows from: near its top, or for a file preview, its top right corner.
+ * @param {HTMLElement} pane
+ * @param {MouseEvent} e
+ */
+function nearTop(pane, e) {
+  const box = pane.getBoundingClientRect();
+  if (!pane.classList.contains(PREVIEW_PANE)) return e.clientY - box.top < BAR_NEAR_PX;
+  return e.clientY - box.top < PREVIEW_CORNER_PX && box.right - e.clientX < PREVIEW_CORNER_PX;
+}
 document.addEventListener('keydown', () => showBarOn(null), { capture: true });
 
 on(EVENTS.settings, applyLayout);
