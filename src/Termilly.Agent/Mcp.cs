@@ -377,7 +377,11 @@ internal static class Mcp
         }
         try
         {
-            var result = call(method, parameters?[Keys.Arguments]?.DeepClone() as JsonObject ?? []);
+            var arguments = parameters?[Keys.Arguments]?.DeepClone() as JsonObject ?? [];
+            // Which terminal asks is the server's own (its pane, Api.Call), never what the model passed: a "from" in
+            // the arguments would let it act as another terminal, or as none (every To do list).
+            arguments.Remove(ApiFields.From);
+            var result = call(method, arguments);
             return Result(id, ToolResult(Api.Pretty(result), isError: false));
         }
         catch (ApiException e)
