@@ -65,6 +65,19 @@ public sealed class CompactFeedTests : IDisposable
     }
 
     [Fact]
+    public void A_long_reply_comes_whole_and_only_a_runaway_one_is_cut_and_says_so()
+    {
+        var review = new string('r', 12_000);
+        var runaway = new string('x', CompactText.MaxWords + 10);
+        var lines = Lines(new CompactClaude(),
+            Assistant("a1", $$"""{"type":"text","text":"{{review}}"}"""),
+            Assistant("a2", $$"""{"type":"text","text":"{{runaway}}"}"""));
+
+        Assert.Equal((review, (bool?)null), (lines[0].Text, lines[0].Cut));
+        Assert.Equal((CompactText.MaxWords, (bool?)true), (lines[1].Text.Length, lines[1].Cut));
+    }
+
+    [Fact]
     public void A_claude_tool_runs_until_its_result_and_a_failure_says_why()
     {
         var log = new CompactLog();

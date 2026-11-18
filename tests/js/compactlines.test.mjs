@@ -147,3 +147,12 @@ test('the minimal view shows no words from before the last tool of a stopped tur
   ], NONE, { minimal: true });
   assert.match(html, /cv-prompt">Hi<\/div><div class="cv-note">Stopped<\/div>$/);
 });
+
+test('words too long to send whole say so, with the way to the terminal; whole ones do not', () => {
+  const html = linesHtml([
+    { key: 'p', kind: 'prompt', text: 'Review it', failed: false, done: true },
+    { key: 'r', kind: 'reply', text: 'The start', failed: false, done: true, cut: true },
+  ]);
+  assert.equal(html.match(/Only the start is shown/g)?.length, 1);
+  assert.ok(html.includes('cv-reply">The start</div><div class="cv-note">Only the start is shown. <button class="link-btn cv-open-terminal">Open terminal</button> for the rest.</div>'));
+});

@@ -28,9 +28,9 @@ internal static partial class FromPage
 /// user (Claude Code's AskUserQuestion) carries its <see cref="Questions"/>, and a plan up for approval (ExitPlanMode)
 /// the plan as <see cref="Body"/>, for the view's card. A reply says with <see cref="Final"/> whether the agent marked it
 /// its answer (true) or words on the way (false; Claude Code went on to a tool, Codex called it commentary); null when
-/// the file doesn't say.
+/// the file doesn't say. <see cref="Cut"/> is true when the words were too long to send whole: only their start is here.
 /// </summary>
-internal sealed record CompactLine(string Key, string Kind, string Text, string? Verb = null, string? Detail = null, bool Failed = false, bool Done = true, IReadOnlyList<CompactQuestion>? Questions = null, string? Body = null, bool? Final = null);
+internal sealed record CompactLine(string Key, string Kind, string Text, string? Verb = null, string? Detail = null, bool Failed = false, bool Done = true, IReadOnlyList<CompactQuestion>? Questions = null, string? Body = null, bool? Final = null, bool? Cut = null);
 
 /// <summary>A question the agent asks the user, with its choices (one, or several with <see cref="Multi"/>).</summary>
 internal sealed record CompactQuestion(string Question, string? Header, bool Multi, IReadOnlyList<CompactOption> Options);
