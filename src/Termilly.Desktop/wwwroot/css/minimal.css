@@ -84,8 +84,10 @@ body[data-layout="minimal"][data-pane-names="hover"] .pane:not(.bar-near) > .pan
   box-shadow: none;
   opacity: 1;
 }
-body[data-layout="minimal"][data-pane-names="hover"] .pane:not(.bar-near) > .pane-header:not(:hover, :has(.open), :has(input:focus)):has(.agent-stop-btn:not([hidden])) > * { visibility: hidden; }
-body[data-layout="minimal"][data-pane-names="hover"] .pane:not(.bar-near) > .pane-header:not(:hover, :has(.open), :has(input:focus)) .agent-stop-btn { visibility: visible; pointer-events: auto; background: var(--raised); }
+/* The rest leaves the layout (not only the view), so Stop ends up at the right end where the bar's buttons end. */
+body[data-layout="minimal"][data-pane-names="hover"] .pane:not(.bar-near) > .pane-header:not(:hover, :has(.open), :has(input:focus)):has(.agent-stop-btn:not([hidden])) > :not(.pane-actions),
+body[data-layout="minimal"][data-pane-names="hover"] .pane:not(.bar-near) > .pane-header:not(:hover, :has(.open), :has(input:focus)) .pane-actions > :not(.agent-stop-btn) { display: none; }
+body[data-layout="minimal"][data-pane-names="hover"] .pane:not(.bar-near) > .pane-header:not(:hover, :has(.open), :has(input:focus)) .agent-stop-btn { pointer-events: auto; background: var(--raised); }
 
 /* ---- The dock ---- */
 
