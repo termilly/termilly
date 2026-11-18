@@ -6,10 +6,13 @@ import assert from 'node:assert/strict';
 import { startApp } from './harness.mjs';
 import { until } from './gitsteps.mjs';
 
-/** Whether To do's Detach and Close buttons show, and whether its list is in a window of its own. */
+/** Whether To do's Detach and Close buttons show, and whether its list is in a window of its own (one gone is in neither). */
 const buttons = app => app.eval(t => {
-  const detach = t.$('[data-td="detach"]');
-  return { detach: t.visible('[data-td="detach"]'), close: t.visible('[data-td="close"]'), windowed: detach?.ownerDocument !== t.$('.xterm')?.ownerDocument };
+  const panel = t.$('.todo-panel');
+  return {
+    detach: t.visible('[data-td="detach"]'), close: t.visible('[data-td="close"]'),
+    windowed: !!panel?.ownerDocument.body.classList.contains('detached-window'),
+  };
 });
 
 test('docked, To do shows its Detach and Close; in a window of its own, it shows neither', async () => {
