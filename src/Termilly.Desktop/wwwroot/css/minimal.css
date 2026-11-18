@@ -186,6 +186,8 @@ body[data-layout="minimal"] .preview-panel { border-radius: 0; box-shadow: -1px 
 /* Its name as a terminal's on its line, not bold. */
 body[data-layout="minimal"] .preview-pane .pv-name { font-weight: 500; }
 /* On hover, the preview's long bar shows only from this square in its top right corner (js/minimal.js), where its
-   Close is; the file tabs end before it, so the last tab's Close is never under the bar. */
+   Close is. The file tabs end before it and a tab scrolled into view stops short of it: no tab's Close is under the bar,
+   and one scrolled there by hand doesn't bring the bar up either. */
 body[data-layout="minimal"][data-pane-names="hover"] .preview-pane { --preview-corner: 40px; }
 body[data-layout="minimal"][data-pane-names="hover"] .preview-pane .pv-tabs::after { content: ''; flex: none; width: var(--preview-corner); }
+body[data-layout="minimal"][data-pane-names="hover"] .preview-pane .pv-tabs { scroll-padding-inline-end: var(--preview-corner); }

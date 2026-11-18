@@ -274,7 +274,7 @@ step('on hover, an agent terminal in its compact view shows its bar over the vie
 });
 
 step('on hover, a file preview\'s long bar shows only from its top right corner, so its tabs stay in reach', async () => {
-  // Enough files for the tab strip to overflow, scrolled to its end: the last tab's Close is then in the corner.
+  // Enough files for the tab strip to overflow; the last one opened is in front, scrolled into view as the preview does.
   await app.eval(async (t, files) => {
     const { state } = await t.import('store.js');
     const tab = [...state.tabs.values()].find(x => x.view?.term);
@@ -282,31 +282,47 @@ step('on hover, a file preview\'s long bar shows only from its top right corner,
     for (const file of files) await showChange(tab, file, { wholeFile: true, focus: false });
   }, PREVIEW_FILES);
   await until(async () => (await app.eval(t => t.$$('.preview-pane .pv-tab').length)) === PREVIEW_FILES.length, 'a tab for each file');
-  await app.eval(t => { const strip = t.$('.preview-pane .pv-tabs'); strip.scrollLeft = strip.scrollWidth; });
   await pause(300);
+  const overflows = await app.eval(t => { const strip = t.$('.preview-pane .pv-tabs'); return strip.scrollWidth > strip.clientWidth; });
   const at = await app.eval(() => {
-    const box = r => { const b = r.getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2 }; };
+    const middle = el => { const b = el.getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2 }; };
+    const strip = globalThis.document.querySelector('.preview-pane .pv-tabs').getBoundingClientRect();
     const pane = globalThis.document.querySelector('.preview-pane').getBoundingClientRect();
     const tabs = [...globalThis.document.querySelectorAll('.preview-pane .pv-tab')];
-    return { firstTab: box(tabs[0]), lastClose: box(tabs.at(-1).querySelector('.pv-tab-close')), corner: { x: pane.right - 12, y: pane.top + 12 }, right: pane.right, top: pane.top };
+    const shownTab = tabs.find(el => el.getBoundingClientRect().left >= strip.left);
+    return { tab: middle(shownTab), lastClose: middle(tabs.at(-1).querySelector('.pv-tab-close')), corner: { x: pane.right - 12, y: pane.top + 12 } };
   });
-  const bar = () => app.eval(() => globalThis.getComputedStyle(globalThis.document.querySelector('.preview-pane > .pane-header')).opacity);
-  const hoverAt = async point => { await pointTo(point.x, point.y); await pause(300); return bar(); };
-  const overTabs = await hoverAt(at.firstTab);
-  // The tabs end before the corner, so the last tab's Close is out of it and the bar stays away there.
+  // Each point is checked to land on what it names: a missed point would pass for a hidden bar.
+  const hoverAt = async point => {
+    await pointTo(point.x, point.y);
+    await pause(300);
+    return app.eval((t, x, y) => {
+      const hit = globalThis.document.elementFromPoint(x, y);
+      const on = hit?.closest('.pv-tab-close') ? 'close' : hit?.closest('.pv-tab') ? 'tab' : hit?.closest('.pane-header') ? 'bar' : 'other';
+      return `${on} ${globalThis.getComputedStyle(globalThis.document.querySelector('.preview-pane > .pane-header')).opacity}`;
+    }, point.x, point.y);
+  };
+  const overTab = await hoverAt(at.tab);
+  // The newest tab, scrolled into view, stops short of the corner: its Close doesn't bring the bar up.
   const lastClose = await hoverAt(at.lastClose);
   const inCorner = await hoverAt(at.corner);
   await app.screenshot('06c-preview-corner');
   // Along the bar, leftward from the corner, it stays.
   const head = await app.eval(() => { const b = globalThis.document.querySelector('.preview-pane > .pane-header').getBoundingClientRect(); return { x: b.left + 20, y: b.top + b.height / 2 }; });
   const alongBar = await hoverAt(head);
+  // Scrolled to their end by hand, the tabs still leave the corner free.
+  await pointTo(at.tab.x, at.tab.y + 200);
+  await pause(300);
+  await app.eval(t => { const strip = t.$('.preview-pane .pv-tabs'); strip.scrollLeft = strip.scrollWidth; });
+  const cornerAtEnd = await hoverAt(at.corner);
   // A terminal's bar still shows anywhere along its top.
   const pane = await app.eval(() => { const r = globalThis.document.querySelector('.ws-layer.active .pane:not(.preview-pane)').getBoundingClientRect(); return { x: r.left + 40, top: r.top }; });
   await pointTo(pane.x, pane.top + 12);
   await pause(300);
   const terminal = await app.eval(() => globalThis.document.querySelector('.ws-layer.active .pane:not(.preview-pane)').classList.contains('bar-near'));
   await app.eval(async t => (await t.import('preview.js')).closePreview());
-  assert.deepEqual({ overTabs, lastClose, inCorner, alongBar, terminal }, { overTabs: '0', lastClose: '0', inCorner: '1', alongBar: '1', terminal: true });
+  assert.deepEqual({ overflows, overTab, lastClose, inCorner, alongBar, cornerAtEnd, terminal },
+    { overflows: true, overTab: 'tab 0', lastClose: 'close 0', inCorner: 'bar 1', alongBar: 'bar 1', cornerAtEnd: 'bar 1', terminal: true });
 });
 
 step('the dock moves to another edge from its menu, and stays shown with hiding off', async () => {
