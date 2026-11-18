@@ -16,7 +16,22 @@ async function events(app) {
 }
 
 // Each scenario owns a fresh process: no consumed prompt or keyed choice can leak into the next assertion.
-async function scenario(name, lines, body) {
+/**
+ * Codex waits on the question, as its PermissionRequest hook reports it (the fake has no hooks): the view shows the
+ * card, not the live terminal it shows for a menu while an agent starts.
+ */
+async function waitOnQuestion(app) {
+  await app.eval(async t => {
+    const { state, agentChanged } = await t.import('store.js');
+    const { AGENT_STATE, AGENT_KIND, AGENT_SOURCE, HOOK_EVENT } = await t.import('constants.js');
+    const tab = [...state.tabs.values()].find(tab => tab.view?.term && tab.compactView);
+    tab.agent = { state: AGENT_STATE.needsInput, source: AGENT_SOURCE.hooks, kind: AGENT_KIND.codex, event: HOOK_EVENT.permissionRequest, tool: 'Bash', target: 'git init' };
+    agentChanged(tab);
+  });
+  await until(() => app.eval(t => !t.$('.compact-view').classList.contains('drawer')), 'the card without the drawer');
+}
+
+async function scenario(name, lines, body, { waiting = false, ready = '.cv-choice[data-choice="3"]' } = {}) {
   const repo = await makeRepo();
   let app, failed = true;
   try {
@@ -37,7 +52,8 @@ async function scenario(name, lines, body) {
     await app.waitFor('.view-btn');
     await app.click('.view-btn');
     await clickText(app, '.menu-row', 'Compact');
-    await app.waitFor('.cv-choice[data-choice="3"]');
+    if (waiting) await waitOnQuestion(app);
+    await app.waitFor(ready);
     assert.equal(await app.eval(t => t.$('.cv-input').value), '');
     await body(app);
     failed = false;
@@ -108,19 +124,13 @@ test('a prompt taller than the screen keeps its choices, and Preview shows all o
   await app.click('.cv-preview .cv-choice[data-choice="3"]');
   await app.waitFor('.cv-preview', { gone: true });
   await received(app, '3');
-}));
+}, { waiting: true }));
+
+test('a menu cut off at the top while Codex starts offers the terminal, with no choices or preview', () => scenario('compact-tall-start', tall, async app => {
+  assert.equal(await app.eval(t => t.$$('.cv-choice, .cv-preview-btn').length), 0);
+}, { waiting: false, ready: '.cv-card .cv-open-terminal' }));
 
 test('the card stays in sight while the prompt box grows and the feed scrolls', () => scenario('compact-grow', tall, async app => {
-  // Waiting on the question, as Codex's PermissionRequest hook reports it (the fake has no hooks): the view shows
-  // the card, not the live terminal it shows for a menu while an agent starts.
-  await app.eval(async t => {
-    const { state, agentChanged } = await t.import('store.js');
-    const { AGENT_STATE, AGENT_KIND, AGENT_SOURCE, HOOK_EVENT } = await t.import('constants.js');
-    const tab = [...state.tabs.values()].find(tab => tab.view?.term && tab.compactView);
-    tab.agent = { state: AGENT_STATE.needsInput, source: AGENT_SOURCE.hooks, kind: AGENT_KIND.codex, event: HOOK_EVENT.permissionRequest, tool: 'Bash', target: 'git init' };
-    agentChanged(tab);
-  });
-  await until(() => app.eval(t => !t.$('.compact-view').classList.contains('drawer') && !!t.$('.cv-choice[data-choice="3"]')), 'the card without the drawer');
   assert.ok(await choiceInSight(app), 'at first');
   await app.eval(t => {
     const input = t.$('.cv-input');
@@ -131,4 +141,4 @@ test('the card stays in sight while the prompt box grows and the feed scrolls', 
   assert.ok(await choiceInSight(app), 'with the prompt box grown');
   await app.eval(t => { t.$('.cv-feed').scrollTop = 0; });
   assert.ok(await choiceInSight(app), 'with the feed scrolled up');
-}));
+}, { waiting: true }));
