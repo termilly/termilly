@@ -7,7 +7,7 @@ import { focusTab } from './panes.js';
 /** The flash laid over the pane (panes.css). */
 const ARRIVED_CLASS = 'pane-arrived';
 /** How long the flash stays: a little over its animation. */
-const ARRIVED_MS = 550;
+const ARRIVED_MS = 300;
 /** Each lit pane's timer, so a second go starts a fresh flash rather than having the old timer cut it short. */
 const arrivedTimers = new WeakMap();
 
