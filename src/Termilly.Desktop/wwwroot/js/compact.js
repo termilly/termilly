@@ -471,7 +471,7 @@ function draw(tab) {
 }
 
 /** @param {string} s */
-const flat = s => s.replace(/s+/g, ' ').trim().toLowerCase();
+const flat = s => s.replace(/\s+/g, ' ').trim().toLowerCase();
 
 /**
  * Scrolls the compact or minimal view to a prompt or step and marks it for a moment (My prompts' jump: the terminal it
