@@ -245,9 +245,9 @@ step('on hover, a bar a button was clicked in hides again, and a working agent k
     for (const tab of state.tabs.values()) if (tab.agent) { tab.agent = null; emit(EVENTS.tab, tab); }
   });
   await pause(300);
-  await app.key('.ws-layer.active .pane > .pane-header .menu-btn', 'Tab');
   const keyboard = await app.eval(() => {
     const button = globalThis.document.querySelector('.ws-layer.active .pane > .pane-header .menu-btn');
+    button.blur();
     button.focus({ focusVisible: true });
     return globalThis.getComputedStyle(button.closest('.pane-header')).opacity;
   });
