@@ -343,7 +343,9 @@ public sealed class SessionProfileTests : IDisposable
         // Quiet where Termilly's own integration is installed (a WSL distribution set up), which reports them itself.
         Assert.StartsWith("""$([ -n "$__termilly_loaded" ] || printf '\e]633;E;%s\a\e]133;C\a' "$(HISTTIMEFORMAT=""", vars["PS0"]);
         Assert.Contains("""[ -n "$__termilly_loaded" ] || { """, vars["PROMPT_COMMAND"]);
-        Assert.Contains("""printf '\033]133;D;%s\007\033]133;A;shell=bash\007' "$__termilly_status"; }""", vars["PROMPT_COMMAND"]);
+        Assert.Contains("""printf '\033]133;D;%s\007\033]133;A;shell=bash\007' "$__termilly_status"; """, vars["PROMPT_COMMAND"]);
+        // The prompt's end, once, at the end of PS1, so autocomplete knows where the typed command starts.
+        Assert.Contains("""[[ "$PS1" == *'133;B'* ]] || PS1="$PS1"'\[\e]133;B\a\]'; }""", vars["PROMPT_COMMAND"]);
         // bash before 4.4 has no PS0: the first prompt sets a DEBUG trap that marks commands instead; a prompt arms it.
         Assert.Contains("-lt 404", vars["PROMPT_COMMAND"]);
         Assert.EndsWith("__termilly_ready=1", vars["PROMPT_COMMAND"]);
