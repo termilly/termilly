@@ -84,6 +84,8 @@ step('a command run in bash is offered in grey when typed again, and → takes i
 });
 
 step('a prompt rebuilt after Termilly\'s mark (as Starship does) still gets it, from the first key typed there', async () => {
+  await press(['Enter']); // runs what → put on the line
+  await until(p => !p.running && p.line?.typed === '', 'the taken command did not run');
   // The user's own prompt command, after Termilly's: PS1 is made again without the prompt's end mark.
   await press([...'PROMPT_COMMAND="$PROMPT_COMMAND; PS1=\'rebuilt> \'"', 'Enter']);
   await until(p => !p.running && !p.input, 'the rebuilt prompt still marks its end');
