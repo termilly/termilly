@@ -21,7 +21,7 @@ import { holdStart } from './terminals.js';
 import { KNOWN_AGENTS, RUN, STAGE, fitPlan } from './todoplan.js';
 import { implementSilently, watchWork, workDone, oneMoreRound } from './todoreview.js';
 import { alertReview } from './notify.js';
-import { LIST_KIND, findTask, setStatus, updateTask } from './todo.js';
+import { LIST_KIND, findTask, setStatus, updateTask, workedIn } from './todo.js';
 import { implementPrompt, remotePrompt, linkSub, statusOf, tickSub, TASK_STATUS } from './todolist.js';
 
 /** @typedef {import('./todo.js').ListRef} ListRef */
@@ -184,6 +184,32 @@ export function offersImplement(ref) {
 }
 
 /**
+ * Review's Git changes: the terminal the work was done in, when it's still open, and whether the Git window can show the
+ * work. A folder on an SSH host is only reached through its terminal.
+ * @param {TodoTask} task
+ */
+function changesPlace(task) {
+  const where = task.workedIn;
+  const tab = where?.terminal ? state.tabs.get(where.terminal) ?? null : null;
+  return { where, tab, shown: !!where && (!where.server || !!tab) };
+}
+
+/** Whether Review offers Git changes for a task. @param {TodoTask} task */
+export const offersChanges = task => changesPlace(task).shown;
+
+/**
+ * Opens the Git window on what Implement changed: the files its agent edited in its terminal when they were tracked, else
+ * the folder's changes (a run out of sight has no terminal).
+ * @param {TodoTask} task
+ */
+export function showChanges(task) {
+  const { where, tab, shown } = changesPlace(task);
+  if (!where || !shown) return;
+  if (tab && (tab.changes?.length || where.server)) emit(EVENTS.openAgentChanges, { tab });
+  else emit(EVENTS.openGit, { folder: where.folder });
+}
+
+/**
  * Whether an issue can be made in a folder, as far as is known.
  * @param {string} folder
  */
@@ -235,7 +261,7 @@ export function implementTask(ref, task, sub, plan = planOf(ref), place = implem
     agent = newTab({ wsId, profile: profile.id, cwd: folder, name, command: commandLine([program, prompt], profile.shellIcon ?? profile.icon) });
   }
   watchWork(task, plan, place, { line: sub?.at, terminal: agent.id });
-  setStatus(ref, task.id, TASK_STATUS.progress, { terminal: agent.id, plan, stage: { what: STAGE.working, round: 0 } });
+  setStatus(ref, task.id, TASK_STATUS.progress, { terminal: agent.id, plan, stage: { what: STAGE.working, round: 0 }, workedIn: workedIn(place, agent.id) });
   return agent;
 }
 

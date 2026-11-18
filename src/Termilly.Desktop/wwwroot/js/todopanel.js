@@ -11,7 +11,7 @@ import { state, on, persist, newId, wsById, tabsOf, tabTitle, EVENTS } from './s
 import { focusTab } from './panes.js';
 import {
   AGENT_COMMAND, agentWorking, folderOfList as folderOf, implementPlace, cantImplement, offersImplement, implementing, ALREADY_IMPLEMENTING, isOnGitHub, checkRepo, keepIssue,
-  implement, anotherRound, planOf, hasOwnPlan, keepPlan, agentsFor, reviewersAt,
+  implement, anotherRound, planOf, hasOwnPlan, keepPlan, agentsFor, reviewersAt, offersChanges, showChanges,
 } from './todoactions.js';
 import { stopRun } from './todorun.js';
 import { openImplementCard } from './todocard.js';
@@ -84,7 +84,7 @@ const ACTION = Object.freeze({
   dropAddTag: 'dropAddTag',
   implement: 'implement', issue: 'issue', openIssue: 'openIssue', status: 'status', agentTerminal: 'agentTerminal', accept: 'accept', reopen: 'reopen', round: 'round',
   edit: 'edit', remove: 'remove', expand: 'expand', stopRun: 'stopRun', scope: 'scope', clearSearch: 'clearSearch', searchToggle: 'searchToggle',
-  allow: 'allow', allowAll: 'allowAll', deny: 'deny', filter: 'filter', foldActive: 'foldActive', clearActive: 'clearActive', clearDone: 'clearDone', settings: 'settings',
+  changes: 'changes', allow: 'allow', allowAll: 'allowAll', deny: 'deny', filter: 'filter', foldActive: 'foldActive', clearActive: 'clearActive', clearDone: 'clearDone', settings: 'settings',
   implementAll: 'implementAll',
 });
 /** How long after the last key a note is saved. */
@@ -301,8 +301,8 @@ function askHtml(task) {
 
 /**
  * The ways on from Review (what the agents said is in the task's details, aboutHtml): back to Open, Review (opens the task
- * out to read what they said, as its arrow does), Accept, and where its reviewers didn't agree, one more round of fixing
- * and reviewing.
+ * out to read what they said, as its arrow does), Git changes (what the work changed), Accept, and where its reviewers
+ * didn't agree, one more round of fixing and reviewing.
  * @param {TodoTask} task
  */
 function reviewHtml(task) {
@@ -311,7 +311,8 @@ function reviewHtml(task) {
   const round = open ? `<button type="button" class="btn small" data-td="${ACTION.round}" title="What’s still open goes back to ${escapeHtml(agentKind(task.plan?.by).name)}, and the reviewers look again">One more round</button>` : '';
   const shown = expanded.has(task.id);
   const read = aboutHtml(task) ? `<button type="button" class="btn small" data-td="${ACTION.expand}" aria-expanded="${shown}" title="${shown ? 'Show less' : 'Read what the agent said'}">Review</button>` : '';
-  return `<div class="td-review"><span class="td-edit-actions"><button type="button" class="btn small" data-td="${ACTION.reopen}">Back to open</button>${read}${round}<button type="button" class="btn small primary" data-td="${ACTION.accept}">Accept</button></span></div>`;
+  const changes = offersChanges(task) ? `<button type="button" class="btn small" data-td="${ACTION.changes}" title="See what was changed, in the Git window">Git changes</button>` : '';
+  return `<div class="td-review"><span class="td-edit-actions"><button type="button" class="btn small" data-td="${ACTION.reopen}">Back to open</button>${read}${changes}${round}<button type="button" class="btn small primary" data-td="${ACTION.accept}">Accept</button></span></div>`;
 }
 
 /**
@@ -1563,6 +1564,7 @@ const ON_TASK = Object.freeze({
   [ACTION.status]: (control, task) => statusMenu(task, control),
   [ACTION.accept]: (_control, task) => acceptTask(task),
   [ACTION.reopen]: (_control, task) => changeStatus(task, TASK_STATUS.open),
+  [ACTION.changes]: (_control, task) => showChanges(task),
   [ACTION.stopRun]: (_control, task) => stopRun(task),
   [ACTION.allow]: (_control, task) => answerAsk(task, ASK.allow),
   [ACTION.allowAll]: (_control, task) => answerAsk(task, ASK.all),
