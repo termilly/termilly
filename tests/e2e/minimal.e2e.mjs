@@ -5,6 +5,10 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { startApp } from './harness.mjs';
+import { until } from './gitsteps.mjs';
+
+/** Files every Linux has, opened in the file preview: enough tabs for its strip to overflow. */
+const PREVIEW_FILES = ['hosts', 'hostname', 'os-release', 'passwd', 'group', 'fstab', 'shells', 'profile', 'environment', 'issue', 'protocols', 'services'].map(name => `/etc/${name}`);
 
 let app;
 let failed = false;
@@ -270,29 +274,39 @@ step('on hover, an agent terminal in its compact view shows its bar over the vie
 });
 
 step('on hover, a file preview\'s long bar shows only from its top right corner, so its tabs stay in reach', async () => {
-  await app.eval(async t => {
+  // Enough files for the tab strip to overflow, scrolled to its end: the last tab's Close is then in the corner.
+  await app.eval(async (t, files) => {
     const { state } = await t.import('store.js');
     const tab = [...state.tabs.values()].find(x => x.view?.term);
-    (await t.import('preview.js')).showMessage(tab, 'Nothing to show yet');
+    const { showChange } = await t.import('preview.js');
+    for (const file of files) await showChange(tab, file, { wholeFile: true, focus: false });
+  }, PREVIEW_FILES);
+  await until(async () => (await app.eval(t => t.$$('.preview-pane .pv-tab').length)) === PREVIEW_FILES.length, 'a tab for each file');
+  await app.eval(t => { const strip = t.$('.preview-pane .pv-tabs'); strip.scrollLeft = strip.scrollWidth; });
+  await pause(300);
+  const at = await app.eval(() => {
+    const box = r => { const b = r.getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2 }; };
+    const pane = globalThis.document.querySelector('.preview-pane').getBoundingClientRect();
+    const tabs = [...globalThis.document.querySelectorAll('.preview-pane .pv-tab')];
+    return { firstTab: box(tabs[0]), lastClose: box(tabs.at(-1).querySelector('.pv-tab-close')), corner: { x: pane.right - 12, y: pane.top + 12 }, right: pane.right, top: pane.top };
   });
-  await app.waitFor('.preview-pane .pv-name');
-  await pause(300);
-  const box = await app.eval(() => { const r = globalThis.document.querySelector('.preview-pane').getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top }; });
   const bar = () => app.eval(() => globalThis.getComputedStyle(globalThis.document.querySelector('.preview-pane > .pane-header')).opacity);
-  await pointTo(box.left + 60, box.top + 12); // over its tabs
-  await pause(300);
-  const overTabs = await bar();
-  await pointTo(box.right - 12, box.top + 12); // the corner, where the bar's Close is
-  await pause(300);
-  const inCorner = await bar();
+  const hoverAt = async point => { await pointTo(point.x, point.y); await pause(300); return bar(); };
+  const overTabs = await hoverAt(at.firstTab);
+  // The last tab's Close, in the corner: still a tab, so the bar stays away.
+  const lastClose = at.lastClose.x > at.right - 40 && at.lastClose.y < at.top + 40 ? await hoverAt(at.lastClose) : 'not in the corner';
+  const inCorner = await hoverAt(at.corner);
   await app.screenshot('06c-preview-corner');
+  // Along the bar, leftward from the corner, it stays.
+  const head = await app.eval(() => { const b = globalThis.document.querySelector('.preview-pane > .pane-header').getBoundingClientRect(); return { x: b.left + 20, y: b.top + b.height / 2 }; });
+  const alongBar = await hoverAt(head);
   // A terminal's bar still shows anywhere along its top.
   const pane = await app.eval(() => { const r = globalThis.document.querySelector('.ws-layer.active .pane:not(.preview-pane)').getBoundingClientRect(); return { x: r.left + 40, top: r.top }; });
   await pointTo(pane.x, pane.top + 12);
   await pause(300);
   const terminal = await app.eval(() => globalThis.document.querySelector('.ws-layer.active .pane:not(.preview-pane)').classList.contains('bar-near'));
   await app.eval(async t => (await t.import('preview.js')).closePreview());
-  assert.deepEqual({ overTabs, inCorner, terminal }, { overTabs: '0', inCorner: '1', terminal: true });
+  assert.deepEqual({ overTabs, lastClose, inCorner, alongBar, terminal }, { overTabs: '0', lastClose: '0', inCorner: '1', alongBar: '1', terminal: true });
 });
 
 step('the dock moves to another edge from its menu, and stays shown with hiding off', async () => {

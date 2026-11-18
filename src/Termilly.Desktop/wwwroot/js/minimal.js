@@ -22,8 +22,9 @@ const BAR_NEAR_PX = 36;
  * right corner, where the bar's Close is, so the tabs (and their close buttons) stay in reach (px).
  */
 const PREVIEW_CORNER_PX = 40;
-/** The file preview pane (js/preview.js). */
+/** The file preview pane (js/preview.js), and one of its file tabs. */
 const PREVIEW_PANE = 'preview-pane';
+const FILE_TAB = '.pv-tab';
 /** A terminal's class while its bar shows (app.css). */
 const BAR_NEAR = 'bar-near';
 const { paneNames, layout } = SETTING_VALUES;
@@ -105,14 +106,15 @@ document.addEventListener('mousemove', e => {
 }, { passive: true });
 
 /**
- * Whether the mouse is where a pane's bar shows from: near its top, or for a file preview, its top right corner.
+ * Whether the mouse is where a pane's bar shows from: near its top, or for a file preview, its top right corner, not
+ * on a file tab (the last one's Close is in that corner when the tabs are scrolled to their end).
  * @param {HTMLElement} pane
  * @param {MouseEvent} e
  */
 function nearTop(pane, e) {
   const box = pane.getBoundingClientRect();
   if (!pane.classList.contains(PREVIEW_PANE)) return e.clientY - box.top < BAR_NEAR_PX;
-  return e.clientY - box.top < PREVIEW_CORNER_PX && box.right - e.clientX < PREVIEW_CORNER_PX;
+  return e.clientY - box.top < PREVIEW_CORNER_PX && box.right - e.clientX < PREVIEW_CORNER_PX && !targetOf(e).closest(FILE_TAB);
 }
 document.addEventListener('keydown', () => showBarOn(null), { capture: true });
 
