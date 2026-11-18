@@ -38,11 +38,12 @@ const UNDER_CHOICE = 3;
 
 /**
  * @typedef {{ key: string, label: string, detail: string, picked: boolean }} MenuChoice
- * @typedef {{ title: string, context: string[], choices: MenuChoice[], whole?: string | null, start?: number, prompt?: string[], cut?: boolean, asked?: number }} Menu
+ * @typedef {{ title: string, context: string[], choices: MenuChoice[], whole?: string | null, start?: number, prompt?: string[], cut?: boolean, shortened?: boolean, asked?: number }} Menu
  *   whole: everything the prompt says, from where it starts (not cut for showing), which tells it from another; null
  *   when its start is off the lines read (keyedByWhatShows gives it one); start: the row of the screen the prompt
  *   starts on, -1 when that's off the screen; prompt: its lines above the choices as drawn, uncut, for its preview;
- *   cut: its start is lost, so prompt has only what shows; asked: which of the agent's questions it is, when known
+ *   cut: its start is lost, so prompt has only what shows; shortened: the agent drew it with lines left out; asked:
+ *   which of the agent's questions it is, when known
  */
 
 /** What starts a prompt above its choices: Claude Code's rule, Codex's gap of blank lines, or either (a rule first). */
@@ -79,8 +80,12 @@ export function readMenu(lines, { screenTop = 0, startsAt = PROMPT_START.either 
   const { title, context } = codex ? { title: codex.title, context: bodyAbove(rows, codex.end, first) } : questionAbove(rows, first);
   const start = codex ? codex.start : promptStart(rows, first, startsAt);
   const whole = start < 0 ? null : JSON.stringify([rows.slice(start, first).map(r => r.trim()), choices.map(c => [c.key, c.label, c.detail])]);
-  return { title, context, choices, whole, start: start < screenTop ? -1 : start - screenTop, prompt: dedent(rows.slice(Math.max(start, 0), first)) };
+  const prompt = dedent(rows.slice(Math.max(start, 0), first));
+  return { title, context, choices, whole, start: start < screenTop ? -1 : start - screenTop, prompt, shortened: prompt.some(line => SHORTENED.test(line.trim())) };
 }
+
+/** The line Codex draws for the rows it left out of a prompt too tall for its terminal ("[… 12 lines] ctrl+a view all"). */
+const SHORTENED = /^\[… \d+ lines?\]/;
 
 /**
  * Lines without the blank ones at either end, and without the indent they all share.
@@ -109,15 +114,18 @@ export function keyedByWhatShows(menu, about) {
 
 /** The preview's first line for a prompt whose start wasn't found (further up, or no longer in the terminal). */
 const CUT_NOTE = '(The start of this prompt could not be found.)';
+/** The preview's first line for a prompt the agent drew with lines left out. */
+const SHORTENED_NOTE = '(The agent left lines out of this prompt. Its terminal can show them all.)';
 
 /**
  * All the menu says, for its preview: the prompt as drawn (the command, the diff), else its question and what it's
- * about (a plan, from its file).
+ * about (a plan, from its file); first, what it lacks.
  * @param {Menu} menu
  */
 export function previewLines(menu) {
   const lines = menu.prompt?.length ? menu.prompt : [menu.title, ...(menu.context.length ? ['', ...menu.context] : [])];
-  return menu.cut ? [CUT_NOTE, '', ...lines] : lines;
+  const notes = [...(menu.cut ? [CUT_NOTE] : []), ...(menu.shortened ? [SHORTENED_NOTE] : [])];
+  return notes.length ? [...notes, '', ...lines] : lines;
 }
 
 /**
@@ -150,10 +158,13 @@ function nearestGap(rows, first) {
 }
 
 /**
- * The titles Codex (0.167, approval_overlay.rs) gives its approvals, once a wrapped one's rows are joined: running a
- * command, typing into a terminal, network access, permissions, edits, a tool or an MCP server asking.
+ * The titles Codex (0.167: approval_overlay.rs, mcp_tool_call.rs) gives its approvals, word for word once a wrapped
+ * one's rows are joined: running a command, typing into a terminal, permissions, edits, network access, an MCP tool,
+ * an MCP server asking.
  */
-const CODEX_TITLE = /^(?:Would you like to .+\?|Do you want to approve network access to .+\?|Allow .+\?|.+ needs your approval\.)$/;
+const CODEX_TITLE = new RegExp('^(?:Would you like to (?:run the following command|make the following edits|grant these permissions'
+  + '|send input to the existing terminal|send input to terminal \\S+)\\?|Do you want to approve network access to ".+"\\?'
+  + '|Allow the .+ MCP server to run tool ".+"\\?|.+ needs your approval\\.)$');
 
 /** A line that starts indented. */
 const INDENTED = /^\s/;
@@ -161,14 +172,15 @@ const INDENTED = /^\s/;
 /**
  * A Codex approval's title above its choices: where it starts, the line after it, and what it says; null when it
  * isn't there. Codex draws the title (wrapped over rows when long) and a blank line, then what it's about (a command
- * may have blank lines and questions of its own). It indents all of an approval and starts its conversation at the
- * margin ("• Ran", "› a prompt"), where the search stops; above that, the highest title is the approval's.
+ * may have blank lines of its own). It indents all of an approval and starts its conversation at the margin ("• Ran",
+ * "› a prompt"), where the search stops. Two titles there can't be told apart: none is taken.
  * @param {string[]} rows
  * @param {number} first
  * @returns {{ start: number, end: number, title: string } | null}
  */
 function codexHeader(rows, first) {
-  let found = null;
+  /** @type {Array<{ start: number, end: number, title: string }>} */
+  const found = [];
   let bottom = first;
   for (let i = first - 1; i >= -1; i--) {
     const row = i < 0 ? '' : rows[i];
@@ -177,11 +189,11 @@ function codexHeader(rows, first) {
     // A blank line, the margin or the top: the paragraph below it is whole.
     const lines = rows.slice(i + 1, bottom).map(line => line.trim());
     const title = lines.join(' ');
-    if (lines.length && CODEX_TITLE.test(title)) found = { start: i + 1, end: bottom, title };
+    if (lines.length && CODEX_TITLE.test(title)) found.push({ start: i + 1, end: bottom, title });
     if (margin) break;
     bottom = i;
   }
-  return found;
+  return found.length === 1 ? found[0] : null;
 }
 
 /**

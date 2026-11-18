@@ -34,10 +34,11 @@ test('a Claude Code permission prompt: its question, the command, and its three 
     ' Esc to cancel · Tab to amend',
   ]);
   assert.ok(menu?.whole);
-  assert.deepEqual({ ...menu, whole: undefined, start: undefined, prompt: undefined }, {
+  assert.deepEqual({ ...menu, whole: undefined, start: undefined, prompt: undefined, shortened: undefined }, {
     start: undefined,
     whole: undefined,
     prompt: undefined,
+    shortened: undefined,
     title: 'Do you want to proceed?',
     context: ['PowerShell command', 'Initialize a git repository', 'git init', 'This command requires approval'],
     choices: [
@@ -190,6 +191,15 @@ test('a Codex approval whose title is not in the lines read has no known start, 
   assert.equal(whole?.prompt?.[0], COMMAND_TITLE);
   // Half a wrapped title (its start evicted) is no evidence: still not known.
   assert.equal(readMenu(['  "example.com"?', '', ...tail], { startsAt: PROMPT_START.gap })?.whole, null);
+  // Nor a line of the command that only looks like one, nor two titles that can't be told apart.
+  assert.equal(readMenu(['  $ ask', '', '  Allow another change?', '', ...tail], { startsAt: PROMPT_START.gap })?.whole, null);
+  assert.equal(readMenu([`  ${COMMAND_TITLE}`, '', `  ${COMMAND_TITLE}`, '', ...tail], { startsAt: PROMPT_START.gap })?.whole, null);
+});
+
+test('a prompt Codex drew with lines left out says so in its preview', () => {
+  const menu = readMenu([`  ${COMMAND_TITLE}`, '', '  $ cat <<EOF', '  [… 12 lines] ctrl+a view all', '  EOF', '› 1. Yes', '  2. No'], { startsAt: PROMPT_START.gap });
+  assert.equal(menu?.shortened, true);
+  assert.equal(previewLines(/** @type {any} */ (menu))[0], '(The agent left lines out of this prompt. Its terminal can show them all.)');
 });
 
 test('a prompt cut off at the top is known by what shows and what the agent said it is about, and gets its buttons', () => {
