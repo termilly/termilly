@@ -93,6 +93,8 @@ internal static class Mcp
         public const string TickTask = "tick_task";
         public const string FinishTask = "finish_task";
         public const string AddTask = "add_task";
+        public const string EditTask = "edit_task";
+        public const string DeleteTask = "delete_task";
         public const string ListSchedules = "list_schedules";
         public const string AddSchedule = "add_schedule";
         public const string RunSchedule = "run_schedule";
@@ -132,6 +134,8 @@ internal static class Mcp
         [ToolNames.TickTask] = ApiMethods.TaskTick,
         [ToolNames.FinishTask] = ApiMethods.TaskDone,
         [ToolNames.AddTask] = ApiMethods.TaskAdd,
+        [ToolNames.EditTask] = ApiMethods.TaskEdit,
+        [ToolNames.DeleteTask] = ApiMethods.TaskDelete,
         [ToolNames.ListSchedules] = ApiMethods.Schedules,
         [ToolNames.AddSchedule] = ApiMethods.ScheduleAdd,
         [ToolNames.RunSchedule] = ApiMethods.ScheduleRun,
@@ -183,7 +187,10 @@ internal static class Mcp
         output.Flush();
     }
 
-    /// <summary>To do: the user's tasks, which an agent reads, adds to, ticks and finishes; it never edits or deletes one.</summary>
+    /// <summary>
+    /// To do: the user's tasks, which an agent reads, adds to, ticks and finishes, and edits or deletes when the user asks
+    /// (only in its terminal's and workspace's lists; a deleted one comes back with the notice's Undo).
+    /// </summary>
     private static IEnumerable<JsonNode> TaskTools()
     {
         const string TaskId = "Task id from list_tasks, or the one Termilly gave you";
@@ -197,6 +204,11 @@ internal static class Mcp
         yield return Tool(ToolNames.AddTask, "Adds a task to the user's To do list: your terminal's list, or its workspace's (list = workspace). Add one only when the user asks you to. Lines in details written as '[ ] text' become its steps.",
             Properties((ApiFields.Title, Types.String, "The task, one line"), (ApiFields.Details, Types.String, "More about it; '[ ] text' lines are steps"),
                 (ApiFields.Tags, Types.String, "Tags, comma-separated"), (ApiFields.List, Types.String, "terminal (default) or workspace")), [ApiFields.Title]);
+        yield return Tool(ToolNames.EditTask, "Changes a task's title, details or tags; what you leave out stays. Only when the user asks you to. Details replace the old ones whole: '[ ] text' lines are steps, '[x] text' done ones.",
+            Properties((ApiFields.Task, Types.String, TaskId), (ApiFields.Title, Types.String, "The new title, one line"),
+                (ApiFields.Details, Types.String, "The new details; empty clears them"), (ApiFields.Tags, Types.String, "The new tags, comma-separated; empty clears them")), [ApiFields.Task]);
+        yield return Tool(ToolNames.DeleteTask, "Deletes a task from the user's To do list. Only when the user asks you to. The user can bring it back with Undo.",
+            Properties((ApiFields.Task, Types.String, TaskId)), [ApiFields.Task]);
     }
 
     /// <summary>
@@ -365,7 +377,11 @@ internal static class Mcp
         }
         try
         {
-            var result = call(method, parameters?[Keys.Arguments]?.DeepClone() as JsonObject ?? []);
+            var arguments = parameters?[Keys.Arguments]?.DeepClone() as JsonObject ?? [];
+            // Which terminal asks is the server's own (its pane, Api.Call), never what the model passed: a "from" in
+            // the arguments would let it act as another terminal, or as none (every To do list).
+            arguments.Remove(ApiFields.From);
+            var result = call(method, arguments);
             return Result(id, ToolResult(Api.Pretty(result), isError: false));
         }
         catch (ApiException e)
