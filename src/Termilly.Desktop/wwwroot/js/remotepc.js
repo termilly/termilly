@@ -171,7 +171,8 @@ setRemoteExtra(groupHtml);
 
 // Minimal hides the sidebar, so its dock lists the computers' workspaces too, with what the tree's rows and menus do.
 setDockWorkspaces(() => computerRows(pcs, {
-  stateOf, icon: COMPUTER_ICON, open: openTerminal, inFront, newWorkspace: newWorkspaceItem, newTerminal: newTerminalItem,
+  computer: id => pcs.find(pc => pc.id === id), stateOf, icon: COMPUTER_ICON, open: openTerminal, inFront,
+  newWorkspace: newWorkspaceItem, newTerminal: newTerminalItem,
 }));
 
 /** Pairs with another computer: its address and the code it shows. */

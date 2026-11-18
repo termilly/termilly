@@ -24,11 +24,13 @@ const there = {
   ],
 };
 
-/** The actions the rows use, recording what they were asked. */
-function actions() {
+/** The actions the rows use, recording what they were asked; `now` is the computers as they are at the moment. */
+function actions(now = [laptop, away]) {
   const asked = [];
   return {
     asked,
+    now,
+    computer: id => now.find(pc => pc.id === id),
     stateOf: () => there,
     icon: '<svg></svg>',
     open: (pc, pane) => asked.push(['open', pc.id, pane]),
@@ -67,6 +69,30 @@ test('an empty workspace offers only New terminal, and no computers add no rows'
   const empty = computerRows([laptop], actions())[0].submenu()[1];
   assert.deepEqual(empty.submenu().map(r => r.label), ['New terminal in w2']);
   assert.deepEqual(computerRows([], actions()), []);
+});
+
+test('a computer that goes away while the menu is open shows as offline, and its terminals no longer open', () => {
+  const a = actions([laptop]);
+  const [row] = computerRows([laptop], a);
+  const site = row.submenu()[0];
+  const claude = site.submenu()[0];
+  a.now[0] = { ...laptop, online: false, error: 'Not reachable' };
+  assert.deepEqual(row.submenu().map(r => [r.label, r.hint, r.disabled]), [['Laptop', 'offline', true]]);
+  assert.deepEqual(site.submenu().map(r => r.hint), ['offline']);
+  claude.action();
+  a.now.length = 0;
+  assert.deepEqual(row.submenu().map(r => r.label), ['Laptop'], 'forgotten, it still says which one');
+  assert.deepEqual(a.asked, []);
+});
+
+test('a terminal closed there since the menu opened is not opened', () => {
+  const a = actions();
+  const rows = computerRows([laptop], a)[0].submenu()[0].submenu();
+  const saved = there.terminals;
+  there.terminals = saved.filter(t => t.id !== 't1');
+  rows[0].action();
+  there.terminals = saved;
+  assert.deepEqual(a.asked, []);
 });
 
 test('the words for what agents do are the same as this PC\'s rows use', () => {
