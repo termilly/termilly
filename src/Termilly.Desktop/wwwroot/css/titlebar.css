@@ -132,4 +132,7 @@ body.moving-bar .toolbar .tool { background: none; color: var(--text); }
 .tool:active, .window-controls button:active { background: var(--pressed); }
 .tool.open, .tool[aria-pressed="true"] { color: var(--text); }
 .tool.open { background: var(--pressed); }
-.tool svg { width: 16px; height: 16px; stroke-width: 1.3; }
+/* The toolbar icons' line width. 1 keeps them crisp: their lines sit on half pixels, so a 1px line fills whole pixels;
+   anything between 1 and 2 blurs every edge. */
+:root { --tool-icon-stroke: 1; }
+.tool svg { width: 16px; height: 16px; stroke-width: var(--tool-icon-stroke); }
