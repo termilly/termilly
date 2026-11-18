@@ -37,7 +37,7 @@ internal sealed class LinuxWindow
     /// <summary>The closing handler (<see cref="Closing"/>): true keeps the window open for now.</summary>
     private Func<bool>? _keepOpen;
     /// <summary>Linux: where the window was last, and whether it was maximized (macOS has MacPlacement).</summary>
-    private readonly LinuxPlacement? _placement = OperatingSystem.IsLinux() ? new LinuxPlacement() : null;
+    private readonly LinuxPlacement? _placement = OperatingSystem.IsLinux() ? new LinuxPlacement(TimeProvider.System) : null;
     // The window's state the page last heard (see PostState): it starts in front.
     private volatile bool _minimized;
     private volatile bool _active = true;
@@ -138,11 +138,11 @@ internal sealed class LinuxWindow
                 using var doc = JsonDocument.Parse(message);
                 host.OnMessage(doc.RootElement);
             })
-            .RegisterMaximizedHandler((_, _) => PostState(channel, window!, minimized: false))
-            .RegisterRestoredHandler((_, _) => PostState(channel, window!, minimized: false))
-            .RegisterMinimizedHandler((_, _) => PostState(channel, window!, minimized: true))
-            .RegisterLocationChangedHandler((_, _) => _placement?.Changed())
-            .RegisterSizeChangedHandler((_, _) => _placement?.Changed())
+            .RegisterMaximizedHandler((_, _) => StateChanged(channel, window!, minimized: false))
+            .RegisterRestoredHandler((_, _) => StateChanged(channel, window!, minimized: false))
+            .RegisterMinimizedHandler((_, _) => StateChanged(channel, window!, minimized: true))
+            .RegisterLocationChangedHandler((_, _) => _placement?.Moved())
+            .RegisterSizeChangedHandler((_, _) => _placement?.Moved())
             .RegisterFocusInHandler((_, _) => PostState(channel, window!, active: true))
             .RegisterFocusOutHandler((_, _) => PostState(channel, window!, active: false))
             .RegisterWindowClosingHandler((_, _) => Closing(window!, host, quit));
@@ -231,6 +231,13 @@ internal sealed class LinuxWindow
                 });
             }
         });
+    }
+
+    /// <summary>Maximized, restored or minimized: the page hears it, and where the window was is kept straight.</summary>
+    private void StateChanged(PageChannel channel, PhotinoWindow window, bool minimized)
+    {
+        _placement?.StateChanged();
+        PostState(channel, window, minimized: minimized);
     }
 
     /// <summary>Tells the page the window's state after a change to one part of it (the others stay as they were).</summary>
