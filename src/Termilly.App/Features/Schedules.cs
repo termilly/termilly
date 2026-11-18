@@ -98,7 +98,14 @@ internal sealed class ScheduleHandler(PageChannel page, ProfileCatalog profiles,
         router.On<FromPage.ScheduleKeep>(m => Guarded(() => reports.Save(m.RunId, m.Output)));
         router.On<FromPage.ScheduleSaveFile>(SaveFile);
         router.On<FromPage.ScheduleReportRead>(m => page.Post(new ToPage.ScheduleReport(m.RequestId, reports.Read(m.RunId), ScheduleRunner.Columns)));
-        router.On<FromPage.ScheduleForget>(m => Guarded(() => reports.Forget(m.RunIds ?? [])));
+        // One at a time: a report that can't be deleted doesn't keep the rest in the vault, whose runs are gone from the page.
+        router.On<FromPage.ScheduleForget>(m =>
+        {
+            foreach (var id in m.RunIds ?? [])
+            {
+                Guarded(() => reports.Forget([id]));
+            }
+        });
     }
 
     public void Start() => _clock = new Timer(_ => page.Post(new ToPage.ScheduleTick()), null, TickEvery, TickEvery);

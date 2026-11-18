@@ -1,6 +1,5 @@
 using System.IO;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using Termilly.Desktop.Messaging;
 using Termilly.Desktop.Services;
 
@@ -10,7 +9,7 @@ namespace Termilly.Desktop.Features;
 /// To do's one link to GitHub (js/todopanel.js): a task becomes an issue through the GitHub CLI, so Termilly keeps no
 /// token of its own. The repository is the one <c>gh</c> finds from the folder's git remote.
 /// </summary>
-internal sealed partial class TodoIssues(PageChannel page, IProcessRunner runner) : IMessageHandler
+internal sealed class TodoIssues(PageChannel page, IProcessRunner runner) : IMessageHandler
 {
     private const string Gh = "gh";
     private const string RepoCommand = "repo";
@@ -51,7 +50,7 @@ internal sealed partial class TodoIssues(PageChannel page, IProcessRunner runner
     }
 
     /// <summary>Whether a remote's address is on GitHub: https://github.com/a/b.git or git@github.com:a/b.git.</summary>
-    internal static bool IsGitHubRemote(string remote) => GitHubRemote().IsMatch(remote.Trim());
+    internal static bool IsGitHubRemote(string remote) => GitHubOutput.IsGitHubRemote(remote);
 
     private async Task InfoAsync(FromPage.TodoIssueInfo message)
     {
@@ -115,8 +114,8 @@ internal sealed partial class TodoIssues(PageChannel page, IProcessRunner runner
     /// <summary>The issue in what <c>gh issue create</c> printed: its address, on the last line that has one.</summary>
     internal static (string Url, int Number)? ParseIssue(string output)
     {
-        var match = IssueUrl().Matches(output).LastOrDefault();
-        return match is null ? null : (match.Value, int.Parse(match.Groups[1].Value, Inv));
+        var issue = GitHubOutput.ParseAddress(output);
+        return issue is null ? null : (issue.Url, issue.Number);
     }
 
     /// <summary>The names in <c>gh label list --json name</c>; nothing when it isn't what was expected.</summary>
@@ -144,9 +143,4 @@ internal sealed partial class TodoIssues(PageChannel page, IProcessRunner runner
     private Task<ProcessResult> RunAsync(string folder, IReadOnlyList<string> arguments) =>
         runner.RunAsync(new ProcessRequest(Gh, arguments) { WorkingDirectory = folder });
 
-    [GeneratedRegex(@"^(https://|ssh://git@|git@)github\.com[/:]", RegexOptions.IgnoreCase)]
-    private static partial Regex GitHubRemote();
-
-    [GeneratedRegex(@"https://\S+/issues/(\d+)")]
-    private static partial Regex IssueUrl();
 }

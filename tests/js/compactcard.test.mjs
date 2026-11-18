@@ -9,7 +9,7 @@ globalThis.window = /** @type {any} */ ({ addEventListener() {}, external: { rec
 globalThis.document = /** @type {any} */ ({ documentElement: { dataset: {} }, addEventListener() {}, querySelector: () => null, querySelectorAll: () => [] });
 globalThis.localStorage = /** @type {any} */ ({ getItem: () => null, setItem() {} });
 globalThis.addEventListener = () => {};
-const { readMenu, menuKey } = await import('../../src/Termilly.Desktop/wwwroot/js/compactcard.js');
+const { readMenu, menuKey, keyedByWhatShows, previewLines, cardHtml, PROMPT_START } = await import('../../src/Termilly.Desktop/wwwroot/js/compactcard.js');
 
 test('a Claude Code permission prompt: its question, the command, and its three choices', () => {
   const menu = readMenu([
@@ -34,9 +34,11 @@ test('a Claude Code permission prompt: its question, the command, and its three 
     ' Esc to cancel · Tab to amend',
   ]);
   assert.ok(menu?.whole);
-  assert.deepEqual({ ...menu, whole: undefined, start: undefined }, {
+  assert.deepEqual({ ...menu, whole: undefined, start: undefined, prompt: undefined, shortened: undefined }, {
     start: undefined,
     whole: undefined,
+    prompt: undefined,
+    shortened: undefined,
     title: 'Do you want to proceed?',
     context: ['PowerShell command', 'Initialize a git repository', 'git init', 'This command requires approval'],
     choices: [
@@ -130,6 +132,9 @@ test('a menu keeps its key while the pointer moves, and another question gets an
   const other = readMenu(['──────────', 'Do you want to make this edit?', '> 1. Yes', '  2. No']);
   assert.equal(menuKey(at(1)), menuKey(at(2)));
   assert.notEqual(menuKey(at(1)), menuKey(other));
+  const menu = /** @type {any} */ (at(1));
+  assert.notEqual(menuKey({ ...menu, asked: 1 }), menuKey({ ...menu, asked: 2 }), 'the next question that says the same');
+  assert.equal(menuKey({ ...menu, asked: 1 }), menuKey({ ...at(2), asked: 1 }));
 });
 
 test('a menu is known by all its prompt says, not only the lines the card shows; one whose start is off the screen has no key', () => {
@@ -138,7 +143,112 @@ test('a menu is known by all its prompt says, not only the lines the card shows;
   assert.equal(menuKey(readMenu(prompt('rm -rf a').slice(1))), '');
 });
 
+test('a prompt taller than the screen is read whole from the scrollback above it, with the same key as on a tall screen', () => {
+  const prompt = ['> earlier', '', '────────────────────', ' Bash command', '', '   rm -rf a', ...Array.from({ length: 13 }, (_, i) => `   # line ${i}`), '', ' Do you want to proceed?', ' > 1. Yes', '   2. No'];
+  const screenTop = 6;
+  const deeper = readMenu(prompt, { screenTop });
+  assert.equal(menuKey(deeper), menuKey(readMenu(prompt.slice(2))));
+  assert.equal(deeper?.start, -1);
+  assert.deepEqual(deeper?.prompt?.slice(0, 3), ['Bash command', '', '  rm -rf a']);
+  assert.equal(deeper?.prompt?.at(-1), 'Do you want to proceed?');
+});
+
+test('choices only in the scrollback are not a menu on the screen', () => {
+  assert.equal(readMenu(['──────────', 'Do you want to proceed?', '> 1. Yes', '  2. No', 'Done.', '> '], { screenTop: 4 }), null);
+});
+
+test('a menu whose first choices scrolled above a short screen is still read, with all its choices', () => {
+  const menu = readMenu(['──────────', 'Do you want to proceed?', '> 1. Yes', '  2. No', '', 'Esc to cancel'], { screenTop: 3 });
+  assert.deepEqual(menu?.choices.map(c => [c.key, c.picked]), [['1', true], ['2', false]]);
+  assert.notEqual(menuKey(/** @type {any} */ (menu)), '');
+});
+
+const COMMAND_TITLE = 'Would you like to run the following command?';
+
+test('a Codex approval starts at its title: blank lines and questions inside its command are not its start', () => {
+  const rows = ['• Ran ls', '', '', `  ${COMMAND_TITLE}`, '', '  $ cat <<EOF', '  one', '', '', '  is this two?', '  EOF', '› 1. Yes', '  2. No'];
+  const menu = readMenu(rows, { startsAt: PROMPT_START.gap });
+  assert.equal(menu?.prompt?.[0], COMMAND_TITLE);
+  // The card says the same: its title is the approval's, what it's about the rest.
+  assert.equal(menu?.title, COMMAND_TITLE);
+  assert.deepEqual(menu?.context, ['$ cat <<EOF', 'one', 'is this two?', 'EOF']);
+  // An indented question in the conversation above isn't one either: the search stops at its margin.
+  const above = ['• Ran ls', '  Prior output?', '', '', `  ${COMMAND_TITLE}`, '', '  $ ls', '› 1. Yes', '  2. No'];
+  assert.equal(readMenu(above, { startsAt: PROMPT_START.gap })?.prompt?.[0], COMMAND_TITLE);
+});
+
+test('a wrapped Codex title is read across its rows, also at the top of what was read', () => {
+  const rows = ['  Do you want to approve network access to', '  "example.com"?', '', '  $ curl example.com', '› 1. Yes', '  2. No'];
+  const menu = readMenu(rows, { startsAt: PROMPT_START.gap });
+  assert.equal(menu?.title, 'Do you want to approve network access to "example.com"?');
+  assert.notEqual(menu?.whole, null);
+});
+
+test('a Codex approval whose title is not in the lines read has no known start, so the scrollback is read', () => {
+  const tail = ['  $ cat <<EOF', '  one', '', '', '  is this two?', '  EOF', '› 1. Yes', '  2. No'];
+  assert.equal(readMenu(tail, { startsAt: PROMPT_START.gap })?.whole, null);
+  const whole = readMenu([`  ${COMMAND_TITLE}`, '', ...tail], { startsAt: PROMPT_START.gap, screenTop: 2 });
+  assert.equal(whole?.prompt?.[0], COMMAND_TITLE);
+  // Half a wrapped title (its start evicted) is no evidence: still not known.
+  assert.equal(readMenu(['  "example.com"?', '', ...tail], { startsAt: PROMPT_START.gap })?.whole, null);
+  // Nor a line of the command that only looks like one, nor two titles that can't be told apart.
+  assert.equal(readMenu(['  $ ask', '', '  Allow another change?', '', ...tail], { startsAt: PROMPT_START.gap })?.whole, null);
+  assert.equal(readMenu([`  ${COMMAND_TITLE}`, '', `  ${COMMAND_TITLE}`, '', ...tail], { startsAt: PROMPT_START.gap })?.whole, null);
+});
+
+test('a prompt Codex drew with lines left out says so in its preview', () => {
+  const menu = readMenu([`  ${COMMAND_TITLE}`, '', '  $ cat <<EOF', '  [… 12 lines] ctrl+a view all', '  EOF', '› 1. Yes', '  2. No'], { startsAt: PROMPT_START.gap });
+  assert.equal(menu?.shortened, true);
+  assert.equal(previewLines(/** @type {any} */ (menu))[0], '(The agent left lines out of this prompt. Its terminal can show them all.)');
+});
+
+test('a prompt cut off at the top is known by what shows and what the agent said it is about, and gets its buttons', () => {
+  const prompt = command => ['Bash command', command, ...Array.from({ length: 13 }, (_, i) => `# line ${i}`), '', 'Do you want to proceed?', '> 1. Yes', '  2. No'];
+  const cut = readMenu(prompt('rm -rf a').slice(1));
+  assert.ok(cut);
+  const keyed = keyedByWhatShows(cut, ['Bash', 'rm -rf a']);
+  assert.notEqual(menuKey(keyed), '');
+  assert.notEqual(menuKey(keyed), menuKey(keyedByWhatShows(cut, ['Bash', 'rm -rf b'])));
+  assert.notEqual(menuKey(keyed), menuKey(keyedByWhatShows(cut, ['Bash', 'rm -rf a', 2])), 'the next question that looks the same');
+  assert.match(cardHtml(keyed, 'Claude', { open: 'o', preview: 'p' }), /data-choice="1"/);
+  assert.equal(previewLines(keyed)[0], '(The start of this prompt could not be found.)');
+  const whole = readMenu(['──────────', ...prompt('rm -rf a')]);
+  assert.ok(whole);
+  assert.equal(keyedByWhatShows(whole, ['x']), whole);
+  assert.equal(previewLines(whole)[0], 'Bash command');
+});
+
+test('up the scrollback, a Codex prompt starts at its title, not at a rule further up in the conversation', () => {
+  const rows = ['──────────', 'an earlier answer', '', '', '  Would you like to run the following command?', '', ...Array.from({ length: 20 }, (_, i) => `  $ step ${i}`), '› 1. Yes', '  2. No'];
+  const codex = readMenu(rows, { screenTop: 10, startsAt: PROMPT_START.gap });
+  assert.equal(codex?.prompt?.[0], 'Would you like to run the following command?');
+  assert.equal(readMenu(rows, { screenTop: 10, startsAt: PROMPT_START.rule })?.prompt?.[0], 'an earlier answer');
+});
+
+test('the preview has all the prompt says; a question without one has its title and what it is about', () => {
+  const menu = readMenu(['──────────', ...Array.from({ length: 20 }, (_, i) => `  line ${i}`), '', '  Do you want to proceed?', '  > 1. Yes', '    2. No']);
+  assert.equal(menu?.context.length, 12);
+  assert.equal(previewLines(/** @type {any} */ (menu)).length, 22);
+  assert.deepEqual(previewLines({ title: 'Ready?', context: ['# Plan', '', 'Step'], choices: [] }), ['Ready?', '', '# Plan', '', 'Step']);
+  assert.match(cardHtml(/** @type {any} */ (menu), 'Claude', { open: 'o', preview: 'p' }), /class="p"[^>]*>Preview</);
+});
+
 test('blank lines inside a command do not end the prompt where a rule starts it', () => {
   const prompt = command => ['─'.repeat(20), 'Bash command', command, '', '', 'echo done', '', 'Do you want to proceed?', '> 1. Yes', '  2. No'];
   assert.notEqual(menuKey(readMenu(prompt('rm -rf a'))), menuKey(readMenu(prompt('rm -rf b'))));
+});
+
+test('a prompt with its question above a gap still says what it asks: the nearest paragraph above', () => {
+  const menu = readMenu([
+    '• Checking the To do list.',
+    ' ',
+    '  Allow the termilly MCP server to run tool "list_tasks"?',
+    ' ',
+    ' ',
+    '› 1. Allow',
+    '  2. Allow for this session',
+    '  3. Cancel',
+  ]);
+  assert.equal(menu?.title, 'Allow the termilly MCP server to run tool "list_tasks"?');
+  assert.deepEqual(menu?.choices.map(c => c.label), ['Allow', 'Allow for this session', 'Cancel']);
 });

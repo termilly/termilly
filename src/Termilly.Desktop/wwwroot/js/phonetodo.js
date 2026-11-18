@@ -10,7 +10,7 @@ import { setNote } from './notes.js';
 import { listOf, noteTarget, addTasks, updateTask, removeTask, moveTask, setStatus, findTask, todoTags, tagColor } from './todo.js';
 import {
   AGENT_COMMAND, agentWorking, folderOfList, implementPlace, cantImplement, isOnGitHub, checkRepo, keepIssue,
-  implement as startImplement, planOf, agentsFor, reviewersAt,
+  implement as startImplement, implementing, ALREADY_IMPLEMENTING, planOf, agentsFor, reviewersAt,
 } from './todoactions.js';
 import { stopRun } from './todorun.js';
 import { agentKind } from './agentkinds.js';
@@ -164,6 +164,7 @@ function phonePlan(ref, m) {
 function implement(m) {
   const { ref, task } = taskOf(m);
   const sub = m.at === undefined ? undefined : detailLines(task.details).find(line => line.sub && line.at === Number(m.at));
+  if (implementing(task)) throw new Error(`${ALREADY_IMPLEMENTING}.`);
   const { started, tab } = startImplement(ref, task, sub, phonePlan(ref, m));
   if (!started) throw new Error(`${cantImplement(ref)}.`);
   return tab ? { id: tab.id } : { silent: true };

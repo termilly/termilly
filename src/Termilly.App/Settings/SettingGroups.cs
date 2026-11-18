@@ -33,6 +33,10 @@ internal sealed record TerminalSettings
     public bool ProgramClipboard { get; init; } = true;
     /// <summary>Selecting text in a terminal copies it.</summary>
     public bool CopyOnSelect { get; init; }
+    /// <summary>At a shell prompt, the rest of a command from history in grey after the cursor (js/autocomplete.js).</summary>
+    public bool Autocomplete { get; init; } = true;
+    /// <summary>The autocomplete list also offers words on the screen.</summary>
+    public bool AutocompleteScreenWords { get; init; } = true;
     /// <summary>What opens a web address in a terminal’s output (js/weblinks.js): Ctrl+click, or a plain click.</summary>
     public string LinkClick { get; init; } = SettingValues.LinkClick.Default;
     /// <summary>The terminal colour scheme's id (js/themes.js); null: the theme's own.</summary>
@@ -76,6 +80,10 @@ internal sealed record InterfaceSettings
     private const int MaxThemeId = 40;
 
     public string Theme { get; init; } = SettingValues.Theme.FirstStart;
+    /// <summary>Normal or Minimal (<see cref="SettingValues.Layout"/>).</summary>
+    public string Layout { get; init; } = SettingValues.Layout.Default;
+    /// <summary>In Minimal, a terminal's name on a line over it or on a bar shown on hover (<see cref="SettingValues.PaneNames"/>).</summary>
+    public string PaneNames { get; init; } = SettingValues.PaneNames.Default;
     /// <summary>The app's font; null: the system's.</summary>
     public string? Font { get; init; }
     public bool ShowActivity { get; init; } = true;
@@ -113,6 +121,8 @@ internal sealed record InterfaceSettings
     public InterfaceSettings Normalize() => this with
     {
         Theme = IsThemeId(Theme) ? Theme : SettingValues.Theme.FirstStart,
+        Layout = SettingChecks.OneOf(Layout, SettingValues.Layout.All, SettingValues.Layout.Default),
+        PaneNames = SettingChecks.OneOf(PaneNames, SettingValues.PaneNames.All, SettingValues.PaneNames.Default),
         MinimizeTo = SettingChecks.OneOf(MinimizeTo, SettingValues.MinimizeTo.All, SettingValues.MinimizeTo.Default),
         CloseAction = SettingChecks.OneOf(CloseAction, SettingValues.CloseAction.All, SettingValues.CloseAction.Default),
         Font = SettingChecks.Trimmed(Font),
@@ -521,6 +531,8 @@ internal sealed record SettingsData
     public IReadOnlyDictionary<string, CostDay>? CostLedger { get; init; }
     /// <summary>Each snippet's variables, as last filled in.</summary>
     public IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>>? SnippetValues { get; init; }
+    /// <summary>When each snippet or task was last run (Unix ms), for the snippets list's order.</summary>
+    public IReadOnlyDictionary<string, long>? SnippetUsed { get; init; }
 
     public SettingsData Normalize() => this;
 }

@@ -209,7 +209,15 @@ internal static class GtkWindow
         }
     }
 
+    /// <summary>
+    /// Whether Termilly's windows can be placed and say where they are: X11 (XWayland too, see <see cref="UseX11"/>), not
+    /// native Wayland, which GDK_BACKEND can still ask for.
+    /// </summary>
+    public static bool PlacesWindows =>
+        Environment.GetEnvironmentVariable(BackendVariable) is not { } backend || !backend.StartsWith(WaylandBackend, StringComparison.Ordinal);
+
     private const string BackendVariable = "GDK_BACKEND";
+    private const string WaylandBackend = "wayland";
     private const string WaylandVariable = "WAYLAND_DISPLAY";
     private const string X11Backend = "x11";
 

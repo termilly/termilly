@@ -10,14 +10,24 @@ import { PAGE } from './protocol.js';
 import { request } from './host.js';
 import { escapeHtml, highlight, snippet } from './ui.js';
 import { timeAgo } from './util.js';
-import { DIFF_ROW, DIFF_LINE, DIFF_TARGET } from './diffrows.js';
+import { DIFF_ROW, DIFF_LINE, DIFF_TARGET, DIFF_LINE_NO } from './diffrows.js';
 import { GIT_MATCH } from './constants.js';
 
 // What GitView.cs and GitSearch.cs answer with.
 /**
+ * A file in the working tree's status: its path (and where it was renamed from), and git's status letter.
+ * @typedef {{ path: string, oldPath?: string | null, status: string }} GitFile
+ */
+/**
+ * A repository's status: where it is, its branch against its upstream, and its files by state.
+ * @typedef {{ root: string, name: string, branch?: string | null, detached?: boolean, upstream?: string | null,
+ *   ahead?: number, behind?: number, hasCommits?: boolean, staged: GitFile[], unstaged: GitFile[],
+ *   untracked: GitFile[], conflicted: GitFile[], head?: string | null }} RepoStatus
+ */
+/**
  * A commit in a log.
  * @typedef {{ hash: string, short: string, subject: string, author: string, date: string,
- *   refs?: string[] | null }} Commit
+ *   refs?: string[] | null, parents?: string[] | null }} Commit
  */
 /**
  * A branch, local or remote, with its last commit.
@@ -424,7 +434,7 @@ export function markInDiff(container, line = 0) {
     for (const node of nodes) marks.push(...markText(node, needle));
   }
   if (line) {
-    const row = [...container.querySelectorAll(DIFF_LINE)].find(r => r.querySelector('.pv-no')?.textContent === String(line));
+    const row = [...container.querySelectorAll(DIFF_LINE)].find(r => r.querySelector(DIFF_LINE_NO)?.textContent === String(line));
     if (row) {
       row.classList.add(DIFF_TARGET);
       return row;

@@ -7,6 +7,7 @@ import { PAGE, HOST } from './protocol.js';
 import { modal, DIALOG_ERROR } from './dialogs.js';
 import { ICONS } from './ui.js';
 import { find, field, showError } from './dom.js';
+import { systemClipboard } from './sysclipboard.js';
 
 /** How long a copy button says Copied, in milliseconds. */
 const COPIED_MS = 1400;
@@ -26,7 +27,7 @@ const COPY_ICON = '<svg viewBox="0 0 16 16"><rect x="5.5" y="5.5" width="8" heig
  */
 export async function copyText(button, text) {
   try {
-    await navigator.clipboard.writeText(text);
+    await systemClipboard().writeText(text);
     const label = find(button, 'span');
     const before = label.textContent;
     label.textContent = COPIED_LABEL;

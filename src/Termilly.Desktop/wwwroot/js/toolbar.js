@@ -9,7 +9,7 @@
 import { state, persist } from './store.js';
 import { showMenu, closeAll } from './popups.js';
 import { scheduleFit } from './terminals.js';
-import { find, targetOf, isAcross, DOCK_SIDE, TOOLBAR } from './dom.js';
+import { find, targetOf, isAcross, nearestEdge, swallowNextClick, DOCK_SIDE, TOOLBAR } from './dom.js';
 
 /** How far the pointer goes with a button held before it drags the bar instead of clicking the button (px). */
 const DRAG_START_PX = 5;
@@ -52,6 +52,12 @@ const strips = /** @type {Record<string, HTMLElement>} */ (Object.fromEntries(
   [.../** @type {NodeListOf<HTMLElement>} */ (document.querySelectorAll('.bar-dock'))].map(el => [el.dataset.side, el])));
 /** How far it's moved along its edge from where the layout puts it (px). */
 let shift = 0;
+/**
+ * Where it lives instead of its edges, and the edge that place is on: Minimal's floating dock (js/dock.js), or null
+ * for its own places. The dock then moves it; its drag and edge menu here stand aside.
+ * @type {{ el: HTMLElement, side: string } | null}
+ */
+let host = null;
 
 /** The edge it's on. */
 function sideNow() {
@@ -75,8 +81,18 @@ function atNow() {
   return sideNow() === DOCK_SIDE.top && besideNow() === BESIDE.left ? LEFT_AT : DEFAULT_AT[sideNow()];
 }
 
-/** Into its strip on its edge, or back into the title bar. */
+/** Into its strip on its edge, or back into the title bar (or into the dock that hosts it). */
 function put() {
+  if (host) {
+    // Its saved place in Normal says nothing while it's hosted: the strips and room kept for it there go.
+    delete document.body.dataset.bar;
+    delete document.body.dataset.barBeside;
+    toolbar.dataset.side = host.side;
+    if (toolbar.parentElement !== host.el) host.el.append(toolbar);
+    shift = 0;
+    toolbar.style.transform = '';
+    return;
+  }
   const side = sideNow();
   document.body.dataset.bar = side;
   // Which side of the search box, read by app.css: the title bar's columns make room for it there.
@@ -126,6 +142,7 @@ function fitTitle() {
 
 /** Moves it to where along its edge it's kept, in whole pixels so its icons stay sharp. */
 function place() {
+  if (host) return;
   const t = track();
   shift = Math.round(t.start + atNow() * t.room - t.natural);
   toolbar.style.transform = shift ? `translate${t.across ? 'X' : 'Y'}(${shift}px)` : '';
@@ -150,18 +167,6 @@ function dockBar(side, beside) {
 }
 
 /**
- * The window's edge nearest a point.
- * @param {number} x
- * @param {number} y
- */
-function nearestEdge(x, y) {
-  const edges = /** @type {[string, number][]} */ ([
-    [DOCK_SIDE.top, y], [DOCK_SIDE.bottom, innerHeight - y], [DOCK_SIDE.left, x], [DOCK_SIDE.right, innerWidth - x],
-  ]);
-  return edges.reduce((near, edge) => (edge[1] < near[1] ? edge : near))[0];
-}
-
-/**
  * Follows the pointer while it's dragged: onto the nearest edge, the grabbed point (a fraction of its length, the
  * same button either way round) under the pointer as far as the room there allows.
  * @param {PointerEvent} ev
@@ -182,19 +187,8 @@ function follow(ev, grab) {
   slide();
 }
 
-/** The click that ends a drag on a button doesn't click it. */
-function swallowClick() {
-  /** @param {MouseEvent} e */
-  const swallow = e => {
-    e.stopPropagation();
-    e.preventDefault();
-  };
-  window.addEventListener('click', swallow, { capture: true, once: true });
-  setTimeout(() => window.removeEventListener('click', swallow, true));
-}
-
 toolbar.addEventListener('pointerdown', e => {
-  if (e.button !== 0 || !targetOf(e).closest('button')) return;
+  if (host || e.button !== 0 || !targetOf(e).closest('button')) return;
   const from = { x: e.clientX, y: e.clientY };
   const t = track();
   const grab = t.length ? ((t.across ? e.clientX : e.clientY) - (t.natural + shift)) / t.length : 0;
@@ -216,7 +210,7 @@ toolbar.addEventListener('pointerdown', e => {
     window.removeEventListener('pointercancel', up);
     if (!body.classList.contains(MOVING)) return;
     body.classList.remove(MOVING);
-    swallowClick();
+    swallowNextClick();
     persist();
   };
   window.addEventListener('pointermove', move);
@@ -230,6 +224,7 @@ toolbar.addEventListener('mousedown', e => {
 });
 
 toolbar.addEventListener('contextmenu', e => {
+  if (host) return;
   e.preventDefault();
   const now = sideNow();
   const nowBeside = now === DOCK_SIDE.top ? besideNow() : undefined;
@@ -245,6 +240,16 @@ const resized = new ResizeObserver(() => {
   requestAnimationFrame(slide);
 });
 for (const el of [home, leftHome, toolbar, ...Object.values(strips)]) resized.observe(el);
+
+/**
+ * Hands it to a place of its own (Minimal's dock), on the given edge, or back to its edges with null.
+ * @param {{ el: HTMLElement, side: string } | null} to
+ */
+export function setToolbarHost(to) {
+  host = to;
+  put();
+  if (!host) slide();
+}
 
 /** Puts it where it was left (main.js, once the saved state is in). */
 export function initToolbar() {

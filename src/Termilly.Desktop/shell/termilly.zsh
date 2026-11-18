@@ -15,7 +15,7 @@ __termilly_precmd() {
     PATH="$TERMILLY_AGENT_DIR:$PATH"
   fi
   printf '\033]7;file://%s%s\007' "$HOST" "$PWD"
-  printf '\033]133;D;%s\007\033]133;A\007' "$st"
+  printf '\033]133;D;%s\007\033]133;A;shell=zsh\007' "$st"
 }
 
 # Before each command: its line (on one line: the mark ends at a newline), then the command starts.
@@ -23,7 +23,13 @@ __termilly_preexec() {
   printf '\033]633;E;%s\007\033]133;C\007' "${1//$'\n'/ }"
 }
 
+# Last before each prompt: the prompt's end (OSC 133;B), where the typed command starts, for autocomplete. zsh has no
+# hook after its prompt, so it goes at the end of PROMPT, after a theme's own precmd has set it.
+__termilly_prompt_end() {
+  [[ $PS1 == *$'\e]133;B'* ]] || PS1="${PS1}%{"$'\e]133;B\a'"%}"
+}
+
 autoload -Uz add-zsh-hook
 add-zsh-hook preexec __termilly_preexec
-# First, so $? is still the command's when it's read.
-precmd_functions=(__termilly_precmd ${precmd_functions:#__termilly_precmd})
+# First, so $? is still the command's when it's read; the prompt's end last.
+precmd_functions=(__termilly_precmd ${precmd_functions:#__termilly_(precmd|prompt_end)} __termilly_prompt_end)

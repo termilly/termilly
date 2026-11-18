@@ -46,6 +46,11 @@ interface TodoTask {
   terminal?: string;
   /** Its run out of sight (Implement, Out of sight): the hidden shell's id. */
   run?: string;
+  /**
+   * Where Implement did the work, kept through In progress and Review for Review's Git changes: the folder (on the SSH host
+   * when server), and the terminal it ran in, if any.
+   */
+  workedIn?: { folder: string; terminal?: string; server?: boolean };
   /** What Implement was started with (js/todoplan.js): the agent doing the work, the agents reviewing it, the rounds and how it runs. */
   plan?: { by: string; reviewers: string[]; rounds: number; run: string };
   /** What its agents are at while it's In progress: working, reviewing or fixing (STAGE), in which round, and how many findings are being fixed. */

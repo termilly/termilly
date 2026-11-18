@@ -14,6 +14,7 @@ import { isProduction } from './environments.js';
 import { screenOf } from './termscreen.js';
 import { agentInput } from './terminals.js';
 import { placeholders } from './snippets.js';
+import { repoAt, repoSnippets } from './reposnippets.js';
 import { clipsForPhone } from './clipboard.js';
 import { THEMES, THEME_BASE, themeId, onSystemThemeChange } from './themes.js';
 import { termTheme } from './terminals.js';
@@ -130,10 +131,10 @@ function terminalOf(tab) {
  */
 const phoneSnippet = (s, ws) => ({ ws, name: s.name, description: s.description ?? '', command: s.command, enter: s.enter !== false, fields: placeholders(s.command) });
 
-/** The snippets, for typing them from a phone: the global ones, then each workspace's. */
+/** The snippets, for typing them from a phone: this computer's, then those of each workspace's repository. */
 const snippetsForPhone = () => [
   ...(state.settings.commands.snippets ?? []).map(s => phoneSnippet(s, null)),
-  ...state.workspaces.flatMap(w => (w.snippets ?? []).map(s => phoneSnippet(s, w.id))),
+  ...state.workspaces.flatMap(w => repoSnippets(repoAt(w.cwd)).map(s => phoneSnippet(s, w.id))),
 ];
 
 /**

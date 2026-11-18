@@ -15,6 +15,7 @@ import { showToast } from './toasts.js';
 import { debounce, linesOf } from './util.js';
 import { targetOf } from './dom.js';
 import { inEachDocument } from './windows.js';
+import { systemClipboard } from './sysclipboard.js';
 
 /** A link in the page: where it is, its text, whether it's a web address, its tooltip and what Ctrl+click does. */
 /** @typedef {{ start: number, end: number, text: string, web: boolean, title: string, open: () => void }} PadLink */
@@ -148,7 +149,7 @@ function copyHovered(e) {
   if (!e.ctrlKey || e.shiftKey || e.altKey || e.code !== COPY_KEY || area.selectionStart !== area.selectionEnd) return;
   if (!hovered || !editor.classList.contains(CTRL_CLASS)) return;
   e.preventDefault();
-  navigator.clipboard.writeText(hovered.text).catch(() => {});
+  systemClipboard().writeText(hovered.text).catch(() => {});
   showToast({ text: `Copied ${hovered.text}` });
 }
 

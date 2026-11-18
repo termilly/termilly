@@ -37,7 +37,7 @@ function global:prompt {
             $marks += "$esc]7;file://$env:COMPUTERNAME/$($location.ProviderPath -replace '\\', '/')$bel"
         }
     }
-    $marks += "$esc]133;A$bel"
+    $marks += "$esc]133;A;shell=powershell$bel"
     $text = & $global:__termilly.Prompt
     $global:LASTEXITCODE = $code
     "$marks$text$esc]133;B$bel"

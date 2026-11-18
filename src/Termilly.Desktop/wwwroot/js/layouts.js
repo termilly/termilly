@@ -64,7 +64,6 @@ export function layoutOf(ws) {
       panes: /** @type {LayoutPane[]} */ ([node(/** @type {SplitNode} */ (n).a), node(/** @type {SplitNode} */ (n).b)]) };
   };
   return { version: 1, name: ws.name, color: ws.color, cwd: ws.cwd ?? undefined, notes: ws.note?.text || undefined,
-    snippets: ws.snippets?.length ? ws.snippets.map(({ name, command, description, enter }) => ({ name, command, description, enter: enter === false ? false : undefined })) : undefined,
     layout: node(withoutPreview(ws.root)) };
 }
 
@@ -116,8 +115,6 @@ export function applyLayout(layout, { into = null, warnings = [] } = {}) {
   }
   // A team's notes on the project (.termilly.yml notes:), pinned so everyone sees them.
   if (layout.notes) ws.note = { text: layout.notes, pinned: true };
-  // The project's snippets (.termilly.yml snippets:) belong to the workspace.
-  if (layout.snippets?.length) ws.snippets = /** @type {SnippetSetting[]} */ (layout.snippets.map((s, i) => ({ id: `y${i}${Date.now().toString(36)}`, ...s })));
   /** @type {Tab[]} */
   const tabs = [];
   /**

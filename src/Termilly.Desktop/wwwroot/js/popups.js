@@ -63,7 +63,7 @@ export function setFocusRestorer(fn) {
  * refocus (where the keyboard focus goes when it closes, instead of the terminal).
  * @param {HTMLElement} el
  * @param {Anchor} anchor
- * @param {{ side?: 'below' | 'right' | 'above', nested?: boolean, onClose?: () => void, dynamic?: boolean, refocus?: () => void }} [options]
+ * @param {{ side?: 'below' | 'right' | 'left' | 'above', nested?: boolean, onClose?: () => void, dynamic?: boolean, refocus?: () => void }} [options]
  */
 export function openPopover(el, anchor, { side = SIDE.below, nested = false, onClose, dynamic = false, refocus } = {}) {
   if (!nested) closeAll();
@@ -75,7 +75,20 @@ export function openPopover(el, anchor, { side = SIDE.below, nested = false, onC
   keepWheel(el);
   const where = anchorEl && side === SIDE.below ? AWAY_FROM_BAR[barSideOf(anchorEl)] ?? side : side;
   place(el, anchorEl ? anchorEl.getBoundingClientRect() : /** @type {DOMRect | { x: number, y: number }} */ (anchor), where);
-  stack.push({ el, anchorEl, onClose, dynamic, refocus, side: where });
+  stack.push({ el, anchorEl, onClose, dynamic, refocus: refocus ?? focusBackIn(el.ownerDocument), side: where });
+}
+
+/**
+ * In a detached window, where the focus goes back to when a popover there closes: what had it in that window (its
+ * terminal), not the main page's terminal. That would take the focus out of the window, and a paste picked from the
+ * menu reads the clipboard, which refuses a window without the focus. The main page's popovers are left to restoreFocus.
+ * @param {Document} doc
+ * @returns {(() => void) | undefined}
+ */
+function focusBackIn(doc) {
+  if (doc === document) return undefined;
+  const had = /** @type {HTMLElement | null} */ (doc.activeElement);
+  return () => { if (had?.isConnected) had.focus(); };
 }
 
 /**
@@ -221,7 +234,7 @@ const CHEVRON = '<svg viewBox="0 0 12 12"><path d="M4.5 3L7.5 6 4.5 9"/></svg>';
  * from it closes only it, not the popover it was opened over (a card it picks for stays put instead of closing and opening again).
  * @param {MenuEntry[]} items
  * @param {Anchor} anchor
- * @param {{ side?: 'below' | 'right' | 'above', nested?: boolean, alone?: boolean, className?: string, keepFocus?: boolean, refocus?: () => void }} [options]
+ * @param {{ side?: 'below' | 'right' | 'left' | 'above', nested?: boolean, alone?: boolean, className?: string, keepFocus?: boolean, refocus?: () => void }} [options]
  */
 export function showMenu(items, anchor, { side = SIDE.below, nested = false, alone = false, className = '', keepFocus = false, refocus } = {}) {
   const menu = document.createElement('div');
@@ -325,7 +338,9 @@ function menuRow(menu, item) {
     const openSub = () => {
       if (button.classList.contains('open')) return;
       closeSubmenus();
-      showMenu(submenu(), button, { side: SIDE.right, nested: true });
+      // A menu opened leftwards (from a dock on the window's right edge) goes on that way, not back over itself.
+      const side = stack.find(entry => entry.el === menu)?.side === SIDE.left ? SIDE.left : SIDE.right;
+      showMenu(submenu(), button, { side, nested: true });
     };
     button.addEventListener('mouseenter', openSub);
     button.addEventListener('click', openSub);

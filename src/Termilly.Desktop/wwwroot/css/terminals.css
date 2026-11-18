@@ -1,0 +1,181 @@
+/* Command marks, broadcast input, stacked workspaces and tab groups. */
+
+/* ---- Command marks (js/commands.js) ---- */
+
+/* In the gutter left of a prompt: green when the command before it succeeded, red when it failed. */
+.xterm .cmd-mark {
+  left: -10px !important;
+  width: 4px !important;
+  border-radius: 2px;
+  pointer-events: auto;
+}
+.xterm .cmd-mark.ok { background: color-mix(in srgb, var(--ok) 70%, transparent); }
+.xterm .cmd-mark.fail { background: var(--danger); }
+.ran-mark { flex: none; width: 4px; align-self: stretch; margin: 2px 6px 2px 2px; border-radius: 2px; }
+.ran-mark.ok { background: color-mix(in srgb, var(--ok) 70%, transparent); }
+.ran-mark.fail { background: var(--danger); }
+.res-title.mono, .pv-title.mono { font-family: var(--mono); font-size: 12.5px; white-space: pre-wrap; word-break: break-all; }
+
+/* ---- Broadcast input (js/broadcast.js) ---- */
+
+.broadcast-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 26px;
+  margin-left: 8px;
+  padding: 0 4px 0 10px;
+  border: 1px solid color-mix(in srgb, var(--danger) 55%, transparent);
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  color: var(--text);
+  font-size: 12px;
+  white-space: nowrap;
+  -webkit-app-region: no-drag;
+}
+.broadcast-bar[hidden] { display: none; }
+.broadcast-bar svg { width: 14px; height: 14px; stroke: var(--danger-text); stroke-width: 1.4; fill: none; }
+.broadcast-bar button { padding: 2px 9px; border-radius: 10px; color: var(--text); }
+.broadcast-bar .bc-text { max-width: 170px; overflow: hidden; text-overflow: ellipsis; }
+.broadcast-bar button:hover { background: var(--hover); }
+/* A terminal that receives broadcast input: a red stripe along its top. */
+.pane.broadcast::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 2;
+  height: 2px;
+  background: var(--danger);
+}
+.bc-toggle {
+  flex: none;
+  padding: 1px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.bc-toggle[hidden] { display: none; }
+.bc-toggle.on { border-color: color-mix(in srgb, var(--danger) 60%, transparent); color: var(--danger-text); }
+.dialog.compose { width: 560px; }
+.layout-warnings { margin: 6px 0 4px; padding-left: 18px; color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+.compose-text { width: 100%; min-height: 120px; font-family: var(--mono); font-size: 13px; resize: vertical; }
+.dialog-hint { margin-right: auto; color: var(--faint); font-size: 12px; }
+
+.refresh-sources { border-top: 1px solid var(--border); margin-top: 4px; }
+.badge[data-icon="serial"] { background: #f2cc6022; color: var(--attention); }
+.serial-row { display: flex; flex-direction: column; gap: 6px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.serial-fields { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.field.small { height: 26px; padding: 0 6px; font-size: 12px; }
+.badge[data-icon="docker"] { background: #1d63ed22; color: #5b9cff; }
+.badge[data-icon="k8s"] { background: #326ce522; color: #7aa2ff; }
+
+/* ---- Stacked workspaces and the scratch terminal (js/scratch.js) ---- */
+
+
+/* A tab group: a strip of tabs over the terminals' panes. Every pane keeps the group's full size and only the shown
+   one is visible, so switching tabs doesn't resize a terminal. Tabs keep their names; when they don't fit, < and > scroll the strip. */
+.tab-group { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; }
+.tab-strip-bar { display: flex; flex: none; align-items: flex-end; height: 30px; min-width: 0; }
+.tab-strip {
+  display: flex;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+  height: 30px;
+  padding: 0 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+/* < and > on either side of the strip when its tabs don't fit. */
+.strip-scroll {
+  display: none;
+  flex: none;
+  place-items: center;
+  width: 22px;
+  height: 26px;
+  margin-bottom: 2px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+.tab-strip-bar.overflow .strip-scroll { display: grid; }
+.strip-scroll:hover:not(:disabled) { background: var(--hover); color: var(--text); }
+.strip-scroll:disabled { opacity: 0.35; cursor: default; }
+.strip-scroll svg { width: 12px; height: 12px; stroke: currentColor; stroke-width: 1.6; fill: none; }
+.tab-strip::-webkit-scrollbar { display: none; }
+.strip-tab {
+  position: relative;
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 7px;
+  max-width: 220px;
+  height: 30px;
+  padding: 0 4px 0 10px;
+  border: 1px solid var(--border);
+  border-bottom: 0;
+  border-radius: var(--radius) var(--radius) 0 0;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  -webkit-user-select: none; user-select: none;
+}
+.strip-tab:hover { background: var(--hover); color: var(--text); }
+.strip-tab.active { background: var(--header); border-color: var(--border); color: var(--text); }
+/* The shown tab's straight accent line along its top edge. */
+.strip-tab.active::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: var(--accent); }
+.strip-name { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: clip; }
+.strip-badge, .strip-activity { display: flex; flex: none; align-items: center; }
+.strip-activity:empty { display: none; }
+/* New output in a tab that isn't shown: a small dot after its name. */
+.strip-tab.attention:not([data-activity]) .strip-activity::after { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--muted); }
+.strip-tab.attention:not([data-activity]) .strip-activity { display: flex; }
+/* A tab whose agent waits for you is marked even while another tab is shown. */
+.strip-tab[data-activity="needs"]:not(.active) { color: var(--attention); }
+.strip-close {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--faint);
+  opacity: 0;
+}
+.strip-tab:hover .strip-close, .strip-tab.active .strip-close { opacity: 1; }
+.strip-close:hover { background: var(--hover); color: var(--text); }
+.strip-close svg { width: 8px; height: 8px; stroke: currentColor; stroke-width: 1.5; fill: none; }
+/* The shown tab carries its terminal's title bar: name, status, chips and buttons, as on a pane. */
+.strip-tab.has-header { max-width: none; padding: 0; cursor: grab; }
+.strip-tab.has-header > :is(.strip-badge, .strip-name, .strip-activity, .strip-close) { display: none !important; }
+.strip-tab.has-header > .pane-header { flex: 1; min-width: 0; height: 28px; background: transparent; border-bottom: 0; }
+.strip-tab.has-header .pane-title { color: var(--text); }
+.strip-tab.has-header .pane-btn { opacity: 1; }
+.strip-tab.env.has-header { background: color-mix(in srgb, var(--env) 14%, var(--header)); }
+.strip-tab.env .env-chip { background: var(--env); }
+/* In a group the panes have no title bar of their own: their tab is it. */
+.tab-group-body > .pane > .pane-header { display: none; }
+.tab-group-body { position: relative; display: flex; flex: 1; min-width: 0; min-height: 0; }
+.tab-group-body > .pane { position: absolute; inset: 0; border-top-left-radius: 0; }
+.pane.tab-hidden { visibility: hidden; }
+.scratch-float {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  z-index: 60;
+  display: flex;
+  width: min(760px, 70%);
+  height: min(420px, 55%);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-pop);
+}
+.scratch-float[hidden] { display: none; }
+.scratch-float .pane { border-color: var(--accent-soft); }
+.scratch-float .pane-header { cursor: move; }

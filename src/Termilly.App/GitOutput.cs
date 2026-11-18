@@ -70,7 +70,7 @@ internal static class GitOutput
             }
         }
         return new GitWorkingTree(root, Path.GetFileName(Path.TrimEndingDirectorySeparator(root)), header.ShownBranch, header.Detached,
-            header.Upstream, header.Ahead, header.Behind, header.HasCommits, files.Staged, files.Unstaged, files.Untracked, files.Conflicted);
+            header.Upstream, header.Ahead, header.Behind, header.HasCommits, files.Staged, files.Unstaged, files.Untracked, files.Conflicted, header.Head);
     }
 
     /// <summary>The "# branch.*" lines at the top of the status (GitStatus reads them too).</summary>
@@ -88,12 +88,16 @@ internal static class GitOutput
         public int Behind { get; private set; }
         public bool HasCommits { get; private set; } = true;
 
+        /// <summary>The commit HEAD is on; null before the first commit.</summary>
+        public string? Head { get; private set; }
+
         /// <summary>Takes in a header line; false for any other entry.</summary>
         public bool Read(string e)
         {
             if (e.StartsWith(BranchOid, StringComparison.Ordinal))
             {
                 HasCommits = e != NoCommits;
+                Head = HasCommits ? e[BranchOid.Length..] : null;
             }
             else if (e.StartsWith(BranchHead, StringComparison.Ordinal))
             {

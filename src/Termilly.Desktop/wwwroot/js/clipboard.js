@@ -25,6 +25,7 @@ import { pathActions } from './actions.js';
 import { copyToNotepadItem, PASTE_TO_NOTEPAD } from './notepad.js';
 import { parentOf } from './filepaths.js';
 import { inEachDocument } from './windows.js';
+import { systemClipboard } from './sysclipboard.js';
 
 /** @typedef {import('./protocol.js').ClipView} Clip */
 
@@ -143,11 +144,12 @@ export async function pasteClip(clip, tab = focusedTab(), run = false) {
  */
 async function copyClip(clip) {
   const isImage = clip.kind === CLIP_KIND.image;
+  const clipboard = systemClipboard(); // the window it was picked in, before the focus can move
   const value = await take(clip, isImage ? CLIP_FORM.picture : CLIP_FORM.text);
   if (value == null) return;
   try {
-    if (isImage) await navigator.clipboard.write([new ClipboardItem({ 'image/png': await (await fetch(value)).blob() })]);
-    else await navigator.clipboard.writeText(value);
+    if (isImage) await clipboard.write([new ClipboardItem({ 'image/png': await (await fetch(value)).blob() })]);
+    else await clipboard.writeText(value);
     showToast({ text: isImage ? 'Copied the image' : COPIED });
   } catch {
     showToast({ text: 'Couldn’t copy to the clipboard', state: TOAST.failed });

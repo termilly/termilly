@@ -1,43 +1,48 @@
 // @ts-check
 // Snippets: saved commands with {{placeholders}}, run in one terminal, the broadcast's terminals or every terminal
-// with a tag. They're global (Settings), or belong to a workspace, which a project's .termilly.yml can fill
-// (`snippets:`) so a team shares them in git. Placeholders are asked for in a small form that remembers the last
-// values; `{{namespace=default}}` has a default. Production terminals ask first (environments.js).
+// with a tag. They're this computer's (Settings), or a repository's: kept in its .termilly/snippets.yml so the team
+// shares them in git (or kept out of git, only for this user), or listed in its .termilly.yml (reposnippets.js).
+// Placeholders are asked for in a small form that remembers the last values; `{{namespace=default}}` has a default.
+// Production terminals ask first (environments.js).
 
 import { PAGE } from './protocol.js';
 import { send } from './host.js';
-import { state, emit, persist, wsById, GROUPS, EVENTS } from './store.js';
+import { state, emit, persist, GROUPS, EVENTS } from './store.js';
 import { modal } from './dialogs.js';
 import { escapeHtml } from './ui.js';
 import { focusedTab } from './panes.js';
 import { isBroadcasting, inputTargets } from './broadcast.js';
 import { confirmProduction } from './environments.js';
-import { fuzzyMatch } from './fuzzy.js';
 import { updateSettings } from './preferences.js';
-import { find, targetOf } from './dom.js';
+import { find } from './dom.js';
+import { showToast } from './toasts.js';
+import {
+  SOURCE, REPO_FILE, LAYOUT_FILE, repoAt, repoOfTab, repoSnippets, loadRepo, saveRepo, folderOfTab,
+} from './reposnippets.js';
 
-/**
- * A snippet as the lists show it: a saved one, with where it's kept ('global', 'workspace', or what a project's
- * file says) and, for a workspace's, that workspace's id.
- * @typedef {SnippetSetting & { scope?: string, wsId?: string }} Snippet
- */
-
+/** @typedef {import('./reposnippets.js').ListedSnippet} Snippet */
+/** @typedef {import('./reposnippets.js').Repo} Repo */
+/** @typedef {import('./reposnippets.js').TaskInput} TaskInput */
 /** @typedef {{ name: string, def: string }} Placeholder */
 
 const PLACEHOLDER = /\{\{\s*([A-Za-z_][\w.-]*)\s*(?:=([^}]*))?\}\}/g;
 
-/** Where a snippet is kept: in Settings for every workspace, or in a workspace (a project's file can name others). */
-export const SNIPPET_SCOPE = Object.freeze({ global: 'global', workspace: 'workspace' });
+/** Where a snippet comes from: this computer, the repository's file, its .termilly.yml, or its tasks.json. */
+export const SNIPPET_SCOPE = SOURCE;
+/** Where a snippet is saved, in the editors: 'global', or this prefix and a repository's folder. */
+export const IN_REPO = 'repo:';
 /** Where the run form can send a snippet: the focused terminal, the broadcast, or "tag:" and a tag's name. */
 const TARGET = Object.freeze({ focused: 'focused', broadcast: 'broadcast', tagPrefix: 'tag:' });
-/** The editors' fields, by their name attribute (a saved snippet's properties). */
+/** The editors' fields, by their name attribute (a saved snippet's properties, where it's kept, and git). */
 export const SNIPPET_FIELD = Object.freeze({
-  name: 'name', command: 'command', description: 'description', enter: 'enter',
+  name: 'name', command: 'command', description: 'description', enter: 'enter', where: 'where', onlyMe: 'onlyMe',
 });
 /** A snippet saved without a name is named after this many words of its command. */
 export const NAME_WORDS = 3;
 /** The button that runs a snippet (one that doesn't press Enter says "Type it"). */
 export const RUN_LABEL = 'Run';
+/** What "Keep it in" calls this computer's snippets. */
+export const THIS_COMPUTER = 'This computer';
 
 /**
  * A snippet's placeholders in order, each once: [{ name, def }].
@@ -58,22 +63,26 @@ export function placeholders(command) {
 export const fill = (command, values) =>
   String(command).replace(PLACEHOLDER, (_, name, def) => values?.[name] ?? def ?? '');
 
+/** This computer's snippets, as the lists show them. */
+export const globalSnippets = () => /** @type {Snippet[]} */ ((state.settings.commands.snippets ?? []).map(s => ({ ...s, scope: SOURCE.global })));
+
 /**
- * Every snippet that applies here: the workspace's (and its project's), then the global ones.
- * @param {Workspace | undefined} [ws]
+ * The repository a terminal or workspace works in (the focused terminal's when neither is given).
+ * @param {Tab | Workspace | undefined} [where]
  */
-export function allSnippets(ws = wsById(state.activeId)) {
-  // A workspace's snippets are there only when the workspace is.
-  const own = /** @type {Snippet[]} */ (ws?.snippets ?? [])
-    .map(s => ({ ...s, scope: s.scope ?? SNIPPET_SCOPE.workspace, wsId: /** @type {Workspace} */ (ws).id }));
-  return [...own, ...(state.settings.commands.snippets ?? []).map(s => ({ ...s, scope: SNIPPET_SCOPE.global }))];
-}
+export const repoHere = where => (!where ? repoOfTab(focusedTab()) : 'wsId' in where ? repoOfTab(where) : repoAt(where.cwd));
+
+/**
+ * Every snippet that applies here: the repository's (its file's, then its .termilly.yml's), then this computer's.
+ * @param {Tab | Workspace | undefined} [where] a terminal or a workspace; the focused terminal when not given
+ */
+export const allSnippets = where => [...repoSnippets(repoHere(where)), ...globalSnippets()];
 
 /**
  * @param {string} name
- * @param {Workspace | undefined} [ws]
+ * @param {Tab | Workspace | undefined} [where]
  */
-export const findSnippet = (name, ws) => allSnippets(ws).find(s => s.name.toLowerCase() === String(name).toLowerCase());
+export const findSnippet = (name, where) => allSnippets(where).find(s => s.name.toLowerCase() === String(name).toLowerCase());
 
 /** Where a snippet can go, for the run form: the focused terminal, the broadcast, or a tag. */
 function targetOptions() {
@@ -98,7 +107,7 @@ function targetsFor(where, tab = focusedTab()) {
 /**
  * Types a snippet into its targets (with Enter if the snippet says so). Production terminals ask first; returns
  * the terminals it went to, or null when nothing was sent.
- * @param {Snippet} snippet
+ * @param {SnippetSetting} snippet
  * @param {Record<string, string>} values
  * @param {Tab[]} targets
  * @param {(tab: Tab) => void} [beforeSend] called for each terminal just before its text goes in
@@ -119,12 +128,21 @@ export async function sendSnippet(snippet, values, targets, beforeSend) {
 }
 
 /**
- * Runs a snippet from the UI: asks for its placeholders and where it goes (when there's a choice), then sends.
- * Returns the terminals it went to, or null when it was cancelled.
- * @param {Snippet} snippet
- * @param {{ tab?: Tab | null, where?: string }} [options]
+ * Notes that a snippet or task was run now, for the list's order (the most recent first).
+ * @param {string} id
  */
-export async function runSnippet(snippet, { tab = focusedTab(), where } = {}) {
+export function markUsed(id) {
+  updateSettings(GROUPS.data, { snippetUsed: { ...(state.settings.data.snippetUsed ?? {}), [id]: Date.now() } });
+}
+
+/**
+ * Runs a snippet from the UI: asks for its placeholders and where it goes (when there's a choice), then sends.
+ * `enter: false` types it without pressing Enter. Returns the terminals it went to, or null when it was cancelled.
+ * @param {SnippetSetting} snippet
+ * @param {{ tab?: Tab | null, where?: string, enter?: boolean }} [options]
+ */
+export async function runSnippet(snippet, { tab = focusedTab(), where, enter } = {}) {
+  if (enter === false) snippet = { ...snippet, enter: false };
   const names = placeholders(snippet.command);
   const options = targetOptions();
   /** @type {Record<string, string>} */
@@ -135,6 +153,7 @@ export async function runSnippet(snippet, { tab = focusedTab(), where } = {}) {
     values = answer.values;
     where = answer.where;
   }
+  markUsed(snippet.id);
   const sent = await sendSnippet(snippet, values, targetsFor(where ?? TARGET.focused, tab));
   if (sent?.length === 1) sent[0].view?.term.focus();
   return sent;
@@ -142,34 +161,56 @@ export async function runSnippet(snippet, { tab = focusedTab(), where } = {}) {
 
 /**
  * Runs a snippet in one terminal (`snippet:name` at its prompt, snippetprompt.js), asking for its placeholders first.
- * @param {Snippet} snippet
+ * @param {SnippetSetting} snippet
  * @param {Tab} tab
  */
 export const runSnippetIn = (snippet, tab) => runSnippet(snippet, { tab, where: TARGET.focused });
 
 /**
- * Where a snippet is kept, as the lists say it.
+ * Where a snippet comes from, as the lists say it.
  * @param {Snippet} snippet
  */
-export const scopeLabel = snippet => (snippet.scope === SNIPPET_SCOPE.global ? 'all workspaces' : 'this workspace');
+export function scopeLabel(snippet) {
+  if (snippet.scope === SOURCE.global) return 'this computer';
+  if (snippet.scope === SOURCE.task) return 'VS Code task';
+  if (snippet.scope === SOURCE.shared) return LAYOUT_FILE;
+  return snippet.root?.split(/[\\/]/).filter(Boolean).pop() ?? 'this repo';
+}
 
 /**
- * The run form: a field per placeholder (last values remembered) and where it goes.
- * @param {Snippet} snippet
+ * A field of the run form: a placeholder's value, or a task input's (a list to pick from, a password, what it asks).
+ * @param {Placeholder} p
+ * @param {string | undefined} remembered
+ * @param {TaskInput | undefined} input
+ * @param {boolean} first
+ */
+function valueField(p, remembered, input, first) {
+  const label = escapeHtml(input?.description || p.name);
+  const value = remembered ?? input?.default ?? p.def;
+  if (input?.options?.length) {
+    return `<label class="dialog-field">${label}<select class="field" data-var="${escapeHtml(p.name)}">${input.options
+      .map(o => `<option${o === value ? ' selected' : ''}>${escapeHtml(o)}</option>`).join('')}</select></label>`;
+  }
+  return `<label class="dialog-field">${label}
+    <input class="field" data-var="${escapeHtml(p.name)}" type="${input?.password ? 'password' : 'text'}" value="${escapeHtml(value)}" spellcheck="false" ${first ? 'autofocus' : ''}></label>`;
+}
+
+/**
+ * The run form: a field per placeholder (last values remembered, a password never) and where it goes.
+ * @param {SnippetSetting} snippet
  * @param {Placeholder[]} names
  * @param {string[][]} options
+ * @param {TaskInput[]} [inputs] a task's inputs, by their id
  * @returns {Promise<{ values: Record<string, string>, where: string } | null>}
  */
-function askValues(snippet, names, options) {
+export function askValues(snippet, names, options, inputs = []) {
   /** @type {Record<string, string>} */
   const remembered = state.settings.data.snippetValues?.[snippet.id] ?? {};
+  const inputOf = (/** @type {string} */ name) => inputs.find(i => i.id === name);
   return modal('snippet-run', `
     <h3>${escapeHtml(snippet.name)}</h3>
     <pre class="snippet-preview" data-preview></pre>
-    ${names.map((p, i) => `
-      <label class="dialog-field">${escapeHtml(p.name)}
-        <input class="field" data-var="${escapeHtml(p.name)}" value="${escapeHtml(remembered[p.name] ?? p.def)}" spellcheck="false" ${i === 0 ? 'autofocus' : ''}>
-      </label>`).join('')}
+    ${names.map((p, i) => valueField(p, remembered[p.name], inputOf(p.name), i === 0)).join('')}
     ${options.length > 1 ? `<label class="dialog-field">Run in
       <select class="field" data-where>${options.map(([v, l]) => `<option value="${escapeHtml(v)}">${escapeHtml(l)}</option>`).join('')}</select></label>` : ''}
     <div class="dialog-actions">
@@ -180,10 +221,12 @@ function askValues(snippet, names, options) {
       .map(i => [/** @type {string} */ (i.dataset.var), i.value]));
     const preview = () => { find(dialog, '[data-preview]').textContent = fill(snippet.command, read()); };
     dialog.addEventListener('input', preview);
+    dialog.addEventListener('change', preview);
     preview();
     const submit = () => {
       const values = read();
-      updateSettings(GROUPS.data, { snippetValues: { ...(state.settings.data.snippetValues ?? {}), [snippet.id]: values } });
+      const kept = Object.fromEntries(Object.entries(values).filter(([name]) => !inputOf(name)?.password));
+      updateSettings(GROUPS.data, { snippetValues: { ...(state.settings.data.snippetValues ?? {}), [snippet.id]: kept } });
       close({ values, where: /** @type {HTMLSelectElement | null} */ (dialog.querySelector('[data-where]'))?.value ?? TARGET.focused });
     };
     return { submit };
@@ -195,91 +238,167 @@ function askValues(snippet, names, options) {
 const newSnippetId = () => `s${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
 /**
- * The editor: name, command, description, Enter, and whether it's global or this workspace's.
- * @param {Snippet | null} [snippet]
+ * Where a snippet can be kept: the repository the focused terminal is in (when it's in one), and this computer.
+ * @param {Repo | null} repo
+ * @returns {string[][]}
+ */
+export const whereOptions = repo => [
+  ...(repo ? [[`${IN_REPO}${repo.root}`, `This repo (${repo.name}), ${REPO_FILE}`]] : []),
+  [SOURCE.global, `${THIS_COMPUTER}, in every folder`],
+];
+
+/**
+ * Where a snippet is kept now, as "Keep it in" says it.
+ * @param {Snippet} s
+ */
+export const whereOf = s => (s.scope === SOURCE.repo && s.root ? `${IN_REPO}${s.root}` : SOURCE.global);
+
+/**
+ * "Keep it in" and "Only for me", for both editors.
+ * @param {string} where
+ * @param {Repo | null} repo
+ */
+export function whereHtml(where, repo) {
+  return `<label class="dialog-field">Keep it in
+      <select class="field" name="${SNIPPET_FIELD.where}">${whereOptions(repo).map(([v, l]) => `<option value="${escapeHtml(v)}"${v === where ? ' selected' : ''}>${escapeHtml(l)}</option>`).join('')}</select></label>
+    ${repo ? `<label class="note-pin" data-only-me><input type="checkbox" name="${SNIPPET_FIELD.onlyMe}" ${repo.onlyMe ? 'checked' : ''}> Only for me (keep ${REPO_FILE} out of git)</label>` : ''}`;
+}
+
+/**
+ * The editor for a new snippet ("Save as snippet", a search with no match): name, command, description, Enter, and
+ * where it's kept (this repository first, when the focused terminal is in one).
  * @param {{ command?: string }} [options]
  */
-export function editSnippet(snippet = null, { command = '' } = {}) {
-  /** @type {Snippet} */
-  const s = snippet ?? { id: newSnippetId(), name: '', command, description: '', enter: true, scope: SNIPPET_SCOPE.global };
-  const ws = wsById(s.wsId ?? state.activeId);
+export function editSnippet({ command = '' } = {}) {
+  const repo = repoHere();
   return modal('snippet-edit', `
-    <h3>${snippet ? 'Edit snippet' : 'New snippet'}</h3>
-    <label class="dialog-field">Name<input class="field" name="name" value="${escapeHtml(s.name)}" placeholder="Tail pod logs" ${snippet ? '' : 'autofocus'}></label>
-    <label class="dialog-field">Command<textarea class="field snippet-command" name="command" rows="3" spellcheck="false" placeholder="kubectl logs -f {{pod}} -n {{namespace=default}}">${escapeHtml(s.command)}</textarea></label>
+    <h3>New snippet</h3>
+    <label class="dialog-field">Name<input class="field" name="name" placeholder="Tail pod logs" autofocus></label>
+    <label class="dialog-field">Command<textarea class="field snippet-command" name="command" rows="3" spellcheck="false" placeholder="kubectl logs -f {{pod}} -n {{namespace=default}}">${escapeHtml(command)}</textarea></label>
     <p class="dialog-sub">Write <code>{{name}}</code> for a value to ask for when it runs, <code>{{name=default}}</code> with a default. Don’t put secrets in a snippet.</p>
-    <label class="dialog-field">Description<input class="field" name="description" value="${escapeHtml(s.description ?? '')}" placeholder="optional"></label>
-    <label class="dialog-field">Keep it in
-      <select class="field" name="scope">
-        <option value="${SNIPPET_SCOPE.global}"${s.scope === SNIPPET_SCOPE.global ? ' selected' : ''}>All workspaces</option>
-        <option value="${SNIPPET_SCOPE.workspace}"${s.scope !== SNIPPET_SCOPE.global ? ' selected' : ''}>${escapeHtml(ws?.name ?? 'This workspace')} (saved in its layout file too)</option>
-      </select></label>
-    <label class="note-pin"><input type="checkbox" name="enter" ${s.enter === false ? '' : 'checked'}> Press Enter after it</label>
+    <label class="dialog-field">Description<input class="field" name="description" placeholder="optional"></label>
+    ${whereHtml(repo ? `${IN_REPO}${repo.root}` : SOURCE.global, repo)}
+    <label class="note-pin"><input type="checkbox" name="enter" checked> Press Enter after it</label>
     <div class="dialog-actions">
-      ${snippet ? '<button class="btn" data-delete>Delete</button>' : ''}
       <span class="spacer"></span>
       <button class="btn" data-cancel>Cancel</button>
       <button class="btn primary" data-ok>Save</button>
     </div>`, (dialog, close) => {
-    /**
-     * The form's field by its name; the inputs, textarea and select all have a value.
-     * @param {string} name
-     */
-    const field = name => /** @type {HTMLInputElement} */ (dialog.querySelector(`[name="${name}"]`));
-    if (snippet) setTimeout(() => field(SNIPPET_FIELD.command).focus());
+    const field = (/** @type {string} */ name) => /** @type {HTMLInputElement} */ (dialog.querySelector(`[name="${name}"]`));
+    const onlyMe = dialog.querySelector('[data-only-me]');
+    const showOnlyMe = () => onlyMe?.toggleAttribute('hidden', !field(SNIPPET_FIELD.where).value.startsWith(IN_REPO));
+    dialog.addEventListener('change', showOnlyMe);
+    showOnlyMe();
     const save = () => {
-      // Saved as it is: a description left empty isn't kept (undefined isn't written).
-      const command = field(SNIPPET_FIELD.command).value.trim();
-      const next = /** @type {SnippetSetting} */ ({
-        id: s.id, name: field(SNIPPET_FIELD.name).value.trim() || command.split(/\s+/).slice(0, NAME_WORDS).join(' '),
-        command, description: field(SNIPPET_FIELD.description).value.trim() || undefined, enter: field(SNIPPET_FIELD.enter).checked,
-      });
-      if (!next.command) return;
-      store(s, next, field('scope').value);
+      const next = readEditor(field, newSnippetId());
+      if (!next) return;
+      saveSnippet(next.id, next, field(SNIPPET_FIELD.where).value, { onlyMe: field(SNIPPET_FIELD.onlyMe)?.checked });
       close(true);
     };
-    dialog.querySelector('[data-delete]')?.addEventListener('click', () => { store(s, null, s.scope); close(true); });
     return { submit: save };
   });
 }
 
 /**
- * Saves (or with `next` null, deletes) a snippet where it belongs, taking it out of where it was.
- * @param {Snippet} old
- * @param {SnippetSetting | null} next
- * @param {string | undefined} scope
+ * A snippet from an editor's fields (null without a command); the name falls back to the command's first words, and a
+ * description left empty isn't kept.
+ * @param {(name: string) => HTMLInputElement} field
+ * @param {string} id
+ * @returns {SnippetSetting | null}
  */
-function store(old, next, scope) {
-  saveSnippet(old.id, next, scope === SNIPPET_SCOPE.global ? SNIPPET_SCOPE.global : old.wsId ?? state.activeId);
+export function readEditor(field, id) {
+  const command = field(SNIPPET_FIELD.command).value.trim();
+  if (!command) return null;
+  return /** @type {SnippetSetting} */ ({
+    id, name: field(SNIPPET_FIELD.name).value.trim() || command.split(/\s+/).slice(0, NAME_WORDS).join(' '),
+    command, description: field(SNIPPET_FIELD.description).value.trim() || undefined, enter: field(SNIPPET_FIELD.enter).checked,
+  });
 }
 
 /**
- * Saves a snippet by id in `where` ('global' or a workspace's id), or deletes it when `next` is null. A snippet
- * that stays where it was keeps its place in the list; one that moves goes to the end of its new list.
+ * The repository a saved snippet's id says it's in, or null for this computer's.
+ * @param {string} id
+ */
+const rootOfId = id => (id.startsWith(`${SOURCE.repo}:`) ? id.slice(SOURCE.repo.length + 1).split('|')[0] : null);
+
+/**
+ * A list with a snippet put in its place (or at the end), or taken out when `next` is null.
+ * @param {SnippetSetting[]} list
  * @param {string} id
  * @param {SnippetSetting | null} next
- * @param {string | null} where
  */
-export function saveSnippet(id, next, where) {
-  /** @param {SnippetSetting[] | null | undefined} list */
-  const put = list => {
-    list = list ?? [];
-    const at = list.findIndex(x => x.id === id);
-    if (!next) return at < 0 ? list : list.filter(x => x.id !== id);
-    return at < 0 ? [...list, next] : list.map(x => (x.id === id ? next : x));
-  };
-  /** @param {SnippetSetting[] | null | undefined} list */
-  const take = list => (list ?? []).filter(x => x.id !== id);
-  const global = where === SNIPPET_SCOPE.global ? put(state.settings.commands.snippets) : take(state.settings.commands.snippets);
-  for (const ws of state.workspaces) {
-    if (ws.id === where) ws.snippets = put(ws.snippets);
-    else if (ws.snippets?.some(x => x.id === id)) ws.snippets = take(ws.snippets);
+function put(list, id, next) {
+  const at = list.findIndex(x => x.id === id);
+  if (!next) return list.filter(x => x.id !== id);
+  return at < 0 ? [...list, next] : list.map(x => (x.id === id ? next : x));
+}
+
+/**
+ * What a save did: the snippet's id now (a repository's snippet is known by its name), and whether it was written.
+ * @typedef {{ id: string | null, ok: boolean }} Saved
+ */
+
+/**
+ * Puts a snippet into this computer's (or takes it out, `next` null): in the state at once, for whoever draws the list
+ * next; settings.js saves it a moment later.
+ * @param {string} id
+ * @param {SnippetSetting | null} next
+ * @returns {Saved}
+ */
+function inComputer(id, next) {
+  const snippets = put(state.settings.commands.snippets ?? [], id, next);
+  state.settings.commands = { ...state.settings.commands, snippets };
+  updateSettings(GROUPS.commands, { snippets });
+  return { id: next?.id ?? null, ok: true };
+}
+
+/**
+ * Puts a snippet into a repository's file (or takes it out, `next` null), and waits until it's written.
+ * @param {string} root
+ * @param {string} id
+ * @param {SnippetSetting | null} next
+ * @param {boolean} [onlyMe] keep the file out of git (as it was, when not given)
+ * @returns {Promise<Saved>}
+ */
+async function inRepository(root, id, next, onlyMe) {
+  const repo = repoAt(root) ?? await loadRepo(root);
+  if (!repo) return { id: null, ok: false };
+  const list = put(repo.snippets, id, next);
+  const at = next ? list.indexOf(next) : -1;
+  const error = await saveRepo(root, list, onlyMe ?? repo.onlyMe);
+  if (error) {
+    showToast({ text: `Couldn’t save ${REPO_FILE}: ${error}` });
+    return { id: null, ok: false };
   }
-  // In the state at once, for whoever draws the list next; settings.js saves it a moment later.
-  state.settings.commands = { ...state.settings.commands, snippets: global };
-  updateSettings(GROUPS.commands, { snippets: global });
+  return { id: at >= 0 ? repo.snippets[at]?.id ?? null : null, ok: true };
+}
+
+/**
+ * Saves a snippet by id where it's to be kept ('global', or IN_REPO and a repository's folder), taking it out of where
+ * it was; deletes it when `next` is null. One that stays keeps its place in its list; one that moves goes to the end.
+ * A move writes where it goes first, and takes it out of where it was only once that's written: a file that can't be
+ * written leaves the snippet where it was, never nowhere.
+ * @param {string} id
+ * @param {SnippetSetting | null} next
+ * @param {string} where
+ * @param {{ onlyMe?: boolean }} [options] keep the repository's file out of git (as it was, when not given)
+ * @returns {Promise<Saved>}
+ */
+export async function saveSnippet(id, next, where, { onlyMe } = {}) {
+  const fromRoot = rootOfId(id);
+  const toRoot = where.startsWith(IN_REPO) ? where.slice(IN_REPO.length) : null;
+  // A repository's snippet moved to this computer gets an id of its own (a repository's is its name).
+  if (next && !toRoot && fromRoot) next = { ...next, id: newSnippetId() };
+  let saved = /** @type {Saved} */ ({ id: null, ok: true });
+  if (next) saved = toRoot ? await inRepository(toRoot, id, next, onlyMe) : inComputer(id, next);
+  // Out of where it was: deleted, or moved and now written where it went.
+  if (saved.ok && (!next || fromRoot !== toRoot)) {
+    if (fromRoot) await inRepository(fromRoot, id, null);
+    else if ((state.settings.commands.snippets ?? []).some(x => x.id === id)) inComputer(id, null);
+  }
   persist();
   emit(EVENTS.snippets);
+  return saved;
 }
 
 export { newSnippetId };
@@ -288,74 +407,39 @@ export { newSnippetId };
  * "Save as snippet" from a command that ran.
  * @param {string} command
  */
-export const saveAsSnippet = command => editSnippet(null, { command });
-
-// ---- The snippets list ----
+export const saveAsSnippet = command => editSnippet({ command });
 
 /**
- * The snippets window (js/snippetswindow.js), where they're made and changed.
- * @param {{ create?: boolean, id?: string }} options
+ * Snippets that belonged to a workspace (before repositories kept them) go to the repository its folder is in, or to
+ * this computer's when it's in none; one of the same name already there isn't copied (a .termilly.yml's were copied
+ * into its workspace, and are read from the file now). One that couldn't be written stays with its workspace, for the
+ * next start.
  */
-const manage = options => setTimeout(() => emit(EVENTS.openSnippets, options));
-
-/** Every snippet, searchable: Enter or Run runs it; Edit, New and Open snippet editor open the snippets window. */
-export function openSnippets() {
-  return modal('snippet-list', `
-    <h3>Snippets</h3>
-    <input class="field" data-search placeholder="Search snippets" spellcheck="false" autofocus>
-    <div class="snippet-items" data-items></div>
-    <div class="dialog-actions">
-      <button class="btn" data-new>New snippet</button>
-      <button class="btn" data-editor title="Make and change snippets">Open snippet editor</button>
-      <span class="spacer"></span>
-      <button class="btn" data-cancel>Close</button>
-    </div>`, (dialog, close) => {
-    /** @type {Snippet[]} */
-    let shown = [];
-    let selected = 0;
-    const render = () => {
-      const q = /** @type {HTMLInputElement} */ (dialog.querySelector('[data-search]')).value.trim();
-      shown = allSnippets().filter(s => !q || fuzzyMatch(q, `${s.name} ${s.command} ${s.description ?? ''}`));
-      selected = Math.min(selected, Math.max(0, shown.length - 1));
-      find(dialog, '[data-items]').innerHTML = shown.length ? shown.map((s, i) => `
-        <div class="snippet-item${i === selected ? ' on' : ''}" data-i="${i}">
-          <div class="snippet-text"><div class="snippet-name">${escapeHtml(s.name)}<span class="snippet-scope">${scopeLabel(s)}</span></div>
-            <code class="snippet-cmd">${escapeHtml(s.command)}</code>${s.description ? `<div class="set-desc">${escapeHtml(s.description)}</div>` : ''}</div>
-          <button class="btn small" data-edit="${i}">Edit</button>
-          <button class="btn small primary" data-run="${i}">Run</button>
-        </div>`).join('')
-        : `<p class="set-desc snippet-empty">${q ? 'No snippet matches.' : 'No snippets yet. Make one, or use “Save as snippet” in a terminal’s menu.'}</p>`;
-    };
-    /** @param {number} i */
-    const run = i => { const s = shown[i]; if (s) { close(true); setTimeout(() => runSnippet(s)); } };
-    dialog.addEventListener('input', render);
-    dialog.addEventListener('click', e => {
-      const t = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-run], [data-edit], .snippet-item'));
-      if (targetOf(e).closest('[data-new]')) { close(true); manage({ create: true }); return; }
-      if (targetOf(e).closest('[data-editor]')) { close(true); manage({}); return; }
-      if (!t) return;
-      if (t.dataset.edit) { const s = shown[Number(t.dataset.edit)]; close(true); manage({ id: s.id }); return; }
-      run(Number(t.dataset.run ?? t.dataset.i));
-    });
-    dialog.addEventListener('keydown', e => {
-      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-        e.preventDefault();
-        selected = Math.max(0, Math.min(shown.length - 1, selected + (e.key === 'ArrowDown' ? 1 : -1)));
-        render();
-      }
-    });
-    render();
-    return { submit: () => run(selected) };
-  });
+export async function moveWorkspaceSnippets() {
+  for (const ws of state.workspaces.filter(w => w.snippets?.length)) {
+    const old = /** @type {SnippetSetting[]} */ (ws.snippets);
+    const repo = await loadRepo(ws.cwd);
+    const have = new Set((repo ? repoSnippets(repo) : globalSnippets()).map(s => s.name.toLowerCase()));
+    const where = repo ? `${IN_REPO}${repo.root}` : SOURCE.global;
+    /** @type {SnippetSetting[]} */
+    const left = [];
+    for (const s of old.filter(x => !have.has(x.name.toLowerCase()))) {
+      const copy = { ...s, id: newSnippetId() };
+      if (!(await saveSnippet(copy.id, copy, where)).ok) left.push(s);
+    }
+    if (left.length) ws.snippets = left;
+    else delete ws.snippets;
+    persist();
+  }
 }
 
-/** Palette entries: one per snippet, run in the focused terminal. */
+// ---- The palette, scripts and agents ----
+
+/** Palette entries: one per snippet and task here, run in the focused terminal (a task in a new one). */
 export const snippetCommands = () => allSnippets().map(s => ({
-  label: `Snippet: ${s.name}`, keywords: `run saved command ${s.command} ${s.description ?? ''}`, hint: s.scope === SNIPPET_SCOPE.global ? '' : SNIPPET_SCOPE.workspace,
+  label: `Snippet: ${s.name}`, keywords: `run saved command ${s.command} ${s.description ?? ''}`, hint: scopeLabel(s),
   run: () => setTimeout(() => runSnippet(s)),
 }));
-
-// ---- From scripts and agents (api.js) ----
 
 /** The snippets for `termilly snippet list` and the MCP server. */
 export const listForApi = () => allSnippets().map(s => ({ name: s.name, command: s.command, description: s.description ?? null, variables: placeholders(s.command), scope: s.scope }));
@@ -365,7 +449,8 @@ export const listForApi = () => allSnippets().map(s => ({ name: s.name, command:
  * @param {{ name: string, tab: Tab, vars?: Record<string, string> | null, beforeSend?: (tab: Tab) => void }} request
  */
 export async function runForApi({ name, tab, vars, beforeSend }) {
-  const snippet = findSnippet(name, wsById(tab.wsId));
+  await loadRepo(folderOfTab(tab));
+  const snippet = findSnippet(name, tab);
   if (!snippet) throw new Error(`No snippet named ${name}.`);
   const missing = placeholders(snippet.command).filter(p => !p.def && !(vars && p.name in vars)).map(p => p.name);
   if (missing.length) throw new Error(`The snippet needs values for: ${missing.join(', ')}.`);

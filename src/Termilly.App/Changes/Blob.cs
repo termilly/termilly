@@ -91,6 +91,16 @@ internal sealed record Blob(bool Exists, byte[]? Bytes, bool Binary, bool TooLar
         return Encoding.UTF8.GetString(b);
     }
 
+    public static byte[] EncodeLike(byte[] original, string text)
+    {
+        var encoding = original.AsSpan().StartsWith(Utf16LittleEndianMark) ? Encoding.Unicode
+            : original.AsSpan().StartsWith(Utf16BigEndianMark) ? Encoding.BigEndianUnicode : Encoding.UTF8;
+        var mark = original.AsSpan().StartsWith(Utf16LittleEndianMark) ? Utf16LittleEndianMark
+            : original.AsSpan().StartsWith(Utf16BigEndianMark) ? Utf16BigEndianMark
+            : original.AsSpan().StartsWith(Utf8Mark) ? Utf8Mark : [];
+        return [.. mark, .. encoding.GetBytes(text)];
+    }
+
     public bool SameAs(Blob other) =>
         Exists == other.Exists && Size == other.Size &&
         (Bytes is null || other.Bytes is null ? Bytes is null && other.Bytes is null : Bytes.AsSpan().SequenceEqual(other.Bytes));

@@ -58,6 +58,10 @@ interface TerminalSettings {
   programClipboard: boolean;
   /** Selecting text in a terminal copies it. */
   copyOnSelect: boolean;
+  /** At a shell prompt, the rest of a command from history in grey after the cursor (js/autocomplete.js). */
+  autocomplete: boolean;
+  /** The autocomplete list also offers words on the screen. */
+  autocompleteScreenWords: boolean;
   /** What opens a web address in a terminal’s output (js/weblinks.js): Ctrl+click, or a plain click. */
   linkClick: string;
   /** The terminal colour scheme's id (js/themes.js); null: the theme's own. */
@@ -81,6 +85,10 @@ interface TerminalSettings {
 /** The app around the terminals: theme, its own font, the sidebar's activity and git status, updates, plugins. */
 interface InterfaceSettings {
   theme: string;
+  /** Normal or Minimal (). */
+  layout: string;
+  /** In Minimal, a terminal's name on a line over it or on a bar shown on hover (). */
+  paneNames: string;
   /** The app's font; null: the system's. */
   font: string | null;
   showActivity: boolean;
@@ -308,6 +316,8 @@ interface SettingsData {
   costLedger: Record<string, CostDay> | null;
   /** Each snippet's variables, as last filled in. */
   snippetValues: Record<string, Record<string, string>> | null;
+  /** When each snippet or task was last run (Unix ms), for the snippets list's order. */
+  snippetUsed: Record<string, number> | null;
 }
 
 /** A theme's colours for the window and start-up loader (#RRGGBB), and whether it's a light theme. */

@@ -13,7 +13,7 @@ import { state, on, emit, wsById, findPreview, EVENTS, GROUPS } from './store.js
 import { focusTab, restoreFocus, setPreviewRenderer, insertPreview, removePreview, renderWorkspace } from './panes.js';
 import { scheduleFit } from './terminals.js';
 import { ICONS, ltrPath, escapeHtml } from './ui.js';
-import { buildDiffRows, diffRowHtml, DIFF_ROW, DIFF_SCROLL, DIFF_LINE, DIFF_TARGET } from './diffrows.js';
+import { buildDiffRows, diffRowHtml, DIFF_ROW, DIFF_SCROLL, DIFF_LINE, DIFF_TARGET, DIFF_ROWS } from './diffrows.js';
 import { debounce } from './util.js';
 import { fileSize, imagesHtml, measureImages } from './pictures.js';
 import { updateSettings } from './preferences.js';
@@ -118,7 +118,7 @@ const scroller = find(el, DIFF_SCROLL);
 const spacer = find(el, '.pv-spacer');
 const tabsEl = find(el, '.pv-tabs');
 const picturesEl = find(el, '.pv-pictures');
-const rowsEl = find(el, '.pv-rows');
+const rowsEl = find(el, DIFF_ROWS);
 const messageEl = find(el, '.pv-message');
 
 const workspaceEl = byId(WORKSPACE_ID);

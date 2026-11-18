@@ -109,8 +109,34 @@ export const DOCK_SIDE = Object.freeze({ right: 'right', left: 'left', top: 'top
 /** @param {string} side */
 export const isAcross = side => side === DOCK_SIDE.top || side === DOCK_SIDE.bottom;
 
+/**
+ * The window's edge nearest a point (a bar or dock dragged there).
+ * @param {number} x
+ * @param {number} y
+ */
+export function nearestEdge(x, y) {
+  const edges = /** @type {[string, number][]} */ ([
+    [DOCK_SIDE.top, y], [DOCK_SIDE.bottom, innerHeight - y], [DOCK_SIDE.left, x], [DOCK_SIDE.right, innerWidth - x],
+  ]);
+  return edges.reduce((near, edge) => (edge[1] < near[1] ? edge : near))[0];
+}
+
+/** The click that ends a drag on a button doesn't click it. */
+export function swallowNextClick() {
+  /** @param {MouseEvent} e */
+  const swallow = e => {
+    e.stopPropagation();
+    e.preventDefault();
+  };
+  window.addEventListener('click', swallow, { capture: true, once: true });
+  setTimeout(() => window.removeEventListener('click', swallow, true));
+}
+
+
 /** The title bar's buttons, New terminal to Settings (js/toolbar.js). */
 export const TOOLBAR = '.toolbar';
+/** The title bar's id (index.html): the strip, in Minimal. */
+export const TITLEBAR_ID = 'titlebar';
 /**
  * The edge of the window the title bar's buttons are docked on, when `el` is one of them (else the top): what opens
  * from one of them opens away from that edge.
@@ -135,6 +161,17 @@ export function edgeAt(area, x, y, band) {
 }
 
 /**
+ * Each docked panel's refresh (dockRight): the room it takes includes the gap between panes, which the layout sets.
+ * @type {Set<() => void>}
+ */
+const dockedPanels = new Set();
+
+/** The layout changed the gap between panes (Normal's 6px, Minimal's 1px line): the docked panels take their room again. */
+export function refreshDockedPanels() {
+  for (const refresh of dockedPanels) refresh();
+}
+
+/**
  * A panel docked on an edge of the workspace, the right one unless `side` says otherwise (the Files panel, the
  * Notepad): the terminals end where it starts (its size and the gap between panes, in the CSS variable `dockVar` on
  * the workspace, with -left, -top or -bottom after it on those edges), and its grip resizes it, up to half the workspace.
@@ -146,7 +183,8 @@ export function edgeAt(area, x, y, band) {
  */
 export function dockRight(panel, { dockVar, minWidth, minHeight = minWidth, side = () => DOCK_SIDE.right, resized, dragged }) {
   const workspace = byId(WORKSPACE_ID);
-  const gap = () => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--gap')) || 0;
+  // The gap as the terminals have it: Minimal's 1px line is set on the body, under the page's own 6px.
+  const gap = () => parseFloat(getComputedStyle(workspace).getPropertyValue('--gap')) || 0;
   // In a window of its own (js/windows.js), or hidden, it takes no room here.
   const refresh = () => {
     const docked = !panel.hidden && !panel.classList.contains(DOCK_AWAY) && workspace.contains(panel);
@@ -158,6 +196,7 @@ export function dockRight(panel, { dockVar, minWidth, minHeight = minWidth, side
     resized();
   };
   new ResizeObserver(refresh).observe(panel);
+  dockedPanels.add(refresh);
   panel.addEventListener('pointerdown', e => {
     if (!targetOf(e).classList.contains(DOCK_GRIP)) return;
     e.preventDefault();
@@ -220,4 +259,15 @@ export function setHtmlIfChanged(el, html) {
   if (el.dataset.html === html) return;
   el.dataset.html = html;
   el.innerHTML = html;
+}
+
+/**
+ * Types text into a text box where its caret is, as Ctrl+V there does: Ctrl+Z takes it back, and the box's input event
+ * fires. Its own window's document when it's detached: the command acts on the focus there.
+ * @param {HTMLTextAreaElement | HTMLInputElement} box
+ * @param {string} text
+ */
+export function typeInto(box, text) {
+  box.focus();
+  box.ownerDocument.execCommand('insertText', false, text);
 }

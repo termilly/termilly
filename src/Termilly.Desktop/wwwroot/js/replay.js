@@ -15,6 +15,7 @@ import { AGENT_STATE } from './constants.js';
 import { find, targetOf } from './dom.js';
 import { SECOND_MS, MINUTE_MS, MINUTE_S } from './util.js';
 import { TERM_FONT_VAR } from './themes.js';
+import { systemClipboard } from './sysclipboard.js';
 
 /** A terminal's size when it has none to give (no view yet, or a recording that doesn't say). */
 const DEFAULT_COLS = 80;
@@ -354,7 +355,7 @@ layer.addEventListener('click', e => {
     /** @type {string[]} */
     const rows = [];
     for (let y = b.viewportY; y < b.viewportY + player.term.rows; y++) rows.push(b.getLine(y)?.translateToString(true) ?? '');
-    navigator.clipboard.writeText(rows.join('\r\n').trimEnd()).catch(() => {});
+    systemClipboard().writeText(rows.join('\r\n').trimEnd()).catch(() => {});
   }
 });
 layer.addEventListener('input', e => {

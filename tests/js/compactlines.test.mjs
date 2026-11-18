@@ -61,6 +61,12 @@ test('a plain click opens web addresses when the setting says so', () => {
   assert.match(wordsHtml('see https://a.b', [], true), /data-web data-plain title="https:\/\/a\.b\nClick to open/);
 });
 
+test('a web address in bold is a bold link without the asterisks (#77)', () => {
+  const html = wordsHtml('Open **http://192.168.0.108:8790/mockups/git-github/** now');
+  assert.match(html, /^Open <b><span class="cv-link" data-link="http:\/\/192\.168\.0\.108:8790\/mockups\/git-github\/" data-web /);
+  assert.match(html, />http:\/\/192\.168\.0\.108:8790\/mockups\/git-github\/<\/span><\/b> now$/);
+});
+
 test('paths found in a line are links; a path inside a web address is left to the address', () => {
   const text = 'Wrote src/a.js, see https://x.y/src/a.js';
   const paths = [{ start: 6, end: 14, text: 'src/a.js', title: 'Ctrl+click' }, { start: 32, end: 40, text: 'src/a.js' }];
@@ -140,4 +146,13 @@ test('the minimal view shows no words from before the last tool of a stopped tur
     line('x', 'interrupted'),
   ], NONE, { minimal: true });
   assert.match(html, /cv-prompt">Hi<\/div><div class="cv-note">Stopped<\/div>$/);
+});
+
+test('words too long to send whole say so, with the way to the terminal; whole ones do not', () => {
+  const html = linesHtml([
+    { key: 'p', kind: 'prompt', text: 'Review it', failed: false, done: true },
+    { key: 'r', kind: 'reply', text: 'The start', failed: false, done: true, cut: true },
+  ]);
+  assert.equal(html.match(/Only the start is shown/g)?.length, 1);
+  assert.ok(html.includes('cv-reply">The start</div><div class="cv-note">Only the start is shown. <button class="link-btn cv-open-terminal">Open terminal</button> for the rest.</div>'));
 });

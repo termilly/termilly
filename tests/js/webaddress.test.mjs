@@ -2,7 +2,7 @@
 // Run with: node --test tests/js/webaddress.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { findWebLinks } from '../../src/Termilly.Desktop/wwwroot/js/webaddress.js';
+import { findWebLinks, cleanWebAddress, webAddressAlone } from '../../src/Termilly.Desktop/wwwroot/js/webaddress.js';
 
 const texts = line => findWebLinks(line).map(l => l.text);
 
@@ -24,4 +24,36 @@ test('a bracket the address opened itself stays', () => {
 
 test('only real addresses: a scheme and a host', () => {
   assert.deepEqual(texts('http:// alone, ftp://a.io/b, file:///c/d, www.example.com'), []);
+});
+
+test('Markdown around an address is not part of it (#77)', () => {
+  const link = 'http://192.168.0.108:8790/mockups/git-github/';
+  for (const line of [`**${link}**`, `*${link}*`, `***${link}***`, `~~${link}~~`, `_${link}_`, `__${link}__`,
+    `**${link}**.`, `(**${link}**)`, `See **${link}**, then`, `**See ${link}**`, `_see ${link}_`, `[**${link}**]`]) {
+    assert.deepEqual(texts(line), [link], line);
+  }
+  const [bold] = findWebLinks(`**${link}**`);
+  assert.deepEqual([bold.start, bold.end], [2, 2 + link.length]);
+});
+
+test('markers inside an address, and an underscore no italic opened, stay', () => {
+  assert.deepEqual(texts('https://a.io/a*b/c_d/~user/x~y'), ['https://a.io/a*b/c_d/~user/x~y']);
+  assert.deepEqual(texts('https://a.io/snake_case_'), ['https://a.io/snake_case_']);
+  assert.deepEqual(texts('https://en.wikipedia.org/wiki/Shell_(computing)**'), ['https://en.wikipedia.org/wiki/Shell_(computing)']);
+  assert.deepEqual(texts('xhttps://a.io/b'), []);
+});
+
+test('a marked link is cleaned the same way', () => {
+  assert.equal(cleanWebAddress('https://a.io/b/**'), 'https://a.io/b/');
+  assert.equal(cleanWebAddress('https://a.io/b_'), 'https://a.io/b_');
+  assert.equal(cleanWebAddress('https://a.io/b_', '_'), 'https://a.io/b');
+});
+
+test('a selection that is one address, maybe in Markdown or a sentence end, is that address', () => {
+  assert.equal(webAddressAlone(' **https://a.io/b/**. '), 'https://a.io/b/');
+  assert.equal(webAddressAlone('"https://a.io/b"'), 'https://a.io/b');
+  assert.equal(webAddressAlone('https://a.io/b'), 'https://a.io/b');
+  assert.equal(webAddressAlone('see https://a.io/b'), null);
+  assert.equal(webAddressAlone('https://a.io/b https://c.io/d'), null);
+  assert.equal(webAddressAlone('not an address'), null);
 });

@@ -17,6 +17,7 @@ import {
 } from './panes.js';
 import { initSidebar, toggleSidebar } from './sidebar.js';
 import { initToolbar } from './toolbar.js';
+import { initMinimal } from './minimal.js';
 import './remotepc.js';
 import { openPalette, setCommands, openGoTo, openCommandHistory, PALETTE_VIEW } from './palette.js';
 import { jumpToPrompt, copyLastOutput } from './commands.js';
@@ -26,7 +27,7 @@ import { keepEarlierOfOpen } from './earlier.js';
 import { toggleCaptures } from './triggers.js';
 import { toggleHints } from './hints.js';
 import { toggleScratch } from './scratch.js';
-import { openGitWindow, openAgentChanges, gitFolderOf, onServer, openRemoteGitNotice } from './gitwindow.js';
+import { openGitWindow, openAgentChanges, GIT_BUTTON_ID, gitFolderOf, onServer, openRemoteGitNotice } from './gitwindow.js';
 import { toggleFiles, initFiles } from './filepanel.js';
 import { toggleNotepad, toggleNotepadFromKeys, initNotepad } from './notepad.js';
 import { toggleTodo, initTodo } from './todopanel.js';
@@ -48,11 +49,14 @@ import { pluginCommands, reloadPlugins } from './plugins.js';
 import { startTour, offerTourOnce } from './tour.js';
 import { showWhatsNew, offerWhatsNewOnce } from './whatsnew.js';
 import './api.js';
+import './testdriver.js';
 import { exportLayout, importLayout } from './layouts.js';
 import { isBroadcasting, startBroadcast, stopBroadcast, openCompose, BROADCAST_SCOPE } from './broadcast.js';
 import { cycleWorkspace } from './workspaces.js';
 
-import { openSnippets, snippetCommands } from './snippets.js';
+import { snippetCommands, moveWorkspaceSnippets } from './snippets.js';
+import { openSnippetPick, toggleSnippetPick } from './snippetpick.js';
+import { readWorkspaceRepos } from './reposnippets.js';
 import { actionCommands, runActionShortcut } from './actions.js';
 import './sshsave.js';
 import './weblinks.js';
@@ -61,6 +65,10 @@ import './subagents.js';
 import './notify.js';
 import './phone.js';
 import './snippetprompt.js';
+// After snippetprompt.js: while `snippet:` keys are held there, autocomplete doesn't see them.
+import { toggleSuggestions } from './autocomplete.js';
+// After autocomplete.js: Enter its list takes doesn't start a cmd command.
+import './cmdcommands.js';
 import './cost.js';
 import './quit.js';
 import './gitstatus.js';
@@ -84,7 +92,8 @@ import { recordReport } from './agentturns.js';
 import { inEachDocument } from './windows.js';
 import { rememberSession, recordPrompt } from './myprompts.js';
 import './tooltips.js';
-import { byId, find, targetOf, WORKSPACE_ID } from './dom.js';
+import { outputArrived } from './reprint.js';
+import { byId, find, targetOf, WORKSPACE_ID, TITLEBAR_ID } from './dom.js';
 
 /** @typedef {import('./protocol.js').Host_agent_1} Host_agent_1 */
 
@@ -204,7 +213,7 @@ setCommands(() => [
   { label: 'Open a recording', keywords: 'replay asciicast cast asciinema recording play', run: () => setTimeout(openRecordings) },
   { label: 'Rewind this terminal', keywords: 'replay instant back history screen earlier', run: () => setTimeout(() => focusedTab() && openRewind(/** @type {Tab} */ (focusedTab()))) },
   { label: 'Attach tmux', keywords: 'tmux control mode -CC attach session server remote panes windows wsl ssh', run: () => setTimeout(openAttach) },
-  { label: 'Run a snippet', keywords: 'snippets saved commands run snippet macro button bar', run: () => setTimeout(openSnippets) },
+  { label: 'Run a snippet or task', keywords: 'snippets saved commands run snippet macro button bar vs code tasks repo', hint: keyHint(KEY_ID.snippets), run: () => setTimeout(openSnippetPick) },
   { label: 'Schedules', keywords: 'schedule cron timer run on time report recurring nightly', hint: keyHint(KEY_ID.schedules), run: () => setTimeout(toggleSchedules) },
   { label: 'Copy Claude Code’s allowed commands to Codex', keywords: 'permissions rules allow approve approved codex claude share sync same agents', run: () => setTimeout(openAgentRules) },
   { label: 'Manage snippets', keywords: 'snippets explorer window edit new delete saved commands', run: () => setTimeout(openSnippetsWindow) },
@@ -343,6 +352,7 @@ function openGitHere() {
   else if (onServer(tab)) openRemoteGitNotice();
   else openGitWindow(gitFolderOf(tab, ws), { agent: tab });
 }
+byId(GIT_BUTTON_ID).addEventListener('click', openGitHere);
 
 /**
  * What each shortcut of the keymap does (keymap.js; its keys are Settings › Keyboard's). One answering false doesn't
@@ -356,7 +366,8 @@ const RUN = {
   [KEY_ID.inbox]: commands.inbox, [KEY_ID.search]: commands.search, [KEY_ID.commandHistory]: commands.commandHistory,
   [KEY_ID.previousPrompt]: commands.previousPrompt, [KEY_ID.nextPrompt]: commands.nextPrompt, [KEY_ID.goTo]: commands.goTo,
   [KEY_ID.settings]: commands.settings, [KEY_ID.hints]: toggleHints, [KEY_ID.scratch]: toggleScratch, [KEY_ID.notepad]: toggleNotepadFromKeys, [KEY_ID.todo]: toggleTodo,
-  [KEY_ID.schedules]: toggleSchedules, [KEY_ID.clips]: toggleClips, [KEY_ID.files]: () => toggleFiles(), [KEY_ID.git]: openGitHere,
+  [KEY_ID.schedules]: toggleSchedules, [KEY_ID.clips]: toggleClips, [KEY_ID.snippets]: toggleSnippetPick, [KEY_ID.suggestions]: () => toggleSuggestions(focusedTab()),
+   [KEY_ID.files]: () => toggleFiles(), [KEY_ID.git]: openGitHere,
   [KEY_ID.agentChanges]: () => {
     if (!changeShortcutOn()) return false;
     if (isPreviewOpen()) closePreview(); else openAgentChanges(focusedTab());
@@ -438,7 +449,7 @@ byId(WORKSPACE_ID).addEventListener('wheel', e => {
 
 // ---- Window chrome (forwarded to the host) ----
 
-const titlebar = byId('titlebar');
+const titlebar = byId(TITLEBAR_ID);
 // Title bar buttons must not steal keyboard focus from the terminal.
 titlebar.addEventListener('mousedown', e => {
   if (targetOf(e).closest('button')) e.preventDefault();
@@ -473,6 +484,7 @@ onHost(HOST.windowState, m => {
 onHost(HOST.output, m => {
   const tab = state.tabs.get(m.id);
   if (!tab?.view?.term) return;
+  outputArrived(tab);
   tab.view.term.write(consoleDefaults(m.data));
   noteOutput(tab);
   if (tab === focusedTab()) setTimeout(signalReady, READY_PAINT_MS); // the first prompt is on screen: let it paint, then show
@@ -486,6 +498,7 @@ function signalReady() {
   if (readySent) return;
   readySent = true;
   send(PAGE.ready);
+  send(PAGE.testReady);
   openHeld();
   const loader = document.getElementById(LOADER_ID); // Linux's (js/loader.js); Windows's is the window's own
   if (loader) {
@@ -611,11 +624,14 @@ function boot(saved, snapshot, liveSessions = []) {
   initTodo();
   initClips();
   applySettings();
+  initMinimal();
   if (state.activeId) switchWorkspace(state.activeId);
   initFiles();
   // Terminals that were in windows of their own when Termilly closed open in them again; the Snippets window too.
   if (restored) reopenWindows();
   initSnippetsWindow();
+  readWorkspaceRepos();
+  moveWorkspaceSnippets();
   initSchedules();
   initSchedulesWindow();
   if (!restored) newTab();

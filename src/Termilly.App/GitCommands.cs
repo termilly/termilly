@@ -6,6 +6,32 @@ namespace Termilly.Desktop;
 /// </summary>
 internal static class GitCommands
 {
+    public const string Short = "--short";
+    public const string ListTree = "ls-tree";
+    public const string NameOnly = "--name-only";
+    public const string Stage = "--stage";
+    public const string UpdateRef = "update-ref";
+    public const string DeleteRef = "-d";
+    public const string List = "list";
+    public const string Porcelain = "--porcelain";
+    public const string RemoveWorktree = "remove";
+    public const string SymbolicRef = "symbolic-ref";
+    public const string DeleteBranch = "-D";
+    public const string Parent = "-p";
+    public const string ListFiles = "ls-files";
+    public const string Cached = "--cached";
+    public const string ConfigOption = "-c";
+    public const string RootCommit = "--root";
+    public const string Recursive = "-r";
+    public const string Blob = "blob";
+    public const string Range = "..";
+
+    public const string Verify = "--verify";
+    public const string QuietLong = "--quiet";
+    public const string Push = "push";
+    public const string GitPath = "--git-path";
+    public const string PrePushHook = "hooks/pre-push";
+
     public const string Program = "git";
     /// <summary>A repository's own folder (a file in a worktree).</summary>
     public const string DotGit = ".git";

@@ -6,7 +6,7 @@
 import { send, onHost } from './host.js';
 import { PAGE, HOST } from './protocol.js';
 import { state, on, wsById, tabTitle, isInView, getSetting, EVENTS } from './store.js';
-import { focusTab } from './panes.js';
+import { arriveAt } from './arrived.js';
 import { entryDetail } from './inbox.js';
 import { AGENT_STATE } from './constants.js';
 import { windowInFront } from './windowshown.js';
@@ -108,7 +108,7 @@ function withdraw(tab) {
 
 onHost(HOST.focusTerminal, m => {
   const tab = state.tabs.get(m.id);
-  if (tab) focusTab(tab);
+  if (tab) arriveAt(tab);
 });
 
 

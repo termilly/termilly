@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  nextRun, minutesOf, describeWhen, describeAt, describeTook, statusOf, summaryOf, shouldTell, sortRuns, newSchedule, RUN, WHEN, UNIT, NOTIFY,
+  nextRun, minutesOf, describeWhen, describeAt, describeTook, statusOf, summaryOf, shouldTell, sortRuns, clearRuns, newSchedule, RUN, WHEN, UNIT, NOTIFY,
 } from '../../src/Termilly.Desktop/wwwroot/js/schedulerules.js';
 
 /** Thursday 5 November 2026. @param {number} hour @param {number} [minute] @param {number} [day] */
@@ -135,4 +135,17 @@ test('a schedule that runs every minute keeps its newest runs only', () => {
   assert.equal(keep.length, 200);
   assert.equal(gone.length, 5);
   assert.equal(keep[0].id, 'r0');
+});
+
+test('Clear takes a schedule\'s ended runs only: one going on and other schedules\' stay', () => {
+  const runs = [
+    { id: 'a', scheduleId: 's', at: at(9), status: RUN.running },
+    { id: 'b', scheduleId: 's', at: at(9), status: RUN.waiting },
+    { id: 'c', scheduleId: 's', at: at(8), status: RUN.worked },
+    { id: 'd', scheduleId: 's', at: at(7), status: RUN.failed },
+    { id: 'e', scheduleId: 'other', at: at(7), status: RUN.worked },
+  ];
+  const { keep, gone } = clearRuns(runs, 's');
+  assert.deepEqual(keep.map(r => r.id), ['a', 'b', 'e']);
+  assert.deepEqual(gone.map(r => r.id), ['c', 'd']);
 });
