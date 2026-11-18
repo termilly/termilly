@@ -101,4 +101,10 @@ step('a task being worked on, or in another terminal\'s list, is not deleted', a
   await new Promise(r => setTimeout(r, 500));
   assert.match((await call('task_delete', { task: other })).error, /another terminal's list/);
   assert.match((await call('task_edit', { task: other, title: 'Mine now' })).error, /another terminal's list/);
+  // Asking from no terminal (or one that closed) would see every list: refused.
+  const noTerminal = await app.eval(async (t, id) => {
+    const { callApi } = await t.import('api.js');
+    try { await callApi('task_delete', { task: id, from: 'gone' }); return 'deleted'; } catch (e) { return e.message; }
+  }, other);
+  assert.match(noTerminal, /from a Termilly terminal/);
 });

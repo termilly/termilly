@@ -124,6 +124,15 @@ public sealed class ApiTests
         Assert.Equal("k1", sent["args"]!["task"]!.GetValue<string>());
     }
 
+    [Fact]
+    public void Mcp_tool_arguments_cannot_say_which_terminal_asks()
+    {
+        var args = new JsonObject { ["task"] = "k1", ["from"] = "someone-else" };
+        var result = Mcp.Handle(Request("tools/call", new JsonObject { ["name"] = "delete_task", ["arguments"] = args }), (m, a) => FakeTermilly(m, a))!["result"]!;
+        var sent = JsonNode.Parse(result["content"]![0]!["text"]!.GetValue<string>())!;
+        Assert.Null(sent["args"]!["from"]);
+    }
+
     [Theory]
     [InlineData("""{ "method": "open", "command": "npm test" }""", true)]
     [InlineData("""{ "method": "open", "argv": ["npm", "test"] }""", true)]

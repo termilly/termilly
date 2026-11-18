@@ -39,10 +39,12 @@ function taskFor(args) {
 }
 
 /**
- * A task the asking agent may change: one in its terminal's or its workspace's list (any list when it isn't in a terminal).
+ * A task the asking agent may change: one in its terminal's or its workspace's list. It must ask from a terminal that's
+ * open: without one, the lists it sees would be every list.
  * @param {any} args
  */
 function ownTask(args) {
+  if (!args.from || !state.tabs.has(args.from)) throw new Error('Editing and deleting tasks works from a Termilly terminal: run it from one.');
   const found = taskFor(args);
   if (!listsOfAsker(args.from).some(list => sameList(list.ref, found.ref))) {
     throw new Error(`Task ${args.task} is in another terminal's list. You can change only your terminal's and its workspace's tasks.`);
