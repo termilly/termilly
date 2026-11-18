@@ -17,6 +17,8 @@ import { renderRemote, setRemoteExtra, REMOTE_ID, REMOTE_GROUP, groupHead, isGro
 import { showToast, TOAST } from './toasts.js';
 import { FOLDER_PATH, SETTING_VALUES } from './constants.js';
 import { showAtSize } from './phone.js';
+import { setDockWorkspaces } from './dock.js';
+import { computerRows, offlineRow } from './workspacelist.js';
 
 /** @typedef {import('./protocol.js').PcView} Pc */
 /** @typedef {import('./popups.js').MenuEntry} MenuEntry */
@@ -167,6 +169,12 @@ const groupHtml = () => groupHead(REMOTE_GROUP.computers, 'Termilly computers', 
 
 setRemoteExtra(groupHtml);
 
+// Minimal hides the sidebar, so its dock lists the computers' workspaces too, with what the tree's rows and menus do.
+setDockWorkspaces(() => computerRows(pcs, {
+  computer: id => pcs.find(pc => pc.id === id), stateOf, icon: COMPUTER_ICON, open: openTerminal, inFront,
+  newWorkspace: newWorkspaceItem, newTerminal: newTerminalItem,
+}));
+
 /** Pairs with another computer: its address and the code it shows. */
 function addComputer() {
   modal(FORM_DIALOG, `
@@ -271,6 +279,8 @@ function settleSize(tab) {
   if (told.get(tab.id) === key) return;
   told.set(tab.id, key);
   send(PAGE.pcSize, { tab: tab.id, ...size });
+  // What it showed came at its old size there: what it shows, again, once it has redrawn at this one.
+  if (size.cols) setTimeout(() => send(PAGE.pcRefresh, { tab: tab.id }), REDRAWN_MS);
 }
 
 /** Its terminal here at the size it has there, as that computer last said. @param {Tab} tab */
@@ -482,10 +492,21 @@ async function closeThere(pc, name, terminals, args) {
  * @returns {MenuEntry}
  */
 function newTerminalItem(pc, wsId) {
-  const s = stateOf(pc);
-  const why = refusal(pc, s.opening);
-  return { label: 'New terminal', icon: ICONS.plus, disabled: !!why, title: why,
-    submenu: why ? undefined : () => (s.places ?? []).map(p => ({ label: p.name, action: () => { manage(pc, { action: MANAGE.open, profile: p.id, ws: wsId }); } })) };
+  const why = refusal(pc, stateOf(pc).opening);
+  return { label: 'New terminal', icon: ICONS.plus, disabled: !!why, title: why, submenu: why ? undefined : () => placesNow(pc, wsId) };
+}
+
+/**
+ * The shells a computer offers for a new terminal, as it is now (it may have gone offline, or been forgotten, since
+ * the menu with New terminal opened).
+ * @param {Pc} pc
+ * @param {string} wsId
+ * @returns {MenuEntry[]}
+ */
+function placesNow(pc, wsId) {
+  const now = pcs.find(p => p.id === pc.id);
+  if (!now?.online) return [offlineRow(now ?? pc, COMPUTER_ICON)];
+  return (stateOf(now).places ?? []).map(p => ({ label: p.name, action: () => { manage(now, { action: MANAGE.open, profile: p.id, ws: wsId }); } }));
 }
 
 /**

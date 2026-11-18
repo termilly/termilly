@@ -15,7 +15,8 @@ import { openCleanup } from './worktree.js';
 import { openTodo, terminalList } from './todo.js';
 import { editHostNote, profileNote } from './notes.js';
 import { isLogging, toggleLog, toggleProfileLogging } from './logging.js';
-import { openSnippets, saveAsSnippet } from './snippets.js';
+import { saveAsSnippet } from './snippets.js';
+import { openSnippetPick } from './snippetpick.js';
 import { portsOf, openPort, repoOf } from './gitstatus.js';
 import { openViewer } from './viewer.js';
 import { togetherMenuItems } from './together.js';
@@ -25,6 +26,7 @@ import { remoteMenuItems, remoteGit } from './remotehost.js';
 import { openNewWorkspace } from './newworkspace.js';
 import { beginRename, RENAME_IN } from './rename.js';
 import { openTagPicker } from './tagpicker.js';
+import { systemClipboard } from './sysclipboard.js';
 /** How many of the last commands "Open output in viewer" lists, and how much of each it shows. */
 const RECENT_COMMANDS = 12;
 const COMMAND_LABEL = 60;
@@ -65,7 +67,7 @@ export function openTabMenu(tab, at, from = RENAME_IN.header) {
     ...toolItems(tab),
     ...commandItems(tab),
     ...togetherMenuItems(tab),
-    { label: 'Run snippet', icon: ICONS.snippet, action: () => openSnippets() },
+    { label: 'Run snippet', icon: ICONS.snippet, action: () => openSnippetPick() },
     ...snippetItems(tab),
     alertItem(tab),
     broadcastItem(tab),
@@ -73,7 +75,7 @@ export function openTabMenu(tab, at, from = RENAME_IN.header) {
     {
       label: `Terminal ID: ${tab.id}`, icon: ICONS.hash,
       submenu: () => [
-        { label: 'Copy to clipboard', icon: ICONS.copy, action: () => navigator.clipboard.writeText(tab.id) },
+        { label: 'Copy to clipboard', icon: ICONS.copy, action: () => systemClipboard().writeText(tab.id) },
       ],
     },
     SEPARATOR,
@@ -196,7 +198,7 @@ function commandItems(tab) {
       label: 'Ports', icon: ICONS.port,
       submenu: () => portsOf(tab).flatMap(port => [
         { label: `Open http://localhost:${port}`, action: () => openPort(port) },
-        { label: `Copy http://localhost:${port}`, action: () => navigator.clipboard.writeText(`http://localhost:${port}`) },
+        { label: `Copy http://localhost:${port}`, action: () => systemClipboard().writeText(`http://localhost:${port}`) },
       ]),
     }] : []),
   ];

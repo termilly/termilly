@@ -7,8 +7,8 @@
 // Only at a prompt the shell marked (shell integration) with nothing typed since (or all of it deleted again), on
 // the normal screen (not vim's), in a terminal with its own shell (not a tmux pane).
 
-import { on, wsById, EVENTS } from './store.js';
-import { setInputHook, isTerminalReply } from './terminals.js';
+import { on, EVENTS } from './store.js';
+import { addInputHook, isTerminalReply } from './terminals.js';
 import { allSnippets, placeholders, runSnippetIn, scopeLabel } from './snippets.js';
 import { escapeHtml } from './ui.js';
 import { find, XTERM_SCREEN } from './dom.js';
@@ -60,7 +60,7 @@ const canStart = (tab, term) => (untouched.has(tab) || inputEmpty(tab)) && !!tab
   && term.buffer.active.type === NORMAL_BUFFER;
 
 /** The snippets that match what's typed after `snippet:`. */
-const matches = () => matchSnippets(allSnippets(wsById(/** @type {Tab} */ (held.tab).wsId)), held.text.slice(SNIPPET_PREFIX.length));
+const matches = () => matchSnippets(allSnippets(/** @type {Tab} */ (held.tab)), held.text.slice(SNIPPET_PREFIX.length));
 
 function clear() {
   held = { tab: null, term: null, text: '', index: 0 };
@@ -86,7 +86,7 @@ function take() {
   runSnippetIn(snippet, tab).then(sent => { if (sent) untouched.delete(tab); });
 }
 
-setInputHook((tab, term, e) => {
+addInputHook((tab, term, e) => {
   if (e.type !== 'keydown' || e.isComposing) return true;
   if (held.tab && held.tab !== tab) release();
   const keep = held.tab ? holdKey(e) : startHolding(tab, term, e);

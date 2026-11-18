@@ -20,6 +20,7 @@ import { notesFor } from './notes.js';
 import { byId, targetOf } from './dom.js';
 import { toggleWrap } from './preview.js';
 import { fileMatches, fileRowHtml, filePreviewHtml, openFile, stillLooking } from './palettefiles.js';
+import { systemClipboard } from './sysclipboard.js';
 
 /**
  * A closed terminal the host keeps (Host_history's entries), as panes.js recordHistory sent it.
@@ -985,7 +986,7 @@ previewEl.addEventListener('click', e => {
   }
   else if (act === ACT.copy && (results[selected]?.kind === KIND.ran || results[selected]?.kind === KIND.files)) {
     const r = results[selected];
-    navigator.clipboard.writeText(r.kind === KIND.ran ? r.entry.command : /** @type {import('./palettefiles.js').FileResult} */ (r).path);
+    systemClipboard().writeText(r.kind === KIND.ran ? r.entry.command : /** @type {import('./palettefiles.js').FileResult} */ (r).path);
     input.focus();
   }
   else if (act === ACT.forget) {

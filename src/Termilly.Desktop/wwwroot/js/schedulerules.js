@@ -264,6 +264,23 @@ export function sortRuns(runs, schedules, now) {
 }
 
 /**
+ * Whether a run has ended: one going on, or waiting for a reply, isn't cleared away under it.
+ * @param {ScheduleRunRecord} run
+ */
+export const hasEnded = run => run.status !== RUN.running && run.status !== RUN.waiting;
+
+/**
+ * A schedule's runs cleared away: those that ended go, those going on stay, and other schedules' are left alone.
+ * @param {ScheduleRunRecord[]} runs every schedule's
+ * @param {string} scheduleId
+ */
+export function clearRuns(runs, scheduleId) {
+  /** @param {ScheduleRunRecord} run */
+  const goes = run => run.scheduleId === scheduleId && hasEnded(run);
+  return { keep: runs.filter(run => !goes(run)), gone: runs.filter(goes) };
+}
+
+/**
  * A new schedule.
  * @param {string} id
  * @returns {Schedule}

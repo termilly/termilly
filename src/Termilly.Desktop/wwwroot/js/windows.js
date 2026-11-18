@@ -87,6 +87,10 @@ let themeWatch = null;
 /** The document the user is in: a detached window's, or the main page's. Menus and dialogs open there. */
 export const hereDoc = () => (here !== document && here.defaultView && !here.defaultView.closed ? here : document);
 
+/** The live documents, including detached windows whose content has moved in. */
+export const openDocuments = () => [document, ...[...open.values()]
+  .filter(d => d.ready && !d.win.closed).map(d => d.win.document)];
+
 /**
  * Runs `install` on the main page's document and on each detached window's, now and as they open: listeners that
  * every window needs.

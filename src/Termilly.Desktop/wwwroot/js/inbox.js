@@ -9,7 +9,8 @@ import { state, on, emit, wsById, tabTitle, EVENTS } from './store.js';
 import { openPopover, closePopover, isOpen } from './popups.js';
 import { tabBadgeHtml, escapeHtml, activityHtml, countText, ICONS } from './ui.js';
 import { activityOf } from './store.js';
-import { focusTab, focusedTab } from './panes.js';
+import { focusedTab } from './panes.js';
+import { arriveAt } from './arrived.js';
 import { AGENT_STATE, CLAUDE_TOOL } from './constants.js';
 import { byId, find, targetOf, TOOL_COUNT } from './dom.js';
 import { SECOND_MS, DAY_S, MINUTE_S, HOUR_S } from './util.js';
@@ -233,7 +234,7 @@ export function jumpToNext() {
   const entries = inboxEntries();
   if (!entries.length) return false;
   const current = entries.findIndex(e => e.tab === focusedTab());
-  focusTab(entries[(current + 1) % entries.length].tab);
+  arriveAt(entries[(current + 1) % entries.length].tab);
   return true;
 }
 
@@ -259,7 +260,8 @@ list.addEventListener('click', e => {
   const item = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-tab]'));
   if (!item) return;
   closePopover(panel);
-  focusTab(/** @type {Tab} */ (state.tabs.get(/** @type {string} */ (item.dataset.tab))));
+  const tab = state.tabs.get(/** @type {string} */ (item.dataset.tab));
+  if (tab) arriveAt(tab);
 });
 panel.addEventListener('keydown', e => {
   if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;

@@ -277,6 +277,27 @@ public sealed class GitViewTests : IDisposable
         var first = GitView.Log(repo, 1, 1, null, TestServices.GitRunner)[0];
         Assert.Equal(3, GitView.Commit(repo, first.Short, TestServices.GitRunner).Files.Count);
         Assert.Equal("created", GitView.Diff(repo, new GitDiffTarget("a.txt", null, "commit", first.Hash), Max, TestServices.GitRunner).Kind);
+        Assert.Equal((1, true), (detail.TotalFiles, detail.Counted)); // all of them, counted
+    }
+
+    [Fact]
+    public void A_very_big_commit_lists_its_first_files_uncounted_and_says_how_many_there_are()
+    {
+        if (!HasGit())
+        {
+            return;
+        }
+        var repo = Directory.CreateDirectory(Path.Combine(_dir, "big")).FullName;
+        TestServices.Git.Text(repo, "init", "-q", "-b", "main");
+        for (var i = 0; i <= GitView.MostCommitFiles; i++)
+        {
+            Write(repo, $"f{i:D4}.txt", "x\n");
+        }
+        TestServices.Git.Text(repo, "add", "-A");
+        TestServices.Git.Text(repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "everything");
+        var detail = GitView.Commit(repo, TestServices.Git.Text(repo, "rev-parse", "HEAD").Trim(), TestServices.GitRunner);
+        Assert.Equal((GitView.MostCommitFiles, GitView.MostCommitFiles + 1, false), (detail.Files.Count, detail.TotalFiles, detail.Counted));
+        Assert.Null(detail.Files[0].Added);
     }
 
     [Fact]

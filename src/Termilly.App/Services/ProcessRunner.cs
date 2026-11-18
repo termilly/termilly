@@ -26,6 +26,9 @@ internal sealed record ProcessRequest(string File, IReadOnlyList<string> Argumen
     /// <summary>Written to the program's input; without <see cref="DoneWhen"/> the input is closed after it.</summary>
     public string? Input { get; init; }
 
+    /// <summary>Unencoded input for git blobs, whose original byte order mark and encoding must survive a partial edit.</summary>
+    public byte[]? InputBytes { get; init; }
+
     /// <summary>
     /// For a program that answers and then waits for more (a JSON-RPC server): once the output so far says this, the
     /// program is ended and what it wrote is the result (exit code 0). Its input stays open till then.
@@ -83,6 +86,11 @@ internal sealed class ProcessRunner : IProcessRunner
     public async Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken cancel = default)
     {
         using var process = Start(request);
+        if (request.InputBytes is { } bytes)
+        {
+            await process.StandardInput.BaseStream.WriteAsync(bytes, cancel).ConfigureAwait(false);
+            await process.StandardInput.BaseStream.FlushAsync(cancel).ConfigureAwait(false);
+        }
         if (request.Input is { } input)
         {
             await process.StandardInput.WriteAsync(input).ConfigureAwait(false);

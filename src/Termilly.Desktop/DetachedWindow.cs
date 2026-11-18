@@ -99,6 +99,7 @@ internal sealed class DetachedWindow : Window
         await _web.EnsureCoreWebView2Async(environment);
         var core = _web.CoreWebView2;
         core.SetVirtualHostNameToFolderMapping(hostName, AppPaths.WebRoot, CoreWebView2HostResourceAccessKind.Deny);
+        ClipboardReadPermission.AllowForDetached(core, hostName);
         core.Settings.AreBrowserAcceleratorKeysEnabled = false; // F5, Ctrl+F etc. reach the terminal
         core.Settings.IsStatusBarEnabled = false;
         core.Settings.IsZoomControlEnabled = false;

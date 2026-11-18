@@ -17,17 +17,17 @@ import { detach, closeWindow, focusWindow, isDetached, windowName } from './wind
 import { readReport, shownText } from './schedulereport.js';
 import { withPaths, openReportLink, LINK_CLASS } from './schedulelinks.js';
 import {
-  schedules, scheduleById, runsOf, saveSchedule, removeSchedule, setScheduleOn, runNow, stopRun, runningNow,
+  schedules, scheduleById, runsOf, saveSchedule, removeSchedule, setScheduleOn, runNow, stopRun, runningNow, clearPastRuns,
 } from './schedules.js';
 import { formHtml, rowHtml, runsHtml, reportHtml, planOf, WHEN_FIELD, WHEN_KIND_SEGMENT, ALL_DAY_FIELD } from './scheduleview.js';
 import { planClicked } from './planrows.js';
-import { newSchedule, minutesOf, nextRun, describeAt, isAllDay, WHAT, WHERE, WHEN, RUN } from './schedulerules.js';
+import { newSchedule, minutesOf, nextRun, describeAt, isAllDay, hasEnded, WHAT, WHERE, WHEN } from './schedulerules.js';
 
 const NAME = 'Schedules';
 const WINDOW_KEY = 'schedules';
 /** The window's buttons (their data-sch). */
 const ACTION = Object.freeze({
-  add: 'add', close: 'close', save: 'save', remove: 'delete', run: 'run', stop: 'stop', copy: 'copy', terminal: 'terminal', onOff: 'onOff', file: 'file', browse: 'browse',
+  add: 'add', close: 'close', save: 'save', remove: 'delete', run: 'run', stop: 'stop', copy: 'copy', terminal: 'terminal', onOff: 'onOff', file: 'file', browse: 'browse', clear: 'clear',
 });
 /** The two views of a schedule. */
 const VIEW = Object.freeze({ form: 'form', runs: 'runs' });
@@ -199,7 +199,8 @@ async function renderRuns() {
     if (openRunId !== asked || view !== VIEW.runs || editing?.id !== id) return;
     report = reportHtml(open, reportShown);
   }
-  const html = runsHtml(runs, openRunId);
+  // The runs as they are now: they may have been cleared while the report was read.
+  const html = runsHtml(runsOf(id), openRunId);
   const whole = html + report;
   if (whole === runsShown) return;
   runsShown = whole;
@@ -356,16 +357,35 @@ async function removeShown() {
     render();
     return;
   }
-  const yes = await modal(CONFIRM_DIALOG, `
-    <h3>Delete ${escapeHtml(editing.name)}?</h3>
-    <p class="dialog-sub">Its reports go with it.</p>
-    <div class="dialog-actions">
-      <button class="btn" data-cancel>Cancel</button>
-      <button class="btn danger" data-ok>Delete</button>
-    </div>`, (dialog, close) => ({ submit: () => close(true), ok: () => close(true) }));
-  if (yes !== true || !editing) return;
+  if (!(await confirmDanger(`Delete ${editing.name}?`, 'Its reports go with it.', 'Delete')) || !editing) return;
   removeSchedule(editing.id);
   select(schedules()[0]?.id ?? null);
+}
+
+/** Clears the shown schedule's past runs and their reports; a run going on stays. */
+async function clearShown() {
+  const id = editing?.id;
+  if (!id || !(await confirmDanger('Clear past runs?', 'Their reports are deleted. A run going on stays.', 'Clear')) || editing?.id !== id) return;
+  clearPastRuns(id);
+  if (!runsOf(id).some(r => r.id === openRunId)) openRunId = null;
+  render();
+}
+
+/**
+ * Asks before something that can't be undone. True when the user goes ahead.
+ * @param {string} title
+ * @param {string} text
+ * @param {string} button what the button that goes ahead says
+ */
+async function confirmDanger(title, text, button) {
+  const yes = await modal(CONFIRM_DIALOG, `
+    <h3>${escapeHtml(title)}</h3>
+    <p class="dialog-sub">${escapeHtml(text)}</p>
+    <div class="dialog-actions">
+      <button class="btn" data-cancel>Cancel</button>
+      <button class="btn danger" data-ok>${escapeHtml(button)}</button>
+    </div>`, (dialog, close) => ({ submit: () => close(true), ok: () => close(true) }));
+  return yes === true;
 }
 
 async function add() {
@@ -428,13 +448,14 @@ async function act(action) {
   else if (action === ACTION.remove) await removeShown();
   else if (action === ACTION.run && editing) {
     runNow(editing.id);
-    openRunId = runsOf(editing.id).find(r => r.status === RUN.running || r.status === RUN.waiting)?.id ?? null;
+    openRunId = runsOf(editing.id).find(r => !hasEnded(r))?.id ?? null;
     view = VIEW.runs;
     render();
   } else if (action === ACTION.stop && openRunId) stopRun(openRunId);
   else if (action === ACTION.copy) await copyOutput();
   else if (action === ACTION.terminal) await openAsTerminal();
   else if (action === ACTION.browse) await browseFolder();
+  else if (action === ACTION.clear) await clearShown();
   else if (action === ACTION.file) {
     const run = openRunId ? state.schedules.runs.find(r => r.id === openRunId) : null;
     if (run?.file) send(PAGE.openPath, { path: run.file });

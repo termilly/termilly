@@ -13,7 +13,7 @@ import { SETTING_VALUES } from '../constants.js';
 import { field, find, targetOf } from '../dom.js';
 
 /** The choices of the settings used here (C#'s SettingValues). */
-const { textSmoothing, cursorStyle, theme } = SETTING_VALUES;
+const { textSmoothing, cursorStyle, theme, layout, paneNames } = SETTING_VALUES;
 
 /** The two font settings the one font list picks for: the terminals' and the app's. */
 const TERMINAL_FONT = 'terminal.fontFamily';
@@ -194,6 +194,11 @@ const APPEARANCE = {
   label: 'Appearance', icon: ICONS.appearance,
   html: () => group('', row('Theme', `Colours for the app and terminals. System follows ${sys.name === SYSTEM_NAME.linux ? 'the desktop' : 'Windows'}.`,
     themeCards(), { stack: true, keywords: 'colour color dark light system look palette' }))
+    + group('Layout',
+      row('Layout', 'Minimal: a thin strip and a floating dock, and the terminals take the rest. Right-click the dock to move or hide it.',
+        seg('interface.layout', [[layout.normal, 'Normal'], [layout.minimal, 'Minimal']]), { keywords: 'minimal compact clean dock sidebar title bar toolbar' })
+      + row('Terminal names', 'In Minimal: on a line over each terminal, or on a bar when the mouse is near its top. Right-click either to pick what it shows.',
+        seg('interface.paneNames', [[paneNames.line, 'Line'], [paneNames.hover, 'On hover']]), { keywords: 'header name bar hover line minimal' }))
     // One list for both fonts; the switch picks which one it sets, and the note shows both choices.
     // The note's line has the size's keys at its right; under it the switch, with the size of what it picks.
     + group('Font', row('', '<span class="font-note-line"><span id="font-target-note"></span><span class="font-keys" id="font-size-keys"></span></span>', `

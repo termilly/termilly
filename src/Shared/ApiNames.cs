@@ -31,6 +31,9 @@ internal static class ApiMethods
     public const string TaskDone = "task_done";
     /// <summary>An agent adds a task to its terminal's list, or its workspace's (the MCP server's add_task).</summary>
     public const string TaskAdd = "task_add";
+    /// <summary>An agent changes a task's title, details or tags, or deletes it, when the user asks (edit_task, delete_task).</summary>
+    public const string TaskEdit = "task_edit";
+    public const string TaskDelete = "task_delete";
     /// <summary>Schedules: listed for any agent; added, run now and turned on or off only with typing allowed.</summary>
     public const string Schedules = "schedules";
     public const string ScheduleAdd = "schedule_add";

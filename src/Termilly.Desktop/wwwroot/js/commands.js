@@ -5,11 +5,28 @@
 
 import { PAGE } from './protocol.js';
 import { send } from './host.js';
-import { wsById, tabTitle, emit, EVENTS } from './store.js';
+import { state, wsById, tabTitle, emit, EVENTS } from './store.js';
+import { PROFILE_ICON } from './constants.js';
 import { commandFinished, scanOutput, scanFrom } from './triggers.js';
 import { SECOND_MS, MINUTE_MS } from './util.js';
+import { systemClipboard } from './sysclipboard.js';
 
 const MAX_PROMPTS = 500;
+/**
+ * The kinds of shell whose commands autocomplete keeps apart (suggest.js): cmd's, PowerShell's, and the Unix shells'
+ * (bash, zsh, fish and sh read much the same lines).
+ */
+export const SHELL_KIND = Object.freeze({ cmd: 'cmd', powerShell: 'powershell', posix: 'posix' });
+/** A prompt's own word for its shell (133;A;shell=…, from Termilly's integrations), as a kind. */
+const KIND_OF_SHELL = Object.freeze({ cmd: SHELL_KIND.cmd, powershell: SHELL_KIND.powerShell, pwsh: SHELL_KIND.powerShell, bash: SHELL_KIND.posix, zsh: SHELL_KIND.posix, fish: SHELL_KIND.posix, sh: SHELL_KIND.posix });
+/** A profile's icon, as the kind of shell it starts when its prompt doesn't say. */
+const KIND_OF_ICON = Object.freeze({
+  [PROFILE_ICON.cmd]: SHELL_KIND.cmd, [PROFILE_ICON.powerShell]: SHELL_KIND.powerShell, [PROFILE_ICON.bash]: SHELL_KIND.posix,
+  [PROFILE_ICON.wsl]: SHELL_KIND.posix, [PROFILE_ICON.ssh]: SHELL_KIND.posix, [PROFILE_ICON.docker]: SHELL_KIND.posix, [PROFILE_ICON.kubernetes]: SHELL_KIND.posix,
+});
+const SHELL_OPTION = 'shell=';
+/** xterm's buffer while no full-screen program has the alternate one. */
+const NORMAL_BUFFER = 'normal';
 /** Finished commands a terminal keeps for the output viewer. */
 const MAX_LOG = 30;
 /** The classes of a finished command's mark in the margin (app.css): it succeeded, or it failed. */
@@ -34,12 +51,13 @@ export const TENTHS_BELOW_MS = 10 * SECOND_MS;
  * A terminal's tab.commands: its prompts (xterm markers), the latest, the input start, the reported command line and
  * the last finished commands.
  * @typedef {{ prompts: any[], promptMarker: any, input: InputStart | null, reported: string | null,
- *   log: CommandRun[] }} CommandsState
+ *   log: CommandRun[], shell?: string | null }} CommandsState
  */
 
 /**
  * What the shell's marks have told this module about a terminal, kept here: its prompts (for jumping), the latest
- * one, where the typed input started, the command line the shell reported (bash's PS0), and the last commands.
+ * one, where the typed input started, the command line the shell reported (bash's PS0), the last commands, and the
+ * kind of shell the latest prompt said it was (SHELL_KIND; null when it didn't say, undefined before any prompt).
  * @param {Tab} tab
  * @returns {CommandsState}
  */
@@ -61,19 +79,54 @@ export function commandReported(tab, commandLine) {
 export const commandLog = tab => tab.commands?.log ?? [];
 
 /**
- * A prompt started (A): remember where, for jumping.
+ * A prompt started (A): remember where, for jumping, and the shell it says it is (A;shell=cmd).
  * @param {Tab} tab
+ * @param {string} [mark] the whole mark, with its options
  */
-export function promptStarted(tab) {
+export function promptStarted(tab, mark = '') {
   const { term } = /** @type {TabView} */ (tab.view);
+  const commands = commandsOf(tab);
+  const named = mark.split(';').find(o => o.startsWith(SHELL_OPTION))?.slice(SHELL_OPTION.length) ?? '';
+  commands.shell = KIND_OF_SHELL[/** @type {keyof typeof KIND_OF_SHELL} */ (named)] ?? null;
   const marker = term.registerMarker(0);
   if (!marker) return;
-  const commands = commandsOf(tab);
   commands.prompts = commands.prompts.filter(m => !m.isDisposed);
   commands.prompts.push(marker);
   if (commands.prompts.length > MAX_PROMPTS) commands.prompts.shift().dispose();
   commands.promptMarker = marker;
+  // Where input starts is this prompt's to say (B), or its first key's (typingAtPrompt): not the last one's.
+  commands.input = null;
   emit(EVENTS.prompt, tab); // a fresh prompt with nothing typed yet (snippetprompt.js)
+}
+
+/**
+ * The kind of shell at a terminal's prompt (SHELL_KIND): what its prompt said; before any prompt, what its profile
+ * starts. Null when that isn't known: a prompt that doesn't say (Termilly's own integrations all do, so it's another
+ * shell, such as one on a server ssh went to, or fish's own marks), or a custom profile.
+ * @param {Tab} tab
+ * @returns {string | null}
+ */
+export function shellKind(tab) {
+  if (tab.commands && tab.commands.shell !== undefined) return tab.commands.shell;
+  const icon = state.profiles.find(p => p.id === tab.profile)?.icon ?? '';
+  return KIND_OF_ICON[/** @type {keyof typeof KIND_OF_ICON} */ (icon)] ?? null;
+}
+
+/**
+ * Whether a terminal waits at a cmd prompt: cmd marks its prompt and input but not when a command starts or ends
+ * (cmdcommands.js has Enter start it). The cursor is still on the line typed after the prompt (or rows it wrapped
+ * onto): a command sent some other way (a paste, a snippet) has moved it on, and Enter in the program it started
+ * isn't a command.
+ * @param {Tab} tab
+ */
+export function atCmdPrompt(tab) {
+  const input = tab.commands?.input;
+  const buffer = tab.view?.term?.buffer.active;
+  if (tab.commands?.shell !== SHELL_KIND.cmd || tab.running || !input?.marker || input.marker.isDisposed || buffer?.type !== NORMAL_BUFFER) return false;
+  const row = buffer.baseY + buffer.cursorY;
+  if (row < input.marker.line) return false;
+  for (let y = input.marker.line + 1; y <= row; y++) if (!buffer.getLine(y)?.isWrapped) return false;
+  return true;
 }
 
 /**
@@ -83,6 +136,18 @@ export function promptStarted(tab) {
 export function inputStarted(tab) {
   const { term } = /** @type {TabView} */ (tab.view);
   commandsOf(tab).input = { marker: term.registerMarker(0), x: term.buffer.active.cursorX };
+}
+
+/**
+ * A key is pressed at a prompt that didn't say where it ends (B): a prompt rebuilt after Termilly's mark went on it
+ * (Starship, say), or Termilly's integration on a server or in WSL. Input starts where the cursor is before the key
+ * reaches the shell, as the prompt is drawn by then.
+ * @param {Tab} tab
+ */
+export function typingAtPrompt(tab) {
+  const commands = tab.commands;
+  if (!tab.shellMarks || tab.running || !commands || commands.input || !commands.promptMarker || commands.promptMarker.isDisposed) return;
+  inputStarted(tab);
 }
 
 /**
@@ -175,7 +240,7 @@ export function commandEnded(tab, exitCode) {
     send(PAGE.historyCommand, {
       entry: {
         command: run.command, exitCode, durationMs, at: run.startedAt, cwd: run.cwd,
-        terminal: tabTitle(tab), workspace: wsById(tab.wsId)?.name ?? null,
+        terminal: tabTitle(tab), workspace: wsById(tab.wsId)?.name ?? null, shell: shellKind(tab),
       },
     });
   }
@@ -240,7 +305,7 @@ export function lastOutput(tab) {
 export async function copyLastOutput(tab) {
   const text = lastOutput(tab);
   if (text === null) return null;
-  await navigator.clipboard.writeText(text);
+  await systemClipboard().writeText(text);
   return text ? text.split('\r\n').length : 0;
 }
 

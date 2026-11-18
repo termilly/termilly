@@ -207,7 +207,7 @@ public partial class MainWindow : Window
         core.SetVirtualHostNameToFolderMapping(
             HostName, AppPaths.WebRoot, CoreWebView2HostResourceAccessKind.Deny);
         core.WebMessageReceived += OnWebMessage;
-        core.PermissionRequested += OnPermissionRequested;
+        ClipboardReadPermission.AllowForPage(core, HostName);
         core.NewWindowRequested += OnNewWindowRequested;
         core.NavigationCompleted += (_, _) =>
         {
@@ -215,19 +215,6 @@ public partial class MainWindow : Window
             PostWindowState();
         };
         core.Navigate($"https://{HostName}/index.html");
-    }
-
-    /// <summary>
-    /// The terminal's right-click Paste reads the clipboard, which WebView2 would otherwise ask about each time. Only
-    /// Termilly's own page gets it (a plugin's sandboxed frame has an opaque origin of its own).
-    /// </summary>
-    private static void OnPermissionRequested(object? sender, CoreWebView2PermissionRequestedEventArgs e)
-    {
-        if (e.PermissionKind == CoreWebView2PermissionKind.ClipboardRead
-            && e.Uri.StartsWith($"https://{HostName}/", StringComparison.OrdinalIgnoreCase))
-        {
-            e.State = CoreWebView2PermissionState.Allow;
-        }
     }
 
     private void OnWebMessage(object? sender, CoreWebView2WebMessageReceivedEventArgs e)

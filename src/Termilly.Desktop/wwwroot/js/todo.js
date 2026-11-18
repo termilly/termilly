@@ -347,8 +347,25 @@ function allLists() {
  * @returns {{ ref: ListRef, task: TodoTask } | null}
  */
 export function findTask(id) {
+  return findTaskWhere(t => t.id === id);
+}
+
+/**
+ * The task linked to a GitHub issue (made from it, or that made it), wherever it is, and its list.
+ * @param {string} repo owner/name
+ * @param {number} number
+ */
+export const findIssueTask = (repo, number) =>
+  findTaskWhere(t => t.issue?.number === number && t.issue.repo.toLowerCase() === repo.toLowerCase());
+
+/**
+ * The first task a test picks, and its list.
+ * @param {(task: TodoTask) => boolean} test
+ * @returns {{ ref: ListRef, task: TodoTask } | null}
+ */
+export function findTaskWhere(test) {
   for (const ref of allLists()) {
-    const task = tasksOf(ref).find(t => t.id === id);
+    const task = tasksOf(ref).find(test);
     if (task) return { ref, task };
   }
   return null;
@@ -367,19 +384,29 @@ export function listsOfAsker(from) {
 }
 
 /**
+ * Where Implement works on a task, for Review's Git changes.
+ * @param {{ folder: string, server: string | null }} place
+ * @param {string} [terminal] the terminal it works in; none out of sight
+ * @returns {NonNullable<TodoTask['workedIn']>}
+ */
+export const workedIn = (place, terminal) => ({ folder: place.folder, ...(terminal ? { terminal } : {}), ...(place.server ? { server: true } : {}) });
+
+/**
  * Moves a task to a status. What only one status has goes with it: its terminal, what its agents are at, and what they said.
  * Implement's plan stays while its agents work and while it waits in Review; without one given, it goes.
  * @param {ListRef} ref
  * @param {string} id
  * @param {string} status
- * @param {{ terminal?: string, run?: string, review?: TodoTask['review'], plan?: TodoTask['plan'], stage?: TodoTask['stage'] }} [with_]
+ * @param {{ terminal?: string, run?: string, review?: TodoTask['review'], plan?: TodoTask['plan'], stage?: TodoTask['stage'], workedIn?: TodoTask['workedIn'] }} [with_]
  */
-export function setStatus(ref, id, status, { terminal, run, review, plan, stage } = {}) {
+export function setStatus(ref, id, status, { terminal, run, review, plan, stage, workedIn } = {}) {
   const middle = status === TASK_STATUS.progress || status === TASK_STATUS.review;
   // An alert about it may wait for the user to leave the PC.
   if (status !== TASK_STATUS.review) send(PAGE.phoneWithdraw, { id });
   // What the agent said stays with a task accepted (Done), to read again in its row; a new run or Back to open clears it.
   const said = status === TASK_STATUS.done ? {} : { review: status === TASK_STATUS.review ? review : undefined };
+  // Where the work was done stays until it's off In progress and Review; a new run says where it is.
+  const where = middle ? (workedIn ? { workedIn } : {}) : { workedIn: undefined };
   // A task just done goes on top of the list, so it shows first in Done, as a new task shows first in Active.
   const tasks = tasksOf(ref);
   const at = tasks.findIndex(task => task.id === id);
@@ -391,6 +418,7 @@ export function setStatus(ref, id, status, { terminal, run, review, plan, stage 
     // Nothing is asked for once it's off In progress, and a new run hasn't asked yet.
     ask: undefined,
     ...said,
+    ...where,
   });
 }
 

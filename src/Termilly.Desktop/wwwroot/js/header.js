@@ -21,6 +21,7 @@ import { openTabMenu, TAG_BUTTON } from './tabmenu.js';
 import { find, setHtmlIfChanged } from './dom.js';
 import { openPrompts, hasPrompts, PROMPTS_TITLE } from './myprompts.js';
 import { updateSwitch, openViewMenu, VIEW_BUTTON } from './compact.js';
+import { isMinimal, markBarParts, openPaneBarMenu } from './panebar.js';
 
 /** The header's parts that change with the terminal (HEADER_HTML has them). */
 const PINNED_NOTE = '.pane-note';
@@ -33,10 +34,6 @@ const PROMPTS_BUTTON = '.prompts-btn';
 
 /** The pane's class while it receives a broadcast (its stripe). */
 const RECEIVING_CLASS = 'broadcast';
-
-/** The pane's Set aside button: a line low down, as a window's minimize, on the 10px grid its buttons are drawn at (a 1px
- * line on a whole pixel, so it stays sharp). */
-const ASIDE_ICON = '<svg viewBox="0 0 10 10"><path d="M1 7.5h8" style="stroke-width:1"/></svg>';
 
 const HEADER_HTML = `
     <span class="pane-title"><span class="env-chip" hidden></span><span class="badge-slot"></span><span class="pane-name"></span><span class="activity-slot"></span><span class="pane-status" hidden></span></span>
@@ -53,8 +50,8 @@ const HEADER_HTML = `
       <button class="pane-btn prompts-btn" title="${PROMPTS_TITLE}" hidden>${ICONS.prompts}</button>
       <button class="pane-btn note-btn" hidden>${ICONS.todo}</button>
       <button class="pane-btn tag-btn" title="Tags">${ICONS.tag}</button>
-      <button class="pane-btn aside-btn" title="${SET_ASIDE_LABEL}">${ASIDE_ICON}</button>
-      <button class="pane-btn close-btn" title="Close terminal (Ctrl+Shift+W)">${ICONS.close}</button>
+      <button class="pane-btn aside-btn" title="${SET_ASIDE_LABEL}">${ICONS.setAside}</button>
+      <button class="pane-btn close-btn" title="Close terminal (Ctrl+Shift+W)">${ICONS.closeTerminal}</button>
     </span>`;
 
 setHeaderBuilder(tab => buildHeader(tab));
@@ -95,9 +92,11 @@ function wireHeader(tab, header) {
   click(VIEW_BUTTON, e => openViewMenu(tab, /** @type {HTMLElement} */ (e.currentTarget)));
   click(PROMPTS_BUTTON, e => openPrompts(tab, /** @type {HTMLElement} */ (e.currentTarget)));
   click(PINNED_NOTE, e => openPinned(tab, /** @type {string} */ (/** @type {HTMLElement} */ (e.currentTarget).dataset.kind)));
+  // In Minimal (the main window) it picks what the name line shows; its last item is this menu.
   header.addEventListener('contextmenu', e => {
     e.preventDefault();
-    openTabMenu(tab, { x: e.clientX, y: e.clientY });
+    if (isMinimal() && !tab.detached) openPaneBarMenu(tab, { x: e.clientX, y: e.clientY });
+    else openTabMenu(tab, { x: e.clientX, y: e.clientY });
   });
 }
 
@@ -119,6 +118,7 @@ export function updateHeader(tab) {
   header.classList.toggle('no-history', !!tab.noHistory);
   showBroadcast(tab, header);
   showActivity(tab, header);
+  markBarParts(header);
 }
 
 /**

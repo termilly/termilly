@@ -16,9 +16,9 @@ import { focusedTab } from './panes.js';
 import { portsOf } from './gitstatus.js';
 import { sendToAgent } from './together.js';
 import { setMenuExtras } from './termclipboard.js';
-import { linkUnderMouse } from './termlinks.js';
 import { copyToNotepadItem } from './notepad.js';
 import { addToTodoItem } from './todomenu.js';
+import { webAddressAlone } from './webaddress.js';
 
 const { ctrl: CTRL, alt: ALT } = ACTION_MODIFIERS;
 /** Re-exported for Settings › Actions and Keyboard. */
@@ -156,7 +156,9 @@ export function pathActions(tab, path, folder, image = null) {
  */
 function openableOf(selection, folder) {
   const text = selection?.trim() ?? '';
-  if (URL_ONLY.test(text)) return { label: 'Open link', icon: ICONS.link, action: () => send(PAGE.openUrl, { url: text }) };
+  // A selected address opens without the sentence or Markdown around it ("**https://a.b/c**.").
+  const address = webAddressAlone(text);
+  if (address) return { label: 'Open link', icon: ICONS.link, action: () => send(PAGE.openUrl, { url: address }) };
   if (!PATH_ONLY.test(text)) return null;
   const path = text.replace(PATH_LINE, '');
   const full = ABSOLUTE_PATH.test(path) ? path : folder && `${folder}/${path}`;
@@ -167,14 +169,15 @@ function openableOf(selection, folder) {
  * The right-click menu's part after Copy and Paste: opening a selected link or path, the actions that can run here,
  * and asking an agent about the selection.
  * @param {HTMLElement} body the terminal's element
+ * @param {import('./termclipboard.js').MenuAt} at what's selected in the view the menu opened over (the terminal, or the
+ *   Compact or Minimal view), and the link under the mouse
  * @returns {import('./popups.js').MenuEntry[]}
  */
-function menuExtras(body) {
+function menuExtras(body, at) {
   const tab = [...state.tabs.values()].find(t => t.view?.body === body) ?? null;
   if (!tab) return [];
   // Right-clicking a link (a web address or a path) without a selection offers what a selection of it would.
-  const context = { ...contextOf(tab) };
-  context.selection ||= linkUnderMouse();
+  const context = { ...contextOf(tab), selection: at.selection || at.link };
   const openable = openableOf(context.selection, context.folder);
   const actions = enabledActions().filter(a => a.menu && canRun(a, context))
     // Without a selection, only actions that don't need one.

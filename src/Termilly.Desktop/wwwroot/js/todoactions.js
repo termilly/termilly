@@ -16,10 +16,13 @@ import { resumeCommand } from './resume.js';
 import { AGENT_COMMAND } from './agentcli.js';
 import { agentKind } from './agentkinds.js';
 import { AGENT_STATE, PROFILE_ICON } from './constants.js';
+import { keepBeforeAgent } from './gitsafety.js';
+import { holdStart } from './terminals.js';
+import { remoteGit } from './remotehost.js';
 import { KNOWN_AGENTS, RUN, STAGE, fitPlan } from './todoplan.js';
 import { implementSilently, watchWork, workDone, oneMoreRound } from './todoreview.js';
 import { alertReview } from './notify.js';
-import { LIST_KIND, findTask, setStatus, updateTask } from './todo.js';
+import { LIST_KIND, findTask, setStatus, updateTask, workedIn } from './todo.js';
 import { implementPrompt, remotePrompt, linkSub, statusOf, tickSub, TASK_STATUS } from './todolist.js';
 
 /** @typedef {import('./todo.js').ListRef} ListRef */
@@ -137,9 +140,23 @@ export function implementPlace(ref) {
     return folder && profile ? { folder, profile, server: profile.name } : null;
   }
   const folder = folderOfList(ref);
-  const id = tab?.profile ?? defaultProfile();
-  const profile = state.profiles.find(p => p.id === id);
-  return folder && profile && agentInstalled() ? { folder, profile, server: null } : null;
+  return folder ? implementPlaceIn(ref, folder) : null;
+}
+
+/**
+ * Where Implement runs a list's task in a folder on this computer known from elsewhere (a repository the Git window
+ * shows, a worktree made for the task), whatever folder the list has, or none: its terminal's profile (else the
+ * default one), when an agent is installed here. Null for a list on an SSH host, whose folders aren't this
+ * computer's.
+ * @param {ListRef} ref
+ * @param {string} folder
+ * @returns {ImplementPlace | null}
+ */
+export function implementPlaceIn(ref, folder) {
+  const tab = ref.kind === LIST_KIND.terminal ? state.tabs.get(ref.id) : null;
+  if (tab && isSsh(tab)) return null;
+  const profile = state.profiles.find(p => p.id === (tab?.profile ?? defaultProfile()));
+  return profile && agentInstalled() ? { folder, profile, server: null } : null;
 }
 
 /**
@@ -152,10 +169,48 @@ export function cantImplement(ref) {
   return tab && isSsh(tab) ? `Implement needs the folder this terminal is in on ${profileOf(tab)?.name ?? 'the server'}: set Termilly up there` : 'Implement needs a folder on this computer';
 }
 
+/** What Implement says on a task an agent already has: it's In progress until the agent finishes or it's taken off. */
+export const ALREADY_IMPLEMENTING = 'An agent is already on this task. Wait for it to finish, or set the task back to Open';
+
+/**
+ * Whether Implement has started on a task, so it can't start again: the task is In progress.
+ * @param {TodoTask} task
+ */
+export const implementing = task => statusOf(task) === TASK_STATUS.progress;
+
 /** Whether a list's To do shows Implement: an agent is installed here, or the list's terminal is on an SSH host. @param {ListRef} ref */
 export function offersImplement(ref) {
   const tab = ref.kind === LIST_KIND.terminal ? state.tabs.get(ref.id) : null;
   return agentInstalled() || (!!tab && isSsh(tab));
+}
+
+/**
+ * Review's Git changes: the terminal the work was done in, when it's still open, and the repository its server reported.
+ * A folder on an SSH host is only reached through its terminal, once Termilly there says which repository it's in.
+ * @param {TodoTask} task
+ */
+function changesPlace(task) {
+  const where = task.workedIn;
+  const tab = where?.terminal ? state.tabs.get(where.terminal) ?? null : null;
+  const remote = where?.server ? remoteGit(tab) : null;
+  return { where, tab, remote, shown: !!where && (!where.server || !!remote) };
+}
+
+/** Whether Review offers Git changes for a task. @param {TodoTask} task */
+export const offersChanges = task => changesPlace(task).shown;
+
+/**
+ * Opens the Git window on what Implement changed: the files its agent edited in its terminal when they were tracked, else
+ * the folder's changes (a run out of sight has no terminal); on an SSH host, the host repository's changes, as edits
+ * there aren't tracked here.
+ * @param {TodoTask} task
+ */
+export function showChanges(task) {
+  const { where, tab, remote, shown } = changesPlace(task);
+  if (!where || !shown) return;
+  if (remote && tab) emit(EVENTS.openGit, { folder: remote.root, remote: tab.id });
+  else if (tab?.changes?.length) emit(EVENTS.openAgentChanges, { tab });
+  else emit(EVENTS.openGit, { folder: where.folder });
 }
 
 /**
@@ -186,10 +241,10 @@ onHost(HOST.todoRepoChecked, m => {
  * @param {TodoTask} task
  * @param {import('./todolist.js').DetailLine} [sub]
  * @param {import('./todoplan.js').ImplementPlan} [plan] the list's, when not given
+ * @param {ImplementPlace | null} [place] the list's, when not given; another folder for work in a worktree
  * @returns {Tab | null} its terminal, or null when it can't start here
  */
-export function implementTask(ref, task, sub, plan = planOf(ref)) {
-  const place = implementPlace(ref);
+export function implementTask(ref, task, sub, plan = planOf(ref), place = implementPlace(ref)) {
   if (!place) return null;
   const { program } = agentKind(plan.by);
   const tab = ref.kind === LIST_KIND.terminal ? state.tabs.get(ref.id) : null;
@@ -210,9 +265,12 @@ export function implementTask(ref, task, sub, plan = planOf(ref)) {
     agent = newTab({ wsId, profile: profile.id, cwd: folder, name, command: commandLine([program, prompt], profile.shellIcon ?? profile.icon) });
   }
   watchWork(task, plan, place, { line: sub?.at, terminal: agent.id });
-  setStatus(ref, task.id, TASK_STATUS.progress, { terminal: agent.id, plan, stage: { what: STAGE.working, round: 0 } });
+  setStatus(ref, task.id, TASK_STATUS.progress, { terminal: agent.id, plan, stage: { what: STAGE.working, round: 0 }, workedIn: workedIn(place, agent.id) });
   return agent;
 }
+
+/** Tasks whose silent run waits for its snapshot: not started twice meanwhile. @type {Set<string>} */
+const startingSilently = new Set();
 
 /**
  * Implement: a plan's agent starts on a task, or one of its sub-items, in a new terminal or silently.
@@ -220,16 +278,27 @@ export function implementTask(ref, task, sub, plan = planOf(ref)) {
  * @param {TodoTask} task
  * @param {import('./todolist.js').DetailLine | undefined} sub
  * @param {import('./todoplan.js').ImplementPlan} [plan] the list's, when not given
+ * @param {ImplementPlace | null} [place] the list's, when not given; another folder for work in a worktree
  * @returns {{ started: boolean, tab: Tab | null }} tab: its terminal, when it has one
  */
-export function implement(ref, task, sub, plan = planOf(ref)) {
-  const place = implementPlace(ref);
-  if (!place) return { started: false, tab: null };
+export function implement(ref, task, sub, plan = planOf(ref), place = implementPlace(ref)) {
+  if (!place || implementing(task) || startingSilently.has(task.id)) return { started: false, tab: null };
+  // What's uncommitted there is kept first (the Git window's Local history), so whatever the agent does to it can be
+  // undone: the agent starts once it's kept. On a server there's nothing kept here.
+  const kept = place.server ? null : keepBeforeAgent(place.folder);
   if (plan.run === RUN.silent) {
-    implementSilently(ref, task, sub, plan, place);
+    if (!kept) implementSilently(ref, task, sub, plan, place);
+    else {
+      startingSilently.add(task.id);
+      kept.then(() => {
+        startingSilently.delete(task.id);
+        implementSilently(ref, task, sub, plan, place);
+      });
+    }
     return { started: true, tab: null };
   }
-  const tab = implementTask(ref, task, sub, plan);
+  const tab = implementTask(ref, task, sub, plan, place);
+  if (tab && kept) holdStart(tab, kept);
   return { started: !!tab, tab };
 }
 
@@ -239,7 +308,9 @@ export function implement(ref, task, sub, plan = planOf(ref)) {
  * @param {TodoTask} task
  */
 export function anotherRound(ref, task) {
-  const place = implementPlace(ref);
+  // In the folder the work was done in (a worktree made for it, say), not wherever the list is now.
+  const worked = task.workedIn;
+  const place = worked && !worked.server ? implementPlaceIn(ref, worked.folder) : implementPlace(ref);
   return !!place && oneMoreRound(ref, task, place);
 }
 

@@ -14,10 +14,30 @@ const INPUT_MARK = /^\s*[>›❯]\s*/;
  * The screen's rows as they show now (not the lines scrolled above them), as text, row by row.
  * @param {any} term xterm's Terminal
  */
-export function screenRows(term) {
+export const screenRows = term => rowsFrom(term, term.buffer.active.baseY);
+
+/**
+ * The screen's rows with up to this many of the scrollback's above them (a prompt taller than the screen), and which
+ * of them is the screen's first.
+ * @param {any} term xterm's Terminal
+ * @param {number} above
+ * @returns {{ rows: string[], screenTop: number }}
+ */
+export function rowsWithScrollback(term, above) {
+  const base = term.buffer.active.baseY;
+  const from = Math.max(0, base - above);
+  return { rows: rowsFrom(term, from), screenTop: base - from };
+}
+
+/**
+ * The buffer's rows from one down to its end, as text.
+ * @param {any} term xterm's Terminal
+ * @param {number} from
+ */
+function rowsFrom(term, from) {
   const buffer = term.buffer.active;
   const rows = [];
-  for (let y = buffer.baseY; y < buffer.length; y++) rows.push(buffer.getLine(y)?.translateToString(true) ?? '');
+  for (let y = from; y < buffer.length; y++) rows.push(buffer.getLine(y)?.translateToString(true) ?? '');
   return rows;
 }
 

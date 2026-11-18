@@ -532,6 +532,10 @@ public sealed class ChangesTests : IDisposable
     [InlineData("src/a.ts:12:4", "src/a.ts", 12)]
     [InlineData("(src/a.ts)", "src/a.ts", null)]
     [InlineData("\"C:\\p\\a.ts\",", "C:\\p\\a.ts", null)]
+    [InlineData(@"C:\p\header.js(46,7)", @"C:\p\header.js", 46)]
+    [InlineData(@"C:\p\header.js(46,7", @"C:\p\header.js", 46)]
+    [InlineData(@"C:\p\a.cs(12)", @"C:\p\a.cs", 12)]
+    [InlineData("D:/p/check-size.mjs", "D:/p/check-size.mjs", null)]
     public void Printed_paths_lose_their_punctuation_and_keep_the_line(string text, string path, int? line) =>
         Assert.Equal(new PrintedPath(path, line), ChangePaths.Clean(text));
 

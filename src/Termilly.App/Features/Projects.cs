@@ -127,7 +127,7 @@ internal sealed class GitHandler(
                 git => GitView.Diff(git.CheckRoot(m.Root), new GitDiffTarget(m.Path ?? "", m.OldPath, m.Side ?? "", m.Hash), maxBytes, git));
         });
         router.On<FromPage.GitViewLog>(m => Answer(m.RequestId, m.Remote, action: false,
-            git => GitView.Log(git.CheckRoot(m.Root), m.Skip, m.Limit, m.Ref, git)));
+            git => GitView.Log(git.CheckRoot(m.Root), m.Skip, m.Limit, m.Ref, git, m.All, m.Path)));
         router.On<FromPage.GitViewCommit>(m => Answer(m.RequestId, m.Remote, action: false,
             git => GitView.Commit(git.CheckRoot(m.Root), m.Hash ?? "", git)));
         router.On<FromPage.GitViewSearch>(m => Answer(m.RequestId, m.Remote, action: false,
@@ -136,11 +136,50 @@ internal sealed class GitHandler(
             git => GitSearch.SearchCode(git.CheckRoot(m.Root), m.Query, m.Batch, git)));
         router.On<FromPage.GitViewBranches>(m => Answer(m.RequestId, m.Remote, action: false,
             git => GitView.Branches(git.CheckRoot(m.Root), git)));
+        RegisterWrites(router);
+        RegisterSafety(router);
         router.On<FromPage.GitViewAct>(m => Answer(m.RequestId, m.Remote, action: true, git =>
         {
-            GitView.Act(git.CheckRoot(m.Root), m.Action ?? "", m.Path, m.Ref, m.HasCommits, git);
-            return new GitActionDone(Ok: true);
+            var kept = GitView.Act(git.CheckRoot(m.Root), m.Action ?? "", m.Path, m.Ref, m.HasCommits, git);
+            return new GitActionDone(Ok: true, Kept: kept);
         }));
+    }
+
+    private void RegisterSafety(MessageRouter router)
+    {
+        router.On<FromPage.GitViewSnapshot>(m => Answer(m.RequestId, m.Remote, true,
+            // Asked for with a terminal's folder too (an agent starting, the timer), which may be inside the repository.
+            git => GitSnapshots.Take(git.CheckRoot(git.RootOf(m.Root) ?? m.Root), m.Reason ?? "", git)));
+        router.On<FromPage.GitViewSnapshots>(m => Answer(m.RequestId, m.Remote, true,
+            git => GitSnapshots.List(git.CheckRoot(m.Root), git, removed: true)));
+        router.On<FromPage.GitViewSnapshotRestore>(m => Answer(m.RequestId, m.Remote, true,
+            git => GitSnapshots.Restore(git.CheckRoot(m.Root), m.Id, m.Paths, git)));
+        router.On<FromPage.GitViewBackups>(m => Answer(m.RequestId, m.Remote, true,
+            git => GitBackups.List(git.CheckRoot(m.Root), git)));
+        router.On<FromPage.GitViewBackupRestore>(m => Answer(m.RequestId, m.Remote, true,
+            git => GitBackups.Restore(git.CheckRoot(m.Root), m.Id, git)));
+        router.On<FromPage.GitViewStageLines>(m => Answer(m.RequestId, m.Remote, true,
+            git => GitStageLines.Apply(git.CheckRoot(m.Root), m.Path, m.Side, m.Action, m.Removed, m.Added, git)));
+        router.On<FromPage.GitViewWorktrees>(m => Answer(m.RequestId, m.Remote, true,
+            git => GitCleanup.Worktrees(git.CheckRoot(m.Root), git)));
+        router.On<FromPage.GitViewWorktreeRemove>(m => Answer(m.RequestId, m.Remote, true,
+            git => GitCleanup.Remove(git.CheckRoot(m.Root), m.Path, m.Force, git)));
+        router.On<FromPage.GitViewPruneCandidates>(m => Answer(m.RequestId, m.Remote, true,
+            git => GitCleanup.Candidates(git.CheckRoot(m.Root), git)));
+        router.On<FromPage.GitViewPruneBranches>(m => Answer(m.RequestId, m.Remote, true,
+            git => GitCleanup.Prune(git.CheckRoot(m.Root), m.Branches, git)));
+    }
+
+    private void RegisterWrites(MessageRouter router)
+    {
+        router.On<FromPage.GitViewPushInfo>(m => Answer(m.RequestId, m.Remote, false,
+            git => GitWrites.PushInfo(git.CheckRoot(m.Root), git)));
+        router.On<FromPage.GitViewPush>(m => Answer(m.RequestId, m.Remote, true,
+            git => GitWrites.Push(git.CheckRoot(m.Root), git)));
+        router.On<FromPage.GitViewCommitCreate>(m => Answer(m.RequestId, m.Remote, true,
+            git => GitWrites.Commit(git.CheckRoot(m.Root), m.Message, m.All, git)));
+        router.On<FromPage.GitViewUndoCommit>(m => Answer(m.RequestId, m.Remote, true,
+            git => GitWrites.Undo(git.CheckRoot(m.Root), git)));
     }
 
     /// <summary>The repositories these folders are in, for the sidebar.</summary>
@@ -154,7 +193,7 @@ internal sealed class GitHandler(
     /// <summary>Runs a Git window request off the UI thread and answers it as gitview:result with the request's id.</summary>
     /// <param name="server">The SSH terminal whose server the repository is on (git runs there, through its host); null for this PC.</param>
     /// <param name="action">An action from a menu: its failure shows all git said; a view's, its first line.</param>
-    private void Answer(string? requestId, string? server, bool action, Func<GitRunner, object> read) => _ = Task.Run(() =>
+    private void Answer(string? requestId, string? server, bool action, Func<GitRunner, object?> read) => _ = Task.Run(() =>
     {
         object? data = null;
         string? error = null;
@@ -162,7 +201,7 @@ internal sealed class GitHandler(
         {
             data = read(server is null ? localGit : ServerGit(server));
         }
-        catch (Exception e) when (Storage.IsFileError(e) || e is ArgumentException or InvalidOperationException)
+        catch (Exception e) when (Storage.IsFileError(e) || e is ArgumentException or InvalidOperationException or JsonException or FormatException)
         {
             error = action && e is GitFailedException failed ? failed.Detail : e.Message;
         }
@@ -193,7 +232,7 @@ internal sealed class WorktreeHandler(PageChannel page, Worktrees worktrees) : I
             {
                 throw new IOException("Pick a folder inside a git repository.");
             }
-            var created = worktrees.Create(m.Folder, m.Branch ?? "");
+            var created = worktrees.Create(m.Folder, m.Branch ?? "", m.Base);
             page.Post(new ToPage.WorktreeCreated(m.RequestId, created.Repo, created.Path, created.Branch, created.Copied));
         }));
         router.On<FromPage.WorktreeStatus>(m => Answer(m.RequestId, () =>

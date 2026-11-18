@@ -1,12 +1,16 @@
 // @ts-check
-// To do and agents: what the termilly command and its MCP tools (list_tasks, get_task, add_task, tick_task, finish_task)
-// can do with a task. An agent reads tasks, adds one when asked, ticks sub-items and finishes; it never edits or deletes one. A finish waits in Review
-// for the user, and a task whose terminal closes before its agent finished goes back to Open.
+// To do and agents: what the termilly command and its MCP tools (list_tasks, get_task, add_task, edit_task, delete_task,
+// tick_task, finish_task) can do with a task. An agent reads tasks, adds, edits and deletes one when asked (only in its
+// terminal's and workspace's lists; a deletion says so with Undo), ticks sub-items and finishes. A finish waits in
+// Review for the user, and a task whose terminal closes before its agent finished goes back to Open.
 
 import { state, on, tabTitle, runningAgent, wsById, EVENTS } from './store.js';
 import { agentKind } from './agentkinds.js';
 import { addApiMethods } from './api.js';
-import { findTask, listsOfAsker, updateTask, setStatus, releaseClosed, addTasks, terminalList, workspaceList, nameOf, LIST_KIND } from './todo.js';
+import { findTask, listsOfAsker, updateTask, removeTask, reorderTasks, listOf, sameList, setStatus, releaseClosed, addTasks, terminalList, workspaceList, nameOf, LIST_KIND } from './todo.js';
+import { showToast, TOAST, UNDO } from './toasts.js';
+
+/** @typedef {import('./todo.js').TodoList} TodoList */
 import { TASK_STATUS, detailLines, statusOf, subProgress, tickByNumber } from './todolist.js';
 import { alertReview } from './notify.js';
 import { workDone } from './todoreview.js';
@@ -32,6 +36,60 @@ function taskFor(args) {
   const found = findTask(String(args.task ?? ''));
   if (!found) throw new Error(`There's no task ${args.task}. list_tasks (termilly tasks) shows them.`);
   return found;
+}
+
+/**
+ * A task the asking agent may change: one in its terminal's or its workspace's list. It must ask from a terminal that's
+ * open: without one, the lists it sees would be every list.
+ * @param {any} args
+ */
+function ownTask(args) {
+  if (!args.from || !state.tabs.has(args.from)) throw new Error('Editing and deleting tasks works from a Termilly terminal: run it from one.');
+  const found = taskFor(args);
+  if (!listsOfAsker(args.from).some(list => sameList(list.ref, found.ref))) {
+    throw new Error(`Task ${args.task} is in another terminal's list. You can change only your terminal's and its workspace's tasks.`);
+  }
+  return found;
+}
+
+/** Tags as an agent gives them: comma-separated, a leading # dropped. @param {unknown} tags */
+const tagsFrom = tags => String(tags ?? '').split(',').map(t => t.trim().replace(/^#/, '')).filter(Boolean);
+
+/**
+ * Changes a task's title, details or tags, as the user asked its agent to; what isn't given stays.
+ * @param {any} args
+ */
+function editTask(args) {
+  const { ref, task } = ownTask(args);
+  /** @type {Partial<TodoTask>} */
+  const change = {};
+  if (args.title != null) {
+    const text = String(args.title).trim();
+    if (!text) throw new Error('A task needs a title: leave title out to keep it.');
+    change.text = text;
+  }
+  if (args.details != null) change.details = String(args.details).trim() || undefined;
+  if (args.tags != null) change.tags = tagsFrom(args.tags).length ? tagsFrom(args.tags) : undefined;
+  if (!Object.keys(change).length) throw new Error('Give a title, details or tags to change.');
+  updateTask(ref, task.id, change);
+  return { ...describeTask(/** @type {TodoTask} */ (findTask(task.id)?.task)), list: nameOf(ref) };
+}
+
+/**
+ * Deletes a task, as the user asked its agent to, with a notice whose Undo puts it back where it was. One an agent is
+ * working on stays: it's stopped from its row first.
+ * @param {any} args
+ */
+function deleteTask(args) {
+  const { ref, task } = ownTask(args);
+  if (task.run) throw new Error(`"${task.text}" is being worked on. Stop it in To do first, or finish it.`);
+  const at = /** @type {TodoList} */ (listOf(ref)).tasks.findIndex(t => t.id === task.id);
+  removeTask(ref, task.id);
+  showToast({
+    text: `${whoIs(args.from)} deleted “${task.text}”`, state: TOAST.done,
+    action: { label: UNDO, run: () => void (listOf(ref) && reorderTasks(ref, tasks => void tasks.splice(Math.max(0, at), 0, task))) },
+  });
+  return { deleted: describeTask(task), list: nameOf(ref), note: 'The user can bring it back with Undo.' };
 }
 
 /**
@@ -66,13 +124,15 @@ function addTask({ title, details, tags, list, from }) {
   if (!text) throw new Error('A task needs a title.');
   const ws = wsById(tab.wsId);
   const ref = list === LIST_KIND.workspace && ws ? workspaceList(ws) : terminalList(tab);
-  const tagList = String(tags ?? '').split(',').map(t => t.trim().replace(/^#/, '')).filter(Boolean);
+  const tagList = tagsFrom(tags);
   const [id] = addTasks(ref, [{ text, details: String(details ?? '').trim() || undefined, tags: tagList.length ? tagList : undefined }]);
   return { ...describeTask(/** @type {TodoTask} */ (findTask(id)?.task)), list: nameOf(ref) };
 }
 
 addApiMethods({
   task_add: args => addTask(args),
+  task_edit: args => editTask(args),
+  task_delete: args => deleteTask(args),
   tasks: ({ from }) => ({ tasks: listsOfAsker(from).flatMap(list => list.tasks.map(task => ({ ...describeTask(task), list: list.name }))) }),
   task: args => {
     const { task } = taskFor(args);

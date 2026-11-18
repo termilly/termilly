@@ -28,6 +28,8 @@ internal sealed class CommandHistory(Vault vault)
         public const string Cwd = "cwd";
         public const string Terminal = "terminal";
         public const string Workspace = "workspace";
+        /// <summary>The kind of shell that ran it (cmd, powershell, posix), for autocomplete; none in older entries.</summary>
+        public const string Shell = "shell";
         /// <summary>The PC another entry was run on (history sync); none for this PC's own.</summary>
         public const string Host = "host";
     }
@@ -44,7 +46,7 @@ internal sealed class CommandHistory(Vault vault)
     private byte[] Key => vault.Key ?? throw new InvalidOperationException("History is locked.");
 
     /// <summary>
-    /// Adds a command from the page: { command, exitCode, durationMs, cwd, at, terminal, workspace }. A command
+    /// Adds a command from the page: { command, exitCode, durationMs, cwd, at, terminal, workspace, shell }. A command
     /// that's empty or too long to be one typed by hand is skipped.
     /// </summary>
     public void Add(JsonElement entry, bool redactSecrets)
@@ -64,6 +66,7 @@ internal sealed class CommandHistory(Vault vault)
             [Fields.Cwd] = Text(entry, Fields.Cwd),
             [Fields.Terminal] = Text(entry, Fields.Terminal),
             [Fields.Workspace] = Text(entry, Fields.Workspace),
+            [Fields.Shell] = Text(entry, Fields.Shell),
         };
         lock (_gate)
         {

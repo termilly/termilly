@@ -10,8 +10,8 @@ import { send, onHost } from './host.js';
 import { state, on, persist, newId, wsById, tabsOf, tabTitle, EVENTS } from './store.js';
 import { focusTab } from './panes.js';
 import {
-  AGENT_COMMAND, agentWorking, folderOfList as folderOf, implementPlace, cantImplement, offersImplement, isOnGitHub, checkRepo, keepIssue,
-  implement, anotherRound, planOf, hasOwnPlan, keepPlan, agentsFor, reviewersAt,
+  AGENT_COMMAND, agentWorking, folderOfList as folderOf, implementPlace, cantImplement, offersImplement, implementing, ALREADY_IMPLEMENTING, isOnGitHub, checkRepo, keepIssue,
+  implement, anotherRound, planOf, hasOwnPlan, keepPlan, agentsFor, reviewersAt, offersChanges, showChanges,
 } from './todoactions.js';
 import { stopRun } from './todorun.js';
 import { openImplementCard } from './todocard.js';
@@ -25,7 +25,7 @@ import { tagCompletion } from './todotagcomplete.js';
 import { escapeHtml, cssColor, tabBadgeHtml, badgeHtml, ICONS } from './ui.js';
 import { byId, find, targetOf, WORKSPACE_ID, DOCK_GRIP, PANEL_HEAD } from './dom.js';
 import { showMenu, openPopover, closePopover, isOpen, closeAll, SEPARATOR } from './popups.js';
-import { showToast, TOAST } from './toasts.js';
+import { showToast, TOAST, UNDO } from './toasts.js';
 import { setNote } from './notes.js';
 import { choiceDialog, confirmDialog, CHOICE } from './dialogs.js';
 import { KEY_ID } from './keymap.js';
@@ -74,8 +74,6 @@ const EDIT_ROW = '.td-edit';
 const EDIT_TEXT = '.td-edit-text';
 /** The edited task's details box: as tall as its text, up to a limit (CSS max-height), then it scrolls. */
 const EDIT_DETAILS = '.td-edit-details';
-/** A deletion's toast button that brings the tasks back. */
-const UNDO = 'Undo';
 const ISSUE_TITLE = '.td-issue-title';
 const ISSUE_BODY = '.td-issue-body';
 const WINDOW_KEY = 'todo';
@@ -86,7 +84,7 @@ const ACTION = Object.freeze({
   dropAddTag: 'dropAddTag',
   implement: 'implement', issue: 'issue', openIssue: 'openIssue', status: 'status', agentTerminal: 'agentTerminal', accept: 'accept', reopen: 'reopen', round: 'round',
   edit: 'edit', remove: 'remove', expand: 'expand', stopRun: 'stopRun', scope: 'scope', clearSearch: 'clearSearch', searchToggle: 'searchToggle',
-  allow: 'allow', allowAll: 'allowAll', deny: 'deny', filter: 'filter', foldActive: 'foldActive', clearActive: 'clearActive', clearDone: 'clearDone', settings: 'settings',
+  changes: 'changes', allow: 'allow', allowAll: 'allowAll', deny: 'deny', filter: 'filter', foldActive: 'foldActive', clearActive: 'clearActive', clearDone: 'clearDone', settings: 'settings',
   implementAll: 'implementAll',
 });
 /** How long after the last key a note is saved. */
@@ -264,7 +262,7 @@ function rowHtml(task, elsewhere) {
   return `<div class="td-task st-${statusOf(task)}${task.done ? ' done' : ''}${chosen ? ' selected' : ''}" data-task="${escapeHtml(task.id)}" tabindex="0"${chosen ? ' aria-selected="true"' : ''}${there}>
     ${statusButtonHtml(task)}
     <div class="td-body"><div class="td-text">${escapeHtml(task.text)}</div>${elsewhere ? '' : aboutHtml(task)}${elsewhere ? `<div class="td-meta"><span class="td-where">${escapeHtml(elsewhere)}</span></div>` : metaHtml(task)}</div>
-    ${elsewhere ? '' : actsHtml(task.issue, false)}
+    ${elsewhere ? '' : actsHtml(task, task.issue, false)}
     ${elsewhere ? '' : reviewHtml(task)}
     ${elsewhere ? '' : askHtml(task)}
   </div>`;
@@ -303,8 +301,8 @@ function askHtml(task) {
 
 /**
  * The ways on from Review (what the agents said is in the task's details, aboutHtml): back to Open, Review (opens the task
- * out to read what they said, as its arrow does), Accept, and where its reviewers didn't agree, one more round of fixing
- * and reviewing.
+ * out to read what they said, as its arrow does), Git changes (what the work changed), Accept, and where its reviewers
+ * didn't agree, one more round of fixing and reviewing.
  * @param {TodoTask} task
  */
 function reviewHtml(task) {
@@ -313,7 +311,8 @@ function reviewHtml(task) {
   const round = open ? `<button type="button" class="btn small" data-td="${ACTION.round}" title="What’s still open goes back to ${escapeHtml(agentKind(task.plan?.by).name)}, and the reviewers look again">One more round</button>` : '';
   const shown = expanded.has(task.id);
   const read = aboutHtml(task) ? `<button type="button" class="btn small" data-td="${ACTION.expand}" aria-expanded="${shown}" title="${shown ? 'Show less' : 'Read what the agent said'}">Review</button>` : '';
-  return `<div class="td-review"><span class="td-edit-actions"><button type="button" class="btn small" data-td="${ACTION.reopen}">Back to open</button>${read}${round}<button type="button" class="btn small primary" data-td="${ACTION.accept}">Accept</button></span></div>`;
+  const changes = offersChanges(task) ? `<button type="button" class="btn small" data-td="${ACTION.changes}" title="See what was changed, in the Git window">Git changes</button>` : '';
+  return `<div class="td-review"><span class="td-edit-actions"><button type="button" class="btn small" data-td="${ACTION.reopen}">Back to open</button>${read}${changes}${round}<button type="button" class="btn small primary" data-td="${ACTION.accept}">Accept</button></span></div>`;
 }
 
 /**
@@ -355,7 +354,7 @@ function aboutHtml(task) {
   if (!open) return `<div class="td-about">${toggle}<span class="td-about-line">${firstHtml}</span></div>`;
   return `<div class="td-about open">${toggle}<div class="td-about-all">
     ${notes ? `<div class="td-details">${escapeHtml(notes)}</div>` : ''}
-    ${steps.map(stepHtml).join('')}
+    ${steps.map(line => stepHtml(task, line)).join('')}
     ${task.review ? saidHtml(task.review) : ''}
   </div></div>`;
 }
@@ -371,21 +370,23 @@ const STEP_MARK = Object.freeze({
 
 /**
  * A step in a task opened out: done or not (ticked by an agent, or in Edit), its text, and Implement and Create GitHub issue for it.
+ * @param {TodoTask} task
  * @param {import('./todolist.js').DetailLine} line
  */
-function stepHtml(line) {
+function stepHtml(task, line) {
   return `<div class="td-step${line.done ? ' done' : ''}" data-sub="${line.at}">
     <span class="td-step-mark">${line.done ? STEP_MARK.done : STEP_MARK.open}</span>
-    <span class="td-step-text">${escapeHtml(line.text)}${issueChip(line.issue)}</span>${actsHtml(line.issue, true)}
+    <span class="td-step-text">${escapeHtml(line.text)}${issueChip(line.issue)}</span>${actsHtml(task, line.issue, true)}
   </div>`;
 }
 
 /**
- * Implement's button: off, saying why, when it can't run here.
+ * Implement's button: off, saying why, when it can't run here or an agent is already on the task.
  * @param {ListRef} ref
+ * @param {TodoTask} task
  */
-function implementButton(ref) {
-  const why = cantImplement(ref);
+function implementButton(ref, task) {
+  const why = cantImplement(ref) || (implementing(task) ? ALREADY_IMPLEMENTING : '');
   const server = implementPlace(ref)?.server;
   const title = why || `Implement${server ? ` on ${server}` : ''}: ${planWords(planOf(ref))}. Click to choose and start`;
   return `<button type="button" class="pane-btn" data-td="${ACTION.implement}" ${why ? 'disabled' : ''} title="${escapeHtml(title)}">${ICONS.play}</button>`;
@@ -394,14 +395,15 @@ function implementButton(ref) {
 /**
  * A task's buttons: Implement when Claude Code is installed or the list's terminal is on an SSH host, Edit, Create GitHub issue when the folder's repository is on
  * GitHub and there's no issue yet, and Delete. A step has Implement and Create GitHub issue only.
+ * @param {TodoTask} task the task, or the step's
  * @param {{ url: string, number: number } | undefined} issue
  * @param {boolean} isStep
  */
-function actsHtml(issue, isStep) {
+function actsHtml(task, issue, isStep) {
   const folder = folderOfList();
   const canIssue = !issue && !!folder && isOnGitHub(folder);
   return `<span class="td-acts">
-    ${current && offersImplement(current) ? implementButton(current) : ''}
+    ${current && offersImplement(current) ? implementButton(current, task) : ''}
     ${isStep ? '' : `<button type="button" class="pane-btn" data-td="${ACTION.edit}" title="Edit">${ICONS.rename}</button>`}
     ${canIssue ? `<button type="button" class="pane-btn" data-td="${ACTION.issue}" title="Create GitHub issue">${ICONS.git}</button>` : ''}
     ${isStep ? '' : `<button type="button" class="pane-btn" data-td="${ACTION.remove}" title="Delete">${ICONS.trash}</button>`}
@@ -1175,7 +1177,7 @@ function acceptTask(task) {
   setStatus(ref, task.id, TASK_STATUS.done, { review: task.review });
   showToast({
     text: `“${task.text}” moved to Done`, state: TOAST.done,
-    action: { label: UNDO, run: () => void (listOf(ref) && setStatus(ref, task.id, TASK_STATUS.review, { review: task.review, terminal: task.terminal })) },
+    action: { label: UNDO, run: () => void (listOf(ref) && setStatus(ref, task.id, TASK_STATUS.review, { review: task.review, terminal: task.terminal, workedIn: task.workedIn })) },
   });
 }
 
@@ -1209,6 +1211,11 @@ function implementCard(at, task, step) {
     start: (plan, keep) => {
       if (keep) keepPlan(ref, plan);
       const now = findTask(task.id)?.task ?? task;
+      // It may have started while the card was up (from the phone, or another click).
+      if (implementing(now)) {
+        showToast({ text: `${ALREADY_IMPLEMENTING}.`, state: TOAST.failed });
+        return;
+      }
       if (!implement(ref, now, step, plan).started) showToast({ text: `${agentKind(plan.by).name} can’t start here. ${cantImplement(ref)}`, state: TOAST.failed });
     },
   });
@@ -1551,12 +1558,13 @@ function stepOf(control, task) {
 const ON_TASK = Object.freeze({
   [ACTION.edit]: (_control, task) => beginEdit(task.id),
   [ACTION.remove]: (_control, task) => deleteTask(task),
-  [ACTION.implement]: (control, task) => implementCard(control, task, stepOf(control, task)),
+  [ACTION.implement]: (control, task) => !implementing(task) && implementCard(control, task, stepOf(control, task)),
   [ACTION.round]: (_control, task) => moreRounds(task),
   [ACTION.issue]: (control, task) => beginIssue(task, stepOf(control, task)),
   [ACTION.status]: (control, task) => statusMenu(task, control),
   [ACTION.accept]: (_control, task) => acceptTask(task),
   [ACTION.reopen]: (_control, task) => changeStatus(task, TASK_STATUS.open),
+  [ACTION.changes]: (_control, task) => showChanges(task),
   [ACTION.stopRun]: (_control, task) => stopRun(task),
   [ACTION.allow]: (_control, task) => answerAsk(task, ASK.allow),
   [ACTION.allowAll]: (_control, task) => answerAsk(task, ASK.all),

@@ -47,14 +47,38 @@ export const PAGE = Object.freeze({
   forwardStart: 'forward:start',
   forwardStop: 'forward:stop',
   gitStatus: 'git:status',
+  githubFailedLog: 'github:failedLog',
+  githubIssue: 'github:issue',
+  githubIssueAct: 'github:issueAct',
+  githubIssues: 'github:issues',
+  githubPrCreate: 'github:prCreate',
+  githubPrFor: 'github:prFor',
+  githubRerunFailed: 'github:rerunFailed',
+  githubRunJobs: 'github:runJobs',
+  githubRuns: 'github:runs',
+  githubStatus: 'github:status',
   gitviewAct: 'gitview:act',
+  gitviewBackupRestore: 'gitview:backupRestore',
+  gitviewBackups: 'gitview:backups',
   gitviewBranches: 'gitview:branches',
   gitviewCommit: 'gitview:commit',
+  gitviewCommitCreate: 'gitview:commitCreate',
   gitviewDiff: 'gitview:diff',
   gitviewLog: 'gitview:log',
+  gitviewPruneBranches: 'gitview:pruneBranches',
+  gitviewPruneCandidates: 'gitview:pruneCandidates',
+  gitviewPush: 'gitview:push',
+  gitviewPushInfo: 'gitview:pushInfo',
   gitviewSearch: 'gitview:search',
   gitviewSearchcode: 'gitview:searchcode',
+  gitviewSnapshot: 'gitview:snapshot',
+  gitviewSnapshotRestore: 'gitview:snapshotRestore',
+  gitviewSnapshots: 'gitview:snapshots',
+  gitviewStageLines: 'gitview:stageLines',
   gitviewStatus: 'gitview:status',
+  gitviewUndoCommit: 'gitview:undoCommit',
+  gitviewWorktreeRemove: 'gitview:worktreeRemove',
+  gitviewWorktrees: 'gitview:worktrees',
   historyAdd: 'history:add',
   historyClear: 'history:clear',
   historyCommand: 'history:command',
@@ -120,6 +144,8 @@ export const PAGE = Object.freeze({
   remoteHook: 'remote:hook',
   remoteInstall: 'remote:install',
   remoteRemove: 'remote:remove',
+  reposnippetsGet: 'reposnippets:get',
+  reposnippetsSave: 'reposnippets:save',
   resize: 'resize',
   scheduleForget: 'schedule:forget',
   scheduleKeep: 'schedule:keep',
@@ -155,6 +181,8 @@ export const PAGE = Object.freeze({
   syncOn: 'sync:on',
   syncRotate: 'sync:rotate',
   syncStatus: 'sync:status',
+  testReady: 'test:ready',
+  testResult: 'test:result',
   tmuxStart: 'tmux:start',
   tmuxStop: 'tmux:stop',
   tmuxWrite: 'tmux:write',
@@ -217,6 +245,7 @@ export const HOST = Object.freeze({
   forwardAll: 'forward:all',
   forwardStatus: 'forward:status',
   gitStatus: 'git:status',
+  githubResult: 'github:result',
   gitviewResult: 'gitview:result',
   history: 'history',
   historyCommands: 'history:commands',
@@ -264,6 +293,9 @@ export const HOST = Object.freeze({
   recStatus: 'rec:status',
   remoteInstall: 'remote:install',
   remoteRemove: 'remote:remove',
+  reposnippetsChanged: 'reposnippets:changed',
+  reposnippetsFound: 'reposnippets:found',
+  reposnippetsSaved: 'reposnippets:saved',
   scheduleEnded: 'schedule:ended',
   scheduleFileSaved: 'schedule:file-saved',
   scheduleReport: 'schedule:report',
@@ -283,6 +315,7 @@ export const HOST = Object.freeze({
   subagent: 'subagent',
   subagentCost: 'subagent:cost',
   syncStatus: 'sync:status',
+  testEval: 'test:eval',
   tmuxData: 'tmux:data',
   tmuxExit: 'tmux:exit',
   todoIssueCreated: 'todo:issueCreated',
@@ -300,7 +333,7 @@ export const HOST = Object.freeze({
 /** @typedef {{ text?: string, decision?: string, command?: string }} AgentRuleChoice */
 /** @typedef {{ type: string, requestId: string, fields: any }} PageCall */
 /** @typedef {{ id: string, kind: string, text: string, lines: number, chars: number, source: string, at: number, pinned: boolean, width: number, height: number, bytes: number, folder: boolean|null }} ClipView */
-/** @typedef {{ key: string, kind: string, text: string, verb?: string|null, detail?: string|null, failed?: boolean, done?: boolean, questions?: Array<CompactQuestion>|null, body?: string|null, final?: boolean|null }} CompactLine */
+/** @typedef {{ key: string, kind: string, text: string, verb?: string|null, detail?: string|null, failed?: boolean, done?: boolean, questions?: Array<CompactQuestion>|null, body?: string|null, final?: boolean|null, cut?: boolean|null }} CompactLine */
 /** @typedef {{ question: string, header: string|null, multi: boolean, options: Array<CompactOption> }} CompactQuestion */
 /** @typedef {{ label: string, description: string|null }} CompactOption */
 /** @typedef {{ state: string, message: string|null }} ForwardState */
@@ -315,6 +348,9 @@ export const HOST = Object.freeze({
 /** @typedef {{ id: string, name: string, description: string|null, icon: string, source: string, tags: Array<string>, startCommand?: string|null, shellIcon?: string|null }} ProfileSummary */
 /** @typedef {{ version: string, date: string|null, notes: string|null, installable: boolean, endsShells: boolean, linux: boolean }} UpdateAvailable */
 /** @typedef {{ state: string, percent: number, message: string|null, command: string|null }} UpdateProgress */
+/** @typedef {{ name: string, command: string, description?: string|null, enter?: boolean|null }} RepoSnippet */
+/** @typedef {{ label: string, command: string, cwd: string|null, env: Object<string, string>|null, group: string|null, isDefault: boolean, hidden: boolean, dependsOn: Array<string>, file: string }} RepoTask */
+/** @typedef {{ id: string, description: string|null, default: string|null, options: Array<string>|null, password: boolean, file: string }} TaskInput */
 
 /** @typedef {{  }} Page_actionDefaults */
 /** @typedef {{ id?: string|null, selection?: string|null, folder?: string|null, port?: number|null, image?: string|null }} Page_actionRun */
@@ -358,14 +394,38 @@ export const HOST = Object.freeze({
 /** @typedef {{ id?: string }} Page_forwardStart */
 /** @typedef {{ id?: string }} Page_forwardStop */
 /** @typedef {{ folders?: Array<string>|null, force?: boolean }} Page_gitStatus */
+/** @typedef {{ requestId?: string|null, remote?: string|null, root?: string|null, runId?: number, jobId?: number|null }} Page_githubFailedLog */
+/** @typedef {{ requestId?: string|null, root?: string|null, number?: number }} Page_githubIssue */
+/** @typedef {{ requestId?: string|null, root?: string|null, number?: number, action?: string|null, body?: string|null }} Page_githubIssueAct */
+/** @typedef {{ requestId?: string|null, root?: string|null, state?: string, search?: string|null, page?: number }} Page_githubIssues */
+/** @typedef {{ requestId?: string|null, root?: string|null, base?: string|null, head?: string|null, title?: string|null, body?: string|null, draft?: boolean }} Page_githubPrCreate */
+/** @typedef {{ requestId?: string|null, root?: string|null, branch?: string|null }} Page_githubPrFor */
+/** @typedef {{ requestId?: string|null, remote?: string|null, root?: string|null, runId?: number }} Page_githubRerunFailed */
+/** @typedef {{ requestId?: string|null, remote?: string|null, root?: string|null, runId?: number }} Page_githubRunJobs */
+/** @typedef {{ requestId?: string|null, remote?: string|null, root?: string|null, branch?: string|null }} Page_githubRuns */
+/** @typedef {{ requestId?: string|null, root?: string|null }} Page_githubStatus */
 /** @typedef {{ requestId?: string|null, remote?: string|null, root?: string|null, action?: string|null, path?: string|null, ref?: string|null, hasCommits?: boolean }} Page_gitviewAct */
+/** @typedef {{ requestId?: string|null, remote?: string|null, root?: string|null, id?: string|null }} Page_gitviewBackupRestore */
+/** @typedef {{ requestId?: string|null, remote?: string|null, root?: string|null }} Page_gitviewBackups */
 /** @typedef {{ requestId?: string|null, remote?: string|null, root?: string|null }} Page_gitviewBranches */
 /** @typedef {{ requestId?: string|null, remote?: string|null, root?: string|null, hash?: string|null }} Page_gitviewCommit */
+/** @typedef {{ requestId?: string|null, remote?: string|null, root?: string|null, message?: string|null, all?: boolean }} Page_gitviewCommitCreate */
 /** @typedef {{ requestId?: string|null, remote?: string|null, root?: string|null, path?: string|null, oldPath?: string|null, side?: string|null, hash?: string|null }} Page_gitviewDiff */
-/** @typedef {{ requestId?: string|null, remote?: string|null, root?: string|null, skip?: number, limit?: number, ref?: string|null }} Page_gitviewLog */
+/** @typedef {{ requestId?: string|null, remote?: string|null, root?: string|null, skip?: number, limit?: number, ref?: string|null, all?: boolean, path?: string|null }} Page_gitviewLog */
+/** @typedef {{ requestId?: string|null, remote?: string|null, root?: string|null, branches?: Array<string>|null }} Page_gitviewPruneBranches */
+/** @typedef {{ requestId?: string|null, remote?: string|null, root?: string|null }} Page_gitviewPruneCandidates */
+/** @typedef {{ requestId?: string|null, remote?: string|null, root?: string|null }} Page_gitviewPush */
+/** @typedef {{ requestId?: string|null, remote?: string|null, root?: string|null }} Page_gitviewPushInfo */
 /** @typedef {{ requestId?: string|null, remote?: string|null, root?: string|null, query?: string|null }} Page_gitviewSearch */
 /** @typedef {{ requestId?: string|null, remote?: string|null, root?: string|null, query?: string|null, batch?: number }} Page_gitviewSearchcode */
+/** @typedef {{ requestId?: string|null, remote?: string|null, root?: string|null, reason?: string|null }} Page_gitviewSnapshot */
+/** @typedef {{ requestId?: string|null, remote?: string|null, root?: string|null, id?: string|null, paths?: Array<string>|null }} Page_gitviewSnapshotRestore */
+/** @typedef {{ requestId?: string|null, remote?: string|null, root?: string|null }} Page_gitviewSnapshots */
+/** @typedef {{ requestId?: string|null, remote?: string|null, root?: string|null, path?: string|null, side?: string|null, action?: string|null, removed?: Array<number>|null, added?: Array<number>|null }} Page_gitviewStageLines */
 /** @typedef {{ requestId?: string|null, remote?: string|null, folder?: string|null }} Page_gitviewStatus */
+/** @typedef {{ requestId?: string|null, remote?: string|null, root?: string|null }} Page_gitviewUndoCommit */
+/** @typedef {{ requestId?: string|null, remote?: string|null, root?: string|null, path?: string|null, force?: boolean }} Page_gitviewWorktreeRemove */
+/** @typedef {{ requestId?: string|null, remote?: string|null, root?: string|null }} Page_gitviewWorktrees */
 /** @typedef {{ entry?: any }} Page_historyAdd */
 /** @typedef {{  }} Page_historyClear */
 /** @typedef {{ entry?: any }} Page_historyCommand */
@@ -431,6 +491,8 @@ export const HOST = Object.freeze({
 /** @typedef {{ id?: string, event?: string|null, payload?: string|null }} Page_remoteHook */
 /** @typedef {{ id?: string }} Page_remoteInstall */
 /** @typedef {{ id?: string }} Page_remoteRemove */
+/** @typedef {{ requestId?: string|null, folder?: string|null }} Page_reposnippetsGet */
+/** @typedef {{ requestId?: string|null, root?: string|null, snippets?: Array<RepoSnippet>|null, onlyMe?: boolean }} Page_reposnippetsSave */
 /** @typedef {{ id?: string, cols?: number, rows?: number }} Page_resize */
 /** @typedef {{ runIds?: Array<string>|null }} Page_scheduleForget */
 /** @typedef {{ runId?: string, output?: string }} Page_scheduleKeep */
@@ -466,6 +528,8 @@ export const HOST = Object.freeze({
 /** @typedef {{ folder?: string|null }} Page_syncOn */
 /** @typedef {{  }} Page_syncRotate */
 /** @typedef {{  }} Page_syncStatus */
+/** @typedef {{  }} Page_testReady */
+/** @typedef {{ id?: string, value?: any|null, error?: string|null }} Page_testResult */
 /** @typedef {{ id?: string, command?: string|null }} Page_tmuxStart */
 /** @typedef {{ id?: string }} Page_tmuxStop */
 /** @typedef {{ id?: string, text?: string|null }} Page_tmuxWrite */
@@ -480,7 +544,7 @@ export const HOST = Object.freeze({
 /** @typedef {{ action?: string|null, edge?: string|null, name?: string|null }} Page_window */
 /** @typedef {{ requestId?: string|null }} Page_windowCapture */
 /** @typedef {{ image?: string|null, x?: number, y?: number, width?: number, height?: number }} Page_windowDragPicture */
-/** @typedef {{ requestId?: string|null, folder?: string|null, branch?: string|null }} Page_worktreeCreate */
+/** @typedef {{ requestId?: string|null, folder?: string|null, branch?: string|null, base?: string|null }} Page_worktreeCreate */
 /** @typedef {{ requestId?: string|null, repo?: string|null, path?: string|null, branch?: string|null, deleteBranch?: boolean, force?: boolean }} Page_worktreeRemove */
 /** @typedef {{ requestId?: string|null, repo?: string|null, path?: string|null, branch?: string|null }} Page_worktreeStatus */
 
@@ -534,6 +598,7 @@ export const HOST = Object.freeze({
 /** @typedef {{ states: Object<string, ForwardState> }} Host_forwardAll */
 /** @typedef {{ id: string, state: string, message: string|null }} Host_forwardStatus */
 /** @typedef {{ states: Array<any> }} Host_gitStatus */
+/** @typedef {{ requestId: string|null, data: any|null, error: string|null }} Host_githubResult */
 /** @typedef {{ requestId: string|null, data: any|null, error: string|null }} Host_gitviewResult */
 /** @typedef {{ entries: any }} Host_history */
 /** @typedef {{ entries: any }} Host_historyCommands */
@@ -593,6 +658,9 @@ export const HOST = Object.freeze({
 /** @typedef {{ id: string, error: string }} Host_remoteInstall_1 */
 /** @typedef {Host_remoteInstall_0|Host_remoteInstall_1} Host_remoteInstall */
 /** @typedef {{ id: string, command: string }} Host_remoteRemove */
+/** @typedef {{ root: string }} Host_reposnippetsChanged */
+/** @typedef {{ requestId: string|null, root: string|null, snippets: Array<RepoSnippet>, shared: Array<RepoSnippet>, tasks: Array<RepoTask>, inputs: Array<TaskInput>, onlyMe: boolean, warnings: Array<string> }} Host_reposnippetsFound */
+/** @typedef {{ requestId: string|null, error: string|null }} Host_reposnippetsSaved */
 /** @typedef {{ runId: string, exitCode: number|null, tail: string, stopped?: boolean, error?: string|null }} Host_scheduleEnded */
 /** @typedef {{ runId: string, path: string|null, error?: string|null }} Host_scheduleFileSaved */
 /** @typedef {{ requestId: string|null, output: string|null, columns: number }} Host_scheduleReport */
@@ -614,6 +682,7 @@ export const HOST = Object.freeze({
 /** @typedef {{ id: string, event: string, agentId: string|null, agentType: string|null, toolUseId: string|null, description: string|null, subagentType: string|null, background: boolean, launchedId: string|null, tool: string|null, target: string|null, message: string|null, session: string|null }} Host_subagent */
 /** @typedef {{ id: string, agentId: string, usd: number|null, model: string|null, input: number, output: number }} Host_subagentCost */
 /** @typedef {{ status: any, code: string|null, rotated: boolean, message: string|null }} Host_syncStatus */
+/** @typedef {{ id: string, code: string }} Host_testEval */
 /** @typedef {{ id: string, data: string }} Host_tmuxData */
 /** @typedef {{ id: string, code: number }} Host_tmuxExit_0 */
 /** @typedef {{ id: string, code: number, error: string }} Host_tmuxExit_1 */
@@ -634,5 +703,5 @@ export const HOST = Object.freeze({
 /** @typedef {{ requestId: string|null, message: string, ok: boolean }} Host_worktreeReply_3 */
 /** @typedef {Host_worktreeReply_0|Host_worktreeReply_1|Host_worktreeReply_2|Host_worktreeReply_3} Host_worktreeReply */
 
-/** @typedef {{ 'action:defaults': Page_actionDefaults, 'action:run': Page_actionRun, 'agentRules:copy': Page_agentRulesCopy, 'agentRules:read': Page_agentRulesRead, 'api:result': Page_apiResult, 'badge': Page_badge, 'changes:clear': Page_changesClear, 'changes:diff': Page_changesDiff, 'changes:get': Page_changesGet, 'changes:list': Page_changesList, 'changes:resolve': Page_changesResolve, 'changes:search': Page_changesSearch, 'clip:clear': Page_clipClear, 'clip:copied': Page_clipCopied, 'clip:forget': Page_clipForget, 'clip:list': Page_clipList, 'clip:open': Page_clipOpen, 'clip:pin': Page_clipPin, 'clip:take': Page_clipTake, 'codex:models': Page_codexModels, 'compact:files': Page_compactFiles, 'compact:watch': Page_compactWatch, 'dataDir:open': Page_dataDirOpen, 'dialog:pickFolder': Page_dialogPickFolder, 'earlier:add': Page_earlierAdd, 'earlier:delete': Page_earlierDelete, 'earlier:keep': Page_earlierKeep, 'earlier:move': Page_earlierMove, 'earlier:search': Page_earlierSearch, 'earlier:tail': Page_earlierTail, 'files:copyTo': Page_filesCopyTo, 'files:drop': Page_filesDrop, 'files:getTo': Page_filesGetTo, 'files:list': Page_filesList, 'files:op': Page_filesOp, 'files:pick': Page_filesPick, 'files:put': Page_filesPut, 'files:search': Page_filesSearch, 'files:tree': Page_filesTree, 'forward:start': Page_forwardStart, 'forward:stop': Page_forwardStop, 'git:status': Page_gitStatus, 'gitview:act': Page_gitviewAct, 'gitview:branches': Page_gitviewBranches, 'gitview:commit': Page_gitviewCommit, 'gitview:diff': Page_gitviewDiff, 'gitview:log': Page_gitviewLog, 'gitview:search': Page_gitviewSearch, 'gitview:searchcode': Page_gitviewSearchcode, 'gitview:status': Page_gitviewStatus, 'history:add': Page_historyAdd, 'history:clear': Page_historyClear, 'history:command': Page_historyCommand, 'history:commands': Page_historyCommands, 'history:delete': Page_historyDelete, 'history:export': Page_historyExport, 'history:list': Page_historyList, 'history:remove': Page_historyRemove, 'history:stats': Page_historyStats, 'host:shutdown': Page_hostShutdown, 'input': Page_input, 'kill': Page_kill, 'layout:export': Page_layoutExport, 'layout:import': Page_layoutImport, 'layout:probe': Page_layoutProbe, 'limits:refresh': Page_limitsRefresh, 'log:lines': Page_logLines, 'log:reveal': Page_logReveal, 'log:start': Page_logStart, 'log:stop': Page_logStop, 'memory:measure': Page_memoryMeasure, 'notepad:open': Page_notepadOpen, 'notepad:save': Page_notepadSave, 'notify': Page_notify, 'notify:withdraw': Page_notifyWithdraw, 'open:page': Page_openPage, 'open:path': Page_openPath, 'open:url': Page_openUrl, 'page:error': Page_pageError, 'pc:add': Page_pcAdd, 'pc:input': Page_pcInput, 'pc:list': Page_pcList, 'pc:manage': Page_pcManage, 'pc:prompts': Page_pcPrompts, 'pc:refresh': Page_pcRefresh, 'pc:remove': Page_pcRemove, 'pc:size': Page_pcSize, 'pc:unwatch': Page_pcUnwatch, 'pc:watch': Page_pcWatch, 'phone:alert': Page_phoneAlert, 'phone:pair': Page_phonePair, 'phone:remove': Page_phoneRemove, 'phone:state': Page_phoneState, 'phone:status': Page_phoneStatus, 'phone:takeBack': Page_phoneTakeBack, 'phone:test': Page_phoneTest, 'phone:withdraw': Page_phoneWithdraw, 'plugins:list': Page_pluginsList, 'plugins:open': Page_pluginsOpen, 'ports:terminals': Page_portsTerminals, 'preview:watch': Page_previewWatch, 'profiles:refresh': Page_profilesRefresh, 'prompt:add': Page_promptAdd, 'prompts:list': Page_promptsList, 'quit:answer': Page_quitAnswer, 'ready': Page_ready, 'rec:list': Page_recList, 'rec:load': Page_recLoad, 'rec:mark': Page_recMark, 'rec:reveal': Page_recReveal, 'rec:start': Page_recStart, 'rec:stop': Page_recStop, 'remote:hook': Page_remoteHook, 'remote:install': Page_remoteInstall, 'remote:remove': Page_remoteRemove, 'resize': Page_resize, 'schedule:forget': Page_scheduleForget, 'schedule:keep': Page_scheduleKeep, 'schedule:report-read': Page_scheduleReportRead, 'schedule:run': Page_scheduleRun, 'schedule:save-file': Page_scheduleSaveFile, 'schedule:stop': Page_scheduleStop, 'security:code': Page_securityCode, 'security:recover': Page_securityRecover, 'security:regenerate': Page_securityRegenerate, 'security:restore': Page_securityRestore, 'security:saved': Page_securitySaved, 'security:startFresh': Page_securityStartFresh, 'serial:break': Page_serialBreak, 'serial:eol': Page_serialEol, 'serial:hex': Page_serialHex, 'settings:load': Page_settingsLoad, 'settings:save': Page_settingsSave, 'snapshot:save': Page_snapshotSave, 'sound:outputs': Page_soundOutputs, 'sound:play': Page_soundPlay, 'ssh:import': Page_sshImport, 'ssh:known': Page_sshKnown, 'ssh:password': Page_sshPassword, 'ssh:passwordForget': Page_sshPasswordForget, 'ssh:status': Page_sshStatus, 'start': Page_start, 'state:save': Page_stateSave, 'sync:code': Page_syncCode, 'sync:join': Page_syncJoin, 'sync:now': Page_syncNow, 'sync:off': Page_syncOff, 'sync:on': Page_syncOn, 'sync:rotate': Page_syncRotate, 'sync:status': Page_syncStatus, 'tmux:start': Page_tmuxStart, 'tmux:stop': Page_tmuxStop, 'tmux:write': Page_tmuxWrite, 'todo:issueCreate': Page_todoIssueCreate, 'todo:issueInfo': Page_todoIssueInfo, 'todo:repoCheck': Page_todoRepoCheck, 'update:cancel': Page_updateCancel, 'update:check': Page_updateCheck, 'update:download': Page_updateDownload, 'update:install': Page_updateInstall, 'update:status': Page_updateStatus, 'window': Page_window, 'window:capture': Page_windowCapture, 'window:dragPicture': Page_windowDragPicture, 'worktree:create': Page_worktreeCreate, 'worktree:remove': Page_worktreeRemove, 'worktree:status': Page_worktreeStatus }} PageMessages */
-/** @typedef {{ 'action:defaults': Host_actionDefaults, 'action:failed': Host_actionFailed, 'agent': Host_agent, 'agentRules:copied': Host_agentRulesCopied, 'agentRules:list': Host_agentRulesList, 'agents:next': Host_agentsNext, 'api': Host_api, 'attached': Host_attached, 'busy': Host_busy, 'changes:content': Host_changesContent, 'changes:diffed': Host_changesDiffed, 'changes:found': Host_changesFound, 'changes:list': Host_changesList, 'changes:resolved': Host_changesResolved, 'claude:context': Host_claudeContext, 'claude:cost': Host_claudeCost, 'claude:limits': Host_claudeLimits, 'claude:plan': Host_claudePlan, 'claude:usage': Host_claudeUsage, 'clip:clips': Host_clipClips, 'clip:taken': Host_clipTaken, 'codex:limits': Host_codexLimits, 'codex:models': Host_codexModels, 'compact:filesFound': Host_compactFilesFound, 'compact:lines': Host_compactLines, 'earlier:found': Host_earlierFound, 'earlier:tail': Host_earlierTail, 'error': Host_error, 'exit': Host_exit, 'files:done': Host_filesDone, 'files:dropped': Host_filesDropped, 'files:found': Host_filesFound, 'files:listing': Host_filesListing, 'files:queued': Host_filesQueued, 'files:tree': Host_filesTree, 'focusTerminal': Host_focusTerminal, 'folderPicked': Host_folderPicked, 'fonts': Host_fonts, 'forward:all': Host_forwardAll, 'forward:status': Host_forwardStatus, 'git:status': Host_gitStatus, 'gitview:result': Host_gitviewResult, 'history': Host_history, 'history:commands': Host_historyCommands, 'history:exported': Host_historyExported, 'history:overLimit': Host_historyOverLimit, 'history:removed': Host_historyRemoved, 'history:stats': Host_historyStats, 'hotkey:taken': Host_hotkeyTaken, 'layout': Host_layout, 'layout:error': Host_layoutError, 'layout:exported': Host_layoutExported, 'layout:found': Host_layoutFound, 'log:status': Host_logStatus, 'memory': Host_memory, 'notepad:opened': Host_notepadOpened, 'notepad:saved': Host_notepadSaved, 'output': Host_output, 'pc:added': Host_pcAdded, 'pc:list': Host_pcList, 'pc:lost': Host_pcLost, 'pc:managed': Host_pcManaged, 'pc:output': Host_pcOutput, 'pc:paused': Host_pcPaused, 'pc:refused': Host_pcRefused, 'pc:sessions': Host_pcSessions, 'phone:answer': Host_phoneAnswer, 'phone:clip': Host_phoneClip, 'phone:manage': Host_phoneManage, 'phone:pairing': Host_phonePairing, 'phone:screen': Host_phoneScreen, 'phone:seen': Host_phoneSeen, 'phone:size': Host_phoneSize, 'phone:status': Host_phoneStatus, 'phone:tested': Host_phoneTested, 'phone:typed': Host_phoneTyped, 'phone:viewers': Host_phoneViewers, 'plugins': Host_plugins, 'ports:terminals': Host_portsTerminals, 'preview:fileChanged': Host_previewFileChanged, 'profiles': Host_profiles, 'prompts:listed': Host_promptsListed, 'quit:ask': Host_quitAsk, 'rec:data': Host_recData, 'rec:list': Host_recList, 'rec:status': Host_recStatus, 'remote:install': Host_remoteInstall, 'remote:remove': Host_remoteRemove, 'schedule:ended': Host_scheduleEnded, 'schedule:file-saved': Host_scheduleFileSaved, 'schedule:report': Host_scheduleReport, 'schedule:tick': Host_scheduleTick, 'security:code': Host_securityCode, 'security:error': Host_securityError, 'security:locked': Host_securityLocked, 'security:restored': Host_securityRestored, 'settings': Host_settings, 'snapshot:request': Host_snapshotRequest, 'sound:outputs': Host_soundOutputs, 'ssh:credentials': Host_sshCredentials, 'ssh:error': Host_sshError, 'ssh:imported': Host_sshImported, 'ssh:known': Host_sshKnown, 'start:folder': Host_startFolder, 'subagent': Host_subagent, 'subagent:cost': Host_subagentCost, 'sync:status': Host_syncStatus, 'tmux:data': Host_tmuxData, 'tmux:exit': Host_tmuxExit, 'todo:issueCreated': Host_todoIssueCreated, 'todo:issueInfo': Host_todoIssueInfo, 'todo:repoChecked': Host_todoRepoChecked, 'update:status': Host_updateStatus, 'window:captured': Host_windowCaptured, 'window:dragged': Host_windowDragged, 'window:placed': Host_windowPlaced, 'windowState': Host_windowState, 'worktree:reply': Host_worktreeReply }} HostMessages */
+/** @typedef {{ 'action:defaults': Page_actionDefaults, 'action:run': Page_actionRun, 'agentRules:copy': Page_agentRulesCopy, 'agentRules:read': Page_agentRulesRead, 'api:result': Page_apiResult, 'badge': Page_badge, 'changes:clear': Page_changesClear, 'changes:diff': Page_changesDiff, 'changes:get': Page_changesGet, 'changes:list': Page_changesList, 'changes:resolve': Page_changesResolve, 'changes:search': Page_changesSearch, 'clip:clear': Page_clipClear, 'clip:copied': Page_clipCopied, 'clip:forget': Page_clipForget, 'clip:list': Page_clipList, 'clip:open': Page_clipOpen, 'clip:pin': Page_clipPin, 'clip:take': Page_clipTake, 'codex:models': Page_codexModels, 'compact:files': Page_compactFiles, 'compact:watch': Page_compactWatch, 'dataDir:open': Page_dataDirOpen, 'dialog:pickFolder': Page_dialogPickFolder, 'earlier:add': Page_earlierAdd, 'earlier:delete': Page_earlierDelete, 'earlier:keep': Page_earlierKeep, 'earlier:move': Page_earlierMove, 'earlier:search': Page_earlierSearch, 'earlier:tail': Page_earlierTail, 'files:copyTo': Page_filesCopyTo, 'files:drop': Page_filesDrop, 'files:getTo': Page_filesGetTo, 'files:list': Page_filesList, 'files:op': Page_filesOp, 'files:pick': Page_filesPick, 'files:put': Page_filesPut, 'files:search': Page_filesSearch, 'files:tree': Page_filesTree, 'forward:start': Page_forwardStart, 'forward:stop': Page_forwardStop, 'git:status': Page_gitStatus, 'github:failedLog': Page_githubFailedLog, 'github:issue': Page_githubIssue, 'github:issueAct': Page_githubIssueAct, 'github:issues': Page_githubIssues, 'github:prCreate': Page_githubPrCreate, 'github:prFor': Page_githubPrFor, 'github:rerunFailed': Page_githubRerunFailed, 'github:runJobs': Page_githubRunJobs, 'github:runs': Page_githubRuns, 'github:status': Page_githubStatus, 'gitview:act': Page_gitviewAct, 'gitview:backupRestore': Page_gitviewBackupRestore, 'gitview:backups': Page_gitviewBackups, 'gitview:branches': Page_gitviewBranches, 'gitview:commit': Page_gitviewCommit, 'gitview:commitCreate': Page_gitviewCommitCreate, 'gitview:diff': Page_gitviewDiff, 'gitview:log': Page_gitviewLog, 'gitview:pruneBranches': Page_gitviewPruneBranches, 'gitview:pruneCandidates': Page_gitviewPruneCandidates, 'gitview:push': Page_gitviewPush, 'gitview:pushInfo': Page_gitviewPushInfo, 'gitview:search': Page_gitviewSearch, 'gitview:searchcode': Page_gitviewSearchcode, 'gitview:snapshot': Page_gitviewSnapshot, 'gitview:snapshotRestore': Page_gitviewSnapshotRestore, 'gitview:snapshots': Page_gitviewSnapshots, 'gitview:stageLines': Page_gitviewStageLines, 'gitview:status': Page_gitviewStatus, 'gitview:undoCommit': Page_gitviewUndoCommit, 'gitview:worktreeRemove': Page_gitviewWorktreeRemove, 'gitview:worktrees': Page_gitviewWorktrees, 'history:add': Page_historyAdd, 'history:clear': Page_historyClear, 'history:command': Page_historyCommand, 'history:commands': Page_historyCommands, 'history:delete': Page_historyDelete, 'history:export': Page_historyExport, 'history:list': Page_historyList, 'history:remove': Page_historyRemove, 'history:stats': Page_historyStats, 'host:shutdown': Page_hostShutdown, 'input': Page_input, 'kill': Page_kill, 'layout:export': Page_layoutExport, 'layout:import': Page_layoutImport, 'layout:probe': Page_layoutProbe, 'limits:refresh': Page_limitsRefresh, 'log:lines': Page_logLines, 'log:reveal': Page_logReveal, 'log:start': Page_logStart, 'log:stop': Page_logStop, 'memory:measure': Page_memoryMeasure, 'notepad:open': Page_notepadOpen, 'notepad:save': Page_notepadSave, 'notify': Page_notify, 'notify:withdraw': Page_notifyWithdraw, 'open:page': Page_openPage, 'open:path': Page_openPath, 'open:url': Page_openUrl, 'page:error': Page_pageError, 'pc:add': Page_pcAdd, 'pc:input': Page_pcInput, 'pc:list': Page_pcList, 'pc:manage': Page_pcManage, 'pc:prompts': Page_pcPrompts, 'pc:refresh': Page_pcRefresh, 'pc:remove': Page_pcRemove, 'pc:size': Page_pcSize, 'pc:unwatch': Page_pcUnwatch, 'pc:watch': Page_pcWatch, 'phone:alert': Page_phoneAlert, 'phone:pair': Page_phonePair, 'phone:remove': Page_phoneRemove, 'phone:state': Page_phoneState, 'phone:status': Page_phoneStatus, 'phone:takeBack': Page_phoneTakeBack, 'phone:test': Page_phoneTest, 'phone:withdraw': Page_phoneWithdraw, 'plugins:list': Page_pluginsList, 'plugins:open': Page_pluginsOpen, 'ports:terminals': Page_portsTerminals, 'preview:watch': Page_previewWatch, 'profiles:refresh': Page_profilesRefresh, 'prompt:add': Page_promptAdd, 'prompts:list': Page_promptsList, 'quit:answer': Page_quitAnswer, 'ready': Page_ready, 'rec:list': Page_recList, 'rec:load': Page_recLoad, 'rec:mark': Page_recMark, 'rec:reveal': Page_recReveal, 'rec:start': Page_recStart, 'rec:stop': Page_recStop, 'remote:hook': Page_remoteHook, 'remote:install': Page_remoteInstall, 'remote:remove': Page_remoteRemove, 'reposnippets:get': Page_reposnippetsGet, 'reposnippets:save': Page_reposnippetsSave, 'resize': Page_resize, 'schedule:forget': Page_scheduleForget, 'schedule:keep': Page_scheduleKeep, 'schedule:report-read': Page_scheduleReportRead, 'schedule:run': Page_scheduleRun, 'schedule:save-file': Page_scheduleSaveFile, 'schedule:stop': Page_scheduleStop, 'security:code': Page_securityCode, 'security:recover': Page_securityRecover, 'security:regenerate': Page_securityRegenerate, 'security:restore': Page_securityRestore, 'security:saved': Page_securitySaved, 'security:startFresh': Page_securityStartFresh, 'serial:break': Page_serialBreak, 'serial:eol': Page_serialEol, 'serial:hex': Page_serialHex, 'settings:load': Page_settingsLoad, 'settings:save': Page_settingsSave, 'snapshot:save': Page_snapshotSave, 'sound:outputs': Page_soundOutputs, 'sound:play': Page_soundPlay, 'ssh:import': Page_sshImport, 'ssh:known': Page_sshKnown, 'ssh:password': Page_sshPassword, 'ssh:passwordForget': Page_sshPasswordForget, 'ssh:status': Page_sshStatus, 'start': Page_start, 'state:save': Page_stateSave, 'sync:code': Page_syncCode, 'sync:join': Page_syncJoin, 'sync:now': Page_syncNow, 'sync:off': Page_syncOff, 'sync:on': Page_syncOn, 'sync:rotate': Page_syncRotate, 'sync:status': Page_syncStatus, 'test:ready': Page_testReady, 'test:result': Page_testResult, 'tmux:start': Page_tmuxStart, 'tmux:stop': Page_tmuxStop, 'tmux:write': Page_tmuxWrite, 'todo:issueCreate': Page_todoIssueCreate, 'todo:issueInfo': Page_todoIssueInfo, 'todo:repoCheck': Page_todoRepoCheck, 'update:cancel': Page_updateCancel, 'update:check': Page_updateCheck, 'update:download': Page_updateDownload, 'update:install': Page_updateInstall, 'update:status': Page_updateStatus, 'window': Page_window, 'window:capture': Page_windowCapture, 'window:dragPicture': Page_windowDragPicture, 'worktree:create': Page_worktreeCreate, 'worktree:remove': Page_worktreeRemove, 'worktree:status': Page_worktreeStatus }} PageMessages */
+/** @typedef {{ 'action:defaults': Host_actionDefaults, 'action:failed': Host_actionFailed, 'agent': Host_agent, 'agentRules:copied': Host_agentRulesCopied, 'agentRules:list': Host_agentRulesList, 'agents:next': Host_agentsNext, 'api': Host_api, 'attached': Host_attached, 'busy': Host_busy, 'changes:content': Host_changesContent, 'changes:diffed': Host_changesDiffed, 'changes:found': Host_changesFound, 'changes:list': Host_changesList, 'changes:resolved': Host_changesResolved, 'claude:context': Host_claudeContext, 'claude:cost': Host_claudeCost, 'claude:limits': Host_claudeLimits, 'claude:plan': Host_claudePlan, 'claude:usage': Host_claudeUsage, 'clip:clips': Host_clipClips, 'clip:taken': Host_clipTaken, 'codex:limits': Host_codexLimits, 'codex:models': Host_codexModels, 'compact:filesFound': Host_compactFilesFound, 'compact:lines': Host_compactLines, 'earlier:found': Host_earlierFound, 'earlier:tail': Host_earlierTail, 'error': Host_error, 'exit': Host_exit, 'files:done': Host_filesDone, 'files:dropped': Host_filesDropped, 'files:found': Host_filesFound, 'files:listing': Host_filesListing, 'files:queued': Host_filesQueued, 'files:tree': Host_filesTree, 'focusTerminal': Host_focusTerminal, 'folderPicked': Host_folderPicked, 'fonts': Host_fonts, 'forward:all': Host_forwardAll, 'forward:status': Host_forwardStatus, 'git:status': Host_gitStatus, 'github:result': Host_githubResult, 'gitview:result': Host_gitviewResult, 'history': Host_history, 'history:commands': Host_historyCommands, 'history:exported': Host_historyExported, 'history:overLimit': Host_historyOverLimit, 'history:removed': Host_historyRemoved, 'history:stats': Host_historyStats, 'hotkey:taken': Host_hotkeyTaken, 'layout': Host_layout, 'layout:error': Host_layoutError, 'layout:exported': Host_layoutExported, 'layout:found': Host_layoutFound, 'log:status': Host_logStatus, 'memory': Host_memory, 'notepad:opened': Host_notepadOpened, 'notepad:saved': Host_notepadSaved, 'output': Host_output, 'pc:added': Host_pcAdded, 'pc:list': Host_pcList, 'pc:lost': Host_pcLost, 'pc:managed': Host_pcManaged, 'pc:output': Host_pcOutput, 'pc:paused': Host_pcPaused, 'pc:refused': Host_pcRefused, 'pc:sessions': Host_pcSessions, 'phone:answer': Host_phoneAnswer, 'phone:clip': Host_phoneClip, 'phone:manage': Host_phoneManage, 'phone:pairing': Host_phonePairing, 'phone:screen': Host_phoneScreen, 'phone:seen': Host_phoneSeen, 'phone:size': Host_phoneSize, 'phone:status': Host_phoneStatus, 'phone:tested': Host_phoneTested, 'phone:typed': Host_phoneTyped, 'phone:viewers': Host_phoneViewers, 'plugins': Host_plugins, 'ports:terminals': Host_portsTerminals, 'preview:fileChanged': Host_previewFileChanged, 'profiles': Host_profiles, 'prompts:listed': Host_promptsListed, 'quit:ask': Host_quitAsk, 'rec:data': Host_recData, 'rec:list': Host_recList, 'rec:status': Host_recStatus, 'remote:install': Host_remoteInstall, 'remote:remove': Host_remoteRemove, 'reposnippets:changed': Host_reposnippetsChanged, 'reposnippets:found': Host_reposnippetsFound, 'reposnippets:saved': Host_reposnippetsSaved, 'schedule:ended': Host_scheduleEnded, 'schedule:file-saved': Host_scheduleFileSaved, 'schedule:report': Host_scheduleReport, 'schedule:tick': Host_scheduleTick, 'security:code': Host_securityCode, 'security:error': Host_securityError, 'security:locked': Host_securityLocked, 'security:restored': Host_securityRestored, 'settings': Host_settings, 'snapshot:request': Host_snapshotRequest, 'sound:outputs': Host_soundOutputs, 'ssh:credentials': Host_sshCredentials, 'ssh:error': Host_sshError, 'ssh:imported': Host_sshImported, 'ssh:known': Host_sshKnown, 'start:folder': Host_startFolder, 'subagent': Host_subagent, 'subagent:cost': Host_subagentCost, 'sync:status': Host_syncStatus, 'test:eval': Host_testEval, 'tmux:data': Host_tmuxData, 'tmux:exit': Host_tmuxExit, 'todo:issueCreated': Host_todoIssueCreated, 'todo:issueInfo': Host_todoIssueInfo, 'todo:repoChecked': Host_todoRepoChecked, 'update:status': Host_updateStatus, 'window:captured': Host_windowCaptured, 'window:dragged': Host_windowDragged, 'window:placed': Host_windowPlaced, 'windowState': Host_windowState, 'worktree:reply': Host_worktreeReply }} HostMessages */
