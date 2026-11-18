@@ -5,11 +5,10 @@ What changed in each release. Termilly says in its title bar when a newer one is
 ## 1.9.0 (2026-11-18)
 
 - **Git and GitHub:** commit, push, pull requests, Issues, graph, local history, line staging, cleanup and checks.
-- **Autocomplete:** ghost text, a list on Ctrl+Shift+Space, and history kept per shell.
-- **Snippets per repo:** also runs VS Code tasks, with a snippets quick pick.
 - **Minimal layout:** the Minimal look for panes, docked tools and other windows, with names shown as a line or on hover.
-- **To do:** edit and delete tasks, review an agent's git changes, and buttons in detached windows.
-- **Schedules:** clear past runs.
+- **Autocomplete:** ghost text, or a dropdown list on Ctrl+Shift+Space, and history kept per shell.
+- **Snippets:** auto discover snippets from git folder, VS Code tasks, new snippets quick picker.
+- **To do:** mcp edit and delete tasks, review an agent's git changes.
 - **Needs you:** a short flash on the terminal you jump to from a notification.
 
 Fixes:
@@ -17,8 +16,8 @@ Fixes:
 - Duplicate replies after resizing Claude Code on Windows.
 - Copy and paste in detached terminals.
 - Compact view: long replies were cut short, and the permission card and prompt jump have been fixed.
-- Bold and italic Markdown links (#77).
-- Path links, remote rendering (#72) and autocomplete in bash and zsh.
+- Bold and italic Markdown links conversion to links in terminal outputs
+- Path links, remote rendering, and autocomplete in bash and zsh.
 - Many small fixes.
 
 ## 1.8.1 (2026-11-14)
