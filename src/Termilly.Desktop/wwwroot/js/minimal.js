@@ -6,8 +6,7 @@
 
 import { state, on, wsById, tabsOf, EVENTS } from './store.js';
 import { showMenu } from './popups.js';
-import { bringBack } from './panes.js';
-import { jumpToNext } from './inbox.js';
+import { bringBack, focusTab, switchWorkspace } from './panes.js';
 import { shownName } from './rename.js';
 import { scheduleFit } from './terminals.js';
 import { showDock, needsYou } from './dock.js';
@@ -23,10 +22,13 @@ const { paneNames, layout } = SETTING_VALUES;
 
 const body = document.body;
 const left = find(document, '#titlebar .tb-left');
-left.insertAdjacentHTML('beforeend', `<button class="mini-aside" hidden><svg viewBox="0 0 16 16"><path d="M3.5 12.5h9"/><path d="M8 3.5v6M5.5 7l2.5 2.5L10.5 7"/></svg><span></span></button>
-  <button class="mini-needs" hidden title="Go to the next terminal that needs you (Ctrl+Shift+J)"><span class="mini-needs-dot"></span><span></span></button>`);
+left.insertAdjacentHTML('beforeend', `<button class="mini-aside" hidden><svg viewBox="0 0 16 16"><path d="M3.5 12.5h9"/><path d="M8 3.5v6M5.5 7l2.5 2.5L10.5 7"/></svg><span></span></button>`);
+// Who needs you: on the right, before the window's buttons (at the start of their side: on macOS they've moved left).
+find(document, '#titlebar .tb-right').insertAdjacentHTML('afterbegin', '<button class="mini-needs" hidden><span class="mini-needs-dot"></span><span></span></button>');
 const asideButton = find(left, '.mini-aside');
-const needsButton = find(left, '.mini-needs');
+const needsButton = find(document, '#titlebar .mini-needs');
+/** The terminal "needs you" names, which a click on it goes to. @type {Tab | null} */
+let needsShown = null;
 
 /** The workspace's terminals set aside. */
 const asideTabs = () => {
@@ -40,10 +42,12 @@ function drawStrip() {
   asideButton.hidden = !aside.length;
   find(asideButton, 'span').textContent = `${aside.length} set aside`;
   const needing = [...state.tabs.values()].filter(needsYou);
-  needsButton.hidden = !needing.length;
-  if (needing.length) {
+  needsShown = needing[0] ?? null;
+  needsButton.hidden = !needsShown;
+  if (needsShown) {
     const more = needing.length > 1 ? `, ${needing.length - 1} more` : '';
-    find(needsButton, 'span:last-child').textContent = `${shownName(needing[0])} needs you${more}`;
+    find(needsButton, 'span:last-child').textContent = `${shownName(needsShown)} needs you${more}`;
+    needsButton.title = `Go to ${shownName(needsShown)}`;
   }
 }
 
@@ -64,7 +68,12 @@ function applyLayout() {
 asideButton.addEventListener('click', () => {
   showMenu(asideTabs().map(tab => ({ label: shownName(tab), hint: 'Bring back', action: () => bringBack(tab) })), asideButton);
 });
-needsButton.addEventListener('click', () => jumpToNext());
+// To the terminal it names (not the inbox's next, which counts finished and failed ones too).
+needsButton.addEventListener('click', () => {
+  if (!needsShown) return;
+  if (needsShown.wsId !== state.activeId) switchWorkspace(needsShown.wsId);
+  focusTab(needsShown);
+});
 
 /** The terminal whose bar shows now, on hover. @type {HTMLElement | null} */
 let barShown = null;

@@ -84,6 +84,9 @@ function atNow() {
 /** Into its strip on its edge, or back into the title bar (or into the dock that hosts it). */
 function put() {
   if (host) {
+    // Its saved place in Normal says nothing while it's hosted: the strips and room kept for it there go.
+    delete document.body.dataset.bar;
+    delete document.body.dataset.barBeside;
     toolbar.dataset.side = host.side;
     if (toolbar.parentElement !== host.el) host.el.append(toolbar);
     shift = 0;
