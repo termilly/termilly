@@ -14,7 +14,7 @@ const MOST = 4;
 export const TOAST = Object.freeze({ running: 'running', done: 'done', failed: 'failed' });
 /** A toast's button that shows what it's about: the files, the tasks. */
 export const SHOW = 'Show';
-/** A toast's button that puts back what was just done away with (a deleted task). */
+/** A toast's button that takes back what it reports. */
 export const UNDO = 'Undo';
 
 /**

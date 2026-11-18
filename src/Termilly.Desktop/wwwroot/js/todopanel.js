@@ -74,7 +74,6 @@ const EDIT_ROW = '.td-edit';
 const EDIT_TEXT = '.td-edit-text';
 /** The edited task's details box: as tall as its text, up to a limit (CSS max-height), then it scrolls. */
 const EDIT_DETAILS = '.td-edit-details';
-/** A deletion's toast button that brings the tasks back. */
 const ISSUE_TITLE = '.td-issue-title';
 const ISSUE_BODY = '.td-issue-body';
 const WINDOW_KEY = 'todo';
