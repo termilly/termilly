@@ -94,6 +94,8 @@ export function promptStarted(tab, mark = '') {
   commands.prompts.push(marker);
   if (commands.prompts.length > MAX_PROMPTS) commands.prompts.shift().dispose();
   commands.promptMarker = marker;
+  // Where input starts is this prompt's to say (B), or its first key's (typingAtPrompt): not the last one's.
+  commands.input = null;
   emit(EVENTS.prompt, tab); // a fresh prompt with nothing typed yet (snippetprompt.js)
 }
 
@@ -134,6 +136,18 @@ export function atCmdPrompt(tab) {
 export function inputStarted(tab) {
   const { term } = /** @type {TabView} */ (tab.view);
   commandsOf(tab).input = { marker: term.registerMarker(0), x: term.buffer.active.cursorX };
+}
+
+/**
+ * A key is pressed at a prompt that didn't say where it ends (B): a prompt rebuilt after Termilly's mark went on it
+ * (Starship, say), or Termilly's integration on a server or in WSL. Input starts where the cursor is before the key
+ * reaches the shell, as the prompt is drawn by then.
+ * @param {Tab} tab
+ */
+export function typingAtPrompt(tab) {
+  const commands = tab.commands;
+  if (!tab.shellMarks || tab.running || !commands || commands.input || !commands.promptMarker || commands.promptMarker.isDisposed) return;
+  inputStarted(tab);
 }
 
 /**

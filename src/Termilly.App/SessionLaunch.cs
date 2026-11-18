@@ -38,7 +38,7 @@ internal static class SessionLaunch
         /// The prompt's end (OSC 133;B), where the typed command starts, for autocomplete: bash has no hook after its
         /// prompt, so it goes at the end of PS1, once, after .bashrc and prompt tools have set it.
         /// </summary>
-        public const string PromptEnd = """[[ "$PS1" == *'133;B'* ]] || PS1="$PS1"'\[\e]133;B\a\]'""";
+        public const string PromptEnd = """[[ "$PS1" == *'\e]133;B\a'* ]] || PS1="$PS1"'\[\e]133;B\a\]'""";
 
         /// <summary>
         /// bash before 4.4 (macOS's own is 3.2) has no PS0: the first prompt sets a DEBUG trap instead (unless the
@@ -229,8 +229,10 @@ internal static class SessionLaunch
     }
 
     /// <summary>
-    /// bash: PS0 prints before each command runs (bash 4.4+), PROMPT_COMMAND before each prompt. bash can't mark
-    /// where its prompt ends, so PS0 also reports the command line itself (OSC 633;E, as VS Code's integration does).
+    /// bash: PS0 prints before each command runs (bash 4.4+), PROMPT_COMMAND before each prompt. bash has no hook after
+    /// its prompt: PROMPT_COMMAND puts the prompt's end mark at the end of PS1 (<see cref="BashMarks.PromptEnd"/>; a
+    /// prompt tool may rebuild PS1 after it, and the page then takes the first key's place), and PS0 reports the
+    /// command line itself (OSC 633;E, as VS Code's integration does).
     /// PROMPT_COMMAND also keeps the agent folder first on PATH (see <see cref="WithAgent"/>; unset on Windows) and,
     /// off Windows, reports the working folder (OSC 7) for the page's recent folders and the terminal's cwd.
     /// In a WSL distribution set up for Termilly, its own integration (shell/remote/termilly.sh, which sets

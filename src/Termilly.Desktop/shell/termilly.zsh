@@ -26,7 +26,7 @@ __termilly_preexec() {
 # Last before each prompt: the prompt's end (OSC 133;B), where the typed command starts, for autocomplete. zsh has no
 # hook after its prompt, so it goes at the end of PROMPT, after a theme's own precmd has set it.
 __termilly_prompt_end() {
-  [[ $PS1 == *'133;B'* ]] || PS1="${PS1}%{"$'\e]133;B\a'"%}"
+  [[ $PS1 == *$'\e]133;B'* ]] || PS1="${PS1}%{"$'\e]133;B\a'"%}"
 }
 
 autoload -Uz add-zsh-hook

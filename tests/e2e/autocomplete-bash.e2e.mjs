@@ -82,3 +82,14 @@ step('a command run in bash is offered in grey when typed again, and → takes i
   await press(['ArrowRight']);
   await until(p => p.line?.typed === COMMAND, '→ did not take the grey text');
 });
+
+step('a prompt rebuilt after Termilly\'s mark (as Starship does) still gets it, from the first key typed there', async () => {
+  // The user's own prompt command, after Termilly's: PS1 is made again without the prompt's end mark.
+  await press([...'PROMPT_COMMAND="$PROMPT_COMMAND; PS1=\'rebuilt> \'"', 'Enter']);
+  await until(p => !p.running && !p.input, 'the rebuilt prompt still marks its end');
+  await press([...COMMAND, 'Enter']);
+  await until(p => !p.running && !p.input, 'the command did not end at a new prompt');
+  await press([...TYPED]);
+  await until(p => p.line?.typed === TYPED, 'what was typed is not read after the rebuilt prompt');
+  await app.waitFor('.ac-ghost', { text: COMMAND.slice(TYPED.length) });
+});
