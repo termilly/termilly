@@ -11,6 +11,13 @@ import { entryDetail } from './inbox.js';
 import { AGENT_STATE } from './constants.js';
 import { windowInFront } from './windowshown.js';
 
+/** The class that lights the pane a notification click went to (panes.css), so the eye finds it at once. */
+const ARRIVED_CLASS = 'pane-arrived';
+/** How long it stays lit: a little over its animation, so it also goes when the animation never runs (a hidden pane). */
+const ARRIVED_MS = 900;
+/** Each lit pane's timer, so a second click restarts the light rather than cutting it short. */
+const arrivedTimers = new WeakMap();
+
 /**
  * Which setting allows a notification for each agent state, and how its title starts.
  * @type {Record<string, [string, string]>}
@@ -108,7 +115,23 @@ function withdraw(tab) {
 
 onHost(HOST.focusTerminal, m => {
   const tab = state.tabs.get(m.id);
-  if (tab) focusTab(tab);
+  if (!tab) return;
+  focusTab(tab);
+  flashArrived(tab);
 });
+
+/**
+ * Lights the terminal's pane briefly.
+ * @param {Tab} tab
+ */
+function flashArrived(tab) {
+  const el = tab.view?.el;
+  if (!el) return;
+  el.classList.remove(ARRIVED_CLASS);
+  void el.offsetWidth; // a reflow, so taking the class off and on again restarts the animation
+  el.classList.add(ARRIVED_CLASS);
+  clearTimeout(arrivedTimers.get(el));
+  arrivedTimers.set(el, setTimeout(() => el.classList.remove(ARRIVED_CLASS), ARRIVED_MS));
+}
 
 

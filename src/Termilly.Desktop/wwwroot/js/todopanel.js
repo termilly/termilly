@@ -1177,7 +1177,7 @@ function acceptTask(task) {
   setStatus(ref, task.id, TASK_STATUS.done, { review: task.review });
   showToast({
     text: `“${task.text}” moved to Done`, state: TOAST.done,
-    action: { label: UNDO, run: () => void (listOf(ref) && setStatus(ref, task.id, TASK_STATUS.review, { review: task.review, terminal: task.terminal })) },
+    action: { label: UNDO, run: () => void (listOf(ref) && setStatus(ref, task.id, TASK_STATUS.review, { review: task.review, terminal: task.terminal, workedIn: task.workedIn })) },
   });
 }
 

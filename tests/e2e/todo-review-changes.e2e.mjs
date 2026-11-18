@@ -81,10 +81,13 @@ step('Git changes opens the Git window on the folder, with the changed file', as
   await app.screenshot('git-changes');
 });
 
-step('Accept lets the place go', async () => {
+step('Accept lets the place go, and its Undo brings it back', async () => {
   await app.eval(async t => (await t.import('gitwindow.js')).closeGitWindow());
   await app.waitFor('.git-win', { gone: true });
   await app.screenshot('review-row');
   await app.click(`${row(withPlace)} [data-td="accept"]`);
   assert.equal((await taskById(withPlace)).workedIn, undefined);
+  await app.waitFor('.toast', { text: 'moved to Done' });
+  await app.eval(t => [...t.$$('.toast button')].find(b => b.textContent.trim() === 'Undo').click());
+  assert.deepEqual((await taskById(withPlace)).workedIn, { folder: repo.path });
 });
