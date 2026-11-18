@@ -92,6 +92,7 @@ import { recordReport } from './agentturns.js';
 import { inEachDocument } from './windows.js';
 import { rememberSession, recordPrompt } from './myprompts.js';
 import './tooltips.js';
+import { outputArrived } from './reprint.js';
 import { byId, find, targetOf, WORKSPACE_ID, TITLEBAR_ID } from './dom.js';
 
 /** @typedef {import('./protocol.js').Host_agent_1} Host_agent_1 */
@@ -483,6 +484,7 @@ onHost(HOST.windowState, m => {
 onHost(HOST.output, m => {
   const tab = state.tabs.get(m.id);
   if (!tab?.view?.term) return;
+  outputArrived(tab);
   tab.view.term.write(consoleDefaults(m.data));
   noteOutput(tab);
   if (tab === focusedTab()) setTimeout(signalReady, READY_PAINT_MS); // the first prompt is on screen: let it paint, then show
