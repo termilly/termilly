@@ -6,17 +6,10 @@
 import { send, onHost } from './host.js';
 import { PAGE, HOST } from './protocol.js';
 import { state, on, wsById, tabTitle, isInView, getSetting, EVENTS } from './store.js';
-import { focusTab } from './panes.js';
+import { arriveAt } from './arrived.js';
 import { entryDetail } from './inbox.js';
 import { AGENT_STATE } from './constants.js';
 import { windowInFront } from './windowshown.js';
-
-/** The glow laid over the pane a notification click went to (panes.css), so the eye finds it at once. */
-const ARRIVED_CLASS = 'pane-arrived';
-/** How long the glow stays: a little over its animation. */
-const ARRIVED_MS = 900;
-/** Each lit pane's timer, so a second click starts a fresh glow rather than having the old timer cut it short. */
-const arrivedTimers = new WeakMap();
 
 /**
  * Which setting allows a notification for each agent state, and how its title starts.
@@ -115,25 +108,7 @@ function withdraw(tab) {
 
 onHost(HOST.focusTerminal, m => {
   const tab = state.tabs.get(m.id);
-  if (!tab) return;
-  focusTab(tab);
-  flashArrived(tab);
+  if (tab) arriveAt(tab);
 });
-
-/**
- * Lights the terminal's pane briefly.
- * @param {Tab} tab
- */
-function flashArrived(tab) {
-  const el = tab.view?.el;
-  if (!el) return;
-  // Its own element, not a pseudo-element: the pane's ::before is the broadcast stripe and its ::after Minimal's edge.
-  el.querySelector(`:scope > .${ARRIVED_CLASS}`)?.remove();
-  clearTimeout(arrivedTimers.get(el));
-  const glow = document.createElement('div');
-  glow.className = ARRIVED_CLASS;
-  el.append(glow);
-  arrivedTimers.set(el, setTimeout(() => glow.remove(), ARRIVED_MS));
-}
 
 
