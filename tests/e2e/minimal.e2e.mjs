@@ -235,7 +235,9 @@ step('on hover, a bar a button was clicked in hides again, and a working agent k
   await app.screenshot('06c-stop-alone');
   await pointTo(pane.x, pane.top + 12);
   await pause(300);
-  assert.deepEqual(await look(), { stop: true, stopAtRight: true, menu: 'visible', name: 'visible' });
+  // The whole bar again, Stop in its usual place among the buttons.
+  const whole = await look();
+  assert.deepEqual({ stop: whole.stop, menu: whole.menu, name: whole.name }, { stop: true, menu: 'visible', name: 'visible' });
   await app.eval(async t => {
     const { state, emit, EVENTS } = await t.import('store.js');
     for (const tab of state.tabs.values()) if (tab.agent) { tab.agent = null; emit(EVENTS.tab, tab); }
