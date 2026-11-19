@@ -144,6 +144,41 @@ public sealed class StartupUpdateTests : IDisposable
     }
 
     [Fact]
+    public async Task Another_program_from_the_folder_means_no_update_and_no_check()
+    {
+        var fake = new Fake(this) { OthersRunning = true };
+
+        Assert.False(await fake.RunAsync());
+
+        Assert.Empty(fake.View.Lines);
+        Assert.Equal(0, fake.Fetched);
+    }
+
+    [Fact]
+    public async Task A_shell_kept_before_the_hand_off_waits_without_using_the_try()
+    {
+        var fake = new Fake(this) { ShellKeptLater = true };
+
+        Assert.False(await fake.RunAsync());
+
+        Assert.Null(fake.Installed);
+        var journal = UpdateJournal.Read(JournalFolder)!;
+        Assert.Null(journal.Attempt);
+        Assert.DoesNotContain(Newer, journal.TriedVersions);
+    }
+
+    [Fact]
+    public async Task The_idle_host_is_stopped_before_setup_runs()
+    {
+        var fake = new Fake(this);
+
+        Assert.True(await fake.RunAsync());
+
+        Assert.Equal(1, fake.HostStops);
+        Assert.NotNull(fake.Installed);
+    }
+
+    [Fact]
     public async Task Not_now_stops_the_download_and_puts_the_version_off()
     {
         var fake = new Fake(this) { PressNotNow = true };
@@ -254,6 +289,10 @@ public sealed class StartupUpdateTests : IDisposable
         public View View { get; } = new();
         public UpdateManifest? Latest { get; init; } = new(Newer, null, null, "https://termilly.com/s.exe", null, null) { WindowsOnlineSha256 = Hash };
         public bool KeptShells { get; init; }
+        public bool OthersRunning { get; init; }
+        /// <summary>A shell kept between the first look and the hand-off: the idle host is then not stopped.</summary>
+        public bool ShellKeptLater { get; init; }
+        public int HostStops { get; private set; }
         public bool PressNotNow { get; init; }
         public bool IntactDownload { get; init; } = true;
         public Exception? DownloadError { get; init; }
@@ -274,6 +313,12 @@ public sealed class StartupUpdateTests : IDisposable
             DownloadAsync,
             (_, _) => IntactDownload,
             () => KeptShells,
+            () => OthersRunning,
+            () =>
+            {
+                HostStops++;
+                return !ShellKeptLater;
+            },
             file =>
             {
                 Installed = InstallResult.Started ? file : null;

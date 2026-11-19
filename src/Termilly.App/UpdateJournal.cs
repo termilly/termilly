@@ -142,6 +142,13 @@ internal static class UpdateJournal
         NotNowUntil = (now + NotNowFor).ToUnixTimeMilliseconds(),
     };
 
+    /// <summary>The journal with the attempt dropped before setup ran (the folder was in use): not counted as tried.</summary>
+    public static UpdateJournalData Skip(UpdateJournalData journal, string version) => journal with
+    {
+        Attempt = null,
+        Tried = [.. journal.TriedVersions.Where(v => v != version)],
+    };
+
     /// <summary>The journal with the attempt moved on to <paramref name="state"/>.</summary>
     public static UpdateJournalData Move(UpdateJournalData journal, string state) =>
         journal.Attempt is { } attempt ? journal with { Attempt = attempt with { State = state } } : journal;

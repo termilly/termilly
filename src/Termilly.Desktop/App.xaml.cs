@@ -62,7 +62,7 @@ public partial class App : Application
             return null;
         }
         var download = UpdateDownload.Create();
-        var installer = new WindowsUpdateInstaller();
+        var installer = new WindowsUpdateInstaller(supervise: true);
         return (new StartupUpdateParts(
             installed.Dir,
             AppVersion.Current,
@@ -71,10 +71,19 @@ public partial class App : Application
             download.DownloadAsync,
             UpdateDownload.IsIntact,
             HostClient.HasKeptShells,
+            () => OthersRunFrom(installed.Dir),
+            HostClient.StopIdleHost,
             file => installer.InstallAsync(file, CancellationToken.None),
             () => DateTimeOffset.Now,
             Task.Delay), settings);
     }
+
+    /// <summary>
+    /// Whether anything other than this Termilly and its background host runs from the program folder (another data
+    /// folder's Termilly, an agent helper): setup never ends those, so the update waits for a start without them.
+    /// </summary>
+    private static bool OthersRunFrom(string dir) =>
+        ProcessImage.InFolder(dir, Environment.ProcessId).Any(path => !string.Equals(path, HostClient.HostExe, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     /// Shows the update's loader and runs it; Termilly then quits for setup to install the new version, or opens as it

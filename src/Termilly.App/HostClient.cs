@@ -109,7 +109,15 @@ internal sealed class HostClient : IDisposable
     /// Whether a background host is running with shells still alive in it: installing an update would end them. Only
     /// connects, never starts a host. A host that's there but doesn't answer counts as having some.
     /// </summary>
-    public static bool HasKeptShells()
+    public static bool HasKeptShells() => AskHost(stopIfIdle: false);
+
+    /// <summary>
+    /// Ends a background host with no shells alive (it would keep the program folder in use for a minute, so an update
+    /// couldn't swap it). False when it has shells, which are never ended.
+    /// </summary>
+    public static bool StopIdleHost() => !AskHost(stopIfIdle: true);
+
+    private static bool AskHost(bool stopIfIdle)
     {
         var pipe = new NamedPipeClientStream(".", HostProtocol.PipeName, PipeDirection.InOut, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
         try
@@ -128,7 +136,12 @@ internal sealed class HostClient : IDisposable
             {
                 HostProtocol.Write(pipe, new HostRequest.Hello(HostProtocol.Version));
             }
-            return !client._hello.Task.Wait(HelloWait) || client._hello.Task.Result.Sessions.Any(s => s.Alive);
+            var keeps = !client._hello.Task.Wait(HelloWait) || client._hello.Task.Result.Sessions.Any(s => s.Alive);
+            if (stopIfIdle && !keeps)
+            {
+                client.Shutdown();
+            }
+            return keeps;
         }
         catch (Exception e) when (e is IOException or AggregateException or ObjectDisposedException)
         {

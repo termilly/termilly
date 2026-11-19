@@ -9,7 +9,8 @@ namespace Termilly.Desktop;
 /// administrator for an install for all users), then starts Termilly again (SetupCommand). It closes Termilly's
 /// processes itself, the background host's too, so kept shells end.
 /// </summary>
-internal sealed class WindowsUpdateInstaller : IUpdateInstaller
+/// <param name="supervise">An update at start (StartupUpdateGate): setup keeps the old version until the new one is healthy.</param>
+internal sealed class WindowsUpdateInstaller(bool supervise = false) : IUpdateInstaller
 {
     /// <summary>Setup's entry in Apps &amp; features (installer/TermillySetup/Engine/Options.cs) and the folder it names.</summary>
     private const string UninstallKey = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\" + Product.Name;
@@ -39,7 +40,7 @@ internal sealed class WindowsUpdateInstaller : IUpdateInstaller
         using var started = TryCreateSignal(scope, UpdateSignals.Started);
         shown?.Reset();
         started?.Reset();
-        var command = SetupCommand.For(file, Installed(), scope);
+        var command = SetupCommand.For(file, Installed(), scope, supervise);
 #if DEBUG
         command = TestSetup(command);
 #endif

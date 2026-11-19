@@ -47,7 +47,11 @@ internal sealed class WindowsPlatform(MainWindow window) :
 
     public void ShowBadge(int count) => window.ShowBadge(count);
 
-    public void PageReady() => window.RevealPage();
+    public void PageReady()
+    {
+        window.RevealPage();
+        MainWindow.SignalUpdateHealthy();
+    }
 
     public Task<string?> CapturePageAsync() => window.Dispatcher.InvokeAsync(window.CapturePageAsync).Task.Unwrap();
 

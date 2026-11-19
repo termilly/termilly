@@ -30,6 +30,8 @@ internal sealed record StartupUpdateParts(
     Func<UpdatePackage, IProgress<int>, CancellationToken, Task<string>> Download,
     Func<string, string, bool> Intact,
     Func<bool> KeptShells,
+    Func<bool> OthersRunning,
+    Func<bool> StopIdleHost,
     Func<string, Task<UpdateInstallResult>> Install,
     Func<DateTimeOffset> Now,
     Func<TimeSpan, Task> Wait);
@@ -69,7 +71,7 @@ internal sealed class StartupUpdateGate(StartupUpdateParts parts, IStartupUpdate
             return await FailedAsync($"Couldn't install Termilly {outcome.Version}.").ConfigureAwait(false);
         }
         // An update was just installed (setup started this): no second one on the same start.
-        if (outcome is not null || await Task.Run(parts.KeptShells).ConfigureAwait(false))
+        if (outcome is not null || await Task.Run(() => parts.KeptShells() || parts.OthersRunning()).ConfigureAwait(false))
         {
             return false;
         }
@@ -134,6 +136,13 @@ internal sealed class StartupUpdateGate(StartupUpdateParts parts, IStartupUpdate
         catch (Exception e) when (Storage.IsFileError(e))
         {
             return await FailedAsync(journal, $"Couldn't keep the update: {e.Message}").ConfigureAwait(false);
+        }
+        // An idle host would keep the folder in use; a shell kept meanwhile, or another program from the folder, means
+        // the update waits for a later start without costing this version its try.
+        if (!await Task.Run(() => parts.StopIdleHost() && !parts.OthersRunning()).ConfigureAwait(false))
+        {
+            UpdateJournal.Write(_folder, UpdateJournal.Skip(journal, version));
+            return false;
         }
         // Written before setup starts: the next start then knows to look for the new version, whatever setup does.
         journal = UpdateJournal.Move(journal, UpdateAttemptStates.HandedOff);

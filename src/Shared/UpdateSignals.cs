@@ -22,6 +22,8 @@ internal static class UpdateSignals
 {
     public const string Shown = "shown";
     public const string Started = "started";
+    /// <summary>The new version's page is up and answered (an automatic update keeps it only after this).</summary>
+    public const string Healthy = "healthy";
     /// <summary>A scope's length: a SHA-256 hash in hex.</summary>
     private const int ScopeLength = 64;
     private const uint EventAccess = 0x00100002; // SYNCHRONIZE | EVENT_MODIFY_STATE
@@ -72,7 +74,7 @@ internal static class UpdateSignals
         {
             throw new ArgumentException("Invalid update event scope.", nameof(scope));
         }
-        if (stage != Shown && stage != Started)
+        if (stage != Shown && stage != Started && stage != Healthy)
         {
             throw new ArgumentException("Invalid update event stage.", nameof(stage));
         }
@@ -104,9 +106,13 @@ internal static class UpdateSignals
         finally { _ = LocalFree(descriptor); }
     }
 
-    public static bool SignalStarted(string installDir)
+    public static bool SignalStarted(string installDir) => Signal(installDir, Started);
+
+    public static bool SignalHealthy(string installDir) => Signal(installDir, Healthy);
+
+    private static bool Signal(string installDir, string stage)
     {
-        using var handle = OpenEvent(EventAccess, false, Name(Scope(installDir), Started));
+        using var handle = OpenEvent(EventAccess, false, Name(Scope(installDir), stage));
         if (handle.IsInvalid)
         {
             return false; // normal start, or setup has already stopped waiting
