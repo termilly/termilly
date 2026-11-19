@@ -13,10 +13,9 @@ import { scheduleFit } from './terminals.js';
 import { openTabMenu, RENAME_LABEL, NOTE_LABEL, GIT_LABEL } from './tabmenu.js';
 import { openTagPicker } from './tagpicker.js';
 import {
-  renameWorkspace, setWorkspaceColor, closeWorkspace, nameTakenMessage, MAX_WORKSPACE_NAME,
+  renameWorkspace, setWorkspaceColor, nameTakenMessage, MAX_WORKSPACE_NAME,
 } from './workspaces.js';
-import { confirmWithOption } from './dialogs.js';
-import { removeHistory, HISTORY_KIND } from './historysize.js';
+import { askCloseWorkspace, CLOSE_WORKSPACE_LABEL } from './workspaceclose.js';
 import { openPalette, PALETTE_VIEW } from './palette.js';
 import { firstLine } from './notes.js';
 import { openTodo, isMarked, markedList, tabHover, workspaceList } from './todo.js';
@@ -294,36 +293,8 @@ function openWorkspaceMenu(ws, at) {
       })),
     },
     SEPARATOR,
-    {
-      label: 'Close workspace', icon: ICONS.trash, danger: true,
-      action: async () => {
-        const n = tabsOf(ws).length;
-        // Asked: whether its history goes too (its terminals, their output and commands), else they're in Recently closed.
-        const erase = n && state.settings.interface.confirmCloseWorkspace ? await confirmWithOption({
-          title: `Close “${ws.name}”?`,
-          body: `Its ${n} terminal${n === 1 ? '' : 's'} will be closed. You can reopen them from Recently closed.${state.workspaces.length === 1 ? ' This is your last workspace.' : ''}`,
-          confirm: 'Close workspace',
-          option: 'Also erase its history: these terminals, their output and their commands',
-        }) : false;
-        if (erase === null) return;
-        closeWorkspace(ws);
-        if (erase) eraseWorkspaceHistory(ws.name);
-      },
-    },
+    { label: CLOSE_WORKSPACE_LABEL, icon: ICONS.trash, danger: true, action: () => askCloseWorkspace(ws) },
   ], at);
-}
-
-/** How long after a workspace closes its history is erased: its terminals' last output is written as they close. */
-const ERASE_AFTER_MS = 1500;
-
-/**
- * A closed workspace's history goes: its closed terminals with their output, and the commands run in them.
- * @param {string} name
- */
-function eraseWorkspaceHistory(name) {
-  setTimeout(() => {
-    removeHistory({ kinds: [HISTORY_KIND.closed, HISTORY_KIND.commands], workspaces: [name] }, false).catch(() => {});
-  }, ERASE_AFTER_MS);
 }
 
 /** @param {Workspace} ws */

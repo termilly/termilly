@@ -388,6 +388,54 @@ step('the dock moves to another edge from its menu, and stays shown with hiding 
   await app.screenshot('07-dock-right');
 });
 
+step("right-click on a workspace in the strip's list closes it, asked first as in the sidebar", async () => {
+  const names = () => app.eval(async t => (await t.import('store.js')).state.workspaces.map(ws => ws.name));
+  const menus = () => app.eval(t => t.$$('.context-menu').length);
+  /** Right-clicks a workspace's row in the open list, as a mouse would, at its left end. */
+  const rightClickRow = async name => {
+    await app.eval((t, n) => {
+      const row = [...t.$$('.context-menu .menu-row')].find(r => r.querySelector('.menu-label')?.textContent === n);
+      const box = row.getBoundingClientRect();
+      for (const type of ['mousedown', 'mouseup', 'contextmenu']) {
+        row.dispatchEvent(new globalThis.MouseEvent(type, { clientX: box.left + 4, clientY: box.top + 2, button: 2, bubbles: true, cancelable: true }));
+      }
+    }, name);
+    await app.waitFor('.context-menu .menu-row.danger');
+  };
+  /** Opens the strip's list and right-clicks a workspace's row. */
+  const rightClick = async name => {
+    await app.click('#crumb');
+    await app.waitFor('.context-menu .menu-row');
+    await rightClickRow(name);
+  };
+  assert.ok((await names()).includes('second'));
+  await rightClick('second');
+  assert.equal(await menus(), 2, 'the list stays open under the workspace menu');
+  await pause(400);
+  await app.screenshot('08-workspace-close-menu');
+  // Another row's right-click replaces it; Escape closes it and gives the list its keys back.
+  await rightClickRow('workspace');
+  assert.equal(await menus(), 2, 'one workspace menu at a time');
+  await app.key('.context-menu .menu-row.danger', 'Escape');
+  await pause(300);
+  assert.deepEqual({ menus: await menus(), keys: await app.eval(() => !!globalThis.document.activeElement?.closest('.context-menu .menu-row')) }, { menus: 1, keys: true });
+  await app.key('.context-menu', 'Escape');
+  await pause(300);
+  await rightClick('second');
+  await app.click('.context-menu .menu-row.danger');
+  await app.waitFor('[data-cancel]');
+  assert.equal(await app.text('.dialog h3, dialog h3'), 'Close “second”?');
+  await app.click('[data-cancel]');
+  await pause(300);
+  assert.ok((await names()).includes('second'), 'Cancel keeps it');
+  await rightClick('second');
+  await app.click('.context-menu .menu-row.danger');
+  await app.waitFor('[data-ok]');
+  await app.click('[data-ok]');
+  await pause(500);
+  assert.ok(!(await names()).includes('second'), 'closed');
+});
+
 step('Normal gives the title bar, sidebar and toolbar back', async () => {
   await setInterface({ layout: 'normal' });
   await pause(400);
