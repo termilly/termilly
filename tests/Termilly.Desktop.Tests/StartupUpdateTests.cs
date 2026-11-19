@@ -115,7 +115,7 @@ public sealed class StartupUpdateTests : IDisposable
 
         Assert.True(await fake.RunAsync());
 
-        Assert.Equal(["Checking for updates", $"Downloading Termilly {Newer}", "Checking the download", $"Installing Termilly {Newer}"], fake.View.Lines);
+        Assert.Equal(["Checking for updates", $"Downloading Termilly {Newer}", "Verifying download", $"Installing Termilly {Newer}"], fake.View.Lines);
         Assert.Equal(Path.Combine(JournalFolder, UpdateJournal.SetupFile), fake.Installed);
         Assert.True(File.Exists(fake.Installed));
         Assert.Equal(UpdateAttemptStates.HandedOff, UpdateJournal.Read(JournalFolder)!.Attempt!.State);

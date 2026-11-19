@@ -123,7 +123,7 @@ internal sealed class StartupUpdateGate(StartupUpdateParts parts, IStartupUpdate
     /// <summary>Checks the download, keeps a copy of setup by the journal, writes the hand-off down, then starts setup.</summary>
     private async Task<bool> HandOffAsync(UpdateJournalData journal, string version, UpdatePackage package, string file)
     {
-        view.Show(new UpdateGateStep("Checking the download", Busy: true));
+        view.Show(new UpdateGateStep("Verifying download", Busy: true));
         if (!parts.Intact(file, package.Sha256))
         {
             return await FailedAsync(journal, "The download didn't match the update, so it wasn't run.").ConfigureAwait(false);
