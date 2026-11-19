@@ -415,7 +415,7 @@ function atPrompt(tab) {
  * it started (noted, and forgotten when it leaves).
  * @param {Tab} tab
  */
-const isStarting = tab => !tab.agent && !agentKind(runningAgent(tab)).hookAtStart && !noteStarted(tab);
+const isStarting = tab => !tab.exited && !tab.agent && !agentKind(runningAgent(tab)).hookAtStart && !noteStarted(tab);
 
 /**
  * A menu an agent shows as it starts, before its input line (Codex's update offer, its cursor parked at the bottom),
