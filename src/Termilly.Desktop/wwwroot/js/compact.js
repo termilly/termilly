@@ -587,7 +587,8 @@ function screenMenu(tab) {
   const startsAt = waiting ? PROMPT_STARTS[runningAgent(tab) ?? ''] ?? PROMPT_START.either : PROMPT_START.either;
   const menu = readMenu(screenRows(term), { startsAt });
   // An agent starting has said nothing of what it asks: a menu cut off at the top offers the terminal, as before.
-  if (!waiting || (menu && menu.whole !== null)) return menu;
+  if (!waiting) return menu?.whole === null ? fromScreenTop(term, menu) : menu;
+  if (menu && menu.whole !== null) return menu;
   // A question taller than the screen, or whose first choices scrolled above it: read on up the scrollback.
   const { rows, screenTop } = rowsWithScrollback(term, SCROLLBACK_ROWS);
   const deeper = readMenu(rows, { screenTop, startsAt });
@@ -595,6 +596,21 @@ function screenMenu(tab) {
   // Its start not found (further up, or no longer in the terminal): all of it that was read, known by that and what
   // the hook said it's about (and which question it is, menuOf).
   return keyedByWhatShows(deeper, [tab.agent?.tool, tab.agent?.target]);
+}
+
+/** Blank rows enough to read as the gap above a menu (compactcard.js counts two). */
+const TOP_GAP = Object.freeze(['', '']);
+
+/**
+ * A menu an agent starting shows with nothing but blank rows above it up to the screen's top, read as starting there:
+ * Codex clears its screen for its update offer, which leaves one blank row above it, not a gap. Any other menu whose
+ * start isn't found stays as it was read (cut off).
+ * @param {any} term xterm's Terminal
+ * @param {import('./compactcard.js').Menu} menu
+ */
+function fromScreenTop(term, menu) {
+  const top = readMenu([...TOP_GAP, ...screenRows(term)]);
+  return top && top.whole !== null && top.start === TOP_GAP.length ? { ...top, start: 0 } : menu;
 }
 
 /**
