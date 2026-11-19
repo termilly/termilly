@@ -26,7 +26,7 @@ Termilly groups your terminals into workspaces, brings them back after a restart
 </p>
 
 <p align="center">
-  <a href="https://www.producthunt.com/products/termilly/reviews/new?utm_source=badge-product_review&utm_medium=badge&utm_source=badge-termilly" target="_blank"><img src="https://api.producthunt.com/widgets/embed-image/v1/product_review.svg?product_id=1364485&theme=light" alt="Termilly - terminal&#0032;and&#0032;AI&#0032;agent&#0032;manager&#0032;for&#0032;Windows&#0044;&#0032;mac&#0032;and&#0032;Linux | Product Hunt" style="width: 250px; height: 54px;" width="250" height="54" /></a>
+  <a href="https://www.producthunt.com/products/termilly?utm_source=badge-follow&utm_medium=badge&utm_source=badge-termilly" target="_blank"><img src="https://api.producthunt.com/widgets/embed-image/v1/follow.svg?product_id=1364485&theme=light&size=small" alt="Termilly - terminal&#0032;and&#0032;AI&#0032;agent&#0032;manager&#0032;for&#0032;Windows&#0044;&#0032;mac&#0032;and&#0032;Linux | Product Hunt" style="width: 86px; height: 32px;" width="86" height="32" /></a>
 </p>
 
 <p align="center"><a href="https://termilly.com"><img src="docs/images/tour.gif" alt="A tour of Termilly: agents working together, To do, Files, Notepad, Clipboard, Snippets and customizing it"></a></p>
