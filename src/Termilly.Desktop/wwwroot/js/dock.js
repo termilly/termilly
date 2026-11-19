@@ -10,7 +10,8 @@ import { setToolbarHost } from './toolbar.js';
 import { switchWorkspace } from './panes.js';
 import { openNewWorkspace } from './newworkspace.js';
 import { openPalette } from './palette.js';
-import { escapeHtml, cssColor } from './ui.js';
+import { escapeHtml, cssColor, ICONS } from './ui.js';
+import { askCloseWorkspace, CLOSE_WORKSPACE_LABEL } from './workspaceclose.js';
 import { targetOf, find, byId, nearestEdge, swallowNextClick, DOCK_SIDE, TITLEBAR_ID } from './dom.js';
 import { AGENT_STATE } from './constants.js';
 import { workspaceSwatch, stateWord } from './workspacelist.js';
@@ -249,6 +250,8 @@ export function showWorkspaceList(anchor, side) {
   const items = state.workspaces.map(ws => ({
     label: ws.name, icon: workspaceSwatch(ws.color), hint: rowHint(ws), checked: ws.id === state.activeId,
     action: () => switchWorkspace(ws.id),
+    // Right-click: as the sidebar's menu, which Minimal hides, closes it.
+    more: () => [{ label: CLOSE_WORKSPACE_LABEL, icon: ICONS.trash, danger: true, action: () => askCloseWorkspace(ws) }],
   }));
   const more = moreWorkspaces();
   if (more.length) items.push(SEPARATOR, ...more);

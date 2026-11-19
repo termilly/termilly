@@ -388,6 +388,39 @@ step('the dock moves to another edge from its menu, and stays shown with hiding 
   await app.screenshot('07-dock-right');
 });
 
+step("right-click on a workspace in the strip's list closes it, asked first as in the sidebar", async () => {
+  const names = () => app.eval(async t => (await t.import('store.js')).state.workspaces.map(ws => ws.name));
+  /** Opens the strip's list and right-clicks a workspace's row, as a mouse would. */
+  const rightClick = async name => {
+    await app.click('#crumb');
+    await app.waitFor('.context-menu .menu-row');
+    await app.eval((t, n) => {
+      const row = [...t.$$('.context-menu .menu-row')].find(r => r.querySelector('.menu-label')?.textContent === n);
+      const box = row.getBoundingClientRect();
+      for (const type of ['mousedown', 'mouseup', 'contextmenu']) {
+        row.dispatchEvent(new globalThis.MouseEvent(type, { clientX: box.left + 20, clientY: box.top + 5, button: 2, bubbles: true, cancelable: true }));
+      }
+    }, name);
+    await app.waitFor('.context-menu .menu-row.danger');
+  };
+  assert.ok((await names()).includes('second'));
+  await rightClick('second');
+  assert.equal(await app.eval(t => t.$$('.context-menu').length), 2, 'the list stays open under the workspace menu');
+  await app.screenshot('08-workspace-close-menu');
+  await app.click('.context-menu .menu-row.danger');
+  await app.waitFor('[data-cancel]');
+  assert.equal(await app.text('.dialog h3, dialog h3'), 'Close “second”?');
+  await app.click('[data-cancel]');
+  await pause(300);
+  assert.ok((await names()).includes('second'), 'Cancel keeps it');
+  await rightClick('second');
+  await app.click('.context-menu .menu-row.danger');
+  await app.waitFor('[data-ok]');
+  await app.click('[data-ok]');
+  await pause(500);
+  assert.ok(!(await names()).includes('second'), 'closed');
+});
+
 step('Normal gives the title bar, sidebar and toolbar back', async () => {
   await setInterface({ layout: 'normal' });
   await pause(400);

@@ -13,9 +13,10 @@ import { barSideOf, DOCK_SIDE } from './dom.js';
 
 /**
  * One of a menu's entries, or 'separator'. `checked` makes it a checkbox; `submenu` opens more entries beside it.
- * `key` picks it while its menu has the focus (a digit, shown as its hint).
+ * `key` picks it while its menu has the focus (a digit, shown as its hint). `more` is what a right-click on it offers,
+ * in a menu of its own over this one.
  * @typedef {{ label: string, icon?: string, hint?: string, checked?: boolean, danger?: boolean, disabled?: boolean,
- *   title?: string, action?: () => unknown, submenu?: () => MenuEntry[], key?: string }} MenuItem
+ *   title?: string, action?: () => unknown, submenu?: () => MenuEntry[], key?: string, more?: () => MenuEntry[] }} MenuItem
  * @typedef {MenuItem | typeof SEPARATOR} MenuEntry
  */
 
@@ -355,6 +356,13 @@ function menuRow(menu, item) {
       item.action?.();
     });
   }
+  const { more } = item;
+  if (more) button.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    closeSubmenus();
+    showMenu(more(), { x: e.clientX, y: e.clientY }, { nested: true });
+  });
   return button;
 }
 
