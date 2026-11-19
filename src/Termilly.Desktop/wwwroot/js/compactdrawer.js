@@ -41,22 +41,26 @@ function rowsFrom(term, from) {
   return rows;
 }
 
+/** The drawer's row when the view needs none. */
+export const NO_DRAWER = Object.freeze({ row: -1, menu: false });
+
 /**
- * The screen row the drawer opens from, or -1 when the view needs none: the agent is working or waits on a question
- * (the feed and its card show those), or it's at its plain empty prompt.
+ * The screen row the drawer opens from (-1 when the view needs none: the agent is working or waits on a question,
+ * which the feed and its card show, or it's at its plain empty prompt), and whether a list of its own opened it.
  * @param {Tab} tab
+ * @returns {{ row: number, menu: boolean }}
  */
 export function liveRow(tab) {
   const term = tab.view?.term;
   const state = tab.agent?.state;
-  if (!term || state === AGENT_STATE.working || state === AGENT_STATE.needsInput) return -1;
+  if (!term || state === AGENT_STATE.working || state === AGENT_STATE.needsInput) return NO_DRAWER;
   // A list of its own (/model, /resume): from the line above its start.
   const menu = readMenu(screenRows(term));
   // A list whose top is off a short screen: the whole screen.
-  if (menu) return Math.max(0, (menu.start ?? 0) - 1);
+  if (menu) return { row: Math.max(0, (menu.start ?? 0) - 1), menu: true };
   // Words in its input line, as the user typed them (not the hint an empty one shows): from the line above.
   const buffer = term.buffer.active;
-  return typedAt(buffer) ? Math.max(0, buffer.cursorY - 1) : -1;
+  return typedAt(buffer) ? { row: Math.max(0, buffer.cursorY - 1), menu: false } : NO_DRAWER;
 }
 
 /**

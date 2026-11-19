@@ -22,7 +22,7 @@ import { readMenu, questionMenu, cardHtml, menuKey, keyedByWhatShows, PROMPT_STA
 import { wireInput } from './compactinput.js';
 import { cardKey } from './compactcardkeys.js';
 import { wireViewMenu } from './termclipboard.js';
-import { liveRow, screenRows, rowsWithScrollback, drawerHolds } from './compactdrawer.js';
+import { liveRow, screenRows, rowsWithScrollback, drawerHolds, NO_DRAWER } from './compactdrawer.js';
 import { showPreview } from './compactpreview.js';
 
 /** @typedef {import('./compactlines.js').CompactLine} CompactLine */
@@ -98,8 +98,8 @@ const VIEW_HTML = `
  * A terminal's compact view: what the host sent of its session, the elements showing it, and the prompt being typed.
  * @typedef {{ lines: CompactLine[], session: string | null, el: HTMLElement | null, frame: number, frameWin: Window | null, sending: Promise<void>, writes: { dispose(): void } | null,
  *   picked?: { menu: string, at: number }, ready?: boolean, drawer?: boolean, drawerFrame?: number, drawerWin?: Window,
- *   resizes?: { dispose(): void }, drawerRow?: number, asked?: number, askedBy?: object | null, waiting?: boolean }} CompactState
- *   asked: how many questions the agent has asked; askedBy: the report that asked the last one
+ *   resizes?: { dispose(): void }, drawerRow?: number, drawerMenu?: boolean, asked?: number, askedBy?: object | null, waiting?: boolean }} CompactState
+ *   drawerMenu: whether a list of the agent's own opened the drawer; asked: how many questions the agent has asked; askedBy: the report that asked the last one
  */
 
 /**
@@ -241,13 +241,15 @@ function placeDrawer(tab) {
   const view = tab.view;
   if (!c.el || !view?.term) return;
   // Open, it stays open while the user works in the terminal and the agent waits (the cursor moved home in what
-  // they typed, or onto its second line, says nothing of whether there are words there). Not over rows that no
-  // longer hold the input line: the prompt box would be gone behind empty rows.
-  const stays = !!c.drawer && view.term.element?.contains(view.body.ownerDocument.activeElement) && !tab.exited
+  // they typed, or onto its second line, says nothing of whether there are words there). Not once a list of the
+  // agent's own that opened it has gone (a rating it asked for, answered), nor over rows that no longer hold the input
+  // line: the prompt box would stay hidden behind them.
+  const stays = !!c.drawer && !c.drawerMenu && view.term.element?.contains(view.body.ownerDocument.activeElement) && !tab.exited
     && tab.agent?.state !== AGENT_STATE.working && tab.agent?.state !== AGENT_STATE.needsInput
     && drawerHolds(view.term, c.drawerRow ?? -1);
-  const found = isCompact(tab) ? liveRow(tab) : -1;
-  const row = found < 0 && stays && isCompact(tab) ? c.drawerRow ?? -1 : found;
+  const found = isCompact(tab) ? liveRow(tab) : NO_DRAWER;
+  const row = found.row < 0 && stays && isCompact(tab) ? c.drawerRow ?? -1 : found.row;
+  if (found.row >= 0) c.drawerMenu = found.menu;
   c.drawerRow = row;
   const open = row >= 0;
   c.el.style.bottom = open ? `${Math.max(0, view.body.clientHeight - rowTop(view, row))}px` : '';

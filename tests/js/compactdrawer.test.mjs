@@ -9,7 +9,7 @@ globalThis.window = /** @type {any} */ ({ addEventListener() {}, external: { rec
 globalThis.document = /** @type {any} */ ({ documentElement: { dataset: {} }, addEventListener() {}, querySelector: () => null, querySelectorAll: () => [] });
 globalThis.localStorage = /** @type {any} */ ({ getItem: () => null, setItem() {} });
 globalThis.addEventListener = () => {};
-const { drawerHolds } = await import('../../src/Termilly.Desktop/wwwroot/js/compactdrawer.js');
+const { drawerHolds, liveRow } = await import('../../src/Termilly.Desktop/wwwroot/js/compactdrawer.js');
 
 /**
  * A terminal showing these rows, with no scrollback, and its cursor on a row.
@@ -39,4 +39,17 @@ test('only blank rows left in the drawer close it, wherever the cursor is', () =
 
 test('no drawer row: nothing to hold', () => {
   assert.equal(drawerHolds(termOf(['> '], 0), -1), false);
+});
+
+test("a list of the agent's own opens the drawer as a list, so it closes once the list goes", () => {
+  const rows = ['● Done.', '', ' Select model', '', ' ❯ 1. Default', '   2. Opus', '   3. Haiku', '', ' Enter to confirm · Esc to exit'];
+  const found = liveRow(/** @type {any} */ ({ view: { term: termOf(rows, 8) }, agent: { state: 'idle' } }));
+  assert.equal(found.menu, true);
+  assert.ok(found.row >= 0 && found.row <= 4);
+});
+
+test('words typed in the input line open the drawer, not as a list', () => {
+  const term = termOf(['● Done.', RULE, '> fix the tests', RULE], 2);
+  term.buffer.active.cursorX = 10;
+  assert.deepEqual(liveRow(/** @type {any} */ ({ view: { term }, agent: { state: 'idle' } })), { row: 1, menu: false });
 });
