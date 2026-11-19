@@ -31,11 +31,11 @@ async function waitOnQuestion(app) {
   await until(() => app.eval(t => !t.$('.compact-view').classList.contains('drawer')), 'the card without the drawer');
 }
 
-async function scenario(name, lines, body, { waiting = false, ready = '.cv-choice[data-choice="3"]' } = {}) {
+async function scenario(name, lines, body, { waiting = false, ready = '.cv-choice[data-choice="3"]', prompt = {} } = {}) {
   const repo = await makeRepo();
   let app, failed = true;
   try {
-    app = await startApp({ folder: repo.folder, name, agents: { codex: { stdout: '', prompt: { lines } } } });
+    app = await startApp({ folder: repo.folder, name, agents: { codex: { stdout: '', prompt: { lines, ...prompt } } } });
     // Launch the bare command so shell integration recognizes the agent.
     await app.waitFor('.xterm');
     await app.eval(async t => {
@@ -134,7 +134,23 @@ test('Codex starting with no menu (an update it runs) says so under a resumed se
   await app.waitFor('.compact-view', { gone: true });
 }, { ready: '.cv-empty .cv-open-terminal' }));
 
-const tall = ['', '', `  ${question}`, '', ...Array.from({ length: 70 }, (_, i) => `  $ step ${i}`), ...choices, '  Press enter to confirm or esc to cancel'];
+test('Send from the prompt box never shows the terminal under it while Codex takes the prompt', () => scenario('compact-send', ['', '  >_ OpenAI Codex', ''], async app => {
+  // Counts each time the drawer opens (the terminal's rows showing under the view).
+  await app.eval(t => {
+    const view = t.$('.compact-view');
+    globalThis.drawerOpened = 0;
+    new globalThis.MutationObserver(() => { if (view.classList.contains('drawer')) globalThis.drawerOpened++; }).observe(view, { attributes: true, attributeFilter: ['class'] });
+    const input = t.$('.cv-input');
+    input.value = 'say hello';
+    input.dispatchEvent(new globalThis.Event('input'));
+  });
+  await app.click('.cv-send');
+  await until(async () => (await events(app)).some(e => e.event === 'prompt' && e.text === 'say hello'), 'Codex took the prompt');
+  await new Promise(resolve => setTimeout(resolve, 600));
+  assert.equal(await app.eval(() => globalThis.drawerOpened), 0);
+}, { ready: '.cv-input:not([readonly])', prompt: { input: '› ', picks: [], echoMs: 30, takeMs: 300 } }));
+
+const tall =['', '', `  ${question}`, '', ...Array.from({ length: 70 }, (_, i) => `  $ step ${i}`), ...choices, '  Press enter to confirm or esc to cancel'];
 
 /** Whether choice 3's button shows inside the feed. */
 const choiceInSight = app => app.eval(t => {

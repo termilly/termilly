@@ -98,8 +98,8 @@ const VIEW_HTML = `
  * A terminal's compact view: what the host sent of its session, the elements showing it, and the prompt being typed.
  * @typedef {{ lines: CompactLine[], session: string | null, el: HTMLElement | null, frame: number, frameWin: Window | null, sending: Promise<void>, writes: { dispose(): void } | null,
  *   picked?: { menu: string, at: number }, ready?: boolean, drawer?: boolean, drawerFrame?: number, drawerWin?: Window,
- *   resizes?: { dispose(): void }, drawerRow?: number, drawerMenu?: boolean, started?: boolean, asked?: number, askedBy?: object | null, waiting?: boolean }} CompactState
- *   drawerMenu: whether a list of the agent's own opened the drawer; started: whether the agent has shown its input line since it started; asked: how many questions the agent has asked; askedBy: the report that asked the last one
+ *   resizes?: { dispose(): void }, drawerRow?: number, drawerMenu?: boolean, started?: boolean, sendingNow?: number, asked?: number, askedBy?: object | null, waiting?: boolean }} CompactState
+ *   drawerMenu: whether a list of the agent's own opened the drawer; started: whether the agent has shown its input line since it started; sendingNow: how many prompts the prompt box is typing into the agent; asked: how many questions the agent has asked; askedBy: the report that asked the last one
  */
 
 /**
@@ -250,7 +250,7 @@ function placeDrawer(tab) {
     && tab.agent?.state !== AGENT_STATE.working && tab.agent?.state !== AGENT_STATE.needsInput
     && drawerHolds(view.term, c.drawerRow ?? -1);
   // Not for a menu as the agent starts (Codex's update offer): that's the feed's card.
-  const found = isCompact(tab) && !startMenu(tab) ? liveRow(tab) : NO_DRAWER;
+  const found = isCompact(tab) && !c.sendingNow && !startMenu(tab) ? liveRow(tab) : NO_DRAWER;
   const row = found.row < 0 && stays && isCompact(tab) ? c.drawerRow ?? -1 : found.row;
   if (found.row >= 0) c.drawerMenu = found.menu;
   c.drawerRow = row;
@@ -469,11 +469,55 @@ function submit(tab, input) {
  */
 async function typePrompt(tab, text) {
   if (!canSend(tab)) return;
+  // The prompt sits in the agent's input line until the agent takes it: words there, which the drawer opens for when
+  // the user types them in the terminal. Not these: the drawer stays shut meanwhile (counted: prompts may overlap).
+  const c = compactOf(tab);
+  c.sendingNow = (c.sendingNow ?? 0) + 1;
   send(PAGE.input, { id: tab.id, data: text.includes('\n') ? `${PASTE_START}${text}${PASTE_END}` : text });
   await beforeEnter(tab, true, true);
-  if (!canSend(tab)) return;
+  if (!canSend(tab)) {
+    doneSending(tab);
+    return;
+  }
   send(PAGE.input, { id: tab.id, data: '\r' });
   agentInput(tab, '\r');
+  doneWhenTaken(tab);
+}
+
+/** How long after its Enter a prompt keeps the drawer shut, at most, waiting for the agent to take it. */
+const TAKEN_MAX_MS = 1000;
+
+/**
+ * Ends a prompt's sending once the agent has taken it: no words left in its input line (it works, or a list of its
+ * own shows), at the latest after TAKEN_MAX_MS. Not waited for: the next prompt goes on meanwhile.
+ * @param {Tab} tab
+ */
+function doneWhenTaken(tab) {
+  const term = tab.view?.term;
+  if (!term) {
+    doneSending(tab);
+    return;
+  }
+  const done = () => {
+    clearTimeout(cap);
+    writes.dispose();
+    doneSending(tab);
+  };
+  const writes = term.onWriteParsed(() => {
+    const live = liveRow(tab);
+    if (live.row < 0 || live.menu) done();
+  });
+  const cap = setTimeout(done, TAKEN_MAX_MS);
+}
+
+/**
+ * A prompt's sending ended: with none left, the drawer may open again.
+ * @param {Tab} tab
+ */
+function doneSending(tab) {
+  const c = compactOf(tab);
+  c.sendingNow = Math.max(0, (c.sendingNow ?? 0) - 1);
+  placeDrawerSoon(tab);
 }
 
 /**
