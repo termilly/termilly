@@ -107,16 +107,18 @@ test('a prompt with no question falls back to Codex asks', () => scenario('compa
 const update = ['', '  Update available · 0.167.2 → 0.170.0', '  Release notes: https://github.com/openai/codex/releases/latest', '',
   '› 1. Update now (runs `npm install -g @openai/codex`)', '  2. Skip', '  3. Skip until next version', '', '  enter continue · esc skip'];
 
+/** A resumed session: the feed has its lines before Codex shows its prompt. */
+const resumed = app => app.eval(async t => {
+  const { state, agentChanged } = await t.import('store.js');
+  const tab = [...state.tabs.values()].find(tab => tab.view?.term && tab.compactView);
+  tab.compact.lines = [{ key: 'p1', kind: 'prompt', text: 'an earlier prompt' }];
+  agentChanged(tab);
+});
+
 test("Codex's update offer is a card, also under a session the view already shows, never the live terminal", () => scenario('compact-update', update, async app => {
   const drawer = () => app.eval(t => t.$('.compact-view').classList.contains('drawer'));
   assert.equal(await drawer(), false, 'with the feed empty');
-  // A resumed session: the feed has its lines before Codex shows its prompt.
-  await app.eval(async t => {
-    const { state, agentChanged } = await t.import('store.js');
-    const tab = [...state.tabs.values()].find(tab => tab.view?.term && tab.compactView);
-    tab.compact.lines = [{ key: 'p1', kind: 'prompt', text: 'an earlier prompt' }];
-    agentChanged(tab);
-  });
+  await resumed(app);
   await app.waitFor('.cv-prompt');
   await app.waitFor('.cv-choice[data-choice="2"]');
   assert.equal(await drawer(), false, 'under the session');
@@ -124,7 +126,15 @@ test("Codex's update offer is a card, also under a session the view already show
   await received(app, '2');
 }));
 
-const tall = ['', '', `  ${question}`, '', ...Array.from({ length: 70 }, (_, i) => `  $ step ${i}`), ...choices, '  Press enter to confirm or esc to cancel'];
+test('Codex starting with no menu (an update it runs) says so under a resumed session, with the terminal a click away', () => scenario('compact-updating', ['', 'Updating Codex via `npm install -g @openai/codex`...'], async app => {
+  await resumed(app);
+  await app.waitFor('.cv-prompt');
+  await app.waitFor('.cv-prompt ~ .cv-empty .cv-open-terminal');
+  await app.click('.cv-empty .cv-open-terminal');
+  await until(() => app.eval(t => t.$('.compact-view').hidden), 'the terminal shows');
+}, { ready: '.cv-empty .cv-open-terminal' }));
+
+const tall =['', '', `  ${question}`, '', ...Array.from({ length: 70 }, (_, i) => `  $ step ${i}`), ...choices, '  Press enter to confirm or esc to cancel'];
 
 /** Whether choice 3's button shows inside the feed. */
 const choiceInSight = app => app.eval(t => {
@@ -201,7 +211,7 @@ test('the prompt box takes its height again when its pane gets narrower or wider
 test('a prompt box hidden while its pane got narrower fits its text when its view shows again', () => scenario('compact-box-hidden', approval, async app => {
   const wide = await fillBox(app);
   await pickView(app, 'Full');
-  await app.waitFor('.compact-view', { gone: true });
+  await until(() => app.eval(t => t.$('.compact-view').hidden), 'the terminal shows');
   await narrowTerminals(app, '60%');
   // Back in the minimal view (the compact one's twin): the box there is the same one.
   await pickView(app, 'Minimal');

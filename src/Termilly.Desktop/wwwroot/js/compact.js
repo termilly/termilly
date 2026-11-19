@@ -411,14 +411,19 @@ function atPrompt(tab) {
 }
 
 /**
+ * Whether an agent with no hooks at start (Codex) is still starting: it hasn't reported, nor shown its input line since
+ * it started (noted, and forgotten when it leaves).
+ * @param {Tab} tab
+ */
+const isStarting = tab => !tab.agent && !agentKind(runningAgent(tab)).hookAtStart && !noteStarted(tab);
+
+/**
  * A menu an agent shows as it starts, before its input line (Codex's update offer, its cursor parked at the bottom),
- * and only one a card can show. Not once the agent has reported, or shown its input line since it started (noted here,
- * and forgotten when it leaves): its own lists after that (/model) are the drawer's.
+ * and only one a card can show. Its own lists after that (/model) are the drawer's.
  * @param {Tab} tab
  */
 function startMenu(tab) {
-  const kind = agentKind(runningAgent(tab));
-  if (tab.agent || kind.hookAtStart || noteStarted(tab)) return null;
+  if (!isStarting(tab)) return null;
   const menu = screenMenu(tab);
   return menu && menuKey(menu) ? menu : null;
 }
@@ -740,9 +745,9 @@ function workingHtml(tab) {
   const name = escapeHtml(agentKind(runningAgent(tab)).short);
   if (waitsForAnswer(tab)) return cardOf(tab, name);
   if (tab.agent?.state === AGENT_STATE.working) return `<div class="cv-working"><i></i>${name} is working</div>`;
-  // Started again on a session the feed already shows (a resume): a menu it shows first comes under it.
-  const start = startMenu(tab);
-  return start ? cardHtml(start, name, CARD_BUTTONS) : '';
+  // Started again on a session the feed already shows (a resume): a menu it shows first comes under it, or else the
+  // note that what it shows is in the terminal (an update it runs).
+  return isStarting(tab) ? startingHtml(tab, name) : '';
 }
 
 /**
