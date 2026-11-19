@@ -173,30 +173,46 @@ step('the hidden dock comes back at its edge and lists the workspaces', async ()
 step("the strip's workspace opens the same list, switches workspace, and leaves the terminal its focus", async () => {
   const crumb = await app.eval(() => {
     const el = globalThis.document.getElementById('crumb');
-    return { role: el.getAttribute('role'), arrow: globalThis.getComputedStyle(el.querySelector('.dock-chev')).display, clickable: globalThis.getComputedStyle(el).pointerEvents };
+    const box = el.getBoundingClientRect();
+    // What a real click at its middle would land on: the crumb, not the dock floating over the strip.
+    const hit = globalThis.document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+    return { role: el.getAttribute('role'), arrow: globalThis.getComputedStyle(el.querySelector('.dock-chev')).display, clickable: globalThis.getComputedStyle(el).pointerEvents, reachable: el.contains(hit) };
   });
-  assert.deepEqual(crumb, { role: 'button', arrow: 'block', clickable: 'auto' });
+  assert.deepEqual(crumb, { role: 'button', arrow: 'block', clickable: 'auto', reachable: true });
   const labels = () => app.eval(t => t.$$('.context-menu .menu-label').map(el => el.textContent));
+  const inTerminal = () => app.eval(() => !!globalThis.document.activeElement?.closest('.pane .xterm'));
   await app.click('.dock-ws');
   await app.waitFor('.context-menu .menu-row');
   const fromDock = await labels();
   await app.key('.context-menu', 'Escape');
   await pause(300);
+  await app.eval(() => globalThis.document.querySelector('.ws-layer.active .pane.focused .xterm textarea')?.focus());
+  assert.equal(await inTerminal(), true, 'the terminal has the focus before the click');
   await app.click('#crumb');
   await app.waitFor('.context-menu .menu-row');
   assert.deepEqual(await labels(), fromDock, 'the same rows as the dock');
-  assert.equal(await app.eval(() => globalThis.document.activeElement?.id === 'crumb'), false, 'the click does not take the focus');
   await pause(300);
   await app.screenshot('03b-strip-workspaces');
+  // The menu holds the keys while it's open (as the dock's does); closed, the terminal has them again.
+  await app.key('.context-menu', 'Escape');
+  await pause(300);
+  assert.equal(await inTerminal(), true, 'the focus is back in the terminal once the menu closes');
+  await app.click('#crumb');
+  await app.waitFor('.context-menu .menu-row');
   await app.eval(t => [...t.$$('.context-menu .menu-row')].find(r => r.textContent.includes('second')).click());
   const switched = await app.eval(async t => {
     const { state, wsById } = await t.import('store.js');
     return { active: wsById(state.activeId)?.name, shown: t.$('#crumb .crumb-name').textContent };
   });
   assert.deepEqual(switched, { active: 'second', shown: 'second' });
-  // From the keyboard too, then back to the first workspace for the steps after.
-  await app.key('#crumb', 'Enter');
-  await app.waitFor('.context-menu .menu-row');
+  // From the keyboard too, reached with the focus on it: Enter and Space. Then back to the first workspace for the
+  // steps after.
+  for (const key of ['Enter', ' ']) {
+    await app.eval(() => globalThis.document.getElementById('crumb').focus());
+    await app.key(null, key);
+    await app.waitFor('.context-menu .menu-row');
+    if (key === 'Enter') { await app.key('.context-menu', 'Escape'); await pause(300); }
+  }
   await app.eval(async t => {
     const { state } = await t.import('store.js');
     [...t.$$('.context-menu .menu-row')].find(r => r.textContent.includes(state.workspaces[0].name)).click();
