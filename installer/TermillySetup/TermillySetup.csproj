@@ -46,6 +46,7 @@
     <Compile Include="..\..\src\Shared\Product.cs" Link="Shared\Product.cs" />
     <Compile Include="..\..\src\Shared\SetupFlags.cs" Link="Shared\SetupFlags.cs" />
     <Compile Include="..\..\src\Shared\UpdateSignals.cs" Link="Shared\UpdateSignals.cs" />
+    <Compile Include="..\..\src\Shared\ProcessImage.cs" Link="Shared\ProcessImage.cs" />
   </ItemGroup>
 
   <ItemGroup>

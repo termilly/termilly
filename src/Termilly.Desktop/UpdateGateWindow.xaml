@@ -1,0 +1,56 @@
+<Window x:Class="Termilly.Desktop.UpdateGateWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:ClassModifier="internal"
+        Title="Termilly" Height="720" Width="1180" MinWidth="702" MinHeight="402"
+        WindowStartupLocation="Manual" Background="#000000" ShowInTaskbar="True"
+        WindowStyle="None" ResizeMode="NoResize" UseLayoutRounding="True">
+    <!-- The start-up screen while an update is installed at start (StartupUpdateGate), before the main window and its
+         services exist: in the main window's place, looking as its loader does (the mark and a typed line with the
+         caret), with a note under the line, a thin bar for the download and "Not now" while it downloads. Colours
+         are set in code. Drag it to move the window. -->
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="0" ResizeBorderThickness="0" GlassFrameThickness="0,0,0,1"
+                      CornerRadius="0" UseAeroCaptionButtons="False" />
+    </WindowChrome.WindowChrome>
+    <Grid x:Name="Loader" Background="#000000">
+        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+            <Image x:Name="LoaderMark" Width="48" Height="48" Stretch="Fill" HorizontalAlignment="Center" Margin="0,0,0,14" />
+            <!-- As wide as the whole line and its dots (the hidden copy), so it's typed from the same place. -->
+            <Grid HorizontalAlignment="Center">
+                <StackPanel Orientation="Horizontal" Visibility="Hidden">
+                    <TextBlock x:Name="LoaderSize" FontFamily="Segoe UI" FontSize="15" TextOptions.TextFormattingMode="Display" />
+                    <Rectangle Width="2" Margin="2,0,0,0" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock x:Name="LoaderText" FontFamily="Segoe UI" FontSize="15" Foreground="#E6E6E6" VerticalAlignment="Center"
+                               TextOptions.TextFormattingMode="Display" TextOptions.TextRenderingMode="ClearType" />
+                    <Rectangle x:Name="LoaderCaret" Width="2" Height="17" Margin="2,0,0,0" Fill="#8B7BFF" VerticalAlignment="Center" />
+                </StackPanel>
+            </Grid>
+            <TextBlock x:Name="Note" FontFamily="Segoe UI" FontSize="12.5" Opacity="0.55" Foreground="#E6E6E6" Margin="0,8,0,0"
+                       MinHeight="18" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="460"
+                       TextOptions.TextFormattingMode="Display" />
+            <Grid x:Name="Bar" Width="220" Height="3" Margin="0,14,0,0" Visibility="Hidden" ClipToBounds="True">
+                <Border x:Name="BarTrack" CornerRadius="1.5" Background="#1C1C22" />
+                <Border x:Name="BarFill" CornerRadius="1.5" Background="#8B7BFF" HorizontalAlignment="Left" Width="0" />
+            </Grid>
+            <Button x:Name="NotNowButton" Content="Not now" Margin="0,14,0,0" HorizontalAlignment="Center" Visibility="Hidden" Cursor="Hand">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Box" Padding="12,4" CornerRadius="6" BorderThickness="1"
+                                BorderBrush="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}" Background="Transparent">
+                            <TextBlock Text="{TemplateBinding Content}" FontFamily="Segoe UI" FontSize="12.5"
+                                       Foreground="{TemplateBinding Foreground}" TextOptions.TextFormattingMode="Display" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Box" Property="Opacity" Value="0.8" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Button.Template>
+            </Button>
+        </StackPanel>
+    </Grid>
+</Window>

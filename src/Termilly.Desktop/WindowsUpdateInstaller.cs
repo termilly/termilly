@@ -9,7 +9,8 @@ namespace Termilly.Desktop;
 /// administrator for an install for all users), then starts Termilly again (SetupCommand). It closes Termilly's
 /// processes itself, the background host's too, so kept shells end.
 /// </summary>
-internal sealed class WindowsUpdateInstaller : IUpdateInstaller
+/// <param name="supervise">An update at start (StartupUpdateGate): setup keeps the old version until the new one is healthy.</param>
+internal sealed class WindowsUpdateInstaller(bool supervise = false) : IUpdateInstaller
 {
     /// <summary>Setup's entry in Apps &amp; features (installer/TermillySetup/Engine/Options.cs) and the folder it names.</summary>
     private const string UninstallKey = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\" + Product.Name;
@@ -19,7 +20,22 @@ internal sealed class WindowsUpdateInstaller : IUpdateInstaller
     /// <summary>ERROR_CANCELLED: the administrator prompt was declined.</summary>
     private const int Cancelled = 1223;
 
+    /// <summary>How long Termilly waits for setup's window before it closes (Settings' update), or gives up (at start).</summary>
+    private static readonly TimeSpan ShownWait = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan SupervisedShownWait = TimeSpan.FromSeconds(15);
+
     public bool EndsKeptShells => true;
+
+    /// <summary>The install this copy runs from, for this user or all users; null for a copy setup didn't install (a build).</summary>
+    public static InstalledCopy? Installed()
+    {
+        var installed = InstalledCopy.Match(AppContext.BaseDirectory, Location(RegistryHive.CurrentUser), Location(RegistryHive.LocalMachine));
+#if DEBUG
+        // With a stand-in for setup (TestSetup), a build counts as installed for this user where it runs.
+        installed ??= Environment.GetEnvironmentVariable(TestSetupVariable) is { Length: > 0 } ? new InstalledCopy(AppContext.BaseDirectory, false) : null;
+#endif
+        return installed;
+    }
 
     public async Task<UpdateInstallResult> InstallAsync(string file, CancellationToken cancel)
     {
@@ -28,7 +44,7 @@ internal sealed class WindowsUpdateInstaller : IUpdateInstaller
         using var started = TryCreateSignal(scope, UpdateSignals.Started);
         shown?.Reset();
         started?.Reset();
-        var command = SetupCommand.For(file, InstalledCopy.Match(AppContext.BaseDirectory, Location(RegistryHive.CurrentUser), Location(RegistryHive.LocalMachine)), scope);
+        var command = SetupCommand.For(file, Installed(), scope, supervise);
 #if DEBUG
         command = TestSetup(command);
 #endif
@@ -44,8 +60,17 @@ internal sealed class WindowsUpdateInstaller : IUpdateInstaller
             Process.Start(start)?.Dispose();
             if (shown is not null)
             {
-                var painted = await Task.Run(() => shown.WaitOne(TimeSpan.FromSeconds(2)), cancel).ConfigureAwait(false);
+                var painted = await Task.Run(() => shown.WaitOne(supervise ? SupervisedShownWait : ShownWait), cancel).ConfigureAwait(false);
                 StartupLog.Mark(painted ? "update window painted" : "update window paint wait timed out");
+                // An update at start quits only once setup has taken over: otherwise this Termilly just opens.
+                if (supervise && !painted)
+                {
+                    return UpdateInstallResult.Failed("Setup didn't open, so nothing changed.");
+                }
+            }
+            else if (supervise)
+            {
+                return UpdateInstallResult.Failed("Couldn't hand the update to setup, so nothing changed.");
             }
             return UpdateInstallResult.Running;
         }
@@ -81,8 +106,10 @@ internal sealed class WindowsUpdateInstaller : IUpdateInstaller
     /// A Debug build can run a stand-in for setup (TERMILLY_UPDATE_SETUP: a program that gets setup's path and
     /// arguments), so the update can be tried without installing anything.
     /// </summary>
+    private const string TestSetupVariable = "TERMILLY_UPDATE_SETUP";
+
     private static SetupCommand TestSetup(SetupCommand command) =>
-        Environment.GetEnvironmentVariable("TERMILLY_UPDATE_SETUP") is { Length: > 0 } stand
+        Environment.GetEnvironmentVariable(TestSetupVariable) is { Length: > 0 } stand
             ? command with { File = stand, Arguments = SetupCommand.Quote(command.File) + " " + command.Arguments }
             : command;
 #endif

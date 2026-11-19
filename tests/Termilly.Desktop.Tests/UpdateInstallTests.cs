@@ -202,6 +202,14 @@ public sealed class UpdateInstallTests : IDisposable
     }
 
     [Fact]
+    public void An_update_at_start_asks_setup_to_supervise()
+    {
+        var command = SetupCommand.For("setup.exe", new InstalledCopy(@"C:\Apps\Termilly", AllUsers: false), supervise: true);
+
+        Assert.Equal(@"--quiet --start --update-window --update-supervise --dir ""C:\Apps\Termilly""", command.Arguments);
+    }
+
+    [Fact]
     public void An_install_for_all_users_is_updated_as_administrator()
     {
         var command = SetupCommand.For("setup.exe", new InstalledCopy(@"C:\Program Files\Termilly", AllUsers: true));

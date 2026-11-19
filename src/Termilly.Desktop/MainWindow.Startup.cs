@@ -32,16 +32,27 @@ public partial class MainWindow
     {
         ContentRendered -= OnStartupScreenPainted;
         StartupLog.Mark("window shown (start-up screen)");
+        TellUpdate(UpdateSignals.SignalStarted, "startup screen paint");
+    }
+
+    /// <summary>
+    /// The page is up and answered: setup supervising an update at start keeps this version only after hearing it
+    /// (it puts the old one back otherwise). Nothing happens on a normal start.
+    /// </summary>
+    internal static void SignalUpdateHealthy() => TellUpdate(UpdateSignals.SignalHealthy, "healthy");
+
+    private static void TellUpdate(Func<string, bool> signal, string what)
+    {
         try
         {
-            if (UpdateSignals.SignalStarted(AppContext.BaseDirectory))
+            if (signal(AppContext.BaseDirectory))
             {
-                StartupLog.Mark("update startup screen paint signalled");
+                StartupLog.Mark($"update {what} signalled");
             }
         }
         catch (Exception error) when (error is Win32Exception or UnauthorizedAccessException or IOException)
         {
-            StartupLog.Mark($"update startup screen signal unavailable: {error.Message}");
+            StartupLog.Mark($"update {what} signal unavailable: {error.Message}");
         }
     }
 }
