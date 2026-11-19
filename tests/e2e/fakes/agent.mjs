@@ -31,6 +31,10 @@ process.stdin.on('keypress', (text, key) => {
   if (key.name === 'return') {
     log({ event: 'prompt', text: typed });
     typed = '';
+    // As Codex does: something else on its screen changes first (its status), the input line empties a while after.
+    process.stdout.write('\x1b7\x1b[H\x1b8');
+    setTimeout(() => process.stdout.write(`\r\x1b[2K${mark}`), script.prompt.takeMs ?? 0);
+    return;
   } else if (text && !key.ctrl && !key.meta) typed += text;
   // As a TUI redraws its input line: a while after the key, not at once.
   setTimeout(() => process.stdout.write(`\r\x1b[2K${mark}${typed}`), script.prompt.echoMs ?? 0);

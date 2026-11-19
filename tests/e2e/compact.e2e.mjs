@@ -148,7 +148,7 @@ test('Send from the prompt box never shows the terminal under it while Codex tak
   await until(async () => (await events(app)).some(e => e.event === 'prompt' && e.text === 'say hello'), 'Codex took the prompt');
   await new Promise(resolve => setTimeout(resolve, 600));
   assert.equal(await app.eval(() => globalThis.drawerOpened), 0);
-}, { ready: '.cv-input:not([readonly])', prompt: { input: '› ', picks: [], echoMs: 30 } }));
+}, { ready: '.cv-input:not([readonly])', prompt: { input: '› ', picks: [], echoMs: 30, takeMs: 300 } }));
 
 const tall =['', '', `  ${question}`, '', ...Array.from({ length: 70 }, (_, i) => `  $ step ${i}`), ...choices, '  Press enter to confirm or esc to cancel'];
 
