@@ -170,6 +170,40 @@ step('the hidden dock comes back at its edge and lists the workspaces', async ()
   await app.key('.context-menu', 'Escape');
 });
 
+step("the strip's workspace opens the same list, switches workspace, and leaves the terminal its focus", async () => {
+  const crumb = await app.eval(() => {
+    const el = globalThis.document.getElementById('crumb');
+    return { role: el.getAttribute('role'), arrow: globalThis.getComputedStyle(el.querySelector('.dock-chev')).display, clickable: globalThis.getComputedStyle(el).pointerEvents };
+  });
+  assert.deepEqual(crumb, { role: 'button', arrow: 'block', clickable: 'auto' });
+  const labels = () => app.eval(t => t.$$('.context-menu .menu-label').map(el => el.textContent));
+  await app.click('.dock-ws');
+  await app.waitFor('.context-menu .menu-row');
+  const fromDock = await labels();
+  await app.key('.context-menu', 'Escape');
+  await pause(300);
+  await app.click('#crumb');
+  await app.waitFor('.context-menu .menu-row');
+  assert.deepEqual(await labels(), fromDock, 'the same rows as the dock');
+  assert.equal(await app.eval(() => globalThis.document.activeElement?.id === 'crumb'), false, 'the click does not take the focus');
+  await pause(300);
+  await app.screenshot('03b-strip-workspaces');
+  await app.eval(t => [...t.$$('.context-menu .menu-row')].find(r => r.textContent.includes('second')).click());
+  const switched = await app.eval(async t => {
+    const { state, wsById } = await t.import('store.js');
+    return { active: wsById(state.activeId)?.name, shown: t.$('#crumb .crumb-name').textContent };
+  });
+  assert.deepEqual(switched, { active: 'second', shown: 'second' });
+  // From the keyboard too, then back to the first workspace for the steps after.
+  await app.key('#crumb', 'Enter');
+  await app.waitFor('.context-menu .menu-row');
+  await app.eval(async t => {
+    const { state } = await t.import('store.js');
+    [...t.$$('.context-menu .menu-row')].find(r => r.textContent.includes(state.workspaces[0].name)).click();
+  });
+  await pause(500);
+});
+
 step('a split shows two name lines, the one in focus with its buttons', async () => {
   await app.click('#dock [data-command="splitRight"]');
   await pause(800);
@@ -346,7 +380,9 @@ step('Normal gives the title bar, sidebar and toolbar back', async () => {
     dock: globalThis.document.getElementById('dock').hidden,
     sidebar: globalThis.getComputedStyle(globalThis.document.getElementById('sidebar')).display !== 'none',
     header: Math.round(globalThis.document.querySelector('.ws-layer.active .pane > .pane-header').getBoundingClientRect().height),
+    // The workspace is a label again, as Normal always had it: no button, no arrow, no clicks.
+    crumb: (el => ({ role: el.getAttribute('role'), tabindex: el.getAttribute('tabindex'), arrow: globalThis.getComputedStyle(el.querySelector('.dock-chev')).display, clickable: globalThis.getComputedStyle(el).pointerEvents }))(globalThis.document.getElementById('crumb')),
   }));
-  assert.deepEqual(back, { toolbarInTitle: true, dock: true, sidebar: true, header: 30 });
+  assert.deepEqual(back, { toolbarInTitle: true, dock: true, sidebar: true, header: 30, crumb: { role: null, tabindex: null, arrow: 'none', clickable: 'none' } });
   await app.screenshot('08-normal-again');
 });

@@ -450,12 +450,14 @@ byId(WORKSPACE_ID).addEventListener('wheel', e => {
 // ---- Window chrome (forwarded to the host) ----
 
 const titlebar = byId(TITLEBAR_ID);
+/** The title bar's buttons: real ones, and ones only some layouts make buttons (Minimal's workspace, js/minimal.js). */
+const TITLEBAR_BUTTON = 'button, [role="button"]';
 // Title bar buttons must not steal keyboard focus from the terminal.
 titlebar.addEventListener('mousedown', e => {
-  if (targetOf(e).closest('button')) e.preventDefault();
+  if (targetOf(e).closest(TITLEBAR_BUTTON)) e.preventDefault();
 });
 titlebar.addEventListener('mousedown', e => {
-  if (e.button !== 0 || targetOf(e).closest('button, input')) return;
+  if (e.button !== 0 || targetOf(e).closest(`${TITLEBAR_BUTTON}, input`)) return;
   send(PAGE.window, { action: e.detail === 2 ? WINDOW_ACTION.maximize : WINDOW_ACTION.drag });
 });
 for (const button of /** @type {NodeListOf<HTMLElement>} */ (document.querySelectorAll('[data-window]'))) {

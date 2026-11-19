@@ -137,6 +137,8 @@ export function swallowNextClick() {
 export const TOOLBAR = '.toolbar';
 /** The title bar's id (index.html): the strip, in Minimal. */
 export const TITLEBAR_ID = 'titlebar';
+/** The workspace on screen in the title bar (index.html): js/sidebar.js fills it in, Minimal makes it open the list. */
+export const CRUMB_ID = 'crumb';
 /**
  * The edge of the window the title bar's buttons are docked on, when `el` is one of them (else the top): what opens
  * from one of them opens away from that edge.

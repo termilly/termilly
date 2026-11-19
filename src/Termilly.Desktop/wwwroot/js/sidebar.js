@@ -29,7 +29,7 @@ import { tabProjectHtml, openPort, repoOf } from './gitstatus.js';
 import { remoteRailHtml, openRemoteMenu } from './remote.js';
 import { openNewWorkspace } from './newworkspace.js';
 import { SETTING_VALUES } from './constants.js';
-import { byId, find, targetOf, dragPointer, showError, MOUSE_OVER } from './dom.js';
+import { byId, find, targetOf, dragPointer, showError, MOUSE_OVER, CRUMB_ID } from './dom.js';
 import { RENAME_INPUT_CLASS, RENAME_IN, shownName } from './rename.js';
 
 /** The choices of the settings used here (C#'s SettingValues). */
@@ -51,7 +51,7 @@ const rail = byId('ws-rail');
 const flyout = byId('ws-flyout');
 // In the sidebar header, and atop the icon rail.
 const toggles = /** @type {NodeListOf<HTMLElement>} */ (document.querySelectorAll('.sidebar-toggle'));
-const crumb = byId('crumb');
+const crumb = byId(CRUMB_ID);
 /** The rail's "+", on a 14-unit grid drawn at 14 px so its lines land on whole pixels (as in the sidebar header). */
 const RAIL_PLUS = '<svg viewBox="0 0 14 14"><path d="M7.5 3v9M3 7.5h9"/></svg>';
 
