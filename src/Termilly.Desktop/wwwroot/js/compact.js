@@ -488,8 +488,8 @@ async function typePrompt(tab, text) {
 const TAKEN_MAX_MS = 1000;
 
 /**
- * Ends a prompt's sending once the agent has taken it: its input line holds no words any more (or it works), at the
- * latest after TAKEN_MAX_MS. Not waited for: the next prompt goes on meanwhile.
+ * Ends a prompt's sending once the agent has taken it: no words left in its input line (it works, or a list of its
+ * own shows), at the latest after TAKEN_MAX_MS. Not waited for: the next prompt goes on meanwhile.
  * @param {Tab} tab
  */
 function doneWhenTaken(tab) {
@@ -503,7 +503,10 @@ function doneWhenTaken(tab) {
     writes.dispose();
     doneSending(tab);
   };
-  const writes = term.onWriteParsed(() => { if (liveRow(tab).row < 0) done(); });
+  const writes = term.onWriteParsed(() => {
+    const live = liveRow(tab);
+    if (live.row < 0 || live.menu) done();
+  });
   const cap = setTimeout(done, TAKEN_MAX_MS);
 }
 
