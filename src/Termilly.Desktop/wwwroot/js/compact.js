@@ -203,6 +203,8 @@ const sessionOf = tab => tab.agent?.session ?? tab.start?.resumeSession ?? null;
  * @param {Tab} tab
  */
 function onScreen(tab) {
+  // Noted in the Full view too, so a list the agent shows later isn't taken for one as it starts.
+  noteStarted(tab);
   if (!isCompact(tab)) return;
   const c = compactOf(tab);
   const ready = atPrompt(tab);
@@ -416,14 +418,20 @@ function atPrompt(tab) {
  */
 function startMenu(tab) {
   const kind = agentKind(runningAgent(tab));
-  const c = compactOf(tab);
-  if (tab.agent || kind.hookAtStart || c.started) return null;
-  if (showsInput(tab, kind)) {
-    c.started = true;
-    return null;
-  }
+  if (tab.agent || kind.hookAtStart || noteStarted(tab)) return null;
   const menu = screenMenu(tab);
   return menu && menuKey(menu) ? menu : null;
+}
+
+/**
+ * Whether the agent has shown its input line since it started, noting it once it does.
+ * @param {Tab} tab
+ */
+function noteStarted(tab) {
+  const c = compactOf(tab);
+  const agent = runningAgent(tab);
+  if (!c.started && agent && showsInput(tab, agentKind(agent))) c.started = true;
+  return !!c.started;
 }
 
 /**
