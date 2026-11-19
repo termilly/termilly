@@ -19,6 +19,8 @@ internal sealed class UpdateFolders
     /// <summary>A kept old version on its way out; unique names, so a stuck one never blocks the next.</summary>
     private const string DiscardSuffix = ".old.delete-";
     private const string MarkerFile = "confirmed";
+    /// <summary>Next to the program folder: the kept setup, the update lock and the confirmed marker.</summary>
+    public const string UpdateSuffix = ".update";
     private const int MoveTries = 10;
     private const int MoveRetryMs = 500;
 
@@ -37,7 +39,7 @@ internal sealed class UpdateFolders
     public string Staging => Dir + StagingSuffix;
     private string Aside => Dir + AsideSuffix;
     /// <summary>Written once the new version is healthy, before the old one goes: it holds the version that was kept.</summary>
-    private string Marker => Path.Combine(Dir + ".update", MarkerFile);
+    private string Marker => Path.Combine(Dir + UpdateSuffix, MarkerFile);
 
     /// <summary>
     /// Settles whatever an earlier update left: kept if it was confirmed, the old version back otherwise. True when
@@ -54,7 +56,19 @@ internal sealed class UpdateFolders
             }
             else
             {
-                RollBack();
+                try
+                {
+                    RollBack();
+                }
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+                {
+                    // The old version is stuck where it is: a complete new copy beats an empty program folder.
+                    if (!Directory.Exists(Dir) && HasApp(Staging))
+                    {
+                        Move(Staging, Dir);
+                    }
+                    throw;
+                }
                 rolledBack = true;
             }
         }

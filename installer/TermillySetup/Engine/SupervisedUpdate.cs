@@ -204,7 +204,7 @@ internal sealed class SupervisedUpdate(Payload payload, string dir, string scope
     /// <summary>The lock Termilly's update check takes too (UpdateJournal.TryLock), tried for a while.</summary>
     private static FileStream? TakeLock(string dir)
     {
-        var folder = Path.GetFullPath(dir).TrimEnd('\\') + ".update";
+        var folder = Path.GetFullPath(dir).TrimEnd('\\') + UpdateFolders.UpdateSuffix;
         var until = DateTime.UtcNow + LockWait;
         while (true)
         {

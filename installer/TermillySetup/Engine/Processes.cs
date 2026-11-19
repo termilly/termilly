@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using Termilly.Shared;
 
 namespace Termilly.Setup.Engine;
 
@@ -13,8 +14,6 @@ internal static class Processes
     /// <summary>How long Termilly's windows get to close (and save) before what's left is ended, and each end.</summary>
     private static readonly TimeSpan CloseWait = TimeSpan.FromSeconds(10);
     private const int EndWaitMs = 5000;
-    /// <summary>PROCESS_QUERY_LIMITED_INFORMATION: enough to read a process's path.</summary>
-    private const int QueryLimitedInformation = 0x1000;
 
     /// <summary>Processes whose exe is in <paramref name="dir"/> (Termilly, its background host, the agent helpers).</summary>
     public static List<Process> InFolder(string dir)
@@ -125,42 +124,15 @@ internal static class Processes
 
     private static string? ImagePath(Process process)
     {
-        IntPtr handle;
         try
         {
-            handle = OpenProcess(QueryLimitedInformation, false, process.Id);
+            return ProcessImage.PathOf(process.Id);
         }
         catch (InvalidOperationException)
         {
-            return null;
-        }
-        if (handle == IntPtr.Zero)
-        {
-            return null;
-        }
-        try
-        {
-            var buffer = new char[MaxPath];
-            var size = buffer.Length;
-            return QueryFullProcessImageName(handle, 0, buffer, ref size) ? new string(buffer, 0, size) : null;
-        }
-        finally
-        {
-            CloseHandle(handle);
+            return null; // already gone
         }
     }
-
-    [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern IntPtr OpenProcess(int access, bool inherit, int processId);
-
-    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
-    private static extern bool QueryFullProcessImageName(IntPtr process, int flags, [Out] char[] name, ref int size);
-
-    /// <summary>Room for a process's path (QueryFullProcessImageName), long paths included.</summary>
-    private const int MaxPath = 1024;
-
-    [DllImport("kernel32.dll")]
-    private static extern bool CloseHandle(IntPtr handle);
 
     /// <summary>ASFW_ANY: any process may take the foreground from setup.</summary>
     private const int AnyProcess = -1;
