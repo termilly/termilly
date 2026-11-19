@@ -42,22 +42,18 @@ internal sealed class SupervisedUpdate(Payload payload, string dir, string scope
             Processes.StartTermilly(_folders.Dir);
             return SupervisedCodes.Busy;
         }
-        using (var held = TakeLock())
+        // Held until the update is kept or undone: the new version's own update check sees it and stays out of the way,
+        // and no other start or sign-in recovery can move folders in between.
+        using var held = TakeLock();
+        if (held is null)
         {
-            if (held is null)
-            {
-                Log.Write("update at start: another update holds this install, nothing changed");
-                Processes.StartTermilly(_folders.Dir);
-                return SupervisedCodes.Busy;
-            }
-            Settle(_folders);
-            OldVersion = UpdateRegistry.VersionOf(_folders.Dir);
-            if (!InstallFiles())
-            {
-                return ExitCodes.Failed;
-            }
+            Log.Write("update at start: another update holds this install, nothing changed");
+            Processes.StartTermilly(_folders.Dir);
+            return SupervisedCodes.Busy;
         }
-        return StartAndWait();
+        Settle(_folders);
+        OldVersion = UpdateRegistry.VersionOf(_folders.Dir);
+        return InstallFiles() ? StartAndWait() : ExitCodes.Failed;
     }
 
     /// <summary>
@@ -138,10 +134,7 @@ internal sealed class SupervisedUpdate(Payload payload, string dir, string scope
         Log.Write($"Termilly {payload.Version} didn't report healthy within {HealthyWait.TotalSeconds:0} s");
         // Only the new version runs from the folder now, started a moment ago by this setup: ending it loses nothing.
         Processes.CloseAll(_folders.Dir);
-        using (TakeLock())
-        {
-            PutOldBack();
-        }
+        PutOldBack();
         return SupervisedCodes.RolledBack;
     }
 
@@ -161,8 +154,29 @@ internal sealed class SupervisedUpdate(Payload payload, string dir, string scope
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             Log.Write($"couldn't put the old version back yet, the sign-in entry will: {e.Message}");
+            KeepSomeVersion();
         }
         Processes.StartTermilly(_folders.Dir);
+    }
+
+    /// <summary>
+    /// A rollback that couldn't finish must still leave a Termilly where the shortcuts point: whichever copy is on
+    /// disk goes back in the program folder (the old version first).
+    /// </summary>
+    private void KeepSomeVersion()
+    {
+        if (UpdateRegistry.VersionOf(_folders.Dir) is not null)
+        {
+            return;
+        }
+        try
+        {
+            _folders.Recover();
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            Log.Write($"no Termilly in the program folder until the sign-in entry runs: {e.Message}");
+        }
     }
 
     private bool WaitUntilFree()

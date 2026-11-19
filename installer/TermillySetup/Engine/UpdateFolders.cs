@@ -90,7 +90,19 @@ internal sealed class UpdateFolders
             DeleteOrThrow(Aside);
             Move(Dir, Aside);
         }
-        Move(Backup, Dir);
+        try
+        {
+            Move(Backup, Dir);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            // The old version won't go back: the new one returns, so the program folder is never left empty.
+            if (!Directory.Exists(Dir) && Directory.Exists(Aside))
+            {
+                Move(Aside, Dir);
+            }
+            throw;
+        }
         TryDelete(Aside);
     }
 
