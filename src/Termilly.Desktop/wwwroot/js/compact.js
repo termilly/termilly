@@ -603,13 +603,16 @@ const TOP_GAP = Object.freeze(['', '']);
 
 /**
  * A menu an agent starting shows with nothing but blank rows above it up to the screen's top, read as starting there:
- * Codex clears its screen for its update offer, which leaves one blank row above it, not a gap. Any other menu whose
- * start isn't found stays as it was read (cut off).
+ * Codex clears its screen for its update offer, which leaves one blank row above it, not a gap. Only with blank rows
+ * to spare under it: a menu taller than the screen fills it, and its top may be cut off at a blank row inside it. Any
+ * other menu whose start isn't found stays as it was read (cut off).
  * @param {any} term xterm's Terminal
  * @param {import('./compactcard.js').Menu} menu
  */
 function fromScreenTop(term, menu) {
-  const top = readMenu([...TOP_GAP, ...screenRows(term)]);
+  const rows = screenRows(term);
+  if (rows.findLastIndex(row => row.trim()) >= rows.length - 1 - TOP_GAP.length) return menu;
+  const top = readMenu([...TOP_GAP, ...rows]);
   return top && top.whole !== null && top.start === TOP_GAP.length ? { ...top, start: 0 } : menu;
 }
 
