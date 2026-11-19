@@ -235,51 +235,50 @@ test('a prompt box hidden while its pane got narrower fits its text when its vie
   await until(async () => (await boxHeight(app)) > wide, 'taller once shown in the narrower pane');
 }, { waiting: true }));
 
-/** The open right-click menu's rows: each one's text and whether it can be picked; the menu is closed after. */
-async function menuRows(app) {
-  await app.waitFor('.menu-row');
-  const rows = await app.eval(t => t.$$('.menu-row').map(row => ({ text: row.textContent.trim(), enabled: !row.disabled })));
-  await app.eval(async t => (await t.import('popups.js')).closeAll());
-  return rows;
-}
-
-/** Selects a view element's text as a drag would, then right-clicks it. */
-const rightClickSelected = (app, selector) => app.eval((t, s) => {
-  const el = t.$(s);
-  const selection = el.ownerDocument.getSelection();
-  selection.selectAllChildren(el);
+/**
+ * Right-clicks an element and returns the menu that opens, as each row's text and whether it can be picked, then closes
+ * it. Read at once: a menu opened by a made-up right-click over the terminal doesn't stay open for a later look.
+ */
+const rightClickMenu = (app, selector) => app.eval(async (t, s) => {
   t.contextmenu(s);
-  return selection.toString();
+  const rows = t.$$('.menu-row').map(row => ({ text: row.textContent.trim(), enabled: !row.disabled }));
+  (await t.import('popups.js')).closeAll();
+  return rows;
 }, selector);
 
-test('the Compact and Minimal views keep a selection through a right-click and show the terminal\'s full menu for it', () => scenario('compact-menu', approval, async app => {
-  const selected = await rightClickSelected(app, '.cv-question');
-  assert.equal(selected, question);
-  const compact = await menuRows(app);
+/** Selects a view element's text as a drag would; returns what got selected. */
+const selectAllOf = (app, selector) => app.eval((t, s) => {
+  const el = t.$(s);
+  el.ownerDocument.getSelection().selectAllChildren(el);
+  return el.ownerDocument.getSelection().toString();
+}, selector);
+
+/** Selects text in the terminal itself (xterm's own selection); returns what got selected. */
+const selectInTerminal = (app, text) => app.eval(async (t, wanted) => {
+  const { state } = await t.import('store.js');
+  const term = [...state.tabs.values()].find(tab => tab.view?.term).view.term;
+  const buffer = term.buffer.active;
+  for (let y = 0; y < buffer.length; y++) {
+    const x = buffer.getLine(y)?.translateToString(true).indexOf(wanted) ?? -1;
+    if (x >= 0) { term.select(x, y, wanted.length); break; }
+  }
+  return term.getSelection();
+}, text);
+
+test('a right-click on selected text in the Compact and Minimal views shows the terminal\'s full menu for it', () => scenario('compact-menu', approval, async app => {
+  assert.equal(await selectAllOf(app, '.cv-question'), question);
+  const compact = await rightClickMenu(app, '.cv-question');
   assert.ok(compact.find(row => row.text.startsWith('Copy'))?.enabled, 'Copy can be picked');
   assert.ok(compact.some(row => row.text === 'Ask an agent about this'), 'the selection\'s entries are there');
 
   await pickView(app, 'Minimal');
   await app.waitFor('.cv-question');
-  await rightClickSelected(app, '.cv-question');
-  assert.deepEqual(await menuRows(app), compact);
+  assert.equal(await selectAllOf(app, '.cv-question'), question);
+  assert.deepEqual(await rightClickMenu(app, '.cv-question'), compact);
 
   // The terminal's own menu for the same selected text is the same menu.
   await pickView(app, 'Full');
   await app.waitFor('.compact-view', { gone: true });
-  await app.eval(async (t, text) => {
-    const { state } = await t.import('store.js');
-    const term = [...state.tabs.values()].find(tab => tab.view?.term).view.term;
-    const buffer = term.buffer.active;
-    for (let y = 0; y < buffer.length; y++) {
-      const x = buffer.getLine(y)?.translateToString(true).indexOf(text) ?? -1;
-      if (x >= 0) { term.select(x, y, text.length); break; }
-    }
-  }, question);
-  assert.equal(await app.eval(async t => {
-    const { state } = await t.import('store.js');
-    return [...state.tabs.values()].find(tab => tab.view?.term).view.term.getSelection();
-  }), question);
-  await app.eval(t => t.contextmenu('.ws-layer.active .pane .xterm'));
-  assert.deepEqual(await menuRows(app), compact);
+  assert.equal(await selectInTerminal(app, question), question);
+  assert.deepEqual(await rightClickMenu(app, '.ws-layer.active .pane .xterm'), compact);
 }, { waiting: true }));
