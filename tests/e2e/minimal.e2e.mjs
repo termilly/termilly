@@ -406,6 +406,7 @@ step("right-click on a workspace in the strip's list closes it, asked first as i
   assert.ok((await names()).includes('second'));
   await rightClick('second');
   assert.equal(await app.eval(t => t.$$('.context-menu').length), 2, 'the list stays open under the workspace menu');
+  await pause(400);
   await app.screenshot('08-workspace-close-menu');
   await app.click('.context-menu .menu-row.danger');
   await app.waitFor('[data-cancel]');
