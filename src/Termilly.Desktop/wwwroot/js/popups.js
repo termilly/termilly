@@ -376,8 +376,8 @@ function wireMore(menu, button, more, closeSubmenus) {
     // One at a time: another row's, still open, goes first.
     const open = moreMenus.get(menu);
     if (open) closePopover(open);
-    // Closed (Escape), its row has the keys again, so the menu under it does too.
-    moreMenus.set(menu, showMenu(more(), { x: e.clientX, y: e.clientY }, { nested: true, onClose: () => { if (button.isConnected) button.focus(); } }));
+    // Closed on its own (Escape), its row has the keys again, so the menu under it does too.
+    moreMenus.set(menu, showMenu(more(), { x: e.clientX, y: e.clientY }, { nested: true, onClose: () => { if (isOpen(menu)) button.focus(); } }));
   });
 }
 
