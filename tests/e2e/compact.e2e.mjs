@@ -31,11 +31,11 @@ async function waitOnQuestion(app) {
   await until(() => app.eval(t => !t.$('.compact-view').classList.contains('drawer')), 'the card without the drawer');
 }
 
-async function scenario(name, lines, body, { waiting = false, ready = '.cv-choice[data-choice="3"]', cursorUp = 0 } = {}) {
+async function scenario(name, lines, body, { waiting = false, ready = '.cv-choice[data-choice="3"]' } = {}) {
   const repo = await makeRepo();
   let app, failed = true;
   try {
-    app = await startApp({ folder: repo.folder, name, agents: { codex: { stdout: '', prompt: { lines, cursorUp } } } });
+    app = await startApp({ folder: repo.folder, name, agents: { codex: { stdout: '', prompt: { lines } } } });
     // Launch the bare command so shell integration recognizes the agent.
     await app.waitFor('.xterm');
     await app.eval(async t => {
@@ -102,7 +102,7 @@ test('a prompt with no question falls back to Codex asks', () => scenario('compa
 }));
 
 
-// Codex's update offer as it starts, its cursor left on the pointer's row (what a resume shows first).
+// Codex's update offer as it starts (what a resume shows first), its cursor parked under it as Codex parks it.
 const update = ['', '', '  Update available · 0.167.2 → 0.170.0', '  Release notes: https://github.com/openai/codex/releases/latest', '',
   '› 1. Update now (runs `npm install -g @openai/codex`)', '  2. Skip', '  3. Skip until next version', '', '  enter continue · esc skip'];
 
@@ -121,7 +121,7 @@ test("Codex's update offer is a card, also under a session the view already show
   assert.equal(await drawer(), false, 'under the session');
   await app.click('.cv-choice[data-choice="2"]');
   await received(app, '2');
-}, { cursorUp: 5 }));
+}));
 
 const tall = ['', '', `  ${question}`, '', ...Array.from({ length: 70 }, (_, i) => `  $ step ${i}`), ...choices, '  Press enter to confirm or esc to cancel'];
 

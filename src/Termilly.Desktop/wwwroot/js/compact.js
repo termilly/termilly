@@ -98,8 +98,8 @@ const VIEW_HTML = `
  * A terminal's compact view: what the host sent of its session, the elements showing it, and the prompt being typed.
  * @typedef {{ lines: CompactLine[], session: string | null, el: HTMLElement | null, frame: number, frameWin: Window | null, sending: Promise<void>, writes: { dispose(): void } | null,
  *   picked?: { menu: string, at: number }, ready?: boolean, drawer?: boolean, drawerFrame?: number, drawerWin?: Window,
- *   resizes?: { dispose(): void }, drawerRow?: number, drawerMenu?: boolean, asked?: number, askedBy?: object | null, waiting?: boolean }} CompactState
- *   drawerMenu: whether a list of the agent's own opened the drawer; asked: how many questions the agent has asked; askedBy: the report that asked the last one
+ *   resizes?: { dispose(): void }, drawerRow?: number, drawerMenu?: boolean, started?: boolean, asked?: number, askedBy?: object | null, waiting?: boolean }} CompactState
+ *   drawerMenu: whether a list of the agent's own opened the drawer; started: whether the agent has shown its input line since it started; asked: how many questions the agent has asked; askedBy: the report that asked the last one
  */
 
 /**
@@ -405,24 +405,23 @@ const waitsForAnswer = tab => tab.agent?.state === AGENT_STATE.needsInput;
 function atPrompt(tab) {
   if (runsClaude(tab)) return true;
   const kind = agentKind(runningAgent(tab));
-  return !kind.hookAtStart && showsInput(tab, kind) && !startMenu(tab);
+  return !kind.hookAtStart && showsInput(tab, kind);
 }
 
-/** A menu's numbered choice ("1. Update now"), as it follows the pointer. */
-const MENU_CHOICE = /^\d+\.\s/;
-
 /**
- * A menu an agent shows as it starts with its cursor on the pointer's row, which is drawn with its input mark
- * (Codex's "› 1. Update now"): only before it has reported anything, and only a menu a card can show. Its own lists
- * later (/model) and a draft starting "1. " aren't one.
+ * A menu an agent shows as it starts, before its input line (Codex's update offer, its cursor parked at the bottom),
+ * and only one a card can show. Not once the agent has reported, or shown its input line since it started (noted here,
+ * and forgotten when it leaves): its own lists after that (/model) are the drawer's.
  * @param {Tab} tab
  */
 function startMenu(tab) {
   const kind = agentKind(runningAgent(tab));
-  const buffer = tab.view?.term?.buffer.active;
-  if (tab.agent || kind.hookAtStart || !kind.inputMark || !buffer) return null;
-  const row = (buffer.getLine(buffer.baseY + buffer.cursorY)?.translateToString(true) ?? '').trimStart();
-  if (!row.startsWith(kind.inputMark) || !MENU_CHOICE.test(row.slice(kind.inputMark.length).trimStart())) return null;
+  const c = compactOf(tab);
+  if (tab.agent || kind.hookAtStart || c.started) return null;
+  if (showsInput(tab, kind)) {
+    c.started = true;
+    return null;
+  }
   const menu = screenMenu(tab);
   return menu && menuKey(menu) ? menu : null;
 }
@@ -833,6 +832,7 @@ on(EVENTS.settings, () => {
 // Termilly saw the agent's program start or stop (a session restored at start: Codex reports nothing before its first
 // prompt), so the view comes or goes with it.
 on(EVENTS.tab, tab => {
+  if (tab.compact && !runningAgent(tab)) tab.compact.started = false;
   if (tab.view && isCompact(tab) !== tab.view.el.classList.contains(SHOWN_CLASS)) apply(tab);
 });
 on(EVENTS.tabClosed, tab => {

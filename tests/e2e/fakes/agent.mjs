@@ -29,8 +29,6 @@ process.stdin.resume();
 setTimeout(() => finish('timeout'), script.prompt.timeoutMs ?? 60000);
 // Home and erase removes the shell's command and history, making the above-choice fallback deterministic.
 process.stdout.write('\x1b[2J\x1b[H' + script.prompt.lines.join('\r\n') + '\r\n');
-// A TUI may leave its cursor on a row of what it drew (Codex on its menu's pointer): that many rows up from the end.
-if (script.prompt.cursorUp) process.stdout.write(`\x1b[${script.prompt.cursorUp}A`);
 log({ event: 'ready', raw: !!process.stdin.isTTY });
 
 
