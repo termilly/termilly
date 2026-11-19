@@ -611,7 +611,7 @@ const TOP_GAP = Object.freeze(['', '']);
  */
 function fromScreenTop(term, menu) {
   const rows = screenRows(term);
-  if (rows.findLastIndex(row => row.trim()) >= rows.length - 1 - TOP_GAP.length) return menu;
+  if (rows.findLastIndex(row => row.trim()) > rows.length - 1 - TOP_GAP.length) return menu;
   const top = readMenu([...TOP_GAP, ...rows]);
   return top && top.whole !== null && top.start === TOP_GAP.length ? { ...top, start: 0 } : menu;
 }
