@@ -348,7 +348,8 @@ function isReady(tab, quietSince) {
 /**
  * Whether an agent's input line is up (for one that has an input mark; any other counts as showing it): the row its cursor
  * is on starts with the mark. Not any row on screen: Codex runs inline, so an earlier session's lines (› and what was
- * asked) stay on screen when it's started again there.
+ * asked) stay on screen when it's started again there. Nor a menu's pointer drawn with the same mark (Codex's
+ * "› 1. Update now" as it starts).
  * @param {Tab} tab
  * @param {import('./agentkinds.js').AgentKind} kind
  */
@@ -356,9 +357,12 @@ export function showsInput(tab, kind) {
   const mark = kind.inputMark;
   if (!mark) return true;
   const buffer = tab.view?.term?.buffer.active;
-  const row = buffer?.getLine(buffer.baseY + buffer.cursorY)?.translateToString(true) ?? '';
-  return row.trimStart().startsWith(mark);
+  const row = (buffer?.getLine(buffer.baseY + buffer.cursorY)?.translateToString(true) ?? '').trimStart();
+  return row.startsWith(mark) && !MENU_CHOICE.test(row.slice(mark.length).trimStart());
 }
+
+/** A menu's numbered choice ("1. Update now"), as it follows the pointer. */
+const MENU_CHOICE = /^\d+\.\s/;
 
 /**
  * Waits until a terminal is ready for a line (isReady): one just opened, or whose agent is still starting, gets that long,

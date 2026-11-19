@@ -247,7 +247,8 @@ function placeDrawer(tab) {
   const stays = !!c.drawer && !c.drawerMenu && view.term.element?.contains(view.body.ownerDocument.activeElement) && !tab.exited
     && tab.agent?.state !== AGENT_STATE.working && tab.agent?.state !== AGENT_STATE.needsInput
     && drawerHolds(view.term, c.drawerRow ?? -1);
-  const found = isCompact(tab) ? liveRow(tab) : NO_DRAWER;
+  // Not while the agent starts: a menu then (Codex's update offer, its trust question) is the feed's card.
+  const found = isCompact(tab) && atPrompt(tab) ? liveRow(tab) : NO_DRAWER;
   const row = found.row < 0 && stays && isCompact(tab) ? c.drawerRow ?? -1 : found.row;
   if (found.row >= 0) c.drawerMenu = found.menu;
   c.drawerRow = row;
@@ -693,6 +694,8 @@ function preview(tab, shown) {
 function workingHtml(tab) {
   const name = escapeHtml(agentKind(runningAgent(tab)).short);
   if (waitsForAnswer(tab)) return cardOf(tab, name);
+  // Started again on a session the feed already shows (a resume): what it asks first comes under it.
+  if (!atPrompt(tab)) return startingHtml(tab, name);
   return tab.agent?.state === AGENT_STATE.working ? `<div class="cv-working"><i></i>${name} is working</div>` : '';
 }
 
@@ -702,13 +705,20 @@ function workingHtml(tab) {
  */
 function emptyHtml(tab) {
   const name = escapeHtml(agentKind(runningAgent(tab)).short);
-  if (!atPrompt(tab)) {
-    // A menu of its own as it starts (Codex's "Trust and continue"): a card too.
-    const menu = screenMenu(tab);
-    if (menu && menuKey(menu)) return cardHtml(menu, name, CARD_BUTTONS);
-    return `<div class="cv-empty">${name} is starting. Anything it asks first is in the terminal.<br><button class="${OPEN_TERMINAL.slice(1)}">Open terminal</button></div>`;
-  }
+  if (!atPrompt(tab)) return startingHtml(tab, name);
   return `<div class="cv-empty">${compactOf(tab).session ? `Nothing yet. Ask ${name} something below.` : `Ask ${name} something below.`}</div>`;
+}
+
+/**
+ * An agent starting: a menu of its own as a card (Codex's "Trust and continue", its update offer), or else a note
+ * that what it asks first is in the terminal.
+ * @param {Tab} tab
+ * @param {string} name the agent's short name, escaped
+ */
+function startingHtml(tab, name) {
+  const menu = screenMenu(tab);
+  if (menu && menuKey(menu)) return cardHtml(menu, name, CARD_BUTTONS);
+  return `<div class="cv-empty">${name} is starting. Anything it asks first is in the terminal.<br><button class="${OPEN_TERMINAL.slice(1)}">Open terminal</button></div>`;
 }
 
 /**
