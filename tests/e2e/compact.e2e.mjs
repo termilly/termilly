@@ -103,7 +103,7 @@ test('a prompt with no question falls back to Codex asks', () => scenario('compa
 
 
 // Codex's update offer as it starts, its cursor left on the pointer's row (what a resume shows first).
-const update = ['', '  Update available · 0.167.2 → 0.170.0', '  Release notes: https://github.com/openai/codex/releases/latest', '',
+const update = ['', '', '  Update available · 0.167.2 → 0.170.0', '  Release notes: https://github.com/openai/codex/releases/latest', '',
   '› 1. Update now (runs `npm install -g @openai/codex`)', '  2. Skip', '  3. Skip until next version', '', '  enter continue · esc skip'];
 
 test("Codex's update offer is a card, also under a session the view already shows, never the live terminal", () => scenario('compact-update', update, async app => {
