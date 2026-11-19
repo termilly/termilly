@@ -14,8 +14,13 @@ body[data-layout="minimal"] #titlebar .tb-right > .separator,
 body[data-layout="minimal"] .bar-dock,
 body[data-layout="minimal"] :is(#sidebar, #sidebar-gap) { display: none; }
 /* The workspace on screen, always (Normal shows it only while the sidebar is closed). */
-body[data-layout="minimal"] .crumb { height: 22px; margin-left: 4px; padding: 0 6px; border: 0; opacity: 1; transform: none; }
+/* It opens the list of all workspaces, as the dock's does (js/minimal.js); Normal's has no arrow and takes no clicks. */
+body[data-layout="minimal"] .crumb { gap: 6px; height: 22px; margin-left: 4px; padding: 0 6px; border: 0; border-radius: 6px; opacity: 1; transform: none; pointer-events: auto; }
 body[data-layout="minimal"] .crumb-name { font-weight: 600; }
+.crumb .dock-chev { display: none; }
+body[data-layout="minimal"] .crumb:hover { background: var(--hover); }
+body[data-layout="minimal"] .crumb:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
+body[data-layout="minimal"] .crumb .dock-chev { display: block; }
 .mini-aside, .mini-needs { display: none; }
 body[data-layout="minimal"] :is(.mini-aside, .mini-needs):not([hidden]) {
   display: inline-flex;

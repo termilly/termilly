@@ -39,7 +39,8 @@ const EDGES = /** @type {const} */ ([[DOCK_SIDE.top, 'Top'], [DOCK_SIDE.bottom, 
 /** @type {Readonly<Record<string, 'below' | 'above' | 'right' | 'left'>>} */
 const AWAY = Object.freeze({ [DOCK_SIDE.top]: SIDE.below, [DOCK_SIDE.bottom]: SIDE.above, [DOCK_SIDE.left]: SIDE.right, [DOCK_SIDE.right]: SIDE.left });
 
-const CHEVRON = '<svg class="dock-chev" viewBox="0 0 8 8"><path d="M1.5 3L4 5.5 6.5 3"/></svg>';
+/** The down arrow after the workspace's name, here and in Minimal's strip. */
+export const CHEVRON = '<svg class="dock-chev" viewBox="0 0 8 8"><path d="M1.5 3L4 5.5 6.5 3"/></svg>';
 const SEARCH = '<svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5l3 3"/></svg>';
 
 const dock = document.createElement('div');
@@ -237,8 +238,13 @@ export function setDockWorkspaces(rows) {
   moreWorkspaces = rows;
 }
 
-// The workspace on screen opens the list of them all, other computers' too, and New workspace.
-wsButton.addEventListener('click', () => {
+/**
+ * The list of all workspaces, other computers' too, and New workspace: what the workspace on screen opens, in the dock
+ * and in Minimal's strip (js/minimal.js).
+ * @param {HTMLElement} anchor
+ * @param {'below' | 'above' | 'right' | 'left'} side
+ */
+export function showWorkspaceList(anchor, side) {
   /** @type {MenuEntry[]} */
   const items = state.workspaces.map(ws => ({
     label: ws.name, icon: workspaceSwatch(ws.color), hint: rowHint(ws), checked: ws.id === state.activeId,
@@ -247,8 +253,10 @@ wsButton.addEventListener('click', () => {
   const more = moreWorkspaces();
   if (more.length) items.push(SEPARATOR, ...more);
   items.push(SEPARATOR, { label: 'New workspace', hint: 'Ctrl+Shift+N', action: () => openNewWorkspace() });
-  showMenu(items, wsButton, { side: AWAY[sideNow()] });
-});
+  showMenu(items, anchor, { side });
+}
+
+wsButton.addEventListener('click', () => showWorkspaceList(wsButton, AWAY[sideNow()]));
 
 find(dock, '.dock-search').addEventListener('click', () => openPalette());
 
