@@ -357,8 +357,19 @@ function menuRow(menu, item) {
       item.action?.();
     });
   }
-  const { more } = item;
-  if (more) button.addEventListener('contextmenu', e => {
+  if (item.more) wireMore(menu, button, item.more, closeSubmenus);
+  return button;
+}
+
+/**
+ * A right-click on a menu's row opens what it offers (MenuItem.more) in a menu at the pointer, over this one.
+ * @param {HTMLElement} menu
+ * @param {HTMLButtonElement} button the row
+ * @param {() => MenuEntry[]} more
+ * @param {() => void} closeSubmenus
+ */
+function wireMore(menu, button, more, closeSubmenus) {
+  button.addEventListener('contextmenu', e => {
     e.preventDefault();
     e.stopPropagation();
     closeSubmenus();
@@ -368,7 +379,6 @@ function menuRow(menu, item) {
     // Closed (Escape), its row has the keys again, so the menu under it does too.
     moreMenus.set(menu, showMenu(more(), { x: e.clientX, y: e.clientY }, { nested: true, onClose: () => { if (button.isConnected) button.focus(); } }));
   });
-  return button;
 }
 
 /**

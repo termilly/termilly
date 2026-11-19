@@ -421,6 +421,7 @@ step("right-click on a workspace in the strip's list closes it, asked first as i
   assert.deepEqual({ menus: await menus(), keys: await app.eval(() => !!globalThis.document.activeElement?.closest('.context-menu .menu-row')) }, { menus: 1, keys: true });
   await app.key('.context-menu', 'Escape');
   await pause(300);
+  await rightClick('second');
   await app.click('.context-menu .menu-row.danger');
   await app.waitFor('[data-cancel]');
   assert.equal(await app.text('.dialog h3, dialog h3'), 'Close “second”?');
