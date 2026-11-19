@@ -23,11 +23,13 @@ const ENTER_MAX_MS = 3000;
  * time is lost, so its stillness only counts once its screen has shown the text.
  * @param {Tab} tab
  * @param {boolean} [typed] whether text was typed just before; with none, nothing will show it, so only ENTER_DELAY_MS
+ * @param {boolean} [settle] wait for the screen whatever the agent: the compact view's prompt box, whose long prompts
+ *   Claude Code on Windows still takes in after ENTER_DELAY_MS (the Enter then only adds a line, and the prompt stays)
  */
-export function beforeEnter(tab, typed = true) {
+export function beforeEnter(tab, typed = true, settle = false) {
   const term = tab.view?.term;
   const agent = runningAgent(tab);
-  if (!typed || !term || !agent || !agentKind(agent).enterAfterQuiet) return new Promise(resolve => setTimeout(resolve, ENTER_DELAY_MS));
+  if (!typed || !term || !agent || !(settle || agentKind(agent).enterAfterQuiet)) return new Promise(resolve => setTimeout(resolve, ENTER_DELAY_MS));
   return new Promise(resolve => {
     let quiet = 0;
     const end = () => {

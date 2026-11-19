@@ -22,7 +22,7 @@ import { readMenu, questionMenu, cardHtml, menuKey, keyedByWhatShows, PROMPT_STA
 import { wireInput } from './compactinput.js';
 import { cardKey } from './compactcardkeys.js';
 import { wireViewMenu } from './termclipboard.js';
-import { liveRow, screenRows, rowsWithScrollback } from './compactdrawer.js';
+import { liveRow, screenRows, rowsWithScrollback, drawerHolds, NO_DRAWER } from './compactdrawer.js';
 import { showPreview } from './compactpreview.js';
 
 /** @typedef {import('./compactlines.js').CompactLine} CompactLine */
@@ -98,8 +98,8 @@ const VIEW_HTML = `
  * A terminal's compact view: what the host sent of its session, the elements showing it, and the prompt being typed.
  * @typedef {{ lines: CompactLine[], session: string | null, el: HTMLElement | null, frame: number, frameWin: Window | null, sending: Promise<void>, writes: { dispose(): void } | null,
  *   picked?: { menu: string, at: number }, ready?: boolean, drawer?: boolean, drawerFrame?: number, drawerWin?: Window,
- *   resizes?: { dispose(): void }, drawerRow?: number, asked?: number, askedBy?: object | null, waiting?: boolean }} CompactState
- *   asked: how many questions the agent has asked; askedBy: the report that asked the last one
+ *   resizes?: { dispose(): void }, drawerRow?: number, drawerMenu?: boolean, started?: boolean, asked?: number, askedBy?: object | null, waiting?: boolean }} CompactState
+ *   drawerMenu: whether a list of the agent's own opened the drawer; started: whether the agent has shown its input line since it started; asked: how many questions the agent has asked; askedBy: the report that asked the last one
  */
 
 /**
@@ -203,6 +203,8 @@ const sessionOf = tab => tab.agent?.session ?? tab.start?.resumeSession ?? null;
  * @param {Tab} tab
  */
 function onScreen(tab) {
+  // Noted in the Full view too, so a list the agent shows later isn't taken for one as it starts.
+  noteStarted(tab);
   if (!isCompact(tab)) return;
   const c = compactOf(tab);
   const ready = atPrompt(tab);
@@ -241,11 +243,16 @@ function placeDrawer(tab) {
   const view = tab.view;
   if (!c.el || !view?.term) return;
   // Open, it stays open while the user works in the terminal and the agent waits (the cursor moved home in what
-  // they typed, or onto its second line, says nothing of whether there are words there).
-  const stays = !!c.drawer && view.term.element?.contains(view.body.ownerDocument.activeElement) && !tab.exited
-    && tab.agent?.state !== AGENT_STATE.working && tab.agent?.state !== AGENT_STATE.needsInput;
-  const found = isCompact(tab) ? liveRow(tab) : -1;
-  const row = found < 0 && stays && isCompact(tab) ? c.drawerRow ?? -1 : found;
+  // they typed, or onto its second line, says nothing of whether there are words there). Not once a list of the
+  // agent's own that opened it has gone (a rating it asked for, answered), nor over rows that no longer hold the input
+  // line: the prompt box would stay hidden behind them.
+  const stays = !!c.drawer && !c.drawerMenu && view.term.element?.contains(view.body.ownerDocument.activeElement) && !tab.exited
+    && tab.agent?.state !== AGENT_STATE.working && tab.agent?.state !== AGENT_STATE.needsInput
+    && drawerHolds(view.term, c.drawerRow ?? -1);
+  // Not for a menu as the agent starts (Codex's update offer): that's the feed's card.
+  const found = isCompact(tab) && !startMenu(tab) ? liveRow(tab) : NO_DRAWER;
+  const row = found.row < 0 && stays && isCompact(tab) ? c.drawerRow ?? -1 : found.row;
+  if (found.row >= 0) c.drawerMenu = found.menu;
   c.drawerRow = row;
   const open = row >= 0;
   c.el.style.bottom = open ? `${Math.max(0, view.body.clientHeight - rowTop(view, row))}px` : '';
@@ -404,6 +411,35 @@ function atPrompt(tab) {
 }
 
 /**
+ * Whether an agent with no hooks at start (Codex) is still starting: it hasn't reported, nor shown its input line since
+ * it started (noted, and forgotten when it leaves).
+ * @param {Tab} tab
+ */
+const isStarting = tab => !tab.exited && !tab.agent && !agentKind(runningAgent(tab)).hookAtStart && !noteStarted(tab);
+
+/**
+ * A menu an agent shows as it starts, before its input line (Codex's update offer, its cursor parked at the bottom),
+ * and only one a card can show. Its own lists after that (/model) are the drawer's.
+ * @param {Tab} tab
+ */
+function startMenu(tab) {
+  if (!isStarting(tab)) return null;
+  const menu = screenMenu(tab);
+  return menu && menuKey(menu) ? menu : null;
+}
+
+/**
+ * Whether the agent has shown its input line since it started, noting it once it does.
+ * @param {Tab} tab
+ */
+function noteStarted(tab) {
+  const c = compactOf(tab);
+  const agent = runningAgent(tab);
+  if (!c.started && agent && showsInput(tab, agentKind(agent))) c.started = true;
+  return !!c.started;
+}
+
+/**
  * Whether the prompt box's text may go to the agent now: it still runs there, is at its prompt, and isn't asking a
  * question of its own.
  * @param {Tab} tab
@@ -434,7 +470,7 @@ function submit(tab, input) {
 async function typePrompt(tab, text) {
   if (!canSend(tab)) return;
   send(PAGE.input, { id: tab.id, data: text.includes('\n') ? `${PASTE_START}${text}${PASTE_END}` : text });
-  await beforeEnter(tab);
+  await beforeEnter(tab, true, true);
   if (!canSend(tab)) return;
   send(PAGE.input, { id: tab.id, data: '\r' });
   agentInput(tab, '\r');
@@ -556,7 +592,8 @@ function screenMenu(tab) {
   const startsAt = waiting ? PROMPT_STARTS[runningAgent(tab) ?? ''] ?? PROMPT_START.either : PROMPT_START.either;
   const menu = readMenu(screenRows(term), { startsAt });
   // An agent starting has said nothing of what it asks: a menu cut off at the top offers the terminal, as before.
-  if (!waiting || (menu && menu.whole !== null)) return menu;
+  if (!waiting) return menu?.whole === null ? fromScreenTop(term, menu) : menu;
+  if (menu && menu.whole !== null) return menu;
   // A question taller than the screen, or whose first choices scrolled above it: read on up the scrollback.
   const { rows, screenTop } = rowsWithScrollback(term, SCROLLBACK_ROWS);
   const deeper = readMenu(rows, { screenTop, startsAt });
@@ -564,6 +601,24 @@ function screenMenu(tab) {
   // Its start not found (further up, or no longer in the terminal): all of it that was read, known by that and what
   // the hook said it's about (and which question it is, menuOf).
   return keyedByWhatShows(deeper, [tab.agent?.tool, tab.agent?.target]);
+}
+
+/** Blank rows enough to read as the gap above a menu (compactcard.js counts two). */
+const TOP_GAP = Object.freeze(['', '']);
+
+/**
+ * A menu an agent starting shows with nothing but blank rows above it up to the screen's top, read as starting there:
+ * Codex clears its screen for its update offer, which leaves one blank row above it, not a gap. Only with blank rows
+ * to spare under it: a menu taller than the screen fills it, and its top may be cut off at a blank row inside it. Any
+ * other menu whose start isn't found stays as it was read (cut off).
+ * @param {any} term xterm's Terminal
+ * @param {import('./compactcard.js').Menu} menu
+ */
+function fromScreenTop(term, menu) {
+  const rows = screenRows(term);
+  if (rows.findLastIndex(row => row.trim()) > rows.length - 1 - TOP_GAP.length) return menu;
+  const top = readMenu([...TOP_GAP, ...rows]);
+  return top && top.whole !== null && top.start === TOP_GAP.length ? { ...top, start: 0 } : menu;
 }
 
 /**
@@ -689,7 +744,10 @@ function preview(tab, shown) {
 function workingHtml(tab) {
   const name = escapeHtml(agentKind(runningAgent(tab)).short);
   if (waitsForAnswer(tab)) return cardOf(tab, name);
-  return tab.agent?.state === AGENT_STATE.working ? `<div class="cv-working"><i></i>${name} is working</div>` : '';
+  if (tab.agent?.state === AGENT_STATE.working) return `<div class="cv-working"><i></i>${name} is working</div>`;
+  // Started again on a session the feed already shows (a resume): a menu it shows first comes under it, or else the
+  // note that what it shows is in the terminal (an update it runs).
+  return isStarting(tab) ? startingHtml(tab, name) : '';
 }
 
 /**
@@ -698,13 +756,20 @@ function workingHtml(tab) {
  */
 function emptyHtml(tab) {
   const name = escapeHtml(agentKind(runningAgent(tab)).short);
-  if (!atPrompt(tab)) {
-    // A menu of its own as it starts (Codex's "Trust and continue"): a card too.
-    const menu = screenMenu(tab);
-    if (menu && menuKey(menu)) return cardHtml(menu, name, CARD_BUTTONS);
-    return `<div class="cv-empty">${name} is starting. Anything it asks first is in the terminal.<br><button class="${OPEN_TERMINAL.slice(1)}">Open terminal</button></div>`;
-  }
+  if (!atPrompt(tab)) return startingHtml(tab, name);
   return `<div class="cv-empty">${compactOf(tab).session ? `Nothing yet. Ask ${name} something below.` : `Ask ${name} something below.`}</div>`;
+}
+
+/**
+ * An agent starting: a menu of its own as a card (Codex's "Trust and continue", its update offer), or else a note
+ * that what it asks first is in the terminal.
+ * @param {Tab} tab
+ * @param {string} name the agent's short name, escaped
+ */
+function startingHtml(tab, name) {
+  const menu = screenMenu(tab);
+  if (menu && menuKey(menu)) return cardHtml(menu, name, CARD_BUTTONS);
+  return `<div class="cv-empty">${name} is starting. Anything it asks first is in the terminal.<br><button class="${OPEN_TERMINAL.slice(1)}">Open terminal</button></div>`;
 }
 
 /**
@@ -799,6 +864,7 @@ on(EVENTS.settings, () => {
 // Termilly saw the agent's program start or stop (a session restored at start: Codex reports nothing before its first
 // prompt), so the view comes or goes with it.
 on(EVENTS.tab, tab => {
+  if (tab.compact && !runningAgent(tab)) tab.compact.started = false;
   if (tab.view && isCompact(tab) !== tab.view.el.classList.contains(SHOWN_CLASS)) apply(tab);
 });
 on(EVENTS.tabClosed, tab => {

@@ -102,6 +102,38 @@ test('a prompt with no question falls back to Codex asks', () => scenario('compa
 }));
 
 
+// Codex's update offer as it starts (what a resume shows first), as Codex 0.170 draws it: its screen cleared, one blank row
+// above it, its cursor parked under it.
+const update = ['', '  Update available · 0.167.2 → 0.170.0', '  Release notes: https://github.com/openai/codex/releases/latest', '',
+  '› 1. Update now (runs `npm install -g @openai/codex`)', '  2. Skip', '  3. Skip until next version', '', '  enter continue · esc skip'];
+
+/** A resumed session: the feed has its lines before Codex shows its prompt. */
+const resumed = app => app.eval(async t => {
+  const { state, agentChanged } = await t.import('store.js');
+  const tab = [...state.tabs.values()].find(tab => tab.view?.term && tab.compactView);
+  tab.compact.lines = [{ key: 'p1', kind: 'prompt', text: 'an earlier prompt' }];
+  agentChanged(tab);
+});
+
+test("Codex's update offer is a card, also under a session the view already shows, never the live terminal", () => scenario('compact-update', update, async app => {
+  const drawer = () => app.eval(t => t.$('.compact-view').classList.contains('drawer'));
+  assert.equal(await drawer(), false, 'with the feed empty');
+  await resumed(app);
+  await app.waitFor('.cv-prompt');
+  await app.waitFor('.cv-choice[data-choice="2"]');
+  assert.equal(await drawer(), false, 'under the session');
+  await app.click('.cv-choice[data-choice="2"]');
+  await received(app, '2');
+}));
+
+test('Codex starting with no menu (an update it runs) says so under a resumed session, with the terminal a click away', () => scenario('compact-updating', ['', 'Updating Codex via `npm install -g @openai/codex`...'], async app => {
+  await resumed(app);
+  await app.waitFor('.cv-prompt');
+  await app.waitFor('.cv-prompt ~ .cv-empty .cv-open-terminal');
+  await app.click('.cv-empty .cv-open-terminal');
+  await app.waitFor('.compact-view', { gone: true });
+}, { ready: '.cv-empty .cv-open-terminal' }));
+
 const tall = ['', '', `  ${question}`, '', ...Array.from({ length: 70 }, (_, i) => `  $ step ${i}`), ...choices, '  Press enter to confirm or esc to cancel'];
 
 /** Whether choice 3's button shows inside the feed. */
