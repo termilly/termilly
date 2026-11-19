@@ -247,8 +247,8 @@ function placeDrawer(tab) {
   const stays = !!c.drawer && !c.drawerMenu && view.term.element?.contains(view.body.ownerDocument.activeElement) && !tab.exited
     && tab.agent?.state !== AGENT_STATE.working && tab.agent?.state !== AGENT_STATE.needsInput
     && drawerHolds(view.term, c.drawerRow ?? -1);
-  // Not while the agent starts: a menu then (Codex's update offer, its trust question) is the feed's card.
-  const found = isCompact(tab) && atPrompt(tab) ? liveRow(tab) : NO_DRAWER;
+  // Not for a menu as the agent starts (Codex's update offer): that's the feed's card.
+  const found = isCompact(tab) && !startMenu(tab) ? liveRow(tab) : NO_DRAWER;
   const row = found.row < 0 && stays && isCompact(tab) ? c.drawerRow ?? -1 : found.row;
   if (found.row >= 0) c.drawerMenu = found.menu;
   c.drawerRow = row;
@@ -405,7 +405,26 @@ const waitsForAnswer = tab => tab.agent?.state === AGENT_STATE.needsInput;
 function atPrompt(tab) {
   if (runsClaude(tab)) return true;
   const kind = agentKind(runningAgent(tab));
-  return !kind.hookAtStart && showsInput(tab, kind);
+  return !kind.hookAtStart && showsInput(tab, kind) && !startMenu(tab);
+}
+
+/** A menu's numbered choice ("1. Update now"), as it follows the pointer. */
+const MENU_CHOICE = /^\d+\.\s/;
+
+/**
+ * A menu an agent shows as it starts with its cursor on the pointer's row, which is drawn with its input mark
+ * (Codex's "› 1. Update now"): only before it has reported anything, and only a menu a card can show. Its own lists
+ * later (/model) and a draft starting "1. " aren't one.
+ * @param {Tab} tab
+ */
+function startMenu(tab) {
+  const kind = agentKind(runningAgent(tab));
+  const buffer = tab.view?.term?.buffer.active;
+  if (tab.agent || kind.hookAtStart || !kind.inputMark || !buffer) return null;
+  const row = (buffer.getLine(buffer.baseY + buffer.cursorY)?.translateToString(true) ?? '').trimStart();
+  if (!row.startsWith(kind.inputMark) || !MENU_CHOICE.test(row.slice(kind.inputMark.length).trimStart())) return null;
+  const menu = screenMenu(tab);
+  return menu && menuKey(menu) ? menu : null;
 }
 
 /**
@@ -694,9 +713,10 @@ function preview(tab, shown) {
 function workingHtml(tab) {
   const name = escapeHtml(agentKind(runningAgent(tab)).short);
   if (waitsForAnswer(tab)) return cardOf(tab, name);
-  // Started again on a session the feed already shows (a resume): what it asks first comes under it.
-  if (!atPrompt(tab)) return startingHtml(tab, name);
-  return tab.agent?.state === AGENT_STATE.working ? `<div class="cv-working"><i></i>${name} is working</div>` : '';
+  if (tab.agent?.state === AGENT_STATE.working) return `<div class="cv-working"><i></i>${name} is working</div>`;
+  // Started again on a session the feed already shows (a resume): a menu it shows first comes under it.
+  const start = startMenu(tab);
+  return start ? cardHtml(start, name, CARD_BUTTONS) : '';
 }
 
 /**
