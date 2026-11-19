@@ -8,7 +8,7 @@ import { clipboardAction, CLIPBOARD_ACTION } from './clipboardkeys.js';
 import { underlinedLink, linkUnderMouse } from './termlinks.js';
 import { showToast } from './toasts.js';
 import { ICONS } from './ui.js';
-import { typeInto } from './dom.js';
+import { typeInto, selectionInside } from './dom.js';
 import { systemClipboard } from './sysclipboard.js';
 
 /** The word for pasting, on the menu and on the production question (terminals.js). */
@@ -162,10 +162,11 @@ export function wireViewMenu(el, body, input) {
 }
 
 /**
- * The text selected inside an element; '' when nothing is, or the selection is elsewhere.
+ * The text selected inside an element; '' when nothing is, or the selection reaches outside it (a drag that went on
+ * past the view would take text the menu isn't about).
  * @param {HTMLElement} el
  */
 function selectedIn(el) {
   const selection = el.ownerDocument.getSelection();
-  return selection && !selection.isCollapsed && el.contains(selection.anchorNode) ? selection.toString() : '';
+  return selectionInside(selection, el) ? selection.toString() : '';
 }
