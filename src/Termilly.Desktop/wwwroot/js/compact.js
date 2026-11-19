@@ -22,7 +22,7 @@ import { readMenu, questionMenu, cardHtml, menuKey, keyedByWhatShows, PROMPT_STA
 import { wireInput } from './compactinput.js';
 import { cardKey } from './compactcardkeys.js';
 import { wireViewMenu } from './termclipboard.js';
-import { liveRow, screenRows, rowsWithScrollback } from './compactdrawer.js';
+import { liveRow, screenRows, rowsWithScrollback, drawerHolds } from './compactdrawer.js';
 import { showPreview } from './compactpreview.js';
 
 /** @typedef {import('./compactlines.js').CompactLine} CompactLine */
@@ -241,9 +241,11 @@ function placeDrawer(tab) {
   const view = tab.view;
   if (!c.el || !view?.term) return;
   // Open, it stays open while the user works in the terminal and the agent waits (the cursor moved home in what
-  // they typed, or onto its second line, says nothing of whether there are words there).
+  // they typed, or onto its second line, says nothing of whether there are words there). Not over rows that no
+  // longer hold the input line: the prompt box would be gone behind empty rows.
   const stays = !!c.drawer && view.term.element?.contains(view.body.ownerDocument.activeElement) && !tab.exited
-    && tab.agent?.state !== AGENT_STATE.working && tab.agent?.state !== AGENT_STATE.needsInput;
+    && tab.agent?.state !== AGENT_STATE.working && tab.agent?.state !== AGENT_STATE.needsInput
+    && drawerHolds(view.term, c.drawerRow ?? -1);
   const found = isCompact(tab) ? liveRow(tab) : -1;
   const row = found < 0 && stays && isCompact(tab) ? c.drawerRow ?? -1 : found;
   c.drawerRow = row;
@@ -434,7 +436,7 @@ function submit(tab, input) {
 async function typePrompt(tab, text) {
   if (!canSend(tab)) return;
   send(PAGE.input, { id: tab.id, data: text.includes('\n') ? `${PASTE_START}${text}${PASTE_END}` : text });
-  await beforeEnter(tab);
+  await beforeEnter(tab, true, true);
   if (!canSend(tab)) return;
   send(PAGE.input, { id: tab.id, data: '\r' });
   agentInput(tab, '\r');

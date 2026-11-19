@@ -60,6 +60,18 @@ export function liveRow(tab) {
 }
 
 /**
+ * Whether a drawer open from a row still shows what the user works in: the cursor's row is in it, and it isn't all
+ * blank. A prompt of the agent's own that closed (a rating it asked for, answered) moves its input line up out of the
+ * drawer and leaves blank rows behind.
+ * @param {any} term xterm's Terminal
+ * @param {number} row
+ */
+export function drawerHolds(term, row) {
+  if (row < 0 || term.buffer.active.cursorY < row) return false;
+  return screenRows(term).slice(row).some(line => line.trim());
+}
+
+/**
  * Whether the agent's input line, the cursor's row, holds words the user typed: the cursor stands past its mark. Its
  * hint on an empty line ('Try "how does it work?"') is drawn as plain text, with the cursor before it.
  * @param {any} buffer xterm's IBuffer
