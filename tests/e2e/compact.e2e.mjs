@@ -131,10 +131,10 @@ test('Codex starting with no menu (an update it runs) says so under a resumed se
   await app.waitFor('.cv-prompt');
   await app.waitFor('.cv-prompt ~ .cv-empty .cv-open-terminal');
   await app.click('.cv-empty .cv-open-terminal');
-  await until(() => app.eval(t => t.$('.compact-view').hidden), 'the terminal shows');
+  await app.waitFor('.compact-view', { gone: true });
 }, { ready: '.cv-empty .cv-open-terminal' }));
 
-const tall =['', '', `  ${question}`, '', ...Array.from({ length: 70 }, (_, i) => `  $ step ${i}`), ...choices, '  Press enter to confirm or esc to cancel'];
+const tall = ['', '', `  ${question}`, '', ...Array.from({ length: 70 }, (_, i) => `  $ step ${i}`), ...choices, '  Press enter to confirm or esc to cancel'];
 
 /** Whether choice 3's button shows inside the feed. */
 const choiceInSight = app => app.eval(t => {
@@ -211,7 +211,7 @@ test('the prompt box takes its height again when its pane gets narrower or wider
 test('a prompt box hidden while its pane got narrower fits its text when its view shows again', () => scenario('compact-box-hidden', approval, async app => {
   const wide = await fillBox(app);
   await pickView(app, 'Full');
-  await until(() => app.eval(t => t.$('.compact-view').hidden), 'the terminal shows');
+  await app.waitFor('.compact-view', { gone: true });
   await narrowTerminals(app, '60%');
   // Back in the minimal view (the compact one's twin): the box there is the same one.
   await pickView(app, 'Minimal');
