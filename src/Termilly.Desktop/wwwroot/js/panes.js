@@ -12,7 +12,7 @@ import {
 import { ICONS, tabBadgeHtml, activityHtml } from './ui.js';
 import { openTerminal, disposeTerminal, bufferLines, scheduleFit, prepareStart, holdBack, isHeld } from './terminals.js';
 import { wake, restAside } from './hibernate.js';
-import { byId, find, targetOf, WORKSPACE_ID, CANVAS_2D, dragPointer, onMiddleClick } from './dom.js';
+import { byId, find, targetOf, WORKSPACE_ID, CANVAS_2D, dragPointer, onMiddleClick, keepingSelectionOnRightPress } from './dom.js';
 import { ENV_CLASS, ENV_COLOR } from './environments.js';
 import { detach, closeWindow, focusWindow, setWindowTitle, OFFSET_PX, MIN_WIDTH_PX } from './windows.js';
 import { followGpu } from './gpu.js';
@@ -174,8 +174,11 @@ export function createView(tab, { draggable = true } = {}) {
     el.append(status);
   }
   // A click in a field on the pane (its name being renamed) stays there: giving the terminal the keyboard would end
-  // the edit, and a click there only moves the cursor.
-  el.addEventListener('mousedown', e => { if (!targetOf(e).closest('input')) focusTab(tab); }, true);
+  // the edit, and a click there only moves the cursor. A right-click keeps the Compact and Minimal views' selected text
+  // for the menu's Copy (xterm keeps its own selection).
+  el.addEventListener('mousedown', e => {
+    if (!targetOf(e).closest('input')) keepingSelectionOnRightPress(e, () => focusTab(tab));
+  }, true);
   if (draggable) wireDrag(tab, tab.view.header);
 }
 

@@ -35,6 +35,26 @@ export function onMiddleClick(el, fn) {
   el.addEventListener('auxclick', e => { if (e.button === MIDDLE_BUTTON) fn(e); });
 }
 
+/** The mouse's right button, which opens a menu. */
+const RIGHT_BUTTON = 2;
+
+/**
+ * Runs fn for a mouse press; a right press keeps the page's selected text even when fn moves the keyboard focus (which
+ * clears it), so the menu that opens next can still copy it.
+ * @param {MouseEvent} e
+ * @param {() => void} fn
+ */
+export function keepingSelectionOnRightPress(e, fn) {
+  const selection = targetOf(e).ownerDocument.getSelection();
+  const kept = e.button === RIGHT_BUTTON && selection && !selection.isCollapsed
+    ? Array.from({ length: selection.rangeCount }, (_, i) => selection.getRangeAt(i).cloneRange())
+    : [];
+  fn();
+  if (!kept.length || !selection || !selection.isCollapsed) return;
+  selection.removeAllRanges();
+  for (const range of kept) selection.addRange(range);
+}
+
 /**
  * An element of index.html, by its id.
  * @param {string} id
