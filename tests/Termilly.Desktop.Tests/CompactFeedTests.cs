@@ -107,6 +107,16 @@ public sealed class CompactFeedTests : IDisposable
     }
 
     [Fact]
+    public void A_prompt_that_is_only_pasted_text_shows()
+    {
+        var lines = Lines(new CompactClaude(),
+            User("u1", "\"<pasted_content id=\\\"ab12\\\">\\n- one\\n- two\\n</pasted_content id=\\\"ab12\\\">\""),
+            User("u2", "\"<pasted_content id=\\\"cd34\\\"><div>hi</div></pasted_content id=\\\"cd34\\\">\""));
+
+        Assert.Equal([(CompactKinds.Prompt, "- one\n- two"), (CompactKinds.Prompt, "<div>hi</div>")], lines.Select(l => (l.Kind, l.Text)));
+    }
+
+    [Fact]
     public void A_claude_question_carries_its_choices_for_the_card_and_its_answers_once_given()
     {
         var log = new CompactLog();
