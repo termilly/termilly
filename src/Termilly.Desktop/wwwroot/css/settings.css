@@ -54,7 +54,7 @@
 /* Removing imported themes (js/settings/thememanage.js): a ticked list. */
 .dialog.theme-manage { width: 380px; }
 .tm-all { margin: 12px 0 6px 9px; color: var(--muted); }
-.tm-list { display: flex; flex-direction: column; max-height: 320px; padding: 4px 8px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; }
+.tm-list { display: flex; flex-direction: column; max-height: min(320px, calc(100vh - 220px)); padding: 4px 8px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; }
 .tm-row { margin: 0; padding: 5px 0; }
 .tm-all input, .tm-row input { accent-color: var(--accent); }
 .tm-swatch { flex: none; width: 14px; height: 14px; border: 2px solid; border-radius: 4px; }
