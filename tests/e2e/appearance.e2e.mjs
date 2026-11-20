@@ -40,7 +40,7 @@ test('Appearance has Theme, Background, Text and Layout tabs, and a tab keeps th
   await app.key('.set-tab.on', 'Home');
   await until(async () => (await app.text('.set-tab.on')) === 'Theme', 'Home opens the first tab');
   await app.key('.set-tab.on', 'ArrowRight');
-  await until(async () => (await app.text('.set-tab.on')) === 'Text', 'Right opens the next tab');
+  await until(async () => (await app.text('.set-tab.on')) === 'Background', 'Right opens the next tab');
   await app.key('.set-tab.on', 'End');
   await until(async () => (await app.text('.set-tab.on')) === 'Layout', 'End opens the last tab');
   await app.key('.set-tab.on', 'ArrowRight');
