@@ -76,7 +76,7 @@ test('two names that make the same id are two themes, and the same name again re
 test('a file that is no scheme says so and offers nothing to use',() => withImport('import-bad', async app => {
   await drop(app, 'notes.txt', 'just some notes');
   await until(() => app.eval(t => t.$('.si-status').classList.contains('error')), 'the error line');
-  assert.match(await app.text('.si-status'), /No colour schemes found (1 file isn’t a scheme)/);
+  assert.equal(await app.text('.si-status'), 'No colour schemes found (1 file isn’t a scheme).');
   assert.equal(await app.eval(t => t.$('.scheme-import [data-ok]').disabled), true);
 }));
 
