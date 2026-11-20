@@ -26,8 +26,8 @@ async function withAppearance(name, body) {
   } finally { await app?.stop({ failed }); await repo.dispose(); }
 }
 
-test('Appearance has Theme, Text and Layout tabs, and a tab keeps the title Appearance', () => withAppearance('appearance-tabs', async app => {
-  assert.deepEqual(await app.eval(t => t.$$('.set-tab').map(b => b.textContent)), ['Theme', 'Text', 'Layout']);
+test('Appearance has Theme, Background, Text and Layout tabs, and a tab keeps the title Appearance', () => withAppearance('appearance-tabs', async app => {
+  assert.deepEqual(await app.eval(t => t.$$('.set-tab').map(b => b.textContent)), ['Theme', 'Background', 'Text', 'Layout']);
   assert.equal(await app.text('.set-tab.on'), 'Theme');
   await app.eval(t => t.click('.set-tab[data-section="appearance-text"]'));
   await app.waitFor('.font-picker');

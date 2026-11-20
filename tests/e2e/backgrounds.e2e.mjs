@@ -91,7 +91,7 @@ test('a workspace’s own background, from its right-click menu, wins over the w
   await until(async () => (await rootState(app)).backdrop === 'terminals', 'the window’s picture');
   await app.eval(t => t.contextmenu('.ws-row'));
   await app.waitFor('.menu-row');
-  await app.eval(t => t.$$('.menu-row').find(r => r.textContent.trim() === 'Background').dispatchEvent(new globalThis.MouseEvent('mouseover', { bubbles: true })));
+  await app.eval(t => t.$$('.menu-row').find(r => r.textContent.trim() === 'Background').click());
   await until(() => app.eval(t => t.$$('.menu-row').some(r => r.textContent.trim() === 'Ember')), 'the gradients');
   await app.eval(t => t.$$('.menu-row').find(r => r.textContent.trim() === 'Ember').click());
   await until(async () => (await rootState(app)).image.startsWith('linear-gradient'), 'Ember on screen');
