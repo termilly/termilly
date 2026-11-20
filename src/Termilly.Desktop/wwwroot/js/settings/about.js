@@ -42,7 +42,7 @@ const ABOUT = {
   html: () => `
     <div class="about-head"><img src="assets/mark-40.png" srcset="assets/mark-40.png 1x" width="40" height="40" alt="">
       <div><div class="about-name">Termilly</div><div class="set-desc">Version ${escapeHtml(about.version ?? '')}</div></div></div>`
-    + group('Updates', row('Check for updates', 'Look for a newer version at start and every 10 minutes.', toggle('interface.checkForUpdates'), { keywords: 'update version new release download' })
+    + group('Updates', row('Check for updates', 'Look for a newer version at start and regularly while Termilly is open.', toggle('interface.checkForUpdates'), { keywords: 'update version new release download' })
       + installAtStartRow()
       + row('Check now', updateAboutHtml(), '<button class="btn small" data-action="checkUpdates">Check now</button>', { keywords: 'update version' }))
     + group('', row('What’s new', 'What changed in this version, as it showed after the update.', '<button class="btn small" data-action="whatsNew">What’s new</button>', { keywords: 'changelog release notes version' })
