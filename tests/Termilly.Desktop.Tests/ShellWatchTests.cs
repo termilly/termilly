@@ -8,6 +8,8 @@ namespace Termilly.Desktop.Tests;
 /// </summary>
 public sealed class ShellWatchTests : IDisposable
 {
+    /// <summary>More than one tick of the clock Windows stamps file times from.</summary>
+    private const int ClockTick = 40;
     private readonly string _dir = Directory.CreateTempSubdirectory("termilly-shellwatch-").FullName;
 
     public void Dispose() => Directory.Delete(_dir, recursive: true);
@@ -28,6 +30,8 @@ public sealed class ShellWatchTests : IDisposable
         File.WriteAllText(old, "1");
         File.SetLastWriteTimeUtc(old, DateTime.UtcNow.AddHours(-1));
         var watch = Begin();
+        // Windows stamps files from a clock that can lag DateTime.UtcNow by a tick (about 16 ms): write after it.
+        Thread.Sleep(ClockTick);
 
         var handler = Path.Combine(deep, "handler.ts");
         var added = Path.Combine(deep, "added.ts");
