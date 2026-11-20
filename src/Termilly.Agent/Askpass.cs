@@ -75,6 +75,7 @@ internal static class Askpass
                 {
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
+                    StandardOutputEncoding = Utf8Output.Encoding,
                     CreateNoWindow = true,
                 };
                 using var op = Process.Start(start)!;
