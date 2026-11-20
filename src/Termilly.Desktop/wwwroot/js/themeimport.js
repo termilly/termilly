@@ -84,20 +84,23 @@ async function droppedFiles(transfer) {
   const files = [];
   let left = 0;
   let capped = false;
-  /** @param {File | null} file @param {string} place */
-  const add = (file, place) => {
-    if (files.length >= CUSTOM_THEME.maxFiles) capped = true;
-    else if (file) files.push({ file, place });
-  };
+  /** Whether there's room for one more file; when there isn't, the walk stops. */
+  const room = () => !(capped ||= files.length >= CUSTOM_THEME.maxFiles);
   /** @param {FileSystemEntry} entry @param {number} depth */
   const walk = async (entry, depth) => {
-    if (capped) return;
     try {
-      if (entry.isFile) return add(await new Promise((resolve, reject) => /** @type {FileSystemFileEntry} */ (entry).file(resolve, reject)), entry.fullPath.replace(/^\//, ''));
+      if (entry.isFile) {
+        if (!room()) return;
+        const file = await new Promise((resolve, reject) => /** @type {FileSystemFileEntry} */ (entry).file(resolve, reject));
+        return void files.push({ file, place: entry.fullPath.replace(/^\//, '') });
+      }
       if (depth > CUSTOM_THEME.folderDepth) return;
       const reader = /** @type {FileSystemDirectoryEntry} */ (entry).createReader();
-      for (let batch = await readBatch(reader); batch.length && !capped; batch = await readBatch(reader)) {
-        for (const child of batch) await walk(child, depth + 1);
+      for (let batch = await readBatch(reader); batch.length; batch = await readBatch(reader)) {
+        for (const child of batch) {
+          if (capped) return;
+          await walk(child, depth + 1);
+        }
       }
     } catch {
       left++; // a file or folder the system won't give: counted, the rest still read
@@ -106,12 +109,17 @@ async function droppedFiles(transfer) {
   // Taken while the drop is still going on (a drop's items can't be read once it's over): a file as it is, a folder
   // as an entry to walk (where the system gives one).
   const dropped = [...transfer.items].map(item => {
-    const entry = item.webkitGetAsEntry?.();
-    return entry?.isDirectory ? { folder: entry } : { file: item.getAsFile() };
+    try {
+      const entry = item.webkitGetAsEntry?.();
+      return entry?.isDirectory ? { folder: entry } : { file: item.getAsFile() };
+    } catch {
+      return { unreadable: true };
+    }
   });
-  for (const { file, folder } of dropped) {
-    if (folder) await walk(folder, 0);
-    else add(file ?? null, file?.name ?? '');
+  for (const { file, folder, unreadable } of dropped) {
+    if (unreadable) left++;
+    else if (folder && !capped) await walk(folder, 0);
+    else if (file && room()) files.push({ file, place: file.name });
   }
   return { files, left, capped };
 }
@@ -172,6 +180,8 @@ class SchemePicker {
     /** @type {{ scheme: import('./schemes.js').Scheme, place: string }[]} each with the file it's in */
     this.fromFiles = [];
     this.action = 0;
+    /** The latest file or folder picker opened: an older one's answer is dropped. */
+    this.asked = 0;
     /** @type {string} */
     this.source = SOURCE.none;
     /** The row picked (a scheme's place in fromFiles, or a collection name), kept ticked while the search shows it. */
@@ -213,6 +223,7 @@ class SchemePicker {
     this.selected = '';
     this.search.value = '';
     this.list.innerHTML = '';
+    find(this.dialog, PART.more).textContent = '';
     find(this.dialog, PART.collection).hidden = source !== SOURCE.collection;
     this.say('');
     return action;
@@ -254,7 +265,7 @@ class SchemePicker {
     const out = [
       notSchemes && count(notSchemes, 'file isn’t a scheme', 'files aren’t schemes'),
       incomplete && count(incomplete, 'scheme misses colours', 'schemes miss colours'),
-      left && count(left, 'file too big or unreadable', 'files too big or unreadable'),
+      left && `${left} left out (too big or unreadable)`,
       capped && `only the first ${CUSTOM_THEME.maxFiles} files read`,
     ].filter(Boolean);
     if (!this.fromFiles.length) return this.say(`No colour schemes found${out.length ? ` (${out.join(', ')})` : ''}.`, true);
@@ -289,9 +300,10 @@ class SchemePicker {
 
   /** @param {boolean} folder a folder's files, or files picked; cancelled, the dialog keeps what it shows */
   async choose(folder) {
-    const action = ++this.action;
+    // Its own count, so a picker cancelled leaves a list still loading from GitHub to finish.
+    const asked = ++this.asked;
     const reply = await request(PAGE.schemeOpen, { folder });
-    if (!this.current(action) || (!reply.files && !reply.error)) return;
+    if (asked !== this.asked || !this.dialog.isConnected || (!reply.files && !reply.error)) return;
     this.start(SOURCE.file);
     if (reply.error) return this.say(reply.error, true);
     const files = reply.files ?? [];
