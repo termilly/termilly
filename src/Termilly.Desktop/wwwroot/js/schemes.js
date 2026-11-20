@@ -81,8 +81,10 @@ const plainValue = raw => /^(['"])(.*?)\1/.exec(raw)?.[2] ?? /^\S+/.exec(raw)?.[
 function readItermPlist(text) {
   /** @type {Record<string, string>} */
   const found = {};
-  const entry = /<key>([^<]+)<\/key>\s*(?:<!--[\s\S]*?-->\s*)*<dict>([\s\S]*?)<\/dict>/g;
-  for (const [, key, dict] of text.matchAll(entry)) {
+  // Comments go first: one between a key and its value hides nothing, and a colour commented out isn't read.
+  const plain = text.replace(/<!--[\s\S]*?-->/g, '');
+  const entry = /<key>([^<]+)<\/key>\s*<dict>([\s\S]*?)<\/dict>/g;
+  for (const [, key, dict] of plain.matchAll(entry)) {
     const part = (/** @type {string} */ name) => new RegExp(`<key>${name} Component</key>\\s*<(?:real|integer)>([^<]+)</`).exec(dict)?.[1];
     const parts = ['Red', 'Green', 'Blue'].map(part);
     // A colour missing a part is left out (the scheme is then incomplete), not taken as black.
@@ -104,11 +106,12 @@ function readItermPlist(text) {
  * @param {Record<string, unknown>} scheme
  */
 function readWindowsTerminal(scheme) {
+  const text = (/** @type {unknown} */ value) => (typeof value === 'string' ? value : '');
   /** @type {Record<string, string>} */
-  const found = { background: String(scheme.background ?? ''), foreground: String(scheme.foreground ?? ''), cursor: String(scheme.cursorColor ?? '') };
+  const found = { background: text(scheme.background), foreground: text(scheme.foreground), cursor: text(scheme.cursorColor) };
   for (const [key, value] of Object.entries(scheme)) {
     const at = ansiIndex(key);
-    if (at >= 0) found[`ansi${at}`] = String(value);
+    if (at >= 0) found[`ansi${at}`] = text(value);
   }
   return found;
 }
@@ -147,9 +150,9 @@ function readSections(text) {
   let stack = [];
   for (const line of text.split(/\r?\n/)) {
     if (!line.trim() || line.trimStart().startsWith('#')) continue;
-    const table = /^\s*\[([\w.]+)\]\s*(#.*)?$/.exec(line);
+    const table = /^\s*\[([^\]]+)\]\s*(#.*)?$/.exec(line);
     if (table) {
-      stack = [{ indent: -1, name: table[1] }];
+      stack = [{ indent: -1, name: table[1].replace(/["'\s]/g, '') }]; // ["colors"."normal"] is [colors.normal]
       continue;
     }
     const indent = /^\s*/.exec(line)?.[0].length ?? 0;
@@ -208,9 +211,9 @@ function withoutComments(text) {
     } else if (text.startsWith('/*', i)) {
       const end = text.indexOf('*/', i + 2);
       i = end < 0 ? text.length : end + 1;
-    } else out += c;
+    } else if (c !== ',' || !/^,\s*[}\]]/.test(text.slice(i))) out += c; // a trailing comma goes
   }
-  return out.replace(/,(?=\s*[}\]])/g, '');
+  return out;
 }
 
 /**
@@ -222,9 +225,10 @@ function jsonSchemes(text) {
   /** @type {unknown} */
   let data;
   try { data = JSON.parse(withoutComments(text)); } catch { return null; }
-  const record = /** @type {Record<string, unknown>} */ (data ?? {});
-  const list = Array.isArray(data) ? data : Array.isArray(record.schemes) ? record.schemes : [data];
-  return list.filter(s => s && typeof s === 'object');
+  const record = /** @type {Record<string, unknown>} */ (data && typeof data === 'object' ? data : {});
+  // A list's every entry counts (one that isn't a scheme is skipped); a lone object only when it's a scheme.
+  const list = Array.isArray(data) ? data : Array.isArray(record.schemes) ? record.schemes : KEY.background in record ? [record] : [];
+  return list.map(s => (s && typeof s === 'object' ? /** @type {Record<string, unknown>} */ (s) : {}));
 }
 
 /**
@@ -240,13 +244,12 @@ export function readSchemes(fileName, text) {
   /** @type {(Scheme | null)[]} */
   let found;
   const json = /^\s*(\/[/*]|[{[])/.test(body) ? jsonSchemes(body) : null;
-  if (/<plist[\s>]/.test(body)) found = [complete(fallback, readItermPlist(body))];
-  else if (json) {
-    found = json.filter(s => KEY.background in s)
-      .map(s => complete(typeof s.name === 'string' && s.name.trim() ? s.name.trim() : fallback, readWindowsTerminal(s)));
-  } else {
+  if (json) {
+    found = json.map(s => complete(typeof s.name === 'string' && s.name.trim() ? s.name.trim() : fallback, readWindowsTerminal(s)));
+  } else if (/^\s*<(\?xml|!DOCTYPE|plist)/.test(body)) found = [complete(fallback, readItermPlist(body))];
+  else {
     const name = nameInText(body) ?? fallback;
-    if (/^\s*\[colors|^\s*terminal_colors\s*:|^colors\s*:/m.test(body)) found = [complete(name, readSections(body))];
+    if (/^\s*\[\s*["']?colors|^\s*["']?terminal_colors["']?\s*:|^["']?colors["']?\s*:/m.test(body)) found = [complete(name, readSections(body))];
     else if (/^\s*(palette\s*=|color\d+\s)/m.test(body)) found = [complete(name, readKeyLines(body))];
     else throw new Error(SCHEME_ERROR.unknown);
   }

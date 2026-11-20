@@ -93,7 +93,7 @@ test('a Windows Terminal settings file gives each of its schemes, and counts the
   const text = JSON.stringify({ profiles: {}, schemes: [dracula, { ...dracula, name: 'Second' }, half, { name: 'No colours' }] });
   const read = readSchemes('settings.json', text);
   assert.deepEqual(read.schemes.map(s => s.name), ['Dracula', 'Second']);
-  assert.equal(read.skipped, 1);
+  assert.equal(read.skipped, 2, "Half, and the one with no colours at all");
 });
 
 test('Windows Terminal JSON with a byte order mark, comments and trailing commas', () => {
@@ -114,4 +114,32 @@ test('colours are read however a scheme writes them', () => {
   assert.equal(hexColour('0x1E1E2E'), '#1e1e2e');
   assert.equal(hexColour("'282a36'"), '#282a36');
   assert.equal(hexColour('rgb(1,2,3)'), null);
+});
+
+test('JSON wins over an iTerm2 look-alike, and commas inside names stay', () => {
+  const dracula = JSON.parse(fixture('Dracula.json'));
+  assert.equal(one('a.json', JSON.stringify({ ...dracula, name: '<plist>' })).name, '<plist>');
+  assert.equal(one('a.json', JSON.stringify({ ...dracula, name: 'Comma,]' })).name, 'Comma,]');
+});
+
+test('a Windows Terminal list counts every entry that isn’t a whole scheme, and odd values break nothing', () => {
+  const dracula = JSON.parse(fixture('Dracula.json'));
+  const read = readSchemes('list.json', JSON.stringify([dracula, { name: 'No background' }, { ...dracula, name: 'Odd', black: { toString: null } }, 7]));
+  assert.deepEqual(read.schemes.map(s => s.name), ['Dracula']);
+  assert.equal(read.skipped, 3);
+  assert.throws(() => readSchemes('profiles.json', '{"profiles": {"list": []}}'), { message: SCHEME_ERROR.unknown });
+});
+
+test('quoted section names in Alacritty’s TOML and Warp’s YAML', () => {
+  const toml = fixture('Dracula.toml').replace('[colors.normal]', '["colors"."normal"]');
+  assert.equal(one('Dracula.toml', toml).ansi[1], '#ff5555');
+  const yaml = fixture('dracula.yaml').replace('terminal_colors:', '"terminal_colors":');
+  assert.equal(one('dracula.yaml', yaml).ansi[12], '#caa9fa');
+});
+
+test('XML comments in iTerm2 files neither hide a value nor bring one back', () => {
+  const between = fixture('Dracula.itermcolors').replace(/(<key>Red Component<\/key>)/, '$1<!-- note -->');
+  assert.equal(one('Dracula.itermcolors', between).ansi.length, 16);
+  const commented = fixture('Dracula.itermcolors').replace(/(<key>Red Component<\/key>\s*<real>[^<]+<\/real>)/, '<!-- $1 -->');
+  assert.throws(() => readSchemes('Dracula.itermcolors', commented), { message: SCHEME_ERROR.incomplete });
 });

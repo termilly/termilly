@@ -43,8 +43,13 @@ ${c(8, '~/acme>')} <span class="si-cursor" style="background:${cssColor(s.cursor
 <div class="si-swatches">${s.ansi.map(a => `<i style="background:${cssColor(a)}"></i>`).join('')}</div>`;
 };
 
+/**
+ * A name as it's saved (the host keeps its first maxName characters), so a long one matches itself after a restart.
+ * @param {string} name
+ */
+const savedName = name => name.trim().slice(0, CUSTOM_THEME.maxName);
 /** @param {string} name */
-const sameName = name => (/** @type {{ name: string }} */ t) => t.name.trim().toLowerCase() === name.trim().toLowerCase();
+const sameName = name => (/** @type {{ name: string }} */ t) => savedName(t.name).toLowerCase() === savedName(name).toLowerCase();
 
 /**
  * The id a scheme is saved under: its name's, unless another scheme's name has it, then with a number added.
@@ -67,7 +72,7 @@ function save(s) {
   const saved = state.settings.interface.customThemes ?? [];
   const others = saved.filter(t => !sameName(s.name)(t));
   const id = saved.find(sameName(s.name))?.id ?? idOf(s.name, others);
-  const theme = { id, name: s.name, background: s.background, foreground: s.foreground, cursor: s.cursor, ansi: s.ansi };
+  const theme = { id, name: savedName(s.name), background: s.background, foreground: s.foreground, cursor: s.cursor, ansi: s.ansi };
   updateSettings(GROUPS.interface, { customThemes: [theme, ...others].slice(0, CUSTOM_THEME.maxThemes), theme: id });
   return id;
 }
@@ -119,6 +124,8 @@ const DIALOG = `
 /** The dialog's parts it changes, and the class its status line has for an error. */
 const PART = Object.freeze({ collection: '.si-collection', list: '.si-list', search: '.si-search', status: '.si-status', preview: '.si-preview', ok: '[data-ok]' });
 const ERROR_CLASS = 'error';
+/** Where the list's rows come from: nothing yet, the file read, or the collection on GitHub. */
+const SOURCE = Object.freeze({ none: 'none', file: 'file', collection: 'collection' });
 
 /** @param {unknown} error */
 const reason = error => (error instanceof Error ? error.message : '');
@@ -136,6 +143,10 @@ class SchemePicker {
     /** @type {import('./schemes.js').Scheme[]} */
     this.fromFile = [];
     this.action = 0;
+    /** @type {string} */
+    this.source = SOURCE.none;
+    /** The collection's scheme picked, kept ticked while the search still shows it. */
+    this.selectedName = '';
     this.list = find(dialog, PART.list);
     this.search = /** @type {HTMLInputElement} */ (find(dialog, PART.search));
   }
@@ -163,6 +174,18 @@ class SchemePicker {
     this.picked = s;
     /** @type {HTMLButtonElement} */ (find(this.dialog, PART.ok)).disabled = !s;
     find(this.dialog, PART.preview).innerHTML = s ? `<b class="si-name">${escapeHtml(s.name)}</b>${preview(s)}` : '';
+  }
+
+  /** A file action: what the list showed (the collection's rows, a file's) goes, so a stale row can't be picked. */
+  startFile() {
+    const action = this.begin();
+    this.source = SOURCE.file;
+    this.fromFile = [];
+    find(this.dialog, PART.collection).hidden = true;
+    this.list.innerHTML = '';
+    this.search.value = '';
+    this.say('');
+    return action;
   }
 
   /** @param {string[]} names @param {number} [selected] which one is picked, by its place */
@@ -196,8 +219,7 @@ class SchemePicker {
 
   /** @param {File} file dropped from the file manager */
   async drop(file) {
-    const action = this.begin();
-    this.fromFile = [];
+    const action = this.startFile();
     if (file.size > CUSTOM_THEME.maxFileBytes) return this.say(`${file.name} is too big to be a colour scheme.`, true);
     try {
       const text = await file.text();
@@ -208,8 +230,7 @@ class SchemePicker {
   }
 
   async choose() {
-    const action = this.begin();
-    this.fromFile = [];
+    const action = this.startFile();
     const reply = await request(PAGE.schemeOpen, {});
     if (!this.current(action)) return;
     if (reply.error) this.say(reply.error, true);
@@ -218,8 +239,10 @@ class SchemePicker {
 
   async browse() {
     const action = this.begin();
+    this.source = SOURCE.collection;
     this.showList(true);
     this.fromFile = [];
+    this.selectedName = '';
     this.list.innerHTML = '<p class="dialog-sub">Loading the list from GitHub…</p>';
     this.say('');
     try {
@@ -240,9 +263,10 @@ class SchemePicker {
       r.classList.toggle('on', r === row);
       r.setAttribute('aria-selected', String(r === row));
     }
-    const inFile = this.fromFile[Number(row.dataset.siRow)];
-    if (inFile) return this.show(inFile);
+    if (this.source === SOURCE.file) return this.show(this.fromFile[Number(row.dataset.siRow)] ?? null);
+    if (this.source !== SOURCE.collection) return;
     const name = /** @type {string} */ (row.dataset.siName);
+    this.selectedName = name;
     const action = this.begin();
     this.say('Loading…');
     try {
@@ -257,10 +281,13 @@ class SchemePicker {
 
   /** The collection's schemes the search matches, the first ones (the search narrows them further). */
   filter() {
+    if (this.source !== SOURCE.collection || !collection) return;
     const query = this.search.value.trim().toLowerCase();
-    const matches = (collection ?? []).filter(n => n.toLowerCase().includes(query));
-    this.listNames(matches.slice(0, MAX_LISTED));
-    if (matches.length > MAX_LISTED) this.say(`${MAX_LISTED} of ${matches.length} shown: search to find others.`);
+    const matches = collection.filter(n => n.toLowerCase().includes(query)).slice(0, MAX_LISTED + 1);
+    const shown = matches.slice(0, MAX_LISTED);
+    this.listNames(shown, shown.indexOf(this.selectedName));
+    if (matches.length > MAX_LISTED) this.say(`The first ${MAX_LISTED} shown: search to find others.`);
+    else if (!this.picked) this.say('');
   }
 }
 

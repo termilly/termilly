@@ -144,7 +144,11 @@ const APPEARANCE = {
       return true;
     }
     if (targetOf(e).closest('[data-theme-import]')) {
-      importScheme().then(id => { if (id) redraw(); });
+      importScheme().then(id => {
+        if (id) redraw();
+        // Back to Import (the one drawn again after a save).
+        /** @type {HTMLElement | null} */ (body.querySelector('[data-theme-import]'))?.focus();
+      });
       return true;
     }
     const kind = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-theme-filter]'));
