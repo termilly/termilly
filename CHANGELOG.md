@@ -4,7 +4,7 @@ What changed in each release. Termilly says in its title bar when a newer one is
 
 ## 1.9.1 (2026-11-20)
 
-- **Automatic updates:** Termilly updates itself at start and rolls back if the update fails (Windows, Settings › About).
+- **Automatic updates:** Termilly updates itself at start and rolls back if the update fails (Settings › About).
 
 Fixes:
 
