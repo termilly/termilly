@@ -33,11 +33,21 @@ internal static class WindowBackdrop
         ? [BackgroundValues.Effect.None, BackgroundValues.Effect.Blur, BackgroundValues.Effect.Acrylic, BackgroundValues.Effect.Mica]
         : [BackgroundValues.Effect.None, BackgroundValues.Effect.Blur, BackgroundValues.Effect.Acrylic];
 
-    /// <summary>A browser can load the background pictures (read-only, nothing else of the data folder).</summary>
+    /// <summary>
+    /// A browser can show the background pictures (as images only: no page can read them as data), nothing else of the
+    /// data folder. Without the folder (it can't be made), there are no pictures, and nothing else changes.
+    /// </summary>
     public static void MapPictures(CoreWebView2 core)
     {
-        Directory.CreateDirectory(BackgroundPictures.Folder);
-        core.SetVirtualHostNameToFolderMapping(PictureHost, BackgroundPictures.Folder, CoreWebView2HostResourceAccessKind.Allow);
+        try
+        {
+            Directory.CreateDirectory(BackgroundPictures.Folder);
+        }
+        catch (Exception e) when (Services.Storage.IsFileError(e))
+        {
+            return;
+        }
+        core.SetVirtualHostNameToFolderMapping(PictureHost, BackgroundPictures.Folder, CoreWebView2HostResourceAccessKind.DenyCors);
     }
 
     /// <summary>The glass WindowChrome keeps while solid: a one-pixel edge, for the system's shadow (MainWindow.xaml).</summary>
@@ -84,7 +94,7 @@ internal static class WindowBackdrop
             web.DefaultBackgroundColor = System.Drawing.Color.Transparent;
         }
         var effect = seeThrough && Effects.Contains(background.Effect) ? background.Effect : BackgroundValues.Effect.None;
-        Dwm.SetDark(hwnd, dark);
+        Dwm.SetDark(hwnd, seeThrough && dark); // solid again: off, as a window that never was see-through
         Dwm.SetEffect(hwnd, seeThrough, effect, tint);
         if (!seeThrough)
         {

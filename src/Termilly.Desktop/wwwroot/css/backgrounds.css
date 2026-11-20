@@ -1,8 +1,11 @@
-/* The window's background (js/backgrounds.js, Settings › Appearance › Background), set on the page's root:
+/* The window's background (js/backgrounds.js, Settings › Appearance › Background), set on the page's root, which the
+   detached windows copy (js/windows.js):
    data-see-through: the desktop shows through, the window's colour at --window-alpha;
-   data-backdrop="terminals" | "window": a picture or gradient (--backdrop-image) behind the terminals or everything,
-   shaded with the theme's colour at --backdrop-dim and blurred by --backdrop-blur;
-   data-clear-terminals: the terminals draw no background of their own, so either shows through them.
+   data-backdrop="terminals" | "window": in the main window, a picture or gradient (--backdrop-image: the workspace on
+   screen's own, else Settings') behind the terminals or everything;
+   data-window-backdrop: in the detached windows, Settings' picture (--window-backdrop-image);
+   both shaded with the theme's colour at --backdrop-dim and blurred by --backdrop-blur;
+   data-clear-terminals: the terminals draw no background of their own, so what's behind shows through them.
    Without these attributes nothing here applies: the window is solid, as before. */
 
 :root {
@@ -17,31 +20,42 @@
 :root[data-see-through] { background: transparent; }
 :root[data-see-through] body { background: color-mix(in srgb, var(--bg) calc(var(--window-alpha) * 100%), transparent); }
 
-/* ---- Regions over a see-through window or a picture: a light tint of their own colour, the rest shows through ---- */
+/* ---- Regions over a see-through window or a background: a light tint of their own colour, the rest shows through ---- */
 
-:root:is([data-see-through], [data-backdrop]) :is(#sidebar, .pane, .strip-tab),
+:root[data-see-through] :is(#sidebar, .pane, .strip-tab),
+:root[data-backdrop] body:not(.detached-window) :is(#sidebar, .pane, .strip-tab),
+:root[data-window-backdrop] body.detached-window > .pane,
 :root:is([data-see-through], [data-backdrop]) body[data-layout="minimal"] :is(.notepad-panel, .clips-panel, .files-panel, .files-panel > .files-head) {
   background: color-mix(in srgb, var(--surface) var(--see-region), transparent);
 }
-:root:is([data-see-through], [data-backdrop]) :is(.pane-header, .strip-tab.active, .pane-statusbar),
+:root[data-see-through] :is(.pane-header, .strip-tab.active, .pane-statusbar),
+:root[data-backdrop] body:not(.detached-window) :is(.pane-header, .strip-tab.active, .pane-statusbar),
+:root[data-window-backdrop] body.detached-window :is(.pane-header, .pane-statusbar),
 :root:is([data-see-through], [data-backdrop]) body[data-layout="minimal"][data-pane-names="line"] .pane > .pane-header {
   background: color-mix(in srgb, var(--header) var(--see-header), transparent);
 }
-/* Behind the terminals only: the panes show the picture as it is (its shade keeps the text readable). */
-:root[data-backdrop="terminals"] :is(.pane, body.detached-window > .pane) { background: transparent; }
+/* Behind the terminals: the panes show the picture as it is (its shade keeps the text readable). */
+:root[data-backdrop="terminals"] #workspace .pane,
+:root[data-window-backdrop] body.detached-window > .pane { background: transparent; }
 
 /* Over the theme's terminal colours (panes.css), which are !important: here they draw nothing. */
 :root[data-clear-terminals] .pane-body,
 :root[data-clear-terminals] .pane-body .xterm,
 :root[data-clear-terminals] .pane-body .xterm-viewport { background: transparent !important; }
+/* Where nothing shows behind a terminal (its workspace has None, or a detached window without a picture), its own
+   colour stays: the pane gives it. */
+:root[data-clear-terminals]:not([data-see-through]):not([data-backdrop]) body:not(.detached-window) .pane-body,
+:root[data-clear-terminals]:not([data-see-through]):not([data-window-backdrop]) body.detached-window .pane-body {
+  background: var(--term-surface, var(--term-bg)) !important;
+}
 
 /* ---- The picture or gradient ---- */
 
 /* Its own layer only while a picture shows: the picture under the terminals, above nothing else. */
 :root[data-backdrop="terminals"] #workspace { isolation: isolate; }
 :root[data-backdrop="terminals"] #workspace::before,
-:root[data-backdrop] body.detached-window::before,
-:root[data-backdrop="window"] body::before {
+:root[data-backdrop="window"] body:not(.detached-window)::before,
+:root[data-window-backdrop] body.detached-window::before {
   content: "";
   position: absolute;
   inset: 0;
@@ -53,11 +67,16 @@
   filter: blur(var(--backdrop-blur, 0));
   pointer-events: none;
 }
+:root[data-window-backdrop] body.detached-window::before {
+  background-image: linear-gradient(var(--backdrop-shade), var(--backdrop-shade)), var(--window-backdrop-image);
+  background-size: auto, var(--window-backdrop-size);
+  background-repeat: no-repeat, var(--window-backdrop-repeat);
+}
 /* The whole window: under everything, the window's colour gives way to it. */
-:root[data-backdrop="window"] body::before,
-:root[data-backdrop] body.detached-window::before { position: fixed; }
-:root[data-backdrop="window"] body,
-:root[data-backdrop] body.detached-window { background: transparent; }
+:root[data-backdrop="window"] body:not(.detached-window)::before,
+:root[data-window-backdrop] body.detached-window::before { position: fixed; }
+:root[data-backdrop="window"] body:not(.detached-window),
+:root[data-window-backdrop] body.detached-window { background: transparent; }
 
 /* ---- Settings › Appearance › Background: the picture chosen ---- */
 

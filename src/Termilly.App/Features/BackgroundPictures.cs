@@ -26,6 +26,9 @@ internal static class BackgroundPictures
     /// <summary>The biggest picture kept: a large photo fits, a mistaken video doesn't.</summary>
     public const long MaxBytes = 40L * 1024 * 1024;
 
+    /// <summary>A picture being copied in, until it's whole (never one of the folder's names).</summary>
+    private const string PartialSuffix = ".partial";
+
     /// <summary>How many hex digits of the content's hash name a picture: enough that two never meet.</summary>
     private const int NameDigits = 16;
 
@@ -45,7 +48,8 @@ internal static class BackgroundPictures
             return null;
         }
         var file = Path.Combine(folder, name);
-        return File.Exists(file) ? file : null;
+        // Not a link: one named like a picture must not lead outside the folder.
+        return File.Exists(file) && new FileInfo(file).LinkTarget is null ? file : null;
     }
 
     /// <summary>Copies a picture into <paramref name="folder"/> and gives the name it's kept under.</summary>
@@ -72,7 +76,17 @@ internal static class BackgroundPictures
         var target = Path.Combine(folder, name);
         if (!File.Exists(target))
         {
-            File.Copy(path, target);
+            // Copied beside it first, then renamed: a copy cut short never stands as the picture.
+            var partial = target + PartialSuffix;
+            File.Copy(path, partial, overwrite: true);
+            try
+            {
+                File.Move(partial, target);
+            }
+            catch (IOException) when (File.Exists(target))
+            {
+                File.Delete(partial); // the same picture, kept meanwhile
+            }
         }
         return name;
     }

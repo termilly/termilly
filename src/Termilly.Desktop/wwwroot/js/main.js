@@ -95,6 +95,7 @@ import './tooltips.js';
 import { outputArrived } from './reprint.js';
 import { byId, find, targetOf, WORKSPACE_ID, TITLEBAR_ID } from './dom.js';
 import { loadBackdropInfo } from './backgrounds.js';
+import { watchAppFocus } from './appfocus.js';
 
 /** @typedef {import('./protocol.js').Host_agent_1} Host_agent_1 */
 
@@ -661,6 +662,7 @@ onHost(HOST.settings, m => {
   }
   // The host sends liveSessions; protocol.js's Host_settings misnames it.
   loadBackdropInfo(); // the effects this system has, and where background pictures load from
+  watchAppFocus();
   boot(m.workspaces, m.snapshot,
     /** @type {{ liveSessions?: string[] }} */ (/** @type {unknown} */ (m)).liveSessions ?? []);
   offerTourOnce();

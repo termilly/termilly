@@ -73,5 +73,11 @@ internal static class MacBackdrop
     }
 
     /// <summary>A window closed: its blur view goes with it.</summary>
-    public static void Forget(IntPtr window) => BlurViews.Remove(window);
+    public static void Forget(IntPtr window)
+    {
+        if (BlurViews.Remove(window, out var effect))
+        {
+            Send(effect, Cocoa.Release);
+        }
+    }
 }

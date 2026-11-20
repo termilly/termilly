@@ -9,7 +9,6 @@ import { request } from './host.js';
 import { PAGE } from './protocol.js';
 import { state, on, emit, activeWs, EVENTS } from './store.js';
 import { BACKGROUND } from './constants.js';
-import { openDocuments } from './windows.js';
 import { cssString } from './ui.js';
 
 const { effect: EFFECT, opacity: OPACITY, fit: FIT, behind: BEHIND, workspaceKind: KIND, gradient: GRADIENT } = BACKGROUND;
@@ -40,10 +39,18 @@ const FIT_CSS = Object.freeze({
 
 /** The page root's attributes and variables (css/backgrounds.css reads them). */
 const ROOT = Object.freeze({
-  seeThrough: 'seeThrough', backdrop: 'backdrop', clearTerminals: 'clearTerminals',
-  alpha: '--window-alpha', image: '--backdrop-image', size: '--backdrop-size', repeat: '--backdrop-repeat',
-  blur: '--backdrop-blur', dim: '--backdrop-dim',
+  seeThrough: 'seeThrough', clearTerminals: 'clearTerminals',
+  alpha: '--window-alpha', blur: '--backdrop-blur', dim: '--backdrop-dim',
 });
+/**
+ * The two backgrounds: the main window's (the workspace on screen's own, else Settings'), and the detached windows'
+ * (Settings' only: their terminals may belong to any workspace). Each has its attribute and variables' prefix.
+ */
+const LAYER = Object.freeze({
+  screen: { attribute: 'backdrop', prefix: '--backdrop' },
+  detached: { attribute: 'windowBackdrop', prefix: '--window-backdrop' },
+});
+const VAR = Object.freeze({ image: '-image', size: '-size', repeat: '-repeat' });
 const PERCENT = 100;
 const ON = '';
 
@@ -56,25 +63,49 @@ export const effects = () => info.effects;
 /** A picture's address, by its name in the backgrounds folder. @param {string} name */
 export const pictureUrl = name => info.pictureBase + encodeURIComponent(name);
 
-/** Whether the app has a window in front (one of Termilly's). */
+/** Whether the app has a window in front (one of Termilly's): js/appfocus.js says. */
 let active = true;
 
 /** @typedef {{ image: string, fit: string, behind: string }} Backdrop */
 
-/**
- * What shows behind: the workspace on screen's own background, else Settings'; null for none.
- * @returns {Backdrop | null}
- */
-function backdrop() {
+/** Settings' picture, or none. @returns {Backdrop | null} */
+function settingsBackdrop() {
   const settings = state.settings.background;
+  if (!settings?.picture || !info.pictureBase) return null;
+  return { image: `url("${cssString(pictureUrl(settings.picture))}")`, fit: settings.fit, behind: settings.behind };
+}
+
+/** What shows behind in the main window: the workspace on screen's own background, else Settings'. @returns {Backdrop | null} */
+function screenBackdrop() {
   const own = activeWs()?.background;
   if (own?.kind === KIND.none) return null;
   if (own?.kind === KIND.gradient && own.gradient && GRADIENTS[own.gradient]) {
     return { image: GRADIENTS[own.gradient], fit: FIT.fill, behind: BEHIND.terminals };
   }
-  const picture = own?.kind === KIND.picture && own.picture ? own.picture : settings?.picture;
-  if (!picture || !info.pictureBase) return null;
-  return { image: `url("${cssString(pictureUrl(picture))}")`, fit: settings.fit, behind: settings.behind };
+  if (own?.kind === KIND.picture && own.picture && info.pictureBase) {
+    const settings = state.settings.background;
+    return { image: `url("${cssString(pictureUrl(own.picture))}")`, fit: settings.fit, behind: settings.behind };
+  }
+  return settingsBackdrop();
+}
+
+/**
+ * Shows a background on the root, or none.
+ * @param {HTMLElement} root
+ * @param {{ attribute: string, prefix: string }} layer
+ * @param {Backdrop | null} shown
+ */
+function setLayer(root, layer, shown) {
+  if (!shown) {
+    delete root.dataset[layer.attribute];
+    for (const suffix of Object.values(VAR)) root.style.removeProperty(layer.prefix + suffix);
+    return;
+  }
+  const fit = FIT_CSS[shown.fit] ?? FIT_CSS[FIT.fill];
+  root.dataset[layer.attribute] = shown.behind;
+  root.style.setProperty(layer.prefix + VAR.image, shown.image);
+  root.style.setProperty(layer.prefix + VAR.size, fit.size);
+  root.style.setProperty(layer.prefix + VAR.repeat, fit.repeat);
 }
 
 /** Whether the terminals are drawn without a background of their own (something shows through them). */
@@ -89,22 +120,16 @@ export function applyBackdrop() {
   const settings = state.settings.background;
   if (!settings) return;
   const seeThrough = settings.opacity < OPACITY.max && (active || !settings.solidWhenInactive);
-  const shown = backdrop();
+  const screen = screenBackdrop();
+  const detached = settingsBackdrop();
   toggle(root, ROOT.seeThrough, seeThrough);
   root.style.setProperty(ROOT.alpha, String(settings.opacity / PERCENT));
-  if (shown) {
-    root.dataset[ROOT.backdrop] = shown.behind;
-    const fit = FIT_CSS[shown.fit] ?? FIT_CSS[FIT.fill];
-    root.style.setProperty(ROOT.image, shown.image);
-    root.style.setProperty(ROOT.size, fit.size);
-    root.style.setProperty(ROOT.repeat, fit.repeat);
-    root.style.setProperty(ROOT.blur, `${settings.blur}px`);
-    root.style.setProperty(ROOT.dim, String(settings.dim / PERCENT));
-  } else {
-    delete root.dataset[ROOT.backdrop];
-    for (const name of [ROOT.image, ROOT.size, ROOT.repeat, ROOT.blur, ROOT.dim]) root.style.removeProperty(name);
-  }
-  const nowClear = !!shown || (seeThrough && !settings.solidTerminals);
+  root.style.setProperty(ROOT.blur, `${settings.blur}px`);
+  root.style.setProperty(ROOT.dim, String(settings.dim / PERCENT));
+  setLayer(root, LAYER.screen, screen);
+  setLayer(root, LAYER.detached, detached);
+  // One setting for every terminal: where nothing shows behind one, its pane gives it its colour (css/backgrounds.css).
+  const nowClear = !!screen || !!detached || (seeThrough && !settings.solidTerminals);
   toggle(root, ROOT.clearTerminals, nowClear);
   if (nowClear !== clear) {
     clear = nowClear;
@@ -118,6 +143,13 @@ function toggle(root, name, on) {
   else delete root.dataset[name];
 }
 
+/** The app came to the front or went behind another (js/appfocus.js): the window turns solid if asked. @param {boolean} now */
+export function setAppActive(now) {
+  if (now === active) return;
+  active = now;
+  applyBackdrop();
+}
+
 /** Asks the host what this system has, then applies (a picture needs its address). */
 export async function loadBackdropInfo() {
   const reply = await request(PAGE.backgroundInfo, {});
@@ -125,16 +157,4 @@ export async function loadBackdropInfo() {
   applyBackdrop();
 }
 
-/** The app in front or not: any of its windows has the focus. A moment later, as focus moves between them. */
-function followFocus() {
-  setTimeout(() => {
-    const now = openDocuments().some(doc => doc.hasFocus());
-    if (now === active) return;
-    active = now;
-    applyBackdrop();
-  });
-}
-
-window.addEventListener('focus', followFocus);
-window.addEventListener('blur', followFocus);
 on(EVENTS.workspaces, applyBackdrop);
