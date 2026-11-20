@@ -64,6 +64,10 @@ test('a card picks its theme for the app and the terminals', () => withAppearanc
 }));
 
 test('following the system uses the dark or light pick, and turning it off keeps the theme on screen', () => withAppearance('appearance-follow', async app => {
+  // A first start follows the system on Linux and macOS: start from a theme of its own.
+  await app.eval(t => t.click('.theme-card[data-theme-id="midnight"]'));
+  await until(async () => (await iface(app)).theme === 'midnight', 'a theme of its own');
+  assert.equal(await app.eval(t => t.$('[data-theme-follow]').getAttribute('aria-checked')), 'false');
   await app.eval(t => t.click('[data-theme-follow]'));
   await until(async () => (await iface(app)).theme === 'system', 'following the system');
   assert.equal(await app.eval(t => t.$('[data-theme-follow]').getAttribute('aria-checked')), 'true');
