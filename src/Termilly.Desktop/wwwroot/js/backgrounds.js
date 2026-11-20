@@ -39,7 +39,7 @@ const FIT_CSS = Object.freeze({
 
 /** The page root's attributes and variables (css/backgrounds.css reads them). */
 const ROOT = Object.freeze({
-  seeThrough: 'seeThrough', clearTerminals: 'clearTerminals',
+  seeThrough: 'seeThrough', clearTerminals: 'clearTerminals', solidTerminals: 'solidTerminals',
   alpha: '--window-alpha', blur: '--backdrop-blur', dim: '--backdrop-dim',
 });
 /**
@@ -123,6 +123,7 @@ export function applyBackdrop() {
   const screen = screenBackdrop();
   const detached = settingsBackdrop();
   toggle(root, ROOT.seeThrough, seeThrough);
+  toggle(root, ROOT.solidTerminals, settings.solidTerminals);
   root.style.setProperty(ROOT.alpha, String(settings.opacity / PERCENT));
   root.style.setProperty(ROOT.blur, `${settings.blur}px`);
   root.style.setProperty(ROOT.dim, String(settings.dim / PERCENT));

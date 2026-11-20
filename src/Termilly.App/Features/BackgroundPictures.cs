@@ -77,7 +77,7 @@ internal static class BackgroundPictures
         if (!File.Exists(target))
         {
             // Copied beside it first, then renamed: a copy cut short never stands as the picture.
-            var partial = target + PartialSuffix;
+            var partial = $"{target}.{Guid.NewGuid():N}{PartialSuffix}"; // its own, if the same picture is picked twice at once
             File.Copy(path, partial, overwrite: true);
             try
             {

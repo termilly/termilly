@@ -34,7 +34,7 @@ internal static class WindowBackdrop
         : [BackgroundValues.Effect.None, BackgroundValues.Effect.Blur, BackgroundValues.Effect.Acrylic];
 
     /// <summary>
-    /// A browser can show the background pictures (as images only: no page can read them as data), nothing else of the
+    /// A browser can show the background pictures (no other site's page can fetch them as data), nothing else of the
     /// data folder. Without the folder (it can't be made), there are no pictures, and nothing else changes.
     /// </summary>
     public static void MapPictures(CoreWebView2 core)

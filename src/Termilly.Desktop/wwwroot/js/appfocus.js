@@ -15,5 +15,6 @@ export function watchAppFocus() {
   inEachDocument(doc => {
     doc.defaultView?.addEventListener('focus', followFocus);
     doc.defaultView?.addEventListener('blur', followFocus);
+    followFocus(); // a window may have the focus before its listeners are in
   });
 }

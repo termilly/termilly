@@ -5,7 +5,8 @@
    screen's own, else Settings') behind the terminals or everything;
    data-window-backdrop: in the detached windows, Settings' picture (--window-backdrop-image);
    both shaded with the theme's colour at --backdrop-dim and blurred by --backdrop-blur;
-   data-clear-terminals: the terminals draw no background of their own, so what's behind shows through them.
+   data-clear-terminals: the terminals draw no background of their own, so what's behind shows through them;
+   data-solid-terminals: Solid terminals is on, so only a picture shows through them, never the desktop.
    Without these attributes nothing here applies: the window is solid, as before. */
 
 :root {
@@ -42,10 +43,10 @@
 :root[data-clear-terminals] .pane-body,
 :root[data-clear-terminals] .pane-body .xterm,
 :root[data-clear-terminals] .pane-body .xterm-viewport { background: transparent !important; }
-/* Where nothing shows behind a terminal (its workspace has None, or a detached window without a picture), its own
-   colour stays: the pane gives it. */
-:root[data-clear-terminals]:not([data-see-through]):not([data-backdrop]) body:not(.detached-window) .pane-body,
-:root[data-clear-terminals]:not([data-see-through]):not([data-window-backdrop]) body.detached-window .pane-body {
+/* Where only the desktop or nothing shows behind a terminal (its workspace has None, a detached window without a
+   picture) and it's meant to keep its colour (solid, or Solid terminals), the pane gives it. */
+:root[data-clear-terminals]:not([data-backdrop]):is(:not([data-see-through]), [data-solid-terminals]) body:not(.detached-window) .pane-body,
+:root[data-clear-terminals]:not([data-window-backdrop]):is(:not([data-see-through]), [data-solid-terminals]) body.detached-window .pane-body {
   background: var(--term-surface, var(--term-bg)) !important;
 }
 
