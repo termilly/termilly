@@ -1,33 +1,26 @@
 // @ts-check
-// Importing another terminal's colour scheme (Settings › Appearance › Theme › Import): drop a file or choose one (read
-// by schemes.js), or pick one of the iTerm2 Color Schemes collection, fetched from GitHub only when asked to Browse.
-// The picked scheme is previewed, then saved with the imported themes and shown (themes.js works out the rest).
+// Importing other terminals' colour schemes (Settings › Appearance › Theme › Import): drop files or a folder, choose
+// files or a folder (read by schemes.js), or browse the iTerm2 Color Schemes collection (schemecollection.js). Every
+// scheme found goes in one list; ↑ and ↓ preview them in turn, and the one shown is saved with the imported themes.
 
 import { PAGE } from './protocol.js';
 import { request } from './host.js';
 import { state, GROUPS } from './store.js';
 import { updateSettings } from './preferences.js';
 import { modal } from './dialogs.js';
-import { readSchemes, SCHEME_ERROR } from './schemes.js';
+import { readSchemes } from './schemes.js';
+import { fetchCollection, fetchScheme, collectionNames } from './schemecollection.js';
 import { CUSTOM_THEME } from './constants.js';
 import { cssColor, escapeHtml } from './ui.js';
 import { find, targetOf } from './dom.js';
 
-/** The iTerm2 Color Schemes collection, in its Windows Terminal form: the list of schemes, and one scheme's file. */
-const COLLECTION = Object.freeze({
-  list: 'https://api.github.com/repos/mbadolato/iTerm2-Color-Schemes/contents/windowsterminal',
-  file: (/** @type {string} */ name) => `https://raw.githubusercontent.com/mbadolato/iTerm2-Color-Schemes/master/windowsterminal/${encodeURIComponent(name)}.json`,
-  extension: '.json',
-});
 /** How much of a name its id keeps, and the id's name part when nothing of the name fits one (no Latin letters). */
 const MAX_ID_NAME = 30;
 const UNNAMED_ID = 'scheme';
-/** The most of the collection's schemes the list shows at once; the search narrows it. */
+/** The most rows the list shows at once; the search narrows it. */
 const MAX_LISTED = 200;
-
-/** The collection's scheme names, once fetched (for the rest of the session). */
-/** @type {string[] | null} */
-let collection = null;
+/** How long ↑ or ↓ held on the collection waits before fetching the scheme it stopped on, in ms. */
+const FETCH_PAUSE_MS = 180;
 
 /**
  * A scheme's small terminal, in its colours.
@@ -77,33 +70,44 @@ function save(s) {
   return id;
 }
 
-/** The collection's scheme names, fetched once. */
-async function fetchCollection() {
-  if (collection) return collection;
-  const response = await fetch(COLLECTION.list);
-  if (!response.ok) throw new Error(`GitHub said ${response.status}`);
-  const files = /** @type {{ name: string, type: string }[]} */ (await response.json());
-  collection = files.filter(f => f.type === 'file' && f.name.endsWith(COLLECTION.extension))
-    .map(f => f.name.slice(0, -COLLECTION.extension.length));
-  return collection;
+/**
+ * The files dropped: each file, and the files in each folder (and its folders' a few levels down, where the system
+ * lets the page read them), within the limits; how many were left out.
+ * @param {DataTransfer} transfer
+ * @returns {Promise<{ files: File[], skipped: number }>}
+ */
+async function droppedFiles(transfer) {
+  /** @type {File[]} */
+  const files = [];
+  let skipped = 0;
+  /** @param {FileSystemEntry} entry @param {number} depth */
+  const walk = async (entry, depth) => {
+    if (files.length >= CUSTOM_THEME.maxFiles) return void skipped++;
+    if (entry.isFile) return files.push(await new Promise((resolve, reject) => /** @type {FileSystemFileEntry} */ (entry).file(resolve, reject)));
+    if (depth > CUSTOM_THEME.folderDepth) return;
+    const reader = /** @type {FileSystemDirectoryEntry} */ (entry).createReader();
+    for (let batch = await readBatch(reader); batch.length; batch = await readBatch(reader)) {
+      for (const child of batch) await walk(child, depth + 1);
+    }
+  };
+  const entries = [...transfer.items].map(i => i.webkitGetAsEntry?.()).filter(e => !!e);
+  if (!entries.length) return { files: [...transfer.files].slice(0, CUSTOM_THEME.maxFiles), skipped: Math.max(0, transfer.files.length - CUSTOM_THEME.maxFiles) };
+  for (const entry of entries) await walk(/** @type {FileSystemEntry} */ (entry), 0);
+  return { files, skipped };
 }
 
-/** @param {string} name one of the collection's */
-async function fetchScheme(name) {
-  const response = await fetch(COLLECTION.file(name));
-  if (!response.ok) throw new Error(`GitHub said ${response.status}`);
-  return readSchemes(`${name}${COLLECTION.extension}`, await response.text()).schemes[0];
-}
+/** @param {FileSystemDirectoryReader} reader @returns {Promise<FileSystemEntry[]>} */
+const readBatch = reader => new Promise((resolve, reject) => reader.readEntries(resolve, reject));
 
 // Buttons and rows take Enter as a click (data-no-enter): only "Use this theme" saves with it.
 const DIALOG = `
-  <h3 id="si-title">Import a colour scheme</h3>
+  <h3 id="si-title">Import colour schemes</h3>
   <div class="si-body">
     <div class="si-pick">
       <div class="si-drop">
-        <b>Drop a scheme file here</b>
+        <b>Drop scheme files or a folder here</b>
         <span class="dialog-sub">From iTerm2, Windows Terminal, Ghostty, Kitty, Alacritty or Warp</span>
-        <button class="btn" data-si-choose data-no-enter autofocus>Choose file</button>
+        <span class="si-buttons"><button class="btn" data-si-choose data-no-enter autofocus>Choose files</button><button class="btn" data-si-folder data-no-enter>Choose folder</button></span>
       </div>
       <button class="btn si-browse" data-si-browse data-no-enter>Browse iTerm2 Color Schemes</button>
       <div class="si-collection" hidden>
@@ -112,7 +116,7 @@ const DIALOG = `
       </div>
     </div>
     <div class="si-show">
-      <div class="si-preview"><p class="dialog-sub">Pick a scheme to see it here.</p></div>
+      <div class="si-preview"><p class="dialog-sub">Pick a scheme to see it here. ↑ and ↓ go through the list.</p></div>
       <p class="dialog-sub si-status" role="status"></p>
     </div>
   </div>
@@ -122,17 +126,21 @@ const DIALOG = `
   </div>`;
 
 /** The dialog's parts it changes, and the class its status line has for an error. */
-const PART = Object.freeze({ collection: '.si-collection', list: '.si-list', search: '.si-search', status: '.si-status', preview: '.si-preview', ok: '[data-ok]' });
+const PART = Object.freeze({ collection: '.si-collection', list: '.si-list', search: '.si-search', status: '.si-status', preview: '.si-preview', ok: '[data-ok]', row: '.si-row' });
 const ERROR_CLASS = 'error';
-/** Where the list's rows come from: nothing yet, the file read, or the collection on GitHub. */
+/** Where the list's rows come from: nothing yet, files read, or the collection on GitHub. */
 const SOURCE = Object.freeze({ none: 'none', file: 'file', collection: 'collection' });
+/** The keys that move through the list: by one row, or to its ends. */
+const LIST_KEYS = Object.freeze({ ArrowDown: 1, ArrowUp: -1, Home: -Infinity, End: Infinity });
 
 /** @param {unknown} error */
 const reason = error => (error instanceof Error ? error.message : '');
+/** @param {number} n @param {string} one @param {string} many */
+const count = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
 /**
- * The Import dialog's state: the scheme picked, the schemes of a file holding several, and which of the user's
- * actions is the current one (a slower answer to an earlier one is dropped).
+ * The Import dialog's state: the scheme shown, the schemes read from files, where the list's rows come from, and which
+ * of the user's actions is the current one (a slower answer to an earlier one is dropped).
  */
 class SchemePicker {
   /** @param {HTMLElement} dialog */
@@ -141,12 +149,12 @@ class SchemePicker {
     /** @type {import('./schemes.js').Scheme | null} */
     this.picked = null;
     /** @type {import('./schemes.js').Scheme[]} */
-    this.fromFile = [];
+    this.fromFiles = [];
     this.action = 0;
     /** @type {string} */
     this.source = SOURCE.none;
-    /** The collection's scheme picked, kept ticked while the search still shows it. */
-    this.selectedName = '';
+    /** The row picked (a scheme's place in fromFiles, or a collection name), kept ticked while the search shows it. */
+    this.selected = '';
     this.list = find(dialog, PART.list);
     this.search = /** @type {HTMLInputElement} */ (find(dialog, PART.search));
   }
@@ -176,75 +184,84 @@ class SchemePicker {
     find(this.dialog, PART.preview).innerHTML = s ? `<b class="si-name">${escapeHtml(s.name)}</b>${preview(s)}` : '';
   }
 
-  /** A file action: what the list showed (the collection's rows, a file's) goes, so a stale row can't be picked. */
-  startFile() {
+  /** A new source for the list: the old rows and search go, so a stale row can't be picked. @param {string} source */
+  start(source) {
     const action = this.begin();
-    this.source = SOURCE.file;
-    this.fromFile = [];
-    find(this.dialog, PART.collection).hidden = true;
-    this.list.innerHTML = '';
+    this.source = source;
+    this.fromFiles = [];
+    this.selected = '';
     this.search.value = '';
+    this.list.innerHTML = '';
+    find(this.dialog, PART.collection).hidden = source !== SOURCE.collection;
     this.say('');
     return action;
   }
 
-  /** @param {string[]} names @param {number} [selected] which one is picked, by its place */
-  listNames(names, selected = -1) {
-    this.list.innerHTML = names.map((n, i) => `<button class="si-row${i === selected ? ' on' : ''}" role="option" aria-selected="${i === selected}" data-no-enter data-si-row="${i}" data-si-name="${escapeHtml(n)}">${escapeHtml(n)}</button>`).join('')
-      || '<p class="dialog-sub">No schemes match.</p>';
+  /** The rows the search matches, the picked one ticked. */
+  filter() {
+    const query = this.search.value.trim().toLowerCase();
+    /** @type {[string, string][]} each row's key and label */
+    const rows = this.source === SOURCE.file ? this.fromFiles.map((s, i) => [String(i), s.name])
+      : this.source === SOURCE.collection ? collectionNames().map(n => [n, n]) : [];
+    const matches = rows.filter(([, label]) => label.toLowerCase().includes(query));
+    this.list.innerHTML = matches.slice(0, MAX_LISTED).map(([key, label]) => {
+      const on = key === this.selected;
+      return `<button class="si-row${on ? ' on' : ''}" role="option" aria-selected="${on}" data-no-enter data-si-key="${escapeHtml(key)}">${escapeHtml(label)}</button>`;
+    }).join('') || '<p class="dialog-sub">No schemes match.</p>';
+    if (matches.length > MAX_LISTED) this.say(`The first ${MAX_LISTED} of ${matches.length} shown: search to find others.`);
   }
 
-  /** Shows the list, with its search box for the collection and without it for a file's schemes. @param {boolean} searching */
-  showList(searching) {
-    find(this.dialog, PART.collection).hidden = false;
-    this.search.hidden = !searching;
-  }
-
-  /** @param {string} name @param {string} text */
-  readFile(name, text) {
-    try {
-      const { schemes, skipped } = readSchemes(name, text);
-      this.fromFile = schemes;
-      this.show(schemes[0]);
-      const left = skipped ? ` (${skipped} without all their colours left out)` : '';
-      this.say(schemes.length > 1 ? `${schemes.length} schemes in ${name}${left}: pick one.` : `From ${name}${left}.`);
-      if (schemes.length > 1) {
-        this.showList(false);
-        this.listNames(schemes.map(s => s.name), 0);
+  /**
+   * The schemes in files read: all of them in the list, the first shown.
+   * @param {{ name: string, text: string }[]} files
+   * @param {number} [left] files left out before reading (too big, past the limits)
+   */
+  readFiles(files, left = 0) {
+    let notSchemes = 0;
+    let incomplete = 0;
+    for (const file of files) {
+      try {
+        const { schemes, skipped } = readSchemes(file.name, file.text);
+        this.fromFiles.push(...schemes);
+        incomplete += skipped;
+      } catch {
+        notSchemes++; // a file in the folder that isn't a scheme: counted, not an error
       }
-    } catch (error) {
-      this.say(reason(error) || SCHEME_ERROR.unknown, true);
     }
+    const out = [left + notSchemes && count(left + notSchemes, 'file isn’t a scheme', 'files aren’t schemes'), incomplete && count(incomplete, 'scheme misses colours', 'schemes miss colours')].filter(Boolean);
+    if (!this.fromFiles.length) return this.say(`No colour schemes found${out.length ? ` (${out.join(', ')})` : ''}.`, true);
+    find(this.dialog, PART.collection).hidden = false;
+    this.selected = '0';
+    this.filter();
+    this.show(this.fromFiles[0]);
+    this.say(`${count(this.fromFiles.length, 'scheme', 'schemes')} found${out.length ? `; ${out.join(', ')}` : ''}.`);
   }
 
-  /** @param {File} file dropped from the file manager */
-  async drop(file) {
-    const action = this.startFile();
-    if (file.size > CUSTOM_THEME.maxFileBytes) return this.say(`${file.name} is too big to be a colour scheme.`, true);
+  /** @param {DataTransfer} transfer files or folders dropped from the file manager */
+  async drop(transfer) {
+    const action = this.start(SOURCE.file);
     try {
-      const text = await file.text();
-      if (this.current(action)) this.readFile(file.name, text);
+      const { files, skipped } = await droppedFiles(transfer);
+      const small = files.filter(f => f.size <= CUSTOM_THEME.maxFileBytes);
+      const texts = await Promise.all(small.map(async f => ({ name: f.webkitRelativePath || f.name, text: await f.text() })));
+      if (this.current(action)) this.readFiles(texts, skipped + files.length - small.length);
     } catch (error) {
-      if (this.current(action)) this.say(`Couldn’t read ${file.name}. ${reason(error)}`, true);
+      if (this.current(action)) this.say(`Couldn’t read what was dropped. ${reason(error)}`, true);
     }
   }
 
-  async choose() {
-    const action = this.startFile();
-    const reply = await request(PAGE.schemeOpen, {});
+  /** @param {boolean} folder a folder's files, or files picked */
+  async choose(folder) {
+    const action = this.start(SOURCE.file);
+    const reply = await request(PAGE.schemeOpen, { folder });
     if (!this.current(action)) return;
     if (reply.error) this.say(reply.error, true);
-    else if (reply.name && typeof reply.text === 'string') this.readFile(reply.name, reply.text);
+    else if (reply.files?.length || reply.skipped) this.readFiles(reply.files ?? [], reply.skipped ?? 0);
   }
 
   async browse() {
-    const action = this.begin();
-    this.source = SOURCE.collection;
-    this.showList(true);
-    this.fromFile = [];
-    this.selectedName = '';
+    const action = this.start(SOURCE.collection);
     this.list.innerHTML = '<p class="dialog-sub">Loading the list from GitHub…</p>';
-    this.say('');
     try {
       await fetchCollection();
       if (!this.current(action)) return;
@@ -257,37 +274,48 @@ class SchemePicker {
     }
   }
 
-  /** @param {HTMLElement} row */
-  async pick(row) {
-    for (const r of this.list.querySelectorAll('.si-row')) {
+  /** @param {HTMLElement} row @param {boolean} [stepping] reached with ↑ or ↓: a fetch waits a moment, in case it's passed */
+  async pick(row, stepping = false) {
+    const key = /** @type {string} */ (row.dataset.siKey);
+    this.selected = key;
+    for (const r of this.list.querySelectorAll(PART.row)) {
       r.classList.toggle('on', r === row);
       r.setAttribute('aria-selected', String(r === row));
     }
-    if (this.source === SOURCE.file) return this.show(this.fromFile[Number(row.dataset.siRow)] ?? null);
+    if (this.source === SOURCE.file) return this.show(this.fromFiles[Number(key)] ?? null);
     if (this.source !== SOURCE.collection) return;
-    const name = /** @type {string} */ (row.dataset.siName);
-    this.selectedName = name;
     const action = this.begin();
     this.say('Loading…');
+    if (stepping) await new Promise(resolve => setTimeout(resolve, FETCH_PAUSE_MS));
+    if (!this.current(action)) return;
     try {
-      const scheme = await fetchScheme(name);
+      const scheme = await fetchScheme(key);
       if (!this.current(action)) return;
       this.show(scheme);
       this.say('From iTerm2 Color Schemes on GitHub.');
     } catch (error) {
-      if (this.current(action)) this.say(`Couldn’t load ${name}. ${reason(error)}`, true);
+      if (this.current(action)) this.say(`Couldn’t load ${key}. ${reason(error)}`, true);
     }
   }
 
-  /** The collection's schemes the search matches, the first ones (the search narrows them further). */
-  filter() {
-    if (this.source !== SOURCE.collection || !collection) return;
-    const query = this.search.value.trim().toLowerCase();
-    const matches = collection.filter(n => n.toLowerCase().includes(query)).slice(0, MAX_LISTED + 1);
-    const shown = matches.slice(0, MAX_LISTED);
-    this.listNames(shown, shown.indexOf(this.selectedName));
-    if (matches.length > MAX_LISTED) this.say(`The first ${MAX_LISTED} shown: search to find others.`);
-    else if (!this.picked) this.say('');
+  /**
+   * ↑ ↓ Home End in the list or its search box: the row beside the picked one (or the first or last) is picked and shown.
+   * @param {KeyboardEvent} e
+   */
+  step(e) {
+    const by = LIST_KEYS[/** @type {keyof typeof LIST_KEYS} */ (e.key)];
+    const target = targetOf(e);
+    const inList = target === this.search || this.list.contains(target);
+    // Home and End move the caret in the search box; only ↑ and ↓ leave it.
+    if (by === undefined || !inList || (target === this.search && !Number.isFinite(by))) return false;
+    const rows = /** @type {HTMLElement[]} */ ([...this.list.querySelectorAll(PART.row)]);
+    if (!rows.length) return false;
+    const at = rows.findIndex(r => r.classList.contains('on'));
+    const next = Number.isFinite(by) ? Math.min(rows.length - 1, Math.max(0, at < 0 ? 0 : at + by)) : by < 0 ? 0 : rows.length - 1;
+    if (target !== this.search) rows[next].focus(); // from the search box, typing goes on there
+    rows[next].scrollIntoView({ block: 'nearest' });
+    this.pick(rows[next], true);
+    return true;
   }
 }
 
@@ -302,18 +330,18 @@ export function importScheme() {
     dialog.addEventListener('dragover', e => e.preventDefault());
     dialog.addEventListener('drop', e => {
       e.preventDefault();
-      e.stopPropagation(); // not a file dropped into a terminal
-      const file = e.dataTransfer?.files[0];
-      if (file) picker.drop(file);
+      e.stopPropagation(); // not files dropped into a terminal
+      if (e.dataTransfer) picker.drop(e.dataTransfer);
     });
     dialog.addEventListener('click', e => {
       const target = targetOf(e);
-      const row = /** @type {HTMLElement | null} */ (target.closest('[data-si-row]'));
-      if (target.closest('[data-si-choose]')) picker.choose();
+      const row = /** @type {HTMLElement | null} */ (target.closest('[data-si-key]'));
+      if (target.closest('[data-si-choose]')) picker.choose(false);
+      else if (target.closest('[data-si-folder]')) picker.choose(true);
       else if (target.closest('[data-si-browse]')) picker.browse();
       else if (row) picker.pick(row);
     });
     picker.search.addEventListener('input', () => picker.filter());
-    return { submit: () => { if (picker.picked) close(save(picker.picked)); } };
+    return { submit: () => { if (picker.picked) close(save(picker.picked)); }, key: e => picker.step(e) };
   });
 }

@@ -183,6 +183,9 @@ export const CUSTOM_THEME = Object.freeze({
   maxName: 60,
   maxThemes: 50,
   maxFileBytes: 524288,
+  maxFiles: 1000,
+  maxTotalBytes: 16777216,
+  folderDepth: 3,
 });
 
 /** C#: ChangeSources (Changes/ChangeModel.cs). */

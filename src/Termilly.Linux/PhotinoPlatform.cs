@@ -145,11 +145,11 @@ internal abstract class PhotinoPlatform(Action<string> send, string? startFolder
             : (await _window.ShowOpenFileAsync("Open in the Notepad", Home, false,
                 [("All files", ["*"]), ("Text files", ["*.txt", "*.md"])]).ConfigureAwait(false))?.FirstOrDefault(); // any file: the Notepad says when one isn't text
 
-    public async Task<string?> PickSchemeToOpenAsync() =>
+    public async Task<IReadOnlyList<string>> PickSchemesToOpenAsync() =>
         _window is null
-            ? null
-            : (await _window.ShowOpenFileAsync("Import a colour scheme", Home, false,
-                [("Colour schemes", SchemeFiles.Extensions.Select(e => "*" + e).ToArray()), ("All files", ["*"])]).ConfigureAwait(false))?.FirstOrDefault();
+            ? []
+            : await _window.ShowOpenFileAsync("Import colour schemes", Home, true,
+                [("Colour schemes", SchemeFiles.Extensions.Select(e => "*" + e).ToArray()), ("All files", ["*"])]).ConfigureAwait(false) ?? [];
 
     public async Task<IReadOnlyList<string>> PickFilesAsync(string title) =>
         _window is null ? [] : await _window.ShowOpenFileAsync(title, Home, true).ConfigureAwait(false) ?? [];

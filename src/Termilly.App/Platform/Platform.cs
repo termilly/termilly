@@ -69,8 +69,8 @@ internal interface IFileDialogs
     /// <summary>A text file to open in the Notepad.</summary>
     Task<string?> PickTextToOpenAsync();
 
-    /// <summary>Another terminal's colour scheme to import (Settings › Appearance › Theme).</summary>
-    Task<string?> PickSchemeToOpenAsync();
+    /// <summary>Other terminals' colour scheme files to import (Settings › Appearance › Theme); none when cancelled.</summary>
+    Task<IReadOnlyList<string>> PickSchemesToOpenAsync();
 
     /// <summary>
     /// Files to upload, picked in the host's own dialog (where the page's can't tell their paths). On Windows the

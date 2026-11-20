@@ -17,6 +17,11 @@ internal static class CustomThemeLimits
     public const int MaxThemes = 50;
     /// <summary>The biggest file read: a scheme is a few kilobytes; a whole Windows Terminal settings file fits too.</summary>
     public const int MaxFileBytes = 524288; // 512 KB
+    /// <summary>The most files read at once (picked, or found in a folder), and all of them together at most.</summary>
+    public const int MaxFiles = 1000;
+    public const int MaxTotalBytes = 16777216; // 16 MB
+    /// <summary>How deep into a folder's folders the files are looked for.</summary>
+    public const int FolderDepth = 3;
 }
 
 /// <summary>

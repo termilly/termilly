@@ -26,13 +26,14 @@ async function withImport(name, body) {
   } finally { await app?.stop({ failed }); await repo.dispose(); }
 }
 
-/** Drops a file on the dialog, as dragging one from the file manager does. */
-const drop = (app, name, text) => app.eval((t, n, x) => {
+/** Drops files on the dialog, as dragging them from the file manager does. */
+const dropAll = (app, files) => app.eval((t, list) => {
   const dialog = t.$('.scheme-import');
-  const files = new globalThis.DataTransfer();
-  files.items.add(new File([x], n));
-  dialog.dispatchEvent(new globalThis.DragEvent('drop', { dataTransfer: files, bubbles: true, cancelable: true }));
-}, name, text);
+  const transfer = new globalThis.DataTransfer();
+  for (const [n, x] of list) transfer.items.add(new File([x], n));
+  dialog.dispatchEvent(new globalThis.DragEvent('drop', { dataTransfer: transfer, bubbles: true, cancelable: true }));
+}, files);
+const drop = (app, name, text) => dropAll(app, [[name, text]]);
 
 test('a dropped scheme shows, is used, and then is removed with a right-click', () => withImport('import-drop', async app => {
   await drop(app, 'Dracula.conf', fixture('Dracula.conf'));
@@ -75,7 +76,7 @@ test('two names that make the same id are two themes, and the same name again re
 test('a file that is no scheme says so and offers nothing to use',() => withImport('import-bad', async app => {
   await drop(app, 'notes.txt', 'just some notes');
   await until(() => app.eval(t => t.$('.si-status').classList.contains('error')), 'the error line');
-  assert.match(await app.text('.si-status'), /isn’t a colour scheme/);
+  assert.match(await app.text('.si-status'), /No colour schemes found (1 file isn’t a scheme)/);
   assert.equal(await app.eval(t => t.$('.scheme-import [data-ok]').disabled), true);
 }));
 
@@ -92,4 +93,34 @@ test('Browse lists the collection, searches it and previews a scheme (GitHub stu
   await app.eval(t => t.click('.si-row'));
   await until(async () => (await app.text('.si-name')) === 'Dracula', 'the preview');
   assert.match(await app.text('.si-status'), /iTerm2 Color Schemes/);
+}));
+
+test('several files dropped fill the list, and ↑ and ↓ preview each in turn', () => withImport('import-many', async app => {
+  const nord = JSON.stringify({ ...JSON.parse(fixture('Dracula.json')), name: 'Nord-ish', background: '#2e3440' });
+  await dropAll(app, [['Dracula.conf', fixture('Dracula.conf')], ['nord.json', nord], ['notes.txt', 'not a scheme']]);
+  await until(() => app.eval(t => t.$$('.si-row').length === 2), 'both schemes listed');
+  assert.match(await app.text('.si-status'), /2 schemes found; 1 file isn’t a scheme/);
+  assert.equal(await app.text('.si-name'), 'Dracula', 'the first shown');
+  await app.key('.si-row.on', 'ArrowDown');
+  await until(async () => (await app.text('.si-name')) === 'Nord-ish', '↓ shows the next');
+  assert.equal(await app.eval(t => t.$('.si-row.on') === t.$('.si-row.on').ownerDocument.activeElement), true);
+  await app.key('.si-row.on', 'ArrowDown');
+  assert.equal(await app.text('.si-name'), 'Nord-ish', 'the last stays');
+  await app.key('.si-row.on', 'ArrowUp');
+  await until(async () => (await app.text('.si-name')) === 'Dracula', '↑ goes back');
+  await app.eval(t => t.click('.scheme-import [data-ok]'));
+  await until(async () => (await iface(app)).theme === 'custom-dracula', 'the one shown is used');
+}));
+
+test('↓ in the collection’s search box previews the first row and keeps typing there (GitHub stubbed)', () => withImport('import-browse-keys', async app => {
+  await app.eval((t, scheme) => {
+    globalThis.fetch = async url => String(url).includes('api.github.com')
+      ? new Response(JSON.stringify([{ name: 'Dracula.json', type: 'file' }, { name: 'Night Owl.json', type: 'file' }]))
+      : new Response(scheme);
+  }, fixture('Dracula.json'));
+  await app.eval(t => t.click('[data-si-browse]'));
+  await until(() => app.eval(t => t.$$('.si-row').length === 2), 'listed');
+  await app.key('.si-search', 'ArrowDown');
+  await until(async () => (await app.text('.si-name')) === 'Dracula', 'the first previewed');
+  assert.equal(await app.eval(t => t.$('.si-search') === t.$('.si-search').ownerDocument.activeElement), true);
 }));

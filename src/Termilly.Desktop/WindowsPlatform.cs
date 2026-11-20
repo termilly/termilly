@@ -124,10 +124,10 @@ internal sealed class WindowsPlatform(MainWindow window) :
         return Task.FromResult(dialog.ShowDialog(window) == true ? dialog.FileName : null);
     }
 
-    public Task<string?> PickSchemeToOpenAsync()
+    public Task<IReadOnlyList<string>> PickSchemesToOpenAsync()
     {
-        var dialog = new Microsoft.Win32.OpenFileDialog { Title = "Import a colour scheme", Filter = SchemeFilter };
-        return Task.FromResult(dialog.ShowDialog(window) == true ? dialog.FileName : null);
+        var dialog = new Microsoft.Win32.OpenFileDialog { Title = "Import colour schemes", Filter = SchemeFilter, Multiselect = true };
+        return Task.FromResult<IReadOnlyList<string>>(dialog.ShowDialog(window) == true ? dialog.FileNames : []);
     }
 
     private const string TextFilter = "Text files (*.txt;*.md)|*.txt;*.md|All files (*.*)|*.*";

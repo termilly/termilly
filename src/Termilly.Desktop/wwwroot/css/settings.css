@@ -56,6 +56,7 @@
 .si-show { flex: 1; min-width: 0; }
 .si-drop { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 16px; border: 1.5px dashed var(--border-strong); border-radius: 10px; text-align: center; }
 .si-drop .dialog-sub { margin: 0; }
+.si-buttons { display: flex; gap: 8px; }
 .si-browse { align-self: flex-start; }
 .si-collection { display: flex; flex-direction: column; gap: 8px; }
 .si-collection[hidden], .si-search[hidden] { display: none; }

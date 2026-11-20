@@ -345,6 +345,7 @@ export const HOST = Object.freeze({
 /** @typedef {{ text: string, at: string }} AgentPrompt */
 /** @typedef {{ kind: string, text: string, at: string, tool?: string|null, failed?: boolean }} AgentStep */
 /** @typedef {{ id: string, name: string, address: string, online: boolean, error: string|null, state: string|null }} PcView */
+/** @typedef {{ name: string, text: string }} SchemeFileText */
 /** @typedef {{ newRecoveryCode: string|null, archives: number }} SecurityInfo */
 /** @typedef {{ version: string|null, dataDir: string, remoteVersion: number, crashes: Array<any> }} AboutInfo */
 /** @typedef {{ id: string, name: string, description: string|null, icon: string, source: string, tags: Array<string>, startCommand?: string|null, shellIcon?: string|null }} ProfileSummary */
@@ -502,7 +503,7 @@ export const HOST = Object.freeze({
 /** @typedef {{ runId?: string, profile?: string|null, cwd?: string|null, command?: string, limitSeconds?: number, ask?: boolean }} Page_scheduleRun */
 /** @typedef {{ runId?: string, path?: string, text?: string }} Page_scheduleSaveFile */
 /** @typedef {{ runId?: string }} Page_scheduleStop */
-/** @typedef {{ requestId?: string|null }} Page_schemeOpen */
+/** @typedef {{ requestId?: string|null, folder?: boolean }} Page_schemeOpen */
 /** @typedef {{  }} Page_securityCode */
 /** @typedef {{ code?: string|null }} Page_securityRecover */
 /** @typedef {{  }} Page_securityRegenerate */
@@ -668,7 +669,7 @@ export const HOST = Object.freeze({
 /** @typedef {{ runId: string, path: string|null, error?: string|null }} Host_scheduleFileSaved */
 /** @typedef {{ requestId: string|null, output: string|null, columns: number }} Host_scheduleReport */
 /** @typedef {{  }} Host_scheduleTick */
-/** @typedef {{ requestId: string|null, name: string|null, text?: string|null, error?: string|null }} Host_schemeOpened */
+/** @typedef {{ requestId: string|null, files?: Array<SchemeFileText>|null, skipped?: number, error?: string|null }} Host_schemeOpened */
 /** @typedef {{ code: string|null }} Host_securityCode_0 */
 /** @typedef {{ code: string, regenerated: boolean }} Host_securityCode_1 */
 /** @typedef {Host_securityCode_0|Host_securityCode_1} Host_securityCode */
