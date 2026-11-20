@@ -46,7 +46,7 @@
 .theme-pick { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; }
 .theme-pick .field.dropdown { min-width: 150px; }
 /* Stays at the top of the page while the cards scroll under it; its own padding is the gap above the cards. */
-.theme-tools { position: sticky; top: -8px; z-index: 1; display: flex; align-items: center; gap: 10px; margin-top: -8px; padding: 8px 0; background: var(--raised); }
+.theme-tools { position: sticky; top: calc(-1 * var(--set-body-top)); z-index: 1; display: flex; align-items: center; gap: 10px; margin-top: calc(-1 * var(--set-body-top)); padding: var(--set-body-top) 0; background: var(--raised); }
 .theme-tools .theme-search { width: 220px; }
 .theme-tools + .theme-cards { margin-top: 8px; }
 .theme-none { margin: 16px 0 0; }
@@ -97,8 +97,9 @@
 .theme-cards > .theme-card[hidden] { display: none; }
 .tc-like { overflow: hidden; margin-top: -4px; padding: 0 2px; color: var(--faint); font-size: 11px; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
 /* The body keeps room for its scrollbar, so its right edge lines up with the buttons above it whether it scrolls or not. */
-.settings { --set-scrollbar: 8px; }
-.set-body { scrollbar-gutter: stable; flex: 1; padding: 8px 24px 24px; overflow-y: auto; -webkit-user-select: text; user-select: text; }
+/* --set-body-top: the room above the page's first row, which the Theme tab's tools keep while they stay on top. */
+.settings { --set-scrollbar: 8px; --set-body-top: 8px; }
+.set-body { scrollbar-gutter: stable; flex: 1; padding: var(--set-body-top) 24px 24px; overflow-y: auto; -webkit-user-select: text; user-select: text; }
 .set-body::-webkit-scrollbar { width: var(--set-scrollbar); }
 .set-body::-webkit-scrollbar-thumb { border: 2px solid var(--raised); border-radius: 4px; background: var(--scroll-thumb); }
 

@@ -8,6 +8,8 @@ import { until } from './gitsteps.mjs';
 /** The names of the gallery's cards that are drawn (not only marked hidden). */
 const shownCards = app => app.eval(t => t.$$('.theme-card').filter(c => c.getClientRects().length).map(c => c.querySelector('.tc-name').textContent));
 /** The interface settings the page has. */
+/** How far past the tools the page is scrolled, in px: several rows of cards. */
+const SCROLL_PAST = 400;
 const iface = app => app.eval(async t => ({ ...(await t.import('store.js')).state.settings.interface }));
 
 /** Settings open on Appearance, in a fresh app. */
@@ -135,7 +137,7 @@ test('the search and buttons stay on top while the cards scroll, and a long name
   assert.equal(card.same, true, 'the card keeps its column width');
   assert.match(card.title, new RegExp(`^${long}`), 'the whole name in the tooltip');
   const before = await app.eval(t => t.$('.theme-tools').getBoundingClientRect().top - t.$('#set-body').getBoundingClientRect().top);
-  await app.eval(t => { t.$('#set-body').scrollTop = t.$('.theme-tools').offsetTop + 400; });
+  await app.eval((t, by) => { t.$('#set-body').scrollTop = t.$('.theme-tools').offsetTop + by; }, SCROLL_PAST);
   await until(() => app.eval(t => t.$('#set-body').scrollTop > 0), 'scrolled');
   const after = await app.eval(t => {
     const body = t.$('#set-body').getBoundingClientRect();
