@@ -1,7 +1,7 @@
 // @ts-check
-// Importing other terminals' colour schemes (Settings › Appearance › Theme › Import): drop files or a folder, choose
-// files or a folder (read by schemes.js), or browse the iTerm2 Color Schemes collection (schemecollection.js). Every
-// scheme found goes in one list; ↑ and ↓ preview them in turn, and the one shown is saved with the imported themes.
+// Importing other terminals' colour schemes (Settings › Appearance › Theme › Import): drop files or a folder, or choose
+// files or a folder (read by schemes.js). Every scheme found goes in one list; ↑ and ↓ preview them in turn. The one
+// shown is saved with the imported themes, or all the ticked ones at once (a tick, Space or Ctrl+click on a row).
 
 import { PAGE } from './protocol.js';
 import { request } from './host.js';
@@ -9,7 +9,7 @@ import { state, GROUPS } from './store.js';
 import { updateSettings } from './preferences.js';
 import { modal } from './dialogs.js';
 import { readSchemes } from './schemes.js';
-import { fetchCollection, fetchScheme, collectionNames } from './schemecollection.js';
+import { droppedFiles } from './schemedrop.js';
 import { CUSTOM_THEME } from './constants.js';
 import { cssColor, escapeHtml } from './ui.js';
 import { find, targetOf } from './dom.js';
@@ -19,8 +19,6 @@ const MAX_ID_NAME = 30;
 const UNNAMED_ID = 'scheme';
 /** The most rows the list shows at once; the search narrows it. */
 const MAX_LISTED = 200;
-/** How long ↑ or ↓ held on the collection waits before fetching the scheme it stopped on, in ms. */
-const FETCH_PAUSE_MS = 180;
 
 /**
  * A scheme's small terminal, in its colours.
@@ -56,78 +54,49 @@ function idOf(name, others) {
   return id;
 }
 
+/** @typedef {{ id: string, name: string }} SavedTheme */
+
 /**
- * Saves a scheme with the imported themes (newest first; one of the same name replaced, keeping its id; the oldest
- * going past the limit) and shows it.
+ * The imported themes with a scheme added first; one of the same name is replaced, keeping its id.
+ * @param {SavedTheme[]} saved
  * @param {import('./schemes.js').Scheme} s
  */
-function save(s) {
-  const saved = state.settings.interface.customThemes ?? [];
+function withScheme(saved, s) {
   const others = saved.filter(t => !sameName(s.name)(t));
   const id = saved.find(sameName(s.name))?.id ?? idOf(s.name, others);
   const theme = { id, name: savedName(s.name), background: s.background, foreground: s.foreground, cursor: s.cursor, ansi: s.ansi };
-  updateSettings(GROUPS.interface, { customThemes: [theme, ...others].slice(0, CUSTOM_THEME.maxThemes), theme: id });
+  return { themes: [theme, ...others], id };
+}
+
+/**
+ * Saves schemes with the imported themes (in the list's order, before the older ones; the oldest going past the limit)
+ * and shows one of them.
+ * @param {import('./schemes.js').Scheme[]} schemes
+ * @param {import('./schemes.js').Scheme} shown one of them
+ */
+function save(schemes, shown) {
+  /** @type {SavedTheme[]} */
+  let themes = state.settings.interface.customThemes ?? [];
+  let id = '';
+  // Last first, so each one goes in before the ones after it.
+  for (const s of [...schemes].reverse()) {
+    const added = withScheme(themes, s);
+    themes = added.themes;
+    if (s === shown) id = added.id;
+  }
+  updateSettings(GROUPS.interface, { customThemes: themes.slice(0, CUSTOM_THEME.maxThemes), theme: id });
   return id;
 }
 
-/** A file found and where it is: its path in the folder dropped, or its name. */
-/** @typedef {{ file: File, place: string }} DroppedFile */
+/** @param {number} n @param {string} one @param {string} many */
+const count = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
-/**
- * The files dropped: each file, and the files in each folder (and its folders' a few levels down, where the system
- * lets the page read them), within the limits; how many couldn't be read, and whether there were more than the limit.
- * @param {DataTransfer} transfer
- * @returns {Promise<{ files: DroppedFile[], left: number, capped: boolean }>}
- */
-async function droppedFiles(transfer) {
-  /** @type {DroppedFile[]} */
-  const files = [];
-  let left = 0;
-  let capped = false;
-  /** Whether there's room for one more file; when there isn't, the walk stops. */
-  const room = () => !(capped ||= files.length >= CUSTOM_THEME.maxFiles);
-  /** @param {FileSystemEntry} entry @param {number} depth */
-  const walk = async (entry, depth) => {
-    try {
-      if (entry.isFile) {
-        if (!room()) return;
-        const file = await new Promise((resolve, reject) => /** @type {FileSystemFileEntry} */ (entry).file(resolve, reject));
-        return void files.push({ file, place: entry.fullPath.replace(/^\//, '') });
-      }
-      if (depth > CUSTOM_THEME.folderDepth) return;
-      const reader = /** @type {FileSystemDirectoryEntry} */ (entry).createReader();
-      for (let batch = await readBatch(reader); batch.length; batch = await readBatch(reader)) {
-        for (const child of batch) {
-          if (capped) return;
-          await walk(child, depth + 1);
-        }
-      }
-    } catch {
-      left++; // a file or folder the system won't give: counted, the rest still read
-    }
-  };
-  // Taken while the drop is still going on (a drop's items can't be read once it's over): a file as it is, a folder
-  // as an entry to walk (where the system gives one).
-  const dropped = [...transfer.items].map(item => {
-    try {
-      const entry = item.webkitGetAsEntry?.();
-      return entry?.isDirectory ? { folder: entry } : { file: item.getAsFile() };
-    } catch {
-      return { unreadable: true };
-    }
-  });
-  for (const { file, folder, unreadable } of dropped) {
-    if (unreadable) left++;
-    else if (folder && !capped) await walk(folder, 0);
-    else if (file && room()) files.push({ file, place: file.name });
-  }
-  return { files, left, capped };
-}
+/** The save button: the scheme shown, or the ticked ones. */
+const USE_LABEL = 'Use this theme';
+/** @param {number} n */
+const addLabel = n => `Add ${count(n, 'theme', 'themes')}`;
 
-/** @param {FileSystemDirectoryReader} reader @returns {Promise<FileSystemEntry[]>} */
-const readBatch = reader => new Promise((resolve, reject) => reader.readEntries(resolve, reject));
-
-// Buttons and rows take Enter as a click (data-no-enter): only "Use this theme" saves with it.
+// Buttons, rows and ticks take Enter as their own (data-no-enter): only the save button saves with it.
 const DIALOG = `
   <h3 id="si-title">Import colour schemes</h3>
   <div class="si-body">
@@ -137,10 +106,10 @@ const DIALOG = `
         <span class="dialog-sub">From iTerm2, Windows Terminal, Ghostty, Kitty, Alacritty or Warp</span>
         <span class="si-buttons"><button class="btn" data-si-choose data-no-enter autofocus>Choose files</button><button class="btn" data-si-folder data-no-enter>Choose folder</button></span>
       </div>
-      <button class="btn si-browse" data-si-browse data-no-enter>Browse iTerm2 Color Schemes</button>
       <div class="si-collection" hidden>
         <input class="field si-search" type="search" placeholder="Search schemes" spellcheck="false" autocomplete="off" aria-label="Search schemes" data-no-enter>
-        <div class="si-list" role="listbox" aria-label="Schemes"></div>
+        <label class="dialog-check si-all"><input type="checkbox" data-si-all data-no-enter> Select all</label>
+        <div class="si-list" role="listbox" aria-label="Schemes" aria-multiselectable="true"></div>
         <p class="dialog-sub si-more"></p>
       </div>
     </div>
@@ -151,25 +120,24 @@ const DIALOG = `
   </div>
   <div class="dialog-actions">
     <button class="btn" data-cancel data-no-enter>Cancel</button>
-    <button class="btn primary" data-ok disabled>Use this theme</button>
+    <button class="btn primary" data-ok disabled>${USE_LABEL}</button>
   </div>`;
 
 /** The dialog's parts it changes, and the class its status line has for an error. */
-const PART = Object.freeze({ collection: '.si-collection', list: '.si-list', more: '.si-more', search: '.si-search', status: '.si-status', preview: '.si-preview', ok: '[data-ok]', row: '.si-row' });
+const PART = Object.freeze({
+  collection: '.si-collection', list: '.si-list', more: '.si-more', search: '.si-search', status: '.si-status',
+  preview: '.si-preview', ok: '[data-ok]', row: '.si-row', all: '[data-si-all]', tick: '[data-si-tick]',
+});
 const ERROR_CLASS = 'error';
-/** Where the list's rows come from: nothing yet, files read, or the collection on GitHub. */
-const SOURCE = Object.freeze({ none: 'none', file: 'file', collection: 'collection' });
 /** The keys that move through the list: by one row, or to its ends. */
 const LIST_KEYS = Object.freeze({ ArrowDown: 1, ArrowUp: -1, Home: -Infinity, End: Infinity });
-
-/** @param {unknown} error */
-const reason = error => (error instanceof Error ? error.message : '');
-/** @param {number} n @param {string} one @param {string} many */
-const count = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+/** The key that ticks or unticks the row it's on, and the one that (with Ctrl) ticks them all. */
+const TICK_KEY = ' ';
+const ALL_KEY = 'a';
 
 /**
- * The Import dialog's state: the scheme shown, the schemes read from files, where the list's rows come from, and which
- * of the user's actions is the current one (a slower answer to an earlier one is dropped).
+ * The Import dialog's state: the scheme shown, the schemes read from files, the ones ticked, and which of the user's
+ * actions is the current one (a slower answer to an earlier one is dropped).
  */
 class SchemePicker {
   /** @param {HTMLElement} dialog */
@@ -182,18 +150,17 @@ class SchemePicker {
     this.action = 0;
     /** The latest file or folder picker opened: an older one's answer is dropped. */
     this.asked = 0;
-    /** @type {string} */
-    this.source = SOURCE.none;
-    /** The row picked (a scheme's place in fromFiles, or a collection name), kept ticked while the search shows it. */
+    /** The row picked (a scheme's place in fromFiles), kept marked while the search shows it. */
     this.selected = '';
+    /** @type {Set<string>} the rows ticked, kept while the search hides them */
+    this.ticked = new Set();
+    /** @type {string[]} the rows the search matches */
+    this.matches = [];
+    /** What the files read came to, said again once the ticks are back within the limit. */
+    this.found = '';
     this.list = find(dialog, PART.list);
     this.search = /** @type {HTMLInputElement} */ (find(dialog, PART.search));
-  }
-
-  /** A new action: what an earlier one still brings is dropped, and nothing can be used until this one shows. */
-  begin() {
-    this.show(null);
-    return ++this.action;
+    this.all = /** @type {HTMLInputElement} */ (find(dialog, PART.all));
   }
 
   /** @param {number} action */
@@ -211,37 +178,82 @@ class SchemePicker {
   /** @param {import('./schemes.js').Scheme | null} s */
   show(s) {
     this.picked = s;
-    /** @type {HTMLButtonElement} */ (find(this.dialog, PART.ok)).disabled = !s;
     find(this.dialog, PART.preview).innerHTML = s ? `<b class="si-name">${escapeHtml(s.name)}</b>${preview(s)}` : '';
+    this.syncTicks();
   }
 
-  /** A new source for the list: the old rows and search go, so a stale row can't be picked. @param {string} source */
-  start(source) {
-    const action = this.begin();
-    this.source = source;
+  /**
+   * The save button, Select all and the status line, as the ticks stand: more than the imported themes kept can't be added.
+   */
+  syncTicks() {
+    const ok = /** @type {HTMLButtonElement} */ (find(this.dialog, PART.ok));
+    const over = this.ticked.size > CUSTOM_THEME.maxThemes;
+    ok.textContent = this.ticked.size ? addLabel(this.ticked.size) : USE_LABEL;
+    ok.disabled = this.ticked.size ? over : !this.picked;
+    const shownTicked = this.matches.filter(key => this.ticked.has(key)).length;
+    this.all.checked = shownTicked > 0 && shownTicked === this.matches.length;
+    this.all.indeterminate = shownTicked > 0 && !this.all.checked;
+    if (this.found) this.say(over ? `Up to ${CUSTOM_THEME.maxThemes} imported themes are kept: tick fewer.` : this.found, over);
+  }
+
+  /** A new list: the old rows, ticks and search go, so a stale row can't be picked. */
+  start() {
+    const action = ++this.action;
     this.fromFiles = [];
     this.selected = '';
+    this.ticked.clear();
+    this.matches = [];
+    this.found = '';
     this.search.value = '';
     this.list.innerHTML = '';
     find(this.dialog, PART.more).textContent = '';
-    find(this.dialog, PART.collection).hidden = source !== SOURCE.collection;
+    find(this.dialog, PART.collection).hidden = true;
+    this.show(null);
     this.say('');
     return action;
   }
 
-  /** The rows the search matches (by name, or by the file a scheme's in), the picked one ticked. */
+  /** The rows the search matches (by name, or by the file a scheme's in), the picked one marked and the ticked ones ticked. */
   filter() {
     const query = this.search.value.trim().toLowerCase();
-    /** @type {[string, string, string][]} each row's key, label and file */
-    const rows = this.source === SOURCE.file ? this.fromFiles.map((f, i) => [String(i), f.scheme.name, f.place])
-      : this.source === SOURCE.collection ? collectionNames().map(n => [n, n, '']) : [];
-    const matches = rows.filter(([, label, place]) => `${label}\n${place}`.toLowerCase().includes(query));
-    this.list.innerHTML = matches.slice(0, MAX_LISTED).map(([key, label, place]) => {
+    const matches = this.fromFiles.map((f, i) => ({ key: String(i), label: f.scheme.name, place: f.place }))
+      .filter(r => `${r.label}\n${r.place}`.toLowerCase().includes(query));
+    this.matches = matches.map(r => r.key);
+    this.list.innerHTML = matches.slice(0, MAX_LISTED).map(({ key, label, place }) => {
       const on = key === this.selected;
+      const ticked = this.ticked.has(key);
+      const k = escapeHtml(key);
       const where = place ? `<span class="si-place">${escapeHtml(place)}</span>` : '';
-      return `<button class="si-row${on ? ' on' : ''}" role="option" aria-selected="${on}" data-no-enter data-si-key="${escapeHtml(key)}"><span class="si-label">${escapeHtml(label)}</span>${where}</button>`;
+      return `<div class="si-item" role="none"><input type="checkbox" class="si-tick" data-si-tick="${k}" data-no-enter tabindex="-1" aria-label="Add ${escapeHtml(label)}"${ticked ? ' checked' : ''}>`
+        + `<button class="si-row${on ? ' on' : ''}" role="option" aria-selected="${on}" aria-checked="${ticked}" data-no-enter data-si-key="${k}"><span class="si-label">${escapeHtml(label)}</span>${where}</button></div>`;
     }).join('') || '<p class="dialog-sub">No schemes match.</p>';
     find(this.dialog, PART.more).textContent = matches.length > MAX_LISTED ? `The first ${MAX_LISTED} of ${matches.length} shown: search to find others.` : '';
+    this.syncTicks();
+  }
+
+  /** @param {string} key @param {boolean} on */
+  tick(key, on) {
+    if (on) this.ticked.add(key);
+    else this.ticked.delete(key);
+    const box = /** @type {HTMLInputElement | null} */ (this.list.querySelector(`[data-si-tick="${CSS.escape(key)}"]`));
+    if (box) box.checked = on;
+    box?.nextElementSibling?.setAttribute('aria-checked', String(on));
+    this.syncTicks();
+  }
+
+  /** @param {string} key */
+  toggle(key) {
+    this.tick(key, !this.ticked.has(key));
+  }
+
+  /** Select all: ticks every row the search matches, or unticks them when they all are. */
+  tickAll() {
+    const on = !this.matches.every(key => this.ticked.has(key));
+    for (const key of this.matches) {
+      if (on) this.ticked.add(key);
+      else this.ticked.delete(key);
+    }
+    this.filter();
   }
 
   /**
@@ -270,15 +282,15 @@ class SchemePicker {
     ].filter(Boolean);
     if (!this.fromFiles.length) return this.say(`No colour schemes found${out.length ? ` (${out.join(', ')})` : ''}.`, true);
     find(this.dialog, PART.collection).hidden = false;
+    this.found = `${count(this.fromFiles.length, 'scheme', 'schemes')} found${out.length ? `; ${out.join(', ')}` : ''}.`;
     this.selected = '0';
     this.filter();
     this.show(this.fromFiles[0].scheme);
-    this.say(`${count(this.fromFiles.length, 'scheme', 'schemes')} found${out.length ? `; ${out.join(', ')}` : ''}.`);
   }
 
   /** @param {DataTransfer} transfer files or folders dropped from the file manager */
   async drop(transfer) {
-    const action = this.start(SOURCE.file);
+    const action = this.start();
     const { files, left, capped } = await droppedFiles(transfer);
     // One at a time, within the total, so a big drop isn't all held at once; a newer action stops it.
     let room = CUSTOM_THEME.maxTotalBytes;
@@ -300,11 +312,10 @@ class SchemePicker {
 
   /** @param {boolean} folder a folder's files, or files picked; cancelled, the dialog keeps what it shows */
   async choose(folder) {
-    // Its own count, so a picker cancelled leaves a list still loading from GitHub to finish.
     const asked = ++this.asked;
     const reply = await request(PAGE.schemeOpen, { folder });
     if (asked !== this.asked || !this.dialog.isConnected || (!reply.files && !reply.error)) return;
-    this.start(SOURCE.file);
+    this.start();
     if (reply.error) return this.say(reply.error, true);
     const files = reply.files ?? [];
     // The host reads one past the limit, so a folder with more says so.
@@ -312,52 +323,43 @@ class SchemePicker {
     this.readFiles(files, (reply.skipped ?? 0) - over, over > 0);
   }
 
-  async browse() {
-    const action = this.start(SOURCE.collection);
-    this.list.innerHTML = '<p class="dialog-sub">Loading the list from GitHub…</p>';
-    try {
-      await fetchCollection();
-      if (!this.current(action)) return;
-      this.filter();
-      this.search.focus();
-    } catch (error) {
-      if (!this.current(action)) return;
-      this.list.innerHTML = '';
-      this.say(`Couldn’t load the list from GitHub. ${reason(error)}`, true);
-    }
-  }
-
-  /** @param {HTMLElement} row @param {boolean} [stepping] reached with ↑ or ↓: a fetch waits a moment, in case it's passed */
-  async pick(row, stepping = false) {
+  /** @param {HTMLElement} row */
+  pick(row) {
     const key = /** @type {string} */ (row.dataset.siKey);
     this.selected = key;
     for (const r of this.list.querySelectorAll(PART.row)) {
       r.classList.toggle('on', r === row);
       r.setAttribute('aria-selected', String(r === row));
     }
-    if (this.source === SOURCE.file) return this.show(this.fromFiles[Number(key)]?.scheme ?? null);
-    if (this.source !== SOURCE.collection) return;
-    const action = this.begin();
-    this.say('Loading…');
-    if (stepping) await new Promise(resolve => setTimeout(resolve, FETCH_PAUSE_MS));
-    if (!this.current(action)) return;
-    try {
-      const scheme = await fetchScheme(key);
-      if (!this.current(action)) return;
-      this.show(scheme);
-      this.say('From iTerm2 Color Schemes on GitHub.');
-    } catch (error) {
-      if (this.current(action)) this.say(`Couldn’t load ${key}. ${reason(error)}`, true);
-    }
+    this.show(this.fromFiles[Number(key)]?.scheme ?? null);
+  }
+
+  /** The ticked schemes saved, or the one shown; the id of the one put on screen, or null when there's nothing to save. */
+  saveChosen() {
+    if (!this.ticked.size) return this.picked && save([this.picked], this.picked);
+    if (this.ticked.size > CUSTOM_THEME.maxThemes) return null;
+    const schemes = this.fromFiles.filter((_, i) => this.ticked.has(String(i))).map(f => f.scheme);
+    // The one previewed goes on screen when it's among them, else the first.
+    return save(schemes, this.picked && schemes.includes(this.picked) ? this.picked : schemes[0]);
   }
 
   /**
-   * ↑ ↓ Home End in the list or its search box: the row beside the picked one (or the first or last) is picked and shown.
+   * Keys in the list or its search box: ↑ ↓ Home End pick and show the row beside the picked one (or the first or
+   * last); Space on a row ticks it; Ctrl+A in the list ticks them all.
    * @param {KeyboardEvent} e
    */
   step(e) {
-    const by = LIST_KEYS[/** @type {keyof typeof LIST_KEYS} */ (e.key)];
     const target = targetOf(e);
+    const row = /** @type {HTMLElement | null} */ (target.closest(PART.row));
+    if (e.key === TICK_KEY && row && this.list.contains(row)) {
+      this.toggle(/** @type {string} */ (row.dataset.siKey));
+      return true;
+    }
+    if (e.key.toLowerCase() === ALL_KEY && (e.ctrlKey || e.metaKey) && this.list.contains(target)) {
+      this.tickAll();
+      return true;
+    }
+    const by = LIST_KEYS[/** @type {keyof typeof LIST_KEYS} */ (e.key)];
     const inList = target === this.search || this.list.contains(target);
     // Home and End move the caret in the search box; only ↑ and ↓ leave it.
     if (by === undefined || !inList || (target === this.search && !Number.isFinite(by))) return false;
@@ -367,13 +369,13 @@ class SchemePicker {
     const next = Number.isFinite(by) ? Math.min(rows.length - 1, Math.max(0, at < 0 ? 0 : at + by)) : by < 0 ? 0 : rows.length - 1;
     if (target !== this.search) rows[next].focus(); // from the search box, typing goes on there
     rows[next].scrollIntoView({ block: 'nearest' });
-    if (next !== at) this.pick(rows[next], true); // at an end the key does nothing, so the scheme shown stays
+    if (next !== at) this.pick(rows[next]); // at an end the key does nothing, so the scheme shown stays
     return true;
   }
 }
 
 /**
- * The Import dialog. Resolves with the imported theme's id, or null when cancelled.
+ * The Import dialog. Resolves with the id of the theme put on screen, or null when cancelled.
  * @returns {Promise<string | null>}
  */
 export function importScheme() {
@@ -391,10 +393,21 @@ export function importScheme() {
       const row = /** @type {HTMLElement | null} */ (target.closest('[data-si-key]'));
       if (target.closest('[data-si-choose]')) picker.choose(false);
       else if (target.closest('[data-si-folder]')) picker.choose(true);
-      else if (target.closest('[data-si-browse]')) picker.browse();
+      else if (row && (e.ctrlKey || e.metaKey)) picker.toggle(/** @type {string} */ (row.dataset.siKey));
       else if (row) picker.pick(row);
     });
+    dialog.addEventListener('change', e => {
+      const box = /** @type {HTMLInputElement} */ (targetOf(e));
+      if (box.matches(PART.all)) picker.tickAll();
+      else if (box.matches(PART.tick)) picker.tick(/** @type {string} */ (box.dataset.siTick), box.checked);
+    });
     picker.search.addEventListener('input', () => picker.filter());
-    return { submit: () => { if (picker.picked) close(save(picker.picked)); }, key: e => picker.step(e) };
+    return {
+      submit: () => {
+        const id = picker.saveChosen();
+        if (id) close(id);
+      },
+      key: e => picker.step(e),
+    };
   });
 }

@@ -1,7 +1,7 @@
 // @ts-check
-// Settings › Appearance › Theme: the colour themes, well-known schemes first and then Termilly's own, showing only
-// dark or light ones, and following the system's light and dark mode with a theme picked for each. Appearance's other tabs
-// are Text (appearancetext.js) and Layout (appearancelayout.js).
+// Settings › Appearance › Theme: the colour themes, well-known schemes first and then Termilly's own, searching them
+// and showing only dark or light ones, and following the system's light and dark mode with a theme picked for each.
+// Appearance's other tabs are Text (appearancetext.js) and Layout (appearancelayout.js).
 
 import { sys, SYSTEM_NAME } from '../host.js';
 import { getSetting, GROUPS } from '../store.js';
@@ -23,6 +23,8 @@ const DARK_PICK = 'interface.themeDark';
 const LIGHT_PICK = 'interface.themeLight';
 /** A theme's card in the gallery, and the class that dims the picks while the system isn't followed. */
 const THEME_CARD = '.theme-card';
+const THEME_SEARCH = 'theme-search';
+const THEME_NONE = '.theme-none';
 const PICKS_UNUSED = 'unused';
 /** How long each line of "output" is in a theme card's small terminal, in percent. */
 const INK_WIDTHS = [70, 45, 58];
@@ -31,6 +33,8 @@ const INK_WIDTHS = [70, 45, 58];
 const FILTER = Object.freeze({ all: 'all', dark: THEME_BASE.dark, light: THEME_BASE.light });
 /** @type {string} */
 let filter = FILTER.all;
+/** The search typed, kept while the page is drawn again (after an import). */
+let query = '';
 
 /** The built-in themes in the gallery's order: the well-known schemes (most-starred first), then Termilly's own. */
 const ORDERED = [...POPULAR_THEME_IDS.flatMap(id => THEMES.filter(t => t.id === id)), ...THEMES.filter(t => !POPULAR_THEME_IDS.includes(t.id))];
@@ -47,12 +51,13 @@ const mini = p => `<span class="tc-win" style="--p-bg:${cssColor(p.bg)};--p-side
   </span>`;
 
 /**
- * A theme's card: its small window, its name, and the well-known scheme it follows, or that it's imported.
+ * A theme's card: its small window, its name, and the well-known scheme it follows, or that it's imported (searched by
+ * its name or the scheme's).
  * @param {import('../themes.js').Theme} t
  */
 const card = t => {
   const note = t.imported ? IMPORTED_NOTE : t.like;
-  return `<button class="theme-card" data-theme-id="${t.id}" data-base="${t.base}"${t.imported ? ` title="${REMOVE_HINT}"` : ''}>${mini(t.preview)}<span class="tc-name">${escapeHtml(t.name)}</span>${note ? `<span class="tc-like">${escapeHtml(note)}</span>` : ''}</button>`;
+  return `<button class="theme-card" data-theme-id="${t.id}" data-base="${t.base}" data-hay="${escapeHtml(`${t.name} ${t.like ?? ''}`.toLowerCase())}"${t.imported ? ` title="${REMOVE_HINT}"` : ''}>${mini(t.preview)}<span class="tc-name">${escapeHtml(t.name)}</span>${note ? `<span class="tc-like">${escapeHtml(note)}</span>` : ''}</button>`;
 };
 const IMPORTED_NOTE = 'Imported';
 const REMOVE_HINT = 'Imported. Right-click to remove it.';
@@ -90,13 +95,18 @@ const picker = (key, base, label) => `<label class="theme-pick"><span>${label}</
 const following = () => getSetting(THEME_SETTING) === theme.system;
 
 /**
- * Shows the cards of the kind the filter picks.
+ * Shows the cards the search and the filter match, or a line saying none do.
  * @param {HTMLElement} root
  */
 function applyFilter(root) {
+  const words = query.trim().toLowerCase();
+  let any = false;
   for (const c of /** @type {NodeListOf<HTMLElement>} */ (root.querySelectorAll(THEME_CARD))) {
-    c.hidden = filter !== FILTER.all && c.dataset.base !== filter;
+    c.hidden = (filter !== FILTER.all && c.dataset.base !== filter) || !(c.dataset.hay ?? '').includes(words);
+    any ||= !c.hidden;
   }
+  const none = /** @type {HTMLElement | null} */ (root.querySelector(THEME_NONE));
+  if (none) none.hidden = any;
 }
 
 /**
@@ -126,9 +136,10 @@ const APPEARANCE = {
       <button class="switch" role="switch" data-theme-follow aria-label="Follow the system"><span></span></button></span>`,
     { keywords: 'system dark light mode automatic auto night day' }))
     + group('', row('Theme', 'Colours for the app and terminals.', `<div class="theme-tools">
+        <input class="field ${THEME_SEARCH}" type="search" placeholder="Search themes" spellcheck="false" autocomplete="off" aria-label="Search themes" value="${escapeHtml(query)}">
         <span class="seg theme-filter">${Object.values(FILTER).map(f => `<button data-theme-filter="${f}">${f === FILTER.all ? 'All' : f === FILTER.dark ? 'Dark' : 'Light'}</button>`).join('')}</span>
         <button class="btn" data-theme-import>Import</button>
-      </div><span class="seg theme-cards">${gallery().map(card).join('')}</span>`,
+      </div><span class="seg theme-cards">${gallery().map(card).join('')}</span><p class="set-desc theme-none" hidden>No themes match.</p>`,
     { stack: true, keywords: `colour color look palette scheme ${THEMES.map(t => `${t.name} ${t.like ?? ''}`).join(' ').toLowerCase()}` })),
   drawn: root => { applyFilter(root); sync(root); },
   sync,
@@ -157,6 +168,12 @@ const APPEARANCE = {
     applyFilter(body);
     sync(body);
     return true;
+  },
+  input(e) {
+    const box = /** @type {HTMLInputElement} */ (targetOf(e));
+    if (!box.classList.contains(THEME_SEARCH)) return;
+    query = box.value;
+    applyFilter(body);
   },
 };
 

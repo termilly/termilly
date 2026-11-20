@@ -80,21 +80,6 @@ test('a file that is no scheme says so and offers nothing to use',() => withImpo
   assert.equal(await app.eval(t => t.$('.scheme-import [data-ok]').disabled), true);
 }));
 
-test('Browse lists the collection, searches it and previews a scheme (GitHub stubbed)', () => withImport('import-browse', async app => {
-  await app.eval((t, scheme) => {
-    globalThis.fetch = async url => String(url).includes('api.github.com')
-      ? new Response(JSON.stringify([{ name: 'Dracula.json', type: 'file' }, { name: 'Night Owl.json', type: 'file' }, { name: 'README.md', type: 'file' }]))
-      : new Response(scheme);
-  }, fixture('Dracula.json'));
-  await app.eval(t => t.click('[data-si-browse]'));
-  await until(() => app.eval(t => t.$$('.si-row').length === 2), 'two schemes listed');
-  await app.type('.si-search', 'drac');
-  await until(() => app.eval(t => t.$$('.si-row').map(r => r.textContent).join() === 'Dracula'), 'the search');
-  await app.eval(t => t.click('.si-row'));
-  await until(async () => (await app.text('.si-name')) === 'Dracula', 'the preview');
-  assert.match(await app.text('.si-status'), /iTerm2 Color Schemes/);
-}));
-
 test('several files dropped fill the list, and ↑ and ↓ preview each in turn', () => withImport('import-many', async app => {
   const nord = JSON.stringify({ ...JSON.parse(fixture('Dracula.json')), name: 'Nord-ish', background: '#2e3440' });
   await dropAll(app, [['Dracula.conf', fixture('Dracula.conf')], ['nord.json', nord], ['notes.txt', 'not a scheme']]);
@@ -112,15 +97,21 @@ test('several files dropped fill the list, and ↑ and ↓ preview each in turn'
   await until(async () => (await iface(app)).theme === 'custom-dracula', 'the one shown is used');
 }));
 
-test('↓ in the collection’s search box previews the first row and keeps typing there (GitHub stubbed)', () => withImport('import-browse-keys', async app => {
-  await app.eval((t, scheme) => {
-    globalThis.fetch = async url => String(url).includes('api.github.com')
-      ? new Response(JSON.stringify([{ name: 'Dracula.json', type: 'file' }, { name: 'Night Owl.json', type: 'file' }]))
-      : new Response(scheme);
-  }, fixture('Dracula.json'));
-  await app.eval(t => t.click('[data-si-browse]'));
-  await until(() => app.eval(t => t.$$('.si-row').length === 2), 'listed');
-  await app.key('.si-search', 'ArrowDown');
-  await until(async () => (await app.text('.si-name')) === 'Dracula', 'the first previewed');
-  assert.equal(await app.eval(t => t.$('.si-search') === t.$('.si-search').ownerDocument.activeElement), true);
+test('ticked schemes are added at once, the one shown put on screen', () => withImport('import-tick', async app => {
+  const named = (name, background) => JSON.stringify({ ...JSON.parse(fixture('Dracula.json')), name, background });
+  await dropAll(app, [['a.json', named('One', '#111111')], ['b.json', named('Two', '#222222')], ['c.json', named('Three', '#333333')]]);
+  await until(() => app.eval(t => t.$$('.si-row').length === 3), 'three listed');
+  assert.equal(await app.text('.scheme-import [data-ok]'), 'Use this theme');
+  await app.eval(t => { t.$('[data-si-all]').click(); });
+  await until(async () => (await app.text('.scheme-import [data-ok]')) === 'Add 3 themes', 'all ticked');
+  await app.key('.si-row[data-si-key="0"]', ' ');
+  await until(async () => (await app.text('.scheme-import [data-ok]')) === 'Add 2 themes', 'Space unticks a row');
+  assert.equal(await app.eval(t => t.$('[data-si-all]').indeterminate), true);
+  await app.eval(t => t.click('.si-row[data-si-key="2"]'));
+  await until(async () => (await app.text('.si-name')) === 'Three', 'Three previewed');
+  await app.eval(t => t.click('.scheme-import [data-ok]'));
+  await app.waitFor('.scheme-import', { gone: true });
+  const saved = await iface(app);
+  assert.deepEqual(saved.customThemes.map(t => t.name), ['Two', 'Three']);
+  assert.equal(saved.theme, 'custom-three', 'the one shown goes on screen');
 }));

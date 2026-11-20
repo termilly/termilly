@@ -50,13 +50,21 @@ test('Appearance has Theme, Text and Layout tabs, and a tab keeps the title Appe
   assert.equal(await app.eval(t => t.$('#set-body').getAttribute('aria-labelledby')), 'set-tab-appearance-text');
 }));
 
-test('the gallery is one list, well-known schemes first with their names, and filters dark and light', () => withAppearance('appearance-gallery', async app => {
+test('the gallery is one list, well-known schemes first with their names, searches and filters dark and light', () => withAppearance('appearance-gallery', async app => {
   const names = await app.eval(t => t.$$('.theme-cards .tc-name').map(n => n.textContent));
   assert.deepEqual(names.slice(0, 3), ['Midnight', 'Catppuccin Mocha', 'Catppuccin Latte']);
   assert.equal(names[12], 'Dark', 'Termilly’s own come after the 12 well-known ones');
   assert.equal(await app.eval(t => t.$$('.theme-cards').length), 1);
   assert.equal(await app.text('.theme-card[data-theme-id="midnight"] .tc-like'), 'Dracula');
   assert.equal((await shownCards(app)).length, await app.eval(t => t.$$('.theme-card').length), 'all themes show');
+  await app.type('.theme-search', 'dracula');
+  await until(async () => (await shownCards(app)).join() === 'Midnight', 'Dracula finds Midnight');
+  await app.type('.theme-search', 'nothing like this');
+  await until(() => app.eval(t => !t.$('.theme-none').hidden), 'the no-match line');
+  await app.type('.theme-search', '');
+  await until(async () => (await shownCards(app)).length === await app.eval(t => t.$$('.theme-card').length), 'all back');
+  const gap = await app.eval(t => t.$('.theme-cards').getBoundingClientRect().top - t.$('.theme-tools').getBoundingClientRect().bottom);
+  assert.ok(gap >= 14, `room between the tools and the cards (${gap}px)`);
   await app.eval(t => t.click('[data-theme-filter="light"]'));
   const light = await app.eval(t => t.$$('.theme-card').filter(c => c.getClientRects().length).map(c => c.dataset.base));
   assert.ok(light.length > 0 && light.every(b => b === 'light'), 'only light themes');
