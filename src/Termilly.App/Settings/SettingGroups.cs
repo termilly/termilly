@@ -78,8 +78,6 @@ internal sealed record InterfaceSettings
     private const int MaxShortcutText = 40;
     /// <summary>The longest theme id js/themes.js uses.</summary>
     private const int MaxThemeId = 40;
-    /// <summary>The most imported colour schemes kept.</summary>
-    private const int MaxCustomThemes = 50;
 
     public string Theme { get; init; } = SettingValues.Theme.FirstStart;
     /// <summary>The theme "system" shows while the system is in dark mode.</summary>
@@ -137,7 +135,7 @@ internal sealed record InterfaceSettings
         ThemeDark = IsPick(ThemeDark) ? ThemeDark : SettingValues.Theme.Dark,
         ThemeLight = IsPick(ThemeLight) ? ThemeLight : SettingValues.Theme.Light,
         CustomThemes = (CustomThemes ?? []).Select(t => t?.Normalize()).OfType<CustomTheme>().Where(t => IsThemeId(t.Id))
-            .DistinctBy(t => t.Id).Take(MaxCustomThemes).ToList(),
+            .DistinctBy(t => t.Id).Take(CustomThemeLimits.MaxThemes).ToList(),
         Layout = SettingChecks.OneOf(Layout, SettingValues.Layout.All, SettingValues.Layout.Default),
         PaneNames = SettingChecks.OneOf(PaneNames, SettingValues.PaneNames.All, SettingValues.PaneNames.Default),
         MinimizeTo = SettingChecks.OneOf(MinimizeTo, SettingValues.MinimizeTo.All, SettingValues.MinimizeTo.Default),

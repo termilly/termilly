@@ -18,9 +18,6 @@ internal static class SchemeFiles
 /// </summary>
 internal sealed class SchemeFileHandler(PageChannel page, IFileDialogs dialogs) : IMessageHandler
 {
-    /// <summary>The biggest file read: a scheme is a few kilobytes; a whole Windows Terminal settings file fits too.</summary>
-    private const long MaxBytes = 512 * 1024;
-
     public void Register(MessageRouter router) => router.On<FromPage.SchemeOpen>(m => OpenAsync(m.RequestId));
 
     private async Task OpenAsync(string? requestId)
@@ -33,12 +30,20 @@ internal sealed class SchemeFileHandler(PageChannel page, IFileDialogs dialogs) 
         var name = Path.GetFileName(file);
         try
         {
-            if (new FileInfo(file).Length > MaxBytes)
+            // Read one byte past the limit, so a file that's bigger (or grows while read) is told apart without reading it all.
+            var bytes = new byte[CustomThemeLimits.MaxFileBytes + 1];
+            int read;
+            await using (var stream = File.OpenRead(file))
+            {
+                read = await stream.ReadAtLeastAsync(bytes, bytes.Length, throwOnEndOfStream: false).ConfigureAwait(false);
+            }
+            if (read > CustomThemeLimits.MaxFileBytes)
             {
                 page.Post(new ToPage.SchemeOpened(requestId, name, Error: $"{name} is too big to be a colour scheme."));
                 return;
             }
-            page.Post(new ToPage.SchemeOpened(requestId, name, await File.ReadAllTextAsync(file).ConfigureAwait(false)));
+            using var reader = new StreamReader(new MemoryStream(bytes, 0, read), detectEncodingFromByteOrderMarks: true);
+            page.Post(new ToPage.SchemeOpened(requestId, name, await reader.ReadToEndAsync().ConfigureAwait(false)));
         }
         catch (Exception e) when (Storage.IsFileError(e))
         {

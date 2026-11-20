@@ -52,7 +52,27 @@ test('a dropped scheme shows, is used, and then is removed with a right-click', 
   assert.equal((await iface(app)).theme, 'dark', 'the theme on screen gave way to Dark');
 }));
 
-test('a file that is no scheme says so and offers nothing to use', () => withImport('import-bad', async app => {
+test('two names that make the same id are two themes, and the same name again replaces its own', () => withImport('import-names', async app => {
+  const named = name => JSON.stringify({ ...JSON.parse(fixture('Dracula.json')), name });
+  const importNamed = async name => {
+    if (!(await app.eval(t => !!t.$('.scheme-import')))) {
+      await app.eval(t => t.click('[data-theme-import]'));
+      await app.waitFor('.scheme-import');
+    }
+    await drop(app, `${name}.json`, named(name));
+    await until(async () => (await app.text('.si-name')) === name, `${name} previewed`);
+    await app.eval(t => t.click('.scheme-import [data-ok]'));
+    await app.waitFor('.scheme-import', { gone: true });
+  };
+  await importNamed('Night Owl');
+  await importNamed('Night-Owl');
+  await importNamed('night owl');
+  const saved = (await iface(app)).customThemes;
+  assert.deepEqual(saved.map(t => t.name), ['night owl', 'Night-Owl']);
+  assert.equal(new Set(saved.map(t => t.id)).size, 2);
+}));
+
+test('a file that is no scheme says so and offers nothing to use',() => withImport('import-bad', async app => {
   await drop(app, 'notes.txt', 'just some notes');
   await until(() => app.eval(t => t.$('.si-status').classList.contains('error')), 'the error line');
   assert.match(await app.text('.si-status'), /isn’t a colour scheme/);

@@ -19,7 +19,7 @@ public sealed class CustomThemeTests
 
     [Fact]
     public void A_long_name_is_cut() =>
-        Assert.Equal(CustomTheme.MaxName, Theme(name: new string('x', 200)).Normalize()?.Name.Length);
+        Assert.Equal(CustomThemeLimits.MaxName, Theme(name: new string('x', 200)).Normalize()?.Name.Length);
 
     [Theory]
     [InlineData("dracula")] // not an imported theme's id: it could take a built-in one's

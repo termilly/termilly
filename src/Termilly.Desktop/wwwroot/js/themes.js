@@ -335,8 +335,8 @@ function importedSpec(c) {
       text: c.foreground, muted: blend(c.foreground, c.background, DERIVED.muted), accent: c.ansi[ANSI_INDEX.blue],
       attention: c.ansi[ANSI_INDEX.yellow], danger: c.ansi[ANSI_INDEX.red], ok: c.ansi[ANSI_INDEX.green],
     },
-    // As on every dark theme here, ANSI black is the background (PSReadLine paints with it).
-    term: { bg: c.background, fg: c.foreground, cursor: c.cursor ?? undefined, ansi: dark ? [c.background, ...c.ansi.slice(1)] : [...c.ansi] },
+    // The scheme's own 16, black too: it's the user's (the built-in dark themes make black their background instead).
+    term: { bg: c.background, fg: c.foreground, cursor: c.cursor ?? undefined, ansi: [...c.ansi] },
   };
 }
 

@@ -176,6 +176,15 @@ export const COMPACT_LIMIT = Object.freeze({
   maxLines: 2000,
 });
 
+/** C#: CustomThemeLimits (Settings/SettingRecords.cs). */
+export const CUSTOM_THEME = Object.freeze({
+  idPrefix: 'custom-',
+  ansiCount: 16,
+  maxName: 60,
+  maxThemes: 50,
+  maxFileBytes: 524288,
+});
+
 /** C#: ChangeSources (Changes/ChangeModel.cs). */
 export const CHANGE_SOURCE = Object.freeze({
   snapshot: 'snapshot',

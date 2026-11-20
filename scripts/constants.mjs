@@ -35,6 +35,7 @@ const SOURCES = [
   { file: 'Messaging/Compact.cs', cls: 'CompactKinds', js: 'COMPACT_KIND' },
   { file: 'Messaging/Compact.cs', cls: 'CompactVerbs', js: 'COMPACT_VERB' },
   { file: 'Messaging/Compact.cs', cls: 'CompactLimits', js: 'COMPACT_LIMIT' },
+  { file: 'Settings/SettingRecords.cs', cls: 'CustomThemeLimits', js: 'CUSTOM_THEME' },
   { file: 'Changes/ChangeModel.cs', cls: 'ChangeSources', js: 'CHANGE_SOURCE' },
   { file: 'Changes/ChangeModel.cs', cls: 'ChangeKinds', js: 'CHANGE_KIND' },
   { file: '../Shared/HookEvents.cs', cls: 'HookEvents', js: 'HOOK_EVENT' },
