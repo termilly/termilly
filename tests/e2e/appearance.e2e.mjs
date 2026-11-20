@@ -63,7 +63,7 @@ test('the gallery is one list, well-known schemes first with their names, search
   await until(() => app.eval(t => !t.$('.theme-none').hidden), 'the no-match line');
   await app.type('.theme-search', '');
   await until(async () => (await shownCards(app)).length === await app.eval(t => t.$$('.theme-card').length), 'all back');
-  const gap = await app.eval(t => t.$('.theme-cards').getBoundingClientRect().top - t.$('.theme-tools').getBoundingClientRect().bottom);
+  const gap = await app.eval(t => t.$('.theme-cards').getBoundingClientRect().top - t.$('.theme-search').getBoundingClientRect().bottom);
   assert.ok(gap >= 14, `room between the tools and the cards (${gap}px)`);
   await app.eval(t => t.click('[data-theme-filter="light"]'));
   const light = await app.eval(t => t.$$('.theme-card').filter(c => c.getClientRects().length).map(c => c.dataset.base));

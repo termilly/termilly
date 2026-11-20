@@ -118,6 +118,8 @@
 .set-control { display: flex; flex: none; align-items: center; }
 .set-row.stack .set-control { flex-direction: column; align-items: stretch; }
 .set-control .seg button { display: inline-flex; align-items: center; gap: 6px; }
+/* A theme card's parts take its width, so a long name is cut short (…) inside it. */
+.set-control .seg.theme-cards button { align-items: stretch; }
 .set-control .seg svg { width: 13px; height: 13px; stroke-width: 1.5; }
 .set-control select.field, .set-control .field.dropdown { min-width: 220px; }
 .set-control .size-control { width: 300px; }
