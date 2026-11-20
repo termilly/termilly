@@ -111,7 +111,11 @@ body[data-bar-beside="left"] #titlebar { grid-template-columns: minmax(max-conte
 #titlebar .tb-left > .toolbar { flex: none; margin-left: 12px; }
 /* There the workspace's name takes no room while it's hidden (the sidebar is open), and in a narrow window the app's name
    goes (js/toolbar.js). */
-body[data-bar-beside="left"][data-sidebar="open"] .crumb, #titlebar.tight .brand { display: none; }
+body[data-bar-beside="left"][data-sidebar="open"] .crumb { display: none; }
+/* The brand goes in a narrow window, in Minimal's strip and on macOS (the Finder names the app), but not the update
+   notice in it (js/update.js): a new version always shows. The brand takes no room while the notice is hidden too. */
+:is(#titlebar.tight, body[data-layout="minimal"] #titlebar, :root[data-os="mac"] #titlebar) .brand > :not(.update-chip),
+:is(#titlebar.tight, body[data-layout="minimal"] #titlebar, :root[data-os="mac"] #titlebar) .brand:not(:has(> .update-chip:not([hidden]))) { display: none; }
 body.moving-bar, body.moving-bar * { cursor: grabbing !important; -webkit-user-select: none; user-select: none; }
 /* While it's dragged the whole bar lights up, so it's plain what's moving and where it lands; no single button looks
    hovered. A shadow, not a border, so nothing in the layout moves. */

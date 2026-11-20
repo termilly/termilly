@@ -71,6 +71,23 @@ step('Minimal moves the toolbar into a hidden dock and the sidebar away', async 
   await app.screenshot('02-minimal-hidden');
 });
 
+step('a new version\'s notice shows on the strip, without the rest of the brand', async () => {
+  const look = shown => app.eval((t, shown) => {
+    const chip = globalThis.document.getElementById('update-chip');
+    chip.hidden = !shown;
+    chip.innerHTML = '<span>Update 9.9</span>';
+    const css = el => globalThis.getComputedStyle(el).display;
+    const box = chip.getBoundingClientRect();
+    const strip = globalThis.document.getElementById('titlebar').getBoundingClientRect();
+    const crumb = globalThis.document.getElementById('crumb').getBoundingClientRect();
+    return { chip: box.width > 0 && box.top >= strip.top && box.bottom <= strip.bottom && box.left >= crumb.right, logo: css(globalThis.document.querySelector('#titlebar .brand .logo')), brand: css(globalThis.document.querySelector('#titlebar .brand')) };
+  }, shown);
+  assert.deepEqual(await look(true), { chip: true, logo: 'none', brand: 'flex' });
+  await pause(1000); // the screenshot grabs the screen, which WebKit repaints a moment later
+  await app.screenshot('02b-minimal-update');
+  assert.deepEqual(await look(false), { chip: false, logo: 'none', brand: 'none' });
+});
+
 step('switching workspaces keeps the strip, the window buttons and the dock as they were', async () => {
   const look = () => app.eval(() => ({
     controlsAtRight: globalThis.innerWidth - globalThis.document.querySelector('#titlebar .window-controls').getBoundingClientRect().right < 20,
