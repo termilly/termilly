@@ -179,3 +179,22 @@ test('the counter shows the imported themes with the ones added, and over the li
   await until(async () => (await app.text('.si-count')) === '500/500', 'One alone replaces its namesake');
   assert.equal(await app.eval(t => t.$('.scheme-import [data-ok]').disabled), false);
 }));
+
+test('every scheme found is listed, and Select all ticks as many as there is room for', () => withImport('import-room', async app => {
+  await app.eval(async t => {
+    const { updateSettings } = await t.import('preferences.js');
+    const { GROUPS } = await t.import('store.js');
+    const base = { background: '#000000', foreground: '#ffffff', cursor: null, ansi: Array(16).fill('#808080') };
+    updateSettings(GROUPS.interface, { customThemes: Array.from({ length: 300 }, (_, i) => ({ ...base, id: `custom-old${i}`, name: `Old ${i}` })) });
+  });
+  const scheme = JSON.parse(fixture('Dracula.json'));
+  await dropAll(app, Array.from({ length: 250 }, (_, i) => [`s${i}.json`, JSON.stringify({ ...scheme, name: `New ${i}` })]));
+  await until(() => app.eval(t => t.$$('.si-row').length === 250), 'all 250 listed');
+  await app.eval(t => { t.$('[data-si-all]').click(); });
+  await until(async () => (await app.text('.si-count')) === '500/500', 'filled to the limit');
+  assert.equal(await app.text('.scheme-import [data-ok]'), 'Add 200 themes');
+  assert.equal(await app.text('.si-status'), 'Ticked the first 200 that fit, up to 500 imported themes.');
+  assert.equal(await app.eval(t => t.$('.scheme-import [data-ok]').disabled), false);
+  await app.eval(t => { t.$('[data-si-all]').click(); });
+  await until(async () => (await app.text('.si-count')) === '301/500', 'no room left: Select all unticks them');
+}));

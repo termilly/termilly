@@ -17,8 +17,6 @@ import { find, targetOf } from './dom.js';
 /** How much of a name its id keeps, and the id's name part when nothing of the name fits one (no Latin letters). */
 const MAX_ID_NAME = 30;
 const UNNAMED_ID = 'scheme';
-/** The most rows the list shows at once; the search narrows it. */
-const MAX_LISTED = 200;
 
 /**
  * A scheme's small terminal, in its colours.
@@ -99,6 +97,28 @@ function themesAfter(schemes) {
   return (state.settings.interface.customThemes ?? []).filter(t => !added.has(nameKey(t.name))).length + added.size;
 }
 
+/**
+ * The schemes that still fit beside the ones chosen, in order: one of a name already there or chosen takes no more room.
+ * @template {{ scheme: import('./schemes.js').Scheme }} T
+ * @param {import('./schemes.js').Scheme[]} chosen
+ * @param {T[]} candidates
+ */
+function fitting(chosen, candidates) {
+  /** @type {Map<string, number>} how many saved themes have each name */
+  const saved = new Map();
+  for (const t of state.settings.interface.customThemes ?? []) saved.set(nameKey(t.name), (saved.get(nameKey(t.name)) ?? 0) + 1);
+  const added = new Set(chosen.map(c => nameKey(c.name)));
+  let total = themesAfter(chosen);
+  return candidates.filter(c => {
+    const key = nameKey(c.scheme.name);
+    const grows = added.has(key) ? 0 : 1 - (saved.get(key) ?? 0);
+    if (total + grows > CUSTOM_THEME.maxThemes) return false;
+    total += grows;
+    added.add(key);
+    return true;
+  });
+}
+
 /** @param {number} n @param {string} one @param {string} many */
 const count = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
@@ -122,7 +142,6 @@ const DIALOG = `
         <input class="field si-search" type="search" placeholder="${SEARCH_LABEL}" spellcheck="false" autocomplete="off" aria-label="${SEARCH_LABEL}" data-no-enter>
         <label class="dialog-check si-all"><input type="checkbox" data-si-all data-no-enter> Select all</label>
         <div class="si-list" role="listbox" aria-label="Schemes" aria-multiselectable="true"></div>
-        <p class="dialog-sub si-more"></p>
       </div>
     </div>
     <div class="si-show">
@@ -138,7 +157,7 @@ const DIALOG = `
 
 /** The dialog's parts it changes, and the class its status line has for an error. */
 const PART = Object.freeze({
-  collection: '.si-collection', list: '.si-list', more: '.si-more', search: '.si-search', status: '.si-status',
+  collection: '.si-collection', list: '.si-list', search: '.si-search', status: '.si-status',
   preview: '.si-preview', ok: '[data-ok]', count: '.si-count', row: '.si-row', all: '[data-si-all]', tick: '[data-si-tick]',
 });
 const ERROR_CLASS = 'error';
@@ -169,6 +188,8 @@ class SchemePicker {
     this.ticked = new Set();
     /** @type {string[]} the rows the search matches */
     this.matches = [];
+    /** How many Select all ticked when not all of them fit, said until the ticks change; else 0. */
+    this.capped = 0;
     /** What the files read came to, said again once the ticks are back within the limit. */
     this.found = '';
     this.list = find(dialog, PART.list);
@@ -212,7 +233,9 @@ class SchemePicker {
     const shownTicked = this.matches.filter(key => this.ticked.has(key)).length;
     this.all.checked = shownTicked > 0 && shownTicked === this.matches.length;
     this.all.indeterminate = shownTicked > 0 && !this.all.checked;
-    if (this.found) this.say(over ? `Only ${CUSTOM_THEME.maxThemes} imported themes are kept: tick fewer, or remove some with Manage.` : this.found, over);
+    if (!this.found) return;
+    if (over) this.say(`Only ${CUSTOM_THEME.maxThemes} imported themes are kept: tick fewer, or remove some with Manage.`, true);
+    else this.say(this.capped ? `Ticked the first ${this.capped} that fit, up to ${CUSTOM_THEME.maxThemes} imported themes.` : this.found);
   }
 
   /** A new list: the old rows, ticks and search go, so a stale row can't be picked. */
@@ -221,11 +244,11 @@ class SchemePicker {
     this.fromFiles = [];
     this.selected = '';
     this.ticked.clear();
+    this.capped = 0;
     this.matches = [];
     this.found = '';
     this.search.value = '';
     this.list.innerHTML = '';
-    find(this.dialog, PART.more).textContent = '';
     find(this.dialog, PART.collection).hidden = true;
     this.show(null);
     this.say('');
@@ -238,7 +261,7 @@ class SchemePicker {
     const matches = this.fromFiles.map((f, i) => ({ key: String(i), label: f.scheme.name, place: f.place }))
       .filter(r => `${r.label}\n${r.place}`.toLowerCase().includes(query));
     this.matches = matches.map(r => r.key);
-    this.list.innerHTML = matches.slice(0, MAX_LISTED).map(({ key, label, place }) => {
+    this.list.innerHTML = matches.map(({ key, label, place }) => {
       const on = key === this.selected;
       const ticked = this.ticked.has(key);
       const k = escapeHtml(key);
@@ -246,12 +269,12 @@ class SchemePicker {
       return `<div class="si-item" role="none"><input type="checkbox" class="si-tick" data-si-tick="${k}" data-no-enter tabindex="-1" aria-label="Add ${escapeHtml(label)}"${ticked ? ' checked' : ''}>`
         + `<button class="si-row${on ? ' on' : ''}" role="option" aria-selected="${on}" aria-checked="${ticked}" data-no-enter data-si-key="${k}"><span class="si-label">${escapeHtml(label)}</span>${where}</button></div>`;
     }).join('') || '<p class="dialog-sub">No schemes match.</p>';
-    find(this.dialog, PART.more).textContent = matches.length > MAX_LISTED ? `The first ${MAX_LISTED} of ${matches.length} shown: search to find others.` : '';
     this.syncTicks();
   }
 
   /** @param {string} key @param {boolean} on */
   tick(key, on) {
+    this.capped = 0;
     if (on) this.ticked.add(key);
     else this.ticked.delete(key);
     this.showTicks();
@@ -274,11 +297,12 @@ class SchemePicker {
 
   /** Select all: ticks every row the search matches, or unticks them when they all are. */
   tickAll() {
-    const on = !this.matches.every(key => this.ticked.has(key));
-    for (const key of this.matches) {
-      if (on) this.ticked.add(key);
-      else this.ticked.delete(key);
-    }
+    const unticked = this.matches.filter(key => !this.ticked.has(key)).map(key => ({ key, scheme: this.fromFiles[Number(key)].scheme }));
+    const fit = fitting(this.chosenTicked(), unticked);
+    // Everything shown ticked, or no room for more: Select all unticks them.
+    if (!fit.length) for (const key of this.matches) this.ticked.delete(key);
+    for (const { key } of fit) this.ticked.add(key);
+    this.capped = fit.length > 0 && fit.length < unticked.length ? fit.length : 0;
     this.showTicks();
   }
 
@@ -371,6 +395,10 @@ class SchemePicker {
   /** What saving adds: the ticked schemes, or the one shown when none are ticked. */
   chosen() {
     if (!this.ticked.size) return this.picked ? [this.picked] : [];
+    return this.chosenTicked();
+  }
+
+  chosenTicked() {
     return this.fromFiles.filter((_, i) => this.ticked.has(String(i))).map(f => f.scheme);
   }
 

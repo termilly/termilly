@@ -85,7 +85,6 @@
 .si-row { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
 .si-label { flex: none; }
 .si-place { overflow: hidden; color: var(--muted); font-size: 11.5px; text-overflow: ellipsis; white-space: nowrap; }
-.si-more:empty { display: none; }
 .si-name { display: block; margin-bottom: 8px; font-size: 13px; }
 .si-term { padding: 10px 12px; border-radius: 8px; font: 12px/1.6 var(--mono); white-space: pre; }
 .si-cursor { display: inline-block; width: 7px; height: 13px; vertical-align: -2px; }
