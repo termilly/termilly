@@ -37,7 +37,8 @@
 
 /* ---- The picture or gradient ---- */
 
-#workspace { isolation: isolate; }
+/* Its own layer only while a picture shows: the picture under the terminals, above nothing else. */
+:root[data-backdrop="terminals"] #workspace { isolation: isolate; }
 :root[data-backdrop="terminals"] #workspace::before,
 :root[data-backdrop] body.detached-window::before,
 :root[data-backdrop="window"] body::before {

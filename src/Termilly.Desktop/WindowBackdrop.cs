@@ -50,7 +50,7 @@ internal static class WindowBackdrop
     /// the window's colours are set (they're taken off while see-through) and once it has a handle.
     /// </summary>
     /// <param name="dark">The theme is dark: Mica and acrylic take a dark tint.</param>
-    /// <param name="tint">The theme's background (#RRGGBB): acrylic's tint on Windows 10, and what WPF clears to while solid.</param>
+    /// <param name="tint">The theme's background (#RRGGBB): acrylic's tint on Windows 10.</param>
     public static void Apply(Window window, WebView2 web, BackgroundSettings background, bool dark, string tint)
     {
         var hwnd = new WindowInteropHelper(window).Handle;
@@ -59,14 +59,24 @@ internal static class WindowBackdrop
             return;
         }
         var seeThrough = background.SeeThrough;
+        // A window never made see-through is left exactly as it is (the default): nothing to undo.
+        if (!seeThrough && !SolidAgain.ContainsKey(hwnd))
+        {
+            return;
+        }
+        var target = HwndSource.FromHwnd(hwnd)?.CompositionTarget;
+        if (seeThrough && !SolidAgain.ContainsKey(hwnd))
+        {
+            SolidAgain[hwnd] = target?.BackgroundColor ?? Colors.Black;
+            window.Closed += (_, _) => SolidAgain.Remove(hwnd);
+        }
         if (WindowChrome.GetWindowChrome(window) is { } chrome)
         {
             chrome.GlassFrameThickness = seeThrough ? SeeThroughGlass : SolidGlass;
         }
-        if (HwndSource.FromHwnd(hwnd)?.CompositionTarget is { } target)
+        if (target is not null)
         {
-            // Solid, WPF clears to the theme's colour as the window paints anyway.
-            target.BackgroundColor = seeThrough ? Colors.Transparent : (Color)ColorConverter.ConvertFromString(tint);
+            target.BackgroundColor = seeThrough ? Colors.Transparent : SolidAgain[hwnd];
         }
         if (seeThrough)
         {
@@ -76,7 +86,14 @@ internal static class WindowBackdrop
         var effect = seeThrough && Effects.Contains(background.Effect) ? background.Effect : BackgroundValues.Effect.None;
         Dwm.SetDark(hwnd, dark);
         Dwm.SetEffect(hwnd, seeThrough, effect, tint);
+        if (!seeThrough)
+        {
+            SolidAgain.Remove(hwnd);
+        }
     }
+
+    /// <summary>The windows made see-through, with the colour WPF cleared them to before (theirs again when solid).</summary>
+    private static readonly Dictionary<IntPtr, Color> SolidAgain = [];
 
     /// <summary>The compositor's calls: what shows through a see-through window.</summary>
     private static class Dwm
