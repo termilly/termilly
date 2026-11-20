@@ -295,7 +295,10 @@ class SchemePicker {
     this.tick(key, !this.ticked.has(key));
   }
 
-  /** Select all: ticks every row the search matches, or unticks them when they all are. */
+  /**
+   * Select all: ticks the rows the search matches, in order, as many as fit under the limit; when they're all ticked,
+   * or no more fit, it unticks them.
+   */
   tickAll() {
     const unticked = this.matches.filter(key => !this.ticked.has(key)).map(key => ({ key, scheme: this.fromFiles[Number(key)].scheme }));
     const fit = fitting(this.chosenTicked(), unticked);
