@@ -68,6 +68,7 @@ export function manageImported() {
       const shownTicked = shown().filter(b => b.checked).length;
       all.checked = shownTicked > 0 && shownTicked === shown().length;
       all.indeterminate = shownTicked > 0 && !all.checked;
+      all.disabled = !shown().length;
       ok.textContent = removeLabel(n);
       ok.disabled = !n;
     };

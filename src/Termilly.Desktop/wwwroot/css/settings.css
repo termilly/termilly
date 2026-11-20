@@ -53,10 +53,11 @@
 
 /* Removing imported themes (js/settings/thememanage.js): a ticked list. */
 .dialog.theme-manage { width: 380px; }
-.tm-all { margin: 10px 0 6px 9px; color: var(--muted); }
+/* Over .dialog-check's own margin (github.css, read after this file). */
+.theme-manage .tm-all { margin: 10px 0 6px 9px; color: var(--muted); }
 .tm-list { display: flex; flex-direction: column; max-height: min(320px, calc(100vh - 220px)); padding: 4px 8px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; }
 .tm-search { width: 100%; margin-top: 12px; }
-.tm-row { margin: 0; padding: 1px 0; }
+.theme-manage .tm-row { margin: 0; padding: 2px 0; }
 .tm-row[hidden] { display: none; }
 .tm-none { margin: 4px 0; }
 .tm-none[hidden] { display: none; }
