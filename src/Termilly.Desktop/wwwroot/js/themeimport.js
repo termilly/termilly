@@ -90,9 +90,17 @@ async function droppedFiles(transfer) {
       for (const child of batch) await walk(child, depth + 1);
     }
   };
-  const entries = [...transfer.items].map(i => i.webkitGetAsEntry?.()).filter(e => !!e);
-  if (!entries.length) return { files: [...transfer.files].slice(0, CUSTOM_THEME.maxFiles), skipped: Math.max(0, transfer.files.length - CUSTOM_THEME.maxFiles) };
-  for (const entry of entries) await walk(/** @type {FileSystemEntry} */ (entry), 0);
+  // Taken while the drop is still going on (a drop's items can't be read once it's over): a file as it is, a folder
+  // as an entry to walk (where the system gives one).
+  const dropped = [...transfer.items].map(item => {
+    const entry = item.webkitGetAsEntry?.();
+    return entry?.isDirectory ? { folder: entry } : { file: item.getAsFile() };
+  });
+  for (const { file, folder } of dropped) {
+    if (folder) await walk(folder, 0);
+    else if (file && files.length < CUSTOM_THEME.maxFiles) files.push(file);
+    else if (file) skipped++;
+  }
   return { files, skipped };
 }
 
