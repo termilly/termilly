@@ -184,6 +184,8 @@ export const CONFIRM_DIALOG = 'confirm';
 export const FORM_DIALOG = 'new-workspace';
 /** The confirm button's label when the question names none. */
 const OK_LABEL = 'OK';
+/** A button that removes what's ticked, before it says how much (Clear history, Manage themes). */
+export const REMOVE_LABEL = 'Remove';
 /** The selects a dialog shows as the app's own dropdowns. */
 const SELECT_FIELD = 'select.field';
 /** Where a dialog says what's wrong with what was entered. */

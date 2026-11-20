@@ -14,6 +14,7 @@ import { SETTING_VALUES } from '../constants.js';
 import { targetOf } from '../dom.js';
 import { dropdown, showMenu } from '../popups.js';
 import { importScheme } from '../themeimport.js';
+import { removeImported, manageImported } from './thememanage.js';
 
 /** The theme setting's choices (C#'s SettingValues): a theme's id, or System. */
 const { theme } = SETTING_VALUES;
@@ -30,10 +31,21 @@ const PICKS_UNUSED = 'unused';
 /** How long each line of "output" is in a theme card's small terminal, in percent. */
 const INK_WIDTHS = [70, 45, 58];
 
-/** Which themes the gallery shows: all, or only dark or light ones. */
-const FILTER = Object.freeze({ all: 'all', dark: THEME_BASE.dark, light: THEME_BASE.light });
+/** Which themes the gallery shows: all, only dark or light ones, or only imported ones. */
+const FILTER = Object.freeze({ all: 'all', dark: THEME_BASE.dark, light: THEME_BASE.light, imported: 'imported' });
+const FILTER_LABEL = Object.freeze({ [FILTER.all]: 'All', [FILTER.dark]: 'Dark', [FILTER.light]: 'Light', [FILTER.imported]: 'Imported' });
 /** @type {string} */
 let filter = FILTER.all;
+/** The buttons that open the Import and Manage dialogs. */
+const IMPORT_BUTTON = '[data-theme-import]';
+const MANAGE_BUTTON = '[data-theme-manage]';
+
+/** The filters offered: Imported only while there are imported themes (else the gallery goes back to All). */
+function filters() {
+  if (importedThemes().length) return Object.values(FILTER);
+  if (filter === FILTER.imported) filter = FILTER.all;
+  return Object.values(FILTER).filter(f => f !== FILTER.imported);
+}
 /** The search typed, kept while the page is drawn again (after an import). */
 let query = '';
 
@@ -58,22 +70,10 @@ const mini = p => `<span class="tc-win" style="--p-bg:${cssColor(p.bg)};--p-side
  */
 const card = t => {
   const note = t.imported ? IMPORTED_NOTE : t.like;
-  return `<button class="theme-card" data-theme-id="${t.id}" data-base="${t.base}" data-hay="${escapeHtml(`${t.name} ${t.like ?? ''}`.toLowerCase())}"${t.imported ? ` title="${REMOVE_HINT}"` : ''}>${mini(t.preview)}<span class="tc-name">${escapeHtml(t.name)}</span>${note ? `<span class="tc-like">${escapeHtml(note)}</span>` : ''}</button>`;
+  return `<button class="theme-card" data-theme-id="${t.id}" data-base="${t.base}" data-hay="${escapeHtml(`${t.name} ${t.like ?? ''}`.toLowerCase())}"${t.imported ? ` data-imported title="${REMOVE_HINT}"` : ''}>${mini(t.preview)}<span class="tc-name">${escapeHtml(t.name)}</span>${note ? `<span class="tc-like">${escapeHtml(note)}</span>` : ''}</button>`;
 };
 const IMPORTED_NOTE = 'Imported';
 const REMOVE_HINT = 'Imported. Right-click to remove it.';
-
-/**
- * Takes an imported theme out; one on screen gives way to Dark or Light (as following the system's pick does).
- * @param {string} id
- */
-function removeImported(id) {
-  const gone = themeById(id);
-  const patch = { customThemes: (getSetting('interface.customThemes') ?? []).filter((/** @type {{ id: string }} */ t) => t.id !== id) };
-  const fallback = gone?.base === THEME_BASE.light ? theme.light : theme.dark;
-  updateSettings(GROUPS.interface, getSetting(THEME_SETTING) === id ? { ...patch, theme: fallback } : patch);
-  redraw();
-}
 
 // An imported theme's card, right-clicked: Remove.
 body.addEventListener('contextmenu', e => {
@@ -81,8 +81,18 @@ body.addEventListener('contextmenu', e => {
   const id = target?.dataset.themeId;
   if (!target || !id || !themeById(id)?.imported) return;
   e.preventDefault();
-  showMenu([{ label: 'Remove theme', icon: ICONS.trash, danger: true, action: () => removeImported(id) }], { x: e.clientX, y: e.clientY });
+  showMenu([{ label: 'Remove theme', icon: ICONS.trash, danger: true, action: () => { removeImported([id]); redraw(); } }], { x: e.clientX, y: e.clientY });
 });
+
+/**
+ * After the Import or Manage dialog: the page drawn again when it changed something, and the focus back on the button
+ * that opened it (or on Import, when Manage has gone with the last imported theme).
+ * @param {string} button
+ */
+const afterDialog = button => (/** @type {unknown} */ changed) => {
+  if (changed) redraw();
+  /** @type {HTMLElement | null} */ (body.querySelector(button) ?? body.querySelector(IMPORT_BUTTON))?.focus();
+};
 
 /**
  * The theme following the system shows in one mode: the dark themes or the light ones, in the gallery's order.
@@ -103,7 +113,8 @@ function applyFilter(root) {
   const words = query.trim().toLowerCase();
   let any = false;
   for (const c of /** @type {NodeListOf<HTMLElement>} */ (root.querySelectorAll(THEME_CARD))) {
-    c.hidden = (filter !== FILTER.all && c.dataset.base !== filter) || !(c.dataset.hay ?? '').includes(words);
+    const kind = filter === FILTER.all || (filter === FILTER.imported ? c.dataset.imported !== undefined : c.dataset.base === filter);
+    c.hidden = !kind || !(c.dataset.hay ?? '').includes(words);
     any ||= !c.hidden;
   }
   const none = /** @type {HTMLElement | null} */ (root.querySelector(THEME_NONE));
@@ -138,8 +149,8 @@ const APPEARANCE = {
     { keywords: 'system dark light mode automatic auto night day' }))
     + group('', row('Theme', 'Colours for the app and terminals.', `<div class="theme-tools">
         <input class="field ${THEME_SEARCH}" type="search" placeholder="${SEARCH_LABEL}" spellcheck="false" autocomplete="off" aria-label="${SEARCH_LABEL}" value="${escapeHtml(query)}">
-        <span class="seg theme-filter">${Object.values(FILTER).map(f => `<button data-theme-filter="${f}">${f === FILTER.all ? 'All' : f === FILTER.dark ? 'Dark' : 'Light'}</button>`).join('')}</span>
-        <button class="btn" data-theme-import>Import</button>
+        <span class="seg theme-filter">${filters().map(f => `<button data-theme-filter="${f}">${FILTER_LABEL[f]}</button>`).join('')}</span>
+        <button class="btn" data-theme-import>Import</button>${importedThemes().length ? '<button class="btn" data-theme-manage>Manage</button>' : ''}
       </div><span class="seg theme-cards">${gallery().map(card).join('')}</span><p class="set-desc theme-none" hidden>No themes match.</p>`,
     { stack: true, keywords: `colour color look palette scheme ${THEMES.map(t => `${t.name} ${t.like ?? ''}`).join(' ').toLowerCase()}` })),
   drawn: root => { applyFilter(root); sync(root); },
@@ -155,12 +166,12 @@ const APPEARANCE = {
       updateSettings(GROUPS.interface, { theme: following() ? themeId() : theme.system });
       return true;
     }
-    if (targetOf(e).closest('[data-theme-import]')) {
-      importScheme().then(id => {
-        if (id) redraw();
-        // Back to Import (the one drawn again after a save).
-        /** @type {HTMLElement | null} */ (body.querySelector('[data-theme-import]'))?.focus();
-      });
+    if (targetOf(e).closest(IMPORT_BUTTON)) {
+      importScheme().then(afterDialog(IMPORT_BUTTON));
+      return true;
+    }
+    if (targetOf(e).closest(MANAGE_BUTTON)) {
+      manageImported().then(afterDialog(MANAGE_BUTTON));
       return true;
     }
     const kind = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-theme-filter]'));

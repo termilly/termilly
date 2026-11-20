@@ -51,6 +51,14 @@
 .theme-none { margin: 16px 0 0; }
 .theme-tools [data-theme-import] { margin-left: auto; }
 
+/* Removing imported themes (js/settings/thememanage.js): a ticked list. */
+.dialog.theme-manage { width: 380px; }
+.tm-all { margin: 12px 0 6px 9px; color: var(--muted); }
+.tm-list { display: flex; flex-direction: column; max-height: 320px; padding: 4px 8px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; }
+.tm-row { margin: 0; padding: 5px 0; }
+.tm-all input, .tm-row input { accent-color: var(--accent); }
+.tm-swatch { flex: none; width: 14px; height: 14px; border: 2px solid; border-radius: 4px; }
+
 /* Import a colour scheme (js/themeimport.js): the schemes found on the left, its preview on the right. */
 .dialog.scheme-import { width: 760px; }
 .si-body { display: flex; gap: 18px; margin-top: 14px; }

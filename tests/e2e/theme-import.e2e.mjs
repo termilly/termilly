@@ -115,3 +115,31 @@ test('ticked schemes are added at once, the one shown put on screen', () => with
   assert.deepEqual(saved.customThemes.map(t => t.name), ['Two', 'Three']);
   assert.equal(saved.theme, 'custom-three', 'the one shown goes on screen');
 }));
+
+test('Imported filters the gallery, and Manage removes the ticked themes', () => withImport('import-manage', async app => {
+  assert.equal(await app.eval(t => !!t.$('[data-theme-manage]') || !!t.$('[data-theme-filter="imported"]')), false, 'none until a theme is imported');
+  const named = (name, background) => JSON.stringify({ ...JSON.parse(fixture('Dracula.json')), name, background });
+  await dropAll(app, [['a.json', named('One', '#111111')], ['b.json', named('Two', '#222222')], ['c.json', named('Three', '#333333')]]);
+  await until(() => app.eval(t => t.$$('.si-row').length === 3), 'three listed');
+  await app.eval(t => { t.$('[data-si-all]').click(); });
+  await app.eval(t => t.click('.scheme-import [data-ok]'));
+  await app.waitFor('[data-theme-manage]');
+  await app.eval(t => t.click('[data-theme-filter="imported"]'));
+  const shown = () => app.eval(t => t.$$('.theme-card').filter(c => c.getClientRects().length).map(c => c.querySelector('.tc-name').textContent));
+  assert.deepEqual(await shown(), ['One', 'Two', 'Three']);
+  await app.eval(t => t.click('[data-theme-manage]'));
+  await app.waitFor('.theme-manage');
+  assert.equal(await app.eval(t => t.$('.theme-manage [data-ok]').disabled), true);
+  await app.eval(t => { t.$$('.theme-manage [data-tm-id]').slice(0, 2).forEach(b => b.click()); });
+  assert.equal(await app.text('.theme-manage [data-ok]'), 'Remove 2 themes');
+  await app.eval(t => t.click('.theme-manage [data-ok]'));
+  await app.waitFor('.theme-manage', { gone: true });
+  assert.deepEqual((await iface(app)).customThemes.map(t => t.name), ['Three']);
+  await until(async () => (await shown()).join() === 'Three', 'the gallery keeps the Imported filter');
+  await app.eval(t => t.click('[data-theme-manage]'));
+  await app.waitFor('.theme-manage');
+  await app.eval(t => { t.$('[data-tm-all]').click(); });
+  await app.eval(t => t.click('.theme-manage [data-ok]'));
+  await until(() => app.eval(t => !t.$('[data-theme-manage]') && !t.$('[data-theme-filter="imported"]')), 'Manage and Imported gone with the last one');
+  assert.equal(await app.eval(t => t.$('[data-theme-filter="all"]').classList.contains('on')), true, 'back to All');
+}));
