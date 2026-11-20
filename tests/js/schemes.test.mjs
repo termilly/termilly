@@ -84,7 +84,7 @@ test('iTerm2 with whole-number components, and a colour missing one refused', ()
 test('a scheme is named from the file, or from the name it gives', () => {
   assert.equal(one('Dracula.itermcolors').name, 'Dracula');
   assert.equal(one('Dracula.json').name, 'Dracula');
-  assert.equal(one('C:\\themes\\Dracula.toml', fixture('Dracula.toml')).name, 'Dracula', 'the folder goes');
+  assert.equal(one('back\\slash.toml', fixture('Dracula.toml')).name, 'back\\slash', 'a Linux file name keeps its backslash');
 });
 
 test('a Windows Terminal settings file gives each of its schemes, and counts the ones missing colours', () => {

@@ -190,8 +190,8 @@ function readSectionValue(found, section, key, raw) {
 const nameInText = text => /^name\s*:\s*['"]?(.+?)['"]?\s*$/m.exec(text)?.[1] // Warp's, at the top
   ?? /^##\s*name\s*:\s*(.+?)\s*$/m.exec(text)?.[1]; // Kitty's themes
 
-/** @param {string} fileName */
-const nameOfFile = fileName => fileName.replace(/^.*[\\/]/, '').replace(/\.[^.]+$/, '') || 'Imported';
+/** @param {string} fileName the file's own name, without its folder (a name on Linux can hold a backslash) */
+const nameOfFile = fileName => fileName.replace(/\.[^.]+$/, '') || 'Imported';
 
 /**
  * JSON as Windows Terminal writes it: comments (// and /* *\/) and trailing commas allowed, outside strings.

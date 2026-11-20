@@ -21,13 +21,22 @@ public sealed class SchemeFilesTests : IDisposable
     }
 
     [Fact]
-    public async Task A_folder_gives_its_files_and_its_folders_named_by_their_place_in_it()
+    public async Task A_folder_gives_its_files_and_its_folders_named_and_placed_in_it()
     {
         Write("Dracula.conf", "background #282a36");
         Write(Path.Combine("kitty", "Nord.conf"), "background #2e3440");
         var read = await SchemeFileHandler.ReadAllAsync("r1", SchemeFileHandler.FilesIn(_dir), _dir);
-        Assert.Equal(["Dracula.conf", Path.Combine("kitty", "Nord.conf")], read.Files!.Select(f => f.Name).Order());
+        Assert.Equal(["Dracula.conf", Path.Combine("kitty", "Nord.conf")], read.Files!.Select(f => f.Place).Order());
+        Assert.Equal(["Dracula.conf", "Nord.conf"], read.Files!.Select(f => f.Name).Order());
         Assert.Equal(0, read.Skipped);
+    }
+
+    [Fact]
+    public async Task An_empty_folder_gives_no_files_rather_than_none_picked()
+    {
+        var read = await SchemeFileHandler.ReadAllAsync("r1", SchemeFileHandler.FilesIn(_dir), _dir);
+        Assert.NotNull(read.Files);
+        Assert.Empty(read.Files);
     }
 
     [Fact]
@@ -37,6 +46,7 @@ public sealed class SchemeFilesTests : IDisposable
         File.WriteAllText(path, "{}", new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
         var read = await SchemeFileHandler.ReadAllAsync(null, [path], root: null);
         Assert.Equal("bom.json", read.Files![0].Name);
+        Assert.Null(read.Files[0].Place);
         Assert.Equal("{}", read.Files[0].Text);
     }
 

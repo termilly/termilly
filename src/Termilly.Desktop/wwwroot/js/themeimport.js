@@ -70,24 +70,37 @@ function save(s) {
   return id;
 }
 
+/** A file found and where it is: its path in the folder dropped, or its name. */
+/** @typedef {{ file: File, place: string }} DroppedFile */
+
 /**
  * The files dropped: each file, and the files in each folder (and its folders' a few levels down, where the system
- * lets the page read them), within the limits; how many were left out.
+ * lets the page read them), within the limits; how many couldn't be read, and whether there were more than the limit.
  * @param {DataTransfer} transfer
- * @returns {Promise<{ files: File[], skipped: number }>}
+ * @returns {Promise<{ files: DroppedFile[], left: number, capped: boolean }>}
  */
 async function droppedFiles(transfer) {
-  /** @type {File[]} */
+  /** @type {DroppedFile[]} */
   const files = [];
-  let skipped = 0;
+  let left = 0;
+  let capped = false;
+  /** @param {File | null} file @param {string} place */
+  const add = (file, place) => {
+    if (files.length >= CUSTOM_THEME.maxFiles) capped = true;
+    else if (file) files.push({ file, place });
+  };
   /** @param {FileSystemEntry} entry @param {number} depth */
   const walk = async (entry, depth) => {
-    if (files.length >= CUSTOM_THEME.maxFiles) return void skipped++;
-    if (entry.isFile) return files.push(await new Promise((resolve, reject) => /** @type {FileSystemFileEntry} */ (entry).file(resolve, reject)));
-    if (depth > CUSTOM_THEME.folderDepth) return;
-    const reader = /** @type {FileSystemDirectoryEntry} */ (entry).createReader();
-    for (let batch = await readBatch(reader); batch.length; batch = await readBatch(reader)) {
-      for (const child of batch) await walk(child, depth + 1);
+    if (capped) return;
+    try {
+      if (entry.isFile) return add(await new Promise((resolve, reject) => /** @type {FileSystemFileEntry} */ (entry).file(resolve, reject)), entry.fullPath.replace(/^\//, ''));
+      if (depth > CUSTOM_THEME.folderDepth) return;
+      const reader = /** @type {FileSystemDirectoryEntry} */ (entry).createReader();
+      for (let batch = await readBatch(reader); batch.length && !capped; batch = await readBatch(reader)) {
+        for (const child of batch) await walk(child, depth + 1);
+      }
+    } catch {
+      left++; // a file or folder the system won't give: counted, the rest still read
     }
   };
   // Taken while the drop is still going on (a drop's items can't be read once it's over): a file as it is, a folder
@@ -98,10 +111,9 @@ async function droppedFiles(transfer) {
   });
   for (const { file, folder } of dropped) {
     if (folder) await walk(folder, 0);
-    else if (file && files.length < CUSTOM_THEME.maxFiles) files.push(file);
-    else if (file) skipped++;
+    else add(file ?? null, file?.name ?? '');
   }
-  return { files, skipped };
+  return { files, left, capped };
 }
 
 /** @param {FileSystemDirectoryReader} reader @returns {Promise<FileSystemEntry[]>} */
@@ -121,6 +133,7 @@ const DIALOG = `
       <div class="si-collection" hidden>
         <input class="field si-search" type="search" placeholder="Search schemes" spellcheck="false" autocomplete="off" aria-label="Search schemes" data-no-enter>
         <div class="si-list" role="listbox" aria-label="Schemes"></div>
+        <p class="dialog-sub si-more"></p>
       </div>
     </div>
     <div class="si-show">
@@ -134,7 +147,7 @@ const DIALOG = `
   </div>`;
 
 /** The dialog's parts it changes, and the class its status line has for an error. */
-const PART = Object.freeze({ collection: '.si-collection', list: '.si-list', search: '.si-search', status: '.si-status', preview: '.si-preview', ok: '[data-ok]', row: '.si-row' });
+const PART = Object.freeze({ collection: '.si-collection', list: '.si-list', more: '.si-more', search: '.si-search', status: '.si-status', preview: '.si-preview', ok: '[data-ok]', row: '.si-row' });
 const ERROR_CLASS = 'error';
 /** Where the list's rows come from: nothing yet, files read, or the collection on GitHub. */
 const SOURCE = Object.freeze({ none: 'none', file: 'file', collection: 'collection' });
@@ -156,7 +169,7 @@ class SchemePicker {
     this.dialog = dialog;
     /** @type {import('./schemes.js').Scheme | null} */
     this.picked = null;
-    /** @type {import('./schemes.js').Scheme[]} */
+    /** @type {{ scheme: import('./schemes.js').Scheme, place: string }[]} each with the file it's in */
     this.fromFiles = [];
     this.action = 0;
     /** @type {string} */
@@ -205,66 +218,86 @@ class SchemePicker {
     return action;
   }
 
-  /** The rows the search matches, the picked one ticked. */
+  /** The rows the search matches (by name, or by the file a scheme's in), the picked one ticked. */
   filter() {
     const query = this.search.value.trim().toLowerCase();
-    /** @type {[string, string][]} each row's key and label */
-    const rows = this.source === SOURCE.file ? this.fromFiles.map((s, i) => [String(i), s.name])
-      : this.source === SOURCE.collection ? collectionNames().map(n => [n, n]) : [];
-    const matches = rows.filter(([, label]) => label.toLowerCase().includes(query));
-    this.list.innerHTML = matches.slice(0, MAX_LISTED).map(([key, label]) => {
+    /** @type {[string, string, string][]} each row's key, label and file */
+    const rows = this.source === SOURCE.file ? this.fromFiles.map((f, i) => [String(i), f.scheme.name, f.place])
+      : this.source === SOURCE.collection ? collectionNames().map(n => [n, n, '']) : [];
+    const matches = rows.filter(([, label, place]) => `${label}\n${place}`.toLowerCase().includes(query));
+    this.list.innerHTML = matches.slice(0, MAX_LISTED).map(([key, label, place]) => {
       const on = key === this.selected;
-      return `<button class="si-row${on ? ' on' : ''}" role="option" aria-selected="${on}" data-no-enter data-si-key="${escapeHtml(key)}">${escapeHtml(label)}</button>`;
+      const where = place ? `<span class="si-place">${escapeHtml(place)}</span>` : '';
+      return `<button class="si-row${on ? ' on' : ''}" role="option" aria-selected="${on}" data-no-enter data-si-key="${escapeHtml(key)}"><span class="si-label">${escapeHtml(label)}</span>${where}</button>`;
     }).join('') || '<p class="dialog-sub">No schemes match.</p>';
-    if (matches.length > MAX_LISTED) this.say(`The first ${MAX_LISTED} of ${matches.length} shown: search to find others.`);
+    find(this.dialog, PART.more).textContent = matches.length > MAX_LISTED ? `The first ${MAX_LISTED} of ${matches.length} shown: search to find others.` : '';
   }
 
   /**
    * The schemes in files read: all of them in the list, the first shown.
-   * @param {{ name: string, text: string }[]} files
-   * @param {number} [left] files left out before reading (too big, past the limits)
+   * @param {import('./protocol.js').SchemeFileText[]} files
+   * @param {number} left files left out before reading (too big or unreadable)
+   * @param {boolean} capped more files than the limit: only the first were read
    */
-  readFiles(files, left = 0) {
+  readFiles(files, left, capped) {
     let notSchemes = 0;
     let incomplete = 0;
     for (const file of files) {
       try {
         const { schemes, skipped } = readSchemes(file.name, file.text);
-        this.fromFiles.push(...schemes);
+        this.fromFiles.push(...schemes.map(scheme => ({ scheme, place: file.place ?? file.name })));
         incomplete += skipped;
       } catch {
         notSchemes++; // a file in the folder that isn't a scheme: counted, not an error
       }
     }
-    const out = [left + notSchemes && count(left + notSchemes, 'file isn’t a scheme', 'files aren’t schemes'), incomplete && count(incomplete, 'scheme misses colours', 'schemes miss colours')].filter(Boolean);
+    const out = [
+      notSchemes && count(notSchemes, 'file isn’t a scheme', 'files aren’t schemes'),
+      incomplete && count(incomplete, 'scheme misses colours', 'schemes miss colours'),
+      left && count(left, 'file too big or unreadable', 'files too big or unreadable'),
+      capped && `only the first ${CUSTOM_THEME.maxFiles} files read`,
+    ].filter(Boolean);
     if (!this.fromFiles.length) return this.say(`No colour schemes found${out.length ? ` (${out.join(', ')})` : ''}.`, true);
     find(this.dialog, PART.collection).hidden = false;
     this.selected = '0';
     this.filter();
-    this.show(this.fromFiles[0]);
+    this.show(this.fromFiles[0].scheme);
     this.say(`${count(this.fromFiles.length, 'scheme', 'schemes')} found${out.length ? `; ${out.join(', ')}` : ''}.`);
   }
 
   /** @param {DataTransfer} transfer files or folders dropped from the file manager */
   async drop(transfer) {
     const action = this.start(SOURCE.file);
-    try {
-      const { files, skipped } = await droppedFiles(transfer);
-      const small = files.filter(f => f.size <= CUSTOM_THEME.maxFileBytes);
-      const texts = await Promise.all(small.map(async f => ({ name: f.webkitRelativePath || f.name, text: await f.text() })));
-      if (this.current(action)) this.readFiles(texts, skipped + files.length - small.length);
-    } catch (error) {
-      if (this.current(action)) this.say(`Couldn’t read what was dropped. ${reason(error)}`, true);
+    const { files, left, capped } = await droppedFiles(transfer);
+    // One at a time, within the total, so a big drop isn't all held at once; a newer action stops it.
+    let room = CUSTOM_THEME.maxTotalBytes;
+    let unread = left;
+    /** @type {import('./protocol.js').SchemeFileText[]} */
+    const texts = [];
+    for (const { file, place } of files) {
+      if (!this.current(action)) return;
+      if (file.size > Math.min(CUSTOM_THEME.maxFileBytes, room)) { unread++; continue; }
+      try {
+        texts.push({ name: file.name, text: await file.text(), place });
+        room -= file.size;
+      } catch {
+        unread++;
+      }
     }
+    if (this.current(action)) this.readFiles(texts, unread, capped);
   }
 
-  /** @param {boolean} folder a folder's files, or files picked */
+  /** @param {boolean} folder a folder's files, or files picked; cancelled, the dialog keeps what it shows */
   async choose(folder) {
-    const action = this.start(SOURCE.file);
+    const action = ++this.action;
     const reply = await request(PAGE.schemeOpen, { folder });
-    if (!this.current(action)) return;
-    if (reply.error) this.say(reply.error, true);
-    else if (reply.files?.length || reply.skipped) this.readFiles(reply.files ?? [], reply.skipped ?? 0);
+    if (!this.current(action) || (!reply.files && !reply.error)) return;
+    this.start(SOURCE.file);
+    if (reply.error) return this.say(reply.error, true);
+    const files = reply.files ?? [];
+    // The host reads one past the limit, so a folder with more says so.
+    const over = Math.max(0, files.length + (reply.skipped ?? 0) - CUSTOM_THEME.maxFiles);
+    this.readFiles(files, (reply.skipped ?? 0) - over, over > 0);
   }
 
   async browse() {
@@ -290,7 +323,7 @@ class SchemePicker {
       r.classList.toggle('on', r === row);
       r.setAttribute('aria-selected', String(r === row));
     }
-    if (this.source === SOURCE.file) return this.show(this.fromFiles[Number(key)] ?? null);
+    if (this.source === SOURCE.file) return this.show(this.fromFiles[Number(key)]?.scheme ?? null);
     if (this.source !== SOURCE.collection) return;
     const action = this.begin();
     this.say('Loading…');
@@ -322,7 +355,7 @@ class SchemePicker {
     const next = Number.isFinite(by) ? Math.min(rows.length - 1, Math.max(0, at < 0 ? 0 : at + by)) : by < 0 ? 0 : rows.length - 1;
     if (target !== this.search) rows[next].focus(); // from the search box, typing goes on there
     rows[next].scrollIntoView({ block: 'nearest' });
-    this.pick(rows[next], true);
+    if (next !== at) this.pick(rows[next], true); // at an end the key does nothing, so the scheme shown stays
     return true;
   }
 }

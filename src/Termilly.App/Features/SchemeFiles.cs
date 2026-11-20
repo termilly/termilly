@@ -47,6 +47,11 @@ internal sealed class SchemeFileHandler(PageChannel page, IFileDialogs dialogs) 
         else
         {
             paths = await dialogs.PickSchemesToOpenAsync().ConfigureAwait(false);
+            if (paths.Count == 0)
+            {
+                page.Post(new ToPage.SchemeOpened(requestId)); // cancelled: the dialog keeps what it shows
+                return;
+            }
         }
         page.Post(await ReadAllAsync(requestId, paths, root).ConfigureAwait(false));
     }
@@ -58,41 +63,47 @@ internal sealed class SchemeFileHandler(PageChannel page, IFileDialogs dialogs) 
             RecurseSubdirectories = true, MaxRecursionDepth = CustomThemeLimits.FolderDepth, IgnoreInaccessible = true,
         }).Take(CustomThemeLimits.MaxFiles + 1)];
 
-    /// <summary>The files' text, each named by its path under the folder (or its file name), within the limits.</summary>
+    /// <summary>
+    /// The files' text, each named by its file name (and placed by its path under the folder), within the limits: a file
+    /// bigger than what's left of the total is left out without reading it whole.
+    /// </summary>
     internal static async Task<ToPage.SchemeOpened> ReadAllAsync(string? requestId, IReadOnlyList<string> paths, string? root)
     {
         var files = new List<SchemeFileText>();
-        long total = 0;
+        long left = CustomThemeLimits.MaxTotalBytes;
         foreach (var path in paths.Take(CustomThemeLimits.MaxFiles))
         {
-            if (await ReadBoundedAsync(path).ConfigureAwait(false) is not { } text || total + text.Length > CustomThemeLimits.MaxTotalBytes)
+            if (await ReadBoundedAsync(path, (int)Math.Min(CustomThemeLimits.MaxFileBytes, left)).ConfigureAwait(false) is not { } read)
             {
                 continue;
             }
-            total += text.Length;
-            files.Add(new SchemeFileText(root is null ? Path.GetFileName(path) : Path.GetRelativePath(root, path), text));
+            left -= read.Bytes;
+            files.Add(new SchemeFileText(Path.GetFileName(path), read.Text, root is null ? null : Path.GetRelativePath(root, path)));
         }
         return new ToPage.SchemeOpened(requestId, files, paths.Count - files.Count);
     }
 
-    /// <summary>A file's text, or null when it's too big or can't be read.</summary>
-    private static async Task<string?> ReadBoundedAsync(string path)
+    /// <summary>A file's text and its size in bytes.</summary>
+    private sealed record FileRead(string Text, int Bytes);
+
+    /// <summary>A file's text, or null when it's bigger than the limit (in bytes) or can't be read.</summary>
+    private static async Task<FileRead?> ReadBoundedAsync(string path, int limit)
     {
         try
         {
             // Read one byte past the limit, so a file that's bigger (or grows while read) is told apart without reading it all.
-            var bytes = new byte[CustomThemeLimits.MaxFileBytes + 1];
+            var bytes = new byte[limit + 1];
             int read;
             await using (var stream = File.OpenRead(path))
             {
                 read = await stream.ReadAtLeastAsync(bytes, bytes.Length, throwOnEndOfStream: false).ConfigureAwait(false);
             }
-            if (read > CustomThemeLimits.MaxFileBytes)
+            if (read > limit)
             {
                 return null;
             }
             using var reader = new StreamReader(new MemoryStream(bytes, 0, read), detectEncodingFromByteOrderMarks: true);
-            return await reader.ReadToEndAsync().ConfigureAwait(false);
+            return new FileRead(await reader.ReadToEndAsync().ConfigureAwait(false), read);
         }
         catch (Exception e) when (Storage.IsFileError(e))
         {

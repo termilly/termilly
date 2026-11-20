@@ -345,7 +345,7 @@ export const HOST = Object.freeze({
 /** @typedef {{ text: string, at: string }} AgentPrompt */
 /** @typedef {{ kind: string, text: string, at: string, tool?: string|null, failed?: boolean }} AgentStep */
 /** @typedef {{ id: string, name: string, address: string, online: boolean, error: string|null, state: string|null }} PcView */
-/** @typedef {{ name: string, text: string }} SchemeFileText */
+/** @typedef {{ name: string, text: string, place?: string|null }} SchemeFileText */
 /** @typedef {{ newRecoveryCode: string|null, archives: number }} SecurityInfo */
 /** @typedef {{ version: string|null, dataDir: string, remoteVersion: number, crashes: Array<any> }} AboutInfo */
 /** @typedef {{ id: string, name: string, description: string|null, icon: string, source: string, tags: Array<string>, startCommand?: string|null, shellIcon?: string|null }} ProfileSummary */
