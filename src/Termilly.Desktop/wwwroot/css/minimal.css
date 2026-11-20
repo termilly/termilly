@@ -13,6 +13,8 @@ body[data-layout="minimal"] #titlebar .searchbox,
 body[data-layout="minimal"] #titlebar .tb-right > .separator,
 body[data-layout="minimal"] .bar-dock,
 body[data-layout="minimal"] :is(#sidebar, #sidebar-gap) { display: none; }
+/* The update notice, all that's left of the brand here (titlebar.css), starts where the workspace's name would. */
+body[data-layout="minimal"] #titlebar .brand { margin-left: 4px; }
 /* The workspace on screen, always (Normal shows it only while the sidebar is closed). */
 /* It opens the list of all workspaces, as the dock's does (js/minimal.js); Normal's has no arrow and takes no clicks. */
 body[data-layout="minimal"] .crumb { gap: 6px; height: 22px; margin-left: 4px; padding: 0 6px; border: 0; border-radius: 6px; opacity: 1; transform: none; pointer-events: auto; }

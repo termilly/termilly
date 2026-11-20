@@ -75,10 +75,14 @@ step('a new version\'s notice shows on the strip, without the rest of the brand'
   const look = shown => app.eval((t, shown) => {
     const chip = globalThis.document.getElementById('update-chip');
     chip.hidden = !shown;
+    chip.innerHTML = '<span>Update 9.9</span>';
     const css = el => globalThis.getComputedStyle(el).display;
-    return { chip: chip.getBoundingClientRect().width > 0, logo: css(globalThis.document.querySelector('#titlebar .brand .logo')), brand: css(globalThis.document.querySelector('#titlebar .brand')) };
+    const box = chip.getBoundingClientRect();
+    const strip = globalThis.document.getElementById('titlebar').getBoundingClientRect();
+    return { chip: box.width > 0 && box.top >= strip.top && box.bottom <= strip.bottom, logo: css(globalThis.document.querySelector('#titlebar .brand .logo')), brand: css(globalThis.document.querySelector('#titlebar .brand')) };
   }, shown);
   assert.deepEqual(await look(true), { chip: true, logo: 'none', brand: 'flex' });
+  await pause(1000); // the screenshot grabs the screen, which WebKit repaints a moment later
   await app.screenshot('02b-minimal-update');
   assert.deepEqual(await look(false), { chip: false, logo: 'none', brand: 'none' });
 });
