@@ -71,6 +71,23 @@ step('Minimal moves the toolbar into a hidden dock and the sidebar away', async 
   await app.screenshot('02-minimal-hidden');
 });
 
+step('a new version\'s notice shows on the strip, without the rest of the brand', async () => {
+  const look = shown => app.eval((t, shown) => {
+    const chip = globalThis.document.getElementById('update-chip');
+    chip.hidden = !shown;
+    chip.innerHTML = '<span>Update 9.9</span>';
+    const css = el => globalThis.getComputedStyle(el).display;
+    const box = chip.getBoundingClientRect();
+    const strip = globalThis.document.getElementById('titlebar').getBoundingClientRect();
+    const crumb = globalThis.document.getElementById('crumb').getBoundingClientRect();
+    return { chip: box.width > 0 && box.top >= strip.top && box.bottom <= strip.bottom && box.left >= crumb.right, logo: css(globalThis.document.querySelector('#titlebar .brand .logo')), brand: css(globalThis.document.querySelector('#titlebar .brand')) };
+  }, shown);
+  assert.deepEqual(await look(true), { chip: true, logo: 'none', brand: 'flex' });
+  await pause(1000); // the screenshot grabs the screen, which WebKit repaints a moment later
+  await app.screenshot('02b-minimal-update');
+  assert.deepEqual(await look(false), { chip: false, logo: 'none', brand: 'none' });
+});
+
 step('switching workspaces keeps the strip, the window buttons and the dock as they were', async () => {
   const look = () => app.eval(() => ({
     controlsAtRight: globalThis.innerWidth - globalThis.document.querySelector('#titlebar .window-controls').getBoundingClientRect().right < 20,
@@ -168,6 +185,56 @@ step('the hidden dock comes back at its edge and lists the workspaces', async ()
   await pause(300);
   await app.screenshot('03-dock-workspaces');
   await app.key('.context-menu', 'Escape');
+});
+
+step("the strip's workspace opens the same list, switches workspace, and leaves the terminal its focus", async () => {
+  const crumb = await app.eval(() => {
+    const el = globalThis.document.getElementById('crumb');
+    const box = el.getBoundingClientRect();
+    // What a real click at its middle would land on: the crumb, not the dock floating over the strip.
+    const hit = globalThis.document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+    return { role: el.getAttribute('role'), arrow: globalThis.getComputedStyle(el.querySelector('.dock-chev')).display, clickable: globalThis.getComputedStyle(el).pointerEvents, reachable: el.contains(hit) };
+  });
+  assert.deepEqual(crumb, { role: 'button', arrow: 'block', clickable: 'auto', reachable: true });
+  const labels = () => app.eval(t => t.$$('.context-menu .menu-label').map(el => el.textContent));
+  const inTerminal = () => app.eval(() => !!globalThis.document.activeElement?.closest('.pane .xterm'));
+  await app.click('.dock-ws');
+  await app.waitFor('.context-menu .menu-row');
+  const fromDock = await labels();
+  await app.key('.context-menu', 'Escape');
+  await pause(300);
+  await app.eval(() => globalThis.document.querySelector('.ws-layer.active .pane.focused .xterm textarea')?.focus());
+  assert.equal(await inTerminal(), true, 'the terminal has the focus before the click');
+  await app.click('#crumb');
+  await app.waitFor('.context-menu .menu-row');
+  assert.deepEqual(await labels(), fromDock, 'the same rows as the dock');
+  await pause(300);
+  await app.screenshot('03b-strip-workspaces');
+  // The menu holds the keys while it's open (as the dock's does); closed, the terminal has them again.
+  await app.key('.context-menu', 'Escape');
+  await pause(300);
+  assert.equal(await inTerminal(), true, 'the focus is back in the terminal once the menu closes');
+  await app.click('#crumb');
+  await app.waitFor('.context-menu .menu-row');
+  await app.eval(t => [...t.$$('.context-menu .menu-row')].find(r => r.textContent.includes('second')).click());
+  const switched = await app.eval(async t => {
+    const { state, wsById } = await t.import('store.js');
+    return { active: wsById(state.activeId)?.name, shown: t.$('#crumb .crumb-name').textContent };
+  });
+  assert.deepEqual(switched, { active: 'second', shown: 'second' });
+  // From the keyboard too, reached with the focus on it: Enter and Space. Then back to the first workspace for the
+  // steps after.
+  for (const key of ['Enter', ' ']) {
+    await app.eval(() => globalThis.document.getElementById('crumb').focus());
+    await app.key(null, key);
+    await app.waitFor('.context-menu .menu-row');
+    if (key === 'Enter') { await app.key('.context-menu', 'Escape'); await pause(300); }
+  }
+  await app.eval(async t => {
+    const { state } = await t.import('store.js');
+    [...t.$$('.context-menu .menu-row')].find(r => r.textContent.includes(state.workspaces[0].name)).click();
+  });
+  await pause(500);
 });
 
 step('a split shows two name lines, the one in focus with its buttons', async () => {
@@ -338,6 +405,54 @@ step('the dock moves to another edge from its menu, and stays shown with hiding 
   await app.screenshot('07-dock-right');
 });
 
+step("right-click on a workspace in the strip's list closes it, asked first as in the sidebar", async () => {
+  const names = () => app.eval(async t => (await t.import('store.js')).state.workspaces.map(ws => ws.name));
+  const menus = () => app.eval(t => t.$$('.context-menu').length);
+  /** Right-clicks a workspace's row in the open list, as a mouse would, at its left end. */
+  const rightClickRow = async name => {
+    await app.eval((t, n) => {
+      const row = [...t.$$('.context-menu .menu-row')].find(r => r.querySelector('.menu-label')?.textContent === n);
+      const box = row.getBoundingClientRect();
+      for (const type of ['mousedown', 'mouseup', 'contextmenu']) {
+        row.dispatchEvent(new globalThis.MouseEvent(type, { clientX: box.left + 4, clientY: box.top + 2, button: 2, bubbles: true, cancelable: true }));
+      }
+    }, name);
+    await app.waitFor('.context-menu .menu-row.danger');
+  };
+  /** Opens the strip's list and right-clicks a workspace's row. */
+  const rightClick = async name => {
+    await app.click('#crumb');
+    await app.waitFor('.context-menu .menu-row');
+    await rightClickRow(name);
+  };
+  assert.ok((await names()).includes('second'));
+  await rightClick('second');
+  assert.equal(await menus(), 2, 'the list stays open under the workspace menu');
+  await pause(400);
+  await app.screenshot('08-workspace-close-menu');
+  // Another row's right-click replaces it; Escape closes it and gives the list its keys back.
+  await rightClickRow('workspace');
+  assert.equal(await menus(), 2, 'one workspace menu at a time');
+  await app.key('.context-menu .menu-row.danger', 'Escape');
+  await pause(300);
+  assert.deepEqual({ menus: await menus(), keys: await app.eval(() => !!globalThis.document.activeElement?.closest('.context-menu .menu-row')) }, { menus: 1, keys: true });
+  await app.key('.context-menu', 'Escape');
+  await pause(300);
+  await rightClick('second');
+  await app.click('.context-menu .menu-row.danger');
+  await app.waitFor('[data-cancel]');
+  assert.equal(await app.text('.dialog h3, dialog h3'), 'Close “second”?');
+  await app.click('[data-cancel]');
+  await pause(300);
+  assert.ok((await names()).includes('second'), 'Cancel keeps it');
+  await rightClick('second');
+  await app.click('.context-menu .menu-row.danger');
+  await app.waitFor('[data-ok]');
+  await app.click('[data-ok]');
+  await pause(500);
+  assert.ok(!(await names()).includes('second'), 'closed');
+});
+
 step('Normal gives the title bar, sidebar and toolbar back', async () => {
   await setInterface({ layout: 'normal' });
   await pause(400);
@@ -346,7 +461,9 @@ step('Normal gives the title bar, sidebar and toolbar back', async () => {
     dock: globalThis.document.getElementById('dock').hidden,
     sidebar: globalThis.getComputedStyle(globalThis.document.getElementById('sidebar')).display !== 'none',
     header: Math.round(globalThis.document.querySelector('.ws-layer.active .pane > .pane-header').getBoundingClientRect().height),
+    // The workspace is a label again, as Normal always had it: no button, no arrow, no clicks.
+    crumb: (el => ({ role: el.getAttribute('role'), tabindex: el.getAttribute('tabindex'), arrow: globalThis.getComputedStyle(el.querySelector('.dock-chev')).display, clickable: globalThis.getComputedStyle(el).pointerEvents }))(globalThis.document.getElementById('crumb')),
   }));
-  assert.deepEqual(back, { toolbarInTitle: true, dock: true, sidebar: true, header: 30 });
+  assert.deepEqual(back, { toolbarInTitle: true, dock: true, sidebar: true, header: 30, crumb: { role: null, tabindex: null, arrow: 'none', clickable: 'none' } });
   await app.screenshot('08-normal-again');
 });

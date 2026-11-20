@@ -35,6 +35,43 @@ export function onMiddleClick(el, fn) {
   el.addEventListener('auxclick', e => { if (e.button === MIDDLE_BUTTON) fn(e); });
 }
 
+/** The mouse's left and right buttons. */
+const LEFT_BUTTON = 0;
+const RIGHT_BUTTON = 2;
+
+/**
+ * Whether a mouse press opens the right-click menu: the right button, or on a Mac Control with the left one.
+ * @param {MouseEvent} e
+ * @param {boolean} mac
+ */
+export const opensMenu = (e, mac) => e.button === RIGHT_BUTTON || (mac && e.ctrlKey && e.button === LEFT_BUTTON);
+
+/**
+ * Whether a selection lies wholly inside an element (where it starts and where it ends).
+ * @param {Selection | null} selection
+ * @param {HTMLElement} el
+ * @returns {selection is Selection}
+ */
+export const selectionInside = (selection, el) =>
+  !!selection && !selection.isCollapsed && el.contains(selection.anchorNode) && el.contains(selection.focusNode);
+
+/**
+ * Runs fn, then puts back the text selected inside `within` when fn cleared it (moving the keyboard focus does), the
+ * same way round, so the menu that opens next can still copy it. A selection elsewhere stays as fn leaves it.
+ * @param {HTMLElement} within
+ * @param {() => void} fn
+ */
+export function keepingSelectionIn(within, fn) {
+  const selection = within.ownerDocument.getSelection();
+  if (!selectionInside(selection, within)) {
+    fn();
+    return;
+  }
+  const { anchorNode, anchorOffset, focusNode, focusOffset } = selection;
+  fn();
+  if (selection.isCollapsed && anchorNode && focusNode) selection.setBaseAndExtent(anchorNode, anchorOffset, focusNode, focusOffset);
+}
+
 /**
  * An element of index.html, by its id.
  * @param {string} id
@@ -137,6 +174,8 @@ export function swallowNextClick() {
 export const TOOLBAR = '.toolbar';
 /** The title bar's id (index.html): the strip, in Minimal. */
 export const TITLEBAR_ID = 'titlebar';
+/** The workspace on screen in the title bar (index.html): js/sidebar.js fills it in, Minimal makes it open the list. */
+export const CRUMB_ID = 'crumb';
 /**
  * The edge of the window the title bar's buttons are docked on, when `el` is one of them (else the top): what opens
  * from one of them opens away from that edge.

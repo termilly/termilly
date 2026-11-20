@@ -61,12 +61,18 @@ internal sealed class Installation
     private readonly Payload _payload;
     private readonly SetupOptions _options;
     private readonly bool _integrate;
+    private readonly bool _supervised;
 
-    public Installation(Payload payload, SetupOptions options, bool integrate = true)
+    /// <param name="supervised">
+    /// An update at start (SupervisedUpdate): nothing is closed, only the files change, and the old ones stay as .old
+    /// until the new version reports healthy.
+    /// </param>
+    public Installation(Payload payload, SetupOptions options, bool integrate = true, bool supervised = false)
     {
         _payload = payload;
         _options = options;
-        _integrate = integrate;
+        _integrate = integrate && !supervised;
+        _supervised = supervised;
     }
 
     /// <summary>Whether the .NET runtime came from setup's own copy (the Done page says so).</summary>
@@ -98,7 +104,10 @@ internal sealed class Installation
             {
                 Log.Write("Windows integration skipped (--no-windows-integration)");
             }
-            TermillySettings.Write(_options);
+            if (!_supervised)
+            {
+                TermillySettings.Write(_options);
+            }
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Security.SecurityException or COMException)
         {
@@ -113,7 +122,10 @@ internal sealed class Installation
         }
         var installed = FileVersionInfo.GetVersionInfo(exe).ProductVersion ?? "?";
         Log.Write($"Termilly.exe {installed} is in place");
-        Folders.Delete(dir + BackupSuffix);
+        if (!_supervised)
+        {
+            Folders.Delete(dir + BackupSuffix);
+        }
         report(new Progress(Step.Check, UiText.Done, At.Done, Done: true));
     }
 
@@ -145,7 +157,7 @@ internal sealed class Installation
     private async Task CopyFilesAsync(string dir, Action<Progress> report, CancellationToken cancel)
     {
         report(new Progress(Step.Files, "Closing Termilly…", At.Closing));
-        await Task.Run(() => Processes.CloseAll(dir), cancel).ConfigureAwait(false);
+        await Task.Run(() => CloseAll(dir), cancel).ConfigureAwait(false);
         Log.Write("closing Termilly done");
         report(new Progress(Step.Files, "Copying Termilly…", At.Copying));
         var staging = dir + StagingSuffix;
@@ -172,11 +184,20 @@ internal sealed class Installation
                     "Close Termilly and any terminal or Explorer window open in that folder, then retry.");
             }
             // Whatever still runs from the folder (Termilly closing, a helper started meanwhile) is closed again.
-            await Task.Run(() => Processes.CloseAll(dir), cancel).ConfigureAwait(false);
+            await Task.Run(() => CloseAll(dir), cancel).ConfigureAwait(false);
             Log.Write($"closing Termilly done after swap try {attempt}; retrying in {SwapRetryDelay.TotalMilliseconds:0} ms");
             await Task.Delay(SwapRetryDelay, cancel).ConfigureAwait(false);
         }
         report(new Progress(Step.Files, "Termilly copied", At.Copied, Done: true, Note: $"{Folders.SizeMb(dir):0} MB"));
+    }
+
+    /// <summary>Closes what runs from the folder, except in an update at start, which never ends anything.</summary>
+    private void CloseAll(string dir)
+    {
+        if (!_supervised)
+        {
+            Processes.CloseAll(dir);
+        }
     }
 
     /// <summary>

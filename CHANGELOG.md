@@ -2,6 +2,22 @@
 
 What changed in each release. Termilly says in its title bar when a newer one is out.
 
+## 1.9.2 (2026-11-20)
+
+Fixes:
+
+- New version notice now shows in the Minimal layout and on macOS.
+
+## 1.9.1 (2026-11-20)
+
+- **Automatic updates:** Termilly updates itself at start and rolls back if the update fails (Settings › About).
+
+Fixes:
+
+- Compact and Minimal terminal views: fixes for the prompt box, reply width, @ files and pasted text, Codex's start-up questions and right-click.
+- Minimal layout: right-click a workspace to close it.
+- Minimal layout: the workspace name opens the list of workspaces while the dock is hidden.
+
 ## 1.9.0 (2026-11-18)
 
 - **Git and GitHub:** commit, push, pull requests, Issues, graph, local history, line staging, cleanup and checks.

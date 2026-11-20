@@ -236,16 +236,16 @@ internal sealed class CompactClaude : ICompactReader
         {
             log.Put(new CompactLine(key, CompactKinds.Interrupted, ""));
         }
-        else if (Prompt(text) is { Length: > 0 } prompt)
+        else if (Prompt(text) is { } prompt && PastedText.Unwrap(prompt) is { Length: > 0 } shown)
         {
-            log.Put(CompactText.Words(key, CompactKinds.Prompt, prompt));
+            log.Put(CompactText.Words(key, CompactKinds.Prompt, shown));
         }
     }
 
     /// <summary>The prompt as the user wrote it; a slash command by its name; Claude Code's own notes (tags) none.</summary>
     private static string? Prompt(string text)
     {
-        if (!text.StartsWith('<'))
+        if (!text.StartsWith('<') || PastedText.Leads(text))
         {
             return text;
         }

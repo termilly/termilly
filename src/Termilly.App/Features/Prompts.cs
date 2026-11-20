@@ -1,7 +1,6 @@
 using System.IO;
 using System.Text;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using Termilly.Desktop.Messaging;
 using Termilly.Desktop.Services;
 
@@ -97,7 +96,7 @@ internal sealed class PromptsHandler(PageChannel page, PromptHistory history, IS
 /// The prompts in a Claude Code transcript: the user's own messages, without tool results, slash commands' output,
 /// shell commands (!), notices Claude Code adds, or the summary a compaction starts with.
 /// </summary>
-internal static partial class TranscriptPrompts
+internal static class TranscriptPrompts
 {
     /// <summary>At most this many prompts are listed (the newest).</summary>
     public const int MaxPrompts = 2000;
@@ -192,7 +191,7 @@ internal static partial class TranscriptPrompts
             {
                 return null;
             }
-            text = PastedTag().Replace(text, "").Trim();
+            text = PastedText.Unwrap(text);
             if (text.Length == 0 || NotTyped.Any(n => text.StartsWith(n, StringComparison.Ordinal)))
             {
                 return null;
@@ -237,8 +236,4 @@ internal static partial class TranscriptPrompts
         e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
 
     private static bool IsTrue(JsonElement e, string name) => e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.True;
-
-    /// <summary>The tags a pasted text is wrapped in (the text itself stays).</summary>
-    [GeneratedRegex("</?pasted_content[^>]*>")]
-    private static partial Regex PastedTag();
 }

@@ -9,13 +9,21 @@ body[data-layout="minimal"] { --gap: 1px; --strip: 32px; --name-line: 24px; --na
 
 /* Two columns, not Normal's three: with the search box gone from the middle one, the window's buttons would move into it. */
 body[data-layout="minimal"] #titlebar { position: relative; grid-template-columns: minmax(0, 1fr) max-content; height: var(--strip); gap: 8px; }
-body[data-layout="minimal"] #titlebar :is(.brand, .searchbox),
+body[data-layout="minimal"] #titlebar .searchbox,
 body[data-layout="minimal"] #titlebar .tb-right > .separator,
 body[data-layout="minimal"] .bar-dock,
 body[data-layout="minimal"] :is(#sidebar, #sidebar-gap) { display: none; }
+/* The update notice, all that's left of the brand here (titlebar.css), comes after the workspace's name, before Set aside. */
+body[data-layout="minimal"] #titlebar .brand { order: 1; margin-left: 4px; }
+body[data-layout="minimal"] #titlebar .mini-aside { order: 2; }
 /* The workspace on screen, always (Normal shows it only while the sidebar is closed). */
-body[data-layout="minimal"] .crumb { height: 22px; margin-left: 4px; padding: 0 6px; border: 0; opacity: 1; transform: none; }
+/* It opens the list of all workspaces, as the dock's does (js/minimal.js); Normal's has no arrow and takes no clicks. */
+body[data-layout="minimal"] .crumb { gap: 6px; height: 22px; margin-left: 4px; padding: 0 6px; border: 0; border-radius: 6px; opacity: 1; transform: none; pointer-events: auto; }
 body[data-layout="minimal"] .crumb-name { font-weight: 600; }
+.crumb .dock-chev { display: none; }
+body[data-layout="minimal"] .crumb:hover { background: var(--hover); }
+body[data-layout="minimal"] .crumb:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
+body[data-layout="minimal"] .crumb .dock-chev { display: block; }
 .mini-aside, .mini-needs { display: none; }
 body[data-layout="minimal"] :is(.mini-aside, .mini-needs):not([hidden]) {
   display: inline-flex;

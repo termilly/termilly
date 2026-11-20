@@ -31,11 +31,11 @@ async function waitOnQuestion(app) {
   await until(() => app.eval(t => !t.$('.compact-view').classList.contains('drawer')), 'the card without the drawer');
 }
 
-async function scenario(name, lines, body, { waiting = false, ready = '.cv-choice[data-choice="3"]' } = {}) {
+async function scenario(name, lines, body, { waiting = false, ready = '.cv-choice[data-choice="3"]', prompt = {} } = {}) {
   const repo = await makeRepo();
   let app, failed = true;
   try {
-    app = await startApp({ folder: repo.folder, name, agents: { codex: { stdout: '', prompt: { lines } } } });
+    app = await startApp({ folder: repo.folder, name, agents: { codex: { stdout: '', prompt: { lines, ...prompt } } } });
     // Launch the bare command so shell integration recognizes the agent.
     await app.waitFor('.xterm');
     await app.eval(async t => {
@@ -102,7 +102,55 @@ test('a prompt with no question falls back to Codex asks', () => scenario('compa
 }));
 
 
-const tall = ['', '', `  ${question}`, '', ...Array.from({ length: 70 }, (_, i) => `  $ step ${i}`), ...choices, '  Press enter to confirm or esc to cancel'];
+// Codex's update offer as it starts (what a resume shows first), as Codex 0.170 draws it: its screen cleared, one blank row
+// above it, its cursor parked under it.
+const update = ['', '  Update available · 0.167.2 → 0.170.0', '  Release notes: https://github.com/openai/codex/releases/latest', '',
+  '› 1. Update now (runs `npm install -g @openai/codex`)', '  2. Skip', '  3. Skip until next version', '', '  enter continue · esc skip'];
+
+/** A resumed session: the feed has its lines before Codex shows its prompt. */
+const resumed = app => app.eval(async t => {
+  const { state, agentChanged } = await t.import('store.js');
+  const tab = [...state.tabs.values()].find(tab => tab.view?.term && tab.compactView);
+  tab.compact.lines = [{ key: 'p1', kind: 'prompt', text: 'an earlier prompt' }];
+  agentChanged(tab);
+});
+
+test("Codex's update offer is a card, also under a session the view already shows, never the live terminal", () => scenario('compact-update', update, async app => {
+  const drawer = () => app.eval(t => t.$('.compact-view').classList.contains('drawer'));
+  assert.equal(await drawer(), false, 'with the feed empty');
+  await resumed(app);
+  await app.waitFor('.cv-prompt');
+  await app.waitFor('.cv-choice[data-choice="2"]');
+  assert.equal(await drawer(), false, 'under the session');
+  await app.click('.cv-choice[data-choice="2"]');
+  await received(app, '2');
+}));
+
+test('Codex starting with no menu (an update it runs) says so under a resumed session, with the terminal a click away', () => scenario('compact-updating', ['', 'Updating Codex via `npm install -g @openai/codex`...'], async app => {
+  await resumed(app);
+  await app.waitFor('.cv-prompt');
+  await app.waitFor('.cv-prompt ~ .cv-empty .cv-open-terminal');
+  await app.click('.cv-empty .cv-open-terminal');
+  await app.waitFor('.compact-view', { gone: true });
+}, { ready: '.cv-empty .cv-open-terminal' }));
+
+test('Send from the prompt box never shows the terminal under it while Codex takes the prompt', () => scenario('compact-send', ['', '  >_ OpenAI Codex', ''], async app => {
+  // Counts each time the drawer opens (the terminal's rows showing under the view).
+  await app.eval(t => {
+    const view = t.$('.compact-view');
+    globalThis.drawerOpened = 0;
+    new globalThis.MutationObserver(() => { if (view.classList.contains('drawer')) globalThis.drawerOpened++; }).observe(view, { attributes: true, attributeFilter: ['class'] });
+    const input = t.$('.cv-input');
+    input.value = 'say hello';
+    input.dispatchEvent(new globalThis.Event('input'));
+  });
+  await app.click('.cv-send');
+  await until(async () => (await events(app)).some(e => e.event === 'prompt' && e.text === 'say hello'), 'Codex took the prompt');
+  await new Promise(resolve => setTimeout(resolve, 600));
+  assert.equal(await app.eval(() => globalThis.drawerOpened), 0);
+}, { ready: '.cv-input:not([readonly])', prompt: { input: '› ', picks: [], echoMs: 30, takeMs: 300 } }));
+
+const tall =['', '', `  ${question}`, '', ...Array.from({ length: 70 }, (_, i) => `  $ step ${i}`), ...choices, '  Press enter to confirm or esc to cancel'];
 
 /** Whether choice 3's button shows inside the feed. */
 const choiceInSight = app => app.eval(t => {
@@ -185,4 +233,52 @@ test('a prompt box hidden while its pane got narrower fits its text when its vie
   await pickView(app, 'Minimal');
   await app.waitFor('.cv-input');
   await until(async () => (await boxHeight(app)) > wide, 'taller once shown in the narrower pane');
+}, { waiting: true }));
+
+/**
+ * Right-clicks an element and returns the menu that opens, as each row's text and whether it can be picked, then closes
+ * it. Read at once: a menu opened by a made-up right-click over the terminal doesn't stay open for a later look.
+ */
+const rightClickMenu = (app, selector) => app.eval(async (t, s) => {
+  t.contextmenu(s);
+  const rows = t.$$('.menu-row').map(row => ({ text: row.textContent.trim(), enabled: !row.disabled }));
+  (await t.import('popups.js')).closeAll();
+  return rows;
+}, selector);
+
+/** Selects a view element's text as a drag would; returns what got selected. */
+const selectAllOf = (app, selector) => app.eval((t, s) => {
+  const el = t.$(s);
+  el.ownerDocument.getSelection().selectAllChildren(el);
+  return el.ownerDocument.getSelection().toString();
+}, selector);
+
+/** Selects text in the terminal itself (xterm's own selection); returns what got selected. */
+const selectInTerminal = (app, text) => app.eval(async (t, wanted) => {
+  const { state } = await t.import('store.js');
+  const term = [...state.tabs.values()].find(tab => tab.view?.term).view.term;
+  const buffer = term.buffer.active;
+  for (let y = 0; y < buffer.length; y++) {
+    const x = buffer.getLine(y)?.translateToString(true).indexOf(wanted) ?? -1;
+    if (x >= 0) { term.select(x, y, wanted.length); break; }
+  }
+  return term.getSelection();
+}, text);
+
+test('a right-click on selected text in the Compact and Minimal views shows the terminal\'s full menu for it', () => scenario('compact-menu', approval, async app => {
+  assert.equal(await selectAllOf(app, '.cv-question'), question);
+  const compact = await rightClickMenu(app, '.cv-question');
+  assert.ok(compact.find(row => row.text.startsWith('Copy'))?.enabled, 'Copy can be picked');
+  assert.ok(compact.some(row => row.text === 'Ask an agent about this'), 'the selection\'s entries are there');
+
+  await pickView(app, 'Minimal');
+  await app.waitFor('.cv-question');
+  assert.equal(await selectAllOf(app, '.cv-question'), question);
+  assert.deepEqual(await rightClickMenu(app, '.cv-question'), compact);
+
+  // The terminal's own menu for the same selected text is the same menu.
+  await pickView(app, 'Full');
+  await app.waitFor('.compact-view', { gone: true });
+  assert.equal(await selectInTerminal(app, question), question);
+  assert.deepEqual(await rightClickMenu(app, '.ws-layer.active .pane .xterm'), compact);
 }, { waiting: true }));
