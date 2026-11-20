@@ -36,6 +36,7 @@ const SOURCES = [
   { file: 'Messaging/Compact.cs', cls: 'CompactVerbs', js: 'COMPACT_VERB' },
   { file: 'Messaging/Compact.cs', cls: 'CompactLimits', js: 'COMPACT_LIMIT' },
   { file: 'Settings/SettingRecords.cs', cls: 'CustomThemeLimits', js: 'CUSTOM_THEME' },
+  { file: 'Settings/BackgroundSettings.cs', cls: 'BackgroundValues', js: 'BACKGROUND' },
   { file: 'Changes/ChangeModel.cs', cls: 'ChangeSources', js: 'CHANGE_SOURCE' },
   { file: 'Changes/ChangeModel.cs', cls: 'ChangeKinds', js: 'CHANGE_KIND' },
   { file: '../Shared/HookEvents.cs', cls: 'HookEvents', js: 'HOOK_EVENT' },
@@ -63,7 +64,7 @@ const SOURCES = [
 ];
 
 /** The files with the records the page gets as they are: AppSettings and every record it holds, and SessionProfile. */
-const TYPE_FILES = ['Settings/AppSettings.cs', 'Settings/SettingGroups.cs', 'Settings/SettingRecords.cs', 'SerialConsole.cs', 'SshConnections.cs', 'SessionProfiles.cs'];
+const TYPE_FILES = ['Settings/AppSettings.cs', 'Settings/SettingGroups.cs', 'Settings/SettingRecords.cs', 'Settings/BackgroundSettings.cs', 'SerialConsole.cs', 'SshConnections.cs', 'SessionProfiles.cs'];
 
 const camel = name => name[0].toLowerCase() + name.slice(1);
 

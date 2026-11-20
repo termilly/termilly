@@ -12,6 +12,8 @@ namespace Termilly.Linux;
 internal sealed class LinuxPlatform(Action<string> send, string? startFolder) :
     PhotinoPlatform(send, startFolder), IDesktopShell, INotifier, ISystemProcesses, ISignInStart, ISystemTheme
 {
+    public override IReadOnlyList<string> Effects => OperatingSystem.IsLinux() ? LinuxBlur.Effects : [BackgroundValues.Effect.None];
+
     /// <summary>What a dark colour scheme's name has in it ("prefer-dark").</summary>
     private const string DarkScheme = "dark";
     private static readonly string[] ColorSchemeQuery = ["get", "org.gnome.desktop.interface", "color-scheme"];

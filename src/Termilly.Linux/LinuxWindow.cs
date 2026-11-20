@@ -57,6 +57,40 @@ internal sealed class LinuxWindow
         }
     }
 
+    /// <summary>See-through and blur (Settings › Appearance › Background): the latest asked, applied once the window exists.</summary>
+    private volatile bool _seeThrough;
+    private volatile bool _blur;
+
+    /// <summary>
+    /// The window's background changed: on macOS its web views draw nothing behind the page while see-through, and both
+    /// systems blur behind where they can (KDE, macOS). Linux windows are always see-through (the page paints them).
+    /// </summary>
+    public void SetBackdrop(BackgroundSettings background)
+    {
+        _seeThrough = background.SeeThrough;
+        _blur = background.SeeThrough && background.Effect == BackgroundValues.Effect.Blur;
+        if (_window is { } window && _created)
+        {
+            window.Invoke(ApplyBackdrop);
+        }
+    }
+
+    private void ApplyBackdrop()
+    {
+        if (OperatingSystem.IsLinux())
+        {
+            if (GtkWindow.Find() is { } main)
+            {
+                LinuxBlur.Set(main, _blur);
+            }
+            DetachedWindows.SetBlur(_blur);
+        }
+        else if (OperatingSystem.IsMacOS())
+        {
+            MacBackdrop.SetAll(_seeThrough, _blur);
+        }
+    }
+
     private void ApplyZoom(PhotinoWindow window)
     {
         if (OperatingSystem.IsLinux())
@@ -212,6 +246,7 @@ internal sealed class LinuxWindow
                 DetachedWindows.SetZoom(_zoom / (double)InterfaceSettings.DefaultZoom);
                 GtkWindow.ClearBackground(main);
                 DetachedWindows.Hook(main);
+                ApplyBackdrop();
                 // After ClearBackground, which may take the window down and show it again.
                 _placement?.Restore(window, StartFrame);
             }
@@ -219,6 +254,7 @@ internal sealed class LinuxWindow
             {
                 // Rounded corners, maximize, and the page's own windows (Photino does none of them on macOS).
                 MacWindows.Hook(action => window.Invoke(action), _zoom / (double)InterfaceSettings.DefaultZoom);
+                ApplyBackdrop();
                 // Cmd+Q quits as Close does: asking first, after the last snapshot. Once the window has closed, it may.
                 MacQuit.Hook(() =>
                 {

@@ -33,6 +33,7 @@ import { restoreFocus } from '../panes.js';
 /** The sections' ids, in the nav's order. */
 export const SECTION = Object.freeze({
   appearance: 'appearance',
+  appearanceBackground: 'appearance-background',
   appearanceText: 'appearance-text',
   appearanceLayout: 'appearance-layout',
   terminal: 'terminal',

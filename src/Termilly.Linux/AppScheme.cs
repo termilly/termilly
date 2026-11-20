@@ -1,5 +1,6 @@
 using System.Text;
 using Termilly.Desktop;
+using Termilly.Desktop.Features;
 using Termilly.Desktop.Services;
 
 namespace Termilly.Linux;
@@ -30,10 +31,17 @@ internal static class AppScheme
     /// <summary>The page's root says its window's corners are its own to round (app.css).</summary>
     private const string RoundCorners = "round";
 
+    /// <summary>Where the background pictures are served (Features/BackgroundPictures.cs): app://localhost/backgrounds/name.</summary>
+    public const string PicturesPath = BackgroundPictures.FolderName;
+
     public static Stream? Serve(string url, ThemeWindowColors colors, out string contentType)
     {
         contentType = MediaTypes.PlainText;
         var path = Uri.TryCreate(url, UriKind.Absolute, out var uri) ? Uri.UnescapeDataString(uri.AbsolutePath).TrimStart('/') : "";
+        if (path.StartsWith(PicturesPath + '/', StringComparison.Ordinal))
+        {
+            return ServePicture(path[(PicturesPath.Length + 1)..], out contentType);
+        }
         var file = Path.GetFullPath(Path.Combine(Root, path.Length == 0 ? IndexPage : path));
         if (!file.StartsWith(Root + Path.DirectorySeparatorChar, StringComparison.Ordinal) || !File.Exists(file))
         {
@@ -47,6 +55,18 @@ internal static class AppScheme
             var page = File.ReadAllText(file).Replace("<html>", $"<html data-theme=\"{(colors.Light ? "light" : "dark")}\"{corners} style=\"--bg:{colors.Background};--text:{colors.Text};--accent:{colors.Accent}\">");
             return new MemoryStream(Encoding.UTF8.GetBytes(page));
         }
+        return File.OpenRead(file);
+    }
+
+    /// <summary>A background picture by its name in the backgrounds folder, nothing else of the data folder.</summary>
+    private static FileStream? ServePicture(string name, out string contentType)
+    {
+        contentType = MediaTypes.Binary;
+        if (BackgroundPictures.FileFor(BackgroundPictures.Folder, name) is not { } file)
+        {
+            return null;
+        }
+        contentType = BackgroundPictures.Types[Path.GetExtension(file)];
         return File.OpenRead(file);
     }
 }

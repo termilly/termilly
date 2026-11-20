@@ -75,6 +75,7 @@ public partial class MainWindow : Window
         // Termilly opens where the window was last closed (maximized, if it was), on the start-up screen until the
         // page is ready (RevealPage).
         SourceInitialized += (_, _) => WindowPlacement.Restore(this, _target = WindowPlacement.Plan(new Size(MinWidth, MinHeight)));
+        SourceInitialized += (_, _) => ApplyBackdrop(); // see-through needs the window's handle
         Stage.SizeChanged += (_, _) => FitPageToWindow();
         ApplyTheme();
 
@@ -106,7 +107,7 @@ public partial class MainWindow : Window
         Web.ZoomFactor = Zoom;
         foreach (var window in _detached)
         {
-            window.Recolor(_theme.Palette);
+            window.Recolor(_theme.Palette, Settings.Background);
             window.Zoom(Zoom);
         }
         UpdateGlobalHotkeys();
@@ -129,6 +130,19 @@ public partial class MainWindow : Window
         LoaderText.Foreground = Brush(colors.Text);
         LoaderCaret.Fill = Brush(colors.Accent);
         Web.DefaultBackgroundColor = System.Drawing.ColorTranslator.FromHtml(colors.Background);
+        ApplyBackdrop();
+    }
+
+    /// <summary>
+    /// See-through or solid, as Settings › Appearance › Background says (solid by default, as before). The start-up
+    /// screen stays solid: it has its own background.
+    /// </summary>
+    private void ApplyBackdrop()
+    {
+        var background = Settings.Background;
+        // Windows paints a see-through window black first: black is what the glass shows through.
+        WindowInterop.Background = background.SeeThrough ? WindowInterop.Black : _theme.Palette.Background;
+        WindowBackdrop.Apply(this, Web, background, !_theme.Palette.Light, _theme.Palette.Background);
     }
 
     private static SolidColorBrush Brush(string hex) => (SolidColorBrush)new BrushConverter().ConvertFromString(hex)!;
@@ -202,6 +216,7 @@ public partial class MainWindow : Window
         core.Settings.IsZoomControlEnabled = false;
         core.SetVirtualHostNameToFolderMapping(
             HostName, AppPaths.WebRoot, CoreWebView2HostResourceAccessKind.Deny);
+        WindowBackdrop.MapPictures(core);
         core.WebMessageReceived += OnWebMessage;
         ClipboardReadPermission.AllowForPage(core, HostName);
         core.NewWindowRequested += OnNewWindowRequested;

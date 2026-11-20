@@ -40,11 +40,11 @@ public sealed class CustomThemeTests
     public void No_cursor_colour_is_fine() => Assert.NotNull(Theme(cursor: null).Normalize());
 
     [Fact]
-    public void Settings_keep_the_good_ones_once_each_and_at_most_fifty()
+    public void Settings_keep_the_good_ones_once_each_and_at_most_the_limit()
     {
-        var many = Enumerable.Range(0, 70).Select(i => Theme(id: $"custom-{i}")).ToList();
+        var many = Enumerable.Range(0, CustomThemeLimits.MaxThemes + 20).Select(i => Theme(id: $"custom-{i}")).ToList();
         var kept = new InterfaceSettings { CustomThemes = [Theme(), Theme(), Theme(id: "bad"), .. many] }.Normalize().CustomThemes!;
-        Assert.Equal(50, kept.Count);
+        Assert.Equal(CustomThemeLimits.MaxThemes, kept.Count);
         Assert.Single(kept, t => t.Id == "custom-dracula");
         Assert.DoesNotContain(kept, t => t.Id == "bad");
     }

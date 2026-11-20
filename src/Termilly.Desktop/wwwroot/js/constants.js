@@ -188,6 +188,64 @@ export const CUSTOM_THEME = Object.freeze({
   folderDepth: 3,
 });
 
+/** C#: BackgroundValues (Settings/BackgroundSettings.cs). */
+export const BACKGROUND = Object.freeze({
+  effect: Object.freeze({
+    none: 'none',
+    blur: 'blur',
+    acrylic: 'acrylic',
+    mica: 'mica',
+    default: 'none',
+    all: Object.freeze(['none', 'blur', 'acrylic', 'mica']),
+  }),
+  opacity: Object.freeze({
+    min: 40,
+    max: 100,
+    default: 100,
+  }),
+  fit: Object.freeze({
+    fill: 'fill',
+    contain: 'fit',
+    center: 'center',
+    tile: 'tile',
+    default: 'fill',
+    all: Object.freeze(['fill', 'fit', 'center', 'tile']),
+  }),
+  dim: Object.freeze({
+    min: 0,
+    max: 90,
+    default: 50,
+  }),
+  blur: Object.freeze({
+    min: 0,
+    max: 20,
+    default: 0,
+  }),
+  behind: Object.freeze({
+    terminals: 'terminals',
+    window: 'window',
+    default: 'terminals',
+    all: Object.freeze(['terminals', 'window']),
+  }),
+  workspaceKind: Object.freeze({
+    window: 'window',
+    none: 'none',
+    gradient: 'gradient',
+    picture: 'picture',
+    default: 'window',
+    all: Object.freeze(['window', 'none', 'gradient', 'picture']),
+  }),
+  gradient: Object.freeze({
+    aurora: 'aurora',
+    ember: 'ember',
+    dusk: 'dusk',
+    ocean: 'ocean',
+    moss: 'moss',
+    slate: 'slate',
+    all: Object.freeze(['aurora', 'ember', 'dusk', 'ocean', 'moss', 'slate']),
+  }),
+});
+
 /** C#: ChangeSources (Changes/ChangeModel.cs). */
 export const CHANGE_SOURCE = Object.freeze({
   snapshot: 'snapshot',

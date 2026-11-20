@@ -18,6 +18,7 @@ import { modal } from './dialogs.js';
 import { escapeHtml } from './ui.js';
 import { pasteNeedsConfirm, confirmProduction } from './environments.js';
 import { currentTheme, themeId, themeById, THEME_BASE } from './themes.js';
+import { clearTerminals } from './backgrounds.js';
 import { updateSettings } from './preferences.js';
 import { resumeCommand, attachFor } from './resume.js';
 import { noteRemotePrompt, noteRemoteCwd, leftRemote } from './remotecwd.js';
@@ -95,6 +96,16 @@ const lightTerminal = () => {
  */
 const CONTRAST = Object.freeze({ light: 4.5, dark: 1 });
 
+/** A terminal's background with nothing of its own: the window's background shows through (js/backgrounds.js). */
+const NO_BACKGROUND = 'rgba(0, 0, 0, 0)';
+/** The see-through copy of a theme, kept per theme so the options only change when the theme does. */
+const clearThemes = new WeakMap();
+/** @param {any} theme */
+function clearTheme(theme) {
+  if (!clearThemes.has(theme)) clearThemes.set(theme, { ...theme, background: NO_BACKGROUND });
+  return clearThemes.get(theme);
+}
+
 /** Terminal options that come from Settings. */
 const settingsOptions = () => ({
   fontFamily: fontStack(state.settings.terminal.fontFamily),
@@ -104,7 +115,8 @@ const settingsOptions = () => ({
   cursorBlink: state.settings.terminal.cursorBlink,
   cursorStyle: state.settings.terminal.cursorStyle,
   scrollback: state.settings.terminal.scrollback,
-  theme: termTheme(),
+  theme: clearTerminals() ? clearTheme(termTheme()) : termTheme(),
+  allowTransparency: clearTerminals(),
   minimumContrastRatio: lightTerminal() ? CONTRAST.light : CONTRAST.dark,
 });
 
@@ -1200,8 +1212,9 @@ export function bufferLines(tab, max = state.settings.terminal.scrollback) {
   return lines;
 }
 
-// A theme plugin came or went: its terminal colours with it.
+// A theme plugin came or went: its terminal colours with it. The window's background came or went behind them.
 on(EVENTS.plugins, () => applyTerminalSettings());
+on(EVENTS.backdrop, () => applyTerminalSettings());
 
 /** Applies Settings (font, cursor, scrollback, theme) to every open terminal. */
 export function applyTerminalSettings() {

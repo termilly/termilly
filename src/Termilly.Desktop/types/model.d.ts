@@ -75,6 +75,13 @@ interface Note {
   pinned?: boolean;
 }
 
+/** A workspace's own background: BACKGROUND.workspaceKind, with its gradient's name or picture's file. */
+interface WorkspaceBackground {
+  kind: string;
+  gradient?: string;
+  picture?: string;
+}
+
 interface Workspace {
   id: string;
   name: string;
@@ -93,6 +100,8 @@ interface Workspace {
   asideCollapsed?: boolean;
   /** Where "Copy to" last copied from here (js/copyto.js): the terminal picked, and the folder picked in each. */
   copyTo?: { tab: string | null; dirs: Record<string, string> };
+  /** Its own background (js/backgrounds.js): none means the window's (Settings › Appearance › Background). */
+  background?: WorkspaceBackground;
   /** Another Termilly computer's terminals open here (js/remotepc.js): its id. Not listed with this PC's; never saved. */
   remote?: string;
   /** A tmux window shown as this workspace (js/tmux.js); never saved. */

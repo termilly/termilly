@@ -186,7 +186,7 @@ internal static class MacWindowDrag
             }
             finally
             {
-                onMain(() => Send(window, "release"));
+                onMain(() => Send(window, Cocoa.Release));
                 Volatile.Write(ref _following, 0);
             }
         }) { IsBackground = true, Name = "window-drag" }.Start();

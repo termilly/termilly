@@ -1,0 +1,140 @@
+// @ts-check
+// The window's background (Settings › Appearance › Background, settings/appearancebackground.js): see-through, so the
+// desktop shows (the host makes the window so, with the system's blur behind where it has one), and a picture or a
+// gradient behind the terminals or the whole window. A workspace can have its own (its right-click menu): the one on
+// screen wins. Everything is set on the page's root (attributes and CSS variables, css/backgrounds.css), which the
+// detached windows copy (js/windows.js), so they follow too.
+
+import { request } from './host.js';
+import { PAGE } from './protocol.js';
+import { state, on, emit, activeWs, EVENTS } from './store.js';
+import { BACKGROUND } from './constants.js';
+import { openDocuments } from './windows.js';
+import { cssString } from './ui.js';
+
+const { effect: EFFECT, opacity: OPACITY, fit: FIT, behind: BEHIND, workspaceKind: KIND, gradient: GRADIENT } = BACKGROUND;
+
+/**
+ * The gradients a workspace can have, drawn here (C#'s BackgroundValues.Gradient names them).
+ * @type {Readonly<Record<string, string>>}
+ */
+export const GRADIENTS = Object.freeze({
+  [GRADIENT.aurora]: 'linear-gradient(135deg, #1d2b64 0%, #2b6c7a 50%, #1f8a6b 100%)',
+  [GRADIENT.ember]: 'linear-gradient(135deg, #2b0f12 0%, #5a1a1f 55%, #8a2a1e 100%)',
+  [GRADIENT.dusk]: 'linear-gradient(160deg, #211a3d 0%, #4b2a5c 60%, #7a3f55 100%)',
+  [GRADIENT.ocean]: 'linear-gradient(160deg, #061a2b 0%, #0f3a57 100%)',
+  [GRADIENT.moss]: 'linear-gradient(160deg, #10201a 0%, #23402f 100%)',
+  [GRADIENT.slate]: 'linear-gradient(160deg, #15171c 0%, #2a2f3a 100%)',
+});
+
+/**
+ * How a picture fills its space, as CSS: its size and whether it repeats.
+ * @type {Readonly<Record<string, { size: string, repeat: string }>>}
+ */
+const FIT_CSS = Object.freeze({
+  [FIT.fill]: { size: 'cover', repeat: 'no-repeat' },
+  [FIT.contain]: { size: 'contain', repeat: 'no-repeat' },
+  [FIT.center]: { size: 'auto', repeat: 'no-repeat' },
+  [FIT.tile]: { size: 'auto', repeat: 'repeat' },
+});
+
+/** The page root's attributes and variables (css/backgrounds.css reads them). */
+const ROOT = Object.freeze({
+  seeThrough: 'seeThrough', backdrop: 'backdrop', clearTerminals: 'clearTerminals',
+  alpha: '--window-alpha', image: '--backdrop-image', size: '--backdrop-size', repeat: '--backdrop-repeat',
+  blur: '--backdrop-blur', dim: '--backdrop-dim',
+});
+const PERCENT = 100;
+const ON = '';
+
+/** What the host says this system has: the effects its windows have, and where pictures load from. */
+let info = { effects: /** @type {string[]} */ ([EFFECT.none]), pictureBase: '' };
+
+/** The effects this system's windows have (Settings offers only these). */
+export const effects = () => info.effects;
+
+/** A picture's address, by its name in the backgrounds folder. @param {string} name */
+export const pictureUrl = name => info.pictureBase + encodeURIComponent(name);
+
+/** Whether the app has a window in front (one of Termilly's). */
+let active = true;
+
+/** @typedef {{ image: string, fit: string, behind: string }} Backdrop */
+
+/**
+ * What shows behind: the workspace on screen's own background, else Settings'; null for none.
+ * @returns {Backdrop | null}
+ */
+function backdrop() {
+  const settings = state.settings.background;
+  const own = activeWs()?.background;
+  if (own?.kind === KIND.none) return null;
+  if (own?.kind === KIND.gradient && own.gradient && GRADIENTS[own.gradient]) {
+    return { image: GRADIENTS[own.gradient], fit: FIT.fill, behind: BEHIND.terminals };
+  }
+  const picture = own?.kind === KIND.picture && own.picture ? own.picture : settings?.picture;
+  if (!picture || !info.pictureBase) return null;
+  return { image: `url("${cssString(pictureUrl(picture))}")`, fit: settings.fit, behind: settings.behind };
+}
+
+/** Whether the terminals are drawn without a background of their own (something shows through them). */
+let clear = false;
+
+/** Whether the terminals draw no background now (js/terminals.js: xterm's transparency). */
+export const clearTerminals = () => clear;
+
+/** Sets the page's root as the background settings, the workspace on screen and the app's focus say. */
+export function applyBackdrop() {
+  const root = document.documentElement;
+  const settings = state.settings.background;
+  if (!settings) return;
+  const seeThrough = settings.opacity < OPACITY.max && (active || !settings.solidWhenInactive);
+  const shown = backdrop();
+  toggle(root, ROOT.seeThrough, seeThrough);
+  root.style.setProperty(ROOT.alpha, String(settings.opacity / PERCENT));
+  if (shown) {
+    root.dataset[ROOT.backdrop] = shown.behind;
+    const fit = FIT_CSS[shown.fit] ?? FIT_CSS[FIT.fill];
+    root.style.setProperty(ROOT.image, shown.image);
+    root.style.setProperty(ROOT.size, fit.size);
+    root.style.setProperty(ROOT.repeat, fit.repeat);
+    root.style.setProperty(ROOT.blur, `${settings.blur}px`);
+    root.style.setProperty(ROOT.dim, String(settings.dim / PERCENT));
+  } else {
+    delete root.dataset[ROOT.backdrop];
+    for (const name of [ROOT.image, ROOT.size, ROOT.repeat, ROOT.blur, ROOT.dim]) root.style.removeProperty(name);
+  }
+  const nowClear = !!shown || (seeThrough && !settings.solidTerminals);
+  toggle(root, ROOT.clearTerminals, nowClear);
+  if (nowClear !== clear) {
+    clear = nowClear;
+    emit(EVENTS.backdrop);
+  }
+}
+
+/** @param {HTMLElement} root @param {string} name @param {boolean} on */
+function toggle(root, name, on) {
+  if (on) root.dataset[name] = ON;
+  else delete root.dataset[name];
+}
+
+/** Asks the host what this system has, then applies (a picture needs its address). */
+export async function loadBackdropInfo() {
+  const reply = await request(PAGE.backgroundInfo, {});
+  info = { effects: reply.effects, pictureBase: reply.pictureBase };
+  applyBackdrop();
+}
+
+/** The app in front or not: any of its windows has the focus. A moment later, as focus moves between them. */
+function followFocus() {
+  setTimeout(() => {
+    const now = openDocuments().some(doc => doc.hasFocus());
+    if (now === active) return;
+    active = now;
+    applyBackdrop();
+  });
+}
+
+window.addEventListener('focus', followFocus);
+window.addEventListener('blur', followFocus);
+on(EVENTS.workspaces, applyBackdrop);

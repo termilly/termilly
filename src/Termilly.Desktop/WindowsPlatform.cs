@@ -12,7 +12,7 @@ namespace Termilly.Desktop;
 /// background host at sign-in. Calls may come from any thread; what touches the window runs on its thread.
 /// </summary>
 internal sealed class WindowsPlatform(MainWindow window) :
-    IPageSink, IAppWindow, IFileDialogs, IDesktopShell, INotifier, ISystemProcesses, ISignInStart, ISystemTheme
+    IPageSink, IAppWindow, IFileDialogs, IDesktopShell, INotifier, ISystemProcesses, ISignInStart, ISystemTheme, IWindowBackdrop
 {
     /// <summary>Where Windows keeps whether apps use the light theme (1) or the dark one.</summary>
     private const string PersonalizeKey = @"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize";
@@ -129,6 +129,21 @@ internal sealed class WindowsPlatform(MainWindow window) :
         var dialog = new Microsoft.Win32.OpenFileDialog { Title = "Import colour schemes", Filter = SchemeFilter, Multiselect = true };
         return Task.FromResult<IReadOnlyList<string>>(dialog.ShowDialog(window) == true ? dialog.FileNames : []);
     }
+
+    public Task<string?> PickPictureToOpenAsync()
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog { Title = "Background picture", Filter = PictureFilter };
+        return Task.FromResult(dialog.ShowDialog(window) == true ? dialog.FileName : null);
+    }
+
+    private static readonly string PicturePatterns = string.Join(';', BackgroundPictures.Types.Keys.Select(e => "*" + e));
+    private static readonly string PictureFilter = $"Pictures ({PicturePatterns})|{PicturePatterns}";
+
+    // ---- The window's background ----
+
+    public IReadOnlyList<string> Effects => WindowBackdrop.Effects;
+
+    public string PictureBase => WindowBackdrop.PictureBase;
 
     private const string TextFilter = "Text files (*.txt;*.md)|*.txt;*.md|All files (*.*)|*.*";
     private static readonly string SchemePatterns = string.Join(';', SchemeFiles.Extensions.Select(e => "*" + e));

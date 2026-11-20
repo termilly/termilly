@@ -48,6 +48,19 @@ export const seg = (key, options) => `
  */
 export const choices = (values, label) => values.map(value => [value, label(value)]);
 
+/**
+ * A slider bound to a setting, with its value beside it (data-range-setting: settings.js shows it and saves it as it
+ * moves).
+ * @param {string} key
+ * @param {{ min: number, max: number }} range
+ * @param {string} unit what the value is shown with: '%' or 'px'
+ * @param {string} label
+ */
+export const slider = (key, { min, max }, unit, label) => `<div class="size-control">
+    <input class="set-range" type="range" min="${min}" max="${max}" step="1" data-range-setting="${key}" data-unit="${unit}" aria-label="${label}">
+    <span class="set-range-value"></span>
+  </div>`;
+
 /** An on/off switch bound to a setting. @param {string} key */
 export const toggle = key => `<button class="switch" role="switch" data-setting="${key}" aria-label="${key}"><span></span></button>`;
 

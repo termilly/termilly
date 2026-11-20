@@ -8,9 +8,11 @@ import { applyTerminalSettings, isLight, onSystemThemeChange } from './terminals
 import { THEME_VARIABLES, currentTheme, TERM_FONT_VAR } from './themes.js';
 import { cssString, escapeHtml } from './ui.js';
 import { compileTriggers } from './triggers.js';
+import { applyBackdrop } from './backgrounds.js';
 import { updateSettings, setSetting, saveSoon, onApply } from './preferences.js';
 import { layer, body, button, page, setRedraw, closeSettings } from './settings/page.js';
 import { SECTIONS } from './settings/sections.js';
+import { setRange } from './settings/controls.js';
 import { SETTING_VALUES, PRODUCT } from './constants.js';
 import { send } from './host.js';
 import { PAGE } from './protocol.js';
@@ -65,6 +67,7 @@ export function applySettings() {
   // The change preview shows code in the terminals' font and size.
   root.style.setProperty(TERM_FONT_VAR, `"${cssString(state.settings.terminal.fontFamily)}", var(--mono)`);
   root.style.setProperty('--term-font-size', `${state.settings.terminal.fontSize}px`);
+  applyBackdrop(); // before the terminals: whether they draw a background of their own
   applyTerminalSettings();
   compileTriggers();
   if (!layer.hidden) syncControls();
@@ -403,6 +406,20 @@ export function openSetting(section, name) {
   revealSetting(section, name);
 }
 
+/** The sliders bound to a setting (controls.js slider). */
+const RANGE_SETTING = 'input[data-range-setting]';
+
+/**
+ * A slider at a value: its fill, and the value beside it with its unit.
+ * @param {HTMLInputElement} range
+ * @param {number} value
+ */
+function showRange(range, value) {
+  setRange(range, value);
+  const shown = range.nextElementSibling;
+  if (shown) shown.textContent = `${value}${range.dataset.unit ?? ''}`;
+}
+
 /** Reflects the current settings in the visible controls. */
 function syncControls() {
   for (const el of /** @type {NodeListOf<HTMLElement>} */ (body.querySelectorAll('[data-setting]'))) {
@@ -417,6 +434,9 @@ function syncControls() {
       // Its own setting; the default shell, when none is chosen yet, is the first one, and other unset ones the empty choice.
       /** @type {HTMLSelectElement} */ (el).value = String(value ?? (el.dataset.setting === DEFAULT_SHELL ? state.profiles[0]?.id : null) ?? '');
     }
+  }
+  for (const range of /** @type {NodeListOf<HTMLInputElement>} */ (body.querySelectorAll(RANGE_SETTING))) {
+    showRange(range, Number(getSetting(/** @type {string} */ (range.dataset.rangeSetting))));
   }
   for (const select of /** @type {NodeListOf<HTMLSelectElement>} */ (body.querySelectorAll('select.field'))) {
     dropdown(select);
@@ -491,6 +511,12 @@ body.addEventListener('click', e => {
 });
 
 body.addEventListener('input', e => {
+  // A slider bound to a setting saves as it moves, so what it changes shows at once.
+  const range = /** @type {HTMLInputElement} */ (targetOf(e));
+  if (range.matches(RANGE_SETTING)) {
+    showRange(range, Number(range.value));
+    saveSetting(/** @type {string} */ (range.dataset.rangeSetting), Number(range.value));
+  }
   for (const section of sections) section.input?.(e);
 });
 body.addEventListener('change', e => {

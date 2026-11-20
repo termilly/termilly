@@ -137,7 +137,7 @@ function sync(root) {
 const APPEARANCE = {
   id: SECTION.appearance,
   label: 'Appearance', tab: 'Theme', icon: ICONS.appearance,
-  tabs: [SECTION.appearance, SECTION.appearanceText, SECTION.appearanceLayout],
+  tabs: [SECTION.appearance, SECTION.appearanceBackground, SECTION.appearanceText, SECTION.appearanceLayout],
   html: () => group('', row('Follow the system', 'Default theme per mode',
     `<span class="theme-follow">${picker(DARK_PICK, THEME_BASE.dark, 'Dark')}${picker(LIGHT_PICK, THEME_BASE.light, 'Light')}
       <button class="switch" role="switch" data-theme-follow aria-label="Follow the system"><span></span></button></span>`,

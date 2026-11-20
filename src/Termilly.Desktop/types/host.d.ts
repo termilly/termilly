@@ -9,6 +9,8 @@ interface AppSettings {
   terminal: TerminalSettings;
   /** The app around the terminals. */
   interface: InterfaceSettings;
+  /** The window's background: see-through, an effect, a picture (Settings › Appearance › Background). */
+  background: BackgroundSettings;
   /** The shells on offer. */
   shells: ShellSettings;
   /** Snippets and triggers. */
@@ -403,6 +405,24 @@ interface ActionSetting {
   shortcut: string | null;
   menu: boolean;
   enabled: boolean;
+}
+
+/** The window's background (Settings › Appearance › Background): how see-through it is and what shows through, and a picture behind the terminals or the whole window. The defaults are a solid window with no picture, as before. */
+interface BackgroundSettings {
+  /** The window's own colour in percent (); below 100 the desktop shows through. */
+  opacity: number;
+  /** What shows through (), where the system has it. */
+  effect: string;
+  /** The window turns solid while another app is in front. */
+  solidWhenInactive: boolean;
+  /** Only the window around the terminals is see-through; the terminals keep their colour. */
+  solidTerminals: boolean;
+  /** The picture's file in the backgrounds folder (), or none. */
+  picture: string | null;
+  fit: string;
+  dim: number;
+  blur: number;
+  behind: string;
 }
 
 /** How a COM port is set up (Settings › Serial); one per port that's been changed from the defaults. */

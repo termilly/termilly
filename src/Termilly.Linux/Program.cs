@@ -51,6 +51,8 @@ internal static class Program
         var settings = provider.GetRequiredService<ISettingsStore>();
         window.SetZoom(settings.Current.Interface.Zoom);
         settings.Saved += _ => window.SetZoom(settings.Current.Interface.Zoom);
+        window.SetBackdrop(settings.Current.Background);
+        settings.Saved += _ => window.SetBackdrop(settings.Current.Background);
         if (OperatingSystem.IsLinux() && settings.Current.Interface.RunAsX11)
         {
             GtkWindow.UseX11(); // before the window opens GTK

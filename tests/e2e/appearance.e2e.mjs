@@ -7,9 +7,9 @@ import { until } from './gitsteps.mjs';
 
 /** The names of the gallery's cards that are drawn (not only marked hidden). */
 const shownCards = app => app.eval(t => t.$$('.theme-card').filter(c => c.getClientRects().length).map(c => c.querySelector('.tc-name').textContent));
-/** The interface settings the page has. */
 /** How far past the tools the page is scrolled, in px: several rows of cards. */
 const SCROLL_PAST = 400;
+/** The interface settings the page has. */
 const iface = app => app.eval(async t => ({ ...(await t.import('store.js')).state.settings.interface }));
 
 /** Settings open on Appearance, in a fresh app. */

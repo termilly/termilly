@@ -1,0 +1,67 @@
+/* The window's background (js/backgrounds.js, Settings › Appearance › Background), set on the page's root:
+   data-see-through: the desktop shows through, the window's colour at --window-alpha;
+   data-backdrop="terminals" | "window": a picture or gradient (--backdrop-image) behind the terminals or everything,
+   shaded with the theme's colour at --backdrop-dim and blurred by --backdrop-blur;
+   data-clear-terminals: the terminals draw no background of their own, so either shows through them.
+   Without these attributes nothing here applies: the window is solid, as before. */
+
+:root {
+  /* What the see-through parts keep of their own colour, over the window's: enough to tell them apart. */
+  --see-region: 40%;
+  --see-header: 60%;
+  --backdrop-shade: color-mix(in srgb, var(--bg) calc(var(--backdrop-dim, 0) * 100%), transparent);
+}
+
+/* ---- See-through ---- */
+
+:root[data-see-through] { background: transparent; }
+:root[data-see-through] body { background: color-mix(in srgb, var(--bg) calc(var(--window-alpha) * 100%), transparent); }
+
+/* ---- Regions over a see-through window or a picture: a light tint of their own colour, the rest shows through ---- */
+
+:root:is([data-see-through], [data-backdrop]) :is(#sidebar, .pane, .strip-tab),
+:root:is([data-see-through], [data-backdrop]) body[data-layout="minimal"] :is(.notepad-panel, .clips-panel, .files-panel, .files-panel > .files-head) {
+  background: color-mix(in srgb, var(--surface) var(--see-region), transparent);
+}
+:root:is([data-see-through], [data-backdrop]) :is(.pane-header, .strip-tab.active, .pane-statusbar),
+:root:is([data-see-through], [data-backdrop]) body[data-layout="minimal"][data-pane-names="line"] .pane > .pane-header {
+  background: color-mix(in srgb, var(--header) var(--see-header), transparent);
+}
+/* Behind the terminals only: the panes show the picture as it is (its shade keeps the text readable). */
+:root[data-backdrop="terminals"] :is(.pane, body.detached-window > .pane) { background: transparent; }
+
+/* Over the theme's terminal colours (panes.css), which are !important: here they draw nothing. */
+:root[data-clear-terminals] .pane-body,
+:root[data-clear-terminals] .pane-body .xterm,
+:root[data-clear-terminals] .pane-body .xterm-viewport { background: transparent !important; }
+
+/* ---- The picture or gradient ---- */
+
+#workspace { isolation: isolate; }
+:root[data-backdrop="terminals"] #workspace::before,
+:root[data-backdrop] body.detached-window::before,
+:root[data-backdrop="window"] body::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image: linear-gradient(var(--backdrop-shade), var(--backdrop-shade)), var(--backdrop-image);
+  background-position: center;
+  background-size: auto, var(--backdrop-size);
+  background-repeat: no-repeat, var(--backdrop-repeat);
+  filter: blur(var(--backdrop-blur, 0));
+  pointer-events: none;
+}
+/* The whole window: under everything, the window's colour gives way to it. */
+:root[data-backdrop="window"] body::before,
+:root[data-backdrop] body.detached-window::before { position: fixed; }
+:root[data-backdrop="window"] body,
+:root[data-backdrop] body.detached-window { background: transparent; }
+
+/* ---- Settings › Appearance › Background: the picture chosen ---- */
+
+.bg-picture { display: flex; align-items: center; gap: 8px; }
+.bg-thumb { flex: none; width: 64px; height: 40px; border: 1px solid var(--border); border-radius: 6px; background: center / cover no-repeat; }
+.bg-thumb.empty { border-style: dashed; }
+.bg-error { margin: 6px 0 0; color: var(--danger-text); }
+.bg-error[hidden] { display: none; }

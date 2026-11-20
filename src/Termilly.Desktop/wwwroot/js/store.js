@@ -48,6 +48,7 @@ export const sourceOf = profile => profile?.source ?? PROFILE_SOURCE.local;
 export const GROUPS = Object.freeze({
   terminal: 'terminal',
   interface: 'interface',
+  background: 'background',
   shells: 'shells',
   commands: 'commands',
   notifications: 'notifications',
@@ -220,6 +221,8 @@ export const newId = prefix => `${prefix}${Date.now().toString(36)}${(counter++)
 /** The page's events (on, emit): what changed, or what a module asks another to do. */
 export const EVENTS = Object.freeze({
   agent: 'agent',
+  /** The window's background changed whether the terminals draw one of their own (js/backgrounds.js). */
+  backdrop: 'backdrop',
   changes: 'changes',
   claudeUsage: 'claudeUsage',
   commandEnding: 'commandEnding',
@@ -841,7 +844,7 @@ function serialize() {
     windowPlaces: state.windowPlaces,
     windowsOnTop: state.windowsOnTop,
     // tmux windows aren't saved: they're tmux's, and attaching again brings them back (tmux.js).
-    workspaces: state.workspaces.filter(w => !w.tmux).map(({ id, name, color, cwd, focusId, root, note, tasks, snippets, collapsed, asideCollapsed, copyTo }) => ({ id, name, color, cwd, focusId, tasks, root: withoutPreview(root), note, snippets, collapsed: collapsed || undefined, asideCollapsed: asideCollapsed || undefined, copyTo })),
+    workspaces: state.workspaces.filter(w => !w.tmux).map(({ id, name, color, cwd, focusId, root, note, tasks, snippets, collapsed, asideCollapsed, copyTo, background }) => ({ id, name, color, cwd, focusId, tasks, root: withoutPreview(root), note, snippets, collapsed: collapsed || undefined, asideCollapsed: asideCollapsed || undefined, copyTo, background })),
     tabs: [...state.tabs.values()].filter(t => !t.virtual).map(t => {
       const { id, wsId, profile, name, tags, noHistory, startCwd, env, startCommand, worktree, note, tasks, agentRead, agentType, openedBy, agentSessions, promptsClearedAt, stepsClearedAt, compactView, setAside } = t;
       // In a window of its own: it opens in one again after a restart, where it was (windowPlaces).
