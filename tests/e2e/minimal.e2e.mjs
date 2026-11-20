@@ -79,7 +79,8 @@ step('a new version\'s notice shows on the strip, without the rest of the brand'
     const css = el => globalThis.getComputedStyle(el).display;
     const box = chip.getBoundingClientRect();
     const strip = globalThis.document.getElementById('titlebar').getBoundingClientRect();
-    return { chip: box.width > 0 && box.top >= strip.top && box.bottom <= strip.bottom, logo: css(globalThis.document.querySelector('#titlebar .brand .logo')), brand: css(globalThis.document.querySelector('#titlebar .brand')) };
+    const crumb = globalThis.document.getElementById('crumb').getBoundingClientRect();
+    return { chip: box.width > 0 && box.top >= strip.top && box.bottom <= strip.bottom && box.left >= crumb.right, logo: css(globalThis.document.querySelector('#titlebar .brand .logo')), brand: css(globalThis.document.querySelector('#titlebar .brand')) };
   }, shown);
   assert.deepEqual(await look(true), { chip: true, logo: 'none', brand: 'flex' });
   await pause(1000); // the screenshot grabs the screen, which WebKit repaints a moment later
