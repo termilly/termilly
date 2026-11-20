@@ -50,20 +50,20 @@ test('Appearance has Theme, Text and Layout tabs, and a tab keeps the title Appe
   assert.equal(await app.eval(t => t.$('#set-body').getAttribute('aria-labelledby')), 'set-tab-appearance-text');
 }));
 
-test('the gallery lists Popular first, finds a theme by its well-known name, and filters dark and light', () => withAppearance('appearance-gallery', async app => {
+test('the gallery lists Popular first with their well-known names, and filters dark and light', () => withAppearance('appearance-gallery', async app => {
   assert.deepEqual(await app.eval(t => t.$$('.theme-group-head').map(h => h.textContent)), ['Popular', 'Termilly’s own']);
   const popular = await app.eval(t => [...t.$$('.theme-group')[0].querySelectorAll('.tc-name')].map(n => n.textContent));
   assert.equal(popular.length, 12);
   assert.deepEqual(popular.slice(0, 3), ['Midnight', 'Catppuccin Mocha', 'Catppuccin Latte']);
-  await app.type('.theme-search', 'dracula');
-  await until(async () => (await shownCards(app)).join() === 'Midnight', 'Dracula finds Midnight');
-  await app.type('.theme-search', 'nothing like this');
-  await until(() => app.eval(t => !t.$('.theme-none').hidden), 'the no-match line');
-  await app.type('.theme-search', '');
+  assert.equal(await app.text('.theme-card[data-theme-id="midnight"] .tc-like'), 'Dracula');
+  assert.equal((await shownCards(app)).length, await app.eval(t => t.$$('.theme-card').length), 'all themes show');
   await app.eval(t => t.click('[data-theme-filter="light"]'));
   const light = await app.eval(t => t.$$('.theme-card').filter(c => c.getClientRects().length).map(c => c.dataset.base));
   assert.ok(light.length > 0 && light.every(b => b === 'light'), 'only light themes');
   assert.ok((await shownCards(app)).includes('Catppuccin Latte'));
+  // Settings search still finds the gallery by a well-known scheme's name.
+  await app.type('#set-search', 'dracula');
+  await until(() => app.eval(t => t.$$('.set-result-head').some(h => h.textContent === 'Appearance › Theme')), 'Dracula found in Theme');
 }));
 
 test('a card picks its theme for the app and the terminals', () => withAppearance('appearance-pick', async app => {

@@ -1,6 +1,6 @@
 // @ts-check
-// Settings › Appearance › Theme: the colour themes, Popular ones (well-known schemes) and Termilly's own, searching and
-// filtering them, and following the system's light and dark mode with a theme picked for each. Appearance's other tabs
+// Settings › Appearance › Theme: the colour themes, Popular ones (well-known schemes) and Termilly's own, showing only
+// dark or light ones, and following the system's light and dark mode with a theme picked for each. Appearance's other tabs
 // are Text (appearancetext.js) and Layout (appearancelayout.js).
 
 import { sys, SYSTEM_NAME } from '../host.js';
@@ -45,10 +45,10 @@ const mini = p => `<span class="tc-win" style="--p-bg:${cssColor(p.bg)};--p-side
   </span>`;
 
 /**
- * A theme's card: its small window, its name, and the well-known scheme it follows (searched by either name).
+ * A theme's card: its small window, its name, and the well-known scheme it follows.
  * @param {import('../themes.js').Theme} t
  */
-const card = t => `<button class="theme-card" data-theme-id="${t.id}" data-base="${t.base}" data-hay="${escapeHtml(`${t.name} ${t.like ?? ''}`.toLowerCase())}">${mini(t.preview)}<span class="tc-name">${escapeHtml(t.name)}</span>${t.like ? `<span class="tc-like">${escapeHtml(t.like)}</span>` : ''}</button>`;
+const card = t => `<button class="theme-card" data-theme-id="${t.id}" data-base="${t.base}">${mini(t.preview)}<span class="tc-name">${escapeHtml(t.name)}</span>${t.like ? `<span class="tc-like">${escapeHtml(t.like)}</span>` : ''}</button>`;
 
 /** @param {string} name @param {import('../themes.js').Theme[]} themes */
 const gallery = (name, themes) => `<div class="theme-group"><h5 class="theme-group-head">${name}</h5><span class="seg theme-cards">${themes.map(card).join('')}</span></div>`;
@@ -69,24 +69,18 @@ const picker = (key, base, label) => {
 const following = () => getSetting(THEME_SETTING) === theme.system;
 
 /**
- * Shows the cards the search and the filter match, and each group only while it has some.
+ * Shows the cards of the kind the filter picks, and each group only while it has some.
  * @param {HTMLElement} root
  */
 function applyFilter(root) {
-  const search = /** @type {HTMLInputElement | null} */ (root.querySelector('.theme-search'));
-  const query = search?.value.trim().toLowerCase() ?? '';
-  let any = false;
   for (const box of /** @type {NodeListOf<HTMLElement>} */ (root.querySelectorAll('.theme-group'))) {
     let shown = false;
     for (const c of /** @type {NodeListOf<HTMLElement>} */ (box.querySelectorAll(THEME_CARD))) {
-      c.hidden = !(filter === FILTER.all || c.dataset.base === filter) || !(c.dataset.hay ?? '').includes(query);
+      c.hidden = filter !== FILTER.all && c.dataset.base !== filter;
       shown ||= !c.hidden;
     }
     box.hidden = !shown;
-    any ||= shown;
   }
-  const none = /** @type {HTMLElement | null} */ (root.querySelector('.theme-none'));
-  if (none) none.hidden = any;
 }
 
 /**
@@ -116,9 +110,8 @@ const APPEARANCE = {
       <button class="switch" role="switch" data-theme-follow aria-label="Follow the system"><span></span></button></span>`,
     { keywords: 'system dark light mode automatic auto night day' }))
     + group('', row('Theme', 'Colours for the app and terminals.', `<div class="theme-tools">
-        <input class="field theme-search" type="search" placeholder="Search themes" spellcheck="false" autocomplete="off" aria-label="Search themes">
         <span class="seg theme-filter">${Object.values(FILTER).map(f => `<button data-theme-filter="${f}">${f === FILTER.all ? 'All' : f === FILTER.dark ? 'Dark' : 'Light'}</button>`).join('')}</span>
-      </div>${gallery(GROUP_NAME.popular, POPULAR)}${gallery(GROUP_NAME.own, OWN)}<p class="set-desc theme-none" hidden>No themes match.</p>`,
+      </div>${gallery(GROUP_NAME.popular, POPULAR)}${gallery(GROUP_NAME.own, OWN)}`,
     { stack: true, keywords: `colour color look palette scheme ${THEMES.map(t => `${t.name} ${t.like ?? ''}`).join(' ').toLowerCase()}` })),
   drawn: root => { applyFilter(root); sync(root); },
   sync,
@@ -139,9 +132,6 @@ const APPEARANCE = {
     applyFilter(body);
     sync(body);
     return true;
-  },
-  input(e) {
-    if (targetOf(e).classList.contains('theme-search')) applyFilter(body);
   },
 };
 
