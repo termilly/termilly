@@ -71,6 +71,18 @@ step('Minimal moves the toolbar into a hidden dock and the sidebar away', async 
   await app.screenshot('02-minimal-hidden');
 });
 
+step('a new version\'s notice shows on the strip, without the rest of the brand', async () => {
+  const look = shown => app.eval((t, shown) => {
+    const chip = globalThis.document.getElementById('update-chip');
+    chip.hidden = !shown;
+    const css = el => globalThis.getComputedStyle(el).display;
+    return { chip: chip.getBoundingClientRect().width > 0, logo: css(globalThis.document.querySelector('#titlebar .brand .logo')), brand: css(globalThis.document.querySelector('#titlebar .brand')) };
+  }, shown);
+  assert.deepEqual(await look(true), { chip: true, logo: 'none', brand: 'flex' });
+  await app.screenshot('02b-minimal-update');
+  assert.deepEqual(await look(false), { chip: false, logo: 'none', brand: 'none' });
+});
+
 step('switching workspaces keeps the strip, the window buttons and the dock as they were', async () => {
   const look = () => app.eval(() => ({
     controlsAtRight: globalThis.innerWidth - globalThis.document.querySelector('#titlebar .window-controls').getBoundingClientRect().right < 20,
