@@ -1,5 +1,5 @@
 // @ts-check
-// Settings › Appearance › Theme: the colour themes, Popular ones (well-known schemes) and Termilly's own, showing only
+// Settings › Appearance › Theme: the colour themes, well-known schemes first and then Termilly's own, showing only
 // dark or light ones, and following the system's light and dark mode with a theme picked for each. Appearance's other tabs
 // are Text (appearancetext.js) and Layout (appearancelayout.js).
 
@@ -31,9 +31,8 @@ const FILTER = Object.freeze({ all: 'all', dark: THEME_BASE.dark, light: THEME_B
 /** @type {string} */
 let filter = FILTER.all;
 
-const POPULAR = POPULAR_THEME_IDS.flatMap(id => THEMES.filter(t => t.id === id));
-const OWN = THEMES.filter(t => !POPULAR_THEME_IDS.includes(t.id));
-const GROUP_NAME = Object.freeze({ popular: 'Popular', own: 'Termilly’s own' });
+/** Every theme in the gallery's order: the well-known schemes (most-starred first), then Termilly's own. */
+const ORDERED = [...POPULAR_THEME_IDS.flatMap(id => THEMES.filter(t => t.id === id)), ...THEMES.filter(t => !POPULAR_THEME_IDS.includes(t.id))];
 
 /** What the system's light and dark mode is called here. */
 const systemName = sys.name === SYSTEM_NAME.linux ? 'the desktop' : 'Windows';
@@ -50,36 +49,24 @@ const mini = p => `<span class="tc-win" style="--p-bg:${cssColor(p.bg)};--p-side
  */
 const card = t => `<button class="theme-card" data-theme-id="${t.id}" data-base="${t.base}">${mini(t.preview)}<span class="tc-name">${escapeHtml(t.name)}</span>${t.like ? `<span class="tc-like">${escapeHtml(t.like)}</span>` : ''}</button>`;
 
-/** @param {string} name @param {import('../themes.js').Theme[]} themes */
-const gallery = (name, themes) => `<div class="theme-group"><h5 class="theme-group-head">${name}</h5><span class="seg theme-cards">${themes.map(card).join('')}</span></div>`;
-
 /**
- * The theme following the system shows in one mode: dark or light themes, Popular first.
+ * The theme following the system shows in one mode: the dark themes or the light ones, in the gallery's order.
  * @param {string} key the setting
  * @param {string} base dark or light
  * @param {string} label
  */
-const picker = (key, base, label) => {
-  /** @param {import('../themes.js').Theme[]} list */
-  const options = list => list.filter(t => t.base === base).map(t => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('');
-  return `<label class="theme-pick"><span>${label}</span><select class="field" data-setting="${key}" aria-label="${label} theme">
-    <optgroup label="${GROUP_NAME.popular}">${options(POPULAR)}</optgroup><optgroup label="${GROUP_NAME.own}">${options(OWN)}</optgroup></select></label>`;
-};
+const picker = (key, base, label) => `<label class="theme-pick"><span>${label}</span><select class="field" data-setting="${key}" aria-label="${label} theme">
+    ${ORDERED.filter(t => t.base === base).map(t => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('')}</select></label>`;
 
 const following = () => getSetting(THEME_SETTING) === theme.system;
 
 /**
- * Shows the cards of the kind the filter picks, and each group only while it has some.
+ * Shows the cards of the kind the filter picks.
  * @param {HTMLElement} root
  */
 function applyFilter(root) {
-  for (const box of /** @type {NodeListOf<HTMLElement>} */ (root.querySelectorAll('.theme-group'))) {
-    let shown = false;
-    for (const c of /** @type {NodeListOf<HTMLElement>} */ (box.querySelectorAll(THEME_CARD))) {
-      c.hidden = filter !== FILTER.all && c.dataset.base !== filter;
-      shown ||= !c.hidden;
-    }
-    box.hidden = !shown;
+  for (const c of /** @type {NodeListOf<HTMLElement>} */ (root.querySelectorAll(THEME_CARD))) {
+    c.hidden = filter !== FILTER.all && c.dataset.base !== filter;
   }
 }
 
@@ -111,7 +98,7 @@ const APPEARANCE = {
     { keywords: 'system dark light mode automatic auto night day' }))
     + group('', row('Theme', 'Colours for the app and terminals.', `<div class="theme-tools">
         <span class="seg theme-filter">${Object.values(FILTER).map(f => `<button data-theme-filter="${f}">${f === FILTER.all ? 'All' : f === FILTER.dark ? 'Dark' : 'Light'}</button>`).join('')}</span>
-      </div>${gallery(GROUP_NAME.popular, POPULAR)}${gallery(GROUP_NAME.own, OWN)}`,
+      </div><span class="seg theme-cards">${ORDERED.map(card).join('')}</span>`,
     { stack: true, keywords: `colour color look palette scheme ${THEMES.map(t => `${t.name} ${t.like ?? ''}`).join(' ').toLowerCase()}` })),
   drawn: root => { applyFilter(root); sync(root); },
   sync,

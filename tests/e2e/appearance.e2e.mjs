@@ -50,11 +50,11 @@ test('Appearance has Theme, Text and Layout tabs, and a tab keeps the title Appe
   assert.equal(await app.eval(t => t.$('#set-body').getAttribute('aria-labelledby')), 'set-tab-appearance-text');
 }));
 
-test('the gallery lists Popular first with their well-known names, and filters dark and light', () => withAppearance('appearance-gallery', async app => {
-  assert.deepEqual(await app.eval(t => t.$$('.theme-group-head').map(h => h.textContent)), ['Popular', 'Termilly’s own']);
-  const popular = await app.eval(t => [...t.$$('.theme-group')[0].querySelectorAll('.tc-name')].map(n => n.textContent));
-  assert.equal(popular.length, 12);
-  assert.deepEqual(popular.slice(0, 3), ['Midnight', 'Catppuccin Mocha', 'Catppuccin Latte']);
+test('the gallery is one list, well-known schemes first with their names, and filters dark and light', () => withAppearance('appearance-gallery', async app => {
+  const names = await app.eval(t => t.$$('.theme-cards .tc-name').map(n => n.textContent));
+  assert.deepEqual(names.slice(0, 3), ['Midnight', 'Catppuccin Mocha', 'Catppuccin Latte']);
+  assert.equal(names[12], 'Dark', 'Termilly’s own come after the 12 well-known ones');
+  assert.equal(await app.eval(t => t.$$('.theme-cards').length), 1);
   assert.equal(await app.text('.theme-card[data-theme-id="midnight"] .tc-like'), 'Dracula');
   assert.equal((await shownCards(app)).length, await app.eval(t => t.$$('.theme-card').length), 'all themes show');
   await app.eval(t => t.click('[data-theme-filter="light"]'));
