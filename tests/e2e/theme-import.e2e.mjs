@@ -153,10 +153,11 @@ test('the counter shows the imported themes with the ones added, and over the li
   await until(async () => (await app.text('.si-count')) === '2/500', 'both ticked count');
   // 500 already imported, one of them named One: One replaces it, Two goes over.
   await app.eval(async t => {
-    const { state } = await t.import('store.js');
+    const { updateSettings } = await t.import('preferences.js');
+    const { GROUPS } = await t.import('store.js');
     const base = { background: '#000000', foreground: '#ffffff', cursor: null, ansi: Array(16).fill('#808080') };
     const themes = Array.from({ length: 500 }, (_, i) => ({ ...base, id: `custom-t${i}`, name: i ? `T${i}` : 'One' }));
-    state.settings.interface.customThemes = themes;
+    updateSettings(GROUPS.interface, { customThemes: themes });
   });
   await app.eval(t => { t.$('[data-si-all]').click(); t.$('[data-si-all]').click(); });
   await until(async () => (await app.text('.si-count')) === '501/500', 'over');

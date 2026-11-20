@@ -39,8 +39,10 @@ ${c(8, '~/acme>')} <span class="si-cursor" style="background:${cssColor(s.cursor
  * @param {string} name
  */
 const savedName = name => name.trim().slice(0, CUSTOM_THEME.maxName);
+/** A name as it's compared: two that differ only in case are the same theme. @param {string} name */
+const nameKey = name => savedName(name).toLowerCase();
 /** @param {string} name */
-const sameName = name => (/** @type {{ name: string }} */ t) => savedName(t.name).toLowerCase() === savedName(name).toLowerCase();
+const sameName = name => (/** @type {{ name: string }} */ t) => nameKey(t.name) === nameKey(name);
 
 /**
  * The id a scheme is saved under: its name's, unless another scheme's name has it, then with a number added.
@@ -93,10 +95,8 @@ function save(schemes, shown) {
  * @param {import('./schemes.js').Scheme[]} schemes
  */
 function themesAfter(schemes) {
-  const saved = state.settings.interface.customThemes ?? [];
-  const key = (/** @type {string} */ name) => savedName(name).toLowerCase();
-  const had = new Set(saved.map(t => key(t.name)));
-  return saved.length + new Set(schemes.map(s => key(s.name)).filter(n => !had.has(n))).size;
+  const added = new Set(schemes.map(s => nameKey(s.name)));
+  return (state.settings.interface.customThemes ?? []).filter(t => !added.has(nameKey(t.name))).length + added.size;
 }
 
 /** @param {number} n @param {string} one @param {string} many */
