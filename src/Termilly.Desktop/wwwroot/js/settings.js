@@ -91,6 +91,32 @@ function renderNav() {
     `<button class="set-nav-item${s.id === shown && !searchQuery ? ' on' : ''}" data-section="${s.id}">${s.icon}<span>${s.label}</span></button>`).join('');
 }
 
+/**
+ * The section whose tabs a section is one of (itself, or its parent), if it has tabs.
+ * @param {import('./settings/page.js').Section} section
+ */
+function tabOwner(section) {
+  const owner = section.tabs ? section : section.parent ? SECTIONS[section.parent] : undefined;
+  return owner?.tabs ? owner : undefined;
+}
+
+/**
+ * A section's tabs, the open one marked.
+ * @param {import('./settings/page.js').Section} owner
+ * @param {string} open
+ */
+const tabBar = (owner, open) => `<span class="set-tabs" role="tablist">${(owner.tabs ?? []).map(id =>
+  `<button class="set-tab${id === open ? ' on' : ''}" role="tab" aria-selected="${id === open}" data-section="${id}">${SECTIONS[id].tab}</button>`).join('')}</span>`;
+
+/**
+ * A section's name over its search results: a tab's says whose tab it is.
+ * @param {import('./settings/page.js').Section} section
+ */
+function resultLabel(section) {
+  const owner = tabOwner(section);
+  return owner ? `${owner.label} › ${section.tab}` : section.label;
+}
+
 /** @param {string} id */
 function showSection(id) {
   const section = SECTIONS[id];
@@ -99,10 +125,11 @@ function showSection(id) {
   searchQuery = '';
   searchBox.value = '';
   renderNav();
-  title.textContent = section.parent ? `${SECTIONS[section.parent].label} › ${section.label}` : section.label;
+  const owner = tabOwner(section);
+  title.textContent = owner ? owner.label : section.parent ? `${SECTIONS[section.parent].label} › ${section.label}` : section.label;
   help.hidden = !section.docs;
-  tools.innerHTML = section.tools?.() ?? '';
-  tools.hidden = !section.tools;
+  tools.innerHTML = owner ? tabBar(owner, id) : section.tools?.() ?? '';
+  tools.hidden = !owner && !section.tools;
   body.innerHTML = section.html();
   body.scrollTop = 0;
   section.drawn?.(body);
@@ -243,7 +270,7 @@ function renderSearch() {
     const head = document.createElement('button');
     head.className = 'set-result-head';
     head.dataset.section = section.id;
-    head.innerHTML = `${section.icon}<span>${section.label}</span>`;
+    head.innerHTML = `${section.icon}<span>${resultLabel(section)}</span>`;
     body.append(head, ...found.childNodes);
   }
   hits = [.../** @type {NodeListOf<HTMLElement>} */ (body.querySelectorAll(ROW))];
@@ -309,7 +336,7 @@ export function settingEntries() {
     try { holder.innerHTML = section.html(); } catch { continue; }
     for (const rowEl of /** @type {NodeListOf<HTMLElement>} */ (holder.querySelectorAll(ROW))) {
       const name = rowName(rowEl);
-      if (name) entries.push({ section: section.id, sectionLabel: section.label, name, keywords: rowEl.dataset.keywords ?? '' });
+      if (name) entries.push({ section: section.id, sectionLabel: resultLabel(section), name, keywords: rowEl.dataset.keywords ?? '' });
     }
   }
   return entries;
@@ -455,6 +482,8 @@ layer.addEventListener('mousedown', e => {
 });
 byId('set-close').addEventListener('click', closeSettings);
 tools.addEventListener('click', e => {
+  const tab = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-section]'));
+  if (tab) return showSection(/** @type {string} */ (tab.dataset.section));
   const action = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-action]'));
   if (action) actions[/** @type {string} */ (action.dataset.action)]?.(action);
 });

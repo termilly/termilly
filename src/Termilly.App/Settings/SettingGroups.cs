@@ -80,6 +80,10 @@ internal sealed record InterfaceSettings
     private const int MaxThemeId = 40;
 
     public string Theme { get; init; } = SettingValues.Theme.FirstStart;
+    /// <summary>The theme "system" shows while the system is in dark mode.</summary>
+    public string ThemeDark { get; init; } = SettingValues.Theme.Dark;
+    /// <summary>The theme "system" shows while the system is in light mode.</summary>
+    public string ThemeLight { get; init; } = SettingValues.Theme.Light;
     /// <summary>Normal or Minimal (<see cref="SettingValues.Layout"/>).</summary>
     public string Layout { get; init; } = SettingValues.Layout.Default;
     /// <summary>In Minimal, a terminal's name on a line over it or on a bar shown on hover (<see cref="SettingValues.PaneNames"/>).</summary>
@@ -126,6 +130,8 @@ internal sealed record InterfaceSettings
     public InterfaceSettings Normalize() => this with
     {
         Theme = IsThemeId(Theme) ? Theme : SettingValues.Theme.FirstStart,
+        ThemeDark = IsThemeId(ThemeDark) ? ThemeDark : SettingValues.Theme.Dark,
+        ThemeLight = IsThemeId(ThemeLight) ? ThemeLight : SettingValues.Theme.Light,
         Layout = SettingChecks.OneOf(Layout, SettingValues.Layout.All, SettingValues.Layout.Default),
         PaneNames = SettingChecks.OneOf(PaneNames, SettingValues.PaneNames.All, SettingValues.PaneNames.Default),
         MinimizeTo = SettingChecks.OneOf(MinimizeTo, SettingValues.MinimizeTo.All, SettingValues.MinimizeTo.Default),

@@ -17,9 +17,9 @@ export const TERM_FONT_VAR = '--term-font';
 
 /**
  * A theme as it's written below: its interface colours, its terminals' (bg, fg, cursor and the 16 ANSI colours), and
- * variables it sets itself.
+ * variables it sets itself. `like`: the well-known scheme it follows, when its own name is another one.
  * @typedef {{ id: string, name: string, base: string, ui: Record<string, string>,
- *   term: { bg: string, fg: string, cursor?: string, ansi: string[] }, over?: Record<string, string> }} ThemeSpec
+ *   term: { bg: string, fg: string, cursor?: string, ansi: string[] }, over?: Record<string, string>, like?: string }} ThemeSpec
  */
 
 /**
@@ -27,7 +27,7 @@ export const TERM_FONT_VAR = '--term-font';
  * the host's window colours.
  * @typedef {{ id: string, name: string, base: string, vars: Record<string, string>, terminal: Record<string, string>,
  *   preview: { bg: string, side: string, line: string, text: string, accent: string, term: string, ink: string[] },
- *   window: { background: string, frame: string, text: string, accent: string } }} Theme
+ *   window: { background: string, frame: string, text: string, accent: string }, like?: string }} Theme
  */
 
 /**
@@ -78,22 +78,22 @@ const ANSI = ['black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'whi
  */
 /** @type {ThemeSpec[]} */
 const SPECS = [
-  { id: 'midnight', name: 'Midnight', base: 'dark',
+  { id: 'midnight', name: 'Midnight', base: 'dark', like: 'Dracula',
     ui: { bg: '#1e1f29', surface: '#21222c', header: '#191a21', raised: '#282a36', border: '#343746', text: '#f8f8f2', muted: '#8b8fa8', accent: '#bd93f9', attention: '#f1fa8c', danger: '#ff5555', ok: '#50fa7b' },
     term: { bg: '#21222c', fg: '#f8f8f2', ansi: ['#21222c', '#ff5555', '#50fa7b', '#f1fa8c', '#bd93f9', '#ff79c6', '#8be9fd', '#f8f8f2', '#6272a4', '#ff6e6e', '#69ff94', '#ffffa5', '#d6acff', '#ff92df', '#a4ffff', '#ffffff'] } },
-  { id: 'arctic', name: 'Arctic', base: 'dark',
+  { id: 'arctic', name: 'Arctic', base: 'dark', like: 'Nord',
     ui: { bg: '#242933', surface: '#2e3440', header: '#272c36', raised: '#3b4252', border: '#3b4252', text: '#eceff4', muted: '#8f9bb3', accent: '#88c0d0', attention: '#ebcb8b', danger: '#bf616a', ok: '#a3be8c' },
     term: { bg: '#2e3440', fg: '#d8dee9', ansi: ['#2e3440', '#bf616a', '#a3be8c', '#ebcb8b', '#81a1c1', '#b48ead', '#88c0d0', '#e5e9f0', '#4c566a', '#d57780', '#b5cf9e', '#f0d7a3', '#97b3d1', '#c5a3be', '#8fbcbb', '#eceff4'] } },
-  { id: 'ember', name: 'Ember', base: 'dark',
+  { id: 'ember', name: 'Ember', base: 'dark', like: 'Gruvbox Dark',
     ui: { bg: '#1d2021', surface: '#282828', header: '#1d2021', raised: '#32302f', border: '#3c3836', text: '#ebdbb2', muted: '#a89984', accent: '#fe8019', attention: '#fabd2f', danger: '#fb4934', ok: '#b8bb26' },
     term: { bg: '#282828', fg: '#ebdbb2', ansi: ['#282828', '#cc241d', '#98971a', '#d79921', '#458588', '#b16286', '#689d6a', '#a89984', '#928374', '#fb4934', '#b8bb26', '#fabd2f', '#83a598', '#d3869b', '#8ec07c', '#ebdbb2'] } },
-  { id: 'deep-ocean', name: 'Deep Ocean', base: 'dark',
+  { id: 'deep-ocean', name: 'Deep Ocean', base: 'dark', like: 'Solarized Dark',
     ui: { bg: '#002029', surface: '#002b36', header: '#00222b', raised: '#073642', border: '#0a3c48', text: '#eee8d5', muted: '#839496', accent: '#268bd2', attention: '#b58900', danger: '#dc322f', ok: '#859900' },
     term: { bg: '#002b36', fg: '#93a1a1', ansi: ['#002b36', '#dc322f', '#859900', '#b58900', '#268bd2', '#d33682', '#2aa198', '#eee8d5', '#657b83', '#e4605a', '#a3b72a', '#d4a11a', '#4fa3e0', '#e0609d', '#4cbcb2', '#fdf6e3'] } },
-  { id: 'forest', name: 'Forest', base: 'dark',
+  { id: 'forest', name: 'Forest', base: 'dark', like: 'Everforest',
     ui: { bg: '#232a2e', surface: '#2d353b', header: '#272e33', raised: '#343f44', border: '#3d484d', text: '#d3c6aa', muted: '#9da9a0', accent: '#a7c080', attention: '#dbbc7f', danger: '#e67e80', ok: '#a7c080' },
     term: { bg: '#2d353b', fg: '#d3c6aa', ansi: ['#2d353b', '#e67e80', '#a7c080', '#dbbc7f', '#7fbbb3', '#d699b6', '#83c092', '#d3c6aa', '#7a8478', '#f08c8e', '#b5d08c', '#e8c98a', '#8fcac2', '#e2a8c4', '#92d0a2', '#e8dfc7'] } },
-  { id: 'rose', name: 'Rose', base: 'dark',
+  { id: 'rose', name: 'Rose', base: 'dark', like: 'Rosé Pine',
     ui: { bg: '#191724', surface: '#1f1d2e', header: '#1a1826', raised: '#26233a', border: '#2a273f', text: '#e0def4', muted: '#908caa', accent: '#ebbcba', attention: '#f6c177', danger: '#eb6f92', ok: '#9ccfd8' },
     term: { bg: '#1f1d2e', fg: '#e0def4', ansi: ['#1f1d2e', '#eb6f92', '#a3d6b0', '#f6c177', '#5ea3c4', '#c4a7e7', '#9ccfd8', '#e0def4', '#6e6a86', '#f08aa8', '#b8e3c4', '#f9d29a', '#80bcd8', '#d6c1f0', '#b8e1e8', '#ffffff'] } },
   { id: 'plum', name: 'Plum', base: 'dark',
@@ -116,19 +116,19 @@ const SPECS = [
   { id: 'sunset', name: 'Sunset', base: 'dark',
     ui: { bg: '#1f1418', surface: '#27191e', header: '#211519', raised: '#2f1f25', border: '#3d2830', text: '#f5e1d8', muted: '#b0908a', accent: '#ff8a65', attention: '#ffd166', danger: '#ef476f', ok: '#8bd17c' },
     term: { bg: '#27191e', fg: '#f5e1d8', ansi: ['#27191e', '#ef476f', '#8bd17c', '#ffd166', '#6ca6f0', '#e58fd0', '#6fd6c8', '#e8d2c8', '#7a5d63', '#ff6b8b', '#a8e39a', '#ffe08f', '#93bff7', '#f2aee0', '#94e6db', '#ffffff'] } },
-  { id: 'neon', name: 'Neon', base: 'dark',
+  { id: 'neon', name: 'Neon', base: 'dark', like: 'Tokyo Night',
     ui: { bg: '#16161e', surface: '#1a1b26', header: '#16161e', raised: '#24283b', border: '#292e42', text: '#c0caf5', muted: '#7f88b5', accent: '#7aa2f7', attention: '#e0af68', danger: '#f7768e', ok: '#9ece6a' },
     term: { bg: '#1a1b26', fg: '#c0caf5', ansi: ['#1a1b26', '#f7768e', '#9ece6a', '#e0af68', '#7aa2f7', '#bb9af7', '#7dcfff', '#a9b1d6', '#565f89', '#ff8fa3', '#b4e07f', '#f0c584', '#94b8ff', '#cdb2ff', '#9ad9ff', '#c0caf5'] } },
   { id: 'coffee', name: 'Coffee', base: 'dark',
     ui: { bg: '#1c1612', surface: '#231c17', header: '#1e1814', raised: '#2c231d', border: '#3a2f27', text: '#eadbc8', muted: '#a8937e', accent: '#d4a373', attention: '#e9c46a', danger: '#e76f51', ok: '#a3b18a' },
     term: { bg: '#231c17', fg: '#eadbc8', ansi: ['#231c17', '#e76f51', '#a3b18a', '#e9c46a', '#7fa7c9', '#c99ab0', '#88b8a8', '#d8c8b4', '#76665a', '#f28b6e', '#bccaa3', '#f2d488', '#9cbfdc', '#dcb3c6', '#a5cfc1', '#fff4e6'] } },
-  { id: 'slate', name: 'Slate', base: 'dark',
+  { id: 'slate', name: 'Slate', base: 'dark', like: 'One Dark',
     ui: { bg: '#1e2127', surface: '#282c34', header: '#21252b', raised: '#2c313a', border: '#3a3f4b', text: '#dcdfe4', muted: '#8b919d', accent: '#61afef', attention: '#e5c07b', danger: '#e06c75', ok: '#98c379' },
     term: { bg: '#282c34', fg: '#abb2bf', ansi: ['#282c34', '#e06c75', '#98c379', '#e5c07b', '#61afef', '#c678dd', '#56b6c2', '#abb2bf', '#5c6370', '#ef7f88', '#a9d18a', '#f0cd8e', '#7cbff5', '#d394e8', '#6ec8d4', '#ffffff'] } },
-  { id: 'paper', name: 'Paper', base: 'light',
+  { id: 'paper', name: 'Paper', base: 'light', like: 'Solarized Light',
     ui: { bg: '#eee8d5', surface: '#fdf6e3', header: '#f4eedb', raised: '#fdf6e3', border: '#ded6bf', text: '#3b4b52', muted: '#6f7f86', accent: '#268bd2', attention: '#b58900', danger: '#dc322f', ok: '#859900' },
     term: { bg: '#fdf6e3', fg: '#4f6169', ansi: ['#073642', '#dc322f', '#6c7f00', '#8a6900', '#268bd2', '#d33682', '#1f7a73', '#93a1a1', '#586e75', '#cb4b16', '#5a6a00', '#735800', '#1a6aa3', '#a8286a', '#186560', '#7c8b8b'] } },
-  { id: 'sandstone', name: 'Sandstone', base: 'light',
+  { id: 'sandstone', name: 'Sandstone', base: 'light', like: 'Gruvbox Light',
     ui: { bg: '#ebdbb2', surface: '#fbf1c7', header: '#f2e5bc', raised: '#fbf1c7', border: '#d5c4a1', text: '#3c3836', muted: '#7c6f64', accent: '#af3a03', attention: '#b57614', danger: '#9d0006', ok: '#79740e' },
     term: { bg: '#fbf1c7', fg: '#3c3836', ansi: ['#3c3836', '#cc241d', '#79740e', '#b57614', '#076678', '#8f3f71', '#427b58', '#7c6f64', '#665c54', '#9d0006', '#5f5d0a', '#8f5c0f', '#05515f', '#702b5a', '#2f5d42', '#928374'] } },
   { id: 'mint', name: 'Mint', base: 'light',
@@ -140,7 +140,21 @@ const SPECS = [
   { id: 'lavender', name: 'Lavender', base: 'light',
     ui: { bg: '#f1eef8', surface: '#ffffff', header: '#f6f4fb', raised: '#ffffff', border: '#e0daee', text: '#2a2438', muted: '#6b6280', accent: '#7c5cd6', attention: '#b7791f', danger: '#d6455a', ok: '#2f9e6b' },
     term: { bg: '#ffffff', fg: '#2a2438', ansi: ['#2a2438', '#c4314b', '#2b7d55', '#8d5d00', '#3b5bd6', '#7c3fbf', '#127c8a', '#6e6780', '#4f4762', '#a51d36', '#1f6140', '#6c4700', '#2d47aa', '#612f98', '#0d5f6a', '#918aa3'] } },
+  // Well-known schemes with their published colours (catppuccin.com, github.com/rebelot/kanagawa.nvim).
+  { id: 'catppuccin-mocha', name: 'Catppuccin Mocha', base: 'dark',
+    ui: { bg: '#181825', surface: '#1e1e2e', header: '#181825', raised: '#313244', border: '#313244', text: '#cdd6f4', muted: '#a6adc8', accent: '#cba6f7', attention: '#f9e2af', danger: '#f38ba8', ok: '#a6e3a1' },
+    term: { bg: '#1e1e2e', fg: '#cdd6f4', cursor: '#f5e0dc', ansi: ['#1e1e2e', '#f38ba8', '#a6e3a1', '#f9e2af', '#89b4fa', '#f5c2e7', '#94e2d5', '#bac2de', '#585b70', '#f38ba8', '#a6e3a1', '#f9e2af', '#89b4fa', '#f5c2e7', '#94e2d5', '#a6adc8'] } },
+  { id: 'catppuccin-latte', name: 'Catppuccin Latte', base: 'light',
+    ui: { bg: '#e6e9ef', surface: '#eff1f5', header: '#e6e9ef', raised: '#eff1f5', border: '#ccd0da', text: '#4c4f69', muted: '#6c6f85', accent: '#8839ef', attention: '#df8e1d', danger: '#d20f39', ok: '#40a02b' },
+    term: { bg: '#eff1f5', fg: '#4c4f69', cursor: '#dc8a78', ansi: ['#5c5f77', '#d20f39', '#40a02b', '#df8e1d', '#1e66f5', '#ea76cb', '#179299', '#acb0be', '#6c6f85', '#d20f39', '#40a02b', '#df8e1d', '#1e66f5', '#ea76cb', '#179299', '#bcc0cc'] } },
+  { id: 'kanagawa', name: 'Kanagawa', base: 'dark',
+    ui: { bg: '#16161d', surface: '#1f1f28', header: '#1a1a22', raised: '#2a2a37', border: '#363646', text: '#dcd7ba', muted: '#a6a69c', accent: '#7e9cd8', attention: '#e6c384', danger: '#e46876', ok: '#98bb6c' },
+    term: { bg: '#1f1f28', fg: '#dcd7ba', cursor: '#c8c093', ansi: ['#1f1f28', '#c34043', '#76946a', '#c0a36e', '#7e9cd8', '#957fb8', '#6a9589', '#c8c093', '#727169', '#e82424', '#98bb6c', '#e6c384', '#7fb4ca', '#938aa9', '#7aa89f', '#dcd7ba'] } },
 ];
+
+/** The gallery's Popular group, most-starred on GitHub first; the rest are Termilly's own. */
+export const POPULAR_THEME_IDS = Object.freeze(['midnight', 'catppuccin-mocha', 'catppuccin-latte', 'deep-ocean', 'paper', 'ember',
+  'neon', 'arctic', 'kanagawa', 'forest', 'slate', 'rose']);
 
 // ---- Working out the rest ----
 
@@ -273,7 +287,7 @@ export const THEMES = [
     window: { background: '#f3f3f5', frame: '#d4d4da', text: '#1d1d22', accent: '#6d5cf0' },
   },
   ...SPECS.map(spec => ({
-    id: spec.id, name: spec.name, base: spec.base, vars: variables(spec), terminal: terminal(spec),
+    id: spec.id, name: spec.name, base: spec.base, like: spec.like, vars: variables(spec), terminal: terminal(spec),
     preview: { bg: spec.ui.bg, side: spec.ui.surface, line: spec.ui.border, text: spec.ui.muted, accent: spec.ui.accent, term: spec.term.bg, ink: [spec.term.ansi[2], spec.term.ansi[4], spec.term.fg] },
     window: { background: spec.ui.bg, frame: spec.ui.border, text: spec.ui.text, accent: spec.ui.accent },
   })),
@@ -284,13 +298,21 @@ export const THEME_VARIABLES = [...new Set(THEMES.flatMap(t => Object.keys(t.var
 
 const systemLight = matchMedia('(prefers-color-scheme: light)');
 
+/** @param {string | undefined} id */
+const known = id => !!id && THEMES.some(t => t.id === id);
+
 /**
- * The theme on screen: the chosen one, or for "system" Dark or Light as Windows' app mode says.
+ * The theme on screen: the chosen one, or for "system" the dark or light pick (Dark and Light unless changed) as
+ * Windows' app mode says.
  * @param {string} [theme]
  */
 export function themeId(theme = state.settings.interface.theme) {
-  if (theme === THEME.system) return systemLight.matches ? THEME.light : THEME.dark;
-  return THEMES.some(t => t.id === theme) ? theme : THEME.dark;
+  if (theme === THEME.system) {
+    const { themeLight, themeDark } = state.settings.interface;
+    if (systemLight.matches) return known(themeLight) ? themeLight : THEME.light;
+    return known(themeDark) ? themeDark : THEME.dark;
+  }
+  return known(theme) ? theme : THEME.dark;
 }
 
 /** The theme on screen (Dark when the chosen one is gone). */

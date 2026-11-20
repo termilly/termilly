@@ -34,6 +34,23 @@
 /* A section’s own buttons (Settings › Actions), first on the left, last on the right; they don’t scroll. */
 .set-tools { display: flex; flex: none; justify-content: space-between; align-items: center; padding: 10px calc(24px + var(--set-scrollbar)) 10px 24px; border-bottom: 1px solid var(--border); }
 .set-tools[hidden] { display: none; }
+/* A section's tabs (Appearance: Theme, Text, Layout), in the bar above its body. */
+.set-tabs { display: flex; gap: 4px; }
+.set-tab { padding: 5px 12px; border-radius: 7px; color: var(--muted); font-size: 13px; }
+.set-tab:hover { background: var(--hover); color: var(--text); }
+.set-tab.on { background: var(--accent-fill); color: var(--text-strong); }
+
+/* Appearance › Theme: following the system, then the gallery with its search and filter. */
+.theme-follow { display: flex; align-items: center; gap: 10px; }
+.theme-follow.unused .theme-pick { opacity: 0.45; }
+.theme-pick { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; }
+.theme-pick .field.dropdown { min-width: 170px; }
+.theme-tools { display: flex; align-items: center; gap: 10px; }
+.theme-tools .theme-search { width: 240px; }
+.theme-group-head { margin: 14px 0 8px; color: var(--muted); font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.theme-group[hidden], .theme-card[hidden] { display: none; }
+.tc-like { overflow: hidden; margin-top: -4px; padding: 0 2px; color: var(--faint); font-size: 11px; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
+.theme-none { margin: 12px 0 0; }
 /* The body keeps room for its scrollbar, so its right edge lines up with the buttons above it whether it scrolls or not. */
 .settings { --set-scrollbar: 8px; }
 .set-body { scrollbar-gutter: stable; flex: 1; padding: 8px 24px 24px; overflow-y: auto; -webkit-user-select: text; user-select: text; }
