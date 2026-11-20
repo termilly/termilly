@@ -10,9 +10,10 @@ import { bringBack, switchWorkspace } from './panes.js';
 import { arriveAt } from './arrived.js';
 import { shownName } from './rename.js';
 import { scheduleFit } from './terminals.js';
-import { showDock, needsYou } from './dock.js';
+import { showDock, needsYou, showWorkspaceList, CHEVRON } from './dock.js';
 import { isMinimal, PANE_HEADER } from './panebar.js';
-import { find, targetOf, refreshDockedPanels } from './dom.js';
+import { find, byId, targetOf, refreshDockedPanels, CRUMB_ID } from './dom.js';
+import { SIDE } from './popups.js';
 import { SETTING_VALUES } from './constants.js';
 
 /** How near a terminal's top the mouse has to be for its bar to show, on hover (px). */
@@ -34,6 +35,12 @@ const left = find(document, '#titlebar .tb-left');
 left.insertAdjacentHTML('beforeend', `<button class="mini-aside" hidden><svg viewBox="0 0 16 16"><path d="M3.5 12.5h9"/><path d="M8 3.5v6M5.5 7l2.5 2.5L10.5 7"/></svg><span></span></button>`);
 // Who needs you: on the right, before the window's buttons (at the start of their side: on macOS they've moved left).
 find(document, '#titlebar .tb-right').insertAdjacentHTML('afterbegin', '<button class="mini-needs" hidden><span class="mini-needs-dot"></span><span></span></button>');
+// The workspace on screen (js/sidebar.js fills it in) opens the list of them all, as the dock's does; a button only in
+// Minimal, as Normal shows it just as a label while the sidebar is closed.
+const crumb = byId(CRUMB_ID);
+crumb.insertAdjacentHTML('beforeend', CHEVRON);
+/** What makes the crumb a button that opens a menu, in Minimal. */
+const CRUMB_BUTTON = /** @type {const} */ ([['role', 'button'], ['tabindex', '0'], ['aria-haspopup', 'menu'], ['title', 'Workspaces']]);
 const asideButton = find(left, '.mini-aside');
 const needsButton = find(document, '#titlebar .mini-needs');
 /** The terminal "needs you" names, which a click on it goes to. @type {Tab | null} */
@@ -68,6 +75,9 @@ function applyLayout() {
   const changed = body.dataset.layout !== now || body.dataset.paneNames !== names;
   body.dataset.layout = now;
   body.dataset.paneNames = names;
+  for (const [name, value] of CRUMB_BUTTON) {
+    if (minimal) crumb.setAttribute(name, value); else crumb.removeAttribute(name);
+  }
   showDock(minimal);
   drawStrip();
   // The terminals' room changes with the title bar, sidebar and headers, and the docked tools' with the gap beside them.
@@ -75,6 +85,16 @@ function applyLayout() {
   refreshDockedPanels();
   scheduleFit();
 }
+
+const openWorkspaceList = () => {
+  if (isMinimal()) showWorkspaceList(crumb, SIDE.below);
+};
+crumb.addEventListener('click', openWorkspaceList);
+crumb.addEventListener('keydown', e => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  e.preventDefault();
+  openWorkspaceList();
+});
 
 asideButton.addEventListener('click', () => {
   showMenu(asideTabs().map(tab => ({ label: shownName(tab), hint: 'Bring back', action: () => bringBack(tab) })), asideButton);

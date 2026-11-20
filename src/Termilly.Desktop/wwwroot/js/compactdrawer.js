@@ -41,22 +41,38 @@ function rowsFrom(term, from) {
   return rows;
 }
 
+/** The drawer's row when the view needs none. */
+export const NO_DRAWER = Object.freeze({ row: -1, menu: false });
+
 /**
- * The screen row the drawer opens from, or -1 when the view needs none: the agent is working or waits on a question
- * (the feed and its card show those), or it's at its plain empty prompt.
+ * The screen row the drawer opens from (-1 when the view needs none: the agent is working or waits on a question,
+ * which the feed and its card show, or it's at its plain empty prompt), and whether a list of its own opened it.
  * @param {Tab} tab
+ * @returns {{ row: number, menu: boolean }}
  */
 export function liveRow(tab) {
   const term = tab.view?.term;
   const state = tab.agent?.state;
-  if (!term || state === AGENT_STATE.working || state === AGENT_STATE.needsInput) return -1;
+  if (!term || state === AGENT_STATE.working || state === AGENT_STATE.needsInput) return NO_DRAWER;
   // A list of its own (/model, /resume): from the line above its start.
   const menu = readMenu(screenRows(term));
   // A list whose top is off a short screen: the whole screen.
-  if (menu) return Math.max(0, (menu.start ?? 0) - 1);
+  if (menu) return { row: Math.max(0, (menu.start ?? 0) - 1), menu: true };
   // Words in its input line, as the user typed them (not the hint an empty one shows): from the line above.
   const buffer = term.buffer.active;
-  return typedAt(buffer) ? Math.max(0, buffer.cursorY - 1) : -1;
+  return typedAt(buffer) ? { row: Math.max(0, buffer.cursorY - 1), menu: false } : NO_DRAWER;
+}
+
+/**
+ * Whether a drawer open from a row still shows what the user works in: the cursor's row is in it, and it isn't all
+ * blank. A prompt of the agent's own that closed (a rating it asked for, answered) moves its input line up out of the
+ * drawer and leaves blank rows behind.
+ * @param {any} term xterm's Terminal
+ * @param {number} row
+ */
+export function drawerHolds(term, row) {
+  if (row < 0 || term.buffer.active.cursorY < row) return false;
+  return screenRows(term).slice(row).some(line => line.trim());
 }
 
 /**

@@ -21,11 +21,11 @@ public sealed class CommandHistoryTests : IDisposable
     public void Dispose() => Directory.Delete(_dir, recursive: true);
 
     private static JsonElement Entry(string command, int? exitCode = 0, long? at = null) =>
-        JsonDocument.Parse(new JsonObject
+        JsonElement.Parse(new JsonObject
         {
             ["command"] = command, ["exitCode"] = exitCode, ["durationMs"] = 1200, ["cwd"] = @"C:\dev",
             ["at"] = at ?? DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), ["terminal"] = "PowerShell", ["workspace"] = "api",
-        }.ToJsonString()).RootElement;
+        }.ToJsonString());
 
     [Fact]
     public void Commands_are_kept_encrypted_newest_first_and_survive_a_restart()

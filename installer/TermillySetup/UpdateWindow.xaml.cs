@@ -13,6 +13,8 @@ namespace Termilly.Setup;
 public partial class UpdateWindow : Window
 {
     private static readonly TimeSpan StartupWait = TimeSpan.FromSeconds(30);
+    /// <summary>How long "didn't start, so the old version is back" stays before the window closes.</summary>
+    private static readonly TimeSpan RolledBackShown = TimeSpan.FromSeconds(4);
     /// <summary>The most of a failure's reason the window shows; a longer one is cut, with "..." after it.</summary>
     private const int ReasonMax = 240;
     private const string Cut = "...";
@@ -62,6 +64,11 @@ public partial class UpdateWindow : Window
     private async void RunUpdate(object? sender, EventArgs e)
     {
         ContentRendered -= RunUpdate;
+        if (SetupApp.Has(SetupFlags.UpdateSupervise))
+        {
+            await RunSupervisedAsync();
+            return;
+        }
         EventWaitHandle? started = null;
         try
         {
@@ -96,6 +103,49 @@ public partial class UpdateWindow : Window
             ShowFailure(error.Message);
         }
         finally { started?.Dispose(); }
+    }
+
+    /// <summary>
+    /// An update at start (SupervisedUpdate): this window stays until the new version reports healthy. Whatever
+    /// happens, a Termilly is started, so the window closes on its own; the Termilly that opens says what went wrong.
+    /// </summary>
+    private async Task RunSupervisedAsync()
+    {
+        var scope = SetupApp.Args.Value(SetupFlags.UpdateWindow);
+        var dir = SetupApp.Args.Value(Flags.Dir);
+        var payload = Payload.Open(SetupApp.ExePath);
+        if (!UpdateSignals.IsScope(scope) || dir is null || payload is null)
+        {
+            Log.Write("update at start: setup was started without its scope, folder or payload");
+            Processes.StartTermilly(dir ?? InstalledTermilly.Find()?.Dir ?? "");
+            Finish(ExitCodes.Failed);
+            return;
+        }
+        SignalShown()?.Dispose();
+        var update = new SupervisedUpdate(payload, Path.GetFullPath(dir), scope!, text => Dispatcher.BeginInvoke(new Action(() => Status.Text = text)));
+        var result = await Task.Run(() =>
+        {
+            try { return update.Run(); }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException or Win32Exception or SetupException)
+            {
+                Log.Write($"update at start failed: {error}");
+                Processes.StartTermilly(dir);
+                return ExitCodes.Failed;
+            }
+        });
+        if (result == SupervisedCodes.RolledBack)
+        {
+            Status.Text = $"Termilly {payload.Version} didn't start, so {update.OldVersion ?? "the earlier version"} is back.";
+            await Task.Delay(RolledBackShown);
+        }
+        Finish(result);
+    }
+
+    private void Finish(int exitCode)
+    {
+        _exitCode = exitCode;
+        _finished = true;
+        Close();
     }
 
     private void ShowFailure(string reason)

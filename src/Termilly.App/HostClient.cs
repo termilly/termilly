@@ -105,6 +105,50 @@ internal sealed class HostClient : IDisposable
         return null;
     }
 
+    /// <summary>
+    /// Whether a background host is running with shells still alive in it: installing an update would end them. Only
+    /// connects, never starts a host. A host that's there but doesn't answer counts as having some.
+    /// </summary>
+    public static bool HasKeptShells() => AskHost(stopIfIdle: false);
+
+    /// <summary>
+    /// Ends a background host with no shells alive (it would keep the program folder in use for a minute, so an update
+    /// couldn't swap it). False when it has shells, which are never ended.
+    /// </summary>
+    public static bool StopIdleHost() => !AskHost(stopIfIdle: true);
+
+    private static bool AskHost(bool stopIfIdle)
+    {
+        var pipe = new NamedPipeClientStream(".", HostProtocol.PipeName, PipeDirection.InOut, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+        try
+        {
+            pipe.Connect(FirstConnectMs);
+        }
+        catch (Exception e) when (e is TimeoutException or IOException or UnauthorizedAccessException)
+        {
+            pipe.Dispose();
+            return false; // no host
+        }
+        using var client = new HostClient(pipe);
+        try
+        {
+            lock (client._writeGate)
+            {
+                HostProtocol.Write(pipe, new HostRequest.Hello(HostProtocol.Version));
+            }
+            var keeps = !client._hello.Task.Wait(HelloWait) || client._hello.Task.Result.Sessions.Any(s => s.Alive);
+            if (stopIfIdle && !keeps)
+            {
+                client.Shutdown();
+            }
+            return keeps;
+        }
+        catch (Exception e) when (e is IOException or AggregateException or ObjectDisposedException)
+        {
+            return true;
+        }
+    }
+
     /// <summary>Runs a new shell in the host (replacing one with the same id).</summary>
     public HostedSession Start(string id, PtyOptions options, Action<string> onOutput, Action<int> onExit, Action<string> onFailed)
     {

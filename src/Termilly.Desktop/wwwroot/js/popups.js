@@ -13,9 +13,10 @@ import { barSideOf, DOCK_SIDE } from './dom.js';
 
 /**
  * One of a menu's entries, or 'separator'. `checked` makes it a checkbox; `submenu` opens more entries beside it.
- * `key` picks it while its menu has the focus (a digit, shown as its hint).
+ * `key` picks it while its menu has the focus (a digit, shown as its hint). `more` is what a right-click on it offers,
+ * in a menu of its own over this one.
  * @typedef {{ label: string, icon?: string, hint?: string, checked?: boolean, danger?: boolean, disabled?: boolean,
- *   title?: string, action?: () => unknown, submenu?: () => MenuEntry[], key?: string }} MenuItem
+ *   title?: string, action?: () => unknown, submenu?: () => MenuEntry[], key?: string, more?: () => MenuEntry[] }} MenuItem
  * @typedef {MenuItem | typeof SEPARATOR} MenuEntry
  */
 
@@ -232,11 +233,12 @@ const CHEVRON = '<svg viewBox="0 0 12 12"><path d="M4.5 3L7.5 6 4.5 9"/></svg>';
  * submenu: () => items }, or 'separator'. Arrow keys move, Enter/Space run, Right opens a submenu. keepFocus leaves the
  * keyboard focus where it is (a text box keeps showing its selection), and refocus says where it goes on closing. alone: picking
  * from it closes only it, not the popover it was opened over (a card it picks for stays put instead of closing and opening again).
+ * onClose runs as it closes.
  * @param {MenuEntry[]} items
  * @param {Anchor} anchor
- * @param {{ side?: 'below' | 'right' | 'left' | 'above', nested?: boolean, alone?: boolean, className?: string, keepFocus?: boolean, refocus?: () => void }} [options]
+ * @param {{ side?: 'below' | 'right' | 'left' | 'above', nested?: boolean, alone?: boolean, className?: string, keepFocus?: boolean, refocus?: () => void, onClose?: () => void }} [options]
  */
-export function showMenu(items, anchor, { side = SIDE.below, nested = false, alone = false, className = '', keepFocus = false, refocus } = {}) {
+export function showMenu(items, anchor, { side = SIDE.below, nested = false, alone = false, className = '', keepFocus = false, refocus, onClose } = {}) {
   const menu = document.createElement('div');
   if (alone) menu.dataset.alone = '1';
   menu.className = `popover menu context-menu ${className}`;
@@ -263,7 +265,7 @@ export function showMenu(items, anchor, { side = SIDE.below, nested = false, alo
     }
   });
 
-  openPopover(menu, anchor, { side, nested, dynamic: true, refocus });
+  openPopover(menu, anchor, { side, nested, dynamic: true, refocus, onClose });
   fitAndScroll(menu);
   if (!keepFocus) /** @type {HTMLButtonElement | null} */ (menu.querySelector('.menu-row:not(:disabled)'))?.focus();
   return menu;
@@ -355,8 +357,35 @@ function menuRow(menu, item) {
       item.action?.();
     });
   }
+  if (item.more) wireMore(menu, button, item.more, closeSubmenus);
   return button;
 }
+
+/**
+ * A right-click on a menu's row opens what it offers (MenuItem.more) in a menu at the pointer, over this one.
+ * @param {HTMLElement} menu
+ * @param {HTMLButtonElement} button the row
+ * @param {() => MenuEntry[]} more
+ * @param {() => void} closeSubmenus
+ */
+function wireMore(menu, button, more, closeSubmenus) {
+  button.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    closeSubmenus();
+    // One at a time: another row's, still open, goes first.
+    const open = moreMenus.get(menu);
+    if (open) closePopover(open);
+    // Closed on its own (Escape), its row has the keys again, so the menu under it does too.
+    moreMenus.set(menu, showMenu(more(), { x: e.clientX, y: e.clientY }, { nested: true, onClose: () => { if (isOpen(menu)) button.focus(); } }));
+  });
+}
+
+/**
+ * The menu a right-click on a row opened over each menu (MenuItem.more), while it may be open.
+ * @type {WeakMap<HTMLElement, HTMLElement>}
+ */
+const moreMenus = new WeakMap();
 
 /**
  * Closes the submenu that was opened from `row`.

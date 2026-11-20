@@ -21,14 +21,28 @@ const finish = (reason, pick = null) => {
 
 emitKeypressEvents(process.stdin);
 if (process.stdin.isTTY) process.stdin.setRawMode(true);
+// An input line (Codex's "› "), when asked for: what's typed shows after it, and Enter takes it (logged) and empties it.
+const mark = script.prompt.input;
+let typed = '';
 process.stdin.on('keypress', (text, key) => {
   log({ event: 'key', text: text ?? '', sequence: key.sequence, name: key.name ?? null });
   if ((script.prompt.picks ?? ['1', '2', '3']).includes(text)) finish('pick', text);
+  if (!mark) return;
+  if (key.name === 'return') {
+    log({ event: 'prompt', text: typed });
+    typed = '';
+    // As Codex does: something else on its screen changes first (its status), the input line empties a while after.
+    process.stdout.write('\x1b7\x1b[H\x1b8');
+    setTimeout(() => process.stdout.write(`\r\x1b[2K${mark}`), script.prompt.takeMs ?? 0);
+    return;
+  } else if (text && !key.ctrl && !key.meta) typed += text;
+  // As a TUI redraws its input line: a while after the key, not at once.
+  setTimeout(() => process.stdout.write(`\r\x1b[2K${mark}${typed}`), script.prompt.echoMs ?? 0);
 });
 process.stdin.resume();
 setTimeout(() => finish('timeout'), script.prompt.timeoutMs ?? 60000);
 // Home and erase removes the shell's command and history, making the above-choice fallback deterministic.
-process.stdout.write('\x1b[2J\x1b[H' + script.prompt.lines.join('\r\n') + '\r\n');
+process.stdout.write('\x1b[2J\x1b[H' + script.prompt.lines.join('\r\n') + '\r\n' + (mark ?? ''));
 log({ event: 'ready', raw: !!process.stdin.isTTY });
 
 
