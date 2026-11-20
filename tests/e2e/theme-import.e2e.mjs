@@ -170,7 +170,9 @@ test('the counter shows the imported themes with the ones added, and over the li
     const themes = Array.from({ length: 500 }, (_, i) => ({ ...base, id: `custom-t${i}`, name: i ? `T${i}` : 'One' }));
     updateSettings(GROUPS.interface, { customThemes: themes });
   });
-  await app.eval(t => { t.$('[data-si-all]').click(); t.$('[data-si-all]').click(); });
+  // Ticked by hand (Select all stops at the limit): Two untick and tick again, counted against the new list.
+  await app.key('.si-row[data-si-key="1"]', ' ');
+  await app.key('.si-row[data-si-key="1"]', ' ');
   await until(async () => (await app.text('.si-count')) === '501/500', 'over');
   assert.equal(await app.eval(t => t.$('.si-count').classList.contains('error')), true);
   assert.equal(await app.eval(t => t.$('.scheme-import [data-ok]').disabled), true);
