@@ -133,7 +133,7 @@ test('Imported filters the gallery, and Manage removes the ticked themes', () =>
   const rowHeight = await app.eval(t => t.$('.tm-row').getBoundingClientRect().height);
   assert.ok(rowHeight <= 22, `rows sit close (${rowHeight}px)`);
   await app.type('.tm-search', 'tw');
-  await until(() => app.eval(t => t.$('.tm-row').filter(r => !r.hidden).map(r => r.textContent).join() === 'Two'), 'the search finds Two');
+  await until(() => app.eval(t => t.$$('.tm-row').filter(r => !r.hidden).map(r => r.textContent).join() === 'Two'), 'the search finds Two');
   await app.eval(t => { t.$('[data-tm-all]').click(); });
   assert.equal(await app.text('.theme-manage [data-ok]'), 'Remove 1 theme', 'Select all ticks only the rows shown');
   await app.eval(t => { t.$('[data-tm-all]').click(); });
