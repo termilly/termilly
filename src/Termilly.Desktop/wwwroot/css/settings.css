@@ -45,9 +45,10 @@
 .theme-follow.unused .theme-pick { opacity: 0.45; }
 .theme-pick { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; }
 .theme-pick .field.dropdown { min-width: 150px; }
-.theme-tools { display: flex; align-items: center; gap: 10px; }
+/* Stays at the top of the page while the cards scroll under it; its own padding is the gap above the cards. */
+.theme-tools { position: sticky; top: -8px; z-index: 1; display: flex; align-items: center; gap: 10px; margin-top: -8px; padding: 8px 0; background: var(--raised); }
 .theme-tools .theme-search { width: 220px; }
-.theme-tools + .theme-cards { margin-top: 16px; }
+.theme-tools + .theme-cards { margin-top: 8px; }
 .theme-none { margin: 16px 0 0; }
 .theme-tools [data-theme-import] { margin-left: auto; }
 

@@ -3,7 +3,6 @@
 // and showing only dark or light ones, and following the system's light and dark mode with a theme picked for each.
 // Appearance's other tabs are Text (appearancetext.js) and Layout (appearancelayout.js).
 
-import { sys, SYSTEM_NAME } from '../host.js';
 import { getSetting, GROUPS } from '../store.js';
 import { THEMES, THEME_BASE, POPULAR_THEME_IDS, themeId, systemPick, importedThemes, themeById } from '../themes.js';
 import { cssColor, escapeHtml, ICONS } from '../ui.js';
@@ -53,9 +52,6 @@ const ORDERED = [...POPULAR_THEME_IDS.flatMap(id => THEMES.filter(t => t.id === 
 /** Every theme in the gallery's order: imported ones first. */
 const gallery = () => [...importedThemes(), ...ORDERED];
 
-/** What the system's light and dark mode is called here. */
-const systemName = sys.name === SYSTEM_NAME.linux ? 'the desktop' : 'Windows';
-
 /** @param {import('../themes.js').Theme['preview']} p a theme's small window, in its colours */
 const mini = p => `<span class="tc-win" style="--p-bg:${cssColor(p.bg)};--p-side:${cssColor(p.side)};--p-line:${cssColor(p.line)};--p-text:${cssColor(p.text)};--p-accent:${cssColor(p.accent)};--p-term:${cssColor(p.term)}">
     <span class="tc-side"><i></i><i class="on"></i><i></i></span>
@@ -69,7 +65,7 @@ const mini = p => `<span class="tc-win" style="--p-bg:${cssColor(p.bg)};--p-side
  */
 const card = t => {
   const note = t.imported ? IMPORTED_NOTE : t.like;
-  return `<button class="theme-card" data-theme-id="${t.id}" data-base="${t.base}" data-hay="${escapeHtml(`${t.name} ${t.like ?? ''}`.toLowerCase())}"${t.imported ? ` data-imported title="${REMOVE_HINT}"` : ''}>${mini(t.preview)}<span class="tc-name">${escapeHtml(t.name)}</span>${note ? `<span class="tc-like">${escapeHtml(note)}</span>` : ''}</button>`;
+  return `<button class="theme-card" data-theme-id="${t.id}" data-base="${t.base}" data-hay="${escapeHtml(`${t.name} ${t.like ?? ''}`.toLowerCase())}" title="${escapeHtml(t.imported ? `${t.name}. ${REMOVE_HINT}` : t.name)}"${t.imported ? ' data-imported' : ''}>${mini(t.preview)}<span class="tc-name">${escapeHtml(t.name)}</span>${note ? `<span class="tc-like">${escapeHtml(note)}</span>` : ''}</button>`;
 };
 const IMPORTED_NOTE = 'Imported';
 const REMOVE_HINT = 'Imported. Right-click to remove it.';
@@ -142,7 +138,7 @@ const APPEARANCE = {
   id: SECTION.appearance,
   label: 'Appearance', tab: 'Theme', icon: ICONS.appearance,
   tabs: [SECTION.appearance, SECTION.appearanceText, SECTION.appearanceLayout],
-  html: () => group('', row('Follow the system', `Switches with ${systemName}’s dark and light mode.`,
+  html: () => group('', row('Follow the system', 'Default theme per mode',
     `<span class="theme-follow">${picker(DARK_PICK, THEME_BASE.dark, 'Dark')}${picker(LIGHT_PICK, THEME_BASE.light, 'Light')}
       <button class="switch" role="switch" data-theme-follow aria-label="Follow the system"><span></span></button></span>`,
     { keywords: 'system dark light mode automatic auto night day' }))

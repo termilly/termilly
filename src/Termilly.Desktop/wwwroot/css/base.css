@@ -188,7 +188,8 @@ select.field { padding-right: 6px; }
 .seg.wide button { flex: 1; }
 /* The theme picker (settings.js themeCards): a small window in each theme's colours, its name under it. */
 .seg.theme-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 8px; width: 100%; padding: 0; border: 0; background: none; }
-.seg.theme-cards button { display: flex; flex-direction: column; align-items: stretch; gap: 6px; padding: 5px; border-radius: 9px; color: var(--muted); box-shadow: inset 0 0 0 1px var(--border); }
+/* min-width: 0, so a long name is cut short (…) instead of widening its column. */
+.seg.theme-cards button { display: flex; flex-direction: column; align-items: stretch; gap: 6px; min-width: 0; padding: 5px; border-radius: 9px; color: var(--muted); box-shadow: inset 0 0 0 1px var(--border); }
 .seg.theme-cards button:hover { background: var(--hover); color: var(--text); }
 .seg.theme-cards button.on { background: var(--accent-fill); color: var(--text-strong); box-shadow: inset 0 0 0 2px var(--accent); }
 .tc-name { overflow: hidden; padding: 0 2px; font-size: 12px; text-align: left; text-overflow: ellipsis; white-space: nowrap; }

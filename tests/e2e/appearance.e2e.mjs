@@ -114,3 +114,34 @@ test('a setting found by the search opens on its own tab', () => withAppearance(
   await until(async () => (await app.text('.set-tab.on')) === 'Text', 'the Text tab opened');
   assert.equal(await app.eval(t => t.$('#set-title').textContent), 'Appearance');
 }));
+
+test('the search and buttons stay on top while the cards scroll, and a long name is cut short', () => withAppearance('appearance-sticky', async app => {
+  assert.equal(await app.eval(t => t.$$('.set-desc').some(d => d.textContent === 'Default theme per mode')), true);
+  const long = 'A very long imported theme name that never fits a card';
+  await app.eval(async (t, name) => {
+    const { updateSettings } = await t.import('preferences.js');
+    const { GROUPS } = await t.import('store.js');
+    const base = { background: '#000000', foreground: '#ffffff', cursor: null, ansi: Array(16).fill('#808080') };
+    updateSettings(GROUPS.interface, { customThemes: [{ ...base, id: 'custom-long', name }] });
+    (await t.import('settings.js')).openSettings('appearance');
+  }, long);
+  await app.waitFor('.theme-card[data-theme-id="custom-long"]');
+  const card = await app.eval(t => {
+    const [first, second] = t.$$('.theme-card');
+    const name = first.querySelector('.tc-name');
+    return { cut: name.scrollWidth > name.clientWidth, same: Math.abs(first.offsetWidth - second.offsetWidth) <= 1, title: first.title };
+  });
+  assert.equal(card.cut, true, 'the name is cut short');
+  assert.equal(card.same, true, 'the card keeps its column width');
+  assert.match(card.title, new RegExp(`^${long}`), 'the whole name in the tooltip');
+  const before = await app.eval(t => t.$('.theme-tools').getBoundingClientRect().top - t.$('#set-body').getBoundingClientRect().top);
+  await app.eval(t => { t.$('#set-body').scrollTop = t.$('.theme-tools').offsetTop + 400; });
+  await until(() => app.eval(t => t.$('#set-body').scrollTop > 0), 'scrolled');
+  const after = await app.eval(t => {
+    const body = t.$('#set-body').getBoundingClientRect();
+    const tools = t.$('.theme-tools').getBoundingClientRect();
+    return { top: tools.top - body.top, onTop: t.$('.theme-tools').contains(globalThis.document.elementFromPoint(tools.left + 4, tools.top + tools.height / 2)) };
+  });
+  assert.ok(before > 0 && after.top >= -1 && after.top <= 1, `the tools stay at the top (${after.top}px)`);
+  assert.equal(after.onTop, true, 'nothing scrolls over them');
+}));
