@@ -23,7 +23,7 @@ internal sealed class WindowTheme(ISettingsStore settings, ISystemTheme system)
             // For "system" the saved colours are the theme's shown last: right only while it's the pick for the mode now.
             var pick = system.PrefersLight ? current.Interface.ThemeLight : current.Interface.ThemeDark;
             return chosen is not null
-                && (current.Interface.Theme != SettingValues.Theme.System || chosen.Id == pick) ? chosen
+                && (current.Interface.Theme != SettingValues.Theme.System || (chosen.Id == pick && chosen.Light == system.PrefersLight)) ? chosen
                 : IsLight(current.Interface.Theme, chosen) ? LightPalette
                 : DarkPalette;
         }

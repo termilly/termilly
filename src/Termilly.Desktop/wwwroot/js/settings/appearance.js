@@ -111,7 +111,7 @@ const APPEARANCE = {
   id: SECTION.appearance,
   label: 'Appearance', tab: 'Theme', icon: ICONS.appearance,
   tabs: [SECTION.appearance, SECTION.appearanceText, SECTION.appearanceLayout],
-  html: () => group('', row('Follow the system', `One theme while ${systemName} is in dark mode and another while it’s light.`,
+  html: () => group('', row('Follow the system', `Switches with ${systemName}’s dark and light mode.`,
     `<span class="theme-follow">${picker(DARK_PICK, THEME_BASE.dark, 'Dark')}${picker(LIGHT_PICK, THEME_BASE.light, 'Light')}
       <button class="switch" role="switch" data-theme-follow aria-label="Follow the system"><span></span></button></span>`,
     { keywords: 'system dark light mode automatic auto night day' }))

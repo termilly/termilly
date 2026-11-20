@@ -113,8 +113,23 @@ const tabBar = (owner, open) => `<span class="set-tabs" role="tablist" aria-labe
 const TAB_ID_PREFIX = 'set-tab-';
 /** The panel's attribute naming the tab it shows. */
 const LABELLED_BY = 'aria-labelledby';
-/** The keys that move between tabs: by one, or to the first or last. */
-const TAB_KEYS = Object.freeze({ ArrowLeft: -1, ArrowRight: 1, Home: -Infinity, End: Infinity });
+/** The keys that move between tabs: ← and → by one, round from the last to the first; Home and End to the ends. */
+const TAB_STEPS = Object.freeze({ ArrowLeft: -1, ArrowRight: 1 });
+const TAB_ENDS = Object.freeze({ Home: 'first', End: 'last' });
+
+/**
+ * Makes the body the open tab's panel, or (no tab) a plain body again.
+ * @param {string | null} tab
+ */
+function panelOf(tab) {
+  if (tab) {
+    body.setAttribute('role', 'tabpanel');
+    body.setAttribute(LABELLED_BY, `${TAB_ID_PREFIX}${tab}`);
+  } else {
+    body.removeAttribute('role');
+    body.removeAttribute(LABELLED_BY);
+  }
+}
 
 /**
  * Opens a tab and keeps the keyboard on its button.
@@ -130,13 +145,14 @@ function openTab(id) {
  * @param {KeyboardEvent} e
  */
 function tabKey(e) {
-  const by = TAB_KEYS[/** @type {keyof typeof TAB_KEYS} */ (e.key)];
-  const owner = tabOwner(SECTIONS[page.current]);
-  if (by === undefined || !owner?.tabs) return;
+  const step = TAB_STEPS[/** @type {keyof typeof TAB_STEPS} */ (e.key)];
+  const end = TAB_ENDS[/** @type {keyof typeof TAB_ENDS} */ (e.key)];
+  const tabs = tabOwner(SECTIONS[page.current])?.tabs;
+  if ((step === undefined && !end) || !tabs) return;
   e.preventDefault();
-  const tabs = owner.tabs;
-  const at = tabs.indexOf(page.current) + by;
-  openTab(tabs[Math.max(0, Math.min(tabs.length - 1, Number.isFinite(at) ? at : by < 0 ? 0 : tabs.length - 1))]);
+  const at = end ? (end === TAB_ENDS.Home ? 0 : tabs.length - 1)
+    : (tabs.indexOf(page.current) + step + tabs.length) % tabs.length;
+  openTab(tabs[at]);
 }
 
 /**
@@ -161,14 +177,7 @@ function showSection(id) {
   help.hidden = !section.docs;
   tools.innerHTML = owner ? tabBar(owner, id) : section.tools?.() ?? '';
   tools.hidden = !owner && !section.tools;
-  // Under tabs the body is the open tab's panel.
-  if (owner) {
-    body.setAttribute('role', 'tabpanel');
-    body.setAttribute(LABELLED_BY, `${TAB_ID_PREFIX}${id}`);
-  } else {
-    body.removeAttribute('role');
-    body.removeAttribute(LABELLED_BY);
-  }
+  panelOf(owner ? id : null);
   body.innerHTML = section.html();
   body.scrollTop = 0;
   section.drawn?.(body);
@@ -302,6 +311,7 @@ function renderSearch() {
   renderNav();
   title.textContent = 'Search results';
   tools.hidden = true;
+  panelOf(null);
   body.innerHTML = '';
   for (const section of sections) {
     const found = sectionMatches(section, terms);

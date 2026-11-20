@@ -44,7 +44,7 @@
 .theme-follow { display: flex; align-items: center; gap: 10px; }
 .theme-follow.unused .theme-pick { opacity: 0.45; }
 .theme-pick { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; }
-.theme-pick .field.dropdown { min-width: 170px; }
+.theme-pick .field.dropdown { min-width: 150px; }
 .theme-tools { display: flex; align-items: center; gap: 10px; }
 .theme-tools .theme-search { width: 240px; }
 .theme-group-head { margin: 14px 0 8px; color: var(--muted); font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }

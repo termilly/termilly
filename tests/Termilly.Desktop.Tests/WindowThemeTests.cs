@@ -54,6 +54,10 @@ public sealed class WindowThemeTests
         Assert.NotSame(Mocha, Palette(Following, Mocha, systemLight: false, darkPick: "kanagawa"));
 
     [Fact]
+    public void Following_the_system_doesnt_take_a_light_picks_colours_for_dark_mode() =>
+        Assert.False(Palette(Following, Latte, systemLight: false, darkPick: "catppuccin-latte").Light);
+
+    [Fact]
     public void Colours_saved_before_they_had_an_id_start_following_the_system_in_Dark_or_Light()
     {
         var legacy = Mocha with { Id = null };

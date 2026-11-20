@@ -39,6 +39,13 @@ test('Appearance has Theme, Text and Layout tabs, and a tab keeps the title Appe
   await until(async () => (await app.text('.set-tab.on')) === 'Theme', 'Home opens the first tab');
   await app.key('.set-tab.on', 'ArrowRight');
   await until(async () => (await app.text('.set-tab.on')) === 'Text', 'Right opens the next tab');
+  await app.key('.set-tab.on', 'End');
+  await until(async () => (await app.text('.set-tab.on')) === 'Layout', 'End opens the last tab');
+  await app.key('.set-tab.on', 'ArrowRight');
+  await until(async () => (await app.text('.set-tab.on')) === 'Theme', 'Right on the last goes round to the first');
+  await app.key('.set-tab.on', 'ArrowLeft');
+  await until(async () => (await app.text('.set-tab.on')) === 'Layout', 'Left on the first goes round to the last');
+  await app.key('.set-tab.on', 'ArrowLeft');
   assert.equal(await app.eval(t => t.$('.set-tab.on') === t.$('.set-tab.on').ownerDocument.activeElement), true);
   assert.equal(await app.eval(t => t.$('#set-body').getAttribute('aria-labelledby')), 'set-tab-appearance-text');
 }));
