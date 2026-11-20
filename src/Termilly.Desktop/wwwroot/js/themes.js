@@ -27,7 +27,7 @@ export const TERM_FONT_VAR = '--term-font';
  * the host's window colours.
  * @typedef {{ id: string, name: string, base: string, vars: Record<string, string>, terminal: Record<string, string>,
  *   preview: { bg: string, side: string, line: string, text: string, accent: string, term: string, ink: string[] },
- *   window: { background: string, frame: string, text: string, accent: string }, like?: string }} Theme
+ *   window: { background: string, frame: string, text: string, accent: string }, like?: string, imported?: boolean }} Theme
  */
 
 /**
@@ -287,12 +287,71 @@ export const THEMES = [
     preview: { bg: '#f3f3f5', side: '#ffffff', line: '#d0d0d8', text: '#686874', accent: '#6d5cf0', term: '#ffffff', ink: ['#116329', '#0969da', '#1f2328'] },
     window: { background: '#f3f3f5', frame: '#d4d4da', text: '#1d1d22', accent: '#6d5cf0' },
   },
-  ...SPECS.map(spec => ({
-    id: spec.id, name: spec.name, base: spec.base, like: spec.like, vars: variables(spec), terminal: terminal(spec),
-    preview: { bg: spec.ui.bg, side: spec.ui.surface, line: spec.ui.border, text: spec.ui.muted, accent: spec.ui.accent, term: spec.term.bg, ink: [spec.term.ansi[2], spec.term.ansi[4], spec.term.fg] },
-    window: { background: spec.ui.bg, frame: spec.ui.border, text: spec.ui.text, accent: spec.ui.accent },
-  })),
+  ...SPECS.map(themeOf),
 ];
+
+/**
+ * A theme from its spec.
+ * @param {ThemeSpec} spec
+ * @returns {Theme}
+ */
+function themeOf(spec) {
+  return {
+    id: spec.id, name: spec.name, base: spec.base, like: spec.like, vars: variables(spec), terminal: terminal(spec),
+    preview: { bg: spec.ui.bg, side: spec.ui.surface, line: spec.ui.border, text: spec.ui.muted, accent: spec.ui.accent, term: spec.term.bg, ink: [spec.term.ansi[ANSI_INDEX.green], spec.term.ansi[ANSI_INDEX.blue], spec.term.fg] },
+    window: { background: spec.ui.bg, frame: spec.ui.border, text: spec.ui.text, accent: spec.ui.accent },
+  };
+}
+
+// ---- Imported schemes ----
+
+/** How an imported scheme's app colours sit between two of its colours: the share of the first, in percent. */
+const DERIVED = Object.freeze({ shade: { dark: 88, light: 96 }, header: { dark: 94, light: 98 }, raised: 90, border: 82, muted: 58 });
+const PERCENT = 100;
+
+/**
+ * Two #rrggbb colours mixed, as #rrggbb (the host's window needs plain colours).
+ * @param {string} a @param {string} b @param {number} share of `a`, in percent
+ */
+const blend = (a, b, share) => {
+  const other = rgb(b);
+  return `#${rgb(a).map((v, i) => Math.round((v * share + other[i] * (PERCENT - share)) / PERCENT).toString(HEX).padStart(2, '0')).join('')}`;
+};
+
+/**
+ * A theme's spec from an imported scheme: its terminal colours as they are, the app's worked out from them (the
+ * sidebar a little darker than the terminals, the accent its blue).
+ * @param {CustomTheme} c
+ * @returns {ThemeSpec}
+ */
+function importedSpec(c) {
+  const dark = onColour(c.background) === WHITE;
+  const kind = dark ? THEME_BASE.dark : THEME_BASE.light;
+  return {
+    id: c.id, name: c.name, base: kind,
+    ui: {
+      bg: blend(c.background, BLACK, DERIVED.shade[kind]), surface: c.background, header: blend(c.background, BLACK, DERIVED.header[kind]),
+      raised: blend(c.background, c.foreground, DERIVED.raised), border: blend(c.background, c.foreground, DERIVED.border),
+      text: c.foreground, muted: blend(c.foreground, c.background, DERIVED.muted), accent: c.ansi[ANSI_INDEX.blue],
+      attention: c.ansi[ANSI_INDEX.yellow], danger: c.ansi[ANSI_INDEX.red], ok: c.ansi[ANSI_INDEX.green],
+    },
+    // As on every dark theme here, ANSI black is the background (PSReadLine paints with it).
+    term: { bg: c.background, fg: c.foreground, cursor: c.cursor ?? undefined, ansi: dark ? [c.background, ...c.ansi.slice(1)] : [...c.ansi] },
+  };
+}
+
+/** The imported themes, made again only when the saved list changes. */
+let imported = { from: /** @type {CustomTheme[] | null | undefined} */ (null), themes: /** @type {Theme[]} */ ([]) };
+
+/** The schemes imported from other terminals (Settings), newest first. */
+export function importedThemes() {
+  const list = state.settings.interface.customThemes;
+  if (imported.from !== list) imported = { from: list, themes: (list ?? []).map(c => ({ ...themeOf(importedSpec(c)), imported: true })) };
+  return imported.themes;
+}
+
+/** Every theme: the imported ones first, then the built-in ones. */
+export const allThemes = () => [...importedThemes(), ...THEMES];
 
 /** Every variable any theme sets, so switching away from one takes its colours off again. */
 export const THEME_VARIABLES = [...new Set(THEMES.flatMap(t => Object.keys(t.vars)))];
@@ -300,7 +359,7 @@ export const THEME_VARIABLES = [...new Set(THEMES.flatMap(t => Object.keys(t.var
 const systemLight = matchMedia('(prefers-color-scheme: light)');
 
 /** @param {string | undefined} id */
-const known = id => !!id && THEMES.some(t => t.id === id);
+const known = id => !!id && allThemes().some(t => t.id === id);
 
 /**
  * The theme following the system shows in one mode: its pick when that's a known theme of the mode's kind, else Dark
@@ -311,7 +370,7 @@ export function systemPick(light) {
   const { themeLight, themeDark } = state.settings.interface;
   const pick = light ? themeLight : themeDark;
   const base = light ? THEME_BASE.light : THEME_BASE.dark;
-  return THEMES.some(t => t.id === pick && t.base === base) ? pick : light ? THEME.light : THEME.dark;
+  return allThemes().some(t => t.id === pick && t.base === base) ? pick : light ? THEME.light : THEME.dark;
 }
 
 /**
@@ -324,10 +383,10 @@ export function themeId(theme = state.settings.interface.theme) {
 }
 
 /** The theme on screen (Dark when the chosen one is gone). */
-export const currentTheme = () => THEMES.find(t => t.id === themeId()) ?? THEMES[0];
+export const currentTheme = () => allThemes().find(t => t.id === themeId()) ?? THEMES[0];
 
 /** @param {string} id */
-export const themeById = id => THEMES.find(t => t.id === id);
+export const themeById = id => allThemes().find(t => t.id === id);
 
 /** @param {() => void} fn */
 export const onSystemThemeChange = fn => systemLight.addEventListener('change', fn);

@@ -5,14 +5,15 @@
 
 import { sys, SYSTEM_NAME } from '../host.js';
 import { getSetting, GROUPS } from '../store.js';
-import { THEMES, THEME_BASE, POPULAR_THEME_IDS, themeId, systemPick } from '../themes.js';
+import { THEMES, THEME_BASE, POPULAR_THEME_IDS, themeId, systemPick, importedThemes, themeById } from '../themes.js';
 import { cssColor, escapeHtml, ICONS } from '../ui.js';
 import { updateSettings } from '../preferences.js';
 import { row, group } from './controls.js';
-import { SECTION, body } from './page.js';
+import { SECTION, body, redraw } from './page.js';
 import { SETTING_VALUES } from '../constants.js';
 import { targetOf } from '../dom.js';
-import { dropdown } from '../popups.js';
+import { dropdown, showMenu } from '../popups.js';
+import { importScheme } from '../themeimport.js';
 
 /** The theme setting's choices (C#'s SettingValues): a theme's id, or System. */
 const { theme } = SETTING_VALUES;
@@ -31,8 +32,10 @@ const FILTER = Object.freeze({ all: 'all', dark: THEME_BASE.dark, light: THEME_B
 /** @type {string} */
 let filter = FILTER.all;
 
-/** Every theme in the gallery's order: the well-known schemes (most-starred first), then Termilly's own. */
+/** The built-in themes in the gallery's order: the well-known schemes (most-starred first), then Termilly's own. */
 const ORDERED = [...POPULAR_THEME_IDS.flatMap(id => THEMES.filter(t => t.id === id)), ...THEMES.filter(t => !POPULAR_THEME_IDS.includes(t.id))];
+/** Every theme in the gallery's order: imported ones first. */
+const gallery = () => [...importedThemes(), ...ORDERED];
 
 /** What the system's light and dark mode is called here. */
 const systemName = sys.name === SYSTEM_NAME.linux ? 'the desktop' : 'Windows';
@@ -44,10 +47,36 @@ const mini = p => `<span class="tc-win" style="--p-bg:${cssColor(p.bg)};--p-side
   </span>`;
 
 /**
- * A theme's card: its small window, its name, and the well-known scheme it follows.
+ * A theme's card: its small window, its name, and the well-known scheme it follows, or that it's imported.
  * @param {import('../themes.js').Theme} t
  */
-const card = t => `<button class="theme-card" data-theme-id="${t.id}" data-base="${t.base}">${mini(t.preview)}<span class="tc-name">${escapeHtml(t.name)}</span>${t.like ? `<span class="tc-like">${escapeHtml(t.like)}</span>` : ''}</button>`;
+const card = t => {
+  const note = t.imported ? IMPORTED_NOTE : t.like;
+  return `<button class="theme-card" data-theme-id="${t.id}" data-base="${t.base}"${t.imported ? ` title="${REMOVE_HINT}"` : ''}>${mini(t.preview)}<span class="tc-name">${escapeHtml(t.name)}</span>${note ? `<span class="tc-like">${escapeHtml(note)}</span>` : ''}</button>`;
+};
+const IMPORTED_NOTE = 'Imported';
+const REMOVE_HINT = 'Imported. Right-click to remove it.';
+
+/**
+ * Takes an imported theme out; one on screen gives way to Dark or Light (as following the system's pick does).
+ * @param {string} id
+ */
+function removeImported(id) {
+  const gone = themeById(id);
+  const patch = { customThemes: (getSetting('interface.customThemes') ?? []).filter((/** @type {{ id: string }} */ t) => t.id !== id) };
+  const fallback = gone?.base === THEME_BASE.light ? theme.light : theme.dark;
+  updateSettings(GROUPS.interface, getSetting(THEME_SETTING) === id ? { ...patch, theme: fallback } : patch);
+  redraw();
+}
+
+// An imported theme's card, right-clicked: Remove.
+body.addEventListener('contextmenu', e => {
+  const target = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-theme-id]'));
+  const id = target?.dataset.themeId;
+  if (!target || !id || !themeById(id)?.imported) return;
+  e.preventDefault();
+  showMenu([{ label: 'Remove theme', icon: ICONS.trash, danger: true, action: () => removeImported(id) }], { x: e.clientX, y: e.clientY });
+});
 
 /**
  * The theme following the system shows in one mode: the dark themes or the light ones, in the gallery's order.
@@ -56,7 +85,7 @@ const card = t => `<button class="theme-card" data-theme-id="${t.id}" data-base=
  * @param {string} label
  */
 const picker = (key, base, label) => `<label class="theme-pick"><span>${label}</span><select class="field" data-setting="${key}" aria-label="${label} theme">
-    ${ORDERED.filter(t => t.base === base).map(t => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('')}</select></label>`;
+    ${gallery().filter(t => t.base === base).map(t => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('')}</select></label>`;
 
 const following = () => getSetting(THEME_SETTING) === theme.system;
 
@@ -98,7 +127,8 @@ const APPEARANCE = {
     { keywords: 'system dark light mode automatic auto night day' }))
     + group('', row('Theme', 'Colours for the app and terminals.', `<div class="theme-tools">
         <span class="seg theme-filter">${Object.values(FILTER).map(f => `<button data-theme-filter="${f}">${f === FILTER.all ? 'All' : f === FILTER.dark ? 'Dark' : 'Light'}</button>`).join('')}</span>
-      </div><span class="seg theme-cards">${ORDERED.map(card).join('')}</span>`,
+        <button class="btn" data-theme-import>Import</button>
+      </div><span class="seg theme-cards">${gallery().map(card).join('')}</span>`,
     { stack: true, keywords: `colour color look palette scheme ${THEMES.map(t => `${t.name} ${t.like ?? ''}`).join(' ').toLowerCase()}` })),
   drawn: root => { applyFilter(root); sync(root); },
   sync,
@@ -111,6 +141,10 @@ const APPEARANCE = {
     if (targetOf(e).closest('[data-theme-follow]')) {
       // Off keeps what's on screen: the pick the system's mode shows now.
       updateSettings(GROUPS.interface, { theme: following() ? themeId() : theme.system });
+      return true;
+    }
+    if (targetOf(e).closest('[data-theme-import]')) {
+      importScheme().then(id => { if (id) redraw(); });
       return true;
     }
     const kind = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-theme-filter]'));

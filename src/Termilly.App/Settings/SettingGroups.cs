@@ -78,12 +78,16 @@ internal sealed record InterfaceSettings
     private const int MaxShortcutText = 40;
     /// <summary>The longest theme id js/themes.js uses.</summary>
     private const int MaxThemeId = 40;
+    /// <summary>The most imported colour schemes kept.</summary>
+    private const int MaxCustomThemes = 50;
 
     public string Theme { get; init; } = SettingValues.Theme.FirstStart;
     /// <summary>The theme "system" shows while the system is in dark mode.</summary>
     public string ThemeDark { get; init; } = SettingValues.Theme.Dark;
     /// <summary>The theme "system" shows while the system is in light mode.</summary>
     public string ThemeLight { get; init; } = SettingValues.Theme.Light;
+    /// <summary>Colour schemes imported from other terminals, newest first.</summary>
+    public IReadOnlyList<CustomTheme>? CustomThemes { get; init; }
     /// <summary>Normal or Minimal (<see cref="SettingValues.Layout"/>).</summary>
     public string Layout { get; init; } = SettingValues.Layout.Default;
     /// <summary>In Minimal, a terminal's name on a line over it or on a bar shown on hover (<see cref="SettingValues.PaneNames"/>).</summary>
@@ -132,6 +136,8 @@ internal sealed record InterfaceSettings
         Theme = IsThemeId(Theme) ? Theme : SettingValues.Theme.FirstStart,
         ThemeDark = IsPick(ThemeDark) ? ThemeDark : SettingValues.Theme.Dark,
         ThemeLight = IsPick(ThemeLight) ? ThemeLight : SettingValues.Theme.Light,
+        CustomThemes = (CustomThemes ?? []).Select(t => t?.Normalize()).OfType<CustomTheme>().Where(t => IsThemeId(t.Id))
+            .DistinctBy(t => t.Id).Take(MaxCustomThemes).ToList(),
         Layout = SettingChecks.OneOf(Layout, SettingValues.Layout.All, SettingValues.Layout.Default),
         PaneNames = SettingChecks.OneOf(PaneNames, SettingValues.PaneNames.All, SettingValues.PaneNames.Default),
         MinimizeTo = SettingChecks.OneOf(MinimizeTo, SettingValues.MinimizeTo.All, SettingValues.MinimizeTo.Default),

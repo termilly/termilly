@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using Termilly.Desktop.Messaging;
 using Termilly.Desktop.Platform;
+using Termilly.Desktop.Features;
 
 namespace Termilly.Desktop;
 
@@ -123,7 +124,15 @@ internal sealed class WindowsPlatform(MainWindow window) :
         return Task.FromResult(dialog.ShowDialog(window) == true ? dialog.FileName : null);
     }
 
+    public Task<string?> PickSchemeToOpenAsync()
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog { Title = "Import a colour scheme", Filter = SchemeFilter };
+        return Task.FromResult(dialog.ShowDialog(window) == true ? dialog.FileName : null);
+    }
+
     private const string TextFilter = "Text files (*.txt;*.md)|*.txt;*.md|All files (*.*)|*.*";
+    private static readonly string SchemePatterns = string.Join(';', SchemeFiles.Extensions.Select(e => "*" + e));
+    private static readonly string SchemeFilter = $"Colour schemes ({SchemePatterns})|{SchemePatterns}|All files (*.*)|*.*";
     private const string OpenFilter = "All files (*.*)|*.*|Text files (*.txt;*.md)|*.txt;*.md";
 
     /// <summary>Never asked on Windows: the page's file input gives the files' paths.</summary>

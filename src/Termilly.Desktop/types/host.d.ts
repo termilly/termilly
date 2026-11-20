@@ -89,6 +89,8 @@ interface InterfaceSettings {
   themeDark: string;
   /** The theme "system" shows while the system is in light mode. */
   themeLight: string;
+  /** Colour schemes imported from other terminals, newest first. */
+  customThemes: CustomTheme[] | null;
   /** Normal or Minimal (). */
   layout: string;
   /** In Minimal, a terminal's name on a line over it or on a bar shown on hover (). */
@@ -334,6 +336,16 @@ interface ThemeWindowColors {
   accent: string;
   light: boolean;
   id: string | null;
+}
+
+/** A colour scheme imported from another terminal (Settings › Appearance › Theme): its terminal colours (#RRGGBB, the 16 ANSI ones in order); the page works out the app's colours from them (js/themes.js). */
+interface CustomTheme {
+  id: string;
+  name: string;
+  background: string;
+  foreground: string;
+  cursor: string | null;
+  ansi: string[];
 }
 
 /** One day in the agent cost ledger (js/cost.js): the total, and per workspace name. */

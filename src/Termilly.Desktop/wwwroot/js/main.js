@@ -43,7 +43,7 @@ import { openChangedFiles } from './changes.js';
 import { openSnippetsWindow, initSnippetsWindow } from './snippetswindow.js';
 import { initSchedules, nobodyAsksIn } from './schedules.js';
 import { toggleSchedules, initSchedulesWindow } from './scheduleswindow.js';
-import { THEMES } from './themes.js';
+import { allThemes } from './themes.js';
 import { isPreviewOpen, closePreview } from './preview.js';
 import { pluginCommands, reloadPlugins } from './plugins.js';
 import { startTour, offerTourOnce } from './tour.js';
@@ -240,7 +240,7 @@ setCommands(() => [
   { label: 'Show recently closed', keywords: 'history reopen restore', run: () => setTimeout(commands.recentlyClosed) },
   { label: 'Settings', keywords: 'preferences options font theme privacy history security', hint: keyHint(KEY_ID.settings), run: () => setTimeout(toggleSettings) },
   { label: 'Switch light / dark theme', keywords: 'appearance colour color mode', run: commands.toggleTheme },
-  ...[{ id: theme.system, name: 'System', like: '' }, ...THEMES].map(t => ({ label: `Theme: ${t.name}`, keywords: `appearance colour color look palette ${t.like ?? ''}`, run: () => updateSettings(GROUPS.interface, { theme: t.id }) })),
+  ...[{ id: theme.system, name: 'System', like: '' }, ...allThemes()].map(t => ({ label: `Theme: ${t.name}`, keywords: `appearance colour color look palette ${t.like ?? ''}`, run: () => updateSettings(GROUPS.interface, { theme: t.id }) })),
   { label: 'Bigger text', keywords: 'font zoom in', hint: keysHtml('Ctrl +'), run: commands.fontLarger },
   { label: 'Smaller text', keywords: 'font zoom out', hint: keysHtml('Ctrl -'), run: commands.fontSmaller },
   { label: 'Reset text size', keywords: 'font zoom', hint: keysHtml('Ctrl 0'), run: commands.fontReset },

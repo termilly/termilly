@@ -47,6 +47,28 @@
 .theme-pick .field.dropdown { min-width: 150px; }
 .theme-tools { display: flex; align-items: center; gap: 10px; }
 .theme-tools + .theme-cards { margin-top: 4px; }
+.theme-tools [data-theme-import] { margin-left: auto; }
+
+/* Import a colour scheme (js/themeimport.js): a file or the collection on the left, its preview on the right. */
+.dialog.scheme-import { width: 760px; }
+.si-body { display: flex; gap: 18px; margin-top: 14px; }
+.si-pick { display: flex; flex: 1.1; flex-direction: column; gap: 10px; min-width: 0; }
+.si-show { flex: 1; min-width: 0; }
+.si-drop { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 16px; border: 1.5px dashed var(--border-strong); border-radius: 10px; text-align: center; }
+.si-drop .dialog-sub { margin: 0; }
+.si-browse { align-self: flex-start; }
+.si-collection { display: flex; flex-direction: column; gap: 8px; }
+.si-collection[hidden], .si-search[hidden] { display: none; }
+.si-list { display: flex; flex-direction: column; max-height: 220px; padding: 4px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; }
+.si-row { padding: 5px 8px; border-radius: 6px; color: var(--text); font-size: 12.5px; text-align: left; }
+.si-row:hover { background: var(--hover); }
+.si-row.on { background: var(--accent-fill); color: var(--text-strong); }
+.si-name { display: block; margin-bottom: 8px; font-size: 13px; }
+.si-term { padding: 10px 12px; border-radius: 8px; font: 12px/1.6 var(--mono); white-space: pre; }
+.si-cursor { display: inline-block; width: 7px; height: 13px; vertical-align: -2px; }
+.si-swatches { display: grid; grid-template-columns: repeat(8, 1fr); gap: 3px; margin-top: 8px; }
+.si-swatches i { height: 14px; border-radius: 3px; }
+.si-status.error { color: var(--danger-text); }
 /* Over the cards' own display (.seg.theme-cards button), which would show them anyway. */
 .theme-cards > .theme-card[hidden] { display: none; }
 .tc-like { overflow: hidden; margin-top: -4px; padding: 0 2px; color: var(--faint); font-size: 11px; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
