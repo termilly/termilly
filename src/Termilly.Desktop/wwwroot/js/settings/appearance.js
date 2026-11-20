@@ -25,6 +25,7 @@ const LIGHT_PICK = 'interface.themeLight';
 const THEME_CARD = '.theme-card';
 const THEME_SEARCH = 'theme-search';
 const THEME_NONE = '.theme-none';
+const SEARCH_LABEL = 'Search themes';
 const PICKS_UNUSED = 'unused';
 /** How long each line of "output" is in a theme card's small terminal, in percent. */
 const INK_WIDTHS = [70, 45, 58];
@@ -136,7 +137,7 @@ const APPEARANCE = {
       <button class="switch" role="switch" data-theme-follow aria-label="Follow the system"><span></span></button></span>`,
     { keywords: 'system dark light mode automatic auto night day' }))
     + group('', row('Theme', 'Colours for the app and terminals.', `<div class="theme-tools">
-        <input class="field ${THEME_SEARCH}" type="search" placeholder="Search themes" spellcheck="false" autocomplete="off" aria-label="Search themes" value="${escapeHtml(query)}">
+        <input class="field ${THEME_SEARCH}" type="search" placeholder="${SEARCH_LABEL}" spellcheck="false" autocomplete="off" aria-label="${SEARCH_LABEL}" value="${escapeHtml(query)}">
         <span class="seg theme-filter">${Object.values(FILTER).map(f => `<button data-theme-filter="${f}">${f === FILTER.all ? 'All' : f === FILTER.dark ? 'Dark' : 'Light'}</button>`).join('')}</span>
         <button class="btn" data-theme-import>Import</button>
       </div><span class="seg theme-cards">${gallery().map(card).join('')}</span><p class="set-desc theme-none" hidden>No themes match.</p>`,

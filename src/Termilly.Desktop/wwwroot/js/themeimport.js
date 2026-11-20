@@ -78,8 +78,8 @@ function save(schemes, shown) {
   /** @type {SavedTheme[]} */
   let themes = state.settings.interface.customThemes ?? [];
   let id = '';
-  // Last first, so each one goes in before the ones after it.
-  for (const s of [...schemes].reverse()) {
+  // Last first, so each one goes in before the ones after it; another of the shown one's name would replace it.
+  for (const s of schemes.filter(x => x === shown || !sameName(shown.name)(x)).reverse()) {
     const added = withScheme(themes, s);
     themes = added.themes;
     if (s === shown) id = added.id;
@@ -91,6 +91,7 @@ function save(schemes, shown) {
 /** @param {number} n @param {string} one @param {string} many */
 const count = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
+const SEARCH_LABEL = 'Search schemes';
 /** The save button: the scheme shown, or the ticked ones. */
 const USE_LABEL = 'Use this theme';
 /** @param {number} n */
@@ -107,7 +108,7 @@ const DIALOG = `
         <span class="si-buttons"><button class="btn" data-si-choose data-no-enter autofocus>Choose files</button><button class="btn" data-si-folder data-no-enter>Choose folder</button></span>
       </div>
       <div class="si-collection" hidden>
-        <input class="field si-search" type="search" placeholder="Search schemes" spellcheck="false" autocomplete="off" aria-label="Search schemes" data-no-enter>
+        <input class="field si-search" type="search" placeholder="${SEARCH_LABEL}" spellcheck="false" autocomplete="off" aria-label="${SEARCH_LABEL}" data-no-enter>
         <label class="dialog-check si-all"><input type="checkbox" data-si-all data-no-enter> Select all</label>
         <div class="si-list" role="listbox" aria-label="Schemes" aria-multiselectable="true"></div>
         <p class="dialog-sub si-more"></p>
@@ -235,9 +236,16 @@ class SchemePicker {
   tick(key, on) {
     if (on) this.ticked.add(key);
     else this.ticked.delete(key);
-    const box = /** @type {HTMLInputElement | null} */ (this.list.querySelector(`[data-si-tick="${CSS.escape(key)}"]`));
-    if (box) box.checked = on;
-    box?.nextElementSibling?.setAttribute('aria-checked', String(on));
+    this.showTicks();
+  }
+
+  /** The rows' ticks as they stand, drawn in place so the row with the focus keeps it. */
+  showTicks() {
+    for (const box of /** @type {NodeListOf<HTMLInputElement>} */ (this.list.querySelectorAll(PART.tick))) {
+      const on = this.ticked.has(/** @type {string} */ (box.dataset.siTick));
+      box.checked = on;
+      box.nextElementSibling?.setAttribute('aria-checked', String(on));
+    }
     this.syncTicks();
   }
 
@@ -253,7 +261,7 @@ class SchemePicker {
       if (on) this.ticked.add(key);
       else this.ticked.delete(key);
     }
-    this.filter();
+    this.showTicks();
   }
 
   /**
