@@ -18,6 +18,11 @@ if (string.Equals(name, AgentExecutables.Codex, StringComparison.OrdinalIgnoreCa
 {
     return Shim.Run(AgentKinds.Codex, args);
 }
+
+// Everything below prints text (the termilly command, askpass, the status line): UTF-8, or straight to a console, so no
+// letter outside the console's code page turns into "?" (Utf8Output.cs).
+Console.SetOut(Utf8Output.Out());
+Console.SetError(Utf8Output.Error());
 if (string.Equals(name, AgentExecutables.Cli, StringComparison.OrdinalIgnoreCase))
 {
     return Cli.Run(args);

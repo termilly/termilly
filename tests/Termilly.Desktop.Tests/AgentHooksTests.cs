@@ -216,6 +216,33 @@ public sealed class AgentHooksTests : IDisposable
     }
 
     [Fact]
+    public void The_users_status_line_gets_and_gives_any_language()
+    {
+        // Version 0: Termilly isn't told, only the user's own line runs (here cat, which prints what it was given).
+        var project = Directory.CreateDirectory(Path.Combine(_dir, "测试 Тест ąčęėį", ".claude")).Parent!.FullName;
+        File.WriteAllText(Path.Combine(project, ".claude", "settings.json"), """{ "statusLine": { "command": "cat" } }""");
+        var input = new JsonObject { ["workspace"] = new JsonObject { ["project_dir"] = project } }.ToJsonString(NonAscii);
+        var output = new StringWriter();
+
+        StatusLine.Run("0", new MemoryStream(Utf8Output.Encoding.GetBytes(input)), output);
+
+        Assert.Equal(input, output.ToString());
+    }
+
+    [Fact]
+    public void Printed_text_to_a_pipe_is_utf8_without_a_mark()
+    {
+        var pipe = new MemoryStream();
+        using (var writer = Utf8Output.Writer(redirected: true, () => pipe, handle: 0))
+        {
+            writer.Write("Тест 测试 ąč");
+        }
+        Assert.Equal(System.Text.Encoding.UTF8.GetBytes("Тест 测试 ąč"), pipe.ToArray());
+    }
+
+    private static readonly System.Text.Json.JsonSerializerOptions NonAscii = new() { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
+
+    [Fact]
     public void The_plan_is_read_without_the_account_details()
     {
         var plan = ClaudePlan.Parse("""{ "loggedIn": true, "authMethod": "claude.ai", "email": "a@b.c", "orgName": "Org", "subscriptionType": "max" }""");

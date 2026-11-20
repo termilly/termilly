@@ -2,6 +2,12 @@
 
 What changed in each release. Termilly says in its title bar when a newer one is out.
 
+## 1.9.3 (2026-11-20)
+
+Fixes:
+
+- Non-English letters no longer show as "?" in the status line.
+
 ## 1.9.2 (2026-11-20)
 
 Fixes:

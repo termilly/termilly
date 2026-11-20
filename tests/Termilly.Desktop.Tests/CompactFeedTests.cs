@@ -197,13 +197,23 @@ public sealed class CompactFeedTests : IDisposable
         Assert.Equal([(bool?)false, true, null], codex.Select(l => l.Final));
     }
 
+    /// <summary>No timer: the tests tick the feed themselves, so a timer's tick can't race theirs.</summary>
+    private static readonly Func<Action, IRepeating> ByHand = _ => new NoRepeat();
+
+    private sealed class NoRepeat : IRepeating
+    {
+        public void Start(TimeSpan every) { }
+        public void Stop() { }
+        public void Dispose() { }
+    }
+
     [Fact]
     public void A_view_gets_every_line_when_switched_on_then_only_what_changed()
     {
         var path = Path.Combine(_dir, "s.jsonl");
         File.WriteAllText(path, User("u1", "\"First\"") + "\n");
         var sent = new List<ToPage.CompactLines>();
-        using var feed = new CompactFeed(sent.Add, (_, _) => path);
+        using var feed = new CompactFeed(sent.Add, (_, _) => path, ByHand);
 
         feed.Watch(new FromPage.CompactWatch("pane", "session-1", "claude"));
         feed.Tick();
@@ -224,7 +234,7 @@ public sealed class CompactFeedTests : IDisposable
     {
         var path = Path.Combine(_dir, "later.jsonl");
         var sent = new List<ToPage.CompactLines>();
-        using var feed = new CompactFeed(sent.Add, (_, _) => File.Exists(path) ? path : null);
+        using var feed = new CompactFeed(sent.Add, (_, _) => File.Exists(path) ? path : null, ByHand);
 
         feed.Watch(new FromPage.CompactWatch("pane", "session-2", "codex"));
         feed.Tick();
