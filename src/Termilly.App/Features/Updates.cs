@@ -6,7 +6,7 @@ using Termilly.Desktop.Services;
 namespace Termilly.Desktop.Features;
 
 /// <summary>
-/// Updates (UpdateCheck.cs): a check soon after start and every 12 hours while Settings › General allows it, and
+/// Updates (UpdateCheck.cs): a check soon after start and every 10 minutes while Settings › General allows it, and
 /// whenever "Check now" asks; offline or a manifest that doesn't verify stays quiet until the next check. A check
 /// only shows the notice. The installer is downloaded when the user chooses "Download and install", and installed
 /// when they choose "Restart to update": Termilly closes and the installer opens it again.
@@ -15,7 +15,7 @@ internal sealed class UpdateHandler(
     PageChannel page, ISettingsStore settings, UpdateDownload download, IUpdateInstaller installer, IAppWindow window)
     : IMessageHandler, IStartable, IDisposable
 {
-    private static readonly TimeSpan Interval = TimeSpan.FromHours(12);
+    private static readonly TimeSpan Interval = TimeSpan.FromMinutes(10);
     /// <summary>The first check: a few seconds after start, once the window is up, so a new version shows at once.</summary>
     private static readonly TimeSpan First = TimeSpan.FromSeconds(3);
     private const int AllOfIt = 100;
