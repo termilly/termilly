@@ -2,6 +2,12 @@
 
 What changed in each release. Termilly says in its title bar when a newer one is out.
 
+## 1.9.2 (2026-11-20)
+
+Fixes:
+
+- New version notice now shows in the Minimal layout and on macOS.
+
 ## 1.9.1 (2026-11-20)
 
 - **Automatic updates:** Termilly updates itself at start and rolls back if the update fails (Settings › About).
