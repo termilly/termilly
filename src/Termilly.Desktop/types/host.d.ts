@@ -326,13 +326,14 @@ interface SettingsData {
   snippetUsed: Record<string, number> | null;
 }
 
-/** A theme's colours for the window and start-up loader (#RRGGBB), and whether it's a light theme. */
+/** A theme's colours for the window and start-up loader (#RRGGBB), whether it's a light theme, and its id (none in colours saved before 1.10). */
 interface ThemeWindowColors {
   background: string;
   frame: string;
   text: string;
   accent: string;
   light: boolean;
+  id: string | null;
 }
 
 /** One day in the agent cost ledger (js/cost.js): the total, and per workspace name. */

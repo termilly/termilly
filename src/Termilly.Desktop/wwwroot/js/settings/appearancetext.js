@@ -7,7 +7,7 @@ import { state, getSetting, GROUPS } from '../store.js';
 import { cssString, escapeHtml, ICONS, keysHtml } from '../ui.js';
 import { setSetting, updateSettings, MIN_FONT_SIZE, MAX_FONT_SIZE, MIN_ZOOM, MAX_ZOOM, ZOOM_STEP, DEFAULT_ZOOM } from '../preferences.js';
 import { row, seg, toggle, group, setRange } from './controls.js';
-import { SECTION, body, layer, page } from './page.js';
+import { SECTION, body, layer } from './page.js';
 import { SETTING_VALUES } from '../constants.js';
 import { field, find, targetOf } from '../dom.js';
 
@@ -225,5 +225,6 @@ export default TEXT;
 onHost(HOST.fonts, m => {
   installedFonts = m.fonts;
   uiFonts = m.uiFonts ?? [];
-  if (!layer.hidden && page.current === SECTION.appearanceText) renderFontLists(body);
+  // Also in search results, where a font list shows though the open section is another one.
+  if (!layer.hidden && body.querySelector(FONT_PICKER)) renderFontLists(body);
 });

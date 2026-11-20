@@ -130,8 +130,8 @@ internal sealed record InterfaceSettings
     public InterfaceSettings Normalize() => this with
     {
         Theme = IsThemeId(Theme) ? Theme : SettingValues.Theme.FirstStart,
-        ThemeDark = IsThemeId(ThemeDark) ? ThemeDark : SettingValues.Theme.Dark,
-        ThemeLight = IsThemeId(ThemeLight) ? ThemeLight : SettingValues.Theme.Light,
+        ThemeDark = IsPick(ThemeDark) ? ThemeDark : SettingValues.Theme.Dark,
+        ThemeLight = IsPick(ThemeLight) ? ThemeLight : SettingValues.Theme.Light,
         Layout = SettingChecks.OneOf(Layout, SettingValues.Layout.All, SettingValues.Layout.Default),
         PaneNames = SettingChecks.OneOf(PaneNames, SettingValues.PaneNames.All, SettingValues.PaneNames.Default),
         MinimizeTo = SettingChecks.OneOf(MinimizeTo, SettingValues.MinimizeTo.All, SettingValues.MinimizeTo.Default),
@@ -147,6 +147,9 @@ internal sealed record InterfaceSettings
     /// <summary>A theme's id as js/themes.js has them: lowercase letters, digits and hyphens.</summary>
     private static bool IsThemeId(string? id) =>
         id is { Length: > 0 and <= MaxThemeId } && id.All(c => c is >= 'a' and <= 'z' or >= '0' and <= '9' or '-');
+
+    /// <summary>A theme following the system can show: a theme's id, not "system" itself (the page checks its kind).</summary>
+    private static bool IsPick(string? id) => IsThemeId(id) && id != SettingValues.Theme.System;
 }
 
 /// <summary>The shells on offer: the default, the user's own profiles and notes, shell integration, COM ports and consoles.</summary>

@@ -140,13 +140,14 @@ const SPECS = [
   { id: 'lavender', name: 'Lavender', base: 'light',
     ui: { bg: '#f1eef8', surface: '#ffffff', header: '#f6f4fb', raised: '#ffffff', border: '#e0daee', text: '#2a2438', muted: '#6b6280', accent: '#7c5cd6', attention: '#b7791f', danger: '#d6455a', ok: '#2f9e6b' },
     term: { bg: '#ffffff', fg: '#2a2438', ansi: ['#2a2438', '#c4314b', '#2b7d55', '#8d5d00', '#3b5bd6', '#7c3fbf', '#127c8a', '#6e6780', '#4f4762', '#a51d36', '#1f6140', '#6c4700', '#2d47aa', '#612f98', '#0d5f6a', '#918aa3'] } },
-  // Well-known schemes with their published colours (catppuccin.com, github.com/rebelot/kanagawa.nvim).
+  // Well-known schemes with their published colours (github.com/catppuccin/kitty, github.com/rebelot/kanagawa.nvim); on the
+  // dark ones ANSI black is the background, as on every theme here.
   { id: 'catppuccin-mocha', name: 'Catppuccin Mocha', base: 'dark',
     ui: { bg: '#181825', surface: '#1e1e2e', header: '#181825', raised: '#313244', border: '#313244', text: '#cdd6f4', muted: '#a6adc8', accent: '#cba6f7', attention: '#f9e2af', danger: '#f38ba8', ok: '#a6e3a1' },
-    term: { bg: '#1e1e2e', fg: '#cdd6f4', cursor: '#f5e0dc', ansi: ['#1e1e2e', '#f38ba8', '#a6e3a1', '#f9e2af', '#89b4fa', '#f5c2e7', '#94e2d5', '#bac2de', '#585b70', '#f38ba8', '#a6e3a1', '#f9e2af', '#89b4fa', '#f5c2e7', '#94e2d5', '#a6adc8'] } },
+    term: { bg: '#1e1e2e', fg: '#cdd6f4', cursor: '#f5e0dc', ansi: ['#1e1e2e', '#f38ba8', '#a6e3a1', '#f9e2af', '#89b4fa', '#f5c2e7', '#94e2d5', '#a6adc8', '#585b70', '#f37799', '#89d88b', '#ebd391', '#74a8fc', '#f2aede', '#6bd7ca', '#bac2de'] } },
   { id: 'catppuccin-latte', name: 'Catppuccin Latte', base: 'light',
     ui: { bg: '#e6e9ef', surface: '#eff1f5', header: '#e6e9ef', raised: '#eff1f5', border: '#ccd0da', text: '#4c4f69', muted: '#6c6f85', accent: '#8839ef', attention: '#df8e1d', danger: '#d20f39', ok: '#40a02b' },
-    term: { bg: '#eff1f5', fg: '#4c4f69', cursor: '#dc8a78', ansi: ['#5c5f77', '#d20f39', '#40a02b', '#df8e1d', '#1e66f5', '#ea76cb', '#179299', '#acb0be', '#6c6f85', '#d20f39', '#40a02b', '#df8e1d', '#1e66f5', '#ea76cb', '#179299', '#bcc0cc'] } },
+    term: { bg: '#eff1f5', fg: '#4c4f69', cursor: '#dc8a78', ansi: ['#5c5f77', '#d20f39', '#40a02b', '#df8e1d', '#1e66f5', '#ea76cb', '#179299', '#acb0be', '#6c6f85', '#de293e', '#49af3d', '#eea02d', '#456eff', '#fe85d8', '#2d9fa8', '#bcc0cc'] } },
   { id: 'kanagawa', name: 'Kanagawa', base: 'dark',
     ui: { bg: '#16161d', surface: '#1f1f28', header: '#1a1a22', raised: '#2a2a37', border: '#363646', text: '#dcd7ba', muted: '#a6a69c', accent: '#7e9cd8', attention: '#e6c384', danger: '#e46876', ok: '#98bb6c' },
     term: { bg: '#1f1f28', fg: '#dcd7ba', cursor: '#c8c093', ansi: ['#1f1f28', '#c34043', '#76946a', '#c0a36e', '#7e9cd8', '#957fb8', '#6a9589', '#c8c093', '#727169', '#e82424', '#98bb6c', '#e6c384', '#7fb4ca', '#938aa9', '#7aa89f', '#dcd7ba'] } },
@@ -302,16 +303,23 @@ const systemLight = matchMedia('(prefers-color-scheme: light)');
 const known = id => !!id && THEMES.some(t => t.id === id);
 
 /**
- * The theme on screen: the chosen one, or for "system" the dark or light pick (Dark and Light unless changed) as
- * Windows' app mode says.
+ * The theme following the system shows in one mode: its pick when that's a known theme of the mode's kind, else Dark
+ * or Light.
+ * @param {boolean} light
+ */
+export function systemPick(light) {
+  const { themeLight, themeDark } = state.settings.interface;
+  const pick = light ? themeLight : themeDark;
+  const base = light ? THEME_BASE.light : THEME_BASE.dark;
+  return THEMES.some(t => t.id === pick && t.base === base) ? pick : light ? THEME.light : THEME.dark;
+}
+
+/**
+ * The theme on screen: the chosen one, or for "system" the pick for the mode Windows' app mode (or the desktop's) is in.
  * @param {string} [theme]
  */
 export function themeId(theme = state.settings.interface.theme) {
-  if (theme === THEME.system) {
-    const { themeLight, themeDark } = state.settings.interface;
-    if (systemLight.matches) return known(themeLight) ? themeLight : THEME.light;
-    return known(themeDark) ? themeDark : THEME.dark;
-  }
+  if (theme === THEME.system) return systemPick(systemLight.matches);
   return known(theme) ? theme : THEME.dark;
 }
 

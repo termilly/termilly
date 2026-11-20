@@ -5,17 +5,21 @@
 
 import { sys, SYSTEM_NAME } from '../host.js';
 import { getSetting, GROUPS } from '../store.js';
-import { THEMES, THEME_BASE, POPULAR_THEME_IDS, themeId } from '../themes.js';
+import { THEMES, THEME_BASE, POPULAR_THEME_IDS, themeId, systemPick } from '../themes.js';
 import { cssColor, escapeHtml, ICONS } from '../ui.js';
 import { updateSettings } from '../preferences.js';
 import { row, group } from './controls.js';
 import { SECTION, body } from './page.js';
 import { SETTING_VALUES } from '../constants.js';
 import { targetOf } from '../dom.js';
+import { dropdown } from '../popups.js';
 
 /** The theme setting's choices (C#'s SettingValues): a theme's id, or System. */
 const { theme } = SETTING_VALUES;
 const THEME_SETTING = 'interface.theme';
+/** The themes following the system shows in dark mode and in light mode. */
+const DARK_PICK = 'interface.themeDark';
+const LIGHT_PICK = 'interface.themeLight';
 /** A theme's card in the gallery, and the class that dims the picks while the system isn't followed. */
 const THEME_CARD = '.theme-card';
 const PICKS_UNUSED = 'unused';
@@ -95,6 +99,11 @@ function sync(root) {
   for (const b of /** @type {NodeListOf<HTMLElement>} */ (root.querySelectorAll('[data-theme-filter]'))) b.classList.toggle('on', b.dataset.themeFilter === filter);
   root.querySelector('[data-theme-follow]')?.setAttribute('aria-checked', String(following()));
   root.querySelector('.theme-follow')?.classList.toggle(PICKS_UNUSED, !following());
+  // Each pick as the system shows it: one that's gone or of the other kind shows as Dark or Light, as it acts.
+  for (const select of /** @type {NodeListOf<HTMLSelectElement>} */ (root.querySelectorAll('.theme-pick select'))) {
+    select.value = systemPick(select.dataset.setting === LIGHT_PICK);
+    dropdown(select);
+  }
 }
 
 /** @type {import('./page.js').Section} */
@@ -103,7 +112,7 @@ const APPEARANCE = {
   label: 'Appearance', tab: 'Theme', icon: ICONS.appearance,
   tabs: [SECTION.appearance, SECTION.appearanceText, SECTION.appearanceLayout],
   html: () => group('', row('Follow the system', `One theme while ${systemName} is in dark mode and another while it’s light.`,
-    `<span class="theme-follow">${picker('interface.themeDark', THEME_BASE.dark, 'Dark')}${picker('interface.themeLight', THEME_BASE.light, 'Light')}
+    `<span class="theme-follow">${picker(DARK_PICK, THEME_BASE.dark, 'Dark')}${picker(LIGHT_PICK, THEME_BASE.light, 'Light')}
       <button class="switch" role="switch" data-theme-follow aria-label="Follow the system"><span></span></button></span>`,
     { keywords: 'system dark light mode automatic auto night day' }))
     + group('', row('Theme', 'Colours for the app and terminals.', `<div class="theme-tools">

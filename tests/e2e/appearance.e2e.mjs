@@ -5,8 +5,8 @@ import { startApp } from './harness.mjs';
 import { makeRepo } from './repo.mjs';
 import { until } from './gitsteps.mjs';
 
-/** The names of the gallery's cards that show. */
-const shownCards = app => app.eval(t => t.$$('.theme-card').filter(c => !c.hidden).map(c => c.querySelector('.tc-name').textContent));
+/** The names of the gallery's cards that are drawn (not only marked hidden). */
+const shownCards = app => app.eval(t => t.$('.theme-card').filter(c => c.getClientRects().length).map(c => c.querySelector('.tc-name').textContent));
 /** The interface settings the page has. */
 const iface = app => app.eval(async t => ({ ...(await t.import('store.js')).state.settings.interface }));
 
@@ -33,7 +33,14 @@ test('Appearance has Theme, Text and Layout tabs, and a tab keeps the title Appe
   assert.equal(await app.eval(t => t.$('#set-title').textContent), 'Appearance');
   await app.eval(t => t.click('.set-tab[data-section="appearance-layout"]'));
   await until(async () => (await app.text('.set-tab.on')) === 'Layout', 'the Layout tab');
-  assert.equal(await app.eval(t => t.$$('.set-row .set-name').some(n => n.textContent === 'Terminal names')), true);
+  assert.equal(await app.eval(t => t.$('.set-row .set-name').some(n => n.textContent === 'Terminal names')), true);
+  // The keyboard moves between tabs and stays on them; the body is the open tab's panel.
+  await app.key('.set-tab.on', 'Home');
+  await until(async () => (await app.text('.set-tab.on')) === 'Theme', 'Home opens the first tab');
+  await app.key('.set-tab.on', 'ArrowRight');
+  await until(async () => (await app.text('.set-tab.on')) === 'Text', 'Right opens the next tab');
+  assert.equal(await app.eval(t => t.$('.set-tab.on') === t.$('.set-tab.on').ownerDocument.activeElement), true);
+  assert.equal(await app.eval(t => t.$('#set-body').getAttribute('aria-labelledby')), 'set-tab-appearance-text');
 }));
 
 test('the gallery lists Popular first, finds a theme by its well-known name, and filters dark and light', () => withAppearance('appearance-gallery', async app => {
@@ -47,7 +54,7 @@ test('the gallery lists Popular first, finds a theme by its well-known name, and
   await until(() => app.eval(t => !t.$('.theme-none').hidden), 'the no-match line');
   await app.type('.theme-search', '');
   await app.eval(t => t.click('[data-theme-filter="light"]'));
-  const light = await app.eval(t => t.$$('.theme-card').filter(c => !c.hidden).map(c => c.dataset.base));
+  const light = await app.eval(t => t.$('.theme-card').filter(c => c.getClientRects().length).map(c => c.dataset.base));
   assert.ok(light.length > 0 && light.every(b => b === 'light'), 'only light themes');
   assert.ok((await shownCards(app)).includes('Catppuccin Latte'));
 }));
@@ -55,7 +62,7 @@ test('the gallery lists Popular first, finds a theme by its well-known name, and
 test('a card picks its theme for the app and the terminals', () => withAppearance('appearance-pick', async app => {
   await app.eval(t => t.click('.theme-card[data-theme-id="catppuccin-mocha"]'));
   await until(async () => (await iface(app)).theme === 'catppuccin-mocha', 'the setting saved');
-  assert.equal(await app.eval(t => getComputedStyle(t.$('html')).getPropertyValue('--bg').trim()), '#181825');
+  assert.equal(await app.eval(t => globalThis.getComputedStyle(t.$('html')).getPropertyValue('--bg').trim()), '#181825');
   assert.equal(await app.eval(t => t.$('.theme-card.on').dataset.themeId), 'catppuccin-mocha');
   assert.equal(await app.eval(async t => {
     const { state } = await t.import('store.js');
@@ -72,7 +79,7 @@ test('following the system uses the dark or light pick, and turning it off keeps
   await until(async () => (await iface(app)).theme === 'system', 'following the system');
   assert.equal(await app.eval(t => t.$('[data-theme-follow]').getAttribute('aria-checked')), 'true');
   // Each mode's pick is a dropdown; picking one for the mode the system is in shows it at once.
-  const mode = await app.eval(() => matchMedia('(prefers-color-scheme: light)').matches ? 'themeLight' : 'themeDark');
+  const mode = await app.eval(() => globalThis.matchMedia('(prefers-color-scheme: light)').matches ? 'themeLight' : 'themeDark');
   const pick = mode === 'themeLight' ? 'catppuccin-latte' : 'kanagawa';
   await app.eval((t, m, p) => {
     const select = t.$(`select[data-setting="interface.${m}"]`);

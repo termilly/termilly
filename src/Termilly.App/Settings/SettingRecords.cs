@@ -1,7 +1,10 @@
 namespace Termilly.Desktop;
 
-/// <summary>A theme's colours for the window and start-up loader (#RRGGBB), and whether it's a light theme.</summary>
-internal sealed record ThemeWindowColors(string Background, string Frame, string Text, string Accent, bool Light);
+/// <summary>
+/// A theme's colours for the window and start-up loader (#RRGGBB), whether it's a light theme, and its id (none in
+/// colours saved before 1.10).
+/// </summary>
+internal sealed record ThemeWindowColors(string Background, string Frame, string Text, string Accent, bool Light, string? Id = null);
 
 /// <summary>One day in the agent cost ledger (js/cost.js): the total, and per workspace name.</summary>
 internal sealed record CostDay(double Total, IReadOnlyDictionary<string, double>? Ws = null);

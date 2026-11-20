@@ -52,7 +52,7 @@ export function applySettings() {
     else root.style.removeProperty(name);
   }
   // The host colours its window and start-up loader with these before the page draws (saved with the settings).
-  const windowColors = { ...current.window, light: current.base === theme.light };
+  const windowColors = { ...current.window, light: current.base === theme.light, id: current.id };
   if (JSON.stringify(state.settings.uiState.windowColors) !== JSON.stringify(windowColors)) {
     state.settings.uiState.windowColors = windowColors;
     saveSoon(GROUPS.uiState);
@@ -105,8 +105,39 @@ function tabOwner(section) {
  * @param {import('./settings/page.js').Section} owner
  * @param {string} open
  */
-const tabBar = (owner, open) => `<span class="set-tabs" role="tablist">${(owner.tabs ?? []).map(id =>
-  `<button class="set-tab${id === open ? ' on' : ''}" role="tab" aria-selected="${id === open}" data-section="${id}">${SECTIONS[id].tab}</button>`).join('')}</span>`;
+const tabBar = (owner, open) => `<span class="set-tabs" role="tablist" aria-label="${owner.label}">${(owner.tabs ?? []).map(id =>
+  `<button class="set-tab${id === open ? ' on' : ''}" role="tab" id="${TAB_ID_PREFIX}${id}" aria-selected="${id === open}" aria-controls="${body.id}"
+    tabindex="${id === open ? 0 : -1}" data-section="${id}">${SECTIONS[id].tab}</button>`).join('')}</span>`;
+
+/** A tab's element id, for the panel (the body) to say which tab it shows. */
+const TAB_ID_PREFIX = 'set-tab-';
+/** The panel's attribute naming the tab it shows. */
+const LABELLED_BY = 'aria-labelledby';
+/** The keys that move between tabs: by one, or to the first or last. */
+const TAB_KEYS = Object.freeze({ ArrowLeft: -1, ArrowRight: 1, Home: -Infinity, End: Infinity });
+
+/**
+ * Opens a tab and keeps the keyboard on its button.
+ * @param {string} id
+ */
+function openTab(id) {
+  showSection(id);
+  /** @type {HTMLElement | null} */ (tools.querySelector('.set-tab.on'))?.focus();
+}
+
+/**
+ * ← → Home End on a tab open the tab beside it, or the first or last one.
+ * @param {KeyboardEvent} e
+ */
+function tabKey(e) {
+  const by = TAB_KEYS[/** @type {keyof typeof TAB_KEYS} */ (e.key)];
+  const owner = tabOwner(SECTIONS[page.current]);
+  if (by === undefined || !owner?.tabs) return;
+  e.preventDefault();
+  const tabs = owner.tabs;
+  const at = tabs.indexOf(page.current) + by;
+  openTab(tabs[Math.max(0, Math.min(tabs.length - 1, Number.isFinite(at) ? at : by < 0 ? 0 : tabs.length - 1))]);
+}
 
 /**
  * A section's name over its search results: a tab's says whose tab it is.
@@ -130,6 +161,14 @@ function showSection(id) {
   help.hidden = !section.docs;
   tools.innerHTML = owner ? tabBar(owner, id) : section.tools?.() ?? '';
   tools.hidden = !owner && !section.tools;
+  // Under tabs the body is the open tab's panel.
+  if (owner) {
+    body.setAttribute('role', 'tabpanel');
+    body.setAttribute(LABELLED_BY, `${TAB_ID_PREFIX}${id}`);
+  } else {
+    body.removeAttribute('role');
+    body.removeAttribute(LABELLED_BY);
+  }
   body.innerHTML = section.html();
   body.scrollTop = 0;
   section.drawn?.(body);
@@ -469,6 +508,7 @@ document.addEventListener('keydown', e => {
     } else closeSettings();
   }
   if (e.target === searchBox) searchKey(e);
+  if (/** @type {HTMLElement} */ (e.target).classList?.contains('set-tab')) tabKey(e);
   // Ctrl+F searches the settings.
   if (e.key === 'f' && e.ctrlKey && !e.shiftKey && !e.altKey) {
     e.preventDefault();
@@ -483,7 +523,7 @@ layer.addEventListener('mousedown', e => {
 byId('set-close').addEventListener('click', closeSettings);
 tools.addEventListener('click', e => {
   const tab = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-section]'));
-  if (tab) return showSection(/** @type {string} */ (tab.dataset.section));
+  if (tab) return openTab(/** @type {string} */ (tab.dataset.section));
   const action = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-action]'));
   if (action) actions[/** @type {string} */ (action.dataset.action)]?.(action);
 });
