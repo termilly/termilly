@@ -14,7 +14,7 @@ import { SETTING_VALUES } from '../constants.js';
 import { targetOf } from '../dom.js';
 import { dropdown, showMenu } from '../popups.js';
 import { importScheme } from '../themeimport.js';
-import { removeImported, manageImported } from './thememanage.js';
+import { removeImported, manageImported, SEARCH_LABEL } from './thememanage.js';
 
 /** The theme setting's choices (C#'s SettingValues): a theme's id, or System. */
 const { theme } = SETTING_VALUES;
@@ -26,7 +26,6 @@ const LIGHT_PICK = 'interface.themeLight';
 const THEME_CARD = '.theme-card';
 const THEME_SEARCH = 'theme-search';
 const THEME_NONE = '.theme-none';
-const SEARCH_LABEL = 'Search themes';
 const PICKS_UNUSED = 'unused';
 /** How long each line of "output" is in a theme card's small terminal, in percent. */
 const INK_WIDTHS = [70, 45, 58];

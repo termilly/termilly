@@ -31,17 +31,20 @@ export function removeImported(ids) {
 const removeLabel = n => (n ? `${REMOVE_LABEL} ${n} ${n === 1 ? 'theme' : 'themes'}` : REMOVE_LABEL);
 
 /** The parts of the dialog it reads. */
-const PART = Object.freeze({ all: '[data-tm-all]', tick: '[data-tm-id]', ok: '[data-ok]' });
+const PART = Object.freeze({ all: '[data-tm-all]', tick: '[data-tm-id]', ok: '[data-ok]', search: '.tm-search', none: '.tm-none' });
+/** The search box's label, here and in the gallery (appearance.js). */
+export const SEARCH_LABEL = 'Search themes';
 
 /** @param {import('../themes.js').Theme} t a row: its tick, its colours and its name */
-const row = t => `<label class="dialog-check tm-row"><input type="checkbox" data-tm-id="${t.id}" data-no-enter>`
+const row = t => `<label class="dialog-check tm-row" data-tm-name="${escapeHtml(t.name.toLowerCase())}"><input type="checkbox" data-tm-id="${t.id}" data-no-enter>`
   + `<span class="tm-swatch" style="background:${cssColor(t.preview.term)};border-color:${cssColor(t.preview.accent)}"></span>${escapeHtml(t.name)}</label>`;
 
-/** The dialog: Select all, the imported themes, and the button that removes the ticked ones. */
+/** The dialog: a search, Select all, the imported themes, and the button that removes the ticked ones. */
 const dialogHtml = () => `
   <h3>Imported themes</h3>
-  <label class="dialog-check tm-all"><input type="checkbox" data-tm-all data-no-enter autofocus> Select all</label>
-  <div class="tm-list">${importedThemes().map(row).join('')}</div>
+  <input class="field tm-search" type="search" placeholder="${SEARCH_LABEL}" spellcheck="false" autocomplete="off" aria-label="${SEARCH_LABEL}" data-no-enter autofocus>
+  <label class="dialog-check tm-all"><input type="checkbox" data-tm-all data-no-enter> Select all</label>
+  <div class="tm-list">${importedThemes().map(row).join('')}<p class="dialog-sub tm-none" hidden>No themes match.</p></div>
   <div class="dialog-actions">
     <button class="btn" data-cancel data-no-enter>Cancel</button>
     <button class="btn danger" data-ok disabled>${removeLabel(0)}</button>
@@ -56,16 +59,29 @@ export function manageImported() {
     const all = field(dialog, PART.all);
     const ticks = /** @type {HTMLInputElement[]} */ ([...dialog.querySelectorAll(PART.tick)]);
     const ok = /** @type {HTMLButtonElement} */ (find(dialog, PART.ok));
+    const search = field(dialog, PART.search);
     const ticked = () => ticks.filter(b => b.checked).map(b => /** @type {string} */ (b.dataset.tmId));
+    /** The rows the search shows: Select all ticks only these. */
+    const shown = () => ticks.filter(b => !(/** @type {HTMLElement} */ (b.parentElement)).hidden);
     const sync = () => {
       const n = ticked().length;
-      all.checked = n > 0 && n === ticks.length;
-      all.indeterminate = n > 0 && !all.checked;
+      const shownTicked = shown().filter(b => b.checked).length;
+      all.checked = shownTicked > 0 && shownTicked === shown().length;
+      all.indeterminate = shownTicked > 0 && !all.checked;
       ok.textContent = removeLabel(n);
       ok.disabled = !n;
     };
+    search.addEventListener('input', () => {
+      const words = search.value.trim().toLowerCase();
+      for (const b of ticks) {
+        const label = /** @type {HTMLElement} */ (b.parentElement);
+        label.hidden = !(label.dataset.tmName ?? '').includes(words);
+      }
+      find(dialog, PART.none).hidden = shown().length > 0;
+      sync();
+    });
     dialog.addEventListener('change', e => {
-      if (targetOf(e) === all) for (const b of ticks) b.checked = all.checked;
+      if (targetOf(e) === all) for (const b of shown()) b.checked = all.checked;
       sync();
     });
     return {

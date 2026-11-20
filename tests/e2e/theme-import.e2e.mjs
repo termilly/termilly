@@ -130,6 +130,16 @@ test('Imported filters the gallery, and Manage removes the ticked themes', () =>
   await app.eval(t => t.click('[data-theme-manage]'));
   await app.waitFor('.theme-manage');
   assert.equal(await app.eval(t => t.$('.theme-manage [data-ok]').disabled), true);
+  const rowHeight = await app.eval(t => t.$('.tm-row').getBoundingClientRect().height);
+  assert.ok(rowHeight <= 22, `rows sit close (${rowHeight}px)`);
+  await app.type('.tm-search', 'tw');
+  await until(() => app.eval(t => t.$('.tm-row').filter(r => !r.hidden).map(r => r.textContent).join() === 'Two'), 'the search finds Two');
+  await app.eval(t => { t.$('[data-tm-all]').click(); });
+  assert.equal(await app.text('.theme-manage [data-ok]'), 'Remove 1 theme', 'Select all ticks only the rows shown');
+  await app.eval(t => { t.$('[data-tm-all]').click(); });
+  await app.type('.tm-search', 'nothing like this');
+  await until(() => app.eval(t => !t.$('.tm-none').hidden), 'the no-match line');
+  await app.type('.tm-search', '');
   await app.eval(t => { t.$$('.theme-manage [data-tm-id]').slice(0, 2).forEach(b => b.click()); });
   assert.equal(await app.text('.theme-manage [data-ok]'), 'Remove 2 themes');
   await app.eval(t => t.click('.theme-manage [data-ok]'));
