@@ -143,3 +143,27 @@ test('Imported filters the gallery, and Manage removes the ticked themes', () =>
   await until(() => app.eval(t => !t.$('[data-theme-manage]') && !t.$('[data-theme-filter="imported"]')), 'Manage and Imported gone with the last one');
   assert.equal(await app.eval(t => t.$('[data-theme-filter="all"]').classList.contains('on')), true, 'back to All');
 }));
+
+test('the counter shows the imported themes with the ones added, and over the limit nothing can be added', () => withImport('import-count', async app => {
+  assert.equal(await app.text('.si-count'), '0/500');
+  const named = (name, background) => JSON.stringify({ ...JSON.parse(fixture('Dracula.json')), name, background });
+  await dropAll(app, [['a.json', named('One', '#111111')], ['b.json', named('Two', '#222222')]]);
+  await until(async () => (await app.text('.si-count')) === '1/500', 'the one shown counts');
+  await app.eval(t => { t.$('[data-si-all]').click(); });
+  await until(async () => (await app.text('.si-count')) === '2/500', 'both ticked count');
+  // 500 already imported, one of them named One: One replaces it, Two goes over.
+  await app.eval(async t => {
+    const { state } = await t.import('store.js');
+    const base = { background: '#000000', foreground: '#ffffff', cursor: null, ansi: Array(16).fill('#808080') };
+    const themes = Array.from({ length: 500 }, (_, i) => ({ ...base, id: `custom-t${i}`, name: i ? `T${i}` : 'One' }));
+    state.settings.interface.customThemes = themes;
+  });
+  await app.eval(t => { t.$('[data-si-all]').click(); t.$('[data-si-all]').click(); });
+  await until(async () => (await app.text('.si-count')) === '501/500', 'over');
+  assert.equal(await app.eval(t => t.$('.si-count').classList.contains('error')), true);
+  assert.equal(await app.eval(t => t.$('.scheme-import [data-ok]').disabled), true);
+  assert.match(await app.text('.si-status'), /Only 500 imported themes are kept/);
+  await app.key('.si-row[data-si-key="1"]', ' ');
+  await until(async () => (await app.text('.si-count')) === '500/500', 'One alone replaces its namesake');
+  assert.equal(await app.eval(t => t.$('.scheme-import [data-ok]').disabled), false);
+}));

@@ -86,7 +86,8 @@
 .si-cursor { display: inline-block; width: 7px; height: 13px; vertical-align: -2px; }
 .si-swatches { display: grid; grid-template-columns: repeat(8, 1fr); gap: 3px; margin-top: 8px; }
 .si-swatches i { height: 14px; border-radius: 3px; }
-.si-status.error { color: var(--danger-text); }
+.si-status.error, .si-count.error { color: var(--danger-text); }
+.si-count { align-self: center; margin: 0; font-variant-numeric: tabular-nums; }
 /* Over the cards' own display (.seg.theme-cards button), which would show them anyway. */
 .theme-cards > .theme-card[hidden] { display: none; }
 .tc-like { overflow: hidden; margin-top: -4px; padding: 0 2px; color: var(--faint); font-size: 11px; text-align: left; text-overflow: ellipsis; white-space: nowrap; }

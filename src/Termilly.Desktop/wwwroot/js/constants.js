@@ -181,7 +181,7 @@ export const CUSTOM_THEME = Object.freeze({
   idPrefix: 'custom-',
   ansiCount: 16,
   maxName: 60,
-  maxThemes: 50,
+  maxThemes: 500,
   maxFileBytes: 524288,
   maxFiles: 1000,
   maxTotalBytes: 16777216,

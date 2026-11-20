@@ -14,7 +14,7 @@ internal static class CustomThemeLimits
     public const int AnsiCount = 16;
     public const int MaxName = 60;
     /// <summary>The most imported schemes kept.</summary>
-    public const int MaxThemes = 50;
+    public const int MaxThemes = 500;
     /// <summary>The biggest file read: a scheme is a few kilobytes; a whole Windows Terminal settings file fits too.</summary>
     public const int MaxFileBytes = 524288; // 512 KB
     /// <summary>The most files read at once (picked, or found in a folder), and all of them together at most.</summary>

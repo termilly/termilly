@@ -88,6 +88,17 @@ function save(schemes, shown) {
   return id;
 }
 
+/**
+ * How many imported themes there are once schemes are saved: one of a name already there replaces it.
+ * @param {import('./schemes.js').Scheme[]} schemes
+ */
+function themesAfter(schemes) {
+  const saved = state.settings.interface.customThemes ?? [];
+  const key = (/** @type {string} */ name) => savedName(name).toLowerCase();
+  const had = new Set(saved.map(t => key(t.name)));
+  return saved.length + new Set(schemes.map(s => key(s.name)).filter(n => !had.has(n))).size;
+}
+
 /** @param {number} n @param {string} one @param {string} many */
 const count = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
@@ -120,6 +131,7 @@ const DIALOG = `
     </div>
   </div>
   <div class="dialog-actions">
+    <span class="dialog-sub si-count" title="Imported themes, with the ones added here"></span><span class="spacer"></span>
     <button class="btn" data-cancel data-no-enter>Cancel</button>
     <button class="btn primary" data-ok disabled>${USE_LABEL}</button>
   </div>`;
@@ -127,7 +139,7 @@ const DIALOG = `
 /** The dialog's parts it changes, and the class its status line has for an error. */
 const PART = Object.freeze({
   collection: '.si-collection', list: '.si-list', more: '.si-more', search: '.si-search', status: '.si-status',
-  preview: '.si-preview', ok: '[data-ok]', row: '.si-row', all: '[data-si-all]', tick: '[data-si-tick]',
+  preview: '.si-preview', ok: '[data-ok]', count: '.si-count', row: '.si-row', all: '[data-si-all]', tick: '[data-si-tick]',
 });
 const ERROR_CLASS = 'error';
 /** The keys that move through the list: by one row, or to its ends. */
@@ -162,6 +174,7 @@ class SchemePicker {
     this.list = find(dialog, PART.list);
     this.search = /** @type {HTMLInputElement} */ (find(dialog, PART.search));
     this.all = /** @type {HTMLInputElement} */ (find(dialog, PART.all));
+    this.syncTicks();
   }
 
   /** @param {number} action */
@@ -188,13 +201,18 @@ class SchemePicker {
    */
   syncTicks() {
     const ok = /** @type {HTMLButtonElement} */ (find(this.dialog, PART.ok));
-    const over = this.ticked.size > CUSTOM_THEME.maxThemes;
+    const chosen = this.chosen();
+    const total = themesAfter(chosen);
+    const over = total > CUSTOM_THEME.maxThemes;
     ok.textContent = this.ticked.size ? addLabel(this.ticked.size) : USE_LABEL;
-    ok.disabled = this.ticked.size ? over : !this.picked;
+    ok.disabled = !chosen.length || over;
+    const counter = find(this.dialog, PART.count);
+    counter.textContent = `${total}/${CUSTOM_THEME.maxThemes}`;
+    counter.classList.toggle(ERROR_CLASS, over);
     const shownTicked = this.matches.filter(key => this.ticked.has(key)).length;
     this.all.checked = shownTicked > 0 && shownTicked === this.matches.length;
     this.all.indeterminate = shownTicked > 0 && !this.all.checked;
-    if (this.found) this.say(over ? `Up to ${CUSTOM_THEME.maxThemes} imported themes are kept: tick fewer.` : this.found, over);
+    if (this.found) this.say(over ? `Only ${CUSTOM_THEME.maxThemes} imported themes are kept: tick fewer, or remove some with Manage.` : this.found, over);
   }
 
   /** A new list: the old rows, ticks and search go, so a stale row can't be picked. */
@@ -344,11 +362,16 @@ class SchemePicker {
 
   /** The ticked schemes saved, or the one shown; the id of the one put on screen, or null when there's nothing to save. */
   saveChosen() {
-    if (!this.ticked.size) return this.picked && save([this.picked], this.picked);
-    if (this.ticked.size > CUSTOM_THEME.maxThemes) return null;
-    const schemes = this.fromFiles.filter((_, i) => this.ticked.has(String(i))).map(f => f.scheme);
+    const schemes = this.chosen();
+    if (!schemes.length || themesAfter(schemes) > CUSTOM_THEME.maxThemes) return null;
     // The one previewed goes on screen when it's among them, else the first.
     return save(schemes, this.picked && schemes.includes(this.picked) ? this.picked : schemes[0]);
+  }
+
+  /** What saving adds: the ticked schemes, or the one shown when none are ticked. */
+  chosen() {
+    if (!this.ticked.size) return this.picked ? [this.picked] : [];
+    return this.fromFiles.filter((_, i) => this.ticked.has(String(i))).map(f => f.scheme);
   }
 
   /**
