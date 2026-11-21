@@ -35,6 +35,10 @@
 :root:is([data-see-through], [data-backdrop]) body[data-layout="minimal"][data-pane-names="line"] .pane > .pane-header {
   background: color-mix(in srgb, var(--header) var(--see-header), transparent);
 }
+/* Minimal's bar that shows over a terminal on hover (minimal.css) floats like a menu: solid, as menus are. */
+:root:is([data-see-through], [data-backdrop], [data-window-backdrop]) body[data-layout="minimal"][data-pane-names="hover"] .pane > .pane-header {
+  background: var(--raised);
+}
 /* Minimal draws its lines between panes as the workspace's own colour (minimal.css), which would cover everything
    behind: here the workspace is clear and the lines are drawn by the dividers themselves. */
 :root:is([data-see-through], [data-backdrop]) body[data-layout="minimal"] #workspace { background: transparent; }
