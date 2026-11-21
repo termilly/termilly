@@ -98,11 +98,28 @@ const CONTRAST = Object.freeze({ light: 4.5, dark: 1 });
 
 /** A terminal's background with nothing of its own: the window's background shows through (js/backgrounds.js). */
 const NO_BACKGROUND = 'rgba(0, 0, 0, 0)';
+/** A one-pixel canvas any CSS colour is painted on to read it back as red, green and blue. */
+const colourProbe = document.createElement('canvas').getContext('2d', { willReadFrequently: true });
+/** @param {string} colour any CSS colour (a theme's #rrggbb, a plugin's rgb(), a name) @returns {string} it fully transparent, or transparent black */
+function transparentOf(colour) {
+  if (!colourProbe || !CSS.supports('color', colour)) return NO_BACKGROUND;
+  colourProbe.clearRect(0, 0, 1, 1);
+  colourProbe.fillStyle = NO_BACKGROUND; // one the canvas can't take (a var()) leaves this, not the last colour
+  colourProbe.fillStyle = colour;
+  colourProbe.fillRect(0, 0, 1, 1);
+  const [r, g, b] = colourProbe.getImageData(0, 0, 1, 1).data;
+  return `rgba(${r}, ${g}, ${b}, 0)`;
+}
 /** The see-through copy of a theme, kept per theme so the options only change when the theme does. */
 const clearThemes = new WeakMap();
-/** @param {any} theme */
+/**
+ * The theme with its background drawn as nothing. Its colour stays, fully transparent: xterm measures text contrast
+ * (minimumContrastRatio, on light themes) against the background's colour, and against transparent black it would
+ * lighten dark text on a light theme.
+ * @param {any} theme
+ */
 function clearTheme(theme) {
-  if (!clearThemes.has(theme)) clearThemes.set(theme, { ...theme, background: NO_BACKGROUND });
+  if (!clearThemes.has(theme)) clearThemes.set(theme, { ...theme, background: transparentOf(theme.background ?? '') });
   return clearThemes.get(theme);
 }
 

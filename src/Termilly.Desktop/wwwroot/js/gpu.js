@@ -3,13 +3,15 @@
 // thousands of elements to redo. A browser keeps only so many WebGL contexts (16 in Chromium; past that it drops the
 // oldest), and Termilly can have more terminals than that, so a terminal has one while it's on screen and gives it
 // back a little after it's hidden. A lost context (a driver reset, sleep) falls back to the DOM renderer, and comes
-// back while the terminal shows, a few times at most. Settings › Appearance › GPU rendering turns it all off.
+// back while the terminal shows, a few times at most. Settings › Appearance › GPU rendering turns it all off, and
+// see-through terminals (a picture, Theme gradient, the desktop through them) draw on the DOM renderer.
 //
 // The GPU draws each character in a cell of whole device pixels, rounding the font's width down (Consolas at 14px:
 // 7.7 becomes 7, and the letters crowd). A pixel of letter spacing, centred, makes it the nearest whole width instead
 // (8); the terminal then fits its columns again. Back on the DOM renderer, which keeps the exact width, it goes.
 
 import { state } from './store.js';
+import { clearTerminals } from './backgrounds.js';
 
 /** A hidden terminal keeps its context this long (switching back and forth needn't rebuild it). */
 const RELEASE_AFTER_MS = 10_000;
@@ -38,7 +40,12 @@ const supported = (() => {
   }
 })();
 
-const wanted = () => supported && state.settings.terminal.gpuRendering !== false;
+/**
+ * Whether terminals draw on the GPU. Not while they're see-through (js/backgrounds.js): the GPU draws each letter on
+ * nothing then, and blended over what's behind it comes out thinner and lighter than the page's own text in the same
+ * colour (the Compact view beside it); the DOM renderer draws it as the page does.
+ */
+const wanted = () => supported && state.settings.terminal.gpuRendering !== false && !clearTerminals();
 
 /**
  * The letter spacing (whole device pixels) that rounds the GPU's cells to the nearest width rather than down; none
@@ -69,12 +76,13 @@ function release(g) {
   if (!g.addon) return;
   const addon = g.addon;
   g.addon = null;
-  fitWidth(g); // the DOM renderer keeps the font's own width
   try {
     addon.dispose(); // the DOM renderer takes over
   } catch {
     // a context already lost can throw as it goes; the terminal draws either way
   }
+  fitWidth(g); // the DOM renderer keeps the font's own width
+  if (g.visible) g.fit(); // its cells are its own size, even where the spacing stayed the same
 }
 
 /** Makes room under the cap: the terminal hidden longest gives its context up. */
@@ -99,7 +107,10 @@ function attach(g) {
     });
     g.term.loadAddon(addon);
     g.addon = addon;
-    requestAnimationFrame(() => fitWidth(g)); // the font is measured by then
+    requestAnimationFrame(() => { // the font is measured by then
+      fitWidth(g);
+      if (g.visible) g.fit(); // its cells are whole device pixels, even where the spacing stayed the same
+    });
   } catch {
     g.losses = MAX_LOSSES; // no WebGL for this one: it stays on the DOM renderer
   }
