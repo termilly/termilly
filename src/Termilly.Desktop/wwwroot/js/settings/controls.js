@@ -15,10 +15,23 @@ export function setRange(range, value) {
   range.style.setProperty('--fill', `${((value - min) / (max - min)) * 100}%`);
 }
 
+/** Marks a switch in a row's `needs` that has to be off. */
+const NEEDS_OFF = '!';
+
+/**
+ * Whether a row's `needs` (see row) aren't met: a switch it needs is off, or one that takes its place is on.
+ * @param {string} needs
+ * @param {(key: string) => unknown} setting
+ */
+export const needsUnmet = (needs, setting) => needs.split(',').some(need => (need.startsWith(NEEDS_OFF)
+  ? !!setting(need.slice(NEEDS_OFF.length))
+  : !setting(need)));
+
 /**
  * A labelled row: title and description on the left, the control on the right (or below with `stack`).
  * `keywords` are other words the search finds it by. `needs` is a switch it depends on ("group.key", or several
- * with commas): while one is off, the row is greyed out and can't be changed.
+ * with commas): while one is off, the row is greyed out and can't be changed. "!group.key" is a switch that takes the
+ * row's place: while that one is on, the row is greyed out.
  * @param {string} label
  * @param {string} description
  * @param {string} control

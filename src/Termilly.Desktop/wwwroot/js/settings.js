@@ -12,7 +12,7 @@ import { applyBackdrop } from './backgrounds.js';
 import { updateSettings, setSetting, saveSoon, onApply } from './preferences.js';
 import { layer, body, button, page, setRedraw, closeSettings } from './settings/page.js';
 import { SECTIONS } from './settings/sections.js';
-import { setRange } from './settings/controls.js';
+import { setRange, needsUnmet } from './settings/controls.js';
 import { SETTING_VALUES, PRODUCT } from './constants.js';
 import { send } from './host.js';
 import { PAGE } from './protocol.js';
@@ -442,9 +442,9 @@ function syncControls() {
   for (const select of /** @type {NodeListOf<HTMLSelectElement>} */ (body.querySelectorAll('select.field'))) {
     dropdown(select);
   }
-  // A row that needs a switch that's off is greyed out, and its control out of reach of the mouse and the keyboard.
+  // A row whose needs aren't met is greyed out, and its control out of reach of the mouse and the keyboard.
   for (const row of /** @type {NodeListOf<HTMLElement>} */ (body.querySelectorAll('[data-needs]'))) {
-    const off = /** @type {string} */ (row.dataset.needs).split(',').some(key => !getSetting(key));
+    const off = needsUnmet(/** @type {string} */ (row.dataset.needs), getSetting);
     row.classList.toggle('needs-off', off);
     for (const control of /** @type {NodeListOf<HTMLButtonElement>} */ (row.querySelectorAll('button, input, select'))) control.disabled = off;
   }

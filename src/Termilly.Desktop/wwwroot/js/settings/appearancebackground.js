@@ -21,6 +21,8 @@ const { effect: EFFECT, opacity: OPACITY, fit: FIT, dim: DIM, blur: BLUR, behind
  */
 const EFFECT_LABEL = Object.freeze({ [EFFECT.none]: 'None', [EFFECT.blur]: 'Blur', [EFFECT.acrylic]: 'Acrylic' });
 const PICTURE_SETTING = 'background.picture';
+/** Theme gradient shows in the picture's place, so the picture's rows can't be changed while it's on. */
+const NO_GRADIENT = '!background.themeGradient';
 const PERCENT = '%';
 const PIXELS = 'px';
 /** The picture row's buttons, and where an error picking one shows. */
@@ -67,11 +69,11 @@ const BACKGROUND_TAB = {
     + row('Solid in the background', 'While another app is in front.', toggle('background.solidWhenInactive'), { keywords: 'focus inactive solid' })
     + row('Solid terminals', 'Only the window around them shows through.', toggle('background.solidTerminals'), { keywords: 'terminal solid opaque' }))
     + group('Picture',
-      row('Picture', 'Behind the terminals or the whole window.', pictureControl(), { keywords: 'background image picture wallpaper photo' })
-      + row('Fit', '', seg('background.fit', [[FIT.fill, 'Fill'], [FIT.contain, 'Fit'], [FIT.center, 'Center'], [FIT.tile, 'Tile']]), { keywords: 'picture fill stretch tile center' })
-      + row('Dim', 'Keeps text readable.', slider('background.dim', DIM, PERCENT, 'Dim'), { keywords: 'picture dim darken shade' })
-      + row('Blur', '', slider('background.blur', BLUR, PIXELS, 'Blur'), { keywords: 'picture blur soften' })
-      + row('Show behind', '', seg('background.behind', [[BEHIND.terminals, 'Terminals'], [BEHIND.window, 'Whole window']]), { keywords: 'picture behind window terminals' })),
+      row('Picture', 'Behind the terminals or the whole window.', pictureControl(), { keywords: 'background image picture wallpaper photo', needs: NO_GRADIENT })
+      + row('Fit', '', seg('background.fit', [[FIT.fill, 'Fill'], [FIT.contain, 'Fit'], [FIT.center, 'Center'], [FIT.tile, 'Tile']]), { keywords: 'picture fill stretch tile center', needs: NO_GRADIENT })
+      + row('Dim', 'Keeps text readable.', slider('background.dim', DIM, PERCENT, 'Dim'), { keywords: 'picture dim darken shade', needs: NO_GRADIENT })
+      + row('Blur', '', slider('background.blur', BLUR, PIXELS, 'Blur'), { keywords: 'picture blur soften', needs: NO_GRADIENT })
+      + row('Show behind', '', seg('background.behind', [[BEHIND.terminals, 'Terminals'], [BEHIND.window, 'Whole window']]), { keywords: 'picture behind window terminals', needs: NO_GRADIENT })),
   click(e) {
     if (targetOf(e).closest(CHOOSE)) {
       choosePicture();
