@@ -34,13 +34,14 @@ internal static class WindowBackdrop
     /// 11 22H2 and later: its own acrylic and Mica only; the older blur (an accent) shows white there, and once set it
     /// stops the system's acrylic and Mica too, so it is never used.
     /// 11 before 22H2: as first built (not seen on screen).
-    /// 10: blur and acrylic, both accents.
+    /// 10: blur only (an accent); its acrylic accent draws a flat grey with nothing of what's behind (seen with a red and
+    /// blue window behind, where blur showed both), so it isn't offered and a saved Acrylic shows as Blur.
     /// </summary>
     public static IReadOnlyList<string> Effects { get; } = Build >= Windows11Backdrops
         ? [BackgroundValues.Effect.Acrylic, BackgroundValues.Effect.Mica]
         : Build >= Windows11
             ? [BackgroundValues.Effect.None, BackgroundValues.Effect.Blur, BackgroundValues.Effect.Acrylic, BackgroundValues.Effect.Mica]
-            : [BackgroundValues.Effect.Blur, BackgroundValues.Effect.Acrylic];
+            : [BackgroundValues.Effect.Blur];
 
     /// <summary>
     /// A browser can show the background pictures (no other site's page can fetch them as data), nothing else of the
@@ -69,7 +70,7 @@ internal static class WindowBackdrop
     /// the window's colours are set (they're taken off while see-through) and once it has a handle.
     /// </summary>
     /// <param name="dark">The theme is dark: Mica and acrylic take a dark tint.</param>
-    /// <param name="tint">The theme's background (#RRGGBB): acrylic's tint on Windows 10.</param>
+    /// <param name="tint">The theme's background (#RRGGBB): the acrylic accent's tint (Windows 11 before 22H2).</param>
     public static void Apply(Window window, WebView2 web, BackgroundSettings background, bool dark, string tint)
     {
         var hwnd = new WindowInteropHelper(window).Handle;
@@ -104,7 +105,7 @@ internal static class WindowBackdrop
             web.DefaultBackgroundColor = System.Drawing.Color.Transparent;
         }
         var effect = !seeThrough ? BackgroundValues.Effect.None : Effects.Contains(background.Effect) ? background.Effect : Effects[0];
-        // Windows 11's Mica and acrylic take a dark tint from it; Windows 10's acrylic turns black with it. Solid again:
+        // Windows 11's Mica and acrylic take a dark tint from it; Windows 10 has no use for it. Solid again:
         // off, as a window that never was see-through.
         if (Build >= Windows11)
         {
@@ -153,7 +154,7 @@ internal static class WindowBackdrop
         private const int ACCENT_ENABLE_TRANSPARENTGRADIENT = 2;
         private const int ACCENT_ENABLE_BLURBEHIND = 3;
         private const int ACCENT_ENABLE_ACRYLICBLURBEHIND = 4;
-        /// <summary>Acrylic's own tint on Windows 10: the theme's colour, faint (0 to 255), as the page already shades the window by Opacity.</summary>
+        /// <summary>The acrylic accent's own tint (Windows 11 before 22H2): the theme's colour, faint (0 to 255), as the page already shades the window by Opacity.</summary>
         private const byte AcrylicTintAlpha = 0x20;
         private const int AccentDrawAllBorders = 2;
         /// <summary>Where each channel sits in AABBGGRR.</summary>
