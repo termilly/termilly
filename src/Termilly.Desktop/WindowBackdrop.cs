@@ -29,12 +29,18 @@ internal static class WindowBackdrop
     private static readonly int Build = Environment.OSVersion.Version.Build;
 
     /// <summary>
-    /// The effects this Windows has: Mica only on 11. Windows 10 has no see-through without a blur (its glass shows
-    /// white there), so it has no None.
+    /// The effects this Windows draws (each seen on screen; see-through with nothing behind shows white on 10 and on 11
+    /// 22H2 and later, so neither has None):
+    /// 11 22H2 and later: its own acrylic and Mica only; the older blur (an accent) shows white there, and once set it
+    /// stops the system's acrylic and Mica too, so it is never used.
+    /// 11 before 22H2: as first built (not seen on screen).
+    /// 10: blur and acrylic, both accents.
     /// </summary>
-    public static IReadOnlyList<string> Effects { get; } = Build >= Windows11
-        ? [BackgroundValues.Effect.None, BackgroundValues.Effect.Blur, BackgroundValues.Effect.Acrylic, BackgroundValues.Effect.Mica]
-        : [BackgroundValues.Effect.Blur, BackgroundValues.Effect.Acrylic];
+    public static IReadOnlyList<string> Effects { get; } = Build >= Windows11Backdrops
+        ? [BackgroundValues.Effect.Acrylic, BackgroundValues.Effect.Mica]
+        : Build >= Windows11
+            ? [BackgroundValues.Effect.None, BackgroundValues.Effect.Blur, BackgroundValues.Effect.Acrylic, BackgroundValues.Effect.Mica]
+            : [BackgroundValues.Effect.Blur, BackgroundValues.Effect.Acrylic];
 
     /// <summary>
     /// A browser can show the background pictures (no other site's page can fetch them as data), nothing else of the
@@ -112,12 +118,12 @@ internal static class WindowBackdrop
     }
 
     /// <summary>
-    /// Windows takes a blur only on a window that had an effect before it was first shown: every window gets a clear one
-    /// then (it draws nothing), so a blur can be turned on later.
+    /// Windows 10 takes a blur only on a window that had an effect before it was first shown: every window gets a clear
+    /// one then (it draws nothing), so a blur can be turned on later. Not on 11, where it would stop acrylic and Mica.
     /// </summary>
     private static void Prepare(Window window, IntPtr hwnd)
     {
-        if (Prepared.Add(hwnd))
+        if (Build < Windows11 && Prepared.Add(hwnd))
         {
             Dwm.Prepare(hwnd);
             window.Closed += (_, _) => Prepared.Remove(hwnd);
@@ -138,11 +144,11 @@ internal static class WindowBackdrop
         /// <summary>Windows 11 before 22H2: Mica on or off (not documented, but what it had).</summary>
         private const int DWMWA_MICA_EFFECT = 1029;
         private const int DWMSBT_AUTO = 0;
-        private const int DWMSBT_NONE = 1;
         private const int DWMSBT_MAINWINDOW = 2;
         private const int DWMSBT_TRANSIENTWINDOW = 3;
 
         private const int WCA_ACCENT_POLICY = 19;
+        private const int ACCENT_DISABLED = 0;
         /// <summary>An effect that draws nothing (a fully clear colour): "no effect" that still lets a blur come later.</summary>
         private const int ACCENT_ENABLE_TRANSPARENTGRADIENT = 2;
         private const int ACCENT_ENABLE_BLURBEHIND = 3;
@@ -169,14 +175,15 @@ internal static class WindowBackdrop
 
         public static void SetEffect(IntPtr hwnd, bool seeThrough, string effect, string tint)
         {
-            // Back to the clear effect first, so switching leaves nothing of the old one. Never off: Windows wouldn't
-            // take a blur again.
-            Prepare(hwnd);
             if (Build >= Windows11Backdrops)
             {
-                SetBackdrop(hwnd, seeThrough ? DWMSBT_NONE : DWMSBT_AUTO);
+                SetSystemBackdrop(hwnd, seeThrough, effect);
+                return;
             }
-            else if (Build >= Windows11)
+            // Windows 10: back to the clear effect first, so switching leaves nothing of the old one; never off, or it
+            // wouldn't take a blur again. 11 before 22H2: off first, as first built.
+            SetAccent(hwnd, Build < Windows11 ? ACCENT_ENABLE_TRANSPARENTGRADIENT : ACCENT_DISABLED, 0, 0);
+            if (Build >= Windows11)
             {
                 SetMica(hwnd, false);
             }
@@ -190,20 +197,18 @@ internal static class WindowBackdrop
                 case BackgroundValues.Effect.Blur:
                     SetAccent(hwnd, ACCENT_ENABLE_BLURBEHIND, 0, AccentDrawAllBorders);
                     break;
-                case BackgroundValues.Effect.Acrylic when Build >= Windows11Backdrops:
-                    SetBackdrop(hwnd, DWMSBT_TRANSIENTWINDOW);
-                    break;
                 case BackgroundValues.Effect.Acrylic:
                     SetAccent(hwnd, ACCENT_ENABLE_ACRYLICBLURBEHIND, TintOf(tint), AccentDrawAllBorders);
-                    break;
-                case BackgroundValues.Effect.Mica when Build >= Windows11Backdrops:
-                    SetBackdrop(hwnd, DWMSBT_MAINWINDOW);
                     break;
                 case BackgroundValues.Effect.Mica:
                     SetMica(hwnd, true);
                     break;
             }
         }
+
+        /// <summary>Windows 11 22H2 and later: the system's own acrylic or Mica, or the default again when solid.</summary>
+        private static void SetSystemBackdrop(IntPtr hwnd, bool seeThrough, string effect) => SetBackdrop(hwnd,
+            !seeThrough ? DWMSBT_AUTO : effect == BackgroundValues.Effect.Mica ? DWMSBT_MAINWINDOW : DWMSBT_TRANSIENTWINDOW);
 
         private static void SetBackdrop(IntPtr hwnd, int type) => _ = DwmSetWindowAttribute(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, ref type, sizeof(int));
 
