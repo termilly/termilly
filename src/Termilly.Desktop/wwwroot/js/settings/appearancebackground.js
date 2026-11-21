@@ -21,7 +21,7 @@ const { effect: EFFECT, opacity: OPACITY, fit: FIT, dim: DIM, blur: BLUR, behind
  */
 const EFFECT_LABEL = Object.freeze({ [EFFECT.none]: 'None', [EFFECT.blur]: 'Blur', [EFFECT.acrylic]: 'Acrylic' });
 const PICTURE_SETTING = 'background.picture';
-/** Theme gradient shows in the picture's place, so the picture's rows can't be changed while it's on. */
+/** Theme gradient covers the whole window, so neither the desktop nor a picture shows: their rows wait while it's on. */
 const NO_GRADIENT = '!background.themeGradient';
 const PERCENT = '%';
 const PIXELS = 'px';
@@ -55,7 +55,7 @@ async function choosePicture() {
 
 /** The effects this system has, if any beyond plain see-through. */
 const effectRow = () => (effects().length > 1
-  ? row('Effect', 'What shows through.', seg('background.effect', effects().map(e => [e, EFFECT_LABEL[e] ?? e]), { firstIfNone: true }), { keywords: 'blur acrylic vibrancy glass frosted' })
+  ? row('Effect', 'What shows through.', seg('background.effect', effects().map(e => [e, EFFECT_LABEL[e] ?? e]), { firstIfNone: true }), { keywords: 'blur acrylic vibrancy glass frosted', needs: NO_GRADIENT })
   : '');
 
 /** @type {import('./page.js').Section} */
@@ -63,11 +63,10 @@ const BACKGROUND_TAB = {
   id: SECTION.appearanceBackground,
   label: 'Background', tab: 'Background', parent: SECTION.appearance, icon: ICONS.appearance,
   html: () => group('Window',
-    row('Opacity', 'Below 100%, the desktop shows through.', slider('background.opacity', OPACITY, PERCENT, 'Opacity'), { keywords: 'transparent transparency see-through translucent opacity alpha' })
+    row('Theme gradient', 'Frosted glass over the theme\'s colours.', toggle('background.themeGradient'), { keywords: 'gradient glow glass frosted theme colours colors' })
+    + row('Opacity', 'Below 100%, the desktop shows through.', slider('background.opacity', OPACITY, PERCENT, 'Opacity'), { keywords: 'transparent transparency see-through translucent opacity alpha', needs: NO_GRADIENT })
     + effectRow()
-    + row('Theme gradient', 'Frosted glass over the theme\'s colours.', toggle('background.themeGradient'), { keywords: 'gradient glow glass frosted theme colours colors' })
-    + row('Solid in the background', 'While another app is in front.', toggle('background.solidWhenInactive'), { keywords: 'focus inactive solid' })
-    + row('Solid terminals', 'Only the window around them shows through.', toggle('background.solidTerminals'), { keywords: 'terminal solid opaque' }))
+    + row('Solid terminals', 'Only the window around them shows through.', toggle('background.solidTerminals'), { keywords: 'terminal solid opaque', needs: NO_GRADIENT }))
     + group('Picture',
       row('Picture', 'Behind the terminals or the whole window.', pictureControl(), { keywords: 'background image picture wallpaper photo', needs: NO_GRADIENT })
       + row('Fit', '', seg('background.fit', [[FIT.fill, 'Fill'], [FIT.contain, 'Fit'], [FIT.center, 'Center'], [FIT.tile, 'Tile']]), { keywords: 'picture fill stretch tile center', needs: NO_GRADIENT })

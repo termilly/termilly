@@ -413,8 +413,6 @@ interface BackgroundSettings {
   opacity: number;
   /** What shows through (), where the system has it. */
   effect: string;
-  /** The window turns solid while another app is in front. */
-  solidWhenInactive: boolean;
   /** Only the window around the terminals is see-through; the terminals keep their colour. */
   solidTerminals: boolean;
   /** A gradient in the theme's own colours behind the whole window, seen through it as frosted glass; it takes the place of a picture while on. */

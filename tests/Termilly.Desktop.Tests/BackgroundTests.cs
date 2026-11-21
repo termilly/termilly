@@ -32,6 +32,13 @@ public sealed class BackgroundTests : IDisposable
     }
 
     [Fact]
+    public void Theme_gradient_covers_the_window_so_the_desktop_never_shows_through()
+    {
+        var settings = new BackgroundSettings { Opacity = BackgroundValues.Opacity.Min, ThemeGradient = true };
+        Assert.False(settings.SeeThrough);
+    }
+
+    [Fact]
     public void Values_out_of_range_or_unknown_become_the_nearest_or_the_default()
     {
         var settings = new BackgroundSettings { Opacity = 5, Effect = "glass", Fit = "zoom", Dim = 500, Blur = -3, Behind = "desk" }.Normalize();

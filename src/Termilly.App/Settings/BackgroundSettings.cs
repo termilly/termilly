@@ -98,8 +98,6 @@ internal sealed record BackgroundSettings
     public int Opacity { get; init; } = BackgroundValues.Opacity.Default;
     /// <summary>What shows through (<see cref="BackgroundValues.Effect"/>), where the system has it.</summary>
     public string Effect { get; init; } = BackgroundValues.Effect.Default;
-    /// <summary>The window turns solid while another app is in front.</summary>
-    public bool SolidWhenInactive { get; init; } = true;
     /// <summary>Only the window around the terminals is see-through; the terminals keep their colour.</summary>
     public bool SolidTerminals { get; init; }
     /// <summary>
@@ -114,9 +112,12 @@ internal sealed record BackgroundSettings
     public int Blur { get; init; } = BackgroundValues.Blur.Default;
     public string Behind { get; init; } = BackgroundValues.Behind.Default;
 
-    /// <summary>The desktop shows through: the host makes the window see-through, with the effect asked for.</summary>
+    /// <summary>
+    /// The desktop shows through: the host makes the window see-through, with the effect asked for. Never under Theme
+    /// gradient, which covers the whole window. js/backgrounds.js decides the same.
+    /// </summary>
     [System.Text.Json.Serialization.JsonIgnore]
-    public bool SeeThrough => Opacity < BackgroundValues.Opacity.Max;
+    public bool SeeThrough => Opacity < BackgroundValues.Opacity.Max && !ThemeGradient;
 
     public BackgroundSettings Normalize() => this with
     {

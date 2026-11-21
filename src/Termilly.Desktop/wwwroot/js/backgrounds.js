@@ -84,9 +84,6 @@ export const effects = () => info.effects;
 /** A picture's address, by its name in the backgrounds folder. @param {string} name */
 export const pictureUrl = name => info.pictureBase + encodeURIComponent(name);
 
-/** Whether the app has a window in front (one of Termilly's): js/appfocus.js says. */
-let active = true;
-
 /** @typedef {{ image: string, fit: string, behind: string }} Backdrop */
 
 /** Settings' picture, or none. @returns {Backdrop | null} */
@@ -135,12 +132,13 @@ let clear = false;
 /** Whether the terminals draw no background now (js/terminals.js: xterm's transparency). */
 export const clearTerminals = () => clear;
 
-/** Sets the page's root as the background settings, the workspace on screen and the app's focus say. */
+/** Sets the page's root as the background settings and the workspace on screen say. */
 export function applyBackdrop() {
   const root = document.documentElement;
   const settings = state.settings.background;
   if (!settings) return;
-  const seeThrough = settings.opacity < OPACITY.max && (active || !settings.solidWhenInactive);
+  // Never under Theme gradient, which covers the whole window (BackgroundSettings.SeeThrough decides the same).
+  const seeThrough = settings.opacity < OPACITY.max && !settings.themeGradient;
   const screen = settings.themeGradient ? THEME_GRADIENT : screenBackdrop();
   const detached = settings.themeGradient ? THEME_GRADIENT : settingsBackdrop();
   toggle(root, ROOT.themeGradient, settings.themeGradient);
@@ -164,13 +162,6 @@ export function applyBackdrop() {
 function toggle(root, name, on) {
   if (on) root.dataset[name] = ON;
   else delete root.dataset[name];
-}
-
-/** The app came to the front or went behind another (js/appfocus.js): the window turns solid if asked. @param {boolean} now */
-export function setAppActive(now) {
-  if (now === active) return;
-  active = now;
-  applyBackdrop();
 }
 
 /** Asks the host what this system has, then applies (a picture needs its address). */
