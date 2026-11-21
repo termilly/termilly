@@ -26,7 +26,10 @@
 :root[data-see-through] :is(#sidebar, .pane, .strip-tab),
 :root[data-backdrop] body:not(.detached-window) :is(#sidebar, .pane, .strip-tab),
 :root[data-window-backdrop] body.detached-window > .pane,
-:root:is([data-see-through], [data-backdrop]) body[data-layout="minimal"] :is(.notepad-panel, .clips-panel, .files-panel, .files-panel > .files-head) {
+:root[data-see-through] :is(.notepad-panel, .clips-panel, .files-panel),
+:root[data-backdrop] body:not(.detached-window) :is(.notepad-panel, .clips-panel, .files-panel),
+:root[data-window-backdrop] body.detached-window :is(.notepad-panel, .clips-panel, .files-panel),
+:root:is([data-see-through], [data-backdrop]) body[data-layout="minimal"] .files-panel > .files-head {
   background: color-mix(in srgb, var(--surface) var(--see-region), transparent);
 }
 :root[data-see-through] :is(.pane-header, .strip-tab.active, .pane-statusbar),
