@@ -12,7 +12,7 @@ namespace Termilly.Desktop;
 
 /// <summary>
 /// The window's background on Windows (Settings › Appearance › Background): see-through, so the desktop shows where the
-/// page lets it, with the system's blur, acrylic or Mica behind; or solid, as before. Also where the page's browsers
+/// page lets it, with the system's blur or acrylic behind; or solid, as before. Also where the page's browsers
 /// load background pictures from.
 /// </summary>
 internal static class WindowBackdrop
@@ -22,7 +22,7 @@ internal static class WindowBackdrop
 
     public static string PictureBase => $"https://{PictureHost}/";
 
-    /// <summary>Windows 11's first build (Mica), and the one with the documented backdrop types (Mica, acrylic).</summary>
+    /// <summary>Windows 11's first build, and the one with the documented backdrop types (acrylic).</summary>
     private const int Windows11 = 22000;
     private const int Windows11Backdrops = 22621;
 
@@ -31,16 +31,17 @@ internal static class WindowBackdrop
     /// <summary>
     /// The effects this Windows draws (each seen on screen; see-through with nothing behind shows white on 10 and on 11
     /// 22H2 and later, so neither has None):
-    /// 11 22H2 and later: its own acrylic and Mica only; the older blur (an accent) shows white there, and once set it
-    /// stops the system's acrylic and Mica too, so it is never used.
-    /// 11 before 22H2: as first built (not seen on screen).
+    /// 11 22H2 and later: its own acrylic only; the older blur (an accent) shows white there, and once set it stops the
+    /// system's acrylic too, so it is never used. Its Mica isn't offered: it shows only the wallpaper's colour, never
+    /// what's behind, so it looked like no effect at all.
+    /// 11 before 22H2: as first built, without Mica (not seen on screen).
     /// 10: blur only (an accent); its acrylic accent draws a flat grey with nothing of what's behind (seen with a red and
     /// blue window behind, where blur showed both), so it isn't offered and a saved Acrylic shows as Blur.
     /// </summary>
     public static IReadOnlyList<string> Effects { get; } = Build >= Windows11Backdrops
-        ? [BackgroundValues.Effect.Acrylic, BackgroundValues.Effect.Mica]
+        ? [BackgroundValues.Effect.Acrylic]
         : Build >= Windows11
-            ? [BackgroundValues.Effect.None, BackgroundValues.Effect.Blur, BackgroundValues.Effect.Acrylic, BackgroundValues.Effect.Mica]
+            ? [BackgroundValues.Effect.None, BackgroundValues.Effect.Blur, BackgroundValues.Effect.Acrylic]
             : [BackgroundValues.Effect.Blur];
 
     /// <summary>
@@ -69,7 +70,7 @@ internal static class WindowBackdrop
     /// Makes a window see-through with the effect asked for (one this Windows has, else none), or solid again. Call after
     /// the window's colours are set (they're taken off while see-through) and once it has a handle.
     /// </summary>
-    /// <param name="dark">The theme is dark: Mica and acrylic take a dark tint.</param>
+    /// <param name="dark">The theme is dark: acrylic takes a dark tint.</param>
     /// <param name="tint">The theme's background (#RRGGBB): the acrylic accent's tint (Windows 11 before 22H2).</param>
     public static void Apply(Window window, WebView2 web, BackgroundSettings background, bool dark, string tint)
     {
@@ -105,7 +106,7 @@ internal static class WindowBackdrop
             web.DefaultBackgroundColor = System.Drawing.Color.Transparent;
         }
         var effect = !seeThrough ? BackgroundValues.Effect.None : Effects.Contains(background.Effect) ? background.Effect : Effects[0];
-        // Windows 11's Mica and acrylic take a dark tint from it; Windows 10 has no use for it. Solid again:
+        // Windows 11's acrylic takes a dark tint from it; Windows 10 has no use for it. Solid again:
         // off, as a window that never was see-through.
         if (Build >= Windows11)
         {
@@ -120,7 +121,7 @@ internal static class WindowBackdrop
 
     /// <summary>
     /// Windows 10 takes a blur only on a window that had an effect before it was first shown: every window gets a clear
-    /// one then (it draws nothing), so a blur can be turned on later. Not on 11, where it would stop acrylic and Mica.
+    /// one then (it draws nothing), so a blur can be turned on later. Not on 11, where it would stop acrylic.
     /// </summary>
     private static void Prepare(Window window, IntPtr hwnd)
     {
@@ -142,10 +143,7 @@ internal static class WindowBackdrop
     {
         private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
         private const int DWMWA_SYSTEMBACKDROP_TYPE = 38;
-        /// <summary>Windows 11 before 22H2: Mica on or off (not documented, but what it had).</summary>
-        private const int DWMWA_MICA_EFFECT = 1029;
         private const int DWMSBT_AUTO = 0;
-        private const int DWMSBT_MAINWINDOW = 2;
         private const int DWMSBT_TRANSIENTWINDOW = 3;
 
         private const int WCA_ACCENT_POLICY = 19;
@@ -178,16 +176,12 @@ internal static class WindowBackdrop
         {
             if (Build >= Windows11Backdrops)
             {
-                SetSystemBackdrop(hwnd, seeThrough, effect);
+                SetSystemBackdrop(hwnd, seeThrough);
                 return;
             }
             // Windows 10: back to the clear effect first, so switching leaves nothing of the old one; never off, or it
             // wouldn't take a blur again. 11 before 22H2: off first, as first built.
             SetAccent(hwnd, Build < Windows11 ? ACCENT_ENABLE_TRANSPARENTGRADIENT : ACCENT_DISABLED, 0, 0);
-            if (Build >= Windows11)
-            {
-                SetMica(hwnd, false);
-            }
             ClearBlurBehind(hwnd, seeThrough);
             if (!seeThrough)
             {
@@ -201,23 +195,13 @@ internal static class WindowBackdrop
                 case BackgroundValues.Effect.Acrylic:
                     SetAccent(hwnd, ACCENT_ENABLE_ACRYLICBLURBEHIND, TintOf(tint), AccentDrawAllBorders);
                     break;
-                case BackgroundValues.Effect.Mica:
-                    SetMica(hwnd, true);
-                    break;
             }
         }
 
-        /// <summary>Windows 11 22H2 and later: the system's own acrylic or Mica, or the default again when solid.</summary>
-        private static void SetSystemBackdrop(IntPtr hwnd, bool seeThrough, string effect) => SetBackdrop(hwnd,
-            !seeThrough ? DWMSBT_AUTO : effect == BackgroundValues.Effect.Mica ? DWMSBT_MAINWINDOW : DWMSBT_TRANSIENTWINDOW);
+        /// <summary>Windows 11 22H2 and later: the system's own acrylic, or the default again when solid.</summary>
+        private static void SetSystemBackdrop(IntPtr hwnd, bool seeThrough) => SetBackdrop(hwnd, seeThrough ? DWMSBT_TRANSIENTWINDOW : DWMSBT_AUTO);
 
         private static void SetBackdrop(IntPtr hwnd, int type) => _ = DwmSetWindowAttribute(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, ref type, sizeof(int));
-
-        private static void SetMica(IntPtr hwnd, bool on)
-        {
-            var value = on ? 1 : 0;
-            _ = DwmSetWindowAttribute(hwnd, DWMWA_MICA_EFFECT, ref value, sizeof(int));
-        }
 
         /// <summary>
         /// See-through with nothing behind: blur-behind on a region outside the window, which makes Windows honour the

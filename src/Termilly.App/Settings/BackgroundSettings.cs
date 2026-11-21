@@ -15,10 +15,8 @@ internal static class BackgroundValues
         public const string Blur = "blur";
         /// <summary>Blur with a little grain and tint (Windows 10 and 11).</summary>
         public const string Acrylic = "acrylic";
-        /// <summary>Only the wallpaper's colour (Windows 11).</summary>
-        public const string Mica = "mica";
         public const string Default = None;
-        public static readonly IReadOnlyList<string> All = [None, Blur, Acrylic, Mica];
+        public static readonly IReadOnlyList<string> All = [None, Blur, Acrylic];
     }
 
     /// <summary>How much of the window's own colour stays, in percent: 100 is solid, as before.</summary>

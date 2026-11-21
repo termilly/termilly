@@ -19,7 +19,7 @@ const { effect: EFFECT, opacity: OPACITY, fit: FIT, dim: DIM, blur: BLUR, behind
  * Each effect's name in the choice.
  * @type {Readonly<Record<string, string>>}
  */
-const EFFECT_LABEL = Object.freeze({ [EFFECT.none]: 'None', [EFFECT.blur]: 'Blur', [EFFECT.acrylic]: 'Acrylic', [EFFECT.mica]: 'Mica' });
+const EFFECT_LABEL = Object.freeze({ [EFFECT.none]: 'None', [EFFECT.blur]: 'Blur', [EFFECT.acrylic]: 'Acrylic' });
 const PICTURE_SETTING = 'background.picture';
 const PERCENT = '%';
 const PIXELS = 'px';
@@ -53,7 +53,7 @@ async function choosePicture() {
 
 /** The effects this system has, if any beyond plain see-through. */
 const effectRow = () => (effects().length > 1
-  ? row('Effect', 'What shows through.', seg('background.effect', effects().map(e => [e, EFFECT_LABEL[e] ?? e]), { firstIfNone: true }), { keywords: 'blur acrylic mica vibrancy glass frosted' })
+  ? row('Effect', 'What shows through.', seg('background.effect', effects().map(e => [e, EFFECT_LABEL[e] ?? e]), { firstIfNone: true }), { keywords: 'blur acrylic vibrancy glass frosted' })
   : '');
 
 /** @type {import('./page.js').Section} */

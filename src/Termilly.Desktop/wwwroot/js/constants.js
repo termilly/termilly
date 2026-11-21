@@ -194,9 +194,8 @@ export const BACKGROUND = Object.freeze({
     none: 'none',
     blur: 'blur',
     acrylic: 'acrylic',
-    mica: 'mica',
     default: 'none',
-    all: Object.freeze(['none', 'blur', 'acrylic', 'mica']),
+    all: Object.freeze(['none', 'blur', 'acrylic']),
   }),
   opacity: Object.freeze({
     min: 40,
