@@ -38,6 +38,16 @@
 :root:is([data-see-through], [data-backdrop]) body[data-layout="minimal"][data-pane-names="line"] .pane > .pane-header {
   background: color-mix(in srgb, var(--header) var(--see-header), transparent);
 }
+/* The Snippets, Schedules and Git windows in windows of their own: tinted as a terminal's window is. Shown over the
+   main window instead (macOS), they're dialogs and stay solid. */
+:root:is([data-see-through], [data-window-backdrop]) body.detached-window > :is(.snippets-win, .git-win) {
+  background: color-mix(in srgb, var(--surface) var(--see-region), transparent);
+}
+/* Their list and the diff are the window's own tint; the title bar and the diff's bars, the header's. */
+:root:is([data-see-through], [data-window-backdrop]) body.detached-window > :is(.snippets-win, .git-win) :is(.cw-side, .gw-diff) { background: transparent; }
+:root:is([data-see-through], [data-window-backdrop]) body.detached-window > :is(.snippets-win, .git-win) :is(.set-head, .gw-diff-head, .gw-pick-bar) {
+  background: color-mix(in srgb, var(--header) var(--see-header), transparent);
+}
 /* Minimal's bar that shows over a terminal on hover (minimal.css) floats like a menu: solid, as menus are. */
 :root:is([data-see-through], [data-backdrop], [data-window-backdrop]) body[data-layout="minimal"][data-pane-names="hover"] .pane > .pane-header {
   background: var(--raised);
