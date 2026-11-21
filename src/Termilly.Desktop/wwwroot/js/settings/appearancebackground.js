@@ -13,7 +13,7 @@ import { BACKGROUND } from '../constants.js';
 import { targetOf, showError } from '../dom.js';
 import { effects, pictureUrl } from '../backgrounds.js';
 
-const { effect: EFFECT, opacity: OPACITY, fit: FIT, dim: DIM, blur: BLUR, behind: BEHIND, source: SOURCE } = BACKGROUND;
+const { effect: EFFECT, opacity: OPACITY, fit: FIT, dim: DIM, blur: BLUR, behind: BEHIND } = BACKGROUND;
 
 /**
  * Each effect's name in the choice.
@@ -21,7 +21,6 @@ const { effect: EFFECT, opacity: OPACITY, fit: FIT, dim: DIM, blur: BLUR, behind
  */
 const EFFECT_LABEL = Object.freeze({ [EFFECT.none]: 'None', [EFFECT.blur]: 'Blur', [EFFECT.acrylic]: 'Acrylic', [EFFECT.mica]: 'Mica' });
 const PICTURE_SETTING = 'background.picture';
-const SOURCE_SETTING = 'background.source';
 const PERCENT = '%';
 const PIXELS = 'px';
 /** The picture row's buttons, and where an error picking one shows. */
@@ -49,7 +48,6 @@ async function choosePicture() {
   }
   if (!reply.picture) return; // cancelled
   setSetting(PICTURE_SETTING, reply.picture);
-  setSetting(SOURCE_SETTING, SOURCE.picture);
   redraw();
 }
 
@@ -65,11 +63,11 @@ const BACKGROUND_TAB = {
   html: () => group('Window',
     row('Opacity', 'Below 100%, the desktop shows through.', slider('background.opacity', OPACITY, PERCENT, 'Opacity'), { keywords: 'transparent transparency see-through translucent opacity alpha' })
     + effectRow()
+    + row('Theme gradient', 'Frosted glass over the theme\'s colours.', toggle('background.themeGradient'), { keywords: 'gradient glow glass frosted theme colours colors' })
     + row('Solid in the background', 'While another app is in front.', toggle('background.solidWhenInactive'), { keywords: 'focus inactive solid' })
     + row('Solid terminals', 'Only the window around them shows through.', toggle('background.solidTerminals'), { keywords: 'terminal solid opaque' }))
     + group('Picture',
-      row('Show', 'Behind the terminals or the whole window.', seg(SOURCE_SETTING, [[SOURCE.none, 'None'], [SOURCE.theme, 'Theme glow'], [SOURCE.picture, 'Picture']]), { keywords: 'background image picture wallpaper photo gradient glow theme' })
-      + row('Picture', '', pictureControl(), { keywords: 'background image picture wallpaper photo' })
+      row('Picture', 'Behind the terminals or the whole window.', pictureControl(), { keywords: 'background image picture wallpaper photo' })
       + row('Fit', '', seg('background.fit', [[FIT.fill, 'Fill'], [FIT.contain, 'Fit'], [FIT.center, 'Center'], [FIT.tile, 'Tile']]), { keywords: 'picture fill stretch tile center' })
       + row('Dim', 'Keeps text readable.', slider('background.dim', DIM, PERCENT, 'Dim'), { keywords: 'picture dim darken shade' })
       + row('Blur', '', slider('background.blur', BLUR, PIXELS, 'Blur'), { keywords: 'picture blur soften' })
@@ -81,7 +79,6 @@ const BACKGROUND_TAB = {
     }
     if (!targetOf(e).closest(REMOVE)) return false;
     setSetting(PICTURE_SETTING, null);
-    if (getSetting(SOURCE_SETTING) === SOURCE.picture) setSetting(SOURCE_SETTING, SOURCE.none);
     redraw();
     return true;
   },

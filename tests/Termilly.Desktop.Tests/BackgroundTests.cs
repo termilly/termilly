@@ -28,23 +28,7 @@ public sealed class BackgroundTests : IDisposable
         Assert.Equal(BackgroundValues.Opacity.Max, settings.Opacity);
         Assert.Equal(BackgroundValues.Effect.None, settings.Effect);
         Assert.Null(settings.Picture);
-        Assert.Equal(BackgroundValues.Source.None, settings.Source);
-    }
-
-    [Fact]
-    public void Settings_saved_before_the_choice_show_their_picture_as_then()
-    {
-        Assert.Equal(BackgroundValues.Source.Picture, new BackgroundSettings { Picture = "0123456789abcdef.jpg" }.Normalize().Source);
-        Assert.Equal(BackgroundValues.Source.None, new BackgroundSettings().Normalize().Source);
-    }
-
-    [Fact]
-    public void The_theme_glow_keeps_the_picture_for_later_and_an_unknown_choice_falls_back()
-    {
-        var glow = new BackgroundSettings { Source = BackgroundValues.Source.Theme, Picture = "0123456789abcdef.jpg" }.Normalize();
-        Assert.Equal(BackgroundValues.Source.Theme, glow.Source);
-        Assert.Equal("0123456789abcdef.jpg", glow.Picture);
-        Assert.Equal(BackgroundValues.Source.None, new BackgroundSettings { Source = "video" }.Normalize().Source);
+        Assert.False(settings.ThemeGradient);
     }
 
     [Fact]
@@ -75,12 +59,13 @@ public sealed class BackgroundTests : IDisposable
     [Fact]
     public void The_group_saves_and_reads_back_as_the_page_sends_it()
     {
-        var values = JsonSerializer.SerializeToElement(new { opacity = 70, effect = "blur", picture = "0123456789abcdef.jpg", behind = "window" });
+        var values = JsonSerializer.SerializeToElement(new { opacity = 70, effect = "blur", picture = "0123456789abcdef.jpg", behind = "window", themeGradient = true });
         var saved = new AppSettings().WithGroup("background", values).Background;
         Assert.Equal(70, saved.Opacity);
         Assert.Equal(BackgroundValues.Effect.Blur, saved.Effect);
         Assert.Equal("0123456789abcdef.jpg", saved.Picture);
         Assert.Equal(BackgroundValues.Behind.Window, saved.Behind);
+        Assert.True(saved.ThemeGradient);
         Assert.DoesNotContain("seeThrough", JsonSerializer.Serialize(saved, AppSettings.Json), StringComparison.Ordinal);
     }
 

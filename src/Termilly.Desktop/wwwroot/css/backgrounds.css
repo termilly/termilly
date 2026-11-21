@@ -93,6 +93,25 @@
 :root[data-backdrop="window"] body:not(.detached-window),
 :root[data-window-backdrop] body.detached-window { background: transparent; }
 
+/* ---- Theme gradient: the window as frosted glass over a gradient in the theme's colours (js/backgrounds.js) ---- */
+
+:root[data-theme-gradient] {
+  --backdrop-shade: transparent;
+  --see-region: 55%;
+  --see-header: 65%;
+}
+/* Blurred as the desktop is behind acrylic, and larger than the window so its blurred edges stay out of sight. */
+:root[data-theme-gradient][data-backdrop] body:not(.detached-window)::before,
+:root[data-theme-gradient][data-window-backdrop] body.detached-window::before {
+  inset: calc(var(--glass-blur) * -3);
+  filter: blur(var(--glass-blur)) saturate(1.3);
+}
+:root { --glass-blur: 14px; }
+/* A terminal in a window of its own is glass like the main window's, not clear as over a picture. */
+:root[data-theme-gradient][data-window-backdrop] body.detached-window > .pane {
+  background: color-mix(in srgb, var(--surface) var(--see-region), transparent);
+}
+
 /* ---- Settings › Appearance › Background: the picture chosen ---- */
 
 .bg-picture { display: flex; align-items: center; gap: 8px; }

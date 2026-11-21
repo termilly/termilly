@@ -14,7 +14,7 @@ const { workspaceKind: KIND, gradient: GRADIENT } = BACKGROUND;
 
 /** Each gradient's name in the menu. */
 const GRADIENT_NAMES = Object.freeze({
-  [GRADIENT.theme]: 'Theme glow', [GRADIENT.aurora]: 'Aurora', [GRADIENT.ember]: 'Ember', [GRADIENT.dusk]: 'Dusk',
+  [GRADIENT.aurora]: 'Aurora', [GRADIENT.ember]: 'Ember', [GRADIENT.dusk]: 'Dusk',
   [GRADIENT.ocean]: 'Ocean', [GRADIENT.moss]: 'Moss', [GRADIENT.slate]: 'Slate',
 });
 const CURRENT = '<span class="menu-current">current</span>';

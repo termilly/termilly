@@ -11,29 +11,34 @@ import { state, on, emit, activeWs, EVENTS } from './store.js';
 import { BACKGROUND } from './constants.js';
 import { cssString } from './ui.js';
 
-const { effect: EFFECT, opacity: OPACITY, fit: FIT, behind: BEHIND, workspaceKind: KIND, gradient: GRADIENT, source: SOURCE } = BACKGROUND;
+const { effect: EFFECT, opacity: OPACITY, fit: FIT, behind: BEHIND, workspaceKind: KIND, gradient: GRADIENT } = BACKGROUND;
 
-/** Two soft lines across the glow's lower part, as in a desktop wallpaper (light, so they suit any theme), stretched to the window at any shape. */
+/** Two soft lines across the gradient's lower part, as in a desktop wallpaper, stretched to the window at any shape. */
 const GLOW_LINES = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" preserveAspectRatio="none">'
   + '<path d="M0 760 C 500 640, 1000 900, 1600 700" stroke="#ffffff" stroke-width="3" fill="none" opacity=".3" vector-effect="non-scaling-stroke"/>'
   + '<path d="M0 800 C 520 700, 1020 940, 1600 760" stroke="#ffffff" stroke-width="2" fill="none" opacity=".18" vector-effect="non-scaling-stroke"/></svg>');
 
 /**
- * A glow in the theme's own colours, drawn from its variables, so it follows the theme on screen with no picture: its
- * accent lit at the top left and fading to a deep shade of its background, its magenta glowing at the bottom right.
+ * Theme gradient (Settings): drawn from the theme's variables, so it follows the theme on screen, imported ones too:
+ * its accent lit at the top left fading to a deep shade of its background, its magenta glowing at the bottom right.
+ * It goes behind the whole window, in place of any picture; css/backgrounds.css frosts it.
+ * @type {Readonly<Backdrop>}
  */
-const THEME_GLOW = [
-  `url('${GLOW_LINES}')`,
-  'radial-gradient(50% 50% at 80% 75%, color-mix(in srgb, var(--hl-title) 85%, transparent), transparent)',
-  'radial-gradient(70% 70% at 25% 30%, color-mix(in srgb, var(--accent) 65%, var(--bg)), color-mix(in srgb, var(--accent) 12%, color-mix(in srgb, var(--bg) 70%, #000)))',
-].join(', ');
+const THEME_GRADIENT = Object.freeze({
+  image: [
+    `url('${GLOW_LINES}')`,
+    'radial-gradient(50% 50% at 80% 75%, color-mix(in srgb, var(--hl-title) 85%, transparent), transparent)',
+    'radial-gradient(70% 70% at 25% 30%, color-mix(in srgb, var(--accent) 65%, var(--bg)), color-mix(in srgb, var(--accent) 12%, color-mix(in srgb, var(--bg) 70%, #000)))',
+  ].join(', '),
+  fit: FIT.fill,
+  behind: BEHIND.window,
+});
 
 /**
  * The gradients a workspace can have, drawn here (C#'s BackgroundValues.Gradient names them).
  * @type {Readonly<Record<string, string>>}
  */
 export const GRADIENTS = Object.freeze({
-  [GRADIENT.theme]: THEME_GLOW,
   [GRADIENT.aurora]: 'linear-gradient(135deg, #1d2b64 0%, #2b6c7a 50%, #1f8a6b 100%)',
   [GRADIENT.ember]: 'linear-gradient(135deg, #2b0f12 0%, #5a1a1f 55%, #8a2a1e 100%)',
   [GRADIENT.dusk]: 'linear-gradient(160deg, #211a3d 0%, #4b2a5c 60%, #7a3f55 100%)',
@@ -55,7 +60,7 @@ const FIT_CSS = Object.freeze({
 
 /** The page root's attributes and variables (css/backgrounds.css reads them). */
 const ROOT = Object.freeze({
-  seeThrough: 'seeThrough', clearTerminals: 'clearTerminals', solidTerminals: 'solidTerminals',
+  seeThrough: 'seeThrough', clearTerminals: 'clearTerminals', solidTerminals: 'solidTerminals', themeGradient: 'themeGradient',
   alpha: '--window-alpha', blur: '--backdrop-blur', dim: '--backdrop-dim',
 });
 /**
@@ -84,11 +89,10 @@ let active = true;
 
 /** @typedef {{ image: string, fit: string, behind: string }} Backdrop */
 
-/** Settings' glow or picture, or none. @returns {Backdrop | null} */
+/** Settings' picture, or none. @returns {Backdrop | null} */
 function settingsBackdrop() {
   const settings = state.settings.background;
-  if (settings?.source === SOURCE.theme) return { image: THEME_GLOW, fit: FIT.fill, behind: settings.behind };
-  if (settings?.source !== SOURCE.picture || !settings.picture || !info.pictureBase) return null;
+  if (!settings?.picture || !info.pictureBase) return null;
   return { image: `url("${cssString(pictureUrl(settings.picture))}")`, fit: settings.fit, behind: settings.behind };
 }
 
@@ -137,8 +141,9 @@ export function applyBackdrop() {
   const settings = state.settings.background;
   if (!settings) return;
   const seeThrough = settings.opacity < OPACITY.max && (active || !settings.solidWhenInactive);
-  const screen = screenBackdrop();
-  const detached = settingsBackdrop();
+  const screen = settings.themeGradient ? THEME_GRADIENT : screenBackdrop();
+  const detached = settings.themeGradient ? THEME_GRADIENT : settingsBackdrop();
+  toggle(root, ROOT.themeGradient, settings.themeGradient);
   toggle(root, ROOT.seeThrough, seeThrough);
   toggle(root, ROOT.solidTerminals, settings.solidTerminals);
   root.style.setProperty(ROOT.alpha, String(settings.opacity / PERCENT));
