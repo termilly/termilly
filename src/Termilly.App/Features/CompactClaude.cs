@@ -135,10 +135,10 @@ internal sealed class CompactClaude : ICompactReader
             switch (block[Fields.Type].AsText())
             {
                 case Fields.Text when block[Fields.Text].AsText() is { } text && !string.IsNullOrWhiteSpace(text):
-                    log.Put(new CompactLine(part, CompactKinds.Reply, CompactText.Cut(text.Trim(), CompactText.MaxWords), Final: final));
+                    log.Put(CompactText.Words(part, CompactKinds.Reply, text, final));
                     break;
                 case Fields.Thinking when block[Fields.Thinking].AsText() is { } thought && !string.IsNullOrWhiteSpace(thought):
-                    log.Put(new CompactLine(part, CompactKinds.Thinking, CompactText.Cut(thought.Trim(), CompactText.MaxWords)));
+                    log.Put(CompactText.Words(part, CompactKinds.Thinking, thought));
                     break;
                 case Types.ToolUse when block[Fields.Id].AsText() is { } id && block[Fields.Name].AsText() is { } name:
                     // A line whose result came already (the transcript repeats a call) keeps it.
@@ -236,16 +236,16 @@ internal sealed class CompactClaude : ICompactReader
         {
             log.Put(new CompactLine(key, CompactKinds.Interrupted, ""));
         }
-        else if (Prompt(text) is { Length: > 0 } prompt)
+        else if (Prompt(text) is { } prompt && PastedText.Unwrap(prompt) is { Length: > 0 } shown)
         {
-            log.Put(new CompactLine(key, CompactKinds.Prompt, CompactText.Cut(prompt, CompactText.MaxWords)));
+            log.Put(CompactText.Words(key, CompactKinds.Prompt, shown));
         }
     }
 
     /// <summary>The prompt as the user wrote it; a slash command by its name; Claude Code's own notes (tags) none.</summary>
     private static string? Prompt(string text)
     {
-        if (!text.StartsWith('<'))
+        if (!text.StartsWith('<') || PastedText.Leads(text))
         {
             return text;
         }

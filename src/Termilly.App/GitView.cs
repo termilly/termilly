@@ -10,7 +10,8 @@ internal sealed record GitFile(string Path, string? OldPath, string Status);
 /// <summary>What the Git window's Changes tab lists (js/gitwindow.js).</summary>
 internal sealed record GitWorkingTree(
     string Root, string Name, string? Branch, bool Detached, string? Upstream, int Ahead, int Behind, bool HasCommits,
-    IReadOnlyList<GitFile> Staged, IReadOnlyList<GitFile> Unstaged, IReadOnlyList<GitFile> Untracked, IReadOnlyList<GitFile> Conflicted);
+    IReadOnlyList<GitFile> Staged, IReadOnlyList<GitFile> Unstaged, IReadOnlyList<GitFile> Untracked, IReadOnlyList<GitFile> Conflicted,
+    string? Head = null);
 
 /// <summary>A commit in the History tab.</summary>
 internal sealed record GitCommit(string Hash, string Short, IReadOnlyList<string> Parents, string Author, string Date, string Subject, IReadOnlyList<string> Refs);
@@ -18,10 +19,14 @@ internal sealed record GitCommit(string Hash, string Short, IReadOnlyList<string
 /// <summary>A file a commit changed, with its line counts (null for a binary file).</summary>
 internal sealed record GitCommitFile(string Path, string? OldPath, string Status, int? Added, int? Removed);
 
-/// <summary>One commit in full: its message, who wrote and committed it, and the files it changed.</summary>
+/// <summary>
+/// One commit in full: its message, who wrote and committed it, and the files it changed: all of them with their line
+/// counts, or for a very big commit (a shallow clone's only commit adds every file) the first ones without counts, and
+/// how many there are.
+/// </summary>
 internal sealed record GitCommitDetail(
     string Hash, IReadOnlyList<string> Parents, string Author, string AuthorDate, string Committer, string CommitDate, string Message,
-    IReadOnlyList<GitCommitFile> Files);
+    IReadOnlyList<GitCommitFile> Files, int TotalFiles = 0, bool Counted = true);
 
 /// <summary>
 /// Which change of a file to show: its path (and its old path when renamed), the side (one of <see cref="DiffSides"/>)
@@ -30,7 +35,8 @@ internal sealed record GitCommitDetail(
 internal sealed record GitDiffTarget(string Path, string? OldPath, string Side, string? Hash = null);
 
 /// <summary>A Git window action's answer when it worked (a failure answers with git's error instead).</summary>
-internal sealed record GitActionDone(bool Ok);
+/// <summary>An action done; <see cref="Kept"/> is the local history snapshot holding what it threw away, for its Undo.</summary>
+internal sealed record GitActionDone(bool Ok, string? Kept = null);
 
 /// <summary>A branch in the Branches tab.</summary>
 internal sealed record GitBranchInfo(
@@ -51,6 +57,7 @@ internal static partial class GitView
 
     /// <summary>The most commits one page of history asks for.</summary>
     private const int MaxLog = 500;
+    private const string OneCommit = "-n1";
     /// <summary>git's message for a log of a repository without commits: an empty history.</summary>
     private const string NoCommits = "does not have any commits";
     private const long BytesPerKb = 1024;
@@ -60,6 +67,8 @@ internal static partial class GitView
 
     internal static readonly string[] StatusCommand = [GitCommands.Status, GitCommands.Options.PorcelainV2, GitCommands.Options.NulTerminated, GitCommands.Options.WithBranch, "--untracked-files=all"];
     /// <summary>A commit's files, renames found, against <c>range</c>: their status letters, or their line counts.</summary>
+    /// <summary>A commit's files listed at most, and counted only up to: more is a commit to read elsewhere.</summary>
+    internal const int MostCommitFiles = 1000;
     private static readonly string[] CommitNames = [GitCommands.DiffTree, "-r", GitCommands.Options.NulTerminated, "-M", "--name-status", "--no-commit-id"];
     private static readonly string[] CommitCounts = [GitCommands.DiffTree, "-r", GitCommands.Options.NulTerminated, "-M", "--numstat", "--no-commit-id"];
     private static readonly string[] BranchRefs = [GitCommands.Refs.Heads, GitCommands.Refs.Remotes];
@@ -88,7 +97,7 @@ internal static partial class GitView
     /// A file's diff in the change preview's shape: staged (last commit against the index), unstaged (index against
     /// the disk), untracked (the new file) or in a commit (its first parent against it).
     /// </summary>
-    public static ChangeView Diff(string root, GitDiffTarget target, long maxBytes, GitRunner git)
+    public static ChangeView Diff(string root, GitDiffTarget target, long maxBytes, GitRunner git, bool remember = true)
     {
         var path = git.CheckPath(root, target.Path);
         var from = target.OldPath is null ? path : git.CheckPath(root, target.OldPath);
@@ -124,6 +133,10 @@ internal static partial class GitView
                 throw new ArgumentException("Unknown kind of change.");
         }
         var view = View(path, target.OldPath is null ? path : $"{from} → {path}", before, after);
+        if (remember)
+        {
+            GitStageLines.Remember(root, target, git, view, maxBytes);
+        }
         return image is null ? view : ChangePictures.With(view, image, before, after);
     }
 
@@ -184,10 +197,22 @@ internal static partial class GitView
     // ---- History ----
 
     /// <summary>Commits, newest first, from HEAD or from one of the repository's refs.</summary>
-    public static IReadOnlyList<GitCommit> Log(string root, int skip, int limit, string? reference, GitRunner git)
+    public static IReadOnlyList<GitCommit> Log(string root, int skip, int limit, string? reference, GitRunner git, bool all = false, string? path = null)
     {
         var args = new List<string> { GitCommands.Log, GitOutput.LogFormat, FullDecorations,
             $"--skip={Math.Max(0, skip)}", $"-n{Math.Clamp(limit, 1, MaxLog)}" };
+        if (all)
+        {
+            args.AddRange(["--branches", "--remotes", "--tags", "--date-order"]);
+        }
+        if (path is not null)
+        {
+            path = git.CheckPath(root, path);
+            if (IsHistoryFile(root, path, git))
+            {
+                args.Add("--follow");
+            }
+        }
         if (reference is not null)
         {
             // Only a ref git itself listed, and after --end-of-options so it can't be taken for an option.
@@ -198,7 +223,29 @@ internal static partial class GitView
             args.Add(GitCommands.Options.EndOfOptions);
             args.Add(reference);
         }
+        if (path is not null)
+        {
+            args.AddRange([GitCommands.Options.Paths, path]);
+        }
         return ReadLog(git, root, args);
+    }
+
+    private static bool IsHistoryFile(string root, string path, GitRunner git)
+    {
+        if (git.ReadFile(root, path, 1).Exists)
+        {
+            return true;
+        }
+        try
+        {
+            // A deleted file still needs rename following; a folder's last change names its children instead.
+            return Text(git, root, GitCommands.Log, OneCommit, "--format=", GitCommands.NameOnly, GitCommands.Options.NulTerminated, GitCommands.Options.Paths, path)
+                .Split('\0', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).Contains(path, StringComparer.Ordinal);
+        }
+        catch (GitFailedException e) when (e.Message.Contains(NoCommits, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
     }
 
     /// <summary>git log's commits; none for a repository without commits.</summary>
@@ -220,7 +267,7 @@ internal static partial class GitView
         try
         {
             var full = Text(git, root, GitCommands.RevParse, "--verify", GitCommands.Options.Quiet, $"{hash}^{{commit}}").Trim();
-            var found = GitOutput.Log(Text(git, root, GitCommands.Log, GitOutput.LogFormat, FullDecorations, "-n1", CheckHash(full)));
+            var found = GitOutput.Log(Text(git, root, GitCommands.Log, GitOutput.LogFormat, FullDecorations, OneCommit, CheckHash(full)));
             return found.Count > 0 ? found[0] : null;
         }
         catch (IOException)
@@ -235,9 +282,15 @@ internal static partial class GitView
         var head = GitOutput.CommitHead(Text(git, root, GitCommands.Show, GitCommands.Options.SizeOnly, GitOutput.CommitFormat, GitCommands.Options.EndOfOptions, hash));
         // Against the first parent (a merge's changes as the branch received them); the first commit against nothing.
         string[] range = head.Parents.Count > 0 ? [head.Parents[0], head.Hash] : ["--root", head.Hash];
-        var status = git.Run(root, [.. CommitNames, .. range]);
+        var names = Encoding.UTF8.GetString(git.Run(root, [.. CommitNames, .. range]));
+        var all = GitOutput.CommitFiles(names, "");
+        if (all.Count > MostCommitFiles)
+        {
+            // Counting every file's lines would take seconds, and the page couldn't show them all anyway.
+            return head with { Files = [.. all.Take(MostCommitFiles)], TotalFiles = all.Count, Counted = false };
+        }
         var numstat = git.Run(root, [.. CommitCounts, .. range]);
-        return head with { Files = GitOutput.CommitFiles(Encoding.UTF8.GetString(status), Encoding.UTF8.GetString(numstat)) };
+        return head with { Files = GitOutput.CommitFiles(names, Encoding.UTF8.GetString(numstat)), TotalFiles = all.Count };
     }
 
     // ---- Actions ----
@@ -258,25 +311,26 @@ internal static partial class GitView
     /// git's own refusals (changes a switch would overwrite, a branch that already exists, a name git won't take)
     /// come back as they are.
     /// </summary>
-    public static void Act(string root, string action, string? path, string? reference, bool hasCommits, GitRunner git)
+    /// <returns>The snapshot holding what a discard threw away; null for the other actions.</returns>
+    public static string? Act(string root, string action, string? path, string? reference, bool hasCommits, GitRunner git)
     {
         switch (action)
         {
             case GitActions.Switch:
                 SwitchTo(root, reference, git);
-                return;
+                return null;
             case GitActions.NewBranch:
                 git.Run(root, [GitCommands.Switch, GitCommands.Options.Create, NewBranchName(reference)]);
-                return;
+                return null;
             case GitActions.Fetch:
                 git.Run(root, [GitCommands.Fetch, GitCommands.Options.AllRemotes]);
-                return;
+                return null;
         }
         var file = git.CheckPath(root, path);
         if (action == GitActions.Ignore)
         {
             git.AppendLine(root, GitCommands.GitIgnore, "/" + file);
-            return;
+            return null;
         }
         string[] args = action switch
         {
@@ -288,7 +342,10 @@ internal static partial class GitView
             GitActions.Delete => [GitCommands.Clean, "-f", GitCommands.Options.Quiet, GitCommands.Options.Paths, file],
             _ => throw new ArgumentException("Unknown action."),
         };
+        var kept = action is GitActions.Discard or GitActions.DiscardAll or GitActions.Delete
+            ? GitSnapshots.Before(root, SnapshotReasons.BeforeDiscard, git) : null;
         git.Run(root, args);
+        return kept;
     }
 
     /// <summary>Checks out a branch git listed; a remote one as a new local branch that tracks it.</summary>

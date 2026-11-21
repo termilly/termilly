@@ -69,6 +69,12 @@ internal interface IFileDialogs
     /// <summary>A text file to open in the Notepad.</summary>
     Task<string?> PickTextToOpenAsync();
 
+    /// <summary>Other terminals' colour scheme files to import (Settings › Appearance › Theme); none when cancelled.</summary>
+    Task<IReadOnlyList<string>> PickSchemesToOpenAsync();
+
+    /// <summary>A picture to show behind the terminals (Settings › Appearance › Background).</summary>
+    Task<string?> PickPictureToOpenAsync();
+
     /// <summary>
     /// Files to upload, picked in the host's own dialog (where the page's can't tell their paths). On Windows the
     /// page's file input gives them instead, so this is never asked there.
@@ -159,7 +165,7 @@ internal static class PlatformServices
     /// <summary>Registers <paramref name="platform"/> as each platform interface it implements.</summary>
     public static IServiceCollection AddPlatform(this IServiceCollection services, object platform)
     {
-        foreach (var contract in new[] { typeof(IPageSink), typeof(IAppWindow), typeof(IFileDialogs), typeof(IDesktopShell), typeof(INotifier), typeof(ISystemProcesses), typeof(ISignInStart), typeof(ICredentialStore), typeof(ISystemTheme) })
+        foreach (var contract in new[] { typeof(IPageSink), typeof(IAppWindow), typeof(IFileDialogs), typeof(IDesktopShell), typeof(INotifier), typeof(ISystemProcesses), typeof(ISignInStart), typeof(ICredentialStore), typeof(ISystemTheme), typeof(IWindowBackdrop) })
         {
             if (contract.IsInstanceOfType(platform))
             {
@@ -242,6 +248,17 @@ internal static class ListeningPorts
 /// draw bold text at normal weight in those fonts).
 /// </summary>
 internal sealed record InstalledFonts(IReadOnlyList<string> All, IReadOnlyList<string> Monospace, IReadOnlyList<string> RealBold);
+
+/// <summary>
+/// What the window's background can be here (Settings › Appearance › Background): the effects its windows have
+/// (BackgroundValues.Effect), and the address the page loads a background picture from, its file name added.
+/// </summary>
+internal interface IWindowBackdrop
+{
+    IReadOnlyList<string> Effects { get; }
+
+    string PictureBase { get; }
+}
 
 /// <summary>The system's light or dark mode, for the "system" theme.</summary>
 internal interface ISystemTheme

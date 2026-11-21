@@ -11,8 +11,11 @@ namespace Termilly.Desktop.Features;
 /// </summary>
 internal static partial class CompactText
 {
-    /// <summary>The words of a reply or a prompt are cut to this (the view shows the start; a reply this long is rare).</summary>
-    public const int MaxWords = 4000;
+    /// <summary>
+    /// The words of a reply, a prompt or a thought are cut to this: far past what an agent writes in one answer (long
+    /// reviews and plans run to many thousands), so only a runaway one is cut, and its line says so (<see cref="CompactLine.Cut"/>).
+    /// </summary>
+    public const int MaxWords = 100_000;
     /// <summary>What a tool worked on is cut to this.</summary>
     public const int MaxSubject = 300;
     /// <summary>A failed tool's reason is cut to this.</summary>
@@ -34,6 +37,17 @@ internal static partial class CompactText
 
     /// <summary>"12 hits": a search's matches.</summary>
     public static string HitCount(long n) => Count(n, "hit", "hits");
+
+    /// <summary>
+    /// A line of words (a reply, a prompt, a thought), trimmed and cut to <see cref="MaxWords"/>; when cut, it says so,
+    /// so the view can point at the terminal for the rest rather than look finished.
+    /// </summary>
+    public static CompactLine Words(string key, string kind, string text, bool? final = null)
+    {
+        var words = text.Trim();
+        var cut = words.Length > MaxWords;
+        return new CompactLine(key, kind, Cut(words, MaxWords), Final: final, Cut: cut ? true : null);
+    }
 
     /// <summary>Cut to at most <paramref name="max"/> characters, with an ellipsis when something was left out.</summary>
     public static string Cut(string text, int max) => text.Length <= max ? text : string.Concat(text.AsSpan(0, max - 1), Ellipsis.ToString());

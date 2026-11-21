@@ -9,6 +9,8 @@ interface AppSettings {
   terminal: TerminalSettings;
   /** The app around the terminals. */
   interface: InterfaceSettings;
+  /** The window's background: see-through, an effect, a picture (Settings › Appearance › Background). */
+  background: BackgroundSettings;
   /** The shells on offer. */
   shells: ShellSettings;
   /** Snippets and triggers. */
@@ -58,6 +60,10 @@ interface TerminalSettings {
   programClipboard: boolean;
   /** Selecting text in a terminal copies it. */
   copyOnSelect: boolean;
+  /** At a shell prompt, the rest of a command from history in grey after the cursor (js/autocomplete.js). */
+  autocomplete: boolean;
+  /** The autocomplete list also offers words on the screen. */
+  autocompleteScreenWords: boolean;
   /** What opens a web address in a terminal’s output (js/weblinks.js): Ctrl+click, or a plain click. */
   linkClick: string;
   /** The terminal colour scheme's id (js/themes.js); null: the theme's own. */
@@ -81,12 +87,24 @@ interface TerminalSettings {
 /** The app around the terminals: theme, its own font, the sidebar's activity and git status, updates, plugins. */
 interface InterfaceSettings {
   theme: string;
+  /** The theme "system" shows while the system is in dark mode. */
+  themeDark: string;
+  /** The theme "system" shows while the system is in light mode. */
+  themeLight: string;
+  /** Colour schemes imported from other terminals, newest first. */
+  customThemes: CustomTheme[] | null;
+  /** Normal or Minimal (). */
+  layout: string;
+  /** In Minimal, a terminal's name on a line over it or on a bar shown on hover (). */
+  paneNames: string;
   /** The app's font; null: the system's. */
   font: string | null;
   showActivity: boolean;
   confirmCloseWorkspace: boolean;
   gitStatus: boolean;
   checkForUpdates: boolean;
+  /** A newer version is installed when Termilly starts, before anything else runs (StartupUpdateGate). Windows' per-user installs only for now; off unless the user turns it on. */
+  installUpdatesOnStart: boolean;
   disabledPlugins: string[] | null;
   /** The window's Minimize: to the taskbar, or the tray (Windows). */
   minimizeTo: string;
@@ -308,15 +326,28 @@ interface SettingsData {
   costLedger: Record<string, CostDay> | null;
   /** Each snippet's variables, as last filled in. */
   snippetValues: Record<string, Record<string, string>> | null;
+  /** When each snippet or task was last run (Unix ms), for the snippets list's order. */
+  snippetUsed: Record<string, number> | null;
 }
 
-/** A theme's colours for the window and start-up loader (#RRGGBB), and whether it's a light theme. */
+/** A theme's colours for the window and start-up loader (#RRGGBB), whether it's a light theme, and its id (none in colours saved before 1.10). */
 interface ThemeWindowColors {
   background: string;
   frame: string;
   text: string;
   accent: string;
   light: boolean;
+  id: string | null;
+}
+
+/** A colour scheme imported from another terminal (Settings › Appearance › Theme): its terminal colours (#RRGGBB, the 16 ANSI ones in order); the page works out the app's colours from them (js/themes.js). */
+interface CustomTheme {
+  id: string;
+  name: string;
+  background: string;
+  foreground: string;
+  cursor: string | null;
+  ansi: string[];
 }
 
 /** One day in the agent cost ledger (js/cost.js): the total, and per workspace name. */
@@ -374,6 +405,24 @@ interface ActionSetting {
   shortcut: string | null;
   menu: boolean;
   enabled: boolean;
+}
+
+/** The window's background (Settings › Appearance › Background): how see-through it is and what shows through, and a picture behind the terminals or the whole window. The defaults are a solid window with no picture, as before. */
+interface BackgroundSettings {
+  /** The window's own colour in percent (); below 100 the desktop shows through. */
+  opacity: number;
+  /** What shows through (), where the system has it. */
+  effect: string;
+  /** Only the window around the terminals is see-through; the terminals keep their colour. */
+  solidTerminals: boolean;
+  /** A gradient in the theme's own colours behind the whole window, seen through it as frosted glass; it takes the place of a picture while on. */
+  themeGradient: boolean;
+  /** The picture's file in the backgrounds folder (), or none. */
+  picture: string | null;
+  fit: string;
+  dim: number;
+  blur: number;
+  behind: string;
 }
 
 /** How a COM port is set up (Settings › Serial); one per port that's been changed from the defaults. */

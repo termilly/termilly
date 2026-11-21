@@ -7,7 +7,8 @@
 
 import { PAGE } from './protocol.js';
 import { request } from './host.js';
-import { state, wsById, defaultProfile, persist, emit, EVENTS } from './store.js';
+import { state, wsById, defaultProfile, persist, emit, EVENTS, installedAgents } from './store.js';
+import { AGENTS, agentOfProgram } from './agentkinds.js';
 import { escapeHtml, profileOptionsHtml } from './ui.js';
 import { modal, pickFolder, CONFIRM_DIALOG, FORM_DIALOG } from './dialogs.js';
 import { newTab, closeTab, focusedTab } from './panes.js';
@@ -20,10 +21,25 @@ const DEFAULT_COMMAND = 'claude';
 /** The New agent in worktree dialog's fields (their names). */
 const FIELD = Object.freeze({ folder: 'folder', branch: 'branch', command: 'command', profile: 'profile' });
 /** How long the worktree's terminals get to close before it's removed: a shell still in the folder would hold it. */
-const CLOSE_GRACE_MS = 800;
+export const CLOSE_GRACE_MS = 800;
 
 function lastCommand() {
   try { return localStorage.getItem(LAST_COMMAND_KEY) ?? DEFAULT_COMMAND; } catch { return DEFAULT_COMMAND; }
+}
+
+/**
+ * The Run dropdown: the agents installed here (every agent Termilly knows when none is found), then just a shell. The
+ * one picked last time is chosen; a command remembered from before the dropdown counts as its agent.
+ */
+function agentOptionsHtml() {
+  const installed = installedAgents();
+  const kinds = installed.length ? installed : Object.keys(AGENTS);
+  const last = lastCommand();
+  const lastKind = last ? agentOfProgram(last.trim().split(/\s+/)[0]) : null;
+  const chosen = last && lastKind && kinds.includes(lastKind) ? AGENTS[lastKind].program : last ? AGENTS[kinds[0]].program : '';
+  const option = (/** @type {string} */ value, /** @type {string} */ label) =>
+    `<option value="${escapeHtml(value)}"${value === chosen ? ' selected' : ''}>${escapeHtml(label)}</option>`;
+  return [...kinds.map(kind => option(AGENTS[kind].program, AGENTS[kind].name)), option('', 'Nothing (just a shell)')].join('');
 }
 
 /**
@@ -45,7 +61,7 @@ function newWorktreeHtml(folder) {
     </label>
     <div class="dialog-field">Run
       <span class="field-row">
-        <input class="field" name="${FIELD.command}" value="${escapeHtml(lastCommand())}" placeholder="Nothing (just a shell)" spellcheck="false">
+        <select class="field" name="${FIELD.command}" aria-label="Agent">${agentOptionsHtml()}</select>
         <select class="field" name="${FIELD.profile}" aria-label="Shell">${profileOptionsHtml(defaultProfile())}</select>
       </span>
     </div>
@@ -100,19 +116,27 @@ export function openNewWorktree() {
  */
 function openAgentTab(m, { command, profile, wsId }) {
   try { localStorage.setItem(LAST_COMMAND_KEY, command); } catch { /* a convenience only */ }
-  const created = newTab({ profile, wsId, name: m.branch, cwd: m.path, command: command || null });
-  created.worktree = { repo: m.repo, path: m.path, branch: m.branch };
-  if (m.copied) created.worktree.copied = m.copied;
+  return markWorktree(newTab({ profile, wsId, name: m.branch, cwd: m.path, command: command || null }), m);
+}
+
+/**
+ * Marks a terminal as working in a worktree the host made, so Clean up worktree finds it.
+ * @param {Tab} tab
+ * @param {import('./protocol.js').Host_worktreeReply_0} m the host's answer: the worktree it made
+ */
+export function markWorktree(tab, m) {
+  tab.worktree = { repo: m.repo, path: m.path, branch: m.branch };
+  if (m.copied) tab.worktree.copied = m.copied;
   persist();
-  emit(EVENTS.tab, created);
-  return created;
+  emit(EVENTS.tab, tab);
+  return tab;
 }
 
 /**
  * The terminals working in a worktree.
  * @param {{ path: string }} worktree
  */
-const tabsIn = worktree => [...state.tabs.values()].filter(t => t.worktree?.path === worktree.path);
+export const tabsIn = worktree => [...state.tabs.values()].filter(t => t.worktree?.path === worktree.path);
 
 /**
  * Clean up worktree: its state, then closing its terminals and removing it.

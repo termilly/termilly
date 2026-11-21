@@ -9,6 +9,13 @@ public partial class App : Application
     {
         base.OnStartup(e);
         SetupApp.LeaveStartFolder();
+        if (SetupApp.Has(Termilly.Shared.SetupFlags.UpdateRecover))
+        {
+            // At sign-in after an update at start was cut off (Engine/SupervisedUpdate.cs): no window.
+            var dir = SetupApp.Args.Value(Engine.Flags.Dir);
+            Shutdown(dir is null ? Engine.ExitCodes.Failed : Engine.SupervisedUpdate.Recover(dir));
+            return;
+        }
         if (UpdateWindow.IsRequested(SetupApp.Args))
         {
             MainWindow = new UpdateWindow();

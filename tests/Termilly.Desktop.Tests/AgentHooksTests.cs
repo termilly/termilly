@@ -100,7 +100,7 @@ public sealed class AgentHooksTests : IDisposable
         // PowerShell runs a hook's command on Windows: the helper is in a variable, which needs & to be run.
         Assert.Contains("""hooks.SessionStart=[{hooks=[{type='command',command='& $env:TERMILLY_HOOK_EXE hook 1 SessionStart codex',timeout=3}]}]""", values);
         Assert.Contains("""hooks.PreToolUse=[{matcher='*',hooks=[{type='command',command='& $env:TERMILLY_HOOK_EXE hook 1 PreToolUse codex',timeout=3}]}]""", values);
-        Assert.Contains("""mcp_servers.termilly={command='C:\a\termilly.exe',args=['mcp'],env_vars=['TERMILLY_PANE_ID','TERMILLY_PIPE'],tool_timeout_sec=130}""", values);
+        Assert.Contains("""mcp_servers.termilly={command='C:\a\termilly.exe',args=['mcp'],env_vars=['TERMILLY_PANE_ID','TERMILLY_PIPE'],tool_timeout_sec=130,default_tools_approval_mode='approve'}""", values);
         // npm's codex.cmd goes through cmd, which a double quote would let run what follows an &.
         Assert.All(values, v => Assert.DoesNotContain("\"", v));
         // The same every run: Codex remembers a trusted hook by its exact definition.
@@ -214,6 +214,33 @@ public sealed class AgentHooksTests : IDisposable
         File.WriteAllText(Path.Combine(project, ".claude", "settings.local.json"), """{ "statusLine": { "command": "\"C:/app/agent/termilly-hook.exe\" statusline 1" } }""");
         Assert.Null(StatusLine.UserCommand(input, home));
     }
+
+    [Fact]
+    public void The_users_status_line_gets_and_gives_any_language()
+    {
+        // Version 0: Termilly isn't told, only the user's own line runs (here cat, which prints what it was given).
+        var project = Directory.CreateDirectory(Path.Combine(_dir, "测试 Тест ąčęėį", ".claude")).Parent!.FullName;
+        File.WriteAllText(Path.Combine(project, ".claude", "settings.json"), """{ "statusLine": { "command": "cat" } }""");
+        var input = new JsonObject { ["workspace"] = new JsonObject { ["project_dir"] = project } }.ToJsonString(NonAscii);
+        var output = new StringWriter();
+
+        StatusLine.Run("0", new MemoryStream(Utf8Output.Encoding.GetBytes(input)), output);
+
+        Assert.Equal(input, output.ToString());
+    }
+
+    [Fact]
+    public void Printed_text_to_a_pipe_is_utf8_without_a_mark()
+    {
+        var pipe = new MemoryStream();
+        using (var writer = Utf8Output.Writer(redirected: true, () => pipe, handle: 0))
+        {
+            writer.Write("Тест 测试 ąč");
+        }
+        Assert.Equal(System.Text.Encoding.UTF8.GetBytes("Тест 测试 ąč"), pipe.ToArray());
+    }
+
+    private static readonly System.Text.Json.JsonSerializerOptions NonAscii = new() { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
     [Fact]
     public void The_plan_is_read_without_the_account_details()

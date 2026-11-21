@@ -10,6 +10,7 @@ import {
 import { inputTargets } from './broadcast.js';
 import { promptStarted, inputStarted, commandStarted, commandEnded, commandReported } from './commands.js';
 import { scanOutput, scanFrom, screenCleared } from './triggers.js';
+import { sizeTold } from './reprint.js';
 import { quotePaths } from './quoting.js';
 import { isWsl } from './filepaths.js';
 import { remoteReport, remoteHook, remotePrompt, watchRemote } from './remotehost.js';
@@ -17,6 +18,7 @@ import { modal } from './dialogs.js';
 import { escapeHtml } from './ui.js';
 import { pasteNeedsConfirm, confirmProduction } from './environments.js';
 import { currentTheme, themeId, themeById, THEME_BASE } from './themes.js';
+import { clearTerminals } from './backgrounds.js';
 import { updateSettings } from './preferences.js';
 import { resumeCommand, attachFor } from './resume.js';
 import { noteRemotePrompt, noteRemoteCwd, leftRemote } from './remotecwd.js';
@@ -28,7 +30,9 @@ import { agentKind, agentOfProgram } from './agentkinds.js';
 import { clipboardKey, wireClipboard, PASTE_LABEL } from './termclipboard.js';
 import { selectionKey } from './keyselect.js';
 import { hoverMarkedLink, COPY_HINT } from './termlinks.js';
+import { cleanWebAddress } from './webaddress.js';
 import { wireGpu, dropGpu, applyGpu } from './gpu.js';
+import { systemClipboard } from './sysclipboard.js';
 
 /**
  * A theme plugin's terminal colours (state.pluginThemes).
@@ -92,6 +96,16 @@ const lightTerminal = () => {
  */
 const CONTRAST = Object.freeze({ light: 4.5, dark: 1 });
 
+/** A terminal's background with nothing of its own: the window's background shows through (js/backgrounds.js). */
+const NO_BACKGROUND = 'rgba(0, 0, 0, 0)';
+/** The see-through copy of a theme, kept per theme so the options only change when the theme does. */
+const clearThemes = new WeakMap();
+/** @param {any} theme */
+function clearTheme(theme) {
+  if (!clearThemes.has(theme)) clearThemes.set(theme, { ...theme, background: NO_BACKGROUND });
+  return clearThemes.get(theme);
+}
+
 /** Terminal options that come from Settings. */
 const settingsOptions = () => ({
   fontFamily: fontStack(state.settings.terminal.fontFamily),
@@ -101,7 +115,8 @@ const settingsOptions = () => ({
   cursorBlink: state.settings.terminal.cursorBlink,
   cursorStyle: state.settings.terminal.cursorStyle,
   scrollback: state.settings.terminal.scrollback,
-  theme: termTheme(),
+  theme: clearTerminals() ? clearTheme(termTheme()) : termTheme(),
+  allowTransparency: clearTerminals(),
   minimumContrastRatio: lightTerminal() ? CONTRAST.light : CONTRAST.dark,
 });
 
@@ -151,12 +166,19 @@ export const isTerminalReply = data => TERMINAL_REPLY.test(data);
 let keyHandler = () => true;
 
 /**
- * Keys a feature takes before the shell sees them (`snippet:` at a prompt, snippetprompt.js); false keeps a key.
- * @type {(tab: Tab, term: any, e: KeyboardEvent) => boolean}
+ * Keys features take before the shell sees them (`snippet:` at a prompt, snippetprompt.js; autocomplete,
+ * autocomplete.js), asked in the order they were added; false from one keeps a key.
+ * @type {Array<(tab: Tab, term: any, e: KeyboardEvent) => boolean>}
  */
-let inputHook = () => true;
+const inputHooks = [];
 /** @param {(tab: Tab, term: any, e: KeyboardEvent) => boolean} fn */
-export const setInputHook = fn => { inputHook = fn; };
+export const addInputHook = fn => { inputHooks.push(fn); };
+/**
+ * @param {Tab} tab
+ * @param {any} term
+ * @param {KeyboardEvent} e
+ */
+const inputHook = (tab, term, e) => inputHooks.every(hook => hook(tab, term, e));
 
 /**
  * Where typing in a terminal without its own shell goes, by its kind: a tmux pane (tmux.js), another computer's
@@ -348,7 +370,9 @@ function createTerminal(tab) {
   term.loadAddon(new Unicode11Addon.Unicode11Addon());
   term.unicode.activeVersion = '11';
   // On the GPU while it's on screen (Settings › Appearance › GPU rendering).
-  wireGpu(tab, term, () => fit.fit());
+  // Not while a phone or another computer gives it its size: fitting it to the pane would give the program its pane's
+  // size again behind their back (a GPU context comes back after sleep or a lock), and they'd draw it garbled.
+  wireGpu(tab, term, () => { if (!tab.phoneSize) fit.fit(); });
   wireDropAndPaste(tab, term);
   /** @type {TabView} */ (tab.view).term = term;
   /** @type {TabView} */ (tab.view).fit = fit;
@@ -404,6 +428,7 @@ function wireInput(tab, term) {
       if (!state.tabs.has(tab.id)) return; // closed meanwhile
       // ConPTY repaints after a resize; that output isn't news, so it mustn't raise an attention dot.
       quiet(tab);
+      sizeTold(tab, term, () => quiet(tab));
       send(PAGE.resize, { id: tab.id, cols, rows });
     }, RESIZE_SETTLE_MS));
   });
@@ -538,7 +563,7 @@ function wireProgramRequests(tab, term) {
   // are honoured: a read ('?') would hand the clipboard to whatever runs in the terminal.
   term.parser.registerOscHandler(OSC.clipboard, (/** @type {string} */ data) => {
     const text = clipboardWrite(data);
-    if (text !== null && state.settings.terminal.programClipboard !== false) navigator.clipboard.writeText(text).catch(() => {});
+    if (text !== null && state.settings.terminal.programClipboard !== false) systemClipboard().writeText(text).catch(() => {});
     return true;
   });
   // XTVERSION (CSI > 0 q): which terminal this is, so programs can use what it supports.
@@ -644,6 +669,23 @@ onHost(HOST.startFolder, m => {
  * @param {Tab} tab
  */
 const startOf = tab => (tab.start ??= { output: null, command: null, resumeSession: null, done: false });
+
+/**
+ * What a terminal's start command waits for besides its prompt, by terminal: Implement's snapshot of the folder, so
+ * the agent starts on work that's already kept. Kept here, not in tab.start, which is saved with the terminal.
+ * @type {Map<string, Promise<unknown>>}
+ */
+const holds = new Map();
+
+/**
+ * Holds a terminal's start command until `until` settles (whichever way).
+ * @param {Tab} tab
+ * @param {Promise<unknown>} until
+ */
+export function holdStart(tab, until) {
+  const held = until.finally(() => { if (holds.get(tab.id) === held) holds.delete(tab.id); });
+  holds.set(tab.id, held);
+}
 
 /**
  * Sets what a terminal does as its shell starts (any of output, command, resumeSession): from a layout, the API, a
@@ -800,11 +842,14 @@ function clipboardWrite(data) {
  * @param {Tab} tab
  */
 function linkHandler(tab) {
+  // A program can mark a link from Markdown it read, closing "**" and all; it opens, shows and copies without them.
+  const target = (/** @type {string} */ uri) => (WEB_URI.test(uri) ? cleanWebAddress(uri) : uri);
   return {
     allowNonHttpProtocols: true,
-    activate: (/** @type {MouseEvent} */ event, /** @type {string} */ uri) => {
+    activate: (/** @type {MouseEvent} */ event, /** @type {string} */ marked) => {
       if (!event.ctrlKey) return;
-      if (/^https?:\/\//i.test(uri)) send(PAGE.openUrl, { url: uri });
+      const uri = target(marked);
+      if (WEB_URI.test(uri)) send(PAGE.openUrl, { url: uri });
       else if (/^file:\/\//i.test(uri)) {
         let path = uri.replace(/^file:\/\/[^/]*/i, '');
         try { path = decodeURIComponent(path); } catch { /* keep it as sent */ }
@@ -813,7 +858,8 @@ function linkHandler(tab) {
         send(/\.html?$/i.test(path) ? PAGE.openPage : PAGE.openPath, { path });
       }
     },
-    hover: (/** @type {MouseEvent} */ _event, /** @type {string} */ uri) => {
+    hover: (/** @type {MouseEvent} */ _event, /** @type {string} */ marked) => {
+      const uri = target(marked);
       hoverMarkedLink(uri);
       /** @type {TabView} */ (tab.view).body.title = `${uri}\nCtrl+click to open\n${COPY_HINT}`;
     },
@@ -823,6 +869,9 @@ function linkHandler(tab) {
     },
   };
 }
+
+/** A marked link to a web page, rather than a file. */
+const WEB_URI = /^https?:\/\//i;
 
 /** Keys that answer a permission prompt or question: Enter, Esc, or an option's number (not moving between options). */
 const ANSWER = /^(\r|\x1b|[1-9])$/;
@@ -851,6 +900,11 @@ function runPendingCommand(tab) {
   const start = startOf(tab);
   const { command } = start;
   if (!command || tab.exited) return;
+  const held = holds.get(tab.id);
+  if (held) {
+    held.then(() => runPendingCommand(tab));
+    return;
+  }
   const resuming = start.resumeSession;
   start.command = null;
   start.typed = { command, at: Date.now() };
@@ -878,7 +932,7 @@ function shellMark(tab, data) {
       commandEnded(tab, code === undefined || code === '' ? null : Number(code));
     } else {
       if (tab.running) commandEnded(tab, null); // a prompt without an end mark: the command ended unreported
-      promptStarted(tab);
+      promptStarted(tab, data);
       remotePrompt(tab);
     }
     endCommand(tab);
@@ -1158,8 +1212,9 @@ export function bufferLines(tab, max = state.settings.terminal.scrollback) {
   return lines;
 }
 
-// A theme plugin came or went: its terminal colours with it.
+// A theme plugin came or went: its terminal colours with it. The window's background came or went behind them.
 on(EVENTS.plugins, () => applyTerminalSettings());
+on(EVENTS.backdrop, () => applyTerminalSettings());
 
 /** Applies Settings (font, cursor, scrollback, theme) to every open terminal. */
 export function applyTerminalSettings() {

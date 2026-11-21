@@ -2,6 +2,46 @@
 
 What changed in each release. Termilly says in its title bar when a newer one is out.
 
+## 1.9.3 (2026-11-20)
+
+Fixes:
+
+- Non-English letters no longer show as "?" in the status line.
+
+## 1.9.2 (2026-11-20)
+
+Fixes:
+
+- New version notice now shows in the Minimal layout and on macOS.
+
+## 1.9.1 (2026-11-20)
+
+- **Automatic updates:** Termilly updates itself at start and rolls back if the update fails (Settings › About).
+
+Fixes:
+
+- Compact and Minimal terminal views: fixes for the prompt box, reply width, @ files and pasted text, Codex's start-up questions and right-click.
+- Minimal layout: right-click a workspace to close it.
+- Minimal layout: the workspace name opens the list of workspaces while the dock is hidden.
+
+## 1.9.0 (2026-11-18)
+
+- **Git and GitHub:** commit, push, pull requests, Issues, graph, local history, line staging, cleanup and checks.
+- **Minimal layout:** the Minimal look for panes, docked tools and other windows, with names shown as a line or on hover.
+- **Autocomplete:** ghost text, or a dropdown list on Ctrl+Shift+Space, and history kept per shell.
+- **Snippets:** auto discover snippets from git folder, VS Code tasks, new snippets quick picker.
+- **To do:** mcp edit and delete tasks, review an agent's git changes.
+- **Needs you:** a short flash on the terminal you jump to from a notification.
+
+Fixes:
+
+- Duplicate replies after resizing Claude Code on Windows.
+- Copy and paste in detached terminals.
+- Compact view: long replies were cut short, and the permission card and prompt jump have been fixed.
+- Bold and italic Markdown links conversion to links in terminal outputs
+- Path links, remote rendering, and autocomplete in bash and zsh.
+- Many small fixes.
+
 ## 1.8.1 (2026-11-14)
 
 - **Compact and Minimal views:** follow an agent one line per step, or see only your prompts and its answers. Pick one with the new button in the terminal's title bar.

@@ -13,6 +13,8 @@ namespace Termilly.Linux;
 internal sealed class MacPlatform(Action<string> send, string? startFolder, IProcessRunner runner) :
     PhotinoPlatform(send, startFolder), IDesktopShell, INotifier, ISystemProcesses, ISignInStart, ISystemTheme
 {
+    public override IReadOnlyList<string> Effects => OperatingSystem.IsMacOS() ? MacBackdrop.Effects : [BackgroundValues.Effect.None];
+
     /// <summary>Opens a folder, file or link with what the system chose for it; with -R, shows a file in the Finder.</summary>
     private const string Open = "open";
     private const string RevealOption = "-R";

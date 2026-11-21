@@ -46,6 +46,11 @@ interface TodoTask {
   terminal?: string;
   /** Its run out of sight (Implement, Out of sight): the hidden shell's id. */
   run?: string;
+  /**
+   * Where Implement did the work, kept through In progress and Review for Review's Git changes: the folder (on the SSH host
+   * when server), and the terminal it ran in, if any.
+   */
+  workedIn?: { folder: string; terminal?: string; server?: boolean };
   /** What Implement was started with (js/todoplan.js): the agent doing the work, the agents reviewing it, the rounds and how it runs. */
   plan?: { by: string; reviewers: string[]; rounds: number; run: string };
   /** What its agents are at while it's In progress: working, reviewing or fixing (STAGE), in which round, and how many findings are being fixed. */
@@ -70,6 +75,13 @@ interface Note {
   pinned?: boolean;
 }
 
+/** A workspace's own background: BACKGROUND.workspaceKind, with its gradient's name or picture's file. */
+interface WorkspaceBackground {
+  kind: string;
+  gradient?: string;
+  picture?: string;
+}
+
 interface Workspace {
   id: string;
   name: string;
@@ -88,6 +100,8 @@ interface Workspace {
   asideCollapsed?: boolean;
   /** Where "Copy to" last copied from here (js/copyto.js): the terminal picked, and the folder picked in each. */
   copyTo?: { tab: string | null; dirs: Record<string, string> };
+  /** Its own background (js/backgrounds.js): none means the window's (Settings › Appearance › Background). */
+  background?: WorkspaceBackground;
   /** Another Termilly computer's terminals open here (js/remotepc.js): its id. Not listed with this PC's; never saved. */
   remote?: string;
   /** A tmux window shown as this workspace (js/tmux.js); never saved. */

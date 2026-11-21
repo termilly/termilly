@@ -87,6 +87,10 @@ let themeWatch = null;
 /** The document the user is in: a detached window's, or the main page's. Menus and dialogs open there. */
 export const hereDoc = () => (here !== document && here.defaultView && !here.defaultView.closed ? here : document);
 
+/** The live documents, including detached windows whose content has moved in. */
+export const openDocuments = () => [document, ...[...open.values()]
+  .filter(d => d.ready && !d.win.closed).map(d => d.win.document)];
+
 /**
  * Runs `install` on the main page's document and on each detached window's, now and as they open: listeners that
  * every window needs.
@@ -266,18 +270,16 @@ function gone(d, quiet) {
 }
 
 /**
- * A header's own close (Schedules, Snippets) goes after the pin, with the window's buttons; back in its place when the
- * window goes (its chrome's signal).
+ * A header's own close (Schedules, Snippets, Git) hides while detached: the window's Close does the same, so two would
+ * show. Back when the window goes (its chrome's signal).
  * @param {HTMLElement} header
- * @param {HTMLElement} controls
  * @param {AbortSignal} signal
  */
-function takeOwnClose(header, controls, signal) {
+function hideOwnClose(header, signal) {
   const own = /** @type {HTMLElement | null} */ (header.querySelector(`:scope > .${OWN_CLOSE}`));
   if (!own) return;
-  const before = own.previousElementSibling;
-  controls.append(own);
-  signal.addEventListener('abort', () => (before ? before.after(own) : header.prepend(own)));
+  own.hidden = true;
+  signal.addEventListener('abort', () => { own.hidden = false; });
 }
 
 /**
@@ -295,7 +297,7 @@ function addChrome(d, doc) {
   controls.className = 'window-controls detached-controls';
   // The pin that keeps the window above every other one, Return, a separator, then the window's own buttons.
   controls.append(pinButton(doc, d.key, act));
-  takeOwnClose(d.header, controls, signal);
+  hideOwnClose(d.header, signal);
   if (d.returnable !== false) {
     const back = doc.createElement('button');
     back.innerHTML = RETURN_ICON;

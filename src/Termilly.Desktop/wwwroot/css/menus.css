@@ -1,0 +1,310 @@
+/* Popovers, menus, the tag picker and dialogs. */
+
+/* ---- Popovers ---- */
+
+.popover {
+  position: fixed;
+  top: 44px;
+  left: 0;
+  z-index: 1800;
+  width: 300px;
+  padding: 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--raised);
+  box-shadow: var(--shadow-pop);
+  animation: pop-in 0.12s ease-out;
+}
+.popover[hidden] { display: none; }
+
+@keyframes pop-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+
+.popover-section { padding: 8px; }
+.popover-section + .popover-section { border-top: 1px solid var(--border); }
+
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+.section-head .shortcut { text-transform: none; letter-spacing: 0; }
+.setting-note { margin: 0 0 8px; color: var(--muted); font-size: 12px; line-height: 1.45; }
+
+.font-search { width: 100%; }
+.font-picker { display: flex; flex-direction: column; gap: 8px; }
+
+.font-list {
+  max-height: 220px;
+  margin-top: 6px;
+  overflow-y: auto;
+}
+.font-list::-webkit-scrollbar { width: 8px; }
+.font-list::-webkit-scrollbar-thumb { border: 2px solid var(--raised); border-radius: 4px; background: var(--scroll-thumb); }
+
+.font-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 6px;
+  font-size: 13.5px;
+  text-align: left;
+}
+.font-option:hover { background: var(--hover); }
+.font-option.selected { background: var(--accent-fill); color: var(--text-strong); }
+.font-option .check { width: 12px; height: 12px; stroke-width: 1.6; color: var(--accent); visibility: hidden; }
+.font-option.selected .check { visibility: visible; }
+.font-list .none { padding: 10px; color: var(--muted); }
+
+.size-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.size-control button {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  color: var(--muted);
+}
+.size-control button:hover { background: var(--hover); color: var(--text); }
+.size-control button svg { width: 12px; height: 12px; stroke-width: 1.4; }
+#font-size-value, .set-range-value { width: 36px; text-align: right; font-variant-numeric: tabular-nums; }
+
+#font-size-range, .set-range {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(var(--accent), var(--accent)) 0 / var(--fill, 50%) 100% no-repeat, var(--track);
+  appearance: none;
+  outline: none;
+}
+#font-size-range::-webkit-slider-thumb, .set-range::-webkit-slider-thumb {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--raised);
+  border-radius: 50%;
+  background: var(--thumb);
+  appearance: none;
+  cursor: pointer;
+}
+
+/* ---- Shell menu ---- */
+
+.menu { width: 310px; }
+.menu .section-head { margin: 6px 8px 6px; }
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 7px;
+  outline: none;
+  text-align: left;
+}
+.menu-item:hover, .menu-item:focus-visible { background: var(--hover); }
+.menu-item:focus-visible { box-shadow: inset 0 0 0 1px var(--border-strong); }
+
+.menu-item .label {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+.menu-item .name, .menu-item .description { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.menu-item .name { font-size: 13px; }
+.menu-item .description { color: var(--muted); font-size: 11px; }
+.menu-item .keys { display: flex; flex: none; gap: 3px; }
+
+/* ---- Context menus ---- */
+
+.context-menu { width: auto; min-width: 230px; padding: 5px; }
+/* Taller than the window: it scrolls, with an arrow at its top and bottom (js/popups.js), no scrollbar. */
+.context-menu.scrolls { overflow-y: auto; scrollbar-width: none; overscroll-behavior: contain; }
+.context-menu.scrolls::-webkit-scrollbar { display: none; }
+.menu-scroll { position: sticky; z-index: 1; display: flex; align-items: center; justify-content: center; height: 22px; margin: 0 -5px; background: var(--raised); color: var(--muted); }
+.menu-scroll.up { top: -5px; margin-top: -5px; border-bottom: 1px solid var(--border); }
+.menu-scroll.down { bottom: -5px; margin-bottom: -5px; border-top: 1px solid var(--border); }
+.menu-scroll:hover { color: var(--text); }
+.menu-scroll.off { color: var(--border-strong); pointer-events: none; }
+.menu-scroll svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+/* The Git window's right-click menu (js/gitwindow.js) opens over the window, which is above ordinary menus. */
+.popover.git-menu { z-index: 3100; }
+.menu-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  /* A whole-pixel height (text alone would make it fractional), so every row's icon lands on the pixel grid. */
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 7px;
+  outline: none;
+  font-size: 13px;
+  text-align: left;
+  white-space: nowrap;
+}
+.menu-row:hover, .menu-row:focus-visible, .menu-row.open { background: var(--hover); }
+.menu-row.danger { color: var(--danger-text); }
+.menu-row:disabled { opacity: 0.4; cursor: default; }
+.menu-row:disabled:hover { background: none; }
+.menu-icon { display: grid; flex: none; place-items: center; width: 16px; height: 16px; color: var(--muted); }
+/* Icons are drawn on a 16px grid (ui.js ICONS): shown at that size with a 1px stroke, they stay sharp. */
+.menu-icon svg { width: 16px; height: 16px; stroke-width: 1; }
+.menu-row[role="menuitemcheckbox"] .menu-icon { color: var(--accent); }
+.menu-label { flex: 1; }
+.menu-hint { display: flex; gap: 3px; margin-left: 18px; color: var(--faint); }
+.menu-hint svg { width: 12px; height: 12px; stroke-width: 1; }
+.menu-current { color: var(--faint); font-size: 11.5px; }
+.menu-separator { height: 1px; margin: 5px 4px; background: var(--border); }
+.ws-swatch { width: 11px; height: 11px; border-radius: 3px; }
+
+/* ---- Tag picker ---- */
+
+.tag-picker { width: 260px; }
+.tag-picker .field { width: 100%; }
+.tp-list { max-height: 260px; margin-top: 6px; overflow-y: auto; }
+.tp-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 7px;
+  text-align: left;
+}
+.tp-row:hover { background: var(--hover); }
+.tp-count { margin-left: auto; color: var(--faint); font-size: 11.5px; }
+.tp-create { color: var(--text); }
+.tp-sep { height: 1px; margin: 5px 4px; background: var(--border); }
+.tp-empty { padding: 8px; color: var(--faint); }
+.tag-picker .swatches { padding: 4px 8px 8px; }
+.tm-row { display: flex; align-items: center; gap: 6px; padding: 2px 4px 2px 8px; border-radius: 6px; }
+.tm-row:hover { background: var(--hover); }
+.tm-row .td-tag-color { margin-left: 0; }
+.tm-row .tp-count { margin-left: 0; }
+.tm-name { flex: 1; min-width: 0; padding: 2px 4px; border: 1px solid transparent; border-radius: 4px; outline: none; background: none; color: var(--text); font: inherit; font-size: 12.5px; }
+.tm-name:hover { border-color: var(--border-strong); }
+.tm-name:focus { border-color: var(--accent); }
+.tm-row .pane-btn svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1; }
+.check {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  color: transparent;
+}
+.check.on { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
+.check svg { width: 10px; height: 10px; stroke-width: 2.2; }
+
+/* ---- Modal dialogs ---- */
+
+.modal-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 2500;
+  display: grid;
+  place-items: center;
+  background: var(--scrim);
+  backdrop-filter: blur(2px);
+  animation: fade-in 0.12s ease-out;
+}
+.modal-layer[hidden] { display: none; }
+@keyframes fade-in { from { opacity: 0; } }
+
+.dialog {
+  width: 460px;
+  max-width: calc(100vw - 32px);
+  padding: 18px 20px;
+  border: 1px solid var(--border-strong);
+  border-radius: 14px;
+  background: var(--raised);
+  box-shadow: var(--shadow-modal);
+  animation: pop-in 0.14s ease-out;
+}
+.dialog.confirm { width: 400px; }
+/* Settings › Phone › Paired phones (js/settings/phone.js). */
+.dialog.phone-devices { width: 520px; }
+.phone-list { max-height: 60vh; margin-bottom: 14px; overflow-y: auto; }
+.dialog h3 { margin: 0; font-size: 16px; }
+.dialog-sub { margin: 4px 0 14px; color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+.dialog-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.dialog-field .field, .dialog-field .seg { text-transform: none; letter-spacing: 0; font-size: 12.5px; font-weight: 400; }
+.field-row { display: flex; gap: 8px; }
+.field-row .field { flex: 1; min-width: 0; }
+.field-row .keep-count { flex: 0 0 76px; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+
+/* What's new after an update (js/whatsnew.js): the newest version's topics, its fixes and older versions folded. */
+.dialog.whats-new { display: flex; flex-direction: column; width: 540px; max-height: calc(100vh - 64px); }
+.wn-head { display: flex; align-items: flex-start; gap: 12px; }
+.wn-head > div { flex: 1; min-width: 0; }
+.wn-head .dialog-sub { margin-bottom: 10px; }
+.wn-body { min-height: 0; margin: 0 -8px; padding: 0 8px; overflow-y: auto; }
+.wn-version { display: flex; align-items: baseline; gap: 8px; margin: 0 0 2px; font-size: 13px; }
+.wn-version span, .wn-older summary span { color: var(--faint); font-size: 12px; }
+/* A row per topic between thin lines: its name in the accent colour, what it is beside it. */
+.wn-rows { margin: 0; padding: 0; border-top: 1px solid var(--border); list-style: none; }
+.wn-row { display: flex; align-items: baseline; gap: 14px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 12.5px; line-height: 1.45; }
+.wn-row b { flex: none; width: 128px; color: var(--accent); font-weight: 600; }
+.wn-row span { flex: 1; min-width: 0; color: var(--muted); }
+.wn-fixes, .wn-older { padding-top: 9px; color: var(--muted); font-size: 12.5px; }
+.wn-fixes summary, .wn-older summary { display: flex; align-items: center; gap: 6px; color: var(--text); font-weight: 600; list-style: none; cursor: pointer; }
+.wn-fixes summary::-webkit-details-marker, .wn-older summary::-webkit-details-marker { display: none; }
+.wn-caret { display: inline-flex; color: var(--muted); transition: transform 0.12s; }
+.wn-caret svg { width: 12px; height: 12px; fill: none; stroke: currentColor; }
+details[open] > summary .wn-caret { transform: rotate(90deg); }
+.wn-fixes .wn-rows, .wn-older .wn-rows { margin-top: 6px; }
+.wn-auto { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); font-size: 12.5px; cursor: pointer; }
+
+.dialog-icon { display: grid; place-items: center; width: 36px; height: 36px; margin-bottom: 12px; border-radius: 10px; background: var(--accent-fill); color: var(--accent); }
+.dialog-icon svg { width: 18px; height: 18px; stroke-width: 1.5; }
+.dialog-note { margin: 14px 0 0; color: var(--faint); font-size: 12px; line-height: 1.5; }
+.dialog-error { margin: 10px 0 0; color: var(--danger-text); font-size: 12.5px; }
+.dialog.recovery, .dialog.unlock { width: 480px; }
+
+/* The recovery code: big, monospace and selectable. */
+.code-box { display: flex; align-items: center; gap: 10px; padding: 12px 12px 12px 16px; border: 1px solid var(--border-strong); border-radius: 10px; background: var(--surface); }
+.recovery-code { flex: 1; color: var(--text-strong); font: 600 15px/1.4 var(--mono); letter-spacing: 0.04em; -webkit-user-select: all; user-select: all; }
+.btn svg { width: 13px; height: 13px; stroke-width: 1.5; }
+.field.mono { font-family: var(--mono); letter-spacing: 0.03em; }
+.btn.danger-outline { border-color: color-mix(in srgb, var(--danger) 55%, transparent); color: var(--danger-text); }
+.btn.danger-outline:hover { background: color-mix(in srgb, var(--danger) 12%, transparent); }
+.btn:disabled { opacity: 0.55; pointer-events: none; }
+.btn-row { display: flex; gap: 8px; }
+
+/* On/off switch. */
+.switch { position: relative; flex: none; width: 34px; height: 20px; border-radius: 10px; background: var(--track); transition: background 0.15s; }
+.switch span { position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3); transition: transform 0.15s var(--ease); }
+.switch[aria-checked="true"] { background: var(--accent); }
+.switch[aria-checked="true"] span { transform: translateX(14px); }

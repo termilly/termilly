@@ -17,6 +17,14 @@ const typesTarget = path.join(desktop, 'types/host.d.ts');
 
 /** The C# classes the page gets, and the name each has there. A class with nested classes becomes nested objects. */
 const SOURCES = [
+  { file: 'GitSnapshots.cs', cls: 'SnapshotReasons', js: 'SNAPSHOT_REASON' },
+  { file: 'GitBackups.cs', cls: 'BackupEvents', js: 'BACKUP_EVENT' },
+  { file: 'GitCleanup.cs', cls: 'PruneReasons', js: 'PRUNE_REASON' },
+  { file: 'GitHubChecks.cs', cls: 'GitHubRunStatus', js: 'GITHUB_RUN_STATUS' },
+  { file: 'GitHubChecks.cs', cls: 'GitHubRunConclusion', js: 'GITHUB_RUN_CONCLUSION' },
+  { file: 'GitHub.cs', cls: 'GitHubUnavailable', js: 'GITHUB_UNAVAILABLE' },
+  { file: 'GitHub.cs', cls: 'GitHubIssueStates', js: 'GITHUB_ISSUE_STATE' },
+  { file: 'GitHub.cs', cls: 'GitHubIssueActions', js: 'GITHUB_ISSUE_ACTION' },
   { file: 'ProfileKinds.cs', cls: 'ProfileSources', js: 'PROFILE_SOURCE' },
   { file: 'ProfileKinds.cs', cls: 'ProfileIcons', js: 'PROFILE_ICON' },
   { file: 'ProfileKinds.cs', cls: 'ProfileIds', js: 'PROFILE_ID_PREFIX' },
@@ -27,6 +35,8 @@ const SOURCES = [
   { file: 'Messaging/Compact.cs', cls: 'CompactKinds', js: 'COMPACT_KIND' },
   { file: 'Messaging/Compact.cs', cls: 'CompactVerbs', js: 'COMPACT_VERB' },
   { file: 'Messaging/Compact.cs', cls: 'CompactLimits', js: 'COMPACT_LIMIT' },
+  { file: 'Settings/SettingRecords.cs', cls: 'CustomThemeLimits', js: 'CUSTOM_THEME' },
+  { file: 'Settings/BackgroundSettings.cs', cls: 'BackgroundValues', js: 'BACKGROUND' },
   { file: 'Changes/ChangeModel.cs', cls: 'ChangeSources', js: 'CHANGE_SOURCE' },
   { file: 'Changes/ChangeModel.cs', cls: 'ChangeKinds', js: 'CHANGE_KIND' },
   { file: '../Shared/HookEvents.cs', cls: 'HookEvents', js: 'HOOK_EVENT' },
@@ -34,6 +44,7 @@ const SOURCES = [
   { file: '../Shared/ClaudeTools.cs', cls: 'CodexTools', js: 'CODEX_TOOL' },
   { file: '../Shared/ClaudeTools.cs', cls: 'ClaudeTools', js: 'CLAUDE_TOOL' },
   { file: 'GitCommands.cs', cls: 'GitActions', js: 'GIT_ACTION' },
+  { file: 'GitStageLines.cs', cls: 'StageLineActions', js: 'STAGE_LINE_ACTION' },
   { file: 'GitCommands.cs', cls: 'DiffSides', js: 'DIFF_SIDE' },
   { file: 'GitSearch.cs', cls: 'GitSearchMatches', js: 'GIT_MATCH' },
   { file: 'Messaging/Connections.cs', cls: 'ForwardStates', js: 'FORWARD_STATE' },
@@ -53,7 +64,7 @@ const SOURCES = [
 ];
 
 /** The files with the records the page gets as they are: AppSettings and every record it holds, and SessionProfile. */
-const TYPE_FILES = ['Settings/AppSettings.cs', 'Settings/SettingGroups.cs', 'Settings/SettingRecords.cs', 'SerialConsole.cs', 'SshConnections.cs', 'SessionProfiles.cs'];
+const TYPE_FILES = ['Settings/AppSettings.cs', 'Settings/SettingGroups.cs', 'Settings/SettingRecords.cs', 'Settings/BackgroundSettings.cs', 'SerialConsole.cs', 'SshConnections.cs', 'SessionProfiles.cs'];
 
 const camel = name => name[0].toLowerCase() + name.slice(1);
 

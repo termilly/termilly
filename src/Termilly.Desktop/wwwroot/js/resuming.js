@@ -2,8 +2,9 @@
 // An agent's session coming back after a restart (snapshot.js types `claude --resume <session>`, or `codex resume
 // <session>`, at the shell's first prompt): until the agent runs (its program is there, or its hooks report in), an overlay covers the terminal with a spinner, what's typed is held (typed into
 // the shell around the command, it spoiled it), and phones don't open it (js/phone.js). If the shell is still at its
-// prompt a while after the command went (a size change or a key took it), the command goes once more. Esc, and only
-// Esc, cancels: the command isn't typed (or typed again), and the terminal is the user's.
+// prompt a while after the command went (a size change or a key took it), the command goes once more. An agent that
+// exits at once (its session is gone) ends it, as does a second try that leaves the shell at its prompt. Esc cancels:
+// the command isn't typed (or typed again), and the terminal is the user's.
 
 import { send } from './host.js';
 import { PAGE } from './protocol.js';
@@ -41,12 +42,26 @@ export function resumeTyped(tab, command) {
   const r = tab.resuming;
   if (!r) return;
   r.command = command;
-  r.timer = window.setTimeout(() => {
+  const check = () => {
     const term = tab.view?.term;
-    if (tab.resuming !== r || r.retried || !term || tab.exited || !atPrompt(term)) return;
+    if (tab.resuming !== r || !term || tab.exited || !atPrompt(term)) return;
+    // Typed twice and still at the prompt (a shell that doesn't mark its commands' ends): the agent didn't start.
+    if (r.retried) return void gaveUp(tab);
     r.retried = true;
     send(PAGE.input, { id: tab.id, data: `${command}\r` });
-  }, RETRY_AFTER_MS);
+    r.timer = window.setTimeout(check, RETRY_AFTER_MS);
+  };
+  r.timer = window.setTimeout(check, RETRY_AFTER_MS);
+}
+
+/**
+ * The agent didn't come back (its session is gone, it failed to start): the terminal is the user's again, with the
+ * agent's own words on why, and the session isn't tried again at the next start.
+ * @param {Tab} tab
+ */
+function gaveUp(tab) {
+  if (tab.start) tab.start.resumeSession = null;
+  done(tab);
 }
 
 /**
@@ -114,6 +129,13 @@ on(EVENTS.terminalOpened, drawOverlay);
 // for a prompt, which the overlay holds back: once its program runs (the host sees it), the session is back when its
 // screen goes quiet, the conversation drawn.
 on(EVENTS.agent, tab => { if (tab.resuming && tab.agent) done(tab, true); });
+// The resume command itself ended before the agent reported in: it exited at once (`claude --resume` of a session
+// that's gone says "No conversation found"). A command that only got spoiled on its way doesn't name the session,
+// and is typed again (resumeTyped).
+on(EVENTS.commandEnding, (/** @type {{ tab: Tab }} */ { tab }) => {
+  const r = tab.resuming;
+  if (r?.command && !tab.agent && tab.running?.command.includes(r.session)) gaveUp(tab);
+});
 on(EVENTS.tab, tab => {
   if (tab.resuming && !settling.has(tab) && runningAgent(tab) && !agentKind(tab.resuming.kind).hookAtStart) settle(tab);
 });

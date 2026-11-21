@@ -22,20 +22,21 @@ internal sealed class CompactFeed : IMessageHandler, IDisposable
     private readonly Func<string, string, string?> _find;
     private readonly Dictionary<string, Follow> _panes = new(StringComparer.Ordinal);
     private readonly Lock _lock = new();
-    private readonly Timer _timer;
+    private readonly IRepeating _reads;
     private int _ticking;
 
     public CompactFeed(PageChannel page)
-        : this(page.Post, FindFile)
+        : this(page.Post, FindFile, work => new TimerRepeating(work))
     {
     }
 
     /// <param name="post">Sends the page its lines.</param>
     /// <param name="find">The file of a session (its id, its agent's kind); null while there's none.</param>
-    internal CompactFeed(Action<ToPage.CompactLines> post, Func<string, string, string?> find)
+    /// <param name="repeat">What reads the files again and again while a view is on (tests tick by hand instead).</param>
+    internal CompactFeed(Action<ToPage.CompactLines> post, Func<string, string, string?> find, Func<Action, IRepeating> repeat)
     {
         (_post, _find) = (post, find);
-        _timer = new Timer(_ => Tick(), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+        _reads = repeat(Tick);
     }
 
     public void Register(MessageRouter router) => router.On<FromPage.CompactWatch>(Watch);
@@ -57,7 +58,14 @@ internal sealed class CompactFeed : IMessageHandler, IDisposable
             {
                 _panes[m.Id] = new Follow(m.Session, m.Agent == AgentKinds.Codex ? AgentKinds.Codex : AgentKinds.Claude);
             }
-            _timer.Change(_panes.Count == 0 ? Timeout.InfiniteTimeSpan : TimeSpan.Zero, _panes.Count == 0 ? Timeout.InfiniteTimeSpan : Interval);
+            if (_panes.Count == 0)
+            {
+                _reads.Stop();
+            }
+            else
+            {
+                _reads.Start(Interval);
+            }
         }
     }
 
@@ -129,7 +137,7 @@ internal sealed class CompactFeed : IMessageHandler, IDisposable
         ? UsageTracker.FindFile(CodexFiles.SessionsDirectory(), session, $"rollout-*-{session}.jsonl")
         : UsageTracker.FindTranscript(UsageTracker.ProjectsDirectory(), session);
 
-    public void Dispose() => _timer.Dispose();
+    public void Dispose() => _reads.Dispose();
 
     /// <summary>One followed session: its file (once found), what was read of it, and whether the view needs it all.</summary>
     private sealed class Follow(string session, string agent)

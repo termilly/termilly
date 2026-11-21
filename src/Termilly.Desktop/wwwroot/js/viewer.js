@@ -13,6 +13,7 @@ import { debounce, SECOND_MS } from './util.js';
 import { sendToAgent } from './together.js';
 import { byId, find, field, targetOf, WORKSPACE_ID } from './dom.js';
 import { continuesOnNextRow } from './buffer.js';
+import { systemClipboard } from './sysclipboard.js';
 
 /** @typedef {import('./commands.js').CommandRun} CommandRun */
 /**
@@ -377,7 +378,7 @@ panel.addEventListener('click', e => {
     render({ keepScroll: action !== ACTION.follow });
   }
   if (action === ACTION.agent) sendToAgent(shown.map(r => r.text).join('\n'), { command: view.run.command, exitCode: view.run.exitCode, title: tabTitle(view.tab) }, targetOf(e).closest('[data-vw]'), view.tab);
-  if (action === ACTION.copy) navigator.clipboard.writeText(shown.map(r => r.text).join('\r\n')).catch(() => {});
+  if (action === ACTION.copy) systemClipboard().writeText(shown.map(r => r.text).join('\r\n')).catch(() => {});
   if (action === ACTION.save) {
     const blob = new Blob([shown.map(r => r.text).join('\r\n')], { type: 'text/plain' });
     const a = document.createElement('a');

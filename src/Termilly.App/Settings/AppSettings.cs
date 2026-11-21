@@ -20,6 +20,8 @@ internal sealed record AppSettings
     public TerminalSettings Terminal { get; init; } = new();
     /// <summary>The app around the terminals.</summary>
     public InterfaceSettings Interface { get; init; } = new();
+    /// <summary>The window's background: see-through, an effect, a picture (Settings › Appearance › Background).</summary>
+    public BackgroundSettings Background { get; init; } = new();
     /// <summary>The shells on offer.</summary>
     public ShellSettings Shells { get; init; } = new();
     /// <summary>Snippets and triggers.</summary>
@@ -57,6 +59,7 @@ internal sealed record AppSettings
         Version = CurrentVersion,
         Terminal = (Terminal ?? new()).Normalize(),
         Interface = (Interface ?? new()).Normalize(),
+        Background = (Background ?? new()).Normalize(),
         Shells = (Shells ?? new()).Normalize(),
         Commands = (Commands ?? new()).Normalize(),
         Notifications = (Notifications ?? new()).Normalize(),
@@ -88,6 +91,7 @@ internal sealed record AppSettings
     {
         [GroupName(nameof(Terminal))] = (s, v) => s with { Terminal = Read<TerminalSettings>(v) },
         [GroupName(nameof(Interface))] = (s, v) => s with { Interface = Read<InterfaceSettings>(v) },
+        [GroupName(nameof(Background))] = (s, v) => s with { Background = Read<BackgroundSettings>(v) },
         [GroupName(nameof(Shells))] = (s, v) => s with { Shells = Read<ShellSettings>(v) },
         [GroupName(nameof(Commands))] = (s, v) => s with { Commands = Read<CommandSettings>(v) },
         [GroupName(nameof(Notifications))] = (s, v) => s with { Notifications = Read<NotificationSettings>(v) },

@@ -2,7 +2,8 @@
 // The question an agent waits on, read off its screen for the compact view's card (js/compact.js): Claude Code's
 // permission prompts, its questions (AskUserQuestion) and plan approval, and Codex's approvals all draw a question
 // and numbered choices, and a choice's number picks it. The card shows the question, what it's about (the command,
-// the plan) and a button per choice that presses that number. Pure: screen lines in, a menu out; a menu in, HTML out.
+// the plan) and a button per choice that presses that number, and Preview shows all the prompt says. Pure: screen
+// lines in, a menu out; a menu in, HTML out.
 
 import { escapeHtml } from './ui.js';
 
@@ -37,11 +38,16 @@ const UNDER_CHOICE = 3;
 
 /**
  * @typedef {{ key: string, label: string, detail: string, picked: boolean }} MenuChoice
- * @typedef {{ title: string, context: string[], choices: MenuChoice[], whole?: string | null, start?: number }} Menu
+ * @typedef {{ title: string, context: string[], choices: MenuChoice[], whole?: string | null, start?: number, prompt?: string[], cut?: boolean, shortened?: boolean, asked?: number }} Menu
  *   whole: everything the prompt says, from where it starts (not cut for showing), which tells it from another; null
- *   when its start is off the screen (the menu can't be told apart, so the card offers only the terminal); start:
- *   the row the prompt starts on, -1 when that's off the screen
+ *   when its start is off the lines read (keyedByWhatShows gives it one); start: the row of the screen the prompt
+ *   starts on, -1 when that's off the screen; prompt: its lines above the choices as drawn, uncut, for its preview;
+ *   cut: its start is lost, so prompt has only what shows; shortened: the agent drew it with lines left out; asked:
+ *   which of the agent's questions it is, when known
  */
+
+/** What starts a prompt above its choices: Claude Code's rule, Codex's gap of blank lines, or either (a rule first). */
+export const PROMPT_START = Object.freeze({ either: 'either', rule: 'rule', gap: 'gap' });
 
 /**
  * A line as text, without the box it may be drawn in.
@@ -52,34 +58,97 @@ const clean = line => line.replace(BOX, '').trimEnd();
 /**
  * The menu at the bottom of a screen, or null when there's none: the last run of choices numbered from 1 with the
  * agent's pointer on one of them, what they say (a choice's own wrapped words and description under it), and the
- * question above them.
- * @param {string[]} lines the screen's lines, top to bottom
+ * question above them. The lines may start above the screen (the terminal's scrollback), so a prompt taller than
+ * the screen is read whole; its choices must reach the screen (the first ones may have scrolled above it). Up there,
+ * the agent's own kind of start is looked for (an earlier rule in the conversation isn't a Codex prompt's start).
+ * @param {string[]} lines the lines, top to bottom: the screen's, or some above it and then the screen's
+ * @param {{ screenTop?: number, startsAt?: string }} [where] screenTop: the first line that is on the screen;
+ *   startsAt: a PROMPT_START
  * @returns {Menu | null}
  */
-export function readMenu(lines) {
+export function readMenu(lines, { screenTop = 0, startsAt = PROMPT_START.either } = {}) {
   const rows = lines.map(clean);
   const first = lastFirstChoice(rows);
   if (first < 0) return null;
-  const choices = choicesFrom(rows, first);
+  const { choices, end } = choicesFrom(rows, first);
+  // A menu left in the scrollback isn't the one on the screen.
+  if (end < screenTop) return null;
   // A menu the agent waits on has its pointer on one choice; a numbered list in its words has none.
   if (choices.length < 2 || !choices.some(c => c.picked)) return null;
-  const { title, context } = questionAbove(rows, first);
-  const start = promptStart(rows, first);
+  // A Codex approval is known by its title; without it (cut off, or one this doesn't know) its start isn't known.
+  const codex = startsAt === PROMPT_START.gap ? codexHeader(rows, first) : null;
+  const { title, context } = codex ? { title: codex.title, context: bodyAbove(rows, codex.end, first) } : questionAbove(rows, first);
+  const start = codex ? codex.start : promptStart(rows, first, startsAt);
   const whole = start < 0 ? null : JSON.stringify([rows.slice(start, first).map(r => r.trim()), choices.map(c => [c.key, c.label, c.detail])]);
-  return { title, context, choices, whole, start };
+  const prompt = dedent(rows.slice(Math.max(start, 0), first));
+  return { title, context, choices, whole, start: start < screenTop ? -1 : start - screenTop, prompt, shortened: prompt.some(line => SHORTENED.test(line.trim())) };
+}
+
+/** The line Codex draws for the rows it left out of a prompt too tall for its terminal ("[… 12 lines] ctrl+a view all"). */
+const SHORTENED = /^\[… \d+ lines?\]/;
+
+/**
+ * Lines without the blank ones at either end, and without the indent they all share.
+ * @param {string[]} lines
+ */
+function dedent(lines) {
+  const from = lines.findIndex(line => line.trim());
+  if (from < 0) return [];
+  const kept = lines.slice(from, lines.findLastIndex(line => line.trim()) + 1);
+  const indent = Math.min(...kept.filter(line => line.trim()).map(line => line.length - line.trimStart().length));
+  return kept.map(line => line.slice(indent));
+}
+
+/**
+ * A menu whose start is off the lines read, keyed by what shows of it and by what the agent said it asks about (its
+ * hook's tool and target), so a prompt taller than the screen still gets its buttons; which question it is (asked)
+ * keeps a card left over from an earlier one off the next one that looks the same.
+ * @param {Menu} menu
+ * @param {Array<string | null | undefined>} about
+ * @returns {Menu}
+ */
+export function keyedByWhatShows(menu, about) {
+  if (menu.whole !== null) return menu;
+  return { ...menu, cut: true, whole: JSON.stringify([about, menu.prompt ?? menu.context, menu.choices.map(c => [c.key, c.label, c.detail])]) };
+}
+
+/** The preview's first line for a prompt whose start wasn't found (further up, or no longer in the terminal). */
+const CUT_NOTE = '(The start of this prompt could not be found.)';
+/** The preview's first line for a prompt the agent drew with lines left out. */
+const SHORTENED_NOTE = '(The agent left lines out of this prompt. Its terminal can show them all.)';
+
+/**
+ * All the menu says, for its preview: the prompt as drawn (the command, the diff), else its question and what it's
+ * about (a plan, from its file); first, what it lacks.
+ * @param {Menu} menu
+ */
+export function previewLines(menu) {
+  const lines = menu.prompt?.length ? menu.prompt : [menu.title, ...(menu.context.length ? ['', ...menu.context] : [])];
+  const notes = [...(menu.cut ? [CUT_NOTE] : []), ...(menu.shortened ? [SHORTENED_NOTE] : [])];
+  return notes.length ? [...notes, '', ...lines] : lines;
 }
 
 /**
  * Where the prompt above a menu starts: the line after its rule (Claude Code draws one; blank lines inside the
- * prompt, in a command, don't end it), or else after its gap of blank lines (Codex draws no rule); -1 when neither
- * is on the screen.
+ * prompt, in a command, don't end it), or else after its gap of blank lines (Codex draws no rule), or only the kind
+ * asked for (a Codex approval's is its title, codexHeader); -1 when there's none in the lines.
+ * @param {string[]} rows
+ * @param {number} first
+ * @param {string} startsAt a PROMPT_START
+ */
+function promptStart(rows, first, startsAt) {
+  for (let i = first - 1; i >= 0 && startsAt !== PROMPT_START.gap; i--) {
+    if (RULE.test(rows[i].trim())) return i + 1;
+  }
+  return startsAt === PROMPT_START.either ? nearestGap(rows, first) : -1;
+}
+
+/**
+ * The line after the nearest gap of blank lines above the choices; -1 for none.
  * @param {string[]} rows
  * @param {number} first
  */
-function promptStart(rows, first) {
-  for (let i = first - 1; i >= 0; i--) {
-    if (RULE.test(rows[i].trim())) return i + 1;
-  }
+function nearestGap(rows, first) {
   let blanks = 0;
   for (let i = first - 1; i >= 0; i--) {
     blanks = rows[i].trim() ? 0 : blanks + 1;
@@ -87,6 +156,53 @@ function promptStart(rows, first) {
   }
   return -1;
 }
+
+/**
+ * The titles Codex (0.167: approval_overlay.rs, mcp_tool_call.rs) gives its approvals, word for word once a wrapped
+ * one's rows are joined: running a command, typing into a terminal, permissions, edits, network access, an MCP tool,
+ * an MCP server asking.
+ */
+const CODEX_TITLE = new RegExp('^(?:Would you like to (?:run the following command|make the following edits|grant these permissions'
+  + '|send input to the existing terminal|send input to terminal \\S+)\\?|Do you want to approve network access to ".+"\\?'
+  + '|Allow the .+ MCP server to run tool ".+"\\?|.+ needs your approval\\.)$');
+
+/** A line that starts indented. */
+const INDENTED = /^\s/;
+
+/**
+ * A Codex approval's title above its choices: where it starts, the line after it, and what it says; null when it
+ * isn't there. Codex draws the title (wrapped over rows when long) and a blank line, then what it's about (a command
+ * may have blank lines of its own). It indents all of an approval and starts its conversation at the margin ("• Ran",
+ * "› a prompt"), where the search stops. Two titles there can't be told apart: none is taken.
+ * @param {string[]} rows
+ * @param {number} first
+ * @returns {{ start: number, end: number, title: string } | null}
+ */
+function codexHeader(rows, first) {
+  /** @type {Array<{ start: number, end: number, title: string }>} */
+  const found = [];
+  let bottom = first;
+  for (let i = first - 1; i >= -1; i--) {
+    const row = i < 0 ? '' : rows[i];
+    const margin = !!row.trim() && !INDENTED.test(row);
+    if (row.trim() && !margin) continue;
+    // A blank line, the margin or the top: the paragraph below it is whole.
+    const lines = rows.slice(i + 1, bottom).map(line => line.trim());
+    const title = lines.join(' ');
+    if (lines.length && CODEX_TITLE.test(title)) found.push({ start: i + 1, end: bottom, title });
+    if (margin) break;
+    bottom = i;
+  }
+  return found.length === 1 ? found[0] : null;
+}
+
+/**
+ * What a Codex approval is about, under its title: its lines with words in them, the last ones the card has room for.
+ * @param {string[]} rows
+ * @param {number} from
+ * @param {number} first
+ */
+const bodyAbove = (rows, from, first) => rows.slice(from, first).map(row => row.trim()).filter(text => text && !DASHES.test(text)).slice(-MAX_CONTEXT);
 
 /**
  * Where the last "1." that starts a menu is.
@@ -105,11 +221,12 @@ function lastFirstChoice(rows) {
  * draws "Chat about this" under a rule); the menu ends at a hint, or at anything that isn't a choice after them.
  * @param {string[]} rows
  * @param {number} first
- * @returns {MenuChoice[]}
+ * @returns {{ choices: MenuChoice[], end: number }} end: the last line they take
  */
 function choicesFrom(rows, first) {
   /** @type {MenuChoice[]} */
   const choices = [];
+  let end = first;
   for (let i = first; i < rows.length; i++) {
     const row = rows[i];
     const text = row.trim();
@@ -117,15 +234,17 @@ function choicesFrom(rows, first) {
     const last = choices[choices.length - 1];
     if (found && (!last || Number(found[1]) > Number(last.key))) {
       choices.push({ key: found[1], label: found[2], detail: '', picked: POINTER.test(row) });
+      end = i;
     } else if (!text || RULE.test(text)) {
       if (!nextIsChoice(rows, i + 1, last)) break;
     } else if (HINT.test(text) || !last || row.length - row.trimStart().length < UNDER_CHOICE) {
       break;
     } else {
       last.detail = last.detail ? `${last.detail} ${text}` : text;
+      end = i;
     }
   }
-  return choices;
+  return { choices, end };
 }
 
 /**
@@ -152,13 +271,28 @@ function nextIsChoice(rows, from, last) {
  * @param {number} first
  */
 function questionAbove(rows, first) {
+  const near = paragraphsAbove(rows, first);
+  // Nothing between the choices and the prompt's start (a prompt drawn in a way this doesn't know): the nearest
+  // paragraph above that start, so a card never shows choices with nothing to say what they answer.
+  const all = near.all.length ? near.all : paragraphsAbove(rows, skipBlank(rows, near.stop)).all.slice(-1);
+  const question = all.find(p => p[p.length - 1].endsWith('?')) ?? all[all.length - 1] ?? [];
+  return { title: question.join(' '), context: all.filter(p => p !== question).flat().slice(-MAX_CONTEXT) };
+}
+
+/**
+ * The paragraphs above a row, up to the prompt's start: the rule (Claude Code) or gap of blank lines (Codex) that
+ * starts it, where what's above is the conversation; and the row it stopped at.
+ * @param {string[]} rows
+ * @param {number} first
+ */
+function paragraphsAbove(rows, first) {
   /** @type {string[][]} */
   const paragraphs = [[]];
   let blanks = 0;
   let count = 0;
-  for (let i = first - 1; i >= 0 && count < MAX_CONTEXT + 1; i--) {
+  let i = first - 1;
+  for (; i >= 0 && count < MAX_CONTEXT + 1; i--) {
     const row = rows[i].trim();
-    // The prompt starts below a rule (Claude Code) or a gap of blank lines (Codex): what's above is the conversation.
     blanks = row ? 0 : blanks + 1;
     if (RULE.test(row) || blanks === GAP) break;
     // A blank line or a dashed rule (around a command) ends a paragraph.
@@ -169,9 +303,18 @@ function questionAbove(rows, first) {
       count++;
     }
   }
-  const all = paragraphs.filter(p => p.length);
-  const question = all.find(p => p[p.length - 1].endsWith('?')) ?? all[all.length - 1] ?? [];
-  return { title: question.join(' '), context: all.filter(p => p !== question).flat().slice(-MAX_CONTEXT) };
+  return { all: paragraphs.filter(p => p.length), stop: Math.max(0, i) };
+}
+
+/**
+ * The row just below the first line above `from` with words in it (blank lines and rules skipped), for reading on.
+ * @param {string[]} rows
+ * @param {number} from
+ */
+function skipBlank(rows, from) {
+  let i = from;
+  while (i > 0 && (!rows[i - 1].trim() || RULE.test(rows[i - 1].trim()))) i--;
+  return i;
 }
 
 /**
@@ -190,15 +333,22 @@ export function questionMenu(question) {
 
 /**
  * The card for a question: the question, what it's about, a button per choice that carries its key and words (to
- * check them again before pressing it), and the terminal for what the card can't show.
+ * check them again before pressing it), Preview for all the prompt says, and the terminal for what the card can't show.
  * @param {Menu | null} menu
  * @param {string} name the agent's short name, escaped
- * @param {string} openClass the class of the button that shows the terminal
+ * @param {{ open: string, preview: string }} classes the classes of the buttons that show the terminal and the preview
  */
-export function cardHtml(menu, name, openClass) {
-  if (menu) return menuCardHtml(menu, openClass);
-  return `<div class="cv-card"><div class="cv-question">${name} needs you</div><div class="cv-choices"><button class="${openClass}">Open terminal</button></div></div>`;
+export function cardHtml(menu, name, classes) {
+  if (menu) return menuCardHtml(menu, name, classes);
+  return `<div class="cv-card"><div class="cv-question">${name} needs you</div><div class="cv-choices"><button class="${classes.open}">Open terminal</button></div></div>`;
 }
+
+/**
+ * A choice's button: its number and words, and what it says under them.
+ * @param {MenuChoice} choice
+ */
+export const choiceHtml = choice => `<button class="cv-choice${choice.picked ? ' picked' : ''}" data-choice="${choice.key}" title="${escapeHtml(choice.detail || choice.label)}">`
+  + `<kbd>${choice.key}</kbd>${escapeHtml(choice.label)}${choice.detail ? `<small>${escapeHtml(choice.detail)}</small>` : ''}</button>`;
 
 /**
  * What tells one menu from another: all its prompt says and its choices (not which one the pointer is on, which the
@@ -208,7 +358,9 @@ export function cardHtml(menu, name, openClass) {
  */
 export function menuKey(menu) {
   if (menu.whole === null) return '';
-  const text = menu.whole ?? JSON.stringify([menu.title, menu.context, menu.choices.map(c => [c.key, c.label, c.detail])]);
+  const said = menu.whole ?? JSON.stringify([menu.title, menu.context, menu.choices.map(c => [c.key, c.label, c.detail])]);
+  // Which question it is, where that's known: the next one may say the same, and a card left over mustn't answer it.
+  const text = menu.asked === undefined ? said : `${menu.asked}#${said}`;
   let hash = HASH_SEED;
   for (let i = 0; i < text.length; i++) hash = (Math.imul(hash, HASH_PRIME) ^ text.charCodeAt(i)) >>> 0;
   return `${hash.toString(HASH_BASE)}:${text.length}`;
@@ -216,15 +368,18 @@ export function menuKey(menu) {
 
 /**
  * @param {Menu} menu
- * @param {string} openClass
+ * @param {string} name the agent's short name, escaped
+ * @param {{ open: string, preview: string }} classes
  */
-function menuCardHtml(menu, openClass) {
-  const open = `<button class="${openClass}">Open terminal</button>`;
+function menuCardHtml(menu, name, classes) {
   // A plan's blank lines keep its paragraphs apart.
   const context = menu.context.map(line => (line ? `<div>${escapeHtml(line)}</div>` : '<br>')).join('');
-  // A menu that can't be told from another (its start is off a short screen) gets no buttons: the terminal answers it.
-  const choices = menuKey(menu) ? menu.choices.map(c => `<button class="cv-choice${c.picked ? ' picked' : ''}" data-choice="${c.key}" title="${escapeHtml(c.detail || c.label)}">`
-    + `<kbd>${c.key}</kbd>${escapeHtml(c.label)}${c.detail ? `<small>${escapeHtml(c.detail)}</small>` : ''}</button>`).join('') : '';
-  return `<div class="cv-card" data-menu="${menuKey(menu)}"><div class="cv-question">${escapeHtml(menu.title)}</div>`
-    + `${context ? `<div class="cv-context">${context}</div>` : ''}<div class="cv-choices">${choices}${open}</div></div>`;
+  // A menu that can't be told from another gets no buttons, nor a preview (it opens only on a card it can check):
+  // the terminal answers it.
+  const key = menuKey(menu);
+  const choices = key ? menu.choices.map(choiceHtml).join('') : '';
+  const preview = key ? `<button class="${classes.preview}" title="All the prompt says">Preview</button>` : '';
+  const tools = `${preview}<button class="${classes.open}">Open terminal</button>`;
+  return `<div class="cv-card" data-menu="${key}"><div class="cv-question">${menu.title ? escapeHtml(menu.title) : `${name} asks`}</div>`
+    + `${context ? `<div class="cv-context">${context}</div>` : ''}<div class="cv-choices">${choices}${tools}</div></div>`;
 }

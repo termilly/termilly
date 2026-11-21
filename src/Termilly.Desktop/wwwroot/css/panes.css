@@ -1,0 +1,267 @@
+/* Workspace layers, the split layout and a terminal's pane and header. */
+
+/* ---- Workspace layers and split layout ---- */
+
+#workspace {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* Every workspace stays laid out (so hidden terminals keep their size); only the active one shows. */
+.ws-layer {
+  position: absolute;
+  inset: calc(var(--notepad-dock-top, 0px) + var(--todo-dock-top, 0px)) calc(var(--files-dock, 0px) + var(--notepad-dock, 0px) + var(--todo-dock, 0px) + var(--clips-dock, 0px)) calc(var(--notepad-dock-bottom, 0px) + var(--todo-dock-bottom, 0px)) calc(var(--notepad-dock-left, 0px) + var(--todo-dock-left, 0px));
+  display: flex;
+  visibility: hidden;
+}
+.ws-layer.active { visibility: visible; animation: layer-in 0.16s var(--ease); }
+@keyframes layer-in { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+
+.split, .cell {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.split.row { flex-direction: row; }
+.split.column { flex-direction: column; }
+
+.divider {
+  position: relative;
+  flex: none;
+}
+.split.row > .divider { width: var(--gap); cursor: col-resize; }
+.split.column > .divider { height: var(--gap); cursor: row-resize; }
+.divider::after {
+  content: "";
+  position: absolute;
+  border-radius: 2px;
+  background: var(--accent);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.split.row > .divider::after { top: 0; bottom: 0; left: 2px; width: 2px; }
+.split.column > .divider::after { left: 0; right: 0; top: 2px; height: 2px; }
+.divider:hover::after, .divider.dragging::after { opacity: 1; }
+
+/* ---- Pane ---- */
+
+.pane {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  transition: border-color 0.15s, box-shadow 0.15s, opacity 0.15s;
+}
+
+.pane.focused {
+  border-color: var(--border-strong);
+  box-shadow: 0 0 0 1px var(--accent-soft);
+}
+
+/* An agent waiting for the user: an amber ring that breathes, so a waiting pane stands out in a busy layout. */
+.pane[data-activity="needs"] {
+  border-color: var(--attention);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--attention) 55%, transparent);
+  animation: pane-needs 2s ease-in-out infinite;
+}
+@keyframes pane-needs {
+  50% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--attention) 30%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pane[data-activity="needs"] { animation: none; }
+}
+
+/* Arrived from a notification click: one accent flash over the pane, so the eye finds it. Above the terminal,
+   out of the mouse's way, and its own layer so it doesn't fight the needs-you ring's animation. */
+.pane > .pane-arrived {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+  border-radius: inherit;
+  opacity: 0;
+  background: color-mix(in srgb, var(--accent) 32%, transparent);
+  box-shadow: inset 0 0 0 3px var(--accent), inset 0 0 32px color-mix(in srgb, var(--accent) 70%, transparent);
+  animation: pane-arrived 0.22s ease-out forwards;
+}
+@keyframes pane-arrived {
+  0% { opacity: 0; }
+  15% { opacity: 1; }
+  100% { opacity: 0; }
+}
+/* A gentle fade instead of a flash. */
+@media (prefers-reduced-motion: reduce) {
+  .pane > .pane-arrived { animation: pane-arrived-calm 0.8s ease-out forwards; }
+  @keyframes pane-arrived-calm { 0% { opacity: 0; } 40% { opacity: 0.45; } 100% { opacity: 0; } }
+}
+
+/* An app reported an error or a pause (OSC 9;4), or an agent stopped with an error: the whole pane says so. */
+.pane[data-activity="error"] { border-color: var(--danger); box-shadow: 0 0 0 1px color-mix(in srgb, var(--danger) 45%, transparent); }
+.pane[data-activity="paused"] { border-color: var(--attention); box-shadow: 0 0 0 1px color-mix(in srgb, var(--attention) 40%, transparent); }
+
+.pane-header {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 6px 0 8px;
+  background: var(--header);
+  border-bottom: 1px solid var(--border);
+  cursor: grab;
+}
+
+.pane-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+  transition: color 0.15s;
+}
+.pane.focused .pane-title { color: var(--text); }
+.badge-slot { display: contents; }
+
+.pane-status {
+  overflow: hidden;
+  max-width: 220px;
+  padding: 0 7px;
+  border-radius: 8px;
+  background: var(--accent-fill);
+  color: var(--text);
+  font-size: 11px;
+  line-height: 17px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pane-status[hidden] { display: none; }
+
+.pane-name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.pane-tags { display: flex; gap: 4px; min-width: 0; overflow: hidden; }
+
+/* The 1px under the buttons keeps them on whole pixels: the header has 29px inside its border, 22px buttons centred in
+   that would sit half a pixel off and blur their icons. */
+.pane-actions { display: flex; flex: none; gap: 2px; margin-left: auto; padding-bottom: 1px; }
+.pane-btn {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  /* No default button padding: it leaves 10px inside, and a wider icon then sits off to the right. */
+  padding: 0;
+  border-radius: 6px;
+  color: var(--muted);
+  opacity: 0.6;
+  transition: background 0.12s, color 0.12s, opacity 0.12s;
+}
+.pane:hover .pane-btn, .pane.focused .pane-btn { opacity: 1; }
+.pane-btn:hover, .pane-btn.open { background: var(--hover); color: var(--text); opacity: 1; }
+.pane-btn svg { width: 10px; height: 10px; stroke-width: 1.4; }
+/* The terminal header's icons (js/header.js) are drawn for 16px at a 1px line, all in the same 10px-tall box. */
+.pane-btn:is(.menu-btn, .note-btn, .tag-btn, .prompts-btn, .aside-btn, .close-btn) svg { width: 16px; height: 16px; stroke-width: 1; }
+/* Only while the terminal has a note. */
+.pane-btn:is(.note-btn, .td-note-btn, .prompts-btn, .view-btn)[hidden] { display: none; }
+/* The agent view button (compact.js): the view's 16px icon and an 8px caret, both drawn for those sizes. */
+.pane-btn.view-btn { grid-auto-flow: column; gap: 1px; width: auto; padding: 0 3px; }
+.pane-btn.view-btn > svg { width: 16px; height: 16px; stroke-width: 1; }
+.view-caret { display: grid; }
+.view-caret svg { width: 8px; height: 8px; stroke-width: 1; }
+
+/* My prompts (js/myprompts.js): by day, newest first. */
+.prompts-pop { width: 440px; padding: 0; }
+.prompts-pop .inbox-head { justify-content: flex-start; gap: 8px; }
+.prompts-pop .inbox-head [data-clear] { margin-left: auto; }
+.prompts-pop .btn[hidden], .prompts-cleared[hidden] { display: none; }
+.prompts-cleared { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.prompts-count { color: var(--faint); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.prompts-filter { padding: 0 10px 8px; }
+.prompts-filter input { width: 100%; height: 26px; padding: 0 8px; border: 1px solid var(--border); border-radius: 6px; outline: none; background: var(--surface); color: var(--text); font: inherit; font-size: 12.5px; }
+.prompts-filter input:focus { border-color: var(--accent); }
+.prompts-list { max-height: min(480px, 65vh); }
+.prompts-day { position: sticky; top: 0; z-index: 1; padding: 8px 8px 4px; background: var(--raised); color: var(--faint); font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+.prompt-row { display: grid; grid-template-columns: auto minmax(0, 1fr) 20px; align-items: start; gap: 8px; padding: 6px 6px 6px 8px; border-radius: 8px; cursor: pointer; outline: none; }
+.prompt-row:hover, .prompt-row:focus { background: var(--hover); }
+.prompt-row.gone { cursor: pointer; }
+.prompt-row.gone .prompt-text { color: var(--faint); }
+.prompt-time { min-width: 34px; padding-top: 1px; color: var(--faint); white-space: nowrap; font-size: 11px; font-variant-numeric: tabular-nums; }
+.prompt-text { display: -webkit-box; overflow: hidden; color: var(--text); font-size: 12.5px; line-height: 1.4; white-space: pre-wrap; word-break: break-word; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+.prompt-copy { display: grid; place-items: center; width: 20px; height: 20px; padding: 0; border-radius: 5px; color: var(--muted); opacity: 0; }
+.prompt-copy svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1; }
+.prompt-row:hover .prompt-copy { opacity: 1; }
+.prompt-copy:hover { background: var(--hover); color: var(--text); }
+
+.rename-input {
+  height: 22px;
+  min-width: 120px;
+  padding: 0 6px;
+  border: 1px solid var(--accent);
+  border-radius: 5px;
+  outline: none;
+  background: var(--surface);
+  color: var(--text-strong);
+  font: inherit;
+  box-shadow: 0 0 0 3px var(--accent-fill);
+  -webkit-user-select: text; user-select: text;
+}
+
+.pane-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  background: var(--term-surface, transparent); /* a theme plugin's background reaches the edges */
+}
+
+/* A phone shows this terminal, at the phone's size (js/phone.js): the terminal drawn in a phone in the middle of the
+   pane (its island, its home bar), with the phone's name and address under it. */
+.pane-body.phone-sized { display: flex; flex-direction: column; align-items: center; justify-content: safe center; gap: 12px; padding: 16px; overflow: auto; }
+.pane-body.phone-sized > .xterm { flex: none; overflow: hidden; padding: 34px 8px 24px; border: 9px solid #050506; border-radius: 44px; box-shadow: 0 0 0 2px #55555d, 0 0 0 3px #1c1c20, 0 16px 40px rgba(0, 0, 0, 0.45); }
+.pane-body.phone-sized > .xterm::before { content: ''; position: absolute; top: 8px; left: 50%; z-index: 10; width: 84px; height: 22px; border-radius: 11px; background: #000; transform: translateX(-50%); pointer-events: none; }
+.pane-body.phone-sized > .xterm::after { content: ''; position: absolute; bottom: 8px; left: 50%; z-index: 10; width: 30%; height: 4px; border-radius: 2px; background: var(--muted); opacity: 0.7; transform: translateX(-50%); pointer-events: none; }
+/* Another Termilly computer shows it: no phone around it, only what it is and "Open on" under it. */
+.pane-body.phone-sized.by-computer { padding: 0; }
+.pane-body.phone-sized.by-computer > .xterm { padding: 0; border: 0; border-radius: 0; box-shadow: none; }
+.pane-body:not(.phone-sized) > .size-who, .pane-body.phone-sized.by-computer > .size-who { position: absolute; right: 10px; bottom: 10px; z-index: 5; opacity: 0.92; }
+.pane-body.phone-sized.by-computer > .xterm::before, .pane-body.phone-sized.by-computer > .xterm::after { content: none; }
+.size-who { flex: none; display: flex; align-items: center; gap: 8px; padding: 3px 4px 3px 10px; border-radius: 999px; background: var(--accent); color: #fff; font-size: 12px; font-weight: 600; }
+.size-who:not(:has(button)) { padding-right: 10px; }
+.size-who button { height: 20px; padding: 0 8px; border-radius: 10px; background: rgba(0, 0, 0, 0.25); color: #fff; font-size: 11.5px; font-weight: 600; }
+.size-who button:hover { background: rgba(0, 0, 0, 0.4); }
+.pc-paused, .pc-lost { position: absolute; inset: 0; z-index: 20; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: color-mix(in srgb, var(--bg) 70%, transparent); color: var(--text); font-size: 13px; text-align: center; }
+.pc-paused p, .pc-lost p { margin: 0; }
+
+/* The padding sits on .xterm, not .pane-body: the fit addon measures the parent's full height and
+   subtracts only .xterm's own padding, so padding on the parent makes the bottom row overflow. */
+.pane-body .xterm { padding: 8px 4px 8px 14px; }
+
+/* Greyscale anti-aliasing for terminal text (Settings › Appearance › Text smoothing). Chromium smooths text
+   with ClearType unless it sits on its own compositing layer; ClearType's coloured fringes make coloured text
+   (prompts, ls --color, ssh sessions) look blurry on the dark background. */
+:root[data-smoothing="grayscale"] .xterm .xterm-rows { will-change: transform; }
+
+/* xterm paints its viewport with the theme background; keep it flush with the pane. */
+.pane-body .xterm, .pane-body .xterm-viewport { background: var(--term-surface, var(--surface)) !important; }
+
+/* xterm draws its own (themed) scrollbar in the space the fit addon reserves; hide the viewport's
+   native one, which otherwise sits on top of it over the terminal's right edge. */
+.pane-body .xterm-viewport::-webkit-scrollbar { display: none; }
+
+/* The renderer paints the selection as an opaque layer above the rows; keep the text on top so it stays readable. */
+.pane-body .xterm .xterm-rows { position: relative; z-index: 2; }
+/* No scrollbar while there's nothing to scroll (js/terminals.js marks the body .scrollable). */
+.pane-body:not(.scrollable) .xterm .scrollbar.vertical { display: none; }

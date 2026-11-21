@@ -23,13 +23,14 @@ export function pickFolder(initial, window) {
 
 /**
  * Shows a modal; `build` fills it and returns { submit }, what Enter and the OK button ([data-ok]) do, and `ok` when
- * the button does something Enter mustn't. The Cancel button ([data-cancel]) closes it, as Escape does. Resolves with
+ * the button does something Enter mustn't, and `key` for the dialog's own keys (true when it took one; other keys
+ * stay in the dialog either way). The Cancel button ([data-cancel]) closes it, as Escape does. Resolves with
  * what close() was given (null when cancelled). A modal that isn't `dismissable` ignores Escape and backdrop clicks
  * (it must be answered).
  * @template T
  * @param {string} className
  * @param {string} html
- * @param {(dialog: HTMLElement, close: (result: T | null) => void) => { submit: () => unknown, ok?: () => unknown }} build
+ * @param {(dialog: HTMLElement, close: (result: T | null) => void) => { submit: () => unknown, ok?: () => unknown, key?: (e: KeyboardEvent) => boolean }} build
  * @param {{ dismissable?: boolean }} [options]
  * @returns {Promise<T | null>}
  */
@@ -51,7 +52,7 @@ export function modal(className, html, build, { dismissable = true } = {}) {
       resolve(result);
       emit(EVENTS.dialogClosed);
     };
-    const { submit, ok = submit } = build(dialog, close);
+    const { submit, ok = submit, key } = build(dialog, close);
     dialog.querySelector('[data-cancel]')?.addEventListener('click', () => close(null));
     dialog.querySelector('[data-ok]')?.addEventListener('click', () => ok());
     // Selects open the app's own menu (popups.js), which handles its keys while it's open.
@@ -69,6 +70,7 @@ export function modal(className, html, build, { dismissable = true } = {}) {
         e.stopPropagation();
         submit();
       } else {
+        if (key?.(e)) e.preventDefault();
         e.stopPropagation(); // typing in a dialog must not trigger app shortcuts
       }
     };
@@ -182,6 +184,8 @@ export const CONFIRM_DIALOG = 'confirm';
 export const FORM_DIALOG = 'new-workspace';
 /** The confirm button's label when the question names none. */
 const OK_LABEL = 'OK';
+/** A button that removes what's ticked, before it says how much (Clear history, Manage themes). */
+export const REMOVE_LABEL = 'Remove';
 /** The selects a dialog shows as the app's own dropdowns. */
 const SELECT_FIELD = 'select.field';
 /** Where a dialog says what's wrong with what was entered. */

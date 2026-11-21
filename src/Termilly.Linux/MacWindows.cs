@@ -105,6 +105,7 @@ internal static class MacWindows
                 Zoom(view, _zoom);
                 MacWindowDrag.TakeFirstClickOnTitleBar(() => _zoom);
                 Round(window, true);
+                MacBackdrop.Apply(window, view);
                 MacPlacement.Restore(window);
                 var preferences = Send(Send(view, "configuration"), "preferences");
                 // The page reopens its windows as it starts (where they were before a restart): without a click first.
@@ -162,6 +163,9 @@ internal static class MacWindows
         Send(window, "setHasShadow:", true);
         Send(window, "invalidateShadow");
     }
+
+    /// <summary>Every window open and its web view: the main one, then the page's own.</summary>
+    public static IEnumerable<(IntPtr Window, IntPtr View)> All => [(Main, _mainView), .. Open.Select(o => (o.Window, o.View))];
 
     /// <summary>The whole app's size changed (1 is as designed): the page's windows at it, now and later.</summary>
     public static void SetZoom(double factor)
@@ -248,14 +252,15 @@ internal static class MacWindows
             var cls = Class(BorderlessWindowClass);
             var window = InitWindow(Send(cls == IntPtr.Zero ? Class("NSWindow") : cls, Cocoa.Alloc), frame, DetachedStyle);
             var content = Send(window, Cocoa.ContentView);
-            var view = InitWithFrame(Send(Class(WebViewClass), Cocoa.Alloc), SendRect(content, "bounds"), configuration);
-            Send(view, "setAutoresizingMask:", (nint)FillParent);
+            var view = InitWithFrame(Send(Class(WebViewClass), Cocoa.Alloc), SendRect(content, Cocoa.Bounds), configuration);
+            Send(view, Cocoa.SetAutoresizingMask, (nint)FillParent);
             Send(content, "addSubview:", view);
             Send(view, SetUIDelegate, self);
             Send(view, "setNavigationDelegate:", Send(webView, "navigationDelegate"));
             Zoom(view, _zoom);
             Round(window, true);
             Open.Add(new Opened(window, view));
+            MacBackdrop.Apply(window, view);
             Send(window, Cocoa.MakeKeyAndOrderFront, IntPtr.Zero);
             return view;
         }
@@ -316,6 +321,7 @@ internal static class MacWindows
         {
             Open.Remove(opened);
             Restore.Remove(opened.Window);
+            MacBackdrop.Forget(opened.Window);
             Send(opened.Window, Cocoa.Close);
         }
     }

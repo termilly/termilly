@@ -14,8 +14,9 @@ import { isProduction } from './environments.js';
 import { screenOf } from './termscreen.js';
 import { agentInput } from './terminals.js';
 import { placeholders } from './snippets.js';
+import { repoAt, repoSnippets } from './reposnippets.js';
 import { clipsForPhone } from './clipboard.js';
-import { THEMES, THEME_BASE, themeId, onSystemThemeChange } from './themes.js';
+import { allThemes, THEME_BASE, themeId, onSystemThemeChange } from './themes.js';
 import { termTheme } from './terminals.js';
 import { placesForPhone } from './phonemanage.js';
 import { listForPhone, tagsForPhone } from './phonetodo.js';
@@ -130,10 +131,10 @@ function terminalOf(tab) {
  */
 const phoneSnippet = (s, ws) => ({ ws, name: s.name, description: s.description ?? '', command: s.command, enter: s.enter !== false, fields: placeholders(s.command) });
 
-/** The snippets, for typing them from a phone: the global ones, then each workspace's. */
+/** The snippets, for typing them from a phone: this computer's, then those of each workspace's repository. */
 const snippetsForPhone = () => [
   ...(state.settings.commands.snippets ?? []).map(s => phoneSnippet(s, null)),
-  ...state.workspaces.flatMap(w => (w.snippets ?? []).map(s => phoneSnippet(s, w.id))),
+  ...state.workspaces.flatMap(w => repoSnippets(repoAt(w.cwd)).map(s => phoneSnippet(s, w.id))),
 ];
 
 /**
@@ -144,7 +145,6 @@ const phoneTheme = t => ({
   id: t.id, name: t.name, light: t.base === THEME_BASE.light, terminal: t.terminal,
   ui: { bg: t.window.background, raised: t.preview.side, line: t.preview.line, text: t.window.text, muted: t.preview.text, accent: t.window.accent },
 });
-const PHONE_THEMES = THEMES.map(phoneTheme);
 
 /** What the phones show: this PC's workspaces, in order, their terminals, and whether a phone may type into them. */
 function snapshot() {
@@ -165,7 +165,7 @@ function snapshot() {
     // Schedules and their last runs; a report is read when it's opened.
     schedules: schedulesForPhone(),
     // Its themes, the one it shows now and its terminals' colours then (a theme plugin's, if one is chosen).
-    themes: PHONE_THEMES, pcTheme: themeId(), pcTerminal: termTheme(),
+    themes: allThemes().map(phoneTheme), pcTheme: themeId(), pcTerminal: termTheme(),
     workspaces: state.workspaces.map(w => ({ id: w.id, name: w.name, color: w.color, cwd: w.cwd ?? null, note: w.note ?? null, todo: listForPhone(workspaceList(w)) })),
     // What a phone may open a terminal on, and where it opens by default (only while it may type: js/phonemanage.js).
     places: opening ? placesForPhone(badgeOf) : [], activeWs: state.activeId,

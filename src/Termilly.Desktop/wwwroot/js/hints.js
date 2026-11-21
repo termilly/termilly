@@ -7,6 +7,8 @@ import { send } from './host.js';
 import { PAGE } from './protocol.js';
 import { focusedTab } from './panes.js';
 import { find, XTERM_SCREEN } from './dom.js';
+import { findWebLinks } from './webaddress.js';
+import { systemClipboard } from './sysclipboard.js';
 
 /**
  * A link, path or hash on the screen: what it is, and the row and column it starts at.
@@ -17,9 +19,11 @@ import { find, XTERM_SCREEN } from './dom.js';
  * @typedef {FoundHint & { label: string }} Hint
  */
 
+/** A web address's kind: its addresses come from webaddress.js, as the terminal's links do, Markdown markers dropped. */
+const URL_KIND = 'url';
 const KINDS = [
-  { kind: 'url', re: /\bhttps?:\/\/[^\s"'<>`]+/g },
-  { kind: 'path', re: /(?:\b[A-Za-z]:\\|\\\\)[^\s"'<>|*?]+/g },
+  // C:\..., C:/... (as Node, Git and many tools print it) or \\server\...
+  { kind: 'path', re: /(?:\b[A-Za-z]:[\\/]|\\\\)[^\s"'<>|*?]+/g },
   { kind: 'path', re: /(?:^|[\s(])((?:~|\.{1,2})?\/[\w.\-@+]+(?:\/[\w.\-@+]+)+)/g, group: 1 },
   { kind: 'hash', re: /\b[0-9a-f]{7,40}\b/g },
 ];
@@ -57,6 +61,10 @@ export function findHints(rows) {
   rows.forEach((line, row) => {
     /** @type {[number, number][]} */
     const taken = [];
+    for (const { start, end, text } of findWebLinks(line)) {
+      taken.push([start, end]);
+      found.push({ text, kind: URL_KIND, row, col: start });
+    }
     for (const { kind, re, group } of KINDS) {
       re.lastIndex = 0;
       for (let m; (m = re.exec(line));) {
@@ -132,7 +140,7 @@ function onKey(e) {
  * @param {boolean} shift
  */
 function act(hint, shift) {
-  if (hint.kind === 'url' && !shift) send(PAGE.openUrl, { url: hint.text });
+  if (hint.kind === URL_KIND && !shift) send(PAGE.openUrl, { url: hint.text });
   else if (hint.kind === 'path' && shift) send(PAGE.openPath, { path: hint.text });
-  else navigator.clipboard.writeText(hint.text);
+  else systemClipboard().writeText(hint.text);
 }

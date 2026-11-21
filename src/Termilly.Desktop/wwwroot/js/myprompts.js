@@ -17,6 +17,8 @@ import { find, targetOf } from './dom.js';
 import { showToast, TOAST } from './toasts.js';
 import { AGENT_STEP } from './constants.js';
 import { shownSteps, placeSteps, stepRowHtml, GONE_TITLE } from './agentsteps.js';
+import { isCompact, revealInView } from './compact.js';
+import { systemClipboard } from './sysclipboard.js';
 
 /** A terminal keeps this many of its Claude Code sessions' ids (a /clear starts a new one). */
 const KEPT_SESSIONS = 20;
@@ -314,20 +316,43 @@ function renderPrompts() {
   }).join('') || `<p class="change-empty">${listed.length ? 'No prompt has that text.' : hidden ? 'Nothing since you cleared it.' : 'No prompts yet.'}</p>`;
 }
 
+/** Whether it's a prompt, not one of Claude's steps. @param {Found | PlacedStep} f @returns {f is Found} */
+const isPrompt = f => 'prompt' in f;
+
+/** A prompt's or step's text. @param {Found | PlacedStep} f */
+const textOf = f => (isPrompt(f) ? f.prompt.text : f.step.text);
+
 /**
- * Scrolls the terminal to a prompt (or one of Claude's steps) and selects its first line.
- * @param {{ line: number }} f
+ * Which of the prompts (or steps) with the same text this one is, oldest first: a prompt sent twice goes to its own.
+ * @param {Found | PlacedStep} f
+ */
+function nthOf(f) {
+  const o = /** @type {NonNullable<typeof open>} */ (open);
+  /** @type {(Found | PlacedStep)[]} */
+  const list = isPrompt(f) ? o.found : o.steps;
+  const text = norm(textOf(f));
+  return list.slice(0, list.indexOf(f)).filter(other => norm(textOf(other)) === text).length;
+}
+
+/**
+ * Goes to a prompt (or one of Claude's steps): in the compact or minimal view when the terminal shows one (the terminal
+ * is hidden under it), else scrolled to in the terminal with its first line selected. False when it isn't there to go
+ * to (the list stays open, for its text instead).
+ * @param {Found | PlacedStep} f
  */
 function goTo(f) {
   const { tab, lines } = /** @type {NonNullable<typeof open>} */ (open);
-  const row = lines.rows?.[f.line];
-  const term = tab.view?.term;
+  const inView = isCompact(tab);
+  if (inView ? !revealInView(tab, textOf(f), nthOf(f)) : f.line < 0) return false;
   closePopover(pop);
   if (tab.wsId !== state.activeId) switchWorkspace(tab.wsId);
   focusTab(tab);
-  if (!term || row === undefined) return;
+  const row = lines.rows?.[f.line];
+  const term = tab.view?.term;
+  if (inView || !term || row === undefined) return true;
   term.scrollToLine(Math.max(0, row - ABOVE_ROWS));
   term.select(0, row, lines[f.line].length);
+  return true;
 }
 
 /**
@@ -378,7 +403,7 @@ pop.addEventListener('click', e => {
   }
   const copyBtn = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-reader-copy]'));
   if (copyBtn) {
-    navigator.clipboard.writeText(reading).then(() => { copyBtn.textContent = COPIED; }, () => { copyBtn.textContent = 'Couldn’t copy'; });
+    systemClipboard().writeText(reading).then(() => { copyBtn.textContent = COPIED; }, () => { copyBtn.textContent = 'Couldn’t copy'; });
     setTimeout(() => { copyBtn.textContent = COPY; }, COPIED_MS);
     return;
   }
@@ -409,7 +434,8 @@ pop.addEventListener('click', e => {
 });
 filterEl.addEventListener('keydown', e => {
   if (e.key !== 'Enter' || !open) return;
-  const first = /** @type {HTMLElement | null} */ (listEl.querySelector(':is(.prompt-row, .step-row):not(.gone)'));
+  // A row gone from the output may still be in the compact or minimal view.
+  const first = /** @type {HTMLElement | null} */ (listEl.querySelector(`:is(.prompt-row, .step-row)${isCompact(open.tab) ? '' : `:not(.${GONE})`}`));
   if (first) goTo(first.dataset.s !== undefined ? open.steps[Number(first.dataset.s)] : open.found[Number(first.dataset.i)]);
 });
 listEl.addEventListener('click', e => {
@@ -417,14 +443,13 @@ listEl.addEventListener('click', e => {
   if (stepClick(e)) return;
   const copy = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-copy]'));
   if (copy) {
-    navigator.clipboard.writeText(open.found[Number(copy.dataset.copy)].prompt.text);
+    systemClipboard().writeText(open.found[Number(copy.dataset.copy)].prompt.text);
     return;
   }
   const row = /** @type {HTMLElement | null} */ (targetOf(e).closest('.prompt-row'));
   if (!row) return;
   const f = open.found[Number(row.dataset.i)];
-  if (!row.classList.contains(GONE)) goTo(f);
-  else read({ what: 'Prompt', at: f.prompt.at, text: f.prompt.text, note: f.prompt.at ? 'From Termilly’s history and Claude Code’s transcript on this PC.' : '' });
+  if (!goTo(f)) read({ what: 'Prompt', at: f.prompt.at, text: f.prompt.text, note: f.prompt.at ? 'From Termilly’s history and Claude Code’s transcript on this PC.' : '' });
 });
 
 /**
@@ -443,13 +468,12 @@ function stepClick(e) {
   const copy = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-copy-step]'));
   if (copy) {
     const { step } = o.steps[Number(copy.dataset.copyStep)];
-    navigator.clipboard.writeText(step.kind === AGENT_STEP.tool ? String(step.tool) + "(" + step.text + ")" : step.text);
+    systemClipboard().writeText(step.kind === AGENT_STEP.tool ? String(step.tool) + "(" + step.text + ")" : step.text);
     return true;
   }
   const row = /** @type {HTMLElement | null} */ (targetOf(e).closest('.step-row'));
   if (!row) return false;
   const p = o.steps[Number(row.dataset.s)];
-  if (!row.classList.contains(GONE)) goTo(p);
-  else readStep(p);
+  if (!goTo(p)) readStep(p);
   return true;
 }

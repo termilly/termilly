@@ -25,6 +25,8 @@ const clipRows = () => row('Keep copies', 'Every copy kept, to paste again from 
 
 /** The status bar's own switch, which the rows after it need. */
 const STATUS_BAR = 'terminal.statusBar';
+/** The autocomplete rows that need it on. */
+const AUTOCOMPLETE = 'terminal.autocomplete';
 /** The plan's two windows in the bar: with either on, Termilly reads the limits (agents.claudeLimits follows them, statusbar.js). */
 const FIVE_HOUR = 'terminal.statusFiveHour';
 const WEEK = 'terminal.statusWeek';
@@ -87,6 +89,8 @@ const TERMINAL = {
     + row('Live agents', 'Above this many, idle agents in other workspaces hibernate.',
       seg('agents.limit', choices(agentLimit.all, limit => (limit ? String(limit) : 'No limit')))))
     + group('Status bar', statusBarRows())
+    + group('Autocomplete', row('Suggest commands from history', 'Grey text after the cursor at a shell prompt. → takes it, Ctrl+→ one word.', toggle('terminal.autocomplete'), { keywords: 'autocomplete suggest suggestion complete history ghost inline' })
+      + row('Words on the screen in the list', 'The list (Ctrl+Shift+Space) also offers words shown above the prompt.', toggle('terminal.autocompleteScreenWords'), { keywords: 'autocomplete suggest list words screen', needs: AUTOCOMPLETE }))
     + group('Clipboard', clipRows())
     + group('Production', row('Ask before pasting', 'Ask before pasting into a production terminal.',
         seg('safety.prodPaste', [[prodPaste.always, 'Always'], [prodPaste.multiline, 'Several lines or risky'], [prodPaste.dangerous, 'Risky words'], [prodPaste.never, 'Never']]), { keywords: 'production prod safety confirm paste rm drop delete' })

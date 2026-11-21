@@ -14,6 +14,11 @@ import { COMPACT_KIND, COMPACT_VERB } from './constants.js';
 const CHANGES = /^(?:\+(\d+))?\s*(?:-(\d+))?$/;
 /** A tool line's state, its class. */
 const STATE = Object.freeze({ running: 'running', failed: 'failed', worked: 'worked' });
+/**
+ * The feed's button that shows the terminal (compact.js handles it): while the agent waits on a question, and after
+ * words too long to send whole.
+ */
+export const OPEN_TERMINAL = '.cv-open-terminal';
 /** A count at the start of a result: "412 lines". */
 const COUNT = /^(\d+)\s+(\S+)$/;
 
@@ -190,6 +195,14 @@ function endHtml(end, turn) {
 }
 
 /**
+ * Under words too long to send whole: that this is only their start, and the way to the rest. Nothing for the rest.
+ * @param {CompactLine} line
+ */
+const cutHtml = line => (line.cut
+  ? `<div class="cv-note">Only the start is shown. <button class="link-btn ${OPEN_TERMINAL.slice(1)}">Open terminal</button> for the rest.</div>`
+  : '');
+
+/**
  * One line as HTML.
  * @param {CompactLine & { more?: number }} line
  * @param {CompactLine[]} turn the lines of its turn so far (a footer sums them up)
@@ -197,8 +210,8 @@ function endHtml(end, turn) {
  */
 function lineHtml(line, turn, links) {
   switch (line.kind) {
-    case COMPACT_KIND.prompt: return `<div class="cv-prompt">${linkedHtml(line.text, links.paths(line), { plainClick: links.plainClick })}</div>`;
-    case COMPACT_KIND.reply: return `<div class="cv-reply">${wordsHtml(line.text, links.paths(line), links.plainClick)}</div>`;
+    case COMPACT_KIND.prompt: return `<div class="cv-prompt">${linkedHtml(line.text, links.paths(line), { plainClick: links.plainClick })}</div>${cutHtml(line)}`;
+    case COMPACT_KIND.reply: return `<div class="cv-reply">${wordsHtml(line.text, links.paths(line), links.plainClick)}</div>${cutHtml(line)}`;
     case COMPACT_KIND.thinking: return `<div class="cv-thinking" title="${escapeHtml(line.text)}">${escapeHtml(line.text.split('\n')[0])}</div>`;
     case COMPACT_KIND.tool: return toolHtml(line, links);
     case COMPACT_KIND.end: return endHtml(line, turn);

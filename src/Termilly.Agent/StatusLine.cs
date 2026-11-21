@@ -193,6 +193,8 @@ internal static class StatusLine
             RedirectStandardInput = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
+            // Both ways UTF-8, as Claude Code itself does: the console's code page turned a folder's name into "????".
+            StandardInputEncoding = Utf8Output.Encoding,
             StandardOutputEncoding = Encoding.UTF8,
             CreateNoWindow = true,
         };

@@ -33,6 +33,19 @@ internal abstract class GitRunner(IProcessRunner runner)
     /// <summary>git's output for <paramref name="args"/> in <paramref name="root"/>; IOException with git's message when it fails.</summary>
     public abstract byte[] Run(string root, IReadOnlyList<string> args);
 
+    public virtual string Identity => GetType().FullName!;
+
+    public virtual byte[] WithInput(string root, IReadOnlyList<string> args, string? input = null,
+        IReadOnlyDictionary<string, string>? variables = null, byte[]? bytes = null) => throw new NotSupportedException("This runner cannot supply input.");
+
+    public virtual void WriteFile(string root, string path, byte[] bytes) => throw new NotSupportedException("This runner cannot write files.");
+
+    /// <summary>Uses git's hook path so linked worktrees and core.hooksPath are respected.</summary>
+    public abstract bool HasPrePushHook(string root);
+
+    /// <summary>Keeps both output streams so hooks can explain a rejected write.</summary>
+    public abstract string Write(string root, IReadOnlyList<string> args, TimeSpan timeout);
+
     /// <summary>
     /// A file in the working tree, at most <paramref name="maxBytes"/>; missing when it isn't there. With
     /// <paramref name="keepBytes"/>, its bytes are kept even when it's binary (<see cref="Blob.Raw"/>).
@@ -64,6 +77,18 @@ internal abstract class GitRunner(IProcessRunner runner)
     }
 
     /// <summary>Runs git (or ssh) to its end: its output, or <see cref="GitFailedException"/> with all it wrote to stderr.</summary>
+    protected string CollectWrite(ProcessRequest request)
+    {
+        var result = runner.Run(request);
+        var output = result.Text + result.Error;
+        if (!result.Succeeded)
+        {
+            var message = result.FirstErrorLine ?? "Git failed.";
+            throw new GitFailedException(result.ExitCode, message, string.IsNullOrWhiteSpace(output) ? message : output);
+        }
+        return output;
+    }
+
     protected byte[] Collect(ProcessRequest request, string what)
     {
         var result = runner.Run(request);
@@ -93,6 +118,29 @@ internal sealed class LocalGitRunner(IProcessRunner runner) : GitRunner(runner)
 {
     public override byte[] Run(string root, IReadOnlyList<string> args) =>
         Collect(new ProcessRequest(GitCommands.Program, [.. Options, .. args]) { WorkingDirectory = root, Environment = Environment }, GitCommands.Program);
+
+    public override byte[] WithInput(string root, IReadOnlyList<string> args, string? input = null,
+        IReadOnlyDictionary<string, string>? variables = null, byte[]? bytes = null)
+    {
+        var values = Environment.ToDictionary(p => p.Key, p => p.Value);
+        foreach (var pair in variables ?? new Dictionary<string, string>())
+        {
+            values[pair.Key] = pair.Value;
+        }
+        return Collect(new ProcessRequest(GitCommands.Program, [.. Options, .. args])
+        { WorkingDirectory = root, Environment = values, Input = input, InputBytes = bytes }, GitCommands.Program);
+    }
+
+    public override void WriteFile(string root, string path, byte[] bytes) => AppPaths.WriteAtomically(Path.Combine(root, path), bytes);
+
+    public override bool HasPrePushHook(string root)
+    {
+        var path = Encoding.UTF8.GetString(Run(root, [GitCommands.RevParse, GitCommands.GitPath, GitCommands.PrePushHook])).Trim();
+        return File.Exists(Path.GetFullPath(path, root));
+    }
+
+    public override string Write(string root, IReadOnlyList<string> args, TimeSpan timeout) =>
+        CollectWrite(new ProcessRequest(GitCommands.Program, [.. Options, .. args]) { WorkingDirectory = root, Environment = Environment, Timeout = timeout });
 
     public override Blob ReadFile(string root, string path, long maxBytes, bool keepBytes = false) =>
         Blob.Read(Path.Combine(root, path), maxBytes, keepBytes);
@@ -143,6 +191,8 @@ internal sealed class LocalGitRunner(IProcessRunner runner) : GitRunner(runner)
 internal sealed class SshGitRunner(IProcessRunner runner, string sshArguments, IReadOnlyDictionary<string, string>? environment) : GitRunner(runner)
 {
     /// <summary>Roots already checked on each server, so a diff doesn't cost an extra connection each time.</summary>
+    public override string Identity => sshArguments;
+
     private static readonly ConcurrentDictionary<(string Host, string Root), DateTime> Checked = new();
     /// <summary>How long a root stays checked.</summary>
     private static readonly TimeSpan CheckedFor = TimeSpan.FromMinutes(2);
@@ -198,6 +248,28 @@ internal sealed class SshGitRunner(IProcessRunner runner, string sshArguments, I
         string.Concat(Environment.Select(v => $"{v.Key}={v.Value} ")) + GitCommands.Program + " -C " + Quote(root) + " " + string.Join(' ', Options.Concat(args).Select(Quote));
 
     public override byte[] Run(string root, IReadOnlyList<string> args) => Remote(GitCommand(root, args));
+
+    public override byte[] WithInput(string root, IReadOnlyList<string> args, string? input = null,
+        IReadOnlyDictionary<string, string>? variables = null, byte[]? bytes = null)
+    {
+        var prefix = string.Concat((variables ?? new Dictionary<string, string>()).Select(p => p.Key + "=" + Quote(p.Value) + " "));
+        return Collect(new ProcessRequest(SessionProfiles.SshCommand, [])
+        { CommandLine = Arguments(prefix + GitCommand(root, args)), Environment = environment, Input = input, InputBytes = bytes }, SessionProfiles.SshCommand);
+    }
+
+    public override void WriteFile(string root, string path, byte[] bytes) =>
+        Collect(new ProcessRequest(SessionProfiles.SshCommand, [])
+        { CommandLine = Arguments("cat > " + Quote(root.TrimEnd('/') + "/" + path)), Environment = environment, InputBytes = bytes }, SessionProfiles.SshCommand);
+
+    public override bool HasPrePushHook(string root)
+    {
+        var path = Encoding.UTF8.GetString(Run(root, [GitCommands.RevParse, GitCommands.GitPath, GitCommands.PrePushHook])).Trim();
+        var full = path.StartsWith('/') ? path : root.TrimEnd('/') + "/" + path;
+        return Encoding.UTF8.GetString(Remote($"if [ -f {Quote(full)} ]; then printf 1; fi")) == "1";
+    }
+
+    public override string Write(string root, IReadOnlyList<string> args, TimeSpan timeout) =>
+        CollectWrite(new ProcessRequest(SessionProfiles.SshCommand, []) { CommandLine = Arguments(GitCommand(root, args)), Environment = environment, Timeout = timeout });
 
     public override Blob ReadFile(string root, string path, long maxBytes, bool keepBytes = false)
     {

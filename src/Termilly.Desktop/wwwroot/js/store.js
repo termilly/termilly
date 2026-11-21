@@ -48,6 +48,7 @@ export const sourceOf = profile => profile?.source ?? PROFILE_SOURCE.local;
 export const GROUPS = Object.freeze({
   terminal: 'terminal',
   interface: 'interface',
+  background: 'background',
   shells: 'shells',
   commands: 'commands',
   notifications: 'notifications',
@@ -125,6 +126,17 @@ export const getSetting = path => {
  */
 
 /**
+ * Minimal's floating dock (js/dock.js): the edge it floats on (top unless moved), and whether it hides to a line
+ * when not in use (on unless turned off).
+ * @typedef {{ side?: string, hide?: boolean }} DockState
+ */
+
+/**
+ * What Minimal shows on a terminal's name line or bar (js/panebar.js): the parts the user turned off.
+ * @typedef {{ hidden?: string[] }} PaneBarState
+ */
+
+/**
  * A theme plugin's terminal colours (plugins.js), based on Light or Dark.
  * @typedef {{ id: string, name: string, light?: boolean, colors: Record<string, string> }} PluginTheme
  */
@@ -153,6 +165,10 @@ export const state = {
   files: { open: false },
   /** @type {ToolbarState} */
   toolbar: {},
+  /** @type {DockState} */
+  dock: {},
+  /** @type {PaneBarState} */
+  paneBar: {},
   /**
    * Schedules, their runs, and whether their window is open (js/schedules.js).
    * @type {SchedulesState}
@@ -205,6 +221,8 @@ export const newId = prefix => `${prefix}${Date.now().toString(36)}${(counter++)
 /** The page's events (on, emit): what changed, or what a module asks another to do. */
 export const EVENTS = Object.freeze({
   agent: 'agent',
+  /** The window's background changed whether the terminals draw one of their own (js/backgrounds.js). */
+  backdrop: 'backdrop',
   changes: 'changes',
   claudeUsage: 'claudeUsage',
   commandEnding: 'commandEnding',
@@ -821,10 +839,12 @@ function serialize() {
     clips: state.clips,
     files: state.files,
     toolbar: state.toolbar,
+    dock: state.dock,
+    paneBar: state.paneBar,
     windowPlaces: state.windowPlaces,
     windowsOnTop: state.windowsOnTop,
     // tmux windows aren't saved: they're tmux's, and attaching again brings them back (tmux.js).
-    workspaces: state.workspaces.filter(w => !w.tmux).map(({ id, name, color, cwd, focusId, root, note, tasks, snippets, collapsed, asideCollapsed, copyTo }) => ({ id, name, color, cwd, focusId, tasks, root: withoutPreview(root), note, snippets, collapsed: collapsed || undefined, asideCollapsed: asideCollapsed || undefined, copyTo })),
+    workspaces: state.workspaces.filter(w => !w.tmux).map(({ id, name, color, cwd, focusId, root, note, tasks, snippets, collapsed, asideCollapsed, copyTo, background }) => ({ id, name, color, cwd, focusId, tasks, root: withoutPreview(root), note, snippets, collapsed: collapsed || undefined, asideCollapsed: asideCollapsed || undefined, copyTo, background })),
     tabs: [...state.tabs.values()].filter(t => !t.virtual).map(t => {
       const { id, wsId, profile, name, tags, noHistory, startCwd, env, startCommand, worktree, note, tasks, agentRead, agentType, openedBy, agentSessions, promptsClearedAt, stepsClearedAt, compactView, setAside } = t;
       // In a window of its own: it opens in one again after a restart, where it was (windowPlaces).
@@ -854,6 +874,8 @@ export function lastFolderOf(tab) {
  */
 function restorePanels(saved) {
   if (saved.toolbar && typeof saved.toolbar === 'object') state.toolbar = { ...saved.toolbar };
+  if (saved.dock && typeof saved.dock === 'object') state.dock = { ...saved.dock };
+  if (saved.paneBar && typeof saved.paneBar === 'object') state.paneBar = { ...saved.paneBar };
   if (saved.todo && typeof saved.todo === 'object') state.todo = { ...state.todo, ...saved.todo };
   if (saved.clips && typeof saved.clips === 'object') state.clips = { ...state.clips, ...saved.clips };
   if (saved.files && typeof saved.files === 'object') state.files = { ...state.files, ...saved.files };

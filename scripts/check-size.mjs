@@ -1,5 +1,5 @@
-// Fails on code that's grown too big to read in one go: a method or function over 50 lines, a C# class over 400. C# under
-// src/ and installer/, and the page's JavaScript (wwwroot/js). scripts/baselines/size.json lists what was over when the
+// Fails on code that's grown too big to read in one go: a method or function over 50 lines, a C# class over 400, a
+// stylesheet over 400. C# under src/ and installer/, the page's JavaScript (wwwroot/js) and its stylesheets (wwwroot). scripts/baselines/size.json lists what was over when the
 // check began; the refactor (issues #72, #75, #76) brings it down to nothing, so the check also fails when a listed one has
 // shrunk below the limit or grown, until the baseline is updated (`node scripts/check-size.mjs --update`). `--report`
 // lists everything over, largest first.
@@ -11,6 +11,9 @@ const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const baselineFile = path.join(repo, 'scripts/baselines/size.json');
 const MAX_METHOD = 50;
 const MAX_CLASS = 400;
+const MAX_STYLESHEET = 400;
+/** The limit for each kind of thing measured (the first word of its key). */
+const LIMITS = Object.freeze({ method: MAX_METHOD, function: MAX_METHOD, class: MAX_CLASS, stylesheet: MAX_STYLESHEET });
 const SKIP_DIRS = new Set(['bin', 'obj', 'lib', 'node_modules']);
 
 function files() {
@@ -20,7 +23,8 @@ function files() {
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) {
         if (!SKIP_DIRS.has(entry.name)) walk(full);
-      } else if (entry.name.endsWith('.cs') || (entry.name.endsWith('.js') && full.includes(`wwwroot${path.sep}js`))) {
+      } else if (entry.name.endsWith('.cs') || (entry.name.endsWith('.js') && full.includes(`wwwroot${path.sep}js`))
+        || (entry.name.endsWith('.css') && full.includes('wwwroot'))) {
         found.push(full);
       }
     }
@@ -154,12 +158,18 @@ function javascript(text) {
   return found;
 }
 
+/** A stylesheet over the limit, by its lines. */
+function stylesheet(text) {
+  const lines = text.split('\n').length - (text.endsWith('\n') ? 1 : 0);
+  return lines > MAX_STYLESHEET ? [{ kind: 'stylesheet', name: 'lines', lines }] : [];
+}
+
 function measure() {
   const result = {};
   for (const full of files()) {
     const file = path.relative(repo, full).replaceAll('\\', '/');
     const text = fs.readFileSync(full, 'utf8').replaceAll('\r\n', '\n');
-    const found = file.endsWith('.cs') ? csharp(text) : javascript(text);
+    const found = file.endsWith('.cs') ? csharp(text) : file.endsWith('.css') ? stylesheet(text) : javascript(text);
     for (const f of found) {
       result[file] ??= {};
       const key = `${f.kind} ${f.name}`;
@@ -185,7 +195,7 @@ const baseline = fs.existsSync(baselineFile) ? JSON.parse(fs.readFileSync(baseli
 const problems = [];
 for (const { file, key, lines } of entries) {
   const before = baseline[file]?.[key];
-  if (before === undefined) problems.push(`${file}: ${key} is ${lines} lines (limit ${key.startsWith('class') ? MAX_CLASS : MAX_METHOD}): split it`);
+  if (before === undefined) problems.push(`${file}: ${key} is ${lines} lines (limit ${LIMITS[key.split(' ')[0]]}): split it`);
   else if (lines > before) problems.push(`${file}: ${key} grew from ${before} to ${lines} lines: split it`);
 }
 for (const [file, keys] of Object.entries(baseline)) {

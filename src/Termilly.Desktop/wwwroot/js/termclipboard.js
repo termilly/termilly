@@ -8,6 +8,8 @@ import { clipboardAction, CLIPBOARD_ACTION } from './clipboardkeys.js';
 import { underlinedLink, linkUnderMouse } from './termlinks.js';
 import { showToast } from './toasts.js';
 import { ICONS } from './ui.js';
+import { typeInto, selectionInside } from './dom.js';
+import { systemClipboard } from './sysclipboard.js';
 
 /** The word for pasting, on the menu and on the production question (terminals.js). */
 export const PASTE_LABEL = 'Paste';
@@ -20,9 +22,14 @@ const NO_MOUSE_TRACKING = 'none';
 
 /**
  * What a feature adds to the right-click menu after Copy and Paste (js/actions.js: open, actions, ask an agent).
- * @type {(body: HTMLElement) => import('./popups.js').MenuEntry[]}
+ * @type {(body: HTMLElement, at: MenuAt) => import('./popups.js').MenuEntry[]}
  */
 let menuExtras = () => [];
+
+/**
+ * Where a right-click menu opened: the text selected in the view it opened over, and the link under the mouse.
+ * @typedef {{ selection: string | null, link: string | null }} MenuAt
+ */
 
 /**
  * What Clipboard adds right after Paste (js/clipboard.js), given how this terminal pastes.
@@ -48,7 +55,7 @@ export function setClipHooks(entries, onCopy) {
 
 /**
  * Sets what the right-click menu adds after Copy and Paste.
- * @param {(body: HTMLElement) => import('./popups.js').MenuEntry[]} fn
+ * @param {(body: HTMLElement, at: MenuAt) => import('./popups.js').MenuEntry[]} fn
  */
 export function setMenuExtras(fn) {
   menuExtras = fn;
@@ -61,7 +68,7 @@ export function setMenuExtras(fn) {
 function copySelection(term, body = null) {
   const text = term.getSelection();
   if (!text) return;
-  navigator.clipboard.writeText(text).catch(() => {});
+  systemClipboard().writeText(text).catch(() => {});
   copied(text, body, false);
 }
 
@@ -77,7 +84,7 @@ export function clipboardKey(term, e) {
   const link = !term.hasSelection() && clipboardAction(e, true) === CLIPBOARD_ACTION.copy && !e.shiftKey ? underlinedLink() : null;
   if (link) {
     e.preventDefault();
-    navigator.clipboard.writeText(link).catch(() => {});
+    systemClipboard().writeText(link).catch(() => {});
     copied(link, term.element?.parentElement ?? null, true);
     showToast({ text: `Copied ${link}` });
     return false;
@@ -107,15 +114,59 @@ export function wireClipboard(term, body, paste, agentHere = () => false) {
   body.addEventListener('contextmenu', e => {
     e.preventDefault();
     if (term.modes.mouseTrackingMode !== NO_MOUSE_TRACKING && !agentHere()) return;
-    // Nothing selected, a link under the mouse: Copy takes the link, as Ctrl+C does over it.
-    const link = term.hasSelection() ? null : linkUnderMouse();
-    showMenu([
-      link
-        ? { label: 'Copy link', icon: ICONS.copy, action: () => { navigator.clipboard.writeText(link).catch(() => {}); copied(link, body, true); showToast({ text: `Copied ${link}` }); } }
-        : { label: COPY_LABEL, icon: ICONS.copy, hint: MENU_KEYS.copy, disabled: !term.hasSelection(), action: () => copySelection(term, body) },
-      { label: PASTE_LABEL, icon: ICONS.paste, hint: MENU_KEYS.paste, action: () => navigator.clipboard.readText().then(text => { if (text) paste(text); }).catch(() => {}) },
-      ...clipEntries(body, paste),
-      ...menuExtras(body),
-    ], { x: e.clientX, y: e.clientY });
+    showTerminalMenu(e, body, { selection: term.getSelection(), link: term.hasSelection() ? null : linkUnderMouse(), paste });
   });
+}
+
+/**
+ * A terminal's right-click menu, the same in each of its views: Copy, or Copy link with nothing selected and a link under
+ * the mouse (as Ctrl+C does over it), Paste, what Clipboard adds, then what features add (setMenuExtras).
+ * @param {MouseEvent} e
+ * @param {HTMLElement} body the terminal's element
+ * @param {{ selection: string, link: string | null, paste: (text: string) => void }} at what's selected, the link under
+ *   the mouse, and how this view pastes
+ */
+function showTerminalMenu(e, body, { selection, link, paste }) {
+  /** @param {string} text @param {boolean} isLink */
+  const copy = (text, isLink) => {
+    systemClipboard().writeText(text).catch(() => {});
+    copied(text, body, isLink);
+  };
+  showMenu([
+    !selection && link
+      ? { label: 'Copy link', icon: ICONS.copy, action: () => { copy(link, true); showToast({ text: `Copied ${link}` }); } }
+      : { label: COPY_LABEL, icon: ICONS.copy, hint: MENU_KEYS.copy, disabled: !selection, action: () => copy(selection, false) },
+    { label: PASTE_LABEL, icon: ICONS.paste, hint: MENU_KEYS.paste, action: () => systemClipboard().readText().then(text => { if (text) paste(text); }).catch(() => {}) },
+    ...clipEntries(body, paste),
+    ...menuExtras(body, { selection: selection || null, link }),
+  ], { x: e.clientX, y: e.clientY });
+}
+
+/**
+ * The terminal's right-click menu over a view drawn in its place (the Compact and Minimal views, compact.js): Copy takes
+ * what's selected in the view, or in its prompt box when that's where the click is; a link is the one under the mouse;
+ * Paste types into the prompt box.
+ * @param {HTMLElement} el the view
+ * @param {HTMLElement} body the terminal's element, which the view sits in
+ * @param {HTMLTextAreaElement} input the view's prompt box
+ */
+export function wireViewMenu(el, body, input) {
+  el.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    const target = /** @type {Element} */ (e.target);
+    const selection = target === input ? input.value.slice(input.selectionStart, input.selectionEnd) : selectedIn(el);
+    const link = selection ? null : target.closest?.('[data-link]')?.getAttribute('data-link') ?? null;
+    showTerminalMenu(e, body, { selection, link, paste: text => typeInto(input, text) });
+  });
+}
+
+/**
+ * The text selected inside an element; '' when nothing is, or the selection reaches outside it (a drag that went on
+ * past the view would take text the menu isn't about).
+ * @param {HTMLElement} el
+ */
+function selectedIn(el) {
+  const selection = el.ownerDocument.getSelection();
+  return selectionInside(selection, el) ? selection.toString() : '';
 }

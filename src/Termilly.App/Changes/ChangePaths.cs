@@ -39,7 +39,8 @@ internal static partial class ChangePaths
     [GeneratedRegex(@"^/([a-zA-Z])(?=/|$)/?")]
     private static partial Regex GitBashDrive();
 
-    [GeneratedRegex(@":(\d+)(?::\d+)?$")]
+    // :12, :12:5, or (12) and (12,5) as compilers print them; Clean has already cut the closing bracket.
+    [GeneratedRegex(@"(?::(\d+)(?::\d+)?|\((\d+)(?:,\s*\d+)?\)?)$")]
     private static partial Regex LineSuffix();
 
     /// <summary>A folder without its trailing separator, except a root's own (C:\, /).</summary>
@@ -88,7 +89,7 @@ internal static partial class ChangePaths
         }
     }
 
-    /// <summary>A path as printed: quotes, :line:column and trailing punctuation removed (the line is kept).</summary>
+    /// <summary>A path as printed: quotes, :line:column or (line,column) and trailing punctuation removed (the line is kept).</summary>
     public static PrintedPath Clean(string text)
     {
         var path = text.Trim().TrimStart('"', '\'', '`', '(', '[', '<').TrimEnd('"', '\'', '`', ')', ']', '>', '.', ',', ';', ':');
@@ -96,7 +97,8 @@ internal static partial class ChangePaths
         if (LineSuffix().Match(path) is { Success: true } m)
         {
             path = path[..m.Index];
-            line = int.TryParse(m.Groups[1].Value, out var n) ? n : null;
+            var number = m.Groups[1].Success ? m.Groups[1] : m.Groups[2];
+            line = int.TryParse(number.Value, out var n) ? n : null;
         }
         return new(path, line);
     }

@@ -33,6 +33,10 @@ internal sealed record TerminalSettings
     public bool ProgramClipboard { get; init; } = true;
     /// <summary>Selecting text in a terminal copies it.</summary>
     public bool CopyOnSelect { get; init; }
+    /// <summary>At a shell prompt, the rest of a command from history in grey after the cursor (js/autocomplete.js).</summary>
+    public bool Autocomplete { get; init; } = true;
+    /// <summary>The autocomplete list also offers words on the screen.</summary>
+    public bool AutocompleteScreenWords { get; init; } = true;
     /// <summary>What opens a web address in a terminal’s output (js/weblinks.js): Ctrl+click, or a plain click.</summary>
     public string LinkClick { get; init; } = SettingValues.LinkClick.Default;
     /// <summary>The terminal colour scheme's id (js/themes.js); null: the theme's own.</summary>
@@ -76,12 +80,27 @@ internal sealed record InterfaceSettings
     private const int MaxThemeId = 40;
 
     public string Theme { get; init; } = SettingValues.Theme.FirstStart;
+    /// <summary>The theme "system" shows while the system is in dark mode.</summary>
+    public string ThemeDark { get; init; } = SettingValues.Theme.Dark;
+    /// <summary>The theme "system" shows while the system is in light mode.</summary>
+    public string ThemeLight { get; init; } = SettingValues.Theme.Light;
+    /// <summary>Colour schemes imported from other terminals, newest first.</summary>
+    public IReadOnlyList<CustomTheme>? CustomThemes { get; init; }
+    /// <summary>Normal or Minimal (<see cref="SettingValues.Layout"/>).</summary>
+    public string Layout { get; init; } = SettingValues.Layout.Default;
+    /// <summary>In Minimal, a terminal's name on a line over it or on a bar shown on hover (<see cref="SettingValues.PaneNames"/>).</summary>
+    public string PaneNames { get; init; } = SettingValues.PaneNames.Default;
     /// <summary>The app's font; null: the system's.</summary>
     public string? Font { get; init; }
     public bool ShowActivity { get; init; } = true;
     public bool ConfirmCloseWorkspace { get; init; } = true;
     public bool GitStatus { get; init; } = true;
     public bool CheckForUpdates { get; init; } = true;
+    /// <summary>
+    /// A newer version is installed when Termilly starts, before anything else runs (StartupUpdateGate). Windows'
+    /// per-user installs only for now; off unless the user turns it on.
+    /// </summary>
+    public bool InstallUpdatesOnStart { get; init; }
     public IReadOnlyList<string>? DisabledPlugins { get; init; }
     /// <summary>The window's Minimize: to the taskbar, or the tray (Windows).</summary>
     public string MinimizeTo { get; init; } = SettingValues.MinimizeTo.Default;
@@ -113,6 +132,12 @@ internal sealed record InterfaceSettings
     public InterfaceSettings Normalize() => this with
     {
         Theme = IsThemeId(Theme) ? Theme : SettingValues.Theme.FirstStart,
+        ThemeDark = IsPick(ThemeDark) ? ThemeDark : SettingValues.Theme.Dark,
+        ThemeLight = IsPick(ThemeLight) ? ThemeLight : SettingValues.Theme.Light,
+        CustomThemes = (CustomThemes ?? []).Select(t => t?.Normalize()).OfType<CustomTheme>().Where(t => IsThemeId(t.Id))
+            .DistinctBy(t => t.Id).Take(CustomThemeLimits.MaxThemes).ToList(),
+        Layout = SettingChecks.OneOf(Layout, SettingValues.Layout.All, SettingValues.Layout.Default),
+        PaneNames = SettingChecks.OneOf(PaneNames, SettingValues.PaneNames.All, SettingValues.PaneNames.Default),
         MinimizeTo = SettingChecks.OneOf(MinimizeTo, SettingValues.MinimizeTo.All, SettingValues.MinimizeTo.Default),
         CloseAction = SettingChecks.OneOf(CloseAction, SettingValues.CloseAction.All, SettingValues.CloseAction.Default),
         Font = SettingChecks.Trimmed(Font),
@@ -126,6 +151,9 @@ internal sealed record InterfaceSettings
     /// <summary>A theme's id as js/themes.js has them: lowercase letters, digits and hyphens.</summary>
     private static bool IsThemeId(string? id) =>
         id is { Length: > 0 and <= MaxThemeId } && id.All(c => c is >= 'a' and <= 'z' or >= '0' and <= '9' or '-');
+
+    /// <summary>A theme following the system can show: a theme's id, not "system" itself (the page checks its kind).</summary>
+    private static bool IsPick(string? id) => IsThemeId(id) && id != SettingValues.Theme.System;
 }
 
 /// <summary>The shells on offer: the default, the user's own profiles and notes, shell integration, COM ports and consoles.</summary>
@@ -521,6 +549,8 @@ internal sealed record SettingsData
     public IReadOnlyDictionary<string, CostDay>? CostLedger { get; init; }
     /// <summary>Each snippet's variables, as last filled in.</summary>
     public IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>>? SnippetValues { get; init; }
+    /// <summary>When each snippet or task was last run (Unix ms), for the snippets list's order.</summary>
+    public IReadOnlyDictionary<string, long>? SnippetUsed { get; init; }
 
     public SettingsData Normalize() => this;
 }

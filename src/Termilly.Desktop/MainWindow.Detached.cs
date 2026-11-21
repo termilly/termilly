@@ -48,7 +48,7 @@ public partial class MainWindow
             return;
         }
         using var deferral = e.GetDeferral();
-        var window = new DetachedWindow(e.Name, _theme.Palette, e.WindowFeatures);
+        var window = new DetachedWindow(e.Name, _theme.Palette, Settings.Background, e.WindowFeatures);
         _detached.Add(window);
         window.Closed += (_, _) => _detached.Remove(window);
         window.Moved += OnDetachedMoved;

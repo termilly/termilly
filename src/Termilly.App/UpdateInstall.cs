@@ -49,12 +49,17 @@ internal sealed record SetupCommand(string File, string Arguments, bool AsAdmini
     /// <param name="setup">The downloaded setup.</param>
     /// <param name="installed">The install this copy runs from, or null for a copy setup didn't install (a build).</param>
     /// <param name="updateScope">Paint acknowledgement scope supplied by the Windows app.</param>
-    public static SetupCommand For(string setup, InstalledCopy? installed, string? updateScope = null)
+    /// <param name="supervise">An update at start: setup keeps the old version until the new one reports healthy.</param>
+    public static SetupCommand For(string setup, InstalledCopy? installed, string? updateScope = null, bool supervise = false)
     {
         var arguments = $"{SetupFlags.Quiet} {SetupFlags.Start} {SetupFlags.UpdateWindow}";
         if (updateScope is not null)
         {
             arguments += " " + Quote(updateScope);
+        }
+        if (supervise)
+        {
+            arguments += " " + SetupFlags.UpdateSupervise;
         }
         if (installed is not null)
         {

@@ -65,6 +65,19 @@ public sealed class CompactFeedTests : IDisposable
     }
 
     [Fact]
+    public void A_long_reply_comes_whole_and_only_a_runaway_one_is_cut_and_says_so()
+    {
+        var review = new string('r', 12_000);
+        var runaway = new string('x', CompactText.MaxWords + 10);
+        var lines = Lines(new CompactClaude(),
+            Assistant("a1", $$"""{"type":"text","text":"{{review}}"}"""),
+            Assistant("a2", $$"""{"type":"text","text":"{{runaway}}"}"""));
+
+        Assert.Equal((review, (bool?)null), (lines[0].Text, lines[0].Cut));
+        Assert.Equal((CompactText.MaxWords, (bool?)true), (lines[1].Text.Length, lines[1].Cut));
+    }
+
+    [Fact]
     public void A_claude_tool_runs_until_its_result_and_a_failure_says_why()
     {
         var log = new CompactLog();
@@ -91,6 +104,16 @@ public sealed class CompactFeedTests : IDisposable
         Assert.Equal(
             [(CompactKinds.Prompt, "/model"), (CompactKinds.Interrupted, ""), (CompactKinds.Tool, "termilly: list_tasks")],
             lines.Select(l => (l.Kind, l.Text)));
+    }
+
+    [Fact]
+    public void A_prompt_that_is_only_pasted_text_shows()
+    {
+        var lines = Lines(new CompactClaude(),
+            User("u1", "\"<pasted_content id=\\\"ab12\\\">\\n- one\\n- two\\n</pasted_content id=\\\"ab12\\\">\""),
+            User("u2", "\"<pasted_content id=\\\"cd34\\\"><div>hi</div></pasted_content id=\\\"cd34\\\">\""));
+
+        Assert.Equal([(CompactKinds.Prompt, "- one\n- two"), (CompactKinds.Prompt, "<div>hi</div>")], lines.Select(l => (l.Kind, l.Text)));
     }
 
     [Fact]
@@ -174,13 +197,23 @@ public sealed class CompactFeedTests : IDisposable
         Assert.Equal([(bool?)false, true, null], codex.Select(l => l.Final));
     }
 
+    /// <summary>No timer: the tests tick the feed themselves, so a timer's tick can't race theirs.</summary>
+    private static readonly Func<Action, IRepeating> ByHand = _ => new NoRepeat();
+
+    private sealed class NoRepeat : IRepeating
+    {
+        public void Start(TimeSpan every) { }
+        public void Stop() { }
+        public void Dispose() { }
+    }
+
     [Fact]
     public void A_view_gets_every_line_when_switched_on_then_only_what_changed()
     {
         var path = Path.Combine(_dir, "s.jsonl");
         File.WriteAllText(path, User("u1", "\"First\"") + "\n");
         var sent = new List<ToPage.CompactLines>();
-        using var feed = new CompactFeed(sent.Add, (_, _) => path);
+        using var feed = new CompactFeed(sent.Add, (_, _) => path, ByHand);
 
         feed.Watch(new FromPage.CompactWatch("pane", "session-1", "claude"));
         feed.Tick();
@@ -201,7 +234,7 @@ public sealed class CompactFeedTests : IDisposable
     {
         var path = Path.Combine(_dir, "later.jsonl");
         var sent = new List<ToPage.CompactLines>();
-        using var feed = new CompactFeed(sent.Add, (_, _) => File.Exists(path) ? path : null);
+        using var feed = new CompactFeed(sent.Add, (_, _) => File.Exists(path) ? path : null, ByHand);
 
         feed.Watch(new FromPage.CompactWatch("pane", "session-2", "codex"));
         feed.Tick();

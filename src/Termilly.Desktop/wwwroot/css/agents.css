@@ -1,0 +1,152 @@
+/* Notifications, agent activity, subagents, cost, ports, the output viewer, replay, SSH reconnect and tmux. */
+
+/* The notification center's title, and under it how many there are. */
+.inbox-heading { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.inbox-heading .section-head { white-space: nowrap; }
+.inbox-actions { display: flex; align-items: center; gap: 6px; }
+.inbox-actions .btn[hidden] { display: none; }
+/* An entry and its × (shown on hover), which clears it. */
+.inbox-row { position: relative; }
+.inbox-row .inbox-item { padding-right: 28px; }
+.inbox-clear { position: absolute; top: 50%; right: 4px; transform: translateY(-50%); opacity: 0; }
+.inbox-row:hover .inbox-clear, .inbox-clear:focus-visible { opacity: 1; }
+.inbox-total { color: var(--muted); font-size: 11.5px; white-space: nowrap; }
+
+/* Agent activity line and stop button (js/agentline.js). */
+.agent-line { overflow: hidden; margin: -2px 0 3px 31px; padding-right: 8px; color: var(--muted); font-size: 11px; line-height: 15px; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.agent-line.working { color: color-mix(in srgb, var(--accent) 55%, var(--muted)); }
+.agent-line.needs-input { color: var(--attention); }
+.agent-line.error { color: var(--danger, #ff7b72); }
+.agent-stop { display: none; flex: none; width: 16px; height: 16px; margin-left: 4px; border-radius: 4px; background: color-mix(in srgb, var(--danger, #ff7b72) 18%, transparent); position: relative; }
+.agent-stop::after { content: ''; position: absolute; inset: 5px; border-radius: 1px; background: var(--danger, #ff7b72); }
+.tab-row:hover .agent-stop { display: inline-block; }
+.agent-stop:hover { background: color-mix(in srgb, var(--danger, #ff7b72) 35%, transparent); }
+.pane-btn.agent-stop-btn { display: inline-flex; align-items: center; gap: 4px; width: auto; padding: 0 7px; border: 1px solid color-mix(in srgb, var(--danger, #ff7b72) 45%, transparent); color: var(--danger, #ff7b72); font-size: 11px; font-weight: 600; opacity: 1; }
+.pane-btn.agent-stop-btn[hidden] { display: none; }
+.pane-btn.agent-stop-btn svg { width: 11px; height: 11px; fill: currentColor; }
+
+/* Subagents under their terminal (js/subagents.js). */
+.sub-rows { margin: 0 0 4px 22px; padding-left: 8px; border-left: 1px dashed var(--border-strong); }
+.sub-row { display: flex; align-items: center; gap: 6px; min-width: 0; height: 20px; padding: 0 6px 0 2px; border-radius: 5px; color: var(--muted); font-size: 11.5px; cursor: pointer; }
+.sub-row:hover { background: var(--hover); color: var(--text); }
+.sub-icon { display: grid; flex: none; place-items: center; width: 12px; font-size: 10px; }
+.sub-row.done .sub-icon { color: var(--ok, #7ee787); }
+.sub-row.unknown .sub-icon { color: var(--muted); }
+.sub-row.error .sub-icon { color: var(--danger, #ff7b72); }
+.sub-spin, .busy-spin { flex: none; width: 9px; height: 9px; border: 1.5px solid var(--accent); border-right-color: transparent; border-radius: 50%; animation: sub-spin 0.9s linear infinite; }
+@keyframes sub-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .sub-spin, .busy-spin { animation: none; } }
+.sub-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sub-name b { color: var(--text); font-weight: 500; }
+.sub-row.done .sub-name b, .sub-row.unknown .sub-name b { color: var(--muted); }
+.sub-bg { padding: 0 4px; border-radius: 3px; background: var(--hover); font-size: 10px; }
+.sub-tool { flex: none; padding: 0 5px; border-radius: 4px; background: var(--accent-fill); color: var(--text); font-size: 10.5px; }
+.sub-tool.needs, .sub-row.needs .sub-icon { background: color-mix(in srgb, var(--attention) 22%, transparent); color: var(--attention); }
+.sub-time { flex: none; font-variant-numeric: tabular-nums; font-size: 10.5px; }
+.sub-badge { padding: 0 5px; border-radius: 8px; background: var(--accent-fill); color: var(--accent); font-size: 10px; font-weight: 600; line-height: 15px; white-space: nowrap; }
+
+/* Agent cost (js/cost.js). */
+.cost-chip { padding: 0 4px; border-radius: 4px; color: var(--muted); font-size: 10.5px; font-variant-numeric: tabular-nums; }
+.tab-row:hover .cost-chip, .tab-row.focused .cost-chip { color: var(--text); }
+.ws-cost { margin-left: auto; margin-right: 6px; color: var(--muted); font-size: 10.5px; font-variant-numeric: tabular-nums; }
+.ws-cost + .ws-count { margin-left: 0; }
+.sub-cost { flex: none; color: var(--muted); font-size: 10.5px; font-variant-numeric: tabular-nums; }
+.cu-cost { margin-right: 6px; color: var(--ok, #7ee787); font-weight: 600; font-variant-numeric: tabular-nums; }
+.cu-cost-rows { border-top: 1px solid var(--border); }
+
+.results-all { display: flex; flex-direction: column; gap: 2px; max-height: 420px; overflow-y: auto; }
+.res-all-row { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 7px; text-align: left; }
+.res-all-row:hover { background: var(--hover); }
+.res-kind { flex: none; width: 92px; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
+.res-kind.pr { color: var(--accent); }
+.res-kind.app { color: var(--ok, #7ee787); }
+.res-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.res-where { flex: none; color: var(--muted); font-size: 11.5px; }
+
+/* Project status (js/gitstatus.js): listening ports in the sidebar. */
+.port-chip { flex: none; padding: 0 4px; border-radius: 4px; background: color-mix(in srgb, var(--ok, #7ee787) 14%, transparent); color: var(--ok, #7ee787); font-size: 10.5px; font-variant-numeric: tabular-nums; line-height: 16px; cursor: pointer; }
+.port-chip:hover { background: color-mix(in srgb, var(--ok, #7ee787) 28%, transparent); }
+.ws-row { min-width: 0; overflow: hidden; }
+.ws-row .ws-name { flex: 0 1 auto; min-width: 48px; }
+
+/* The output viewer (js/viewer.js): a panel over the right edge, like the change preview's. */
+.viewer-panel { position: absolute; top: 0; right: 0; bottom: 0; z-index: 56; display: flex; width: min(58vw, 960px); min-width: 340px; box-shadow: var(--shadow-pop); border-radius: var(--radius); }
+.viewer-panel[hidden] { display: none; }
+.viewer { flex: 1; border-color: var(--border-strong); }
+.vw-icon svg { width: 13px; height: 13px; color: var(--accent); }
+.vw-name { max-width: 380px; font-family: var(--mono); font-size: 12px; }
+.vw-live { padding: 0 6px; border-radius: 8px; background: color-mix(in srgb, var(--ok, #7ee787) 18%, transparent); color: var(--ok, #7ee787); font-size: 10px; font-weight: 700; text-transform: uppercase; }
+.vw-live[hidden] { display: none; }
+.vw-count { margin-left: auto; color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.vw-bar { display: flex; flex: none; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 8px; border-bottom: 1px solid var(--border); background: var(--surface); }
+.vw-filter { flex: 1; min-width: 160px; height: 26px; font-family: var(--mono); font-size: 12px; }
+.vw-context { width: auto; height: 26px; }
+.vw-levels, .vw-toggles { display: inline-flex; gap: 3px; padding: 2px; border: 1px solid var(--border-strong); border-radius: 7px; }
+.vw-levels button, .vw-toggles button { padding: 2px 8px; border-radius: 5px; color: var(--muted); font-size: 11.5px; }
+.vw-levels button:hover, .vw-toggles button:hover { color: var(--text); }
+.vw-levels button.on, .vw-toggles button.on { background: var(--accent-fill); color: var(--text-strong); }
+.vw-levels [data-level="error"].on { background: color-mix(in srgb, var(--danger, #ff7b72) 22%, transparent); }
+.vw-levels [data-level="warn"].on { background: color-mix(in srgb, var(--attention) 22%, transparent); }
+.vw-toggles [hidden] { display: none; }
+.vw-scroll { position: relative; flex: 1; min-height: 0; overflow: auto; background: var(--term-surface, var(--bg)); font: var(--term-font-size, 13px)/1.45 var(--term-font, var(--mono)); }
+.vw-rows { min-width: max-content; }
+.viewer.wrap .vw-rows { min-width: 0; }
+.vw-row { display: flex; padding-right: 12px; white-space: pre; }
+.viewer.wrap .vw-row { white-space: pre-wrap; word-break: break-all; }
+.vw-row:hover { background: var(--hover); }
+.vw-no { flex: none; width: 52px; padding-right: 10px; color: var(--faint, #555); text-align: right; -webkit-user-select: none; user-select: none; }
+.vw-text { min-width: 0; }
+.vw-row.error .vw-text { color: var(--danger, #ff7b72); }
+.vw-row.warn .vw-text { color: var(--attention); }
+.vw-row.hit { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+.vw-row mark { border-radius: 2px; background: var(--accent-soft); color: inherit; }
+.vw-gap { padding-left: 52px; color: var(--faint, #555); line-height: 1.1; -webkit-user-select: none; user-select: none; }
+.vw-empty { padding: 24px; color: var(--muted); font-family: var(--ui-font, sans-serif); font-size: 13px; }
+.vw-json summary { cursor: pointer; }
+.vw-json summary::marker { color: var(--muted); }
+.vw-json pre { margin: 2px 0 4px; white-space: pre; }
+.vw-k { color: #79c0ff; }
+.vw-s { color: #a5d6ff; }
+.vw-n { color: #d2a8ff; }
+[data-theme="light"] .vw-k { color: #0550ae; }
+[data-theme="light"] .vw-s { color: #0a3069; }
+[data-theme="light"] .vw-n { color: #8250df; }
+
+/* Terminals working together (js/together.js): who's reading or typing here just now. */
+.access-mark { flex: none; padding: 0 7px; border-radius: 8px; background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--text); font-size: 10.5px; line-height: 17px; white-space: nowrap; animation: access-in 0.3s ease-out; }
+.access-mark[hidden] { display: none; }
+@keyframes access-in { from { opacity: 0; transform: translateY(-2px); } }
+.pane-btn.vw-send { width: auto; padding: 0 8px; border: 1px solid var(--accent-soft); color: var(--accent); font-size: 11px; font-weight: 600; opacity: 1; }
+
+/* Replay (js/replay.js): the player over the window. */
+.replay-layer { z-index: 90; }
+.replay { display: flex; flex-direction: column; max-width: calc(100vw - 48px); max-height: calc(100vh - 48px); overflow: hidden; border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow-pop); }
+.rp-icon svg { width: 13px; height: 13px; color: var(--accent); }
+.rp-sub { margin-left: 8px; color: var(--muted); font-size: 11px; }
+.rp-screen { flex: 1; min-height: 0; overflow: auto; padding: 8px 10px; background: #0a0a0a; }
+.rp-bar { display: flex; flex: none; align-items: center; gap: 10px; padding: 8px 10px; border-top: 1px solid var(--border); }
+.rp-play { min-width: 64px; }
+.rp-time { flex: none; color: var(--muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.rp-track { position: relative; flex: 1; min-width: 160px; }
+.rp-seek { width: 100%; accent-color: var(--accent); }
+.rp-marks { position: absolute; inset: 0 7px; pointer-events: none; }
+.rp-marks i { position: absolute; top: -3px; width: 2px; height: 7px; margin-left: -1px; border-radius: 1px; background: var(--ok, #7ee787); pointer-events: auto; }
+.rp-idle { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); font-size: 11.5px; white-space: nowrap; }
+.log-chip { color: var(--accent); }
+
+/* SSH reconnect (js/reconnect.js): the bar over a terminal whose connection dropped. */
+.reconnect-bar { position: absolute; top: 38px; left: 50%; z-index: 6; display: flex; align-items: center; gap: 10px; max-width: calc(100% - 24px); padding: 7px 8px 7px 12px; transform: translateX(-50%); border: 1px solid color-mix(in srgb, var(--attention) 50%, transparent); border-radius: 9px; background: color-mix(in srgb, var(--attention) 12%, var(--surface)); box-shadow: var(--shadow-pop); font-size: 12.5px; white-space: nowrap; }
+.rc-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--attention); animation: rec-blink 1.2s ease-in-out infinite; }
+.rc-text { overflow: hidden; text-overflow: ellipsis; }
+/* "Set up Termilly on this host" (js/remotehost.js): an offer, not a problem, so in the accent rather than yellow. */
+.remote-bar, .ssh-save-bar { position: absolute; top: 38px; left: 50%; z-index: 6; display: flex; align-items: center; gap: 10px; max-width: calc(100% - 24px); padding: 7px 8px 7px 12px; transform: translateX(-50%); border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); border-radius: 9px; background: color-mix(in srgb, var(--accent) 10%, var(--surface)); box-shadow: var(--shadow-pop); font-size: 12.5px; white-space: nowrap; }
+.remote-bar .rb-text, .ssh-save-bar .rb-text { overflow: hidden; text-overflow: ellipsis; }
+/* Both bars at once (the password asked, the host not set up yet): the second sits under the first. */
+.remote-bar ~ .ssh-save-bar, .ssh-save-bar ~ .remote-bar { top: 84px; }
+/* Settings › SSH’s connection dialog: a host ~/.ssh/config already has, and the keys in ~/.ssh to pick from. */
+.ssh-note { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 2px 0 10px; color: var(--muted); font-size: 12.5px; }
+.ssh-keys { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; }
+.ssh-keys:empty { display: none; }
+
+/* tmux (js/tmux.js): fields shown only for some choices. */
+.dialog-field[hidden] { display: none; }

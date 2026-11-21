@@ -3,7 +3,7 @@
 // stay laid out so their terminals keep the right size), the split layout inside it, and tab actions.
 
 import { PAGE } from './protocol.js';
-import { send, request, platform, PLATFORM } from './host.js';
+import { send, request, platform, PLATFORM, mac } from './host.js';
 import {
   state, on, emit, persist, newId, activeWs, isAway, firstShown, wsById, tabsOf, tabTitle, defaultProfile, ensureTag, activityOf, leaves,
   replaceNode, findLeaf, detachLeaf, groupOf, firstTabOf, markSeen, findPreview, withoutPreview, EVENTS, NODE, SPLIT,
@@ -12,7 +12,7 @@ import {
 import { ICONS, tabBadgeHtml, activityHtml } from './ui.js';
 import { openTerminal, disposeTerminal, bufferLines, scheduleFit, prepareStart, holdBack, isHeld } from './terminals.js';
 import { wake, restAside } from './hibernate.js';
-import { byId, find, targetOf, WORKSPACE_ID, CANVAS_2D, dragPointer, onMiddleClick } from './dom.js';
+import { byId, find, targetOf, WORKSPACE_ID, CANVAS_2D, dragPointer, onMiddleClick, opensMenu, keepingSelectionIn } from './dom.js';
 import { ENV_CLASS, ENV_COLOR } from './environments.js';
 import { detach, closeWindow, focusWindow, setWindowTitle, OFFSET_PX, MIN_WIDTH_PX } from './windows.js';
 import { followGpu } from './gpu.js';
@@ -86,7 +86,7 @@ const JPEG = 'image/jpeg';
  * What newTab is given: all of it optional. restore is a reopened terminal's saved output.
  * @typedef {{ profile?: string | null, wsId?: string | null, dir?: 'row' | 'column', name?: string | null,
  *   tags?: string[], restore?: { lines: string[], closedAt: number }, cwd?: string | null, command?: string | null,
- *   note?: Note | null, tasks?: TodoTask[], virtual?: Tab['virtual'] }} NewTabOptions
+ *   note?: Note | null, tasks?: TodoTask[], virtual?: Tab['virtual'], env?: Record<string, string> | null }} NewTabOptions
  */
 
 /**
@@ -174,8 +174,13 @@ export function createView(tab, { draggable = true } = {}) {
     el.append(status);
   }
   // A click in a field on the pane (its name being renamed) stays there: giving the terminal the keyboard would end
-  // the edit, and a click there only moves the cursor.
-  el.addEventListener('mousedown', e => { if (!targetOf(e).closest('input')) focusTab(tab); }, true);
+  // the edit, and a click there only moves the cursor. A right-click keeps the Compact and Minimal views' selected text
+  // for the menu (xterm keeps its own selection).
+  el.addEventListener('mousedown', e => {
+    if (targetOf(e).closest('input')) return;
+    if (opensMenu(e, mac)) keepingSelectionIn(el, () => focusTab(tab));
+    else focusTab(tab);
+  }, true);
   if (draggable) wireDrag(tab, tab.view.header);
 }
 
@@ -184,14 +189,14 @@ export function createView(tab, { draggable = true } = {}) {
  * focused tab. dir 'row' puts it to the right, 'column' below; with no dir, it splits along the longer side.
  * @param {NewTabOptions} [options]
  */
-export function newTab({ profile = defaultProfile(), wsId = state.activeId, dir, name = null, tags = [], restore, cwd = null, command = null, note = null, tasks, virtual = null } = {}) {
+export function newTab({ profile = defaultProfile(), wsId = state.activeId, dir, name = null, tags = [], restore, cwd = null, command = null, note = null, tasks, virtual = null, env = null } = {}) {
   const ws = /** @type {Workspace} */ (wsById(wsId) ?? activeWorkspace());
   // A fresh terminal starts with its profile's tags (an SSH host to production gets "prod").
   if (!restore && !tags.length) tags = state.profiles.find(p => p.id === profile)?.tags ?? [];
   for (const tag of tags) ensureTag(tag);
   const tab = /** @type {Tab} */ ({
     id: newId('t'), wsId: ws.id, profile, name, tags: [...tags], noHistory: !!virtual, attention: false, startedAt: Date.now(), view: null, note, ...(tasks?.length ? { tasks } : {}),
-    startCwd: cwd, virtual,
+    startCwd: cwd, virtual, ...(env ? { env } : {}),
   });
   // A reopened terminal's output; a command from the API (termilly open), or the profile's own (Claude Code: claude).
   prepareStart(tab, { output: restore ?? null, command: command ?? (restore ? null : state.profiles.find(p => p.id === profile)?.startCommand ?? null) });

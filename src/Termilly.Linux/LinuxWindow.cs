@@ -18,6 +18,7 @@ internal sealed class LinuxWindow
     private static readonly Size StartSize = new(1280, 820);
     /// <summary>Center() misplaces the window under XWayland.</summary>
     private static readonly Point StartLocation = new(80, 60);
+    private static readonly Rectangle StartFrame = new(StartLocation, StartSize);
     private const int MinWidth = 480;
     private const int MinHeight = 320;
     /// <summary>How long a closing window waits for the page's last snapshot.</summary>
@@ -35,6 +36,8 @@ internal sealed class LinuxWindow
     private volatile bool _closing;
     /// <summary>The closing handler (<see cref="Closing"/>): true keeps the window open for now.</summary>
     private Func<bool>? _keepOpen;
+    /// <summary>Linux: where the window was last, and whether it was maximized (macOS has MacPlacement).</summary>
+    private readonly LinuxPlacement? _placement = OperatingSystem.IsLinux() ? new LinuxPlacement(TimeProvider.System) : null;
     // The window's state the page last heard (see PostState): it starts in front.
     private volatile bool _minimized;
     private volatile bool _active = true;
@@ -51,6 +54,40 @@ internal sealed class LinuxWindow
         if (_window is { } window && _created)
         {
             window.Invoke(() => ApplyZoom(window));
+        }
+    }
+
+    /// <summary>See-through and blur (Settings › Appearance › Background): the latest asked, applied once the window exists.</summary>
+    private volatile bool _seeThrough;
+    private volatile bool _blur;
+
+    /// <summary>
+    /// The window's background changed: on macOS its web views draw nothing behind the page while see-through, and both
+    /// systems blur behind where they can (KDE, macOS). Linux windows are always see-through (the page paints them).
+    /// </summary>
+    public void SetBackdrop(BackgroundSettings background)
+    {
+        _seeThrough = background.SeeThrough;
+        _blur = background.SeeThrough && background.Effect == BackgroundValues.Effect.Blur;
+        if (_window is { } window && _created)
+        {
+            window.Invoke(ApplyBackdrop);
+        }
+    }
+
+    private void ApplyBackdrop()
+    {
+        if (OperatingSystem.IsLinux())
+        {
+            if (GtkWindow.Find() is { } main)
+            {
+                LinuxBlur.Set(main, _blur);
+            }
+            DetachedWindows.SetBlur(_blur);
+        }
+        else if (OperatingSystem.IsMacOS())
+        {
+            MacBackdrop.SetAll(_seeThrough, _blur);
         }
     }
 
@@ -113,12 +150,13 @@ internal sealed class LinuxWindow
     private PhotinoWindow Create(WindowTheme theme, PageChannel channel, PageHost host, QuitGate quit)
     {
         PhotinoWindow? window = null;
+        var start = _placement?.Start(StartFrame) ?? StartFrame;
         // LogVerbosity 0: Photino otherwise prints every message to and from the page, settings and scrollback included.
         window = new PhotinoWindow { LogVerbosity = 0 }
             .SetTitle(GtkWindow.Title)
             .SetUseOsDefaultSize(false)
-            .SetSize(StartSize)
-            .SetLocation(StartLocation)
+            .SetSize(start.Size)
+            .SetLocation(start.Location)
             .SetResizable(true)
             .SetChromeless(true)
             // Linux: see-through, so the page's rounded corners (app.css, data-corners) show the desktop behind them.
@@ -134,9 +172,11 @@ internal sealed class LinuxWindow
                 using var doc = JsonDocument.Parse(message);
                 host.OnMessage(doc.RootElement);
             })
-            .RegisterMaximizedHandler((_, _) => PostState(channel, window!, minimized: false))
-            .RegisterRestoredHandler((_, _) => PostState(channel, window!, minimized: false))
-            .RegisterMinimizedHandler((_, _) => PostState(channel, window!, minimized: true))
+            .RegisterMaximizedHandler((_, _) => StateChanged(channel, window!, minimized: false))
+            .RegisterRestoredHandler((_, _) => StateChanged(channel, window!, minimized: false))
+            .RegisterMinimizedHandler((_, _) => StateChanged(channel, window!, minimized: true))
+            .RegisterLocationChangedHandler((_, _) => _placement?.Moved())
+            .RegisterSizeChangedHandler((_, _) => _placement?.Moved())
             .RegisterFocusInHandler((_, _) => PostState(channel, window!, active: true))
             .RegisterFocusOutHandler((_, _) => PostState(channel, window!, active: false))
             .RegisterWindowClosingHandler((_, _) => Closing(window!, host, quit));
@@ -161,6 +201,7 @@ internal sealed class LinuxWindow
             return true; // keep the window open for now
         }
         _closing = true;
+        _placement?.Save();
         if (OperatingSystem.IsMacOS())
         {
             MacWindows.CloseAll();
@@ -205,11 +246,15 @@ internal sealed class LinuxWindow
                 DetachedWindows.SetZoom(_zoom / (double)InterfaceSettings.DefaultZoom);
                 GtkWindow.ClearBackground(main);
                 DetachedWindows.Hook(main);
+                ApplyBackdrop();
+                // After ClearBackground, which may take the window down and show it again.
+                _placement?.Restore(window, StartFrame);
             }
             else if (OperatingSystem.IsMacOS())
             {
                 // Rounded corners, maximize, and the page's own windows (Photino does none of them on macOS).
                 MacWindows.Hook(action => window.Invoke(action), _zoom / (double)InterfaceSettings.DefaultZoom);
+                ApplyBackdrop();
                 // Cmd+Q quits as Close does: asking first, after the last snapshot. Once the window has closed, it may.
                 MacQuit.Hook(() =>
                 {
@@ -222,6 +267,13 @@ internal sealed class LinuxWindow
                 });
             }
         });
+    }
+
+    /// <summary>Maximized, restored or minimized: the page hears it, and where the window was is kept straight.</summary>
+    private void StateChanged(PageChannel channel, PhotinoWindow window, bool minimized)
+    {
+        _placement?.StateChanged();
+        PostState(channel, window, minimized: minimized);
     }
 
     /// <summary>Tells the page the window's state after a change to one part of it (the others stay as they were).</summary>
