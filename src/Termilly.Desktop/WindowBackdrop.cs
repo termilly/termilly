@@ -71,13 +71,7 @@ internal static class WindowBackdrop
         {
             return;
         }
-        // Windows takes a blur only on a window that had an effect before it was first shown: every window gets a clear
-        // one then (it draws nothing), so a blur can be turned on later.
-        if (Prepared.Add(hwnd))
-        {
-            Dwm.Prepare(hwnd);
-            window.Closed += (_, _) => Prepared.Remove(hwnd);
-        }
+        Prepare(window, hwnd);
         var seeThrough = background.SeeThrough;
         // A window never made see-through is otherwise left as it is (the default): nothing to undo.
         if (!seeThrough && !SolidAgain.ContainsKey(hwnd))
@@ -114,6 +108,19 @@ internal static class WindowBackdrop
         if (!seeThrough)
         {
             SolidAgain.Remove(hwnd);
+        }
+    }
+
+    /// <summary>
+    /// Windows takes a blur only on a window that had an effect before it was first shown: every window gets a clear one
+    /// then (it draws nothing), so a blur can be turned on later.
+    /// </summary>
+    private static void Prepare(Window window, IntPtr hwnd)
+    {
+        if (Prepared.Add(hwnd))
+        {
+            Dwm.Prepare(hwnd);
+            window.Closed += (_, _) => Prepared.Remove(hwnd);
         }
     }
 
