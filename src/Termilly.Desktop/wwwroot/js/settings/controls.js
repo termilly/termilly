@@ -34,9 +34,11 @@ export const row = (label, description, control, { stack = false, keywords = '',
  * Segmented choice bound to a setting. Options: [value, label, icon?].
  * @param {string} key
  * @param {Array<[string | number, string, string?]>} options
+ * @param {{ firstIfNone?: boolean }} [how] firstIfNone: a value not among the options shows as the first one (what
+ *   the app uses instead, as with an effect this system doesn't have).
  */
-export const seg = (key, options) => `
-  <span class="seg" data-setting="${key}">${options.map(([value, label, icon]) =>
+export const seg = (key, options, how = {}) => `
+  <span class="seg" data-setting="${key}"${how.firstIfNone ? ' data-first-if-none' : ''}>${options.map(([value, label, icon]) =>
     `<button data-value="${value}">${icon ?? ''}${label}</button>`).join('')}</span>`;
 
 /**

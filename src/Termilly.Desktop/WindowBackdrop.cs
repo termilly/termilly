@@ -28,10 +28,13 @@ internal static class WindowBackdrop
 
     private static readonly int Build = Environment.OSVersion.Version.Build;
 
-    /// <summary>The effects this Windows has: Mica only on 11.</summary>
+    /// <summary>
+    /// The effects this Windows has: Mica only on 11. Windows 10 has no see-through without a blur (its glass shows
+    /// white there), so it has no None.
+    /// </summary>
     public static IReadOnlyList<string> Effects { get; } = Build >= Windows11
         ? [BackgroundValues.Effect.None, BackgroundValues.Effect.Blur, BackgroundValues.Effect.Acrylic, BackgroundValues.Effect.Mica]
-        : [BackgroundValues.Effect.None, BackgroundValues.Effect.Blur, BackgroundValues.Effect.Acrylic];
+        : [BackgroundValues.Effect.Blur, BackgroundValues.Effect.Acrylic];
 
     /// <summary>
     /// A browser can show the background pictures (no other site's page can fetch them as data), nothing else of the
@@ -68,8 +71,15 @@ internal static class WindowBackdrop
         {
             return;
         }
+        // Windows takes a blur only on a window that had an effect before it was first shown: every window gets a clear
+        // one then (it draws nothing), so a blur can be turned on later.
+        if (Prepared.Add(hwnd))
+        {
+            Dwm.Prepare(hwnd);
+            window.Closed += (_, _) => Prepared.Remove(hwnd);
+        }
         var seeThrough = background.SeeThrough;
-        // A window never made see-through is left exactly as it is (the default): nothing to undo.
+        // A window never made see-through is otherwise left as it is (the default): nothing to undo.
         if (!seeThrough && !SolidAgain.ContainsKey(hwnd))
         {
             return;
@@ -93,8 +103,10 @@ internal static class WindowBackdrop
             window.Background = Brushes.Transparent;
             web.DefaultBackgroundColor = System.Drawing.Color.Transparent;
         }
-        var effect = seeThrough && Effects.Contains(background.Effect) ? background.Effect : BackgroundValues.Effect.None;
-        Dwm.SetDark(hwnd, seeThrough && dark); // solid again: off, as a window that never was see-through
+        var effect = !seeThrough ? BackgroundValues.Effect.None : Effects.Contains(background.Effect) ? background.Effect : Effects[0];
+        // Windows 11's Mica and acrylic take a dark tint from it; Windows 10's acrylic turns black with it. Solid again:
+        // off, as a window that never was see-through.
+        Dwm.SetDark(hwnd, seeThrough && dark && Build >= Windows11);
         Dwm.SetEffect(hwnd, seeThrough, effect, tint);
         if (!seeThrough)
         {
@@ -104,6 +116,9 @@ internal static class WindowBackdrop
 
     /// <summary>The windows made see-through, with the colour WPF cleared them to before (theirs again when solid).</summary>
     private static readonly Dictionary<IntPtr, Color> SolidAgain = [];
+
+    /// <summary>The windows given their clear effect (Dwm.Prepare).</summary>
+    private static readonly HashSet<IntPtr> Prepared = [];
 
     /// <summary>The compositor's calls: what shows through a see-through window.</summary>
     private static class Dwm
@@ -118,11 +133,12 @@ internal static class WindowBackdrop
         private const int DWMSBT_TRANSIENTWINDOW = 3;
 
         private const int WCA_ACCENT_POLICY = 19;
-        private const int ACCENT_DISABLED = 0;
+        /// <summary>An effect that draws nothing (a fully clear colour): "no effect" that still lets a blur come later.</summary>
+        private const int ACCENT_ENABLE_TRANSPARENTGRADIENT = 2;
         private const int ACCENT_ENABLE_BLURBEHIND = 3;
         private const int ACCENT_ENABLE_ACRYLICBLURBEHIND = 4;
-        /// <summary>Acrylic's tint on Windows 10: the theme's colour at this alpha (0 to 255), so the blur still shows.</summary>
-        private const byte AcrylicTintAlpha = 0x99;
+        /// <summary>Acrylic's own tint on Windows 10: the theme's colour, faint (0 to 255), as the page already shades the window by Opacity.</summary>
+        private const byte AcrylicTintAlpha = 0x20;
         private const int AccentDrawAllBorders = 2;
         /// <summary>Where each channel sits in AABBGGRR.</summary>
         private const int AlphaShift = 24;
@@ -138,10 +154,14 @@ internal static class WindowBackdrop
             _ = DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, ref value, sizeof(int));
         }
 
+        /// <summary>The clear effect every window starts with (Apply says why).</summary>
+        public static void Prepare(IntPtr hwnd) => SetAccent(hwnd, ACCENT_ENABLE_TRANSPARENTGRADIENT, 0, 0);
+
         public static void SetEffect(IntPtr hwnd, bool seeThrough, string effect, string tint)
         {
-            // Everything off first, so switching from one effect to another leaves nothing of the old one.
-            SetAccent(hwnd, ACCENT_DISABLED, 0);
+            // Back to the clear effect first, so switching leaves nothing of the old one. Never off: Windows wouldn't
+            // take a blur again.
+            Prepare(hwnd);
             if (Build >= Windows11Backdrops)
             {
                 SetBackdrop(hwnd, seeThrough ? DWMSBT_NONE : DWMSBT_AUTO);
@@ -158,13 +178,13 @@ internal static class WindowBackdrop
             switch (effect)
             {
                 case BackgroundValues.Effect.Blur:
-                    SetAccent(hwnd, ACCENT_ENABLE_BLURBEHIND, 0);
+                    SetAccent(hwnd, ACCENT_ENABLE_BLURBEHIND, 0, AccentDrawAllBorders);
                     break;
                 case BackgroundValues.Effect.Acrylic when Build >= Windows11Backdrops:
                     SetBackdrop(hwnd, DWMSBT_TRANSIENTWINDOW);
                     break;
                 case BackgroundValues.Effect.Acrylic:
-                    SetAccent(hwnd, ACCENT_ENABLE_ACRYLICBLURBEHIND, TintOf(tint));
+                    SetAccent(hwnd, ACCENT_ENABLE_ACRYLICBLURBEHIND, TintOf(tint), AccentDrawAllBorders);
                     break;
                 case BackgroundValues.Effect.Mica when Build >= Windows11Backdrops:
                     SetBackdrop(hwnd, DWMSBT_MAINWINDOW);
@@ -205,9 +225,10 @@ internal static class WindowBackdrop
             return ((uint)AcrylicTintAlpha << AlphaShift) | ((uint)c.B << BlueShift) | ((uint)c.G << GreenShift) | c.R;
         }
 
-        private static void SetAccent(IntPtr hwnd, int state, uint colour)
+        /// <param name="flags">Which window edges the effect draws on: none for the clear one, which changes nothing.</param>
+        private static void SetAccent(IntPtr hwnd, int state, uint colour, int flags)
         {
-            var accent = new ACCENT_POLICY { AccentState = state, AccentFlags = AccentDrawAllBorders, GradientColor = colour };
+            var accent = new ACCENT_POLICY { AccentState = state, AccentFlags = flags, GradientColor = colour };
             var size = Marshal.SizeOf<ACCENT_POLICY>();
             var pointer = Marshal.AllocHGlobal(size);
             try

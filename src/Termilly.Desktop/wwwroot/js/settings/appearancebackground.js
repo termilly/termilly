@@ -53,7 +53,7 @@ async function choosePicture() {
 
 /** The effects this system has, if any beyond plain see-through. */
 const effectRow = () => (effects().length > 1
-  ? row('Effect', 'What shows through.', seg('background.effect', effects().map(e => [e, EFFECT_LABEL[e] ?? e])), { keywords: 'blur acrylic mica vibrancy glass frosted' })
+  ? row('Effect', 'What shows through.', seg('background.effect', effects().map(e => [e, EFFECT_LABEL[e] ?? e]), { firstIfNone: true }), { keywords: 'blur acrylic mica vibrancy glass frosted' })
   : '');
 
 /** @type {import('./page.js').Section} */

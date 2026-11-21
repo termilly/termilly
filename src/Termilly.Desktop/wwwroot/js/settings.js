@@ -425,9 +425,10 @@ function syncControls() {
   for (const el of /** @type {NodeListOf<HTMLElement>} */ (body.querySelectorAll('[data-setting]'))) {
     const value = getSetting(/** @type {string} */ (el.dataset.setting));
     if (el.classList.contains('seg')) {
-      for (const b of /** @type {NodeListOf<HTMLElement>} */ (el.querySelectorAll('[data-value]'))) {
-        b.classList.toggle('on', String(value) === b.dataset.value);
-      }
+      const options = [.../** @type {NodeListOf<HTMLElement>} */ (el.querySelectorAll('[data-value]'))];
+      const known = options.some(b => String(value) === b.dataset.value);
+      options.forEach((b, i) => b.classList.toggle('on', known ? String(value) === b.dataset.value
+        : i === 0 && el.dataset.firstIfNone !== undefined));
     } else if (el.classList.contains('switch')) {
       el.setAttribute('aria-checked', String(!!value));
     } else if (el.tagName === 'SELECT') {

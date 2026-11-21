@@ -35,6 +35,9 @@
 :root:is([data-see-through], [data-backdrop]) body[data-layout="minimal"][data-pane-names="line"] .pane > .pane-header {
   background: color-mix(in srgb, var(--header) var(--see-header), transparent);
 }
+/* Minimal draws its lines between panes as the workspace's own colour (minimal.css), which would cover everything
+   behind: here the gaps show through too. */
+:root:is([data-see-through], [data-backdrop]) body[data-layout="minimal"] #workspace { background: transparent; }
 /* Behind the terminals: the panes show the picture as it is (its shade keeps the text readable). */
 :root[data-backdrop="terminals"] #workspace .pane,
 :root[data-window-backdrop] body.detached-window > .pane { background: transparent; }
