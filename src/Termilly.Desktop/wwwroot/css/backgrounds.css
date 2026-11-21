@@ -46,12 +46,18 @@
 /* Over the theme's terminal colours (panes.css), which are !important: here they draw nothing. */
 :root[data-clear-terminals] .pane-body,
 :root[data-clear-terminals] .pane-body .xterm,
-:root[data-clear-terminals] .pane-body .xterm-viewport { background: transparent !important; }
+:root[data-clear-terminals] .pane-body .xterm-viewport,
+:root[data-clear-terminals] .pane-body .compact-view { background: transparent !important; }
 /* Where only the desktop or nothing shows behind a terminal (its workspace has None, a detached window without a
    picture) and it's meant to keep its colour (solid, or Solid terminals), the pane gives it. */
 :root[data-clear-terminals]:not([data-backdrop]):is(:not([data-see-through]), [data-solid-terminals]) body:not(.detached-window) .pane-body,
 :root[data-clear-terminals]:not([data-window-backdrop]):is(:not([data-see-through]), [data-solid-terminals]) body.detached-window .pane-body {
   background: var(--term-surface, var(--term-bg)) !important;
+}
+/* Compact view (statusbar.css) keeps its own colour there, over the terminal's. */
+:root[data-clear-terminals]:not([data-backdrop]):is(:not([data-see-through]), [data-solid-terminals]) body:not(.detached-window) .pane-body .compact-view,
+:root[data-clear-terminals]:not([data-window-backdrop]):is(:not([data-see-through]), [data-solid-terminals]) body.detached-window .pane-body .compact-view {
+  background: var(--surface) !important;
 }
 
 /* ---- The picture or gradient ---- */

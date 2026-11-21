@@ -85,3 +85,24 @@ function typedAt(buffer) {
   const from = line ? INPUT_MARK.exec(line.translateToString(false))?.[0].length ?? 0 : 0;
   return from > 0 && buffer.cursorX > from;
 }
+
+/** The terminal's clip while the view covers all of it. */
+const COVERED = 'inset(100% 0 0 0)';
+
+/**
+ * Hides the terminal's rows the view covers: over a picture or a see-through window the view draws no colour of its
+ * own, and the terminal's text would show through it.
+ * @param {HTMLElement | undefined} terminal xterm's element
+ * @param {HTMLElement} body the pane's body
+ * @param {number | null} covers how much of the body, from its top, the view covers (above the drawer, in pixels;
+ *   Infinity for all of it), or null while the view is hidden
+ */
+export function coverTerminal(terminal, body, covers) {
+  if (!terminal) return;
+  if (covers === null) {
+    terminal.style.clipPath = '';
+    return;
+  }
+  const top = covers - (terminal.getBoundingClientRect().top - body.getBoundingClientRect().top);
+  terminal.style.clipPath = covers === Infinity ? COVERED : `inset(${Math.max(0, top)}px 0 0 0)`;
+}

@@ -22,7 +22,7 @@ import { readMenu, questionMenu, cardHtml, menuKey, keyedByWhatShows, PROMPT_STA
 import { wireInput } from './compactinput.js';
 import { cardKey } from './compactcardkeys.js';
 import { wireViewMenu } from './termclipboard.js';
-import { liveRow, screenRows, rowsWithScrollback, drawerHolds, NO_DRAWER } from './compactdrawer.js';
+import { liveRow, screenRows, rowsWithScrollback, drawerHolds, coverTerminal, NO_DRAWER } from './compactdrawer.js';
 import { showPreview } from './compactpreview.js';
 
 /** @typedef {import('./compactlines.js').CompactLine} CompactLine */
@@ -255,8 +255,12 @@ function placeDrawer(tab) {
   if (found.row >= 0) c.drawerMenu = found.menu;
   c.drawerRow = row;
   const open = row >= 0;
-  c.el.style.bottom = open ? `${Math.max(0, view.body.clientHeight - rowTop(view, row))}px` : '';
+  // Its height from the top, as the terminal's rows are placed: a resize that keeps the rows keeps it on the same row.
+  const covers = open ? Math.min(view.body.clientHeight, Math.max(0, rowTop(view, row))) : Infinity;
+  c.el.style.bottom = open ? 'auto' : '';
+  c.el.style.height = open ? `${covers}px` : '';
   c.el.classList.toggle(DRAWER_CLASS, open);
+  coverTerminal(view.term.element, view.body, c.el.hidden ? null : covers);
   if (open === !!c.drawer) return;
   c.drawer = open;
   // The prompt box shows again (the drawer hid it, and it wasn't fitted to a resize meanwhile): its height for its text.
