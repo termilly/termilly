@@ -28,6 +28,16 @@ export const needsUnmet = (needs, setting) => needs.split(',').some(need => (nee
   : !setting(need)));
 
 /**
+ * Greys a row out (css/settings.css), its controls out of reach of the mouse and the keyboard, or makes it usable again.
+ * @param {HTMLElement} row
+ * @param {boolean} off
+ */
+export function greyOut(row, off) {
+  row.classList.toggle('needs-off', off);
+  for (const control of /** @type {NodeListOf<HTMLButtonElement>} */ (row.querySelectorAll('button, input, select'))) control.disabled = off;
+}
+
+/**
  * A labelled row: title and description on the left, the control on the right (or below with `stack`).
  * `keywords` are other words the search finds it by. `needs` is a switch it depends on ("group.key", or several
  * with commas): while one is off, the row is greyed out and can't be changed. "!group.key" is a switch that takes the

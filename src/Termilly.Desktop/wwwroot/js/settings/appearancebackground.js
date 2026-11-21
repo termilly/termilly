@@ -7,7 +7,7 @@ import { PAGE } from '../protocol.js';
 import { getSetting } from '../store.js';
 import { setSetting } from '../preferences.js';
 import { ICONS, escapeHtml } from '../ui.js';
-import { row, seg, toggle, group, slider } from './controls.js';
+import { row, seg, toggle, group, slider, greyOut } from './controls.js';
 import { SECTION, redraw } from './page.js';
 import { BACKGROUND } from '../constants.js';
 import { targetOf, showError } from '../dom.js';
@@ -25,6 +25,8 @@ const PICTURE_SETTING = 'background.picture';
 const NO_GRADIENT = '!background.themeGradient';
 const PERCENT = '%';
 const PIXELS = 'px';
+/** The rows of what shows the desktop through the window. */
+const SEE_THROUGH_SETTINGS = Object.freeze(['background.opacity', 'background.effect', 'background.solidTerminals']);
 /** The picture row's buttons, and where an error picking one shows. */
 const CHOOSE = '[data-background-choose]';
 const REMOVE = '[data-background-remove]';
@@ -53,6 +55,19 @@ async function choosePicture() {
   redraw();
 }
 
+/**
+ * A picture behind the whole window covers the desktop, so the see-through rows wait while there is one (behind the
+ * terminals it doesn't: the desktop still shows around them). Theme gradient greys them out by itself (their needs).
+ * @param {HTMLElement} body
+ */
+function syncSeeThrough(body) {
+  if (!getSetting(PICTURE_SETTING) || getSetting('background.behind') !== BEHIND.window) return;
+  for (const key of SEE_THROUGH_SETTINGS) {
+    const row = body.querySelector(`[data-setting="${key}"], [data-range-setting="${key}"]`)?.closest('.set-row');
+    if (row instanceof HTMLElement) greyOut(row, true);
+  }
+}
+
 /** The effects this system has, if any beyond plain see-through. */
 const effectRow = () => (effects().length > 1
   ? row('Effect', 'What shows through.', seg('background.effect', effects().map(e => [e, EFFECT_LABEL[e] ?? e]), { firstIfNone: true }), { keywords: 'blur acrylic vibrancy glass frosted', needs: NO_GRADIENT })
@@ -73,6 +88,7 @@ const BACKGROUND_TAB = {
       + row('Dim', 'Keeps text readable.', slider('background.dim', DIM, PERCENT, 'Dim'), { keywords: 'picture dim darken shade', needs: NO_GRADIENT })
       + row('Blur', '', slider('background.blur', BLUR, PIXELS, 'Blur'), { keywords: 'picture blur soften', needs: NO_GRADIENT })
       + row('Show behind', '', seg('background.behind', [[BEHIND.terminals, 'Terminals'], [BEHIND.window, 'Whole window']]), { keywords: 'picture behind window terminals', needs: NO_GRADIENT })),
+  sync: syncSeeThrough,
   click(e) {
     if (targetOf(e).closest(CHOOSE)) {
       choosePicture();
