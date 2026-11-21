@@ -38,14 +38,30 @@
 :root:is([data-see-through], [data-backdrop]) body[data-layout="minimal"][data-pane-names="line"] .pane > .pane-header {
   background: color-mix(in srgb, var(--header) var(--see-header), transparent);
 }
-/* The Snippets, Schedules and Git windows in windows of their own: tinted as a terminal's window is. Shown over the
-   main window instead (macOS), they're dialogs and stay solid. */
-:root:is([data-see-through], [data-window-backdrop]) body.detached-window > :is(.snippets-win, .git-win) {
+/* The Snippets, Schedules and Git windows: in windows of their own, tinted as a terminal's window is; shown over the
+   main window instead (macOS), frosted glass over what's behind them, as they're over the terminals, not the
+   background. */
+:root:is([data-see-through], [data-window-backdrop]) body.detached-window > :is(.snippets-win, .git-win),
+:root:is([data-see-through], [data-backdrop]) body:not(.detached-window) .modal-layer > :is(.snippets-win, .git-win) {
   background: color-mix(in srgb, var(--surface) var(--see-region), transparent);
 }
+/* The blur written out: macOS's WebKit can drop a backdrop-filter that takes it from a variable (WebKit bug 297620). */
+:root:is([data-see-through], [data-backdrop]) body:not(.detached-window) .modal-layer > :is(.snippets-win, .git-win) {
+  -webkit-backdrop-filter: blur(24px) saturate(1.3);
+  backdrop-filter: blur(24px) saturate(1.3);
+}
+/* The layer's own slight blur (menus.css) would keep theirs from reaching the page behind, and its shade would darken
+   the glass: they nearly fill the window, so theirs is enough. */
+:root:is([data-see-through], [data-backdrop]) body:not(.detached-window) .modal-layer:is(.snippets-layer, .git-layer) {
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
 /* Their list and the diff are the window's own tint; the title bar and the diff's bars, the header's. */
-:root:is([data-see-through], [data-window-backdrop]) body.detached-window > :is(.snippets-win, .git-win) :is(.cw-side, .gw-diff) { background: transparent; }
-:root:is([data-see-through], [data-window-backdrop]) body.detached-window > :is(.snippets-win, .git-win) :is(.set-head, .gw-diff-head, .gw-pick-bar) {
+:root:is([data-see-through], [data-window-backdrop]) body.detached-window > :is(.snippets-win, .git-win) :is(.cw-side, .gw-diff),
+:root:is([data-see-through], [data-backdrop]) body:not(.detached-window) .modal-layer > :is(.snippets-win, .git-win) :is(.cw-side, .gw-diff) { background: transparent; }
+:root:is([data-see-through], [data-window-backdrop]) body.detached-window > :is(.snippets-win, .git-win) :is(.set-head, .gw-diff-head, .gw-pick-bar),
+:root:is([data-see-through], [data-backdrop]) body:not(.detached-window) .modal-layer > :is(.snippets-win, .git-win) :is(.set-head, .gw-diff-head, .gw-pick-bar) {
   background: color-mix(in srgb, var(--header) var(--see-header), transparent);
 }
 /* Minimal's bar that shows over a terminal on hover (minimal.css) floats like a menu: solid, as menus are. */
