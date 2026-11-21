@@ -106,7 +106,10 @@ internal static class WindowBackdrop
         var effect = !seeThrough ? BackgroundValues.Effect.None : Effects.Contains(background.Effect) ? background.Effect : Effects[0];
         // Windows 11's Mica and acrylic take a dark tint from it; Windows 10's acrylic turns black with it. Solid again:
         // off, as a window that never was see-through.
-        Dwm.SetDark(hwnd, seeThrough && dark && Build >= Windows11);
+        if (Build >= Windows11)
+        {
+            Dwm.SetDark(hwnd, seeThrough && dark);
+        }
         Dwm.SetEffect(hwnd, seeThrough, effect, tint);
         if (!seeThrough)
         {
