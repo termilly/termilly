@@ -28,6 +28,23 @@ public sealed class BackgroundTests : IDisposable
         Assert.Equal(BackgroundValues.Opacity.Max, settings.Opacity);
         Assert.Equal(BackgroundValues.Effect.None, settings.Effect);
         Assert.Null(settings.Picture);
+        Assert.Equal(BackgroundValues.Source.None, settings.Source);
+    }
+
+    [Fact]
+    public void Settings_saved_before_the_choice_show_their_picture_as_then()
+    {
+        Assert.Equal(BackgroundValues.Source.Picture, new BackgroundSettings { Picture = "0123456789abcdef.jpg" }.Normalize().Source);
+        Assert.Equal(BackgroundValues.Source.None, new BackgroundSettings().Normalize().Source);
+    }
+
+    [Fact]
+    public void The_theme_glow_keeps_the_picture_for_later_and_an_unknown_choice_falls_back()
+    {
+        var glow = new BackgroundSettings { Source = BackgroundValues.Source.Theme, Picture = "0123456789abcdef.jpg" }.Normalize();
+        Assert.Equal(BackgroundValues.Source.Theme, glow.Source);
+        Assert.Equal("0123456789abcdef.jpg", glow.Picture);
+        Assert.Equal(BackgroundValues.Source.None, new BackgroundSettings { Source = "video" }.Normalize().Source);
     }
 
     [Fact]

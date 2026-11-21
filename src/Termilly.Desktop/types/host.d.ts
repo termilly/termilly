@@ -417,7 +417,9 @@ interface BackgroundSettings {
   solidWhenInactive: boolean;
   /** Only the window around the terminals is see-through; the terminals keep their colour. */
   solidTerminals: boolean;
-  /** The picture's file in the backgrounds folder (), or none. */
+  /** What shows behind (). Settings saved before it had none: the picture, if one was chosen, as then. */
+  source: string | null;
+  /** The picture's file in the backgrounds folder (), or none; kept while the theme's glow shows. */
   picture: string | null;
   fit: string;
   dim: number;

@@ -203,6 +203,12 @@ export const BACKGROUND = Object.freeze({
     max: 100,
     default: 100,
   }),
+  source: Object.freeze({
+    none: 'none',
+    theme: 'theme',
+    picture: 'picture',
+    all: Object.freeze(['none', 'theme', 'picture']),
+  }),
   fit: Object.freeze({
     fill: 'fill',
     contain: 'fit',
@@ -242,7 +248,8 @@ export const BACKGROUND = Object.freeze({
     ocean: 'ocean',
     moss: 'moss',
     slate: 'slate',
-    all: Object.freeze(['aurora', 'ember', 'dusk', 'ocean', 'moss', 'slate']),
+    theme: 'theme',
+    all: Object.freeze(['theme', 'aurora', 'ember', 'dusk', 'ocean', 'moss', 'slate']),
   }),
 });
 

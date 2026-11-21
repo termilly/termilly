@@ -29,6 +29,15 @@ internal static class BackgroundValues
         public const int Default = Max;
     }
 
+    /// <summary>What shows behind: nothing, a glow drawn in the theme's own colours, or the picture chosen.</summary>
+    public static class Source
+    {
+        public const string None = "none";
+        public const string Theme = "theme";
+        public const string Picture = "picture";
+        public static readonly IReadOnlyList<string> All = [None, Theme, Picture];
+    }
+
     /// <summary>How a picture fills the space behind: covering it, all of it shown, at its own size, or repeated.</summary>
     public static class Fit
     {
@@ -86,7 +95,9 @@ internal static class BackgroundValues
         public const string Ocean = "ocean";
         public const string Moss = "moss";
         public const string Slate = "slate";
-        public static readonly IReadOnlyList<string> All = [Aurora, Ember, Dusk, Ocean, Moss, Slate];
+        /// <summary>A glow in the theme's own colours (js/backgrounds.js THEME_GLOW).</summary>
+        public const string Theme = "theme";
+        public static readonly IReadOnlyList<string> All = [Theme, Aurora, Ember, Dusk, Ocean, Moss, Slate];
     }
 }
 
@@ -104,7 +115,12 @@ internal sealed record BackgroundSettings
     public bool SolidWhenInactive { get; init; } = true;
     /// <summary>Only the window around the terminals is see-through; the terminals keep their colour.</summary>
     public bool SolidTerminals { get; init; }
-    /// <summary>The picture's file in the backgrounds folder (<see cref="BackgroundPictures"/>), or none.</summary>
+    /// <summary>
+    /// What shows behind (<see cref="BackgroundValues.Source"/>). Settings saved before it had none: the picture, if
+    /// one was chosen, as then.
+    /// </summary>
+    public string? Source { get; init; }
+    /// <summary>The picture's file in the backgrounds folder (<see cref="BackgroundPictures"/>), or none; kept while the theme's glow shows.</summary>
     public string? Picture { get; init; }
     public string Fit { get; init; } = BackgroundValues.Fit.Default;
     public int Dim { get; init; } = BackgroundValues.Dim.Default;
@@ -115,11 +131,21 @@ internal sealed record BackgroundSettings
     [System.Text.Json.Serialization.JsonIgnore]
     public bool SeeThrough => Opacity < BackgroundValues.Opacity.Max;
 
-    public BackgroundSettings Normalize() => this with
+    public BackgroundSettings Normalize()
+    {
+        var picture = BackgroundPictures.IsName(Picture) ? Picture : null;
+        var before = picture is null ? BackgroundValues.Source.None : BackgroundValues.Source.Picture;
+        return Clamped() with
+        {
+            Picture = picture,
+            Source = Source is null ? before : SettingChecks.OneOf(Source, BackgroundValues.Source.All, before),
+        };
+    }
+
+    private BackgroundSettings Clamped() => this with
     {
         Opacity = Math.Clamp(Opacity, BackgroundValues.Opacity.Min, BackgroundValues.Opacity.Max),
         Effect = SettingChecks.OneOf(Effect, BackgroundValues.Effect.All, BackgroundValues.Effect.Default),
-        Picture = BackgroundPictures.IsName(Picture) ? Picture : null,
         Fit = SettingChecks.OneOf(Fit, BackgroundValues.Fit.All, BackgroundValues.Fit.Default),
         Dim = Math.Clamp(Dim, BackgroundValues.Dim.Min, BackgroundValues.Dim.Max),
         Blur = Math.Clamp(Blur, BackgroundValues.Blur.Min, BackgroundValues.Blur.Max),
