@@ -54,7 +54,9 @@ body[data-layout="minimal"] .pane::after { content: ""; position: absolute; inse
 body[data-layout="minimal"] .pane.focused::after { box-shadow: var(--in-use-edge); }
 body[data-layout="minimal"] .pane[data-activity="needs"]::after { box-shadow: inset 0 0 0 1px var(--attention); }
 body[data-layout="minimal"] .pane[data-activity="error"]::after { box-shadow: inset 0 0 0 1px var(--danger); }
-/* The 1px gap is too thin to grab: the divider's handle reaches 3px either side of it. */
+/* The 1px gap is too thin to grab: the divider's handle reaches 3px either side of it, above what the terminals draw
+   over themselves (the Compact view, the focus edge), which would otherwise take the side it reaches into. */
+body[data-layout="minimal"] .divider { z-index: 6; }
 body[data-layout="minimal"] .divider::before { content: ""; position: absolute; inset: 0 -3px; z-index: 2; }
 body[data-layout="minimal"] .split.column > .divider::before { inset: -3px 0; }
 body[data-layout="minimal"] .bar-off { display: none !important; }
