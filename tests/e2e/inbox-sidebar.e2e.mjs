@@ -78,6 +78,14 @@ step('each note lands in its group, Needs you on top', async () => {
   ]);
 });
 
+step('Preview of a permission whose prompt can\'t be read shows the screen, with no choices', async () => {
+  await app.click('[data-lane="needs-you"] [data-preview]');
+  await app.waitFor('.cv-preview .cv-preview-text');
+  assert.equal(await app.eval(t => t.$$('.cv-preview [data-choice]').length), 0);
+  await app.click('.cv-preview [data-cancel]');
+  await app.waitFor('.cv-preview', { gone: true });
+});
+
 step('a permission is answered with Allow, and its buttons go', async () => {
   await app.waitFor('[data-lane="needs-you"] [data-answer="approve"]', { text: 'Allow' });
   await app.click('[data-lane="needs-you"] [data-answer="approve"]');

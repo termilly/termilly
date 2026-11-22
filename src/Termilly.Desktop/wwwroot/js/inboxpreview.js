@@ -34,5 +34,9 @@ export function previewWaiting(tab, detail) {
   const menu = asked ?? { title: detail, context: [], choices: [], whole: null, prompt: screenText(tab, detail) };
   const agent = runningAgent(tab);
   const shown = menuKey(menu);
-  showPreview(menu, agent ? agentKind(agent).short : tabTitle(tab), key => pick(tab, key, shown));
+  // Only for the very report it was opened on: a newer question can look the same, and pick can't tell them apart.
+  const report = tab.agent;
+  showPreview(menu, agent ? agentKind(agent).short : tabTitle(tab), key => {
+    if (tab.agent === report) pick(tab, key, shown);
+  });
 }
