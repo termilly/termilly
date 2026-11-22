@@ -85,9 +85,30 @@ step('a permission is answered with Allow, and its buttons go', async () => {
   await app.waitFor('[data-lane="needs-you"] .inbox-answer', { gone: true });
 });
 
+step('Preview shows the whole permission prompt, and a choice picked there answers it', async () => {
+  const prompt = ['', '', '  Would you like to run the following command?', '', '  $ npm test', '', '› 1. Yes, proceed (y)', '  2. No, and tell the agent what to do differently (esc)', ''];
+  await app.eval(async (t, prompt) => {
+    const { state } = await t.import('store.js');
+    const tab = [...state.tabs.values()].find(x => x.name === 'asks');
+    await new Promise(done => tab.view.term.write(`\x1b[2J\x1b[H${prompt.join('\r\n')}`, done));
+  }, prompt);
+  await agentSays('asks', { state: 'needs-input', tool: 'Bash', target: 'npm test' });
+  await app.click('[data-lane="needs-you"] [data-preview]');
+  await app.waitFor('.cv-preview .cv-preview-text', { text: '$ npm test' });
+  await app.waitFor('.cv-preview [data-choice="1"]');
+  await app.click('.cv-preview [data-choice="1"]');
+  await app.waitFor('.cv-preview', { gone: true });
+  await until(() => app.eval(async t => [...(await t.import('store.js')).state.tabs.values()].find(x => x.name === 'asks').agent.state === 'working'), 'the choice answered it');
+});
+
 step('a question gets a reply typed into its terminal', async () => {
   await agentSays('asks', { state: 'attention', message: 'Which port?' });
   await app.waitFor('[data-lane="needs-you"] .inbox-reply');
+  // With no prompt to read, Preview shows what the terminal's screen shows.
+  await app.click('[data-lane="needs-you"] [data-preview]');
+  await app.waitFor('.cv-preview .cv-preview-text', { text: 'npm test' });
+  await app.click('.cv-preview [data-cancel]');
+  await app.waitFor('.cv-preview', { gone: true });
   await app.type('[data-lane="needs-you"] .inbox-reply', '8080');
   await app.key('[data-lane="needs-you"] .inbox-reply', 'Enter');
   await until(() => app.eval(async t => [...(await t.import('store.js')).state.tabs.values()].find(x => x.name === 'asks').agent.state === 'idle'), 'the agent took the reply');

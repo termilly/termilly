@@ -810,7 +810,7 @@ function pendingPlan(tab) {
  * @param {Tab} tab
  * @returns {import('./compactcard.js').Menu & { last?: boolean } | null}
  */
-function menuOf(tab) {
+export function menuOf(tab) {
   const menu = questionOf(tab);
   return menu && waitsForAnswer(tab) ? { ...menu, asked: compactOf(tab).asked ?? 0 } : menu;
 }
@@ -845,7 +845,7 @@ function questionOf(tab) {
  * @param {string} key
  * @param {string} shown the card's menu, by menuKey
  */
-function pick(tab, key, shown) {
+export function pick(tab, key, shown) {
   if (!(waitsForAnswer(tab) || !atPrompt(tab)) || tab.exited) return;
   const menu = menuOf(tab);
   const c = compactOf(tab);

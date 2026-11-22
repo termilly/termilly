@@ -9,6 +9,7 @@ import { answerAgent, awaitsPermission, isWaiting, ANSWER } from './agentanswer.
 import { tabBadgeHtml, escapeHtml, activityHtml, cssColor, ICONS } from './ui.js';
 import { restoreFocus } from './panes.js';
 import { arriveAt } from './arrived.js';
+import { previewWaiting } from './inboxpreview.js';
 import { scheduleFit } from './terminals.js';
 import { isShortcut, KEY_ID } from './keymap.js';
 import { AGENT_STATE } from './constants.js';
@@ -23,6 +24,10 @@ const ACTION = Object.freeze({ clearAll: 'clearAll', close: 'close' });
 const ITEM = '.inbox-item';
 const ROW = '.inbox-row';
 const CLEAR_LABEL = 'Clear';
+/** The tooltip of an entry's Preview button. */
+const PREVIEW_TIP = 'Why it needs you: all the agent asks';
+/** An entry's second line: what its note says. */
+const DETAIL = '.inbox-detail';
 const REPLY = '.inbox-reply';
 const LIST = '.inbox-lanes';
 /** How long an entry's age reads "now", in seconds. */
@@ -84,7 +89,8 @@ function answerHtml(n, tab) {
   const body = awaitsPermission(tab)
     ? `<button class="btn small primary" data-answer="${ANSWER.approve}" data-f="${key}:a"${off}>Allow</button><button class="btn small" data-answer="${ANSWER.reject}" data-f="${key}:r"${off}>Deny</button>`
     : `<input class="field inbox-reply" placeholder="Reply" spellcheck="false" autocomplete="off" data-f="${key}:t" value="${escapeHtml(drafts.get(n.key) ?? '')}"${off}><button class="btn small" data-answer="${ANSWER.reply}" data-f="${key}:s"${off}>Send</button>`;
-  return `<div class="inbox-answer">${body}</div>${fail ? `<div class="inbox-fail">${escapeHtml(fail)}</div>` : ''}`;
+  const preview = `<button class="btn small" data-preview data-f="${key}:p" title="${PREVIEW_TIP}">Preview</button>`;
+  return `<div class="inbox-answer">${body}${preview}</div>${fail ? `<div class="inbox-fail">${escapeHtml(fail)}</div>` : ''}`;
 }
 
 /** @param {string} key @param {string} label */
@@ -236,10 +242,20 @@ async function answer(row, choice) {
   draw();
 }
 
+/**
+ * Shows why a note's terminal needs the user.
+ * @param {HTMLElement} row
+ */
+function preview(row) {
+  const tab = state.tabs.get(row.dataset.pane ?? '');
+  if (tab) previewWaiting(tab, row.querySelector(DETAIL)?.textContent ?? '');
+}
+
 /** @param {HTMLElement} el */
 function onAction(el) {
   const row = /** @type {HTMLElement | null} */ (el.closest(ROW));
   if (el.dataset.answer && row) answer(row, el.dataset.answer);
+  else if (el.dataset.preview !== undefined && row) preview(row);
   else if (el.dataset.clear) clear(el.dataset.clear);
   else if (el.dataset.clearLane) clear(entries().filter(e => e.lane === el.dataset.clearLane).map(e => e.key));
   else if (el.dataset.fold) toggleFold(el.dataset.fold);
@@ -253,7 +269,7 @@ function onAction(el) {
 }
 
 panel.addEventListener('click', e => {
-  const el = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-answer], [data-clear], [data-clear-lane], [data-fold], [data-inbox], [data-run], [data-tab]'));
+  const el = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-answer], [data-preview], [data-clear], [data-clear-lane], [data-fold], [data-inbox], [data-run], [data-tab]'));
   if (el) onAction(el);
 });
 panel.addEventListener('compositionstart', () => { composing = true; });
