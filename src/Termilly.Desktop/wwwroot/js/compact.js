@@ -22,7 +22,7 @@ import { readMenu, questionMenu, cardHtml, menuKey, keyedByWhatShows, PROMPT_STA
 import { wireInput } from './compactinput.js';
 import { cardKey } from './compactcardkeys.js';
 import { wireViewMenu } from './termclipboard.js';
-import { liveRow, screenRows, rowsWithScrollback, drawerHolds, coverTerminal, NO_DRAWER } from './compactdrawer.js';
+import { liveRow, typedPrompt, screenRows, rowsWithScrollback, drawerHolds, coverTerminal, NO_DRAWER } from './compactdrawer.js';
 import { showPreview } from './compactpreview.js';
 
 /** @typedef {import('./compactlines.js').CompactLine} CompactLine */
@@ -150,8 +150,31 @@ function setView(tab, view) {
     return;
   }
   apply(tab);
-  if (view !== COMPACT_VIEW.full) focusInput(tab);
-  else tab.view?.term?.focus();
+  if (view === COMPACT_VIEW.full) {
+    tab.view?.term?.focus();
+    return;
+  }
+  takeTyped(tab);
+  focusInput(tab);
+}
+
+/**
+ * Words typed in the agent's terminal and not sent move into the prompt box as the view comes on: the box shows
+ * them, and sending it doesn't add to them in the agent's input line. That line is cleared with the drawer kept shut
+ * meanwhile, as for a prompt the box sends.
+ * @param {Tab} tab
+ */
+function takeTyped(tab) {
+  const c = compactOf(tab);
+  const term = tab.view?.term;
+  const typed = term && c.el && canSend(tab) ? typedPrompt(term) : null;
+  if (!typed || !c.el) return;
+  const input = /** @type {HTMLTextAreaElement} */ (find(c.el, INPUT));
+  input.value = input.value.trim() ? `${input.value}\n${typed.text}` : typed.text;
+  input.dispatchEvent(new Event('input')); // the box fits its text
+  c.sendingNow = (c.sendingNow ?? 0) + 1;
+  send(PAGE.input, { id: tab.id, data: typed.clear });
+  doneWhenTaken(tab);
 }
 
 /**

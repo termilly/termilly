@@ -31,7 +31,24 @@ async function waitOnQuestion(app) {
   await until(() => app.eval(t => !t.$('.compact-view').classList.contains('drawer')), 'the card without the drawer');
 }
 
-async function scenario(name, lines, body, { waiting = false, ready = '.cv-choice[data-choice="3"]', prompt = {} } = {}) {
+/** Types into the terminal, as keys pressed in its Full view, and waits for its screen to show what. */
+async function typeInTerminal(app, keys, shows) {
+  await app.eval(async (t, keys) => {
+    const { state } = await t.import('store.js');
+    const { send } = await t.import('host.js');
+    const { PAGE } = await t.import('protocol.js');
+    const tab = [...state.tabs.values()].find(tab => tab.view?.term);
+    send(PAGE.input, { id: tab.id, data: keys });
+  }, keys);
+  await until(() => app.eval(async (t, shows) => {
+    const { state } = await t.import('store.js');
+    const term = [...state.tabs.values()].find(tab => tab.view?.term).view.term;
+    const buffer = term.buffer.active;
+    return buffer.getLine(buffer.baseY + buffer.cursorY)?.translateToString(true) === shows;
+  }, shows), `the terminal shows ${shows}`);
+}
+
+async function scenario(name, lines, body, { waiting = false, ready = '.cv-choice[data-choice="3"]', prompt = {}, typed = '' } = {}) {
   const repo = await makeRepo();
   let app, failed = true;
   try {
@@ -50,11 +67,15 @@ async function scenario(name, lines, body, { waiting = false, ready = '.cv-choic
       return [...state.tabs.values()].some(tab => runningAgent(tab) === 'codex');
     }), 'shell recognizes Codex');
     await app.waitFor('.view-btn');
+    if (typed) {
+      await until(async () => (await events(app)).some(e => e.event === 'ready'), 'the fake drew its screen');
+      await typeInTerminal(app, typed, `${prompt.input}${typed}`);
+    }
     await app.click('.view-btn');
     await clickText(app, '.menu-row', 'Compact');
     if (waiting) await waitOnQuestion(app);
     await app.waitFor(ready);
-    assert.equal(await app.eval(t => t.$('.cv-input').value), '');
+    assert.equal(await app.eval(t => t.$('.cv-input').value), typed);
     await body(app);
     failed = false;
   } finally { await app?.stop({ failed }); await repo.dispose(); }
@@ -149,6 +170,17 @@ test('Send from the prompt box never shows the terminal under it while Codex tak
   await new Promise(resolve => setTimeout(resolve, 600));
   assert.equal(await app.eval(() => globalThis.drawerOpened), 0);
 }, { ready: '.cv-input:not([readonly])', prompt: { input: '› ', picks: [], echoMs: 30, takeMs: 300 } }));
+
+test('a prompt typed in the terminal and not sent moves into the prompt box as the Compact view comes on', () => scenario('compact-typed', ['', '  >_ OpenAI Codex', ''], async app => {
+  await until(() => app.eval(async t => {
+    const { state } = await t.import('store.js');
+    const buffer = [...state.tabs.values()].find(tab => tab.view?.term).view.term.buffer.active;
+    return buffer.getLine(buffer.baseY + buffer.cursorY)?.translateToString(true) === '› ';
+  }), "the terminal's input line emptied");
+  assert.equal(await app.eval(t => t.$('.compact-view').classList.contains('drawer')), false, 'the prompt box shows, not the terminal');
+  assert.equal(await app.eval(t => t.$('.cv-input').offsetParent !== null), true);
+  assert.equal((await events(app)).some(e => e.event === 'prompt'), false, 'nothing was sent');
+}, { ready: '.cv-input:not([readonly])', typed: 'fix the tests', prompt: { input: '› ', picks: [], footer: ['', '  100% context left'] } }));
 
 const tall =['', '', `  ${question}`, '', ...Array.from({ length: 70 }, (_, i) => `  $ step ${i}`), ...choices, '  Press enter to confirm or esc to cancel'];
 

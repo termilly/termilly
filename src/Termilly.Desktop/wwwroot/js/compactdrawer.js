@@ -86,6 +86,81 @@ function typedAt(buffer) {
   return from > 0 && buffer.cursorX > from;
 }
 
+/** The rule Claude Code draws above and below its input. */
+const RULE = /^\s*─+\s*$/;
+/** What an agent shows in its input line for something it holds folded up (a long paste, a picture): not its text. */
+const FOLDED = /\[(Pasted|Image)/i;
+/** The keys that delete a character after the caret and before it. */
+const DELETE = '\x1b[3~';
+const BACKSPACE = '\x7f';
+
+/**
+ * What the user typed in the agent's input line and hasn't sent, read off the screen, and the keys that clear it
+ * there; null when there's none (its empty line shows a hint, the cursor before it), when the agent shows a list of
+ * its own, or when it can't be read whole (its top is off the screen, it holds a paste or a picture folded up).
+ * @param {any} term xterm's Terminal
+ * @returns {{ text: string, clear: string } | null}
+ */
+export function typedPrompt(term) {
+  const rows = screenRows(term);
+  if (readMenu(rows)) return null;
+  const cursor = term.buffer.active.cursorY;
+  const top = inputTop(rows, cursor);
+  if (top < 0) return null;
+  const mark = /** @type {RegExpExecArray} */ (INPUT_MARK.exec(rows[top]))[0].length;
+  const end = inputEnd(rows, top);
+  if (end < cursor || (cursor === top && term.buffer.active.cursorX <= mark)) return null;
+  const lines = rows.slice(top, end + 1).map((row, i) => (i ? row.replace(new RegExp(`^ {0,${mark}}`), '') : row.slice(mark)).trimEnd());
+  while (lines.length && !lines[lines.length - 1]) lines.pop();
+  const text = joinRows(lines, term.cols - mark);
+  if (!text.trim() || FOLDED.test(text)) return null;
+  // Counted over: a space the agent dropped where it wrapped is one more. More than there are does nothing.
+  const keys = text.length + lines.length;
+  return { text, clear: DELETE.repeat(keys) + BACKSPACE.repeat(keys) };
+}
+
+/**
+ * The row the input line starts on, at or above the cursor: its mark, with a rule or a blank row above it; -1 if none.
+ * @param {string[]} rows
+ * @param {number} cursor
+ */
+function inputTop(rows, cursor) {
+  for (let y = Math.min(cursor, rows.length - 1); y >= 0; y--) {
+    if (INPUT_MARK.test(rows[y]) && (y === 0 || !rows[y - 1].trim() || RULE.test(rows[y - 1]))) return y;
+  }
+  return -1;
+}
+
+/**
+ * The input's last row: the one above the rule under it (Claude Code), or else above the blank row over the footer at
+ * the screen's bottom (Codex); -1 if neither shows.
+ * @param {string[]} rows
+ * @param {number} top
+ */
+function inputEnd(rows, top) {
+  for (let y = top + 1; y < rows.length; y++) if (RULE.test(rows[y])) return y - 1;
+  let last = rows.length - 1;
+  while (last > top && !rows[last].trim()) last--;
+  for (let y = last - 1; y > top; y--) if (!rows[y].trim()) return y - 1;
+  return -1;
+}
+
+/**
+ * The input's rows as its text: a row the agent wrapped (the next one's first word wouldn't have fitted on it) runs
+ * on into the next, any other ends a line.
+ * @param {string[]} lines
+ * @param {number} width the columns the input's text has
+ */
+function joinRows(lines, width) {
+  return lines.reduce((text, line, i) => {
+    if (!i) return line;
+    const before = lines[i - 1];
+    const word = line.split(' ')[0].length;
+    if (before.length + 1 + word <= width) return `${text}\n${line}`;
+    return `${text}${before.length >= width ? '' : ' '}${line}`;
+  }, '');
+}
+
 /** The terminal's clip while the view covers all of it. */
 const COVERED = 'inset(100% 0 0 0)';
 
