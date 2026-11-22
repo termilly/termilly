@@ -106,14 +106,9 @@ const BACKSPACE = '\x7f';
  * @returns {{ text: string, clear: string } | null}
  */
 export function typedPrompt(term, exact = screen => screen) {
-  const rows = screenRows(term);
-  if (readMenu(rows)) return null;
-  const top = inputTop(rows, term.buffer.active.cursorY);
-  if (top < 0) return null;
-  const mark = /** @type {RegExpExecArray} */ (MARK_AND_SPACE.exec(rows[top]))[0].length;
-  const end = inputEnd(rows, top);
-  if (end < term.buffer.active.cursorY || showsHint(term, rows[top], top, mark)) return null;
-  const lines = rows.slice(top, end + 1).map((row, i) => (i ? row.replace(new RegExp(`^ {0,${mark}}`), '') : row.slice(mark)).trimEnd());
+  const area = inputArea(term);
+  if (!area || area.end < term.buffer.active.cursorY || area.dim) return null;
+  const { mark, lines } = area;
   let blankAfter = 0;
   while (lines.length && !lines[lines.length - 1]) {
     lines.pop();
@@ -126,6 +121,42 @@ export function typedPrompt(term, exact = screen => screen) {
   // spaces at the ends of rows the screen doesn't show (past the input's end, the rule or footer, it does nothing).
   const keys = text === screen ? text.length + blankAfter : text.length;
   return { text, clear: DELETE.repeat(keys + lines.length) + BACKSPACE.repeat(keys) };
+}
+
+/** Claude Code's hint in an empty input line, which Right arrow doesn't take: not a prompt it suggests. */
+const TRY_HINT = /^Try ".*"$/;
+/** A run of whitespace, one space in a suggestion. */
+const SPACES = /\s+/g;
+
+/**
+ * The prompt the agent suggests in its empty input line (Claude Code's guess at what's next, drawn dim, which Right
+ * arrow takes); null when there's none, when the line holds what the user typed, or when it shows a list of its own.
+ * @param {any} term xterm's Terminal
+ */
+export function suggestedPrompt(term) {
+  const area = inputArea(term);
+  if (!area || area.end < term.buffer.active.cursorY || !area.dim) return null;
+  // One line: a row that looks short (wide characters take two columns) still runs on into the next.
+  const text = area.lines.filter(line => line).join(' ').replace(SPACES, ' ').trim();
+  return text && !TRY_HINT.test(text) ? text : null;
+}
+
+/**
+ * The agent's input line on the screen: its rows (from its top row to its end, -1 if that doesn't show), how many
+ * columns its mark takes, its rows' text without the mark or the indent under it, and whether it shows dim text (the
+ * hint or suggestion of an empty one); null when there's none or the agent shows a list of its own.
+ * @param {any} term xterm's Terminal
+ * @returns {{ top: number, end: number, mark: number, lines: string[], dim: boolean } | null}
+ */
+function inputArea(term) {
+  const rows = screenRows(term);
+  if (readMenu(rows)) return null;
+  const top = inputTop(rows, term.buffer.active.cursorY);
+  if (top < 0) return null;
+  const mark = /** @type {RegExpExecArray} */ (MARK_AND_SPACE.exec(rows[top]))[0].length;
+  const end = inputEnd(rows, top);
+  const lines = rows.slice(top, end + 1).map((row, i) => (i ? row.replace(new RegExp(`^ {0,${mark}}`), '') : row.slice(mark)).trimEnd());
+  return { top, end, mark, lines, dim: showsHint(term, rows[top], top, mark) };
 }
 
 /**

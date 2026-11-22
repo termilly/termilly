@@ -22,7 +22,7 @@ import { readMenu, questionMenu, cardHtml, menuKey, keyedByWhatShows, PROMPT_STA
 import { wireInput } from './compactinput.js';
 import { cardKey } from './compactcardkeys.js';
 import { wireViewMenu } from './termclipboard.js';
-import { liveRow, typedPrompt, screenRows, rowsWithScrollback, drawerHolds, coverTerminal, NO_DRAWER } from './compactdrawer.js';
+import { liveRow, typedPrompt, suggestedPrompt, screenRows, rowsWithScrollback, drawerHolds, coverTerminal, NO_DRAWER } from './compactdrawer.js';
 import { showPreview } from './compactpreview.js';
 import { followKeys, exactText, forgetDraft, addToDraft } from './compacttyped.js';
 
@@ -100,8 +100,8 @@ const VIEW_HTML = `
  * @typedef {{ lines: CompactLine[], session: string | null, el: HTMLElement | null, frame: number, frameWin: Window | null, sending: Promise<void>, writes: { dispose(): void } | null,
  *   picked?: { menu: string, at: number }, ready?: boolean, drawer?: boolean, drawerFrame?: number, drawerWin?: Window,
  *   resizes?: { dispose(): void }, drawerRow?: number, drawerMenu?: boolean, started?: boolean, sendingNow?: number, asked?: number, askedBy?: object | null, waiting?: boolean,
- *   keys?: import('./compacttyped.js').TypedKeys, keysTerm?: object }} CompactState
- *   drawerMenu: whether a list of the agent's own opened the drawer; started: whether the agent has shown its input line since it started; sendingNow: how many prompts the prompt box is typing into the agent; asked: how many questions the agent has asked; askedBy: the report that asked the last one; keys: the keys typed into keysTerm since its last Enter
+ *   keys?: import('./compacttyped.js').TypedKeys, keysTerm?: object, suggestion?: string | null }} CompactState
+ *   drawerMenu: whether a list of the agent's own opened the drawer; started: whether the agent has shown its input line since it started; sendingNow: how many prompts the prompt box is typing into the agent; asked: how many questions the agent has asked; askedBy: the report that asked the last one; keys: the keys typed into keysTerm since its last Enter; suggestion: the prompt the agent suggests, which the empty box shows
  */
 
 /**
@@ -323,6 +323,8 @@ function placeDrawerSoon(tab) {
   c.drawerFrame = win.requestAnimationFrame(() => {
     c.drawerFrame = 0;
     placeDrawer(tab);
+    // The suggestion comes and goes as the agent draws its input line, between the renders.
+    if (c.el) updateComposer(tab, c.el);
   });
 }
 
@@ -422,6 +424,7 @@ function build(tab) {
     agent: () => runningAgent(tab),
     folder: () => tab.agent?.folder ?? tab.cwd ?? tab.lastCwd ?? null,
     cardKey: e => cardKey(el, e, (key, menu) => pick(tab, key, menu)),
+    suggestion: () => compactOf(tab).suggestion ?? null,
   });
   input.addEventListener('input', () => fitInput(input, find(el, FEED)));
   find(el, '.cv-send').addEventListener('click', () => submit(tab, input));
@@ -924,10 +927,19 @@ function updateComposer(tab, el) {
   const input = /** @type {HTMLTextAreaElement} */ (find(el, INPUT));
   const waiting = waitsForAnswer(tab);
   const starting = !atPrompt(tab);
-  input.placeholder = waiting ? `${name} is waiting for your answer above` : starting ? `${name} is starting` : `Message ${name}`;
+  const suggestion = waiting || starting || tab.exited ? null : suggestionOf(tab);
+  compactOf(tab).suggestion = suggestion;
+  input.placeholder = waiting ? `${name} is waiting for your answer above` : starting ? `${name} is starting` : suggestion ?? `Message ${name}`;
   // Read-only, not disabled: its keys still go to the agent (Esc, Up and Down, Enter on a question's choices).
   input.readOnly = waiting || starting || !!tab.exited;
 }
+
+/**
+ * The prompt Claude Code suggests in its empty input line, shown dim in the empty box until Right arrow takes it.
+ * Codex's dim text there is only a hint.
+ * @param {Tab} tab
+ */
+const suggestionOf = tab => (runningAgent(tab) === AGENT_KIND.claude && tab.view?.term ? suggestedPrompt(tab.view.term) : null);
 
 /**
  * The view that shows now: the one picked, or Full where the agent has left.

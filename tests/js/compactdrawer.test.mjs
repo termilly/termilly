@@ -9,7 +9,7 @@ globalThis.window = /** @type {any} */ ({ addEventListener() {}, external: { rec
 globalThis.document = /** @type {any} */ ({ documentElement: { dataset: {} }, addEventListener() {}, querySelector: () => null, querySelectorAll: () => [] });
 globalThis.localStorage = /** @type {any} */ ({ getItem: () => null, setItem() {} });
 globalThis.addEventListener = () => {};
-const { drawerHolds, liveRow, typedPrompt } = await import('../../src/Termilly.Desktop/wwwroot/js/compactdrawer.js');
+const { drawerHolds, liveRow, typedPrompt, suggestedPrompt } = await import('../../src/Termilly.Desktop/wwwroot/js/compactdrawer.js');
 
 /**
  * A terminal showing these rows, with no scrollback, and its cursor on a row.
@@ -90,6 +90,15 @@ test("Codex's unsent prompt, blank lines in it kept and the ones after it left o
 test("an empty input line's hint is no prompt", () => {
   assert.equal(typedPrompt(typedTerm(['', RULE, '❯ Try "fix lint errors"', RULE, ...CLAUDE_FOOTER], 2, 2, 2)), null);
   assert.equal(typedPrompt(typedTerm(['', '', '› Ask Codex to do anything', ...CODEX_FOOTER], 2, 2, 2)), null);
+});
+
+test("the prompt Claude Code suggests is its empty input line's dim text, but for its Try hint", () => {
+  assert.equal(suggestedPrompt(typedTerm(['', RULE, '❯ commit this', RULE, ...CLAUDE_FOOTER], 2, 2, 2)), 'commit this');
+  assert.equal(suggestedPrompt(typedTerm(['', RULE, '❯ Try "fix lint errors"', RULE, ...CLAUDE_FOOTER], 2, 2, 2)), null);
+  assert.equal(suggestedPrompt(typedTerm(['', RULE, '❯ commit this', RULE, ...CLAUDE_FOOTER], 2, 13)), null);
+  assert.equal(suggestedPrompt(typedTerm(['', RULE, '❯ ', RULE, ...CLAUDE_FOOTER], 2, 2, 2)), null);
+  assert.equal(suggestedPrompt(typedTerm(['', RULE, `❯ ${'界'.repeat(28)}`, '  hi', RULE, ...CLAUDE_FOOTER], 2, 2, 2)), `${'界'.repeat(28)} hi`);
+  assert.equal(suggestedPrompt(typedTerm(['', RULE, '❯ commit this', RULE, ...CLAUDE_FOOTER], 5, 0, 2)), null);
 });
 
 test('a prompt with the caret moved to its start is still a prompt', () => {
