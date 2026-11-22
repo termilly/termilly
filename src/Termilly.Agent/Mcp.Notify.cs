@@ -14,6 +14,13 @@ internal static partial class Mcp
     /// <summary>MCP's notice that the client no longer waits for a request, and its field naming which.</summary>
     private const string CancelledNotification = "notifications/cancelled";
     private const string RequestIdKey = "requestId";
+    /// <summary>MCP's progress notice, the request's token for it, and how far along it is.</summary>
+    private const string ProgressNotification = "notifications/progress";
+    private const string MetaKey = "_meta";
+    private const string ProgressTokenKey = "progressToken";
+    private const string ProgressKey = "progress";
+    /// <summary>How often a waiting question says it's still waiting (well inside Claude Code's 30 quiet minutes).</summary>
+    private static readonly TimeSpan HeartbeatEvery = TimeSpan.FromMinutes(1);
 
     /// <summary>JSON Schema's words this tool's arguments need beyond the others' (lists, closed sets).</summary>
     private static class Schema
@@ -160,9 +167,11 @@ internal static partial class Mcp
             var key = id.ToJsonString();
             var questionId = Guid.NewGuid().ToString("N");
             _waiting[key] = questionId;
+            var beat = Heartbeat(request[Rpc.Params]?[MetaKey]?[ProgressTokenKey]?.DeepClone(), key);
             _ = Task.Run(() =>
             {
                 var response = Notify(id, request[Rpc.Params] as JsonObject, call, questionId);
+                beat?.Dispose();
                 // One the agent cancelled gets no answer (MCP: the client has stopped listening for it).
                 if (_waiting.TryRemove(key, out _))
                 {
@@ -170,6 +179,31 @@ internal static partial class Mcp
                 }
             });
             return true;
+        }
+
+        /// <summary>
+        /// While a question waits, a progress notice now and then, when the client gave a token for them: Claude Code
+        /// gives up on a stdio tool that's quiet for half an hour, and a question may wait far longer.
+        /// </summary>
+        private Timer? Heartbeat(JsonNode? token, string key)
+        {
+            if (token is null)
+            {
+                return null;
+            }
+            var beats = 0;
+            return new Timer(_ =>
+            {
+                if (_waiting.ContainsKey(key))
+                {
+                    Write(new JsonObject
+                    {
+                        [Rpc.JsonRpc] = Rpc.Version,
+                        [Rpc.Method] = ProgressNotification,
+                        [Rpc.Params] = new JsonObject { [ProgressTokenKey] = token.DeepClone(), [ProgressKey] = ++beats },
+                    });
+                }
+            }, null, HeartbeatEvery, HeartbeatEvery);
         }
 
         public void CancelAll()
