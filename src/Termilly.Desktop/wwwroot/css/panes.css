@@ -12,7 +12,7 @@
 /* Every workspace stays laid out (so hidden terminals keep their size); only the active one shows. */
 .ws-layer {
   position: absolute;
-  inset: calc(var(--notepad-dock-top, 0px) + var(--todo-dock-top, 0px)) calc(var(--files-dock, 0px) + var(--notepad-dock, 0px) + var(--todo-dock, 0px) + var(--clips-dock, 0px)) calc(var(--notepad-dock-bottom, 0px) + var(--todo-dock-bottom, 0px)) calc(var(--notepad-dock-left, 0px) + var(--todo-dock-left, 0px));
+  inset: calc(var(--notepad-dock-top, 0px) + var(--todo-dock-top, 0px)) calc(var(--files-dock, 0px) + var(--notepad-dock, 0px) + var(--todo-dock, 0px) + var(--clips-dock, 0px) + var(--inbox-dock, 0px)) calc(var(--notepad-dock-bottom, 0px) + var(--todo-dock-bottom, 0px)) calc(var(--notepad-dock-left, 0px) + var(--todo-dock-left, 0px));
   display: flex;
   visibility: hidden;
 }

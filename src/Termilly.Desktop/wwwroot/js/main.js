@@ -21,7 +21,8 @@ import { initMinimal } from './minimal.js';
 import './remotepc.js';
 import { openPalette, setCommands, openGoTo, openCommandHistory, PALETTE_VIEW } from './palette.js';
 import { jumpToPrompt, copyLastOutput } from './commands.js';
-import { toggleInbox, jumpToNext } from './inbox.js';
+import { jumpToNext } from './inbox.js';
+import { toggleInbox, initInbox } from './inboxpanel.js';
 import { applySnapshot } from './snapshot.js';
 import { keepEarlierOfOpen } from './earlier.js';
 import { toggleCaptures } from './triggers.js';
@@ -626,6 +627,7 @@ function boot(saved, snapshot, liveSessions = []) {
   initNotepad();
   initTodo();
   initClips();
+  initInbox();
   applySettings();
   initMinimal();
   if (state.activeId) switchWorkspace(state.activeId);
