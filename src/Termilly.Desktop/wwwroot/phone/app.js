@@ -419,6 +419,7 @@ function connect() {
   });
   live.addEventListener('close', () => {
     connected = false;
+    questionsShown.disconnected();
     render();
     setTimeout(connect, retry);
     retry = Math.min(retry * 2, RETRY_MAX_MS);

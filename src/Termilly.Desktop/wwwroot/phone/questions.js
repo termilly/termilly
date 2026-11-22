@@ -11,6 +11,8 @@
  *   redraw: () => void, age: (at: number) => string }} QuestionsApp
  */
 
+import { esc } from './todoviews.js';
+
 /** What's asked of the PC (Phone/PhoneQuestions.cs Op). */
 const OP = 'question';
 /** The question kinds (Shared/Questions.cs QuestionKinds). */
@@ -27,9 +29,6 @@ const CLASS = Object.freeze({ link: 'link', more: 'link q-more', chip: 'q-chip' 
 const LABEL = Object.freeze({ details: 'Details', hideDetails: 'Hide details', note: 'Add a note' });
 /** What the cards' taps do (data-qa). */
 const QA = Object.freeze({ pick: 'pick', approve: 'approve', deny: 'deny', send: 'send', more: 'more', note: 'note', details: 'details', skip: 'skip' });
-
-/** @param {unknown} text */
-const esc = text => String(text ?? '').replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
 
 /** @param {QuestionsApp} app */
 export function questionsTab(app) {
@@ -140,6 +139,10 @@ export function questionsTab(app) {
       if (e.key !== 'Enter' || !key.endsWith(ANSWER_SUFFIX)) return;
       e.preventDefault();
       sendWords(key.slice(0, -ANSWER_SUFFIX.length));
+    },
+    /** The connection dropped: an answer on its way may never have arrived, so the cards can be answered again. */
+    disconnected() {
+      sending.clear();
     },
     /** The PC said how an answer went: a failure is said; one that went through clears its drafts. @param {any} m */
     answered(m) {

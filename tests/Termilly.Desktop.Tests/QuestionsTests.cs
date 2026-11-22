@@ -152,6 +152,19 @@ public sealed class QuestionsTests
     }
 
     [Fact]
+    public void Odd_parameters_do_not_stop_the_server()
+    {
+        using var termilly = new WaitingTermilly();
+        var input = Lines(
+            new JsonObject { ["jsonrpc"] = "2.0", ["id"] = 1, ["method"] = "tools/call", ["params"] = 5 },
+            new JsonObject { ["jsonrpc"] = "2.0", ["method"] = "notifications/cancelled", ["params"] = new JsonArray() },
+            new JsonObject { ["jsonrpc"] = "2.0", ["id"] = 2, ["method"] = "tools/list" });
+        using var output = new StringWriter();
+        Mcp.Run(new StringReader(input), output, termilly.Call, run: null);
+        Assert.Contains(output.ToString().Split('\n', StringSplitOptions.RemoveEmptyEntries), l => JsonNode.Parse(l)!["id"]!.GetValue<int>() == 2);
+    }
+
+    [Fact]
     public void An_agent_that_quits_closes_the_questions_it_waited_on()
     {
         using var termilly = new WaitingTermilly();

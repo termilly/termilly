@@ -136,7 +136,7 @@ step('narrow, the sources hide and the feed shows All', async () => {
     (await t.import('inbox.js')).addScheduleNote({ id: 'r2', title: 'Hourly', detail: 'Worked', failed: false, at: Date.now() });
   });
   await until(() => app.eval(t => t.$('#inbox').classList.contains('narrow')), 'narrow');
-  assert.equal(await app.eval(t => getComputedStyle(t.$('.inbox-sources')).display), 'none');
+  assert.equal(await app.eval(t => globalThis.getComputedStyle(t.$('.inbox-sources')).display), 'none');
   assert.match((await feed()).head, /^All/);
   await app.eval(async t => {
     t.$('#inbox').style.width = '';

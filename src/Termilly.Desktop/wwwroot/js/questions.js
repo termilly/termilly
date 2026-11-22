@@ -27,6 +27,8 @@ import { answerOf, text } from './questionreply.js';
 export const QUESTION_STATUS = Object.freeze({ waiting: 'waiting', answered: 'answered', delivered: 'delivered' });
 /** How many answered questions and updates are kept (waiting ones always are). */
 const MAX_DONE = 40;
+/** What a question's id starts with here (questionKey). */
+const QUESTION_PREFIX = 'q:';
 /** The desktop notification setting a question follows, as an agent that needs the user does. */
 const NOTIFY_SETTING = 'notifications.needsInput';
 
@@ -59,6 +61,13 @@ function changed() {
 }
 
 /**
+ * A question's id here: the asker's own, in a space of its own, so it can't be taken for a note's key or a schedule
+ * run's id (the notification center clears them all by key).
+ * @param {unknown} id
+ */
+const questionKey = id => `${QUESTION_PREFIX}${String(id ?? '')}`;
+
+/**
  * A question as the host checked it (Features/AgentQuestions.cs), from the terminal that asked.
  * @param {Record<string, any>} args
  * @returns {Question}
@@ -66,7 +75,7 @@ function changed() {
 function questionOf(args) {
   const from = typeof args.from === 'string' && state.tabs.has(args.from) ? args.from : null;
   return {
-    id: String(args.id), tabId: from, ui: String(args.ui), title: text(args.title), details: text(args.details),
+    id: questionKey(args.id), tabId: from, ui: String(args.ui), title: text(args.title), details: text(args.details),
     choices: Array.isArray(args.choices) ? args.choices.map(c => ({ label: text(c?.label), recommended: c?.recommended === true })) : [],
     suggestions: Array.isArray(args.suggestions) ? args.suggestions.map(text) : [],
     button: args.button ? { label: text(args.button.label), url: text(args.button.url) } : null,
@@ -111,7 +120,8 @@ function trim() {
  */
 function ask(args) {
   const q = questionOf(args);
-  if (questionById(q.id)) throw new Error('That question was asked already.');
+  // Refused as an answer, not an error: an error would close the question that has this id (PageApi.AskUserAsync).
+  if (questionById(q.id)) return { unavailable: true, reason: 'A question with that id is already asked.' };
   if (cancelledEarly.includes(q.id)) {
     cancelledEarly = cancelledEarly.filter(id => id !== q.id);
     return { closed: true };
@@ -177,6 +187,7 @@ export function clearQuestions(ids) {
  * @param {string} id
  */
 function cancel(id) {
+  id = questionKey(id);
   const q = questionById(id);
   if (q?.status === QUESTION_STATUS.waiting) settle(q, { closed: true }, false);
   else if (!q) cancelledEarly = [id, ...cancelledEarly].slice(0, MAX_CANCELLED_EARLY);

@@ -30,18 +30,18 @@ const ask = question => app.eval(async (t, question) => {
   const { state } = await t.import('store.js');
   const { callApi } = await t.import('api.js');
   const from = [...state.tabs.values()][0].id;
-  window.__answers ??= {};
-  Promise.resolve(callApi('notify', { ...question, from })).then(answer => { window.__answers[question.id] = answer; });
+  globalThis.__answers ??= {};
+  Promise.resolve(callApi('notify', { ...question, from })).then(answer => { globalThis.__answers[question.id] = answer; });
 }, question);
 
 /** What the agent heard for a question, once it did. @param {string} id */
 const heard = async id => {
-  await until(() => app.eval((t, id) => !!window.__answers?.[id], id), `an answer to ${id}`);
-  return app.eval((t, id) => window.__answers[id], id);
+  await until(() => app.eval((t, id) => !!globalThis.__answers?.[id], id), `an answer to ${id}`);
+  return app.eval((t, id) => globalThis.__answers[id], id);
 };
 
 /** A card's selector. @param {string} id */
-const card = id => `.inbox-feed .q-card[data-question="${id}"]`;
+const card = id => `.inbox-feed .q-card[data-question="q:${id}"]`;
 
 before(async () => {
   app = await startApp({ name: 'agent-questions' });
@@ -98,7 +98,7 @@ step('an update returns at once and shows its button', async () => {
 step('× on a waiting question puts it away, and the agent hears it was skipped', async () => {
   await ask({ id: 'q6', ui: 'approve', title: 'Delete the old branches?' });
   await app.waitFor(card('q6'));
-  await app.click(`${card('q6')} [data-clear="q6"]`);
+  await app.click(`${card('q6')} [data-clear="q:q6"]`);
   assert.deepEqual(await heard('q6'), { skipped: true });
   await app.waitFor(card('q6'), { gone: true });
 });

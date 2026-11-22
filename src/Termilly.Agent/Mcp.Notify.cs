@@ -103,7 +103,7 @@ internal static partial class Mcp
     }
 
     private static bool IsNotify(JsonObject request) =>
-        request[Rpc.Method]?.ToString() == Methods.ToolsCall && request[Rpc.Params]?[Keys.Name]?.ToString() == ToolNames.NotifyUser;
+        request[Rpc.Method]?.ToString() == Methods.ToolsCall && (request[Rpc.Params] as JsonObject)?[Keys.Name]?.ToString() == ToolNames.NotifyUser;
 
     public static int Run(TextReader input, TextWriter output) =>
         Run(input, output, (method, args) => Api.Call(method, args), Environment.GetEnvironmentVariable(TerminalEnvironment.Run));
@@ -154,7 +154,7 @@ internal static partial class Mcp
         {
             if (request[Rpc.Method]?.ToString() == CancelledNotification)
             {
-                if (request[Rpc.Params]?[RequestIdKey] is { } cancelled && _waiting.TryRemove(cancelled.ToJsonString(), out var question))
+                if ((request[Rpc.Params] as JsonObject)?[RequestIdKey] is { } cancelled && _waiting.TryRemove(cancelled.ToJsonString(), out var question))
                 {
                     Cancel(question);
                 }
@@ -167,9 +167,15 @@ internal static partial class Mcp
             var key = id.ToJsonString();
             var questionId = Guid.NewGuid().ToString("N");
             _waiting[key] = questionId;
-            var beat = Heartbeat(request[Rpc.Params]?[MetaKey]?[ProgressTokenKey]?.DeepClone(), key);
+            var beat = Heartbeat(((request[Rpc.Params] as JsonObject)?[MetaKey] as JsonObject)?[ProgressTokenKey]?.DeepClone(), key);
             _ = Task.Run(() =>
             {
+                // Cancelled before it was even asked: nothing to ask, nobody to answer.
+                if (!_waiting.ContainsKey(key))
+                {
+                    beat?.Dispose();
+                    return;
+                }
                 var response = Notify(id, request[Rpc.Params] as JsonObject, call, questionId);
                 beat?.Dispose();
                 // One the agent cancelled gets no answer (MCP: the client has stopped listening for it).
