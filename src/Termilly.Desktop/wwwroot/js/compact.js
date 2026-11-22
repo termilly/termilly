@@ -13,7 +13,7 @@ import { agentKind } from './agentkinds.js';
 import { escapeHtml, ICONS } from './ui.js';
 import { showMenu } from './popups.js';
 import { find } from './dom.js';
-import { agentInput, fontStack } from './terminals.js';
+import { agentInput, fontStack, isTerminalReply } from './terminals.js';
 import { beforeEnter } from './api.js';
 import { showsInput } from './together.js';
 import { linesHtml, OPEN_TERMINAL } from './compactlines.js';
@@ -168,10 +168,11 @@ function setView(tab, view) {
  */
 function takeTyped(tab) {
   const term = tab.view?.term;
-  if (!term || !canTake(tab)) return;
+  const c = compactOf(tab);
+  // Not while the box types a prompt into the agent: that's in its input line until its Enter.
+  if (!term || c.sendingNow || !canTake(tab)) return;
   // Read once what the terminal has been sent so far is drawn: a prompt just sent with Enter has left the line then.
   // The drawer stays shut from now, not only once the words are found: it would open on them meanwhile.
-  const c = compactOf(tab);
   c.sendingNow = (c.sendingNow ?? 0) + 1;
   term.write('', () => {
     if (moveTyped(tab, term)) doneWhenTaken(tab);
@@ -200,7 +201,7 @@ function followTerminalKeys(tab) {
   const term = tab.view?.term;
   if (!term || c.keysTerm === term) return;
   c.keys?.dispose();
-  c.keys = followKeys(term, Date.now);
+  c.keys = followKeys(term, Date.now, isTerminalReply);
   c.keysTerm = term;
 }
 

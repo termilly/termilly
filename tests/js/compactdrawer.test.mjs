@@ -102,7 +102,7 @@ test('the text the keys typed is taken where the screen shows the same, with its
 next `;
   const typed = typedPrompt(typedTerm(rows, 3, 6), () => exact);
   assert.equal(typed?.text, exact);
-  assert.equal(typed?.clear, '[3~'.repeat(exact.length) + ''.repeat(exact.length));
+  assert.equal(typed?.clear, '\x1b[3~'.repeat(exact.length + 2) + '\x7f'.repeat(exact.length));
 });
 
 test('a paste or a picture the agent shows folded up stays where it is', () => {

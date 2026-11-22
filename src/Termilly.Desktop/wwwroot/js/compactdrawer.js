@@ -122,10 +122,10 @@ export function typedPrompt(term, exact = screen => screen) {
   const screen = joinRows(lines, term.cols - mark);
   if (!screen.trim() || FOLDED.test(screen)) return null;
   const text = exact(screen);
-  // Backspace as many as there are, so nothing before them goes, wherever the caret is; Delete a few more where
-  // the screen was read, for spaces at the ends of rows it doesn't show (past the input's end it does nothing).
+  // Backspace as many as there are, so nothing before them goes, wherever the caret is; Delete a few more, for
+  // spaces at the ends of rows the screen doesn't show (past the input's end, the rule or footer, it does nothing).
   const keys = text === screen ? text.length + blankAfter : text.length;
-  return { text, clear: DELETE.repeat(text === screen ? keys + lines.length : keys) + BACKSPACE.repeat(keys) };
+  return { text, clear: DELETE.repeat(keys + lines.length) + BACKSPACE.repeat(keys) };
 }
 
 /**

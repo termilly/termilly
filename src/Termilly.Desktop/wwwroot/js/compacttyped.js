@@ -28,12 +28,15 @@ const SPACES = /\s+/g;
  * Follows the keys typed into a terminal.
  * @param {any} term xterm's Terminal
  * @param {() => number} now the clock
+ * @param {(data: string) => boolean} isReply whether data from xterm is its answer to the console (focus, cursor
+ *   position), which isn't typing
  * @returns {TypedKeys}
  */
-export function followKeys(term, now) {
+export function followKeys(term, now, isReply) {
   /** @type {TypedKeys} */
   const keys = { draft: '', enteredAt: 0, dispose: () => listener.dispose() };
   const listener = term.onData((/** @type {string} */ data) => {
+    if (isReply(data)) return;
     if (data === ENTER) {
       keys.draft = '';
       keys.enteredAt = now();
@@ -51,19 +54,26 @@ function typed(draft, data) {
   const paste = PASTE.exec(data);
   if (paste) return draft + paste[1].replace(LINE_ENDS, '\n');
   if (NEW_LINES.includes(data)) return `${draft}\n`;
-  if (BACKSPACES.includes(data)) return draft.slice(0, -1);
+  if (BACKSPACES.includes(data)) return [...draft].slice(0, -1).join(''); // a whole character, an emoji too
   return PRINTABLE.test(data) ? draft + data : null;
 }
 
 /**
- * The keys' draft when it's what the screen shows (but for whitespace), so the exact text; else the screen's.
+ * The keys' draft when it's what the screen shows (but for how a run of whitespace shows), so the exact text; else
+ * the screen's.
  * @param {TypedKeys | undefined} keys
  * @param {string} screen the text read off the screen
  */
 export function exactText(keys, screen) {
   const draft = keys?.draft;
-  return draft && draft.replace(SPACES, '') === screen.replace(SPACES, '') ? draft : screen;
+  return draft && spaced(draft) === spaced(screen) ? draft : screen;
 }
+
+/**
+ * A text with each run of whitespace as one space, and none at its ends.
+ * @param {string} text
+ */
+const spaced = text => text.replace(SPACES, ' ').trim();
 
 /**
  * Forgets the draft: the input line was cleared by other means than keys (the compact view moved it to its box).

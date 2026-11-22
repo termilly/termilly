@@ -5,12 +5,15 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { followKeys, exactText, forgetDraft } from '../../src/Termilly.Desktop/wwwroot/js/compacttyped.js';
 
+/** What xterm sends the console as its pane loses the focus (focus reporting on). */
+const FOCUS_OUT = '\x1b[O';
+
 /** A terminal that types what it's given, as keys pressed in it; its clock says what `at` holds. */
 function keyed() {
   /** @type {(data: string) => void} */
   let listener = () => {};
   const at = { now: 0 };
-  const keys = followKeys({ onData: (/** @type {(data: string) => void} */ fn) => { listener = fn; return { dispose() {} }; } }, () => at.now);
+  const keys = followKeys({ onData: (/** @type {(data: string) => void} */ fn) => { listener = fn; return { dispose() {} }; } }, () => at.now, data => data === FOCUS_OUT);
   /** @param {string[]} pressed */
   const press = (...pressed) => pressed.forEach(data => listener(data));
   return { keys, press, at };
@@ -46,7 +49,20 @@ test("the keys' text is taken only where the screen shows the same but for white
   press('a', 'b', '\n', 'c');
   assert.equal(exactText(keys, 'ab c'), 'ab\nc');
   assert.equal(exactText(keys, 'ab cd'), 'ab cd');
+  assert.equal(exactText(keys, 'a b c'), 'a b c', 'a space the keys never typed');
   forgetDraft(keys);
   assert.equal(exactText(keys, 'ab c'), 'ab c');
   assert.equal(exactText(undefined, 'x'), 'x');
+});
+
+test("xterm's answers to the console (focus out) aren't typing", () => {
+  const { keys, press } = keyed();
+  press('o', 'k', FOCUS_OUT);
+  assert.equal(keys.draft, 'ok');
+});
+
+test('Backspace takes a whole character, an emoji too', () => {
+  const { keys, press } = keyed();
+  press('a', '😀', '\x7f');
+  assert.equal(keys.draft, 'a');
 });
