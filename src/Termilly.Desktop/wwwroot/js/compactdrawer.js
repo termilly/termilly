@@ -88,8 +88,8 @@ function typedAt(buffer) {
 
 /** The rule Claude Code draws above and below its input, from the screen's left edge (a typed line is indented). */
 const RULE = /^─+\s*$/;
-/** The input line's mark and the one space after it: spaces typed after that are the user's. */
-const MARK_AND_SPACE = /^\s*[>›❯] ?/;
+/** The input line's mark at the screen's left edge (its later rows are indented), and the one space after it. */
+const MARK_AND_SPACE = /^[>›❯] ?/;
 /** What an agent shows in its input line for something it holds folded up (a long paste, a picture): not its text. */
 const FOLDED = /\[(Pasted|Image)/i;
 /** The keys that delete a character after the caret and before it. */
@@ -120,10 +120,10 @@ export function typedPrompt(term) {
   }
   const text = joinRows(lines, term.cols - mark);
   if (!text.trim() || FOLDED.test(text)) return null;
-  // As many as the input holds (its blank lines after the text too): Delete takes what's after the caret, Backspace
-  // what's before it, so nothing past what was read goes, wherever the caret is.
+  // Backspace as many as were read, so nothing before what was read goes, wherever the caret is; Delete a few more,
+  // for spaces at the ends of rows the screen doesn't show (past the input's end it does nothing).
   const keys = text.length + blankAfter;
-  return { text, clear: DELETE.repeat(keys) + BACKSPACE.repeat(keys) };
+  return { text, clear: DELETE.repeat(keys + lines.length) + BACKSPACE.repeat(keys) };
 }
 
 /**
@@ -133,7 +133,7 @@ export function typedPrompt(term) {
  */
 function inputTop(rows, cursor) {
   for (let y = Math.min(cursor, rows.length - 1); y >= 0; y--) {
-    if (INPUT_MARK.test(rows[y]) && (y === 0 || !rows[y - 1].trim() || RULE.test(rows[y - 1]))) return y;
+    if (MARK_AND_SPACE.test(rows[y]) && (y === 0 || !rows[y - 1].trim() || RULE.test(rows[y - 1]))) return y;
   }
   return -1;
 }

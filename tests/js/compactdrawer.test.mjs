@@ -76,7 +76,7 @@ test("Claude Code's unsent prompt: wrapped rows run on, a new line stays one, an
   const text = 'hello world this is a long prompt that will surely wrap onto the next row of the box\nsecond line here';
   assert.equal(typed?.text, text);
   const keys = text.length;
-  assert.equal(typed?.clear, '\x1b[3~'.repeat(keys) + '\x7f'.repeat(keys));
+  assert.equal(typed?.clear, '\x1b[3~'.repeat(keys + 3) + '\x7f'.repeat(keys));
 });
 
 test("Codex's unsent prompt, blank lines in it kept and the ones after it left out", () => {
@@ -110,4 +110,9 @@ test('a line of ─ typed in the prompt is part of it, not the rule under it', (
 
 test('spaces typed at the start of the prompt are kept', () => {
   assert.equal(typedPrompt(typedTerm(['', RULE, '❯   indented', RULE], 2, 12))?.text, '  indented');
+});
+
+test('a "> " line typed after a blank line is part of the prompt, not where it starts', () => {
+  const rows = ['', RULE, '❯ first', '', '  > second', RULE, ...CLAUDE_FOOTER];
+  assert.equal(typedPrompt(typedTerm(rows, 4, 5))?.text, 'first\n\n> second');
 });
