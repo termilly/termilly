@@ -392,6 +392,10 @@ button.row { width: 100%; border: 0; background: none; color: inherit; font: inh
 .td-sheet .td-new-tags { gap: 6px; margin: 0 2px 12px; }
 .td-pick-tag { padding: 0 10px; border: 1px solid var(--line); background: none; color: var(--muted); font-size: 13px; line-height: 26px; }
 .td-pick-tag.on { border-color: transparent; background: color-mix(in srgb, var(--hue) 18%, transparent); color: var(--hue); }
+/* Tag colours are pastel for a dark background: darker text on a light phone, as in the app (css/base.css). */
+@media (prefers-color-scheme: light) {
+  .td-chip, .td-pick-tag.on { color: color-mix(in srgb, var(--hue) 45%, #000); }
+}
 /* Implement's sheet (todoviews.js implementSheetHtml): its choices, as chips in the accent's colour. */
 .td-impl { --hue: var(--accent); height: 34px; padding: 0 14px; font-size: 14px; line-height: 32px; }
 .td-impl-label { margin: 12px 0 6px; color: var(--muted); font-size: 12px; }

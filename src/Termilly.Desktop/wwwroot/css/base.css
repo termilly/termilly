@@ -85,8 +85,14 @@
   --hit-bg: rgba(245, 190, 40, 0.14);
   color-scheme: light;
 }
-/* Tag, workspace and shell colours are pastel for a dark background; darken their text on white. */
-:root[data-theme="light"] :is(.tag, .rail-tile, .ws-tile) { color: color-mix(in srgb, var(--c) 58%, #000); }
+/* Tag, workspace and shell colours are pastel for a dark background; darken their text on white. Tags are small
+   text on a tinted (and in some themes coloured) background, so theirs is darker still. */
+:root[data-theme="light"] { --tag-ink: 45%; }
+:root[data-theme="light"] :is(.rail-tile, .ws-tile) { color: color-mix(in srgb, var(--c) 58%, #000); }
+:root[data-theme="light"] .tag.more-tags { color: color-mix(in srgb, var(--c) 58%, #000); }
+:root[data-theme="light"] .tag:not(.more-tags) { color: color-mix(in srgb, var(--c) var(--tag-ink), #000); }
+:root[data-theme="light"] .td-chip { color: color-mix(in srgb, var(--td-hue) var(--tag-ink), #000); }
+:root[data-theme="light"] .gw-ref.is-tag { color: color-mix(in srgb, var(--attention) var(--tag-ink), #000); }
 :root[data-theme="light"] .badge { color: color-mix(in srgb, var(--tint) 58%, #000); }
 :root[data-theme="light"] .badge[data-icon="cmd"] { --tint: #8a8a96; }
 
