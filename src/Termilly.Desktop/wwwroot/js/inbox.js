@@ -1,29 +1,18 @@
 // @ts-check
-// The notification center: what an agent said out of sight (waiting for the user, failed, finished), newest first.
-// An entry stays, seen or dealt with, until the user clears it (its ×, or Clear all); a terminal closed takes its
-// own with it. One key (Ctrl+Shift+J) goes to the next terminal that still needs the user.
+// The notification center's notes: what an agent said out of sight (waiting for the user, failed, finished), and what
+// schedules said. An entry stays, seen or dealt with, until the user clears it (its ×, or Clear); a terminal closed
+// takes its own with it. One key (Ctrl+Shift+J) goes to the next terminal that still needs the user. The sidebar that
+// shows them is js/inboxpanel.js.
 
 import { HOST, PAGE } from './protocol.js';
 import { onHost, send } from './host.js';
-import { state, on, emit, wsById, tabTitle, EVENTS } from './store.js';
-import { openPopover, closePopover, isOpen } from './popups.js';
-import { tabBadgeHtml, escapeHtml, activityHtml, countText, ICONS } from './ui.js';
+import { state, on, emit, EVENTS } from './store.js';
+import { countText } from './ui.js';
 import { activityOf } from './store.js';
 import { focusedTab } from './panes.js';
 import { arriveAt } from './arrived.js';
 import { AGENT_STATE, CLAUDE_TOOL } from './constants.js';
-import { byId, find, targetOf, TOOL_COUNT } from './dom.js';
-import { SECOND_MS, DAY_S, MINUTE_S, HOUR_S } from './util.js';
-
-/** The inbox's filters (their data-filter). */
-const FILTER = Object.freeze({ all: 'all', unread: 'unread', errors: 'errors' });
-/** An entry in the list. */
-const ITEM = '.inbox-item';
-/** How long an entry's age reads "now", in seconds. */
-const NOW_BELOW_S = 45;
-const NOW_LABEL = 'now';
-/** How often the open panel is redrawn, so the ages move on. */
-const REDRAW_MS = 30 * SECOND_MS;
+import { byId, find, TOOL_COUNT } from './dom.js';
 
 /**
  * A terminal that needs the user now, and how urgent it is (rank(): lower first).
@@ -33,19 +22,21 @@ const REDRAW_MS = 30 * SECOND_MS;
  * An entry in the notification center: what the agent said, as it was then (key: the terminal, the state and when).
  * @typedef {{ key: string, tabId: string, state: string, activity: import('./store.js').Activity | null, detail: string, at: number }} Note
  */
-
-/** @type {Note[]} */
-let notes = [];
 /**
  * What schedules said (js/schedules.js): a run needs no terminal, so these have none. A click opens its report.
  * @typedef {{ id: string, title: string, detail: string, failed: boolean, at: number }} ScheduleNote
  */
+
+/** @type {Note[]} */
+let notes = [];
 /** @type {ScheduleNote[]} */
 let scheduleNotes = [];
 /** How many of them are kept. */
 const MAX_SCHEDULE_NOTES = 30;
 /** Notes the user cleared (their keys): a terminal that still says the same isn't taken in again. */
 const cleared = new Set();
+/** Who redraws when the notes change (the sidebar). @type {Set<() => void>} */
+const watchers = new Set();
 
 /** The count the taskbar button shows (0: none). */
 let badge = 0;
@@ -60,17 +51,9 @@ export function updateBadge(count) {
   send(PAGE.badge, { count });
 }
 
-const panel = byId('inbox');
-const list = byId('inbox-list');
-const filtersEl = byId('inbox-filters');
-const button = byId('inbox-button');
+/** The title bar's button: its count, and the sidebar's toggle (js/inboxpanel.js). */
+export const button = byId('inbox-button');
 const count = find(button, TOOL_COUNT);
-const totalEl = byId('inbox-total');
-const clearAll = byId('inbox-clear');
-
-const FILTERS = [[FILTER.all, 'All'], [FILTER.unread, 'Unread'], [FILTER.errors, 'Errors']];
-/** @type {string} */
-let filter = FILTER.all;
 
 /**
  * How urgent an agent's state is (lower first); null when it isn't inbox material.
@@ -105,7 +88,7 @@ const keyOf = tab => `${tab.id}:${tab.agent?.state}:${tab.agent?.at ?? 0}`;
  * Whether a note is still news: its terminal still needs the user for it.
  * @param {Note} n
  */
-function isLive(n) {
+export function isLive(n) {
   const tab = state.tabs.get(n.tabId);
   return !!tab && rank(tab) !== null && keyOf(tab) === n.key;
 }
@@ -113,10 +96,14 @@ function isLive(n) {
 /** The notification center for the phones (js/phone.js): each note's terminal, what it said, when, and whether it's still news. */
 export const notesForPhone = () => notes.map(n => ({ id: n.tabId, key: n.key, state: n.state, detail: n.detail, at: n.at, live: isLive(n) }));
 
-/** @param {Note} n */
-const matches = n => filter === FILTER.all || (filter === FILTER.unread ? isLive(n) : n.state === AGENT_STATE.error);
-/** @param {ScheduleNote} n */
-const scheduleMatches = n => filter !== FILTER.errors || n.failed;
+/** The notes now, newest first: the terminals' and the schedules'. */
+export const allNotes = () => ({ notes, scheduleNotes });
+
+/**
+ * Redraws `fn` whenever the notes change.
+ * @param {() => void} fn
+ */
+export const watchNotes = fn => watchers.add(fn);
 
 /**
  * A schedule's run, for the notification center.
@@ -124,20 +111,8 @@ const scheduleMatches = n => filter !== FILTER.errors || n.failed;
  */
 export function addScheduleNote(note) {
   scheduleNotes = [note, ...scheduleNotes].slice(0, MAX_SCHEDULE_NOTES);
-  render();
+  refresh();
   emit(EVENTS.inbox);
-}
-
-/**
- * "now", "4m", "2h", "3d": how long it has been waiting.
- * @param {number | null | undefined} at
- */
-function age(at) {
-  const s = Math.max(0, (Date.now() - (at ?? Date.now())) / SECOND_MS);
-  if (s < NOW_BELOW_S) return NOW_LABEL;
-  if (s < HOUR_S) return `${Math.round(s / MINUTE_S)}m`;
-  if (s < DAY_S) return `${Math.round(s / HOUR_S)}h`;
-  return `${Math.round(s / DAY_S)}d`;
 }
 
 /**
@@ -164,66 +139,28 @@ function take(tab) {
 }
 
 /**
- * Clears one note (its key), or all of them (null).
- * @param {string | null} key
+ * Clears these notes and schedule notes (their keys and ids), or all of them (null).
+ * @param {string | string[] | null} keys
  */
-export function clear(key) {
-  for (const n of notes) if (key === null || n.key === key) cleared.add(n.key);
+export function clear(keys) {
+  const these = keys === null ? null : new Set(Array.isArray(keys) ? keys : [keys]);
+  for (const n of notes) if (!these || these.has(n.key)) cleared.add(n.key);
   notes = notes.filter(n => !cleared.has(n.key));
-  scheduleNotes = key === null ? [] : scheduleNotes.filter(n => n.id !== key);
-  render();
+  scheduleNotes = these ? scheduleNotes.filter(n => !these.has(n.id)) : [];
+  refresh();
   emit(EVENTS.inbox);
 }
 
-function render() {
+/** Takes in what the terminals say now, and shows how many notes there are on the button and the taskbar. */
+function refresh() {
   for (const tab of state.tabs.values()) take(tab);
   const size = notes.length + scheduleNotes.length;
   count.textContent = countText(size);
   count.hidden = !size;
   updateBadge(size);
   button.classList.toggle('has-items', size > 0);
-  const total = `${size} notification${size === 1 ? '' : 's'}`;
-  button.title = `Notification center: ${total} (Ctrl+Shift+A)`;
-  totalEl.textContent = total;
-  if (panel.hidden) return;
-
-  filtersEl.innerHTML = FILTERS.map(([id, label]) =>
-    `<button class="seg-btn${id === filter ? ' on' : ''}" data-filter="${id}">${label}</button>`).join('');
-  clearAll.hidden = !size;
-  const rows = [...notes.filter(matches).map(n => ({ at: n.at, html: noteHtml(n) })), ...scheduleNotes.filter(scheduleMatches).map(n => ({ at: n.at, html: scheduleNoteHtml(n) }))];
-  list.innerHTML = rows.length ? rows.sort((a, b) => b.at - a.at).map(r => r.html).join('')
-    : `<div class="inbox-empty">${size ? 'Nothing in this view.' : 'No notifications.'}</div>`;
-}
-
-/** @param {ScheduleNote} n */
-const scheduleNoteHtml = n => `<div class="inbox-row"><button class="inbox-item unread" data-run="${escapeHtml(n.id)}">
-  <span class="inbox-text">
-    <span class="inbox-title"><span class="name">${escapeHtml(n.title)}</span><span class="inbox-age">${age(n.at)}</span></span>
-    <span class="inbox-detail">${escapeHtml(n.detail)}</span>
-  </span>
-</button><button class="pane-btn inbox-clear" data-clear="${escapeHtml(n.id)}" title="Clear" aria-label="Clear">${ICONS.close}</button></div>`;
-
-/** @param {Note} n */
-function noteHtml(n) {
-  const tab = /** @type {Tab} */ (state.tabs.get(n.tabId));
-  const ws = wsById(tab.wsId);
-  return `<div class="inbox-row"><button class="inbox-item${isLive(n) ? ' unread' : ''}" data-tab="${tab.id}">
-      ${activityHtml(n.activity, 'inbox-state')}
-      <span class="inbox-text">
-        <span class="inbox-title">${tabBadgeHtml(tab)}<span class="name">${escapeHtml(tabTitle(tab))}</span>
-          <span class="inbox-ws"><span class="ws-dot" style="background:${ws?.color ?? 'var(--muted)'}"></span>${escapeHtml(ws?.name ?? '')}</span>
-          ${tab.tags.slice(0, 2).map(t => `<span class="inbox-tag">${escapeHtml(t)}</span>`).join('')}
-          <span class="inbox-age">${age(n.at)}</span></span>
-        <span class="inbox-detail">${escapeHtml(n.detail)}</span>
-      </span>
-    </button><button class="pane-btn inbox-clear" data-clear="${escapeHtml(n.key)}" title="Clear" aria-label="Clear">${ICONS.close}</button></div>`;
-}
-
-export function toggleInbox() {
-  if (closePopover(panel)) return;
-  openPopover(panel, button);
-  render();
-  /** @type {HTMLElement | null} */ (list.querySelector(ITEM))?.focus();
+  button.title = `Notification center: ${size} notification${size === 1 ? '' : 's'} (Ctrl+Shift+A)`;
+  for (const fn of watchers) fn();
 }
 
 /**
@@ -238,52 +175,15 @@ export function jumpToNext() {
   return true;
 }
 
-button.addEventListener('click', toggleInbox);
-filtersEl.addEventListener('click', e => {
-  const b = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-filter]'));
-  if (!b) return;
-  filter = /** @type {string} */ (b.dataset.filter);
-  render();
-});
-list.addEventListener('click', e => {
-  const x = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-clear]'));
-  if (x) {
-    clear(/** @type {string} */ (x.dataset.clear));
-    return;
-  }
-  const run = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-run]'));
-  if (run) {
-    closePopover(panel);
-    emit(EVENTS.openSchedules, { runId: run.dataset.run });
-    return;
-  }
-  const item = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-tab]'));
-  if (!item) return;
-  closePopover(panel);
-  const tab = state.tabs.get(/** @type {string} */ (item.dataset.tab));
-  if (tab) arriveAt(tab);
-});
-panel.addEventListener('keydown', e => {
-  if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
-  e.preventDefault();
-  const items = /** @type {HTMLElement[]} */ ([...list.querySelectorAll(ITEM)]);
-  const step = e.key === 'ArrowDown' ? 1 : -1;
-  items[(items.indexOf(/** @type {HTMLElement} */ (document.activeElement)) + step + items.length) % items.length]?.focus();
-});
-
 // The global shortcut (Settings › Terminal) brought the window forward; pick the terminal.
 onHost(HOST.agentsNext, () => jumpToNext());
-
-clearAll.addEventListener('click', () => clear(null));
 
 // Taken as the agent says it, before the user sees it and it's dealt with (markSeen).
 on(EVENTS.agent, take);
 on(EVENTS.tabClosed, tab => {
   notes = notes.filter(n => n.tabId !== tab.id);
   for (const key of cleared) if (key.startsWith(`${tab.id}:`)) cleared.delete(key);
-  render();
+  refresh();
 });
-on(EVENTS.tab, render);
-on(EVENTS.workspaces, render);
-// Ages move on while the panel is open.
-setInterval(() => { if (isOpen(panel)) render(); }, REDRAW_MS);
+on(EVENTS.tab, refresh);
+on(EVENTS.workspaces, refresh);

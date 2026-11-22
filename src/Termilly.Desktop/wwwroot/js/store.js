@@ -93,6 +93,10 @@ export const getSetting = path => {
  *   links?: boolean, wrap?: boolean, numbers?: boolean, highlight?: boolean }} NotepadPage
  */
 /**
+ * The notification center (js/inboxpanel.js) as it was left: open or closed, its width, and its folded groups.
+ * @typedef {{ open: boolean, width?: number, folded?: string[] }} InboxState
+ */
+/**
  * The Clipboard panel (js/clipboard.js) as it was left: open or closed, its width, what its search box held, the
  * clips shown in full, and where its list was scrolled.
  * @typedef {{ open: boolean, width?: number, query?: string, expanded?: string[], scroll?: number }} ClipsState
@@ -161,6 +165,8 @@ export const state = {
   todo: { open: false },
   /** @type {ClipsState} */
   clips: { open: false },
+  /** @type {InboxState} */
+  inbox: { open: false },
   /** @type {FilesState} */
   files: { open: false },
   /** @type {ToolbarState} */
@@ -837,6 +843,7 @@ function serialize() {
     snippetsWindow: state.snippetsWindow,
     schedules: state.schedules,
     clips: state.clips,
+    inbox: state.inbox,
     files: state.files,
     toolbar: state.toolbar,
     dock: state.dock,
@@ -878,6 +885,7 @@ function restorePanels(saved) {
   if (saved.paneBar && typeof saved.paneBar === 'object') state.paneBar = { ...saved.paneBar };
   if (saved.todo && typeof saved.todo === 'object') state.todo = { ...state.todo, ...saved.todo };
   if (saved.clips && typeof saved.clips === 'object') state.clips = { ...state.clips, ...saved.clips };
+  if (saved.inbox && typeof saved.inbox === 'object') state.inbox = { ...state.inbox, ...saved.inbox };
   if (saved.files && typeof saved.files === 'object') state.files = { ...state.files, ...saved.files };
   state.snippetsWindow = { open: saved.snippetsWindow?.open === true };
   const schedules = saved.schedules;

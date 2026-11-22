@@ -173,24 +173,24 @@ body[data-layout="minimal"][data-pane-names="hover"] .pane:not(.bar-near) > .pan
 /* ---- Tools beside the terminals: Notepad, To do, Clipboard, Files and the File Explorer (not in a window of their own) ---- */
 
 /* Flush against the terminals with the same 1px line between them (the workspace showing through the gap), no frame. */
-body[data-layout="minimal"] :is(.notepad-panel, .clips-panel, .files-panel) { border: 0; border-radius: 0; background: var(--surface); }
+body[data-layout="minimal"] :is(.notepad-panel, .clips-panel, .files-panel, .inbox-panel) { border: 0; border-radius: 0; background: var(--surface); }
 /* In use, the accent edge a terminal in use has (not Normal's ring), drawn over what fills the tool. */
-body[data-layout="minimal"] :is(.notepad-panel, .clips-panel, .files-panel):focus-within { box-shadow: none; }
-body[data-layout="minimal"] :is(.notepad-panel, .clips-panel, .files-panel)::after { content: ""; position: absolute; inset: 0; z-index: 2; pointer-events: none; }
-body[data-layout="minimal"] :is(.notepad-panel, .clips-panel, .files-panel):focus-within::after { box-shadow: var(--in-use-edge); }
+body[data-layout="minimal"] :is(.notepad-panel, .clips-panel, .files-panel, .inbox-panel):focus-within { box-shadow: none; }
+body[data-layout="minimal"] :is(.notepad-panel, .clips-panel, .files-panel, .inbox-panel)::after { content: ""; position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+body[data-layout="minimal"] :is(.notepad-panel, .clips-panel, .files-panel, .inbox-panel):focus-within::after { box-shadow: var(--in-use-edge); }
 /* Their title bar is a name line like a terminal's: 24px, the name dim until the tool is in use. */
-body[data-layout="minimal"] :is(.notepad-panel, .clips-panel, .files-panel) > .files-head {
+body[data-layout="minimal"] :is(.notepad-panel, .clips-panel, .files-panel, .inbox-panel) > .files-head {
   height: var(--name-line);
   padding: var(--name-line-pad);
   border-bottom: 1px solid var(--border);
   border-radius: 0;
   background: var(--surface);
 }
-body[data-layout="minimal"] :is(.notepad-panel, .clips-panel, .files-panel) > .files-head .files-title { color: var(--muted); font-size: 12px; font-weight: 500; }
-body[data-layout="minimal"] :is(.notepad-panel, .clips-panel, .files-panel):focus-within > .files-head .files-title { color: var(--text); }
+body[data-layout="minimal"] :is(.notepad-panel, .clips-panel, .files-panel, .inbox-panel) > .files-head .files-title { color: var(--muted); font-size: 12px; font-weight: 500; }
+body[data-layout="minimal"] :is(.notepad-panel, .clips-panel, .files-panel, .inbox-panel):focus-within > .files-head .files-title { color: var(--text); }
 /* Its buttons show on the tool in use or under the mouse, as a terminal's do (switches stay: they show a state). */
 /* Faded, not taken away, so Tab still reaches them (and its focus shows them). */
-body[data-layout="minimal"] :is(.notepad-panel, .clips-panel, .files-panel):not(:hover, :focus-within) > .files-head .files-tools > :is(.pane-btn, .np-sep) { opacity: 0; pointer-events: none; }
+body[data-layout="minimal"] :is(.notepad-panel, .clips-panel, .files-panel, .inbox-panel):not(:hover, :focus-within) > .files-head .files-tools > :is(.pane-btn, .np-sep) { opacity: 0; pointer-events: none; }
 /* The File Explorer over the right edge: a 1px line against the terminals, not a floating card. */
 body[data-layout="minimal"] .preview-panel { border-radius: 0; box-shadow: -1px 0 0 var(--border); }
 /* Its name as a terminal's on its line, not bold. */

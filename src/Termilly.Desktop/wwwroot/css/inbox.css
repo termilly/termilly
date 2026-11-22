@@ -78,6 +78,30 @@
   font-variant-numeric: tabular-nums;
 }
 .tool-count[hidden] { display: none; }
+
+/* ---- The notification center (js/inboxpanel.js): docked like the Clipboard (css/panels.css), on the edge side of
+   it. Its groups, each with a line in its colour: Needs you, Errors, Finished, Schedules. ---- */
+.inbox-panel { right: calc(var(--notepad-dock, 0px) + var(--todo-dock, 0px)); width: 360px; }
+.inbox-lanes { flex: 1; overflow-y: auto; padding: 2px 6px 8px; }
+.inbox-lane { margin: 0 0 8px; padding-left: 4px; border-left: 2px solid var(--border-strong); }
+.inbox-lane[data-lane="needs-you"] { border-left-color: var(--attention); }
+.inbox-lane[data-lane="errors"] { border-left-color: var(--danger); }
+.inbox-lane[data-lane="finished"] { border-left-color: color-mix(in srgb, var(--ok) 50%, transparent); }
+.inbox-lane-head { display: flex; align-items: center; gap: 6px; height: 28px; }
+.inbox-fold { display: flex; flex: 1; align-items: center; gap: 6px; min-width: 0; height: 100%; padding: 0 4px; border-radius: 6px; color: var(--muted); font-size: 12px; }
+.inbox-fold:hover { color: var(--text); }
+.inbox-fold svg { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1; }
+.inbox-lane-name { color: var(--text); font-weight: 600; }
+.inbox-lane-count { color: var(--faint); font-size: 11px; font-variant-numeric: tabular-nums; }
+.inbox-lane-clear { height: 22px; padding: 0 8px; opacity: 0; }
+.inbox-lane-head:hover .inbox-lane-clear, .inbox-lane-clear:focus-visible { opacity: 1; }
+/* An entry's × sits by its first line: a waiting one has its answer under it. */
+.inbox-panel .inbox-clear { top: 6px; transform: none; }
+.inbox-answer { display: flex; gap: 6px; margin: 0 8px 8px 30px; }
+.inbox-answer .btn { height: 24px; padding: 0 10px; }
+.inbox-reply { flex: 1; min-width: 0; height: 24px; font-size: 12px; }
+.inbox-fail { margin: -4px 8px 8px 30px; color: var(--danger-text); font-size: 11.5px; }
+
 .popover.inbox { width: 380px; padding: 0; }
 .inbox-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 10px 8px 12px; }
 .inbox-head .section-head { margin: 0; }
