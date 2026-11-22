@@ -5,7 +5,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { startApp } from './harness.mjs';
-import { until } from './gitsteps.mjs';
+import { until, skipTour } from './gitsteps.mjs';
 
 /** Files every Linux has, opened in the file preview: enough tabs for its strip to overflow. */
 const PREVIEW_FILES = ['hosts', 'hostname', 'os-release', 'passwd', 'group', 'fstab', 'shells', 'profile', 'environment', 'issue', 'protocols', 'services'].map(name => `/etc/${name}`);
@@ -42,12 +42,7 @@ const pointTo = (x, y) => app.eval((t, x, y) => {
 before(async () => {
   app = await startApp({ name: 'minimal' });
   await app.waitFor('.pane .xterm');
-  // The welcome tour a first start offers would sit over everything.
-  await app.eval(async () => {
-    for (let i = 0; i < 20 && !globalThis.document.querySelector('.tour-skip, [data-tour="skip"]'); i++) await new Promise(r => setTimeout(r, 100));
-    const skip = [...globalThis.document.querySelectorAll('button, a, span')].find(el => el.textContent.trim() === 'Skip tour');
-    skip?.click();
-  });
+  await skipTour(app);
 });
 
 after(async () => { await app?.stop({ failed }); });

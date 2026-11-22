@@ -141,3 +141,12 @@ export async function tab(app, name) {
   await clickText(app, '[data-gw-tab]', name);
   await app.waitFor('[data-gw-tab].on', { text: name });
 }
+
+/** Skips the welcome tour a first start offers: it would sit over everything, and hold the keyboard. */
+export async function skipTour(app) {
+  await app.eval(async () => {
+    for (let i = 0; i < 20 && !globalThis.document.querySelector('.tour-skip, [data-tour="skip"]'); i++) await new Promise(r => setTimeout(r, 100));
+    const skip = [...globalThis.document.querySelectorAll('button, a, span')].find(el => el.textContent.trim() === 'Skip tour');
+    skip?.click();
+  });
+}

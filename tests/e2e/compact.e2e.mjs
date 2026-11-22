@@ -4,7 +4,7 @@ import path from 'node:path';
 import { readFile } from 'node:fs/promises';
 import { startApp } from './harness.mjs';
 import { makeRepo } from './repo.mjs';
-import { until, clickText } from './gitsteps.mjs';
+import { until, clickText, skipTour } from './gitsteps.mjs';
 
 const question = 'Would you like to run the following command?';
 const choices = ['› 1. Yes, proceed (y)', "  2. Yes, and don't ask again for commands that start", '     with `git init` (p)', '  3. No, and tell Codex what to do differently (esc)'];
@@ -68,6 +68,7 @@ async function scenario(name, lines, body, { waiting = false, ready = '.cv-choic
     }), 'shell recognizes Codex');
     await app.waitFor('.view-btn');
     if (typed) {
+      await skipTour(app); // it would hold the keyboard the prompt box should get
       await until(async () => (await events(app)).some(e => e.event === 'ready'), 'the fake drew its screen');
       await typeInTerminal(app, typed, `${prompt.input}${typed}`);
       // Counts each time the drawer opens (the terminal's rows showing under the view), from the view's first frame.
@@ -187,7 +188,7 @@ test('a prompt typed in the terminal and not sent moves into the prompt box as t
   await new Promise(resolve => setTimeout(resolve, 600));
   assert.equal(await app.eval(() => globalThis.drawerOpened), 0, 'the prompt box shows, never the terminal');
   assert.equal(await app.eval(t => t.$('.cv-input').offsetParent !== null), true);
-  assert.equal(await app.eval(t => globalThis.document.activeElement === t.$('.cv-input')), true, 'the prompt box has the keyboard');
+  assert.equal(await app.eval(() => globalThis.document.activeElement?.className), 'cv-input', 'the prompt box has the keyboard');
   assert.equal((await events(app)).some(e => e.event === 'prompt'), false, 'nothing was sent');
 }, { ready: '.cv-input:not([readonly])', typed: 'fix the tests', prompt: { input: '› ', picks: [], footer: ['', '  100% context left'] } }));
 
