@@ -86,8 +86,10 @@ function typedAt(buffer) {
   return from > 0 && buffer.cursorX > from;
 }
 
-/** The rule Claude Code draws above and below its input. */
-const RULE = /^\s*─+\s*$/;
+/** The rule Claude Code draws above and below its input, from the screen's left edge (a typed line is indented). */
+const RULE = /^─+\s*$/;
+/** The input line's mark and the one space after it: spaces typed after that are the user's. */
+const MARK_AND_SPACE = /^\s*[>›❯] ?/;
 /** What an agent shows in its input line for something it holds folded up (a long paste, a picture): not its text. */
 const FOLDED = /\[(Pasted|Image)/i;
 /** The keys that delete a character after the caret and before it. */
@@ -107,15 +109,20 @@ export function typedPrompt(term) {
   const cursor = term.buffer.active.cursorY;
   const top = inputTop(rows, cursor);
   if (top < 0) return null;
-  const mark = /** @type {RegExpExecArray} */ (INPUT_MARK.exec(rows[top]))[0].length;
+  const mark = /** @type {RegExpExecArray} */ (MARK_AND_SPACE.exec(rows[top]))[0].length;
   const end = inputEnd(rows, top);
   if (end < cursor || (cursor === top && term.buffer.active.cursorX <= mark)) return null;
   const lines = rows.slice(top, end + 1).map((row, i) => (i ? row.replace(new RegExp(`^ {0,${mark}}`), '') : row.slice(mark)).trimEnd());
-  while (lines.length && !lines[lines.length - 1]) lines.pop();
+  let blankAfter = 0;
+  while (lines.length && !lines[lines.length - 1]) {
+    lines.pop();
+    blankAfter++;
+  }
   const text = joinRows(lines, term.cols - mark);
   if (!text.trim() || FOLDED.test(text)) return null;
-  // Counted over: a space the agent dropped where it wrapped is one more. More than there are does nothing.
-  const keys = text.length + lines.length;
+  // As many as the input holds (its blank lines after the text too): Delete takes what's after the caret, Backspace
+  // what's before it, so nothing past what was read goes, wherever the caret is.
+  const keys = text.length + blankAfter;
   return { text, clear: DELETE.repeat(keys) + BACKSPACE.repeat(keys) };
 }
 

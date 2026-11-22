@@ -75,7 +75,7 @@ test("Claude Code's unsent prompt: wrapped rows run on, a new line stays one, an
   const typed = typedPrompt(typedTerm(rows, 5, 18));
   const text = 'hello world this is a long prompt that will surely wrap onto the next row of the box\nsecond line here';
   assert.equal(typed?.text, text);
-  const keys = text.length + 3;
+  const keys = text.length;
   assert.equal(typed?.clear, '\x1b[3~'.repeat(keys) + '\x7f'.repeat(keys));
 });
 
@@ -101,4 +101,13 @@ test('an input line whose top is off the screen stays where it is', () => {
 test('a word too long for a row runs on with no space', () => {
   const long = `❯ ${'a'.repeat(58)}`;
   assert.equal(typedPrompt(typedTerm(['', RULE, long, '  bcd', RULE], 3, 5))?.text, `${'a'.repeat(58)}bcd`);
+});
+
+test('a line of ─ typed in the prompt is part of it, not the rule under it', () => {
+  const rows = ['', RULE, '❯ above', '  ───', '  below', RULE, ...CLAUDE_FOOTER];
+  assert.equal(typedPrompt(typedTerm(rows, 2, 7))?.text, 'above\n───\nbelow');
+});
+
+test('spaces typed at the start of the prompt are kept', () => {
+  assert.equal(typedPrompt(typedTerm(['', RULE, '❯   indented', RULE], 2, 12))?.text, '  indented');
 });

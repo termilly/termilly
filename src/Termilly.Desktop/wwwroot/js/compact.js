@@ -165,16 +165,40 @@ function setView(tab, view) {
  * @param {Tab} tab
  */
 function takeTyped(tab) {
-  const c = compactOf(tab);
   const term = tab.view?.term;
-  const typed = term && c.el && canSend(tab) ? typedPrompt(term) : null;
-  if (!typed || !c.el) return;
+  if (!term || !canTake(tab)) return;
+  // Read once what the terminal has been sent so far is drawn: a prompt just sent with Enter has left the line then.
+  // The drawer stays shut from now, not only once the words are found: it would open on them meanwhile.
+  const c = compactOf(tab);
+  c.sendingNow = (c.sendingNow ?? 0) + 1;
+  term.write('', () => {
+    if (moveTyped(tab, term)) doneWhenTaken(tab);
+    else doneSending(tab);
+  });
+}
+
+/**
+ * Whether words in the agent's input line may move to the prompt box: it runs there, at its prompt (Codex past its
+ * start), and isn't working (what it's sent is being taken) or asking a question of its own.
+ * @param {Tab} tab
+ */
+const canTake = tab => !tab.exited && !!runningAgent(tab) && !isStarting(tab) && !waitsForAnswer(tab)
+  && tab.agent?.state !== AGENT_STATE.working;
+
+/**
+ * Puts the input line's words in the prompt box and clears them there: true when there were any.
+ * @param {Tab} tab
+ * @param {any} term xterm's Terminal
+ */
+function moveTyped(tab, term) {
+  const c = compactOf(tab);
+  const typed = c.el && isCompact(tab) && canTake(tab) ? typedPrompt(term) : null;
+  if (!typed || !c.el) return false;
   const input = /** @type {HTMLTextAreaElement} */ (find(c.el, INPUT));
   input.value = input.value.trim() ? `${input.value}\n${typed.text}` : typed.text;
   input.dispatchEvent(new Event('input')); // the box fits its text
-  c.sendingNow = (c.sendingNow ?? 0) + 1;
   send(PAGE.input, { id: tab.id, data: typed.clear });
-  doneWhenTaken(tab);
+  return true;
 }
 
 /**

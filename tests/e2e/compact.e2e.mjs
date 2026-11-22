@@ -70,12 +70,19 @@ async function scenario(name, lines, body, { waiting = false, ready = '.cv-choic
     if (typed) {
       await until(async () => (await events(app)).some(e => e.event === 'ready'), 'the fake drew its screen');
       await typeInTerminal(app, typed, `${prompt.input}${typed}`);
+      // Counts each time the drawer opens (the terminal's rows showing under the view), from the view's first frame.
+      await app.eval(t => {
+        globalThis.drawerOpened = 0;
+        new globalThis.MutationObserver(() => {
+          if (t.$('.compact-view')?.classList.contains('drawer')) globalThis.drawerOpened++;
+        }).observe(globalThis.document.body, { attributes: true, attributeFilter: ['class'], subtree: true });
+      });
     }
     await app.click('.view-btn');
     await clickText(app, '.menu-row', 'Compact');
     if (waiting) await waitOnQuestion(app);
     await app.waitFor(ready);
-    assert.equal(await app.eval(t => t.$('.cv-input').value), typed);
+    await until(async () => await app.eval(t => t.$('.cv-input').value) === typed, `the prompt box holds "${typed}"`);
     await body(app);
     failed = false;
   } finally { await app?.stop({ failed }); await repo.dispose(); }
@@ -177,8 +184,10 @@ test('a prompt typed in the terminal and not sent moves into the prompt box as t
     const buffer = [...state.tabs.values()].find(tab => tab.view?.term).view.term.buffer.active;
     return buffer.getLine(buffer.baseY + buffer.cursorY)?.translateToString(true) === '› ';
   }), "the terminal's input line emptied");
-  assert.equal(await app.eval(t => t.$('.compact-view').classList.contains('drawer')), false, 'the prompt box shows, not the terminal');
+  await new Promise(resolve => setTimeout(resolve, 600));
+  assert.equal(await app.eval(() => globalThis.drawerOpened), 0, 'the prompt box shows, never the terminal');
   assert.equal(await app.eval(t => t.$('.cv-input').offsetParent !== null), true);
+  assert.equal(await app.eval(t => globalThis.document.activeElement === t.$('.cv-input')), true, 'the prompt box has the keyboard');
   assert.equal((await events(app)).some(e => e.event === 'prompt'), false, 'nothing was sent');
 }, { ready: '.cv-input:not([readonly])', typed: 'fix the tests', prompt: { input: '› ', picks: [], footer: ['', '  100% context left'] } }));
 
