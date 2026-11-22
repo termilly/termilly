@@ -212,7 +212,9 @@ function followTerminalKeys(tab) {
  */
 function moveTyped(tab, term) {
   const c = compactOf(tab);
-  const typed = c.el && isCompact(tab) && canTake(tab) ? typedPrompt(term, screen => exactText(c.keys, screen)) : null;
+  // Only this move keeps the drawer shut: a prompt the box started sending meanwhile is in the input line too.
+  const alone = (c.sendingNow ?? 0) <= 1;
+  const typed = c.el && alone && isCompact(tab) && canTake(tab) ? typedPrompt(term, screen => exactText(c.keys, screen)) : null;
   if (!typed || !c.el) return false;
   const input = /** @type {HTMLTextAreaElement} */ (find(c.el, INPUT));
   input.value = input.value.trim() ? `${input.value}\n${typed.text}` : typed.text;

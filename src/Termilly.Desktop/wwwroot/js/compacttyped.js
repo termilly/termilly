@@ -70,10 +70,10 @@ export function exactText(keys, screen) {
 }
 
 /**
- * A text with each run of whitespace as one space, and none at its ends.
+ * A text with each run of whitespace as one space, and none at its end (the screen shows no spaces there).
  * @param {string} text
  */
-const spaced = text => text.replace(SPACES, ' ').trim();
+const spaced = text => text.replace(SPACES, ' ').trimEnd();
 
 /**
  * Forgets the draft: the input line was cleared by other means than keys (the compact view moved it to its box).

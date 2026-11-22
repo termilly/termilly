@@ -66,3 +66,9 @@ test('Backspace takes a whole character, an emoji too', () => {
   press('a', '😀', '\x7f');
   assert.equal(keys.draft, 'a');
 });
+
+test('a space the screen shows at the start, which the keys never typed, is no match', () => {
+  const { keys, press } = keyed();
+  press('a', 'b', 'c');
+  assert.equal(exactText(keys, ' abc'), ' abc');
+});
