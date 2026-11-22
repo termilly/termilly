@@ -74,8 +74,10 @@ public partial class MainWindow : Window
         WindowInterop.UseCustomChrome(this);
         // Termilly opens where the window was last closed (maximized, if it was), on the start-up screen until the
         // page is ready (RevealPage).
+        // The backdrop first: it needs the window's handle, and set once the window shows (Restore shows a maximized
+        // one), Windows 10 repaints the window in its colour until WPF draws again, a flash before the start-up screen.
+        SourceInitialized += (_, _) => ApplyBackdrop();
         SourceInitialized += (_, _) => WindowPlacement.Restore(this, _target = WindowPlacement.Plan(new Size(MinWidth, MinHeight)));
-        SourceInitialized += (_, _) => ApplyBackdrop(); // see-through needs the window's handle
         Stage.SizeChanged += (_, _) => FitPageToWindow();
         ApplyTheme();
 

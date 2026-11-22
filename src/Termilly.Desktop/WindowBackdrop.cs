@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Threading;
 using System.Windows.Shell;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
@@ -121,16 +122,32 @@ internal static class WindowBackdrop
 
     /// <summary>
     /// Windows 10 takes a blur only on a window that had an effect before it was first shown: every window gets a plain
-    /// one then, in the theme's background (it shows only before the window is first drawn), so a blur can be turned on
-    /// later. Not on 11, where it would stop acrylic.
+    /// one then, so a blur can be turned on later. Not on 11, where it would stop acrylic.
     /// </summary>
     private static void Prepare(Window window, IntPtr hwnd, string background)
     {
         if (Build < Windows11 && Prepared.Add(hwnd))
         {
+            HideUntilDrawn(window, hwnd);
             Dwm.Prepare(hwnd, background);
             window.Closed += (_, _) => Prepared.Remove(hwnd);
         }
+    }
+
+    /// <summary>
+    /// Windows 10 shows that effect, lighter than its colour, until the window's first frame is drawn: a flash before
+    /// the start-up screen, whatever the colour. The window stays off the screen (cloaked) until then. Only before
+    /// it has loaded, or nothing would show it again.
+    /// </summary>
+    private static void HideUntilDrawn(Window window, IntPtr hwnd)
+    {
+        if (Dwm.IsShown(hwnd))
+        {
+            return;
+        }
+        Dwm.Cloak(hwnd, true);
+        // A pass after the first frame, so the compositor has it before the window shows.
+        window.ContentRendered += (_, _) => window.Dispatcher.BeginInvoke(DispatcherPriority.Background, () => Dwm.Cloak(hwnd, false));
     }
 
     /// <summary>The windows made see-through, with the colour WPF cleared them to before (theirs again when solid).</summary>
@@ -142,6 +159,7 @@ internal static class WindowBackdrop
     /// <summary>The compositor's calls: what shows through a see-through window.</summary>
     private static class Dwm
     {
+        private const int DWMWA_CLOAK = 13;
         private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
         private const int DWMWA_SYSTEMBACKDROP_TYPE = 38;
         private const int DWMSBT_AUTO = 0;
@@ -165,6 +183,14 @@ internal static class WindowBackdrop
 
         private const int DWM_BB_ENABLE = 0x1;
         private const int DWM_BB_BLURREGION = 0x2;
+
+        public static bool IsShown(IntPtr hwnd) => IsWindowVisible(hwnd);
+
+        public static void Cloak(IntPtr hwnd, bool cloaked)
+        {
+            var value = cloaked ? 1 : 0;
+            _ = DwmSetWindowAttribute(hwnd, DWMWA_CLOAK, ref value, sizeof(int));
+        }
 
         public static void SetDark(IntPtr hwnd, bool dark)
         {
@@ -288,6 +314,10 @@ internal static class WindowBackdrop
 
         [DllImport("dwmapi.dll")]
         private static extern int DwmEnableBlurBehindWindow(IntPtr hwnd, ref DWM_BLURBEHIND blurBehind);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool IsWindowVisible(IntPtr hwnd);
 
         [DllImport("user32.dll")]
         private static extern int SetWindowCompositionAttribute(IntPtr hwnd, ref WINDOWCOMPOSITIONATTRIBDATA data);
