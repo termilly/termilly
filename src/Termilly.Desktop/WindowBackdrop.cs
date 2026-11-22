@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Threading;
 using System.Windows.Shell;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
@@ -79,7 +80,7 @@ internal static class WindowBackdrop
         {
             return;
         }
-        Prepare(window, hwnd);
+        Prepare(window, hwnd, tint);
         var seeThrough = background.SeeThrough;
         // A window never made see-through is otherwise left as it is (the default): nothing to undo.
         if (!seeThrough && !SolidAgain.ContainsKey(hwnd))
@@ -120,16 +121,33 @@ internal static class WindowBackdrop
     }
 
     /// <summary>
-    /// Windows 10 takes a blur only on a window that had an effect before it was first shown: every window gets a clear
-    /// one then (it draws nothing), so a blur can be turned on later. Not on 11, where it would stop acrylic.
+    /// Windows 10 takes a blur only on a window that had an effect before it was first shown: every window gets a plain
+    /// one then, so a blur can be turned on later. Not on 11, where it would stop acrylic.
     /// </summary>
-    private static void Prepare(Window window, IntPtr hwnd)
+    private static void Prepare(Window window, IntPtr hwnd, string background)
     {
         if (Build < Windows11 && Prepared.Add(hwnd))
         {
-            Dwm.Prepare(hwnd);
+            HideUntilDrawn(window, hwnd);
+            Dwm.Prepare(hwnd, background);
             window.Closed += (_, _) => Prepared.Remove(hwnd);
         }
+    }
+
+    /// <summary>
+    /// Windows 10 shows that effect, lighter than its colour, until the window's first frame is drawn: a flash before
+    /// the start-up screen, whatever the colour. The window stays off the screen (cloaked) until then. Only before
+    /// it has loaded, or nothing would show it again.
+    /// </summary>
+    private static void HideUntilDrawn(Window window, IntPtr hwnd)
+    {
+        if (Dwm.IsShown(hwnd))
+        {
+            return;
+        }
+        Dwm.Cloak(hwnd, true);
+        // A pass after the first frame, so the compositor has it before the window shows.
+        window.ContentRendered += (_, _) => window.Dispatcher.BeginInvoke(DispatcherPriority.Background, () => Dwm.Cloak(hwnd, false));
     }
 
     /// <summary>The windows made see-through, with the colour WPF cleared them to before (theirs again when solid).</summary>
@@ -141,6 +159,7 @@ internal static class WindowBackdrop
     /// <summary>The compositor's calls: what shows through a see-through window.</summary>
     private static class Dwm
     {
+        private const int DWMWA_CLOAK = 13;
         private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
         private const int DWMWA_SYSTEMBACKDROP_TYPE = 38;
         private const int DWMSBT_AUTO = 0;
@@ -148,12 +167,14 @@ internal static class WindowBackdrop
 
         private const int WCA_ACCENT_POLICY = 19;
         private const int ACCENT_DISABLED = 0;
-        /// <summary>An effect that draws nothing (a fully clear colour): "no effect" that still lets a blur come later.</summary>
+        /// <summary>A plain colour behind the window: "no effect" that still lets a blur come later.</summary>
         private const int ACCENT_ENABLE_TRANSPARENTGRADIENT = 2;
         private const int ACCENT_ENABLE_BLURBEHIND = 3;
         private const int ACCENT_ENABLE_ACRYLICBLURBEHIND = 4;
         /// <summary>The acrylic accent's own tint (Windows 11 before 22H2): the theme's colour, faint (0 to 255), as the page already shades the window by Opacity.</summary>
         private const byte AcrylicTintAlpha = 0x20;
+        private const byte Opaque = 0xFF;
+        /// <summary>The effect takes GradientColor; without it, Windows fills it with the system's accent colour.</summary>
         private const int AccentDrawAllBorders = 2;
         /// <summary>Where each channel sits in AABBGGRR.</summary>
         private const int AlphaShift = 24;
@@ -163,14 +184,26 @@ internal static class WindowBackdrop
         private const int DWM_BB_ENABLE = 0x1;
         private const int DWM_BB_BLURREGION = 0x2;
 
+        public static bool IsShown(IntPtr hwnd) => IsWindowVisible(hwnd);
+
+        public static void Cloak(IntPtr hwnd, bool cloaked)
+        {
+            var value = cloaked ? 1 : 0;
+            _ = DwmSetWindowAttribute(hwnd, DWMWA_CLOAK, ref value, sizeof(int));
+        }
+
         public static void SetDark(IntPtr hwnd, bool dark)
         {
             var value = dark ? 1 : 0;
             _ = DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, ref value, sizeof(int));
         }
 
-        /// <summary>The clear effect every window starts with (Apply says why).</summary>
-        public static void Prepare(IntPtr hwnd) => SetAccent(hwnd, ACCENT_ENABLE_TRANSPARENTGRADIENT, 0, 0);
+        /// <summary>
+        /// The plain effect every window starts with on Windows 10 (Prepare says why), in the theme's background: with the
+        /// system's accent colour instead, that colour flashed before the start-up screen.
+        /// </summary>
+        public static void Prepare(IntPtr hwnd, string background) =>
+            SetAccent(hwnd, ACCENT_ENABLE_TRANSPARENTGRADIENT, ColourOf(background, Opaque), AccentDrawAllBorders);
 
         public static void SetEffect(IntPtr hwnd, bool seeThrough, string effect, string tint)
         {
@@ -179,9 +212,16 @@ internal static class WindowBackdrop
                 SetSystemBackdrop(hwnd, seeThrough);
                 return;
             }
-            // Windows 10: back to the clear effect first, so switching leaves nothing of the old one; never off, or it
+            // Windows 10: back to the plain effect first, so switching leaves nothing of the old one; never off, or it
             // wouldn't take a blur again. 11 before 22H2: off first, as first built.
-            SetAccent(hwnd, Build < Windows11 ? ACCENT_ENABLE_TRANSPARENTGRADIENT : ACCENT_DISABLED, 0, 0);
+            if (Build < Windows11)
+            {
+                Prepare(hwnd, tint);
+            }
+            else
+            {
+                SetAccent(hwnd, ACCENT_DISABLED, 0, 0);
+            }
             ClearBlurBehind(hwnd, seeThrough);
             if (!seeThrough)
             {
@@ -193,7 +233,7 @@ internal static class WindowBackdrop
                     SetAccent(hwnd, ACCENT_ENABLE_BLURBEHIND, 0, AccentDrawAllBorders);
                     break;
                 case BackgroundValues.Effect.Acrylic:
-                    SetAccent(hwnd, ACCENT_ENABLE_ACRYLICBLURBEHIND, TintOf(tint), AccentDrawAllBorders);
+                    SetAccent(hwnd, ACCENT_ENABLE_ACRYLICBLURBEHIND, ColourOf(tint, AcrylicTintAlpha), AccentDrawAllBorders);
                     break;
             }
         }
@@ -219,10 +259,10 @@ internal static class WindowBackdrop
         }
 
         /// <summary>#RRGGBB as the accent policy's colour: AABBGGRR.</summary>
-        private static uint TintOf(string hex)
+        private static uint ColourOf(string hex, byte alpha)
         {
             var c = System.Drawing.ColorTranslator.FromHtml(hex);
-            return ((uint)AcrylicTintAlpha << AlphaShift) | ((uint)c.B << BlueShift) | ((uint)c.G << GreenShift) | c.R;
+            return ((uint)alpha << AlphaShift) | ((uint)c.B << BlueShift) | ((uint)c.G << GreenShift) | c.R;
         }
 
         /// <param name="flags">Which window edges the effect draws on: none for the clear one, which changes nothing.</param>
@@ -274,6 +314,10 @@ internal static class WindowBackdrop
 
         [DllImport("dwmapi.dll")]
         private static extern int DwmEnableBlurBehindWindow(IntPtr hwnd, ref DWM_BLURBEHIND blurBehind);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool IsWindowVisible(IntPtr hwnd);
 
         [DllImport("user32.dll")]
         private static extern int SetWindowCompositionAttribute(IntPtr hwnd, ref WINDOWCOMPOSITIONATTRIBDATA data);
