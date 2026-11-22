@@ -54,7 +54,7 @@ internal static class Api
     /// <summary>Calls one method; throws <see cref="ApiException"/> with Termilly's message when it says no.</summary>
     public static JsonNode? Call(string method, JsonObject? arguments = null, string? pipe = null)
     {
-        pipe ??= FindPipe() ?? throw new ApiException("Termilly isn't running.");
+        pipe ??= FindPipe() ?? throw new ApiUnreachableException("Termilly isn't running.");
         var request = arguments?.DeepClone().AsObject() ?? [];
         request[ApiFields.Version] = Protocol.Version;
         request[ApiFields.Method] = method;
@@ -65,7 +65,7 @@ internal static class Api
         }
         // Typing may wait for the user to say yes (a terminal on production), so it gets longer.
         var line = Protocol.Send(pipe, request.ToJsonString(), PipeTimeouts.ForApi(method))
-            ?? throw new ApiException("Termilly didn't answer.");
+            ?? throw new ApiUnreachableException("Termilly didn't answer.");
         var reply = JsonNode.Parse(line) as JsonObject ?? throw new ApiException("Termilly's answer wasn't readable.");
         if (reply[ApiFields.Ok].AsBool() != true)
         {
@@ -80,4 +80,7 @@ internal static class Api
     public static string Pretty(JsonNode? node) => node?.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) ?? JsonNull;
 }
 
-internal sealed class ApiException(string message) : Exception(message);
+internal class ApiException(string message) : Exception(message);
+
+/// <summary>Termilly couldn't be reached at all (not running, or gone quiet), rather than saying no.</summary>
+internal sealed class ApiUnreachableException(string message) : ApiException(message);

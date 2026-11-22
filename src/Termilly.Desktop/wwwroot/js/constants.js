@@ -318,6 +318,49 @@ export const CLAUDE_TOOL = Object.freeze({
   watchedTools: Object.freeze(['Bash', 'PowerShell', 'apply_patch']),
 });
 
+/** C#: QuestionKinds (../Shared/Questions.cs). */
+export const QUESTION_KIND = Object.freeze({
+  options: 'options',
+  approve: 'approve',
+  ask: 'ask',
+  info: 'info',
+});
+
+/** C#: QuestionFields (../Shared/Questions.cs). */
+export const QUESTION_FIELD = Object.freeze({
+  id: 'id',
+  ui: 'ui',
+  title: 'title',
+  details: 'details',
+  choices: 'choices',
+  label: 'label',
+  recommended: 'recommended',
+  suggestions: 'suggestions',
+  button: 'button',
+  url: 'url',
+  answer: 'answer',
+  note: 'note',
+  approved: 'approved',
+  delivered: 'delivered',
+  skipped: 'skipped',
+  unavailable: 'unavailable',
+  reason: 'reason',
+  next: 'next',
+});
+
+/** C#: QuestionLimits (../Shared/Questions.cs). */
+export const QUESTION_LIMIT = Object.freeze({
+  maxChoices: 9,
+  shownChoices: 4,
+  maxSuggestions: 6,
+  maxTitle: 200,
+  maxDetails: 4000,
+  maxLabel: 100,
+  maxButtonLabel: 40,
+  maxUrl: 2000,
+  maxAnswer: 4000,
+});
+
 /** C#: GitActions (GitCommands.cs). */
 export const GIT_ACTION = Object.freeze({
   stage: 'stage',

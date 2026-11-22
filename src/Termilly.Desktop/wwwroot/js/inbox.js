@@ -13,6 +13,7 @@ import { focusedTab } from './panes.js';
 import { arriveAt } from './arrived.js';
 import { AGENT_STATE, CLAUDE_TOOL } from './constants.js';
 import { byId, find, TOOL_COUNT } from './dom.js';
+import { allQuestions, clearQuestions, watchQuestions, QUESTION_STATUS } from './questions.js';
 
 /**
  * A terminal that needs the user now, and how urgent it is (rank(): lower first).
@@ -96,8 +97,8 @@ export function isLive(n) {
 /** The notification center for the phones (js/phone.js): each note's terminal, what it said, when, and whether it's still news. */
 export const notesForPhone = () => notes.map(n => ({ id: n.tabId, key: n.key, state: n.state, detail: n.detail, at: n.at, live: isLive(n) }));
 
-/** The notes now, newest first: the terminals' and the schedules'. */
-export const allNotes = () => ({ notes, scheduleNotes });
+/** The notes now, newest first: the terminals', the schedules' and the agents' questions (js/questions.js). */
+export const allNotes = () => ({ notes, scheduleNotes, questions: allQuestions() });
 
 /**
  * Redraws `fn` whenever the notes change.
@@ -139,7 +140,8 @@ function take(tab) {
 }
 
 /**
- * Clears these notes and schedule notes (their keys and ids), or all of them (null).
+ * Clears these notes, schedule notes and agents' questions (their keys and ids), or all of them (null). Clear all
+ * leaves the questions that still wait for an answer: only their own × puts one away.
  * @param {string | string[] | null} keys
  */
 export function clear(keys) {
@@ -147,6 +149,8 @@ export function clear(keys) {
   for (const n of notes) if (!these || these.has(n.key)) cleared.add(n.key);
   notes = notes.filter(n => !cleared.has(n.key));
   scheduleNotes = these ? scheduleNotes.filter(n => !these.has(n.id)) : [];
+  const asked = allQuestions().filter(q => (these ? these.has(q.id) : q.status !== QUESTION_STATUS.waiting));
+  if (asked.length) clearQuestions(asked.map(q => q.id));
   refresh();
   emit(EVENTS.inbox);
 }
@@ -154,7 +158,7 @@ export function clear(keys) {
 /** Takes in what the terminals say now, and shows how many notes there are on the button and the taskbar. */
 function refresh() {
   for (const tab of state.tabs.values()) take(tab);
-  const size = notes.length + scheduleNotes.length;
+  const size = notes.length + scheduleNotes.length + allQuestions().length;
   count.textContent = countText(size);
   count.hidden = !size;
   updateBadge(size);
@@ -186,4 +190,5 @@ on(EVENTS.tabClosed, tab => {
   refresh();
 });
 on(EVENTS.tab, refresh);
+watchQuestions(refresh);
 on(EVENTS.workspaces, refresh);

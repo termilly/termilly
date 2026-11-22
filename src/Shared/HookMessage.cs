@@ -106,12 +106,15 @@ internal static class PipeTimeouts
     public static readonly TimeSpan ApiWaiting = TimeSpan.FromMinutes(2);
     /// <summary>A permission asked for out of sight waits for the user as long as the run may take.</summary>
     public static readonly TimeSpan Asking = TimeSpan.FromHours(1);
+    /// <summary>An agent's question in the notification center waits for the user a working day.</summary>
+    public static readonly TimeSpan Question = TimeSpan.FromHours(8);
 
     /// <summary>How long a call to <paramref name="method"/> may take.</summary>
     public static TimeSpan ForApi(string? method) => method switch
     {
         ApiMethods.Send or ApiMethods.Snippet or ApiMethods.Wait or ApiMethods.Ask or ApiMethods.AgentAsk => ApiWaiting,
         ApiMethods.TaskAsk => Asking,
+        ApiMethods.Notify => Question,
         _ => Api,
     };
 }

@@ -12,7 +12,7 @@ import { modal, pickFolder, CONFIRM_DIALOG } from './dialogs.js';
 import { escapeHtml, COPIED } from './ui.js';
 import { fuzzyMatch } from './fuzzy.js';
 import { allSnippets, NAME_WORDS } from './snippets.js';
-import { byId, find, targetOf, TOOL_COUNT } from './dom.js';
+import { byId, find, targetOf, TOOL_COUNT, SCHEDULES_BUTTON_ID } from './dom.js';
 import { detach, closeWindow, focusWindow, isDetached, windowName } from './windows.js';
 import { readReport, shownText } from './schedulereport.js';
 import { withPaths, openReportLink, LINK_CLASS } from './schedulelinks.js';
@@ -81,7 +81,7 @@ const listEl = find(box, '.sch-list');
 const tabsEl = find(box, '.sch-tabs');
 const onBox = /** @type {HTMLInputElement} */ (find(box, '[data-sch-on]'));
 const editEl = find(box, '.sch-edit');
-const openButton = byId('schedules-button');
+const openButton = byId(SCHEDULES_BUTTON_ID);
 const runningCount = find(openButton, TOOL_COUNT);
 
 /** What the form shows: the selected schedule's copy. */

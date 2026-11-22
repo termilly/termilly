@@ -103,7 +103,7 @@ public sealed class ApiTests
 
         var tools = Mcp.Handle(Request("tools/list"), (m, a) => FakeTermilly(m, a))!["result"]!["tools"]!.AsArray();
         var names = tools.Select(t => t!["name"]!.GetValue<string>()).ToList();
-        Assert.Equal(["list_terminals", "terminal_state", "search_command_history", "set_status", "read_terminal_output", "wait_for_terminal", "list_tasks", "get_task", "tick_task", "finish_task", "add_task", "edit_task", "delete_task", "list_schedules", "add_schedule", "run_schedule", "set_schedule", "list_notepad_pages", "read_notepad_page", "add_notepad_page", "write_notepad_page", "rename_notepad_page", "ask_terminal", "run_snippet", "open_terminal", "send_to_terminal", "list_snippets", "ask_agent"], names);
+        Assert.Equal(["list_terminals", "terminal_state", "search_command_history", "set_status", "read_terminal_output", "wait_for_terminal", "list_tasks", "get_task", "tick_task", "finish_task", "add_task", "edit_task", "delete_task", "list_schedules", "add_schedule", "run_schedule", "set_schedule", "list_notepad_pages", "read_notepad_page", "add_notepad_page", "write_notepad_page", "rename_notepad_page", "ask_terminal", "run_snippet", "open_terminal", "send_to_terminal", "list_snippets", "ask_agent", "notify_user"], names);
         // Listed with typing off too, so an agent knows they're there; each says what it needs.
         var withInput = Mcp.Handle(Request("tools/list"), (m, a) => FakeTermilly(m, a, allowInput: true))!["result"]!["tools"]!.AsArray();
         Assert.Equal(names, withInput.Select(t => t!["name"]!.GetValue<string>()));

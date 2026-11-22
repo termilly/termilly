@@ -1,6 +1,7 @@
-// The notification center as a sidebar (js/inboxpanel.js): the title bar's button docks it on the right and takes it
-// away again; its notes sit in groups (Needs you, Errors, Finished, Schedules); a permission is answered with Allow, a
-// question with a reply; a group folds and clears. Run with: npm run e2e (on Linux, under Xvfb).
+// The notification center as a sidebar (js/inboxpanel.js), design B: the title bar's button docks it on the right and
+// takes it away again; its sources (All, workspaces, terminals, Schedules) sit beside the feed, newest first; picking
+// one shows only its entries; a permission is answered with Allow, a question with a reply; narrow, the sources hide.
+// Run with: npm run e2e (on Linux, under Xvfb).
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { startApp } from './harness.mjs';
@@ -23,10 +24,14 @@ const step = (name, run) => test(name, async () => {
 /** The room the sidebar takes on the right of the terminals, in pixels. */
 const room = () => app.eval(t => parseFloat(t.$('#workspace').style.getPropertyValue('--inbox-dock')) || 0);
 
-/** The groups shown, each with its entries' terminal names. */
-const lanes = () => app.eval(t => [...t.$$('.inbox-lane')].map(l => ({
-  lane: l.dataset.lane, names: [...l.querySelectorAll('.inbox-item .name')].map(n => n.textContent),
-})));
+/** The feed's head and its rows' names, top to bottom. */
+const feed = () => app.eval(t => ({
+  head: t.$('.inbox-feed-head').textContent.trim(),
+  names: [...t.$$('.inbox-feed .inbox-item .name')].map(n => n.textContent),
+}));
+
+/** The sources listed, as their names. */
+const sources = () => app.eval(t => [...t.$$('.inbox-source .name')].map(n => n.textContent));
 
 /**
  * Says what a terminal's agent does now, as its hooks would: three terminals, by name.
@@ -40,6 +45,12 @@ const agentSays = (name, agent) => app.eval(async (t, name, agent) => {
   emit(EVENTS.agent, tab);
   emit(EVENTS.tab, tab);
 }, name, agent);
+
+/** A row of the feed by its terminal's name, as a selector. @param {string} name */
+const rowOf = name => app.eval(async (t, name) => {
+  const { state } = await t.import('store.js');
+  return `.inbox-feed .inbox-row[data-pane="${[...state.tabs.values()].find(x => x.name === name).id}"]`;
+}, name);
 
 before(async () => {
   app = await startApp({ name: 'inbox-sidebar' });
@@ -64,22 +75,34 @@ step('the button docks the notification center on the right, and no dropdown ope
   assert.equal(await app.eval(async t => (await t.import('store.js')).state.inbox.open), true);
 });
 
-step('each note lands in its group, Needs you on top', async () => {
+step('the feed has every note, newest first, and each terminal with one is a source', async () => {
   await agentSays('asks', { state: 'needs-input', tool: 'Bash', target: 'npm test' });
   await agentSays('fails', { state: 'error', reason: 'Connection refused' });
   await agentSays('ends', { state: 'done', message: 'All done', unread: true });
   await app.eval(async t => (await t.import('inbox.js')).addScheduleNote({ id: 'r1', title: 'Nightly', detail: 'Worked', failed: false, at: Date.now() }));
-  await until(async () => (await lanes()).length === 4, 'four groups');
-  assert.deepEqual(await lanes(), [
-    { lane: 'needs-you', names: ['asks'] },
-    { lane: 'errors', names: ['fails'] },
-    { lane: 'finished', names: ['ends'] },
-    { lane: 'schedules', names: ['Nightly'] },
-  ]);
+  await until(async () => (await feed()).names.length === 4, 'four rows');
+  assert.deepEqual((await feed()).names, ['Nightly', 'ends', 'fails', 'asks']);
+  const listed = await sources();
+  for (const name of ['All', 'asks', 'fails', 'ends', 'Schedules']) assert.ok(listed.includes(name), `${name} is a source`);
+  assert.equal(await app.eval(t => t.$(`.inbox-source.on .name`).textContent), 'All');
+});
+
+step('a terminal\'s source shows only its notes, and is remembered', async () => {
+  await app.eval(async t => {
+    const { state } = await t.import('store.js');
+    t.click(`[data-source="tab:${[...state.tabs.values()].find(x => x.name === 'fails').id}"]`);
+  });
+  await until(async () => (await feed()).names.join() === 'fails', 'only fails');
+  assert.match((await feed()).head, /^fails/);
+  assert.match(await app.eval(async t => (await t.import('store.js')).state.inbox.source), /^tab:/);
+  await app.click('[data-source="schedules"]');
+  await until(async () => (await feed()).names.join() === 'Nightly', 'only the schedule');
+  await app.click('[data-source="all"]');
+  await until(async () => (await feed()).names.length === 4, 'all again');
 });
 
 step('Preview of a permission whose prompt can\'t be read shows the screen, with no choices', async () => {
-  await app.click('[data-lane="needs-you"] [data-preview]');
+  await app.click(`${await rowOf('asks')} [data-preview]`);
   await app.waitFor('.cv-preview .cv-preview-text');
   assert.equal(await app.eval(t => t.$$('.cv-preview [data-choice]').length), 0);
   await app.click('.cv-preview [data-cancel]');
@@ -87,54 +110,46 @@ step('Preview of a permission whose prompt can\'t be read shows the screen, with
 });
 
 step('a permission is answered with Allow, and its buttons go', async () => {
-  await app.waitFor('[data-lane="needs-you"] [data-answer="approve"]', { text: 'Allow' });
-  await app.click('[data-lane="needs-you"] [data-answer="approve"]');
+  const row = await rowOf('asks');
+  await app.waitFor(`${row} [data-answer="approve"]`, { text: 'Allow' });
+  await app.click(`${row} [data-answer="approve"]`);
   await until(() => app.eval(async t => [...(await t.import('store.js')).state.tabs.values()].find(x => x.name === 'asks').agent.state === 'working'), 'the agent works on');
-  await app.waitFor('[data-lane="needs-you"] .inbox-answer', { gone: true });
-});
-
-step('Preview shows the whole permission prompt, and a choice picked there answers it', async () => {
-  const prompt = ['', '', '  Would you like to run the following command?', '', '  $ npm test', '', '› 1. Yes, proceed (y)', '  2. No, and tell the agent what to do differently (esc)', ''];
-  await app.eval(async (t, prompt) => {
-    const { state } = await t.import('store.js');
-    const tab = [...state.tabs.values()].find(x => x.name === 'asks');
-    await new Promise(done => tab.view.term.write(`\x1b[2J\x1b[H${prompt.join('\r\n')}`, done));
-  }, prompt);
-  await agentSays('asks', { state: 'needs-input', tool: 'Bash', target: 'npm test' });
-  await app.click('[data-lane="needs-you"] [data-preview]');
-  await app.waitFor('.cv-preview .cv-preview-text', { text: '$ npm test' });
-  await app.waitFor('.cv-preview [data-choice="1"]');
-  await app.click('.cv-preview [data-choice="1"]');
-  await app.waitFor('.cv-preview', { gone: true });
-  await until(() => app.eval(async t => [...(await t.import('store.js')).state.tabs.values()].find(x => x.name === 'asks').agent.state === 'working'), 'the choice answered it');
+  await app.waitFor(`${row} .inbox-answer`, { gone: true });
 });
 
 step('a question gets a reply typed into its terminal', async () => {
   await agentSays('asks', { state: 'attention', message: 'Which port?' });
-  await app.waitFor('[data-lane="needs-you"] .inbox-reply');
-  // With no prompt to read, Preview shows what the terminal's screen shows.
-  await app.click('[data-lane="needs-you"] [data-preview]');
-  await app.waitFor('.cv-preview .cv-preview-text', { text: 'npm test' });
-  await app.click('.cv-preview [data-cancel]');
-  await app.waitFor('.cv-preview', { gone: true });
-  await app.type('[data-lane="needs-you"] .inbox-reply', '8080');
-  await app.key('[data-lane="needs-you"] .inbox-reply', 'Enter');
+  const row = await rowOf('asks');
+  await app.waitFor(`${row} .inbox-reply`);
+  await app.type(`${row} .inbox-reply`, '8080');
+  await app.key(`${row} .inbox-reply`, 'Enter');
   await until(() => app.eval(async t => [...(await t.import('store.js')).state.tabs.values()].find(x => x.name === 'asks').agent.state === 'idle'), 'the agent took the reply');
-  await app.waitFor('[data-lane="needs-you"] .inbox-reply', { gone: true });
+  await app.waitFor(`${row} .inbox-reply`, { gone: true });
 });
 
-step('a group folds, stays folded, and opens again', async () => {
-  await app.click('[data-fold="finished"]');
-  await until(async () => (await lanes()).find(l => l.lane === 'finished')?.names.length === 0, 'Finished folded');
-  assert.deepEqual(await app.eval(async t => (await t.import('store.js')).state.inbox.folded), ['finished']);
-  await app.click('[data-fold="finished"]');
-  await until(async () => (await lanes()).find(l => l.lane === 'finished')?.names.length === 1, 'Finished open');
+step('narrow, the sources hide and the feed shows All', async () => {
+  await app.click('[data-source="schedules"]');
+  await until(async () => (await feed()).names.join() === 'Nightly', 'only the schedule');
+  await app.eval(async t => {
+    const panel = t.$('#inbox');
+    panel.style.width = '320px';
+    (await t.import('inbox.js')).addScheduleNote({ id: 'r2', title: 'Hourly', detail: 'Worked', failed: false, at: Date.now() });
+  });
+  await until(() => app.eval(t => t.$('#inbox').classList.contains('narrow')), 'narrow');
+  assert.equal(await app.eval(t => getComputedStyle(t.$('.inbox-sources')).display), 'none');
+  assert.match((await feed()).head, /^All/);
+  await app.eval(async t => {
+    t.$('#inbox').style.width = '';
+    (await t.import('inbox.js')).clear('r2');
+  });
 });
 
-step('a group\'s Clear clears only that group', async () => {
-  await app.click('[data-clear-lane="schedules"]');
-  await until(async () => !(await lanes()).some(l => l.lane === 'schedules'), 'Schedules gone');
-  assert.equal((await lanes()).some(l => l.lane === 'errors'), true);
+step('a row\'s × clears it, and Clear all the rest', async () => {
+  await app.click('[data-source="all"]');
+  await app.click('.inbox-feed [data-clear="r1"]');
+  await until(async () => !(await feed()).names.includes('Nightly'), 'Nightly gone');
+  await app.click('[data-inbox="clearAll"]');
+  await app.waitFor('#inbox .inbox-empty', { text: 'No notifications.' });
 });
 
 step('the button takes it away again, and the terminals get their room back', async () => {

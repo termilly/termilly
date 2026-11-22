@@ -55,6 +55,13 @@ internal static class ApiMethods
     /// folder, reading only, and its answer comes back. It waits for that answer.
     /// </summary>
     public const string AgentAsk = "agent_ask";
+    /// <summary>
+    /// An agent asks the user in the notification center (the MCP server's notify_user, Shared/Questions.cs): it waits for
+    /// the answer, or for an update only until it's shown.
+    /// </summary>
+    public const string Notify = "notify";
+    /// <summary>The agent stopped waiting for one (Esc, or it quit): its card closes.</summary>
+    public const string NotifyCancel = "notify_cancel";
 
     /// <summary>The methods that type into a terminal: they need Settings › Terminal › API, and may wait on the user.</summary>
     public static readonly IReadOnlyList<string> Typing = [Send, Snippet, Ask];
