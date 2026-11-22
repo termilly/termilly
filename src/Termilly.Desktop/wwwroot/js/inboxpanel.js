@@ -6,7 +6,7 @@
 import { state, persist, emit, wsById, tabTitle, EVENTS } from './store.js';
 import { allNotes, watchNotes, isLive, clear, button } from './inbox.js';
 import { answerAgent, awaitsPermission, isWaiting, ANSWER } from './agentanswer.js';
-import { tabBadgeHtml, escapeHtml, activityHtml, ICONS } from './ui.js';
+import { tabBadgeHtml, escapeHtml, activityHtml, cssColor, ICONS } from './ui.js';
 import { restoreFocus } from './panes.js';
 import { arriveAt } from './arrived.js';
 import { scheduleFit } from './terminals.js';
@@ -43,6 +43,10 @@ const KEYS_TEXT = 'Ctrl+Shift+A';
 const drafts = new Map();
 /** Why an answer couldn't be typed, by note. @type {Map<string, string>} */
 const failures = new Map();
+/** Notes whose answer is being typed now. @type {Set<string>} */
+const answering = new Set();
+/** Whether an input method is putting a word together in a reply box (a redraw then would lose it). */
+let composing = false;
 
 const panel = document.createElement('aside');
 panel.id = 'inbox';
@@ -76,9 +80,10 @@ function answerHtml(n, tab) {
   if (!isLive(n) || !isWaiting(tab) || tab.agent?.state === AGENT_STATE.error) return '';
   const key = escapeHtml(n.key);
   const fail = failures.get(n.key);
+  const off = answering.has(n.key) ? ' disabled' : '';
   const body = awaitsPermission(tab)
-    ? `<button class="btn small primary" data-answer="${ANSWER.approve}" data-f="${key}:a">Allow</button><button class="btn small" data-answer="${ANSWER.reject}" data-f="${key}:r">Deny</button>`
-    : `<input class="field inbox-reply" placeholder="Reply" spellcheck="false" autocomplete="off" data-f="${key}:t" value="${escapeHtml(drafts.get(n.key) ?? '')}"><button class="btn small" data-answer="${ANSWER.reply}" data-f="${key}:s">Send</button>`;
+    ? `<button class="btn small primary" data-answer="${ANSWER.approve}" data-f="${key}:a"${off}>Allow</button><button class="btn small" data-answer="${ANSWER.reject}" data-f="${key}:r"${off}>Deny</button>`
+    : `<input class="field inbox-reply" placeholder="Reply" spellcheck="false" autocomplete="off" data-f="${key}:t" value="${escapeHtml(drafts.get(n.key) ?? '')}"${off}><button class="btn small" data-answer="${ANSWER.reply}" data-f="${key}:s"${off}>Send</button>`;
   return `<div class="inbox-answer">${body}</div>${fail ? `<div class="inbox-fail">${escapeHtml(fail)}</div>` : ''}`;
 }
 
@@ -93,7 +98,7 @@ function noteEntry(n) {
       ${activityHtml(n.activity, 'inbox-state')}
       <span class="inbox-text">
         <span class="inbox-title">${tabBadgeHtml(tab)}<span class="name">${escapeHtml(tabTitle(tab))}</span>
-          <span class="inbox-ws"><span class="ws-dot" style="background:${ws?.color ?? 'var(--muted)'}"></span>${escapeHtml(ws?.name ?? '')}</span>
+          <span class="inbox-ws"><span class="ws-dot" style="background:${ws ? cssColor(ws.color) : 'var(--muted)'}"></span>${escapeHtml(ws?.name ?? '')}</span>
           ${tab.tags.slice(0, 2).map(t => `<span class="inbox-tag">${escapeHtml(t)}</span>`).join('')}
           <span class="inbox-age">${age(n.at)}</span></span>
         <span class="inbox-detail">${escapeHtml(n.detail)}</span>
@@ -129,8 +134,8 @@ function laneHtml(lane, title, rows, closed) {
   if (!rows.length) return '';
   const open = !closed.has(lane);
   return `<section class="inbox-lane" data-lane="${lane}">
-    <div class="inbox-lane-head"><button class="inbox-fold" data-fold="${lane}" aria-expanded="${open}">${open ? ICONS.chevronDown : ICONS.chevronRight}<span class="inbox-lane-name">${title}</span><span class="inbox-lane-count">${rows.length}</span></button>
-      <button class="btn small inbox-lane-clear" data-clear-lane="${lane}">${CLEAR_LABEL}</button></div>
+    <div class="inbox-lane-head"><button class="inbox-fold" data-fold="${lane}" data-f="fold:${lane}" aria-expanded="${open}">${open ? ICONS.chevronDown : ICONS.chevronRight}<span class="inbox-lane-name">${title}</span><span class="inbox-lane-count">${rows.length}</span></button>
+      <button class="btn small inbox-lane-clear" data-clear-lane="${lane}" data-f="clear:${lane}">${CLEAR_LABEL}</button></div>
     ${open ? rows.map(r => r.html).join('') : ''}</section>`;
 }
 
@@ -151,7 +156,7 @@ function giveFocusBack(was) {
 }
 
 function draw() {
-  if (panel.hidden) return;
+  if (panel.hidden || composing) return;
   const all = entries();
   // Drafts and errors of notes that are gone go with them.
   for (const kept of [drafts, failures]) for (const key of kept.keys()) if (!all.some(e => e.key === key)) kept.delete(key);
@@ -165,8 +170,8 @@ function draw() {
       ${titleIconHtml(button)}
       <span class="files-title">Notification center <span class="files-ws">${all.length}</span></span>
       <span class="files-tools">
-        <button class="pane-btn" data-inbox="${ACTION.clearAll}" title="Clear all"${all.length ? '' : ' disabled'}>${ICONS.trash}</button>
-        <button class="pane-btn" data-inbox="${ACTION.close}" title="Close (${KEYS_TEXT})">${ICONS.close}</button>
+        <button class="pane-btn" data-inbox="${ACTION.clearAll}" data-f="${ACTION.clearAll}" title="Clear all"${all.length ? '' : ' disabled'}>${ICONS.trash}</button>
+        <button class="pane-btn" data-inbox="${ACTION.close}" data-f="${ACTION.close}" title="Close (${KEYS_TEXT})">${ICONS.close}</button>
       </span>
     </div>
     <div class="inbox-lanes">${lanes || '<div class="inbox-empty">No notifications.</div>'}</div>`;
@@ -214,13 +219,19 @@ function toggleFold(lane) {
  */
 async function answer(row, choice) {
   const key = /** @type {string} */ (row.dataset.key);
+  // One answer at a time per note: a second click or Enter while the first is typed would type it twice.
+  if (answering.has(key)) return;
   const text = /** @type {HTMLInputElement | null} */ (row.querySelector(REPLY))?.value;
   failures.delete(key);
+  answering.add(key);
+  draw();
   try {
     await answerAgent({ pane: row.dataset.pane, choice, text });
     drafts.delete(key);
   } catch (e) {
     failures.set(key, /** @type {Error} */ (e).message);
+  } finally {
+    answering.delete(key);
   }
   draw();
 }
@@ -245,6 +256,11 @@ panel.addEventListener('click', e => {
   const el = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-answer], [data-clear], [data-clear-lane], [data-fold], [data-inbox], [data-run], [data-tab]'));
   if (el) onAction(el);
 });
+panel.addEventListener('compositionstart', () => { composing = true; });
+panel.addEventListener('compositionend', () => {
+  composing = false;
+  draw();
+});
 panel.addEventListener('input', e => {
   const box = targetOf(e);
   const key = /** @type {HTMLElement | null} */ (box.closest(ROW))?.dataset.key;
@@ -265,6 +281,7 @@ panel.addEventListener('keydown', e => {
   const plain = !e.ctrlKey && !e.shiftKey && !e.altKey;
   const inReply = targetOf(e).matches(REPLY);
   if (e.key === 'Escape' && plain) restoreFocus();
+  else if (e.isComposing) return; // an input method's own Enter picks its word
   else if (e.key === 'Enter' && plain && inReply) answer(/** @type {HTMLElement} */ (targetOf(e).closest(ROW)), ANSWER.reply);
   else if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && !inReply) moveFocus(e);
   else if (isShortcut(e, KEY_ID.inbox)) toggleInbox();

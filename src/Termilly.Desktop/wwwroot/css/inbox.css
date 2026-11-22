@@ -93,8 +93,8 @@
 .inbox-fold svg { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1; }
 .inbox-lane-name { color: var(--text); font-weight: 600; }
 .inbox-lane-count { color: var(--faint); font-size: 11px; font-variant-numeric: tabular-nums; }
-.inbox-lane-clear { visibility: hidden; height: 22px; padding: 0 8px; }
-.inbox-lane-head:hover .inbox-lane-clear, .inbox-lane-clear:focus-visible { visibility: visible; }
+.inbox-lane-clear { height: 22px; padding: 0 8px; opacity: 0; }
+.inbox-lane-head:hover .inbox-lane-clear, .inbox-lane-clear:focus-visible { opacity: 1; }
 /* An entry's × sits by its first line: a waiting one has its answer under it. */
 .inbox-panel .inbox-clear { top: 6px; transform: none; }
 .inbox-answer { display: flex; gap: 6px; margin: 0 8px 8px 30px; }
