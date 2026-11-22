@@ -24,6 +24,7 @@ import { cardKey } from './compactcardkeys.js';
 import { wireViewMenu } from './termclipboard.js';
 import { liveRow, typedPrompt, screenRows, rowsWithScrollback, drawerHolds, coverTerminal, NO_DRAWER } from './compactdrawer.js';
 import { showPreview } from './compactpreview.js';
+import { followKeys, exactText, forgetDraft } from './compacttyped.js';
 
 /** @typedef {import('./compactlines.js').CompactLine} CompactLine */
 
@@ -98,8 +99,9 @@ const VIEW_HTML = `
  * A terminal's compact view: what the host sent of its session, the elements showing it, and the prompt being typed.
  * @typedef {{ lines: CompactLine[], session: string | null, el: HTMLElement | null, frame: number, frameWin: Window | null, sending: Promise<void>, writes: { dispose(): void } | null,
  *   picked?: { menu: string, at: number }, ready?: boolean, drawer?: boolean, drawerFrame?: number, drawerWin?: Window,
- *   resizes?: { dispose(): void }, drawerRow?: number, drawerMenu?: boolean, started?: boolean, sendingNow?: number, asked?: number, askedBy?: object | null, waiting?: boolean }} CompactState
- *   drawerMenu: whether a list of the agent's own opened the drawer; started: whether the agent has shown its input line since it started; sendingNow: how many prompts the prompt box is typing into the agent; asked: how many questions the agent has asked; askedBy: the report that asked the last one
+ *   resizes?: { dispose(): void }, drawerRow?: number, drawerMenu?: boolean, started?: boolean, sendingNow?: number, asked?: number, askedBy?: object | null, waiting?: boolean,
+ *   keys?: import('./compacttyped.js').TypedKeys, keysTerm?: object }} CompactState
+ *   drawerMenu: whether a list of the agent's own opened the drawer; started: whether the agent has shown its input line since it started; sendingNow: how many prompts the prompt box is typing into the agent; asked: how many questions the agent has asked; askedBy: the report that asked the last one; keys: the keys typed into keysTerm since its last Enter
  */
 
 /**
@@ -177,13 +179,30 @@ function takeTyped(tab) {
   });
 }
 
+/** For this long after an Enter typed in the terminal, its screen may still show the prompt that Enter sent. */
+const ENTER_SETTLE_MS = 1500;
+
 /**
  * Whether words in the agent's input line may move to the prompt box: it runs there, at its prompt (Codex past its
- * start), and isn't working (what it's sent is being taken) or asking a question of its own.
+ * start), isn't working (what it's sent is being taken) or asking a question of its own, and no prompt was just sent
+ * from its terminal (the agent may not have redrawn its input line yet, nor reported it works).
  * @param {Tab} tab
  */
 const canTake = tab => !tab.exited && !!runningAgent(tab) && !isStarting(tab) && !waitsForAnswer(tab)
-  && tab.agent?.state !== AGENT_STATE.working;
+  && tab.agent?.state !== AGENT_STATE.working && Date.now() - (compactOf(tab).keys?.enteredAt ?? 0) >= ENTER_SETTLE_MS;
+
+/**
+ * Follows the keys typed into the terminal from its start, Full view or not: the prompt box gets them exactly.
+ * @param {Tab} tab
+ */
+function followTerminalKeys(tab) {
+  const c = compactOf(tab);
+  const term = tab.view?.term;
+  if (!term || c.keysTerm === term) return;
+  c.keys?.dispose();
+  c.keys = followKeys(term, Date.now);
+  c.keysTerm = term;
+}
 
 /**
  * Puts the input line's words in the prompt box and clears them there: true when there were any.
@@ -192,12 +211,13 @@ const canTake = tab => !tab.exited && !!runningAgent(tab) && !isStarting(tab) &&
  */
 function moveTyped(tab, term) {
   const c = compactOf(tab);
-  const typed = c.el && isCompact(tab) && canTake(tab) ? typedPrompt(term) : null;
+  const typed = c.el && isCompact(tab) && canTake(tab) ? typedPrompt(term, screen => exactText(c.keys, screen)) : null;
   if (!typed || !c.el) return false;
   const input = /** @type {HTMLTextAreaElement} */ (find(c.el, INPUT));
   input.value = input.value.trim() ? `${input.value}\n${typed.text}` : typed.text;
   input.dispatchEvent(new Event('input')); // the box fits its text
   send(PAGE.input, { id: tab.id, data: typed.clear });
+  forgetDraft(c.keys);
   return true;
 }
 
@@ -209,6 +229,7 @@ function apply(tab) {
   const view = tab.view;
   if (!view) return;
   countAsked(tab);
+  followTerminalKeys(tab);
   const shown = isCompact(tab);
   view.el.classList.toggle(SHOWN_CLASS, shown);
   const c = compactOf(tab);
@@ -965,5 +986,6 @@ on(EVENTS.tab, tab => {
 on(EVENTS.tabClosed, tab => {
   tab.compact?.writes?.dispose();
   tab.compact?.resizes?.dispose();
+  tab.compact?.keys?.dispose();
   if (tab.compact?.session) send(PAGE.compactWatch, { id: tab.id, session: null });
 });

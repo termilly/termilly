@@ -35,10 +35,8 @@ async function waitOnQuestion(app) {
 async function typeInTerminal(app, keys, shows) {
   await app.eval(async (t, keys) => {
     const { state } = await t.import('store.js');
-    const { send } = await t.import('host.js');
-    const { PAGE } = await t.import('protocol.js');
     const tab = [...state.tabs.values()].find(tab => tab.view?.term);
-    send(PAGE.input, { id: tab.id, data: keys });
+    for (const key of keys) tab.view.term.input(key, true); // key by key, as typed
   }, keys);
   await until(() => app.eval(async (t, shows) => {
     const { state } = await t.import('store.js');

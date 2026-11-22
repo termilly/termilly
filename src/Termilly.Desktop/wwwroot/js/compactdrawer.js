@@ -98,32 +98,49 @@ const BACKSPACE = '\x7f';
 
 /**
  * What the user typed in the agent's input line and hasn't sent, read off the screen, and the keys that clear it
- * there; null when there's none (its empty line shows a hint, the cursor before it), when the agent shows a list of
- * its own, or when it can't be read whole (its top is off the screen, it holds a paste or a picture folded up).
+ * there; null when there's none (its empty line shows a hint, drawn dim), when the agent shows a list of its own, or
+ * when it can't be read whole (its top is off the screen, it holds a paste or a picture folded up).
  * @param {any} term xterm's Terminal
+ * @param {(screen: string) => string} exact the text for what the screen shows, where it's known exactly (the
+ *   screen can't tell a line break from a wrap, nor show spaces at a row's end)
  * @returns {{ text: string, clear: string } | null}
  */
-export function typedPrompt(term) {
+export function typedPrompt(term, exact = screen => screen) {
   const rows = screenRows(term);
   if (readMenu(rows)) return null;
-  const cursor = term.buffer.active.cursorY;
-  const top = inputTop(rows, cursor);
+  const top = inputTop(rows, term.buffer.active.cursorY);
   if (top < 0) return null;
   const mark = /** @type {RegExpExecArray} */ (MARK_AND_SPACE.exec(rows[top]))[0].length;
   const end = inputEnd(rows, top);
-  if (end < cursor || (cursor === top && term.buffer.active.cursorX <= mark)) return null;
+  if (end < term.buffer.active.cursorY || showsHint(term, rows[top], top, mark)) return null;
   const lines = rows.slice(top, end + 1).map((row, i) => (i ? row.replace(new RegExp(`^ {0,${mark}}`), '') : row.slice(mark)).trimEnd());
   let blankAfter = 0;
   while (lines.length && !lines[lines.length - 1]) {
     lines.pop();
     blankAfter++;
   }
-  const text = joinRows(lines, term.cols - mark);
-  if (!text.trim() || FOLDED.test(text)) return null;
-  // Backspace as many as were read, so nothing before what was read goes, wherever the caret is; Delete a few more,
-  // for spaces at the ends of rows the screen doesn't show (past the input's end it does nothing).
-  const keys = text.length + blankAfter;
-  return { text, clear: DELETE.repeat(keys + lines.length) + BACKSPACE.repeat(keys) };
+  const screen = joinRows(lines, term.cols - mark);
+  if (!screen.trim() || FOLDED.test(screen)) return null;
+  const text = exact(screen);
+  // Backspace as many as there are, so nothing before them goes, wherever the caret is; Delete a few more where
+  // the screen was read, for spaces at the ends of rows it doesn't show (past the input's end it does nothing).
+  const keys = text === screen ? text.length + blankAfter : text.length;
+  return { text, clear: DELETE.repeat(text === screen ? keys + lines.length : keys) + BACKSPACE.repeat(keys) };
+}
+
+/**
+ * Whether the input's first row shows the hint of an empty one ('Try "how does it work?"'): both agents draw it dim,
+ * and what's typed plain, wherever the caret is.
+ * @param {any} term xterm's Terminal
+ * @param {string} row the input's first row
+ * @param {number} top its row on the screen
+ * @param {number} mark how many columns its mark takes
+ */
+function showsHint(term, row, top, mark) {
+  const x = row.slice(mark).search(/\S/);
+  if (x < 0) return false;
+  const buffer = term.buffer.active;
+  return !!buffer.getLine(buffer.baseY + top)?.getCell(mark + x)?.isDim();
 }
 
 /**

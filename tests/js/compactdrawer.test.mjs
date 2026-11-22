@@ -55,14 +55,17 @@ test('words typed in the input line open the drawer, not as a list', () => {
 });
 
 /**
- * A terminal of 60 columns showing these rows, its cursor at a column of a row.
+ * A terminal of 60 columns showing these rows, its cursor at a column of a row; a dim row's text is drawn dim (as an
+ * agent draws the hint in an empty input line).
  * @param {string[]} rows
  * @param {number} cursorY
  * @param {number} cursorX
+ * @param {number} [dimRow]
  */
-const typedTerm = (rows, cursorY, cursorX) => {
+const typedTerm = (rows, cursorY, cursorX, dimRow = -1) => {
   const term = /** @type {any} */ ({ cols: 60, ...termOf(rows, cursorY) });
   term.buffer.active.cursorX = cursorX;
+  term.buffer.active.getLine = (/** @type {number} */ y) => ({ translateToString: () => rows[y], getCell: () => ({ isDim: () => y === dimRow }) });
   return term;
 };
 
@@ -85,8 +88,21 @@ test("Codex's unsent prompt, blank lines in it kept and the ones after it left o
 });
 
 test("an empty input line's hint is no prompt", () => {
-  assert.equal(typedPrompt(typedTerm(['', RULE, '❯ Try "fix lint errors"', RULE, ...CLAUDE_FOOTER], 2, 2)), null);
-  assert.equal(typedPrompt(typedTerm(['', '', '› Ask Codex to do anything', ...CODEX_FOOTER], 2, 2)), null);
+  assert.equal(typedPrompt(typedTerm(['', RULE, '❯ Try "fix lint errors"', RULE, ...CLAUDE_FOOTER], 2, 2, 2)), null);
+  assert.equal(typedPrompt(typedTerm(['', '', '› Ask Codex to do anything', ...CODEX_FOOTER], 2, 2, 2)), null);
+});
+
+test('a prompt with the caret moved to its start is still a prompt', () => {
+  assert.equal(typedPrompt(typedTerm(['', RULE, '❯ fix the tests', RULE, ...CLAUDE_FOOTER], 2, 2))?.text, 'fix the tests');
+});
+
+test('the text the keys typed is taken where the screen shows the same, with its line breaks and spaces', () => {
+  const rows = ['', RULE, `❯ ${'a'.repeat(58)}`, '  next', RULE];
+  const exact = `${'a'.repeat(58)}
+next `;
+  const typed = typedPrompt(typedTerm(rows, 3, 6), () => exact);
+  assert.equal(typed?.text, exact);
+  assert.equal(typed?.clear, '[3~'.repeat(exact.length) + ''.repeat(exact.length));
 });
 
 test('a paste or a picture the agent shows folded up stays where it is', () => {
