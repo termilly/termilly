@@ -82,3 +82,13 @@ const spaced = text => text.replace(SPACES, ' ').trimEnd();
 export function forgetDraft(keys) {
   if (keys) keys.draft = '';
 }
+
+/**
+ * The input line got text by other means than keys (the compact view gave it its box's): it's the draft, after an
+ * empty one; after any other, the draft is unknown.
+ * @param {TypedKeys | undefined} keys
+ * @param {string} text
+ */
+export function addToDraft(keys, text) {
+  if (keys) keys.draft = keys.draft === '' ? text : null;
+}

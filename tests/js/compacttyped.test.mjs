@@ -3,7 +3,7 @@
 // Run with: node --test tests/js/compacttyped.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { followKeys, exactText, forgetDraft } from '../../src/Termilly.Desktop/wwwroot/js/compacttyped.js';
+import { followKeys, exactText, forgetDraft, addToDraft } from '../../src/Termilly.Desktop/wwwroot/js/compacttyped.js';
 
 /** What xterm sends the console as its pane loses the focus (focus reporting on). */
 const FOCUS_OUT = '\x1b[O';
@@ -71,4 +71,14 @@ test('a space the screen shows at the start, which the keys never typed, is no m
   const { keys, press } = keyed();
   press('a', 'b', 'c');
   assert.equal(exactText(keys, ' abc'), ' abc');
+});
+
+test('text the view puts in an empty input line is the draft; added to another, the draft is unknown', () => {
+  const { keys, press } = keyed();
+  addToDraft(keys, 'from the box');
+  assert.equal(keys.draft, 'from the box');
+  press('!');
+  assert.equal(keys.draft, 'from the box!');
+  addToDraft(keys, 'more');
+  assert.equal(keys.draft, null);
 });

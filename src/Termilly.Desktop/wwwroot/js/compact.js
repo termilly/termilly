@@ -24,7 +24,7 @@ import { cardKey } from './compactcardkeys.js';
 import { wireViewMenu } from './termclipboard.js';
 import { liveRow, typedPrompt, screenRows, rowsWithScrollback, drawerHolds, coverTerminal, NO_DRAWER } from './compactdrawer.js';
 import { showPreview } from './compactpreview.js';
-import { followKeys, exactText, forgetDraft } from './compacttyped.js';
+import { followKeys, exactText, forgetDraft, addToDraft } from './compacttyped.js';
 
 /** @typedef {import('./compactlines.js').CompactLine} CompactLine */
 
@@ -153,6 +153,7 @@ function setView(tab, view) {
   }
   apply(tab);
   if (view === COMPACT_VIEW.full) {
+    giveTyped(tab);
     tab.view?.term?.focus();
     return;
   }
@@ -179,6 +180,28 @@ function takeTyped(tab) {
     else doneSending(tab);
   });
 }
+
+/**
+ * The prompt box's text, not sent, goes into the agent's input line as the terminal shows again, so it's there to
+ * finish and send (no Enter). Not while the agent waits on a question (it would answer it) or is still starting, nor
+ * while the box is sending a prompt: then it stays in the box.
+ * @param {Tab} tab
+ */
+function giveTyped(tab) {
+  const c = compactOf(tab);
+  const input = /** @type {HTMLTextAreaElement | null | undefined} */ (c.el?.querySelector(INPUT));
+  const text = input?.value.trim() ? input.value : '';
+  if (!input || !text || c.sendingNow || tab.exited || !runningAgent(tab) || isStarting(tab) || waitsForAnswer(tab)) return;
+  send(PAGE.input, { id: tab.id, data: asTyped(text) });
+  addToDraft(c.keys, text);
+  input.value = '';
+}
+
+/**
+ * Text as it's typed into an agent: one of several lines as a paste, so its new lines don't send it line by line.
+ * @param {string} text
+ */
+const asTyped = text => (text.includes('\n') ? `${PASTE_START}${text}${PASTE_END}` : text);
 
 /** For this long after an Enter typed in the terminal, its screen may still show the prompt that Enter sent. */
 const ENTER_SETTLE_MS = 1500;
@@ -548,7 +571,7 @@ async function typePrompt(tab, text) {
   // the user types them in the terminal. Not these: the drawer stays shut meanwhile (counted: prompts may overlap).
   const c = compactOf(tab);
   c.sendingNow = (c.sendingNow ?? 0) + 1;
-  send(PAGE.input, { id: tab.id, data: text.includes('\n') ? `${PASTE_START}${text}${PASTE_END}` : text });
+  send(PAGE.input, { id: tab.id, data: asTyped(text) });
   await beforeEnter(tab, true, true);
   if (!canSend(tab)) {
     doneSending(tab);
