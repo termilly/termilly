@@ -51,8 +51,11 @@ internal static class Program
         var settings = provider.GetRequiredService<ISettingsStore>();
         window.SetZoom(settings.Current.Interface.Zoom);
         settings.Saved += _ => window.SetZoom(settings.Current.Interface.Zoom);
-        // Low memory (Settings › Appearance) is read once: WebKit takes it before the page draws.
-        window.LowMemory = settings.Current.Terminal.LowMemory;
+        // Low memory (Settings › Appearance) is read once: WebKit takes it as it starts, before the window opens.
+        if (OperatingSystem.IsLinux() && settings.Current.Terminal.LowMemory)
+        {
+            GtkWindow.WithoutGraphicsCard();
+        }
         window.SetBackdrop(settings.Current.Background);
         settings.Saved += _ => window.SetBackdrop(settings.Current.Background);
         if (OperatingSystem.IsLinux() && settings.Current.Interface.RunAsX11)
