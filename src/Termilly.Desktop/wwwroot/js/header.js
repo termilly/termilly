@@ -80,7 +80,8 @@ function wireHeader(tab, header) {
   const click = (selector, fn) => find(header, selector).addEventListener('click', fn);
   // On the header, not the name: dragging it captures the pointer (panes.js), so the clicks land on the header.
   header.addEventListener('dblclick', e => {
-    if (header.ownerDocument.elementFromPoint(e.clientX, e.clientY)?.closest(PANE_NAME)) beginRename(tab);
+    const name = header.ownerDocument.elementFromPoint(e.clientX, e.clientY)?.closest(PANE_NAME);
+    if (name && header.contains(name)) beginRename(tab);
   });
   // The same menu as a right-click on the header.
   click('.menu-btn', e => openTabMenu(tab, /** @type {HTMLElement} */ (e.currentTarget)));
