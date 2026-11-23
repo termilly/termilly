@@ -491,7 +491,9 @@ onHost(HOST.output, m => {
   outputArrived(tab);
   tab.view.term.write(consoleDefaults(m.data));
   noteOutput(tab);
-  if (tab === focusedTab()) setTimeout(signalReady, READY_PAINT_MS); // the first prompt is on screen: let it paint, then show
+  // The first prompt is on screen: let it paint, then show. Only until then: one timer per output piles up thousands
+  // during a flood, and WebKit re-times every pending timer for each message the host sends (macOS froze for minutes).
+  if (!readySent && tab === focusedTab()) setTimeout(signalReady, READY_PAINT_MS);
 });
 
 // ---- Ready (the host shows a loader until then) ----
