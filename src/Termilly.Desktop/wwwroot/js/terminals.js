@@ -13,7 +13,7 @@ import { scanOutput, scanFrom, screenCleared } from './triggers.js';
 import { sizeTold } from './reprint.js';
 import { quotePaths } from './quoting.js';
 import { isWsl } from './filepaths.js';
-import { remoteReport, remoteHook, remotePrompt, watchRemote } from './remotehost.js';
+import { remoteReport, remoteHook, isRemoteHook, remotePrompt, watchRemote } from './remotehost.js';
 import { modal } from './dialogs.js';
 import { escapeHtml } from './ui.js';
 import { pasteNeedsConfirm, confirmProduction } from './environments.js';
@@ -170,8 +170,8 @@ const TYPING_BELL_MS = 1500;
 const ERASE_ALL = 2;
 const ERASE_SCROLLBACK = 3;
 
-/** Any answer xterm gives a program's query (CSI, DCS or OSC), for dropping those a replay of old output asks for. */
-const ANY_REPLY = /^\x1b(\[[?>]?[\d;]*\$?[a-zA-Z]|P[^]*\x1b\\|\][^]*(\x07|\x1b\\))$/;
+/** An answer xterm gives a program's query (CSI, DCS or OSC), not a key: for those a replay of old output asks for. */
+const ANY_REPLY = /^\x1b(\[[?>]?[\d;]*(\$y|[cRnt])|P[^]*\x1b\\|\][^]*(\x07|\x1b\\))$/;
 
 /** xterm answering the pseudo console: cursor position, device attributes, focus in or out. */
 const TERMINAL_REPLY = /^\x1b\[(\d+;\d+R|\?[\d;]*c|>[\d;]*c|[IO])$/;
@@ -545,7 +545,8 @@ function wireShellReports(tab, term) {
   });
   // OSC 1337;TermillyHook=…: Claude Code's hook on a server (remotehost.js). Other OSC 1337s (iTerm2 images) go on to
   // the image addon, which registered first and so is asked after this.
-  term.parser.registerOscHandler(OSC.iterm, (/** @type {string} */ data) => remoteHook(tab, data));
+  // A replay of a kept shell's old output (main.js) holds hook events already reported.
+  term.parser.registerOscHandler(OSC.iterm, (/** @type {string} */ data) => (tab.replaying ? isRemoteHook(data) : remoteHook(tab, data)));
 }
 
 /**

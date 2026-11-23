@@ -94,8 +94,11 @@ test('a kept shell taken back doesn\'t get terminal answers typed at its prompt'
     await until(async () => (await screen(app)).some(line => line.trim() === DONE), 'the command run');
     failed = false;
   } finally {
-    await app?.stop({ failed });
-    await endHost(env.TERMILLY_HOST_PIPE);
+    try {
+      await app?.stop({ failed });
+    } finally {
+      await endHost(env.TERMILLY_HOST_PIPE);
+    }
     if (dataDir && !failed) await rm(dataDir, { recursive: true, force: true });
   }
 });

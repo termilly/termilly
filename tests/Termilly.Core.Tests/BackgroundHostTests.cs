@@ -49,6 +49,8 @@ public sealed class BackgroundHostTests
 
             var second = Connect();
             Assert.True(second.Running.TryGetValue("t1", out var kept) && kept.Alive && kept.Pid == shell.ProcessId);
+            Assert.Equal(shell.ProcessId, second.TakeKept("t1"));
+            Assert.Null(second.TakeKept("t1")); // taken once: the same terminal started again later is a new shell
             var replayed = new ConcurrentQueue<string>();
             var live = new ConcurrentQueue<string>();
             var taken = second.Attach("t1", kept.Pid, 100, 30, live.Enqueue, replayed.Enqueue, _ => { });

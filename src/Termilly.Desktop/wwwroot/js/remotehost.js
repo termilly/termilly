@@ -176,13 +176,22 @@ export function remotePrompt(tab) {
   remote.gitReported = false;
 }
 
+/** An OSC 1337 from Claude Code's hook on a server: its event and base64 payload. */
+const REMOTE_HOOK = /^TermillyHook=1;([A-Za-z]{1,40});([A-Za-z0-9+/=]*)$/;
+
+/**
+ * Whether an OSC 1337 is a hook event (and so not an iTerm2 image).
+ * @param {string} data
+ */
+export const isRemoteHook = data => REMOTE_HOOK.test(data);
+
 /**
  * An OSC 1337;TermillyHook=… (from terminals.js): passed to the host as the local hook's events are.
  * @param {Tab} tab
  * @param {string} data
  */
 export function remoteHook(tab, data) {
-  const m = /^TermillyHook=1;([A-Za-z]{1,40});([A-Za-z0-9+/=]*)$/.exec(data);
+  const m = REMOTE_HOOK.exec(data);
   if (!m) return false;
   send(PAGE.remoteHook, { id: tab.id, event: m[1], payload: m[2] });
   return true;

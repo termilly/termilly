@@ -154,12 +154,12 @@ internal sealed class TerminalHandler(
     private (IShellSession Session, int Pid) StartShell(string id, PtyOptions options, Action<string> output, Action<string> replay, Action<int, int> exited)
     {
         var background = host.Current();
-        if (background is not null && background.Running.TryGetValue(id, out var kept) && kept.Alive)
+        if (background?.TakeKept(id) is { } keptPid)
         {
             // The background host kept this terminal's shell while the window was closed: take it back.
-            var attached = background.Attach(id, kept.Pid, options.Columns, options.Rows, output, replay, code => exited(code, kept.Pid));
+            var attached = background.Attach(id, keptPid, options.Columns, options.Rows, output, replay, code => exited(code, keptPid));
             page.Post(new ToPage.Attached(id));
-            return (attached, kept.Pid);
+            return (attached, keptPid);
         }
         if (background is not null)
         {

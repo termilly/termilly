@@ -53,6 +53,12 @@ internal sealed class HostClient : IDisposable
     /// <summary>Shells the host already runs (from before this window opened): id → process id, alive or exited.</summary>
     public IReadOnlyDictionary<string, (int Pid, bool Alive)> Running { get; private set; } = new Dictionary<string, (int, bool)>();
 
+    /// <summary>Kept shells a terminal already took back: starting that terminal again later is a new shell.</summary>
+    private readonly ConcurrentDictionary<string, bool> _taken = new();
+
+    /// <summary>The process id of a shell the host kept running for this terminal, the first time it's asked; else null.</summary>
+    public int? TakeKept(string id) => Running.TryGetValue(id, out var kept) && kept.Alive && _taken.TryAdd(id, true) ? kept.Pid : null;
+
     /// <summary>Connects to the host, starting it first if needed; null when it can't be reached.</summary>
     public static HostClient? Connect()
     {

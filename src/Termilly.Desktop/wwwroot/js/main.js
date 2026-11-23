@@ -25,7 +25,7 @@ import { jumpToNext } from './inbox.js';
 import { toggleInbox, initInbox } from './inboxpanel.js';
 import { applySnapshot } from './snapshot.js';
 import { keepEarlierOfOpen } from './earlier.js';
-import { toggleCaptures } from './triggers.js';
+import { toggleCaptures, outputSeen } from './triggers.js';
 import { toggleHints } from './hints.js';
 import { toggleScratch } from './scratch.js';
 import { openGitWindow, openAgentChanges, GIT_BUTTON_ID, gitFolderOf, onServer, openRemoteGitNotice } from './gitwindow.js';
@@ -502,8 +502,11 @@ onHost(HOST.replay, m => {
   const tab = state.tabs.get(m.id);
   if (!tab?.view?.term) return;
   tab.replaying = (tab.replaying ?? 0) + 1;
-  // Over after xterm's own handlers for this write (onWriteParsed, which triggers watch) have run too.
-  tab.view.term.write(consoleDefaults(m.data), () => setTimeout(() => { tab.replaying = (tab.replaying ?? 1) - 1; }));
+  // Over as soon as it's parsed, before any live output after it; triggers (watching once parsed) go on from its end.
+  tab.view.term.write(consoleDefaults(m.data), () => {
+    tab.replaying = (tab.replaying ?? 1) - 1;
+    outputSeen(tab);
+  });
   if (!readySent && tab === focusedTab()) setTimeout(signalReady, READY_PAINT_MS);
 });
 
