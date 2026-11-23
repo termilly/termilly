@@ -159,10 +159,13 @@ internal sealed class HostClient : IDisposable
         return session;
     }
 
-    /// <summary>Takes over a shell the host kept running: its missed output comes first, then the live output.</summary>
-    public HostedSession Attach(string id, int pid, int cols, int rows, Action<string> onOutput, Action<int> onExit)
+    /// <summary>
+    /// Takes over a shell the host kept running: its missed output comes first (to <paramref name="onReplay"/>), then
+    /// the live output.
+    /// </summary>
+    public HostedSession Attach(string id, int pid, int cols, int rows, Action<string> onOutput, Action<string> onReplay, Action<int> onExit)
     {
-        var session = new HostedSession(this, id, onOutput, onExit, _ => { }) { ProcessId = pid };
+        var session = new HostedSession(this, id, onOutput, onExit, _ => { }) { ProcessId = pid, OnReplay = onReplay };
         _sessions[id] = session;
         Send(new HostRequest.Attach(id));
         Send(new HostRequest.Resize(id, cols, rows));
@@ -214,7 +217,7 @@ internal sealed class HostClient : IDisposable
                         SessionOf(output.Id)?.Output(output.Data);
                         break;
                     case HostEvent.Replay replay:
-                        SessionOf(replay.Id)?.Output(replay.Data);
+                        SessionOf(replay.Id)?.Replayed(replay.Data);
                         break;
                     case HostEvent.Exited exit:
                         SessionOf(exit.Id)?.Exit(exit.Code);
@@ -264,6 +267,9 @@ internal sealed class HostedSession : IShellSession
 
     public int ProcessId { get; internal set; }
 
+    /// <summary>Where a taken-back shell's missed output goes; with the live output when not set.</summary>
+    internal Action<string>? OnReplay { get; init; }
+
     /// <summary>Waits briefly for the host to report the process id (the busy watcher needs it).</summary>
     internal void WaitStarted() => _started.Wait(HostClient.StartWait);
 
@@ -284,6 +290,14 @@ internal sealed class HostedSession : IShellSession
         if (!_killed)
         {
             _onOutput(text);
+        }
+    }
+
+    internal void Replayed(string text)
+    {
+        if (!_killed)
+        {
+            (OnReplay ?? _onOutput)(text);
         }
     }
 

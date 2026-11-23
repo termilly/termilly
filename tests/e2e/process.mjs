@@ -23,9 +23,17 @@ export async function until(check, { timeoutMs = 30_000, description = 'conditio
   throw new Error(`Timed out waiting for ${description}${error ? `: ${error.message}` : ''}`);
 }
 
+/** How long a stopped process's last output may take to arrive. */
+const OUTPUT_SETTLE_MS = 500;
+
 export async function terminate(child) {
   if (!child || child.exitCode !== null || child.signalCode !== null) return;
-  const exited = new Promise(resolve => child.once('close', resolve));
+  // 'close' waits for its output pipes too, which a process it started in a session of its own (the background host)
+  // keeps open: the exit, then a moment for the last output, is enough.
+  const exited = new Promise(resolve => {
+    child.once('close', resolve);
+    child.once('exit', () => { setTimeout(OUTPUT_SETTLE_MS).then(resolve); });
+  });
   const signal = value => {
     if (child.exitCode !== null || child.signalCode !== null) return;
     try {

@@ -428,6 +428,7 @@ function wireInput(tab, term) {
     // Broadcasting (broadcast.js) sends it to every terminal in the broadcast; otherwise just here.
     // xterm's answers to the console's queries go to this terminal only, and aren't the user typing.
     if (isTerminalReply(data)) {
+      if (tab.replaying) return; // answering a query from a replay of old output (main.js)
       send(PAGE.input, { id: tab.id, data });
       return;
     }
@@ -458,6 +459,8 @@ function wireInput(tab, term) {
  * @param {any} term xterm
  */
 function wireNotifications(tab, term) {
+  // A replay of a kept shell's old output (main.js) doesn't ring or notify again.
+  const alert = (/** @type {string} */ message) => { if (!tab.replaying) agentAlert(tab, message); };
   // OSC 9;4;state;percent: progress an app reports (Claude Code, winget, PowerShell progress bars), the sequence
   // Windows Terminal draws its tab spinner from. OSC 9;<text> is a notification (ConEmu's, which Codex sends);
   // OSC 9;1 to 9;12 are other ConEmu commands (9;9 is the working folder), left alone.
@@ -465,7 +468,7 @@ function wireNotifications(tab, term) {
     const m = /^4;([0-4])(?:;(\d{1,3}))?/.exec(data);
     if (m) return progressReported(tab, Number(m[1]), Number(m[2] ?? 0));
     if (/^(1[0-2]|[1-9])(;|$)/.test(data)) return false;
-    agentAlert(tab, data);
+    alert(data);
     return true;
   });
   // OSC 777;notify;title;body (urxvt, foot, ghostty) and OSC 99 (kitty: metadata;payload, base64 when e=1):
@@ -473,11 +476,11 @@ function wireNotifications(tab, term) {
   term.parser.registerOscHandler(OSC.notify, (/** @type {string} */ data) => {
     const [kind, title = '', body = ''] = data.split(';');
     if (kind !== OSC_777_NOTIFY) return false;
-    agentAlert(tab, [title, body].filter(Boolean).join(': '));
+    alert([title, body].filter(Boolean).join(': '));
     return true;
   });
   term.parser.registerOscHandler(OSC.kittyNotify, (/** @type {string} */ data) => {
-    agentAlert(tab, kittyNotification(data));
+    alert(kittyNotification(data));
     return true;
   });
   term.onBell(() => {
@@ -487,7 +490,7 @@ function wireNotifications(tab, term) {
     const { el } = /** @type {TabView} */ (tab.view);
     // Seen: its own window has the focus (a detached one), or the main window does with it focused there.
     if (tab.detached ? el.ownerDocument.hasFocus() : document.hasFocus() && tab.wsId === state.activeId && el.classList.contains('focused')) return;
-    agentAlert(tab, '');
+    alert('');
   });
 }
 

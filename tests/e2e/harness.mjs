@@ -51,9 +51,12 @@ async function displayFor(env, logs) {
   } catch (error) { await terminate(child); throw error; }
 }
 
-/** Starts one isolated application. Call stop({ failed: true }) from failure cleanup to retain evidence. */
-export async function startApp({ folder, gh = {}, agents = {}, env = {}, name = 'test' } = {}) {
-  const dataDir = await mkdtemp(path.join(tmpdir(), 'termilly-e2e-'));
+/**
+ * Starts one isolated application. Call stop({ failed: true }) from failure cleanup to retain evidence. To start it
+ * again on the same data (a restart), stop the first with { keepData: true } and pass its dataDir.
+ */
+export async function startApp({ folder, gh = {}, agents = {}, env = {}, name = 'test', dataDir: reused } = {}) {
+  const dataDir = reused ?? await mkdtemp(path.join(tmpdir(), 'termilly-e2e-'));
   const logs = [], xvfbLogs = [];
   const artifacts = path.join(out, `${name.replace(/[^a-zA-Z0-9_-]/g, '-')}-${path.basename(dataDir)}`);
   const scenario = path.join(dataDir, 'gh-scenario.json'), ghLog = path.join(dataDir, 'gh.jsonl');
@@ -86,9 +89,12 @@ export async function startApp({ folder, gh = {}, agents = {}, env = {}, name = 
       if (appProcess.exitCode !== null) throw new Error(`App exited ${appProcess.exitCode}: ${logs.join('')}`);
       return (await request('/ready')).ok;
     }, { timeoutMs: 60_000, description: 'test driver ready' });
-    await app.waitFor('.recovery [data-ok]');
-    await app.click('.recovery [data-ok]');
-    await app.waitFor('.recovery', { gone: true });
+    // The recovery code is offered once, when the data folder is new.
+    if (!reused) {
+      await app.waitFor('.recovery [data-ok]');
+      await app.click('.recovery [data-ok]');
+      await app.waitFor('.recovery', { gone: true });
+    }
     return app;
   } catch (error) { await app.stop({ failed: true }); throw error; }
 
@@ -123,7 +129,7 @@ export async function startApp({ folder, gh = {}, agents = {}, env = {}, name = 
       },
       ghCalls() { return readCalls(ghLog); },
       agentCalls() { return readCalls(agentLog); },
-      async stop({ failed = false } = {}) {
+      async stop({ failed = false, keepData = false } = {}) {
         if (stopped) return;
         stopped = true;
         failed ||= evaluationFailed;
@@ -135,7 +141,7 @@ export async function startApp({ folder, gh = {}, agents = {}, env = {}, name = 
         await terminate(xvfb);
         if (failed) await Promise.all([writeFile(path.join(artifacts, 'app.log'), logs.join('')),
           writeFile(path.join(artifacts, 'xvfb.log'), xvfbLogs.join('')), writeFile(path.join(artifacts, 'data-dir.txt'), dataDir)]);
-        else await rm(dataDir, { recursive: true, force: true });
+        else if (!keepData) await rm(dataDir, { recursive: true, force: true });
       },
     };
   }

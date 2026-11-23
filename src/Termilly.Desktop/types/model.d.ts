@@ -216,6 +216,8 @@ interface Tab {
   progress?: { state: number; percent: number } | null;
   /** Output until then isn't news (js/terminals.js). */
   quietUntil?: number;
+  /** How many replays of a kept shell's missed output xterm is still drawing: old news, not answered (js/main.js). */
+  replaying?: number;
   /** Its shell ended (and it waits for a key to start again). */
   exited?: boolean;
   agent?: AgentInfo | null;

@@ -86,6 +86,12 @@ internal static partial class ToPage
         public static string Type => "output";
     }
 
+    /// <summary>What a kept shell printed while no window was open, drawn again as it's taken back.</summary>
+    internal sealed record Replay(string Id, string Data) : IHostMessage
+    {
+        public static string Type => "replay";
+    }
+
     internal sealed record Exit(string Id, int Code) : IHostMessage
     {
         public static string Type => "exit";

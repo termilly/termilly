@@ -50,10 +50,12 @@ public sealed class BackgroundHostTests
             var second = Connect();
             Assert.True(second.Running.TryGetValue("t1", out var kept) && kept.Alive && kept.Pid == shell.ProcessId);
             var replayed = new ConcurrentQueue<string>();
-            var taken = second.Attach("t1", kept.Pid, 100, 30, replayed.Enqueue, _ => { });
+            var live = new ConcurrentQueue<string>();
+            var taken = second.Attach("t1", kept.Pid, 100, 30, live.Enqueue, replayed.Enqueue, _ => { });
             Assert.True(Until(() => string.Concat(replayed).Contains("one-2", StringComparison.Ordinal)), "no replay of what it missed");
             taken.Write("echo two-$((2+2))\n");
-            Assert.True(Until(() => string.Concat(replayed).Contains("two-4", StringComparison.Ordinal)), string.Concat(replayed));
+            Assert.True(Until(() => string.Concat(live).Contains("two-4", StringComparison.Ordinal)), string.Concat(live));
+            Assert.DoesNotContain("one-2", string.Concat(live), StringComparison.Ordinal);
 
             second.Shutdown(); // Settings › Stop background shells
             Assert.True(host.WaitForExit(5000));

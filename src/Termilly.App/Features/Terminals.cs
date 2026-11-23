@@ -80,11 +80,7 @@ internal sealed class TerminalHandler(
             {
                 commandLine = WslFolders.StartingIn(commandLine, linuxFolder);
             }
-            void Output(string data)
-            {
-                page.Post(new ToPage.Output(id, data));
-                terminals.Print(id, data);
-            }
+            void Output(string data) => Printed(id, data);
 
             // COM ports and network consoles are byte streams, not processes in a pseudo terminal.
             if (ByteStream(profile, Output) is { } stream)
@@ -93,7 +89,7 @@ internal sealed class TerminalHandler(
                 return;
             }
             var took = System.Diagnostics.Stopwatch.StartNew();
-            var (session, pid) = StartShell(id, new PtyOptions(commandLine, cols, rows, folder, environment), Output, (code, exitedPid) =>
+            var (session, pid) = StartShell(id, new PtyOptions(commandLine, cols, rows, folder, environment), Output, data => Replayed(id, data), (code, exitedPid) =>
             {
                 terminals.Exited(id, exitedPid);
                 page.Post(new ToPage.Exit(id, code));
@@ -105,6 +101,19 @@ internal sealed class TerminalHandler(
         {
             page.Post(new ToPage.Error(id, ex.Message));
         }
+    }
+
+    private void Printed(string id, string data)
+    {
+        page.Post(new ToPage.Output(id, data));
+        terminals.Print(id, data);
+    }
+
+    /// <summary>A kept shell's missed output, drawn again: not news, so the page doesn't answer or announce it.</summary>
+    private void Replayed(string id, string data)
+    {
+        page.Post(new ToPage.Replay(id, data));
+        terminals.Print(id, data);
     }
 
     private static IReadOnlyDictionary<string, string> WithVariables(IReadOnlyDictionary<string, string> environment, Dictionary<string, string>? variables)
@@ -139,16 +148,16 @@ internal sealed class TerminalHandler(
 
     /// <summary>
     /// Starts a terminal's shell: in the background host when Settings keep shells running (taking back one it kept
-    /// while no window was open), else here. Returns the session and its root process (0 when not known);
-    /// <paramref name="exited"/> takes the exit code and that process id.
+    /// while no window was open, whose missed output goes to <paramref name="replay"/>), else here. Returns the session
+    /// and its root process (0 when not known); <paramref name="exited"/> takes the exit code and that process id.
     /// </summary>
-    private (IShellSession Session, int Pid) StartShell(string id, PtyOptions options, Action<string> output, Action<int, int> exited)
+    private (IShellSession Session, int Pid) StartShell(string id, PtyOptions options, Action<string> output, Action<string> replay, Action<int, int> exited)
     {
         var background = host.Current();
         if (background is not null && background.Running.TryGetValue(id, out var kept) && kept.Alive)
         {
             // The background host kept this terminal's shell while the window was closed: take it back.
-            var attached = background.Attach(id, kept.Pid, options.Columns, options.Rows, output, code => exited(code, kept.Pid));
+            var attached = background.Attach(id, kept.Pid, options.Columns, options.Rows, output, replay, code => exited(code, kept.Pid));
             page.Post(new ToPage.Attached(id));
             return (attached, kept.Pid);
         }

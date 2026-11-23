@@ -496,6 +496,16 @@ onHost(HOST.output, m => {
   if (!readySent && tab === focusedTab()) setTimeout(signalReady, READY_PAINT_MS);
 });
 
+// A kept shell's missed output, drawn again as the window takes it back. The queries and bells in it were answered
+// and heard back then: xterm's answers would be typed at the live prompt, and its bells and notifications raised again.
+onHost(HOST.replay, m => {
+  const tab = state.tabs.get(m.id);
+  if (!tab?.view?.term) return;
+  tab.replaying = (tab.replaying ?? 0) + 1;
+  tab.view.term.write(consoleDefaults(m.data), () => { tab.replaying = (tab.replaying ?? 1) - 1; });
+  if (!readySent && tab === focusedTab()) setTimeout(signalReady, READY_PAINT_MS);
+});
+
 // ---- Ready (the host shows a loader until then) ----
 
 let readySent = false;
