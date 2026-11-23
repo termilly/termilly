@@ -12,7 +12,7 @@ import { until } from './gitsteps.mjs';
 const ASK_TERMINAL = 'printf \'\\033[c\'';
 // Split so the typed command doesn't count as its output.
 const QUERIED = 'QUERIED';
-const ASKED = `stty -echo; ${ASK_TERMINAL}; read -rs -t 2 reply; stty echo; echo QUER""IED\r`;
+const ASKED = `stty -echo; ${ASK_TERMINAL}; read -rs -d c -t 2 reply; stty echo; echo QUER""IED\r`;
 const DONE = 'AFTERWARDS';
 const TYPED_LATER = 'echo AFTER""WARDS\r';
 /** xterm's answer, as it would show at the prompt: numbers with semicolons ending in "c". */
