@@ -33,9 +33,16 @@ internal static class BackgroundMemory
             return;
         }
         var level = OutOfSight(window.IsVisible, window.WindowState) ? CoreWebView2MemoryUsageTargetLevel.Low : CoreWebView2MemoryUsageTargetLevel.Normal;
-        if (core.MemoryUsageTargetLevel != level)
+        try
         {
-            core.MemoryUsageTargetLevel = level;
+            if (core.MemoryUsageTargetLevel != level)
+            {
+                core.MemoryUsageTargetLevel = level;
+            }
+        }
+        catch (NotImplementedException)
+        {
+            // A WebView2 runtime older than this API (setup accepts some): the window keeps its memory, as before.
         }
     }
 }

@@ -31,23 +31,33 @@ const RETRY_MS = 1000;
 /** @type {Map<string, Gpu>} */
 const gpus = new Map();
 
-/** Whether this page can draw with WebGL 2 at all (asked once). */
-const supported = (() => {
-  try {
-    return !!document.createElement('canvas').getContext('webgl2');
-  } catch {
-    return false;
+/** Whether this page can draw with WebGL 2 at all: asked the first time it matters, so Low memory never wakes the GPU. */
+let supported = /** @type {boolean | null} */ (null);
+const canDraw = () => {
+  if (supported === null) {
+    try {
+      supported = !!document.createElement('canvas').getContext('webgl2');
+    } catch {
+      supported = false;
+    }
   }
-})();
+  return supported;
+};
 
 /**
- * Whether terminals draw on the GPU. Not while they're see-through (js/backgrounds.js): the GPU draws each letter on
- * nothing then, and blended over what's behind it comes out thinner and lighter than the page's own text in the same
- * colour (the Compact view beside it); the DOM renderer draws it as the page does.
+ * Low memory as the browser started with it: the browser takes it only at start (BrowserArguments.cs), so turning it
+ * off doesn't bring WebGL back before a restart. Without the GPU, WebGL is emulated on the CPU and costs more memory
+ * than the DOM renderer (measured: 537 MB against 253 MB for the page with 9 full terminals).
  */
-// Low memory starts the browser without the GPU, where WebGL is emulated on the CPU and costs more memory than the DOM
-// renderer (measured: 537 MB against 253 MB for the page with 9 full terminals), so terminals draw on the DOM then.
-const wanted = () => supported && state.settings.terminal.gpuRendering !== false && !state.settings.terminal.lowMemory && !clearTerminals();
+let startedLowMemory = /** @type {boolean | null} */ (null);
+const lowMemory = () => (startedLowMemory ??= !!state.settings.terminal.lowMemory);
+
+/**
+ * Whether terminals draw on the GPU. Not in Low memory, nor while they're see-through (js/backgrounds.js): the GPU draws
+ * each letter on nothing then, and blended over what's behind it comes out thinner and lighter than the page's own text
+ * in the same colour (the Compact view beside it); the DOM renderer draws it as the page does.
+ */
+const wanted = () => state.settings.terminal.gpuRendering !== false && !lowMemory() && !clearTerminals() && canDraw();
 
 /**
  * The letter spacing (whole device pixels) that rounds the GPU's cells to the nearest width rather than down; none
@@ -125,7 +135,7 @@ function attach(g) {
  * @param {() => void} fit fits its columns and rows to its pane
  */
 export function wireGpu(tab, term, fit) {
-  if (!supported) return;
+  if (lowMemory() || !canDraw()) return;
   const body = /** @type {TabView} */ (tab.view).body;
   /** @type {Gpu} */
   const g = { term, fit, addon: null, visible: false, timer: 0, losses: 0, shownAt: 0, observer: /** @type {any} */ (null) };
