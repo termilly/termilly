@@ -13,10 +13,13 @@ namespace Termilly.Desktop;
 /// </summary>
 internal static class MacLocale
 {
-    /// <summary>The variables that already name a locale, most specific first.</summary>
-    private static readonly string[] LocaleVariables = ["LC_ALL", "LC_CTYPE", "LANG"];
-    /// <summary>The variable set, and what its locale ends with.</summary>
+    /// <summary>The variables that name a locale; LANG is the one set.</summary>
+    private const string All = "LC_ALL";
+    private const string CharacterType = "LC_CTYPE";
     public const string Variable = "LANG";
+    /// <summary>The variables that already name a locale, most specific first.</summary>
+    private static readonly string[] LocaleVariables = [All, CharacterType, Variable];
+    /// <summary>What a UTF-8 locale's name ends with.</summary>
     private const string Utf8 = ".UTF-8";
     /// <summary>The locale used when the user's own has no UTF-8 form on this Mac.</summary>
     public const string Fallback = "en_US" + Utf8;
@@ -63,7 +66,7 @@ internal static class MacLocale
 
     /// <summary>The user's language and region as macOS has it (System Settings), such as en_US or zh-Hans_CN.</summary>
     [SupportedOSPlatform("macos")]
-    private static string? SystemLocale()
+    internal static string? SystemLocale()
     {
         var locale = CFLocaleCopyCurrent();
         if (locale == IntPtr.Zero)

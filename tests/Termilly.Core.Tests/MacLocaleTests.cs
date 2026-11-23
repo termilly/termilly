@@ -41,6 +41,8 @@ public sealed class MacLocaleTests
         {
             return;
         }
+        // CoreFoundation gives the user's language and region (en_US, zh-Hans_CN): a broken call would give nothing.
+        Assert.Matches("^[a-z]{2,3}", MacLocale.SystemLocale() ?? "");
         // Whatever the Mac's language, the result is a UTF-8 locale, or nothing when the test run has one set.
         var lang = MacLocale.Lang;
         Assert.True(lang is null || lang.EndsWith(".UTF-8", StringComparison.Ordinal), lang);
