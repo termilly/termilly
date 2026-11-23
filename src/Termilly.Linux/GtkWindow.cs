@@ -112,35 +112,21 @@ internal static class GtkWindow
         g_object_unref(provider);
     }
 
-    /// <summary>WebKitGTK's own switch: no compositing on the graphics card, nor its buffers, for every web view.</summary>
-    private const string NoCompositingVariable = "WEBKIT_DISABLE_COMPOSITING_MODE";
-    private const string On = "1";
+    /// <summary>WEBKIT_HARDWARE_ACCELERATION_POLICY_NEVER: WebKit composites the page on the CPU.</summary>
+    private const int AccelerationNever = 2;
 
     /// <summary>
-    /// Low memory: WebKit draws without the graphics card. Its hardware acceleration setting isn't enough: set on the
-    /// view Photino made, WebKitGTK 2.52 kept its graphics buffers (measured 194 MB with or without it; 38 MB with this
-    /// switch). WebKit reads the switch from the process's own environment as it starts, so before GTK opens the window.
-    /// Nothing when the user set it already: theirs, and passed on as before.
+    /// Low memory: the window's web view draws without the graphics card. The page's own windows (DetachedWindows) are
+    /// made from this view and take its settings with them.
     /// </summary>
-    public static void WithoutGraphicsCard()
+    public static void WithoutGraphicsCard(IntPtr window)
     {
-        if (Environment.GetEnvironmentVariable(NoCompositingVariable) is not null)
+        var view = gtk_bin_get_child(window);
+        if (view != IntPtr.Zero)
         {
-            return;
-        }
-        // .NET takes its copy of the environment first (any change to it does) and never reads the process's own again;
-        // every program Termilly starts gets that copy. So the shells, the background host, tmux and the apps it opens
-        // never get the switch (their own WebKit apps keep the graphics card); only WebKit, reading the real one, does.
-        Environment.SetEnvironmentVariable(NoCompositingVariable, null);
-        if (setenv(NoCompositingVariable, On, 0) != 0)
-        {
-            // Out of memory for the environment: the window keeps the graphics card, as before Low memory.
-            Console.Error.WriteLine($"termilly: Low memory: couldn't set {NoCompositingVariable}.");
+            webkit_settings_set_hardware_acceleration_policy(webkit_web_view_get_settings(view), AccelerationNever);
         }
     }
-
-    [DllImport("libc", SetLastError = true)]
-    private static extern int setenv([MarshalAs(UnmanagedType.LPUTF8Str)] string name, [MarshalAs(UnmanagedType.LPUTF8Str)] string value, int overwrite);
 
     /// <summary>
     /// Gives the window an RGBA visual, so what's behind it shows through where the page draws nothing. Photino asks for one;
@@ -286,6 +272,8 @@ internal static class GtkWindow
     [DllImport(Gtk)] private static extern void gtk_widget_unrealize(IntPtr widget);
     [DllImport(Gtk)] private static extern void gtk_widget_set_opacity(IntPtr widget, double opacity);
     [DllImport(WebKit)] private static extern int webkit_web_view_is_loading(IntPtr view);
+    [DllImport(WebKit)] private static extern IntPtr webkit_web_view_get_settings(IntPtr view);
+    [DllImport(WebKit)] private static extern void webkit_settings_set_hardware_acceleration_policy(IntPtr settings, int policy);
     [DllImport(GLib)] private static extern uint g_timeout_add(uint interval, TimeoutCallback callback, IntPtr data);
     [DllImport(GObjectName)] private static extern ulong g_signal_connect_data(IntPtr instance, [MarshalAs(UnmanagedType.LPUTF8Str)] string signal, Delegate handler, IntPtr data, IntPtr destroy, int flags);
     [DllImport(Gdk)] private static extern IntPtr gdk_screen_get_rgba_visual(IntPtr screen);
