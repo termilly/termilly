@@ -187,7 +187,7 @@ const TEXT = {
         ${fontPicker(fontTarget)}`, { stack: true, keywords: 'font family typeface terminal app size zoom bigger smaller' }))
     + group('Terminal text',
       row('GPU rendering', 'Smoother scrolling and fast output, drawn by the graphics card. Its text is always greyscale.',
-        toggle('terminal.gpuRendering'), { keywords: 'gpu webgl renderer performance frame rate fps smooth scroll' })
+        toggle('terminal.gpuRendering'), { keywords: 'gpu webgl renderer performance frame rate fps smooth scroll', needs: '!terminal.lowMemory' })
       + row('Low memory', `${mac ? 'Terminals drawn' : 'Drawn'} without the graphics card: less memory, more CPU for fast output. Turns GPU rendering off. After a restart.`,
         toggle('terminal.lowMemory'), { keywords: 'memory ram vram gpu graphics card low light lean performance' })
       // ClearType is Windows' own; on Linux the desktop's font settings decide.
