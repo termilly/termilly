@@ -112,6 +112,11 @@ internal static class SessionLaunch
             // macOS's own bash (3.2) says at each start that zsh is the default now: in every terminal and restart.
             // Only that bash reads this, so a bash typed in zsh stays quiet too.
             vars[Variables.QuietBash] = "1";
+            // Started from the Dock or Finder, Termilly has no locale, and shells garbled non-ASCII text without one.
+            if (MacLocale.Lang is { } lang)
+            {
+                vars[MacLocale.Variable] = lang;
+            }
         }
         foreach (var (name, value) in profile.Environment ?? new Dictionary<string, string>())
         {
