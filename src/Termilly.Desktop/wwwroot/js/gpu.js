@@ -45,7 +45,9 @@ const supported = (() => {
  * nothing then, and blended over what's behind it comes out thinner and lighter than the page's own text in the same
  * colour (the Compact view beside it); the DOM renderer draws it as the page does.
  */
-const wanted = () => supported && state.settings.terminal.gpuRendering !== false && !clearTerminals();
+// Low memory starts the browser without the GPU, where WebGL is emulated on the CPU and costs more memory than the DOM
+// renderer (measured: 537 MB against 253 MB for the page with 9 full terminals), so terminals draw on the DOM then.
+const wanted = () => supported && state.settings.terminal.gpuRendering !== false && !state.settings.terminal.lowMemory && !clearTerminals();
 
 /**
  * The letter spacing (whole device pixels) that rounds the GPU's cells to the nearest width rather than down; none

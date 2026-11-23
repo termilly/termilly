@@ -188,15 +188,17 @@ public partial class MainWindow : Window
     {
         try
         {
-            CoreWebView2EnvironmentOptions? options = null;
+            int? devtools = null;
 #if DEBUG
             // Debug builds only: TERMILLY_DEVTOOLS_PORT opens the page to the DevTools protocol, for live tests
             // against a throwaway instance (TERMILLY_DATA_DIR). WebView2 doesn't always honour its own variable.
             if (int.TryParse(Environment.GetEnvironmentVariable("TERMILLY_DEVTOOLS_PORT"), out var devtoolsPort))
             {
-                options = new CoreWebView2EnvironmentOptions($"--remote-debugging-port={devtoolsPort}");
+                devtools = devtoolsPort;
             }
 #endif
+            // Detached windows share this environment, so Low memory reaches them too (it applies at the next start).
+            var options = BrowserArguments.For(Settings.Terminal.LowMemory, devtools) is { } args ? new CoreWebView2EnvironmentOptions(args) : null;
             var env = await CoreWebView2Environment.CreateAsync(
                 userDataFolder: Path.Combine(AppPaths.DataDirectory, WebViewFolder), options: options);
             StartupLog.Mark("WebView2 environment created");
@@ -212,6 +214,7 @@ public partial class MainWindow : Window
         }
 
         var core = Web.CoreWebView2;
+        BackgroundMemory.Follow(this, Web);
         Web.ZoomFactor = Zoom;
         core.Settings.AreBrowserAcceleratorKeysEnabled = false; // let F5, Ctrl+F etc. reach the terminal
         core.Settings.IsStatusBarEnabled = false;
