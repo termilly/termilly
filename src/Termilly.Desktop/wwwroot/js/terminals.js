@@ -170,6 +170,9 @@ const TYPING_BELL_MS = 1500;
 const ERASE_ALL = 2;
 const ERASE_SCROLLBACK = 3;
 
+/** Any answer xterm gives a program's query (CSI, DCS or OSC), for dropping those a replay of old output asks for. */
+const ANY_REPLY = /^\x1b(\[[?>]?[\d;]*\$?[a-zA-Z]|P[^]*\x1b\\|\][^]*(\x07|\x1b\\))$/;
+
 /** xterm answering the pseudo console: cursor position, device attributes, focus in or out. */
 const TERMINAL_REPLY = /^\x1b\[(\d+;\d+R|\?[\d;]*c|>[\d;]*c|[IO])$/;
 
@@ -414,6 +417,8 @@ function wireInput(tab, term) {
       virtualInputs[tab.virtual.kind]?.(tab, data);
       return;
     }
+    // Answers to queries in a replay of a kept shell's old output (main.js) were given back then.
+    if (tab.replaying && ANY_REPLY.test(data)) return;
     if (tab.exited) {
       if (tab.reconnect) return; // waiting to reconnect (reconnect.js): its bar has the buttons
       restartShell(tab);
@@ -428,7 +433,6 @@ function wireInput(tab, term) {
     // Broadcasting (broadcast.js) sends it to every terminal in the broadcast; otherwise just here.
     // xterm's answers to the console's queries go to this terminal only, and aren't the user typing.
     if (isTerminalReply(data)) {
-      if (tab.replaying) return; // answering a query from a replay of old output (main.js)
       send(PAGE.input, { id: tab.id, data });
       return;
     }
@@ -583,13 +587,13 @@ function wireProgramRequests(tab, term) {
   // are honoured: a read ('?') would hand the clipboard to whatever runs in the terminal.
   term.parser.registerOscHandler(OSC.clipboard, (/** @type {string} */ data) => {
     const text = clipboardWrite(data);
-    if (text !== null && state.settings.terminal.programClipboard !== false) systemClipboard().writeText(text).catch(() => {});
+    if (text !== null && !tab.replaying && state.settings.terminal.programClipboard !== false) systemClipboard().writeText(text).catch(() => {});
     return true;
   });
   // XTVERSION (CSI > 0 q): which terminal this is, so programs can use what it supports.
   term.parser.registerCsiHandler({ prefix: '>', final: 'q' }, (/** @type {number[]} */ params) => {
     if (params.length > 1 || (params[0] ?? 0) !== 0) return false;
-    send(PAGE.input, { id: tab.id, data: `\x1bP>|Termilly ${appVersion}\x1b\\` });
+    if (!tab.replaying) send(PAGE.input, { id: tab.id, data: `\x1bP>|Termilly ${appVersion}\x1b\\` });
     return true;
   });
 }

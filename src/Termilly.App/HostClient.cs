@@ -270,6 +270,12 @@ internal sealed class HostedSession : IShellSession
     /// <summary>Where a taken-back shell's missed output goes; with the live output when not set.</summary>
     internal Action<string>? OnReplay { get; init; }
 
+    /// <summary>
+    /// A taken-back shell's live output before its replay is in the replay too (the host sends each chunk either
+    /// before the replay or after it), so it's left out until the replay comes.
+    /// </summary>
+    private volatile bool _replayed;
+
     /// <summary>Waits briefly for the host to report the process id (the busy watcher needs it).</summary>
     internal void WaitStarted() => _started.Wait(HostClient.StartWait);
 
@@ -287,7 +293,7 @@ internal sealed class HostedSession : IShellSession
 
     internal void Output(string text)
     {
-        if (!_killed)
+        if (!_killed && (_replayed || OnReplay is null))
         {
             _onOutput(text);
         }
@@ -299,6 +305,7 @@ internal sealed class HostedSession : IShellSession
         {
             (OnReplay ?? _onOutput)(text);
         }
+        _replayed = true;
     }
 
     internal void Exit(int code)

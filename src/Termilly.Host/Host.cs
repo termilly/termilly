@@ -11,6 +11,8 @@ internal sealed class HostedShell(string id, IPty pty)
     public string Id { get; } = id;
     public IPty Pty { get; } = pty;
     public OutputRing Output { get; } = new();
+    /// <summary>Held while output goes into the ring and out, so a replay holds each chunk or comes before it.</summary>
+    public Lock OutputGate { get; } = new();
     public int? ExitCode { get; set; }
     public bool Alive => ExitCode is null;
 }
@@ -107,7 +109,10 @@ internal sealed class Host
                 Start(start);
                 break;
             case HostRequest.Attach attach when _shells.TryGetValue(attach.Id, out var shell):
-                Send(new HostEvent.Replay(attach.Id, shell.Output.Text()));
+                lock (shell.OutputGate)
+                {
+                    Send(new HostEvent.Replay(attach.Id, shell.Output.Text()));
+                }
                 if (!shell.Alive)
                 {
                     Send(new HostEvent.Exited(attach.Id, shell.ExitCode ?? HostEvent.UnknownExitCode));
@@ -179,8 +184,11 @@ internal sealed class Host
                     continue;
                 }
                 var text = new string(chars, 0, count);
-                shell.Output.Add(text);
-                Send(new HostEvent.Output(shell.Id, text));
+                lock (shell.OutputGate)
+                {
+                    shell.Output.Add(text);
+                    Send(new HostEvent.Output(shell.Id, text));
+                }
             }
         }
         catch (Exception e) when (e is IOException or ObjectDisposedException)

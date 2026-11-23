@@ -151,7 +151,8 @@ function fire(tab, trigger, text, y) {
     decoration?.onRender((/** @type {HTMLElement} */ el) => { el.title = trigger.name || trigger.pattern; });
   }
   if (action === triggerAction.capture) capture(tab, trigger, text, marker);
-  if (action === triggerAction.notify || action === triggerAction.attention) {
+  // A replay of a kept shell's old output (main.js) was announced back then.
+  if ((action === triggerAction.notify || action === triggerAction.attention) && !tab.replaying) {
     const now = Date.now();
     const { alertedAt } = scanOf(tab);
     if (now - (alertedAt[trigger.id] ?? 0) < NOTIFY_EVERY) return; // a burst of matches is one alert
@@ -303,7 +304,7 @@ export function commandFinished(tab, command, exitCode) {
  * @param {Tab} tab
  */
 function noteActivity(tab) {
-  if (tab.alerts?.output && Date.now() - tab.alerts.setAt > OUTPUT_GRACE_MS) {
+  if (tab.alerts?.output && !tab.replaying && Date.now() - tab.alerts.setAt > OUTPUT_GRACE_MS) {
     tab.alerts.output = false;
     raiseAlert(tab, 'New output');
     emit(EVENTS.tab, tab);

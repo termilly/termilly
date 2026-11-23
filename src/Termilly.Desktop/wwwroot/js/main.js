@@ -502,7 +502,8 @@ onHost(HOST.replay, m => {
   const tab = state.tabs.get(m.id);
   if (!tab?.view?.term) return;
   tab.replaying = (tab.replaying ?? 0) + 1;
-  tab.view.term.write(consoleDefaults(m.data), () => { tab.replaying = (tab.replaying ?? 1) - 1; });
+  // Over after xterm's own handlers for this write (onWriteParsed, which triggers watch) have run too.
+  tab.view.term.write(consoleDefaults(m.data), () => setTimeout(() => { tab.replaying = (tab.replaying ?? 1) - 1; }));
   if (!readySent && tab === focusedTab()) setTimeout(signalReady, READY_PAINT_MS);
 });
 
