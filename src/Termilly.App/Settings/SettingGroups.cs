@@ -27,6 +27,12 @@ internal sealed record TerminalSettings
     public string TextSmoothing { get; init; } = SettingValues.TextSmoothing.Default;
     /// <summary>Terminals drawn on the GPU (xterm's WebGL add-on, js/gpu.js): smoother scrolling; text is greyscale-smoothed then.</summary>
     public bool GpuRendering { get; init; } = true;
+    /// <summary>
+    /// No graphics card for the window or its terminals (Windows: WebView2's --disable-gpu, Linux: WebKit's compositing
+    /// off; macOS can only draw terminals on the CPU): least memory and no VRAM, more CPU for fast output. Applies at the
+    /// next start.
+    /// </summary>
+    public bool LowMemory { get; init; }
     /// <summary>Images programs print (sixel, iTerm2's), shown inline.</summary>
     public bool InlineImages { get; init; } = true;
     /// <summary>Programs may set the clipboard (OSC 52).</summary>

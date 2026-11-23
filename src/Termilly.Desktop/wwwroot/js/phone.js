@@ -8,6 +8,7 @@ import { PAGE, HOST } from './protocol.js';
 import { send, onHost } from './host.js';
 import { state, on, wsById, tabTitle, profileOf, activityOf, runningAgent, markSeen, isSsh, BADGES, EVENTS } from './store.js';
 import { entryDetail, notesForPhone } from './inbox.js';
+import { questionsForPhone, answerQuestion, clearQuestions } from './questions.js';
 import { AGENT_STATE, PROFILE_ICON } from './constants.js';
 import { answerAgent, awaitsPermission, alwaysKey } from './agentanswer.js';
 import { debounce } from './util.js';
@@ -125,6 +126,8 @@ function snapshot() {
     // Clipboard's text clips to paste (their first lines; the PC pastes the whole one): Settings › Phone.
     clips: typing && state.settings.phone?.clips !== false ? clipsForPhone() : [],
     notes: notesForPhone(),
+    // Agents' questions (js/questions.js), answered on the phone too.
+    questions: questionsForPhone(),
     // To do's tags to pick from; each terminal and workspace has its own list.
     tags: tagsForPhone(),
     // Schedules and their last runs; a report is read when it's opened.
@@ -323,6 +326,18 @@ onHost(HOST.phoneTyped, m => {
 onHost(HOST.phoneSeen, m => {
   const tab = state.tabs.get(m.id);
   if (tab) markSeen(tab);
+});
+
+// A phone answers an agent's question, or puts it away (Phone/PhoneQuestions.cs).
+onHost(HOST.phoneQuestion, m => {
+  const { id, skip, ...reply } = m.args ?? {};
+  try {
+    if (skip) clearQuestions([String(id)]);
+    else answerQuestion(String(id), reply);
+    send(PAGE.apiResult, { requestId: m.requestId, result: { answered: id } });
+  } catch (e) {
+    send(PAGE.apiResult, { requestId: m.requestId, error: /** @type {Error} */ (e).message });
+  }
 });
 
 onHost(HOST.phoneAnswer, async m => {

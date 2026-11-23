@@ -100,7 +100,7 @@ public sealed class AgentHooksTests : IDisposable
         // PowerShell runs a hook's command on Windows: the helper is in a variable, which needs & to be run.
         Assert.Contains("""hooks.SessionStart=[{hooks=[{type='command',command='& $env:TERMILLY_HOOK_EXE hook 1 SessionStart codex',timeout=3}]}]""", values);
         Assert.Contains("""hooks.PreToolUse=[{matcher='*',hooks=[{type='command',command='& $env:TERMILLY_HOOK_EXE hook 1 PreToolUse codex',timeout=3}]}]""", values);
-        Assert.Contains("""mcp_servers.termilly={command='C:\a\termilly.exe',args=['mcp'],env_vars=['TERMILLY_PANE_ID','TERMILLY_PIPE'],tool_timeout_sec=130,default_tools_approval_mode='approve'}""", values);
+        Assert.Contains("""mcp_servers.termilly={command='C:\a\termilly.exe',args=['mcp'],env_vars=['TERMILLY_PANE_ID','TERMILLY_PIPE'],tool_timeout_sec=28810,default_tools_approval_mode='approve'}""", values);
         // npm's codex.cmd goes through cmd, which a double quote would let run what follows an &.
         Assert.All(values, v => Assert.DoesNotContain("\"", v));
         // The same every run: Codex remembers a trusted hook by its exact definition.

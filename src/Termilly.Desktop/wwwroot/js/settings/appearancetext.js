@@ -2,7 +2,7 @@
 // Settings › Appearance › Text: the terminals' and the app's fonts, text size, how terminal text is drawn, the cursor.
 
 import { HOST } from '../protocol.js';
-import { onHost, sys, SYSTEM_NAME } from '../host.js';
+import { onHost, sys, mac, SYSTEM_NAME } from '../host.js';
 import { state, getSetting, GROUPS } from '../store.js';
 import { cssString, escapeHtml, ICONS, keysHtml } from '../ui.js';
 import { setSetting, updateSettings, MIN_FONT_SIZE, MAX_FONT_SIZE, MIN_ZOOM, MAX_ZOOM, ZOOM_STEP, DEFAULT_ZOOM } from '../preferences.js';
@@ -187,7 +187,9 @@ const TEXT = {
         ${fontPicker(fontTarget)}`, { stack: true, keywords: 'font family typeface terminal app size zoom bigger smaller' }))
     + group('Terminal text',
       row('GPU rendering', 'Smoother scrolling and fast output, drawn by the graphics card. Its text is always greyscale.',
-        toggle('terminal.gpuRendering'), { keywords: 'gpu webgl renderer performance frame rate fps smooth scroll' })
+        toggle('terminal.gpuRendering'), { keywords: 'gpu webgl renderer performance frame rate fps smooth scroll', needs: '!terminal.lowMemory' })
+      + row('Low memory', `${mac ? 'Terminals drawn' : 'Drawn'} without the graphics card: less memory, more CPU for fast output. Turns GPU rendering off. After a restart.`,
+        toggle('terminal.lowMemory'), { keywords: 'memory ram vram gpu graphics card low light lean performance' })
       // ClearType is Windows' own; on Linux the desktop's font settings decide.
       + (sys.name === SYSTEM_NAME.linux ? '' : row('Text smoothing', 'Greyscale keeps coloured text crisp; ClearType matches Windows. Without GPU rendering only.',
         seg('terminal.textSmoothing', [[textSmoothing.grayscale, 'Greyscale'], [textSmoothing.clearType, 'ClearType']])))

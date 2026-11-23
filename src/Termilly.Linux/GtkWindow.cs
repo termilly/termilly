@@ -112,6 +112,22 @@ internal static class GtkWindow
         g_object_unref(provider);
     }
 
+    /// <summary>WEBKIT_HARDWARE_ACCELERATION_POLICY_NEVER: WebKit composites the page on the CPU.</summary>
+    private const int AccelerationNever = 2;
+
+    /// <summary>
+    /// Low memory: the window's web view draws without the graphics card. The page's own windows (DetachedWindows) are
+    /// made from this view and take its settings with them.
+    /// </summary>
+    public static void WithoutGraphicsCard(IntPtr window)
+    {
+        var view = gtk_bin_get_child(window);
+        if (view != IntPtr.Zero)
+        {
+            webkit_settings_set_hardware_acceleration_policy(webkit_web_view_get_settings(view), AccelerationNever);
+        }
+    }
+
     /// <summary>
     /// Gives the window an RGBA visual, so what's behind it shows through where the page draws nothing. Photino asks for one;
     /// on X11 a window gets it only before it's first shown, which Photino's main window already is: it's taken down,
@@ -256,6 +272,8 @@ internal static class GtkWindow
     [DllImport(Gtk)] private static extern void gtk_widget_unrealize(IntPtr widget);
     [DllImport(Gtk)] private static extern void gtk_widget_set_opacity(IntPtr widget, double opacity);
     [DllImport(WebKit)] private static extern int webkit_web_view_is_loading(IntPtr view);
+    [DllImport(WebKit)] private static extern IntPtr webkit_web_view_get_settings(IntPtr view);
+    [DllImport(WebKit)] private static extern void webkit_settings_set_hardware_acceleration_policy(IntPtr settings, int policy);
     [DllImport(GLib)] private static extern uint g_timeout_add(uint interval, TimeoutCallback callback, IntPtr data);
     [DllImport(GObjectName)] private static extern ulong g_signal_connect_data(IntPtr instance, [MarshalAs(UnmanagedType.LPUTF8Str)] string signal, Delegate handler, IntPtr data, IntPtr destroy, int flags);
     [DllImport(Gdk)] private static extern IntPtr gdk_screen_get_rgba_visual(IntPtr screen);

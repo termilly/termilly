@@ -1,57 +1,58 @@
 // @ts-check
-// The notification center, docked on the right of the terminals (the title bar's button, Ctrl+Shift+A): the notes of
-// js/inbox.js in groups by what they ask of the user (Needs you, Errors, Finished, Schedules). A permission is answered
-// here (Allow, Deny) and a question gets a reply; a click on a note goes to its terminal, and the panel stays.
+// The notification center, docked on the right of the terminals (the title bar's button, Ctrl+Shift+A), as design B
+// (Sources and feed): the sources on the left (js/inboxsources.js), the picked one's feed on the right, newest first.
+// The feed has the notes of js/inbox.js (js/inboxrows.js) and the agents' questions (js/questioncards.js). A permission
+// is answered here (Allow, Deny), a question gets a reply, an agent's question its answer; a click on a row goes to its
+// terminal, and the panel stays. Narrow, the sources hide and the feed shows All.
 
-import { state, persist, emit, wsById, tabTitle, EVENTS } from './store.js';
-import { allNotes, watchNotes, isLive, clear, button } from './inbox.js';
-import { answerAgent, awaitsPermission, isWaiting, ANSWER } from './agentanswer.js';
-import { tabBadgeHtml, escapeHtml, activityHtml, cssColor, ICONS } from './ui.js';
+import { state, persist, on, emit, EVENTS } from './store.js';
+import { allNotes, watchNotes, clear, button } from './inbox.js';
+import { answerAgent, ANSWER } from './agentanswer.js';
+import { answerQuestion } from './questions.js';
+import { noteEntry, scheduleEntry } from './inboxrows.js';
+import { questionEntry, replyOf, toggleOpened, answerKey, noteKey, CARD_ACTION } from './questioncards.js';
+import { sourcesHtml, shownSource, inSource, sourceTitle, SOURCE } from './inboxsources.js';
+import { escapeHtml, ICONS } from './ui.js';
+import { send } from './host.js';
+import { PAGE } from './protocol.js';
 import { restoreFocus } from './panes.js';
 import { arriveAt } from './arrived.js';
 import { previewWaiting } from './inboxpreview.js';
 import { scheduleFit } from './terminals.js';
 import { isShortcut, KEY_ID } from './keymap.js';
-import { AGENT_STATE } from './constants.js';
 import { byId, targetOf, dockRight, titleIconHtml, WORKSPACE_ID, DOCK_GRIP } from './dom.js';
-import { SECOND_MS, DAY_S, MINUTE_S, HOUR_S } from './util.js';
+import { SECOND_MS } from './util.js';
 
-/** The groups, top to bottom: what needs the user first. */
-const LANE = Object.freeze({ needsYou: 'needs-you', errors: 'errors', finished: 'finished', schedules: 'schedules' });
-const LANES = [[LANE.needsYou, 'Needs you'], [LANE.errors, 'Errors'], [LANE.finished, 'Finished'], [LANE.schedules, 'Schedules']];
 const ACTION = Object.freeze({ clearAll: 'clearAll', close: 'close' });
-/** An entry in the list, and an entry's reply box. */
+/** A row in the feed, its main button, a text box in it, and the feed itself. */
 const ITEM = '.inbox-item';
 const ROW = '.inbox-row';
-const CLEAR_LABEL = 'Clear';
-/** The tooltip of an entry's Preview button. */
-const PREVIEW_TIP = 'Why it needs you: all the agent asks';
-/** An entry's second line: what its note says. */
+const BOX = '[data-draft]';
 const DETAIL = '.inbox-detail';
-const REPLY = '.inbox-reply';
-const LIST = '.inbox-lanes';
-/** How long an entry's age reads "now", in seconds. */
-const NOW_BELOW_S = 45;
-const NOW_LABEL = 'now';
+const FEED = '.inbox-feed';
 /** How often the open panel is redrawn, so the ages move on. */
 const REDRAW_MS = 30 * SECOND_MS;
 /** Its narrowest width (app.css has its width until it's dragged). */
 const MIN_WIDTH_PX = 280;
+/** Narrower than this, the sources hide and the feed shows All. */
+const SOURCES_MIN_PX = 400;
+/** The panel's class while it's that narrow. */
+const NARROW = 'narrow';
 const KEYS_TEXT = 'Ctrl+Shift+A';
+/** The card parts a button opens or closes. @type {Set<string>} */
+const TOGGLES = new Set([CARD_ACTION.more, CARD_ACTION.note, CARD_ACTION.details]);
 
-/**
- * A row in a group: its group, when, its markup, and what clearing it clears.
- * @typedef {{ lane: string, at: number, html: string, key: string }} Entry
- */
-
-/** What was typed in a reply box, by note (kept across redraws). @type {Map<string, string>} */
+/** What was typed in a box (by its draft key), kept across redraws. @type {Map<string, string>} */
 const drafts = new Map();
-/** Why an answer couldn't be typed, by note. @type {Map<string, string>} */
+/** Why an answer couldn't go, by note or question. @type {Map<string, string>} */
 const failures = new Map();
-/** Notes whose answer is being typed now. @type {Set<string>} */
+/** Notes and questions whose answer is going now. @type {Set<string>} */
 const answering = new Set();
-/** Whether an input method is putting a word together in a reply box (a redraw then would lose it). */
+/** Whether an input method is putting a word together in a box (a redraw then would lose it). */
 let composing = false;
+
+/** @type {import('./inboxrows.js').RowContext} */
+const ctx = { draft: key => drafts.get(key) ?? '', failure: key => failures.get(key), busy: key => answering.has(key) };
 
 const panel = document.createElement('aside');
 panel.id = 'inbox';
@@ -61,91 +62,14 @@ panel.hidden = true;
 panel.tabIndex = -1;
 byId(WORKSPACE_ID).append(panel);
 
-/**
- * "now", "4m", "2h", "3d": how long it has been waiting.
- * @param {number | null | undefined} at
- */
-function age(at) {
-  const s = Math.max(0, (Date.now() - (at ?? Date.now())) / SECOND_MS);
-  if (s < NOW_BELOW_S) return NOW_LABEL;
-  if (s < HOUR_S) return `${Math.round(s / MINUTE_S)}m`;
-  if (s < DAY_S) return `${Math.round(s / HOUR_S)}h`;
-  return `${Math.round(s / DAY_S)}d`;
-}
-
-/** @param {string} state */
-const laneOf = state => (state === AGENT_STATE.error ? LANE.errors : state === AGENT_STATE.done ? LANE.finished : LANE.needsYou);
-
-/**
- * Its answer, for a note whose terminal still waits on it: Allow and Deny for a permission, else a reply box.
- * @param {import('./inbox.js').Note} n
- * @param {Tab} tab
- */
-function answerHtml(n, tab) {
-  if (!isLive(n) || !isWaiting(tab) || tab.agent?.state === AGENT_STATE.error) return '';
-  const key = escapeHtml(n.key);
-  const fail = failures.get(n.key);
-  const off = answering.has(n.key) ? ' disabled' : '';
-  const body = awaitsPermission(tab)
-    ? `<button class="btn small primary" data-answer="${ANSWER.approve}" data-f="${key}:a"${off}>Allow</button><button class="btn small" data-answer="${ANSWER.reject}" data-f="${key}:r"${off}>Deny</button>`
-    : `<input class="field inbox-reply" placeholder="Reply" spellcheck="false" autocomplete="off" data-f="${key}:t" value="${escapeHtml(drafts.get(n.key) ?? '')}"${off}><button class="btn small" data-answer="${ANSWER.reply}" data-f="${key}:s"${off}>Send</button>`;
-  const preview = `<button class="btn small" data-preview data-f="${key}:p" title="${PREVIEW_TIP}">Preview</button>`;
-  return `<div class="inbox-answer">${body}${preview}</div>${fail ? `<div class="inbox-fail">${escapeHtml(fail)}</div>` : ''}`;
-}
-
-/** @param {string} key @param {string} label */
-const clearHtml = (key, label = CLEAR_LABEL) => `<button class="pane-btn inbox-clear" data-clear="${escapeHtml(key)}" title="${label}" aria-label="${label}">${ICONS.close}</button>`;
-
-/** @param {import('./inbox.js').Note} n @returns {Entry} */
-function noteEntry(n) {
-  const tab = /** @type {Tab} */ (state.tabs.get(n.tabId));
-  const ws = wsById(tab.wsId);
-  const html = `<div class="inbox-row" data-key="${escapeHtml(n.key)}" data-pane="${tab.id}"><button class="inbox-item${isLive(n) ? ' unread' : ''}" data-tab="${tab.id}" data-f="${escapeHtml(n.key)}:i">
-      ${activityHtml(n.activity, 'inbox-state')}
-      <span class="inbox-text">
-        <span class="inbox-title">${tabBadgeHtml(tab)}<span class="name">${escapeHtml(tabTitle(tab))}</span>
-          <span class="inbox-ws"><span class="ws-dot" style="background:${ws ? cssColor(ws.color) : 'var(--muted)'}"></span>${escapeHtml(ws?.name ?? '')}</span>
-          ${tab.tags.slice(0, 2).map(t => `<span class="inbox-tag">${escapeHtml(t)}</span>`).join('')}
-          <span class="inbox-age">${age(n.at)}</span></span>
-        <span class="inbox-detail">${escapeHtml(n.detail)}</span>
-      </span>
-    </button>${clearHtml(n.key)}${answerHtml(n, tab)}</div>`;
-  return { lane: laneOf(n.state), at: n.at, html, key: n.key };
-}
-
-/** @param {import('./inbox.js').ScheduleNote} n @returns {Entry} */
-const scheduleEntry = n => ({
-  lane: n.failed ? LANE.errors : LANE.schedules, at: n.at, key: n.id,
-  html: `<div class="inbox-row"><button class="inbox-item unread" data-run="${escapeHtml(n.id)}" data-f="${escapeHtml(n.id)}:i">
-    <span class="inbox-text">
-      <span class="inbox-title"><span class="name">${escapeHtml(n.title)}</span><span class="inbox-age">${age(n.at)}</span></span>
-      <span class="inbox-detail">${escapeHtml(n.detail)}</span>
-    </span>
-  </button>${clearHtml(n.id)}</div>`,
-});
-
 /** Every entry, newest first. */
 function entries() {
-  const { notes, scheduleNotes } = allNotes();
-  return [...notes.map(noteEntry), ...scheduleNotes.map(scheduleEntry)].sort((a, b) => b.at - a.at);
+  const { notes, scheduleNotes, questions } = allNotes();
+  return [...notes.map(n => noteEntry(n, ctx)), ...scheduleNotes.map(scheduleEntry), ...questions.map(q => questionEntry(q, ctx))]
+    .sort((a, b) => b.at - a.at);
 }
 
-const folded = () => new Set(state.inbox.folded ?? []);
-
-/**
- * A group: its head (fold, name, count, Clear) and, unless folded, its entries. Nothing when it has none.
- * @param {string} lane @param {string} title @param {Entry[]} rows @param {Set<string>} closed
- */
-function laneHtml(lane, title, rows, closed) {
-  if (!rows.length) return '';
-  const open = !closed.has(lane);
-  return `<section class="inbox-lane" data-lane="${lane}">
-    <div class="inbox-lane-head"><button class="inbox-fold" data-fold="${lane}" data-f="fold:${lane}" aria-expanded="${open}">${open ? ICONS.chevronDown : ICONS.chevronRight}<span class="inbox-lane-name">${title}</span><span class="inbox-lane-count">${rows.length}</span></button>
-      <button class="btn small inbox-lane-clear" data-clear-lane="${lane}" data-f="clear:${lane}">${CLEAR_LABEL}</button></div>
-    ${open ? rows.map(r => r.html).join('') : ''}</section>`;
-}
-
-/** What has the focus in the list (an entry, a button, a reply box and its caret), to give it back after a redraw. */
+/** What has the focus in the panel (a row, a button, a box and its caret), to give it back after a redraw. */
 function focusNow() {
   const el = /** @type {HTMLElement | null} */ (document.activeElement);
   if (!el || !panel.contains(el) || !el.dataset.f) return null;
@@ -161,27 +85,41 @@ function giveFocusBack(was) {
   if (el instanceof HTMLInputElement && was.start !== null) el.setSelectionRange(was.start, was.end);
 }
 
+/** Drafts and errors of entries that are gone go with them. @param {ReturnType<typeof entries>} all */
+function forgetGone(all) {
+  const kept = new Set(all.map(e => e.key));
+  for (const key of failures.keys()) if (!kept.has(key)) failures.delete(key);
+  for (const key of drafts.keys()) if (![...kept].some(k => key === k || key === answerKey(k) || key === noteKey(k))) drafts.delete(key);
+}
+
 function draw() {
   if (panel.hidden || composing) return;
   const all = entries();
-  // Drafts and errors of notes that are gone go with them.
-  for (const kept of [drafts, failures]) for (const key of kept.keys()) if (!all.some(e => e.key === key)) kept.delete(key);
+  forgetGone(all);
   const was = focusNow();
-  const scroll = /** @type {HTMLElement | null} */ (panel.querySelector(LIST))?.scrollTop ?? 0;
-  const closed = folded();
-  const lanes = LANES.map(([lane, title]) => laneHtml(lane, title, all.filter(e => e.lane === lane), closed)).join('');
+  const scroll = /** @type {HTMLElement | null} */ (panel.querySelector(FEED))?.scrollTop ?? 0;
+  const narrow = panel.offsetWidth < SOURCES_MIN_PX;
+  panel.classList.toggle(NARROW, narrow);
+  const source = narrow ? SOURCE.all : shownSource(all);
+  const rows = all.filter(e => inSource(e, source));
   panel.innerHTML = `
     <div class="${DOCK_GRIP}" title="Drag to resize"></div>
     <div class="files-head">
       ${titleIconHtml(button)}
-      <span class="files-title">Notification center <span class="files-ws">${all.length}</span></span>
+      <span class="files-title">Notifications <span class="files-ws">${all.length}</span></span>
       <span class="files-tools">
         <button class="pane-btn" data-inbox="${ACTION.clearAll}" data-f="${ACTION.clearAll}" title="Clear all"${all.length ? '' : ' disabled'}>${ICONS.trash}</button>
         <button class="pane-btn" data-inbox="${ACTION.close}" data-f="${ACTION.close}" title="Close (${KEYS_TEXT})">${ICONS.close}</button>
       </span>
     </div>
-    <div class="inbox-lanes">${lanes || '<div class="inbox-empty">No notifications.</div>'}</div>`;
-  /** @type {HTMLElement} */ (panel.querySelector(LIST)).scrollTop = scroll;
+    <div class="inbox-split">
+      ${sourcesHtml(all, source)}
+      <div class="inbox-feed">
+        <div class="inbox-feed-head">${escapeHtml(sourceTitle(source))} <span class="inbox-feed-order">newest first</span></div>
+        ${rows.map(r => r.html).join('') || '<div class="inbox-empty">No notifications.</div>'}
+      </div>
+    </div>`;
+  /** @type {HTMLElement} */ (panel.querySelector(FEED)).scrollTop = scroll;
   giveFocusBack(was);
 }
 
@@ -209,31 +147,28 @@ export function initInbox() {
   if (state.inbox.open) setOpen(true);
 }
 
-/** @param {string} lane */
-function toggleFold(lane) {
-  const closed = folded();
-  if (!closed.delete(lane)) closed.add(lane);
-  state.inbox.folded = [...closed];
+/** @param {string} source */
+function pickSource(source) {
+  state.inbox.source = source;
   persist();
   draw();
 }
 
 /**
- * Types an answer into a note's terminal; why it couldn't shows under it.
- * @param {HTMLElement} row
- * @param {string} choice
+ * Sends an answer, one at a time per entry (a second click or Enter while one goes would send it twice); why it
+ * couldn't go shows under it.
+ * @param {string} key
+ * @param {() => unknown} go
+ * @param {string[]} sentDrafts the boxes it empties once it went
  */
-async function answer(row, choice) {
-  const key = /** @type {string} */ (row.dataset.key);
-  // One answer at a time per note: a second click or Enter while the first is typed would type it twice.
+async function sendAnswer(key, go, sentDrafts) {
   if (answering.has(key)) return;
-  const text = /** @type {HTMLInputElement | null} */ (row.querySelector(REPLY))?.value;
   failures.delete(key);
   answering.add(key);
   draw();
   try {
-    await answerAgent({ pane: row.dataset.pane, choice, text });
-    drafts.delete(key);
+    await go();
+    for (const d of sentDrafts) drafts.delete(d);
   } catch (e) {
     failures.set(key, /** @type {Error} */ (e).message);
   } finally {
@@ -243,9 +178,32 @@ async function answer(row, choice) {
 }
 
 /**
- * Shows why a note's terminal needs the user.
+ * Types an answer into a note's terminal.
  * @param {HTMLElement} row
+ * @param {string} choice
  */
+function answer(row, choice) {
+  const key = /** @type {string} */ (row.dataset.key);
+  void sendAnswer(key, () => answerAgent({ pane: row.dataset.pane, choice, text: drafts.get(key) }), [key]);
+}
+
+/**
+ * A card's button: an answer to the agent's question, or a part of the card opened or closed.
+ * @param {HTMLElement} el
+ */
+function cardAction(el) {
+  const id = /** @type {string} */ (el.dataset.question);
+  const action = /** @type {string} */ (el.dataset.q);
+  if (TOGGLES.has(action)) {
+    toggleOpened(id, action);
+    return draw();
+  }
+  if (action === CARD_ACTION.link) return send(PAGE.openUrl, { url: el.dataset.value ?? '' });
+  const reply = replyOf(action, el.dataset.value ?? '', ctx, id);
+  if (reply) void sendAnswer(id, () => answerQuestion(id, reply), [answerKey(id), noteKey(id)]);
+}
+
+/** @param {HTMLElement} row */
 function preview(row) {
   const tab = state.tabs.get(row.dataset.pane ?? '');
   if (tab) previewWaiting(tab, row.querySelector(DETAIL)?.textContent ?? '');
@@ -254,11 +212,11 @@ function preview(row) {
 /** @param {HTMLElement} el */
 function onAction(el) {
   const row = /** @type {HTMLElement | null} */ (el.closest(ROW));
-  if (el.dataset.answer && row) answer(row, el.dataset.answer);
+  if (el.dataset.q) cardAction(el);
+  else if (el.dataset.answer && row) answer(row, el.dataset.answer);
   else if (el.dataset.preview !== undefined && row) preview(row);
   else if (el.dataset.clear) clear(el.dataset.clear);
-  else if (el.dataset.clearLane) clear(entries().filter(e => e.lane === el.dataset.clearLane).map(e => e.key));
-  else if (el.dataset.fold) toggleFold(el.dataset.fold);
+  else if (el.dataset.source) pickSource(el.dataset.source);
   else if (el.dataset.inbox === ACTION.clearAll) clear(null);
   else if (el.dataset.inbox === ACTION.close) toggleInbox();
   else if (el.dataset.run) emit(EVENTS.openSchedules, { runId: el.dataset.run });
@@ -269,7 +227,7 @@ function onAction(el) {
 }
 
 panel.addEventListener('click', e => {
-  const el = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-answer], [data-preview], [data-clear], [data-clear-lane], [data-fold], [data-inbox], [data-run], [data-tab]'));
+  const el = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-q], [data-answer], [data-preview], [data-clear], [data-source], [data-inbox], [data-run], [data-tab]'));
   if (el) onAction(el);
 });
 panel.addEventListener('compositionstart', () => { composing = true; });
@@ -279,12 +237,11 @@ panel.addEventListener('compositionend', () => {
 });
 panel.addEventListener('input', e => {
   const box = targetOf(e);
-  const key = /** @type {HTMLElement | null} */ (box.closest(ROW))?.dataset.key;
-  if (key && box instanceof HTMLInputElement) drafts.set(key, box.value);
+  if (box instanceof HTMLInputElement && box.dataset.draft) drafts.set(box.dataset.draft, box.value);
 });
 
 /**
- * Up and Down go from entry to entry.
+ * Up and Down go from row to row.
  * @param {KeyboardEvent} e
  */
 function moveFocus(e) {
@@ -293,13 +250,25 @@ function moveFocus(e) {
   items[(items.indexOf(/** @type {HTMLElement} */ (document.activeElement)) + step + items.length) % items.length]?.focus();
 }
 
+/**
+ * Enter in a box sends it: a note's reply, or a card's answer (its note box sends with its recommended or only button
+ * only when the card has one to send).
+ * @param {HTMLElement} box
+ */
+function enterIn(box) {
+  const row = /** @type {HTMLElement} */ (box.closest(ROW));
+  if (!row.dataset.question) return answer(row, ANSWER.reply);
+  const sendButton = /** @type {HTMLElement | null} */ (row.querySelector(`[data-q="${CARD_ACTION.send}"]`));
+  if (sendButton && box.dataset.draft === answerKey(row.dataset.question)) cardAction(sendButton);
+}
+
 panel.addEventListener('keydown', e => {
   const plain = !e.ctrlKey && !e.shiftKey && !e.altKey;
-  const inReply = targetOf(e).matches(REPLY);
+  const inBox = targetOf(e).matches(BOX);
   if (e.key === 'Escape' && plain) restoreFocus();
   else if (e.isComposing) return; // an input method's own Enter picks its word
-  else if (e.key === 'Enter' && plain && inReply) answer(/** @type {HTMLElement} */ (targetOf(e).closest(ROW)), ANSWER.reply);
-  else if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && !inReply) moveFocus(e);
+  else if (e.key === 'Enter' && plain && inBox) enterIn(targetOf(e));
+  else if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && !inBox) moveFocus(e);
   else if (isShortcut(e, KEY_ID.inbox)) toggleInbox();
   else return;
   e.preventDefault();
@@ -308,9 +277,19 @@ panel.addEventListener('keydown', e => {
 
 button.addEventListener('click', () => toggleInbox());
 watchNotes(draw);
+// A question's desktop notification was clicked (js/questions.js): the panel opens on All, where it is.
+on(EVENTS.openInbox, () => {
+  state.inbox.source = undefined;
+  setOpen(true);
+});
 dockRight(panel, {
-  dockVar: '--inbox-dock', minWidth: MIN_WIDTH_PX, resized: scheduleFit,
+  dockVar: '--inbox-dock', minWidth: MIN_WIDTH_PX,
+  resized: () => {
+    scheduleFit();
+    // Dragged past the width the sources need, or back: drawn with or without them.
+    if (panel.classList.contains(NARROW) !== panel.offsetWidth < SOURCES_MIN_PX) draw();
+  },
   dragged: width => { state.inbox.width = width; persist(); },
 });
-// Ages move on while the panel is open (not while a reply is typed: a redraw keeps it, but there's no need).
-setInterval(() => { if (!panel.hidden && !document.activeElement?.matches(REPLY)) draw(); }, REDRAW_MS);
+// Ages move on while the panel is open (not while something is typed: a redraw keeps it, but there's no need).
+setInterval(() => { if (!panel.hidden && !document.activeElement?.matches(BOX)) draw(); }, REDRAW_MS);

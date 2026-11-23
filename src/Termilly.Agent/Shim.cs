@@ -97,8 +97,8 @@ internal static class Shim
     /// <summary>How long Codex lets one of Termilly's hooks run (Interrupt's limit is 3 seconds).</summary>
     private const int CodexHookTimeoutSeconds = 3;
 
-    /// <summary>How long a termilly tool may take: waiting on a terminal's output takes up to two minutes.</summary>
-    private static readonly int CodexToolTimeoutSeconds = (int)PipeTimeouts.ApiWaiting.TotalSeconds + 10;
+    /// <summary>How long a termilly tool may take: a question for the user (notify_user) waits the longest.</summary>
+    private static readonly int CodexToolTimeoutSeconds = (int)PipeTimeouts.Question.TotalSeconds + 10;
 
     /// <summary>
     /// The -c values that add Termilly's hooks and MCP server to Codex for this run: a hook for each event Termilly

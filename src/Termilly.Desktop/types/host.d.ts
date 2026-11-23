@@ -54,6 +54,8 @@ interface TerminalSettings {
   textSmoothing: string;
   /** Terminals drawn on the GPU (xterm's WebGL add-on, js/gpu.js): smoother scrolling; text is greyscale-smoothed then. */
   gpuRendering: boolean;
+  /** No graphics card for the window or its terminals (Windows: WebView2's --disable-gpu, Linux: WebKit's compositing off; macOS can only draw terminals on the CPU): least memory and no VRAM, more CPU for fast output. Applies at the next start. */
+  lowMemory: boolean;
   /** Images programs print (sixel, iTerm2's), shown inline. */
   inlineImages: boolean;
   /** Programs may set the clipboard (OSC 52). */

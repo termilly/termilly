@@ -103,6 +103,7 @@ internal sealed class DetachedWindow : Window
         WindowPlacement.KeepOnScreen(this); // the place it remembers may be on a monitor that's gone
         await _web.EnsureCoreWebView2Async(environment);
         var core = _web.CoreWebView2;
+        BackgroundMemory.Follow(this, _web);
         core.SetVirtualHostNameToFolderMapping(hostName, AppPaths.WebRoot, CoreWebView2HostResourceAccessKind.Deny);
         WindowBackdrop.MapPictures(core);
         ClipboardReadPermission.AllowForDetached(core, hostName);

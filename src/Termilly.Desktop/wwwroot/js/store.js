@@ -93,8 +93,9 @@ export const getSetting = path => {
  *   links?: boolean, wrap?: boolean, numbers?: boolean, highlight?: boolean }} NotepadPage
  */
 /**
- * The notification center (js/inboxpanel.js) as it was left: open or closed, its width, and its folded groups.
- * @typedef {{ open: boolean, width?: number, folded?: string[] }} InboxState
+ * The notification center (js/inboxpanel.js) as it was left: open or closed, its width, and the source its feed shows
+ * (all, a workspace, a terminal or schedules: js/inboxsources.js).
+ * @typedef {{ open: boolean, width?: number, source?: string }} InboxState
  */
 /**
  * The Clipboard panel (js/clipboard.js) as it was left: open or closed, its width, what its search box held, the
@@ -257,6 +258,8 @@ export const EVENTS = Object.freeze({
   /** The schedules' clock ticked: when things run next reads differently, though nothing changed. */
   scheduleClock: 'scheduleClock',
   openSchedules: 'openSchedules',
+  /** Open the notification center (a question's desktop notification was clicked). */
+  openInbox: 'openInbox',
   openSnippets: 'openSnippets',
   opened: 'opened',
   planChanged: 'planChanged',

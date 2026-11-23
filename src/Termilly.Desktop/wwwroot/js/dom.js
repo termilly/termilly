@@ -176,6 +176,8 @@ export const TOOLBAR = '.toolbar';
 export const TITLEBAR_ID = 'titlebar';
 /** The workspace on screen in the title bar (index.html): js/sidebar.js fills it in, Minimal makes it open the list. */
 export const CRUMB_ID = 'crumb';
+/** The title bar's Schedules button (index.html): js/scheduleswindow.js's, and its icon in the notification center. */
+export const SCHEDULES_BUTTON_ID = 'schedules-button';
 /**
  * The edge of the window the title bar's buttons are docked on, when `el` is one of them (else the top): what opens
  * from one of them opens away from that edge.

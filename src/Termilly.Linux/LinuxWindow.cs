@@ -57,6 +57,9 @@ internal sealed class LinuxWindow
         }
     }
 
+    /// <summary>Low memory (Settings › Appearance): the page drawn without the graphics card, set before the window opens.</summary>
+    public bool LowMemory { get; set; }
+
     /// <summary>See-through and blur (Settings › Appearance › Background): the latest asked, applied once the window exists.</summary>
     private volatile bool _seeThrough;
     private volatile bool _blur;
@@ -245,6 +248,10 @@ internal sealed class LinuxWindow
                 GtkWindow.HideUntilLoaded(main);
                 DetachedWindows.SetZoom(_zoom / (double)InterfaceSettings.DefaultZoom);
                 GtkWindow.ClearBackground(main);
+                if (LowMemory)
+                {
+                    GtkWindow.WithoutGraphicsCard(main);
+                }
                 DetachedWindows.Hook(main);
                 ApplyBackdrop();
                 // After ClearBackground, which may take the window down and show it again.
