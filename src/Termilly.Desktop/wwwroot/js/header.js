@@ -21,7 +21,7 @@ import { openTabMenu, TAG_BUTTON } from './tabmenu.js';
 import { find, setHtmlIfChanged } from './dom.js';
 import { openPrompts, hasPrompts, PROMPTS_TITLE } from './myprompts.js';
 import { updateSwitch, openViewMenu, VIEW_BUTTON } from './compact.js';
-import { isMinimal, markBarParts, openPaneBarMenu } from './panebar.js';
+import { markBarParts } from './panebar.js';
 
 /** The header's parts that change with the terminal (HEADER_HTML has them). */
 const PINNED_NOTE = '.pane-note';
@@ -78,7 +78,10 @@ function wireHeader(tab, header) {
    * @param {(e: MouseEvent) => unknown} fn
    */
   const click = (selector, fn) => find(header, selector).addEventListener('click', fn);
-  find(header, PANE_NAME).addEventListener('dblclick', () => beginRename(tab));
+  // On the header, not the name: dragging it captures the pointer (panes.js), so the clicks land on the header.
+  header.addEventListener('dblclick', e => {
+    if (header.ownerDocument.elementFromPoint(e.clientX, e.clientY)?.closest(PANE_NAME)) beginRename(tab);
+  });
   // The same menu as a right-click on the header.
   click('.menu-btn', e => openTabMenu(tab, /** @type {HTMLElement} */ (e.currentTarget)));
   click(TAG_BUTTON, e => openTagPicker(tab, /** @type {HTMLElement} */ (e.currentTarget)));
@@ -92,11 +95,9 @@ function wireHeader(tab, header) {
   click(VIEW_BUTTON, e => openViewMenu(tab, /** @type {HTMLElement} */ (e.currentTarget)));
   click(PROMPTS_BUTTON, e => openPrompts(tab, /** @type {HTMLElement} */ (e.currentTarget)));
   click(PINNED_NOTE, e => openPinned(tab, /** @type {string} */ (/** @type {HTMLElement} */ (e.currentTarget).dataset.kind)));
-  // In Minimal (the main window) it picks what the name line shows; its last item is this menu.
   header.addEventListener('contextmenu', e => {
     e.preventDefault();
-    if (isMinimal() && !tab.detached) openPaneBarMenu(tab, { x: e.clientX, y: e.clientY });
-    else openTabMenu(tab, { x: e.clientX, y: e.clientY });
+    openTabMenu(tab, { x: e.clientX, y: e.clientY });
   });
 }
 
