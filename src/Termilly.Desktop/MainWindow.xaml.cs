@@ -198,7 +198,7 @@ public partial class MainWindow : Window
             }
 #endif
             // Detached windows share this environment, so Low memory reaches them too (it applies at the next start).
-            var options = BrowserArguments.For(Settings.Terminal.LowMemory, devtools) is { } args ? new CoreWebView2EnvironmentOptions(args) : null;
+            var options = PageCrashes.Options(BrowserArguments.For(Settings.Terminal.LowMemory, devtools));
             var env = await CoreWebView2Environment.CreateAsync(
                 userDataFolder: Path.Combine(AppPaths.DataDirectory, WebViewFolder), options: options);
             StartupLog.Mark("WebView2 environment created");
@@ -215,6 +215,7 @@ public partial class MainWindow : Window
 
         var core = Web.CoreWebView2;
         BackgroundMemory.Follow(this, Web);
+        PageCrashes.Follow(core);
         Web.ZoomFactor = Zoom;
         core.Settings.AreBrowserAcceleratorKeysEnabled = false; // let F5, Ctrl+F etc. reach the terminal
         core.Settings.IsStatusBarEnabled = false;

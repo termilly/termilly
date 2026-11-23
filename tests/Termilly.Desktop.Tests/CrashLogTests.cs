@@ -38,6 +38,19 @@ public sealed class CrashLogTests : IDisposable
     }
 
     [Fact]
+    public void A_page_crash_is_noted_with_its_time_version_and_description()
+    {
+        var path = Path.Combine(_dir, CrashLog.FileName);
+        var when = new DateTimeOffset(2026, 11, 23, 16, 50, 25, TimeSpan.FromHours(1));
+
+        CrashLog.Note(path, "WebView2: RenderProcessExited, Crashed, exit code 0x80000003", when);
+
+        var log = File.ReadAllText(path);
+        Assert.StartsWith($"2026-11-23 16:50:25 +01:00  Termilly {AppVersion.Current} on ", log);
+        Assert.Contains($"{Environment.NewLine}WebView2: RenderProcessExited, Crashed, exit code 0x80000003{Environment.NewLine}", log);
+    }
+
+    [Fact]
     public void A_full_log_is_moved_aside_and_a_new_one_started()
     {
         var path = Path.Combine(_dir, CrashLog.FileName);

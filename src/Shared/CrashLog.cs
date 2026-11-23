@@ -27,6 +27,8 @@ internal static class CrashLog
 
     private const long MaxBytes = 1024 * 1024;
 
+    private static readonly Lock Writing = new();
+
     /// <summary>How long About offers a log after a crash was written to it.</summary>
     public static readonly TimeSpan RecentFor = TimeSpan.FromDays(7);
 
@@ -53,8 +55,17 @@ internal static class CrashLog
     public static void Caught(Exception error) => Write(PathOf(FileName), error, DateTimeOffset.Now);
 
     /// <summary>Adds one crash to the log at <paramref name="path"/>. Never throws: the program is going down already.</summary>
-    public static void Write(string path, Exception error, DateTimeOffset when)
+    public static void Write(string path, Exception error, DateTimeOffset when) => Append(path, Entry(error, when));
+
+    /// <summary>
+    /// Adds a crash that isn't one of this program's errors (WebView2's page process ended) to the log at
+    /// <paramref name="path"/>, described by <paramref name="what"/>. Never throws.
+    /// </summary>
+    public static void Note(string path, string what, DateTimeOffset when) => Append(path, Entry(what, when));
+
+    private static void Append(string path, string entry)
     {
+        using var _ = Writing.EnterScope(); // a page crash and an error elsewhere may come at once
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
@@ -62,7 +73,7 @@ internal static class CrashLog
             {
                 File.Move(path, Path.ChangeExtension(path, OldExtension), overwrite: true);
             }
-            File.AppendAllText(path, Entry(error, when));
+            File.AppendAllText(path, entry);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -70,9 +81,11 @@ internal static class CrashLog
     }
 
     /// <summary>When, which build on which system, and the error.</summary>
-    public static string Entry(Exception error, DateTimeOffset when) =>
+    public static string Entry(Exception error, DateTimeOffset when) => Entry(error.ToString(), when);
+
+    private static string Entry(string what, DateTimeOffset when) =>
         $"{when:yyyy-MM-dd HH:mm:ss zzz}  {Product.Name} {AppVersion.Current} on {RuntimeInformation.OSDescription}, .NET {Environment.Version}"
-        + $"{Environment.NewLine}{error}{Environment.NewLine}{Environment.NewLine}";
+        + $"{Environment.NewLine}{what}{Environment.NewLine}{Environment.NewLine}";
 
     /// <summary>The logs in <paramref name="folder"/> written since <paramref name="since"/>, newest first.</summary>
     public static IReadOnlyList<RecentCrash> Recent(string folder, DateTimeOffset since) =>
