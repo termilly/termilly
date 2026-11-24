@@ -97,6 +97,12 @@ step('on_start: false alone keeps the time; a production schedule keeps what it 
   assert.match((await call('schedule_edit', { schedule: added.id, command: 'rm -rf /' })).error, /runs on production/);
   assert.match((await call('schedule_edit', { schedule: added.id, cwd: '/' })).error, /runs on production/);
   assert.equal((await stored(added.id)).command, 'echo t');
+  // One that types into a terminal: which one it finds is only known when it runs.
+  await app.eval(async (t, id) => {
+    const { scheduleById, saveSchedule } = await t.import('schedules.js');
+    saveSchedule({ .../** @type {any} */ (scheduleById(id)), profile: null, where: 'terminal', terminal: 'Web' });
+  }, added.id);
+  assert.match((await call('schedule_edit', { schedule: added.id, command: 'echo other' })).error, /types into a terminal/);
   // Its name and time are still the agent's to change.
   await call('schedule_edit', { schedule: added.id, name: 'Timed, renamed', at: '07:00' });
   assert.equal((await stored(added.id)).name, 'Timed, renamed');
