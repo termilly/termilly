@@ -102,7 +102,10 @@ export function reconnect(tab) {
   /** @type {TabView} */ (tab.view).term.write(`\x1b[90m[reconnecting, attempt ${r.attempt}…]\x1b[0m\r\n`);
   tab.exited = false;
   clearActivity(tab);
-  prepareStart(tab, { command: resumeCommand(r.cwd, attachFor(tab)) });
+  // An agent whose shell ended with the background host resumes after it (snapshot.js resumeAfterHost).
+  const agent = tab.start?.afterHost ? tab.start.command : null;
+  const back = resumeCommand(r.cwd, attachFor(tab));
+  prepareStart(tab, { command: back && agent ? `${back}; ${agent}` : back ?? agent, afterHost: false });
   startShell(tab);
   // Connected for a minute: the next drop starts the backoff over.
   clearTimeout(r.reset);

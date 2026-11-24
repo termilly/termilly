@@ -73,6 +73,33 @@ public sealed class BackgroundHostTests
         }
     }
 
+    [Fact]
+    public void A_second_host_leaves_while_one_runs()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+        Assert.True(File.Exists(HostExe), HostExe);
+        Environment.SetEnvironmentVariable("TERMILLY_HOST_PIPE", $"termilly-host-test-{Guid.NewGuid():N}");
+        using var host = Process.Start(new ProcessStartInfo(HostExe) { UseShellExecute = false })!;
+        try
+        {
+            Connect().Dispose(); // the first host is up
+            using var second = Process.Start(new ProcessStartInfo(HostExe) { UseShellExecute = false })!;
+            Assert.True(second.WaitForExit(5000), "a second host stayed: the shells would split between two");
+            Assert.False(host.HasExited);
+        }
+        finally
+        {
+            if (!host.HasExited)
+            {
+                host.Kill(entireProcessTree: true);
+            }
+            Environment.SetEnvironmentVariable("TERMILLY_HOST_PIPE", null);
+        }
+    }
+
     private static HostClient Connect()
     {
         HostClient? client = null;

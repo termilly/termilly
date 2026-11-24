@@ -54,53 +54,13 @@ internal static class OpenFolder
     /// </summary>
     public static IDisposable? ClaimInstance(out bool first, string? dataDirectory = null)
     {
-        if (!OperatingSystem.IsWindows())
-        {
-            return LockFile(dataDirectory ?? AppPaths.DataDirectory, out first);
-        }
-        var folder = (dataDirectory ?? AppPaths.DataDirectory).ToLowerInvariant();
-        var key = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(folder)))[..16];
-        try
-        {
-            return new Mutex(initiallyOwned: true, $@"Local\Termilly-{key}", out first);
-        }
-        catch (Exception e) when (e is UnauthorizedAccessException or WaitHandleCannotBeOpenedException or IOException)
-        {
-            first = true; // can't tell: start as before
-            return null;
-        }
+        var folder = dataDirectory ?? AppPaths.DataDirectory;
+        var key = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(folder.ToLowerInvariant())))[..16];
+        return SingleInstance.Claim($@"Local\Termilly-{key}", Path.Combine(folder, InstanceLockFile), out first);
     }
 
-    /// <summary>
-    /// Off Windows: an open, locked file in the data folder (FileShare.None takes an flock there). The system lets go
-    /// of it when this Termilly exits, however it ends.
-    /// </summary>
-    private static FileStream? LockFile(string folder, out bool first)
-    {
-        first = true;
-        string path;
-        try
-        {
-            path = Path.Combine(Directory.CreateDirectory(folder).FullName, "instance.lock");
-        }
-        catch (Exception e) when (Storage.IsFileError(e))
-        {
-            return null; // can't tell: start as before
-        }
-        try
-        {
-            return new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
-        }
-        catch (UnauthorizedAccessException)
-        {
-            return null;
-        }
-        catch (IOException)
-        {
-            first = false; // another Termilly holds it
-            return null;
-        }
-    }
+    /// <summary>The file locked off Windows while a Termilly runs on this data folder.</summary>
+    private const string InstanceLockFile = "instance.lock";
 
     /// <summary>
     /// Hands the start-up to the Termilly already running: a terminal in <paramref name="folder"/> (or the one already

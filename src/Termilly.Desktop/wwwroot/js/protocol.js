@@ -595,7 +595,7 @@ export const HOST = Object.freeze({
 /** @typedef {{ requestId: string|null, hits: Array<any> }} Host_earlierFound */
 /** @typedef {{ requestId: string|null, lines: Array<string> }} Host_earlierTail */
 /** @typedef {{ id: string, message: string }} Host_error */
-/** @typedef {{ id: string, code: number }} Host_exit */
+/** @typedef {{ id: string, code: number, ended?: boolean }} Host_exit */
 /** @typedef {{ requestId: string|null, local: string|null, ok: boolean }} Host_filesDone_0 */
 /** @typedef {{ requestId: string|null, message: string, ok: boolean }} Host_filesDone_1 */
 /** @typedef {{ requestId: string|null, file: string, ok: boolean }} Host_filesDone_2 */

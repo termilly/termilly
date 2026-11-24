@@ -7,7 +7,7 @@
 
 import { PAGE, HOST } from './protocol.js';
 import { send, onHost } from './host.js';
-import { state, finalSave, resumeAgentCommand } from './store.js';
+import { state, finalSave, resumeAgentCommand, isSsh } from './store.js';
 import { bufferLines, scrolledBack, prepareStart, isHeld } from './terminals.js';
 import { markHibernated } from './hibernate.js';
 import { startResuming } from './resuming.js';
@@ -85,6 +85,24 @@ onHost(HOST.snapshotRequest, async () => {
   send(PAGE.snapshotSave, { snapshot: snapshot(), final: true });
   showClosing('Closing the terminals');
 });
+
+/**
+ * Its shell ended with the background host (Settings › Workspaces turned it off or stopped its shells): an agent that
+ * had a conversation there resumes in its folder when the terminal starts again, at a key, a reconnect or Termilly's
+ * next start (the snapshot keeps tab.start's session). Called before the exit forgets the agent.
+ * @param {Tab} tab
+ */
+export function resumeAfterHost(tab) {
+  const agent = tab.agent;
+  if (!agent?.hadTurn || !agent.session || !SESSION_ID.test(agent.session)) return;
+  const kind = agent.kind === AGENT_KIND.codex ? AGENT_KIND.codex : AGENT_KIND.claude;
+  if (agent.folder) {
+    tab.lastCwd = agent.folder;
+    if (isSsh(tab)) tab.remoteCwd = agent.folder;
+    else tab.cwd = agent.folder;
+  }
+  prepareStart(tab, { resumeSession: agent.session, resumeKind: kind, command: resumeAgentCommand(agent.session, kind), afterHost: true });
+}
 
 /**
  * What a terminal's profile types at its first prompt (Claude Code: claude), or null.

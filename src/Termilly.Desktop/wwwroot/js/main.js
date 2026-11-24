@@ -23,7 +23,7 @@ import { openPalette, setCommands, openGoTo, openCommandHistory, PALETTE_VIEW } 
 import { jumpToPrompt, copyLastOutput } from './commands.js';
 import { jumpToNext } from './inbox.js';
 import { toggleInbox, initInbox } from './inboxpanel.js';
-import { applySnapshot } from './snapshot.js';
+import { applySnapshot, resumeAfterHost } from './snapshot.js';
 import { keepEarlierOfOpen } from './earlier.js';
 import { toggleCaptures, outputSeen } from './triggers.js';
 import { toggleHints } from './hints.js';
@@ -589,6 +589,7 @@ onHost(HOST.agent, report => {
 onHost(HOST.exit, m => {
   const tab = state.tabs.get(m.id);
   if (!tab?.view?.term) return;
+  if (m.ended) resumeAfterHost(tab);
   clearActivity(tab);
   if (handleSshExit(tab, m.code)) return; // an SSH connection that dropped: it reconnects (reconnect.js)
   if (m.code === 0) {
