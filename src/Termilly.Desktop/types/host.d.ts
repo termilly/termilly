@@ -419,6 +419,12 @@ interface BackgroundSettings {
   solidTerminals: boolean;
   /** A gradient in the theme's own colours behind the whole window, seen through it as frosted glass; it takes the place of a picture while on. */
   themeGradient: boolean;
+  /** Theme gradient's glow at the top left, one of the theme's colours (BackgroundValues.GradientColor). */
+  gradientGlow: string;
+  /** Theme gradient's colour underneath, darkened. */
+  gradientBase: string;
+  /** Theme gradient's glow at the bottom right. */
+  gradientSecondGlow: string;
   /** The picture's file in the backgrounds folder (), or none. */
   picture: string | null;
   fit: string;

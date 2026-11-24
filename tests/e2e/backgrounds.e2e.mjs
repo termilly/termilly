@@ -108,3 +108,28 @@ test('a workspace’s own background, from its right-click menu, wins over the w
   });
   await until(async () => (await rootState(app)).backdrop === 'terminals', 'Same as the window again');
 }));
+
+test('Theme gradient paints the accent, background and magenta until its colours are picked from the theme', () => withApp('background-gradient-colors', async app => {
+  await app.eval(async t => (await t.import('settings.js')).openSettings('appearance-background'));
+  await app.waitFor('[data-setting="background.gradientGlow"]');
+  const glowRow = '[data-setting="background.gradientGlow"]';
+  assert.equal(await app.eval((t, s) => t.$$(`${s} [data-value]`).length, glowRow), 11, 'every theme colour');
+  assert.ok(await app.eval((t, s) => t.$(s).closest('.set-row').classList.contains('needs-off'), glowRow), 'waits for Theme gradient');
+
+  await app.click('[data-setting="background.themeGradient"]');
+  await until(async () => (await rootState(app)).themeGradient === '', 'Theme gradient on');
+  const before = (await rootState(app)).image;
+  assert.match(before, /var\(--accent\) 65%, var\(--bg\)/, 'the accent over the background, as before');
+  assert.match(before, /var\(--hl-title\) 85%/, 'magenta at the bottom right, as before');
+  await app.screenshot('gradient-default');
+
+  await app.click(`${glowRow} [data-value="background"]`);
+  await app.click('[data-setting="background.gradientSecondGlow"] [data-value="blue"]');
+  await until(async () => /var\(--hl-number\) 85%/.test((await rootState(app)).image), 'blue at the bottom right');
+  assert.match((await rootState(app)).image, /var\(--bg\) 65%, var\(--bg\)/, 'no accent left in it');
+  assert.ok(await app.eval((t, s) => t.$(`${s} [data-value="background"]`).classList.contains('on'), glowRow));
+  const saved = await app.eval(async t => (await t.import('store.js')).state.settings.background);
+  assert.equal(saved.gradientGlow, 'background');
+  assert.equal(saved.gradientSecondGlow, 'blue');
+  await app.screenshot('gradient-picked');
+}));

@@ -243,6 +243,23 @@ export const BACKGROUND = Object.freeze({
     slate: 'slate',
     all: Object.freeze(['aurora', 'ember', 'dusk', 'ocean', 'moss', 'slate']),
   }),
+  gradientColor: Object.freeze({
+    accent: 'accent',
+    background: 'background',
+    surface: 'surface',
+    text: 'text',
+    muted: 'muted',
+    red: 'red',
+    yellow: 'yellow',
+    green: 'green',
+    cyan: 'cyan',
+    blue: 'blue',
+    magenta: 'magenta',
+    defaultGlow: 'accent',
+    defaultBase: 'background',
+    defaultSecondGlow: 'magenta',
+    all: Object.freeze(['accent', 'background', 'surface', 'text', 'muted', 'red', 'yellow', 'green', 'cyan', 'blue', 'magenta']),
+  }),
 });
 
 /** C#: ChangeSources (Changes/ChangeModel.cs). */
