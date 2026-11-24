@@ -87,9 +87,13 @@ const GRADIENT_COLOR_LABEL = Object.freeze({
 const WITH_GRADIENT = 'background.themeGradient';
 const GRADIENT_KEYWORDS = 'gradient colour color glow theme accent';
 
+/** The colours offered; the terminal ones aren't, but one already set (Second glow's magenta by default) still shows. */
+const PICKABLE = new Set(/** @type {string[]} */ ([GRADIENT_COLOR.accent, GRADIENT_COLOR.background, GRADIENT_COLOR.surface, GRADIENT_COLOR.text, GRADIENT_COLOR.muted]));
+
 /** @param {string} key */
 const gradientColors = key => swatchChoice(key,
-  GRADIENT_COLOR.all.map(c => [c, GRADIENT_COLOR_LABEL[c] ?? c, `var(${GRADIENT_COLOR_VAR[c]})`]));
+  GRADIENT_COLOR.all.filter(c => PICKABLE.has(c) || c === getSetting(key))
+    .map(c => [c, GRADIENT_COLOR_LABEL[c] ?? c, `var(${GRADIENT_COLOR_VAR[c]})`]));
 
 /** Theme gradient's three colours, each picked from the theme's own. */
 const gradientRows = () =>
