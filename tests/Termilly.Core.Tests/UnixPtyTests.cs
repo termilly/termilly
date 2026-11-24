@@ -1,7 +1,5 @@
 using System.Diagnostics;
-using System.Globalization;
 using System.Text;
-using System.Text.RegularExpressions;
 using Termilly.Pty;
 using Termilly.Pty.Unix;
 
@@ -157,12 +155,10 @@ public sealed class UnixPtyTests
         {
             return;
         }
-        var pty = PseudoTerminal.Start(new PtyOptions("/bin/sh", 80, 24));
-        var seen = new StringBuilder();
-        // A program that outlives its shell and ignores the hang-up, as an agent left running can. macOS's sh (bash)
-        // would take $! as history: that's off first, on a line of its own (sh elsewhere just says it has no -H).
-        await SendAsync(pty, "set +H 2>/dev/null\n(trap '' HUP; exec sleep 60) & echo held-$!-$((1+1))\n");
-        var held = int.Parse(Regex.Match(await ReadUntilAsync(pty, "-2\r", seen), @"held-(\d+)-2").Groups[1].Value, CultureInfo.InvariantCulture);
+        // A program that holds its terminal and ignores the hang-up, as an agent left running can (one that leads its
+        // session, as the shell of the terminal does).
+        var pty = PseudoTerminal.Start(new PtyOptions("/bin/sh -c \"trap '' HUP; echo held; sleep 60\"", 80, 24));
+        await ReadUntilAsync(pty, "held", new StringBuilder());
         try
         {
             // A reader waiting for output that doesn't come, as the terminal's pump does: on macOS a close used to wait
@@ -181,8 +177,8 @@ public sealed class UnixPtyTests
         }
         finally
         {
-            using var program = Process.GetProcessById(held);
-            program.Kill();
+            using var program = Process.GetProcessById(pty.ProcessId);
+            program.Kill(entireProcessTree: true);
         }
     }
 }
