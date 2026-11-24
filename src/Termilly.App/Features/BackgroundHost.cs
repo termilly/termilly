@@ -53,15 +53,23 @@ internal sealed class BackgroundHost : IDisposable
         return host?.Running.Where(s => s.Value.Alive).Select(s => s.Key).ToArray() ?? [];
     }
 
-    /// <summary>Ends the host and every shell it runs; false when there was none.</summary>
-    public bool ShutDown()
+    /// <summary>
+    /// Live shells the host runs that aren't this window's terminals: kept ones not taken back, or, with no connection
+    /// (background shells turned on after start, or off), every one a host still runs. Waits for a connection being made.
+    /// </summary>
+    public IReadOnlyList<string> KeptShells() =>
+        Connected() is { } connected ? [.. connected.Untaken] : HostClient.AliveShells();
+
+    /// <summary>
+    /// Ends the host and every shell it runs, also one this window isn't connected to; done once its process is gone.
+    /// </summary>
+    public Task ShutDown() => Task.Run(() => HostClient.StopHost(Connected()));
+
+    /// <summary>This window's connection to the host once it's made (one being made is waited for), or null.</summary>
+    private HostClient? Connected()
     {
-        if (_host.IsCompletedSuccessfully && _host.Result is { } running)
-        {
-            running.Shutdown();
-            return true;
-        }
-        return false;
+        Task.WhenAny(_host, Task.Delay(ConnectWait)).Wait();
+        return _host.IsCompletedSuccessfully && _host.Result is { IsConnected: true } connected ? connected : null;
     }
 
     /// <summary>The window is closing: the shells stay with the host.</summary>

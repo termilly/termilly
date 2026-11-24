@@ -103,7 +103,7 @@ internal sealed class Host
         {
             case HostRequest.Hello:
                 Send(new HostEvent.Hello(HostProtocol.Version,
-                    _shells.Values.Select(s => new HostEvent.Session(s.Id, s.Pty.ProcessId, s.Alive, s.ExitCode)).ToList()));
+                    _shells.Values.Select(s => new HostEvent.Session(s.Id, s.Pty.ProcessId, s.Alive, s.ExitCode)).ToList(), Environment.ProcessId));
                 break;
             case HostRequest.Start start:
                 Start(start);

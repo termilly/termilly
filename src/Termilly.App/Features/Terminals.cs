@@ -27,6 +27,7 @@ internal sealed class TerminalHandler(
         router.On<FromPage.SerialHex>(m => WithStream(m.Id, stream => stream.Hex = m.On));
         router.On<FromPage.SerialEol>(m => WithStream(m.Id, stream => stream.LineEnding = LineEndings.OrDefault(m.Eol)));
         router.On<FromPage.HostShutdown>(_ => ShutDownHost());
+        router.On<FromPage.HostShells>(m => ListHostShells(m.RequestId));
         // A server's (or WSL's) tmux in control mode, its panes shown as terminals (TmuxClient.cs, js/tmux.js).
         router.On<FromPage.TmuxStart>(m => tmux.Start(m.Id, m.Command ?? TmuxClients.DefaultCommand,
             data => page.Post(new ToPage.TmuxData(m.Id, data)),
@@ -177,16 +178,17 @@ internal sealed class TerminalHandler(
     private void ShutDownHost()
     {
         var hosted = terminals.Hosted();
-        if (!host.ShutDown())
-        {
-            return;
-        }
+        _ = host.ShutDown();
         foreach (var id in hosted)
         {
             terminals.Forget(id);
             page.Post(new ToPage.Exit(id, HostedSession.EndedCode));
         }
     }
+
+    /// <summary>The terminals whose shells the background host runs: this window's, and kept ones not taken back.</summary>
+    private void ListHostShells(string? requestId) => Task.Run(() =>
+        page.Post(new ToPage.HostShellList(requestId, [.. terminals.LiveHosted().Union(host.KeptShells())])));
 
     /// <summary>A terminal's own environment variables (from a layout), if the message has any.</summary>
     private static Dictionary<string, string>? Variables(JsonElement? env) =>

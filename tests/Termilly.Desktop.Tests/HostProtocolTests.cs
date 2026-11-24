@@ -29,11 +29,23 @@ public sealed class HostProtocolTests
     {
         using var stream = new MemoryStream();
         HostProtocol.Write(stream, new HostRequest.Input("t1", "dir\r"));
-        HostProtocol.Write(stream, new HostEvent.Hello(HostProtocol.Version, [new HostEvent.Session("t1", 42, false, 0)]));
+        HostProtocol.Write(stream, new HostEvent.Hello(HostProtocol.Version, [new HostEvent.Session("t1", 42, false, 0)], 7));
 
         var frames = Encoding.UTF8.GetString(stream.ToArray());
         Assert.Contains("""{"op":"input","id":"t1","d":"dir\r"}""", frames);
-        Assert.Contains($$"""{"ev":"hello","v":{{HostProtocol.Version}},"sessions":[{"id":"t1","pid":42,"alive":false,"exit":0}]}""", frames);
+        Assert.Contains($$"""{"ev":"hello","v":{{HostProtocol.Version}},"sessions":[{"id":"t1","pid":42,"alive":false,"exit":0}],"pid":7}""", frames);
+    }
+
+    [Fact]
+    public void A_hello_from_a_host_that_does_not_name_its_process_reads_as_process_0()
+    {
+        using var stream = new MemoryStream();
+        var older = Encoding.UTF8.GetBytes($$"""{"ev":"hello","v":{{HostProtocol.Version}},"sessions":[]}""");
+        stream.Write(BitConverter.GetBytes(older.Length));
+        stream.Write(older);
+        stream.Position = 0;
+
+        Assert.Equal(0, Assert.IsType<HostEvent.Hello>(HostProtocol.ReadEvent(stream)).Pid);
     }
 
     [Fact]

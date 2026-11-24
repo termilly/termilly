@@ -83,14 +83,16 @@ export function modal(className, html, build, { dismissable = true } = {}) {
 }
 
 /**
- * Asks to confirm something (a delete, closing a workspace). Resolves true to go ahead.
- * @param {{ title: string, body: string, confirm?: string }} question
+ * Asks to confirm something (a delete, closing a workspace). Resolves true to go ahead. items: what it affects,
+ * listed under the question.
+ * @param {{ title: string, body: string, confirm?: string, items?: string[] }} question
  * @returns {Promise<boolean>}
  */
-export function confirmDialog({ title, body, confirm = OK_LABEL }) {
+export function confirmDialog({ title, body, confirm = OK_LABEL, items = [] }) {
+  const list = items.length ? `<ul class="dialog-list">${items.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul>` : '';
   return modal(CONFIRM_DIALOG, `
     <h3>${escapeHtml(title)}</h3>
-    <p class="dialog-sub">${escapeHtml(body)}</p>
+    <p class="dialog-sub">${escapeHtml(body)}</p>${list}
     <div class="dialog-actions">
       <button class="btn" data-cancel>Cancel</button>
       <button class="btn danger" data-ok autofocus>${escapeHtml(confirm)}</button>

@@ -34,6 +34,8 @@ internal sealed class HostClient : IDisposable
     /// <summary>Before trying again when the host dropped the connection while replacing its pipe.</summary>
     private static readonly TimeSpan RetryDelay = TimeSpan.FromMilliseconds(200);
     internal static readonly TimeSpan StartWait = TimeSpan.FromSeconds(5);
+    /// <summary>How long a host asked to stop gets to end its shells and exit before it's ended.</summary>
+    private static readonly TimeSpan StopWait = TimeSpan.FromSeconds(5);
 
     private readonly NamedPipeClientStream _pipe;
     private readonly Lock _writeGate = new();
@@ -53,8 +55,14 @@ internal sealed class HostClient : IDisposable
     /// <summary>Shells the host already runs (from before this window opened): id → process id, alive or exited.</summary>
     public IReadOnlyDictionary<string, (int Pid, bool Alive)> Running { get; private set; } = new Dictionary<string, (int, bool)>();
 
+    /// <summary>The host's own process; 0 from an older host that doesn't say.</summary>
+    public int HostPid { get; private set; }
+
     /// <summary>Kept shells a terminal already took back: starting that terminal again later is a new shell.</summary>
     private readonly ConcurrentDictionary<string, bool> _taken = new();
+
+    /// <summary>Shells the host kept running that no terminal has taken back yet.</summary>
+    public IEnumerable<string> Untaken => Running.Where(s => s.Value.Alive && !_taken.ContainsKey(s.Key)).Select(s => s.Key);
 
     /// <summary>The process id of a shell the host kept running for this terminal, the first time it's asked; else null.</summary>
     public int? TakeKept(string id) => Running.TryGetValue(id, out var kept) && kept.Alive && _taken.TryAdd(id, true) ? kept.Pid : null;
@@ -91,6 +99,7 @@ internal sealed class HostClient : IDisposable
                     return null;
                 }
                 client.Running = hello.Sessions.ToDictionary(s => s.Id, s => (s.Pid, s.Alive));
+                client.HostPid = hello.Pid;
                 StartupLog.Mark($"host connected (try {attempt + 1})");
                 return client;
             }
@@ -115,15 +124,75 @@ internal sealed class HostClient : IDisposable
     /// Whether a background host is running with shells still alive in it: installing an update would end them. Only
     /// connects, never starts a host. A host that's there but doesn't answer counts as having some.
     /// </summary>
-    public static bool HasKeptShells() => AskHost(stopIfIdle: false);
+    public static bool HasKeptShells() => AskHost(HostAsk.Check)?.Keeps ?? false;
 
     /// <summary>
     /// Ends a background host with no shells alive (it would keep the program folder in use for a minute, so an update
     /// couldn't swap it). False when it has shells, which are never ended.
     /// </summary>
-    public static bool StopIdleHost() => !AskHost(stopIfIdle: true);
+    public static bool StopIdleHost() => !(AskHost(HostAsk.StopIfIdle)?.Keeps ?? false);
 
-    private static bool AskHost(bool stopIfIdle)
+    /// <summary>The live shells of a host this window isn't connected to, by asking it; never starts one.</summary>
+    public static IReadOnlyList<string> AliveShells() => AskHost(HostAsk.Check)?.Alive ?? [];
+
+    /// <summary>
+    /// Ends the background host this window is connected to (<paramref name="connected"/>), or else any that answers,
+    /// with every shell in it, and waits until its process is gone: one that doesn't stop by itself is ended. Never
+    /// starts one.
+    /// </summary>
+    public static void StopHost(HostClient? connected)
+    {
+        int pid;
+        if (connected is { IsConnected: true })
+        {
+            pid = connected.HostPid;
+            connected.Shutdown();
+        }
+        else
+        {
+            pid = AskHost(HostAsk.Stop)?.Pid ?? 0;
+        }
+        if (pid > 0)
+        {
+            EndProcess(pid);
+        }
+    }
+
+    /// <summary>Waits for the host's process to exit after a shutdown, and ends it (with its shells) if it doesn't.</summary>
+    private static void EndProcess(int pid)
+    {
+        try
+        {
+            using var process = Process.GetProcessById(pid);
+            if (process.ProcessName != HostExeName)
+            {
+                return; // gone, and its id taken by an unrelated process
+            }
+            if (!process.WaitForExit(StopWait))
+            {
+                process.Kill(entireProcessTree: true);
+                process.WaitForExit(StopWait);
+            }
+        }
+        catch (Exception e) when (e is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            // Exited already, or can't be ended from here.
+        }
+    }
+
+    /// <summary>What <see cref="AskHost"/> does once the host answers.</summary>
+    private enum HostAsk { Check, StopIfIdle, Stop }
+
+    /// <summary>A host's answer: its live shells and its process. One that didn't answer counts as keeping shells.</summary>
+    private sealed record HostReply(bool Answered, IReadOnlyList<string> Alive, int Pid)
+    {
+        public bool Keeps => !Answered || Alive.Count > 0;
+
+        public static readonly HostReply Unanswered = new(false, [], 0);
+    }
+
+    /// <summary>Asks a running host what it keeps, and stops it as asked; null when no host answers the pipe.</summary>
+    private static HostReply? AskHost(HostAsk ask)
     {
         var pipe = new NamedPipeClientStream(".", HostProtocol.PipeName, PipeDirection.InOut, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
         try
@@ -133,7 +202,7 @@ internal sealed class HostClient : IDisposable
         catch (Exception e) when (e is TimeoutException or IOException or UnauthorizedAccessException)
         {
             pipe.Dispose();
-            return false; // no host
+            return null; // no host
         }
         using var client = new HostClient(pipe);
         try
@@ -142,16 +211,18 @@ internal sealed class HostClient : IDisposable
             {
                 HostProtocol.Write(pipe, new HostRequest.Hello(HostProtocol.Version));
             }
-            var keeps = !client._hello.Task.Wait(HelloWait) || client._hello.Task.Result.Sessions.Any(s => s.Alive);
-            if (stopIfIdle && !keeps)
+            var reply = client._hello.Task.Wait(HelloWait)
+                ? new HostReply(true, [.. client._hello.Task.Result.Sessions.Where(s => s.Alive).Select(s => s.Id)], client._hello.Task.Result.Pid)
+                : HostReply.Unanswered;
+            if (ask == HostAsk.Stop || (ask == HostAsk.StopIfIdle && !reply.Keeps))
             {
                 client.Shutdown();
             }
-            return keeps;
+            return reply;
         }
         catch (Exception e) when (e is IOException or AggregateException or ObjectDisposedException)
         {
-            return true;
+            return HostReply.Unanswered;
         }
     }
 
