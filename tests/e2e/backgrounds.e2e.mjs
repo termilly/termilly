@@ -127,6 +127,7 @@ test('Theme gradient paints the accent, background and magenta until its colours
   await app.click('[data-setting="background.gradientSecondGlow"] [data-value="blue"]');
   await until(async () => /var\(--hl-number\) 85%/.test((await rootState(app)).image), 'blue at the bottom right');
   assert.match((await rootState(app)).image, /var\(--bg\) 65%, var\(--bg\)/, 'no accent left in it');
+  await until(() => app.eval(t => t.$('[data-setting="background.gradientSecondGlow"] .on')?.dataset.value === 'blue'), 'Blue shows as picked');
   assert.ok(await app.eval((t, s) => t.$(`${s} [data-value="background"]`).classList.contains('on'), glowRow));
   const saved = await app.eval(async t => (await t.import('store.js')).state.settings.background);
   assert.equal(saved.gradientGlow, 'background');
