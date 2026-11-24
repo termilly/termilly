@@ -70,7 +70,7 @@ export const seg = (key, options, how = {}) => `
  * @param {Array<[string, string, string]>} options
  */
 export const swatchChoice = (key, options) => `
-  <span class="seg swatch-choice" data-setting="${key}" role="radiogroup">${options.map(([value, name, color]) =>
+  <span class="seg swatch-choice" data-setting="${key}">${options.map(([value, name, color]) =>
     `<button data-value="${value}" title="${escapeHtml(name)}" aria-label="${escapeHtml(name)}"><i style="background:${escapeHtml(color)}"></i></button>`).join('')}</span>`;
 
 /**
