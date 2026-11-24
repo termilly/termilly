@@ -19,14 +19,13 @@ internal static class MacPlacement
     {
         var areas = UsableAreas();
         var saved = SavedPlacement.Read();
-        var frame = saved is not null && WindowFit.Placed(new Rect(saved.X, saved.Y, saved.Width, saved.Height), areas) is { } back
-            ? back
-            : WindowFit.Placed(SendRect(window, Cocoa.Frame), areas); // the first start's size may not fit a small screen
-        if (frame is { } fitted)
+        var back = saved is not null ? WindowFit.Placed(new Rect(saved.X, saved.Y, saved.Width, saved.Height), areas) : null;
+        // The first start's size, or one from a display that's gone, may not fit a small screen either.
+        if ((back ?? WindowFit.Placed(SendRect(window, Cocoa.Frame), areas)) is { } fitted)
         {
             SetFrame(window, fitted);
         }
-        if (saved?.Maximized == true)
+        if (back is not null && saved!.Maximized)
         {
             MacWindows.ToggleMaximized(window);
         }
