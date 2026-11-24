@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using System.Text;
+using System.Text.RegularExpressions;
 using Termilly.Pty;
 using Termilly.Pty.Unix;
 
@@ -144,5 +146,39 @@ public sealed class UnixPtyTests
         var exited = pty.Exited;
         pty.Dispose();
         Assert.Equal(128 + 1, await exited.WaitAsync(TimeSpan.FromSeconds(10))); // SIGHUP
+    }
+
+    [Fact]
+    public async Task Closing_a_terminal_a_program_still_holds_never_waits()
+    {
+        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsMacOS())
+        {
+            return;
+        }
+        var pty = PseudoTerminal.Start(new PtyOptions("/bin/sh", 80, 24));
+        var seen = new StringBuilder();
+        // A program that outlives its shell and ignores the hang-up, as an agent left running can.
+        await SendAsync(pty, "(trap '' HUP; exec sleep 60) & echo held-$!-$((1+1))\n");
+        var held = int.Parse(Regex.Match(await ReadUntilAsync(pty, "-2\r", seen), @"held-(\d+)-2").Groups[1].Value);
+        try
+        {
+            // A reader waiting for output that doesn't come, as the terminal's pump does: on macOS a close used to wait
+            // for it, forever while the program held the terminal.
+            var reading = Task.Run(() =>
+            {
+                var buffer = new byte[4096];
+                while (pty.Output.Read(buffer, 0, buffer.Length) > 0)
+                {
+                }
+            });
+            await Task.Delay(300);
+            Assert.True(Task.Run(pty.Dispose).Wait(TimeSpan.FromSeconds(2)), "closing the terminal waited");
+            await reading.WaitAsync(TimeSpan.FromSeconds(5)); // and the reader ends
+        }
+        finally
+        {
+            using var program = Process.GetProcessById(held);
+            program.Kill();
+        }
     }
 }
