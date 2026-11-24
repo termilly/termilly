@@ -38,7 +38,7 @@ internal sealed class HostClient : IDisposable
     private static readonly TimeSpan StopWait = TimeSpan.FromSeconds(5);
 
     private readonly NamedPipeClientStream _pipe;
-    private readonly Lock _writeGate = new();
+    private readonly HostWriter _writer;
     private readonly ConcurrentDictionary<string, HostedSession> _sessions = new();
     private readonly TaskCompletionSource<HostEvent.Hello> _hello = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private volatile bool _closed;
@@ -46,6 +46,7 @@ internal sealed class HostClient : IDisposable
     private HostClient(NamedPipeClientStream pipe)
     {
         _pipe = pipe;
+        _writer = new HostWriter(pipe, () => _closed = true);
         new Thread(ReadLoop) { IsBackground = true, Name = "host-client" }.Start();
     }
 
@@ -77,10 +78,7 @@ internal sealed class HostClient : IDisposable
             {
                 pipe.Connect(attempt == 0 ? FirstConnectMs : StartingConnectMs);
                 var client = new HostClient(pipe);
-                lock (client._writeGate)
-                {
-                    HostProtocol.Write(pipe, new HostRequest.Hello(HostProtocol.Version));
-                }
+                client.Send(new HostRequest.Hello(HostProtocol.Version));
                 HostEvent.Hello? hello;
                 try
                 {
@@ -207,10 +205,7 @@ internal sealed class HostClient : IDisposable
         using var client = new HostClient(pipe);
         try
         {
-            lock (client._writeGate)
-            {
-                HostProtocol.Write(pipe, new HostRequest.Hello(HostProtocol.Version));
-            }
+            client.Send(new HostRequest.Hello(HostProtocol.Version));
             var reply = client._hello.Task.Wait(HelloWait)
                 ? new HostReply(true, [.. client._hello.Task.Result.Sessions.Where(s => s.Alive).Select(s => s.Id)], client._hello.Task.Result.Pid)
                 : HostReply.Unanswered;
@@ -249,22 +244,12 @@ internal sealed class HostClient : IDisposable
         return session;
     }
 
+    /// <summary>Sends the host a message, in order, without waiting for it to be written (HostWriter).</summary>
     public void Send(HostRequest message)
     {
-        if (_closed)
+        if (!_closed)
         {
-            return;
-        }
-        try
-        {
-            lock (_writeGate)
-            {
-                HostProtocol.Write(_pipe, message);
-            }
-        }
-        catch (Exception e) when (e is IOException or ObjectDisposedException)
-        {
-            _closed = true;
+            _writer.Send(message);
         }
     }
 
@@ -314,6 +299,7 @@ internal sealed class HostClient : IDisposable
     /// <summary>The window is closing: the shells stay with the host.</summary>
     public void Dispose()
     {
+        _writer.Dispose(); // what's queued (a last Shutdown) goes first
         _closed = true;
         _pipe.Dispose();
     }

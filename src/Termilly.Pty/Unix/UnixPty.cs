@@ -47,7 +47,7 @@ public sealed class UnixPty : IPty
         _master = master;
         ProcessId = pid;
         // One stream each way over the same terminal (a duplicate descriptor, so each can close on its own).
-        Output = new TerminalStream(new FileStream(new SafeFileHandle((IntPtr)master, ownsHandle: false), FileAccess.Read, 1));
+        Output = new TerminalStream(master);
         Input = new FileStream(new SafeFileHandle((IntPtr)dup(master), ownsHandle: true), FileAccess.Write, 1);
         var waiter = new Thread(WaitForExit) { IsBackground = true, Name = $"pty wait {pid}" };
         waiter.Start();
@@ -171,8 +171,9 @@ public sealed class UnixPty : IPty
             _ = kill(ProcessId, SIGHUP); // as a terminal window closing does
         }
         Input.Dispose();
-        Output.Dispose();
-        _ = close(_master);
+        // The output closes the terminal once its reader has stopped waiting (TerminalStream), on a thread of its own:
+        // whoever closes a terminal (the host's only request thread, the window's) never waits for that.
+        _ = Task.Run(Output.Dispose);
     }
 
     private void WaitForExit()
@@ -241,12 +242,22 @@ public sealed class UnixPty : IPty
     }
 
     /// <summary>
-    /// The terminal's output. Once the shell has exited and nothing holds the terminal open, reading fails with
-    /// EIO: that's the end of the output, so it reads as 0 like the end of a file. On macOS a read still waiting when
-    /// the terminal is closed fails with EBADF, which .NET throws as UnauthorizedAccessException: the end too.
+    /// The terminal's output, and the terminal itself, closed with it. Once the shell has exited and nothing holds the
+    /// terminal open, reading fails with EIO: that's the end of the output, so it reads as 0 like the end of a file.
+    /// A read only starts once there's output (poll, looking again every <see cref="WaitMs"/>): macOS's close waits
+    /// for a read in progress on the terminal, and with a program still holding its other end (an agent that outlived
+    /// its shell) that read, and the close, would wait forever.
     /// </summary>
-    private sealed class TerminalStream(Stream inner) : Stream
+    private sealed class TerminalStream(int master) : Stream
     {
+        /// <summary>How long a wait for output lasts before it looks whether the terminal is closing.</summary>
+        private const int WaitMs = 250;
+
+        private readonly FileStream _inner = new(new SafeFileHandle((IntPtr)master, ownsHandle: false), FileAccess.Read, 1);
+        /// <summary>Held while reading or waiting to: closing waits for it, so the terminal never closes under a read.</summary>
+        private readonly Lock _gate = new();
+        private bool _closed;
+
         public override bool CanRead => true;
         public override bool CanSeek => false;
         public override bool CanWrite => false;
@@ -255,13 +266,33 @@ public sealed class UnixPty : IPty
 
         public override int Read(byte[] buffer, int offset, int count)
         {
-            try
+            while (true)
             {
-                return inner.Read(buffer, offset, count);
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-            {
-                return 0;
+                lock (_gate)
+                {
+                    if (_closed)
+                    {
+                        return 0;
+                    }
+                    var poll = new PollFd { Fd = master, Events = POLLIN };
+                    var ready = Native.poll(ref poll, 1, WaitMs);
+                    if (ready == 0 || (ready < 0 && Marshal.GetLastPInvokeError() == EINTR))
+                    {
+                        continue; // nothing yet: look again (and whether it's closing)
+                    }
+                    if (ready < 0)
+                    {
+                        return 0;
+                    }
+                    try
+                    {
+                        return _inner.Read(buffer, offset, count);
+                    }
+                    catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+                    {
+                        return 0;
+                    }
+                }
             }
         }
 
@@ -273,11 +304,20 @@ public sealed class UnixPty : IPty
         public override void SetLength(long value) => throw new NotSupportedException();
         public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
 
+        /// <summary>Closes the terminal once no read is waiting on it (one waiting for output looks again within WaitMs).</summary>
         protected override void Dispose(bool disposing)
         {
             if (disposing)
             {
-                inner.Dispose();
+                lock (_gate)
+                {
+                    if (!_closed)
+                    {
+                        _closed = true;
+                        _inner.Dispose();
+                        _ = close(master);
+                    }
+                }
             }
             base.Dispose(disposing);
         }
