@@ -25,7 +25,7 @@ import { noteRemotePrompt, noteRemoteCwd, leftRemote } from './remotecwd.js';
 import { AGENT_STATE, AGENT_SOURCE, PROFILE_ICON } from './constants.js';
 import { find, field, PATH_DRAG, CLIP_DRAG } from './dom.js';
 import { continuesOnNextRow, atPrompt } from './buffer.js';
-import { isResuming, resumeTyped, cancelResume, wasResumed, CANCEL_KEY } from './resuming.js';
+import { isResuming, resumeTyped, cancelResume, keptAgent, wasResumed, CANCEL_KEY } from './resuming.js';
 import { agentKind, agentOfProgram } from './agentkinds.js';
 import { clipboardKey, wireClipboard, PASTE_LABEL } from './termclipboard.js';
 import { selectionKey } from './keyselect.js';
@@ -728,6 +728,7 @@ export function prepareStart(tab, fields) {
  */
 export function keptRunning(tab) {
   Object.assign(startOf(tab), { output: null, command: null, resumeSession: null, done: true });
+  keptAgent(tab);
 }
 
 /**
