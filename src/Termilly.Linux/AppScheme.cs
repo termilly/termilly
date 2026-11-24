@@ -34,7 +34,11 @@ internal static class AppScheme
     /// <summary>Where the background pictures are served (Features/BackgroundPictures.cs): app://localhost/backgrounds/name.</summary>
     public const string PicturesPath = BackgroundPictures.FolderName;
 
-    public static Stream? Serve(string url, ThemeWindowColors colors, out string contentType)
+    /// <param name="colors">
+    /// The theme's colours, asked for the page alone: finding them may ask the system for its light or dark mode (a
+    /// program run), too slow for each of the page's few hundred files.
+    /// </param>
+    public static Stream? Serve(string url, Func<ThemeWindowColors> colors, out string contentType)
     {
         contentType = MediaTypes.PlainText;
         var path = Uri.TryCreate(url, UriKind.Absolute, out var uri) ? Uri.UnescapeDataString(uri.AbsolutePath).TrimStart('/') : "";
@@ -52,7 +56,8 @@ internal static class AppScheme
         {
             // On Linux the window is see-through (LinuxWindow) and the page rounds its corners (app.css, data-corners).
             var corners = OperatingSystem.IsLinux() ? $" data-corners=\"{RoundCorners}\"" : "";
-            var page = File.ReadAllText(file).Replace("<html>", $"<html data-theme=\"{(colors.Light ? "light" : "dark")}\"{corners} style=\"--bg:{colors.Background};--text:{colors.Text};--accent:{colors.Accent}\">");
+            var palette = colors();
+            var page = File.ReadAllText(file).Replace("<html>", $"<html data-theme=\"{(palette.Light ? "light" : "dark")}\"{corners} style=\"--bg:{palette.Background};--text:{palette.Text};--accent:{palette.Accent}\">");
             return new MemoryStream(Encoding.UTF8.GetBytes(page));
         }
         return File.OpenRead(file);
