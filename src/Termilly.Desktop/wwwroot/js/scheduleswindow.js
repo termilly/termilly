@@ -21,7 +21,7 @@ import {
 } from './schedules.js';
 import { formHtml, rowHtml, runsHtml, reportHtml, planOf, WHEN_FIELD, WHEN_KIND_SEGMENT, ALL_DAY_FIELD } from './scheduleview.js';
 import { planClicked } from './planrows.js';
-import { newSchedule, minutesOf, nextRun, describeAt, isAllDay, hasEnded, WHAT, WHERE, WHEN } from './schedulerules.js';
+import { newSchedule, minutesOf, nextRun, describeAt, isAllDay, hasEnded, reachesProduction, WHAT, WHERE, WHEN } from './schedulerules.js';
 
 const NAME = 'Schedules';
 const WINDOW_KEY = 'schedules';
@@ -33,7 +33,6 @@ const ACTION = Object.freeze({
 const VIEW = Object.freeze({ form: 'form', runs: 'runs' });
 /** How much of the main window it takes the first time. */
 const FIRST_SHARE = 0.8;
-const PROD_TAG = 'prod';
 const KEY_SAVE = 'KeyS';
 /** Boxes that show or hide more of the form. */
 const REDRAWS = new Set(['allowChanges', 'allowAll', 'toNotepad', 'toFile']);
@@ -329,13 +328,6 @@ function dayChose(button) {
   renderState();
 }
 
-/** Whether a schedule goes to production, where nobody will be there to see what it types. */
-function reachesProduction() {
-  const s = /** @type {Schedule} */ (editing);
-  if (s.where === WHERE.terminal) return [...state.tabs.values()].some(t => t.tags.includes(PROD_TAG) && (s.terminal === `#${PROD_TAG}` || t.name === s.terminal));
-  return !!state.profiles.find(p => p.id === s.profile)?.tags?.includes(PROD_TAG);
-}
-
 const confirmProduction = () => modal('confirm prod-confirm', `
   <h3>Run this on production, on time?</h3>
   <p class="dialog-sub">It’ll run with nobody there, each time, without asking again.</p>
@@ -347,7 +339,8 @@ const confirmProduction = () => modal('confirm prod-confirm', `
 async function save() {
   const s = editing;
   if (!s || problemOf(s) || !isDirty()) return;
-  if (reachesProduction() && !(await confirmProduction())) return;
+  // Production is where nobody will be there to see what it types.
+  if (reachesProduction(s, [...state.tabs.values()], state.profiles) && !(await confirmProduction())) return;
   if (s !== editing) return;
   s.name = s.name.trim() || (s.what === WHAT.snippet ? s.snippet : (s.what === WHAT.agent ? s.prompt : s.command).trim().split(/\s+/).slice(0, NAME_WORDS).join(' '));
   saveSchedule(s);
@@ -362,8 +355,10 @@ async function removeShown() {
     render();
     return;
   }
-  if (!(await confirmDanger(`Delete ${editing.name}?`, 'Its reports go with it.', 'Delete')) || !editing) return;
-  removeSchedule(editing.id);
+  const id = editing.id;
+  // An agent may change what's shown while the user is asked: only the schedule asked about goes.
+  if (!(await confirmDanger(`Delete ${editing.name}?`, 'Its reports go with it.', 'Delete')) || editing?.id !== id) return;
+  removeSchedule(id);
   select(schedules()[0]?.id ?? null);
 }
 
@@ -508,6 +503,8 @@ onBox.addEventListener('change', () => {
   if (!editing || isNew) return;
   setScheduleOn(editing.id, onBox.checked);
   editing.on = onBox.checked;
+  // It's saved at once, so it's no change of the user's still to save.
+  shownAs = snapshot({ ...JSON.parse(shownAs), on: onBox.checked });
   editing.nextAt = saved()?.nextAt ?? null;
 });
 

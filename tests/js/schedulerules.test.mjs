@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  nextRun, minutesOf, describeWhen, describeAt, describeTook, statusOf, summaryOf, shouldTell, sortRuns, clearRuns, newSchedule, RUN, WHEN, UNIT, NOTIFY,
+  nextRun, minutesOf, describeWhen, describeAt, describeTook, statusOf, summaryOf, shouldTell, sortRuns, clearRuns, newSchedule, reachesProduction, RUN, WHEN, UNIT, NOTIFY, WHERE,
 } from '../../src/Termilly.Desktop/wwwroot/js/schedulerules.js';
 
 /** Thursday 5 November 2026. @param {number} hour @param {number} [minute] @param {number} [day] */
@@ -148,4 +148,17 @@ test('Clear takes a schedule\'s ended runs only: one going on and other schedule
   const { keep, gone } = clearRuns(runs, 's');
   assert.deepEqual(keep.map(r => r.id), ['a', 'b', 'e']);
   assert.deepEqual(gone.map(r => r.id), ['c', 'd']);
+});
+
+test('a schedule reaches production through a prod shell, or a prod terminal it names', () => {
+  const profiles = [{ id: 'p', tags: ['prod'] }, { id: 'd', tags: ['dev'] }];
+  const tabs = [{ name: 'web', tags: ['prod'] }, { name: 'local', tags: [] }];
+  const hidden = profile => ({ ...newSchedule('s'), where: WHERE.hidden, profile });
+  const inTerminal = terminal => ({ ...newSchedule('s'), where: WHERE.terminal, terminal });
+  assert.equal(reachesProduction(hidden('p'), tabs, profiles), true);
+  assert.equal(reachesProduction(hidden('d'), tabs, profiles), false);
+  assert.equal(reachesProduction(hidden(null), tabs, profiles), false);
+  assert.equal(reachesProduction(inTerminal('web'), tabs, profiles), true);
+  assert.equal(reachesProduction(inTerminal('#prod'), tabs, profiles), true);
+  assert.equal(reachesProduction(inTerminal('local'), tabs, profiles), false);
 });

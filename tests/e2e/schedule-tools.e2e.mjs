@@ -74,6 +74,37 @@ step('a changed agent prompt only reads files again; a new name keeps what the u
   const s = await stored(added.id);
   assert.equal(s.prompt, 'Look at the diff and fix it');
   assert.equal(s.allowChanges, false);
+  // Another folder: what the user allowed was for this one.
+  const allow = id => app.eval(async (t, id) => {
+    const { scheduleById, saveSchedule } = await t.import('schedules.js');
+    saveSchedule({ .../** @type {any} */ (scheduleById(id)), allowChanges: true, allowAll: true });
+  }, id);
+  await allow(added.id);
+  await call('schedule_edit', { schedule: added.id, cwd: '/somewhere/else' });
+  assert.deepEqual([(await stored(added.id)).allowChanges, (await stored(added.id)).allowAll], [false, false]);
+});
+
+step('on_start: false alone keeps the time; a production schedule keeps what it runs', async () => {
+  const added = await call('schedule_add', { name: 'Timed', command: 'echo t', at: '06:45' });
+  await call('schedule_edit', { schedule: added.id, on_start: false });
+  assert.deepEqual([(await stored(added.id)).when.kind, (await stored(added.id)).when.at], ['time', '06:45']);
+  await app.eval(async (t, id) => {
+    const { state } = await t.import('store.js');
+    const { scheduleById, saveSchedule } = await t.import('schedules.js');
+    state.profiles.push(/** @type {any} */ ({ id: 'prod-shell', name: 'Prod', tags: ['prod'] }));
+    saveSchedule({ .../** @type {any} */ (scheduleById(id)), profile: 'prod-shell' });
+  }, added.id);
+  assert.match((await call('schedule_edit', { schedule: added.id, command: 'rm -rf /' })).error, /runs on production/);
+  assert.match((await call('schedule_edit', { schedule: added.id, cwd: '/' })).error, /runs on production/);
+  assert.equal((await stored(added.id)).command, 'echo t');
+  // Its name and time are still the agent's to change.
+  await call('schedule_edit', { schedule: added.id, name: 'Timed, renamed', at: '07:00' });
+  assert.equal((await stored(added.id)).name, 'Timed, renamed');
+  await call('schedule_delete', { schedule: added.id });
+  await app.eval(async t => {
+    const { state } = await t.import('store.js');
+    state.profiles = state.profiles.filter(p => p.id !== 'prod-shell');
+  });
 });
 
 step('delete_schedule deletes it, and the open Schedules window follows', async () => {

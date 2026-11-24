@@ -8,7 +8,7 @@
 import { state, newId, lastFolderOf, installedAgents } from './store.js';
 import { addApiMethods } from './api.js';
 import { schedules, scheduleById, runsOf, saveSchedule, removeSchedule, runNow, setScheduleOn } from './schedules.js';
-import { newSchedule, describeWhen, describeAt, WHAT, WHEN, UNIT, DAY_NAMES, minutesOf } from './schedulerules.js';
+import { newSchedule, describeWhen, describeAt, reachesProduction, WHAT, WHEN, UNIT, DAY_NAMES, minutesOf } from './schedulerules.js';
 import { AGENT_KIND } from './constants.js';
 import { reviewersOf } from './schedulereview.js';
 import { allSnippets } from './snippets.js';
@@ -97,7 +97,7 @@ function whatOf(args) {
   if (what === WHAT.agent) {
     const prompt = String(args.prompt ?? '').trim();
     if (!prompt) throw new Error('An agent schedule needs its prompt.');
-    return { what, prompt, agent: agentOf(args.agent), allowChanges: false, allowAll: false };
+    return { what, prompt, agent: agentOf(args.agent), ...READ_ONLY };
   }
   const command = String(args.command ?? '').trim();
   if (!command) throw new Error('A command schedule needs its command.');
@@ -117,11 +117,13 @@ function addSchedule(args) {
   return describeSchedule(/** @type {Schedule} */ (scheduleById(schedule.id)));
 }
 
+/** The arguments that pick a kind of when: at, every or on_start. Given, the old kind's own fields don't carry over. */
+const WHEN_KIND_FIELDS = ['at', 'every', 'on_start'];
 /** The arguments that say what a schedule runs, and when. */
 const WHAT_FIELDS = ['what', 'command', 'snippet', 'prompt', 'agent'];
-const WHEN_FIELDS = ['at', 'days', 'every', 'unit', 'on_start'];
-/** The ones among them that pick another kind of when: the old kind's own fields don't carry over. */
-const WHEN_KIND_FIELDS = ['at', 'every', 'on_start'];
+const WHEN_FIELDS = [...WHEN_KIND_FIELDS, 'days', 'unit'];
+/** What a changed prompt, agent or folder makes of what the user allowed an agent schedule: reading files only. */
+const READ_ONLY = Object.freeze({ allowChanges: false, allowAll: false });
 
 /**
  * The arguments among fields that were given.
@@ -156,14 +158,26 @@ function editedWhat(schedule, changed) {
 }
 
 /**
- * What an edit makes of a schedule's when: a new kind (at, every or on_start) starts afresh, keeping only its days and unit.
+ * What an edit makes of a schedule's when: a new kind (at, every or on_start: true) starts afresh, keeping only its days
+ * and unit. on_start: false alone keeps a time or a repeat as it is.
  * @param {ScheduleWhen} when
  * @param {Record<string, unknown>} changed
  */
 function editedWhen(when, changed) {
-  const newKind = WHEN_KIND_FIELDS.some(k => k in changed);
+  const newKind = WHEN_KIND_FIELDS.some(k => k in changed && changed[k] !== false);
   const kept = newKind ? { days: whenArgsOf(when).days, unit: when.unit } : whenArgsOf(when);
   return whenOf({ ...kept, ...changed }, when);
+}
+
+/**
+ * Refuses to change what a schedule on production runs, or where: the user said yes to it running there with nobody
+ * watching, and an agent asking now can't ask them the same.
+ * @param {Schedule} schedule
+ */
+function refuseOnProduction(schedule) {
+  if (reachesProduction(schedule, [...state.tabs.values()], state.profiles)) {
+    throw new Error(`${schedule.name} runs on production: the user changes what it runs, or where, in the Schedules window.`);
+  }
 }
 
 /**
@@ -180,9 +194,10 @@ function editSchedule(args) {
     changes.name = String(args.name).trim();
     if (!changes.name) throw new Error('A schedule needs a name.');
   }
+  if (Object.keys(whatChanged).length || args.cwd != null) refuseOnProduction(schedule);
   if (Object.keys(whatChanged).length) Object.assign(changes, editedWhat(schedule, whatChanged));
   if (Object.keys(whenChanged).length) changes.when = editedWhen(schedule.when, whenChanged);
-  if (args.cwd != null) changes.cwd = String(args.cwd);
+  if (args.cwd != null) Object.assign(changes, { cwd: String(args.cwd), ...READ_ONLY });
   if (args.on != null) changes.on = args.on !== false;
   if (!Object.keys(changes).length) throw new Error('Say what to change: name, what it runs, when, cwd or on.');
   saveSchedule({ ...schedule, ...changes });
