@@ -256,7 +256,11 @@ public sealed class UnixPty : IPty
         private readonly FileStream _inner = new(new SafeFileHandle((IntPtr)master, ownsHandle: false), FileAccess.Read, 1);
         /// <summary>Held while reading or waiting to: closing waits for it, so the terminal never closes under a read.</summary>
         private readonly Lock _gate = new();
-        private bool _closed;
+        /// <summary>
+        /// Set before closing takes the gate: a reader seeing it stops rather than taking the gate again (it isn't fair,
+        /// and a reader that always takes it back would keep the terminal open).
+        /// </summary>
+        private int _closing;
 
         public override bool CanRead => true;
         public override bool CanSeek => false;
@@ -270,7 +274,7 @@ public sealed class UnixPty : IPty
             {
                 lock (_gate)
                 {
-                    if (_closed)
+                    if (Volatile.Read(ref _closing) == 1)
                     {
                         return 0;
                     }
@@ -307,16 +311,12 @@ public sealed class UnixPty : IPty
         /// <summary>Closes the terminal once no read is waiting on it (one waiting for output looks again within WaitMs).</summary>
         protected override void Dispose(bool disposing)
         {
-            if (disposing)
+            if (disposing && Interlocked.Exchange(ref _closing, 1) == 0)
             {
                 lock (_gate)
                 {
-                    if (!_closed)
-                    {
-                        _closed = true;
-                        _inner.Dispose();
-                        _ = close(master);
-                    }
+                    _inner.Dispose();
+                    _ = close(master);
                 }
             }
             base.Dispose(disposing);
