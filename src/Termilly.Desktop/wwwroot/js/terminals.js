@@ -682,7 +682,7 @@ onHost(HOST.startFolder, m => {
  * What a terminal does as its shell starts (tab.start); see startOf.
  * @typedef {{ output: { lines: string[], closedAt: number, resurrected?: boolean, scroll?: number | null } | null,
  *   command: string | null, resumeSession: string | null, resumeKind?: string | null, done: boolean,
- *   typed?: { command: string, at: number }, afterHost?: string | null }} ShellStart
+ *   typed?: { command: string, at: number }, afterHost?: string | null, resumeFolder?: string | null }} ShellStart
  */
 
 /**
@@ -716,7 +716,7 @@ export function holdStart(tab, until) {
  * Sets what a terminal does as its shell starts (any of output, command, resumeSession): from a layout, the API, a
  * reopened terminal, a restart (snapshot.js) or a reconnect.
  * @param {Tab} tab
- * @param {{ output?: any, command?: string | null, resumeSession?: string | null, resumeKind?: string | null, afterHost?: string | null }} fields
+ * @param {{ output?: any, command?: string | null, resumeSession?: string | null, resumeKind?: string | null, afterHost?: string | null, resumeFolder?: string | null }} fields
  */
 export function prepareStart(tab, fields) {
   Object.assign(startOf(tab), Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== undefined)));

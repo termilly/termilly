@@ -13,7 +13,7 @@ import { markHibernated } from './hibernate.js';
 import { startResuming } from './resuming.js';
 import { AGENT_KIND, SETTING_VALUES } from './constants.js';
 import { showClosing, painted } from './closing.js';
-import { resumeCommand } from './resume.js';
+import { resumeCommand, attachFor } from './resume.js';
 
 /** The choices of the settings used here (C#'s SettingValues). */
 const { restoreSession } = SETTING_VALUES;
@@ -55,7 +55,7 @@ function snapshot() {
       lines,
       scroll: waiting ? (waiting.scroll ?? null) : scrolledBack(tab, lines), // null at the bottom
       agentSession: session && SESSION_ID.test(session) ? session : null,
-      agentFolder: tab.agent?.folder ?? tab.hibernated?.folder ?? null,
+      agentFolder: tab.agent?.folder ?? tab.hibernated?.folder ?? tab.start?.resumeFolder ?? null,
       // The agent of the session kept, from the same place as the session.
       agentKind: (tab.agent?.session ? tab.agent.kind : tab.hibernated?.session ? tab.hibernated.kind : tab.start?.resumeKind) ?? AGENT_KIND.claude,
       hibernated: !tab.agent?.session && !!tab.hibernated,
@@ -96,8 +96,9 @@ onHost(HOST.snapshotRequest, async () => {
 export function resumeAfterHost(tab) {
   const agent = tab.agent;
   if (!agent?.hadTurn || !agent.session || !SESSION_ID.test(agent.session)) return;
-  const kind = agent.kind === AGENT_KIND.codex ? AGENT_KIND.codex : AGENT_KIND.claude;
   const server = isSsh(tab);
+  if (server && attachFor(tab)) return; // in tmux or screen on the server: the agent runs on, and the reconnect attaches to it
+  const kind = agent.kind === AGENT_KIND.codex ? AGENT_KIND.codex : AGENT_KIND.claude;
   if (agent.folder) {
     tab.lastCwd = agent.folder;
     if (server) tab.remoteCwd = agent.folder;
@@ -107,7 +108,7 @@ export function resumeAfterHost(tab) {
   const back = server ? resumeCommand(agent.folder, null) : null;
   const resume = resumeAgentCommand(agent.session, kind);
   const command = back ? `${back}; ${resume}` : resume;
-  prepareStart(tab, { resumeSession: agent.session, resumeKind: kind, command, afterHost: command });
+  prepareStart(tab, { resumeSession: agent.session, resumeKind: kind, resumeFolder: agent.folder ?? null, command, afterHost: command });
 }
 
 /**
