@@ -189,7 +189,10 @@ internal sealed class Host
                 lock (shell.OutputGate)
                 {
                     shell.Output.Add(text);
-                    Send(new HostEvent.Output(shell.Id, text));
+                    if (IsCurrent(shell))
+                    {
+                        Send(new HostEvent.Output(shell.Id, text));
+                    }
                 }
             }
         }
@@ -204,12 +207,18 @@ internal sealed class Host
         {
             shell.ExitCode = HostEvent.UnknownExitCode;
         }
-        if (_shells.ContainsKey(shell.Id))
+        if (IsCurrent(shell))
         {
             Send(new HostEvent.Exited(shell.Id, shell.ExitCode ?? HostEvent.UnknownExitCode));
         }
         _idleSince = DateTime.UtcNow;
     }
+
+    /// <summary>
+    /// Whether this shell is still its terminal's: one replaced (a restart) or ended may still be closing, and what it
+    /// says last isn't the new shell's.
+    /// </summary>
+    private bool IsCurrent(HostedShell shell) => _shells.TryGetValue(shell.Id, out var current) && current == shell;
 
     /// <summary>To the attached window, if there is one; output for no one is only kept in the rings.</summary>
     private void Send(HostEvent message)

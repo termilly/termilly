@@ -38,16 +38,15 @@ public sealed class UnixPty : IPty
             TerminalVariables.WindowsTerminalProfile, "ALACRITTY_WINDOW_ID", "ALACRITTY_SOCKET"];
     private static readonly string[] OtherTerminalPrefixes =
         ["GNOME_TERMINAL_", "KONSOLE_", "KITTY_", "TILIX_", "WEZTERM_", "TERMINATOR_", "ITERM_"];
-    private readonly int _master;
+    private readonly TerminalStream _output;
     private readonly TaskCompletionSource<int> _exited = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private int _disposed;
 
     private UnixPty(int master, int pid)
     {
-        _master = master;
         ProcessId = pid;
         // One stream each way over the same terminal (a duplicate descriptor, so each can close on its own).
-        Output = new TerminalStream(master);
+        _output = new TerminalStream(master);
         Input = new FileStream(new SafeFileHandle((IntPtr)dup(master), ownsHandle: true), FileAccess.Write, 1);
         var waiter = new Thread(WaitForExit) { IsBackground = true, Name = $"pty wait {pid}" };
         waiter.Start();
@@ -55,7 +54,7 @@ public sealed class UnixPty : IPty
 
     public int ProcessId { get; }
     public Stream Input { get; }
-    public Stream Output { get; }
+    public Stream Output => _output;
     public Task<int> Exited => _exited.Task;
 
     public static UnixPty Start(PtyOptions options)
@@ -154,10 +153,7 @@ public sealed class UnixPty : IPty
 
     public void Resize(int columns, int rows)
     {
-        if (Volatile.Read(ref _disposed) == 0)
-        {
-            SetSize(_master, columns, rows); // the kernel tells the shell (SIGWINCH)
-        }
+        _output.WithTerminal(master => SetSize(master, columns, rows)); // the kernel tells the shell (SIGWINCH)
     }
 
     public void Dispose()
@@ -256,6 +252,9 @@ public sealed class UnixPty : IPty
         private readonly FileStream _inner = new(new SafeFileHandle((IntPtr)master, ownsHandle: false), FileAccess.Read, 1);
         /// <summary>Held while reading or waiting to: closing waits for it, so the terminal never closes under a read.</summary>
         private readonly Lock _gate = new();
+        /// <summary>Held while the terminal is used for something else (its size) and while it closes, never for long.</summary>
+        private readonly Lock _descriptor = new();
+        private bool _closed;
         /// <summary>
         /// Set before closing takes the gate: a reader seeing it stops rather than taking the gate again (it isn't fair,
         /// and a reader that always takes it back would keep the terminal open).
@@ -300,6 +299,18 @@ public sealed class UnixPty : IPty
             }
         }
 
+        /// <summary>Uses the terminal unless it's closed (its number may already be another file's by then).</summary>
+        public void WithTerminal(Action<int> use)
+        {
+            lock (_descriptor)
+            {
+                if (!_closed)
+                {
+                    use(master);
+                }
+            }
+        }
+
         public override void Flush()
         {
         }
@@ -316,7 +327,11 @@ public sealed class UnixPty : IPty
                 lock (_gate)
                 {
                     _inner.Dispose();
-                    _ = close(master);
+                    lock (_descriptor)
+                    {
+                        _closed = true;
+                        _ = close(master);
+                    }
                 }
             }
             base.Dispose(disposing);
