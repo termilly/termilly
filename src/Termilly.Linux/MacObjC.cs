@@ -38,10 +38,6 @@ internal static class MacObjC
         public const string Release = "release";
     }
 
-    /// <summary>A rectangle as Cocoa gives and takes it (CGRect / NSRect).</summary>
-    [StructLayout(LayoutKind.Sequential)]
-    public readonly record struct Rect(double X, double Y, double Width, double Height);
-
     /// <summary>Loads AppKit and WebKit, whose classes are looked up by name.</summary>
     public static void Load()
     {
