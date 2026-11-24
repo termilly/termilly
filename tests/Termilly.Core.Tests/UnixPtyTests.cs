@@ -30,7 +30,8 @@ public sealed class UnixPtyTests
         using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(seconds));
         while (!seen.ToString().Contains(text, StringComparison.Ordinal))
         {
-            var read = await pty.Output.ReadAsync(buffer, cancel.Token);
+            // The token can't stop a read already waiting: the wait for it gives up instead (the test fails, not hangs).
+            var read = await pty.Output.ReadAsync(buffer, cancel.Token).AsTask().WaitAsync(cancel.Token);
             if (read == 0)
             {
                 break;
@@ -158,8 +159,9 @@ public sealed class UnixPtyTests
         }
         var pty = PseudoTerminal.Start(new PtyOptions("/bin/sh", 80, 24));
         var seen = new StringBuilder();
-        // A program that outlives its shell and ignores the hang-up, as an agent left running can.
-        await SendAsync(pty, "(trap '' HUP; exec sleep 60) & echo held-$!-$((1+1))\n");
+        // A program that outlives its shell and ignores the hang-up, as an agent left running can. macOS's sh (bash)
+        // would take $! as history: that's off first, on a line of its own (sh elsewhere just says it has no -H).
+        await SendAsync(pty, "set +H 2>/dev/null\n(trap '' HUP; exec sleep 60) & echo held-$!-$((1+1))\n");
         var held = int.Parse(Regex.Match(await ReadUntilAsync(pty, "-2\r", seen), @"held-(\d+)-2").Groups[1].Value, CultureInfo.InvariantCulture);
         try
         {
