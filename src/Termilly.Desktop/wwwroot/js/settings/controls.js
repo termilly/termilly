@@ -65,6 +65,15 @@ export const seg = (key, options, how = {}) => `
     `<button data-value="${value}">${icon ?? ''}${label}</button>`).join('')}</span>`;
 
 /**
+ * A choice of colours bound to a setting, each a small square with its name on hover. Options: [value, name, CSS colour].
+ * @param {string} key
+ * @param {Array<[string, string, string]>} options
+ */
+export const swatchChoice = (key, options) => `
+  <span class="seg swatch-choice" data-setting="${key}">${options.map(([value, name, color]) =>
+    `<button data-value="${value}" title="${escapeHtml(name)}" aria-label="${escapeHtml(name)}"><i style="background:${escapeHtml(color)}"></i></button>`).join('')}</span>`;
+
+/**
  * Choices for a segmented control from a setting's list of values, each with its label.
  * @template T
  * @param {readonly T[]} values

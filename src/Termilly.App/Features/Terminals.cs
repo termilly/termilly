@@ -182,7 +182,7 @@ internal sealed class TerminalHandler(
         foreach (var id in hosted)
         {
             terminals.Forget(id);
-            page.Post(new ToPage.Exit(id, HostedSession.EndedCode));
+            page.Post(new ToPage.Exit(id, HostedSession.EndedCode, Ended: true));
         }
     }
 

@@ -7,12 +7,13 @@
 
 import { PAGE, HOST } from './protocol.js';
 import { send, onHost } from './host.js';
-import { state, finalSave, resumeAgentCommand } from './store.js';
+import { state, finalSave, resumeAgentCommand, isSsh } from './store.js';
 import { bufferLines, scrolledBack, prepareStart, isHeld } from './terminals.js';
 import { markHibernated } from './hibernate.js';
 import { startResuming } from './resuming.js';
 import { AGENT_KIND, SETTING_VALUES } from './constants.js';
 import { showClosing, painted } from './closing.js';
+import { resumeCommand, attachFor } from './resume.js';
 
 /** The choices of the settings used here (C#'s SettingValues). */
 const { restoreSession } = SETTING_VALUES;
@@ -54,7 +55,7 @@ function snapshot() {
       lines,
       scroll: waiting ? (waiting.scroll ?? null) : scrolledBack(tab, lines), // null at the bottom
       agentSession: session && SESSION_ID.test(session) ? session : null,
-      agentFolder: tab.agent?.folder ?? tab.hibernated?.folder ?? null,
+      agentFolder: tab.agent?.folder ?? tab.hibernated?.folder ?? tab.start?.resumeFolder ?? null,
       // The agent of the session kept, from the same place as the session.
       agentKind: (tab.agent?.session ? tab.agent.kind : tab.hibernated?.session ? tab.hibernated.kind : tab.start?.resumeKind) ?? AGENT_KIND.claude,
       hibernated: !tab.agent?.session && !!tab.hibernated,
@@ -85,6 +86,30 @@ onHost(HOST.snapshotRequest, async () => {
   send(PAGE.snapshotSave, { snapshot: snapshot(), final: true });
   showClosing('Closing the terminals');
 });
+
+/**
+ * Its shell ended with the background host (Settings › Workspaces turned it off or stopped its shells): an agent that
+ * had a conversation there resumes in its folder when the terminal starts again, at a key, a reconnect or Termilly's
+ * next start (the snapshot keeps tab.start's session). Called before the exit forgets the agent.
+ * @param {Tab} tab
+ */
+export function resumeAfterHost(tab) {
+  const agent = tab.agent;
+  if (!agent?.hadTurn || !agent.session || !SESSION_ID.test(agent.session)) return;
+  const server = isSsh(tab);
+  if (server && attachFor(tab)) return; // in tmux or screen on the server: the agent runs on, and the reconnect attaches to it
+  const kind = agent.kind === AGENT_KIND.codex ? AGENT_KIND.codex : AGENT_KIND.claude;
+  if (agent.folder) {
+    tab.lastCwd = agent.folder;
+    if (server) tab.remoteCwd = agent.folder;
+    else tab.cwd = agent.folder;
+  }
+  // On a server the shell starts in the login folder: back to the agent's first (a reconnect goes there anyway).
+  const back = server ? resumeCommand(agent.folder, null) : null;
+  const resume = resumeAgentCommand(agent.session, kind);
+  const command = back ? `${back}; ${resume}` : resume;
+  prepareStart(tab, { resumeSession: agent.session, resumeKind: kind, resumeFolder: agent.folder ?? null, command, afterHost: command });
+}
 
 /**
  * What a terminal's profile types at its first prompt (Claude Code: claude), or null.

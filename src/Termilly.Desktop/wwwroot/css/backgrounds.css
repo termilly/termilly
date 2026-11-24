@@ -148,3 +148,11 @@
 .bg-thumb.empty { border-style: dashed; }
 .bg-error { margin: 6px 0 0; color: var(--danger-text); }
 .bg-error[hidden] { display: none; }
+
+/* ---- Settings › Appearance › Background: Theme gradient's colours, each a square of the theme's own ---- */
+
+.seg.swatch-choice { flex-wrap: wrap; }
+.seg.swatch-choice button { display: flex; padding: 3px; }
+.seg.swatch-choice i { width: 16px; height: 16px; border-radius: 4px; box-shadow: inset 0 0 0 1px var(--border-strong); }
+/* The one picked: a ring in the text's colour, as the other colour pickers have, plain on every swatch. */
+.seg.swatch-choice button.on { background: none; box-shadow: inset 0 0 0 2px var(--text-strong); }

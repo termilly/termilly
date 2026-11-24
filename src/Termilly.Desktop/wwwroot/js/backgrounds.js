@@ -11,7 +11,7 @@ import { state, on, emit, activeWs, EVENTS } from './store.js';
 import { BACKGROUND } from './constants.js';
 import { cssString } from './ui.js';
 
-const { effect: EFFECT, opacity: OPACITY, fit: FIT, behind: BEHIND, workspaceKind: KIND, gradient: GRADIENT } = BACKGROUND;
+const { effect: EFFECT, opacity: OPACITY, fit: FIT, behind: BEHIND, workspaceKind: KIND, gradient: GRADIENT, gradientColor: GRADIENT_COLOR } = BACKGROUND;
 
 /** Two soft lines across the gradient's lower part, as in a desktop wallpaper, stretched to the window at any shape. */
 const GLOW_LINES = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" preserveAspectRatio="none">'
@@ -19,20 +19,53 @@ const GLOW_LINES = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http:
   + '<path d="M0 800 C 520 700, 1020 940, 1600 760" stroke="#ffffff" stroke-width="2" fill="none" opacity=".18" vector-effect="non-scaling-stroke"/></svg>');
 
 /**
- * Theme gradient (Settings): drawn from the theme's variables, so it follows the theme on screen, imported ones too:
- * its accent lit at the top left fading to a deep shade of its background, its magenta glowing at the bottom right.
- * It goes behind the whole window, in place of any picture; css/backgrounds.css frosts it.
- * @type {Readonly<Backdrop>}
+ * The theme's variable for each colour Theme gradient can be painted with; the terminal colours are the theme's
+ * own ANSI ones, which every theme (imported ones too) sets as its code colours.
+ * @type {Readonly<Record<string, string>>}
  */
-const THEME_GRADIENT = Object.freeze({
-  image: [
-    `url('${GLOW_LINES}')`,
-    'radial-gradient(50% 50% at 80% 75%, color-mix(in srgb, var(--hl-title) 85%, transparent), transparent)',
-    'radial-gradient(70% 70% at 25% 30%, color-mix(in srgb, var(--accent) 65%, var(--bg)), color-mix(in srgb, var(--accent) 12%, color-mix(in srgb, var(--bg) 70%, #000)))',
-  ].join(', '),
-  fit: FIT.fill,
-  behind: BEHIND.window,
+export const GRADIENT_COLOR_VAR = Object.freeze({
+  [GRADIENT_COLOR.accent]: '--accent',
+  [GRADIENT_COLOR.background]: '--bg',
+  [GRADIENT_COLOR.surface]: '--surface',
+  [GRADIENT_COLOR.text]: '--text',
+  [GRADIENT_COLOR.muted]: '--muted',
+  [GRADIENT_COLOR.red]: '--hl-keyword',
+  [GRADIENT_COLOR.yellow]: '--hl-type',
+  [GRADIENT_COLOR.green]: '--hl-tag',
+  [GRADIENT_COLOR.cyan]: '--hl-attr',
+  [GRADIENT_COLOR.blue]: '--hl-number',
+  [GRADIENT_COLOR.magenta]: '--hl-title',
 });
+
+/**
+ * A gradient colour as CSS, or the fallback's when the setting names none.
+ * @param {string | undefined} name
+ * @param {string} fallback
+ */
+const colorVar = (name, fallback) => `var(${GRADIENT_COLOR_VAR[name ?? ''] ?? GRADIENT_COLOR_VAR[fallback]})`;
+
+/**
+ * Theme gradient (Settings): drawn from the theme's variables, so it follows the theme on screen, imported ones too:
+ * the glow colour lit at the top left fading to a deep shade of the base, the second glow at the bottom right (by
+ * default the accent, the background and magenta). It goes behind the whole window, in place of any picture;
+ * css/backgrounds.css frosts it.
+ * @param {BackgroundSettings} settings
+ * @returns {Backdrop}
+ */
+function themeGradient(settings) {
+  const glow = colorVar(settings.gradientGlow, GRADIENT_COLOR.defaultGlow);
+  const base = colorVar(settings.gradientBase, GRADIENT_COLOR.defaultBase);
+  const second = colorVar(settings.gradientSecondGlow, GRADIENT_COLOR.defaultSecondGlow);
+  return {
+    image: [
+      `url('${GLOW_LINES}')`,
+      `radial-gradient(50% 50% at 80% 75%, color-mix(in srgb, ${second} 85%, transparent), transparent)`,
+      `radial-gradient(70% 70% at 25% 30%, color-mix(in srgb, ${glow} 65%, ${base}), color-mix(in srgb, ${glow} 12%, color-mix(in srgb, ${base} 70%, #000)))`,
+    ].join(', '),
+    fit: FIT.fill,
+    behind: BEHIND.window,
+  };
+}
 
 /**
  * The gradients a workspace can have, drawn here (C#'s BackgroundValues.Gradient names them).
@@ -139,8 +172,9 @@ export function applyBackdrop() {
   if (!settings) return;
   // Never under Theme gradient, which covers the whole window (BackgroundSettings.SeeThrough decides the same).
   const seeThrough = settings.opacity < OPACITY.max && !settings.themeGradient;
-  const screen = settings.themeGradient ? THEME_GRADIENT : screenBackdrop();
-  const detached = settings.themeGradient ? THEME_GRADIENT : settingsBackdrop();
+  const gradient = settings.themeGradient ? themeGradient(settings) : null;
+  const screen = gradient ?? screenBackdrop();
+  const detached = gradient ?? settingsBackdrop();
   toggle(root, ROOT.themeGradient, settings.themeGradient);
   toggle(root, ROOT.seeThrough, seeThrough);
   toggle(root, ROOT.solidTerminals, settings.solidTerminals);

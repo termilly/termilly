@@ -98,7 +98,8 @@ internal static partial class ToPage
         public static string Type => "replay";
     }
 
-    internal sealed record Exit(string Id, int Code) : IHostMessage
+    /// <summary>A terminal's shell ended; <paramref name="Ended"/> when the background host ended it (Stop background shells).</summary>
+    internal sealed record Exit(string Id, int Code, bool Ended = false) : IHostMessage
     {
         public static string Type => "exit";
     }

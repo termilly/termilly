@@ -28,7 +28,11 @@ internal static class ClaudeHookSettings
         public const string Command = "command";
         public const string Timeout = "timeout";
         public const string Matcher = "matcher";
+        public const string View = "tui";
     }
+
+    /// <summary>Claude Code's classic view (its "tui" setting), drawn in the terminal's scrollback.</summary>
+    private const string ClassicView = "default";
 
     /// <summary>
     /// Writes the Claude Code settings file the shim passes with --settings. Claude Code runs hooks through Git
@@ -38,32 +42,46 @@ internal static class ClaudeHookSettings
     /// With <paramref name="statusLine"/>, Termilly's status line too (Termilly.Agent/StatusLine.cs): it passes the plan's
     /// usage limits on and then runs the user's own status line, so theirs still shows. Its padding and refresh interval
     /// are copied from the user's settings (<paramref name="userSettings"/>, ~/.claude/settings.json).
+    /// Claude Code's classic view too, unless the user picked a view there: its fullscreen one draws on the alternate
+    /// screen, which has no scrollback, so the terminal can't scroll back or keep its output (--settings wins over theirs).
     /// </remarks>
     public static void Write(string path, string hookExe, bool statusLine = false, string? userSettings = null)
     {
         var settings = new JsonObject { [Keys.Hooks] = Hooks($"\"{hookExe.Replace('\\', '/')}\" {HookCommands.Hook} {AgentHooks.Version}") };
+        var theirs = Read(userSettings);
+        if (theirs?[Keys.View] is null)
+        {
+            settings[Keys.View] = ClassicView;
+        }
         if (statusLine)
         {
             var line = new JsonObject { [Keys.Type] = Keys.Command, [Keys.Command] = $"\"{hookExe.Replace('\\', '/')}\" {HookCommands.StatusLine} {AgentHooks.Version}" };
-            try
+            if (theirs?[Keys.StatusLine] is JsonObject theirLine)
             {
-                if (userSettings is not null && File.Exists(userSettings) && JsonNode.Parse(File.ReadAllText(userSettings))?[Keys.StatusLine] is JsonObject theirs)
+                foreach (var name in CopiedFromTheirs)
                 {
-                    foreach (var name in CopiedFromTheirs)
+                    if (theirLine[name] is JsonValue value)
                     {
-                        if (theirs[name] is JsonValue value)
-                        {
-                            line[name] = value.DeepClone();
-                        }
+                        line[name] = value.DeepClone();
                     }
                 }
-            }
-            catch (Exception e) when (Storage.IsFileError(e) || e is JsonException)
-            {
             }
             settings[Keys.StatusLine] = line;
         }
         AppPaths.WriteAtomically(path, settings.ToJsonString(Indented));
+    }
+
+    /// <summary>The user's own Claude Code settings, or null when there are none or they can't be read.</summary>
+    private static JsonObject? Read(string? userSettings)
+    {
+        try
+        {
+            return userSettings is not null && File.Exists(userSettings) ? JsonNode.Parse(File.ReadAllText(userSettings)) as JsonObject : null;
+        }
+        catch (Exception e) when (Storage.IsFileError(e) || e is JsonException)
+        {
+            return null;
+        }
     }
 
     /// <summary>

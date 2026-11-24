@@ -86,6 +86,29 @@ internal static class BackgroundValues
         public const string Slate = "slate";
         public static readonly IReadOnlyList<string> All = [Aurora, Ember, Dusk, Ocean, Moss, Slate];
     }
+
+    /// <summary>
+    /// The theme's colours Theme gradient can be painted with, one for each of its parts (js/backgrounds.js maps each
+    /// to the theme's variable). The defaults paint it as before: the accent's glow, the background, magenta's glow.
+    /// </summary>
+    public static class GradientColor
+    {
+        public const string Accent = "accent";
+        public const string Background = "background";
+        public const string Surface = "surface";
+        public const string Text = "text";
+        public const string Muted = "muted";
+        public const string Red = "red";
+        public const string Yellow = "yellow";
+        public const string Green = "green";
+        public const string Cyan = "cyan";
+        public const string Blue = "blue";
+        public const string Magenta = "magenta";
+        public const string DefaultGlow = Accent;
+        public const string DefaultBase = Background;
+        public const string DefaultSecondGlow = Magenta;
+        public static readonly IReadOnlyList<string> All = [Accent, Background, Surface, Text, Muted, Red, Yellow, Green, Cyan, Blue, Magenta];
+    }
 }
 
 /// <summary>
@@ -105,6 +128,12 @@ internal sealed record BackgroundSettings
     /// place of a picture while on.
     /// </summary>
     public bool ThemeGradient { get; init; }
+    /// <summary>Theme gradient's glow at the top left, one of the theme's colours (BackgroundValues.GradientColor).</summary>
+    public string GradientGlow { get; init; } = BackgroundValues.GradientColor.DefaultGlow;
+    /// <summary>Theme gradient's colour underneath, darkened.</summary>
+    public string GradientBase { get; init; } = BackgroundValues.GradientColor.DefaultBase;
+    /// <summary>Theme gradient's glow at the bottom right.</summary>
+    public string GradientSecondGlow { get; init; } = BackgroundValues.GradientColor.DefaultSecondGlow;
     /// <summary>The picture's file in the backgrounds folder (<see cref="BackgroundPictures"/>), or none.</summary>
     public string? Picture { get; init; }
     public string Fit { get; init; } = BackgroundValues.Fit.Default;
@@ -123,6 +152,9 @@ internal sealed record BackgroundSettings
     {
         Opacity = Math.Clamp(Opacity, BackgroundValues.Opacity.Min, BackgroundValues.Opacity.Max),
         Effect = SettingChecks.OneOf(Effect, BackgroundValues.Effect.All, BackgroundValues.Effect.Default),
+        GradientGlow = SettingChecks.OneOf(GradientGlow, BackgroundValues.GradientColor.All, BackgroundValues.GradientColor.DefaultGlow),
+        GradientBase = SettingChecks.OneOf(GradientBase, BackgroundValues.GradientColor.All, BackgroundValues.GradientColor.DefaultBase),
+        GradientSecondGlow = SettingChecks.OneOf(GradientSecondGlow, BackgroundValues.GradientColor.All, BackgroundValues.GradientColor.DefaultSecondGlow),
         Picture = BackgroundPictures.IsName(Picture) ? Picture : null,
         Fit = SettingChecks.OneOf(Fit, BackgroundValues.Fit.All, BackgroundValues.Fit.Default),
         Dim = Math.Clamp(Dim, BackgroundValues.Dim.Min, BackgroundValues.Dim.Max),

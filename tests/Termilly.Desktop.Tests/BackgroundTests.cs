@@ -39,6 +39,24 @@ public sealed class BackgroundTests : IDisposable
     }
 
     [Fact]
+    public void Theme_gradient_is_painted_as_before_until_its_colours_are_picked()
+    {
+        var settings = new AppSettings().Normalize().Background;
+        Assert.Equal(BackgroundValues.GradientColor.Accent, settings.GradientGlow);
+        Assert.Equal(BackgroundValues.GradientColor.Background, settings.GradientBase);
+        Assert.Equal(BackgroundValues.GradientColor.Magenta, settings.GradientSecondGlow);
+    }
+
+    [Fact]
+    public void A_gradient_colour_the_theme_does_not_have_becomes_the_default()
+    {
+        var settings = new BackgroundSettings { GradientGlow = "plaid", GradientBase = "", GradientSecondGlow = BackgroundValues.GradientColor.Cyan }.Normalize();
+        Assert.Equal(BackgroundValues.GradientColor.DefaultGlow, settings.GradientGlow);
+        Assert.Equal(BackgroundValues.GradientColor.DefaultBase, settings.GradientBase);
+        Assert.Equal(BackgroundValues.GradientColor.Cyan, settings.GradientSecondGlow);
+    }
+
+    [Fact]
     public void Values_out_of_range_or_unknown_become_the_nearest_or_the_default()
     {
         var settings = new BackgroundSettings { Opacity = 5, Effect = "glass", Fit = "zoom", Dim = 500, Blur = -3, Behind = "desk" }.Normalize();
@@ -66,13 +84,14 @@ public sealed class BackgroundTests : IDisposable
     [Fact]
     public void The_group_saves_and_reads_back_as_the_page_sends_it()
     {
-        var values = JsonSerializer.SerializeToElement(new { opacity = 70, effect = "blur", picture = "0123456789abcdef.jpg", behind = "window", themeGradient = true });
+        var values = JsonSerializer.SerializeToElement(new { opacity = 70, effect = "blur", picture = "0123456789abcdef.jpg", behind = "window", themeGradient = true, gradientGlow = "blue" });
         var saved = new AppSettings().WithGroup("background", values).Background;
         Assert.Equal(70, saved.Opacity);
         Assert.Equal(BackgroundValues.Effect.Blur, saved.Effect);
         Assert.Equal("0123456789abcdef.jpg", saved.Picture);
         Assert.Equal(BackgroundValues.Behind.Window, saved.Behind);
         Assert.True(saved.ThemeGradient);
+        Assert.Equal(BackgroundValues.GradientColor.Blue, saved.GradientGlow);
         Assert.DoesNotContain("seeThrough", JsonSerializer.Serialize(saved, AppSettings.Json), StringComparison.Ordinal);
     }
 

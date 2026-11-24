@@ -7,13 +7,13 @@ import { PAGE } from '../protocol.js';
 import { getSetting } from '../store.js';
 import { setSetting } from '../preferences.js';
 import { ICONS, escapeHtml } from '../ui.js';
-import { row, seg, toggle, group, slider, greyOut } from './controls.js';
+import { row, seg, swatchChoice, toggle, group, slider, greyOut } from './controls.js';
 import { SECTION, redraw } from './page.js';
 import { BACKGROUND } from '../constants.js';
 import { targetOf, showError } from '../dom.js';
-import { effects, pictureUrl } from '../backgrounds.js';
+import { effects, pictureUrl, GRADIENT_COLOR_VAR } from '../backgrounds.js';
 
-const { effect: EFFECT, opacity: OPACITY, fit: FIT, dim: DIM, blur: BLUR, behind: BEHIND } = BACKGROUND;
+const { effect: EFFECT, opacity: OPACITY, fit: FIT, dim: DIM, blur: BLUR, behind: BEHIND, gradientColor: GRADIENT_COLOR } = BACKGROUND;
 
 /**
  * Each effect's name in the choice.
@@ -73,12 +73,41 @@ const effectRow = () => (effects().length > 1
   ? row('Effect', 'What shows through.', seg('background.effect', effects().map(e => [e, EFFECT_LABEL[e] ?? e]), { firstIfNone: true }), { keywords: 'blur acrylic vibrancy glass frosted', needs: NO_GRADIENT })
   : '');
 
+/**
+ * Each theme colour's name in the gradient's colour choices.
+ * @type {Readonly<Record<string, string>>}
+ */
+const GRADIENT_COLOR_LABEL = Object.freeze({
+  [GRADIENT_COLOR.accent]: 'Accent', [GRADIENT_COLOR.background]: 'Background', [GRADIENT_COLOR.surface]: 'Panels',
+  [GRADIENT_COLOR.text]: 'Text', [GRADIENT_COLOR.muted]: 'Muted text', [GRADIENT_COLOR.red]: 'Red',
+  [GRADIENT_COLOR.yellow]: 'Yellow', [GRADIENT_COLOR.green]: 'Green', [GRADIENT_COLOR.cyan]: 'Cyan',
+  [GRADIENT_COLOR.blue]: 'Blue', [GRADIENT_COLOR.magenta]: 'Magenta',
+});
+/** The gradient's colour rows only matter while it's on. */
+const WITH_GRADIENT = 'background.themeGradient';
+const GRADIENT_KEYWORDS = 'gradient colour color glow theme accent';
+
+/** The colours offered; the terminal ones aren't, but one already set (Second glow's magenta by default) still shows. */
+const PICKABLE = new Set(/** @type {string[]} */ ([GRADIENT_COLOR.accent, GRADIENT_COLOR.background, GRADIENT_COLOR.surface, GRADIENT_COLOR.text, GRADIENT_COLOR.muted]));
+
+/** @param {string} key */
+const gradientColors = key => swatchChoice(key,
+  GRADIENT_COLOR.all.filter(c => PICKABLE.has(c) || c === getSetting(key))
+    .map(c => [c, GRADIENT_COLOR_LABEL[c] ?? c, `var(${GRADIENT_COLOR_VAR[c]})`]));
+
+/** Theme gradient's three colours, each picked from the theme's own. */
+const gradientRows = () =>
+  row('Glow', 'Top left.', gradientColors('background.gradientGlow'), { keywords: GRADIENT_KEYWORDS, needs: WITH_GRADIENT })
+  + row('Base', 'Underneath, darkened.', gradientColors('background.gradientBase'), { keywords: GRADIENT_KEYWORDS, needs: WITH_GRADIENT })
+  + row('Second glow', 'Bottom right.', gradientColors('background.gradientSecondGlow'), { keywords: GRADIENT_KEYWORDS, needs: WITH_GRADIENT });
+
 /** @type {import('./page.js').Section} */
 const BACKGROUND_TAB = {
   id: SECTION.appearanceBackground,
   label: 'Background', tab: 'Background', parent: SECTION.appearance, icon: ICONS.appearance,
   html: () => group('Window',
     row('Theme gradient', 'Frosted glass over the theme\'s colours.', toggle('background.themeGradient'), { keywords: 'gradient glow glass frosted theme colours colors' })
+    + gradientRows()
     + row('Opacity', 'Below 100%, the desktop shows through.', slider('background.opacity', OPACITY, PERCENT, 'Opacity'), { keywords: 'transparent transparency see-through translucent opacity alpha', needs: NO_GRADIENT })
     + effectRow()
     + row('Solid terminals', 'Only the window around them shows through.', toggle('background.solidTerminals'), { keywords: 'terminal solid opaque', needs: NO_GRADIENT }))

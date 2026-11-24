@@ -22,6 +22,7 @@ internal sealed class AgentMonitor : IStartable, IDisposable
     private readonly ClaudePlan _claudePlan;
     private readonly PageApi _api;
     private readonly BackgroundHost _host;
+    private readonly Lock _claudeFilesGate = new();
     private AgentHooks? _hooks;
     private ClaudeAgentsPoller? _poller;
     /// <summary>Token use of the Claude Code session in each terminal, for its status bar (ClaudeUsage.cs).</summary>
@@ -117,9 +118,13 @@ internal sealed class AgentMonitor : IStartable, IDisposable
     /// </summary>
     private void WriteClaudeFiles()
     {
-        var userSettings = Path.Combine(ClaudeCodeFiles.ConfigDirectory(), ClaudeCodeFiles.Settings);
-        Storage.Try(() => ClaudeHookSettings.Write(AgentHooks.ClaudeSettingsPath, AgentHooks.HookExe, Settings.Agents.ClaudeUsage, userSettings));
-        Storage.Try(() => ClaudeMcpConfig.Write(AgentHooks.ClaudeMcpPath));
+        // A settings save and a session's end (a hook, on the pipe's thread) can both write: one at a time, the last one whole.
+        lock (_claudeFilesGate)
+        {
+            var userSettings = Path.Combine(ClaudeCodeFiles.ConfigDirectory(), ClaudeCodeFiles.Settings);
+            Storage.Try(() => ClaudeHookSettings.Write(AgentHooks.ClaudeSettingsPath, AgentHooks.HookExe, Settings.Agents.ClaudeUsage, userSettings));
+            Storage.Try(() => ClaudeMcpConfig.Write(AgentHooks.ClaudeMcpPath));
+        }
     }
 
     private void Forget(string terminal)
@@ -185,6 +190,12 @@ internal sealed class AgentMonitor : IStartable, IDisposable
             if (!remote)
             {
                 Track(e.Pane, e.Session, state, e.Agent);
+            }
+            // A view picked in the session (/tui fullscreen) holds from the next start: Termilly's classic one, which
+            // --settings would keep, is only for users who haven't picked one.
+            if (!remote && state == AgentStates.Exited && e.Agent == AgentKinds.Claude && settings.Agents.Integration)
+            {
+                WriteClaudeFiles();
             }
             if (limitsShown)
             {
