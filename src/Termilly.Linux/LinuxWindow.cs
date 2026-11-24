@@ -168,7 +168,7 @@ internal sealed class LinuxWindow
             .SetMinSize(MinWidth, MinHeight)
             .SetDevToolsEnabled(Environment.GetEnvironmentVariable(DevToolsVariable) == "1")
             .SetContextMenuEnabled(false)
-            .RegisterCustomSchemeHandler(AppScheme.Scheme, (object _, string _, string url, out string contentType) => AppScheme.Serve(url, theme.Palette, out contentType))
+            .RegisterCustomSchemeHandler(AppScheme.Scheme, (object _, string _, string url, out string contentType) => AppScheme.Serve(url, () => theme.Palette, out contentType))
             .RegisterWindowCreatedHandler((_, _) => OnCreated(window!, channel))
             .RegisterWebMessageReceivedHandler((_, message) =>
             {
