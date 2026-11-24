@@ -269,6 +269,11 @@ public sealed class UnixPty : IPty
 
         public override int Read(byte[] buffer, int offset, int count)
         {
+            ValidateBufferArguments(buffer, offset, count);
+            if (count == 0)
+            {
+                return 0; // nothing asked: no wait for output
+            }
             while (true)
             {
                 lock (_gate)
