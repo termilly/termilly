@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 using Termilly.Pty;
@@ -159,7 +160,7 @@ public sealed class UnixPtyTests
         var seen = new StringBuilder();
         // A program that outlives its shell and ignores the hang-up, as an agent left running can.
         await SendAsync(pty, "(trap '' HUP; exec sleep 60) & echo held-$!-$((1+1))\n");
-        var held = int.Parse(Regex.Match(await ReadUntilAsync(pty, "-2\r", seen), @"held-(\d+)-2").Groups[1].Value);
+        var held = int.Parse(Regex.Match(await ReadUntilAsync(pty, "-2\r", seen), @"held-(\d+)-2").Groups[1].Value, CultureInfo.InvariantCulture);
         try
         {
             // A reader waiting for output that doesn't come, as the terminal's pump does: on macOS a close used to wait
@@ -172,7 +173,8 @@ public sealed class UnixPtyTests
                 }
             });
             await Task.Delay(300);
-            Assert.True(Task.Run(pty.Dispose).Wait(TimeSpan.FromSeconds(2)), "closing the terminal waited");
+            var closing = Task.Run(pty.Dispose);
+            Assert.Same(closing, await Task.WhenAny(closing, Task.Delay(TimeSpan.FromSeconds(2)))); // closing the terminal didn't wait
             await reading.WaitAsync(TimeSpan.FromSeconds(5)); // and the reader ends
         }
         finally
