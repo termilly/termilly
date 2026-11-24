@@ -18,6 +18,7 @@ import { sendToAgent } from './together.js';
 import { setMenuExtras } from './termclipboard.js';
 import { copyToNotepadItem } from './notepad.js';
 import { addToTodoItem } from './todomenu.js';
+import { saveAsSnippet } from './snippets.js';
 import { webAddressAlone } from './webaddress.js';
 
 const { ctrl: CTRL, alt: ALT } = ACTION_MODIFIERS;
@@ -189,6 +190,9 @@ function menuExtras(body, at) {
     ...(context.selection?.trim() ? [{
       label: 'Ask an agent about this', icon: ICONS.ask,
       action: () => sendToAgent(/** @type {string} */ (context.selection).slice(0, MAX_AGENT_TEXT), { title: tabTitle(tab) }, tab.view?.header, tab),
+    }, {
+      label: 'Save as snippet', icon: ICONS.snippet,
+      action: () => saveAsSnippet(/** @type {string} */ (context.selection).trim(), tab),
     }, copyToNotepadItem(/** @type {string} */ (context.selection)), addToTodoItem(/** @type {string} */ (context.selection))] : []),
   ];
   return items.length ? [SEPARATOR, ...items] : [];

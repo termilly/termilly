@@ -267,10 +267,10 @@ export function whereHtml(where, repo) {
 /**
  * The editor for a new snippet ("Save as snippet", a search with no match): name, command, description, Enter, and
  * where it's kept (this repository first, when the focused terminal is in one).
- * @param {{ command?: string }} [options]
+ * @param {{ command?: string, where?: Tab }} [options] where: the terminal it came from; the focused one when not given
  */
-export function editSnippet({ command = '' } = {}) {
-  const repo = repoHere();
+export function editSnippet({ command = '', where } = {}) {
+  const repo = repoHere(where);
   return modal('snippet-edit', `
     <h3>New snippet</h3>
     <label class="dialog-field">Name<input class="field" name="name" placeholder="Tail pod logs" autofocus></label>
@@ -404,10 +404,11 @@ export async function saveSnippet(id, next, where, { onlyMe } = {}) {
 export { newSnippetId };
 
 /**
- * "Save as snippet" from a command that ran.
+ * "Save as snippet" from a command that ran, or text selected in a terminal.
  * @param {string} command
+ * @param {Tab} [where] the terminal it came from; the focused one when not given
  */
-export const saveAsSnippet = command => editSnippet({ command });
+export const saveAsSnippet = (command, where) => editSnippet({ command, where });
 
 /**
  * Snippets that belonged to a workspace (before repositories kept them) go to the repository its folder is in, or to
