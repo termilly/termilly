@@ -136,11 +136,13 @@ internal sealed class Host
                 break;
             case HostRequest.Shutdown:
                 _stopping = true;
-                foreach (var s in _shells.Values)
+                // Forgotten first, so their pumps don't report an ordinary exit: the window says they ended with the host.
+                var ending = _shells.Values.ToList();
+                _shells.Clear();
+                foreach (var s in ending)
                 {
                     s.Pty.Dispose();
                 }
-                _shells.Clear();
                 Environment.Exit(0);
                 break;
         }

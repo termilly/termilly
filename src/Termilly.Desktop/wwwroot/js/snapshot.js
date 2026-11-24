@@ -13,6 +13,7 @@ import { markHibernated } from './hibernate.js';
 import { startResuming } from './resuming.js';
 import { AGENT_KIND, SETTING_VALUES } from './constants.js';
 import { showClosing, painted } from './closing.js';
+import { resumeCommand } from './resume.js';
 
 /** The choices of the settings used here (C#'s SettingValues). */
 const { restoreSession } = SETTING_VALUES;
@@ -96,12 +97,17 @@ export function resumeAfterHost(tab) {
   const agent = tab.agent;
   if (!agent?.hadTurn || !agent.session || !SESSION_ID.test(agent.session)) return;
   const kind = agent.kind === AGENT_KIND.codex ? AGENT_KIND.codex : AGENT_KIND.claude;
+  const server = isSsh(tab);
   if (agent.folder) {
     tab.lastCwd = agent.folder;
-    if (isSsh(tab)) tab.remoteCwd = agent.folder;
+    if (server) tab.remoteCwd = agent.folder;
     else tab.cwd = agent.folder;
   }
-  prepareStart(tab, { resumeSession: agent.session, resumeKind: kind, command: resumeAgentCommand(agent.session, kind), afterHost: true });
+  // On a server the shell starts in the login folder: back to the agent's first (a reconnect goes there anyway).
+  const back = server ? resumeCommand(agent.folder, null) : null;
+  const resume = resumeAgentCommand(agent.session, kind);
+  const command = back ? `${back}; ${resume}` : resume;
+  prepareStart(tab, { resumeSession: agent.session, resumeKind: kind, command, afterHost: command });
 }
 
 /**

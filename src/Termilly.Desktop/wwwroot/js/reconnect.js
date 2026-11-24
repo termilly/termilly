@@ -103,9 +103,10 @@ export function reconnect(tab) {
   tab.exited = false;
   clearActivity(tab);
   // An agent whose shell ended with the background host resumes after it (snapshot.js resumeAfterHost).
-  const agent = tab.start?.afterHost ? tab.start.command : null;
+  // Kept until it's typed, so a reconnect that fails before a prompt doesn't lose it.
+  const agent = tab.start?.afterHost ?? null;
   const back = resumeCommand(r.cwd, attachFor(tab));
-  prepareStart(tab, { command: back && agent ? `${back}; ${agent}` : back ?? agent, afterHost: false });
+  prepareStart(tab, { command: back && agent ? `${back}; ${agent}` : back ?? agent });
   startShell(tab);
   // Connected for a minute: the next drop starts the backoff over.
   clearTimeout(r.reset);
