@@ -186,6 +186,12 @@ internal sealed class AgentMonitor : IStartable, IDisposable
             {
                 Track(e.Pane, e.Session, state, e.Agent);
             }
+            // A view picked in the session (/tui fullscreen) holds from the next start: Termilly's classic one, which
+            // --settings would keep, is only for users who haven't picked one.
+            if (!remote && state == AgentStates.Exited && e.Agent == AgentKinds.Claude && settings.Agents.Integration)
+            {
+                WriteClaudeFiles();
+            }
             if (limitsShown)
             {
                 RefreshPlan(); // the plan's name shows before the first limits do

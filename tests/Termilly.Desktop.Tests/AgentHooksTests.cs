@@ -144,6 +144,26 @@ public sealed class AgentHooksTests : IDisposable
     }
 
     [Fact]
+    public void Claude_starts_in_its_classic_view_unless_the_user_picked_one()
+    {
+        var path = Path.Combine(_dir, "claude-settings.json");
+        var user = Path.Combine(_dir, "settings.json");
+        string? View() => JsonNode.Parse(File.ReadAllText(path))!["tui"]?.GetValue<string>();
+
+        ClaudeHookSettings.Write(path, @"C:\app\agent\termilly-hook.exe", userSettings: user); // no settings of theirs
+        Assert.Equal("default", View());
+        File.WriteAllText(user, """{ "theme": "dark" }""");
+        ClaudeHookSettings.Write(path, @"C:\app\agent\termilly-hook.exe", userSettings: user);
+        Assert.Equal("default", View());
+        File.WriteAllText(user, """{ "tui": "fullscreen" }""");
+        ClaudeHookSettings.Write(path, @"C:\app\agent\termilly-hook.exe", statusLine: true, userSettings: user);
+        Assert.Null(View()); // theirs: --settings would win over it
+        File.WriteAllText(user, """{ "tui": "default" }""");
+        ClaudeHookSettings.Write(path, @"C:\app\agent\termilly-hook.exe", userSettings: user);
+        Assert.Null(View());
+    }
+
+    [Fact]
     public void Helper_and_app_agree_on_the_protocol()
     {
         Assert.Equal(Protocol.Version, AgentHooks.Version);
