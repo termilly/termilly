@@ -26,7 +26,7 @@ internal sealed class PageApi(PageChannel page, ISettingsStore settings, IAppWin
     private static readonly TimeSpan QuestionWait = PipeTimeouts.Question - TimeSpan.FromSeconds(5);
 
     /// <summary>The methods about terminals, which the page answers.</summary>
-    private static readonly string[] PageMethods = [ApiMethods.Tasks, ApiMethods.Task, ApiMethods.TaskTick, ApiMethods.TaskDone, ApiMethods.TaskAdd, ApiMethods.TaskEdit, ApiMethods.TaskDelete, ApiMethods.Schedules, ApiMethods.ScheduleAdd, ApiMethods.ScheduleRun, ApiMethods.ScheduleSet, ApiMethods.NotepadPages, ApiMethods.NotepadRead, ApiMethods.NotepadAdd, ApiMethods.NotepadWrite, ApiMethods.NotepadRename, ApiMethods.TaskAsk, ApiMethods.List, ApiMethods.State, ApiMethods.Status, ApiMethods.Open, ApiMethods.Send, ApiMethods.Snippets, ApiMethods.Snippet, ApiMethods.Read, ApiMethods.Wait, ApiMethods.Ask, ApiMethods.AgentAsk, ApiMethods.NotifyCancel];
+    private static readonly string[] PageMethods = [ApiMethods.Tasks, ApiMethods.Task, ApiMethods.TaskTick, ApiMethods.TaskDone, ApiMethods.TaskAdd, ApiMethods.TaskEdit, ApiMethods.TaskDelete, ApiMethods.Schedules, ApiMethods.ScheduleAdd, ApiMethods.ScheduleEdit, ApiMethods.ScheduleDelete, ApiMethods.ScheduleRun, ApiMethods.ScheduleSet, ApiMethods.NotepadPages, ApiMethods.NotepadRead, ApiMethods.NotepadAdd, ApiMethods.NotepadWrite, ApiMethods.NotepadRename, ApiMethods.TaskAsk, ApiMethods.List, ApiMethods.State, ApiMethods.Status, ApiMethods.Open, ApiMethods.Send, ApiMethods.Snippets, ApiMethods.Snippet, ApiMethods.Read, ApiMethods.Wait, ApiMethods.Ask, ApiMethods.AgentAsk, ApiMethods.NotifyCancel];
     /// <summary>The methods that return a terminal's output, which is redacted for an agent.</summary>
     private static readonly string[] OutputMethods = [ApiMethods.Read, ApiMethods.Wait, ApiMethods.Ask];
 
@@ -168,7 +168,7 @@ internal sealed class PageApi(PageChannel page, ISettingsStore settings, IAppWin
     {
         ApiMethods.Open when RunsCommand(request) => "Opening a terminal that runs a command from scripts and agents is off. Turn it on in Termilly: Settings › Terminal › Let scripts and agents type.",
         _ when ApiMethods.Typing.Contains(method) => "Typing into terminals from scripts and agents is off. Turn it on in Termilly: Settings › Terminal › Let scripts and agents type.",
-        _ when ApiMethods.Scheduling.Contains(method) => "Adding and running schedules from agents is off. Turn it on in Termilly: Settings › Terminal › Let scripts and agents type.",
+        _ when ApiMethods.Scheduling.Contains(method) => "Adding, changing and running schedules from agents is off. Turn it on in Termilly: Settings › Terminal › Let scripts and agents type.",
         _ => null,
     };
 

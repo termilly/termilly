@@ -103,11 +103,11 @@ public sealed class ApiTests
 
         var tools = Mcp.Handle(Request("tools/list"), (m, a) => FakeTermilly(m, a))!["result"]!["tools"]!.AsArray();
         var names = tools.Select(t => t!["name"]!.GetValue<string>()).ToList();
-        Assert.Equal(["list_terminals", "terminal_state", "search_command_history", "set_status", "read_terminal_output", "wait_for_terminal", "list_tasks", "get_task", "tick_task", "finish_task", "add_task", "edit_task", "delete_task", "list_schedules", "add_schedule", "run_schedule", "set_schedule", "list_notepad_pages", "read_notepad_page", "add_notepad_page", "write_notepad_page", "rename_notepad_page", "ask_terminal", "run_snippet", "open_terminal", "send_to_terminal", "list_snippets", "ask_agent", "notify_user"], names);
+        Assert.Equal(["list_terminals", "terminal_state", "search_command_history", "set_status", "read_terminal_output", "wait_for_terminal", "list_tasks", "get_task", "tick_task", "finish_task", "add_task", "edit_task", "delete_task", "list_schedules", "add_schedule", "edit_schedule", "delete_schedule", "run_schedule", "set_schedule", "list_notepad_pages", "read_notepad_page", "add_notepad_page", "write_notepad_page", "rename_notepad_page", "ask_terminal", "run_snippet", "open_terminal", "send_to_terminal", "list_snippets", "ask_agent", "notify_user"], names);
         // Listed with typing off too, so an agent knows they're there; each says what it needs.
         var withInput = Mcp.Handle(Request("tools/list"), (m, a) => FakeTermilly(m, a, allowInput: true))!["result"]!["tools"]!.AsArray();
         Assert.Equal(names, withInput.Select(t => t!["name"]!.GetValue<string>()));
-        Assert.All(["ask_terminal", "run_snippet", "send_to_terminal", "add_schedule", "run_schedule", "set_schedule", "open_terminal"],
+        Assert.All(["ask_terminal", "run_snippet", "send_to_terminal", "add_schedule", "edit_schedule", "delete_schedule", "run_schedule", "set_schedule", "open_terminal"],
             name => Assert.Contains("Let scripts and agents type", tools.Single(t => t!["name"]!.GetValue<string>() == name)!["description"]!.GetValue<string>()));
     }
 
@@ -123,6 +123,35 @@ public sealed class ApiTests
         Assert.Equal(method, sent["method"]!.GetValue<string>());
         Assert.Equal("k1", sent["args"]!["task"]!.GetValue<string>());
     }
+
+    [Theory]
+    [InlineData("edit_schedule", "schedule_edit")]
+    [InlineData("delete_schedule", "schedule_delete")]
+    public void Mcp_schedule_edit_and_delete_reach_the_page_with_their_arguments(string tool, string method)
+    {
+        var args = new JsonObject { ["schedule"] = "s1", ["at"] = "07:30" };
+        var result = Mcp.Handle(Request("tools/call", new JsonObject { ["name"] = tool, ["arguments"] = args }), (m, a) => FakeTermilly(m, a))!["result"]!;
+        Assert.False(result["isError"]!.GetValue<bool>());
+        var sent = JsonNode.Parse(result["content"]![0]!["text"]!.GetValue<string>())!;
+        Assert.Equal(method, sent["method"]!.GetValue<string>());
+        Assert.Equal("s1", sent["args"]!["schedule"]!.GetValue<string>());
+    }
+
+    [Theory]
+    [InlineData("schedule_add")]
+    [InlineData("schedule_edit")]
+    [InlineData("schedule_delete")]
+    [InlineData("schedule_run")]
+    [InlineData("schedule_set")]
+    public void Changing_schedules_is_refused_while_typing_is_off(string method)
+    {
+        Assert.Contains("Settings › Terminal", Termilly.Desktop.Features.PageApi.SwitchedOff(method, [], allowInput: false));
+        Assert.Null(Termilly.Desktop.Features.PageApi.SwitchedOff(method, [], allowInput: true));
+    }
+
+    [Fact]
+    public void Listing_schedules_needs_nothing() =>
+        Assert.Null(Termilly.Desktop.Features.PageApi.SwitchedOff("schedules", [], allowInput: false));
 
     [Fact]
     public void Mcp_tool_arguments_cannot_say_which_terminal_asks()

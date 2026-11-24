@@ -1,12 +1,13 @@
 // @ts-check
-// Schedules and agents: what the MCP tools list_schedules, add_schedule, run_schedule and set_schedule can do. Any agent
+// Schedules and agents: what the MCP tools list_schedules, add_schedule, edit_schedule, delete_schedule, run_schedule and
+// set_schedule can do. Any agent
 // may list them; the host lets the others through only with Settings › Terminal › Let scripts and agents type on, as
 // they make something run. A schedule an agent adds runs out of sight, and an agent prompt in it only reads files: the
 // user can allow more in the Schedules window.
 
 import { state, newId, lastFolderOf, installedAgents } from './store.js';
 import { addApiMethods } from './api.js';
-import { schedules, scheduleById, runsOf, saveSchedule, runNow, setScheduleOn } from './schedules.js';
+import { schedules, scheduleById, runsOf, saveSchedule, removeSchedule, runNow, setScheduleOn } from './schedules.js';
 import { newSchedule, describeWhen, describeAt, WHAT, WHEN, UNIT, DAY_NAMES, minutesOf } from './schedulerules.js';
 import { AGENT_KIND } from './constants.js';
 import { reviewersOf } from './schedulereview.js';
@@ -65,12 +66,12 @@ function dayNumbers(days) {
 }
 
 /**
- * When a new schedule runs: when Termilly starts, every so often, or at a time of day.
+ * When a schedule runs: when Termilly starts, every so often, or at a time of day. What it doesn't say comes from base.
  * @param {any} args
+ * @param {ScheduleWhen} [base]
  * @returns {ScheduleWhen}
  */
-function whenOf(args) {
-  const base = newSchedule('').when;
+function whenOf(args, base = newSchedule('').when) {
   const days = dayNumbers(args.days);
   if (args.on_start) return { ...base, kind: WHEN.start };
   if (args.every) {
@@ -116,9 +117,87 @@ function addSchedule(args) {
   return describeSchedule(/** @type {Schedule} */ (scheduleById(schedule.id)));
 }
 
+/** The arguments that say what a schedule runs, and when. */
+const WHAT_FIELDS = ['what', 'command', 'snippet', 'prompt', 'agent'];
+const WHEN_FIELDS = ['at', 'days', 'every', 'unit', 'on_start'];
+/** The ones among them that pick another kind of when: the old kind's own fields don't carry over. */
+const WHEN_KIND_FIELDS = ['at', 'every', 'on_start'];
+
+/**
+ * The arguments among fields that were given.
+ * @param {any} args
+ * @param {string[]} fields
+ * @returns {Record<string, unknown>}
+ */
+const given = (args, fields) => Object.fromEntries(fields.filter(k => args[k] != null).map(k => [k, args[k]]));
+
+/**
+ * A schedule's when as add_schedule's arguments, so an edit can change part of it.
+ * @param {ScheduleWhen} when
+ */
+function whenArgsOf(when) {
+  const days = when.days.map(d => DAY_NAMES[d]).join(',');
+  if (when.kind === WHEN.start) return { on_start: true, days };
+  if (when.kind === WHEN.every) return { every: when.every, unit: when.unit, days };
+  return { at: when.at, days };
+}
+
+/**
+ * What an edit makes of a schedule's what: a changed agent prompt or agent only reads files again, as a new one does, so an
+ * agent can't change what a schedule the user allowed more does.
+ * @param {Schedule} schedule
+ * @param {Record<string, unknown>} changed
+ */
+function editedWhat(schedule, changed) {
+  const { what, command, snippet, prompt } = schedule;
+  const edited = whatOf({ what, command, snippet, prompt, ...changed });
+  // Its agent stays as it was unless the edit names one, even one no longer installed.
+  return edited.what === WHAT.agent && !('agent' in changed) && schedule.agent ? { ...edited, agent: schedule.agent } : edited;
+}
+
+/**
+ * What an edit makes of a schedule's when: a new kind (at, every or on_start) starts afresh, keeping only its days and unit.
+ * @param {ScheduleWhen} when
+ * @param {Record<string, unknown>} changed
+ */
+function editedWhen(when, changed) {
+  const newKind = WHEN_KIND_FIELDS.some(k => k in changed);
+  const kept = newKind ? { days: whenArgsOf(when).days, unit: when.unit } : whenArgsOf(when);
+  return whenOf({ ...kept, ...changed }, when);
+}
+
+/**
+ * Changes what an agent was asked to of a schedule; what it leaves out stays.
+ * @param {any} args
+ */
+function editSchedule(args) {
+  const schedule = scheduleFor(args);
+  const whatChanged = given(args, WHAT_FIELDS);
+  const whenChanged = given(args, WHEN_FIELDS);
+  /** @type {Partial<Schedule>} */
+  const changes = {};
+  if (args.name != null) {
+    changes.name = String(args.name).trim();
+    if (!changes.name) throw new Error('A schedule needs a name.');
+  }
+  if (Object.keys(whatChanged).length) Object.assign(changes, editedWhat(schedule, whatChanged));
+  if (Object.keys(whenChanged).length) changes.when = editedWhen(schedule.when, whenChanged);
+  if (args.cwd != null) changes.cwd = String(args.cwd);
+  if (args.on != null) changes.on = args.on !== false;
+  if (!Object.keys(changes).length) throw new Error('Say what to change: name, what it runs, when, cwd or on.');
+  saveSchedule({ ...schedule, ...changes });
+  return describeSchedule(/** @type {Schedule} */ (scheduleById(schedule.id)));
+}
+
 addApiMethods({
   schedules: () => ({ schedules: schedules().map(describeSchedule) }),
   schedule_add: args => addSchedule(args),
+  schedule_edit: args => editSchedule(args),
+  schedule_delete: args => {
+    const schedule = scheduleFor(args);
+    removeSchedule(schedule.id);
+    return { deleted: schedule.id, name: schedule.name };
+  },
   schedule_run: args => {
     const schedule = scheduleFor(args);
     runNow(schedule.id);

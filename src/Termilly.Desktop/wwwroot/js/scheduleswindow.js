@@ -97,7 +97,11 @@ let allDay = true;
 
 const isOpen = () => !layer.hidden || isDetached(WINDOW_KEY);
 const saved = () => (editing ? scheduleById(editing.id) : null);
-const isDirty = () => !!editing && (isNew || JSON.stringify({ ...editing, nextAt: 0 }) !== JSON.stringify({ ...saved(), nextAt: 0 }));
+/** @param {Schedule | null} s */
+const snapshot = s => JSON.stringify({ ...s, nextAt: 0 });
+const isDirty = () => !!editing && (isNew || snapshot(editing) !== snapshot(saved()));
+/** The shown schedule as it was saved when the form took it, to tell the user's changes from an agent's. */
+let shownAs = '';
 
 /** Shells that can run out of sight or in a terminal, servers, and the rest of what the form picks from. */
 function choices() {
@@ -236,6 +240,7 @@ function render() {
 function select(id, { runId = null } = {}) {
   const schedule = id ? scheduleById(id) : null;
   editing = schedule ? structuredClone(schedule) : null;
+  shownAs = snapshot(editing);
   allDay = !editing || isAllDay(editing.when);
   isNew = false;
   openRunId = runId;
@@ -589,12 +594,32 @@ export function initSchedulesWindow() {
 on(EVENTS.openSchedules, options => openSchedules(options));
 
 // A run's news, or the clock's: what's being edited stays as it is, and the rest shows it.
+/**
+ * The shown schedule changed or went elsewhere (an agent's edit_schedule, set_schedule or delete_schedule): the form
+ * follows, unless the user changed it, so Save never brings back an old copy. True when it was shown again.
+ */
+function followOutsideChange() {
+  if (!editing || isNew) return false;
+  const now = saved();
+  if (!now) {
+    select(schedules()[0]?.id ?? null);
+    return true;
+  }
+  if (snapshot(editing) !== shownAs || snapshot(now) === shownAs) return false;
+  editing = structuredClone(now);
+  shownAs = snapshot(editing);
+  allDay = isAllDay(editing.when);
+  render();
+  return true;
+}
+
 const newsCame = () => {
   const count = runningNow().length;
   runningCount.textContent = String(count);
   runningCount.hidden = !count;
   if (!isOpen()) return;
   renderList();
+  if (followOutsideChange()) return;
   if (editing && view === VIEW.runs) render();
 };
 on(EVENTS.schedules, newsCame);
