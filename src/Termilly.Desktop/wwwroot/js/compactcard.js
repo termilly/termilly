@@ -23,12 +23,14 @@ const RULE = /^([─━]+)(?:\s+\S.*?\s+([─━]+))?$/;
 const RULE_MIN = 8;
 
 /**
- * Whether a row of the screen is a rule (see RULE), wherever it starts.
+ * Whether a row of the screen is a rule (see RULE): a plain one wherever it starts, one with a name only from the
+ * screen's left edge, as Claude Code draws it (an indented "──── section ────" is a command's text).
  * @param {string} row
  */
 export function isRule(row) {
   const rule = RULE.exec(row.trim());
-  return !!rule && rule[1].length + (rule[2]?.length ?? 0) >= RULE_MIN;
+  if (!rule || rule[1].length + (rule[2]?.length ?? 0) < RULE_MIN) return false;
+  return rule[2] === undefined || row.startsWith(rule[1]);
 }
 /** A dashed rule inside the prompt (around a command): left out of the card. */
 const DASHES = /^[╌┄┈-]{8,}$/;

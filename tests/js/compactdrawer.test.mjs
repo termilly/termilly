@@ -149,3 +149,10 @@ test("a named session's rule, its name in it, is a rule: its suggestion stays, t
   assert.equal(typedPrompt(typedTerm(rows, 7, 2, 7)), null);
   assert.equal(suggestedPrompt(typedTerm(rows, 7, 2, 7)), 'start on #114');
 });
+
+test('a named rule counts from the left edge only: indented, it is a command text line', async () => {
+  const { isRule } = await import('../../src/Termilly.Desktop/wwwroot/js/compactcard.js');
+  assert.equal(isRule(`${'─'.repeat(30)} my-session ─`), true);
+  assert.equal(isRule(`   ${'─'.repeat(8)} section ${'─'.repeat(8)}`), false);
+  assert.equal(isRule(`   ${'─'.repeat(40)}`), true);
+});
