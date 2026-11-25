@@ -101,3 +101,17 @@ step('a click on the peek opens the center, and the tab goes while it\'s open', 
   await setLayout('normal');
   await until(async () => !(await edge()).shown, 'gone in Normal');
 });
+
+step('closing a terminal takes its notifications away', async () => {
+  const count = () => app.eval(async t => (await t.import('inbox.js')).allNotes().notes.length);
+  await agentSays('fails', { state: 'error', reason: 'Disk full' });
+  const before = await count();
+  assert.ok(before > 0);
+  await app.eval(async t => {
+    const { state } = await t.import('store.js');
+    const { closeTab } = await t.import('panes.js');
+    closeTab([...state.tabs.values()].find(x => x.name === 'fails'));
+  });
+  await until(async () => (await count()) === before - 1, 'its note went with it');
+  assert.equal(await app.eval(async t => (await t.import('inbox.js')).allNotes().notes.some(n => n.detail === 'Disk full')), false);
+});
