@@ -64,6 +64,8 @@ test('a background task keeps the spinner, shows its row and chip, and holds "do
     // Running: the row, the chip, the spinner, and a "done" held back.
     await app.waitFor('.task-row.running', { text: NAME });
     await app.waitFor('.tasks-chip', { text: '1 task' });
+    // The turn has ended (Stop) while the task runs.
+    await soon(() => app.eval(async t => [...(await t.import('store.js')).state.tabs.values()][0]?.agent?.state === 'done'), 'the turn ended');
     const running = await app.eval(async t => {
       const { state, activityOf } = await t.import('store.js');
       const tab = [...state.tabs.values()][0];
