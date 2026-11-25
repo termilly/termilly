@@ -45,7 +45,7 @@ public sealed class TaskProcessesTests
         // keeps the shell itself holding the file, as an agent's bash does (a single command's cmd hands it on).
         var start = OperatingSystem.IsWindows()
             ? new System.Diagnostics.ProcessStartInfo("cmd.exe", $"/c (ping -n 60 127.0.0.1 & echo done) > \"{file}\"")
-            : new System.Diagnostics.ProcessStartInfo("/bin/sh", ["-c", $"sleep 60 > \"{file}\""]);
+            : new System.Diagnostics.ProcessStartInfo("/bin/sh", ["-c", $"exec > \"{file}\"; sleep 60; echo done"]);
         start.UseShellExecute = false;
         start.CreateNoWindow = true;
         return System.Diagnostics.Process.Start(start)!;
