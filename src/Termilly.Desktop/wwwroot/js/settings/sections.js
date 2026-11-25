@@ -54,4 +54,4 @@ const DOCS = Object.freeze({
 
 /** @type {Record<string, import('./page.js').Section>} by id, in the nav's order */
 export const SECTIONS = Object.fromEntries(
-  [appearance, appearanceBackground, appearanceText, appearanceLayout, terminal, notifications, ssh, serial, workspaces, actions, changes, privacy, history, phone, plugins, keyboard, about].map(s => [s.id, { ...s, docs: DOCS[s.id] }]));
+  [appearance, appearanceBackground, appearanceText, appearanceLayout, workspaces, terminal, notifications, keyboard, changes, actions, phone, ssh, serial, plugins, privacy, history, about].map(s => [s.id, { ...s, docs: DOCS[s.id] }]));

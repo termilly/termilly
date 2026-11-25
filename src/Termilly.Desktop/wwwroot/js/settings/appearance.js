@@ -59,12 +59,12 @@ const mini = p => `<span class="tc-win" style="--p-bg:${cssColor(p.bg)};--p-side
   </span>`;
 
 /**
- * A theme's card: its small window, its name, and the well-known scheme it follows, or that it's imported (searched by
- * its name or the scheme's).
+ * A theme's card: its small window, its name, and that it's imported. Found by its name or the well-known scheme it
+ * follows, which it doesn't show.
  * @param {import('../themes.js').Theme} t
  */
 const card = t => {
-  const note = t.imported ? IMPORTED_NOTE : t.like;
+  const note = t.imported ? IMPORTED_NOTE : '';
   return `<button class="theme-card" data-theme-id="${t.id}" data-base="${t.base}" data-hay="${escapeHtml(`${t.name} ${t.like ?? ''}`.toLowerCase())}" title="${escapeHtml(t.imported ? `${t.name}. ${REMOVE_HINT}` : t.name)}"${t.imported ? ' data-imported' : ''}>${mini(t.preview)}<span class="tc-name">${escapeHtml(t.name)}</span>${note ? `<span class="tc-like">${escapeHtml(note)}</span>` : ''}</button>`;
 };
 const IMPORTED_NOTE = 'Imported';

@@ -52,12 +52,12 @@ test('Appearance has Theme, Background, Text and Layout tabs, and a tab keeps th
   assert.equal(await app.eval(t => t.$('#set-body').getAttribute('aria-labelledby')), 'set-tab-appearance-text');
 }));
 
-test('the gallery is one list, well-known schemes first with their names, searches and filters dark and light', () => withAppearance('appearance-gallery', async app => {
+test('the gallery is one list, well-known schemes first, names only, searches and filters dark and light', () => withAppearance('appearance-gallery', async app => {
   const names = await app.eval(t => t.$$('.theme-cards .tc-name').map(n => n.textContent));
   assert.deepEqual(names.slice(0, 3), ['Midnight', 'Catppuccin Mocha', 'Catppuccin Latte']);
   assert.equal(names[12], 'Dark', 'Termilly’s own come after the 12 well-known ones');
   assert.equal(await app.eval(t => t.$$('.theme-cards').length), 1);
-  assert.equal(await app.text('.theme-card[data-theme-id="midnight"] .tc-like'), 'Dracula');
+  assert.equal(await app.eval(t => !!t.$('.theme-card[data-theme-id="midnight"] .tc-like')), false, 'names only, as in 1.9.3');
   assert.equal((await shownCards(app)).length, await app.eval(t => t.$$('.theme-card').length), 'all themes show');
   await app.type('.theme-search', 'dracula');
   await until(async () => (await shownCards(app)).join() === 'Midnight', 'Dracula finds Midnight');
