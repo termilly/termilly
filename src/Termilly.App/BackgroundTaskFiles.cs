@@ -3,13 +3,22 @@ using System.Text.RegularExpressions;
 
 namespace Termilly.Desktop;
 
-/// <summary>What a background task's output file says now: where it is, its last line, and its exit code once it ended.</summary>
-internal sealed record TaskReading(string Path, string? LastLine, int? ExitCode);
+/// <summary>
+/// What a background task's output says now: its file (Claude Code's tasks have one), its last line, and its exit code
+/// once it ended.
+/// </summary>
+internal sealed record TaskReading(string? Path, string? LastLine, int? ExitCode);
 
-/// <summary>Reads a background task's output file (Claude Code writes one per task, under the temp folder).</summary>
+/// <summary>Reads how an agent's background task goes (Claude Code's from its output file, Codex's from its rollout).</summary>
 internal interface ITaskOutput
 {
-    /// <summary>The task's output so far, or null while its file isn't found.</summary>
+    /// <summary>
+    /// Whether a running task reads as something: a Claude task's file shows up as it starts, so one that never does
+    /// never started. A Codex task reads as nothing till it ends.
+    /// </summary>
+    bool ReadsWhileRunning { get; }
+
+    /// <summary>The task's output so far, or null while there's none to read.</summary>
     TaskReading? Read(string session, string taskId);
 }
 
@@ -21,6 +30,12 @@ internal interface ITaskProcesses
     /// none is found (it ended already).
     /// </summary>
     bool Stop(int terminalPid, string outputFile);
+
+    /// <summary>
+    /// Ends the task that runs <paramref name="command"/> (Codex's: it has no output file), under an agent in the
+    /// terminal: false when none is found.
+    /// </summary>
+    bool StopCommand(int terminalPid, string command);
 }
 
 /// <summary>
@@ -48,6 +63,8 @@ internal sealed partial class ClaudeTaskOutput : ITaskOutput
 
     /// <param name="tempRoot">The folder Claude Code's temp folders are in (a test's own).</param>
     internal ClaudeTaskOutput(string tempRoot) => _tempRoot = tempRoot;
+
+    public bool ReadsWhileRunning => true;
 
     public TaskReading? Read(string session, string taskId)
     {
@@ -123,7 +140,27 @@ internal sealed class TaskProcesses : ITaskProcesses
     /// <param name="starters">The programs whose children are tasks (a test's own).</param>
     internal TaskProcesses(string[] starters) => _starters = starters;
 
-    public bool Stop(int terminalPid, string outputFile)
+    /// <summary>The processes under a terminal, and which of them (or the terminal's own) are agents.</summary>
+    private sealed record Tree(Dictionary<int, ProcessEntry> Below, HashSet<int> Agents)
+    {
+        /// <summary>Whether an agent is above the process in the terminal (a reader the user started there has none).</summary>
+        public bool UnderAgent(int pid)
+        {
+            for (var at = pid; Below.TryGetValue(at, out var process); at = process.ParentId)
+            {
+                if (Agents.Contains(process.ParentId))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>Of these, the ones none of the others is above: a task's own process, not what it runs.</summary>
+        public List<int> Topmost(HashSet<int> pids) => [.. pids.Where(pid => !pids.Contains(Below[pid].ParentId))];
+    }
+
+    private Tree TreeOf(int terminalPid)
     {
         var all = BusyWatcher.Snapshot();
         var below = ClaudeAgentsPoller.Descendants(all, terminalPid).ToDictionary(p => p.Id);
@@ -131,14 +168,41 @@ internal sealed class TaskProcesses : ITaskProcesses
         var agents = below.Values.Concat(all.Where(p => p.Id == terminalPid))
             .Where(p => _starters.Contains(Path.GetFileNameWithoutExtension(p.Exe), StringComparer.OrdinalIgnoreCase))
             .Select(p => p.Id).ToHashSet();
+        return new Tree(below, agents);
+    }
+
+    public bool Stop(int terminalPid, string outputFile)
+    {
+        var tree = TreeOf(terminalPid);
         // The task's: an agent above it (its shell, or what that shell handed the file to), and the topmost of those.
-        var holders = FileHolders.Of(outputFile, below.Keys).Where(pid => UnderAgent(pid, below, agents)).ToHashSet();
-        var tasks = holders.Where(pid => !holders.Contains(below[pid].ParentId)).ToList();
-        // Held open while it's checked again: a process that ended meanwhile can't hand its id to another one.
+        var holders = FileHolders.Of(outputFile, tree.Below.Keys).Where(tree.UnderAgent).ToHashSet();
+        return KillChecked(tree.Topmost(holders), () => FileHolders.Of(outputFile, tree.Below.Keys).ToHashSet());
+    }
+
+    public bool StopCommand(int terminalPid, string command)
+    {
+        // The hook's command may have been cut short ("…" at its end): its start is what's looked for.
+        var wanted = command.TrimEnd('…').Trim();
+        if (wanted.Length == 0)
+        {
+            return false;
+        }
+        var tree = TreeOf(terminalPid);
+        var candidates = tree.Below.Keys.Where(pid => !tree.Agents.Contains(pid) && tree.UnderAgent(pid)).ToList();
+        HashSet<int> Running() => [.. ProcessCommandLines.Of(candidates).Where(p => p.Value.Contains(wanted, StringComparison.Ordinal)).Select(p => p.Key)];
+        return KillChecked(tree.Topmost(Running()), Running);
+    }
+
+    /// <summary>
+    /// Ends each process and what it runs, if it's still the task's when checked again: held open meanwhile, so one
+    /// that ended can't hand its id to another.
+    /// </summary>
+    private static bool KillChecked(List<int> tasks, Func<HashSet<int>> stillTasks)
+    {
         var opened = tasks.Select(Open).OfType<Process>().ToList();
         try
         {
-            var still = FileHolders.Of(outputFile, below.Keys).ToHashSet();
+            var still = stillTasks();
             var stopped = false;
             foreach (var process in opened.Where(p => still.Contains(p.Id)))
             {
@@ -150,19 +214,6 @@ internal sealed class TaskProcesses : ITaskProcesses
         {
             opened.ForEach(p => p.Dispose());
         }
-    }
-
-    /// <summary>Whether an agent is above the process in the terminal (a reader the user started there has none).</summary>
-    private static bool UnderAgent(int pid, Dictionary<int, ProcessEntry> below, HashSet<int> agents)
-    {
-        for (var at = pid; below.TryGetValue(at, out var process); at = process.ParentId)
-        {
-            if (agents.Contains(process.ParentId))
-            {
-                return true;
-            }
-        }
-        return false;
     }
 
     private static Process? Open(int pid)

@@ -68,9 +68,9 @@ internal static class Composition
         .AddStartable<AgentMonitor>()
         // After the agent hooks listen: the agents it starts report to them (EarlyAgents).
         .AddSingleton<EarlyShells>()
-        // Agents' background commands: their output files, and their processes for Stop.
+        // Agents' background commands: where each agent's are read from, and their processes for Stop.
         .AddSingleton(TimeProvider.System)
-        .AddSingleton<ITaskOutput, ClaudeTaskOutput>()
+        .AddSingleton(new TaskOutputs(new ClaudeTaskOutput(), new CodexTaskOutput()))
         .AddSingleton<ITaskProcesses, TaskProcesses>()
         .AddHandler<BackgroundTasks>()
         .AddStartable<EarlyAgents>()

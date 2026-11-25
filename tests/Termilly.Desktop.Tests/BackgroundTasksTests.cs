@@ -17,15 +17,17 @@ public sealed class BackgroundTasksTests : IDisposable
     private const string Session = "s1";
     private const string UseId = "toolu_1";
     private const string TaskId = "bk1u88xlt";
+    private const string CodexId = "exec-dfeb0971";
 
     private readonly Sink _sink = new();
     private readonly FakeOutput _output = new();
+    private readonly FakeOutput _codex = new(readsWhileRunning: false);
     private readonly FakeProcesses _processes = new();
     private readonly Clock _clock = new();
     private readonly TerminalSessions _terminals = new();
     private readonly BackgroundTasks _tasks;
 
-    public BackgroundTasksTests() => _tasks = new BackgroundTasks(new PageChannel(_sink), _terminals, _output, _processes, _clock);
+    public BackgroundTasksTests() => _tasks = new BackgroundTasks(new PageChannel(_sink), _terminals, new TaskOutputs(_output, _codex), _processes, _clock);
 
     public void Dispose() => _tasks.Dispose();
 
@@ -35,15 +37,17 @@ public sealed class BackgroundTasksTests : IDisposable
         public void Send(string json) => Sent.Enqueue(json);
     }
 
-    private sealed class FakeOutput : ITaskOutput
+    private sealed class FakeOutput(bool readsWhileRunning = true) : ITaskOutput
     {
+        public bool ReadsWhileRunning => readsWhileRunning;
         public TaskReading? Reading { get; set; }
-        public TaskReading? Read(string session, string taskId) => session == Session && taskId == TaskId ? Reading : null;
+        public TaskReading? Read(string session, string taskId) => session == Session && taskId is TaskId or CodexId ? Reading : null;
     }
 
     private sealed class FakeProcesses : ITaskProcesses
     {
         public bool Stop(int terminalPid, string outputFile) => true;
+        public bool StopCommand(int terminalPid, string command) => true;
     }
 
     private sealed class Clock : TimeProvider
@@ -59,6 +63,12 @@ public sealed class BackgroundTasksTests : IDisposable
         """;
 
     private static AgentEvent Event(string hookEvent, string? taskId = null) => AgentHooks.Parse(Protocol.Message(Pane, hookEvent, Payload(taskId)))!;
+
+    private static AgentEvent CodexEvent(string hookEvent) => AgentHooks.Parse(Protocol.Message(Pane, hookEvent, $$"""
+        { "session_id": "{{Session}}", "tool_name": "Bash", "tool_use_id": "{{CodexId}}", "tool_input": { "command": "npm run dev" } }
+        """, "codex"))!;
+
+    private bool TasksSent() => _sink.Sent.Any(j => j.Contains("\"agent:tasks\"", StringComparison.Ordinal));
 
     /// <summary>The last task list the page got for the pane.</summary>
     private JsonArray LastList()
@@ -133,5 +143,71 @@ public sealed class BackgroundTasksTests : IDisposable
         _tasks.OnEvent(Event("PostToolUse", TaskId));
         _tasks.OnEvent(AgentHooks.Parse(Protocol.Message(Pane, "SessionEnd", $$"""{ "session_id": "{{Session}}" }"""))!);
         Assert.Empty(LastList());
+    }
+
+    [Fact]
+    public void Every_Codex_command_passes_on_its_call_and_command()
+    {
+        Assert.Equal(new ShellTask(CodexId, "npm run dev", null, null), CodexEvent("PreToolUse").Task);
+    }
+
+    [Fact]
+    public void A_Codex_command_that_ends_in_its_turn_is_no_task()
+    {
+        _tasks.OnEvent(CodexEvent("PreToolUse"));
+        _tasks.OnEvent(CodexEvent("PostToolUse"));
+        _tasks.OnEvent(CodexEvent("Stop"));
+        Assert.False(TasksSent());
+    }
+
+    [Fact]
+    public void A_Codex_command_still_running_when_the_turn_ends_is_a_task_till_its_rollout_says_it_ended()
+    {
+        _tasks.OnEvent(CodexEvent("PreToolUse"));
+        Assert.False(TasksSent());
+        _tasks.OnEvent(CodexEvent("Stop"));
+        Assert.Equal(TaskStates.Running, (string?)LastList().Single()!["state"]);
+
+        // Nothing to read while it runs, and that doesn't make it a task that never started.
+        _clock.Now += TimeSpan.FromMinutes(5);
+        _tasks.Tick();
+        Assert.Equal(TaskStates.Running, (string?)LastList().Single()!["state"]);
+
+        _codex.Reading = new TaskReading(null, "ready on :3000", 1);
+        _tasks.Tick();
+        Assert.Equal(TaskStates.Failed, (string?)LastList().Single()!["state"]);
+    }
+
+    [Fact]
+    public void A_Codex_agent_exiting_takes_its_running_commands()
+    {
+        _tasks.OnEvent(CodexEvent("PreToolUse"));
+        _tasks.OnEvent(AgentHooks.Parse(Protocol.Message(Pane, "SessionEnd", $$"""{ "session_id": "{{Session}}" }""", "codex"))!);
+        _tasks.OnEvent(CodexEvent("Stop"));
+        Assert.False(TasksSent());
+    }
+
+    [Fact]
+    public void A_Codex_rollout_says_when_a_command_ended_and_how()
+    {
+        const string session = "01a213e3-ab09-79b2-bbe4-125d8524926e";
+        var folder = Directory.CreateTempSubdirectory("termilly-codex-").FullName;
+        try
+        {
+            var day = Path.Combine(folder, "2026", "11", "25");
+            Directory.CreateDirectory(day);
+            var file = Path.Combine(day, $"rollout-2026-11-25T19-06-57-{session}.jsonl");
+            File.WriteAllText(file, """{"type":"event_msg","payload":{"type":"task_started"}}""" + "\n");
+            var output = new CodexTaskOutput(folder);
+            Assert.Null(output.Read(session, CodexId));
+
+            var ended = """{"type":"event_msg","payload":{"type":"item_completed","item":{"type":"CommandExecution","id":"ID","exit_code":0,"aggregated_output":"one\r\ntwo\r\n"}}}""";
+            File.AppendAllText(file, ended.Replace("ID", CodexId, StringComparison.Ordinal) + "\n");
+            Assert.Equal(new TaskReading(null, "two", 0), output.Read(session, CodexId));
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
     }
 }

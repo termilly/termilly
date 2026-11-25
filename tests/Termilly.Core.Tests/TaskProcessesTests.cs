@@ -40,6 +40,39 @@ public sealed class TaskProcessesTests
         }
     }
 
+    [Fact]
+    public void Stop_by_command_ends_the_shell_running_it_and_no_other()
+    {
+        // Codex's tasks have no file: each is the shell an agent started its command in.
+        string Command(int seconds) => OperatingSystem.IsWindows() ? $"ping -n {seconds} 127.0.0.1" : $"sleep {seconds}; echo done";
+        using var task = Running(Command(61));
+        using var bystander = Running(Command(62));
+        try
+        {
+            using var self = System.Diagnostics.Process.GetCurrentProcess();
+            var processes = new TaskProcesses([self.ProcessName]);
+            WaitFor(() => processes.StopCommand(Environment.ProcessId, Command(61) + "…"));
+            Assert.True(task.WaitForExit(5000));
+            Assert.False(bystander.HasExited);
+            Assert.False(processes.StopCommand(Environment.ProcessId, "nothing runs this"));
+        }
+        finally
+        {
+            bystander.Kill(entireProcessTree: true);
+            bystander.WaitForExit(5000);
+        }
+    }
+
+    private static System.Diagnostics.Process Running(string command)
+    {
+        var start = OperatingSystem.IsWindows()
+            ? new System.Diagnostics.ProcessStartInfo("cmd.exe", $"/c {command}")
+            : new System.Diagnostics.ProcessStartInfo("/bin/sh", ["-c", command]);
+        start.UseShellExecute = false;
+        start.CreateNoWindow = true;
+        return System.Diagnostics.Process.Start(start)!;
+    }
+
     /// <summary>
     /// A shell whose output goes to <paramref name="file"/> for a minute, as a background task's does: the shell holds
     /// the file itself (as an agent's bash does), or only the command it hands it to does.

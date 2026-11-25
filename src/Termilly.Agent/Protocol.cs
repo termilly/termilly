@@ -135,7 +135,7 @@ internal static partial class Protocol
                 message[HookMessage.Fields.Transcript] = Text(payload, Payload.AgentTranscriptPath, MaxPath, cut: false);
             }
         }
-        AddToolFields(message, payload, hookEvent, tool);
+        AddToolFields(message, payload, hookEvent, tool, agent);
         AddSessionFields(message, payload, hookEvent);
         return message.ToJsonString();
     }
@@ -144,7 +144,7 @@ internal static partial class Protocol
     /// A tool's event: what an Agent call starts, a shell command run in the background, what the tool works on now
     /// (PreToolUse), and the files it changes or may change.
     /// </summary>
-    private static void AddToolFields(JsonObject message, JsonObject? payload, string hookEvent, string? tool)
+    private static void AddToolFields(JsonObject message, JsonObject? payload, string hookEvent, string? tool, string agent)
     {
         if (hookEvent is not (HookEvents.PreToolUse or HookEvents.PostToolUse))
         {
@@ -154,7 +154,7 @@ internal static partial class Protocol
         {
             AddAgentCall(message, payload);
         }
-        if (tool is not null && ClaudeTools.ShellTools.Contains(tool) && ShellTask(payload) is { } task)
+        if (tool is not null && ClaudeTools.ShellTools.Contains(tool) && ShellTask(payload, agent) is { } task)
         {
             message[HookMessage.Fields.ShellTask] = task;
         }
@@ -194,12 +194,14 @@ internal static partial class Protocol
 
     /// <summary>
     /// A shell command run in the background: its call, its command (the start of it) and description, and once it has
-    /// started the task id it got, which names its output file. Null for one that runs in the foreground.
+    /// started the task id it got, which names its output file. Null for one that runs in the foreground. Codex doesn't
+    /// say which run on: each of its commands is sent, and one still running when the turn ends is a task.
     /// </summary>
-    private static JsonObject? ShellTask(JsonObject? payload)
+    private static JsonObject? ShellTask(JsonObject? payload, string agent)
     {
         var input = payload?[Payload.ToolInput] as JsonObject;
-        if (input?[Input.RunInBackground] is not JsonValue bg || !bg.TryGetValue<bool>(out var background) || !background)
+        var background = input?[Input.RunInBackground] is JsonValue bg && bg.TryGetValue<bool>(out var flag) && flag;
+        if (!background && agent != AgentKinds.Codex)
         {
             return null;
         }

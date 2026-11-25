@@ -4,11 +4,13 @@ using Termilly.Desktop.Services;
 namespace Termilly.Desktop.Features;
 
 /// <summary>
-/// The shell commands each terminal's agent runs in the background (Claude Code's run_in_background): the hooks say
+/// The shell commands each terminal's agent runs in the background. Claude Code's (run_in_background): the hooks say
 /// when one has started and which task it is, its output file says how it goes and when it ends (there's no hook for
-/// that). The page keeps the agent's spinner while any runs, and shows them under the terminal and in its bar. An
-/// ended task stays a minute, so the page can say how it went; one whose agent or shell ended goes with it, and so
-/// does one whose output file never shows up.
+/// that). Codex's: its hooks report each command before it runs and after it ends, but not the end of one left running,
+/// so one still running when the turn ends is a task, and its rollout says when it ends. The page keeps the agent's
+/// spinner while any runs, and shows them under the terminal and in its bar. An ended task stays a minute, so the page
+/// can say how it went; one whose agent or shell ended goes with it, and so does a Claude task whose output file never
+/// shows up.
 /// </summary>
 internal sealed class BackgroundTasks : IMessageHandler, IDisposable
 {
@@ -21,17 +23,21 @@ internal sealed class BackgroundTasks : IMessageHandler, IDisposable
 
     private readonly PageChannel _page;
     private readonly TerminalSessions _terminals;
-    private readonly ITaskOutput _output;
+    private readonly ITaskOutput _claude;
+    private readonly ITaskOutput _codex;
     private readonly ITaskProcesses _processes;
     private readonly TimeProvider _clock;
     /// <summary>Guards the tasks, and keeps what the page is sent in the order it changed.</summary>
     private readonly Lock _gate = new();
     /// <summary>By terminal, each task by its call.</summary>
     private readonly Dictionary<string, List<Tracked>> _tasks = [];
+    /// <summary>By terminal, Codex's commands that haven't reported their end: each a task if the turn ends first.</summary>
+    private readonly Dictionary<string, List<Tracked>> _running = [];
     private readonly ITimer _timer;
 
-    private sealed class Tracked(string useId, string session, string taskId, string? command, string? description, DateTimeOffset started)
+    private sealed class Tracked(string agent, string useId, string session, string taskId, string? command, string? description, DateTimeOffset started)
     {
+        public string Agent { get; } = agent;
         public string UseId { get; } = useId;
         public string Session { get; } = session;
         public string TaskId { get; } = taskId;
@@ -46,9 +52,9 @@ internal sealed class BackgroundTasks : IMessageHandler, IDisposable
             Reading?.ExitCode, Reading?.LastLine, Reading?.Path, Ended?.ToUnixTimeMilliseconds());
     }
 
-    public BackgroundTasks(PageChannel page, TerminalSessions terminals, ITaskOutput output, ITaskProcesses processes, TimeProvider clock)
+    public BackgroundTasks(PageChannel page, TerminalSessions terminals, TaskOutputs outputs, ITaskProcesses processes, TimeProvider clock)
     {
-        (_page, _terminals, _output, _processes, _clock) = (page, terminals, output, processes, clock);
+        (_page, _terminals, _claude, _codex, _processes, _clock) = (page, terminals, outputs.Claude, outputs.Codex, processes, clock);
         _timer = clock.CreateTimer(_ => Tick(), null, Every, Every);
         terminals.Closed += Forget;
         terminals.Restarting += Forget;
@@ -57,34 +63,65 @@ internal sealed class BackgroundTasks : IMessageHandler, IDisposable
 
     public void Register(MessageRouter router) => router.On<FromPage.TaskStop>(m => Stop(m.Id, m.Task));
 
-    /// <summary>An agent hook: a background command started (its id given), or the agent gone (its tasks go with it).</summary>
+    /// <summary>
+    /// An agent hook: a background command started (its id given), a Codex command started or ended, a Codex turn
+    /// ended (what still runs is a task), or the agent gone (its tasks go with it).
+    /// </summary>
     public void OnEvent(AgentEvent e)
     {
-        if (e is { Event: HookEvents.PostToolUse, Session: { } session, Task: { ToolUseId: { } useId, Id: { } taskId } task })
+        if (e.Agent == AgentKinds.Codex)
         {
-            Started(e.Pane, new Tracked(useId, session, taskId, task.Command, task.Description, _clock.GetUtcNow()));
+            OnCodexEvent(e);
         }
-        else if (AgentHooks.StateFor(e) == AgentStates.Exited)
+        else if (e is { Event: HookEvents.PostToolUse, Session: { } session, Task: { ToolUseId: { } useId, Id: { } taskId } task })
+        {
+            lock (_gate)
+            {
+                Started(e.Pane, new Tracked(e.Agent, useId, session, taskId, task.Command, task.Description, _clock.GetUtcNow()));
+            }
+        }
+        if (AgentHooks.StateFor(e) == AgentStates.Exited)
         {
             Forget(e.Pane);
         }
     }
 
-    private void Started(string pane, Tracked task)
+    private void OnCodexEvent(AgentEvent e)
     {
         lock (_gate)
         {
-            var list = _tasks.TryGetValue(pane, out var known) ? known : _tasks[pane] = [];
-            if (list.Exists(t => t.UseId == task.UseId))
+            if (e is { Event: HookEvents.PreToolUse, Session: { } session, Task: { ToolUseId: { } useId } task })
             {
-                return;
+                var list = _running.TryGetValue(e.Pane, out var known) ? known : _running[e.Pane] = [];
+                list.Add(new Tracked(e.Agent, useId, session, useId, task.Command, task.Description, _clock.GetUtcNow()));
             }
-            list.Add(task);
-            Post(pane);
+            else if (e is { Event: HookEvents.PostToolUse, Task.ToolUseId: { } ended })
+            {
+                _running.GetValueOrDefault(e.Pane)?.RemoveAll(t => t.UseId == ended);
+            }
+            else if (e.Event is HookEvents.Stop or HookEvents.Interrupt && _running.Remove(e.Pane, out var left))
+            {
+                // Posted before the page hears the turn ended, so its "done" waits for them.
+                left.ForEach(t => Started(e.Pane, t));
+            }
         }
     }
 
-    /// <summary>Reads the running tasks' files; an ended one goes a while after.</summary>
+    /// <summary>A new task (one known already is left as it is); called under the gate.</summary>
+    private void Started(string pane, Tracked task)
+    {
+        var list = _tasks.TryGetValue(pane, out var known) ? known : _tasks[pane] = [];
+        if (list.Exists(t => t.UseId == task.UseId))
+        {
+            return;
+        }
+        list.Add(task);
+        Post(pane);
+    }
+
+    private ITaskOutput OutputOf(Tracked task) => task.Agent == AgentKinds.Codex ? _codex : _claude;
+
+    /// <summary>Reads the running tasks' output; an ended one goes a while after.</summary>
     public void Tick()
     {
         lock (_gate)
@@ -92,7 +129,7 @@ internal sealed class BackgroundTasks : IMessageHandler, IDisposable
             var now = _clock.GetUtcNow();
             foreach (var (pane, list) in _tasks.ToList())
             {
-                var removed = list.RemoveAll(t => now - t.Ended > KeepEnded || (t.Reading is null && now - t.Started > FileWait)) > 0;
+                var removed = list.RemoveAll(t => now - t.Ended > KeepEnded || NeverStarted(t, now)) > 0;
                 var read = false;
                 foreach (var task in list.Where(t => t.Ended is null))
                 {
@@ -106,10 +143,14 @@ internal sealed class BackgroundTasks : IMessageHandler, IDisposable
         }
     }
 
-    /// <summary>Reads one task's file: whether its last line or its state changed.</summary>
+    /// <summary>A Claude task whose output file never showed up.</summary>
+    private bool NeverStarted(Tracked task, DateTimeOffset now) =>
+        task.Reading is null && OutputOf(task).ReadsWhileRunning && now - task.Started > FileWait;
+
+    /// <summary>Reads one task's output: whether its last line or its state changed.</summary>
     private bool Read(Tracked task, DateTimeOffset now)
     {
-        var reading = _output.Read(task.Session, task.TaskId);
+        var reading = OutputOf(task).Read(task.Session, task.TaskId);
         if (reading is null || reading == task.Reading)
         {
             return false;
@@ -122,17 +163,28 @@ internal sealed class BackgroundTasks : IMessageHandler, IDisposable
         return true;
     }
 
-    /// <summary>The page's Stop: the task's shell and what it runs end (found by its output file); its file then says so.</summary>
+    /// <summary>
+    /// The page's Stop: the task's shell and what it runs end, found by its output file (Claude's) or its command
+    /// (Codex's); its output then says so.
+    /// </summary>
     private void Stop(string pane, string? useId)
     {
-        string? file;
+        Tracked? task;
         lock (_gate)
         {
-            file = _tasks.GetValueOrDefault(pane)?.Find(t => t.UseId == useId && t.Ended is null)?.Reading?.Path;
+            task = _tasks.GetValueOrDefault(pane)?.Find(t => t.UseId == useId && t.Ended is null);
         }
-        if (file is not null && _terminals.Pids().TryGetValue(pane, out var pid))
+        if (task is null || !_terminals.Pids().TryGetValue(pane, out var pid))
+        {
+            return;
+        }
+        if (task.Reading?.Path is { } file)
         {
             _ = Task.Run(() => _processes.Stop(pid, file));
+        }
+        else if (task.Agent == AgentKinds.Codex && task.Command is { } command)
+        {
+            _ = Task.Run(() => _processes.StopCommand(pid, command));
         }
     }
 
@@ -154,9 +206,9 @@ internal sealed class BackgroundTasks : IMessageHandler, IDisposable
         lock (_gate)
         {
             // Checked under the gate: a new shell's tasks are added under it too, so they can't come in between.
-            if (!_terminals.Pids().ContainsKey(pane) && _tasks.Remove(pane))
+            if (!_terminals.Pids().ContainsKey(pane))
             {
-                _page.Post(new ToPage.AgentTasks(pane, [], Gone: true));
+                ForgetLocked(pane);
             }
         }
     }
@@ -165,10 +217,16 @@ internal sealed class BackgroundTasks : IMessageHandler, IDisposable
     {
         lock (_gate)
         {
-            if (_tasks.Remove(pane))
-            {
-                _page.Post(new ToPage.AgentTasks(pane, [], Gone: true));
-            }
+            ForgetLocked(pane);
+        }
+    }
+
+    private void ForgetLocked(string pane)
+    {
+        _running.Remove(pane);
+        if (_tasks.Remove(pane))
+        {
+            _page.Post(new ToPage.AgentTasks(pane, [], Gone: true));
         }
     }
 
@@ -185,3 +243,6 @@ internal sealed class BackgroundTasks : IMessageHandler, IDisposable
 
     public void Dispose() => _timer.Dispose();
 }
+
+/// <summary>Where each agent's background tasks are read from.</summary>
+internal sealed record TaskOutputs(ITaskOutput Claude, ITaskOutput Codex);
