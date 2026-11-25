@@ -179,16 +179,16 @@ internal static class SessionLaunch
                 // The script's text runs as a script block rather than as a file: execution policy covers only
                 // script files, so this works on a clean Windows (Restricted) without loosening the user's policy.
                 return ($"{profile.CommandLine} -NoExit -Command \"{PowerShellIntegrationCommand(script)}\"", withMarks);
-            case (ProfileSources.Local, ProfileIcons.Bash) when profile.Id == ZshMarks.Shell && Directory.Exists(ZshFolder):
+            case (ProfileSources.Local, ProfileIcons.Bash) when profile.ShellKind == ZshMarks.Shell && Directory.Exists(ZshFolder):
                 AddZshMarks(withMarks, vars);
                 return (profile.CommandLine, withMarks);
-            case (ProfileSources.Local, ProfileIcons.Bash) when profile.Id is TcshMarks.Tcsh or TcshMarks.Csh && Directory.Exists(TcshFolder):
+            case (ProfileSources.Local, ProfileIcons.Bash) when profile.ShellKind is TcshMarks.Tcsh or TcshMarks.Csh && Directory.Exists(TcshFolder):
                 AddTcshMarks(withMarks, vars);
                 return (profile.CommandLine, withMarks);
-            case (ProfileSources.Local, ProfileIcons.Bash) when profile.Id == KshMarks.Shell && File.Exists(KshScript):
+            case (ProfileSources.Local, ProfileIcons.Bash) when profile.ShellKind == KshMarks.Shell && File.Exists(KshScript):
                 AddKshMarks(withMarks, vars);
                 return (profile.CommandLine, withMarks);
-            case (ProfileSources.Local, ProfileIcons.Bash) when profile.Id is XdgMarks.Fish or XdgMarks.Nu && Directory.Exists(XdgFolder):
+            case (ProfileSources.Local, ProfileIcons.Bash) when profile.ShellKind is XdgMarks.Fish or XdgMarks.Nu && Directory.Exists(XdgFolder):
                 AddXdgMarks(withMarks, vars);
                 return (profile.CommandLine, withMarks);
             case (ProfileSources.Local, ProfileIcons.Bash):
