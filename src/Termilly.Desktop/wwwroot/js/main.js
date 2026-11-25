@@ -585,6 +585,8 @@ onHost(HOST.agent, report => {
     };
   rememberSession(tab);
   recordPrompt(tab, /** @type {Partial<Host_agent_1>} */ (m));
+  // Its shell is back, and its prompt may have come before this report, while the agent's output didn't count.
+  if (!tab.agent) noteOutput(tab);
   agentChanged(tab);
 });
 
