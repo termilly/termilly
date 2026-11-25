@@ -1,14 +1,14 @@
 // @ts-check
-// The notification center's feed rows (design B): a dot for what it is, the terminal and workspace it's from, how old
+// The notification center's rows (design A): a dot for what it is, the terminal it's from, how old
 // it is and what it says, with its × beside it. An agent that waits for a permission or a reply gets its answer under
 // its row (Allow, Deny, a reply box, Preview); agents' questions are js/questioncards.js.
 
-import { state, wsById, tabTitle } from './store.js';
+import { state, tabTitle } from './store.js';
 import { isLive } from './inbox.js';
 import { awaitsPermission, isWaiting, ANSWER } from './agentanswer.js';
-import { tabBadgeHtml, escapeHtml, cssColor, ICONS } from './ui.js';
+import { tabBadgeHtml, escapeHtml, ICONS } from './ui.js';
 import { AGENT_STATE } from './constants.js';
-import { DOT } from './inboxsources.js';
+import { DOT } from './inboxgroups.js';
 import { SECOND_MS, DAY_S, MINUTE_S, HOUR_S } from './util.js';
 
 /**
@@ -40,16 +40,14 @@ export function age(at) {
 export const clearHtml = (key, label = CLEAR_LABEL) => `<button class="pane-btn inbox-clear" data-clear="${escapeHtml(key)}" title="${label}" aria-label="${label}">${ICONS.close}</button>`;
 
 /**
- * A row's first line: the terminal (its badge and name) and its workspace, or a name of its own, and its age.
+ * A row's first line: the terminal (its badge and name; its group names the workspace), or a name of its own, and
+ * its age.
  * @param {Tab | null} tab
  * @param {string} name used when there's no terminal
  * @param {number} at
  */
 export function titleLineHtml(tab, name, at) {
-  const ws = tab ? wsById(tab.wsId) : null;
-  const from = tab
-    ? `${tabBadgeHtml(tab)}<span class="name">${escapeHtml(tabTitle(tab))}</span>${ws ? `<span class="inbox-ws"><span class="ws-dot" style="background:${cssColor(ws.color)}"></span>${escapeHtml(ws.name)}</span>` : ''}`
-    : `<span class="name">${escapeHtml(name)}</span>`;
+  const from = tab ? `${tabBadgeHtml(tab)}<span class="name">${escapeHtml(tabTitle(tab))}</span>` : `<span class="name">${escapeHtml(name)}</span>`;
   return `<span class="inbox-title">${from}<span class="inbox-age">${age(at)}</span></span>`;
 }
 
@@ -83,7 +81,7 @@ const noteDot = state => (state === AGENT_STATE.error ? DOT.error : state === AG
  * An agent's note: what it said out of sight.
  * @param {import('./inbox.js').Note} n
  * @param {RowContext} ctx
- * @returns {import('./inboxsources.js').Entry}
+ * @returns {import('./inboxgroups.js').Entry}
  */
 export function noteEntry(n, ctx) {
   const tab = /** @type {Tab} */ (state.tabs.get(n.tabId));
@@ -92,13 +90,13 @@ export function noteEntry(n, ctx) {
       ${dotHtml(dot)}
       <span class="inbox-text">${titleLineHtml(tab, '', n.at)}<span class="inbox-detail">${escapeHtml(n.detail)}</span></span>
     </button>${clearHtml(n.key)}${answerHtml(n, tab, ctx)}</div>`;
-  return { at: n.at, html, key: n.key, tabId: tab.id, schedule: false, dot };
+  return { at: n.at, html, key: n.key, tabId: tab.id, schedule: false, dot, unread: isLive(n), waiting: false };
 }
 
 /**
  * A schedule's run: a click opens its report.
  * @param {import('./inbox.js').ScheduleNote} n
- * @returns {import('./inboxsources.js').Entry}
+ * @returns {import('./inboxgroups.js').Entry}
  */
 export function scheduleEntry(n) {
   const dot = n.failed ? DOT.error : DOT.schedule;
@@ -106,5 +104,5 @@ export function scheduleEntry(n) {
     ${dotHtml(dot)}
     <span class="inbox-text">${titleLineHtml(null, n.title, n.at)}<span class="inbox-detail">${escapeHtml(n.detail)}</span></span>
   </button>${clearHtml(n.id)}</div>`;
-  return { at: n.at, html, key: n.id, tabId: null, schedule: true, dot };
+  return { at: n.at, html, key: n.id, tabId: null, schedule: true, dot, unread: true, waiting: false };
 }

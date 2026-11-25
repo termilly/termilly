@@ -62,9 +62,9 @@ step('an options question shows four choices, the rest under More, and returns t
   await until(() => app.eval((t, s) => t.$$(`${s} .q-choice`).length === 6, card('q1')), 'all six');
   await app.click(`${card('q1')} [data-q="details"]`);
   await app.waitFor(`${card('q1')} .q-details`, { text: 'Redis is down twice a week.' });
-  // The title bar's count has it, and the terminal's source shows it waits.
+  // The title bar's count has it, and its card shows it waits.
   assert.equal(await app.text('#inbox-button .tool-count'), '1');
-  await app.waitFor('.inbox-source .inbox-dot.ask');
+  await app.waitFor(`${card('q1')} .inbox-dot.ask`);
   await app.click(`${card('q1')} [data-q="note"]`);
   await app.type(`${card('q1')} .q-box`, 'try it on staging');
   await app.click(`${card('q1')} [data-q="pick"][data-value="SQLite"]`);

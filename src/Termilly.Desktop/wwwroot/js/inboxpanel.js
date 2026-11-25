@@ -1,9 +1,10 @@
 // @ts-check
-// The notification center, docked on the right of the terminals (the title bar's button, Ctrl+Shift+A), as design B
-// (Sources and feed): the sources on the left (js/inboxsources.js), the picked one's feed on the right, newest first.
-// The feed has the notes of js/inbox.js (js/inboxrows.js) and the agents' questions (js/questioncards.js). A permission
-// is answered here (Allow, Deny), a question gets a reply, an agent's question its answer; a click on a row goes to its
-// terminal, and the panel stays. Narrow, the sources hide and the feed shows All.
+// The notification center, docked on the right of the terminals (the title bar's button, Ctrl+Shift+A), as design A
+// (By workspace): a filter (All, Unread, Errors), then a group per workspace, newest first, each folding away and
+// clearing on its own (js/inboxgroups.js). The rows are the notes of js/inbox.js (js/inboxrows.js) and the agents'
+// questions (js/questioncards.js). A permission is answered here (Allow, Deny), a question gets a reply, an agent's
+// question its answer; a click on a row goes to its terminal, and the panel stays. One column at any width, so a
+// resize never redraws it.
 
 import { state, persist, on, emit, EVENTS } from './store.js';
 import { allNotes, watchNotes, clear, button } from './inbox.js';
@@ -11,8 +12,8 @@ import { answerAgent, ANSWER } from './agentanswer.js';
 import { answerQuestion } from './questions.js';
 import { noteEntry, scheduleEntry } from './inboxrows.js';
 import { questionEntry, replyOf, toggleOpened, answerKey, noteKey, CARD_ACTION } from './questioncards.js';
-import { sourcesHtml, shownSource, inSource, sourceTitle, SOURCE } from './inboxsources.js';
-import { escapeHtml, ICONS } from './ui.js';
+import { groupsOf, groupOf, groupHtml, filtersHtml, shownFilter, passes, FILTER } from './inboxgroups.js';
+import { ICONS } from './ui.js';
 import { send } from './host.js';
 import { PAGE } from './protocol.js';
 import { restoreFocus } from './panes.js';
@@ -24,7 +25,7 @@ import { byId, targetOf, dockRight, fillDockedPanel, titleIconHtml, WORKSPACE_ID
 import { SECOND_MS } from './util.js';
 
 const ACTION = Object.freeze({ clearAll: 'clearAll', close: 'close' });
-/** A row in the feed, its main button, a text box in it, and the feed itself. */
+/** A row, its main button, a text box in it, and the list of groups. */
 const ITEM = '.inbox-item';
 const ROW = '.inbox-row';
 const BOX = '[data-draft]';
@@ -34,10 +35,8 @@ const FEED = '.inbox-feed';
 const REDRAW_MS = 30 * SECOND_MS;
 /** Its narrowest width (app.css has its width until it's dragged). */
 const MIN_WIDTH_PX = 280;
-/** Narrower than this, the sources hide and the feed shows All. */
-const SOURCES_MIN_PX = 400;
-/** The panel's class while it's that narrow. */
-const NARROW = 'narrow';
+/** What the list says when nothing is there: nothing at all, or nothing the filter lets through. */
+const EMPTY = Object.freeze({ all: 'No notifications.', unread: 'Nothing unread.', errors: 'No errors.' });
 const KEYS_TEXT = 'Ctrl+Shift+A';
 /** The card parts a button opens or closes. @type {Set<string>} */
 const TOGGLES = new Set([CARD_ACTION.more, CARD_ACTION.note, CARD_ACTION.details]);
@@ -98,10 +97,10 @@ function draw() {
   forgetGone(all);
   const was = focusNow();
   const scroll = /** @type {HTMLElement | null} */ (panel.querySelector(FEED))?.scrollTop ?? 0;
-  const narrow = panel.offsetWidth < SOURCES_MIN_PX;
-  panel.classList.toggle(NARROW, narrow);
-  const source = narrow ? SOURCE.all : shownSource(all);
-  const rows = all.filter(e => inSource(e, source));
+  const filter = shownFilter();
+  const folded = new Set(state.inbox.folded ?? []);
+  const groups = groupsOf(all.filter(e => passes(e, filter)));
+  const empty = all.length ? EMPTY[/** @type {keyof typeof EMPTY} */ (filter)] : EMPTY.all;
   fillDockedPanel(panel, `
     <div class="files-head">
       ${titleIconHtml(button)}
@@ -111,12 +110,9 @@ function draw() {
         <button class="pane-btn" data-inbox="${ACTION.close}" data-f="${ACTION.close}" title="Close (${KEYS_TEXT})">${ICONS.close}</button>
       </span>
     </div>
-    <div class="inbox-split">
-      ${sourcesHtml(all, source)}
-      <div class="inbox-feed">
-        <div class="inbox-feed-head">${escapeHtml(sourceTitle(source))} <span class="inbox-feed-order">newest first</span></div>
-        ${rows.map(r => r.html).join('') || '<div class="inbox-empty">No notifications.</div>'}
-      </div>
+    <div class="inbox-feed">
+      ${filtersHtml(filter)}
+      ${groups.map(g => groupHtml(g, folded.has(g.id))).join('') || `<div class="inbox-empty">${empty}</div>`}
     </div>`);
   /** @type {HTMLElement} */ (panel.querySelector(FEED)).scrollTop = scroll;
   giveFocusBack(was);
@@ -146,11 +142,29 @@ export function initInbox() {
   if (state.inbox.open) setOpen(true);
 }
 
-/** @param {string} source */
-function pickSource(source) {
-  state.inbox.source = source;
+/** @param {string} filter */
+function pickFilter(filter) {
+  state.inbox.filter = filter;
   persist();
   draw();
+}
+
+/** @param {string} group */
+function fold(group) {
+  const folded = new Set(state.inbox.folded ?? []);
+  if (!folded.delete(group)) folded.add(group);
+  state.inbox.folded = [...folded];
+  persist();
+  draw();
+}
+
+/**
+ * A group's Clear: what it shows, but not the questions still waiting (as Clear all leaves them).
+ * @param {string} group
+ */
+function clearGroup(group) {
+  const shown = groupsOf(entries().filter(e => passes(e, shownFilter()))).find(g => g.id === group);
+  if (shown) clear(shown.rows.filter(e => !e.waiting).map(e => e.key));
 }
 
 /**
@@ -215,7 +229,9 @@ function onAction(el) {
   else if (el.dataset.answer && row) answer(row, el.dataset.answer);
   else if (el.dataset.preview !== undefined && row) preview(row);
   else if (el.dataset.clear) clear(el.dataset.clear);
-  else if (el.dataset.source) pickSource(el.dataset.source);
+  else if (el.dataset.filter) pickFilter(el.dataset.filter);
+  else if (el.dataset.fold) fold(el.dataset.fold);
+  else if (el.dataset.clearGroup) clearGroup(el.dataset.clearGroup);
   else if (el.dataset.inbox === ACTION.clearAll) clear(null);
   else if (el.dataset.inbox === ACTION.close) toggleInbox();
   else if (el.dataset.run) emit(EVENTS.openSchedules, { runId: el.dataset.run });
@@ -226,7 +242,7 @@ function onAction(el) {
 }
 
 panel.addEventListener('click', e => {
-  const el = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-q], [data-answer], [data-preview], [data-clear], [data-source], [data-inbox], [data-run], [data-tab]'));
+  const el = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-q], [data-answer], [data-preview], [data-clear], [data-filter], [data-fold], [data-clear-group], [data-inbox], [data-run], [data-tab]'));
   if (el) onAction(el);
 });
 panel.addEventListener('compositionstart', () => { composing = true; });
@@ -276,18 +292,17 @@ panel.addEventListener('keydown', e => {
 
 button.addEventListener('click', () => toggleInbox());
 watchNotes(draw);
-// A question's desktop notification was clicked (js/questions.js): the panel opens on All, where it is.
-on(EVENTS.openInbox, () => {
-  state.inbox.source = undefined;
+// A question's desktop notification was clicked (js/questions.js): the panel opens on All with its group unfolded,
+// where it is.
+on(EVENTS.openInbox, ({ question } = {}) => {
+  state.inbox.filter = FILTER.all;
+  const asked = question ? entries().find(e => e.key === question) : null;
+  if (asked) state.inbox.folded = (state.inbox.folded ?? []).filter(g => g !== groupOf(asked));
   setOpen(true);
 });
 dockRight(panel, {
   dockVar: '--inbox-dock', minWidth: MIN_WIDTH_PX,
-  resized: () => {
-    scheduleFit();
-    // Dragged past the width the sources need, or back: drawn with or without them.
-    if (panel.classList.contains(NARROW) !== panel.offsetWidth < SOURCES_MIN_PX) draw();
-  },
+  resized: scheduleFit,
   dragged: width => { state.inbox.width = width; persist(); },
 });
 // Ages move on while the panel is open (not while something is typed: a redraw keeps it, but there's no need).

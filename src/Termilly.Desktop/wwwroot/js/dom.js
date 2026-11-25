@@ -127,14 +127,15 @@ export function dragPointer(el, e, move, done) {
   // would otherwise keep resizing on a plain hover.
   const up = () => {
     el.removeEventListener('pointermove', move);
-    el.removeEventListener('pointerup', up);
-    el.removeEventListener('lostpointercapture', up);
+    for (const type of DRAG_ENDS) el.removeEventListener(type, up);
     done?.();
   };
   el.addEventListener('pointermove', move);
-  el.addEventListener('pointerup', up);
-  el.addEventListener('lostpointercapture', up);
+  for (const type of DRAG_ENDS) el.addEventListener(type, up);
 }
+
+/** What ends a drag: the button let go, or the capture lost without it. */
+const DRAG_ENDS = ['pointerup', 'lostpointercapture'];
 
 /** The class of a docked panel's grip, on its left edge. */
 export const DOCK_GRIP = 'files-grip';

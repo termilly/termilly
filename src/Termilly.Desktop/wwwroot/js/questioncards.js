@@ -1,5 +1,5 @@
 // @ts-check
-// An agent's question as a card in the notification center's feed (js/questions.js): its title, the details a click
+// An agent's question as a card in the notification center (js/questions.js): its title, the details a click
 // away, and what the kind asks for. Options: the choices, four of them and the rest under More, the recommended one
 // marked. Approve: Deny and Approve. Ask: the suggestions over a text field. Options and Approve take a note too. An
 // update has at most one button. Once answered, the card says what was sent.
@@ -8,7 +8,7 @@ import { state } from './store.js';
 import { escapeHtml } from './ui.js';
 import { QUESTION_STATUS } from './questions.js';
 import { titleLineHtml, clearHtml, dotHtml, failHtml } from './inboxrows.js';
-import { DOT } from './inboxsources.js';
+import { DOT } from './inboxgroups.js';
 import { QUESTION_KIND, QUESTION_LIMIT } from './constants.js';
 
 /** Card buttons' looks beyond a plain button: a link-like one, a suggestion. */
@@ -87,10 +87,10 @@ function askHtml(q, ctx) {
 const dotOf = q => (q.status === QUESTION_STATUS.waiting ? DOT.ask : q.status === QUESTION_STATUS.answered ? DOT.done : DOT.info);
 
 /**
- * A question's card in the feed.
+ * A question's card in the notification center.
  * @param {import('./questions.js').Question} q
  * @param {import('./inboxrows.js').RowContext} ctx
- * @returns {import('./inboxsources.js').Entry}
+ * @returns {import('./inboxgroups.js').Entry}
  */
 export function questionEntry(q, ctx) {
   const tab = q.tabId ? state.tabs.get(q.tabId) ?? null : null;
@@ -103,7 +103,7 @@ export function questionEntry(q, ctx) {
       <span class="inbox-text">${titleLineHtml(tab, 'An agent', q.at)}<span class="q-title">${escapeHtml(q.title)}</span></span>
     </button>${clearHtml(q.id, waiting ? 'Put away without answering' : 'Clear')}
     <div class="q-body">${details}${body}${failHtml(q.id, ctx.failure(q.id))}</div></div>`;
-  return { at: q.at, html, key: q.id, tabId: q.tabId, schedule: false, dot: dotOf(q) };
+  return { at: q.at, html, key: q.id, tabId: q.tabId, schedule: false, dot: dotOf(q), unread: waiting, waiting };
 }
 
 /**

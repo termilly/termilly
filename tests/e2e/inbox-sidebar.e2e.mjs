@@ -1,6 +1,7 @@
-// The notification center as a sidebar (js/inboxpanel.js), design B: the title bar's button docks it on the right and
-// takes it away again; its sources (All, workspaces, terminals, Schedules) sit beside the feed, newest first; picking
-// one shows only its entries; a permission is answered with Allow, a question with a reply; narrow, the sources hide.
+// The notification center as a sidebar (js/inboxpanel.js), design A: the title bar's button docks it on the right and
+// takes it away again; a group per workspace, newest first, then Schedules; All, Unread and Errors filter every group;
+// a group folds away and clears on its own; a permission is answered with Allow, a question with a reply; one column at
+// any width, and its grip survives a redraw.
 // Run with: npm run e2e (on Linux, under Xvfb).
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -24,14 +25,11 @@ const step = (name, run) => test(name, async () => {
 /** The room the sidebar takes on the right of the terminals, in pixels. */
 const room = () => app.eval(t => parseFloat(t.$('#workspace').style.getPropertyValue('--inbox-dock')) || 0);
 
-/** The feed's head and its rows' names, top to bottom. */
+/** The groups' names and their rows' names, top to bottom. */
 const feed = () => app.eval(t => ({
-  head: t.$('.inbox-feed-head').textContent.trim(),
-  names: [...t.$$('.inbox-feed .inbox-item .name')].map(n => n.textContent),
+  groups: [...t.$('.inbox-group-fold .name')].map(n => n.textContent),
+  names: [...t.$('.inbox-feed .inbox-item .name')].map(n => n.textContent),
 }));
-
-/** The sources listed, as their names. */
-const sources = () => app.eval(t => [...t.$$('.inbox-source .name')].map(n => n.textContent));
 
 /**
  * Says what a terminal's agent does now, as its hooks would: three terminals, by name.
@@ -75,30 +73,37 @@ step('the button docks the notification center on the right, and no dropdown ope
   assert.equal(await app.eval(async t => (await t.import('store.js')).state.inbox.open), true);
 });
 
-step('the feed has every note, newest first, and each terminal with one is a source', async () => {
+step('each note is in its workspace\'s group, newest first, and Schedules come last', async () => {
   await agentSays('asks', { state: 'needs-input', tool: 'Bash', target: 'npm test' });
   await agentSays('fails', { state: 'error', reason: 'Connection refused' });
   await agentSays('ends', { state: 'done', message: 'All done', unread: true });
   await app.eval(async t => (await t.import('inbox.js')).addScheduleNote({ id: 'r1', title: 'Nightly', detail: 'Worked', failed: false, at: Date.now() }));
   await until(async () => (await feed()).names.length === 4, 'four rows');
-  assert.deepEqual((await feed()).names, ['Nightly', 'ends', 'fails', 'asks']);
-  const listed = await sources();
-  for (const name of ['All', 'asks', 'fails', 'ends', 'Schedules']) assert.ok(listed.includes(name), `${name} is a source`);
-  assert.equal(await app.eval(t => t.$(`.inbox-source.on .name`).textContent), 'All');
+  const { groups, names } = await feed();
+  assert.deepEqual(names, ['ends', 'fails', 'asks', 'Nightly']);
+  assert.equal(groups.length, 2);
+  assert.equal(groups[1], 'Schedules');
+  assert.equal(await app.eval(t => t.$('.inbox-filters .on').textContent), 'All');
 });
 
-step('a terminal\'s source shows only its notes, and is remembered', async () => {
-  await app.eval(async t => {
-    const { state } = await t.import('store.js');
-    t.click(`[data-source="tab:${[...state.tabs.values()].find(x => x.name === 'fails').id}"]`);
-  });
-  await until(async () => (await feed()).names.join() === 'fails', 'only fails');
-  assert.match((await feed()).head, /^fails/);
-  assert.match(await app.eval(async t => (await t.import('store.js')).state.inbox.source), /^tab:/);
-  await app.click('[data-source="schedules"]');
-  await until(async () => (await feed()).names.join() === 'Nightly', 'only the schedule');
-  await app.click('[data-source="all"]');
+step('Unread and Errors filter every group, and the filter is remembered', async () => {
+  await agentSays('ends', { state: 'idle' });
+  await app.click('[data-filter="unread"]');
+  await until(async () => (await feed()).names.join() === 'fails,asks,Nightly', 'only what is still news');
+  await app.click('[data-filter="errors"]');
+  await until(async () => (await feed()).names.join() === 'fails', 'only the error');
+  assert.equal(await app.eval(async t => (await t.import('store.js')).state.inbox.filter), 'errors');
+  await app.click('[data-filter="all"]');
   await until(async () => (await feed()).names.length === 4, 'all again');
+});
+
+step('a group folds away and back, and stays folded', async () => {
+  const group = await app.eval(t => t.$('.inbox-group-fold').dataset.fold);
+  await app.click(`[data-fold="${group}"]`);
+  await until(async () => (await feed()).names.join() === 'Nightly', 'the workspace folded');
+  assert.deepEqual(await app.eval(async t => (await t.import('store.js')).state.inbox.folded), [group]);
+  await app.click(`[data-fold="${group}"]`);
+  await until(async () => (await feed()).names.length === 4, 'unfolded');
 });
 
 step('Preview of a permission whose prompt can\'t be read shows the screen, with no choices', async () => {
@@ -127,18 +132,15 @@ step('a question gets a reply typed into its terminal', async () => {
   await app.waitFor(`${row} .inbox-reply`, { gone: true });
 });
 
-step('narrow, the sources hide and the feed shows All', async () => {
-  await app.click('[data-source="schedules"]');
-  await until(async () => (await feed()).names.join() === 'Nightly', 'only the schedule');
+step('one column at any width, and a redraw keeps the grip', async () => {
   await app.eval(async t => {
     const panel = t.$('#inbox');
     globalThis.inboxGrip = panel.querySelector(':scope > .files-grip');
-    panel.style.width = '320px';
+    panel.style.width = '300px';
     (await t.import('inbox.js')).addScheduleNote({ id: 'r2', title: 'Hourly', detail: 'Worked', failed: false, at: Date.now() });
   });
-  await until(() => app.eval(t => t.$('#inbox').classList.contains('narrow')), 'narrow');
-  assert.equal(await app.eval(t => globalThis.getComputedStyle(t.$('.inbox-sources')).display), 'none');
-  assert.match((await feed()).head, /^All/);
+  await until(async () => (await feed()).names.includes('Hourly'), 'redrawn');
+  assert.equal((await feed()).groups.length, 2);
   // Drawn anew mid-drag, a new grip would lose the pointer and the drag would stop.
   assert.equal(await app.eval(t => t.$('#inbox > .files-grip') === globalThis.inboxGrip), true, 'the grip outlives the redraw');
   await app.eval(async t => {
@@ -147,10 +149,13 @@ step('narrow, the sources hide and the feed shows All', async () => {
   });
 });
 
-step('a row\'s × clears it, and Clear all the rest', async () => {
-  await app.click('[data-source="all"]');
+step('a row\'s ×, a group\'s Clear, and Clear all the rest', async () => {
   await app.click('.inbox-feed [data-clear="r1"]');
   await until(async () => !(await feed()).names.includes('Nightly'), 'Nightly gone');
+  await app.eval(async t => (await t.import('inbox.js')).addScheduleNote({ id: 'r3', title: 'Weekly', detail: 'Worked', failed: false, at: Date.now() }));
+  await until(async () => (await feed()).groups.length === 2, 'two groups');
+  await app.click('[data-clear-group="schedules"]');
+  await until(async () => (await feed()).groups.length === 1, 'Schedules cleared');
   await app.click('[data-inbox="clearAll"]');
   await app.waitFor('#inbox .inbox-empty', { text: 'No notifications.' });
 });
