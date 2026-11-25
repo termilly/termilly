@@ -84,7 +84,7 @@ function askHtml(q, ctx) {
 }
 
 /** @param {import('./questions.js').Question} q */
-const dotOf = q => (q.status === QUESTION_STATUS.waiting ? DOT.ask : q.status === QUESTION_STATUS.answered ? DOT.done : DOT.info);
+export const questionDot = q => (q.status === QUESTION_STATUS.waiting ? DOT.ask : q.status === QUESTION_STATUS.answered ? DOT.done : DOT.info);
 
 /**
  * A question's card in the notification center.
@@ -99,11 +99,11 @@ export function questionEntry(q, ctx) {
   const details = q.details && isOpen(q.id, OPENED.details) ? `<div class="q-details">${escapeHtml(q.details)}</div>` : '';
   const html = `<div class="inbox-row q-card${waiting ? ' waiting' : ''}${ctx.busy(q.id) ? ' busy' : ''}" data-key="${escapeHtml(q.id)}" data-question="${escapeHtml(q.id)}">
     <button class="inbox-item${waiting ? ' unread' : ''}"${tab ? ` data-tab="${tab.id}"` : ''} data-f="${escapeHtml(q.id)}:i">
-      ${dotHtml(dotOf(q))}
+      ${dotHtml(questionDot(q))}
       <span class="inbox-text">${titleLineHtml(tab, 'An agent', q.at)}<span class="q-title">${escapeHtml(q.title)}</span></span>
     </button>${clearHtml(q.id, waiting ? 'Put away without answering' : 'Clear')}
     <div class="q-body">${details}${body}${failHtml(q.id, ctx.failure(q.id))}</div></div>`;
-  return { at: q.at, html, key: q.id, tabId: q.tabId, schedule: false, dot: dotOf(q), unread: waiting, waiting };
+  return { at: q.at, html, key: q.id, tabId: q.tabId, schedule: false, dot: questionDot(q), unread: waiting, waiting };
 }
 
 /**

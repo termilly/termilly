@@ -23,6 +23,7 @@ import { openPalette, setCommands, openGoTo, openCommandHistory, PALETTE_VIEW } 
 import { jumpToPrompt, copyLastOutput } from './commands.js';
 import { jumpToNext } from './inbox.js';
 import { toggleInbox, initInbox } from './inboxpanel.js';
+import './inboxalert.js';
 import { applySnapshot, resumeAfterHost } from './snapshot.js';
 import { keepEarlierOfOpen } from './earlier.js';
 import { toggleCaptures, outputSeen } from './triggers.js';

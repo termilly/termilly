@@ -137,7 +137,15 @@ function setOpen(open) {
     persist();
   }
   draw();
+  for (const fn of openWatchers) fn();
 }
+
+/** Who wants to know when the center opens or closes (js/inboxalert.js). @type {Set<() => void>} */
+const openWatchers = new Set();
+/** @param {() => void} fn */
+export const watchInboxOpen = fn => openWatchers.add(fn);
+/** Whether the notification center is open. */
+export const inboxShown = () => !panel.hidden;
 
 /** Opens or closes the notification center; opened, the newest entry has the keys. */
 export function toggleInbox() {

@@ -75,7 +75,7 @@ function answerHtml(n, tab, ctx) {
 }
 
 /** @param {string} state */
-const noteDot = state => (state === AGENT_STATE.error ? DOT.error : state === AGENT_STATE.done ? DOT.done : DOT.ask);
+export const noteDot = state => (state === AGENT_STATE.error ? DOT.error : state === AGENT_STATE.done ? DOT.done : DOT.ask);
 
 /**
  * An agent's note: what it said out of sight.
