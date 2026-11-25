@@ -573,6 +573,12 @@ export function agentChanged(tab) {
  */
 export function markSeen(tab) {
   emit(EVENTS.seen, tab);
+  // An agent's bell that came while it was in view isn't unread, but focusing it still deals with it.
+  if (tab.agent?.state === AGENT_STATE.attention && !tab.agent.unread) {
+    tab.agent.state = AGENT_STATE.idle;
+    activityChanged(tab, true);
+    return;
+  }
   if (!tab.agent?.unread) return;
   tab.agent.unread = false;
   if (tab.agent.state === AGENT_STATE.done || tab.agent.state === AGENT_STATE.attention) tab.agent.state = AGENT_STATE.idle;

@@ -221,13 +221,14 @@ body[data-sidebar="rail"] .side-rail { opacity: 1; pointer-events: auto; }
 .aside-rows .tab-row { opacity: .6; }
 .aside-rows .tab-row:hover { opacity: 1; }
 
+/* New output out of sight: grey, so yellow only ever means "needs you". */
 .attn {
   width: 6px;
   height: 6px;
   flex: none;
   border-radius: 50%;
-  background: var(--attention);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--attention) 15%, transparent);
+  background: var(--muted);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--muted) 15%, transparent);
 }
 
 .side-foot {
