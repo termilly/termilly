@@ -24,6 +24,9 @@ internal sealed class EarlyShells(TerminalSessions terminals) : IDisposable
         _expire ??= new Timer(_ => EndUnclaimed(), null, WaitForPage, Timeout.InfiniteTimeSpan);
     }
 
+    /// <summary>The terminal's early shell while it waits for the page; null when it has none.</summary>
+    public EarlyShell? Get(string id) => _shells.TryGetValue(id, out var shell) ? shell : null;
+
     /// <summary>The terminal's early shell, now the page's; null when it has none.</summary>
     public EarlyShell? Take(string id) => _shells.TryRemove(id, out var shell) ? shell : null;
 

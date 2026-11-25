@@ -28,6 +28,8 @@ internal sealed class EarlyShell(string command, string versionReply) : IDisposa
     private bool _typed;
     private Timer? _typing;
     private Timer? _fallback;
+    /// <summary>What reached the page about the shell meanwhile (its agent's reports), told once it takes the shell over.</summary>
+    private readonly List<Action> _kept = [];
 
     /// <summary>The shell, once it runs: what the command is typed into.</summary>
     public IShellSession? Session { get; set; }
@@ -58,6 +60,23 @@ internal sealed class EarlyShell(string command, string versionReply) : IDisposa
         TypeAtPrompt(seen);
     }
 
+    /// <summary>
+    /// Keeps something to tell the page about the shell (its agent's report) until the page takes it over, which would
+    /// drop it before: false once it has, and it's to be told now.
+    /// </summary>
+    public bool Keep(Action tell)
+    {
+        lock (_gate)
+        {
+            if (_output is not null)
+            {
+                return false;
+            }
+            _kept.Add(tell);
+            return true;
+        }
+    }
+
     /// <summary>The shell ended: the page hears it once it takes the shell over (at once if it has).</summary>
     public void Exited(int code)
     {
@@ -78,6 +97,7 @@ internal sealed class EarlyShell(string command, string versionReply) : IDisposa
     public void Take(Action<string> output, Action<string> replay, Action<int> exited)
     {
         int? code;
+        List<Action> kept;
         lock (_gate)
         {
             if (_missed.Text() is { Length: > 0 } missed)
@@ -87,6 +107,12 @@ internal sealed class EarlyShell(string command, string versionReply) : IDisposa
             _output = output;
             _exited = exited;
             code = _exitCode;
+            kept = [.. _kept];
+            _kept.Clear();
+        }
+        foreach (var tell in kept)
+        {
+            tell();
         }
         if (code is { } ended)
         {

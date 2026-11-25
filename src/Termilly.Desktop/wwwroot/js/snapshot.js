@@ -165,7 +165,7 @@ export function applySnapshot(saved, earlyStarted = []) {
       // Its shell started before the page was up and typed the command itself: the page waits for the agent, and
       // types the command again only if the shell is still at its prompt a while later (resumeTyped).
       prepareStart(tab, { resumeSession: session, resumeKind: kindOf(s) });
-      startResuming(tab, session, kindOf(s));
+      startResuming(tab, session, kindOf(s), true);
       resumeTyped(tab, resumeAgentCommand(session, kindOf(s)));
       resumeStep(tab.id, 'command typed before the page was up');
     } else if (session) {

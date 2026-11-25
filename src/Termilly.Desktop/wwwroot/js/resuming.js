@@ -25,9 +25,10 @@ export const CANCEL_KEY = '\x1b';
  * @param {Tab} tab
  * @param {string} session
  * @param {string} kind which agent (AGENT_KIND)
+ * @param {boolean} [early] its shell started before the page was up (EarlyAgents.cs), the command typed already
  */
-export function startResuming(tab, session, kind) {
-  tab.resuming = { session, kind, command: null, retried: false, timer: 0 };
+export function startResuming(tab, session, kind, early = false) {
+  tab.resuming = { session, kind, command: null, retried: false, timer: 0, early };
   resumeStep(tab.id, `${kind} waits for its terminal`);
   drawOverlay(tab);
 }
@@ -46,7 +47,8 @@ export function resumeTyped(tab, command) {
   r.command = command;
   const check = () => {
     const term = tab.view?.term;
-    if (tab.resuming !== r || !term || tab.exited || !atPrompt(term)) return;
+    // An agent that runs has taken the command: its own input line can look like a shell prompt.
+    if (tab.resuming !== r || !term || tab.exited || !atPrompt(term) || runningAgent(tab)) return;
     // Typed twice and still at the prompt (a shell that doesn't mark its commands' ends): the agent didn't start.
     if (r.retried) return void gaveUp(tab);
     r.retried = true;
@@ -149,7 +151,8 @@ on(EVENTS.commandEnding, (/** @type {{ tab: Tab }} */ { tab }) => {
   if (r?.command && !tab.agent && tab.running?.command.includes(r.session)) gaveUp(tab);
 });
 on(EVENTS.tab, tab => {
-  if (tab.resuming && !settling.has(tab) && runningAgent(tab) && !agentKind(tab.resuming.kind).hookAtStart) settle(tab);
+  // One started before the page was up has run for a while: its screen settling says it's back, hooks or not.
+  if (tab.resuming && !settling.has(tab) && runningAgent(tab) && (!agentKind(tab.resuming.kind).hookAtStart || tab.resuming.early)) settle(tab);
 });
 
 /** How long an agent's screen stays still before its resumed session counts as drawn, and the longest wait for it. */

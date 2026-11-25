@@ -84,6 +84,17 @@ public sealed class EarlyShellTests
     }
 
     [Fact]
+    public void An_agent_report_before_the_page_takes_over_is_told_after_the_replay()
+    {
+        var (early, _) = Started();
+        var heard = new List<string>();
+        Assert.True(early.Keep(() => heard.Add("SessionStart")));
+        early.Take(_ => heard.Add("live"), _ => heard.Add("replay"), _ => { });
+        Assert.False(early.Keep(() => heard.Add("late")));
+        Assert.Equal(["SessionStart"], heard);
+    }
+
+    [Fact]
     public void An_exit_before_the_page_takes_over_is_told_after_the_replay()
     {
         var (early, _) = Started();

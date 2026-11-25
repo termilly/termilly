@@ -29,8 +29,9 @@ const options = { bundle: true, format: 'esm', logLevel: 'warning', absWorkingDi
 const graph = await esbuild.build({ ...options, entryPoints: [entry], write: false, metafile: true });
 const modules = Object.keys(graph.metafile.inputs).map(file => path.relative(scripts, path.resolve(scripts, file)).replaceAll('\\', '/'));
 
-// main.js first, so everything runs in the order it does unbundled; then the modules for the test driver.
-const lines = ["import './main.js';", `import { ${REGISTER} } from './testdriver.js';`];
+// The start-up log first, so it notes when the page started to run; then main.js, so everything runs in the order it
+// does unbundled; then the modules for the test driver.
+const lines = ["import './startuplog.js';", "import './main.js';", `import { ${REGISTER} } from './testdriver.js';`];
 modules.forEach((file, i) => lines.push(`import * as m${i} from './${file}';`));
 lines.push(`${REGISTER}({ ${modules.map((file, i) => `${JSON.stringify(file)}: m${i}`).join(', ')} });`);
 
