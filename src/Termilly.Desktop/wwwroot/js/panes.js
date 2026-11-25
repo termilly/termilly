@@ -5,7 +5,7 @@
 import { PAGE } from './protocol.js';
 import { send, request, platform, PLATFORM, mac } from './host.js';
 import {
-  state, on, emit, persist, newId, activeWs, isAway, firstShown, wsById, tabsOf, tabTitle, defaultProfile, ensureTag, activityOf, leaves, runningAgent,
+  state, on, emit, persist, newId, activeWs, isAway, firstShown, wsById, tabsOf, tabTitle, defaultProfile, ensureTag, activityOf, leaves, runsClaude,
   replaceNode, findLeaf, detachLeaf, groupOf, firstTabOf, markSeen, findPreview, withoutPreview, EVENTS, NODE, SPLIT,
   SPLIT_EVEN, TAB_WINDOW,
 } from './store.js';
@@ -663,8 +663,9 @@ export function switchWorkspace(id) {
   const ws = wsById(id);
   if (!ws) return;
   state.activeId = id;
-  // Its terminals are on screen now: their new output has been seen, not just the focused one's.
-  for (const shown of tabsOf(ws).filter(t => t.attention)) {
+  // Its terminals on screen now have had their new output seen, not just the focused one: not one set aside or in a
+  // window of its own, nor a group's tab that isn't the one it shows.
+  for (const shown of tabsOf(ws).filter(t => t.attention && !isAway(t) && (groupOf(ws, t.id)?.active ?? t.id) === t.id)) {
     shown.attention = false;
     emit(EVENTS.tab, shown);
   }
@@ -2078,9 +2079,10 @@ function movePane(source, target, zone) {
  */
 export function noteOutput(tab) {
   if (tab.wsId === state.activeId || tab.attention || Date.now() < (tab.quietUntil ?? 0)) return;
-  // An agent redraws its screen (its spinner, its status line) on its own: what it has to say comes from its hooks,
-  // in the notification center, not from new output.
-  if (runningAgent(tab)) return;
+  // An agent that reports (hooks, or Claude Code's poll) redraws its screen on its own: what it has to say comes in the
+  // notification center, not from new output. One that doesn't report keeps the dot, and a shell back at its prompt
+  // after the agent exited gets it at once.
+  if (runsClaude(tab)) return;
   tab.attention = true;
   emit(EVENTS.tab, tab);
 }
