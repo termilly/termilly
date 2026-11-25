@@ -35,7 +35,7 @@ const TAB_TITLE = 'Notification center (Ctrl+Shift+A)';
 const edge = document.createElement('div');
 edge.className = 'inbox-edge';
 edge.hidden = true;
-edge.innerHTML = `<div class="inbox-peek" role="status" hidden></div><button class="inbox-edge-tab" title="${TAB_TITLE}" aria-label="${TAB_TITLE}"></button>`;
+edge.innerHTML = `<div class="inbox-peek" role="button" tabindex="0" aria-live="polite" hidden></div><button class="inbox-edge-tab"></button>`;
 byId(WORKSPACE_ID).append(edge);
 const peekEl = /** @type {HTMLElement} */ (edge.querySelector('.inbox-peek'));
 const tabEl = /** @type {HTMLElement} */ (edge.querySelector('.inbox-edge-tab'));
@@ -76,7 +76,12 @@ function drawEdge() {
   if (edge.hidden) return hidePeek();
   const dots = all.slice(0, MAX_DOTS).map(i => `<span class="inbox-dot ${i.dot}"></span>`).join('');
   tabEl.innerHTML = `${ICONS.chevronLeft}${dots}<span class="inbox-edge-count">${all.length}</span>`;
-  if (peeking && !all.some(i => i.key === peeking?.key)) hidePeek();
+  const label = `${TAB_TITLE}: ${all.length} notification${all.length === 1 ? '' : 's'}`;
+  tabEl.title = label;
+  tabEl.setAttribute('aria-label', label);
+  // Answered (on a phone, say) or cleared: it doesn't wait any more.
+  const now = peeking ? all.find(i => i.key === peeking?.key) : null;
+  if (peeking && !(now && ALERTS.has(now.dot))) hidePeek();
 }
 
 /** @param {Item} item */
@@ -84,7 +89,9 @@ function showPeek(item) {
   peeking = item;
   peekEl.innerHTML = peekHtml(item);
   peekEl.hidden = false;
-  startPeekTimer();
+  // A new one under the mouse stays until the mouse leaves, as the one before it did.
+  if (peekEl.matches(':hover')) clearTimeout(peekTimer);
+  else startPeekTimer();
 }
 
 function startPeekTimer() {
@@ -118,10 +125,16 @@ watchInboxOpen(drawEdge);
 on(EVENTS.settings, drawEdge);
 
 tabEl.addEventListener('click', () => toggleInbox());
-peekEl.addEventListener('click', () => {
+function openPeeked() {
   const key = peeking?.key;
   hidePeek();
   emit(EVENTS.openInbox, { question: key });
+}
+peekEl.addEventListener('click', openPeeked);
+peekEl.addEventListener('keydown', e => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  e.preventDefault();
+  openPeeked();
 });
 // Kept while the mouse is on it, so it can be read.
 peekEl.addEventListener('mouseenter', () => clearTimeout(peekTimer));

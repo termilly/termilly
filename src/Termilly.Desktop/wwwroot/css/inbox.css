@@ -101,7 +101,7 @@
    the newest one that needs the user peeking out of it. On the docked tools' side, like the center. */
 .inbox-edge {
   position: absolute;
-  top: 10px;
+  top: calc(10px + var(--notepad-dock-top, 0px) + var(--todo-dock-top, 0px));
   right: calc(var(--files-dock, 0px) + var(--notepad-dock, 0px) + var(--todo-dock, 0px) + var(--clips-dock, 0px));
   z-index: 20;
   display: flex;

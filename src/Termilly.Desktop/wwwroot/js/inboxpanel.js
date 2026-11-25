@@ -312,13 +312,14 @@ panel.addEventListener('keydown', e => {
 
 button.addEventListener('click', () => toggleInbox());
 watchNotes(draw);
-// A question's desktop notification was clicked (js/questions.js): the panel opens on All with its group unfolded,
-// where it is.
+// A question's desktop notification or Minimal's peek was clicked (js/questions.js, js/inboxalert.js): the panel opens
+// on All with its group unfolded, scrolled to it.
 on(EVENTS.openInbox, ({ question } = {}) => {
   state.inbox.filter = FILTER.all;
   const asked = question ? entries().find(e => e.key === question) : null;
   if (asked) state.inbox.folded = (state.inbox.folded ?? []).filter(g => g !== groupOf(asked));
   setOpen(true);
+  if (asked) [...panel.querySelectorAll(`${ROW}[data-key]`)].find(r => /** @type {HTMLElement} */ (r).dataset.key === asked.key)?.scrollIntoView({ block: 'nearest' });
 });
 dockRight(panel, {
   dockVar: '--inbox-dock', minWidth: MIN_WIDTH_PX,
