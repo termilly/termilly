@@ -37,6 +37,8 @@ const REDRAW_MS = 30 * SECOND_MS;
 const MIN_WIDTH_PX = 280;
 /** What the list says when nothing is there: nothing at all, or nothing the filter lets through. */
 const EMPTY = Object.freeze({ all: 'No notifications.', unread: 'Nothing unread.', errors: 'No errors.' });
+/** Where design B kept its picked source in the saved state. */
+const OLD_SOURCE_KEY = 'source';
 const KEYS_TEXT = 'Ctrl+Shift+A';
 /** The card parts a button opens or closes. @type {Set<string>} */
 const TOGGLES = new Set([CARD_ACTION.more, CARD_ACTION.note, CARD_ACTION.details]);
@@ -80,15 +82,23 @@ function focusNow() {
 function giveFocusBack(was) {
   if (!was) return;
   const el = /** @type {HTMLElement | null} */ ([...panel.querySelectorAll('[data-f]')].find(x => /** @type {HTMLElement} */ (x).dataset.f === was.f) ?? null);
-  el?.focus();
+  // What had the keys went (its group cleared): the first row has them, or the panel, so they stay in it.
+  if (!el || /** @type {HTMLButtonElement} */ (el).disabled) return /** @type {HTMLElement} */ (panel.querySelector(ITEM) ?? panel).focus();
+  el.focus();
   if (el instanceof HTMLInputElement && was.start !== null) el.setSelectionRange(was.start, was.end);
 }
 
-/** Drafts and errors of entries that are gone go with them. @param {ReturnType<typeof entries>} all */
+/** Drafts, errors and folds of entries that are gone go with them. @param {ReturnType<typeof entries>} all */
 function forgetGone(all) {
   const kept = new Set(all.map(e => e.key));
   for (const key of failures.keys()) if (!kept.has(key)) failures.delete(key);
   for (const key of drafts.keys()) if (![...kept].some(k => key === k || key === answerKey(k) || key === noteKey(k))) drafts.delete(key);
+  // A group that emptied isn't folded any more: its next notification shows.
+  const live = new Set(groupsOf(all).map(g => g.id));
+  const folded = state.inbox.folded ?? [];
+  if (folded.every(g => live.has(g))) return;
+  state.inbox.folded = folded.filter(g => live.has(g));
+  persist();
 }
 
 function draw() {
@@ -106,7 +116,7 @@ function draw() {
       ${titleIconHtml(button)}
       <span class="files-title">Notifications <span class="files-ws">${all.length}</span></span>
       <span class="files-tools">
-        <button class="pane-btn" data-inbox="${ACTION.clearAll}" data-f="${ACTION.clearAll}" title="Clear all"${all.length ? '' : ' disabled'}>${ICONS.trash}</button>
+        <button class="pane-btn" data-inbox="${ACTION.clearAll}" data-f="${ACTION.clearAll}" title="Clear all"${all.some(e => !e.waiting) ? '' : ' disabled'}>${ICONS.trash}</button>
         <button class="pane-btn" data-inbox="${ACTION.close}" data-f="${ACTION.close}" title="Close (${KEYS_TEXT})">${ICONS.close}</button>
       </span>
     </div>
@@ -138,6 +148,8 @@ export function toggleInbox() {
 
 /** The panel as it was left when Termilly closed: open or not, and its width (main.js, once the saved state is in). */
 export function initInbox() {
+  // Design B's picked source, saved before design A: nothing reads it now.
+  Reflect.deleteProperty(state.inbox, OLD_SOURCE_KEY);
   if (state.inbox.width) panel.style.width = `${state.inbox.width}px`;
   if (state.inbox.open) setOpen(true);
 }
