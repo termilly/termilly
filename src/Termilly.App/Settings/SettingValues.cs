@@ -213,13 +213,13 @@ internal static class SettingValues
         public const string Default = Always;
     }
 
-    /// <summary>The sidebar's agent activity line: everywhere, in the workspace on screen only, or nowhere.</summary>
+    /// <summary>The sidebar's agent activity line, in every workspace or nowhere.</summary>
     public static class AgentLine
     {
         public const string On = "on";
-        public const string Focused = "focused";
         public const string Off = "off";
         public const string Default = On;
+        public static readonly IReadOnlyList<string> All = [On, Off];
     }
 
     /// <summary>What an agent's use shows as: dollars, tokens, or nothing.</summary>

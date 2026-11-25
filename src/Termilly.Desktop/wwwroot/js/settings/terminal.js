@@ -85,7 +85,7 @@ const TERMINAL = {
     + row('Agent cost', 'What each agent has cost, in the sidebar and its status bar.',
       seg('agents.costDisplay', [[costDisplay.cost, 'Dollars'], [costDisplay.tokens, 'Tokens'], [costDisplay.off, 'Off']]), { keywords: 'agent claude cost price dollars tokens spend usage budget' })
     + row('Agent activity line', 'A dim line under an agent’s row: what it’s doing now.',
-      seg('agents.line', [[agentLine.on, 'On'], [agentLine.focused, 'This workspace'], [agentLine.off, 'Off']]), { keywords: 'agent claude activity status line sidebar' })
+      seg('agents.line', [[agentLine.on, 'On'], [agentLine.off, 'Off']]), { keywords: 'agent claude activity status line sidebar' })
     + row('Where to show background tasks', 'The spinner and "done" still wait for them.',
       flags([['agents.tasksInSidebar', 'Workspace'], ['agents.tasksInBar', 'Terminal bar']]), { keywords: 'background task agent command running review test server sidebar chip bar' })
     + row('Live agents', 'Above this many, idle agents in other workspaces hibernate.',

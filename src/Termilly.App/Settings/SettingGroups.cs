@@ -480,6 +480,8 @@ internal sealed record AgentSettings
     public AgentSettings Normalize() => this with
     {
         Limit = SettingChecks.OneOf(Limit, SettingValues.AgentLimit.All, SettingValues.AgentLimit.Default),
+        // The old "This workspace" choice is gone: it shows everywhere now.
+        Line = SettingChecks.OneOf(Line, SettingValues.AgentLine.All, SettingValues.AgentLine.Default),
     };
 }
 

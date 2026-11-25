@@ -600,9 +600,9 @@ export const SETTING_VALUES = Object.freeze({
   }),
   agentLine: Object.freeze({
     on: 'on',
-    focused: 'focused',
     off: 'off',
     default: 'on',
+    all: Object.freeze(['on', 'off']),
   }),
   costDisplay: Object.freeze({
     cost: 'cost',
