@@ -279,6 +279,7 @@ export function closeTab(tab) {
     disposeTerminal(tab);
     tab.view?.el.remove();
     state.tabs.delete(tab.id);
+    emit(EVENTS.tabClosed, tab);
     emit(EVENTS.scratchClosed);
     restoreFocus();
     return;
