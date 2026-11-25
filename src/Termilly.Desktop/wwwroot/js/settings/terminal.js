@@ -7,7 +7,7 @@ import { state, isSshProfile, activityChanged, GROUPS } from '../store.js';
 import { escapeHtml, ICONS, profileOptionsHtml } from '../ui.js';
 import { environments } from '../environments.js';
 import { updateSettings } from '../preferences.js';
-import { row, seg, toggle, group, choices } from './controls.js';
+import { row, seg, toggle, group, choices, flags } from './controls.js';
 import { SECTION } from './page.js';
 import { triggerList, triggerActions, triggerClick, triggerChange, triggerInput } from './triggers.js';
 import { shellList, profileActions, profileClick } from './profiles.js';
@@ -86,10 +86,10 @@ const TERMINAL = {
       seg('agents.costDisplay', [[costDisplay.cost, 'Dollars'], [costDisplay.tokens, 'Tokens'], [costDisplay.off, 'Off']]), { keywords: 'agent claude cost price dollars tokens spend usage budget' })
     + row('Agent activity line', 'A dim line under an agent’s row: what it’s doing now.',
       seg('agents.line', [[agentLine.on, 'On'], [agentLine.focused, 'This workspace'], [agentLine.off, 'Off']]), { keywords: 'agent claude activity status line sidebar' })
+    + row('Where to show background tasks', 'The spinner and "done" still wait for them.',
+      flags([['agents.tasksInSidebar', 'Workspace'], ['agents.tasksInBar', 'Terminal bar']]), { keywords: 'background task agent command running review test server sidebar chip bar' })
     + row('Live agents', 'Above this many, idle agents in other workspaces hibernate.',
       seg('agents.limit', choices(agentLimit.all, limit => (limit ? String(limit) : 'No limit')))))
-    + group('Background tasks', row('In the sidebar', 'Each task an agent runs in the background, under its terminal.', toggle('agents.tasksInSidebar'), { keywords: 'background task agent command running review test server' })
-      + row('In the terminal bar', 'How many run. Click for their output and Stop.', toggle('agents.tasksInBar'), { keywords: 'background task agent command running chip bar' }))
     + group('Status bar', statusBarRows())
     + group('Autocomplete', row('Suggest commands from history', 'Grey text after the cursor at a shell prompt. → takes it, Ctrl+→ one word.', toggle('terminal.autocomplete'), { keywords: 'autocomplete suggest suggestion complete history ghost inline' })
       + row('Words on the screen in the list', 'The list (Ctrl+Shift+Space) also offers words shown above the prompt.', toggle('terminal.autocompleteScreenWords'), { keywords: 'autocomplete suggest list words screen', needs: AUTOCOMPLETE }))

@@ -73,6 +73,15 @@ test('a background task keeps the spinner, shows its row and chip, and holds "do
     });
     assert.deepEqual(running, { spin: 'spin', state: 'done', held: true });
 
+    // Settings › Terminal: Workspace off takes the rows away, the chip stays; on again brings them back.
+    await app.eval(async t => (await t.import('settings.js')).openSettings('terminal'));
+    await app.click('[data-flag="agents.tasksInSidebar"]');
+    await app.waitFor('.task-row', { gone: true });
+    await app.waitFor('.tasks-chip', { text: '1 task' });
+    await app.click('[data-flag="agents.tasksInSidebar"]');
+    await app.waitFor('.task-row.running', { text: NAME });
+    await app.key('body', 'Escape');
+
     // Ended: ✓ in its row, the chip gone, "done" through.
     await writeFile(output, 'Reading src/EarlyShell.cs\nNo findings\n\n[exited with code 0]\n');
     await app.waitFor('.task-row.done', { text: NAME });
