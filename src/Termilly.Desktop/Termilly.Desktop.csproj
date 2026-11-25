@@ -53,6 +53,12 @@
     <PropertyGroup>
       <AgentOutputDir>$([System.IO.Path]::GetDirectoryName($(AgentTargetPath)))\</AgentOutputDir>
     </PropertyGroup>
+    <!-- Release: the helper as published, precompiled for this system (Termilly.Agent.csproj). -->
+    <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+      <AgentOutputDir>$([System.IO.Path]::GetFullPath('$(IntermediateOutputPath)agent-r2r'))\</AgentOutputDir>
+    </PropertyGroup>
+    <MSBuild Condition="'$(Configuration)' == 'Release'" Projects="..\Termilly.Agent\Termilly.Agent.csproj" Targets="Publish"
+      Properties="Configuration=Release;RuntimeIdentifier=$(NETCoreSdkRuntimeIdentifier);SelfContained=false;PublishDir=$(AgentOutputDir)" />
     <ItemGroup>
       <AgentFiles Include="$(AgentOutputDir)termilly-hook.*" Exclude="$(AgentOutputDir)*.pdb" />
     </ItemGroup>

@@ -15,6 +15,16 @@
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
   </PropertyGroup>
 
+  <!--
+    Release: precompiled (ReadyToRun), as the apps publish it (CopyAgentHelper in Termilly.Desktop and Termilly.Linux,
+    installer/mac/build-app.sh). It runs for every hook and every agent start, so its own start counts. The systems
+    it's built for are restored up front, as a publish for one needs.
+  -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <PublishReadyToRun>true</PublishReadyToRun>
+    <RuntimeIdentifiers>win-x64;win-arm64;linux-x64;linux-arm64;osx-x64;osx-arm64</RuntimeIdentifiers>
+  </PropertyGroup>
+
   <!-- The Linux keyring and the macOS keychain, shared with the app: askpass reads saved passwords from them. -->
   <ItemGroup>
     <Compile Include="..\Termilly.App\LibSecret.cs" Link="LibSecret.cs" />
