@@ -286,6 +286,7 @@ internal sealed class WindowHandler : IMessageHandler
             _quit.Answer(m.Answer);
         });
         router.On<FromPage.PageError>(m => Console.Error.WriteLine($"termilly page: {m.Message} ({m.Where})"));
+        router.On<FromPage.StartupStep>(m => StartupLog.MarkFromPage(m.Step));
         router.On<FromPage.Notify>(m => _notifier.Notify(m.Id, m.Title ?? Product.Name, m.Body ?? ""));
         router.On<FromPage.NotifyWithdraw>(m => _notifier.Withdraw(m.Id));
         router.On<FromPage.Badge>(m => _window.ShowBadge(m.Count));

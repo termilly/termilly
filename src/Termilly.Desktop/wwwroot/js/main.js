@@ -8,6 +8,7 @@ import {
   state, restore, newId, emit, saveNow, WORKSPACE_COLORS, PROFILE_SOURCES, agentChanged, markSeen, GROUPS, EVENTS, sourceOf, SPLIT,
 } from './store.js';
 import { setWindowState } from './windowshown.js';
+import { scriptsLoaded } from './startuplog.js';
 import { setFocusRestorer, openPopover, closePopover } from './popups.js';
 import { setKeyHandler, scheduleFit, clearActivity, keptRunning, holdOpening, openHeld } from './terminals.js';
 import { consoleDefaults } from './consolecolors.js';
@@ -698,3 +699,4 @@ onHost(HOST.profiles, m => {
 });
 
 send(PAGE.settingsLoad);
+scriptsLoaded(); // every module has run by now: the page's own share of the start

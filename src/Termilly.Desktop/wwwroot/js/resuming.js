@@ -11,6 +11,7 @@ import { PAGE } from './protocol.js';
 import { on, emit, runningAgent, EVENTS } from './store.js';
 import { agentKind } from './agentkinds.js';
 import { atPrompt } from './buffer.js';
+import { resumeStep } from './startuplog.js';
 
 /** Typed this long ago and still at a prompt: once more. */
 const RETRY_AFTER_MS = 15_000;
@@ -27,6 +28,7 @@ export const CANCEL_KEY = '\x1b';
  */
 export function startResuming(tab, session, kind) {
   tab.resuming = { session, kind, command: null, retried: false, timer: 0 };
+  resumeStep(tab.id, `${kind} waits for its terminal`);
   drawOverlay(tab);
 }
 
@@ -49,6 +51,7 @@ export function resumeTyped(tab, command) {
     if (r.retried) return void gaveUp(tab);
     r.retried = true;
     send(PAGE.input, { id: tab.id, data: `${command}\r` });
+    resumeStep(tab.id, 'command typed again, the first one did not take');
     r.timer = window.setTimeout(check, RETRY_AFTER_MS);
   };
   r.timer = window.setTimeout(check, RETRY_AFTER_MS);
@@ -61,7 +64,7 @@ export function resumeTyped(tab, command) {
  */
 function gaveUp(tab) {
   if (tab.start) tab.start.resumeSession = null;
-  done(tab);
+  done(tab, false, 'gave up, the shell still at its prompt');
 }
 
 /**
@@ -76,7 +79,7 @@ export function cancelResume(tab) {
     tab.start.command = null;
     if (!typed) tab.start.resumeSession = null;
   }
-  done(tab);
+  done(tab, false, 'cancelled with Esc');
 }
 
 /**
@@ -84,15 +87,16 @@ export function cancelResume(tab) {
  * goes on as it was, without the overlay.
  * @param {Tab} tab
  */
-export const keptAgent = tab => done(tab);
+export const keptAgent = tab => done(tab, false, 'kept running by the background host');
 
 /**
  * Resuming is over: the session is back (resumed), or Esc. A session that's back is at the terminal's end, where its
  * view goes; the restart put the view where it was before (terminals.js scrollRestored), above what the agent drew.
  * @param {Tab} tab
  * @param {boolean} [resumed]
+ * @param {string} [how] how it ended, for startup.log
  */
-function done(tab, resumed = false) {
+function done(tab, resumed = false, how = resumed ? 'agent back' : 'over without the agent') {
   settling.get(tab)?.();
   if (!tab.resuming) return;
   clearTimeout(tab.resuming.timer);
@@ -102,6 +106,7 @@ function done(tab, resumed = false) {
     resumedTabs.add(tab);
     tab.view?.term?.scrollToBottom();
   }
+  resumeStep(tab.id, how);
   emit(EVENTS.tab, tab);
 }
 

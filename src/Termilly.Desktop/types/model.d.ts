@@ -289,7 +289,7 @@ interface Tab {
   /** Who has it open: the paired phones' and computers' names (js/phone.js). */
   viewers?: string[];
   /** Its agent's session (Claude Code, Codex: kind) is resuming after a restart, until it runs (js/resuming.js). */
-  resuming?: { session: string; kind: string; command: string | null; retried: boolean; timer: number } | null;
+  resuming?: { session: string; kind: string; command: string | null; retried: boolean; timer: number; prompted?: boolean } | null;
   /** What it brings back and types as its shell starts (js/terminals.js). */
   start?: import('../wwwroot/js/terminals.js').ShellStart;
   /** js/terminals.js's timers for its shell. */
