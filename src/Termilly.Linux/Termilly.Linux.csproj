@@ -141,4 +141,6 @@
     <Using Include="Termilly.Shared" />
   </ItemGroup>
 
+  <Import Project="..\..\scripts\BundlePage.targets" />
+
 </Project>

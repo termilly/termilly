@@ -109,6 +109,21 @@ async function waitFor(selector, { text, gone = false, timeoutMs = WAIT_MS } = {
   throw new Error(`Timed out waiting for ${selector} (text=${text}, gone=${gone}). Saw: ${seen || 'no matches'}`);
 }
 
+/**
+ * The page's modules by file name, when it runs as one bundled file (scripts/bundle.mjs): importing a file by name
+ * would load a second copy of it, with state of its own. Empty when the page runs its files one by one.
+ * @type {Record<string, object>}
+ */
+let bundled = {};
+
+/**
+ * Takes the modules the bundle ran, by file name (called by the bundle, never by the page's own files).
+ * @param {Record<string, object>} modules
+ */
+export function registerModules(modules) {
+  bundled = modules;
+}
+
 const helpers = Object.freeze({
   $: first, $$: all,
   /** @param {string} selector */
@@ -117,7 +132,7 @@ const helpers = Object.freeze({
   visible: selector => all(selector).some(shown),
   click, dblclick, contextmenu, type, key: pressKey, waitFor,
   /** @param {string} path */
-  import: path => import(new URL(path, import.meta.url).href),
+  import: path => bundled[path] ?? import(new URL(path, import.meta.url).href),
 });
 
 onHost(HOST.testEval, async ({ id, code }) => {
