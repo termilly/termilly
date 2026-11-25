@@ -207,13 +207,13 @@ const asTyped = text => (text.includes('\n') ? `${PASTE_START}${text}${PASTE_END
 const ENTER_SETTLE_MS = 1500;
 
 /**
- * Whether words in the agent's input line may move to the prompt box: it runs there, at its prompt (Codex past its
- * start), isn't working (what it's sent is being taken) or asking a question of its own, and no prompt was just sent
- * from its terminal (the agent may not have redrawn its input line yet, nor reported it works).
+ * Whether words in the agent's input line may move to the prompt box: it runs there (Codex past its start), isn't
+ * asking a question of its own, and no prompt was just sent from its terminal (the agent may not have redrawn its
+ * input line yet). While it works too: words typed for its next turn, or to queue, move as at its prompt.
  * @param {Tab} tab
  */
 const canTake = tab => !tab.exited && !!runningAgent(tab) && !isStarting(tab) && !waitsForAnswer(tab)
-  && tab.agent?.state !== AGENT_STATE.working && Date.now() - (compactOf(tab).keys?.enteredAt ?? 0) >= ENTER_SETTLE_MS;
+  && Date.now() - (compactOf(tab).keys?.enteredAt ?? 0) >= ENTER_SETTLE_MS;
 
 /**
  * Follows the keys typed into the terminal from its start, Full view or not: the prompt box gets them exactly.
