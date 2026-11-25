@@ -97,9 +97,13 @@
 .inbox-group-count { color: var(--faint); font-size: 11px; font-weight: 400; font-variant-numeric: tabular-nums; }
 .inbox-group-clear { flex: none; height: 22px; padding: 0 8px; border-radius: 6px; color: var(--muted); font-size: 11.5px; }
 .inbox-group-clear:hover, .inbox-group-clear:focus-visible { background: var(--hover); color: var(--text); outline: none; }
-/* Normal, the center closed (js/inboxalert.js): the pane's flash (panes.css), pulsing three times and reaching a little
-   past the button, since one blink on a button this small goes unseen. */
-#inbox-button > .pane-arrived { inset: -3px; border-radius: 9px; animation: button-arrived 1.2s ease-out forwards; }
+/* Normal, the center closed (js/inboxalert.js): the pane's flash (panes.css) kept within the button, a thin ring and a
+   light fill, pulsing three times since one blink on a button this small goes unseen. */
+#inbox-button > .pane-arrived {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+  animation: button-arrived 1.2s ease-out forwards;
+}
 @keyframes button-arrived {
   0%, 30%, 60%, 100% { opacity: 0; }
   10%, 40%, 70% { opacity: 1; }
