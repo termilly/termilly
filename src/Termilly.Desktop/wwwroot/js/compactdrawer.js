@@ -95,8 +95,11 @@ const RULE_START = '─';
  * @param {string} row
  */
 const isInputRule = row => row.startsWith(RULE_START) && isRule(row);
-/** The input line's mark at the screen's left edge (its later rows are indented), and the one space after it. */
-const MARK_AND_SPACE = /^[>›❯] ?/;
+/**
+ * The input line's mark at the screen's left edge (its later rows are indented), and the one space after it (Claude
+ * Code draws a no-break space there).
+ */
+const MARK_AND_SPACE = /^[>›❯][ \u00a0]?/;
 /** What an agent shows in its input line for something it holds folded up (a long paste, a picture): not its text. */
 const FOLDED = /\[(Pasted|Image)/i;
 /** The keys that delete a character after the caret and before it. */

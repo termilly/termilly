@@ -156,3 +156,8 @@ test('a named rule counts from the left edge only: indented, it is a command tex
   assert.equal(isRule(`   ${'─'.repeat(8)} section ${'─'.repeat(8)}`), false);
   assert.equal(isRule(`   ${'─'.repeat(40)}`), true);
 });
+
+test("Claude Code's no-break space after its mark isn't part of the prompt", () => {
+  const rows = ['● Working', '', RULE, '❯\u00a0next: write a summary', RULE, ...CLAUDE_FOOTER];
+  assert.equal(typedPrompt(typedTerm(rows, 3, 23))?.text, 'next: write a summary');
+});
