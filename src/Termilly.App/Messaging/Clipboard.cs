@@ -48,6 +48,15 @@ internal static partial class FromPage
     {
         public static string Type => "clip:take";
     }
+
+    /// <summary>
+    /// The system clipboard's text, read by the host where the page's own reading asks the user first (macOS: WebKit
+    /// shows its Paste button for text another app copied).
+    /// </summary>
+    internal sealed record ClipRead(string? RequestId = null) : IPageMessage
+    {
+        public static string Type => "clip:read";
+    }
 }
 
 internal static partial class ToPage
@@ -62,6 +71,12 @@ internal static partial class ToPage
     internal sealed record ClipTaken(string? RequestId, string? Text, string? Error = null) : IHostMessage
     {
         public static string Type => "clip:taken";
+    }
+
+    /// <summary>The system clipboard's text (<see cref="FromPage.ClipRead"/>), or null when it has none.</summary>
+    internal sealed record ClipText(string? RequestId, string? Text) : IHostMessage
+    {
+        public static string Type => "clip:text";
     }
 }
 

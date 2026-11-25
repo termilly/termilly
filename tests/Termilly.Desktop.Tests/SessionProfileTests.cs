@@ -367,6 +367,19 @@ public sealed class SessionProfileTests : IDisposable
         Assert.True(File.Exists(Path.Combine(SessionLaunch.ZshFolder, ".zshrc")));
     }
 
+    [Fact]
+    public void Claude_code_in_zsh_starts_with_zshs_integration()
+    {
+        // Its integration puts the claude shim back first on PATH at each prompt: a ~/.zshrc putting ~/.local/bin first
+        // otherwise starts the real claude, without Termilly's hooks.
+        var claude = new SessionProfile("claude", "Claude Code", "claude in zsh", "claude", "/bin/zsh -l", ProfileSources.Local,
+            StartCommand: "claude", ShellIcon: "bash", ShellId: "zsh");
+        var (commandLine, vars) = SessionLaunch.WithShellIntegration(claude, new Dictionary<string, string>());
+        Assert.Equal("/bin/zsh -l", commandLine);
+        Assert.Equal(SessionLaunch.ZshFolder, vars["ZDOTDIR"]);
+        Assert.False(vars.ContainsKey("PROMPT_COMMAND"));
+    }
+
     [Theory]
     [InlineData("tcsh")]
     [InlineData("csh")]

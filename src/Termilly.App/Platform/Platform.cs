@@ -133,6 +133,13 @@ internal interface IClipboardWatch
     void Start();
 }
 
+/// <summary>The system clipboard's text, read by the host (macOS); elsewhere the page reads it itself.</summary>
+internal interface IClipboardReader
+{
+    /// <summary>The text on the clipboard, or null when there's none.</summary>
+    string? ReadText();
+}
+
 /// <summary>The system's notifications.</summary>
 internal interface INotifier
 {

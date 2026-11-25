@@ -89,11 +89,12 @@ internal static class Program
     private static IServiceCollection MacServices(LinuxWindow window, string? folder, out PhotinoPlatform platform)
     {
         platform = new MacPlatform(window.Send, folder, new ProcessRunner());
-        var onWindow = platform.OnWindowThread;
+        var clipboard = new MacClipboard(platform.OnWindowThread);
         return new ServiceCollection()
             .AddTermilly()
             .AddPlatform(platform)
-            .AddSingleton<IClipboardWatch>(new MacClipboard(onWindow))
+            .AddSingleton<IClipboardWatch>(clipboard)
+            .AddSingleton<IClipboardReader>(clipboard)
             .AddSingleton<ICredentialStore, MacKeychainStore>()
             .AddSingleton<IFontCatalog, MacFonts>()
             .AddSingleton<IAudioOutputs, MacAudio>()

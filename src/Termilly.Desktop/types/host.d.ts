@@ -497,4 +497,5 @@ interface SessionProfile {
   tags: string[] | null;
   startCommand: string | null;
   shellIcon: string | null;
+  shellId: string | null;
 }

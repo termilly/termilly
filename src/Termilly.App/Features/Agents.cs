@@ -203,6 +203,13 @@ internal sealed class AgentMonitor : IStartable, IDisposable
             }
             _page.Post(new ToPage.HookedAgent(e.Pane, state, e.Event, e.Tool, e.Message, e.Reason, e.Session, e.Target ?? e.File, e.Folder, e.Prompt, e.Agent));
         }
+        PostStatus(e, settings, limitsShown);
+        return reply;
+    }
+
+    /// <summary>What Claude Code's status line and a subagent's end report: limits, cost, context.</summary>
+    private void PostStatus(AgentEvent e, AppSettings settings, bool limitsShown)
+    {
         if (e.Status?.Limits is { } limits && limitsShown)
         {
             // The limits are the account's, not the terminal's: the page shows them on every Claude terminal.
@@ -223,7 +230,6 @@ internal sealed class AgentMonitor : IStartable, IDisposable
             // Claude Code's own context figures for this terminal's session; the page prefers them to the transcript's.
             _page.Post(new ToPage.ContextReport(e.Pane, e.Session, context.Used, context.Size, context.Tokens));
         }
-        return reply;
     }
 
     /// <summary>Subagents get rows under their terminal (js/subagents.js): an Agent call, their start and stop, their tools.</summary>

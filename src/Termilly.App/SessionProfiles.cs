@@ -16,6 +16,8 @@ namespace Termilly.Desktop;
 /// <param name="StartCommand">Typed at a new terminal's first prompt (Claude Code: claude).</param>
 /// <param name="ShellIcon">The shell it runs in, when its icon is something else (Claude Code in PowerShell): its
 /// integration and its quoting are the shell's.</param>
+/// <param name=ShellId>The shell profile it runs in, when it's another (Claude Code in zsh): its integration is that
+/// shell's, as for the shell's own terminals.</param>
 internal sealed record SessionProfile(
     string Id,
     string Name,
@@ -27,10 +29,14 @@ internal sealed record SessionProfile(
     IReadOnlyDictionary<string, string>? Environment = null,
     IReadOnlyList<string>? Tags = null,
     string? StartCommand = null,
-    string? ShellIcon = null)
+    string? ShellIcon = null,
+    string? ShellId = null)
 {
     /// <summary>The shell's icon: its own, or the one it runs in.</summary>
     public string Shell => ShellIcon ?? Icon;
+
+    /// <summary>Which shell it is (zsh, fish, …): its own id, or the one of the shell it runs in.</summary>
+    public string ShellKind => ShellId ?? Id;
 }
 
 /// <summary>
@@ -127,7 +133,7 @@ internal static partial class SessionProfiles
         }
         var shell = shells[0];
         return new SessionProfile(id, name, $"{id} in {shell.Name}", icon, shell.CommandLine, ProfileSources.Local,
-            StartCommand: id, ShellIcon: shell.Shell);
+            StartCommand: id, ShellIcon: shell.Shell, ShellId: shell.ShellKind);
     }
 
     /// <summary>
