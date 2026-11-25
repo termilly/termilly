@@ -51,15 +51,38 @@ public sealed class TaskProcessesTests
         {
             using var self = System.Diagnostics.Process.GetCurrentProcess();
             var processes = new TaskProcesses([self.ProcessName]);
-            WaitFor(() => processes.StopCommand(Environment.ProcessId, Command(61) + "…"));
+            WaitFor(() => processes.StopCommand(Environment.ProcessId, Command(61) + "…", DateTimeOffset.Now));
             Assert.True(task.WaitForExit(5000));
             Assert.False(bystander.HasExited);
-            Assert.False(processes.StopCommand(Environment.ProcessId, "nothing runs this"));
+            Assert.False(processes.StopCommand(Environment.ProcessId, "nothing runs this", DateTimeOffset.Now));
         }
         finally
         {
             bystander.Kill(entireProcessTree: true);
             bystander.WaitForExit(5000);
+        }
+    }
+
+    [Fact]
+    public void Of_the_same_command_twice_Stop_ends_the_one_started_nearest_the_task()
+    {
+        var command = OperatingSystem.IsWindows() ? "ping -n 63 127.0.0.1" : "sleep 63; echo done";
+        using var earlier = Running(command);
+        Thread.Sleep(1500);
+        using var task = Running(command);
+        var started = new DateTimeOffset(task.StartTime);
+        try
+        {
+            using var self = System.Diagnostics.Process.GetCurrentProcess();
+            var processes = new TaskProcesses([self.ProcessName]);
+            WaitFor(() => processes.StopCommand(Environment.ProcessId, command, started));
+            Assert.True(task.WaitForExit(5000));
+            Assert.False(earlier.HasExited);
+        }
+        finally
+        {
+            earlier.Kill(entireProcessTree: true);
+            earlier.WaitForExit(5000);
         }
     }
 

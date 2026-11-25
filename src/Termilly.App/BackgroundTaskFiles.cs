@@ -20,6 +20,9 @@ internal interface ITaskOutput
 
     /// <summary>The task's output so far, or null while there's none to read.</summary>
     TaskReading? Read(string session, string taskId);
+
+    /// <summary>No task of the session is left: what was kept to read its tasks goes.</summary>
+    void Forget(string session);
 }
 
 /// <summary>A background task's process: the shell an agent started it in, and what that shell runs.</summary>
@@ -33,9 +36,9 @@ internal interface ITaskProcesses
 
     /// <summary>
     /// Ends the task that runs <paramref name="command"/> (Codex's: it has no output file), under an agent in the
-    /// terminal: false when none is found.
+    /// terminal, started nearest <paramref name="started"/>: false when none is found.
     /// </summary>
-    bool StopCommand(int terminalPid, string command);
+    bool StopCommand(int terminalPid, string command, DateTimeOffset started);
 }
 
 /// <summary>
@@ -65,6 +68,14 @@ internal sealed partial class ClaudeTaskOutput : ITaskOutput
     internal ClaudeTaskOutput(string tempRoot) => _tempRoot = tempRoot;
 
     public bool ReadsWhileRunning => true;
+
+    public void Forget(string session)
+    {
+        foreach (var key in _found.Keys.Where(k => k.Item1 == session).ToList())
+        {
+            _found.Remove(key);
+        }
+    }
 
     public TaskReading? Read(string session, string taskId)
     {
@@ -179,7 +190,7 @@ internal sealed class TaskProcesses : ITaskProcesses
         return KillChecked(tree.Topmost(holders), () => FileHolders.Of(outputFile, tree.Below.Keys).ToHashSet());
     }
 
-    public bool StopCommand(int terminalPid, string command)
+    public bool StopCommand(int terminalPid, string command, DateTimeOffset started)
     {
         // The hook's command may have been cut short ("…" at its end): its start is what's looked for.
         var wanted = command.TrimEnd('…').Trim();
@@ -190,7 +201,29 @@ internal sealed class TaskProcesses : ITaskProcesses
         var tree = TreeOf(terminalPid);
         var candidates = tree.Below.Keys.Where(pid => !tree.Agents.Contains(pid) && tree.UnderAgent(pid)).ToList();
         HashSet<int> Running() => [.. ProcessCommandLines.Of(candidates).Where(p => p.Value.Contains(wanted, StringComparison.Ordinal)).Select(p => p.Key)];
-        return KillChecked(tree.Topmost(Running()), Running);
+        // The same command may run twice (or one that contains it): the one started nearest the task is the task's.
+        return Closest(tree.Topmost(Running()), started) is { } task && KillChecked([task], Running);
+    }
+
+    /// <summary>Of the processes, the one that started nearest the time; one whose start can't be read is the last pick.</summary>
+    private static int? Closest(List<int> pids, DateTimeOffset started)
+    {
+        if (pids.Count <= 1)
+        {
+            return pids.Count == 0 ? null : pids[0];
+        }
+        return pids.MinBy(pid =>
+        {
+            using var process = Open(pid);
+            try
+            {
+                return process is null ? TimeSpan.MaxValue : (new DateTimeOffset(process.StartTime) - started).Duration();
+            }
+            catch (Exception e) when (e is InvalidOperationException or System.ComponentModel.Win32Exception or NotSupportedException)
+            {
+                return TimeSpan.MaxValue;
+            }
+        });
     }
 
     /// <summary>

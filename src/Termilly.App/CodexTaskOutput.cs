@@ -62,6 +62,8 @@ internal sealed class CodexTaskOutput : ITaskOutput
         return follow.Ended.GetValueOrDefault(taskId);
     }
 
+    public void Forget(string session) => _follows.Remove(session);
+
     /// <summary>A command's end, kept by its id; only lines that name a command are parsed.</summary>
     private static bool Ended(ReadOnlySpan<byte> line, Dictionary<string, TaskReading> ended)
     {

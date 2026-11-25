@@ -98,6 +98,13 @@ internal sealed class BackgroundTasks : IMessageHandler, IDisposable
             else if (e is { Event: HookEvents.PostToolUse, Task.ToolUseId: { } ended })
             {
                 _running.GetValueOrDefault(e.Pane)?.RemoveAll(t => t.UseId == ended);
+                // Late news of one taken for a task already: it ended (its exit isn't said).
+                if (_tasks.GetValueOrDefault(e.Pane)?.Find(t => t.UseId == ended && t.Ended is null) is { } promoted)
+                {
+                    promoted.Reading = new TaskReading(null, promoted.Reading?.LastLine, 0);
+                    promoted.Ended = _clock.GetUtcNow();
+                    Post(e.Pane);
+                }
             }
             else if (e.Event is HookEvents.Stop or HookEvents.Interrupt && _running.Remove(e.Pane, out var left))
             {
@@ -129,7 +136,10 @@ internal sealed class BackgroundTasks : IMessageHandler, IDisposable
             var now = _clock.GetUtcNow();
             foreach (var (pane, list) in _tasks.ToList())
             {
-                var removed = list.RemoveAll(t => now - t.Ended > KeepEnded || NeverStarted(t, now)) > 0;
+                var gone = list.FindAll(t => now - t.Ended > KeepEnded || NeverStarted(t, now));
+                list.RemoveAll(gone.Contains);
+                Release(gone);
+                var removed = gone.Count > 0;
                 var read = false;
                 foreach (var task in list.Where(t => t.Ended is null))
                 {
@@ -184,7 +194,7 @@ internal sealed class BackgroundTasks : IMessageHandler, IDisposable
         }
         else if (task.Agent == AgentKinds.Codex && task.Command is { } command)
         {
-            _ = Task.Run(() => _processes.StopCommand(pid, command));
+            _ = Task.Run(() => _processes.StopCommand(pid, command, task.Started));
         }
     }
 
@@ -224,9 +234,22 @@ internal sealed class BackgroundTasks : IMessageHandler, IDisposable
     private void ForgetLocked(string pane)
     {
         _running.Remove(pane);
-        if (_tasks.Remove(pane))
+        if (_tasks.Remove(pane, out var gone))
         {
+            Release(gone);
             _page.Post(new ToPage.AgentTasks(pane, [], Gone: true));
+        }
+    }
+
+    /// <summary>The outputs these tasks were read from stop being followed, once no other task of their session is left.</summary>
+    private void Release(List<Tracked> gone)
+    {
+        foreach (var task in gone.DistinctBy(t => (t.Agent, t.Session)))
+        {
+            if (!_tasks.Values.Concat(_running.Values).Any(list => list.Exists(t => t.Agent == task.Agent && t.Session == task.Session)))
+            {
+                OutputOf(task).Forget(task.Session);
+            }
         }
     }
 

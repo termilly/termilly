@@ -40,6 +40,8 @@ public sealed class BackgroundTasksTests : IDisposable
     private sealed class FakeOutput(bool readsWhileRunning = true) : ITaskOutput
     {
         public bool ReadsWhileRunning => readsWhileRunning;
+        public List<string> Forgotten { get; } = [];
+        public void Forget(string session) => Forgotten.Add(session);
         public TaskReading? Reading { get; set; }
         public TaskReading? Read(string session, string taskId) => session == Session && taskId is TaskId or CodexId ? Reading : null;
     }
@@ -47,7 +49,7 @@ public sealed class BackgroundTasksTests : IDisposable
     private sealed class FakeProcesses : ITaskProcesses
     {
         public bool Stop(int terminalPid, string outputFile) => true;
-        public bool StopCommand(int terminalPid, string command) => true;
+        public bool StopCommand(int terminalPid, string command, DateTimeOffset started) => true;
     }
 
     private sealed class Clock : TimeProvider
@@ -176,6 +178,28 @@ public sealed class BackgroundTasksTests : IDisposable
         _codex.Reading = new TaskReading(null, "ready on :3000", 1);
         _tasks.Tick();
         Assert.Equal(TaskStates.Failed, (string?)LastList().Single()!["state"]);
+    }
+
+    [Fact]
+    public void A_Codex_task_whose_command_reports_its_end_after_all_ends()
+    {
+        _tasks.OnEvent(CodexEvent("PreToolUse"));
+        _tasks.OnEvent(CodexEvent("Stop"));
+        _tasks.OnEvent(CodexEvent("PostToolUse"));
+        Assert.Equal(TaskStates.Done, (string?)LastList().Single()!["state"]);
+    }
+
+    [Fact]
+    public void A_session_whose_tasks_are_all_gone_isnt_followed_any_longer()
+    {
+        _tasks.OnEvent(CodexEvent("PreToolUse"));
+        _tasks.OnEvent(CodexEvent("Stop"));
+        _codex.Reading = new TaskReading(null, "ok", 0);
+        _tasks.Tick();
+        Assert.Empty(_codex.Forgotten);
+        _clock.Now += TimeSpan.FromMinutes(2);
+        _tasks.Tick();
+        Assert.Equal([Session], _codex.Forgotten);
     }
 
     [Fact]
