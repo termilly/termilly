@@ -27,8 +27,8 @@ const room = () => app.eval(t => parseFloat(t.$('#workspace').style.getPropertyV
 
 /** The groups' names and their rows' names, top to bottom. */
 const feed = () => app.eval(t => ({
-  groups: [...t.$('.inbox-group-fold .name')].map(n => n.textContent),
-  names: [...t.$('.inbox-feed .inbox-item .name')].map(n => n.textContent),
+  groups: [...t.$$('.inbox-group-fold .name')].map(n => n.textContent),
+  names: [...t.$$('.inbox-feed .inbox-item .name')].map(n => n.textContent),
 }));
 
 /**
