@@ -132,12 +132,15 @@ step('narrow, the sources hide and the feed shows All', async () => {
   await until(async () => (await feed()).names.join() === 'Nightly', 'only the schedule');
   await app.eval(async t => {
     const panel = t.$('#inbox');
+    globalThis.inboxGrip = panel.querySelector(':scope > .files-grip');
     panel.style.width = '320px';
     (await t.import('inbox.js')).addScheduleNote({ id: 'r2', title: 'Hourly', detail: 'Worked', failed: false, at: Date.now() });
   });
   await until(() => app.eval(t => t.$('#inbox').classList.contains('narrow')), 'narrow');
   assert.equal(await app.eval(t => globalThis.getComputedStyle(t.$('.inbox-sources')).display), 'none');
   assert.match((await feed()).head, /^All/);
+  // Drawn anew mid-drag, a new grip would lose the pointer and the drag would stop.
+  assert.equal(await app.eval(t => t.$('#inbox > .files-grip') === globalThis.inboxGrip), true, 'the grip outlives the redraw');
   await app.eval(async t => {
     t.$('#inbox').style.width = '';
     (await t.import('inbox.js')).clear('r2');

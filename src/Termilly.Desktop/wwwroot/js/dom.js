@@ -123,17 +123,42 @@ export function showError(el, text) {
  */
 export function dragPointer(el, e, move, done) {
   el.setPointerCapture(e.pointerId);
+  // Ends on release, or when the capture goes without one (the system cancelled the pointer): a grip that stays put
+  // would otherwise keep resizing on a plain hover.
   const up = () => {
     el.removeEventListener('pointermove', move);
     el.removeEventListener('pointerup', up);
+    el.removeEventListener('lostpointercapture', up);
     done?.();
   };
   el.addEventListener('pointermove', move);
   el.addEventListener('pointerup', up);
+  el.addEventListener('lostpointercapture', up);
 }
 
 /** The class of a docked panel's grip, on its left edge. */
 export const DOCK_GRIP = 'files-grip';
+/** What a docked panel's grip says on hover. */
+const DOCK_GRIP_TITLE = 'Drag to resize';
+
+/**
+ * Fills a docked panel that redraws while it's resized (its layout changes with its width), keeping its grip: a grip
+ * drawn anew mid-drag loses the pointer it holds, and the drag stops.
+ * @param {HTMLElement} panel
+ * @param {string} html everything but the grip
+ */
+export function fillDockedPanel(panel, html) {
+  let grip = /** @type {HTMLElement | null} */ (panel.querySelector(`:scope > .${DOCK_GRIP}`));
+  if (!grip) {
+    grip = document.createElement('div');
+    grip.className = DOCK_GRIP;
+    grip.title = DOCK_GRIP_TITLE;
+    panel.prepend(grip);
+  }
+  for (const node of [...panel.childNodes]) if (node !== grip) node.remove();
+  grip.insertAdjacentHTML('afterend', html);
+}
+
 /** A docked panel's header, and the count on a title bar button. */
 export const PANEL_HEAD = '.files-head';
 export const TOOL_COUNT = '.tool-count';

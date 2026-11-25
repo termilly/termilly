@@ -20,7 +20,7 @@ import { arriveAt } from './arrived.js';
 import { previewWaiting } from './inboxpreview.js';
 import { scheduleFit } from './terminals.js';
 import { isShortcut, KEY_ID } from './keymap.js';
-import { byId, targetOf, dockRight, titleIconHtml, WORKSPACE_ID, DOCK_GRIP } from './dom.js';
+import { byId, targetOf, dockRight, fillDockedPanel, titleIconHtml, WORKSPACE_ID } from './dom.js';
 import { SECOND_MS } from './util.js';
 
 const ACTION = Object.freeze({ clearAll: 'clearAll', close: 'close' });
@@ -102,8 +102,7 @@ function draw() {
   panel.classList.toggle(NARROW, narrow);
   const source = narrow ? SOURCE.all : shownSource(all);
   const rows = all.filter(e => inSource(e, source));
-  panel.innerHTML = `
-    <div class="${DOCK_GRIP}" title="Drag to resize"></div>
+  fillDockedPanel(panel, `
     <div class="files-head">
       ${titleIconHtml(button)}
       <span class="files-title">Notifications <span class="files-ws">${all.length}</span></span>
@@ -118,7 +117,7 @@ function draw() {
         <div class="inbox-feed-head">${escapeHtml(sourceTitle(source))} <span class="inbox-feed-order">newest first</span></div>
         ${rows.map(r => r.html).join('') || '<div class="inbox-empty">No notifications.</div>'}
       </div>
-    </div>`;
+    </div>`);
   /** @type {HTMLElement} */ (panel.querySelector(FEED)).scrollTop = scroll;
   giveFocusBack(was);
 }
