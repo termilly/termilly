@@ -142,7 +142,7 @@ onHost(HOST.agent, m => {
  * 0:42, 12:05, 1:02:07
  * @param {number} ms
  */
-const clock = ms => {
+export const clock = ms => {
   const s = Math.max(0, Math.floor(ms / SECOND_MS));
   const h = Math.floor(s / HOUR_S);
   const mm = String(Math.floor((s % HOUR_S) / MINUTE_S));

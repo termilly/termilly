@@ -17,6 +17,12 @@ internal static class AgentSources
 
 internal static partial class FromPage
 {
+    /// <summary>Stop a terminal's background task (BackgroundTasks).</summary>
+    internal sealed record TaskStop(string Id = "", string? Task = null) : IPageMessage
+    {
+        public static string Type => "agent:taskStop";
+    }
+
     /// <summary>Claude Code's hook on a server, reported through the terminal (shell/remote/termilly-hook.sh).</summary>
     /// <param name="Payload">The hook's JSON, base64.</param>
     internal sealed record RemoteHook(string Id = "", string? Event = null, string? Payload = null) : IPageMessage
@@ -56,6 +62,12 @@ internal static partial class FromPage
 
 internal static partial class ToPage
 {
+    /// <summary>A terminal's agent's background tasks, running and just ended (BackgroundTasks).</summary>
+    internal sealed record AgentTasks(string Id, IReadOnlyList<TaskView> Tasks) : IHostMessage
+    {
+        public static string Type => "agent:tasks";
+    }
+
     /// <summary>An agent's state from polling `claude agents` (no hooks in that terminal).</summary>
     internal sealed record PolledAgent(string Id, string State, string? Message, string? Session) : IHostMessage
     {

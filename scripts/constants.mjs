@@ -66,10 +66,11 @@ const SOURCES = [
   { file: '../Shared/Product.cs', cls: 'Product', js: 'PRODUCT' },
   { file: 'AgentStarts.cs', cls: 'SnapshotFields', js: 'SNAPSHOT_FIELD' },
   { file: 'AgentStarts.cs', cls: 'PromptTiming', js: 'PROMPT_TIMING' },
+  { file: 'BackgroundTaskFiles.cs', cls: 'TaskStates', js: 'TASK_STATE' },
 ];
 
 /** The files with the records the page gets as they are: AppSettings and every record it holds, and SessionProfile. */
-const TYPE_FILES = ['Settings/AppSettings.cs', 'Settings/SettingGroups.cs', 'Settings/SettingRecords.cs', 'Settings/BackgroundSettings.cs', 'SerialConsole.cs', 'SshConnections.cs', 'SessionProfiles.cs', 'AgentStarts.cs'];
+const TYPE_FILES = ['Settings/AppSettings.cs', 'Settings/SettingGroups.cs', 'Settings/SettingRecords.cs', 'Settings/BackgroundSettings.cs', 'SerialConsole.cs', 'SshConnections.cs', 'SessionProfiles.cs', 'AgentStarts.cs', 'BackgroundTaskFiles.cs'];
 
 const camel = name => name[0].toLowerCase() + name.slice(1);
 

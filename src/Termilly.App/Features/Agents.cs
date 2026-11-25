@@ -24,6 +24,8 @@ internal sealed class AgentMonitor : IStartable, IDisposable
     private readonly BackgroundHost _host;
     /// <summary>Shells started before the page was up: their agents' reports wait with them for the page.</summary>
     private readonly EarlyShells _early;
+    /// <summary>The commands agents run in the background, which their hooks start telling about.</summary>
+    private readonly BackgroundTasks _tasks;
     private readonly Lock _claudeFilesGate = new();
     private AgentHooks? _hooks;
     private ClaudeAgentsPoller? _poller;
@@ -38,8 +40,9 @@ internal sealed class AgentMonitor : IStartable, IDisposable
 
     public AgentMonitor(
         PageChannel page, ISettingsStore settings, TerminalSessions terminals, ChangeStore changes, IProcessRunner runner,
-        ClaudePlan claudePlan, PageApi api, BackgroundHost host, EarlyShells early)
+        ClaudePlan claudePlan, PageApi api, BackgroundHost host, EarlyShells early, BackgroundTasks tasks)
     {
+        _tasks = tasks;
         (_page, _settings, _terminals, _changes, _runner, _claudePlan, _api, _host) = (page, settings, terminals, changes, runner, claudePlan, api, host);
         _early = early;
         settings.Saved += _ => Update();
@@ -184,6 +187,10 @@ internal sealed class AgentMonitor : IStartable, IDisposable
         if (e.Subagent is not null || e.Event is HookEvents.SubagentStart or HookEvents.SubagentStop)
         {
             PostSubagent(e);
+        }
+        if (!remote)
+        {
+            _tasks.OnEvent(e); // a server's task files aren't on this PC
         }
         var limitsShown = settings.Agents.ClaudeUsage && settings.Agents.ClaudeLimits;
         if (AgentHooks.StateFor(e) is { } state)

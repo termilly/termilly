@@ -275,6 +275,10 @@ interface AgentSettings {
   claudeLimits: boolean;
   /** The limits asked for while Termilly is in front, so they're always there: Codex's for free, Claude's with a tiny Haiku prompt at most every 15 minutes (Features/PlanRefresh.cs). */
   refreshLimits: boolean;
+  /** An agent's background tasks as rows under its terminal in the sidebar (Features/BackgroundTasks.cs). */
+  tasksInSidebar: boolean;
+  /** An agent's background tasks as a chip in its terminal's bar, which lists them. */
+  tasksInBar: boolean;
 }
 
 /** The change preview (Changes/, js/preview.js): where it opens, what it compares, and how it shows a change. */
@@ -514,4 +518,24 @@ interface AgentStart {
 interface PlannedStart {
   id: string;
   start: AgentStart;
+}
+
+/** A background task as the page shows it: what it runs and why, when it started, its state, its output's last line, its output file and, once ended, when (Unix milliseconds). */
+interface TaskView {
+  id: string;
+  command: string | null;
+  description: string | null;
+  startedAt: number;
+  state: string;
+  exitCode: number | null;
+  lastLine: string | null;
+  outputFile: string | null;
+  endedAt: number | null;
+}
+
+/** What a background task's output file says now: where it is, its last line, and its exit code once it ended. */
+interface TaskReading {
+  path: string;
+  lastLine: string | null;
+  exitCode: number | null;
 }

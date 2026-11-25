@@ -88,6 +88,8 @@ const TERMINAL = {
       seg('agents.line', [[agentLine.on, 'On'], [agentLine.focused, 'This workspace'], [agentLine.off, 'Off']]), { keywords: 'agent claude activity status line sidebar' })
     + row('Live agents', 'Above this many, idle agents in other workspaces hibernate.',
       seg('agents.limit', choices(agentLimit.all, limit => (limit ? String(limit) : 'No limit')))))
+    + group('Background tasks', row('In the sidebar', 'Each task an agent runs in the background, under its terminal.', toggle('agents.tasksInSidebar'), { keywords: 'background task agent command running review test server' })
+      + row('In the terminal bar', 'How many run. Click for their output and Stop.', toggle('agents.tasksInBar'), { keywords: 'background task agent command running chip bar' }))
     + group('Status bar', statusBarRows())
     + group('Autocomplete', row('Suggest commands from history', 'Grey text after the cursor at a shell prompt. → takes it, Ctrl+→ one word.', toggle('terminal.autocomplete'), { keywords: 'autocomplete suggest suggestion complete history ghost inline' })
       + row('Words on the screen in the list', 'The list (Ctrl+Shift+Space) also offers words shown above the prompt.', toggle('terminal.autocompleteScreenWords'), { keywords: 'autocomplete suggest list words screen', needs: AUTOCOMPLETE }))
@@ -131,7 +133,7 @@ const TERMINAL = {
   },
   input: triggerInput,
   changed(key) {
-    if (key === 'interface.showActivity') for (const tab of state.tabs.values()) activityChanged(tab, true);
+    if (key === 'interface.showActivity' || key === 'agents.tasksInSidebar') for (const tab of state.tabs.values()) activityChanged(tab, true);
   },
 };
 

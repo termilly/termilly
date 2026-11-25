@@ -144,3 +144,30 @@
 
 /* tmux (js/tmux.js): fields shown only for some choices. */
 .dialog-field[hidden] { display: none; }
+
+/* An agent's background tasks (js/backgroundtasks.js): rows under its terminal, a chip in its bar and the chip's list. */
+.task-stop { position: relative; display: none; flex: none; width: 14px; height: 14px; border-radius: 3px; background: color-mix(in srgb, var(--danger, #ff7b72) 18%, transparent); cursor: pointer; }
+.task-stop::after { content: ''; position: absolute; inset: 4px; border-radius: 1px; background: var(--danger, #ff7b72); }
+.task-stop:hover { background: color-mix(in srgb, var(--danger, #ff7b72) 35%, transparent); }
+.task-row:hover .task-stop, .task-item .task-stop { display: inline-block; }
+.task-row.failed .sub-icon, .task-item.failed .sub-icon { color: var(--danger, #ff7b72); }
+.task-row.done .sub-icon, .task-item.done .sub-icon { color: var(--ok, #7ee787); }
+.tasks-chip { display: inline-flex; flex: none; align-items: center; gap: 5px; height: 18px; padding: 0 7px; border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); border-radius: 9px; background: var(--accent-fill); color: var(--text); font-size: 11px; line-height: 16px; cursor: pointer; }
+.tasks-chip[hidden] { display: none; }
+.tasks-chip:hover { border-color: var(--accent); }
+.tasks-pop { width: 460px; max-width: calc(100vw - 16px); padding: 4px 6px 6px; }
+.tasks-head { display: flex; align-items: center; gap: 6px; padding: 6px 4px 6px; color: var(--text); font-weight: 600; }
+.tasks-count { color: var(--muted); font-weight: 400; }
+.tasks-ended { margin-top: 4px; padding: 6px 4px 2px; border-top: 1px solid var(--border); color: var(--muted); font-size: 11px; }
+.tasks-none { padding: 4px; color: var(--muted); }
+.task-item { display: flex; align-items: flex-start; gap: 8px; padding: 6px 4px; border-radius: 6px; }
+.task-item:hover { background: var(--hover); }
+.task-item .sub-icon { margin-top: 2px; }
+.task-item .task-stop { margin-top: 2px; }
+.task-text { flex: 1; min-width: 0; }
+.task-head { display: flex; align-items: center; gap: 8px; }
+.task-name { flex: 1; min-width: 0; overflow: hidden; color: var(--text); text-overflow: ellipsis; white-space: nowrap; }
+.task-cmd, .task-last { overflow: hidden; font-family: var(--mono, monospace); font-size: 11px; line-height: 16px; text-overflow: ellipsis; white-space: nowrap; }
+.task-cmd { color: var(--text); opacity: .85; }
+.task-last { color: var(--muted); }
+.task-out { flex: none; }

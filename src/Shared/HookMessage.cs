@@ -15,6 +15,9 @@ internal static class HookMessage
     /// <summary>The longest prompt passed on (My prompts shows its start; the terminal has the rest).</summary>
     public const int MaxPrompt = 4000;
 
+    /// <summary>The longest background command passed on (its row shows the start; its output file has the rest).</summary>
+    public const int MaxTaskCommand = 300;
+
     /// <summary>The most folders passed for one shell command.</summary>
     public const int MaxFolders = 10;
 
@@ -48,6 +51,11 @@ internal static class HookMessage
         public const string SubagentType = "subagentType";
         public const string Background = "background";
         public const string LaunchedId = "launchedId";
+
+        // A shell command an agent runs in the background (its tool call, then the task id it got).
+        public const string ShellTask = "shellTask";
+        public const string Command = "command";
+        public const string TaskId = "id";
 
         // A status line's report.
         public const string Limits = "limits";

@@ -138,6 +138,8 @@ interface AgentInfo {
   folder?: string | null;
   /** Its news arrived out of sight and hasn't been looked at (store.js agentChanged). */
   unread?: boolean;
+  /** Its turn ended while background tasks ran: "done" waits for them (store.js tasksEnded). */
+  heldDone?: boolean;
   /** Which agent it is: one of AGENT_KIND (Claude Code when not said). */
   kind?: string;
 }
@@ -171,6 +173,8 @@ interface Tab {
   noHistory: boolean;
   note?: Note | null;
   tasks?: TodoTask[];
+  /** Its agent's background tasks, running and just ended (js/backgroundtasks.js). */
+  shellTasks?: TaskView[];
   /** The folder it was opened in (a layout's, the API's). */
   startCwd?: string | null;
   /** A layout's variables for its shell. */

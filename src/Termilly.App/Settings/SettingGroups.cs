@@ -472,6 +472,10 @@ internal sealed record AgentSettings
     /// Haiku prompt at most every 15 minutes (Features/PlanRefresh.cs).
     /// </summary>
     public bool RefreshLimits { get; init; } = true;
+    /// <summary>An agent's background tasks as rows under its terminal in the sidebar (Features/BackgroundTasks.cs).</summary>
+    public bool TasksInSidebar { get; init; } = true;
+    /// <summary>An agent's background tasks as a chip in its terminal's bar, which lists them.</summary>
+    public bool TasksInBar { get; init; } = true;
 
     public AgentSettings Normalize() => this with
     {

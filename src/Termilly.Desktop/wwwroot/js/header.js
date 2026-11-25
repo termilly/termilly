@@ -22,11 +22,13 @@ import { find, setHtmlIfChanged } from './dom.js';
 import { openPrompts, hasPrompts, PROMPTS_TITLE } from './myprompts.js';
 import { updateSwitch, openViewMenu, VIEW_BUTTON } from './compact.js';
 import { markBarParts } from './panebar.js';
+import { showTaskChip, openTaskList } from './backgroundtasks.js';
 
 /** The header's parts that change with the terminal (HEADER_HTML has them). */
 const PINNED_NOTE = '.pane-note';
 const CAST_CHIP = '.cast-chip';
 const LOG_CHIP = '.log-chip';
+const TASKS_CHIP = '.tasks-chip';
 const BROADCAST_TOGGLE = '.bc-toggle';
 const STOP_BUTTON = '.agent-stop-btn';
 const NOTE_BUTTON = '.note-btn';
@@ -43,6 +45,7 @@ const HEADER_HTML = `
     <button class="rec-chip cast-chip" title="Recording (asciicast). Click to stop." hidden><span class="rec-dot"></span>REC</button>
     <button class="rec-chip log-chip" title="Logging to a file" hidden><span class="rec-dot"></span>LOG</button>
     <button class="bc-toggle" hidden></button>
+    <button class="tasks-chip" title="Background tasks: what they run, their output, Stop" hidden></button>
     <span class="pane-actions">
       <button class="pane-btn agent-stop-btn" title="Stop the agent (Esc)" hidden>${ICONS.stop}<span>Stop</span></button>
       <button class="pane-btn menu-btn" title="Terminal menu">${ICONS.more}</button>
@@ -91,6 +94,7 @@ function wireHeader(tab, header) {
   click(BROADCAST_TOGGLE, () => toggleReceiver(tab));
   click(LOG_CHIP, e => openLogMenu(tab, /** @type {HTMLElement} */ (e.currentTarget)));
   click(CAST_CHIP, () => toggleRecording(tab));
+  click(TASKS_CHIP, e => openTaskList(tab, /** @type {HTMLElement} */ (e.currentTarget)));
   click(STOP_BUTTON, () => stopAgent(tab));
   click(NOTE_BUTTON, () => openTodo(markedList(tab) ?? terminalList(tab)));
   click(VIEW_BUTTON, e => openViewMenu(tab, /** @type {HTMLElement} */ (e.currentTarget)));
@@ -160,6 +164,8 @@ function showChips(tab, header) {
   const rec = find(header, LOG_CHIP);
   rec.hidden = !isLogging(tab);
   if (isLogging(tab)) rec.title = `Logging to ${logFile(tab)}`;
+  // The agent's background tasks while they run (backgroundtasks.js).
+  showTaskChip(tab, find(header, TASKS_CHIP));
 }
 
 /**

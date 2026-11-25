@@ -756,3 +756,10 @@ export const PROMPT_TIMING = Object.freeze({
   atPromptMs: 400,
   withoutMarksMs: 5000,
 });
+
+/** C#: TaskStates (BackgroundTaskFiles.cs). */
+export const TASK_STATE = Object.freeze({
+  running: 'running',
+  done: 'done',
+  failed: 'failed',
+});

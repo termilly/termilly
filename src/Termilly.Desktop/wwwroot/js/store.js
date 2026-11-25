@@ -9,7 +9,7 @@
 
 import { PAGE } from './protocol.js';
 import { send, platform, PLATFORM } from './host.js';
-import { PROFILE_SOURCE, AGENT_STATE, PROFILE_ICON, AGENT_SOURCE, AGENT_KIND, CLAUDE_TOOL } from './constants.js';
+import { PROFILE_SOURCE, AGENT_STATE, PROFILE_ICON, AGENT_SOURCE, AGENT_KIND, CLAUDE_TOOL, TASK_STATE } from './constants.js';
 import { debounce } from './util.js';
 import { windowInFront } from './windowshown.js';
 import { agentKind, agentOfProgram, AGENTS, AGENT_PROGRAMS } from './agentkinds.js';
@@ -398,11 +398,31 @@ const AGENT_ACTIVITY = {
 };
 
 /**
- * The agent's state from its hooks (tab.agent), when it has something to show.
+ * How many of a terminal's background tasks (js/backgroundtasks.js) still run.
+ * @param {Tab} tab
+ */
+export const runningTasks = tab => (tab.shellTasks ?? []).filter(t => t.state === TASK_STATE.running).length;
+
+/**
+ * What a terminal's agent waits for after its turn: its background tasks.
+ * @param {number} count
+ */
+export const waitingForTasks = count => `Waiting for ${count} background task${count === 1 ? '' : 's'}`;
+
+/** States the agent's own look wins over its background tasks: it works, needs you, or failed. @type {Set<string>} */
+const OVER_TASKS = new Set([AGENT_STATE.needsInput, AGENT_STATE.error, AGENT_STATE.working]);
+
+/**
+ * The agent's state from its hooks (tab.agent), when it has something to show. An agent whose turn ended while its
+ * background tasks run still spins: it isn't done until they are.
  * @param {Tab} tab
  * @returns {Activity | null}
  */
 function agentActivity(tab) {
+  const tasks = runningTasks(tab);
+  if (tasks && !OVER_TASKS.has(tab.agent?.state ?? '')) {
+    return state.settings.interface.showActivity === false ? null : { kind: ACTIVITY.spin, title: waitingForTasks(tasks) };
+  }
   const show = tab.agent && AGENT_ACTIVITY[tab.agent.state];
   if (!show || !tab.agent) return null;
   // The spinner setting covers "working"; waiting for you, errors and "done" always show.
@@ -515,6 +535,16 @@ export const installedAgents = () => Object.keys(AGENTS).filter(kind => state.pr
 export const TURN_ENDS = new Set([AGENT_STATE.done, AGENT_STATE.error]);
 
 /**
+ * A terminal's background tasks have all ended: a "done" held back for them is news now, with its notifications.
+ * @param {Tab} tab
+ */
+export function tasksEnded(tab) {
+  if (!tab.agent?.heldDone || tab.agent.state !== AGENT_STATE.done) return;
+  tab.agent.at = Date.now();
+  agentChanged(tab);
+}
+
+/**
  * Call after changing tab.agent: news that arrives out of sight is marked unread (bold in the sidebar, a badge on
  * the rail) until the terminal is focused. See markSeen. A turn that ended, or an agent that's gone, takes the
  * progress it reported (OSC 9;4) with it: left uncleared, it would spin on once "done" has been seen.
@@ -522,6 +552,14 @@ export const TURN_ENDS = new Set([AGENT_STATE.done, AGENT_STATE.error]);
  */
 export function agentChanged(tab) {
   if (!tab.agent || TURN_ENDS.has(tab.agent.state)) tab.progress = null;
+  // A turn that ended while background tasks run isn't news yet: "done" waits for them (tasksEnded).
+  if (tab.agent?.state === AGENT_STATE.done && runningTasks(tab)) {
+    tab.agent.heldDone = true;
+    tab.agent.unread = false;
+    activityChanged(tab, true);
+    return;
+  }
+  if (tab.agent) tab.agent.heldDone = false;
   if (tab.agent) tab.agent.unread = NEWS.has(tab.agent.state) && !isInView(tab);
   // An agent has worked here: the changed-files list on the header stays, even after it exits (js/header.js).
   if (tab.agent) tab.agentSeen = true;
