@@ -11,6 +11,8 @@
 # release; without it, ad hoc ("-"), which macOS warns about when the app is opened but is enough to test the layout.
 set -eu
 repo=$(cd "$(dirname "$0")/../.." && pwd -P)  # -P: the real path, or the compiler and .editorconfig see two different ones
+# esbuild, which bundles the page into one file as the build publishes it (scripts/BundlePage.targets).
+(cd "$repo" && npm ci --no-audit --no-fund --silent)
 here="$repo/installer/mac"
 cache="$repo/installer/.cache/mac"
 version=$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' "$repo/Directory.Build.props")

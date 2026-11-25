@@ -757,7 +757,7 @@ export const PROMPT_TIMING = Object.freeze({
   withoutMarksMs: 5000,
 });
 
-/** C#: TaskStates (BackgroundTaskFiles.cs). */
+/** C#: TaskStates (BackgroundTaskView.cs). */
 export const TASK_STATE = Object.freeze({
   running: 'running',
   done: 'done',

@@ -532,10 +532,3 @@ interface TaskView {
   outputFile: string | null;
   endedAt: number | null;
 }
-
-/** What a background task's output file says now: where it is, its last line, and its exit code once it ended. */
-interface TaskReading {
-  path: string;
-  lastLine: string | null;
-  exitCode: number | null;
-}

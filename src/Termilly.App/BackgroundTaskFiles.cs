@@ -3,21 +3,6 @@ using System.Text.RegularExpressions;
 
 namespace Termilly.Desktop;
 
-/// <summary>A background task's state: running, or ended with its exit code (0: done, else failed).</summary>
-internal static class TaskStates
-{
-    public const string Running = "running";
-    public const string Done = "done";
-    public const string Failed = "failed";
-}
-
-/// <summary>
-/// A background task as the page shows it: what it runs and why, when it started, its state, its output's last line,
-/// its output file and, once ended, when (Unix milliseconds).
-/// </summary>
-internal sealed record TaskView(
-    string Id, string? Command, string? Description, long StartedAt, string State, int? ExitCode, string? LastLine, string? OutputFile, long? EndedAt);
-
 /// <summary>What a background task's output file says now: where it is, its last line, and its exit code once it ended.</summary>
 internal sealed record TaskReading(string Path, string? LastLine, int? ExitCode);
 
@@ -28,11 +13,20 @@ internal interface ITaskOutput
     TaskReading? Read(string session, string taskId);
 }
 
-/// <summary>Stops a background task: the shell an agent started it in, and what that shell runs.</summary>
+/// <summary>A background task's shell: its process, and when it started (so a reused id isn't mistaken for it).</summary>
+internal sealed record TaskProcess(int Pid, DateTime Started);
+
+/// <summary>A background task's process: the shell an agent started it in, and what that shell runs.</summary>
 internal interface ITaskProcesses
 {
-    /// <summary>Stops the task started at <paramref name="startedAt"/> under the terminal's root process; false when none is found.</summary>
-    bool Stop(int terminalPid, DateTime startedAt);
+    /// <summary>
+    /// The shell of a task that started at <paramref name="startedAt"/> under the terminal's root process: the agent's
+    /// newest one not <paramref name="taken"/> by another task. Null when none is found.
+    /// </summary>
+    TaskProcess? Find(int terminalPid, DateTime startedAt, IReadOnlySet<int> taken);
+
+    /// <summary>Ends the shell and what it runs, if it's still that process; false when it isn't (it ended already).</summary>
+    bool Stop(TaskProcess process);
 }
 
 /// <summary>
@@ -116,8 +110,8 @@ internal sealed partial class ClaudeTaskOutput : ITaskOutput
 }
 
 /// <summary>
-/// Stops a task by its process: of the shells the terminal's agent started (they carry no command line here), the one
-/// started nearest after the task was, with everything it runs.
+/// Finds and stops a task's shell. The shells agents start carry no command line here, so a task's is the newest the
+/// agent started around when the task did, and not another task's.
 /// </summary>
 internal sealed class TaskProcesses : ITaskProcesses
 {
@@ -125,26 +119,29 @@ internal sealed class TaskProcesses : ITaskProcesses
     private static readonly string[] Shells = ["bash", "sh", "zsh", "fish", "powershell", "pwsh", "cmd"];
     /// <summary>The programs that start them: the agents (Claude Code's may run under node).</summary>
     private static readonly string[] Agents = [AgentKinds.Claude, AgentKinds.Codex, "node"];
-    /// <summary>A shell may be seen to start a little before the hook said so.</summary>
-    private static readonly TimeSpan Early = TimeSpan.FromSeconds(2);
+    /// <summary>How far from the task's start its shell may have started (the hook comes just after it).</summary>
+    private static readonly TimeSpan Around = TimeSpan.FromSeconds(5);
 
-    public bool Stop(int terminalPid, DateTime startedAt)
+    public TaskProcess? Find(int terminalPid, DateTime startedAt, IReadOnlySet<int> taken)
     {
-        var all = BusyWatcher.Snapshot();
-        var below = ClaudeAgentsPoller.Descendants(all, terminalPid);
+        var below = ClaudeAgentsPoller.Descendants(BusyWatcher.Snapshot(), terminalPid);
         var agents = below.Where(p => Named(p, Agents)).Select(p => p.Id).ToHashSet();
-        var task = below.Where(p => agents.Contains(p.ParentId) && Named(p, Shells))
-            .Select(p => (p.Id, Started: StartOf(p.Id)))
-            .Where(p => p.Started is { } at && at >= startedAt - Early)
-            .OrderBy(p => p.Started)
-            .FirstOrDefault();
-        if (task.Id == 0)
-        {
-            return false;
-        }
+        return below.Where(p => agents.Contains(p.ParentId) && Named(p, Shells) && !taken.Contains(p.Id))
+            .Select(p => StartOf(p.Id) is { } started ? new TaskProcess(p.Id, started) : null)
+            .OfType<TaskProcess>()
+            .Where(p => (p.Started - startedAt).Duration() <= Around)
+            .MaxBy(p => p.Started);
+    }
+
+    public bool Stop(TaskProcess task)
+    {
         try
         {
-            using var process = Process.GetProcessById(task.Id);
+            using var process = Process.GetProcessById(task.Pid);
+            if (process.StartTime != task.Started)
+            {
+                return false;
+            }
             process.Kill(entireProcessTree: true);
             return true;
         }

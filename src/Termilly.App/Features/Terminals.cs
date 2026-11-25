@@ -11,7 +11,7 @@ namespace Termilly.Desktop.Features;
 /// </summary>
 internal sealed class TerminalHandler(
     PageChannel page, ISettingsStore settings, TerminalSessions terminals, ProfileCatalog profiles, BackgroundHost host,
-    AgentMonitor agents, ActivityWatcher activity, TmuxClients tmux, EarlyShells early) : IMessageHandler
+    AgentMonitor agents, ActivityWatcher activity, TmuxClients tmux, EarlyShells early, BackgroundTasks tasks) : IMessageHandler
 {
 
     public void Register(MessageRouter router)
@@ -64,19 +64,24 @@ internal sealed class TerminalHandler(
     /// <param name="fallbackCwd">Where to start when <paramref name="cwd"/> (the folder it was last in) is gone.</param>
     private void Start(string id, string? profileId, string? cwd, int cols, int rows, Dictionary<string, string>? variables, string? fallbackCwd)
     {
-        if (early.Take(id) is { } shell)
+        // Taken over before it leaves the early shells: a report that comes meanwhile still waits for the page with it.
+        if (early.Get(id) is { } shell)
         {
             TakeOver(id, shell, cols, rows);
-            return;
+            early.Take(id);
         }
-        try
+        else
         {
-            Launch(id, profileId, cwd, cols, rows, variables, fallbackCwd, null);
+            try
+            {
+                Launch(id, profileId, cwd, cols, rows, variables, fallbackCwd, null);
+            }
+            catch (Exception ex)
+            {
+                page.Post(new ToPage.Error(id, ex.Message));
+            }
         }
-        catch (Exception ex)
-        {
-            page.Post(new ToPage.Error(id, ex.Message));
-        }
+        tasks.Resend(id); // background tasks the page may have missed: it didn't know the terminal, or reloaded
     }
 
     /// <summary>

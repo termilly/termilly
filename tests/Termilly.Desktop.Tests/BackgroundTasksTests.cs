@@ -43,7 +43,8 @@ public sealed class BackgroundTasksTests : IDisposable
 
     private sealed class FakeProcesses : ITaskProcesses
     {
-        public bool Stop(int terminalPid, DateTime startedAt) => true;
+        public TaskProcess? Find(int terminalPid, DateTime startedAt, IReadOnlySet<int> taken) => null;
+        public bool Stop(TaskProcess process) => true;
     }
 
     private sealed class Clock : TimeProvider
@@ -110,11 +111,21 @@ public sealed class BackgroundTasksTests : IDisposable
     }
 
     [Fact]
+    public void A_task_whose_output_file_never_shows_up_goes()
+    {
+        _tasks.OnEvent(Event("PostToolUse", TaskId));
+        Assert.Single(LastList());
+        _clock.Now += TimeSpan.FromMinutes(1);
+        _tasks.Tick();
+        Assert.Empty(LastList());
+    }
+
+    [Fact]
     public void A_task_that_got_no_id_never_started()
     {
         _tasks.OnEvent(Event("PreToolUse"));
         _tasks.OnEvent(Event("PostToolUse"));
-        Assert.Empty(LastList());
+        Assert.DoesNotContain(_sink.Sent, j => j.Contains("\"agent:tasks\"", StringComparison.Ordinal));
     }
 
     [Fact]

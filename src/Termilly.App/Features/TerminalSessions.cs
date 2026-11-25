@@ -27,6 +27,9 @@ internal sealed class TerminalSessions : IDisposable
     /// <summary>A terminal was closed: what was kept for it goes.</summary>
     public event Action<string>? Closed;
 
+    /// <summary>A terminal's shell ended (the terminal may stay open, its last output on screen).</summary>
+    public event Action<string>? ShellEnded;
+
     public bool IsEmpty => _sessions.IsEmpty;
 
     public bool Has(string id) => _sessions.ContainsKey(id);
@@ -76,7 +79,11 @@ internal sealed class TerminalSessions : IDisposable
     }
 
     /// <summary>A process ended: its id can be reused by an unrelated one, so it isn't watched any more.</summary>
-    public void Exited(string id, int pid) => _pids.TryRemove(new KeyValuePair<string, int>(id, pid));
+    public void Exited(string id, int pid)
+    {
+        _pids.TryRemove(new KeyValuePair<string, int>(id, pid));
+        ShellEnded?.Invoke(id);
+    }
 
     /// <summary>The terminal was closed: its shell ends.</summary>
     public void Close(string id)

@@ -97,22 +97,21 @@ internal sealed class EarlyShell(string command, string versionReply) : IDisposa
     public void Take(Action<string> output, Action<string> replay, Action<int> exited)
     {
         int? code;
-        List<Action> kept;
+        // In one step: a report that comes meanwhile waits for the gate, so it's told after those kept, never before.
         lock (_gate)
         {
             if (_missed.Text() is { Length: > 0 } missed)
             {
                 replay(missed);
             }
+            foreach (var tell in _kept)
+            {
+                tell();
+            }
+            _kept.Clear();
             _output = output;
             _exited = exited;
             code = _exitCode;
-            kept = [.. _kept];
-            _kept.Clear();
-        }
-        foreach (var tell in kept)
-        {
-            tell();
         }
         if (code is { } ended)
         {
