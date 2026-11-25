@@ -31,7 +31,7 @@ const agentSays = (name, agent) => app.eval(async (t, name, agent) => {
 }, name, agent);
 
 const setLayout = layout => app.eval(async (t, layout) => {
-  const prefs = await import(new URL('js/preferences.js', globalThis.location.href).href);
+  const prefs = await t.import('preferences.js');
   prefs.updateSettings('interface', { layout });
 }, layout);
 

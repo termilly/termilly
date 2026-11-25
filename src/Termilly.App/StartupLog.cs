@@ -18,6 +18,23 @@ internal static class StartupLog
     private static readonly DateTime ProcessStarted = StartTime();
     private static bool _begun;
 
+    /// <summary>The longest step the page may note: a line of the log, not a place to keep text.</summary>
+    private const int MaxPageStep = 200;
+
+    /// <summary>
+    /// Notes a step the page reported, cut short and without control characters (a line of its own, whatever it
+    /// says); nothing when it says nothing.
+    /// </summary>
+    public static void MarkFromPage(string? step)
+    {
+        if (string.IsNullOrWhiteSpace(step))
+        {
+            return;
+        }
+        var line = new string([.. step.Take(MaxPageStep).Select(c => char.IsControl(c) ? ' ' : c)]);
+        Mark($"page: {line}");
+    }
+
     /// <summary>Notes that <paramref name="step"/> happened now; never throws.</summary>
     public static void Mark(string step)
     {

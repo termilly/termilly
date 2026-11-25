@@ -744,3 +744,15 @@ export const PRODUCT = Object.freeze({
   docsUrl: 'https://termilly.com/docs/',
   dataDirVariable: 'TERMILLY_DATA_DIR',
 });
+
+/** C#: SnapshotFields (AgentStarts.cs). */
+export const SNAPSHOT_FIELD = Object.freeze({
+  agentStart: 'agentStart',
+});
+
+/** C#: PromptTiming (AgentStarts.cs). */
+export const PROMPT_TIMING = Object.freeze({
+  atInputMs: 50,
+  atPromptMs: 400,
+  withoutMarksMs: 5000,
+});

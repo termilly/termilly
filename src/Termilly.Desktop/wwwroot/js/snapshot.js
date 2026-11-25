@@ -7,11 +7,12 @@
 
 import { PAGE, HOST } from './protocol.js';
 import { send, onHost } from './host.js';
-import { state, finalSave, resumeAgentCommand, isSsh } from './store.js';
-import { bufferLines, scrolledBack, prepareStart, isHeld } from './terminals.js';
+import { state, finalSave, resumeAgentCommand, isSsh, lastFolderOf } from './store.js';
+import { bufferLines, scrolledBack, prepareStart, isHeld, localFolder } from './terminals.js';
 import { markHibernated } from './hibernate.js';
-import { startResuming } from './resuming.js';
-import { AGENT_KIND, SETTING_VALUES } from './constants.js';
+import { startResuming, resumeTyped } from './resuming.js';
+import { resumeStep } from './startuplog.js';
+import { AGENT_KIND, SETTING_VALUES, SNAPSHOT_FIELD } from './constants.js';
 import { showClosing, painted } from './closing.js';
 import { resumeCommand, attachFor } from './resume.js';
 
@@ -40,6 +41,25 @@ const folderOf = s => (typeof s.agentFolder === 'string' && s.agentFolder && !/[
  */
 const kindOf = s => (s.agentKind === AGENT_KIND.codex ? AGENT_KIND.codex : AGENT_KIND.claude);
 
+/**
+ * How the host starts a terminal's agent session again at the next start, before the page is up (AgentStart in
+ * AgentStarts.cs): for one that resumes by itself then (applySnapshot), in a local shell, in the agent's folder, at
+ * the terminal's size now. Null for the rest (hibernated, set aside, over SSH, a tmux pane, not open yet): those
+ * start as they always did.
+ * @param {Tab} tab
+ * @param {string | null} session
+ * @param {string} kind
+ * @param {string | null} folder
+ * @param {boolean} hibernated
+ * @returns {AgentStart | null}
+ */
+function agentStartOf(tab, session, kind, folder, hibernated) {
+  const term = tab.view?.term;
+  const local = localFolder(folder ?? lastFolderOf(tab));
+  if (!session || hibernated || tab.setAside || tab.virtual || isSsh(tab) || !term || !local) return null;
+  return { profile: tab.profile, folder: local, env: tab.env ?? null, command: resumeAgentCommand(session, kind), cols: term.cols, rows: term.rows };
+}
+
 /** What each open terminal shows now, in SessionSnapshot's shape. */
 function snapshot() {
   /** @type {Record<string, object>} */
@@ -51,14 +71,16 @@ function snapshot() {
     // A session still waiting to resume (its shell hasn't shown a prompt yet) is kept for the next start too.
     const session = tab.agent?.session ?? tab.hibernated?.session ?? tab.start?.resumeSession;
     const lines = waiting ? waiting.lines : bufferLines(tab); // the whole scrollback: it all comes back
+    const agentSession = session && SESSION_ID.test(session) ? session : null;
+    const agentFolder = tab.agent?.folder ?? tab.hibernated?.folder ?? tab.start?.resumeFolder ?? null;
+    // The agent of the session kept, from the same place as the session.
+    const agentKind = (tab.agent?.session ? tab.agent.kind : tab.hibernated?.session ? tab.hibernated.kind : tab.start?.resumeKind) ?? AGENT_KIND.claude;
+    const hibernated = !tab.agent?.session && !!tab.hibernated;
     tabs[tab.id] = {
       lines,
       scroll: waiting ? (waiting.scroll ?? null) : scrolledBack(tab, lines), // null at the bottom
-      agentSession: session && SESSION_ID.test(session) ? session : null,
-      agentFolder: tab.agent?.folder ?? tab.hibernated?.folder ?? tab.start?.resumeFolder ?? null,
-      // The agent of the session kept, from the same place as the session.
-      agentKind: (tab.agent?.session ? tab.agent.kind : tab.hibernated?.session ? tab.hibernated.kind : tab.start?.resumeKind) ?? AGENT_KIND.claude,
-      hibernated: !tab.agent?.session && !!tab.hibernated,
+      agentSession, agentFolder, agentKind, hibernated,
+      [SNAPSHOT_FIELD.agentStart]: agentStartOf(tab, agentSession, agentKind, agentFolder, hibernated),
     };
   }
   return { savedAt: Date.now(), tabs };
@@ -122,9 +144,11 @@ const startCommandOf = tab => state.profiles.find(p => p.id === tab.profile)?.st
  * session that was running resumes by itself at the shell's first prompt (terminals.js types its start command);
  * a hibernated one waits for its terminal to be opened (hibernate.js). Nothing else runs by itself.
  * @param {any} saved
+ * @param {string[]} [earlyStarted] the terminals whose sessions the host started before the page was up (EarlyAgents)
  */
-export function applySnapshot(saved) {
+export function applySnapshot(saved, earlyStarted = []) {
   if (!enabled() || !saved?.tabs) return;
+  const early = new Set(earlyStarted);
   for (const tab of state.tabs.values()) {
     const s = saved.tabs[tab.id];
     if (!s) continue;
@@ -137,6 +161,13 @@ export function applySnapshot(saved) {
     // One set aside resumes only when it's brought back, as a hibernated one does when it's opened.
     if (session && (s.hibernated || tab.setAside)) {
       markHibernated(tab, session, saved.savedAt, folder, kindOf(s));
+    } else if (session && early.has(tab.id)) {
+      // Its shell started before the page was up and typed the command itself: the page waits for the agent, and
+      // types the command again only if the shell is still at its prompt a while later (resumeTyped).
+      prepareStart(tab, { resumeSession: session, resumeKind: kindOf(s) });
+      startResuming(tab, session, kindOf(s), true);
+      resumeTyped(tab, resumeAgentCommand(session, kindOf(s)));
+      resumeStep(tab.id, 'command typed before the page was up');
     } else if (session) {
       prepareStart(tab, { resumeSession: session, resumeKind: kindOf(s), command: resumeAgentCommand(session, kindOf(s)) });
       startResuming(tab, session, kindOf(s));

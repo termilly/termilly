@@ -8,8 +8,9 @@ namespace Termilly.Desktop;
 /// What the open terminals showed, so a restart (or a crash) can bring it back: per terminal its scrollback and the
 /// agent session it ran. Written every half minute while terminals are open and once more on exit, encrypted like
 /// the workspaces (session.tms), with secrets redacted when Settings asks. The page owns the shape:
-/// { savedAt, tabs: { id: { lines, scroll, agentSession, agentFolder, hibernated } } }, scroll being how far
-/// back it was scrolled and agentFolder the folder the agent session resumes in.
+/// { savedAt, tabs: { id: { lines, scroll, agentSession, agentFolder, hibernated, agentStart } } }, scroll being how
+/// far back it was scrolled, agentFolder the folder the agent session resumes in and agentStart how the host starts
+/// it again before the page is up (<see cref="AgentStart"/>).
 /// </summary>
 internal sealed class SessionSnapshot(Vault vault)
 {
@@ -49,4 +50,37 @@ internal sealed class SessionSnapshot(Vault vault)
 
     /// <summary>The last snapshot; null when there's none, or it's damaged or from another key.</summary>
     public JsonDocument? Load() => vault.ReadJson(FilePath);
+
+    /// <summary>The agent sessions the last snapshot starts again (<see cref="AgentStart"/>), by terminal.</summary>
+    public IReadOnlyList<PlannedStart> AgentStarts()
+    {
+        using var saved = Load();
+        if (saved is null || !saved.RootElement.TryGetProperty(TabsField, out var tabs) || tabs.ValueKind != JsonValueKind.Object)
+        {
+            return [];
+        }
+        var starts = new List<PlannedStart>();
+        foreach (var tab in tabs.EnumerateObject())
+        {
+            if (tab.Value.ValueKind == JsonValueKind.Object && tab.Value.TryGetProperty(SnapshotFields.AgentStart, out var start)
+                && start.ValueKind == JsonValueKind.Object && Read(start) is { } read)
+            {
+                starts.Add(new PlannedStart(tab.Name, read));
+            }
+        }
+        return starts;
+    }
+
+    /// <summary>A start as the page wrote it; null when it isn't one (a damaged or older snapshot).</summary>
+    private static AgentStart? Read(JsonElement start)
+    {
+        try
+        {
+            return start.Deserialize<AgentStart>(JsonSerializerOptions.Web);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
 }
