@@ -99,7 +99,7 @@ const VIEW_HTML = `
  * A terminal's compact view: what the host sent of its session, the elements showing it, and the prompt being typed.
  * @typedef {{ lines: CompactLine[], session: string | null, el: HTMLElement | null, frame: number, frameWin: Window | null, sending: Promise<void>, writes: { dispose(): void } | null,
  *   picked?: { menu: string, at: number }, ready?: boolean, drawer?: boolean, drawerFrame?: number, drawerWin?: Window,
- *   resizes?: { dispose(): void }, drawerRow?: number, drawerMenu?: boolean, started?: boolean, sendingNow?: number, asked?: number, askedBy?: object | null, waiting?: boolean,
+ *   resizes?: { dispose(): void }, drawerRow?: number, drawerMenu?: boolean, started?: boolean, sendingNow?: number, sentAt?: number, asked?: number, askedBy?: object | null, waiting?: boolean,
  *   keys?: import('./compacttyped.js').TypedKeys, keysTerm?: object, suggestion?: string | null }} CompactState
  *   drawerMenu: whether a list of the agent's own opened the drawer; started: whether the agent has shown its input line since it started; sendingNow: how many prompts the prompt box is typing into the agent; asked: how many questions the agent has asked; askedBy: the report that asked the last one; keys: the keys typed into keysTerm since its last Enter; suggestion: the prompt the agent suggests, which the empty box shows
  */
@@ -203,7 +203,7 @@ function giveTyped(tab) {
  */
 const asTyped = text => (text.includes('\n') ? `${PASTE_START}${text}${PASTE_END}` : text);
 
-/** For this long after an Enter typed in the terminal, its screen may still show the prompt that Enter sent. */
+/** For this long after an Enter (typed in the terminal, or the box's), the screen may still show the prompt it sent. */
 const ENTER_SETTLE_MS = 1500;
 
 /**
@@ -213,7 +213,7 @@ const ENTER_SETTLE_MS = 1500;
  * @param {Tab} tab
  */
 const canTake = tab => !tab.exited && !!runningAgent(tab) && !isStarting(tab) && !waitsForAnswer(tab)
-  && Date.now() - (compactOf(tab).keys?.enteredAt ?? 0) >= ENTER_SETTLE_MS;
+  && Date.now() - Math.max(compactOf(tab).keys?.enteredAt ?? 0, compactOf(tab).sentAt ?? 0) >= ENTER_SETTLE_MS;
 
 /**
  * Follows the keys typed into the terminal from its start, Full view or not: the prompt box gets them exactly.
@@ -581,6 +581,7 @@ async function typePrompt(tab, text) {
     return;
   }
   send(PAGE.input, { id: tab.id, data: '\r' });
+  c.sentAt = Date.now();
   agentInput(tab, '\r');
   doneWhenTaken(tab);
 }
