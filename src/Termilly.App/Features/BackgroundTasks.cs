@@ -52,7 +52,7 @@ internal sealed class BackgroundTasks : IMessageHandler, IDisposable
         _timer = clock.CreateTimer(_ => Tick(), null, Every, Every);
         terminals.Closed += Forget;
         terminals.Restarting += Forget;
-        terminals.ShellEnded += Forget;
+        terminals.ShellEnded += ShellEnded;
     }
 
     public void Register(MessageRouter router) => router.On<FromPage.TaskStop>(m => Stop(m.Id, m.Task));
@@ -145,6 +145,15 @@ internal sealed class BackgroundTasks : IMessageHandler, IDisposable
             {
                 Post(pane);
             }
+        }
+    }
+
+    /// <summary>A terminal's shell ended, unless it has a new shell already: then it's an old one's late news.</summary>
+    private void ShellEnded(string pane)
+    {
+        if (!_terminals.Pids().ContainsKey(pane))
+        {
+            Forget(pane);
         }
     }
 

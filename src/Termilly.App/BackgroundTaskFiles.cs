@@ -105,33 +105,71 @@ internal sealed partial class ClaudeTaskOutput : ITaskOutput
 
 /// <summary>
 /// Stops a task by its output file: the shell the agent started it in writes it, so the processes that have it open
-/// under the terminal are the task's. The topmost of them ends, with everything it runs.
+/// under the terminal are the task's: of them, the ones an agent started (a reader of the file, such as tail -f in
+/// the terminal, isn't one) end, with everything they run.
 /// </summary>
 internal sealed class TaskProcesses : ITaskProcesses
 {
-    public bool Stop(int terminalPid, string outputFile)
+    /// <summary>The programs that start tasks: the agents (Claude Code's may run under node).</summary>
+    private static readonly string[] AgentPrograms = [AgentKinds.Claude, AgentKinds.Codex, "node"];
+
+    private readonly string[] _starters;
+
+    public TaskProcesses()
+        : this(AgentPrograms)
     {
-        var below = ClaudeAgentsPoller.Descendants(BusyWatcher.Snapshot(), terminalPid);
-        var parents = below.ToDictionary(p => p.Id, p => p.ParentId);
-        var holders = FileHolders.Of(outputFile, parents.Keys).Where(parents.ContainsKey).ToHashSet();
-        var top = holders.Where(pid => !holders.Contains(parents[pid])).ToList();
-        var stopped = false;
-        foreach (var pid in top)
-        {
-            stopped |= Kill(pid); // each one, not just up to the first that ends
-        }
-        return stopped;
     }
 
-    private static bool Kill(int pid)
+    /// <param name="starters">The programs whose children are tasks (a test's own).</param>
+    internal TaskProcesses(string[] starters) => _starters = starters;
+
+    public bool Stop(int terminalPid, string outputFile)
+    {
+        var all = BusyWatcher.Snapshot();
+        var below = ClaudeAgentsPoller.Descendants(all, terminalPid).ToDictionary(p => p.Id);
+        // The agent may be the terminal's own program, not only one its shell started.
+        var agents = below.Values.Concat(all.Where(p => p.Id == terminalPid))
+            .Where(p => _starters.Contains(Path.GetFileNameWithoutExtension(p.Exe), StringComparer.OrdinalIgnoreCase))
+            .Select(p => p.Id).ToHashSet();
+        var tasks = FileHolders.Of(outputFile, below.Keys).Where(pid => below.TryGetValue(pid, out var p) && agents.Contains(p.ParentId)).ToList();
+        // Held open while it's checked again: a process that ended meanwhile can't hand its id to another one.
+        var opened = tasks.Select(Open).OfType<Process>().ToList();
+        try
+        {
+            var still = FileHolders.Of(outputFile, below.Keys).ToHashSet();
+            var stopped = false;
+            foreach (var process in opened.Where(p => still.Contains(p.Id)))
+            {
+                stopped |= Kill(process); // each one, not just up to the first that ends
+            }
+            return stopped;
+        }
+        finally
+        {
+            opened.ForEach(p => p.Dispose());
+        }
+    }
+
+    private static Process? Open(int pid)
     {
         try
         {
-            using var process = Process.GetProcessById(pid);
+            return Process.GetProcessById(pid);
+        }
+        catch (ArgumentException)
+        {
+            return null; // it ended
+        }
+    }
+
+    private static bool Kill(Process process)
+    {
+        try
+        {
             process.Kill(entireProcessTree: true);
             return true;
         }
-        catch (Exception e) when (e is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception)
+        catch (Exception e) when (e is InvalidOperationException or System.ComponentModel.Win32Exception)
         {
             return false;
         }

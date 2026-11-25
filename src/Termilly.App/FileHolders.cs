@@ -29,8 +29,29 @@ internal static partial class FileHolders
     /// <summary>Linux: a candidate holds the file when one of its open descriptors points at it.</summary>
     private static List<int> Linux(string path, IEnumerable<int> candidates)
     {
+        var real = RealPath(path);
+        return [.. candidates.Where(pid => Holds(pid, real))];
+    }
+
+    /// <summary>The path with every link on the way resolved, as /proc names what a process has open.</summary>
+    private static string RealPath(string path)
+    {
         var full = Path.GetFullPath(path);
-        return [.. candidates.Where(pid => Holds(pid, full))];
+        var current = Path.GetPathRoot(full) ?? "/";
+        foreach (var part in full[current.Length..].Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries))
+        {
+            current = Path.Combine(current, part);
+            try
+            {
+                var link = Directory.Exists(current) ? Directory.ResolveLinkTarget(current, true) : File.ResolveLinkTarget(current, true);
+                current = link?.FullName ?? current;
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                // Not resolvable: kept as it is.
+            }
+        }
+        return current;
     }
 
     private static bool Holds(int pid, string path)

@@ -11,7 +11,7 @@ powershell -ExecutionPolicy Bypass -File installer\build.ps1 -NoPrereqs # dist\T
 
 The script:
 
-1. Builds Termilly (Release). The version comes from `Directory.Build.props`.
+1. Builds Termilly (Release), which needs Node.js 24 with npm (the build bundles the page). The version comes from `Directory.Build.props`.
 2. Downloads the .NET 10 Desktop Runtime and WebView2 standalone installers into `installer\.cache`. It does this once (`-Refresh` gets newer ones) and checks they're signed by Microsoft.
 3. Builds the setup program.
 4. Appends the payload to it:
@@ -79,7 +79,7 @@ Termilly when it's done, installed or not: an update from inside Termilly runs s
 ## macOS
 
 `installer/mac/build-app.sh [arm64|x64]` (on a Mac; both by default) builds `dist/Termilly-<version>-<arch>.dmg`
-and `.zip` (what updates will download):
+and `.zip` (what updates will download). It needs Node.js 24 with npm, which the build bundles the page with:
 
 - **Layout.** Termilly as built goes whole in `Termilly.app/Contents/Resources/app`, with one .NET runtime beside
   it in `Contents/Resources/dotnet` (Microsoft's newest .NET 10 for macOS, checked against its SHA-512). Every launcher

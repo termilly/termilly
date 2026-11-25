@@ -24,7 +24,9 @@ public sealed class TaskProcessesTests
         try
         {
             WaitFor(() => File.Exists(file) && File.Exists(other));
-            Assert.True(new TaskProcesses().Stop(Environment.ProcessId, file));
+            // The test runner stands in for the agent that starts tasks.
+            using var self = System.Diagnostics.Process.GetCurrentProcess();
+            Assert.True(new TaskProcesses([self.ProcessName]).Stop(Environment.ProcessId, file));
             Assert.True(task.WaitForExit(5000));
             Assert.False(bystander.HasExited);
         }
@@ -39,9 +41,10 @@ public sealed class TaskProcessesTests
     /// <summary>A shell whose output goes to <paramref name="file"/> for a minute, as a background task's does.</summary>
     private static System.Diagnostics.Process Holding(string file)
     {
-        // cmd reads its command line as it is, quotes and all; sh takes the command as one argument.
+        // cmd reads its command line as it is, quotes and all; sh takes the command as one argument. A redirected group
+        // keeps the shell itself holding the file, as an agent's bash does (a single command's cmd hands it on).
         var start = OperatingSystem.IsWindows()
-            ? new System.Diagnostics.ProcessStartInfo("cmd.exe", $"/c ping -n 60 127.0.0.1 > \"{file}\"")
+            ? new System.Diagnostics.ProcessStartInfo("cmd.exe", $"/c (ping -n 60 127.0.0.1 & echo done) > \"{file}\"")
             : new System.Diagnostics.ProcessStartInfo("/bin/sh", ["-c", $"sleep 60 > \"{file}\""]);
         start.UseShellExecute = false;
         start.CreateNoWindow = true;
