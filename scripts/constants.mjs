@@ -64,10 +64,12 @@ const SOURCES = [
   { file: 'Clipboard.cs', cls: 'ClipKinds', js: 'CLIP_KIND' },
   { file: 'Messaging/Clipboard.cs', cls: 'ClipForms', js: 'CLIP_FORM' },
   { file: '../Shared/Product.cs', cls: 'Product', js: 'PRODUCT' },
+  { file: 'AgentStarts.cs', cls: 'SnapshotFields', js: 'SNAPSHOT_FIELD' },
+  { file: 'AgentStarts.cs', cls: 'PromptTiming', js: 'PROMPT_TIMING' },
 ];
 
 /** The files with the records the page gets as they are: AppSettings and every record it holds, and SessionProfile. */
-const TYPE_FILES = ['Settings/AppSettings.cs', 'Settings/SettingGroups.cs', 'Settings/SettingRecords.cs', 'Settings/BackgroundSettings.cs', 'SerialConsole.cs', 'SshConnections.cs', 'SessionProfiles.cs'];
+const TYPE_FILES = ['Settings/AppSettings.cs', 'Settings/SettingGroups.cs', 'Settings/SettingRecords.cs', 'Settings/BackgroundSettings.cs', 'SerialConsole.cs', 'SshConnections.cs', 'SessionProfiles.cs', 'AgentStarts.cs'];
 
 const camel = name => name[0].toLowerCase() + name.slice(1);
 

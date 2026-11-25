@@ -15,7 +15,7 @@ namespace Termilly.Desktop.Features;
 /// </summary>
 internal sealed class PageBoot(
     PageChannel page, ISettingsStore settings, Vault vault, WorkspaceStore workspaces, SessionSnapshot snapshot, ProfileCatalog profiles,
-    BackgroundHost host, IFontCatalog fonts)
+    BackgroundHost host, IFontCatalog fonts, EarlyShells early)
 {
     private bool _fontsSent;
 
@@ -38,7 +38,7 @@ internal sealed class PageBoot(
                 current, profiles.Summaries(), saved?.RootElement, last?.RootElement, liveSessions,
                 new ToPage.SecurityInfo(vault.IsNew ? vault.RecoveryCode() : null, vault.Archives.Count),
                 new ToPage.AboutInfo(AppVersion.Current, AppPaths.DataDirectory, RemoteIntegration.VersionIn(),
-                    CrashLog.Recent(AppPaths.DataDirectory, DateTimeOffset.Now - CrashLog.RecentFor))));
+                    CrashLog.Recent(AppPaths.DataDirectory, DateTimeOffset.Now - CrashLog.RecentFor)), early.Ids));
             StartupLog.Mark("boot sent to the page");
         }
 

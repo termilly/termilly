@@ -109,9 +109,11 @@ internal static partial class FromPage
 internal static partial class ToPage
 {
     /// <summary>What boots the page: settings, profiles, saved workspaces, the last snapshot and more.</summary>
+    /// <param name="EarlyStarted">The terminals whose agent sessions started before the page was up (EarlyAgents): the
+    /// page takes their shells over and types nothing into them.</param>
     internal sealed record Boot(
         AppSettings Settings, object Profiles, JsonElement? Workspaces, JsonElement? Snapshot, string[] LiveSessions,
-        SecurityInfo Security, AboutInfo About) : IHostMessage
+        SecurityInfo Security, AboutInfo About, string[] EarlyStarted) : IHostMessage
     {
         public static string Type => "settings";
     }

@@ -22,7 +22,7 @@ import { clearTerminals } from './backgrounds.js';
 import { updateSettings } from './preferences.js';
 import { resumeCommand, attachFor } from './resume.js';
 import { noteRemotePrompt, noteRemoteCwd, leftRemote } from './remotecwd.js';
-import { AGENT_STATE, AGENT_SOURCE, PROFILE_ICON } from './constants.js';
+import { AGENT_STATE, AGENT_SOURCE, PROFILE_ICON, PROMPT_TIMING } from './constants.js';
 import { find, field, PATH_DRAG, CLIP_DRAG } from './dom.js';
 import { continuesOnNextRow, atPrompt } from './buffer.js';
 import { isResuming, resumeTyped, cancelResume, keptAgent, wasResumed, CANCEL_KEY } from './resuming.js';
@@ -146,11 +146,10 @@ export const fontStack = family => `"${family}", Consolas, "Cascadia Mono", "Dej
 
 /**
  * How long a start command waits for a shell that marks no prompt (local shells only), and how long after the
- * shell marks where input starts (PowerShell) or where its prompt starts (bash, which marks no input).
+ * shell marks where input starts (PowerShell) or where its prompt starts (bash, which marks no input). The host types
+ * an agent started before the page was up at the same moments (EarlyShell.cs).
  */
-const WITHOUT_MARKS_MS = 5000;
-const AT_INPUT_MS = 50;
-const AT_PROMPT_MS = 400;
+const { withoutMarksMs: WITHOUT_MARKS_MS, atInputMs: AT_INPUT_MS, atPromptMs: AT_PROMPT_MS } = PROMPT_TIMING;
 
 /**
  * A terminal's shell as terminals.js follows it (tab.shell): when someone last typed, and its two timers.
@@ -767,7 +766,7 @@ export function typeAtPrompt(tab, command) {
  * A folder on this PC a shell can start in (the others are on a server or in WSL), or null.
  * @param {string | null | undefined} folder
  */
-function localFolder(folder) {
+export function localFolder(folder) {
   if (!folder) return null;
   return platform === PLATFORM.linux ? (folder.startsWith('/') ? folder : null) : (/^[A-Za-z]:\\|^\\\\/.test(folder) ? folder : null);
 }

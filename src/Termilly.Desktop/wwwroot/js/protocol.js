@@ -698,7 +698,7 @@ export const HOST = Object.freeze({
 /** @typedef {{ message: string }} Host_securityError */
 /** @typedef {{  }} Host_securityLocked */
 /** @typedef {{ count: number, archives: number }} Host_securityRestored */
-/** @typedef {{ settings: any, profiles: any, workspaces: any|null, snapshot: any|null, liveSessions: Array<string>, security: SecurityInfo, about: AboutInfo }} Host_settings */
+/** @typedef {{ settings: any, profiles: any, workspaces: any|null, snapshot: any|null, liveSessions: Array<string>, security: SecurityInfo, about: AboutInfo, earlyStarted: Array<string> }} Host_settings */
 /** @typedef {{  }} Host_snapshotRequest */
 /** @typedef {{ outputs: Array<any> }} Host_soundOutputs */
 /** @typedef {{ saved: Object<string, boolean>, available: boolean, store: string }} Host_sshCredentials */

@@ -66,6 +66,9 @@ internal static class Composition
         .AddStartable<ActivityWatcher>()
         .AddStartable<HistoryWatch>()
         .AddStartable<AgentMonitor>()
+        // After the agent hooks listen: the agents it starts report to them (EarlyAgents).
+        .AddSingleton<EarlyShells>()
+        .AddStartable<EarlyAgents>()
         .AddStartable<RetiredAssistantKey>()
         .AddStartable<RetiredPhonePairings>()
         // Each feature's messages.

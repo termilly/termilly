@@ -499,3 +499,19 @@ interface SessionProfile {
   shellIcon: string | null;
   shellId: string | null;
 }
+
+/** How a terminal's agent session starts again at the next start, before the page is up (Features/EarlyAgents): the page writes one into the session snapshot (js/snapshot.js) for each terminal whose Claude Code or Codex session resumes by itself, and the host runs it as the page would have, a few seconds sooner. */
+interface AgentStart {
+  profile: string | null;
+  folder: string | null;
+  env: Record<string, string> | null;
+  command: string | null;
+  cols: number;
+  rows: number;
+}
+
+/** A terminal's id and how its agent starts again. */
+interface PlannedStart {
+  id: string;
+  start: AgentStart;
+}

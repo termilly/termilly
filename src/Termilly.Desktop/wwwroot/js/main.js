@@ -618,13 +618,14 @@ let booted = false;
  * @param {any} saved The saved workspaces, as the host read them.
  * @param {any} snapshot The terminals' saved output.
  * @param {string[]} [liveSessions] The ids of the shells the background host kept running.
+ * @param {string[]} [earlyStarted] The terminals whose agent sessions the host started before the page was up.
  */
-function boot(saved, snapshot, liveSessions = []) {
+function boot(saved, snapshot, liveSessions = [], earlyStarted = []) {
   if (booted) return;
   booted = true;
   // "Start with a fresh workspace" keeps tags, sidebar and recent folders, but not the workspaces.
   const restored = restore(state.settings.session.restore === restoreSession.off && saved ? { ...saved, workspaces: [] } : saved);
-  if (restored) applySnapshot(snapshot);
+  if (restored) applySnapshot(snapshot, earlyStarted);
   // Shells the background host kept running come back as they are: their own output replays, so nothing
   // saved is shown above it, and there's no last command to offer.
   for (const id of liveSessions) {
@@ -683,7 +684,7 @@ onHost(HOST.settings, m => {
   // The host sends liveSessions; protocol.js's Host_settings misnames it.
   loadBackdropInfo(); // the effects this system has, and where background pictures load from
   boot(m.workspaces, m.snapshot,
-    /** @type {{ liveSessions?: string[] }} */ (/** @type {unknown} */ (m)).liveSessions ?? []);
+    /** @type {{ liveSessions?: string[] }} */ (/** @type {unknown} */ (m)).liveSessions ?? [], m.earlyStarted ?? []);
   offerTourOnce();
   offerWhatsNewOnce();
 });
