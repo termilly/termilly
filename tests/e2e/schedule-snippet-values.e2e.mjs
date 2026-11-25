@@ -89,10 +89,25 @@ step('cancelled, the form says what it needs; Values asks again', async () => {
   });
   assert.equal((await form()).values, 'who: ada, n: 3'); // cancelling keeps what was there
   // Another snippet starts without values: its popup cancelled, the form can't be saved and says why.
+  // Picked from the snippets list with its search, as in the title bar; it picks, nothing runs.
+  const listed = await app.eval(async t => {
+    t.$('[data-sch="pickSnippet"]').click();
+    await t.waitFor('.sp-pop.sp-picking .sp-row');
+    const rows = () => t.$$('.sp-pop .sp-row .sp-name').map(r => r.textContent);
+    const all = rows();
+    const input = t.$('.sp-pop input');
+    input.value = 'wav';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    const doc = t.$('.schedules-win').ownerDocument;
+    return {
+      all, found: rows(), selected: t.$('.sp-pop .sp-row.sel .sp-name')?.textContent, runHints: t.$$('.sp-pop .sp-run').some(e => e.offsetParent),
+      // In the Schedules window's own window, where it has one.
+      sameWindow: t.$('.sp-pop').ownerDocument === doc, windowed: doc.body.classList.contains('detached-window'),
+    };
+  });
+  assert.deepEqual(listed, { all: [SNIPPET, 'Wave'], found: ['Wave'], selected: 'Wave', runHints: false, sameWindow: true, windowed: true });
   await app.eval(async t => {
-    const select = t.$('.schedules-win select[name="snippet"]');
-    select.value = 'Wave';
-    select.dispatchEvent(new Event('change', { bubbles: true }));
+    t.$('.sp-pop input').dispatchEvent(new globalThis.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     await t.waitFor('.snippet-run [data-var="name"]');
     t.$('.snippet-run [data-cancel]').click();
   });
@@ -100,6 +115,31 @@ step('cancelled, the form says what it needs; Values asks again', async () => {
   assert.equal(shown.values, 'name: needs a value');
   assert.equal(shown.problem, 'It needs a value for name.');
   assert.equal(shown.canSave, false);
+  assert.equal(await app.eval(t => t.$('[data-sch="pickSnippet"] .dropdown-label').textContent), 'Wave');
+  // Opened again, the list starts on the snippet picked.
+  const selected = await app.eval(async t => {
+    t.$('[data-sch="pickSnippet"]').click();
+    await t.waitFor('.sp-pop.sp-picking .sp-row.sel');
+    const name = t.$('.sp-pop .sp-row.sel .sp-name').textContent;
+    t.$('.sp-pop input').dispatchEvent(new globalThis.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    return name;
+  });
+  assert.equal(selected, 'Wave');
+});
+
+step('the title bar\'s snippets list still runs, in the main window, after the Schedules window picked from it', async () => {
+  const shown = await app.eval(async t => {
+    (await t.import('snippetpick.js')).openSnippetPick();
+    await t.waitFor('.sp-pop .sp-row');
+    const pop = t.$('.sp-pop');
+    const result = {
+      main: pop.ownerDocument === globalThis.document, picking: pop.classList.contains('sp-picking'),
+      runHints: t.$$('.sp-pop .sp-run').filter(e => e.offsetParent).length, acts: t.$$('.sp-pop .sp-acts').length > 0,
+    };
+    t.$('.sp-pop input').dispatchEvent(new globalThis.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    return result;
+  });
+  assert.deepEqual(shown, { main: true, picking: false, runHints: 5, acts: true });
 });
 
 step('a saved schedule runs the snippet with its values', async () => {

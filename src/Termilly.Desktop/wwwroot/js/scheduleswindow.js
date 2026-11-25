@@ -11,15 +11,16 @@ import { closeAll, dropdown } from './popups.js';
 import { modal, pickFolder, CONFIRM_DIALOG } from './dialogs.js';
 import { escapeHtml, COPIED } from './ui.js';
 import { fuzzyMatch } from './fuzzy.js';
-import { allSnippets, askValues, placeholders, missingValues, filled, NAME_WORDS } from './snippets.js';
+import { askValues, placeholders, missingValues, filled, NAME_WORDS } from './snippets.js';
+import { pickSnippet, endSnippetPick, groupsOf } from './snippetpick.js';
 import { byId, find, targetOf, TOOL_COUNT, SCHEDULES_BUTTON_ID } from './dom.js';
 import { detach, closeWindow, focusWindow, isDetached, windowName } from './windows.js';
 import { readReport, shownText } from './schedulereport.js';
 import { withPaths, openReportLink, LINK_CLASS } from './schedulelinks.js';
 import {
-  schedules, scheduleById, runsOf, saveSchedule, removeSchedule, setScheduleOn, runNow, stopRun, runningNow, clearPastRuns, snippetOf,
+  schedules, scheduleById, runsOf, saveSchedule, removeSchedule, setScheduleOn, runNow, stopRun, runningNow, clearPastRuns, snippetOf, offeredSnippets,
 } from './schedules.js';
-import { formHtml, rowHtml, runsHtml, reportHtml, planOf, WHEN_FIELD, WHEN_KIND_SEGMENT, ALL_DAY_FIELD } from './scheduleview.js';
+import { formHtml, rowHtml, runsHtml, reportHtml, planOf, WHEN_FIELD, WHEN_KIND_SEGMENT, ALL_DAY_FIELD, PICK_SNIPPET } from './scheduleview.js';
 import { planClicked } from './planrows.js';
 import { newSchedule, minutesOf, nextRun, describeAt, isAllDay, hasEnded, reachesProduction, WHAT, WHERE, WHEN } from './schedulerules.js';
 
@@ -109,8 +110,7 @@ let shownAs = '';
 function choices() {
   const shells = state.profiles.filter(p => (p.source === 'local' || p.source === 'wsl') && !p.startCommand);
   const servers = state.profiles.filter(p => p.source === 'ssh');
-  const named = [undefined, ...state.workspaces].flatMap(ws => allSnippets(ws)).map(s => s.name);
-  return { shells, servers, workspaces: state.workspaces.filter(w => !w.tmux), snippets: [...new Set(named)], fields: fieldsOf(editing) };
+  return { shells, servers, workspaces: state.workspaces.filter(w => !w.tmux), snippets: offeredSnippets().map(s => s.name), fields: fieldsOf(editing) };
 }
 
 /**
@@ -144,7 +144,25 @@ async function askSnippetValues() {
   renderForm();
 }
 
-/** Another snippet, or Snippet chosen: the old values were another snippet's, and one that needs values asks for them. */
+/** Opens the snippets list with its search under the form's snippet, to pick another. */
+function chooseSnippet() {
+  const s = editing;
+  if (!s) return;
+  pickSnippet(find(editEl, `[data-sch="${PICK_SNIPPET}"]`), {
+    groups: () => groupsOf(offeredSnippets()),
+    current: s.snippet,
+    onPick: name => {
+      // An agent may have changed what's shown while the list was open.
+      if (s !== editing || name === s.snippet) return;
+      s.snippet = name;
+      snippetPicked();
+      // The form was drawn again: the keyboard stays on the snippet, unless its values are being asked for.
+      if (!missingOf(s).length) /** @type {HTMLElement | null} */ (editEl.querySelector(`[data-sch="${PICK_SNIPPET}"]`))?.focus();
+    },
+  });
+}
+
+/** Another snippet picked: the old values were another snippet's, and one that needs values asks for them. */
 function snippetPicked() {
   const s = /** @type {Schedule} */ (editing);
   s.values = {};
@@ -207,6 +225,8 @@ function renderList() {
 
 function renderForm() {
   const s = /** @type {Schedule} */ (editing);
+  // A form drawn again (an agent's edit, another schedule) takes away the button the snippets list picks for.
+  endSnippetPick();
   const list = choices();
   // The first on offer is what the form shows, so it's what's saved.
   if (s.where === WHERE.server && !list.servers.some(p => p.id === s.profile)) s.profile = list.servers[0]?.id ?? null;
@@ -504,6 +524,7 @@ async function act(action) {
   else if (action === ACTION.browse) await browseFolder();
   else if (action === ACTION.clear) await clearShown();
   else if (action === ACTION.values) await askSnippetValues();
+  else if (action === PICK_SNIPPET) chooseSnippet();
   else if (action === ACTION.file) {
     const run = openRunId ? state.schedules.runs.find(r => r.id === openRunId) : null;
     if (run?.file) send(PAGE.openPath, { path: run.file });
@@ -542,10 +563,7 @@ for (const event of ['input', 'change']) {
       return;
     }
     fieldChanged(field);
-    // A select says it changed twice (input and change): the snippet asks once.
-    if (field.name === WHAT.snippet) {
-      if (e.type === 'change') snippetPicked();
-    } else if (REDRAWS.has(field.name)) renderForm();
+    if (REDRAWS.has(field.name)) renderForm();
     else renderState();
   });
 }
@@ -580,6 +598,8 @@ function keepOpen(open) {
 }
 
 function closed() {
+  // The snippets list it opened goes with it, even when its window was closed from outside (Alt+F4).
+  endSnippetPick();
   keepOpen(false);
   layer.hidden = true;
   layer.style.visibility = '';

@@ -273,7 +273,7 @@ export function showMenu(items, anchor, { side = SIDE.below, nested = false, alo
 
 /** How far a scroll arrow moves the menu per step while the mouse rests on it (px), and how often (ms). */
 const SCROLL_STEP = Object.freeze({ px: 6, ms: 16 });
-const CHEVRON_DOWN = '<svg viewBox="0 0 12 12"><path d="M3 4.5L6 7.5 9 4.5"/></svg>';
+export const CHEVRON_DOWN = '<svg viewBox="0 0 12 12"><path d="M3 4.5L6 7.5 9 4.5"/></svg>';
 const CHEVRON_UP = '<svg viewBox="0 0 12 12"><path d="M3 7.5L6 4.5 9 7.5"/></svg>';
 /** Where a scroll arrow sits, and its icon. */
 /** A scroll arrow at its end (nothing more that way): faded. */

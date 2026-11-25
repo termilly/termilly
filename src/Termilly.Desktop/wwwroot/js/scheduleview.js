@@ -9,6 +9,7 @@ import { reportTextHtml } from './schedulelinks.js';
 import { reviewersFor, namesOf, fitPlan } from './todoplan.js';
 import { planRowsHtml } from './planrows.js';
 import { ownValue } from './snippets.js';
+import { CHEVRON_DOWN } from './popups.js';
 import {
   WHAT, WHERE, WHEN, UNIT, NOTIFY, MISSED, AFTER, BUSY, CLOSED, RUN, RUN_LABEL, DAY_NAMES, describeWhen, describeAt, describeTook, hasEnded,
 } from './schedulerules.js';
@@ -29,6 +30,8 @@ const SEGMENTS = Object.freeze({
   missed: [[MISSED.run, 'Run at the next start'], [MISSED.skip, 'Skip it']],
   notify: [[NOTIFY.always, 'Always'], [NOTIFY.failed, 'If it failed'], [NOTIFY.never, 'Never']],
 });
+/** The button that opens the snippets list to pick one (its data-sch). */
+export const PICK_SNIPPET = 'pickSnippet';
 /** The form's fields that belong to `when`: their name has this in front. */
 export const WHEN_FIELD = 'when.';
 export const WHEN_KIND_SEGMENT = 'whenKind';
@@ -145,7 +148,8 @@ function whatHtml(s, choices) {
   const body = s.what === WHAT.command
     ? `<textarea class="field snippet-command" name="command" rows="3" spellcheck="false" placeholder="git pull && npm test">${escapeHtml(s.command)}</textarea>`
     : choices.snippets.length
-      ? selectHtml(WHAT.snippet, choices.snippets.map(n => /** @type {const} */ ([n, n])), s.snippet || choices.snippets[0])
+      // The snippets list with its search, as the title bar's (snippetpick.js), to pick from.
+      ? `<button type="button" class="field dropdown" data-sch="${PICK_SNIPPET}"><span class="dropdown-label">${escapeHtml(s.snippet || choices.snippets[0])}</span><span class="dropdown-chevron">${CHEVRON_DOWN}</span></button>`
       : '<p class="dialog-sub">No snippets yet. Make one in the Snippets window.</p>';
   return `<h3 class="sch-head">What it runs</h3>${segmentHtml('what', s.what)}${body}
     ${s.what === WHAT.snippet ? valuesHtml(s, choices.fields) : ''}`;

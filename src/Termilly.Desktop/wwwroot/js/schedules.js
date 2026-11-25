@@ -115,11 +115,17 @@ export function clearPastRuns(scheduleId) {
   changed();
 }
 
+/** The snippets a schedule can run, each name once: this computer's, and every workspace's repository's. */
+export function offeredSnippets() {
+  const seen = new Set();
+  return [undefined, ...state.workspaces].flatMap(ws => allSnippets(ws)).filter(s => !seen.has(s.name) && seen.add(s.name));
+}
+
 /**
  * The snippet a schedule runs, as it is now: undefined when it's gone.
  * @param {Schedule} schedule
  */
-export const snippetOf = schedule => [undefined, ...state.workspaces].flatMap(ws => allSnippets(ws)).find(s => s.name === schedule.snippet);
+export const snippetOf = schedule => offeredSnippets().find(s => s.name === schedule.snippet);
 
 /**
  * Why a snippet schedule can't run: its snippet is gone, or a placeholder without a default has no value (the snippet
