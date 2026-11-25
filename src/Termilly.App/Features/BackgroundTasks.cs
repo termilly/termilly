@@ -46,6 +46,8 @@ internal sealed class BackgroundTasks : IMessageHandler, IDisposable
         public DateTimeOffset Started { get; } = started;
         public TaskReading? Reading { get; set; }
         public DateTimeOffset? Ended { get; set; }
+        /// <summary>When its own hook said it ended (a Codex command's, late), its exit then still to be read.</summary>
+        public DateTimeOffset? Reported { get; set; }
 
         public TaskView View() => new(UseId, Command, Description, Started.ToUnixTimeMilliseconds(),
             Reading?.ExitCode is { } code ? (code == 0 ? TaskStates.Done : TaskStates.Failed) : TaskStates.Running,
@@ -98,12 +100,14 @@ internal sealed class BackgroundTasks : IMessageHandler, IDisposable
             else if (e is { Event: HookEvents.PostToolUse, Task.ToolUseId: { } ended })
             {
                 _running.GetValueOrDefault(e.Pane)?.RemoveAll(t => t.UseId == ended);
-                // Late news of one taken for a task already: it ended (its exit isn't said).
+                // Late news of one taken for a task already: it ended. Its rollout says how; if it doesn't, it's over anyway.
                 if (_tasks.GetValueOrDefault(e.Pane)?.Find(t => t.UseId == ended && t.Ended is null) is { } promoted)
                 {
-                    promoted.Reading = new TaskReading(null, promoted.Reading?.LastLine, 0);
-                    promoted.Ended = _clock.GetUtcNow();
-                    Post(e.Pane);
+                    promoted.Reported = _clock.GetUtcNow();
+                    if (Read(promoted, promoted.Reported.Value))
+                    {
+                        Post(e.Pane);
+                    }
                 }
             }
             else if (e.Event is HookEvents.Stop or HookEvents.Interrupt && _running.Remove(e.Pane, out var left))
@@ -161,6 +165,11 @@ internal sealed class BackgroundTasks : IMessageHandler, IDisposable
     private bool Read(Tracked task, DateTimeOffset now)
     {
         var reading = OutputOf(task).Read(task.Session, task.TaskId);
+        if (reading is null && now - task.Reported > FileWait)
+        {
+            // Its hook said it ended, but its exit never showed up: it's over, and counted as done.
+            reading = new TaskReading(task.Reading?.Path, task.Reading?.LastLine, 0);
+        }
         if (reading is null || reading == task.Reading)
         {
             return false;
@@ -233,10 +242,11 @@ internal sealed class BackgroundTasks : IMessageHandler, IDisposable
 
     private void ForgetLocked(string pane)
     {
-        _running.Remove(pane);
-        if (_tasks.Remove(pane, out var gone))
+        var pending = _running.Remove(pane, out var running) ? running : [];
+        var shown = _tasks.Remove(pane, out var tasks);
+        Release([.. pending, .. tasks ?? []]);
+        if (shown)
         {
-            Release(gone);
             _page.Post(new ToPage.AgentTasks(pane, [], Gone: true));
         }
     }

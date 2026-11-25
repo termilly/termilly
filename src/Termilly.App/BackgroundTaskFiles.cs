@@ -142,6 +142,11 @@ internal sealed class TaskProcesses : ITaskProcesses
     private static readonly string[] AgentPrograms = [AgentKinds.Claude, AgentKinds.Codex, "node"];
 
     private readonly string[] _starters;
+    /// <summary>
+    /// How far a task's process may have started from when its agent said it would run it: the agent starts it at
+    /// once, but its sandbox and shell take a moment.
+    /// </summary>
+    private static readonly TimeSpan StartSlack = TimeSpan.FromSeconds(15);
 
     public TaskProcesses()
         : this(AgentPrograms)
@@ -205,25 +210,32 @@ internal sealed class TaskProcesses : ITaskProcesses
         return Closest(tree.Topmost(Running()), started) is { } task && KillChecked([task], Running);
     }
 
-    /// <summary>Of the processes, the one that started nearest the time; one whose start can't be read is the last pick.</summary>
+    /// <summary>
+    /// Of the processes, the one that started nearest the time, and close to it: one started long before or after is
+    /// another run of the command (the task's own ended), as is one whose start can't be read.
+    /// </summary>
     private static int? Closest(List<int> pids, DateTimeOffset started)
     {
-        if (pids.Count <= 1)
+        if (pids.Count == 0)
         {
-            return pids.Count == 0 ? null : pids[0];
+            return null;
         }
-        return pids.MinBy(pid =>
+        var nearest = pids.Select(pid => (Pid: pid, Off: StartOffset(pid, started))).MinBy(p => p.Off);
+        return nearest.Off <= StartSlack ? nearest.Pid : null;
+    }
+
+    /// <summary>How far from the time the process started; the most for one that ended or can't be read.</summary>
+    private static TimeSpan StartOffset(int pid, DateTimeOffset started)
+    {
+        using var process = Open(pid);
+        try
         {
-            using var process = Open(pid);
-            try
-            {
-                return process is null ? TimeSpan.MaxValue : (new DateTimeOffset(process.StartTime) - started).Duration();
-            }
-            catch (Exception e) when (e is InvalidOperationException or System.ComponentModel.Win32Exception or NotSupportedException)
-            {
-                return TimeSpan.MaxValue;
-            }
-        });
+            return process is null ? TimeSpan.MaxValue : (new DateTimeOffset(process.StartTime) - started).Duration();
+        }
+        catch (Exception e) when (e is InvalidOperationException or System.ComponentModel.Win32Exception or NotSupportedException)
+        {
+            return TimeSpan.MaxValue;
+        }
     }
 
     /// <summary>

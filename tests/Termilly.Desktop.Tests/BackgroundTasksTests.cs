@@ -186,7 +186,29 @@ public sealed class BackgroundTasksTests : IDisposable
         _tasks.OnEvent(CodexEvent("PreToolUse"));
         _tasks.OnEvent(CodexEvent("Stop"));
         _tasks.OnEvent(CodexEvent("PostToolUse"));
+        // How it went is still its rollout's to say; if that never does, it's done.
+        Assert.Equal(TaskStates.Running, (string?)LastList().Single()!["state"]);
+        _clock.Now += TimeSpan.FromMinutes(1);
+        _tasks.Tick();
         Assert.Equal(TaskStates.Done, (string?)LastList().Single()!["state"]);
+    }
+
+    [Fact]
+    public void A_late_end_keeps_the_exit_its_rollout_gives()
+    {
+        _tasks.OnEvent(CodexEvent("PreToolUse"));
+        _tasks.OnEvent(CodexEvent("Stop"));
+        _codex.Reading = new TaskReading(null, "boom", 2);
+        _tasks.OnEvent(CodexEvent("PostToolUse"));
+        Assert.Equal(TaskStates.Failed, (string?)LastList().Single()!["state"]);
+    }
+
+    [Fact]
+    public void Closing_a_terminal_lets_go_of_the_sessions_of_commands_still_running()
+    {
+        _tasks.OnEvent(CodexEvent("PreToolUse"));
+        _tasks.OnEvent(AgentHooks.Parse(Protocol.Message(Pane, "SessionEnd", $$"""{ "session_id": "{{Session}}" }""", "codex"))!);
+        Assert.Equal([Session], _codex.Forgotten);
     }
 
     [Fact]
