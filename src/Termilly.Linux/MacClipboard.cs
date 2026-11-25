@@ -13,7 +13,7 @@ namespace Termilly.Linux;
 /// </summary>
 /// <param name="onWindow">Runs an action on the window's thread.</param>
 [SupportedOSPlatform("macos")]
-internal sealed class MacClipboard(Action<Action> onWindow) : IClipboardWatch, IDisposable
+internal sealed class MacClipboard(Action<Action> onWindow) : IClipboardWatch, IClipboardReader, IDisposable
 {
     private const string AppKit = "/System/Library/Frameworks/AppKit.framework/AppKit";
     private const string TextType = "public.utf8-plain-text";
@@ -28,14 +28,12 @@ internal sealed class MacClipboard(Action<Action> onWindow) : IClipboardWatch, I
 
     public void Start()
     {
-        // AppKit has to be loaded for NSPasteboard's class to be found.
-        NativeLibrary.TryLoad(AppKit, out _);
         _timer = new Timer(_ => Look(), null, Every, Every);
     }
 
     private void Look()
     {
-        var board = Send(Class("NSPasteboard"), "generalPasteboard");
+        var board = Board();
         if (board == IntPtr.Zero)
         {
             return;
@@ -51,12 +49,25 @@ internal sealed class MacClipboard(Action<Action> onWindow) : IClipboardWatch, I
         {
             return; // what was there before Termilly started, or a secret
         }
-        var text = Text(Send(board, "stringForType:", NsString(TextType)));
+        var text = TextOn(board);
         if (text is { Length: > 0 })
         {
             onWindow(() => Changed?.Invoke(new ClipboardContent(text)));
         }
     }
+
+    /// <summary>The clipboard's text for a paste the user asked for (a concealed one too: pasting a password is the point).</summary>
+    public string? ReadText() => Board() is var board && board != IntPtr.Zero ? TextOn(board) : null;
+
+    /// <summary>The system's clipboard (AppKit loaded first: NSPasteboard's class is found only then).</summary>
+    private static IntPtr Board()
+    {
+        NativeLibrary.TryLoad(AppKit, out _);
+        return Send(Class("NSPasteboard"), "generalPasteboard");
+    }
+
+    /// <summary>The clipboard's plain text, or null.</summary>
+    private static string? TextOn(IntPtr board) => Text(Send(board, "stringForType:", NsString(TextType)));
 
     /// <summary>Whether the copy is marked concealed.</summary>
     private static bool Concealed(IntPtr board)
