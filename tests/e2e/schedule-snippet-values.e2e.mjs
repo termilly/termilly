@@ -25,7 +25,8 @@ const step = (name, run) => test(name, async () => {
 
 /** Saves this computer's snippets. @param {{ name: string, command: string }[]} snippets */
 const setSnippets = snippets => app.eval(async (t, snippets) => {
-  const { updateSettings, GROUPS } = await t.import('store.js');
+  const { GROUPS } = await t.import('store.js');
+  const { updateSettings } = await t.import('preferences.js');
   updateSettings(GROUPS.commands, { snippets: snippets.map((s, i) => ({ id: `e2e${i}`, ...s })) });
 }, snippets);
 
@@ -75,7 +76,7 @@ step('picking a snippet with a variable asks for it, and the form keeps the valu
   });
   await app.eval(t => t.waitFor('.sch-values-text'));
   const shown = await form();
-  assert.equal(shown.values, 'who: ada, n: 3 (default)');
+  assert.equal(shown.values, 'who: ada, n: 3');
   assert.equal(shown.problem, '');
   assert.equal(shown.canSave, true);
 });
@@ -86,7 +87,7 @@ step('cancelled, the form says what it needs; Values asks again', async () => {
     await t.waitFor('.snippet-run [data-var="who"]');
     t.$('.snippet-run [data-cancel]').click();
   });
-  assert.equal((await form()).values, 'who: ada, n: 3 (default)'); // cancelling keeps what was there
+  assert.equal((await form()).values, 'who: ada, n: 3'); // cancelling keeps what was there
   // Another snippet starts without values: its popup cancelled, the form can't be saved and says why.
   await app.eval(async t => {
     const select = t.$('.schedules-win select[name="snippet"]');
@@ -111,7 +112,7 @@ step('a saved schedule runs the snippet with its values', async () => {
     return s.id;
   }, SNIPPET);
   const run = await ended(id);
-  assert.equal(run?.status, 'ok', run?.summary);
+  assert.equal(run?.status, 'worked', run?.summary);
   const report = await app.eval(async (t, runId) => (await t.import('schedulereport.js')).reportText(runId), run.id);
   assert.match(report, /hello-ada-3/);
 });
@@ -136,4 +137,24 @@ step('add_schedule takes the values as vars, and refuses a snippet without them'
   assert.match((await call({ name: 'No vars', what: 'snippet', snippet: SNIPPET, at: '20:00' })).error, /needs values for: who/);
   const added = await call({ name: 'With vars', what: 'snippet', snippet: SNIPPET, vars: { who: 'bob', n: '' }, at: '20:00' });
   assert.deepEqual(added.vars, { who: 'bob' }); // an empty one runs with its default
+  const edit = args => app.eval(async (t, args) => {
+    try {
+      return await (await t.import('api.js')).callApi('schedule_edit', args);
+    } catch (e) {
+      return { error: e.message };
+    }
+  }, args);
+  // Run as a command, the values go; back to the snippet, it needs them again.
+  await edit({ schedule: added.id, what: 'command', command: 'echo x' });
+  assert.match((await edit({ schedule: added.id, what: 'snippet', snippet: SNIPPET })).error, /needs values for: who/);
+  assert.match((await edit({ schedule: added.id, vars: { who: 'x' } })).error, /vars are for what = snippet/);
+});
+
+step('a variable named like an object property still needs its value', async () => {
+  await setSnippets([{ name: 'Proto', command: 'echo {{constructor}}' }]);
+  const missing = await app.eval(async t => {
+    const { missingValues, fill } = await t.import('snippets.js');
+    return { missing: missingValues('echo {{constructor}}', {}), filled: fill('echo {{constructor}}', {}) };
+  });
+  assert.deepEqual(missing, { missing: ['constructor'], filled: 'echo ' });
 });

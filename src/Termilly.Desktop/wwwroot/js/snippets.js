@@ -61,14 +61,29 @@ export function placeholders(command) {
  * @param {Record<string, string> | null | undefined} values
  */
 export const fill = (command, values) =>
-  String(command).replace(PLACEHOLDER, (_, name, def) => values?.[name] ?? def ?? '');
+  String(command).replace(PLACEHOLDER, (_, name, def) => (hasValue(values, name) ? values[name] : def) ?? '');
+
+/**
+ * Whether values has one of its own for a placeholder: a name such as constructor isn't one an object brings along.
+ * @param {Record<string, string> | null | undefined} values
+ * @param {string} name
+ * @returns {values is Record<string, string>}
+ */
+const hasValue = (values, name) => !!values && Object.hasOwn(values, name);
+
+/**
+ * A placeholder's own value in values; undefined when it has none.
+ * @param {Record<string, string> | null | undefined} values
+ * @param {string} name
+ */
+export const ownValue = (values, name) => (hasValue(values, name) ? values[name] : undefined);
 
 /**
  * The placeholders that have neither a value nor a default, by name.
  * @param {string} command
  * @param {Record<string, string> | null | undefined} values
  */
-export const missingValues = (command, values) => placeholders(command).filter(p => !p.def && !(values && p.name in values)).map(p => p.name);
+export const missingValues = (command, values) => placeholders(command).filter(p => !p.def && !hasValue(values, p.name)).map(p => p.name);
 
 /**
  * The values that say something: an empty field is no value, so its default (or nothing) counts.
@@ -231,7 +246,7 @@ export function askValues(snippet, names, options, inputs = [], { given, ok, req
   return modal('snippet-run', `
     <h3>${escapeHtml(snippet.name)}</h3>
     <pre class="snippet-preview" data-preview></pre>
-    ${names.map((p, i) => valueField(p, remembered[p.name], inputOf(p.name), i === 0)).join('')}
+    ${names.map((p, i) => valueField(p, ownValue(remembered, p.name), inputOf(p.name), i === 0)).join('')}
     ${options.length > 1 ? `<label class="dialog-field">Run in
       <select class="field" data-where>${options.map(([v, l]) => `<option value="${escapeHtml(v)}">${escapeHtml(l)}</option>`).join('')}</select></label>` : ''}
     <div class="dialog-actions">

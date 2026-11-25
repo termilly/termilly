@@ -8,6 +8,7 @@ import { AGENT_KIND } from './constants.js';
 import { reportTextHtml } from './schedulelinks.js';
 import { reviewersFor, namesOf, fitPlan } from './todoplan.js';
 import { planRowsHtml } from './planrows.js';
+import { ownValue } from './snippets.js';
 import {
   WHAT, WHERE, WHEN, UNIT, NOTIFY, MISSED, AFTER, BUSY, CLOSED, RUN, RUN_LABEL, DAY_NAMES, describeWhen, describeAt, describeTook, hasEnded,
 } from './schedulerules.js';
@@ -157,7 +158,7 @@ function whatHtml(s, choices) {
  */
 function valuesHtml(s, fields) {
   if (!fields.length) return '';
-  const valueOf = (/** @type {Placeholder} */ p) => s.values?.[p.name] ?? (p.def ? `${p.def} (default)` : 'needs a value');
+  const valueOf = (/** @type {Placeholder} */ p) => ownValue(s.values, p.name) ?? (p.def ? `${p.def} (default)` : 'needs a value');
   return `<div class="sch-values">
     <span class="sch-values-text">${fields.map(p => `${escapeHtml(p.name)}: ${escapeHtml(valueOf(p))}`).join(', ')}</span>
     <button type="button" class="btn small" data-sch="values">Values</button>

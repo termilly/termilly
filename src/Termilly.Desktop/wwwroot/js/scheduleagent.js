@@ -102,6 +102,7 @@ function valuesOf(vars) {
  */
 function whatOf(args) {
   const what = args.what === WHAT.snippet || args.what === WHAT.agent ? args.what : WHAT.command;
+  if (args.vars != null && what !== WHAT.snippet) throw new Error('vars are for what = snippet.');
   if (what === WHAT.snippet) {
     const snippet = allSnippets().find(sn => sn.name === String(args.snippet ?? ''));
     if (!snippet) throw new Error(`There's no snippet "${args.snippet}". list_snippets shows them.`);
@@ -113,11 +114,11 @@ function whatOf(args) {
   if (what === WHAT.agent) {
     const prompt = String(args.prompt ?? '').trim();
     if (!prompt) throw new Error('An agent schedule needs its prompt.');
-    return { what, prompt, agent: agentOf(args.agent), ...READ_ONLY };
+    return { what, prompt, agent: agentOf(args.agent), values: undefined, ...READ_ONLY };
   }
   const command = String(args.command ?? '').trim();
   if (!command) throw new Error('A command schedule needs its command.');
-  return { what, command };
+  return { what, command, values: undefined };
 }
 
 /**
@@ -168,8 +169,9 @@ function whenArgsOf(when) {
  */
 function editedWhat(schedule, changed) {
   const { what, command, snippet, prompt } = schedule;
-  // Its values stay unless the edit gives new ones, or picks another snippet (they were the old one's).
-  const vars = changed.snippet != null && changed.snippet !== snippet ? null : schedule.values;
+  // Its values stay unless the edit gives new ones, picks another snippet (they were the old one's) or runs something else.
+  const keeps = (changed.what ?? what) === WHAT.snippet && (changed.snippet == null || changed.snippet === snippet);
+  const vars = keeps ? schedule.values : null;
   const edited = whatOf({ what, command, snippet, prompt, vars, ...changed });
   // Its agent stays as it was unless the edit names one, even one no longer installed.
   return edited.what === WHAT.agent && !('agent' in changed) && schedule.agent ? { ...edited, agent: schedule.agent } : edited;

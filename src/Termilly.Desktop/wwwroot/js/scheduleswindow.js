@@ -388,6 +388,8 @@ async function save() {
   if (reachesProduction(s, [...state.tabs.values()], state.profiles) && !(await confirmProduction())) return;
   if (s !== editing) return;
   s.name = s.name.trim() || (s.what === WHAT.snippet ? s.snippet : (s.what === WHAT.agent ? s.prompt : s.command).trim().split(/\s+/).slice(0, NAME_WORDS).join(' '));
+  // A snippet's values go with it when the schedule runs something else.
+  if (s.what !== WHAT.snippet) delete s.values;
   saveSchedule(s);
   select(s.id);
 }
