@@ -345,6 +345,8 @@ interface Schedule {
   command: string;
   /** A snippet's name: it runs as it is at the time. */
   snippet: string;
+  /** The snippet's placeholders, by name; one left out runs with its default (js/snippets.js missingValues). */
+  values?: Record<string, string>;
   /** What an agent is asked (js/agentcli.js). */
   prompt: string;
   /** An agent may change files; by default it only reads. */

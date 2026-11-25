@@ -8,7 +8,7 @@
 import { PAGE, HOST } from './protocol.js';
 import { send, onHost } from './host.js';
 import { state, emit, on, persist, newId, EVENTS } from './store.js';
-import { allSnippets, fill } from './snippets.js';
+import { allSnippets, fill, missingValues } from './snippets.js';
 import { windowInFront } from './windowshown.js';
 import { lastOutput } from './commands.js';
 import { agentCommand, readResult, noticeOf } from './agentcli.js';
@@ -116,7 +116,27 @@ export function clearPastRuns(scheduleId) {
 }
 
 /**
- * The command a schedule runs now: a snippet as it is at the moment, its placeholders at their defaults.
+ * The snippet a schedule runs, as it is now: undefined when it's gone.
+ * @param {Schedule} schedule
+ */
+export const snippetOf = schedule => [undefined, ...state.workspaces].flatMap(ws => allSnippets(ws)).find(s => s.name === schedule.snippet);
+
+/**
+ * Why a snippet schedule can't run: its snippet is gone, or a placeholder without a default has no value (the snippet
+ * was changed after the schedule was saved). Empty when it can.
+ * @param {Schedule} schedule
+ */
+export function snippetProblem(schedule) {
+  if (schedule.what !== WHAT.snippet) return '';
+  const found = snippetOf(schedule);
+  if (!found) return `The snippet ${schedule.snippet} is gone.`;
+  const missing = missingValues(found.command, schedule.values);
+  if (!missing.length) return '';
+  return `The snippet ${schedule.snippet} needs ${missing.length > 1 ? 'values' : 'a value'} for ${missing.join(', ')}.`;
+}
+
+/**
+ * The command a schedule runs now: a snippet as it is at the moment, with the schedule's values (defaults for the rest).
  * @param {Schedule} schedule
  * @returns {string | null} null when the snippet is gone
  */
@@ -127,8 +147,8 @@ function commandOf(schedule) {
     const keep = reviewersOf(schedule).length > 0;
     return agentCommand(schedule.prompt, { kind: schedule.agent, shell: shellOf(schedule), changes: schedule.allowChanges, all: !!schedule.allowAll, json: isOutOfSight(schedule), keep });
   }
-  const found = [undefined, ...state.workspaces].flatMap(ws => allSnippets(ws)).find(s => s.name === schedule.snippet);
-  return found ? fill(found.command, {}) : null;
+  const found = snippetOf(schedule);
+  return found ? fill(found.command, schedule.values ?? {}) : null;
 }
 
 /** @param {Schedule} schedule */
@@ -180,8 +200,9 @@ function begin(schedule) {
   }
   const command = commandOf(schedule);
   const run = record(schedule, RUN.running);
-  if (command === null) {
-    end(run, schedule, { error: `The snippet ${schedule.snippet} is gone.` });
+  const problem = snippetProblem(schedule);
+  if (command === null || problem) {
+    end(run, schedule, { error: problem || `The snippet ${schedule.snippet} is gone.` });
     return;
   }
   const going = { run, schedule, command };

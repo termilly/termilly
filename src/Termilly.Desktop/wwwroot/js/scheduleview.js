@@ -36,8 +36,10 @@ export const ALL_DAY_FIELD = 'allDay';
 
 /**
  * What the form picks from.
- * @typedef {{ shells: SessionProfile[], servers: SessionProfile[], workspaces: { id: string, name: string }[], snippets: string[] }} Choices
+ * @typedef {{ shells: SessionProfile[], servers: SessionProfile[], workspaces: { id: string, name: string }[], snippets: string[],
+ *   fields: Placeholder[] }} Choices fields: the picked snippet's placeholders
  */
+/** @typedef {import('./snippets.js').Placeholder} Placeholder */
 
 /**
  * @param {string} name
@@ -145,7 +147,21 @@ function whatHtml(s, choices) {
       ? selectHtml(WHAT.snippet, choices.snippets.map(n => /** @type {const} */ ([n, n])), s.snippet || choices.snippets[0])
       : '<p class="dialog-sub">No snippets yet. Make one in the Snippets window.</p>';
   return `<h3 class="sch-head">What it runs</h3>${segmentHtml('what', s.what)}${body}
-    ${s.what === WHAT.snippet ? '<p class="dialog-sub">Its placeholders run with their defaults.</p>' : ''}`;
+    ${s.what === WHAT.snippet ? valuesHtml(s, choices.fields) : ''}`;
+}
+
+/**
+ * A snippet's values as the schedule runs it, and the button that asks for them.
+ * @param {Schedule} s
+ * @param {Placeholder[]} fields
+ */
+function valuesHtml(s, fields) {
+  if (!fields.length) return '';
+  const valueOf = (/** @type {Placeholder} */ p) => s.values?.[p.name] ?? (p.def ? `${p.def} (default)` : 'needs a value');
+  return `<div class="sch-values">
+    <span class="sch-values-text">${fields.map(p => `${escapeHtml(p.name)}: ${escapeHtml(valueOf(p))}`).join(', ')}</span>
+    <button type="button" class="btn small" data-sch="values">Values</button>
+  </div>`;
 }
 
 /**

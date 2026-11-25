@@ -11,7 +11,7 @@ import { schedules, scheduleById, runsOf, saveSchedule, removeSchedule, runNow, 
 import { newSchedule, describeWhen, describeAt, reachesProduction, WHAT, WHERE, WHEN, UNIT, DAY_NAMES, minutesOf } from './schedulerules.js';
 import { AGENT_KIND } from './constants.js';
 import { reviewersOf } from './schedulereview.js';
-import { allSnippets } from './snippets.js';
+import { allSnippets, missingValues, filled } from './snippets.js';
 
 /**
  * The agent an agent prompt names, among those installed: Claude Code when it names none (or the first installed without it).
@@ -40,6 +40,7 @@ function describeSchedule(s) {
     id: s.id, name: s.name, on: s.on, what: s.what,
     runs: s.what === WHAT.agent ? s.prompt : s.what === WHAT.snippet ? s.snippet : s.command,
     ...(s.what === WHAT.agent ? { agent: s.agent ?? AGENT_KIND.claude, reviewers: reviewersOf(s) } : {}),
+    ...(s.what === WHAT.snippet ? { vars: s.values ?? {} } : {}),
     when: describeWhen(s.when), next: s.on ? describeAt(s.nextAt, Date.now()) : null,
     last: last ? { status: last.status, at: new Date(last.at).toISOString(), summary: last.summary } : null,
   };
@@ -85,14 +86,29 @@ function whenOf(args, base = newSchedule('').when) {
 }
 
 /**
+ * A snippet's values as an agent gave them (vars): text by placeholder name, the empty ones left out so their default counts.
+ * @param {unknown} vars
+ * @returns {Record<string, string>}
+ */
+function valuesOf(vars) {
+  if (vars == null) return {};
+  if (typeof vars !== 'object' || Array.isArray(vars)) throw new Error('vars should be an object: { "name": "value" }.');
+  return filled(Object.fromEntries(Object.entries(vars).map(([name, value]) => [name, String(value ?? '')])));
+}
+
+/**
  * What a new schedule runs: a command, one of the user's snippets, or an agent's prompt (which only reads files).
  * @param {any} args
  */
 function whatOf(args) {
   const what = args.what === WHAT.snippet || args.what === WHAT.agent ? args.what : WHAT.command;
   if (what === WHAT.snippet) {
-    if (!allSnippets().some(sn => sn.name === String(args.snippet ?? ''))) throw new Error(`There's no snippet "${args.snippet}". list_snippets shows them.`);
-    return { what, snippet: String(args.snippet) };
+    const snippet = allSnippets().find(sn => sn.name === String(args.snippet ?? ''));
+    if (!snippet) throw new Error(`There's no snippet "${args.snippet}". list_snippets shows them.`);
+    const values = valuesOf(args.vars);
+    const missing = missingValues(snippet.command, values);
+    if (missing.length) throw new Error(`The snippet needs values for: ${missing.join(', ')}. Give them in vars.`);
+    return { what, snippet: snippet.name, values };
   }
   if (what === WHAT.agent) {
     const prompt = String(args.prompt ?? '').trim();
@@ -120,7 +136,7 @@ function addSchedule(args) {
 /** The arguments that pick a kind of when: at, every or on_start. Given, the old kind's own fields don't carry over. */
 const WHEN_KIND_FIELDS = ['at', 'every', 'on_start'];
 /** The arguments that say what a schedule runs, and when. */
-const WHAT_FIELDS = ['what', 'command', 'snippet', 'prompt', 'agent'];
+const WHAT_FIELDS = ['what', 'command', 'snippet', 'vars', 'prompt', 'agent'];
 const WHEN_FIELDS = [...WHEN_KIND_FIELDS, 'days', 'unit'];
 /** What a changed prompt, agent or folder makes of what the user allowed an agent schedule: reading files only. */
 const READ_ONLY = Object.freeze({ allowChanges: false, allowAll: false });
@@ -152,7 +168,9 @@ function whenArgsOf(when) {
  */
 function editedWhat(schedule, changed) {
   const { what, command, snippet, prompt } = schedule;
-  const edited = whatOf({ what, command, snippet, prompt, ...changed });
+  // Its values stay unless the edit gives new ones, or picks another snippet (they were the old one's).
+  const vars = changed.snippet != null && changed.snippet !== snippet ? null : schedule.values;
+  const edited = whatOf({ what, command, snippet, prompt, vars, ...changed });
   // Its agent stays as it was unless the edit names one, even one no longer installed.
   return edited.what === WHAT.agent && !('agent' in changed) && schedule.agent ? { ...edited, agent: schedule.agent } : edited;
 }

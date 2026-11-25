@@ -11,13 +11,13 @@ import { closeAll, dropdown } from './popups.js';
 import { modal, pickFolder, CONFIRM_DIALOG } from './dialogs.js';
 import { escapeHtml, COPIED } from './ui.js';
 import { fuzzyMatch } from './fuzzy.js';
-import { allSnippets, NAME_WORDS } from './snippets.js';
+import { allSnippets, askValues, placeholders, missingValues, filled, NAME_WORDS } from './snippets.js';
 import { byId, find, targetOf, TOOL_COUNT, SCHEDULES_BUTTON_ID } from './dom.js';
 import { detach, closeWindow, focusWindow, isDetached, windowName } from './windows.js';
 import { readReport, shownText } from './schedulereport.js';
 import { withPaths, openReportLink, LINK_CLASS } from './schedulelinks.js';
 import {
-  schedules, scheduleById, runsOf, saveSchedule, removeSchedule, setScheduleOn, runNow, stopRun, runningNow, clearPastRuns,
+  schedules, scheduleById, runsOf, saveSchedule, removeSchedule, setScheduleOn, runNow, stopRun, runningNow, clearPastRuns, snippetOf,
 } from './schedules.js';
 import { formHtml, rowHtml, runsHtml, reportHtml, planOf, WHEN_FIELD, WHEN_KIND_SEGMENT, ALL_DAY_FIELD } from './scheduleview.js';
 import { planClicked } from './planrows.js';
@@ -28,12 +28,15 @@ const WINDOW_KEY = 'schedules';
 /** The window's buttons (their data-sch). */
 const ACTION = Object.freeze({
   add: 'add', close: 'close', save: 'save', remove: 'delete', run: 'run', stop: 'stop', copy: 'copy', terminal: 'terminal', onOff: 'onOff', file: 'file', browse: 'browse', clear: 'clear',
+  values: 'values',
 });
 /** The two views of a schedule. */
 const VIEW = Object.freeze({ form: 'form', runs: 'runs' });
 /** How much of the main window it takes the first time. */
 const FIRST_SHARE = 0.8;
 const KEY_SAVE = 'KeyS';
+/** The form's segment for what a schedule runs (scheduleview.js SEGMENTS). */
+const WHAT_SEGMENT = 'what';
 /** Boxes that show or hide more of the form. */
 const REDRAWS = new Set(['allowChanges', 'allowAll', 'toNotepad', 'toFile']);
 /** Fields that hold numbers. */
@@ -107,7 +110,46 @@ function choices() {
   const shells = state.profiles.filter(p => (p.source === 'local' || p.source === 'wsl') && !p.startCommand);
   const servers = state.profiles.filter(p => p.source === 'ssh');
   const named = [undefined, ...state.workspaces].flatMap(ws => allSnippets(ws)).map(s => s.name);
-  return { shells, servers, workspaces: state.workspaces.filter(w => !w.tmux), snippets: [...new Set(named)] };
+  return { shells, servers, workspaces: state.workspaces.filter(w => !w.tmux), snippets: [...new Set(named)], fields: fieldsOf(editing) };
+}
+
+/**
+ * The placeholders of the snippet a schedule runs; none for a command or an agent prompt.
+ * @param {Schedule | null} s
+ */
+function fieldsOf(s) {
+  const snippet = s?.what === WHAT.snippet ? snippetOf(s) : undefined;
+  return snippet ? placeholders(snippet.command) : [];
+}
+
+/**
+ * The snippet's placeholders that have neither a value in the schedule nor a default.
+ * @param {Schedule} s
+ */
+function missingOf(s) {
+  const snippet = snippetOf(s);
+  return snippet ? missingValues(snippet.command, s.values) : [];
+}
+
+/** Asks for the shown snippet's values, the ones it has filled in: the Values button, or a snippet picked that needs some. */
+async function askSnippetValues() {
+  const s = editing;
+  const snippet = s && snippetOf(s);
+  const names = snippet ? placeholders(snippet.command) : [];
+  if (!s || !snippet || !names.length) return;
+  const answer = await askValues(snippet, names, [], [], { given: s.values ?? {}, ok: 'OK', required: true });
+  // An agent may have changed what's shown while the user was asked.
+  if (!answer || s !== editing || s.what !== WHAT.snippet || s.snippet !== snippet.name) return;
+  s.values = filled(answer.values);
+  renderForm();
+}
+
+/** Another snippet, or Snippet chosen: the old values were another snippet's, and one that needs values asks for them. */
+function snippetPicked() {
+  const s = /** @type {Schedule} */ (editing);
+  s.values = {};
+  renderForm();
+  if (missingOf(s).length) askSnippetValues();
 }
 
 /**
@@ -118,6 +160,7 @@ function problemOf(s) {
   const { when } = s;
   if (s.what === WHAT.command && !s.command.trim()) return 'It needs a command.';
   if (s.what === WHAT.snippet && !s.snippet) return 'It needs a snippet.';
+  if (s.what === WHAT.snippet && missingOf(s).length) return `It needs a value for ${missingOf(s).join(', ')}.`;
   if (s.what === WHAT.agent && !s.prompt.trim()) return 'It needs a prompt.';
   if (s.where === WHERE.server && !s.profile) return 'It needs a server.';
   if (s.where === WHERE.terminal && !s.terminal.trim()) return 'It needs a terminal’s name or a #tag.';
@@ -169,6 +212,7 @@ function renderForm() {
   if (s.where === WHERE.server && !list.servers.some(p => p.id === s.profile)) s.profile = list.servers[0]?.id ?? null;
   if (s.where === WHERE.fresh && !s.wsId) s.wsId = state.activeId;
   if (s.what === WHAT.snippet && !s.snippet) s.snippet = list.snippets[0] ?? '';
+  list.fields = fieldsOf(s);
   editEl.innerHTML = formHtml(s, list, problemOf(s), nextText(), { isNew, dirty: isDirty(), allDay });
   for (const select of editEl.querySelectorAll('select')) dropdown(/** @type {HTMLSelectElement} */ (select));
 }
@@ -316,6 +360,7 @@ function segmentChose(button) {
     if (s.where !== place) s.profile = null;
   }
   renderForm();
+  if (seg === WHAT_SEGMENT && value === WHAT.snippet && missingOf(s).length) askSnippetValues();
 }
 
 /** @param {HTMLElement} button */
@@ -456,6 +501,7 @@ async function act(action) {
   else if (action === ACTION.terminal) await openAsTerminal();
   else if (action === ACTION.browse) await browseFolder();
   else if (action === ACTION.clear) await clearShown();
+  else if (action === ACTION.values) await askSnippetValues();
   else if (action === ACTION.file) {
     const run = openRunId ? state.schedules.runs.find(r => r.id === openRunId) : null;
     if (run?.file) send(PAGE.openPath, { path: run.file });
@@ -494,7 +540,10 @@ for (const event of ['input', 'change']) {
       return;
     }
     fieldChanged(field);
-    if (REDRAWS.has(field.name)) renderForm();
+    // A select says it changed twice (input and change): the snippet asks once.
+    if (field.name === WHAT.snippet) {
+      if (e.type === 'change') snippetPicked();
+    } else if (REDRAWS.has(field.name)) renderForm();
     else renderState();
   });
 }
