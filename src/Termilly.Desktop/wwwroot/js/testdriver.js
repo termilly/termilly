@@ -132,7 +132,7 @@ const helpers = Object.freeze({
   visible: selector => all(selector).some(shown),
   click, dblclick, contextmenu, type, key: pressKey, waitFor,
   /** @param {string} path */
-  import: path => bundled[path] ?? import(new URL(path, import.meta.url).href),
+  import: path => bundled[path.replace(/^\.\//, '')] ?? import(new URL(path, import.meta.url).href),
 });
 
 onHost(HOST.testEval, async ({ id, code }) => {
