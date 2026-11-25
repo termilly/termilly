@@ -139,7 +139,7 @@ test('the search and buttons stay on top while the cards scroll, and a long name
   assert.equal(card.same, true, 'the card keeps its column width');
   assert.match(card.title, new RegExp(`^${long}`), 'the whole name in the tooltip');
   // A short body, so the gallery always has room to scroll whatever the window's size.
-  await app.eval(t => { t.$('#set-body').style.maxHeight = `${SHORT_BODY_PX}px`; });
+  await app.eval((t, px) => { t.$('#set-body').style.maxHeight = `${px}px`; }, SHORT_BODY_PX);
   const before = await app.eval(t => t.$('.theme-tools').getBoundingClientRect().top - t.$('#set-body').getBoundingClientRect().top);
   await app.eval((t, by) => { t.$('#set-body').scrollTop = t.$('.theme-tools').offsetTop + by; }, SCROLL_PAST);
   await until(() => app.eval(t => t.$('#set-body').scrollTop > 0), 'scrolled');
