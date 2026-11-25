@@ -21,6 +21,9 @@ internal sealed class MacClipboard(Action<Action> onWindow) : IClipboardWatch, I
     /// <summary>How often the pasteboard is looked at.</summary>
     private static readonly TimeSpan Every = TimeSpan.FromMilliseconds(750);
 
+    /// <summary>AppKit, loaded once: NSPasteboard's class is found only then.</summary>
+    private static readonly Lazy<bool> AppKitLoaded = new(() => NativeLibrary.TryLoad(AppKit, out _));
+
     private Timer? _timer;
     private long _seen = -1;
 
@@ -59,12 +62,8 @@ internal sealed class MacClipboard(Action<Action> onWindow) : IClipboardWatch, I
     /// <summary>The clipboard's text for a paste the user asked for (a concealed one too: pasting a password is the point).</summary>
     public string? ReadText() => Board() is var board && board != IntPtr.Zero ? TextOn(board) : null;
 
-    /// <summary>The system's clipboard (AppKit loaded first: NSPasteboard's class is found only then).</summary>
-    private static IntPtr Board()
-    {
-        NativeLibrary.TryLoad(AppKit, out _);
-        return Send(Class("NSPasteboard"), "generalPasteboard");
-    }
+    /// <summary>The system's clipboard (AppKit loaded first).</summary>
+    private static IntPtr Board() => AppKitLoaded.Value ? Send(Class("NSPasteboard"), "generalPasteboard") : IntPtr.Zero;
 
     /// <summary>The clipboard's plain text, or null.</summary>
     private static string? TextOn(IntPtr board) => Text(Send(board, "stringForType:", NsString(TextType)));
