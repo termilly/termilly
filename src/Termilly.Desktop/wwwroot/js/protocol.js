@@ -576,7 +576,7 @@ export const HOST = Object.freeze({
 /** @typedef {{ id: string, state: string, message: string|null, session: string|null, source: string }} Host_agent_0 */
 /** @typedef {{ id: string, state: string, event: string, tool: string|null, message: string|null, reason: string|null, session: string|null, target: string|null, folder: string|null, prompt?: string|null, agent?: string, source: string }} Host_agent_1 */
 /** @typedef {Host_agent_0|Host_agent_1} Host_agent */
-/** @typedef {{ id: string, tasks: Array<any> }} Host_agentTasks */
+/** @typedef {{ id: string, tasks: Array<any>, gone?: boolean }} Host_agentTasks */
 /** @typedef {{ count: number, file: string|null, error?: string|null }} Host_agentRulesCopied */
 /** @typedef {{ folder: string|null, rules: Array<AgentRuleView>, file: string|null, existing: number }} Host_agentRulesList */
 /** @typedef {{  }} Host_agentsNext */

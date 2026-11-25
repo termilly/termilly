@@ -13,20 +13,14 @@ internal interface ITaskOutput
     TaskReading? Read(string session, string taskId);
 }
 
-/// <summary>A background task's shell: its process, and when it started (so a reused id isn't mistaken for it).</summary>
-internal sealed record TaskProcess(int Pid, DateTime Started);
-
 /// <summary>A background task's process: the shell an agent started it in, and what that shell runs.</summary>
 internal interface ITaskProcesses
 {
     /// <summary>
-    /// The shell of a task that started at <paramref name="startedAt"/> under the terminal's root process: the agent's
-    /// newest one not <paramref name="taken"/> by another task. Null when none is found.
+    /// Ends the task whose output goes to <paramref name="outputFile"/>, under the terminal's root process: false when
+    /// none is found (it ended already).
     /// </summary>
-    TaskProcess? Find(int terminalPid, DateTime startedAt, IReadOnlySet<int> taken);
-
-    /// <summary>Ends the shell and what it runs, if it's still that process; false when it isn't (it ended already).</summary>
-    bool Stop(TaskProcess process);
+    bool Stop(int terminalPid, string outputFile);
 }
 
 /// <summary>
@@ -110,60 +104,36 @@ internal sealed partial class ClaudeTaskOutput : ITaskOutput
 }
 
 /// <summary>
-/// Finds and stops a task's shell. The shells agents start carry no command line here, so a task's is the newest the
-/// agent started around when the task did, and not another task's.
+/// Stops a task by its output file: the shell the agent started it in writes it, so the processes that have it open
+/// under the terminal are the task's. The topmost of them ends, with everything it runs.
 /// </summary>
 internal sealed class TaskProcesses : ITaskProcesses
 {
-    /// <summary>The shells agents run commands in.</summary>
-    private static readonly string[] Shells = ["bash", "sh", "zsh", "fish", "powershell", "pwsh", "cmd"];
-    /// <summary>The programs that start them: the agents (Claude Code's may run under node).</summary>
-    private static readonly string[] Agents = [AgentKinds.Claude, AgentKinds.Codex, "node"];
-    /// <summary>How far from the task's start its shell may have started (the hook comes just after it).</summary>
-    private static readonly TimeSpan Around = TimeSpan.FromSeconds(5);
-
-    public TaskProcess? Find(int terminalPid, DateTime startedAt, IReadOnlySet<int> taken)
+    public bool Stop(int terminalPid, string outputFile)
     {
         var below = ClaudeAgentsPoller.Descendants(BusyWatcher.Snapshot(), terminalPid);
-        var agents = below.Where(p => Named(p, Agents)).Select(p => p.Id).ToHashSet();
-        return below.Where(p => agents.Contains(p.ParentId) && Named(p, Shells) && !taken.Contains(p.Id))
-            .Select(p => StartOf(p.Id) is { } started ? new TaskProcess(p.Id, started) : null)
-            .OfType<TaskProcess>()
-            .Where(p => (p.Started - startedAt).Duration() <= Around)
-            .MaxBy(p => p.Started);
+        var parents = below.ToDictionary(p => p.Id, p => p.ParentId);
+        var holders = FileHolders.Of(outputFile, parents.Keys).Where(parents.ContainsKey).ToHashSet();
+        var top = holders.Where(pid => !holders.Contains(parents[pid])).ToList();
+        var stopped = false;
+        foreach (var pid in top)
+        {
+            stopped |= Kill(pid); // each one, not just up to the first that ends
+        }
+        return stopped;
     }
 
-    public bool Stop(TaskProcess task)
+    private static bool Kill(int pid)
     {
         try
         {
-            using var process = Process.GetProcessById(task.Pid);
-            if (process.StartTime != task.Started)
-            {
-                return false;
-            }
+            using var process = Process.GetProcessById(pid);
             process.Kill(entireProcessTree: true);
             return true;
         }
         catch (Exception e) when (e is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception)
         {
             return false;
-        }
-    }
-
-    private static bool Named(ProcessEntry process, string[] names) =>
-        names.Contains(Path.GetFileNameWithoutExtension(process.Exe), StringComparer.OrdinalIgnoreCase);
-
-    private static DateTime? StartOf(int pid)
-    {
-        try
-        {
-            using var process = Process.GetProcessById(pid);
-            return process.StartTime;
-        }
-        catch (Exception e) when (e is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception)
-        {
-            return null;
         }
     }
 }

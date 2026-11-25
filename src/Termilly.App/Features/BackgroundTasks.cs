@@ -38,8 +38,6 @@ internal sealed class BackgroundTasks : IMessageHandler, IDisposable
         public string? Command { get; } = command;
         public string? Description { get; } = description;
         public DateTimeOffset Started { get; } = started;
-        /// <summary>Its shell, once found: what Stop ends.</summary>
-        public TaskProcess? Process { get; set; }
         public TaskReading? Reading { get; set; }
         public DateTimeOffset? Ended { get; set; }
 
@@ -84,25 +82,6 @@ internal sealed class BackgroundTasks : IMessageHandler, IDisposable
             list.Add(task);
             Post(pane);
         }
-        // Its shell, found now while it's the newest: Stop then ends that one and no other.
-        if (_terminals.Pids().TryGetValue(pane, out var pid))
-        {
-            _ = Task.Run(() => FindProcess(pane, pid, task));
-        }
-    }
-
-    private void FindProcess(string pane, int terminalPid, Tracked task)
-    {
-        HashSet<int> taken;
-        lock (_gate)
-        {
-            taken = [.. (_tasks.GetValueOrDefault(pane) ?? []).Select(t => t.Process?.Pid ?? 0)];
-        }
-        var found = _processes.Find(terminalPid, task.Started.LocalDateTime, taken);
-        lock (_gate)
-        {
-            task.Process ??= found;
-        }
     }
 
     /// <summary>Reads the running tasks' files; an ended one goes a while after.</summary>
@@ -143,17 +122,17 @@ internal sealed class BackgroundTasks : IMessageHandler, IDisposable
         return true;
     }
 
-    /// <summary>The page's Stop: the task's shell and what it runs end; its file then says so.</summary>
+    /// <summary>The page's Stop: the task's shell and what it runs end (found by its output file); its file then says so.</summary>
     private void Stop(string pane, string? useId)
     {
-        TaskProcess? process;
+        string? file;
         lock (_gate)
         {
-            process = _tasks.GetValueOrDefault(pane)?.Find(t => t.UseId == useId && t.Ended is null)?.Process;
+            file = _tasks.GetValueOrDefault(pane)?.Find(t => t.UseId == useId && t.Ended is null)?.Reading?.Path;
         }
-        if (process is not null)
+        if (file is not null && _terminals.Pids().TryGetValue(pane, out var pid))
         {
-            _ = Task.Run(() => _processes.Stop(process));
+            _ = Task.Run(() => _processes.Stop(pid, file));
         }
     }
 
@@ -175,7 +154,7 @@ internal sealed class BackgroundTasks : IMessageHandler, IDisposable
         {
             if (_tasks.Remove(pane))
             {
-                _page.Post(new ToPage.AgentTasks(pane, []));
+                _page.Post(new ToPage.AgentTasks(pane, [], Gone: true));
             }
         }
     }

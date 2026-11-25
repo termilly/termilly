@@ -64,6 +64,9 @@ internal sealed class TerminalHandler(
     /// <param name="fallbackCwd">Where to start when <paramref name="cwd"/> (the folder it was last in) is gone.</param>
     private void Start(string id, string? profileId, string? cwd, int cols, int rows, Dictionary<string, string>? variables, string? fallbackCwd)
     {
+        // Background tasks the page may have missed (it didn't know the terminal, or reloaded), before any report the
+        // early shell kept: a "done" in those then waits for the tasks as it should.
+        tasks.Resend(id);
         // Taken over before it leaves the early shells: a report that comes meanwhile still waits for the page with it.
         if (early.Get(id) is { } shell)
         {
@@ -81,7 +84,6 @@ internal sealed class TerminalHandler(
                 page.Post(new ToPage.Error(id, ex.Message));
             }
         }
-        tasks.Resend(id); // background tasks the page may have missed: it didn't know the terminal, or reloaded
     }
 
     /// <summary>

@@ -63,7 +63,8 @@ internal static partial class FromPage
 internal static partial class ToPage
 {
     /// <summary>A terminal's agent's background tasks, running and just ended (BackgroundTasks).</summary>
-    internal sealed record AgentTasks(string Id, IReadOnlyList<TaskView> Tasks) : IHostMessage
+    /// <param name="Gone">They went with their agent or shell: none ended as itself (an agent's held "done" isn't due).</param>
+    internal sealed record AgentTasks(string Id, IReadOnlyList<TaskView> Tasks, bool Gone = false) : IHostMessage
     {
         public static string Type => "agent:tasks";
     }

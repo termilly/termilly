@@ -81,8 +81,11 @@ internal sealed class TerminalSessions : IDisposable
     /// <summary>A process ended: its id can be reused by an unrelated one, so it isn't watched any more.</summary>
     public void Exited(string id, int pid)
     {
-        _pids.TryRemove(new KeyValuePair<string, int>(id, pid));
-        ShellEnded?.Invoke(id);
+        // Only the shell it has now: a replaced one's late end isn't the terminal's.
+        if (_pids.TryRemove(new KeyValuePair<string, int>(id, pid)))
+        {
+            ShellEnded?.Invoke(id);
+        }
     }
 
     /// <summary>The terminal was closed: its shell ends.</summary>

@@ -12,6 +12,7 @@
 set -eu
 repo=$(cd "$(dirname "$0")/../.." && pwd -P)  # -P: the real path, or the compiler and .editorconfig see two different ones
 # esbuild, which bundles the page into one file as the build publishes it (scripts/BundlePage.targets).
+command -v npm >/dev/null || { echo "Node.js 24 with npm is needed: the build bundles the page with it." >&2; exit 1; }
 (cd "$repo" && npm ci --no-audit --no-fund --silent)
 here="$repo/installer/mac"
 cache="$repo/installer/.cache/mac"

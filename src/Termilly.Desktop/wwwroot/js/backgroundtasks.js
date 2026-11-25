@@ -137,14 +137,14 @@ document.addEventListener('click', e => {
   if (open && task?.outputFile) showChange(open.tab, task.outputFile, { wholeFile: true });
 }, true);
 
-// The host's list for a terminal, whenever it changes: the last one to end lets a held "done" through. An empty
-// list isn't that: its agent or shell went away, and what it had left running ended unseen.
+// The host's list for a terminal, whenever it changes: once none runs, a held "done" comes through (also when the
+// last one went because its output never showed up). Not when they went with their agent or shell (gone).
 onHost(HOST.agentTasks, m => {
   const tab = state.tabs.get(m.id);
   if (!tab) return;
   tab.shellTasks = /** @type {TaskView[]} */ (m.tasks ?? []);
   activityChanged(tab, true);
-  if (tab.shellTasks.length && !runningTasks(tab)) tasksEnded(tab);
+  if (!m.gone && !runningTasks(tab)) tasksEnded(tab);
   if (open?.tab === tab && isOpen(open.el)) renderList();
 });
 

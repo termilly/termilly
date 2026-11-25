@@ -43,8 +43,7 @@ public sealed class BackgroundTasksTests : IDisposable
 
     private sealed class FakeProcesses : ITaskProcesses
     {
-        public TaskProcess? Find(int terminalPid, DateTime startedAt, IReadOnlySet<int> taken) => null;
-        public bool Stop(TaskProcess process) => true;
+        public bool Stop(int terminalPid, string outputFile) => true;
     }
 
     private sealed class Clock : TimeProvider
@@ -134,6 +133,51 @@ public sealed class BackgroundTasksTests : IDisposable
         _tasks.OnEvent(Event("PostToolUse", TaskId));
         _tasks.OnEvent(AgentHooks.Parse(Protocol.Message(Pane, "SessionEnd", $$"""{ "session_id": "{{Session}}" }"""))!);
         Assert.Empty(LastList());
+    }
+
+    [Fact]
+    public void Stop_ends_the_process_that_writes_the_tasks_file_and_no_other()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), $"termilly-stop-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(folder);
+        var file = Path.Combine(folder, "task.output");
+        var other = Path.Combine(folder, "other.output");
+        using var task = Holding(file);
+        using var bystander = Holding(other);
+        try
+        {
+            WaitFor(() => File.Exists(file) && File.Exists(other));
+            Assert.True(new TaskProcesses().Stop(Environment.ProcessId, file));
+            Assert.True(task.WaitForExit(5000));
+            Assert.False(bystander.HasExited);
+        }
+        finally
+        {
+            bystander.Kill(entireProcessTree: true);
+            bystander.WaitForExit(5000);
+            Directory.Delete(folder, true);
+        }
+    }
+
+    /// <summary>A shell whose output goes to <paramref name="file"/> for a minute, as a background task's does.</summary>
+    private static System.Diagnostics.Process Holding(string file)
+    {
+        // cmd reads its command line as it is, quotes and all; sh takes the command as one argument.
+        var start = OperatingSystem.IsWindows()
+            ? new System.Diagnostics.ProcessStartInfo("cmd.exe", $"/c ping -n 60 127.0.0.1 > \"{file}\"")
+            : new System.Diagnostics.ProcessStartInfo("/bin/sh", ["-c", $"sleep 60 > \"{file}\""]);
+        start.UseShellExecute = false;
+        start.CreateNoWindow = true;
+        return System.Diagnostics.Process.Start(start)!;
+    }
+
+    private static void WaitFor(Func<bool> done)
+    {
+        var until = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+        while (!done() && DateTime.UtcNow < until)
+        {
+            Thread.Sleep(20);
+        }
     }
 
     [Fact]
