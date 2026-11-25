@@ -4,7 +4,7 @@
 // the real terminal's rows from where that starts, and the terminal takes the keys. It closes when the agent is back
 // at its plain empty prompt, or working.
 
-import { readMenu } from './compactcard.js';
+import { readMenu, isRule } from './compactcard.js';
 import { AGENT_STATE } from './constants.js';
 
 /** What starts an agent's input line (Claude Code's ">", Codex's "›"), and what may stand before it. */
@@ -86,8 +86,15 @@ function typedAt(buffer) {
   return from > 0 && buffer.cursorX > from;
 }
 
-/** The rule Claude Code draws above and below its input, from the screen's left edge (a typed line is indented). */
-const RULE = /^─+\s*$/;
+/** What Claude Code's rules start with. */
+const RULE_START = '─';
+
+/**
+ * Whether a row is the rule Claude Code draws above and below its input: from the screen's left edge (a typed line is
+ * indented), with a named session's name in the one above.
+ * @param {string} row
+ */
+const isInputRule = row => row.startsWith(RULE_START) && isRule(row);
 /** The input line's mark at the screen's left edge (its later rows are indented), and the one space after it. */
 const MARK_AND_SPACE = /^[>›❯] ?/;
 /** What an agent shows in its input line for something it holds folded up (a long paste, a picture): not its text. */
@@ -181,7 +188,7 @@ function showsHint(term, row, top, mark) {
  */
 function inputTop(rows, cursor) {
   for (let y = Math.min(cursor, rows.length - 1); y >= 0; y--) {
-    if (MARK_AND_SPACE.test(rows[y]) && (y === 0 || !rows[y - 1].trim() || RULE.test(rows[y - 1]))) return y;
+    if (MARK_AND_SPACE.test(rows[y]) && (y === 0 || !rows[y - 1].trim() || isInputRule(rows[y - 1]))) return y;
   }
   return -1;
 }
@@ -193,7 +200,7 @@ function inputTop(rows, cursor) {
  * @param {number} top
  */
 function inputEnd(rows, top) {
-  for (let y = top + 1; y < rows.length; y++) if (RULE.test(rows[y])) return y - 1;
+  for (let y = top + 1; y < rows.length; y++) if (isInputRule(rows[y])) return y - 1;
   let last = rows.length - 1;
   while (last > top && !rows[last].trim()) last--;
   for (let y = last - 1; y > top; y--) if (!rows[y].trim()) return y - 1;

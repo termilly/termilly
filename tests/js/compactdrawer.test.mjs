@@ -141,3 +141,11 @@ test('a "> " line typed after a blank line is part of the prompt, not where it s
   const rows = ['', RULE, '❯ first', '', '  > second', RULE, ...CLAUDE_FOOTER];
   assert.equal(typedPrompt(typedTerm(rows, 4, 5))?.text, 'first\n\n> second');
 });
+
+test("a named session's rule, its name in it, is a rule: its suggestion stays, the last prompt and reply above don't move", () => {
+  // Claude Code writes a named session's name into the rule over its input; the prompt above was looked for instead.
+  const named = `${'─'.repeat(30)} firmbite-next-steps ─`;
+  const rows = ['❯ how are ya?', '', '● Doing well, thanks.', '', '✻ Sautéed for 3s', '', named, '❯ start on #114', RULE, ...CLAUDE_FOOTER];
+  assert.equal(typedPrompt(typedTerm(rows, 7, 2, 7)), null);
+  assert.equal(suggestedPrompt(typedTerm(rows, 7, 2, 7)), 'start on #114');
+});
