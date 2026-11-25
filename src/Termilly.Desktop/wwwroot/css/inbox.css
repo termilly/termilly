@@ -97,6 +97,16 @@
 .inbox-group-count { color: var(--faint); font-size: 11px; font-weight: 400; font-variant-numeric: tabular-nums; }
 .inbox-group-clear { flex: none; height: 22px; padding: 0 8px; border-radius: 6px; color: var(--muted); font-size: 11.5px; }
 .inbox-group-clear:hover, .inbox-group-clear:focus-visible { background: var(--hover); color: var(--text); outline: none; }
+/* Normal, the center closed (js/inboxalert.js): the pane's flash (panes.css), pulsing three times and reaching a little
+   past the button, since one blink on a button this small goes unseen. */
+#inbox-button > .pane-arrived { inset: -3px; border-radius: 9px; animation: button-arrived 1.2s ease-out forwards; }
+@keyframes button-arrived {
+  0%, 30%, 60%, 100% { opacity: 0; }
+  10%, 40%, 70% { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #inbox-button > .pane-arrived { animation: pane-arrived-calm 1.2s ease-out forwards; }
+}
 /* Minimal, the center closed (js/inboxalert.js): a tab on the terminals' right edge with a dot per notification, and
    the newest one that needs the user peeking out of it. On the docked tools' side, like the center. */
 .inbox-edge {

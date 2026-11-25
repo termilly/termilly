@@ -60,11 +60,15 @@ after(async () => { await app?.stop({ failed }); });
 step('in Normal, something that needs you flashes the closed center\'s button, and no tab shows', async () => {
   await app.eval(t => {
     globalThis.inboxFlashed = false;
-    new globalThis.MutationObserver(() => { if (t.$('#inbox-button > .pane-arrived')) globalThis.inboxFlashed = true; })
+    new globalThis.MutationObserver(() => {
+      const glow = t.$('#inbox-button > .pane-arrived');
+      if (glow) globalThis.inboxFlashed = globalThis.getComputedStyle(glow).animationName;
+    })
       .observe(t.$('#inbox-button'), { childList: true });
   });
   await agentSays('asks', { state: 'needs-input', tool: 'Bash', target: 'npm test' });
   await until(() => app.eval(() => globalThis.inboxFlashed), 'the button flashed');
+  assert.equal(await app.eval(() => globalThis.inboxFlashed), 'button-arrived', 'its own pulses, not the pane\'s blink');
   assert.equal((await edge()).shown, false);
 });
 

@@ -27,6 +27,8 @@ import { SECOND_MS } from './util.js';
 const ALERTS = new Set([DOT.ask, DOT.error]);
 /** How long a peek shows (longer while the mouse is on it). */
 const PEEK_MS = 5 * SECOND_MS;
+/** How long the button's pulses last (inbox.css): a little over their animation. */
+const BUTTON_FLASH_MS = 1300;
 /** The most dots the tab shows; its count says the rest. */
 const MAX_DOTS = 8;
 const AGENT_NAME = 'An agent';
@@ -111,7 +113,7 @@ function hidePeek() {
  */
 function alertOf(item) {
   if (isMinimal()) showPeek(item);
-  else flash(button);
+  else flash(button, BUTTON_FLASH_MS);
 }
 
 watchNotes(() => {

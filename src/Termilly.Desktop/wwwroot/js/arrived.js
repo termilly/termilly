@@ -22,16 +22,18 @@ export function arriveAt(tab) {
 }
 
 /**
- * Flashes an element once, as a pane does when a notification takes the user to it (the notification center's button
- * when something comes in while it's closed, js/inboxalert.js). The element has the room for it in panes.css.
+ * Flashes an element, as a pane does when a notification takes the user to it (the notification center's button when
+ * something comes in while it's closed, js/inboxalert.js, pulses for longer: a button is too small for one blink). The
+ * element has its animation in panes.css; `ms` is a little over it.
  * @param {HTMLElement} el
+ * @param {number} [ms]
  */
-export function flash(el) {
+export function flash(el, ms = ARRIVED_MS) {
   // Its own element, not a pseudo-element: the pane's ::before is the broadcast stripe and its ::after Minimal's edge.
   el.querySelector(`:scope > .${ARRIVED_CLASS}`)?.remove();
   clearTimeout(arrivedTimers.get(el));
   const glow = document.createElement('div');
   glow.className = ARRIVED_CLASS;
   el.append(glow);
-  arrivedTimers.set(el, setTimeout(() => glow.remove(), ARRIVED_MS));
+  arrivedTimers.set(el, setTimeout(() => glow.remove(), ms));
 }
