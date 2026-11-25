@@ -185,6 +185,7 @@ function showSection(id) {
   body.scrollTop = 0;
   section.drawn?.(body);
   syncControls();
+  section.shown?.(body);
 }
 
 // ---- Search ----

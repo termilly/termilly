@@ -22,6 +22,8 @@ import { restoreFocus } from '../panes.js';
  * @property {() => void} [refresh] On switching to it from another section: asks the host for what it shows.
  * @property {() => void} [opened] Each time Settings opens on it.
  * @property {(body: HTMLElement) => void} [drawn] After its markup is in the page, also as search results.
+ * @property {(body: HTMLElement) => void} [shown] Each time it's opened as the page's section (not as search results),
+ *   once drawn and its controls show the settings.
  * @property {(body: HTMLElement) => void} [sync] Shows the current settings in its own controls.
  * @property {Record<string, (el: HTMLElement) => unknown>} [actions] Its data-action buttons, by name.
  * @property {(e: MouseEvent) => unknown} [click] Clicks on its own controls; true (or a value) when handled.

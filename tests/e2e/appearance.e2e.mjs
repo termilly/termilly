@@ -151,3 +151,21 @@ test('the search and buttons stay on top while the cards scroll, and a long name
   assert.ok(before > 0 && after.top >= -1 && after.top <= 1, `the tools stay at the top (${after.top}px)`);
   assert.equal(after.onTop, true, 'nothing scrolls over them');
 }));
+
+test('opening the Theme page scrolls to the theme in use', () => withAppearance('appearance-scroll-to-theme', async app => {
+  // The last card, in a short body: far out of view unless the page scrolls to it.
+  const last = await app.eval(t => t.$$('.theme-card').at(-1).dataset.themeId);
+  await app.eval(async (t, id, px) => {
+    const { updateSettings } = await t.import('preferences.js');
+    const { GROUPS } = await t.import('store.js');
+    updateSettings(GROUPS.interface, { theme: id });
+    t.$('#set-body').style.maxHeight = `${px}px`;
+    t.click('[data-section="terminal"]');
+  }, last, SHORT_BODY_PX);
+  await app.eval(async t => (await t.import('settings.js')).openSettings('appearance'));
+  await until(() => app.eval((t, id) => {
+    const body = t.$('#set-body').getBoundingClientRect();
+    const card = t.$(`.theme-card[data-theme-id="${id}"]`).getBoundingClientRect();
+    return t.$('#set-body').scrollTop > 0 && card.top >= body.top && card.bottom <= body.bottom;
+  }, last), 'the theme in use is in view');
+}));

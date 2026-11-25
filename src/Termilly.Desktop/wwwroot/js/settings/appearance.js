@@ -150,6 +150,8 @@ const APPEARANCE = {
     { stack: true, keywords: `colour color look palette scheme ${THEMES.map(t => `${t.name} ${t.like ?? ''}`).join(' ').toLowerCase()}` })),
   drawn: root => { applyFilter(root); sync(root); },
   sync,
+  // The theme in use is in view on arrival, however long the gallery gets (centred, clear of the sticky search).
+  shown: body => /** @type {HTMLElement | null} */ (body.querySelector(`${THEME_CARD}.on:not([hidden])`))?.scrollIntoView({ block: 'center' }),
   click(e) {
     const picked = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-theme-id]'));
     if (picked) {
