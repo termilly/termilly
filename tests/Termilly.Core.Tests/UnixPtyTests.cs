@@ -172,7 +172,7 @@ public sealed class UnixPtyTests
             });
             await Task.Delay(300);
             var closing = Task.Run(pty.Dispose);
-            Assert.Same(closing, await Task.WhenAny(closing, Task.Delay(TimeSpan.FromSeconds(2)))); // closing the terminal didn't wait
+            await closing.WaitAsync(TimeSpan.FromSeconds(2)); // closing the terminal didn't wait (a TimeoutException if it did)
             await reading.WaitAsync(TimeSpan.FromSeconds(5)); // and the reader ends
         }
         finally

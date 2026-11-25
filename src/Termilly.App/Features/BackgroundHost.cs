@@ -68,7 +68,8 @@ internal sealed class BackgroundHost : IDisposable
     /// <summary>This window's connection to the host once it's made (one being made is waited for), or null.</summary>
     private HostClient? Connected()
     {
-        Task.WhenAny(_host, Task.Delay(ConnectWait)).Wait();
+        // Waits without throwing when connecting failed, and without a timer left running after (CA2027).
+        ((IAsyncResult)_host).AsyncWaitHandle.WaitOne(ConnectWait);
         return _host.IsCompletedSuccessfully && _host.Result is { IsConnected: true } connected ? connected : null;
     }
 
