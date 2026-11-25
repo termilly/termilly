@@ -131,7 +131,9 @@ internal sealed class TaskProcesses : ITaskProcesses
         var agents = below.Values.Concat(all.Where(p => p.Id == terminalPid))
             .Where(p => _starters.Contains(Path.GetFileNameWithoutExtension(p.Exe), StringComparer.OrdinalIgnoreCase))
             .Select(p => p.Id).ToHashSet();
-        var tasks = FileHolders.Of(outputFile, below.Keys).Where(pid => below.TryGetValue(pid, out var p) && agents.Contains(p.ParentId)).ToList();
+        // The task's: an agent above it (its shell, or what that shell handed the file to), and the topmost of those.
+        var holders = FileHolders.Of(outputFile, below.Keys).Where(pid => UnderAgent(pid, below, agents)).ToHashSet();
+        var tasks = holders.Where(pid => !holders.Contains(below[pid].ParentId)).ToList();
         // Held open while it's checked again: a process that ended meanwhile can't hand its id to another one.
         var opened = tasks.Select(Open).OfType<Process>().ToList();
         try
@@ -148,6 +150,19 @@ internal sealed class TaskProcesses : ITaskProcesses
         {
             opened.ForEach(p => p.Dispose());
         }
+    }
+
+    /// <summary>Whether an agent is above the process in the terminal (a reader the user started there has none).</summary>
+    private static bool UnderAgent(int pid, Dictionary<int, ProcessEntry> below, HashSet<int> agents)
+    {
+        for (var at = pid; below.TryGetValue(at, out var process); at = process.ParentId)
+        {
+            if (agents.Contains(process.ParentId))
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static Process? Open(int pid)

@@ -151,9 +151,13 @@ internal sealed class BackgroundTasks : IMessageHandler, IDisposable
     /// <summary>A terminal's shell ended, unless it has a new shell already: then it's an old one's late news.</summary>
     private void ShellEnded(string pane)
     {
-        if (!_terminals.Pids().ContainsKey(pane))
+        lock (_gate)
         {
-            Forget(pane);
+            // Checked under the gate: a new shell's tasks are added under it too, so they can't come in between.
+            if (!_terminals.Pids().ContainsKey(pane) && _tasks.Remove(pane))
+            {
+                _page.Post(new ToPage.AgentTasks(pane, [], Gone: true));
+            }
         }
     }
 

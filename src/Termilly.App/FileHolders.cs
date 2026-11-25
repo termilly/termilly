@@ -14,6 +14,8 @@ internal static partial class FileHolders
     /// <summary>How long lsof may take before its answer is given up on.</summary>
     private static readonly TimeSpan LsofWait = TimeSpan.FromSeconds(5);
     private const string Lsof = "/usr/sbin/lsof";
+    /// <summary>How many links deep a path is followed (as the system's own limit, roughly).</summary>
+    private const int MaxLinks = 40;
     /// <summary>lsof's options end here: the path after it is read as a path, whatever it starts with.</summary>
     private const string EndOfOptions = "--";
 
@@ -34,7 +36,7 @@ internal static partial class FileHolders
     }
 
     /// <summary>The path with every link on the way resolved, as /proc names what a process has open.</summary>
-    private static string RealPath(string path)
+    private static string RealPath(string path, int depth = 0)
     {
         var full = Path.GetFullPath(path);
         var current = Path.GetPathRoot(full) ?? "/";
@@ -44,7 +46,8 @@ internal static partial class FileHolders
             try
             {
                 var link = Directory.Exists(current) ? Directory.ResolveLinkTarget(current, true) : File.ResolveLinkTarget(current, true);
-                current = link?.FullName ?? current;
+                // A link's target may go through links of its own on the way: resolved the same way (a loop stops).
+                current = link is null ? current : depth < MaxLinks ? RealPath(link.FullName, depth + 1) : link.FullName;
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException)
             {

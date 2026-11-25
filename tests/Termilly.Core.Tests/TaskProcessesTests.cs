@@ -12,15 +12,17 @@ public sealed class TaskProcessesTests
     private const string Session = "s1";
     private const string TaskId = "bk1u88xlt";
 
-    [Fact]
-    public void Stop_ends_the_process_that_writes_the_tasks_file_and_no_other()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Stop_ends_the_process_that_writes_the_tasks_file_and_no_other(bool shellHolds)
     {
         var folder = Path.Combine(Path.GetTempPath(), $"termilly-stop-{Guid.NewGuid():N}");
         Directory.CreateDirectory(folder);
         var file = Path.Combine(folder, "task.output");
         var other = Path.Combine(folder, "other.output");
-        using var task = Holding(file);
-        using var bystander = Holding(other);
+        using var task = Holding(file, shellHolds);
+        using var bystander = Holding(other, shellHolds);
         try
         {
             WaitFor(() => File.Exists(file) && File.Exists(other));
@@ -38,14 +40,19 @@ public sealed class TaskProcessesTests
         }
     }
 
-    /// <summary>A shell whose output goes to <paramref name="file"/> for a minute, as a background task's does.</summary>
-    private static System.Diagnostics.Process Holding(string file)
+    /// <summary>
+    /// A shell whose output goes to <paramref name="file"/> for a minute, as a background task's does: the shell holds
+    /// the file itself (as an agent's bash does), or only the command it hands it to does.
+    /// </summary>
+    private static System.Diagnostics.Process Holding(string file, bool shellHolds)
     {
         // cmd reads its command line as it is, quotes and all; sh takes the command as one argument. A redirected group
-        // keeps the shell itself holding the file, as an agent's bash does (a single command's cmd hands it on).
+        // keeps cmd holding the file; a single command's cmd hands it on.
         var start = OperatingSystem.IsWindows()
-            ? new System.Diagnostics.ProcessStartInfo("cmd.exe", $"/c (ping -n 60 127.0.0.1 & echo done) > \"{file}\"")
-            : new System.Diagnostics.ProcessStartInfo("/bin/sh", ["-c", $"exec > \"{file}\"; sleep 60; echo done"]);
+            ? new System.Diagnostics.ProcessStartInfo("cmd.exe", shellHolds
+                ? $"/c (ping -n 60 127.0.0.1 & echo done) > \"{file}\"" : $"/c ping -n 60 127.0.0.1 > \"{file}\"")
+            : new System.Diagnostics.ProcessStartInfo("/bin/sh", ["-c", shellHolds
+                ? $"exec > \"{file}\"; sleep 60; echo done" : $"sleep 60 > \"{file}\"; echo done"]);
         start.UseShellExecute = false;
         start.CreateNoWindow = true;
         return System.Diagnostics.Process.Start(start)!;
