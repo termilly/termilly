@@ -11,6 +11,8 @@ internal sealed class HostedShell(string id, IPty pty)
     public string Id { get; } = id;
     public IPty Pty { get; } = pty;
     public OutputRing Output { get; } = new();
+    /// <summary>Held while output goes into the ring and out, so a replay holds each chunk or comes before it.</summary>
+    public Lock OutputGate { get; } = new();
     public int? ExitCode { get; set; }
     public bool Alive => ExitCode is null;
 }
@@ -101,13 +103,16 @@ internal sealed class Host
         {
             case HostRequest.Hello:
                 Send(new HostEvent.Hello(HostProtocol.Version,
-                    _shells.Values.Select(s => new HostEvent.Session(s.Id, s.Pty.ProcessId, s.Alive, s.ExitCode)).ToList()));
+                    _shells.Values.Select(s => new HostEvent.Session(s.Id, s.Pty.ProcessId, s.Alive, s.ExitCode)).ToList(), Environment.ProcessId));
                 break;
             case HostRequest.Start start:
                 Start(start);
                 break;
             case HostRequest.Attach attach when _shells.TryGetValue(attach.Id, out var shell):
-                Send(new HostEvent.Replay(attach.Id, shell.Output.Text()));
+                lock (shell.OutputGate)
+                {
+                    Send(new HostEvent.Replay(attach.Id, shell.Output.Text()));
+                }
                 if (!shell.Alive)
                 {
                     Send(new HostEvent.Exited(attach.Id, shell.ExitCode ?? HostEvent.UnknownExitCode));
@@ -131,11 +136,13 @@ internal sealed class Host
                 break;
             case HostRequest.Shutdown:
                 _stopping = true;
-                foreach (var s in _shells.Values)
+                // Forgotten first, so their pumps don't report an ordinary exit: the window says they ended with the host.
+                var ending = _shells.Values.ToList();
+                _shells.Clear();
+                foreach (var s in ending)
                 {
                     s.Pty.Dispose();
                 }
-                _shells.Clear();
                 Environment.Exit(0);
                 break;
         }
@@ -179,8 +186,14 @@ internal sealed class Host
                     continue;
                 }
                 var text = new string(chars, 0, count);
-                shell.Output.Add(text);
-                Send(new HostEvent.Output(shell.Id, text));
+                lock (shell.OutputGate)
+                {
+                    shell.Output.Add(text);
+                    if (IsCurrent(shell))
+                    {
+                        Send(new HostEvent.Output(shell.Id, text));
+                    }
+                }
             }
         }
         catch (Exception e) when (e is IOException or ObjectDisposedException)
@@ -194,12 +207,18 @@ internal sealed class Host
         {
             shell.ExitCode = HostEvent.UnknownExitCode;
         }
-        if (_shells.ContainsKey(shell.Id))
+        if (IsCurrent(shell))
         {
             Send(new HostEvent.Exited(shell.Id, shell.ExitCode ?? HostEvent.UnknownExitCode));
         }
         _idleSince = DateTime.UtcNow;
     }
+
+    /// <summary>
+    /// Whether this shell is still its terminal's: one replaced (a restart) or ended may still be closing, and what it
+    /// says last isn't the new shell's.
+    /// </summary>
+    private bool IsCurrent(HostedShell shell) => _shells.TryGetValue(shell.Id, out var current) && current == shell;
 
     /// <summary>To the attached window, if there is one; output for no one is only kept in the rings.</summary>
     private void Send(HostEvent message)

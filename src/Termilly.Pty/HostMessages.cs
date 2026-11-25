@@ -48,7 +48,8 @@ public abstract record HostEvent
 {
     /// <param name="V">The host's <see cref="HostProtocol.Version"/>.</param>
     /// <param name="Sessions">The shells it runs, from before this window too.</param>
-    public sealed record Hello(int V, IReadOnlyList<Session> Sessions) : HostEvent;
+    /// <param name="Pid">The host's own process, to make sure it's gone once asked to stop; 0 from an older host.</param>
+    public sealed record Hello(int V, IReadOnlyList<Session> Sessions, int Pid = 0) : HostEvent;
 
     /// <param name="Exit">How it ended; null while it runs.</param>
     public sealed record Session(string Id, int Pid, bool Alive, int? Exit);

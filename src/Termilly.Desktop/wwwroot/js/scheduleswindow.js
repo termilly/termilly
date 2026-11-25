@@ -12,7 +12,7 @@ import { modal, pickFolder, CONFIRM_DIALOG } from './dialogs.js';
 import { escapeHtml, COPIED } from './ui.js';
 import { fuzzyMatch } from './fuzzy.js';
 import { allSnippets, NAME_WORDS } from './snippets.js';
-import { byId, find, targetOf, TOOL_COUNT } from './dom.js';
+import { byId, find, targetOf, TOOL_COUNT, SCHEDULES_BUTTON_ID } from './dom.js';
 import { detach, closeWindow, focusWindow, isDetached, windowName } from './windows.js';
 import { readReport, shownText } from './schedulereport.js';
 import { withPaths, openReportLink, LINK_CLASS } from './schedulelinks.js';
@@ -21,7 +21,7 @@ import {
 } from './schedules.js';
 import { formHtml, rowHtml, runsHtml, reportHtml, planOf, WHEN_FIELD, WHEN_KIND_SEGMENT, ALL_DAY_FIELD } from './scheduleview.js';
 import { planClicked } from './planrows.js';
-import { newSchedule, minutesOf, nextRun, describeAt, isAllDay, hasEnded, WHAT, WHERE, WHEN } from './schedulerules.js';
+import { newSchedule, minutesOf, nextRun, describeAt, isAllDay, hasEnded, reachesProduction, WHAT, WHERE, WHEN } from './schedulerules.js';
 
 const NAME = 'Schedules';
 const WINDOW_KEY = 'schedules';
@@ -33,7 +33,6 @@ const ACTION = Object.freeze({
 const VIEW = Object.freeze({ form: 'form', runs: 'runs' });
 /** How much of the main window it takes the first time. */
 const FIRST_SHARE = 0.8;
-const PROD_TAG = 'prod';
 const KEY_SAVE = 'KeyS';
 /** Boxes that show or hide more of the form. */
 const REDRAWS = new Set(['allowChanges', 'allowAll', 'toNotepad', 'toFile']);
@@ -81,7 +80,7 @@ const listEl = find(box, '.sch-list');
 const tabsEl = find(box, '.sch-tabs');
 const onBox = /** @type {HTMLInputElement} */ (find(box, '[data-sch-on]'));
 const editEl = find(box, '.sch-edit');
-const openButton = byId('schedules-button');
+const openButton = byId(SCHEDULES_BUTTON_ID);
 const runningCount = find(openButton, TOOL_COUNT);
 
 /** What the form shows: the selected schedule's copy. */
@@ -97,7 +96,11 @@ let allDay = true;
 
 const isOpen = () => !layer.hidden || isDetached(WINDOW_KEY);
 const saved = () => (editing ? scheduleById(editing.id) : null);
-const isDirty = () => !!editing && (isNew || JSON.stringify({ ...editing, nextAt: 0 }) !== JSON.stringify({ ...saved(), nextAt: 0 }));
+/** @param {Schedule | null} s */
+const snapshot = s => JSON.stringify({ ...s, nextAt: 0 });
+const isDirty = () => !!editing && (isNew || snapshot(editing) !== snapshot(saved()));
+/** The shown schedule as it was saved when the form took it, to tell the user's changes from an agent's. */
+let shownAs = '';
 
 /** Shells that can run out of sight or in a terminal, servers, and the rest of what the form picks from. */
 function choices() {
@@ -236,6 +239,7 @@ function render() {
 function select(id, { runId = null } = {}) {
   const schedule = id ? scheduleById(id) : null;
   editing = schedule ? structuredClone(schedule) : null;
+  shownAs = snapshot(editing);
   allDay = !editing || isAllDay(editing.when);
   isNew = false;
   openRunId = runId;
@@ -324,13 +328,6 @@ function dayChose(button) {
   renderState();
 }
 
-/** Whether a schedule goes to production, where nobody will be there to see what it types. */
-function reachesProduction() {
-  const s = /** @type {Schedule} */ (editing);
-  if (s.where === WHERE.terminal) return [...state.tabs.values()].some(t => t.tags.includes(PROD_TAG) && (s.terminal === `#${PROD_TAG}` || t.name === s.terminal));
-  return !!state.profiles.find(p => p.id === s.profile)?.tags?.includes(PROD_TAG);
-}
-
 const confirmProduction = () => modal('confirm prod-confirm', `
   <h3>Run this on production, on time?</h3>
   <p class="dialog-sub">It’ll run with nobody there, each time, without asking again.</p>
@@ -342,7 +339,8 @@ const confirmProduction = () => modal('confirm prod-confirm', `
 async function save() {
   const s = editing;
   if (!s || problemOf(s) || !isDirty()) return;
-  if (reachesProduction() && !(await confirmProduction())) return;
+  // Production is where nobody will be there to see what it types.
+  if (reachesProduction(s, [...state.tabs.values()], state.profiles) && !(await confirmProduction())) return;
   if (s !== editing) return;
   s.name = s.name.trim() || (s.what === WHAT.snippet ? s.snippet : (s.what === WHAT.agent ? s.prompt : s.command).trim().split(/\s+/).slice(0, NAME_WORDS).join(' '));
   saveSchedule(s);
@@ -357,8 +355,10 @@ async function removeShown() {
     render();
     return;
   }
-  if (!(await confirmDanger(`Delete ${editing.name}?`, 'Its reports go with it.', 'Delete')) || !editing) return;
-  removeSchedule(editing.id);
+  const id = editing.id;
+  // An agent may change what's shown while the user is asked: only the schedule asked about goes.
+  if (!(await confirmDanger(`Delete ${editing.name}?`, 'Its reports go with it.', 'Delete')) || editing?.id !== id) return;
+  removeSchedule(id);
   select(schedules()[0]?.id ?? null);
 }
 
@@ -503,6 +503,8 @@ onBox.addEventListener('change', () => {
   if (!editing || isNew) return;
   setScheduleOn(editing.id, onBox.checked);
   editing.on = onBox.checked;
+  // It's saved at once, so it's no change of the user's still to save.
+  shownAs = snapshot({ ...JSON.parse(shownAs), on: onBox.checked });
   editing.nextAt = saved()?.nextAt ?? null;
 });
 
@@ -589,12 +591,32 @@ export function initSchedulesWindow() {
 on(EVENTS.openSchedules, options => openSchedules(options));
 
 // A run's news, or the clock's: what's being edited stays as it is, and the rest shows it.
+/**
+ * The shown schedule changed or went elsewhere (an agent's edit_schedule, set_schedule or delete_schedule): the form
+ * follows, unless the user changed it, so Save never brings back an old copy. True when it was shown again.
+ */
+function followOutsideChange() {
+  if (!editing || isNew) return false;
+  const now = saved();
+  if (!now) {
+    select(schedules()[0]?.id ?? null);
+    return true;
+  }
+  if (snapshot(editing) !== shownAs || snapshot(now) === shownAs) return false;
+  editing = structuredClone(now);
+  shownAs = snapshot(editing);
+  allDay = isAllDay(editing.when);
+  render();
+  return true;
+}
+
 const newsCame = () => {
   const count = runningNow().length;
   runningCount.textContent = String(count);
   runningCount.hidden = !count;
   if (!isOpen()) return;
   renderList();
+  if (followOutsideChange()) return;
   if (editing && view === VIEW.runs) render();
 };
 on(EVENTS.schedules, newsCame);

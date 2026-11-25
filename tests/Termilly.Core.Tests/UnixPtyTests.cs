@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using Termilly.Pty;
 using Termilly.Pty.Unix;
@@ -27,7 +28,8 @@ public sealed class UnixPtyTests
         using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(seconds));
         while (!seen.ToString().Contains(text, StringComparison.Ordinal))
         {
-            var read = await pty.Output.ReadAsync(buffer, cancel.Token);
+            // The token can't stop a read already waiting: the wait for it gives up instead (the test fails, not hangs).
+            var read = await pty.Output.ReadAsync(buffer, cancel.Token).AsTask().WaitAsync(cancel.Token);
             if (read == 0)
             {
                 break;
@@ -144,5 +146,39 @@ public sealed class UnixPtyTests
         var exited = pty.Exited;
         pty.Dispose();
         Assert.Equal(128 + 1, await exited.WaitAsync(TimeSpan.FromSeconds(10))); // SIGHUP
+    }
+
+    [Fact]
+    public async Task Closing_a_terminal_a_program_still_holds_never_waits()
+    {
+        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsMacOS())
+        {
+            return;
+        }
+        // A program that holds its terminal and ignores the hang-up, as an agent left running can (one that leads its
+        // session, as the shell of the terminal does).
+        var pty = PseudoTerminal.Start(new PtyOptions("/bin/sh -c \"trap '' HUP; echo held; sleep 60\"", 80, 24));
+        await ReadUntilAsync(pty, "held", new StringBuilder());
+        try
+        {
+            // A reader waiting for output that doesn't come, as the terminal's pump does: on macOS a close used to wait
+            // for it, forever while the program held the terminal.
+            var reading = Task.Run(() =>
+            {
+                var buffer = new byte[4096];
+                while (pty.Output.Read(buffer, 0, buffer.Length) > 0)
+                {
+                }
+            });
+            await Task.Delay(300);
+            var closing = Task.Run(pty.Dispose);
+            await closing.WaitAsync(TimeSpan.FromSeconds(2)); // closing the terminal didn't wait (a TimeoutException if it did)
+            await reading.WaitAsync(TimeSpan.FromSeconds(5)); // and the reader ends
+        }
+        finally
+        {
+            using var program = Process.GetProcessById(pty.ProcessId);
+            program.Kill(entireProcessTree: true);
+        }
     }
 }

@@ -1,0 +1,21 @@
+/* Agents' questions on the Notifications tab (questions.js): a card each, the waiting ones marked in the attention
+   colour, with their choices, Approve and Deny, or a text field. */
+
+.q-card { display: flex; flex-direction: column; gap: 10px; margin: 0 0 12px; padding: 12px 14px 14px; border-radius: 14px; background: var(--raised); }
+.q-card.waiting { box-shadow: inset 3px 0 0 var(--attention); }
+.q-head { display: flex; align-items: center; gap: 8px; }
+.q-head .r-meta { flex: 1; min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.q-head .note-clear { margin: -8px -8px -8px 0; }
+.q-title { font-size: 16px; font-weight: 600; overflow-wrap: anywhere; }
+.q-details { padding: 10px 12px; border-radius: 10px; background: var(--bg); color: var(--muted); font-size: 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.q-card .link { align-self: flex-start; }
+.q-card .ibtn { margin: 0; padding: 12px 14px; font-size: 16px; overflow-wrap: anywhere; }
+.q-rec { display: block; margin-top: 2px; font-size: 12px; font-weight: 500; opacity: .8; }
+.q-card .actions { display: flex; gap: 10px; }
+.q-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.q-chip { padding: 8px 12px; border: 1px solid var(--line); border-radius: 18px; background: var(--bg); color: var(--text); font: inherit; font-size: 14px; }
+.q-send { display: flex; gap: 8px; }
+.q-send .btn { flex: none; padding: 9px 16px; }
+.q-input { flex: 1; min-width: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--text); font: inherit; font-size: 16px; }
+.q-link { display: block; text-decoration: none; color: var(--text); }
+.q-card button:disabled { opacity: .5; }

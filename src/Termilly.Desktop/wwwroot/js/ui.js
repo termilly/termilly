@@ -310,6 +310,8 @@ export const ICONS = {
   tabs: '<svg viewBox="0 0 16 16"><path d="M2.5 13.5v-8h11v8zM2.5 5.5v-3h5v3"/></svg>',
   trash: '<svg viewBox="0 0 16 16"><path d="M2.5 4.5h11M6.5 4.5v-2h3v2M4.5 4.5l.75 9h5.5l.75-9"/></svg>',
   palette: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><circle cx="8" cy="8" r="2"/></svg>',
+  /** A framed picture: a hill and the sun, its frame's lines on the pixel grid. */
+  picture: '<svg viewBox="0 0 16 16"><rect x="2.5" y="3.5" width="11" height="9" rx="1"/><path d="M2.5 11.5l3.5-3.5 3 3 1.5-1.5 3 3"/><circle cx="10.5" cy="6.5" r="1"/></svg>',
   lock: '<svg viewBox="0 0 16 16"><rect x="3.5" y="7.5" width="9" height="6" rx="1.5"/><path d="M5.5 7.5V5a2.5 2.5 0 0 1 5 0v2.5"/></svg>',
   appearance: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><path d="M8 2.5v11A5.5 5.5 0 0 0 8 2.5z" fill="currentColor" stroke="none"/></svg>',
   phone: '<svg viewBox="0 0 16 16"><rect x="4.5" y="1.5" width="7" height="13" rx="1.5"/><path d="M7 12.5h2"/></svg>',

@@ -1,0 +1,232 @@
+// @ts-check
+// Settings › Appearance › Text: the terminals' and the app's fonts, text size, how terminal text is drawn, the cursor.
+
+import { HOST } from '../protocol.js';
+import { onHost, sys, mac, SYSTEM_NAME } from '../host.js';
+import { state, getSetting, GROUPS } from '../store.js';
+import { cssString, escapeHtml, ICONS, keysHtml } from '../ui.js';
+import { setSetting, updateSettings, MIN_FONT_SIZE, MAX_FONT_SIZE, MIN_ZOOM, MAX_ZOOM, ZOOM_STEP, DEFAULT_ZOOM } from '../preferences.js';
+import { row, seg, toggle, group, setRange } from './controls.js';
+import { SECTION, body, layer } from './page.js';
+import { SETTING_VALUES } from '../constants.js';
+import { field, find, targetOf } from '../dom.js';
+
+/** The choices of the settings used here (C#'s SettingValues). */
+const { textSmoothing, cursorStyle } = SETTING_VALUES;
+
+/** The two font settings the one font list picks for: the terminals' and the app's. */
+const TERMINAL_FONT = 'terminal.fontFamily';
+const APP_FONT = 'interface.font';
+/** Which of the two the list is setting now. */
+let fontTarget = TERMINAL_FONT;
+/** The fonts the host found: the monospace ones (for terminals) and all of them (for the app). */
+/** @type {string[]} */
+let installedFonts = [];
+/** @type {string[]} */
+let uiFonts = [];
+
+const FONT_PICKER = '.font-picker';
+const FONT_LIST = '.font-list';
+/** The class of the line a font list shows when nothing matches. */
+const NO_FONTS_CLASS = 'none';
+
+/**
+ * Searchable font list bound to a setting (see FONT_PICKERS).
+ * @param {string} key
+ */
+const fontPicker = key => `
+  <div class="font-picker" data-font-setting="${key}">
+    <input class="field font-search" type="text" placeholder="Search fonts" spellcheck="false" autocomplete="off" aria-label="Search fonts">
+    <div class="font-list" role="listbox"></div>
+  </div>`;
+
+/**
+ * What each font picker lists. The app font can go back to the system's default ('' → null).
+ * @type {Record<string, { fonts: () => string[], fallback: string, defaultLabel?: string }>}
+ */
+const FONT_PICKERS = {
+  [TERMINAL_FONT]: { fonts: () => installedFonts, fallback: 'monospace' },
+  [APP_FONT]: { fonts: () => uiFonts, fallback: 'sans-serif', defaultLabel: sys.name === SYSTEM_NAME.linux ? 'System default' : 'Windows default (Corbel)' },
+};
+
+/**
+ * Fills each font list on the page with the fonts its search matches, each shown in itself.
+ * @param {HTMLElement} root
+ */
+function renderFontLists(root) {
+  for (const picker of /** @type {NodeListOf<HTMLElement>} */ (root.querySelectorAll(FONT_PICKER))) {
+    const key = /** @type {string} */ (picker.dataset.fontSetting);
+    const { fonts: available, fallback, defaultLabel } = FONT_PICKERS[key];
+    const query = field(picker, '.font-search').value.trim().toLowerCase();
+    const chosen = getSetting(key);
+    const fonts = !chosen || available().includes(chosen) ? available() : [chosen, ...available()];
+    const options = fonts.filter(f => f.toLowerCase().includes(query))
+      .map(font => /** @type {[string, string]} */ ([font, font]));
+    if (defaultLabel && defaultLabel.toLowerCase().includes(query)) options.unshift(['', defaultLabel]);
+    find(picker, FONT_LIST).replaceChildren(...options.map(([font, label]) => {
+      const option = document.createElement('button');
+      option.className = 'font-option';
+      option.dataset.font = font;
+      option.style.fontFamily = font ? `"${cssString(font)}", ${fallback}` : 'var(--ui-default-font)';
+      option.textContent = label;
+      option.insertAdjacentHTML('beforeend', '<svg class="check" viewBox="0 0 12 12"><path d="M2.5 6.5l2.5 2.5 4.5-5.5"/></svg>');
+      return option;
+    }));
+    if (!options.length) {
+      const none = document.createElement('div');
+      none.className = NO_FONTS_CLASS;
+      none.textContent = available().length ? 'No matching fonts' : 'Loading fonts…';
+      find(picker, FONT_LIST).append(none);
+    }
+  }
+  syncFonts(root);
+}
+
+/**
+ * Points the font list at the terminals' font or the app's, keeping the search text.
+ * @param {string} key
+ */
+function showFontTarget(key) {
+  fontTarget = key;
+  syncFonts(body); // the size beside it is the one of what it picks now
+  const picker = /** @type {HTMLElement | null} */ (body.querySelector(FONT_PICKER));
+  if (!picker) return;
+  picker.dataset.fontSetting = key;
+  renderFontLists(body);
+  revealChosenFonts();
+}
+
+/** Scrolls each font list (not the page) so its chosen font is in view. */
+function revealChosenFonts() {
+  for (const list of body.querySelectorAll(FONT_LIST)) {
+    const option = list.querySelector('.font-option.selected');
+    if (option) list.scrollTop += option.getBoundingClientRect().top - list.getBoundingClientRect().top - list.clientHeight / 2;
+  }
+}
+
+/**
+ * The text size, the chosen fonts, which font the list sets, and the note naming both.
+ * @param {HTMLElement} root
+ */
+function syncFonts(root) {
+  const range = /** @type {HTMLInputElement | null} */ (root.querySelector('#font-size-range'));
+  if (range) {
+    // The size of what the switch picks: the terminals' text in pixels, or the whole app (zoom) in percent.
+    const size = sizeOf();
+    Object.assign(range, { min: String(size.min), max: String(size.max), step: String(size.step) });
+    setRange(range, size.value);
+    find(root, '#font-size-value').textContent = size.text;
+    find(root, '#font-size-keys').innerHTML = size.keys;
+  }
+  for (const picker of /** @type {NodeListOf<HTMLElement>} */ (root.querySelectorAll(FONT_PICKER))) {
+    const chosen = getSetting(/** @type {string} */ (picker.dataset.fontSetting)) ?? '';
+    for (const option of /** @type {NodeListOf<HTMLElement>} */ (picker.querySelectorAll('.font-option'))) option.classList.toggle('selected', option.dataset.font === chosen);
+  }
+  for (const b of /** @type {NodeListOf<HTMLElement>} */ (root.querySelectorAll('[data-font-target]'))) {
+    const on = b.dataset.fontTarget === fontTarget;
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-selected', String(on));
+  }
+  const note = root.querySelector('#font-target-note');
+  if (note) {
+    const terminal = escapeHtml(state.settings.terminal.fontFamily);
+    const app = escapeHtml(state.settings.interface.font ?? (sys.name === SYSTEM_NAME.linux ? 'System default' : 'Windows default'));
+    note.innerHTML = fontTarget === TERMINAL_FONT
+      ? `Terminal: <b>${terminal}</b> · App: ${app}`
+      : `App: <b>${app}</b> · Terminal: ${terminal}`;
+  }
+}
+
+/** A step of the size buttons for the terminals' text, in pixels. */
+const FONT_STEP = 1;
+
+/**
+ * The size the slider sets for what the switch picks: the terminals' text (pixels; Ctrl + and -), or the whole app,
+ * its text, icons and terminals together (zoom, percent; Ctrl Shift + and -).
+ * @returns {{ value: number, min: number, max: number, step: number, text: string, keys: string }}
+ */
+function sizeOf() {
+  if (fontTarget === TERMINAL_FONT) {
+    const { fontSize } = state.settings.terminal;
+    return { value: fontSize, min: MIN_FONT_SIZE, max: MAX_FONT_SIZE, step: FONT_STEP, text: `${fontSize}px`,
+      keys: `${keysHtml('Ctrl +')} ${keysHtml('Ctrl -')} ${keysHtml('Ctrl 0')}` };
+  }
+  const zoom = state.settings.interface.zoom ?? DEFAULT_ZOOM;
+  return { value: zoom, min: MIN_ZOOM, max: MAX_ZOOM, step: ZOOM_STEP, text: `${zoom}%`,
+    keys: `${keysHtml('Ctrl Shift +')} ${keysHtml('Ctrl Shift -')} ${keysHtml('Ctrl Shift 0')}` };
+}
+
+/**
+ * Sets the size of what the switch picks.
+ * @param {number} value
+ */
+function setSize(value) {
+  if (fontTarget === TERMINAL_FONT) updateSettings(GROUPS.terminal, { fontSize: value });
+  else updateSettings(GROUPS.interface, { zoom: Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value)) });
+}
+
+/** @type {import('./page.js').Section} */
+const TEXT = {
+  id: SECTION.appearanceText,
+  label: 'Text', tab: 'Text', parent: SECTION.appearance, icon: ICONS.appearance,
+  // One list for both fonts; the switch picks which one it sets, and the note shows both choices.
+  // The note's line has the size's keys at its right; under it the switch, with the size of what it picks.
+  html: () => group('Font', row('', '<span class="font-note-line"><span id="font-target-note"></span><span class="font-keys" id="font-size-keys"></span></span>', `
+        <div class="font-head">
+          <span class="seg font-target" role="tablist" aria-label="Font for">
+            <button data-font-target="${TERMINAL_FONT}" role="tab">${ICONS.terminal}Terminal</button>
+            <button data-font-target="${APP_FONT}" role="tab">${ICONS.appearance}App</button>
+          </span>
+          <div class="size-control">
+            <button id="font-smaller" title="Smaller"><svg viewBox="0 0 12 12"><path d="M2.5 6h7"/></svg></button>
+            <input id="font-size-range" type="range" aria-label="Size">
+            <button id="font-larger" title="Larger"><svg viewBox="0 0 12 12"><path d="M6 2.5v7M2.5 6h7"/></svg></button>
+            <span id="font-size-value"></span>
+          </div>
+        </div>
+        ${fontPicker(fontTarget)}`, { stack: true, keywords: 'font family typeface terminal app size zoom bigger smaller' }))
+    + group('Terminal text',
+      row('GPU rendering', 'Smoother scrolling and fast output, drawn by the graphics card. Its text is always greyscale.',
+        toggle('terminal.gpuRendering'), { keywords: 'gpu webgl renderer performance frame rate fps smooth scroll', needs: '!terminal.lowMemory' })
+      + row('Low memory', `${mac ? 'Terminals drawn' : 'Drawn'} without the graphics card: less memory, more CPU for fast output. Turns GPU rendering off. After a restart.`,
+        toggle('terminal.lowMemory'), { keywords: 'memory ram vram gpu graphics card low light lean performance' })
+      // ClearType is Windows' own; on Linux the desktop's font settings decide.
+      + (sys.name === SYSTEM_NAME.linux ? '' : row('Text smoothing', 'Greyscale keeps coloured text crisp; ClearType matches Windows. Without GPU rendering only.',
+        seg('terminal.textSmoothing', [[textSmoothing.grayscale, 'Greyscale'], [textSmoothing.clearType, 'ClearType']])))
+      + row('Line height', '', seg('terminal.lineHeight', [['1', '1.0'], ['1.2', '1.2'], ['1.4', '1.4'], ['1.6', '1.6']])))
+    + group('Cursor',
+      row('Style', '', seg('terminal.cursorStyle', [[cursorStyle.bar, 'Bar'], [cursorStyle.block, 'Block'], [cursorStyle.underline, 'Underline']]))
+      + row('Blink', '', toggle('terminal.cursorBlink'))),
+  opened: revealChosenFonts,
+  drawn: renderFontLists,
+  sync: syncFonts,
+  click(e) {
+    const font = /** @type {HTMLElement | null} */ (targetOf(e).closest('.font-option'));
+    if (font) {
+      setSetting(/** @type {string} */ (/** @type {HTMLElement} */ (font.closest(FONT_PICKER)).dataset.fontSetting),
+        font.dataset.font || null);
+      return true;
+    }
+    const target = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-font-target]'));
+    if (target) {
+      showFontTarget(/** @type {string} */ (target.dataset.fontTarget));
+      return true;
+    }
+    const by = targetOf(e).closest('#font-larger') ? 1 : targetOf(e).closest('#font-smaller') ? -1 : 0;
+    if (by) setSize(sizeOf().value + by * sizeOf().step);
+    return !!by;
+  },
+  input(e) {
+    if (targetOf(e).classList.contains('font-search')) renderFontLists(body);
+    if (targetOf(e).id === 'font-size-range') setSize(Number(/** @type {HTMLInputElement} */ (e.target).value));
+  },
+};
+
+export default TEXT;
+
+onHost(HOST.fonts, m => {
+  installedFonts = m.fonts;
+  uiFonts = m.uiFonts ?? [];
+  // Also in search results, where a font list shows though the open section is another one.
+  if (!layer.hidden && body.querySelector(FONT_PICKER)) renderFontLists(body);
+});

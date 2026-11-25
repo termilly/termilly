@@ -14,8 +14,24 @@ import { escapeHtml } from './ui.js';
 const CHOICE = /^\s*(?:[>❯›↑↓]\s*)*(\d)\.\s+(.+?)\s*$/;
 /** The pointer on the choice picked now. */
 const POINTER = /^\s*(?:[↑↓]\s*)?[>❯›]/;
-/** A rule across the screen: the top of the agent's prompt area. */
-const RULE = /^[─━]{8,}$/;
+/**
+ * A rule across the screen: the top of the agent's prompt area, or a line around Claude Code's input. Claude Code
+ * writes a named session's name into the rule over its input ("──────── my-session ─"): a rule still.
+ */
+const RULE = /^([─━]+)(?:\s+\S.*?\s+([─━]+))?$/;
+/** The fewest rule characters a rule has, its name aside: fewer is a line of text. */
+const RULE_MIN = 8;
+
+/**
+ * Whether a row of the screen is a rule (see RULE): a plain one wherever it starts, one with a name only from the
+ * screen's left edge, as Claude Code draws it (an indented "──── section ────" is a command's text).
+ * @param {string} row
+ */
+export function isRule(row) {
+  const rule = RULE.exec(row.trim());
+  if (!rule || rule[1].length + (rule[2]?.length ?? 0) < RULE_MIN) return false;
+  return rule[2] === undefined || row.startsWith(rule[1]);
+}
 /** A dashed rule inside the prompt (around a command): left out of the card. */
 const DASHES = /^[╌┄┈-]{8,}$/;
 /** Lines that only say how to use the menu, after its choices. */
@@ -138,7 +154,7 @@ export function previewLines(menu) {
  */
 function promptStart(rows, first, startsAt) {
   for (let i = first - 1; i >= 0 && startsAt !== PROMPT_START.gap; i--) {
-    if (RULE.test(rows[i].trim())) return i + 1;
+    if (isRule(rows[i])) return i + 1;
   }
   return startsAt === PROMPT_START.either ? nearestGap(rows, first) : -1;
 }
@@ -235,7 +251,7 @@ function choicesFrom(rows, first) {
     if (found && (!last || Number(found[1]) > Number(last.key))) {
       choices.push({ key: found[1], label: found[2], detail: '', picked: POINTER.test(row) });
       end = i;
-    } else if (!text || RULE.test(text)) {
+    } else if (!text || isRule(text)) {
       if (!nextIsChoice(rows, i + 1, last)) break;
     } else if (HINT.test(text) || !last || row.length - row.trimStart().length < UNDER_CHOICE) {
       break;
@@ -256,7 +272,7 @@ function choicesFrom(rows, first) {
 function nextIsChoice(rows, from, last) {
   for (let i = from; i < rows.length; i++) {
     const text = rows[i].trim();
-    if (!text || RULE.test(text)) continue;
+    if (!text || isRule(text)) continue;
     const found = CHOICE.exec(rows[i]);
     return !!found && !!last && Number(found[1]) > Number(last.key);
   }
@@ -294,7 +310,7 @@ function paragraphsAbove(rows, first) {
   for (; i >= 0 && count < MAX_CONTEXT + 1; i--) {
     const row = rows[i].trim();
     blanks = row ? 0 : blanks + 1;
-    if (RULE.test(row) || blanks === GAP) break;
+    if (isRule(row) || blanks === GAP) break;
     // A blank line or a dashed rule (around a command) ends a paragraph.
     if (!row || DASHES.test(row)) {
       if (paragraphs[0].length) paragraphs.unshift([]);
@@ -313,7 +329,7 @@ function paragraphsAbove(rows, first) {
  */
 function skipBlank(rows, from) {
   let i = from;
-  while (i > 0 && (!rows[i - 1].trim() || RULE.test(rows[i - 1].trim()))) i--;
+  while (i > 0 && (!rows[i - 1].trim() || isRule(rows[i - 1]))) i--;
   return i;
 }
 

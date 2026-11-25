@@ -234,11 +234,16 @@ internal static class PrerequisiteInstaller
             using var stall = CancellationTokenSource.CreateLinkedTokenSource(cancel);
             stall.CancelAfter(StallTimeout);
             var readTask = source.ReadAsync(buffer, 0, buffer.Length, stall.Token);
-            var finished = await Task.WhenAny(readTask, Task.Delay(Timeout.Infinite, stall.Token)).ConfigureAwait(false);
-            if (finished != readTask)
+            // Done when the stall time is up (or setup is cancelled): no timer of its own left running (CA2027).
+            var stalled = new TaskCompletionSource<bool>();
+            using (stall.Token.Register(() => stalled.TrySetResult(true)))
             {
-                cancel.ThrowIfCancellationRequested();
-                throw new TimeoutException($"no data for {StallTimeout.TotalSeconds:0} s");
+                var finished = await Task.WhenAny(readTask, stalled.Task).ConfigureAwait(false);
+                if (finished != readTask)
+                {
+                    cancel.ThrowIfCancellationRequested();
+                    throw new TimeoutException($"no data for {StallTimeout.TotalSeconds:0} s");
+                }
             }
             var read = await readTask.ConfigureAwait(false);
             if (read == 0)

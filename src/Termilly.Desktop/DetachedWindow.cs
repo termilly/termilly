@@ -36,6 +36,9 @@ internal sealed class DetachedWindow : Window
     private bool _closedByPage;
     /// <summary>While a move its title bar started is under way (a resize isn't one): its steps are reported.</summary>
     private bool _moving;
+    /// <summary>The colours and background it has, applied again once it has a handle.</summary>
+    private ThemeWindowColors _colors;
+    private BackgroundSettings _background;
 
     private const int WM_DISPLAYCHANGE = 0x007E;
     private const int WM_MOVING = 0x0216;
@@ -50,9 +53,10 @@ internal sealed class DetachedWindow : Window
     /// <summary>window.open's name for it (its target), which the page uses to act on it.</summary>
     public string PageWindowName { get; }
 
-    public DetachedWindow(string name, ThemeWindowColors colors, CoreWebView2WindowFeatures features)
+    public DetachedWindow(string name, ThemeWindowColors colors, BackgroundSettings background, CoreWebView2WindowFeatures features)
     {
         PageWindowName = name;
+        (_colors, _background) = (colors, background);
         Title = Product.Name;
         MinWidth = MinHeight = MinSize;
         Icon = BitmapFrame.Create(new Uri(AppPaths.IconFile));
@@ -66,9 +70,10 @@ internal sealed class DetachedWindow : Window
         });
         WindowInterop.UseCustomChrome(this, sharpIcons: false);
         SourceInitialized += (_, _) => HwndSource.FromHwnd(new WindowInteropHelper(this).Handle).AddHook(OnMessage);
+        SourceInitialized += (_, _) => Recolor(_colors, _background); // see-through needs the window's handle
         _frame.Child = _web;
         Content = _frame;
-        Recolor(colors);
+        Recolor(colors, background);
         // window.open's size is the page's; the frame goes around it.
         if (features.HasSize)
         {
@@ -98,7 +103,9 @@ internal sealed class DetachedWindow : Window
         WindowPlacement.KeepOnScreen(this); // the place it remembers may be on a monitor that's gone
         await _web.EnsureCoreWebView2Async(environment);
         var core = _web.CoreWebView2;
+        BackgroundMemory.Follow(this, _web);
         core.SetVirtualHostNameToFolderMapping(hostName, AppPaths.WebRoot, CoreWebView2HostResourceAccessKind.Deny);
+        WindowBackdrop.MapPictures(core);
         ClipboardReadPermission.AllowForDetached(core, hostName);
         core.Settings.AreBrowserAcceleratorKeysEnabled = false; // F5, Ctrl+F etc. reach the terminal
         core.Settings.IsStatusBarEnabled = false;
@@ -131,12 +138,14 @@ internal sealed class DetachedWindow : Window
     /// <summary>The whole app's size (Settings' zoom; 1 is as designed), as the main window's.</summary>
     public void Zoom(double factor) => _web.ZoomFactor = factor;
 
-    /// <summary>The theme changed: the background and frame follow, as the main window's.</summary>
-    public void Recolor(ThemeWindowColors colors)
+    /// <summary>The theme or the background changed: the background, frame and see-through follow, as the main window's.</summary>
+    public void Recolor(ThemeWindowColors colors, BackgroundSettings background)
     {
+        (_colors, _background) = (colors, background);
         Background = Brush(colors.Background);
         _frame.BorderBrush = Brush(colors.Frame);
         _web.DefaultBackgroundColor = System.Drawing.ColorTranslator.FromHtml(colors.Background);
+        WindowBackdrop.Apply(this, _web, background, !colors.Light, colors.Background);
     }
 
     private static SolidColorBrush Brush(string hex) => (SolidColorBrush)new BrushConverter().ConvertFromString(hex)!;

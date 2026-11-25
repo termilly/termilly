@@ -30,6 +30,7 @@ import { openNewWorkspace } from './newworkspace.js';
 import { SETTING_VALUES } from './constants.js';
 import { byId, find, targetOf, dragPointer, showError, MOUSE_OVER, CRUMB_ID } from './dom.js';
 import { RENAME_INPUT_CLASS, RENAME_IN, shownName } from './rename.js';
+import { backgroundMenuItem } from './workspacebackground.js';
 
 /** The choices of the settings used here (C#'s SettingValues). */
 const { costDisplay } = SETTING_VALUES;
@@ -292,6 +293,7 @@ function openWorkspaceMenu(ws, at) {
         action: () => setWorkspaceColor(ws, color),
       })),
     },
+    backgroundMenuItem(ws),
     SEPARATOR,
     { label: CLOSE_WORKSPACE_LABEL, icon: ICONS.trash, danger: true, action: () => askCloseWorkspace(ws) },
   ], at);

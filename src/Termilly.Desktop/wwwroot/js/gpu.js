@@ -3,13 +3,15 @@
 // thousands of elements to redo. A browser keeps only so many WebGL contexts (16 in Chromium; past that it drops the
 // oldest), and Termilly can have more terminals than that, so a terminal has one while it's on screen and gives it
 // back a little after it's hidden. A lost context (a driver reset, sleep) falls back to the DOM renderer, and comes
-// back while the terminal shows, a few times at most. Settings › Appearance › GPU rendering turns it all off.
+// back while the terminal shows, a few times at most. Settings › Appearance › GPU rendering turns it all off, and
+// see-through terminals (a picture, Theme gradient, the desktop through them) draw on the DOM renderer.
 //
 // The GPU draws each character in a cell of whole device pixels, rounding the font's width down (Consolas at 14px:
 // 7.7 becomes 7, and the letters crowd). A pixel of letter spacing, centred, makes it the nearest whole width instead
 // (8); the terminal then fits its columns again. Back on the DOM renderer, which keeps the exact width, it goes.
 
 import { state } from './store.js';
+import { clearTerminals } from './backgrounds.js';
 
 /** A hidden terminal keeps its context this long (switching back and forth needn't rebuild it). */
 const RELEASE_AFTER_MS = 10_000;
@@ -29,16 +31,33 @@ const RETRY_MS = 1000;
 /** @type {Map<string, Gpu>} */
 const gpus = new Map();
 
-/** Whether this page can draw with WebGL 2 at all (asked once). */
-const supported = (() => {
-  try {
-    return !!document.createElement('canvas').getContext('webgl2');
-  } catch {
-    return false;
+/** Whether this page can draw with WebGL 2 at all: asked the first time it matters, so Low memory never wakes the GPU. */
+let supported = /** @type {boolean | null} */ (null);
+const canDraw = () => {
+  if (supported === null) {
+    try {
+      supported = !!document.createElement('canvas').getContext('webgl2');
+    } catch {
+      supported = false;
+    }
   }
-})();
+  return supported;
+};
 
-const wanted = () => supported && state.settings.terminal.gpuRendering !== false;
+/**
+ * Low memory as the browser started with it: the browser takes it only at start (BrowserArguments.cs), so turning it
+ * off doesn't bring WebGL back before a restart. Without the GPU, WebGL is emulated on the CPU and costs more memory
+ * than the DOM renderer (measured: 537 MB against 253 MB for the page with 9 full terminals).
+ */
+let startedLowMemory = /** @type {boolean | null} */ (null);
+const lowMemory = () => (startedLowMemory ??= !!state.settings.terminal.lowMemory);
+
+/**
+ * Whether terminals draw on the GPU. Not in Low memory, nor while they're see-through (js/backgrounds.js): the GPU draws
+ * each letter on nothing then, and blended over what's behind it comes out thinner and lighter than the page's own text
+ * in the same colour (the Compact view beside it); the DOM renderer draws it as the page does.
+ */
+const wanted = () => state.settings.terminal.gpuRendering !== false && !lowMemory() && !clearTerminals() && canDraw();
 
 /**
  * The letter spacing (whole device pixels) that rounds the GPU's cells to the nearest width rather than down; none
@@ -69,12 +88,13 @@ function release(g) {
   if (!g.addon) return;
   const addon = g.addon;
   g.addon = null;
-  fitWidth(g); // the DOM renderer keeps the font's own width
   try {
     addon.dispose(); // the DOM renderer takes over
   } catch {
     // a context already lost can throw as it goes; the terminal draws either way
   }
+  fitWidth(g); // the DOM renderer keeps the font's own width
+  if (g.visible) g.fit(); // its cells are its own size, even where the spacing stayed the same
 }
 
 /** Makes room under the cap: the terminal hidden longest gives its context up. */
@@ -99,7 +119,10 @@ function attach(g) {
     });
     g.term.loadAddon(addon);
     g.addon = addon;
-    requestAnimationFrame(() => fitWidth(g)); // the font is measured by then
+    requestAnimationFrame(() => { // the font is measured by then
+      fitWidth(g);
+      if (g.visible) g.fit(); // its cells are whole device pixels, even where the spacing stayed the same
+    });
   } catch {
     g.losses = MAX_LOSSES; // no WebGL for this one: it stays on the DOM renderer
   }
@@ -112,7 +135,7 @@ function attach(g) {
  * @param {() => void} fit fits its columns and rows to its pane
  */
 export function wireGpu(tab, term, fit) {
-  if (!supported) return;
+  if (lowMemory() || !canDraw()) return;
   const body = /** @type {TabView} */ (tab.view).body;
   /** @type {Gpu} */
   const g = { term, fit, addon: null, visible: false, timer: 0, losses: 0, shownAt: 0, observer: /** @type {any} */ (null) };

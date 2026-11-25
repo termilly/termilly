@@ -78,6 +78,123 @@
   font-variant-numeric: tabular-nums;
 }
 .tool-count[hidden] { display: none; }
+
+/* ---- The notification center (js/inboxpanel.js): docked like the Clipboard (css/panels.css), on the edge side of
+   it. Design A: a filter, then a group per workspace (js/inboxgroups.js). ---- */
+.inbox-panel { right: calc(var(--notepad-dock, 0px) + var(--todo-dock, 0px)); width: 470px; }
+.inbox-feed { flex: 1; min-width: 0; min-height: 0; padding: 4px 6px 8px; overflow-y: auto; }
+.inbox-filters { display: flex; margin: 2px 2px 6px; }
+.inbox-filters button { flex: 1; padding: 2px 9px; font-size: 12px; }
+/* A workspace's group: its head folds it away; its Clear clears what it shows. */
+.inbox-group + .inbox-group { margin-top: 4px; }
+.inbox-group-head { display: flex; align-items: center; gap: 4px; height: 28px; }
+.inbox-group-fold { display: flex; flex: 1; align-items: center; gap: 6px; min-width: 0; height: 100%; padding: 0 6px 0 2px; border-radius: 6px; color: var(--text); font-size: 12.5px; font-weight: 700; text-align: left; white-space: nowrap; }
+.inbox-group-fold:hover, .inbox-group-fold:focus-visible { background: var(--hover); outline: none; }
+.inbox-group-fold .name { overflow: hidden; min-width: 0; text-overflow: ellipsis; }
+/* The chevron and Schedules' clock, at the size they're drawn for so they stay sharp. */
+.inbox-group-fold > svg, .inbox-group-fold .title-icon svg { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1; color: var(--muted); }
+.inbox-group-fold .title-icon { margin: 0; color: var(--muted); }
+.inbox-group-count { color: var(--faint); font-size: 11px; font-weight: 400; font-variant-numeric: tabular-nums; }
+.inbox-group-clear { flex: none; height: 22px; padding: 0 8px; border-radius: 6px; color: var(--muted); font-size: 11.5px; }
+.inbox-group-clear:hover, .inbox-group-clear:focus-visible { background: var(--hover); color: var(--text); outline: none; }
+/* Normal, the center closed (js/inboxalert.js): the pane's flash (panes.css) kept within the button, a thin ring and a
+   light fill, pulsing three times since one blink on a button this small goes unseen. */
+#inbox-button > .pane-arrived {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+  animation: button-arrived 1.2s ease-out forwards;
+}
+@keyframes button-arrived {
+  0%, 30%, 60%, 100% { opacity: 0; }
+  10%, 40%, 70% { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #inbox-button > .pane-arrived { animation: pane-arrived-calm 1.2s ease-out forwards; }
+}
+/* Minimal, the center closed (js/inboxalert.js): a tab on the terminals' right edge with a dot per notification, and
+   the newest one that needs the user peeking out of it. On the docked tools' side, like the center. */
+.inbox-edge {
+  position: absolute;
+  /* Under the first terminal's name line, clear of its buttons. */
+  top: calc(var(--name-line, 24px) + 12px + var(--notepad-dock-top, 0px) + var(--todo-dock-top, 0px));
+  right: calc(var(--files-dock, 0px) + var(--notepad-dock, 0px) + var(--todo-dock, 0px) + var(--clips-dock, 0px));
+  z-index: 20;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  pointer-events: none;
+}
+.inbox-edge[hidden], .inbox-peek[hidden] { display: none; }
+.inbox-edge-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 22px;
+  padding: 6px 0 8px;
+  border: 1px solid var(--border-strong);
+  border-right: 0;
+  border-radius: 8px 0 0 8px;
+  background: var(--raised);
+  color: var(--muted);
+  pointer-events: auto;
+}
+.inbox-edge-tab:hover, .inbox-edge-tab:focus-visible { background: var(--hover); color: var(--text); outline: none; }
+.inbox-edge-tab svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1; }
+.inbox-edge-tab .inbox-dot { width: 7px; height: 7px; margin: 0; box-shadow: none; }
+.inbox-edge-count { color: var(--text); font: 700 10px var(--ui-font); font-variant-numeric: tabular-nums; }
+.inbox-peek {
+  display: flex;
+  gap: 9px;
+  width: 300px;
+  margin-top: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--raised);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, .5);
+  cursor: pointer;
+  pointer-events: auto;
+  animation: peek-in .18s ease-out;
+}
+@keyframes peek-in { from { opacity: 0; transform: translateX(12px); } }
+@media (prefers-reduced-motion: reduce) { .inbox-peek { animation: none; } }
+.inbox-peek-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.inbox-peek-from { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 12.5px; }
+.inbox-peek-from .name { overflow: hidden; color: var(--text-strong); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.inbox-peek-ws { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); font-size: 11.5px; white-space: nowrap; }
+.inbox-peek-ws .ws-dot { width: 7px; height: 7px; }
+.inbox-peek-says { display: -webkit-box; overflow: hidden; color: var(--text); font-size: 12.5px; line-height: 1.4; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+/* A row's dot: waiting for the user, an error, finished or answered, a schedule's run, an update. */
+.inbox-dot { width: 8px; height: 8px; flex: none; margin-top: 5px; border-radius: 50%; background: var(--faint); }
+.inbox-dot.ask { background: var(--attention); box-shadow: 0 0 0 3px color-mix(in srgb, var(--attention) 18%, transparent); }
+.inbox-dot.err { background: var(--danger); }
+.inbox-dot.done { background: var(--ok); }
+.inbox-dot.sched { background: var(--accent); }
+.inbox-dot.info { background: color-mix(in srgb, var(--accent) 55%, var(--faint)); }
+/* An entry's × sits by its first line: a waiting one has its answer under it. */
+.inbox-panel .inbox-clear { top: 6px; transform: none; }
+/* An agent's question (js/questioncards.js): its title in full, then what it asks for. */
+.q-title { color: var(--text); font-size: 12.5px; line-height: 1.4; overflow-wrap: anywhere; }
+.inbox-item.unread .q-title { color: var(--text-strong); }
+.q-body { display: flex; flex-direction: column; gap: 6px; margin: 0 8px 8px 26px; }
+.q-body:empty { display: none; }
+.q-choices, .q-line { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.q-body .btn { height: 24px; padding: 0 10px; }
+.q-choice { gap: 6px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.q-recommended { color: inherit; font-size: 10.5px; opacity: .75; }
+.q-chip { border-radius: 12px; }
+.q-body .q-link { padding: 0 4px; border-color: transparent; background: none; color: var(--muted); }
+.q-body .q-link:hover { color: var(--text); }
+.q-box { flex: 1; min-width: 0; height: 24px; font-size: 12px; }
+.q-details { max-height: 180px; overflow-y: auto; padding: 6px 8px; border-radius: 6px; background: var(--hover); color: var(--muted); font-size: 12px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
+.q-said { color: var(--muted); font-size: 12px; }
+.q-card.busy .q-body .btn { pointer-events: none; opacity: .6; }
+.inbox-answer { display: flex; gap: 6px; margin: 0 8px 8px 30px; }
+.inbox-answer .btn { height: 24px; padding: 0 10px; }
+.inbox-reply { flex: 1; min-width: 0; height: 24px; font-size: 12px; }
+.inbox-fail { margin: -4px 8px 8px 30px; color: var(--danger-text); font-size: 11.5px; }
+
 .popover.inbox { width: 380px; padding: 0; }
 .inbox-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 10px 8px 12px; }
 .inbox-head .section-head { margin: 0; }
@@ -94,12 +211,11 @@
 }
 .inbox-item:hover, .inbox-item:focus-visible { background: var(--hover); outline: none; }
 .inbox-item .inbox-state { margin-top: 4px; }
+.inbox-panel .inbox-item { gap: 9px; padding: 7px 26px 7px 8px; }
 .inbox-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
 .inbox-title { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 13px; }
 .inbox-title .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .inbox-item.unread .inbox-title .name { color: var(--text-strong); font-weight: 600; }
-.inbox-ws { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); font-size: 11.5px; white-space: nowrap; }
-.inbox-ws .ws-dot { width: 7px; height: 7px; }
 .inbox-tag { padding: 0 5px; border-radius: 4px; background: var(--hover); color: var(--muted); font-size: 10.5px; }
 .inbox-age { margin-left: auto; color: var(--faint); font-size: 11px; font-variant-numeric: tabular-nums; }
 .inbox-detail {

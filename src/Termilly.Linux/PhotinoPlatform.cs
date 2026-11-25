@@ -3,6 +3,7 @@ using Photino.NET;
 using Termilly.Desktop;
 using Termilly.Desktop.Messaging;
 using Termilly.Desktop.Platform;
+using Termilly.Desktop.Features;
 
 namespace Termilly.Linux;
 
@@ -12,7 +13,7 @@ namespace Termilly.Linux;
 /// the desktop around it does differently (the file manager, notifications, ports, sign-in) is each system's own.
 /// </summary>
 /// <param name="send">Sends a message to the page (the window's outbox, so sending never waits on the window's thread).</param>
-internal abstract class PhotinoPlatform(Action<string> send, string? startFolder) : IPageSink, IAppWindow, IFileDialogs
+internal abstract class PhotinoPlatform(Action<string> send, string? startFolder) : IPageSink, IAppWindow, IFileDialogs, IWindowBackdrop
 {
     /// <summary>How long a query to the system (gsettings, defaults) may take.</summary>
     private static readonly TimeSpan SystemQueryTimeout = TimeSpan.FromSeconds(5);
@@ -143,6 +144,26 @@ internal abstract class PhotinoPlatform(Action<string> send, string? startFolder
             ? null
             : (await _window.ShowOpenFileAsync("Open in the Notepad", Home, false,
                 [("All files", ["*"]), ("Text files", ["*.txt", "*.md"])]).ConfigureAwait(false))?.FirstOrDefault(); // any file: the Notepad says when one isn't text
+
+    public async Task<IReadOnlyList<string>> PickSchemesToOpenAsync() =>
+        _window is null
+            ? []
+            : await _window.ShowOpenFileAsync("Import colour schemes", Home, true,
+                [("Colour schemes", SchemeFiles.Extensions.Select(e => "*" + e).ToArray()), ("All files", ["*"])]).ConfigureAwait(false) ?? [];
+
+    public async Task<string?> PickPictureToOpenAsync() =>
+        _window is null
+            ? null
+            : (await _window.ShowOpenFileAsync("Background picture", Home, false,
+                [("Pictures", BackgroundPictures.Types.Keys.Select(e => "*" + e).ToArray())]).ConfigureAwait(false))?.FirstOrDefault();
+
+    // ---- The window's background ----
+
+    /// <summary>The effects this system's windows have (blur on KDE and macOS).</summary>
+    public abstract IReadOnlyList<string> Effects { get; }
+
+    /// <summary>The backgrounds folder, served on the page's own scheme (AppScheme).</summary>
+    public string PictureBase => $"{AppScheme.Scheme}://localhost/{AppScheme.PicturesPath}/";
 
     public async Task<IReadOnlyList<string>> PickFilesAsync(string title) =>
         _window is null ? [] : await _window.ShowOpenFileAsync(title, Home, true).ConfigureAwait(false) ?? [];

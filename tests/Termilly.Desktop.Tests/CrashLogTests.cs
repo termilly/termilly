@@ -7,7 +7,13 @@ public sealed class CrashLogTests : IDisposable
 {
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "termilly-tests", Guid.NewGuid().ToString("N"));
 
-    public void Dispose() => Directory.Delete(_dir, recursive: true);
+    public void Dispose()
+    {
+        if (Directory.Exists(_dir))
+        {
+            Directory.Delete(_dir, recursive: true);
+        }
+    }
 
     private static OperationCanceledException Thrown()
     {
@@ -35,6 +41,19 @@ public sealed class CrashLogTests : IDisposable
         Assert.Contains("System.OperationCanceledException: The operation was canceled.", log);
         Assert.Contains(nameof(Thrown), log);
         Assert.Contains("System.InvalidOperationException: second", log);
+    }
+
+    [Fact]
+    public void A_page_crash_is_noted_with_its_time_version_and_description()
+    {
+        var path = Path.Combine(_dir, CrashLog.FileName);
+        var when = new DateTimeOffset(2026, 11, 23, 16, 50, 25, TimeSpan.FromHours(1));
+
+        CrashLog.Note(path, "WebView2: RenderProcessExited, Crashed, exit code 0x80000003", when);
+
+        var log = File.ReadAllText(path);
+        Assert.StartsWith($"2026-11-23 16:50:25 +01:00  Termilly {AppVersion.Current} on ", log);
+        Assert.Contains($"{Environment.NewLine}WebView2: RenderProcessExited, Crashed, exit code 0x80000003{Environment.NewLine}", log);
     }
 
     [Fact]
@@ -69,5 +88,22 @@ public sealed class CrashLogTests : IDisposable
         var recent = CrashLog.Recent(_dir, now - CrashLog.RecentFor);
 
         Assert.Equal([host, app], recent.Select(c => c.Path));
+    }
+
+    /// <summary>An error whose own text can't be read, as when a file it describes is gone.</summary>
+    private sealed class Unreadable : Exception
+    {
+        public override string ToString() => throw new IOException("gone");
+    }
+
+    [Fact]
+    public void An_error_whose_text_fails_is_left_out_without_throwing()
+    {
+        Directory.CreateDirectory(_dir);
+        var path = Path.Combine(_dir, CrashLog.FileName);
+
+        CrashLog.Write(path, new Unreadable(), DateTimeOffset.Now);
+
+        Assert.False(File.Exists(path));
     }
 }

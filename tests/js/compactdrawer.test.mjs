@@ -9,7 +9,7 @@ globalThis.window = /** @type {any} */ ({ addEventListener() {}, external: { rec
 globalThis.document = /** @type {any} */ ({ documentElement: { dataset: {} }, addEventListener() {}, querySelector: () => null, querySelectorAll: () => [] });
 globalThis.localStorage = /** @type {any} */ ({ getItem: () => null, setItem() {} });
 globalThis.addEventListener = () => {};
-const { drawerHolds, liveRow } = await import('../../src/Termilly.Desktop/wwwroot/js/compactdrawer.js');
+const { drawerHolds, liveRow, typedPrompt, suggestedPrompt } = await import('../../src/Termilly.Desktop/wwwroot/js/compactdrawer.js');
 
 /**
  * A terminal showing these rows, with no scrollback, and its cursor on a row.
@@ -52,4 +52,112 @@ test('words typed in the input line open the drawer, not as a list', () => {
   const term = termOf(['● Done.', RULE, '> fix the tests', RULE], 2);
   term.buffer.active.cursorX = 10;
   assert.deepEqual(liveRow(/** @type {any} */ ({ view: { term }, agent: { state: 'idle' } })), { row: 1, menu: false });
+});
+
+/**
+ * A terminal of 60 columns showing these rows, its cursor at a column of a row; a dim row's text is drawn dim (as an
+ * agent draws the hint in an empty input line).
+ * @param {string[]} rows
+ * @param {number} cursorY
+ * @param {number} cursorX
+ * @param {number} [dimRow]
+ */
+const typedTerm = (rows, cursorY, cursorX, dimRow = -1) => {
+  const term = /** @type {any} */ ({ cols: 60, ...termOf(rows, cursorY) });
+  term.buffer.active.cursorX = cursorX;
+  term.buffer.active.getLine = (/** @type {number} */ y) => ({ translateToString: () => rows[y], getCell: () => ({ isDim: () => y === dimRow }) });
+  return term;
+};
+
+const CLAUDE_FOOTER = ['  Opus 5.5', '  ⏵⏵ auto mode on (shift+tab to cycle)'];
+const CODEX_FOOTER = ['', '  GPT-6.2-Sol default · /tmp', '  ← for agents · ? for shortcuts'];
+
+test("Claude Code's unsent prompt: wrapped rows run on, a new line stays one, and its keys clear it", () => {
+  const rows = [' ▐▛███▛█   Claude Code', '', RULE, '❯ hello world this is a long prompt that will surely wrap',
+    '  onto the next row of the box', '  second line here', RULE, ...CLAUDE_FOOTER];
+  const typed = typedPrompt(typedTerm(rows, 5, 18));
+  const text = 'hello world this is a long prompt that will surely wrap onto the next row of the box\nsecond line here';
+  assert.equal(typed?.text, text);
+  const keys = text.length;
+  assert.equal(typed?.clear, '\x1b[3~'.repeat(keys + 3) + '\x7f'.repeat(keys));
+});
+
+test("Codex's unsent prompt, blank lines in it kept and the ones after it left out", () => {
+  const rows = ['  >_ OpenAI Codex', '', '', '› aa', '', '  bb', '', '', ...CODEX_FOOTER];
+  assert.equal(typedPrompt(typedTerm(rows, 7, 2))?.text, 'aa\n\nbb');
+});
+
+test("an empty input line's hint is no prompt", () => {
+  assert.equal(typedPrompt(typedTerm(['', RULE, '❯ Try "fix lint errors"', RULE, ...CLAUDE_FOOTER], 2, 2, 2)), null);
+  assert.equal(typedPrompt(typedTerm(['', '', '› Ask Codex to do anything', ...CODEX_FOOTER], 2, 2, 2)), null);
+});
+
+test("the prompt Claude Code suggests is its empty input line's dim text, but for its Try hint", () => {
+  assert.equal(suggestedPrompt(typedTerm(['', RULE, '❯ commit this', RULE, ...CLAUDE_FOOTER], 2, 2, 2)), 'commit this');
+  assert.equal(suggestedPrompt(typedTerm(['', RULE, '❯ Try "fix lint errors"', RULE, ...CLAUDE_FOOTER], 2, 2, 2)), null);
+  assert.equal(suggestedPrompt(typedTerm(['', RULE, '❯ commit this', RULE, ...CLAUDE_FOOTER], 2, 13)), null);
+  assert.equal(suggestedPrompt(typedTerm(['', RULE, '❯ ', RULE, ...CLAUDE_FOOTER], 2, 2, 2)), null);
+  assert.equal(suggestedPrompt(typedTerm(['', RULE, `❯ ${'界'.repeat(28)}`, '  hi', RULE, ...CLAUDE_FOOTER], 2, 2, 2)), `${'界'.repeat(28)} hi`);
+  assert.equal(suggestedPrompt(typedTerm(['', RULE, '❯ commit this', RULE, ...CLAUDE_FOOTER], 5, 0, 2)), null);
+});
+
+test('a prompt with the caret moved to its start is still a prompt', () => {
+  assert.equal(typedPrompt(typedTerm(['', RULE, '❯ fix the tests', RULE, ...CLAUDE_FOOTER], 2, 2))?.text, 'fix the tests');
+});
+
+test('the text the keys typed is taken where the screen shows the same, with its line breaks and spaces', () => {
+  const rows = ['', RULE, `❯ ${'a'.repeat(58)}`, '  next', RULE];
+  const exact = `${'a'.repeat(58)}
+next `;
+  const typed = typedPrompt(typedTerm(rows, 3, 6), () => exact);
+  assert.equal(typed?.text, exact);
+  assert.equal(typed?.clear, '\x1b[3~'.repeat(exact.length + 2) + '\x7f'.repeat(exact.length));
+});
+
+test('a paste or a picture the agent shows folded up stays where it is', () => {
+  assert.equal(typedPrompt(typedTerm(['', RULE, '❯ look at [Pasted text #1 +20 lines]', RULE], 2, 37)), null);
+  assert.equal(typedPrompt(typedTerm(['', RULE, '❯ [Image #1] what is this', RULE], 2, 25)), null);
+});
+
+test('an input line whose top is off the screen stays where it is', () => {
+  assert.equal(typedPrompt(typedTerm(['  more of it', '  and the end', RULE, ...CLAUDE_FOOTER], 1, 13)), null);
+});
+
+test('a word too long for a row runs on with no space', () => {
+  const long = `❯ ${'a'.repeat(58)}`;
+  assert.equal(typedPrompt(typedTerm(['', RULE, long, '  bcd', RULE], 3, 5))?.text, `${'a'.repeat(58)}bcd`);
+});
+
+test('a line of ─ typed in the prompt is part of it, not the rule under it', () => {
+  const rows = ['', RULE, '❯ above', '  ───', '  below', RULE, ...CLAUDE_FOOTER];
+  assert.equal(typedPrompt(typedTerm(rows, 2, 7))?.text, 'above\n───\nbelow');
+});
+
+test('spaces typed at the start of the prompt are kept', () => {
+  assert.equal(typedPrompt(typedTerm(['', RULE, '❯   indented', RULE], 2, 12))?.text, '  indented');
+});
+
+test('a "> " line typed after a blank line is part of the prompt, not where it starts', () => {
+  const rows = ['', RULE, '❯ first', '', '  > second', RULE, ...CLAUDE_FOOTER];
+  assert.equal(typedPrompt(typedTerm(rows, 4, 5))?.text, 'first\n\n> second');
+});
+
+test("a named session's rule, its name in it, is a rule: its suggestion stays, the last prompt and reply above don't move", () => {
+  // Claude Code writes a named session's name into the rule over its input; the prompt above was looked for instead.
+  const named = `${'─'.repeat(30)} firmbite-next-steps ─`;
+  const rows = ['❯ how are ya?', '', '● Doing well, thanks.', '', '✻ Sautéed for 3s', '', named, '❯ start on #114', RULE, ...CLAUDE_FOOTER];
+  assert.equal(typedPrompt(typedTerm(rows, 7, 2, 7)), null);
+  assert.equal(suggestedPrompt(typedTerm(rows, 7, 2, 7)), 'start on #114');
+});
+
+test('a named rule counts from the left edge only: indented, it is a command text line', async () => {
+  const { isRule } = await import('../../src/Termilly.Desktop/wwwroot/js/compactcard.js');
+  assert.equal(isRule(`${'─'.repeat(30)} my-session ─`), true);
+  assert.equal(isRule(`   ${'─'.repeat(8)} section ${'─'.repeat(8)}`), false);
+  assert.equal(isRule(`   ${'─'.repeat(40)}`), true);
+});
+
+test("Claude Code's no-break space after its mark isn't part of the prompt", () => {
+  const rows = ['● Working', '', RULE, '❯\u00a0next: write a summary', RULE, ...CLAUDE_FOOTER];
+  assert.equal(typedPrompt(typedTerm(rows, 3, 23))?.text, 'next: write a summary');
 });

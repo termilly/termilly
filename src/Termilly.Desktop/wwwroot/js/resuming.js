@@ -80,6 +80,13 @@ export function cancelResume(tab) {
 }
 
 /**
+ * The background host kept the terminal's shell running, agent and all: there's nothing to resume, and the terminal
+ * goes on as it was, without the overlay.
+ * @param {Tab} tab
+ */
+export const keptAgent = tab => done(tab);
+
+/**
  * Resuming is over: the session is back (resumed), or Esc. A session that's back is at the terminal's end, where its
  * view goes; the restart put the view where it was before (terminals.js scrollRestored), above what the agent drew.
  * @param {Tab} tab

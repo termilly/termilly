@@ -375,7 +375,11 @@ export function terminalRunEnded(tab, how, output) {
   end(going.run, going.schedule, output === undefined ? how : { ...how, text: output });
 }
 
-on(EVENTS.tabClosed, tab => terminalRunEnded(tab, { error: 'Its terminal was closed.' }));
+// A terminal closed: every run still in it ends. A tick later, so a command that ended as its shell exited keeps the
+// result it was given then (commandEnding below), and only runs still going count as cut off.
+on(EVENTS.tabClosed, tab => setTimeout(() => {
+  for (const going of [...active.values()].filter(a => a.tab === tab)) end(going.run, going.schedule, { error: 'Its terminal was closed.' });
+}));
 
 // A command ended: its output is on the screen a moment later, once commands.js has marked where it ended.
 on(EVENTS.commandEnding, ({ tab, exitCode }) => {

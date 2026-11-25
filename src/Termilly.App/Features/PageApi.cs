@@ -22,9 +22,11 @@ internal sealed class PageApi(PageChannel page, ISettingsStore settings, IAppWin
     private static readonly TimeSpan TypingWait = PipeTimeouts.ApiWaiting - TimeSpan.FromSeconds(5);
     /// <summary>A permission asked for out of sight waits for the user's Allow or Deny: a little less than the caller waits.</summary>
     private static readonly TimeSpan AskingWait = PipeTimeouts.Asking - TimeSpan.FromSeconds(5);
+    /// <summary>An agent's question waits for the user's answer: a little less than the caller waits.</summary>
+    private static readonly TimeSpan QuestionWait = PipeTimeouts.Question - TimeSpan.FromSeconds(5);
 
     /// <summary>The methods about terminals, which the page answers.</summary>
-    private static readonly string[] PageMethods = [ApiMethods.Tasks, ApiMethods.Task, ApiMethods.TaskTick, ApiMethods.TaskDone, ApiMethods.TaskAdd, ApiMethods.TaskEdit, ApiMethods.TaskDelete, ApiMethods.Schedules, ApiMethods.ScheduleAdd, ApiMethods.ScheduleRun, ApiMethods.ScheduleSet, ApiMethods.NotepadPages, ApiMethods.NotepadRead, ApiMethods.NotepadAdd, ApiMethods.NotepadWrite, ApiMethods.NotepadRename, ApiMethods.TaskAsk, ApiMethods.List, ApiMethods.State, ApiMethods.Status, ApiMethods.Open, ApiMethods.Send, ApiMethods.Snippets, ApiMethods.Snippet, ApiMethods.Read, ApiMethods.Wait, ApiMethods.Ask, ApiMethods.AgentAsk];
+    private static readonly string[] PageMethods = [ApiMethods.Tasks, ApiMethods.Task, ApiMethods.TaskTick, ApiMethods.TaskDone, ApiMethods.TaskAdd, ApiMethods.TaskEdit, ApiMethods.TaskDelete, ApiMethods.Schedules, ApiMethods.ScheduleAdd, ApiMethods.ScheduleEdit, ApiMethods.ScheduleDelete, ApiMethods.ScheduleRun, ApiMethods.ScheduleSet, ApiMethods.NotepadPages, ApiMethods.NotepadRead, ApiMethods.NotepadAdd, ApiMethods.NotepadWrite, ApiMethods.NotepadRename, ApiMethods.TaskAsk, ApiMethods.List, ApiMethods.State, ApiMethods.Status, ApiMethods.Open, ApiMethods.Send, ApiMethods.Snippets, ApiMethods.Snippet, ApiMethods.Read, ApiMethods.Wait, ApiMethods.Ask, ApiMethods.AgentAsk, ApiMethods.NotifyCancel];
     /// <summary>The methods that return a terminal's output, which is redacted for an agent.</summary>
     private static readonly string[] OutputMethods = [ApiMethods.Read, ApiMethods.Wait, ApiMethods.Ask];
 
@@ -67,9 +69,6 @@ internal sealed class PageApi(PageChannel page, ISettingsStore settings, IAppWin
     /// <summary>Answers one request on a pool thread. Typing into a terminal needs Settings › Terminal › API.</summary>
     public async Task<JsonObject> HandleAsync(JsonObject request)
     {
-        static JsonObject Ok(JsonNode? result) => new() { [ApiFields.Ok] = true, [ApiFields.Result] = result };
-        static JsonObject No(string error) => new() { [ApiFields.Ok] = false, [ApiFields.Error] = error };
-
         var method = request[ApiFields.Method]!.ToString();
         var activate = request[ApiFields.Activate]?.GetValueKind() == JsonValueKind.True;
         var current = settings.Current;
@@ -92,6 +91,8 @@ internal sealed class PageApi(PageChannel page, ISettingsStore settings, IAppWin
                 return Ok(new JsonObject { [ApiFields.AllowInput] = current.Agents.ApiAllowInput });
             case ApiMethods.History:
                 return vault.IsLocked ? No("History is locked.") : Ok(ApiHistory.Search(commands.List(current.Session.HistoryDays), request));
+            case ApiMethods.Notify:
+                return await AskUserAsync(request).ConfigureAwait(false);
             case var asked when PageMethods.Contains(asked):
                 try
                 {
@@ -116,6 +117,47 @@ internal sealed class PageApi(PageChannel page, ISettingsStore settings, IAppWin
         }
     }
 
+    private static JsonObject Ok(JsonNode? result) => new() { [ApiFields.Ok] = true, [ApiFields.Result] = result };
+    private static JsonObject No(string error) => new() { [ApiFields.Ok] = false, [ApiFields.Error] = error };
+
+    /// <summary>
+    /// An agent's question (AgentQuestions.cs): refused when it isn't one, else shown in the notification center and
+    /// answered there or on a phone. One nobody answers in time closes, and the agent hears it should ask in its terminal.
+    /// </summary>
+    private async Task<JsonObject> AskUserAsync(JsonObject request)
+    {
+        var (question, error) = AgentQuestions.Check(request);
+        if (question is null)
+        {
+            return No(error ?? "");
+        }
+        question[ApiFields.From] = request[ApiFields.From]?.DeepClone();
+        try
+        {
+            var reply = await AskPageAsync(ToPage.Calls.Api, new JsonObject { [CallFields.Method] = ApiMethods.Notify, [CallFields.Args] = question }, QuestionWait).ConfigureAwait(false);
+            return Ok(reply as JsonObject ?? QuestionReplies.Unavailable("Termilly gave no answer."));
+        }
+        catch (InvalidOperationException e)
+        {
+            await CloseQuestionAsync(question).ConfigureAwait(false);
+            return Ok(QuestionReplies.Unavailable(e.Message));
+        }
+    }
+
+    /// <summary>A question nobody will hear the answer to: its card mustn't stay waiting.</summary>
+    private async Task CloseQuestionAsync(JsonObject question)
+    {
+        try
+        {
+            var cancel = new JsonObject { [QuestionFields.Id] = question[QuestionFields.Id]!.DeepClone() };
+            await AskPageAsync(ToPage.Calls.Api, new JsonObject { [CallFields.Method] = ApiMethods.NotifyCancel, [CallFields.Args] = cancel }).ConfigureAwait(false);
+        }
+        catch (InvalidOperationException)
+        {
+            // The window is gone, and the card with it.
+        }
+    }
+
     /// <summary>
     /// Why a request is refused while Settings › Terminal › Let scripts and agents type is off, or null when it isn't (or the
     /// switch is on): typing into a terminal, making a schedule run, and opening a terminal that runs a command, which is as
@@ -126,7 +168,7 @@ internal sealed class PageApi(PageChannel page, ISettingsStore settings, IAppWin
     {
         ApiMethods.Open when RunsCommand(request) => "Opening a terminal that runs a command from scripts and agents is off. Turn it on in Termilly: Settings › Terminal › Let scripts and agents type.",
         _ when ApiMethods.Typing.Contains(method) => "Typing into terminals from scripts and agents is off. Turn it on in Termilly: Settings › Terminal › Let scripts and agents type.",
-        _ when ApiMethods.Scheduling.Contains(method) => "Adding and running schedules from agents is off. Turn it on in Termilly: Settings › Terminal › Let scripts and agents type.",
+        _ when ApiMethods.Scheduling.Contains(method) => "Adding, changing and running schedules from agents is off. Turn it on in Termilly: Settings › Terminal › Let scripts and agents type.",
         _ => null,
     };
 

@@ -52,3 +52,19 @@ test('what was kept before a restart is still known', () => {
   const kept = keptFrom(wrapped(paragraphs, 120));
   assert.deepEqual(leaveOutRepeats(wrapped(paragraphs, 80), kept), []);
 });
+
+test('a flood of short new lines is kept whole', () => {
+  // seq-like output: each line is found inside what's kept (its digits), but no run of them is long enough.
+  const kept = keptFrom();
+  const numbers = n => Array.from({ length: n }, (_, i) => String(i + 1));
+  leaveOutRepeats(numbers(5_000), kept);
+  const flood = numbers(60_000).slice(5_000);
+  assert.deepEqual(leaveOutRepeats(flood, kept), flood);
+});
+
+test('a redraw is left out wherever it sits in a long history', () => {
+  for (const before of [0, 1, 63, 64, 65, 4_999]) {
+    const kept = keptFrom(['x'.repeat(before), ...wrapped(paragraphs, 120)]);
+    assert.deepEqual(leaveOutRepeats(wrapped(paragraphs, 70), kept), [], `with ${before} characters before it`);
+  }
+});

@@ -35,7 +35,8 @@ process.stdin.on('keypress', (text, key) => {
     process.stdout.write('\x1b7\x1b[H\x1b8');
     setTimeout(() => process.stdout.write(`\r\x1b[2K${mark}`), script.prompt.takeMs ?? 0);
     return;
-  } else if (text && !key.ctrl && !key.meta) typed += text;
+  } else if (key.name === 'backspace') typed = typed.slice(0, -1);
+  else if (text && !key.ctrl && !key.meta) typed += text;
   // As a TUI redraws its input line: a while after the key, not at once.
   setTimeout(() => process.stdout.write(`\r\x1b[2K${mark}${typed}`), script.prompt.echoMs ?? 0);
 });
@@ -43,6 +44,8 @@ process.stdin.resume();
 setTimeout(() => finish('timeout'), script.prompt.timeoutMs ?? 60000);
 // Home and erase removes the shell's command and history, making the above-choice fallback deterministic.
 process.stdout.write('\x1b[2J\x1b[H' + script.prompt.lines.join('\r\n') + '\r\n' + (mark ?? ''));
+// A footer under the input line, as Codex draws one (a blank row, then its status), the cursor back on the input line.
+if (script.prompt.footer) process.stdout.write('\x1b7\r\n' + script.prompt.footer.join('\r\n') + '\x1b8');
 log({ event: 'ready', raw: !!process.stdin.isTTY });
 
 

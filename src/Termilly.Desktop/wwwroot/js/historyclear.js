@@ -5,7 +5,7 @@
 import { send, request, onHost } from './host.js';
 import { PAGE, HOST } from './protocol.js';
 import { state, emit, tabTitle, wsById, EVENTS } from './store.js';
-import { modal, confirmDialog } from './dialogs.js';
+import { modal, confirmDialog, REMOVE_LABEL } from './dialogs.js';
 import { escapeHtml } from './ui.js';
 import { showToast, TOAST } from './toasts.js';
 import { DAY_MS } from './util.js';
@@ -110,7 +110,7 @@ function planDialog(html, plansOf, wire) {
         result.innerHTML = lines.length ? `<b>Removes ${formatBytes(bytes)}</b><ul>${lines.map(l => `<li>${escapeHtml(l)}</li>`).join('')}</ul>${result.dataset.keeps ? `<div class="hist-keeps">${escapeHtml(result.dataset.keeps)}</div>` : ''}`
           : '<b>Nothing to remove</b>';
         go.disabled = !lines.length;
-        go.textContent = lines.length ? `Remove ${formatBytes(bytes)}` : 'Remove';
+        go.textContent = lines.length ? `Remove ${formatBytes(bytes)}` : REMOVE_LABEL;
       }, ASK_AFTER_MS);
     };
     wire?.(dialog);

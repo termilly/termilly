@@ -14,12 +14,16 @@ import { restoreFocus } from '../panes.js';
  * @property {string} label
  * @property {string} icon
  * @property {string} [parent] The section it opens from: not in the nav itself, which marks its parent, and its title says both.
+ * @property {string[]} [tabs] Its tabs (sections, itself first), in a bar above its body; a tab's title is its parent's.
+ * @property {string} [tab] Its name on its tab.
  * @property {string} [docs] Its part of the docs (termilly.com/docs/#id), which the help button opens.
  * @property {() => string} [tools] Its buttons above the scrolling body (data-action ones, as in the body).
  * @property {() => string} html Its markup; rows are found again in it by the search and the palette.
  * @property {() => void} [refresh] On switching to it from another section: asks the host for what it shows.
  * @property {() => void} [opened] Each time Settings opens on it.
  * @property {(body: HTMLElement) => void} [drawn] After its markup is in the page, also as search results.
+ * @property {(body: HTMLElement) => void} [shown] Each time it's opened as the page's section (not as search results),
+ *   once drawn and its controls show the settings.
  * @property {(body: HTMLElement) => void} [sync] Shows the current settings in its own controls.
  * @property {Record<string, (el: HTMLElement) => unknown>} [actions] Its data-action buttons, by name.
  * @property {(e: MouseEvent) => unknown} [click] Clicks on its own controls; true (or a value) when handled.
@@ -31,6 +35,9 @@ import { restoreFocus } from '../panes.js';
 /** The sections' ids, in the nav's order. */
 export const SECTION = Object.freeze({
   appearance: 'appearance',
+  appearanceBackground: 'appearance-background',
+  appearanceText: 'appearance-text',
+  appearanceLayout: 'appearance-layout',
   terminal: 'terminal',
   notifications: 'notifications',
   ssh: 'ssh',

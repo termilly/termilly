@@ -48,6 +48,7 @@ export const sourceOf = profile => profile?.source ?? PROFILE_SOURCE.local;
 export const GROUPS = Object.freeze({
   terminal: 'terminal',
   interface: 'interface',
+  background: 'background',
   shells: 'shells',
   commands: 'commands',
   notifications: 'notifications',
@@ -90,6 +91,11 @@ export const getSetting = path => {
  * @typedef {{ id: string, name: string, text: string, path?: string | null, saved?: string | null, crlf?: boolean,
  *   scroll?: number, caret?: number, caretEnd?: number,
  *   links?: boolean, wrap?: boolean, numbers?: boolean, highlight?: boolean }} NotepadPage
+ */
+/**
+ * The notification center (js/inboxpanel.js) as it was left: open or closed, its width, its filter and the groups
+ * folded away (js/inboxgroups.js).
+ * @typedef {{ open: boolean, width?: number, filter?: string, folded?: string[] }} InboxState
  */
 /**
  * The Clipboard panel (js/clipboard.js) as it was left: open or closed, its width, what its search box held, the
@@ -160,6 +166,8 @@ export const state = {
   todo: { open: false },
   /** @type {ClipsState} */
   clips: { open: false },
+  /** @type {InboxState} */
+  inbox: { open: false },
   /** @type {FilesState} */
   files: { open: false },
   /** @type {ToolbarState} */
@@ -220,6 +228,8 @@ export const newId = prefix => `${prefix}${Date.now().toString(36)}${(counter++)
 /** The page's events (on, emit): what changed, or what a module asks another to do. */
 export const EVENTS = Object.freeze({
   agent: 'agent',
+  /** The window's background changed whether the terminals draw one of their own (js/backgrounds.js). */
+  backdrop: 'backdrop',
   changes: 'changes',
   claudeUsage: 'claudeUsage',
   commandEnding: 'commandEnding',
@@ -248,6 +258,8 @@ export const EVENTS = Object.freeze({
   /** The schedules' clock ticked: when things run next reads differently, though nothing changed. */
   scheduleClock: 'scheduleClock',
   openSchedules: 'openSchedules',
+  /** Open the notification center (a question's desktop notification was clicked). */
+  openInbox: 'openInbox',
   openSnippets: 'openSnippets',
   opened: 'opened',
   planChanged: 'planChanged',
@@ -834,6 +846,7 @@ function serialize() {
     snippetsWindow: state.snippetsWindow,
     schedules: state.schedules,
     clips: state.clips,
+    inbox: state.inbox,
     files: state.files,
     toolbar: state.toolbar,
     dock: state.dock,
@@ -841,7 +854,7 @@ function serialize() {
     windowPlaces: state.windowPlaces,
     windowsOnTop: state.windowsOnTop,
     // tmux windows aren't saved: they're tmux's, and attaching again brings them back (tmux.js).
-    workspaces: state.workspaces.filter(w => !w.tmux).map(({ id, name, color, cwd, focusId, root, note, tasks, snippets, collapsed, asideCollapsed, copyTo }) => ({ id, name, color, cwd, focusId, tasks, root: withoutPreview(root), note, snippets, collapsed: collapsed || undefined, asideCollapsed: asideCollapsed || undefined, copyTo })),
+    workspaces: state.workspaces.filter(w => !w.tmux).map(({ id, name, color, cwd, focusId, root, note, tasks, snippets, collapsed, asideCollapsed, copyTo, background }) => ({ id, name, color, cwd, focusId, tasks, root: withoutPreview(root), note, snippets, collapsed: collapsed || undefined, asideCollapsed: asideCollapsed || undefined, copyTo, background })),
     tabs: [...state.tabs.values()].filter(t => !t.virtual).map(t => {
       const { id, wsId, profile, name, tags, noHistory, startCwd, env, startCommand, worktree, note, tasks, agentRead, agentType, openedBy, agentSessions, promptsClearedAt, stepsClearedAt, compactView, setAside } = t;
       // In a window of its own: it opens in one again after a restart, where it was (windowPlaces).
@@ -875,6 +888,7 @@ function restorePanels(saved) {
   if (saved.paneBar && typeof saved.paneBar === 'object') state.paneBar = { ...saved.paneBar };
   if (saved.todo && typeof saved.todo === 'object') state.todo = { ...state.todo, ...saved.todo };
   if (saved.clips && typeof saved.clips === 'object') state.clips = { ...state.clips, ...saved.clips };
+  if (saved.inbox && typeof saved.inbox === 'object') state.inbox = { ...state.inbox, ...saved.inbox };
   if (saved.files && typeof saved.files === 'object') state.files = { ...state.files, ...saved.files };
   state.snippetsWindow = { open: saved.snippetsWindow?.open === true };
   const schedules = saved.schedules;

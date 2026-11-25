@@ -13,7 +13,7 @@ import { agentKind } from './agentkinds.js';
 import { escapeHtml, ICONS } from './ui.js';
 import { showMenu } from './popups.js';
 import { find } from './dom.js';
-import { agentInput, fontStack } from './terminals.js';
+import { agentInput, fontStack, isTerminalReply } from './terminals.js';
 import { beforeEnter } from './api.js';
 import { showsInput } from './together.js';
 import { linesHtml, OPEN_TERMINAL } from './compactlines.js';
@@ -22,8 +22,9 @@ import { readMenu, questionMenu, cardHtml, menuKey, keyedByWhatShows, PROMPT_STA
 import { wireInput } from './compactinput.js';
 import { cardKey } from './compactcardkeys.js';
 import { wireViewMenu } from './termclipboard.js';
-import { liveRow, screenRows, rowsWithScrollback, drawerHolds, NO_DRAWER } from './compactdrawer.js';
+import { liveRow, typedPrompt, suggestedPrompt, screenRows, rowsWithScrollback, drawerHolds, coverTerminal, NO_DRAWER } from './compactdrawer.js';
 import { showPreview } from './compactpreview.js';
+import { followKeys, exactText, forgetDraft, addToDraft } from './compacttyped.js';
 
 /** @typedef {import('./compactlines.js').CompactLine} CompactLine */
 
@@ -98,8 +99,9 @@ const VIEW_HTML = `
  * A terminal's compact view: what the host sent of its session, the elements showing it, and the prompt being typed.
  * @typedef {{ lines: CompactLine[], session: string | null, el: HTMLElement | null, frame: number, frameWin: Window | null, sending: Promise<void>, writes: { dispose(): void } | null,
  *   picked?: { menu: string, at: number }, ready?: boolean, drawer?: boolean, drawerFrame?: number, drawerWin?: Window,
- *   resizes?: { dispose(): void }, drawerRow?: number, drawerMenu?: boolean, started?: boolean, sendingNow?: number, asked?: number, askedBy?: object | null, waiting?: boolean }} CompactState
- *   drawerMenu: whether a list of the agent's own opened the drawer; started: whether the agent has shown its input line since it started; sendingNow: how many prompts the prompt box is typing into the agent; asked: how many questions the agent has asked; askedBy: the report that asked the last one
+ *   resizes?: { dispose(): void }, drawerRow?: number, drawerMenu?: boolean, started?: boolean, sendingNow?: number, sentAt?: number, asked?: number, askedBy?: object | null, waiting?: boolean,
+ *   keys?: import('./compacttyped.js').TypedKeys, keysTerm?: object, suggestion?: string | null }} CompactState
+ *   drawerMenu: whether a list of the agent's own opened the drawer; started: whether the agent has shown its input line since it started; sendingNow: how many prompts the prompt box is typing into the agent; asked: how many questions the agent has asked; askedBy: the report that asked the last one; keys: the keys typed into keysTerm since its last Enter; suggestion: the prompt the agent suggests, which the empty box shows
  */
 
 /**
@@ -150,8 +152,99 @@ function setView(tab, view) {
     return;
   }
   apply(tab);
-  if (view !== COMPACT_VIEW.full) focusInput(tab);
-  else tab.view?.term?.focus();
+  if (view === COMPACT_VIEW.full) {
+    giveTyped(tab);
+    tab.view?.term?.focus();
+    return;
+  }
+  takeTyped(tab);
+  focusInput(tab);
+}
+
+/**
+ * Words typed in the agent's terminal and not sent move into the prompt box as the view comes on: the box shows
+ * them, and sending it doesn't add to them in the agent's input line. That line is cleared with the drawer kept shut
+ * meanwhile, as for a prompt the box sends.
+ * @param {Tab} tab
+ */
+function takeTyped(tab) {
+  const term = tab.view?.term;
+  const c = compactOf(tab);
+  // Not while the box types a prompt into the agent: that's in its input line until its Enter.
+  if (!term || c.sendingNow || !canTake(tab)) return;
+  // Read once what the terminal has been sent so far is drawn: a prompt just sent with Enter has left the line then.
+  // The drawer stays shut from now, not only once the words are found: it would open on them meanwhile.
+  c.sendingNow = (c.sendingNow ?? 0) + 1;
+  term.write('', () => {
+    if (moveTyped(tab, term)) doneWhenTaken(tab);
+    else doneSending(tab);
+  });
+}
+
+/**
+ * The prompt box's text, not sent, goes into the agent's input line as the terminal shows again, so it's there to
+ * finish and send (no Enter). Not while the agent waits on a question (it would answer it) or is still starting, nor
+ * while the box is sending a prompt: then it stays in the box.
+ * @param {Tab} tab
+ */
+function giveTyped(tab) {
+  const c = compactOf(tab);
+  const input = /** @type {HTMLTextAreaElement | null | undefined} */ (c.el?.querySelector(INPUT));
+  const text = input?.value.trim() ? input.value : '';
+  if (!input || !text || c.sendingNow || tab.exited || !runningAgent(tab) || isStarting(tab) || waitsForAnswer(tab)) return;
+  send(PAGE.input, { id: tab.id, data: asTyped(text) });
+  addToDraft(c.keys, text);
+  input.value = '';
+}
+
+/**
+ * Text as it's typed into an agent: one of several lines as a paste, so its new lines don't send it line by line.
+ * @param {string} text
+ */
+const asTyped = text => (text.includes('\n') ? `${PASTE_START}${text}${PASTE_END}` : text);
+
+/** For this long after an Enter (typed in the terminal, or the box's), the screen may still show the prompt it sent. */
+const ENTER_SETTLE_MS = 1500;
+
+/**
+ * Whether words in the agent's input line may move to the prompt box: it runs there (Codex past its start), isn't
+ * asking a question of its own, and no prompt was just sent from its terminal (the agent may not have redrawn its
+ * input line yet). While it works too: words typed for its next turn, or to queue, move as at its prompt.
+ * @param {Tab} tab
+ */
+const canTake = tab => !tab.exited && !!runningAgent(tab) && !isStarting(tab) && !waitsForAnswer(tab)
+  && Date.now() - Math.max(compactOf(tab).keys?.enteredAt ?? 0, compactOf(tab).sentAt ?? 0) >= ENTER_SETTLE_MS;
+
+/**
+ * Follows the keys typed into the terminal from its start, Full view or not: the prompt box gets them exactly.
+ * @param {Tab} tab
+ */
+function followTerminalKeys(tab) {
+  const c = compactOf(tab);
+  const term = tab.view?.term;
+  if (!term || c.keysTerm === term) return;
+  c.keys?.dispose();
+  c.keys = followKeys(term, Date.now, isTerminalReply);
+  c.keysTerm = term;
+}
+
+/**
+ * Puts the input line's words in the prompt box and clears them there: true when there were any.
+ * @param {Tab} tab
+ * @param {any} term xterm's Terminal
+ */
+function moveTyped(tab, term) {
+  const c = compactOf(tab);
+  // Only this move keeps the drawer shut: a prompt the box started sending meanwhile is in the input line too.
+  const alone = (c.sendingNow ?? 0) <= 1;
+  const typed = c.el && alone && isCompact(tab) && canTake(tab) ? typedPrompt(term, screen => exactText(c.keys, screen)) : null;
+  if (!typed || !c.el) return false;
+  const input = /** @type {HTMLTextAreaElement} */ (find(c.el, INPUT));
+  input.value = input.value.trim() ? `${input.value}\n${typed.text}` : typed.text;
+  input.dispatchEvent(new Event('input')); // the box fits its text
+  send(PAGE.input, { id: tab.id, data: typed.clear });
+  forgetDraft(c.keys);
+  return true;
 }
 
 /**
@@ -162,6 +255,7 @@ function apply(tab) {
   const view = tab.view;
   if (!view) return;
   countAsked(tab);
+  followTerminalKeys(tab);
   const shown = isCompact(tab);
   view.el.classList.toggle(SHOWN_CLASS, shown);
   const c = compactOf(tab);
@@ -229,6 +323,8 @@ function placeDrawerSoon(tab) {
   c.drawerFrame = win.requestAnimationFrame(() => {
     c.drawerFrame = 0;
     placeDrawer(tab);
+    // The suggestion comes and goes as the agent draws its input line, between the renders.
+    if (c.el) updateComposer(tab, c.el);
   });
 }
 
@@ -255,8 +351,12 @@ function placeDrawer(tab) {
   if (found.row >= 0) c.drawerMenu = found.menu;
   c.drawerRow = row;
   const open = row >= 0;
-  c.el.style.bottom = open ? `${Math.max(0, view.body.clientHeight - rowTop(view, row))}px` : '';
+  // Its height from the top, as the terminal's rows are placed: a resize that keeps the rows keeps it on the same row.
+  const covers = open ? Math.min(view.body.clientHeight, Math.max(0, rowTop(view, row))) : Infinity;
+  c.el.style.bottom = open ? 'auto' : '';
+  c.el.style.height = open ? `${covers}px` : '';
   c.el.classList.toggle(DRAWER_CLASS, open);
+  coverTerminal(view.term.element, view.body, c.el.hidden ? null : covers);
   if (open === !!c.drawer) return;
   c.drawer = open;
   // The prompt box shows again (the drawer hid it, and it wasn't fitted to a resize meanwhile): its height for its text.
@@ -324,6 +424,7 @@ function build(tab) {
     agent: () => runningAgent(tab),
     folder: () => tab.agent?.folder ?? tab.cwd ?? tab.lastCwd ?? null,
     cardKey: e => cardKey(el, e, (key, menu) => pick(tab, key, menu)),
+    suggestion: () => compactOf(tab).suggestion ?? null,
   });
   input.addEventListener('input', () => fitInput(input, find(el, FEED)));
   find(el, '.cv-send').addEventListener('click', () => submit(tab, input));
@@ -473,13 +574,14 @@ async function typePrompt(tab, text) {
   // the user types them in the terminal. Not these: the drawer stays shut meanwhile (counted: prompts may overlap).
   const c = compactOf(tab);
   c.sendingNow = (c.sendingNow ?? 0) + 1;
-  send(PAGE.input, { id: tab.id, data: text.includes('\n') ? `${PASTE_START}${text}${PASTE_END}` : text });
+  send(PAGE.input, { id: tab.id, data: asTyped(text) });
   await beforeEnter(tab, true, true);
   if (!canSend(tab)) {
     doneSending(tab);
     return;
   }
   send(PAGE.input, { id: tab.id, data: '\r' });
+  c.sentAt = Date.now();
   agentInput(tab, '\r');
   doneWhenTaken(tab);
 }
@@ -709,7 +811,7 @@ function pendingPlan(tab) {
  * @param {Tab} tab
  * @returns {import('./compactcard.js').Menu & { last?: boolean } | null}
  */
-function menuOf(tab) {
+export function menuOf(tab) {
   const menu = questionOf(tab);
   return menu && waitsForAnswer(tab) ? { ...menu, asked: compactOf(tab).asked ?? 0 } : menu;
 }
@@ -744,7 +846,7 @@ function questionOf(tab) {
  * @param {string} key
  * @param {string} shown the card's menu, by menuKey
  */
-function pick(tab, key, shown) {
+export function pick(tab, key, shown) {
   if (!(waitsForAnswer(tab) || !atPrompt(tab)) || tab.exited) return;
   const menu = menuOf(tab);
   const c = compactOf(tab);
@@ -826,10 +928,19 @@ function updateComposer(tab, el) {
   const input = /** @type {HTMLTextAreaElement} */ (find(el, INPUT));
   const waiting = waitsForAnswer(tab);
   const starting = !atPrompt(tab);
-  input.placeholder = waiting ? `${name} is waiting for your answer above` : starting ? `${name} is starting` : `Message ${name}`;
+  const suggestion = waiting || starting || tab.exited ? null : suggestionOf(tab);
+  compactOf(tab).suggestion = suggestion;
+  input.placeholder = waiting ? `${name} is waiting for your answer above` : starting ? `${name} is starting` : suggestion ?? `Message ${name}`;
   // Read-only, not disabled: its keys still go to the agent (Esc, Up and Down, Enter on a question's choices).
   input.readOnly = waiting || starting || !!tab.exited;
 }
+
+/**
+ * The prompt Claude Code suggests in its empty input line, shown dim in the empty box until Right arrow takes it.
+ * Codex's dim text there is only a hint.
+ * @param {Tab} tab
+ */
+const suggestionOf = tab => (runningAgent(tab) === AGENT_KIND.claude && tab.view?.term ? suggestedPrompt(tab.view.term) : null);
 
 /**
  * The view that shows now: the one picked, or Full where the agent has left.
@@ -914,5 +1025,6 @@ on(EVENTS.tab, tab => {
 on(EVENTS.tabClosed, tab => {
   tab.compact?.writes?.dispose();
   tab.compact?.resizes?.dispose();
+  tab.compact?.keys?.dispose();
   if (tab.compact?.session) send(PAGE.compactWatch, { id: tab.id, session: null });
 });

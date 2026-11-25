@@ -57,6 +57,12 @@ internal static partial class FromPage
         public static string Type => "host:shutdown";
     }
 
+    /// <summary>Which terminals the background host runs, to name them before they're stopped.</summary>
+    internal sealed record HostShells(string? RequestId = null) : IPageMessage
+    {
+        public static string Type => "host:shells";
+    }
+
     /// <summary>The ports each terminal's processes listen on.</summary>
     internal sealed record PortsTerminals : IPageMessage
     {
@@ -86,7 +92,14 @@ internal static partial class ToPage
         public static string Type => "output";
     }
 
-    internal sealed record Exit(string Id, int Code) : IHostMessage
+    /// <summary>What a kept shell printed while no window was open, drawn again as it's taken back.</summary>
+    internal sealed record Replay(string Id, string Data) : IHostMessage
+    {
+        public static string Type => "replay";
+    }
+
+    /// <summary>A terminal's shell ended; <paramref name="Ended"/> when the background host ended it (Stop background shells).</summary>
+    internal sealed record Exit(string Id, int Code, bool Ended = false) : IHostMessage
     {
         public static string Type => "exit";
     }
@@ -94,6 +107,12 @@ internal static partial class ToPage
     internal sealed record Error(string Id, string Message) : IHostMessage
     {
         public static string Type => "error";
+    }
+
+    /// <summary>The terminals whose shells the background host runs (answers <see cref="FromPage.HostShells"/>).</summary>
+    internal sealed record HostShellList(string? RequestId, string[] Ids) : IHostMessage
+    {
+        public static string Type => "host:shellList";
     }
 
     /// <summary>The folder a terminal was to start in is gone; it started in <see cref="Folder"/> instead.</summary>

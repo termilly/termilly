@@ -176,6 +176,92 @@ export const COMPACT_LIMIT = Object.freeze({
   maxLines: 2000,
 });
 
+/** C#: CustomThemeLimits (Settings/SettingRecords.cs). */
+export const CUSTOM_THEME = Object.freeze({
+  idPrefix: 'custom-',
+  ansiCount: 16,
+  maxName: 60,
+  maxThemes: 500,
+  maxFileBytes: 524288,
+  maxFiles: 1000,
+  maxTotalBytes: 16777216,
+  folderDepth: 3,
+});
+
+/** C#: BackgroundValues (Settings/BackgroundSettings.cs). */
+export const BACKGROUND = Object.freeze({
+  effect: Object.freeze({
+    none: 'none',
+    blur: 'blur',
+    acrylic: 'acrylic',
+    default: 'none',
+    all: Object.freeze(['none', 'blur', 'acrylic']),
+  }),
+  opacity: Object.freeze({
+    min: 40,
+    max: 100,
+    default: 100,
+  }),
+  fit: Object.freeze({
+    fill: 'fill',
+    contain: 'fit',
+    center: 'center',
+    tile: 'tile',
+    default: 'fill',
+    all: Object.freeze(['fill', 'fit', 'center', 'tile']),
+  }),
+  dim: Object.freeze({
+    min: 0,
+    max: 90,
+    default: 50,
+  }),
+  blur: Object.freeze({
+    min: 0,
+    max: 20,
+    default: 0,
+  }),
+  behind: Object.freeze({
+    terminals: 'terminals',
+    window: 'window',
+    default: 'terminals',
+    all: Object.freeze(['terminals', 'window']),
+  }),
+  workspaceKind: Object.freeze({
+    window: 'window',
+    none: 'none',
+    gradient: 'gradient',
+    picture: 'picture',
+    default: 'window',
+    all: Object.freeze(['window', 'none', 'gradient', 'picture']),
+  }),
+  gradient: Object.freeze({
+    aurora: 'aurora',
+    ember: 'ember',
+    dusk: 'dusk',
+    ocean: 'ocean',
+    moss: 'moss',
+    slate: 'slate',
+    all: Object.freeze(['aurora', 'ember', 'dusk', 'ocean', 'moss', 'slate']),
+  }),
+  gradientColor: Object.freeze({
+    accent: 'accent',
+    background: 'background',
+    surface: 'surface',
+    text: 'text',
+    muted: 'muted',
+    red: 'red',
+    yellow: 'yellow',
+    green: 'green',
+    cyan: 'cyan',
+    blue: 'blue',
+    magenta: 'magenta',
+    defaultGlow: 'accent',
+    defaultBase: 'background',
+    defaultSecondGlow: 'magenta',
+    all: Object.freeze(['accent', 'background', 'surface', 'text', 'muted', 'red', 'yellow', 'green', 'cyan', 'blue', 'magenta']),
+  }),
+});
+
 /** C#: ChangeSources (Changes/ChangeModel.cs). */
 export const CHANGE_SOURCE = Object.freeze({
   snapshot: 'snapshot',
@@ -247,6 +333,49 @@ export const CLAUDE_TOOL = Object.freeze({
   editTools: Object.freeze(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']),
   shellTools: Object.freeze(['Bash', 'PowerShell']),
   watchedTools: Object.freeze(['Bash', 'PowerShell', 'apply_patch']),
+});
+
+/** C#: QuestionKinds (../Shared/Questions.cs). */
+export const QUESTION_KIND = Object.freeze({
+  options: 'options',
+  approve: 'approve',
+  ask: 'ask',
+  info: 'info',
+});
+
+/** C#: QuestionFields (../Shared/Questions.cs). */
+export const QUESTION_FIELD = Object.freeze({
+  id: 'id',
+  ui: 'ui',
+  title: 'title',
+  details: 'details',
+  choices: 'choices',
+  label: 'label',
+  recommended: 'recommended',
+  suggestions: 'suggestions',
+  button: 'button',
+  url: 'url',
+  answer: 'answer',
+  note: 'note',
+  approved: 'approved',
+  delivered: 'delivered',
+  skipped: 'skipped',
+  unavailable: 'unavailable',
+  reason: 'reason',
+  next: 'next',
+});
+
+/** C#: QuestionLimits (../Shared/Questions.cs). */
+export const QUESTION_LIMIT = Object.freeze({
+  maxChoices: 9,
+  shownChoices: 4,
+  maxSuggestions: 6,
+  maxTitle: 200,
+  maxDetails: 4000,
+  maxLabel: 100,
+  maxButtonLabel: 40,
+  maxUrl: 2000,
+  maxAnswer: 4000,
 });
 
 /** C#: GitActions (GitCommands.cs). */

@@ -42,6 +42,9 @@ internal sealed class TerminalSessions : IDisposable
     /// <summary>The terminals whose shells the background host runs.</summary>
     public IReadOnlyList<string> Hosted() => [.. _sessions.Where(s => s.Value is HostedSession).Select(s => s.Key)];
 
+    /// <summary>The terminals whose shells the background host runs and haven't ended.</summary>
+    public IReadOnlyList<string> LiveHosted() => [.. Hosted().Where(_pids.ContainsKey)];
+
     /// <summary>A terminal is starting (again): the shell it had ends, and it's opened with <paramref name="profile"/>.</summary>
     public void Starting(string id, SessionProfile profile)
     {
