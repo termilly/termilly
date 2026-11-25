@@ -132,16 +132,43 @@ public sealed class QuestionsTests
 
     private static string Lines(params JsonObject[] messages) => string.Join("\n", messages.Select(m => m.ToJsonString())) + "\n";
 
+    /// <summary>
+    /// The agent's lines, one at a time, holding back the one at <paramref name="waitBefore"/> until
+    /// <paramref name="ready"/>: a cancel sent at once can beat the question's own thread to Termilly.
+    /// </summary>
+    private sealed class PacedReader(JsonObject[] messages, int waitBefore, Func<bool> ready) : TextReader
+    {
+        private static readonly TimeSpan MaxWait = TimeSpan.FromSeconds(10);
+        private int _next;
+
+        public override string? ReadLine()
+        {
+            if (_next >= messages.Length)
+            {
+                return null;
+            }
+            if (_next == waitBefore)
+            {
+                SpinWait.SpinUntil(ready, MaxWait);
+            }
+            return messages[_next++].ToJsonString();
+        }
+    }
+
     [Fact]
     public void While_a_question_waits_the_server_answers_other_calls_and_a_cancelled_one_closes_its_card()
     {
         using var termilly = new WaitingTermilly();
-        var input = Lines(
+        JsonObject[] messages =
+        [
             Call("notify_user", new JsonObject { ["ui"] = "ask", ["title"] = "Name?" }, id: 7),
             new JsonObject { ["jsonrpc"] = "2.0", ["id"] = 8, ["method"] = "tools/list" },
-            new JsonObject { ["jsonrpc"] = "2.0", ["method"] = "notifications/cancelled", ["params"] = new JsonObject { ["requestId"] = 7 } });
+            new JsonObject { ["jsonrpc"] = "2.0", ["method"] = "notifications/cancelled", ["params"] = new JsonObject { ["requestId"] = 7 } },
+        ];
         using var output = new StringWriter();
-        Mcp.Run(new StringReader(input), output, termilly.Call, run: null);
+        // The cancel comes while the question waits in Termilly, as when the user presses Esc.
+        using var input = new PacedReader(messages, waitBefore: 2, () => termilly.Calls.Any(c => c.Method == "notify"));
+        Mcp.Run(input, output, termilly.Call, run: null);
 
         var replies = output.ToString().Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(l => JsonNode.Parse(l)!).ToList();
         Assert.Contains(replies, r => r["id"]!.GetValue<int>() == 8);
