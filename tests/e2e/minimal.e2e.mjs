@@ -26,7 +26,7 @@ const step = (name, run) => test(name, async () => {
 
 /** Changes interface settings the way Settings does. @param {Record<string, string>} patch */
 const setInterface = patch => app.eval(async (t, p) => {
-  const prefs = await import(new URL('js/preferences.js', globalThis.location.href).href);
+  const prefs = await t.import('preferences.js');
   prefs.updateSettings('interface', p);
 }, patch);
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
