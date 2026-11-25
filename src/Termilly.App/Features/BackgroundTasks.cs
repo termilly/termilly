@@ -20,6 +20,8 @@ internal sealed class BackgroundTasks : IMessageHandler, IDisposable
     private static readonly TimeSpan KeepEnded = TimeSpan.FromMinutes(1);
     /// <summary>How long a task's output file may take to show up before the task counts as never started.</summary>
     private static readonly TimeSpan FileWait = TimeSpan.FromSeconds(30);
+    /// <summary>How long a Codex command whose hook said it ended waits for its rollout to say how.</summary>
+    private static readonly TimeSpan ExitWait = TimeSpan.FromSeconds(5);
 
     private readonly PageChannel _page;
     private readonly TerminalSessions _terminals;
@@ -165,7 +167,7 @@ internal sealed class BackgroundTasks : IMessageHandler, IDisposable
     private bool Read(Tracked task, DateTimeOffset now)
     {
         var reading = OutputOf(task).Read(task.Session, task.TaskId);
-        if (reading is null && now - task.Reported > FileWait)
+        if (reading is null && now - task.Reported > ExitWait)
         {
             // Its hook said it ended, but its exit never showed up: it's over, and counted as done.
             reading = new TaskReading(task.Reading?.Path, task.Reading?.LastLine, 0);

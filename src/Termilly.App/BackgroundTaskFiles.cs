@@ -142,11 +142,6 @@ internal sealed class TaskProcesses : ITaskProcesses
     private static readonly string[] AgentPrograms = [AgentKinds.Claude, AgentKinds.Codex, "node"];
 
     private readonly string[] _starters;
-    /// <summary>
-    /// How far a task's process may have started from when its agent said it would run it: the agent starts it at
-    /// once, but its sandbox and shell take a moment.
-    /// </summary>
-    private static readonly TimeSpan StartSlack = TimeSpan.FromSeconds(15);
 
     public TaskProcesses()
         : this(AgentPrograms)
@@ -211,18 +206,15 @@ internal sealed class TaskProcesses : ITaskProcesses
     }
 
     /// <summary>
-    /// Of the processes, the one that started nearest the time, and close to it: one started long before or after is
-    /// another run of the command (the task's own ended), as is one whose start can't be read.
+    /// Of the processes, the one that started nearest the time. One alone is the task's whenever it started (a command
+    /// waiting for the user's approval starts late); of several, one whose start can't be read is the last pick.
     /// </summary>
-    private static int? Closest(List<int> pids, DateTimeOffset started)
+    private static int? Closest(List<int> pids, DateTimeOffset started) => pids.Count switch
     {
-        if (pids.Count == 0)
-        {
-            return null;
-        }
-        var nearest = pids.Select(pid => (Pid: pid, Off: StartOffset(pid, started))).MinBy(p => p.Off);
-        return nearest.Off <= StartSlack ? nearest.Pid : null;
-    }
+        0 => null,
+        1 => pids[0],
+        _ => pids.MinBy(pid => StartOffset(pid, started)),
+    };
 
     /// <summary>How far from the time the process started; the most for one that ended or can't be read.</summary>
     private static TimeSpan StartOffset(int pid, DateTimeOffset started)
