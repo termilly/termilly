@@ -9,6 +9,8 @@ import { until } from './gitsteps.mjs';
 const shownCards = app => app.eval(t => t.$$('.theme-card').filter(c => c.getClientRects().length).map(c => c.querySelector('.tc-name').textContent));
 /** How far past the tools the page is scrolled, in px: several rows of cards. */
 const SCROLL_PAST = 400;
+/** The settings body's height in the sticky test. */
+const SHORT_BODY_PX = 320;
 /** The interface settings the page has. */
 const iface = app => app.eval(async t => ({ ...(await t.import('store.js')).state.settings.interface }));
 
@@ -136,6 +138,8 @@ test('the search and buttons stay on top while the cards scroll, and a long name
   assert.equal(card.cut, true, 'the name is cut short');
   assert.equal(card.same, true, 'the card keeps its column width');
   assert.match(card.title, new RegExp(`^${long}`), 'the whole name in the tooltip');
+  // A short body, so the gallery always has room to scroll whatever the window's size.
+  await app.eval(t => { t.$('#set-body').style.maxHeight = `${SHORT_BODY_PX}px`; });
   const before = await app.eval(t => t.$('.theme-tools').getBoundingClientRect().top - t.$('#set-body').getBoundingClientRect().top);
   await app.eval((t, by) => { t.$('#set-body').scrollTop = t.$('.theme-tools').offsetTop + by; }, SCROLL_PAST);
   await until(() => app.eval(t => t.$('#set-body').scrollTop > 0), 'scrolled');
