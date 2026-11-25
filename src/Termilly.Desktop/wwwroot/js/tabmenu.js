@@ -27,6 +27,7 @@ import { openNewWorkspace } from './newworkspace.js';
 import { beginRename, RENAME_IN } from './rename.js';
 import { openTagPicker } from './tagpicker.js';
 import { systemClipboard } from './sysclipboard.js';
+import { isMinimal, paneBarItem } from './panebar.js';
 /** How many of the last commands "Open output in viewer" lists, and how much of each it shows. */
 const RECENT_COMMANDS = 12;
 const COMMAND_LABEL = 60;
@@ -78,6 +79,8 @@ export function openTabMenu(tab, at, from = RENAME_IN.header) {
         { label: 'Copy to clipboard', icon: ICONS.copy, action: () => systemClipboard().writeText(tab.id) },
       ],
     },
+    // Minimal's name line or bar picks its parts here (a terminal in a window of its own keeps the Normal header).
+    ...(isMinimal() && !tab.detached ? [paneBarItem()] : []),
     SEPARATOR,
     { label: SET_ASIDE_LABEL, icon: ICONS.setAside, title: SET_ASIDE_TITLE, action: () => setAsideTab(tab) },
     { label: 'Close', icon: ICONS.cross, hint: keysHtml('Ctrl Shift W'), action: () => closeTab(tab) },

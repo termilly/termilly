@@ -9,6 +9,8 @@ interface AppSettings {
   terminal: TerminalSettings;
   /** The app around the terminals. */
   interface: InterfaceSettings;
+  /** The window's background: see-through, an effect, a picture (Settings › Appearance › Background). */
+  background: BackgroundSettings;
   /** The shells on offer. */
   shells: ShellSettings;
   /** Snippets and triggers. */
@@ -52,6 +54,8 @@ interface TerminalSettings {
   textSmoothing: string;
   /** Terminals drawn on the GPU (xterm's WebGL add-on, js/gpu.js): smoother scrolling; text is greyscale-smoothed then. */
   gpuRendering: boolean;
+  /** No graphics card for the window or its terminals (Windows: WebView2's --disable-gpu, Linux: WebKit's compositing off; macOS can only draw terminals on the CPU): least memory and no VRAM, more CPU for fast output. Applies at the next start. */
+  lowMemory: boolean;
   /** Images programs print (sixel, iTerm2's), shown inline. */
   inlineImages: boolean;
   /** Programs may set the clipboard (OSC 52). */
@@ -85,6 +89,12 @@ interface TerminalSettings {
 /** The app around the terminals: theme, its own font, the sidebar's activity and git status, updates, plugins. */
 interface InterfaceSettings {
   theme: string;
+  /** The theme "system" shows while the system is in dark mode. */
+  themeDark: string;
+  /** The theme "system" shows while the system is in light mode. */
+  themeLight: string;
+  /** Colour schemes imported from other terminals, newest first. */
+  customThemes: CustomTheme[] | null;
   /** Normal or Minimal (). */
   layout: string;
   /** In Minimal, a terminal's name on a line over it or on a bar shown on hover (). */
@@ -322,13 +332,24 @@ interface SettingsData {
   snippetUsed: Record<string, number> | null;
 }
 
-/** A theme's colours for the window and start-up loader (#RRGGBB), and whether it's a light theme. */
+/** A theme's colours for the window and start-up loader (#RRGGBB), whether it's a light theme, and its id (none in colours saved before 1.10). */
 interface ThemeWindowColors {
   background: string;
   frame: string;
   text: string;
   accent: string;
   light: boolean;
+  id: string | null;
+}
+
+/** A colour scheme imported from another terminal (Settings › Appearance › Theme): its terminal colours (#RRGGBB, the 16 ANSI ones in order); the page works out the app's colours from them (js/themes.js). */
+interface CustomTheme {
+  id: string;
+  name: string;
+  background: string;
+  foreground: string;
+  cursor: string | null;
+  ansi: string[];
 }
 
 /** One day in the agent cost ledger (js/cost.js): the total, and per workspace name. */
@@ -386,6 +407,30 @@ interface ActionSetting {
   shortcut: string | null;
   menu: boolean;
   enabled: boolean;
+}
+
+/** The window's background (Settings › Appearance › Background): how see-through it is and what shows through, and a picture behind the terminals or the whole window. The defaults are a solid window with no picture, as before. */
+interface BackgroundSettings {
+  /** The window's own colour in percent (); below 100 the desktop shows through. */
+  opacity: number;
+  /** What shows through (), where the system has it. */
+  effect: string;
+  /** Only the window around the terminals is see-through; the terminals keep their colour. */
+  solidTerminals: boolean;
+  /** A gradient in the theme's own colours behind the whole window, seen through it as frosted glass; it takes the place of a picture while on. */
+  themeGradient: boolean;
+  /** Theme gradient's glow at the top left, one of the theme's colours (BackgroundValues.GradientColor). */
+  gradientGlow: string;
+  /** Theme gradient's colour underneath, darkened. */
+  gradientBase: string;
+  /** Theme gradient's glow at the bottom right. */
+  gradientSecondGlow: string;
+  /** The picture's file in the backgrounds folder (), or none. */
+  picture: string | null;
+  fit: string;
+  dim: number;
+  blur: number;
+  behind: string;
 }
 
 /** How a COM port is set up (Settings › Serial); one per port that's been changed from the defaults. */
@@ -452,4 +497,5 @@ interface SessionProfile {
   tags: string[] | null;
   startCommand: string | null;
   shellIcon: string | null;
+  shellId: string | null;
 }

@@ -51,6 +51,10 @@ internal static class Program
         var settings = provider.GetRequiredService<ISettingsStore>();
         window.SetZoom(settings.Current.Interface.Zoom);
         settings.Saved += _ => window.SetZoom(settings.Current.Interface.Zoom);
+        // Low memory (Settings › Appearance) is read once: WebKit takes it before the page draws.
+        window.LowMemory = settings.Current.Terminal.LowMemory;
+        window.SetBackdrop(settings.Current.Background);
+        settings.Saved += _ => window.SetBackdrop(settings.Current.Background);
         if (OperatingSystem.IsLinux() && settings.Current.Interface.RunAsX11)
         {
             GtkWindow.UseX11(); // before the window opens GTK
@@ -85,11 +89,12 @@ internal static class Program
     private static IServiceCollection MacServices(LinuxWindow window, string? folder, out PhotinoPlatform platform)
     {
         platform = new MacPlatform(window.Send, folder, new ProcessRunner());
-        var onWindow = platform.OnWindowThread;
+        var clipboard = new MacClipboard(platform.OnWindowThread);
         return new ServiceCollection()
             .AddTermilly()
             .AddPlatform(platform)
-            .AddSingleton<IClipboardWatch>(new MacClipboard(onWindow))
+            .AddSingleton<IClipboardWatch>(clipboard)
+            .AddSingleton<IClipboardReader>(clipboard)
             .AddSingleton<ICredentialStore, MacKeychainStore>()
             .AddSingleton<IFontCatalog, MacFonts>()
             .AddSingleton<IAudioOutputs, MacAudio>()

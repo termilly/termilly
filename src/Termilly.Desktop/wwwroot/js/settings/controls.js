@@ -15,10 +15,33 @@ export function setRange(range, value) {
   range.style.setProperty('--fill', `${((value - min) / (max - min)) * 100}%`);
 }
 
+/** Marks a switch in a row's `needs` that has to be off. */
+const NEEDS_OFF = '!';
+
+/**
+ * Whether a row's `needs` (see row) aren't met: a switch it needs is off, or one that takes its place is on.
+ * @param {string} needs
+ * @param {(key: string) => unknown} setting
+ */
+export const needsUnmet = (needs, setting) => needs.split(',').some(need => (need.startsWith(NEEDS_OFF)
+  ? !!setting(need.slice(NEEDS_OFF.length))
+  : !setting(need)));
+
+/**
+ * Greys a row out (css/settings.css), its controls out of reach of the mouse and the keyboard, or makes it usable again.
+ * @param {HTMLElement} row
+ * @param {boolean} off
+ */
+export function greyOut(row, off) {
+  row.classList.toggle('needs-off', off);
+  for (const control of /** @type {NodeListOf<HTMLButtonElement>} */ (row.querySelectorAll('button, input, select'))) control.disabled = off;
+}
+
 /**
  * A labelled row: title and description on the left, the control on the right (or below with `stack`).
  * `keywords` are other words the search finds it by. `needs` is a switch it depends on ("group.key", or several
- * with commas): while one is off, the row is greyed out and can't be changed.
+ * with commas): while one is off, the row is greyed out and can't be changed. "!group.key" is a switch that takes the
+ * row's place: while that one is on, the row is greyed out.
  * @param {string} label
  * @param {string} description
  * @param {string} control
@@ -34,10 +57,21 @@ export const row = (label, description, control, { stack = false, keywords = '',
  * Segmented choice bound to a setting. Options: [value, label, icon?].
  * @param {string} key
  * @param {Array<[string | number, string, string?]>} options
+ * @param {{ firstIfNone?: boolean }} [how] firstIfNone: a value not among the options shows as the first one (what
+ *   the app uses instead, as with an effect this system doesn't have).
  */
-export const seg = (key, options) => `
-  <span class="seg" data-setting="${key}">${options.map(([value, label, icon]) =>
+export const seg = (key, options, how = {}) => `
+  <span class="seg" data-setting="${key}"${how.firstIfNone ? ' data-first-if-none' : ''}>${options.map(([value, label, icon]) =>
     `<button data-value="${value}">${icon ?? ''}${label}</button>`).join('')}</span>`;
+
+/**
+ * A choice of colours bound to a setting, each a small square with its name on hover. Options: [value, name, CSS colour].
+ * @param {string} key
+ * @param {Array<[string, string, string]>} options
+ */
+export const swatchChoice = (key, options) => `
+  <span class="seg swatch-choice" data-setting="${key}">${options.map(([value, name, color]) =>
+    `<button data-value="${value}" title="${escapeHtml(name)}" aria-label="${escapeHtml(name)}"><i style="background:${escapeHtml(color)}"></i></button>`).join('')}</span>`;
 
 /**
  * Choices for a segmented control from a setting's list of values, each with its label.
@@ -47,6 +81,19 @@ export const seg = (key, options) => `
  * @returns {Array<[T, string]>}
  */
 export const choices = (values, label) => values.map(value => [value, label(value)]);
+
+/**
+ * A slider bound to a setting, with its value beside it (data-range-setting: settings.js shows it and saves it as it
+ * moves).
+ * @param {string} key
+ * @param {{ min: number, max: number }} range
+ * @param {string} unit what the value is shown with: '%' or 'px'
+ * @param {string} label
+ */
+export const slider = (key, { min, max }, unit, label) => `<div class="size-control">
+    <input class="set-range" type="range" min="${min}" max="${max}" step="1" data-range-setting="${key}" data-unit="${unit}" aria-label="${label}">
+    <span class="set-range-value"></span>
+  </div>`;
 
 /** An on/off switch bound to a setting. @param {string} key */
 export const toggle = key => `<button class="switch" role="switch" data-setting="${key}" aria-label="${key}"><span></span></button>`;

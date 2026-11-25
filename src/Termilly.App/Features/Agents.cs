@@ -22,6 +22,7 @@ internal sealed class AgentMonitor : IStartable, IDisposable
     private readonly ClaudePlan _claudePlan;
     private readonly PageApi _api;
     private readonly BackgroundHost _host;
+    private readonly Lock _claudeFilesGate = new();
     private AgentHooks? _hooks;
     private ClaudeAgentsPoller? _poller;
     /// <summary>Token use of the Claude Code session in each terminal, for its status bar (ClaudeUsage.cs).</summary>
@@ -117,9 +118,13 @@ internal sealed class AgentMonitor : IStartable, IDisposable
     /// </summary>
     private void WriteClaudeFiles()
     {
-        var userSettings = Path.Combine(ClaudeCodeFiles.ConfigDirectory(), ClaudeCodeFiles.Settings);
-        Storage.Try(() => ClaudeHookSettings.Write(AgentHooks.ClaudeSettingsPath, AgentHooks.HookExe, Settings.Agents.ClaudeUsage, userSettings));
-        Storage.Try(() => ClaudeMcpConfig.Write(AgentHooks.ClaudeMcpPath));
+        // A settings save and a session's end (a hook, on the pipe's thread) can both write: one at a time, the last one whole.
+        lock (_claudeFilesGate)
+        {
+            var userSettings = Path.Combine(ClaudeCodeFiles.ConfigDirectory(), ClaudeCodeFiles.Settings);
+            Storage.Try(() => ClaudeHookSettings.Write(AgentHooks.ClaudeSettingsPath, AgentHooks.HookExe, Settings.Agents.ClaudeUsage, userSettings));
+            Storage.Try(() => ClaudeMcpConfig.Write(AgentHooks.ClaudeMcpPath));
+        }
     }
 
     private void Forget(string terminal)
@@ -186,12 +191,25 @@ internal sealed class AgentMonitor : IStartable, IDisposable
             {
                 Track(e.Pane, e.Session, state, e.Agent);
             }
+            // A view picked in the session (/tui fullscreen) holds from the next start: Termilly's classic one, which
+            // --settings would keep, is only for users who haven't picked one.
+            if (!remote && state == AgentStates.Exited && e.Agent == AgentKinds.Claude && settings.Agents.Integration)
+            {
+                WriteClaudeFiles();
+            }
             if (limitsShown)
             {
                 RefreshPlan(); // the plan's name shows before the first limits do
             }
             _page.Post(new ToPage.HookedAgent(e.Pane, state, e.Event, e.Tool, e.Message, e.Reason, e.Session, e.Target ?? e.File, e.Folder, e.Prompt, e.Agent));
         }
+        PostStatus(e, settings, limitsShown);
+        return reply;
+    }
+
+    /// <summary>What Claude Code's status line and a subagent's end report: limits, cost, context.</summary>
+    private void PostStatus(AgentEvent e, AppSettings settings, bool limitsShown)
+    {
         if (e.Status?.Limits is { } limits && limitsShown)
         {
             // The limits are the account's, not the terminal's: the page shows them on every Claude terminal.
@@ -212,7 +230,6 @@ internal sealed class AgentMonitor : IStartable, IDisposable
             // Claude Code's own context figures for this terminal's session; the page prefers them to the transcript's.
             _page.Post(new ToPage.ContextReport(e.Pane, e.Session, context.Used, context.Size, context.Tokens));
         }
-        return reply;
     }
 
     /// <summary>Subagents get rows under their terminal (js/subagents.js): an Agent call, their start and stop, their tools.</summary>

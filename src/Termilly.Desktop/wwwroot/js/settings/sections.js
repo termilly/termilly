@@ -8,6 +8,9 @@ import { serialSectionHtml, handleSerialClick, handleSerialChange, setSerialRere
 import { row, group } from './controls.js';
 import { SECTION, redrawIfShowing } from './page.js';
 import appearance from './appearance.js';
+import appearanceBackground from './appearancebackground.js';
+import appearanceText from './appearancetext.js';
+import appearanceLayout from './appearancelayout.js';
 import terminal from './terminal.js';
 import notifications from './notifications.js';
 import workspaces from './workspaces.js';
@@ -44,11 +47,11 @@ setSerialRerender(() => redrawIfShowing(SECTION.serial));
  * @type {Readonly<Record<string, string>>}
  */
 const DOCS = Object.freeze({
-  [SECTION.appearance]: 'themes', [SECTION.terminal]: 'terminals', [SECTION.notifications]: 'notifications', [SECTION.ssh]: 'ssh', [SECTION.serial]: 'serial',
+  [SECTION.appearance]: 'themes', [SECTION.appearanceBackground]: 'themes', [SECTION.appearanceText]: 'themes', [SECTION.appearanceLayout]: 'themes', [SECTION.terminal]: 'terminals', [SECTION.notifications]: 'notifications', [SECTION.ssh]: 'ssh', [SECTION.serial]: 'serial',
   [SECTION.workspaces]: 'workspaces', [SECTION.actions]: 'actions', [SECTION.changes]: 'changes', [SECTION.privacy]: 'encryption', [SECTION.history]: 'encryption', [SECTION.phone]: 'phone',
   [SECTION.plugins]: 'plugins', [SECTION.keyboard]: 'shortcuts', [SECTION.about]: 'updates',
 });
 
 /** @type {Record<string, import('./page.js').Section>} by id, in the nav's order */
 export const SECTIONS = Object.fromEntries(
-  [appearance, terminal, notifications, ssh, serial, workspaces, actions, changes, privacy, history, phone, plugins, keyboard, about].map(s => [s.id, { ...s, docs: DOCS[s.id] }]));
+  [appearance, appearanceBackground, appearanceText, appearanceLayout, workspaces, terminal, notifications, keyboard, changes, actions, phone, ssh, serial, plugins, privacy, history, about].map(s => [s.id, { ...s, docs: DOCS[s.id] }]));

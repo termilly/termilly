@@ -248,6 +248,7 @@
 .phone-list { max-height: 60vh; margin-bottom: 14px; overflow-y: auto; }
 .dialog h3 { margin: 0; font-size: 16px; }
 .dialog-sub { margin: 4px 0 14px; color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+.dialog-list { max-height: 40vh; margin: -6px 0 14px; padding-left: 20px; overflow-y: auto; font-size: 12.5px; line-height: 1.6; }
 .dialog-field {
   display: flex;
   flex-direction: column;

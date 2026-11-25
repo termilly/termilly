@@ -1,5 +1,6 @@
 using System.Text;
 using Termilly.Desktop;
+using Termilly.Desktop.Features;
 using Termilly.Desktop.Services;
 
 namespace Termilly.Linux;
@@ -30,10 +31,21 @@ internal static class AppScheme
     /// <summary>The page's root says its window's corners are its own to round (app.css).</summary>
     private const string RoundCorners = "round";
 
-    public static Stream? Serve(string url, ThemeWindowColors colors, out string contentType)
+    /// <summary>Where the background pictures are served (Features/BackgroundPictures.cs): app://localhost/backgrounds/name.</summary>
+    public const string PicturesPath = BackgroundPictures.FolderName;
+
+    /// <param name="colors">
+    /// The theme's colours, asked for the page alone: finding them may ask the system for its light or dark mode (a
+    /// program run), too slow for each of the page's few hundred files.
+    /// </param>
+    public static Stream? Serve(string url, Func<ThemeWindowColors> colors, out string contentType)
     {
         contentType = MediaTypes.PlainText;
         var path = Uri.TryCreate(url, UriKind.Absolute, out var uri) ? Uri.UnescapeDataString(uri.AbsolutePath).TrimStart('/') : "";
+        if (path.StartsWith(PicturesPath + '/', StringComparison.Ordinal))
+        {
+            return ServePicture(path[(PicturesPath.Length + 1)..], out contentType);
+        }
         var file = Path.GetFullPath(Path.Combine(Root, path.Length == 0 ? IndexPage : path));
         if (!file.StartsWith(Root + Path.DirectorySeparatorChar, StringComparison.Ordinal) || !File.Exists(file))
         {
@@ -44,9 +56,22 @@ internal static class AppScheme
         {
             // On Linux the window is see-through (LinuxWindow) and the page rounds its corners (app.css, data-corners).
             var corners = OperatingSystem.IsLinux() ? $" data-corners=\"{RoundCorners}\"" : "";
-            var page = File.ReadAllText(file).Replace("<html>", $"<html data-theme=\"{(colors.Light ? "light" : "dark")}\"{corners} style=\"--bg:{colors.Background};--text:{colors.Text};--accent:{colors.Accent}\">");
+            var palette = colors();
+            var page = File.ReadAllText(file).Replace("<html>", $"<html data-theme=\"{(palette.Light ? "light" : "dark")}\"{corners} style=\"--bg:{palette.Background};--text:{palette.Text};--accent:{palette.Accent}\">");
             return new MemoryStream(Encoding.UTF8.GetBytes(page));
         }
+        return File.OpenRead(file);
+    }
+
+    /// <summary>A background picture by its name in the backgrounds folder, nothing else of the data folder.</summary>
+    private static FileStream? ServePicture(string name, out string contentType)
+    {
+        contentType = MediaTypes.Binary;
+        if (BackgroundPictures.FileFor(BackgroundPictures.Folder, name) is not { } file)
+        {
+            return null;
+        }
+        contentType = BackgroundPictures.Types[Path.GetExtension(file)];
         return File.OpenRead(file);
     }
 }

@@ -5,7 +5,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { startApp } from './harness.mjs';
-import { until } from './gitsteps.mjs';
+import { until, skipTour } from './gitsteps.mjs';
 
 /** Files every Linux has, opened in the file preview: enough tabs for its strip to overflow. */
 const PREVIEW_FILES = ['hosts', 'hostname', 'os-release', 'passwd', 'group', 'fstab', 'shells', 'profile', 'environment', 'issue', 'protocols', 'services'].map(name => `/etc/${name}`);
@@ -42,12 +42,7 @@ const pointTo = (x, y) => app.eval((t, x, y) => {
 before(async () => {
   app = await startApp({ name: 'minimal' });
   await app.waitFor('.pane .xterm');
-  // The welcome tour a first start offers would sit over everything.
-  await app.eval(async () => {
-    for (let i = 0; i < 20 && !globalThis.document.querySelector('.tour-skip, [data-tour="skip"]'); i++) await new Promise(r => setTimeout(r, 100));
-    const skip = [...globalThis.document.querySelectorAll('button, a, span')].find(el => el.textContent.trim() === 'Skip tour');
-    skip?.click();
-  });
+  await skipTour(app);
 });
 
 after(async () => { await app?.stop({ failed }); });
@@ -247,12 +242,23 @@ step('a split shows two name lines, the one in focus with its buttons', async ()
   await app.screenshot('04-line');
 });
 
-step('right-click on a name line picks its parts; a part turned off goes from every line', async () => {
+step('double-click on a name line\'s name renames the terminal, as in Normal', async () => {
+  // As the header's pointer capture (Windows, macOS) sends it: to the header, at the name.
+  const at = await app.eval(() => { const r = globalThis.document.querySelector('.ws-layer.active .pane > .pane-header .pane-name').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
+  await app.eval((t, at) => globalThis.document.querySelector('.ws-layer.active .pane > .pane-header').dispatchEvent(new globalThis.MouseEvent('dblclick', { clientX: at.x, clientY: at.y, bubbles: true, detail: 2 })), at);
+  await app.waitFor('.ws-layer.active .pane > .pane-header .rename-input');
+  await app.key('.ws-layer.active .pane > .pane-header .rename-input', 'Escape');
+  await app.waitFor('.ws-layer.active .pane > .pane-header .rename-input', { gone: true });
+});
+
+step('right-click on a name line opens the terminal menu, whose Title bar picks its parts; a part turned off goes from every line', async () => {
   const at = await app.eval(() => { const r = globalThis.document.querySelector('.ws-layer.active .pane > .pane-header').getBoundingClientRect(); return { x: r.left + 40, y: r.top + 10 }; });
   await app.eval((t, at) => globalThis.document.querySelector('.ws-layer.active .pane > .pane-header').dispatchEvent(new globalThis.MouseEvent('contextmenu', { clientX: at.x, clientY: at.y, bubbles: true })), at);
   await app.waitFor('.context-menu .menu-row');
   const labels = await app.eval(t => t.$$('.context-menu .menu-label').map(el => el.textContent));
-  assert.ok(labels.includes('Agent view switch') && labels.includes('Terminal menu') && !labels.includes('Close'), labels.join(', '));
+  assert.ok(labels.includes('Rename') && labels.includes('Title bar') && labels.includes('Close') && !labels.includes('Agent view switch'), labels.join(', '));
+  await app.eval(t => [...t.$$('.context-menu .menu-row')].find(r => r.textContent.includes('Title bar')).click());
+  await until(() => app.eval(t => t.$$('.context-menu .menu-label').some(el => el.textContent === 'Agent view switch')), 'the Title bar submenu');
   await pause(300);
   await app.screenshot('05-line-menu');
   await app.eval(t => [...t.$$('.context-menu .menu-row')].find(r => r.textContent.includes('Tag button')).click());

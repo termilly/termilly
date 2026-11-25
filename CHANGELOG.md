@@ -2,6 +2,20 @@
 
 What changed in each release. Termilly says in its title bar when a newer one is out.
 
+## 1.10.0 (2026-11-25)
+
+- **Notification center:** a sidebar grouped by workspace.
+- **Themes:** you can now import color schemes from other terminals.
+- **Backgrounds:** window transparency, background image or theme gradient in your theme's colors.
+- **Snippets:** save selected terminal text as a snippet.
+
+Fixes:
+
+- Low memory setting keeps Termilly lighter, especially when minimized.
+- macOS: Big bursts of output no longer freeze the window.
+- macOS: right language for shells, Paste from the menus, the window fits the screen.
+- Many small fixes.
+
 ## 1.9.3 (2026-11-20)
 
 Fixes:

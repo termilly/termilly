@@ -279,6 +279,7 @@ export function closeTab(tab) {
     disposeTerminal(tab);
     tab.view?.el.remove();
     state.tabs.delete(tab.id);
+    emit(EVENTS.tabClosed, tab);
     emit(EVENTS.scratchClosed);
     restoreFocus();
     return;
@@ -289,6 +290,9 @@ export function closeTab(tab) {
   disposeTerminal(tab);
   tab.view?.el.remove();
   state.tabs.delete(tab.id);
+  // After it's gone from the list, so what listens (its notifications, questions, schedule runs, Compact view) doesn't
+  // take it back in.
+  emit(EVENTS.tabClosed, tab);
   if (ws.focusId === tab.id) ws.focusId = sibling ? shownIn(sibling) ?? firstShown(ws)?.id ?? null : null;
   renderWorkspace(ws);
   if (ws.id === state.activeId) {

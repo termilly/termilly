@@ -1,7 +1,49 @@
 namespace Termilly.Desktop;
 
-/// <summary>A theme's colours for the window and start-up loader (#RRGGBB), and whether it's a light theme.</summary>
-internal sealed record ThemeWindowColors(string Background, string Frame, string Text, string Accent, bool Light);
+/// <summary>
+/// A theme's colours for the window and start-up loader (#RRGGBB), whether it's a light theme, and its id (none in
+/// colours saved before 1.10).
+/// </summary>
+internal sealed record ThemeWindowColors(string Background, string Frame, string Text, string Accent, bool Light, string? Id = null);
+
+/// <summary>The rules for imported colour schemes, which the page follows too (js/constants.js's CUSTOM_THEME).</summary>
+internal static class CustomThemeLimits
+{
+    /// <summary>What every imported theme's id starts with, so none takes a built-in one's.</summary>
+    public const string IdPrefix = "custom-";
+    public const int AnsiCount = 16;
+    public const int MaxName = 60;
+    /// <summary>The most imported schemes kept.</summary>
+    public const int MaxThemes = 500;
+    /// <summary>The biggest file read: a scheme is a few kilobytes; a whole Windows Terminal settings file fits too.</summary>
+    public const int MaxFileBytes = 524288; // 512 KB
+    /// <summary>The most files read at once (picked, or found in a folder), and all of them together at most.</summary>
+    public const int MaxFiles = 1000;
+    public const int MaxTotalBytes = 16777216; // 16 MB
+    /// <summary>How deep into a folder's folders the files are looked for.</summary>
+    public const int FolderDepth = 3;
+}
+
+/// <summary>
+/// A colour scheme imported from another terminal (Settings › Appearance › Theme): its terminal colours (#RRGGBB, the
+/// 16 ANSI ones in order); the page works out the app's colours from them (js/themes.js).
+/// </summary>
+internal sealed record CustomTheme(string Id, string Name, string Background, string Foreground, string? Cursor, IReadOnlyList<string> Ansi)
+{
+    /// <summary>The theme as saved, or null when it isn't one (a bad id or colour, or not 16 ANSI colours).</summary>
+    public CustomTheme? Normalize()
+    {
+        var colours = Ansi ?? [];
+        if (SettingChecks.Trimmed(Name) is not { } name || Id is null || !Id.StartsWith(CustomThemeLimits.IdPrefix, StringComparison.Ordinal)
+            || !SettingChecks.IsHexColour(Background) || !SettingChecks.IsHexColour(Foreground)
+            || (Cursor is not null && !SettingChecks.IsHexColour(Cursor))
+            || colours.Count != CustomThemeLimits.AnsiCount || !colours.All(SettingChecks.IsHexColour))
+        {
+            return null;
+        }
+        return this with { Name = name[..Math.Min(name.Length, CustomThemeLimits.MaxName)], Ansi = [.. colours] };
+    }
+}
 
 /// <summary>One day in the agent cost ledger (js/cost.js): the total, and per workspace name.</summary>
 internal sealed record CostDay(double Total, IReadOnlyDictionary<string, double>? Ws = null);

@@ -49,11 +49,15 @@ public sealed class BackgroundHostTests
 
             var second = Connect();
             Assert.True(second.Running.TryGetValue("t1", out var kept) && kept.Alive && kept.Pid == shell.ProcessId);
+            Assert.Equal(shell.ProcessId, second.TakeKept("t1"));
+            Assert.Null(second.TakeKept("t1")); // taken once: the same terminal started again later is a new shell
             var replayed = new ConcurrentQueue<string>();
-            var taken = second.Attach("t1", kept.Pid, 100, 30, replayed.Enqueue, _ => { });
+            var live = new ConcurrentQueue<string>();
+            var taken = second.Attach("t1", kept.Pid, 100, 30, live.Enqueue, replayed.Enqueue, _ => { });
             Assert.True(Until(() => string.Concat(replayed).Contains("one-2", StringComparison.Ordinal)), "no replay of what it missed");
             taken.Write("echo two-$((2+2))\n");
-            Assert.True(Until(() => string.Concat(replayed).Contains("two-4", StringComparison.Ordinal)), string.Concat(replayed));
+            Assert.True(Until(() => string.Concat(live).Contains("two-4", StringComparison.Ordinal)), string.Concat(live));
+            Assert.DoesNotContain("one-2", string.Concat(live), StringComparison.Ordinal);
 
             second.Shutdown(); // Settings › Stop background shells
             Assert.True(host.WaitForExit(5000));
@@ -66,6 +70,55 @@ public sealed class BackgroundHostTests
                 host.Kill(entireProcessTree: true);
             }
             Environment.SetEnvironmentVariable("TERMILLY_HOST_PIPE", null);
+        }
+    }
+
+    [Fact]
+    public void A_second_host_leaves_while_one_runs()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+        Assert.True(File.Exists(HostExe), HostExe);
+        // Not through HostProtocol.PipeName: it's read once per process, and the other test sets its own pipe.
+        var pipe = $"termilly-host-test-{Guid.NewGuid():N}";
+        var lockFile = Path.Combine(Path.GetTempPath(), $"{pipe}.lock");
+        Environment.SetEnvironmentVariable("TERMILLY_HOST_PIPE", pipe);
+        using var host = Process.Start(new ProcessStartInfo(HostExe) { UseShellExecute = false })!;
+        try
+        {
+            Assert.True(Until(() => IsLocked(lockFile)), "the first host didn't start");
+            using var second = Process.Start(new ProcessStartInfo(HostExe) { UseShellExecute = false })!;
+            Assert.True(second.WaitForExit(5000), "a second host stayed: the shells would split between two");
+            Assert.False(host.HasExited);
+        }
+        finally
+        {
+            if (!host.HasExited)
+            {
+                host.Kill(entireProcessTree: true);
+            }
+            Environment.SetEnvironmentVariable("TERMILLY_HOST_PIPE", null);
+            File.Delete(lockFile);
+        }
+    }
+
+    /// <summary>Whether a running host holds its lock file.</summary>
+    private static bool IsLocked(string path)
+    {
+        try
+        {
+            using var probe = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+            return false;
+        }
+        catch (FileNotFoundException)
+        {
+            return false;
+        }
+        catch (IOException)
+        {
+            return true;
         }
     }
 

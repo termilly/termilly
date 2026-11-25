@@ -21,10 +21,12 @@ import { initMinimal } from './minimal.js';
 import './remotepc.js';
 import { openPalette, setCommands, openGoTo, openCommandHistory, PALETTE_VIEW } from './palette.js';
 import { jumpToPrompt, copyLastOutput } from './commands.js';
-import { toggleInbox, jumpToNext } from './inbox.js';
-import { applySnapshot } from './snapshot.js';
+import { jumpToNext } from './inbox.js';
+import { toggleInbox, initInbox } from './inboxpanel.js';
+import './inboxalert.js';
+import { applySnapshot, resumeAfterHost } from './snapshot.js';
 import { keepEarlierOfOpen } from './earlier.js';
-import { toggleCaptures } from './triggers.js';
+import { toggleCaptures, outputSeen } from './triggers.js';
 import { toggleHints } from './hints.js';
 import { toggleScratch } from './scratch.js';
 import { openGitWindow, openAgentChanges, GIT_BUTTON_ID, gitFolderOf, onServer, openRemoteGitNotice } from './gitwindow.js';
@@ -43,7 +45,7 @@ import { openChangedFiles } from './changes.js';
 import { openSnippetsWindow, initSnippetsWindow } from './snippetswindow.js';
 import { initSchedules, nobodyAsksIn } from './schedules.js';
 import { toggleSchedules, initSchedulesWindow } from './scheduleswindow.js';
-import { THEMES } from './themes.js';
+import { allThemes } from './themes.js';
 import { isPreviewOpen, closePreview } from './preview.js';
 import { pluginCommands, reloadPlugins } from './plugins.js';
 import { startTour, offerTourOnce } from './tour.js';
@@ -94,6 +96,7 @@ import { rememberSession, recordPrompt } from './myprompts.js';
 import './tooltips.js';
 import { outputArrived } from './reprint.js';
 import { byId, find, targetOf, WORKSPACE_ID, TITLEBAR_ID } from './dom.js';
+import { loadBackdropInfo } from './backgrounds.js';
 
 /** @typedef {import('./protocol.js').Host_agent_1} Host_agent_1 */
 
@@ -240,7 +243,7 @@ setCommands(() => [
   { label: 'Show recently closed', keywords: 'history reopen restore', run: () => setTimeout(commands.recentlyClosed) },
   { label: 'Settings', keywords: 'preferences options font theme privacy history security', hint: keyHint(KEY_ID.settings), run: () => setTimeout(toggleSettings) },
   { label: 'Switch light / dark theme', keywords: 'appearance colour color mode', run: commands.toggleTheme },
-  ...[{ id: theme.system, name: 'System' }, ...THEMES].map(t => ({ label: `Theme: ${t.name}`, keywords: 'appearance colour color look palette', run: () => updateSettings(GROUPS.interface, { theme: t.id }) })),
+  ...[{ id: theme.system, name: 'System', like: '' }, ...allThemes()].map(t => ({ label: `Theme: ${t.name}`, keywords: `appearance colour color look palette ${t.like ?? ''}`, run: () => updateSettings(GROUPS.interface, { theme: t.id }) })),
   { label: 'Bigger text', keywords: 'font zoom in', hint: keysHtml('Ctrl +'), run: commands.fontLarger },
   { label: 'Smaller text', keywords: 'font zoom out', hint: keysHtml('Ctrl -'), run: commands.fontSmaller },
   { label: 'Reset text size', keywords: 'font zoom', hint: keysHtml('Ctrl 0'), run: commands.fontReset },
@@ -489,7 +492,23 @@ onHost(HOST.output, m => {
   outputArrived(tab);
   tab.view.term.write(consoleDefaults(m.data));
   noteOutput(tab);
-  if (tab === focusedTab()) setTimeout(signalReady, READY_PAINT_MS); // the first prompt is on screen: let it paint, then show
+  // The first prompt is on screen: let it paint, then show. Only until then: one timer per output piles up thousands
+  // during a flood, and WebKit re-times every pending timer for each message the host sends (macOS froze for minutes).
+  if (!readySent && tab === focusedTab()) setTimeout(signalReady, READY_PAINT_MS);
+});
+
+// A kept shell's missed output, drawn again as the window takes it back. The queries and bells in it were answered
+// and heard back then: xterm's answers would be typed at the live prompt, and its bells and notifications raised again.
+onHost(HOST.replay, m => {
+  const tab = state.tabs.get(m.id);
+  if (!tab?.view?.term) return;
+  tab.replaying = (tab.replaying ?? 0) + 1;
+  // Over as soon as it's parsed, before any live output after it; triggers (watching once parsed) go on from its end.
+  tab.view.term.write(consoleDefaults(m.data), () => {
+    tab.replaying = (tab.replaying ?? 1) - 1;
+    outputSeen(tab);
+  });
+  if (!readySent && tab === focusedTab()) setTimeout(signalReady, READY_PAINT_MS);
 });
 
 // ---- Ready (the host shows a loader until then) ----
@@ -571,6 +590,7 @@ onHost(HOST.agent, report => {
 onHost(HOST.exit, m => {
   const tab = state.tabs.get(m.id);
   if (!tab?.view?.term) return;
+  if (m.ended) resumeAfterHost(tab);
   clearActivity(tab);
   if (handleSshExit(tab, m.code)) return; // an SSH connection that dropped: it reconnects (reconnect.js)
   if (m.code === 0) {
@@ -625,6 +645,7 @@ function boot(saved, snapshot, liveSessions = []) {
   initNotepad();
   initTodo();
   initClips();
+  initInbox();
   applySettings();
   initMinimal();
   if (state.activeId) switchWorkspace(state.activeId);
@@ -659,6 +680,7 @@ onHost(HOST.settings, m => {
     return;
   }
   // The host sends liveSessions; protocol.js's Host_settings misnames it.
+  loadBackdropInfo(); // the effects this system has, and where background pictures load from
   boot(m.workspaces, m.snapshot,
     /** @type {{ liveSessions?: string[] }} */ (/** @type {unknown} */ (m)).liveSessions ?? []);
   offerTourOnce();

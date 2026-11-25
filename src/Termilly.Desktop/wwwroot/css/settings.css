@@ -34,9 +34,72 @@
 /* A section’s own buttons (Settings › Actions), first on the left, last on the right; they don’t scroll. */
 .set-tools { display: flex; flex: none; justify-content: space-between; align-items: center; padding: 10px calc(24px + var(--set-scrollbar)) 10px 24px; border-bottom: 1px solid var(--border); }
 .set-tools[hidden] { display: none; }
+/* A section's tabs (Appearance: Theme, Text, Layout), in the bar above its body. */
+.set-tabs { display: flex; gap: 4px; }
+.set-tab { padding: 5px 12px; border-radius: 7px; color: var(--muted); font-size: 13px; }
+.set-tab:hover { background: var(--hover); color: var(--text); }
+.set-tab.on { background: var(--accent-fill); color: var(--text-strong); }
+
+/* Appearance › Theme: following the system, then the gallery with its search and filter. */
+.theme-follow { display: flex; align-items: center; gap: 10px; }
+.theme-follow.unused .theme-pick { opacity: 0.45; }
+.theme-pick { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; }
+.theme-pick .field.dropdown { min-width: 150px; }
+/* Stays at the top of the page while the cards scroll under it; its own padding is the gap above the cards. */
+.theme-tools { position: sticky; top: calc(-1 * var(--set-body-top)); z-index: 1; display: flex; align-items: center; gap: 10px; margin-top: calc(-1 * var(--set-body-top)); padding: var(--set-body-top) 0; background: var(--raised); }
+.theme-tools .theme-search { width: 220px; }
+.theme-tools + .theme-cards { margin-top: 8px; }
+.theme-none { margin: 16px 0 0; }
+.theme-tools [data-theme-import] { margin-left: auto; }
+
+/* Removing imported themes (js/settings/thememanage.js): a ticked list. */
+.dialog.theme-manage { width: 380px; }
+/* Over .dialog-check's own margin (github.css, read after this file). */
+.theme-manage .tm-all { margin: 10px 0 6px 9px; color: var(--muted); }
+.tm-list { display: flex; flex-direction: column; max-height: min(320px, calc(100vh - 220px)); padding: 4px 8px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; }
+.tm-search { width: 100%; margin-top: 12px; }
+.theme-manage .tm-row { margin: 0; padding: 2px 0; }
+.tm-row[hidden] { display: none; }
+.tm-none { margin: 4px 0; }
+.tm-none[hidden] { display: none; }
+.tm-all input, .tm-row input { accent-color: var(--accent); }
+.tm-swatch { flex: none; width: 14px; height: 14px; border: 2px solid; border-radius: 4px; }
+
+/* Import a colour scheme (js/themeimport.js): the schemes found on the left, its preview on the right. */
+.dialog.scheme-import { width: 760px; }
+.si-body { display: flex; gap: 18px; margin-top: 14px; }
+.si-pick { display: flex; flex: 1.1; flex-direction: column; gap: 10px; min-width: 0; }
+.si-show { flex: 1; min-width: 0; }
+.si-drop { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 16px; border: 1.5px dashed var(--border-strong); border-radius: 10px; text-align: center; }
+.si-drop .dialog-sub { margin: 0; }
+.si-buttons { display: flex; gap: 8px; }
+.si-collection { display: flex; flex-direction: column; gap: 8px; }
+.si-collection[hidden], .si-search[hidden] { display: none; }
+.si-list { display: flex; flex-direction: column; max-height: 220px; padding: 4px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; }
+.si-item { display: flex; align-items: center; gap: 2px; min-width: 0; }
+.si-tick { flex: none; margin: 0 4px; accent-color: var(--accent); }
+.si-all { margin: 0 0 -2px 5px; color: var(--muted); }
+.si-all input { accent-color: var(--accent); }
+.si-row { flex: 1; padding: 5px 8px; border-radius: 6px; color: var(--text); font-size: 12.5px; text-align: left; }
+.si-row:hover { background: var(--hover); }
+.si-row.on { background: var(--accent-fill); color: var(--text-strong); }
+.si-row { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.si-label { flex: none; }
+.si-place { overflow: hidden; color: var(--muted); font-size: 11.5px; text-overflow: ellipsis; white-space: nowrap; }
+.si-name { display: block; margin-bottom: 8px; font-size: 13px; }
+.si-term { padding: 10px 12px; border-radius: 8px; font: 12px/1.6 var(--mono); white-space: pre; }
+.si-cursor { display: inline-block; width: 7px; height: 13px; vertical-align: -2px; }
+.si-swatches { display: grid; grid-template-columns: repeat(8, 1fr); gap: 3px; margin-top: 8px; }
+.si-swatches i { height: 14px; border-radius: 3px; }
+.si-status.error, .si-count.error { color: var(--danger-text); }
+.si-count { align-self: center; margin: 0; font-variant-numeric: tabular-nums; }
+/* Over the cards' own display (.seg.theme-cards button), which would show them anyway. */
+.theme-cards > .theme-card[hidden] { display: none; }
+.tc-like { overflow: hidden; margin-top: -4px; padding: 0 2px; color: var(--faint); font-size: 11px; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
 /* The body keeps room for its scrollbar, so its right edge lines up with the buttons above it whether it scrolls or not. */
-.settings { --set-scrollbar: 8px; }
-.set-body { scrollbar-gutter: stable; flex: 1; padding: 8px 24px 24px; overflow-y: auto; -webkit-user-select: text; user-select: text; }
+/* --set-body-top: the room above the page's first row, which the Theme tab's tools keep while they stay on top. */
+.settings { --set-scrollbar: 8px; --set-body-top: 8px; }
+.set-body { scrollbar-gutter: stable; flex: 1; padding: var(--set-body-top) 24px 24px; overflow-y: auto; -webkit-user-select: text; user-select: text; }
 .set-body::-webkit-scrollbar { width: var(--set-scrollbar); }
 .set-body::-webkit-scrollbar-thumb { border: 2px solid var(--raised); border-radius: 4px; background: var(--scroll-thumb); }
 
@@ -56,6 +119,8 @@
 .set-control { display: flex; flex: none; align-items: center; }
 .set-row.stack .set-control { flex-direction: column; align-items: stretch; }
 .set-control .seg button { display: inline-flex; align-items: center; gap: 6px; }
+/* A theme card's parts take its width, so a long name is cut short (…) inside it. */
+.set-control .seg.theme-cards button { align-items: stretch; }
 .set-control .seg svg { width: 13px; height: 13px; stroke-width: 1.5; }
 .set-control select.field, .set-control .field.dropdown { min-width: 220px; }
 .set-control .size-control { width: 300px; }

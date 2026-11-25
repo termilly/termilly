@@ -1,0 +1,158 @@
+/* The window's background (js/backgrounds.js, Settings › Appearance › Background), set on the page's root, which the
+   detached windows copy (js/windows.js):
+   data-see-through: the desktop shows through, the window's colour at --window-alpha;
+   data-backdrop="terminals" | "window": in the main window, a picture or gradient (--backdrop-image: the workspace on
+   screen's own, else Settings') behind the terminals or everything;
+   data-window-backdrop: in the detached windows, Settings' picture (--window-backdrop-image);
+   both shaded with the theme's colour at --backdrop-dim and blurred by --backdrop-blur;
+   data-clear-terminals: the terminals draw no background of their own, so what's behind shows through them;
+   data-solid-terminals: Solid terminals is on, so only a picture shows through them, never the desktop.
+   Without these attributes nothing here applies: the window is solid, as before. */
+
+:root {
+  /* What the see-through parts keep of their own colour, over the window's: enough to tell them apart. */
+  --see-region: 40%;
+  --see-header: 60%;
+  --backdrop-shade: color-mix(in srgb, var(--bg) calc(var(--backdrop-dim, 0) * 100%), transparent);
+}
+
+/* ---- See-through ---- */
+
+:root[data-see-through] { background: transparent; }
+:root[data-see-through] body { background: color-mix(in srgb, var(--bg) calc(var(--window-alpha) * 100%), transparent); }
+
+/* ---- Regions over a see-through window or a background: a light tint of their own colour, the rest shows through ---- */
+
+:root[data-see-through] :is(#sidebar, .pane, .strip-tab),
+:root[data-backdrop] body:not(.detached-window) :is(#sidebar, .pane, .strip-tab),
+:root[data-window-backdrop] body.detached-window > .pane,
+:root[data-see-through] :is(.notepad-panel, .clips-panel, .files-panel, .inbox-panel),
+:root[data-backdrop] body:not(.detached-window) :is(.notepad-panel, .clips-panel, .files-panel, .inbox-panel),
+:root[data-window-backdrop] body.detached-window :is(.notepad-panel, .clips-panel, .files-panel, .inbox-panel),
+:root:is([data-see-through], [data-backdrop]) body[data-layout="minimal"] .files-panel > .files-head {
+  background: color-mix(in srgb, var(--surface) var(--see-region), transparent);
+}
+:root[data-see-through] :is(.pane-header, .strip-tab.active, .pane-statusbar),
+:root[data-backdrop] body:not(.detached-window) :is(.pane-header, .strip-tab.active, .pane-statusbar),
+:root[data-window-backdrop] body.detached-window :is(.pane-header, .pane-statusbar),
+:root:is([data-see-through], [data-backdrop]) body[data-layout="minimal"][data-pane-names="line"] .pane > .pane-header {
+  background: color-mix(in srgb, var(--header) var(--see-header), transparent);
+}
+/* The Snippets, Schedules and Git windows: in windows of their own, tinted as a terminal's window is; shown over the
+   main window instead (macOS), frosted glass over what's behind them, as they're over the terminals, not the
+   background. */
+:root:is([data-see-through], [data-window-backdrop]) body.detached-window > :is(.snippets-win, .git-win),
+:root:is([data-see-through], [data-backdrop]) body:not(.detached-window) .modal-layer > :is(.snippets-win, .git-win) {
+  background: color-mix(in srgb, var(--surface) var(--see-region), transparent);
+}
+/* The blur written out: macOS's WebKit can drop a backdrop-filter that takes it from a variable (WebKit bug 297620). */
+:root:is([data-see-through], [data-backdrop]) body:not(.detached-window) .modal-layer > :is(.snippets-win, .git-win) {
+  -webkit-backdrop-filter: blur(24px) saturate(1.3);
+  backdrop-filter: blur(24px) saturate(1.3);
+}
+/* The layer's own slight blur (menus.css) would keep theirs from reaching the page behind, and its shade would darken
+   the glass: they nearly fill the window, so theirs is enough. */
+:root:is([data-see-through], [data-backdrop]) body:not(.detached-window) .modal-layer:is(.snippets-layer, .git-layer) {
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+/* Their list and the diff are the window's own tint; the title bar and the diff's bars, the header's. */
+:root:is([data-see-through], [data-window-backdrop]) body.detached-window > :is(.snippets-win, .git-win) :is(.cw-side, .gw-diff),
+:root:is([data-see-through], [data-backdrop]) body:not(.detached-window) .modal-layer > :is(.snippets-win, .git-win) :is(.cw-side, .gw-diff) { background: transparent; }
+:root:is([data-see-through], [data-window-backdrop]) body.detached-window > :is(.snippets-win, .git-win) :is(.set-head, .gw-diff-head, .gw-pick-bar),
+:root:is([data-see-through], [data-backdrop]) body:not(.detached-window) .modal-layer > :is(.snippets-win, .git-win) :is(.set-head, .gw-diff-head, .gw-pick-bar) {
+  background: color-mix(in srgb, var(--header) var(--see-header), transparent);
+}
+/* Minimal's bar that shows over a terminal on hover (minimal.css) floats like a menu: solid, as menus are. */
+:root:is([data-see-through], [data-backdrop], [data-window-backdrop]) body[data-layout="minimal"][data-pane-names="hover"] .pane > .pane-header {
+  background: var(--raised);
+}
+/* Minimal draws its lines between panes as the workspace's own colour (minimal.css), which would cover everything
+   behind: here the workspace is clear and the lines are drawn by the dividers themselves. */
+:root:is([data-see-through], [data-backdrop]) body[data-layout="minimal"] #workspace { background: transparent; }
+:root:is([data-see-through], [data-backdrop]) body[data-layout="minimal"] .divider { background: var(--border); }
+/* Behind the terminals: the panes show the picture as it is (its shade keeps the text readable). */
+:root[data-backdrop="terminals"] #workspace .pane,
+:root[data-window-backdrop] body.detached-window > .pane { background: transparent; }
+
+/* Over the theme's terminal colours (panes.css), which are !important: here they draw nothing. */
+:root[data-clear-terminals] .pane-body,
+:root[data-clear-terminals] .pane-body .xterm,
+:root[data-clear-terminals] .pane-body .xterm-viewport,
+:root[data-clear-terminals] .pane-body .compact-view { background: transparent !important; }
+/* Where only the desktop or nothing shows behind a terminal (its workspace has None, a detached window without a
+   picture) and it's meant to keep its colour (solid, or Solid terminals), the pane gives it. */
+:root[data-clear-terminals]:not([data-backdrop]):is(:not([data-see-through]), [data-solid-terminals]) body:not(.detached-window) .pane-body,
+:root[data-clear-terminals]:not([data-window-backdrop]):is(:not([data-see-through]), [data-solid-terminals]) body.detached-window .pane-body {
+  background: var(--term-surface, var(--term-bg)) !important;
+}
+/* Compact view (statusbar.css) keeps its own colour there, over the terminal's. */
+:root[data-clear-terminals]:not([data-backdrop]):is(:not([data-see-through]), [data-solid-terminals]) body:not(.detached-window) .pane-body .compact-view,
+:root[data-clear-terminals]:not([data-window-backdrop]):is(:not([data-see-through]), [data-solid-terminals]) body.detached-window .pane-body .compact-view {
+  background: var(--surface) !important;
+}
+
+/* ---- The picture or gradient ---- */
+
+/* Its own layer only while a picture shows: the picture under the terminals, above nothing else. */
+:root[data-backdrop="terminals"] #workspace { isolation: isolate; }
+:root[data-backdrop="terminals"] #workspace::before,
+:root[data-backdrop="window"] body:not(.detached-window)::before,
+:root[data-window-backdrop] body.detached-window::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image: linear-gradient(var(--backdrop-shade), var(--backdrop-shade)), var(--backdrop-image);
+  background-position: center;
+  background-size: auto, var(--backdrop-size);
+  background-repeat: no-repeat, var(--backdrop-repeat);
+  filter: blur(var(--backdrop-blur, 0));
+  pointer-events: none;
+}
+:root[data-window-backdrop] body.detached-window::before {
+  background-image: linear-gradient(var(--backdrop-shade), var(--backdrop-shade)), var(--window-backdrop-image);
+  background-size: auto, var(--window-backdrop-size);
+  background-repeat: no-repeat, var(--window-backdrop-repeat);
+}
+/* The whole window: under everything, the window's colour gives way to it. */
+:root[data-backdrop="window"] body:not(.detached-window)::before,
+:root[data-window-backdrop] body.detached-window::before { position: fixed; }
+:root[data-backdrop="window"] body:not(.detached-window),
+:root[data-window-backdrop] body.detached-window { background: transparent; }
+
+/* ---- Theme gradient: the window as frosted glass over a gradient in the theme's colours (js/backgrounds.js) ---- */
+
+:root[data-theme-gradient] {
+  --backdrop-shade: transparent;
+  --see-region: 55%;
+  --see-header: 65%;
+}
+/* Blurred as the desktop is behind acrylic, and larger than the window so its blurred edges stay out of sight. */
+:root[data-theme-gradient][data-backdrop] body:not(.detached-window)::before,
+:root[data-theme-gradient][data-window-backdrop] body.detached-window::before {
+  inset: calc(var(--glass-blur) * -3);
+  filter: blur(var(--glass-blur)) saturate(1.3);
+}
+:root { --glass-blur: 14px; }
+/* A terminal in a window of its own is glass like the main window's, not clear as over a picture. */
+:root[data-theme-gradient][data-window-backdrop] body.detached-window > .pane {
+  background: color-mix(in srgb, var(--surface) var(--see-region), transparent);
+}
+
+/* ---- Settings › Appearance › Background: the picture chosen ---- */
+
+.bg-picture { display: flex; align-items: center; gap: 8px; }
+.bg-thumb { flex: none; width: 64px; height: 40px; border: 1px solid var(--border); border-radius: 6px; background: center / cover no-repeat; }
+.bg-thumb.empty { border-style: dashed; }
+.bg-error { margin: 6px 0 0; color: var(--danger-text); }
+.bg-error[hidden] { display: none; }
+
+/* ---- Settings › Appearance › Background: Theme gradient's colours, each a square of the theme's own ---- */
+
+.seg.swatch-choice { flex-wrap: wrap; }
+.seg.swatch-choice button { display: flex; padding: 3px; }
+.seg.swatch-choice i { width: 16px; height: 16px; border-radius: 4px; box-shadow: inset 0 0 0 1px var(--border-strong); }
+/* The one picked: a ring in the text's colour, as the other colour pickers have, plain on every swatch. */
+.seg.swatch-choice button.on { background: none; box-shadow: inset 0 0 0 2px var(--text-strong); }

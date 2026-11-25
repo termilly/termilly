@@ -12,6 +12,10 @@ internal static class MediaTypes
     public const string Manifest = "application/manifest+json";
     public const string Svg = "image/svg+xml";
     public const string Png = "image/png";
+    public const string Jpeg = "image/jpeg";
+    public const string Webp = "image/webp";
+    public const string Gif = "image/gif";
+    public const string Bmp = "image/bmp";
     public const string Icon = "image/x-icon";
     public const string Woff2 = "font/woff2";
     public const string Woff = "font/woff";
@@ -31,6 +35,11 @@ internal static class MediaTypes
         public const string Manifest = ".webmanifest";
         public const string Svg = ".svg";
         public const string Png = ".png";
+        public const string Jpg = ".jpg";
+        public const string Jpeg = ".jpeg";
+        public const string Webp = ".webp";
+        public const string Gif = ".gif";
+        public const string Bmp = ".bmp";
         public const string Icon = ".ico";
         public const string Woff2 = ".woff2";
         public const string Woff = ".woff";

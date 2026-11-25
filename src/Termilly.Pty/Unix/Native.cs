@@ -88,6 +88,20 @@ internal static class Native
     [DllImport(Libc, SetLastError = true)]
     public static extern int kill(int pid, int signal);
 
+    /// <summary>poll's "there's something to read".</summary>
+    public const short POLLIN = 0x1;
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct PollFd
+    {
+        public int Fd;
+        public short Events;
+        public short Revents;
+    }
+
+    [DllImport(Libc, SetLastError = true)]
+    public static extern int poll(ref PollFd fds, nuint count, int timeoutMs);
+
     [DllImport(Libc, SetLastError = true)]
     public static extern int waitpid(int pid, out int status, int options);
 

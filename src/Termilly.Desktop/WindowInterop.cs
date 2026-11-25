@@ -118,7 +118,7 @@ internal static class WindowInterop
     /// </summary>
     public static string Background { get; set; } = Black;
 
-    private const string Black = "#000000";
+    public const string Black = "#000000";
 
     private static IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {

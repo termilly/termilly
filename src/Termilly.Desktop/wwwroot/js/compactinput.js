@@ -1,7 +1,8 @@
 // @ts-check
 // The compact view's prompt box (js/compact.js): Enter sends what's in it. With nothing in it, the keys an agent's
 // own screen answers go to the agent: Esc (stop, back), Shift+Tab (its mode), Up and Down (its menus, its history)
-// and Enter (pick). "/" at the start lists the agent's commands, and "@" offers the files of its folder, in a list
+// and Enter (pick). A prompt the agent suggests shows dim in the empty box, and Right arrow puts it in to edit or
+// send. "/" at the start lists the agent's commands, and "@" offers the files of its folder, in a list
 // above the box: Up and Down move in it, Enter or Tab takes one, Esc closes it.
 
 import { PAGE } from './protocol.js';
@@ -14,6 +15,8 @@ import { AGENT_KIND } from './constants.js';
 const PASS_KEYS = Object.freeze({ Escape: '\x1b', ArrowUp: '\x1b[A', ArrowDown: '\x1b[B', Enter: '\r' });
 /** Shift+Tab, as a terminal sends it. */
 const BACK_TAB = '\x1b[Z';
+/** The key that takes the prompt the agent suggests, as in its own input line. */
+const ARROW_RIGHT = 'ArrowRight';
 /** The word being typed at the caret: a command at the box's start, or a file after an @. */
 const COMMAND_WORD = /^\/(\S*)$/;
 const FILE_WORD = /(^|\s)@(\S*)$/;
@@ -51,7 +54,7 @@ const COMMANDS = Object.freeze({
  * @typedef {{ tab: Tab, input: HTMLTextAreaElement, list: HTMLElement, picks: Pick[], at: number,
  *   word: { kind: string, start: number } | null, timer: number, asked: number }} InputState
  * @typedef {{ submit: () => void, passKey: (data: string) => void, agent: () => string | null, folder: () => string | null,
- *   cardKey: (e: KeyboardEvent) => boolean }} InputHooks
+ *   cardKey: (e: KeyboardEvent) => boolean, suggestion: () => string | null }} InputHooks
  */
 
 /**
@@ -94,7 +97,13 @@ function onKey(s, e, hooks) {
     e.preventDefault();
     return;
   }
-  if (e.key === 'Tab' && e.shiftKey && empty) {
+  const suggestion = empty && !s.input.readOnly && e.key === ARROW_RIGHT && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey ? hooks.suggestion() : null;
+  if (suggestion) {
+    e.preventDefault();
+    s.input.value = suggestion;
+    s.input.setSelectionRange(suggestion.length, suggestion.length);
+    s.input.dispatchEvent(new Event('input')); // the box fits its text
+  } else if (e.key === 'Tab' && e.shiftKey && empty) {
     e.preventDefault();
     hooks.passKey(BACK_TAB);
   } else if (empty && !e.shiftKey && !e.ctrlKey && !e.altKey && e.key in PASS_KEYS) {

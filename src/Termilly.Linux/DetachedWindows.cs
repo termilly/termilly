@@ -100,6 +100,27 @@ internal static class DetachedWindows
         }
     }
 
+    /// <summary>Blur behind the windows (Settings › Appearance › Background, KDE only), as the main window's.</summary>
+    private static bool _blur;
+
+    /// <summary>Blur behind the windows open now and later, or none.</summary>
+    public static void SetBlur(bool on)
+    {
+        _blur = on;
+        foreach (var opened in Open.Values)
+        {
+            Blur(opened.Window);
+        }
+    }
+
+    private static void Blur(IntPtr window)
+    {
+        if (OperatingSystem.IsLinux())
+        {
+            LinuxBlur.Set(window, _blur);
+        }
+    }
+
     /// <summary>
     /// What a window's title bar (the page's header) asks, for the window window.open named <paramref name="name"/>:
     /// minimize, maximize or restore, move, resize from an edge, or come to the front.
@@ -254,6 +275,7 @@ internal static class DetachedWindows
         g_signal_connect_data(window, "delete-event", OnDelete, view, IntPtr.Zero, 0);
         g_signal_connect_data(window, "configure-event", OnConfigure, view, IntPtr.Zero, 0);
         gtk_widget_show_all(window);
+        Blur(window); // once shown: the property goes on its X11 window
     }
 
     /// <summary>window.close() in its page (it has taken back what it showed): the window goes.</summary>

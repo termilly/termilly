@@ -90,6 +90,15 @@ export function scanFrom(tab, row) {
 }
 
 /**
+ * Everything drawn so far isn't news, a cleared screen in it too: a kept shell's replayed output (main.js).
+ * @param {Tab} tab
+ */
+export function outputSeen(tab) {
+  const buffer = tab.view?.term?.buffer.normal;
+  if (buffer) Object.assign(scanOf(tab), { line: buffer.baseY + buffer.cursorY, cleared: false });
+}
+
+/**
  * The screen was cleared (CSI 2J or 3J): the scan starts again at its top, once the output is parsed.
  * @param {Tab} tab
  */
@@ -151,7 +160,8 @@ function fire(tab, trigger, text, y) {
     decoration?.onRender((/** @type {HTMLElement} */ el) => { el.title = trigger.name || trigger.pattern; });
   }
   if (action === triggerAction.capture) capture(tab, trigger, text, marker);
-  if (action === triggerAction.notify || action === triggerAction.attention) {
+  // A replay of a kept shell's old output (main.js) was announced back then; its command ends scan it straight away.
+  if ((action === triggerAction.notify || action === triggerAction.attention) && !tab.replaying) {
     const now = Date.now();
     const { alertedAt } = scanOf(tab);
     if (now - (alertedAt[trigger.id] ?? 0) < NOTIFY_EVERY) return; // a burst of matches is one alert

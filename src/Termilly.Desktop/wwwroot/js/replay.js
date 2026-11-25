@@ -141,7 +141,11 @@ on(EVENTS.agent, tab => {
 const REWIND_MS = 3 * MINUTE_MS;
 const REWIND_BYTES = 4 << 20;
 
-onHost(HOST.output, m => {
+/**
+ * Keeps a terminal's output for Rewind, a kept shell's replayed output too.
+ * @param {{ id: string, data: string }} m
+ */
+function keepForRewind(m) {
   const tab = state.tabs.get(m.id);
   if (!tab) return;
   const buf = (tab.rewind ??= { events: [], bytes: 0 });
@@ -149,7 +153,9 @@ onHost(HOST.output, m => {
   buf.events.push([now, m.data]);
   buf.bytes += m.data.length;
   while (buf.events.length && (now - buf.events[0][0] > REWIND_MS || buf.bytes > REWIND_BYTES)) buf.bytes -= /** @type {[number, string]} */ (buf.events.shift())[1].length;
-});
+}
+onHost(HOST.output, keepForRewind);
+onHost(HOST.replay, keepForRewind);
 
 /**
  * A terminal's recent output as a recording, for the player.

@@ -8,9 +8,11 @@ import { applyTerminalSettings, isLight, onSystemThemeChange } from './terminals
 import { THEME_VARIABLES, currentTheme, TERM_FONT_VAR } from './themes.js';
 import { cssString, escapeHtml } from './ui.js';
 import { compileTriggers } from './triggers.js';
+import { applyBackdrop } from './backgrounds.js';
 import { updateSettings, setSetting, saveSoon, onApply } from './preferences.js';
 import { layer, body, button, page, setRedraw, closeSettings } from './settings/page.js';
 import { SECTIONS } from './settings/sections.js';
+import { setRange, needsUnmet, greyOut } from './settings/controls.js';
 import { SETTING_VALUES, PRODUCT } from './constants.js';
 import { send } from './host.js';
 import { PAGE } from './protocol.js';
@@ -52,7 +54,7 @@ export function applySettings() {
     else root.style.removeProperty(name);
   }
   // The host colours its window and start-up loader with these before the page draws (saved with the settings).
-  const windowColors = { ...current.window, light: current.base === theme.light };
+  const windowColors = { ...current.window, light: current.base === theme.light, id: current.id };
   if (JSON.stringify(state.settings.uiState.windowColors) !== JSON.stringify(windowColors)) {
     state.settings.uiState.windowColors = windowColors;
     saveSoon(GROUPS.uiState);
@@ -65,6 +67,7 @@ export function applySettings() {
   // The change preview shows code in the terminals' font and size.
   root.style.setProperty(TERM_FONT_VAR, `"${cssString(state.settings.terminal.fontFamily)}", var(--mono)`);
   root.style.setProperty('--term-font-size', `${state.settings.terminal.fontSize}px`);
+  applyBackdrop(); // before the terminals: whether they draw a background of their own
   applyTerminalSettings();
   compileTriggers();
   if (!layer.hidden) syncControls();
@@ -91,6 +94,79 @@ function renderNav() {
     `<button class="set-nav-item${s.id === shown && !searchQuery ? ' on' : ''}" data-section="${s.id}">${s.icon}<span>${s.label}</span></button>`).join('');
 }
 
+/**
+ * The section whose tabs a section is one of (itself, or its parent), if it has tabs.
+ * @param {import('./settings/page.js').Section} section
+ */
+function tabOwner(section) {
+  const owner = section.tabs ? section : section.parent ? SECTIONS[section.parent] : undefined;
+  return owner?.tabs ? owner : undefined;
+}
+
+/**
+ * A section's tabs, the open one marked.
+ * @param {import('./settings/page.js').Section} owner
+ * @param {string} open
+ */
+const tabBar = (owner, open) => `<span class="set-tabs" role="tablist" aria-label="${owner.label}">${(owner.tabs ?? []).map(id =>
+  `<button class="set-tab${id === open ? ' on' : ''}" role="tab" id="${TAB_ID_PREFIX}${id}" aria-selected="${id === open}" aria-controls="${body.id}"
+    tabindex="${id === open ? 0 : -1}" data-section="${id}">${SECTIONS[id].tab}</button>`).join('')}</span>`;
+
+/** A tab's element id, for the panel (the body) to say which tab it shows. */
+const TAB_ID_PREFIX = 'set-tab-';
+/** The panel's attribute naming the tab it shows. */
+const LABELLED_BY = 'aria-labelledby';
+/** The keys that move between tabs: ← and → by one, round from the last to the first; Home and End to the ends. */
+const TAB_STEPS = Object.freeze({ ArrowLeft: -1, ArrowRight: 1 });
+const TAB_ENDS = Object.freeze({ Home: 'first', End: 'last' });
+
+/**
+ * Makes the body the open tab's panel, or (no tab) a plain body again.
+ * @param {string | null} tab
+ */
+function panelOf(tab) {
+  if (tab) {
+    body.setAttribute('role', 'tabpanel');
+    body.setAttribute(LABELLED_BY, `${TAB_ID_PREFIX}${tab}`);
+  } else {
+    body.removeAttribute('role');
+    body.removeAttribute(LABELLED_BY);
+  }
+}
+
+/**
+ * Opens a tab and keeps the keyboard on its button.
+ * @param {string} id
+ */
+function openTab(id) {
+  showSection(id);
+  /** @type {HTMLElement | null} */ (tools.querySelector('.set-tab.on'))?.focus();
+}
+
+/**
+ * ← → Home End on a tab open the tab beside it, or the first or last one.
+ * @param {KeyboardEvent} e
+ */
+function tabKey(e) {
+  const step = TAB_STEPS[/** @type {keyof typeof TAB_STEPS} */ (e.key)];
+  const end = TAB_ENDS[/** @type {keyof typeof TAB_ENDS} */ (e.key)];
+  const tabs = tabOwner(SECTIONS[page.current])?.tabs;
+  if ((step === undefined && !end) || !tabs) return;
+  e.preventDefault();
+  const at = end ? (end === TAB_ENDS.Home ? 0 : tabs.length - 1)
+    : (tabs.indexOf(page.current) + step + tabs.length) % tabs.length;
+  openTab(tabs[at]);
+}
+
+/**
+ * A section's name over its search results: a tab's says whose tab it is.
+ * @param {import('./settings/page.js').Section} section
+ */
+function resultLabel(section) {
+  const owner = tabOwner(section);
+  return owner ? `${owner.label} › ${section.tab}` : section.label;
+}
+
 /** @param {string} id */
 function showSection(id) {
   const section = SECTIONS[id];
@@ -99,14 +175,17 @@ function showSection(id) {
   searchQuery = '';
   searchBox.value = '';
   renderNav();
-  title.textContent = section.parent ? `${SECTIONS[section.parent].label} › ${section.label}` : section.label;
+  const owner = tabOwner(section);
+  title.textContent = owner ? owner.label : section.parent ? `${SECTIONS[section.parent].label} › ${section.label}` : section.label;
   help.hidden = !section.docs;
-  tools.innerHTML = section.tools?.() ?? '';
-  tools.hidden = !section.tools;
+  tools.innerHTML = owner ? tabBar(owner, id) : section.tools?.() ?? '';
+  tools.hidden = !owner && !section.tools;
+  panelOf(owner ? id : null);
   body.innerHTML = section.html();
   body.scrollTop = 0;
   section.drawn?.(body);
   syncControls();
+  section.shown?.(body);
 }
 
 // ---- Search ----
@@ -236,6 +315,7 @@ function renderSearch() {
   renderNav();
   title.textContent = 'Search results';
   tools.hidden = true;
+  panelOf(null);
   body.innerHTML = '';
   for (const section of sections) {
     const found = sectionMatches(section, terms);
@@ -243,7 +323,7 @@ function renderSearch() {
     const head = document.createElement('button');
     head.className = 'set-result-head';
     head.dataset.section = section.id;
-    head.innerHTML = `${section.icon}<span>${section.label}</span>`;
+    head.innerHTML = `${section.icon}<span>${resultLabel(section)}</span>`;
     body.append(head, ...found.childNodes);
   }
   hits = [.../** @type {NodeListOf<HTMLElement>} */ (body.querySelectorAll(ROW))];
@@ -309,7 +389,7 @@ export function settingEntries() {
     try { holder.innerHTML = section.html(); } catch { continue; }
     for (const rowEl of /** @type {NodeListOf<HTMLElement>} */ (holder.querySelectorAll(ROW))) {
       const name = rowName(rowEl);
-      if (name) entries.push({ section: section.id, sectionLabel: section.label, name, keywords: rowEl.dataset.keywords ?? '' });
+      if (name) entries.push({ section: section.id, sectionLabel: resultLabel(section), name, keywords: rowEl.dataset.keywords ?? '' });
     }
   }
   return entries;
@@ -327,14 +407,29 @@ export function openSetting(section, name) {
   revealSetting(section, name);
 }
 
+/** The sliders bound to a setting (controls.js slider). */
+const RANGE_SETTING = 'input[data-range-setting]';
+
+/**
+ * A slider at a value: its fill, and the value beside it with its unit.
+ * @param {HTMLInputElement} range
+ * @param {number} value
+ */
+function showRange(range, value) {
+  setRange(range, value);
+  const shown = range.nextElementSibling;
+  if (shown) shown.textContent = `${value}${range.dataset.unit ?? ''}`;
+}
+
 /** Reflects the current settings in the visible controls. */
 function syncControls() {
   for (const el of /** @type {NodeListOf<HTMLElement>} */ (body.querySelectorAll('[data-setting]'))) {
     const value = getSetting(/** @type {string} */ (el.dataset.setting));
     if (el.classList.contains('seg')) {
-      for (const b of /** @type {NodeListOf<HTMLElement>} */ (el.querySelectorAll('[data-value]'))) {
-        b.classList.toggle('on', String(value) === b.dataset.value);
-      }
+      const options = [.../** @type {NodeListOf<HTMLElement>} */ (el.querySelectorAll('[data-value]'))];
+      const known = options.some(b => String(value) === b.dataset.value);
+      options.forEach((b, i) => b.classList.toggle('on', known ? String(value) === b.dataset.value
+        : i === 0 && el.dataset.firstIfNone !== undefined));
     } else if (el.classList.contains('switch')) {
       el.setAttribute('aria-checked', String(!!value));
     } else if (el.tagName === 'SELECT') {
@@ -342,14 +437,15 @@ function syncControls() {
       /** @type {HTMLSelectElement} */ (el).value = String(value ?? (el.dataset.setting === DEFAULT_SHELL ? state.profiles[0]?.id : null) ?? '');
     }
   }
+  for (const range of /** @type {NodeListOf<HTMLInputElement>} */ (body.querySelectorAll(RANGE_SETTING))) {
+    showRange(range, Number(getSetting(/** @type {string} */ (range.dataset.rangeSetting))));
+  }
   for (const select of /** @type {NodeListOf<HTMLSelectElement>} */ (body.querySelectorAll('select.field'))) {
     dropdown(select);
   }
-  // A row that needs a switch that's off is greyed out, and its control out of reach of the mouse and the keyboard.
+  // A row whose needs aren't met is greyed out (a section's sync may grey out more).
   for (const row of /** @type {NodeListOf<HTMLElement>} */ (body.querySelectorAll('[data-needs]'))) {
-    const off = /** @type {string} */ (row.dataset.needs).split(',').some(key => !getSetting(key));
-    row.classList.toggle('needs-off', off);
-    for (const control of /** @type {NodeListOf<HTMLButtonElement>} */ (row.querySelectorAll('button, input, select'))) control.disabled = off;
+    greyOut(row, needsUnmet(/** @type {string} */ (row.dataset.needs), getSetting));
   }
   for (const section of sections) section.sync?.(body);
 }
@@ -415,6 +511,12 @@ body.addEventListener('click', e => {
 });
 
 body.addEventListener('input', e => {
+  // A slider bound to a setting saves as it moves, so what it changes shows at once.
+  const range = /** @type {HTMLInputElement} */ (targetOf(e));
+  if (range.matches(RANGE_SETTING)) {
+    showRange(range, Number(range.value));
+    saveSetting(/** @type {string} */ (range.dataset.rangeSetting), Number(range.value));
+  }
   for (const section of sections) section.input?.(e);
 });
 body.addEventListener('change', e => {
@@ -442,6 +544,7 @@ document.addEventListener('keydown', e => {
     } else closeSettings();
   }
   if (e.target === searchBox) searchKey(e);
+  if (/** @type {HTMLElement} */ (e.target).classList?.contains('set-tab')) tabKey(e);
   // Ctrl+F searches the settings.
   if (e.key === 'f' && e.ctrlKey && !e.shiftKey && !e.altKey) {
     e.preventDefault();
@@ -455,6 +558,8 @@ layer.addEventListener('mousedown', e => {
 });
 byId('set-close').addEventListener('click', closeSettings);
 tools.addEventListener('click', e => {
+  const tab = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-section]'));
+  if (tab) return openTab(/** @type {string} */ (tab.dataset.section));
   const action = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-action]'));
   if (action) actions[/** @type {string} */ (action.dataset.action)]?.(action);
 });

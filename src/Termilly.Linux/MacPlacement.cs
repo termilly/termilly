@@ -6,29 +6,26 @@ namespace Termilly.Linux;
 /// <summary>
 /// Where the main window was on macOS and whether it was maximized, kept in window.json (<see cref="SavedPlacement"/>)
 /// and put back the next time Termilly opens. In the system's points, from the bottom left of the main screen as Cocoa
-/// has them. A place whose title bar is on no screen now (a display that's gone) is left out: the window opens where it
-/// always did.
+/// has them. The window always opens inside a screen: a place partly off one is moved and shrunk onto it, and a place on
+/// no screen now (a display that's gone) is left out, so the window opens where it always did, fitted to its screen.
 /// </summary>
 [SupportedOSPlatform("macos")]
 internal static class MacPlacement
 {
-    /// <summary>How far down from a window's top its title bar is looked for on the screens, in points.</summary>
-    private const double TitleBarDepth = 20;
+    private const string VisibleFrame = "visibleFrame";
 
-    /// <summary>Puts the main window back where it was, maximized if it was.</summary>
+    /// <summary>Puts the main window back where it was, maximized if it was; fitted to its screen either way.</summary>
     public static void Restore(IntPtr window)
     {
-        if (SavedPlacement.Read() is not { } saved)
+        var areas = UsableAreas();
+        var saved = SavedPlacement.Read();
+        var back = saved is not null ? WindowFit.Placed(new Rect(saved.X, saved.Y, saved.Width, saved.Height), areas) : null;
+        // The first start's size, or one from a display that's gone, may not fit a small screen either.
+        if ((back ?? WindowFit.Placed(SendRect(window, Cocoa.Frame), areas)) is { } fitted)
         {
-            return;
+            SetFrame(window, fitted);
         }
-        var frame = new Rect(saved.X, saved.Y, saved.Width, saved.Height);
-        if (!TitleBarShows(frame))
-        {
-            return;
-        }
-        SetFrame(window, frame);
-        if (saved.Maximized)
+        if (back is not null && saved!.Maximized)
         {
             MacWindows.ToggleMaximized(window);
         }
@@ -46,19 +43,18 @@ internal static class MacPlacement
     }
 
     /// <summary>Whether the middle of the frame's title bar is on one of the screens (their usable areas).</summary>
-    internal static bool TitleBarShows(Rect frame)
+    internal static bool TitleBarShows(Rect frame) => WindowFit.TitleBarOn(frame, UsableAreas()) is not null;
+
+    /// <summary>Each screen but its menu bar and Dock.</summary>
+    private static List<Rect> UsableAreas()
     {
         var screens = Send(Class(Cocoa.Screen), Cocoa.Screens);
         var count = (nint)Send(screens, Cocoa.Count);
-        double x = frame.X + frame.Width / 2, y = frame.Y + frame.Height - TitleBarDepth;
+        var areas = new List<Rect>();
         for (nint i = 0; i < count; i++)
         {
-            var area = SendRect(Send(screens, Cocoa.ObjectAtIndex, i), "visibleFrame");
-            if (x >= area.X && x <= area.X + area.Width && y >= area.Y && y <= area.Y + area.Height)
-            {
-                return true;
-            }
+            areas.Add(SendRect(Send(screens, Cocoa.ObjectAtIndex, i), VisibleFrame));
         }
-        return false;
+        return areas;
     }
 }

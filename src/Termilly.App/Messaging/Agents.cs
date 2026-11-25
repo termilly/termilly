@@ -174,6 +174,8 @@ internal static partial class ToPage
         public const string Api = "api";
         /// <summary>A paired phone answers an agent, or replies to it (Features/Phone.cs, js/phone.js).</summary>
         public const string PhoneAnswer = "phone:answer";
+        /// <summary>A paired phone answers an agent's question in the notification center (Phone/PhoneQuestions.cs, js/phone.js).</summary>
+        public const string PhoneQuestion = "phone:question";
         /// <summary>What a terminal shows now, for a phone that starts showing it (Phone/PhoneLive.cs, js/phone.js).</summary>
         public const string PhoneScreen = "phone:screen";
         /// <summary>A paired phone opens, closes, renames or moves a terminal, or adds an SSH host (js/phonemanage.js).</summary>
@@ -181,6 +183,6 @@ internal static partial class ToPage
         /// <summary>A terminal's Claude Code sessions, for another Termilly computer's Prompt history (Phone/PcPromptsApi.cs, js/myprompts.js).</summary>
         public const string PcSessions = "pc:sessions";
 
-        public static readonly string[] All = [Api, PhoneAnswer, PhoneScreen, PhoneManage, PcSessions];
+        public static readonly string[] All = [Api, PhoneAnswer, PhoneQuestion, PhoneScreen, PhoneManage, PcSessions];
     }
 }

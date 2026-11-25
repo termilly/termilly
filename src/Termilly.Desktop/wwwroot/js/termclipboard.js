@@ -9,7 +9,7 @@ import { underlinedLink, linkUnderMouse } from './termlinks.js';
 import { showToast } from './toasts.js';
 import { ICONS } from './ui.js';
 import { typeInto, selectionInside } from './dom.js';
-import { systemClipboard } from './sysclipboard.js';
+import { systemClipboard, readClipboardText } from './sysclipboard.js';
 
 /** The word for pasting, on the menu and on the production question (terminals.js). */
 export const PASTE_LABEL = 'Paste';
@@ -136,7 +136,7 @@ function showTerminalMenu(e, body, { selection, link, paste }) {
     !selection && link
       ? { label: 'Copy link', icon: ICONS.copy, action: () => { copy(link, true); showToast({ text: `Copied ${link}` }); } }
       : { label: COPY_LABEL, icon: ICONS.copy, hint: MENU_KEYS.copy, disabled: !selection, action: () => copy(selection, false) },
-    { label: PASTE_LABEL, icon: ICONS.paste, hint: MENU_KEYS.paste, action: () => systemClipboard().readText().then(text => { if (text) paste(text); }).catch(() => {}) },
+    { label: PASTE_LABEL, icon: ICONS.paste, hint: MENU_KEYS.paste, action: () => readClipboardText().then(text => { if (text) paste(text); }).catch(() => {}) },
     ...clipEntries(body, paste),
     ...menuExtras(body, { selection: selection || null, link }),
   ], { x: e.clientX, y: e.clientY });

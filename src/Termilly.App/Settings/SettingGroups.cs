@@ -27,6 +27,12 @@ internal sealed record TerminalSettings
     public string TextSmoothing { get; init; } = SettingValues.TextSmoothing.Default;
     /// <summary>Terminals drawn on the GPU (xterm's WebGL add-on, js/gpu.js): smoother scrolling; text is greyscale-smoothed then.</summary>
     public bool GpuRendering { get; init; } = true;
+    /// <summary>
+    /// No graphics card for the window or its terminals (Windows: WebView2's --disable-gpu, Linux: WebKit's compositing
+    /// off; macOS can only draw terminals on the CPU): least memory and no VRAM, more CPU for fast output. Applies at the
+    /// next start.
+    /// </summary>
+    public bool LowMemory { get; init; }
     /// <summary>Images programs print (sixel, iTerm2's), shown inline.</summary>
     public bool InlineImages { get; init; } = true;
     /// <summary>Programs may set the clipboard (OSC 52).</summary>
@@ -80,6 +86,12 @@ internal sealed record InterfaceSettings
     private const int MaxThemeId = 40;
 
     public string Theme { get; init; } = SettingValues.Theme.FirstStart;
+    /// <summary>The theme "system" shows while the system is in dark mode.</summary>
+    public string ThemeDark { get; init; } = SettingValues.Theme.Dark;
+    /// <summary>The theme "system" shows while the system is in light mode.</summary>
+    public string ThemeLight { get; init; } = SettingValues.Theme.Light;
+    /// <summary>Colour schemes imported from other terminals, newest first.</summary>
+    public IReadOnlyList<CustomTheme>? CustomThemes { get; init; }
     /// <summary>Normal or Minimal (<see cref="SettingValues.Layout"/>).</summary>
     public string Layout { get; init; } = SettingValues.Layout.Default;
     /// <summary>In Minimal, a terminal's name on a line over it or on a bar shown on hover (<see cref="SettingValues.PaneNames"/>).</summary>
@@ -126,6 +138,10 @@ internal sealed record InterfaceSettings
     public InterfaceSettings Normalize() => this with
     {
         Theme = IsThemeId(Theme) ? Theme : SettingValues.Theme.FirstStart,
+        ThemeDark = IsPick(ThemeDark) ? ThemeDark : SettingValues.Theme.Dark,
+        ThemeLight = IsPick(ThemeLight) ? ThemeLight : SettingValues.Theme.Light,
+        CustomThemes = (CustomThemes ?? []).Select(t => t?.Normalize()).OfType<CustomTheme>().Where(t => IsThemeId(t.Id))
+            .DistinctBy(t => t.Id).Take(CustomThemeLimits.MaxThemes).ToList(),
         Layout = SettingChecks.OneOf(Layout, SettingValues.Layout.All, SettingValues.Layout.Default),
         PaneNames = SettingChecks.OneOf(PaneNames, SettingValues.PaneNames.All, SettingValues.PaneNames.Default),
         MinimizeTo = SettingChecks.OneOf(MinimizeTo, SettingValues.MinimizeTo.All, SettingValues.MinimizeTo.Default),
@@ -141,6 +157,9 @@ internal sealed record InterfaceSettings
     /// <summary>A theme's id as js/themes.js has them: lowercase letters, digits and hyphens.</summary>
     private static bool IsThemeId(string? id) =>
         id is { Length: > 0 and <= MaxThemeId } && id.All(c => c is >= 'a' and <= 'z' or >= '0' and <= '9' or '-');
+
+    /// <summary>A theme following the system can show: a theme's id, not "system" itself (the page checks its kind).</summary>
+    private static bool IsPick(string? id) => IsThemeId(id) && id != SettingValues.Theme.System;
 }
 
 /// <summary>The shells on offer: the default, the user's own profiles and notes, shell integration, COM ports and consoles.</summary>

@@ -123,17 +123,43 @@ export function showError(el, text) {
  */
 export function dragPointer(el, e, move, done) {
   el.setPointerCapture(e.pointerId);
+  // Ends on release, or when the capture goes without one (the system cancelled the pointer): a grip that stays put
+  // would otherwise keep resizing on a plain hover.
   const up = () => {
     el.removeEventListener('pointermove', move);
-    el.removeEventListener('pointerup', up);
+    for (const type of DRAG_ENDS) el.removeEventListener(type, up);
     done?.();
   };
   el.addEventListener('pointermove', move);
-  el.addEventListener('pointerup', up);
+  for (const type of DRAG_ENDS) el.addEventListener(type, up);
 }
+
+/** What ends a drag: the button let go, or the capture lost without it. */
+const DRAG_ENDS = ['pointerup', 'lostpointercapture'];
 
 /** The class of a docked panel's grip, on its left edge. */
 export const DOCK_GRIP = 'files-grip';
+/** What a docked panel's grip says on hover. */
+const DOCK_GRIP_TITLE = 'Drag to resize';
+
+/**
+ * Fills a docked panel that redraws while it's resized (its layout changes with its width), keeping its grip: a grip
+ * drawn anew mid-drag loses the pointer it holds, and the drag stops.
+ * @param {HTMLElement} panel
+ * @param {string} html everything but the grip
+ */
+export function fillDockedPanel(panel, html) {
+  let grip = /** @type {HTMLElement | null} */ (panel.querySelector(`:scope > .${DOCK_GRIP}`));
+  if (!grip) {
+    grip = document.createElement('div');
+    grip.className = DOCK_GRIP;
+    grip.title = DOCK_GRIP_TITLE;
+    panel.prepend(grip);
+  }
+  for (const node of [...panel.childNodes]) if (node !== grip) node.remove();
+  grip.insertAdjacentHTML('afterend', html);
+}
+
 /** A docked panel's header, and the count on a title bar button. */
 export const PANEL_HEAD = '.files-head';
 export const TOOL_COUNT = '.tool-count';
@@ -176,6 +202,8 @@ export const TOOLBAR = '.toolbar';
 export const TITLEBAR_ID = 'titlebar';
 /** The workspace on screen in the title bar (index.html): js/sidebar.js fills it in, Minimal makes it open the list. */
 export const CRUMB_ID = 'crumb';
+/** The title bar's Schedules button (index.html): js/scheduleswindow.js's, and its icon in the notification center. */
+export const SCHEDULES_BUTTON_ID = 'schedules-button';
 /**
  * The edge of the window the title bar's buttons are docked on, when `el` is one of them (else the top): what opens
  * from one of them opens away from that edge.

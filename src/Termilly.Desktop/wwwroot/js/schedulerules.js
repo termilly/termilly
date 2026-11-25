@@ -294,3 +294,17 @@ export function newSchedule(id) {
     missed: MISSED.run, notify: NOTIFY.failed, phone: false, nextAt: null, ...START,
   };
 }
+
+/** The tag that marks a terminal or a shell as production. */
+const PROD_TAG = 'prod';
+
+/**
+ * Whether a schedule runs on production: in a terminal tagged prod (or any, when it names #prod), or in a shell tagged prod.
+ * @param {Schedule} s
+ * @param {{ tags: string[], name?: string | null }[]} tabs
+ * @param {{ id: string, tags?: string[] | null }[]} profiles
+ */
+export function reachesProduction(s, tabs, profiles) {
+  if (s.where === WHERE.terminal) return tabs.some(t => t.tags.includes(PROD_TAG) && (s.terminal === `#${PROD_TAG}` || t.name === s.terminal));
+  return !!profiles.find(p => p.id === s.profile)?.tags?.includes(PROD_TAG);
+}

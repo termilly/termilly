@@ -9,6 +9,7 @@ import { terminalView, activityHtml, TEXT_SIZE } from './terminal.js';
 import { TAB, LABEL, SETTING, SETTINGS_PAGE, PAGE_TITLE, STATE_LABEL, TEXT_SIZES, navHtml, notesHtml, settingsHtml, themesHtml, backRow } from './tabs.js';
 import { todoTab } from './todo.js';
 import { schedulesTab } from './schedules.js';
+import { questionsTab } from './questions.js';
 import { SCROLLING, GESTURE_START } from './gestures.js';
 import { manager } from './manage.js';
 import { COMPOSE_STYLE, composeStyle, DICTATION, dictation } from './compose.js';
@@ -23,7 +24,7 @@ const app = /** @type {HTMLElement} */ (document.getElementById('app'));
 /** @typedef {{ kind: string, tool: string | null, target: string | null, text: string, at: number, always?: boolean }} Waiting */
 /** A terminal as the PC describes it (js/phone.js). */
 /** @typedef {{ id: string, ws: string, title: string, icon: string, badge: string, mark: string | null, agent: string | null, activity: string | null, percent: number | null, hint: string | null, line: string | null, waiting: Waiting | null, production: boolean, cols: number | null, rows: number | null }} Terminal */
-/** @typedef {import('./theme.js').Themed & { typing?: boolean, snippets?: import('./snippets.js').PhoneSnippet[], clips?: import('./clips.js').PhoneClip[], notes?: import('./tabs.js').Note[], workspaces: { id: string, name: string, color: string, cwd: string | null }[], terminals: Terminal[], places?: import('./manage.js').Place[], activeWs?: string }} Snapshot */
+/** @typedef {import('./theme.js').Themed & { typing?: boolean, snippets?: import('./snippets.js').PhoneSnippet[], clips?: import('./clips.js').PhoneClip[], notes?: import('./tabs.js').Note[], questions?: import('./questions.js').PhoneQuestion[], workspaces: { id: string, name: string, color: string, cwd: string | null }[], terminals: Terminal[], places?: import('./manage.js').Place[], activeWs?: string }} Snapshot */
 
 /** The PC's API for the app (PhoneServer, PhoneAppApi). */
 const API = Object.freeze({ me: '/api/me', pair: '/api/pair', forget: '/api/forget', push: '/api/push', pushOff: '/api/push/off', pushTest: '/api/push/test', live: '/api/live' });
@@ -253,6 +254,16 @@ const schedulesShown = schedulesTab({
   },
 });
 
+/** Agents' questions on the Notifications tab (questions.js). */
+const questionsShown = questionsTab({
+  questions: () => snap.questions ?? [], toast: text => toast(text), redraw: () => render(), age,
+  send: message => {
+    if (live?.readyState !== OPEN) return false;
+    live.send(JSON.stringify(message));
+    return true;
+  },
+});
+
 /** The Terminals tab: what waits for you, then each workspace's terminals. */
 function terminalsHtml() {
   const waiting = snap.terminals.filter(t => t.waiting).sort((a, b) => (b.waiting?.at ?? 0) - (a.waiting?.at ?? 0));
@@ -266,10 +277,10 @@ function terminalsHtml() {
     + manage.remoteHtml();
 }
 
-/** The Notifications tab: tasks waiting for review, then what agents said. */
+/** The Notifications tab: agents' questions, tasks waiting for review, then what agents said. */
 function notesPage() {
-  const reviews = todo.reviewNotes();
-  return reviews && !snap.notes?.length ? reviews : `${reviews}${notesHtml(snap.notes ?? [], noteParts)}`;
+  const asked = questionsShown.html() + todo.reviewNotes();
+  return asked && !snap.notes?.length ? asked : `${asked}${notesHtml(snap.notes ?? [], noteParts)}`;
 }
 
 function render() {
@@ -288,12 +299,14 @@ function render() {
   if (add) add.innerHTML = tab === TAB.terminals ? manage.addButton() : tab === TAB.todo ? todo.noteButton() : '';
   // Its fields stay as they are while the PC's news comes in.
   if (tab === TAB.todo) todo.fill(home);
+  // An answer being typed in a question's card keeps its box (and the keyboard) until it's sent or left.
+  else if (tab === TAB.notes && questionsShown.typing()) { /* drawn again once it's left */ }
   else home.innerHTML = tab === TAB.notes ? notesPage()
     : tab === TAB.schedules ? schedulesShown.html()
     : page === SETTINGS_PAGE.themes ? themesHtml(looks(snap), chosenLook())
     : tab === TAB.settings ? settingsHtml({ page, alerts: alertsBody(), alertsOn: !canAlert() ? ALERTS_SET.none : me?.alerts ? ALERTS_SET.on : ALERTS_SET.off, size: textSize(), scrolling: localStorage.getItem(SCROLLING.key) ?? SCROLLING.smooth, compose: composeStyle(), dictation: dictation(), host: location.host, connected, look: chosenLook(), looks: looks(snap) })
     : terminalsHtml();
-  /** @type {HTMLElement} */ (document.getElementById('nav')).innerHTML = navHtml(tab, snap.notes?.length ?? 0, todo.reviewCount());
+  /** @type {HTMLElement} */ (document.getElementById('nav')).innerHTML = navHtml(tab, (snap.notes?.length ?? 0) + questionsShown.waiting(), todo.reviewCount());
   renderSheet();
   todo.drawSheet();
 }
@@ -390,6 +403,8 @@ function connect() {
       terminalShown.message(m);
     } else if (m.type === LIVE.answered && m.op === OP.clipText && m.ok) {
       terminalShown.fillBox(m.text ?? '');
+    } else if (m.type === LIVE.answered && questionsShown.answered(m)) {
+      // An agent's question (questions.js) said how it went.
     } else if (m.type === LIVE.answered && schedulesShown.answered(m)) {
       // Schedules (schedules.js) said how it went.
     } else if (m.type === LIVE.answered && todo.answered(m)) {
@@ -404,6 +419,7 @@ function connect() {
   });
   live.addEventListener('close', () => {
     connected = false;
+    questionsShown.disconnected();
     render();
     setTimeout(connect, retry);
     retry = Math.min(retry * 2, RETRY_MAX_MS);
@@ -429,6 +445,13 @@ let openAsk = new URLSearchParams(location.search).get(OPEN_PARAM);
 if (openAsk) history.replaceState(null, '', location.pathname); // once: a reload starts on the list
 
 function openAsked() {
+  // An agent's question: the Notifications tab, where it can be answered.
+  if (openAsk && questionsShown.has(openAsk)) {
+    openAsk = null;
+    tab = TAB.notes;
+    render();
+    return;
+  }
   const t = openAsk ? terminal(openAsk) : null;
   if (t) terminalShown.open(t, !!snap.typing);
   // A task's alert says a task, and a schedule's a run.
@@ -570,6 +593,10 @@ app.addEventListener('click', e => {
     document.getElementById(HOME)?.scrollTo(0, 0);
     return;
   }
+  if (questionsShown.click(/** @type {HTMLElement} */ (e.target))) {
+    e.stopPropagation();
+    return;
+  }
   if (schedulesShown.click(/** @type {HTMLElement} */ (e.target))) {
     e.stopPropagation();
     return;
@@ -671,8 +698,16 @@ const manage = manager({
   render,
 });
 
-app.addEventListener('input', e => todo.typed(e));
-app.addEventListener('keydown', e => todo.key(e));
+app.addEventListener('input', e => {
+  todo.typed(e);
+  questionsShown.typed(e);
+});
+app.addEventListener('keydown', e => {
+  todo.key(e);
+  questionsShown.key(e);
+});
+// Leaving a question's box draws what came in while it was typed in.
+app.addEventListener('focusout', () => setTimeout(() => { if (tab === TAB.notes && !questionsShown.typing()) render(); }));
 
 if (hasWorker) navigator.serviceWorker.register('/sw.js');
 start();

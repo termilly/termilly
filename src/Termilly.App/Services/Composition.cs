@@ -93,6 +93,8 @@ internal static class Composition
         .AddHandler<WorktreeHandler>()
         .AddHandler<LayoutHandler>()
         .AddHandler<NotepadHandler>()
+        .AddHandler<SchemeFileHandler>()
+        .AddHandler<BackgroundHandler>()
         .AddHandler<ScheduleHandler>()
         .AddHandler<TodoIssues>()
         .AddHandler<AgentRulesHandler>()

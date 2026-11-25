@@ -219,6 +219,7 @@ internal sealed class PhoneHandler : IMessageHandler, IStartable, IDisposable
         PhoneClips.PasteOp => Task.FromResult(_clips.Paste(message)),
         PhoneClips.TextOp => Task.FromResult(_clips.Text(message)),
         ManageOp => ManageAsync(device, message),
+        PhoneQuestions.Op => PhoneQuestions.AnswerAsync(_api, message),
         _ => AnswerAsync(device, message),
     };
 

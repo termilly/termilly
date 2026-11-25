@@ -27,6 +27,7 @@ internal sealed class TerminalHandler(
         router.On<FromPage.SerialHex>(m => WithStream(m.Id, stream => stream.Hex = m.On));
         router.On<FromPage.SerialEol>(m => WithStream(m.Id, stream => stream.LineEnding = LineEndings.OrDefault(m.Eol)));
         router.On<FromPage.HostShutdown>(_ => ShutDownHost());
+        router.On<FromPage.HostShells>(m => ListHostShells(m.RequestId));
         // A server's (or WSL's) tmux in control mode, its panes shown as terminals (TmuxClient.cs, js/tmux.js).
         router.On<FromPage.TmuxStart>(m => tmux.Start(m.Id, m.Command ?? TmuxClients.DefaultCommand,
             data => page.Post(new ToPage.TmuxData(m.Id, data)),
@@ -80,11 +81,7 @@ internal sealed class TerminalHandler(
             {
                 commandLine = WslFolders.StartingIn(commandLine, linuxFolder);
             }
-            void Output(string data)
-            {
-                page.Post(new ToPage.Output(id, data));
-                terminals.Print(id, data);
-            }
+            void Output(string data) => Printed(id, data);
 
             // COM ports and network consoles are byte streams, not processes in a pseudo terminal.
             if (ByteStream(profile, Output) is { } stream)
@@ -93,7 +90,7 @@ internal sealed class TerminalHandler(
                 return;
             }
             var took = System.Diagnostics.Stopwatch.StartNew();
-            var (session, pid) = StartShell(id, new PtyOptions(commandLine, cols, rows, folder, environment), Output, (code, exitedPid) =>
+            var (session, pid) = StartShell(id, new PtyOptions(commandLine, cols, rows, folder, environment), Output, data => Replayed(id, data), (code, exitedPid) =>
             {
                 terminals.Exited(id, exitedPid);
                 page.Post(new ToPage.Exit(id, code));
@@ -105,6 +102,19 @@ internal sealed class TerminalHandler(
         {
             page.Post(new ToPage.Error(id, ex.Message));
         }
+    }
+
+    private void Printed(string id, string data)
+    {
+        page.Post(new ToPage.Output(id, data));
+        terminals.Print(id, data);
+    }
+
+    /// <summary>A kept shell's missed output, drawn again: not news, so the page doesn't answer or announce it.</summary>
+    private void Replayed(string id, string data)
+    {
+        page.Post(new ToPage.Replay(id, data));
+        terminals.Print(id, data);
     }
 
     private static IReadOnlyDictionary<string, string> WithVariables(IReadOnlyDictionary<string, string> environment, Dictionary<string, string>? variables)
@@ -139,18 +149,18 @@ internal sealed class TerminalHandler(
 
     /// <summary>
     /// Starts a terminal's shell: in the background host when Settings keep shells running (taking back one it kept
-    /// while no window was open), else here. Returns the session and its root process (0 when not known);
-    /// <paramref name="exited"/> takes the exit code and that process id.
+    /// while no window was open, whose missed output goes to <paramref name="replay"/>), else here. Returns the session
+    /// and its root process (0 when not known); <paramref name="exited"/> takes the exit code and that process id.
     /// </summary>
-    private (IShellSession Session, int Pid) StartShell(string id, PtyOptions options, Action<string> output, Action<int, int> exited)
+    private (IShellSession Session, int Pid) StartShell(string id, PtyOptions options, Action<string> output, Action<string> replay, Action<int, int> exited)
     {
         var background = host.Current();
-        if (background is not null && background.Running.TryGetValue(id, out var kept) && kept.Alive)
+        if (background?.TakeKept(id) is { } keptPid)
         {
             // The background host kept this terminal's shell while the window was closed: take it back.
-            var attached = background.Attach(id, kept.Pid, options.Columns, options.Rows, output, code => exited(code, kept.Pid));
+            var attached = background.Attach(id, keptPid, options.Columns, options.Rows, output, replay, code => exited(code, keptPid));
             page.Post(new ToPage.Attached(id));
-            return (attached, kept.Pid);
+            return (attached, keptPid);
         }
         if (background is not null)
         {
@@ -168,16 +178,17 @@ internal sealed class TerminalHandler(
     private void ShutDownHost()
     {
         var hosted = terminals.Hosted();
-        if (!host.ShutDown())
-        {
-            return;
-        }
+        _ = host.ShutDown();
         foreach (var id in hosted)
         {
             terminals.Forget(id);
-            page.Post(new ToPage.Exit(id, HostedSession.EndedCode));
+            page.Post(new ToPage.Exit(id, HostedSession.EndedCode, Ended: true));
         }
     }
+
+    /// <summary>The terminals whose shells the background host runs: this window's, and kept ones not taken back.</summary>
+    private void ListHostShells(string? requestId) => Task.Run(() =>
+        page.Post(new ToPage.HostShellList(requestId, [.. terminals.LiveHosted().Union(host.KeptShells())])));
 
     /// <summary>A terminal's own environment variables (from a layout), if the message has any.</summary>
     private static Dictionary<string, string>? Variables(JsonElement? env) =>

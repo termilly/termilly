@@ -74,6 +74,9 @@ public partial class MainWindow : Window
         WindowInterop.UseCustomChrome(this);
         // Termilly opens where the window was last closed (maximized, if it was), on the start-up screen until the
         // page is ready (RevealPage).
+        // The backdrop first: it needs the window's handle, and set once the window shows (Restore shows a maximized
+        // one), Windows 10 repaints the window in its colour until WPF draws again, a flash before the start-up screen.
+        SourceInitialized += (_, _) => ApplyBackdrop();
         SourceInitialized += (_, _) => WindowPlacement.Restore(this, _target = WindowPlacement.Plan(new Size(MinWidth, MinHeight)));
         Stage.SizeChanged += (_, _) => FitPageToWindow();
         ApplyTheme();
@@ -106,7 +109,7 @@ public partial class MainWindow : Window
         Web.ZoomFactor = Zoom;
         foreach (var window in _detached)
         {
-            window.Recolor(_theme.Palette);
+            window.Recolor(_theme.Palette, Settings.Background);
             window.Zoom(Zoom);
         }
         UpdateGlobalHotkeys();
@@ -129,6 +132,19 @@ public partial class MainWindow : Window
         LoaderText.Foreground = Brush(colors.Text);
         LoaderCaret.Fill = Brush(colors.Accent);
         Web.DefaultBackgroundColor = System.Drawing.ColorTranslator.FromHtml(colors.Background);
+        ApplyBackdrop();
+    }
+
+    /// <summary>
+    /// See-through or solid, as Settings › Appearance › Background says (solid by default, as before). The start-up
+    /// screen stays solid: it has its own background.
+    /// </summary>
+    private void ApplyBackdrop()
+    {
+        var background = Settings.Background;
+        // Windows paints a see-through window black first: black is what the glass shows through.
+        WindowInterop.Background = background.SeeThrough ? WindowInterop.Black : _theme.Palette.Background;
+        WindowBackdrop.Apply(this, Web, background, !_theme.Palette.Light, _theme.Palette.Background);
     }
 
     private static SolidColorBrush Brush(string hex) => (SolidColorBrush)new BrushConverter().ConvertFromString(hex)!;
@@ -172,15 +188,17 @@ public partial class MainWindow : Window
     {
         try
         {
-            CoreWebView2EnvironmentOptions? options = null;
+            int? devtools = null;
 #if DEBUG
             // Debug builds only: TERMILLY_DEVTOOLS_PORT opens the page to the DevTools protocol, for live tests
             // against a throwaway instance (TERMILLY_DATA_DIR). WebView2 doesn't always honour its own variable.
             if (int.TryParse(Environment.GetEnvironmentVariable("TERMILLY_DEVTOOLS_PORT"), out var devtoolsPort))
             {
-                options = new CoreWebView2EnvironmentOptions($"--remote-debugging-port={devtoolsPort}");
+                devtools = devtoolsPort;
             }
 #endif
+            // Detached windows share this environment, so Low memory reaches them too (it applies at the next start).
+            var options = PageCrashes.Options(BrowserArguments.For(Settings.Terminal.LowMemory, devtools));
             var env = await CoreWebView2Environment.CreateAsync(
                 userDataFolder: Path.Combine(AppPaths.DataDirectory, WebViewFolder), options: options);
             StartupLog.Mark("WebView2 environment created");
@@ -196,12 +214,15 @@ public partial class MainWindow : Window
         }
 
         var core = Web.CoreWebView2;
+        BackgroundMemory.Follow(this, Web);
+        PageCrashes.Follow(core);
         Web.ZoomFactor = Zoom;
         core.Settings.AreBrowserAcceleratorKeysEnabled = false; // let F5, Ctrl+F etc. reach the terminal
         core.Settings.IsStatusBarEnabled = false;
         core.Settings.IsZoomControlEnabled = false;
         core.SetVirtualHostNameToFolderMapping(
             HostName, AppPaths.WebRoot, CoreWebView2HostResourceAccessKind.Deny);
+        WindowBackdrop.MapPictures(core);
         core.WebMessageReceived += OnWebMessage;
         ClipboardReadPermission.AllowForPage(core, HostName);
         core.NewWindowRequested += OnNewWindowRequested;

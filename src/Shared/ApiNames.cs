@@ -34,9 +34,11 @@ internal static class ApiMethods
     /// <summary>An agent changes a task's title, details or tags, or deletes it, when the user asks (edit_task, delete_task).</summary>
     public const string TaskEdit = "task_edit";
     public const string TaskDelete = "task_delete";
-    /// <summary>Schedules: listed for any agent; added, run now and turned on or off only with typing allowed.</summary>
+    /// <summary>Schedules: listed for any agent; added, edited, deleted, run now and turned on or off only with typing allowed.</summary>
     public const string Schedules = "schedules";
     public const string ScheduleAdd = "schedule_add";
+    public const string ScheduleEdit = "schedule_edit";
+    public const string ScheduleDelete = "schedule_delete";
     public const string ScheduleRun = "schedule_run";
     public const string ScheduleSet = "schedule_set";
     /// <summary>Notepad: its pages listed and read, a page added, its text written (replaced, or added at its end or top) and renamed.</summary>
@@ -55,12 +57,19 @@ internal static class ApiMethods
     /// folder, reading only, and its answer comes back. It waits for that answer.
     /// </summary>
     public const string AgentAsk = "agent_ask";
+    /// <summary>
+    /// An agent asks the user in the notification center (the MCP server's notify_user, Shared/Questions.cs): it waits for
+    /// the answer, or for an update only until it's shown.
+    /// </summary>
+    public const string Notify = "notify";
+    /// <summary>The agent stopped waiting for one (Esc, or it quit): its card closes.</summary>
+    public const string NotifyCancel = "notify_cancel";
 
     /// <summary>The methods that type into a terminal: they need Settings › Terminal › API, and may wait on the user.</summary>
     public static readonly IReadOnlyList<string> Typing = [Send, Snippet, Ask];
 
-    /// <summary>The methods that make something run later or now: they need the same setting as typing.</summary>
-    public static readonly IReadOnlyList<string> Scheduling = [ScheduleAdd, ScheduleRun, ScheduleSet];
+    /// <summary>The methods that make something run later or now, or change what runs: they need the same setting as typing.</summary>
+    public static readonly IReadOnlyList<string> Scheduling = [ScheduleAdd, ScheduleEdit, ScheduleDelete, ScheduleRun, ScheduleSet];
 }
 
 /// <summary>The fields of the API's requests and replies.</summary>

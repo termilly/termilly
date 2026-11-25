@@ -13,18 +13,19 @@ import { scanOutput, scanFrom, screenCleared } from './triggers.js';
 import { sizeTold } from './reprint.js';
 import { quotePaths } from './quoting.js';
 import { isWsl } from './filepaths.js';
-import { remoteReport, remoteHook, remotePrompt, watchRemote } from './remotehost.js';
+import { remoteReport, remoteHook, isRemoteHook, remotePrompt, watchRemote } from './remotehost.js';
 import { modal } from './dialogs.js';
 import { escapeHtml } from './ui.js';
 import { pasteNeedsConfirm, confirmProduction } from './environments.js';
 import { currentTheme, themeId, themeById, THEME_BASE } from './themes.js';
+import { clearTerminals } from './backgrounds.js';
 import { updateSettings } from './preferences.js';
 import { resumeCommand, attachFor } from './resume.js';
 import { noteRemotePrompt, noteRemoteCwd, leftRemote } from './remotecwd.js';
 import { AGENT_STATE, AGENT_SOURCE, PROFILE_ICON } from './constants.js';
 import { find, field, PATH_DRAG, CLIP_DRAG } from './dom.js';
 import { continuesOnNextRow, atPrompt } from './buffer.js';
-import { isResuming, resumeTyped, cancelResume, wasResumed, CANCEL_KEY } from './resuming.js';
+import { isResuming, resumeTyped, cancelResume, keptAgent, wasResumed, CANCEL_KEY } from './resuming.js';
 import { agentKind, agentOfProgram } from './agentkinds.js';
 import { clipboardKey, wireClipboard, PASTE_LABEL } from './termclipboard.js';
 import { selectionKey } from './keyselect.js';
@@ -95,6 +96,33 @@ const lightTerminal = () => {
  */
 const CONTRAST = Object.freeze({ light: 4.5, dark: 1 });
 
+/** A terminal's background with nothing of its own: the window's background shows through (js/backgrounds.js). */
+const NO_BACKGROUND = 'rgba(0, 0, 0, 0)';
+/** A one-pixel canvas any CSS colour is painted on to read it back as red, green and blue. */
+const colourProbe = document.createElement('canvas').getContext('2d', { willReadFrequently: true });
+/** @param {string} colour any CSS colour (a theme's #rrggbb, a plugin's rgb(), a name) @returns {string} it fully transparent, or transparent black */
+function transparentOf(colour) {
+  if (!colourProbe || !CSS.supports('color', colour)) return NO_BACKGROUND;
+  colourProbe.clearRect(0, 0, 1, 1);
+  colourProbe.fillStyle = NO_BACKGROUND; // one the canvas can't take (a var()) leaves this, not the last colour
+  colourProbe.fillStyle = colour;
+  colourProbe.fillRect(0, 0, 1, 1);
+  const [r, g, b] = colourProbe.getImageData(0, 0, 1, 1).data;
+  return `rgba(${r}, ${g}, ${b}, 0)`;
+}
+/** The see-through copy of a theme, kept per theme so the options only change when the theme does. */
+const clearThemes = new WeakMap();
+/**
+ * The theme with its background drawn as nothing. Its colour stays, fully transparent: xterm measures text contrast
+ * (minimumContrastRatio, on light themes) against the background's colour, and against transparent black it would
+ * lighten dark text on a light theme.
+ * @param {any} theme
+ */
+function clearTheme(theme) {
+  if (!clearThemes.has(theme)) clearThemes.set(theme, { ...theme, background: transparentOf(theme.background ?? '') });
+  return clearThemes.get(theme);
+}
+
 /** Terminal options that come from Settings. */
 const settingsOptions = () => ({
   fontFamily: fontStack(state.settings.terminal.fontFamily),
@@ -104,7 +132,8 @@ const settingsOptions = () => ({
   cursorBlink: state.settings.terminal.cursorBlink,
   cursorStyle: state.settings.terminal.cursorStyle,
   scrollback: state.settings.terminal.scrollback,
-  theme: termTheme(),
+  theme: clearTerminals() ? clearTheme(termTheme()) : termTheme(),
+  allowTransparency: clearTerminals(),
   minimumContrastRatio: lightTerminal() ? CONTRAST.light : CONTRAST.dark,
 });
 
@@ -140,6 +169,9 @@ const TYPING_BELL_MS = 1500;
 /** Erase in Display (CSI J) of the whole screen, and of the scrollback too. */
 const ERASE_ALL = 2;
 const ERASE_SCROLLBACK = 3;
+
+/** An answer xterm gives a program's query (CSI, DCS or OSC), not a key: for those a replay of old output asks for. */
+const ANY_REPLY = /^\x1b(\[[?>]?[\d;]*(\$y|[cRnt])|P[^]*\x1b\\|\][^]*(\x07|\x1b\\))$/;
 
 /** xterm answering the pseudo console: cursor position, device attributes, focus in or out. */
 const TERMINAL_REPLY = /^\x1b\[(\d+;\d+R|\?[\d;]*c|>[\d;]*c|[IO])$/;
@@ -385,6 +417,8 @@ function wireInput(tab, term) {
       virtualInputs[tab.virtual.kind]?.(tab, data);
       return;
     }
+    // Answers to queries in a replay of a kept shell's old output (main.js) were given back then.
+    if (tab.replaying && ANY_REPLY.test(data)) return;
     if (tab.exited) {
       if (tab.reconnect) return; // waiting to reconnect (reconnect.js): its bar has the buttons
       restartShell(tab);
@@ -429,6 +463,8 @@ function wireInput(tab, term) {
  * @param {any} term xterm
  */
 function wireNotifications(tab, term) {
+  // A replay of a kept shell's old output (main.js) doesn't ring or notify again.
+  const alert = (/** @type {string} */ message) => { if (!tab.replaying) agentAlert(tab, message); };
   // OSC 9;4;state;percent: progress an app reports (Claude Code, winget, PowerShell progress bars), the sequence
   // Windows Terminal draws its tab spinner from. OSC 9;<text> is a notification (ConEmu's, which Codex sends);
   // OSC 9;1 to 9;12 are other ConEmu commands (9;9 is the working folder), left alone.
@@ -436,7 +472,7 @@ function wireNotifications(tab, term) {
     const m = /^4;([0-4])(?:;(\d{1,3}))?/.exec(data);
     if (m) return progressReported(tab, Number(m[1]), Number(m[2] ?? 0));
     if (/^(1[0-2]|[1-9])(;|$)/.test(data)) return false;
-    agentAlert(tab, data);
+    alert(data);
     return true;
   });
   // OSC 777;notify;title;body (urxvt, foot, ghostty) and OSC 99 (kitty: metadata;payload, base64 when e=1):
@@ -444,11 +480,11 @@ function wireNotifications(tab, term) {
   term.parser.registerOscHandler(OSC.notify, (/** @type {string} */ data) => {
     const [kind, title = '', body = ''] = data.split(';');
     if (kind !== OSC_777_NOTIFY) return false;
-    agentAlert(tab, [title, body].filter(Boolean).join(': '));
+    alert([title, body].filter(Boolean).join(': '));
     return true;
   });
   term.parser.registerOscHandler(OSC.kittyNotify, (/** @type {string} */ data) => {
-    agentAlert(tab, kittyNotification(data));
+    alert(kittyNotification(data));
     return true;
   });
   term.onBell(() => {
@@ -458,7 +494,7 @@ function wireNotifications(tab, term) {
     const { el } = /** @type {TabView} */ (tab.view);
     // Seen: its own window has the focus (a detached one), or the main window does with it focused there.
     if (tab.detached ? el.ownerDocument.hasFocus() : document.hasFocus() && tab.wsId === state.activeId && el.classList.contains('focused')) return;
-    agentAlert(tab, '');
+    alert('');
   });
 }
 
@@ -509,7 +545,8 @@ function wireShellReports(tab, term) {
   });
   // OSC 1337;TermillyHook=…: Claude Code's hook on a server (remotehost.js). Other OSC 1337s (iTerm2 images) go on to
   // the image addon, which registered first and so is asked after this.
-  term.parser.registerOscHandler(OSC.iterm, (/** @type {string} */ data) => remoteHook(tab, data));
+  // A replay of a kept shell's old output (main.js) holds hook events already reported.
+  term.parser.registerOscHandler(OSC.iterm, (/** @type {string} */ data) => (tab.replaying ? isRemoteHook(data) : remoteHook(tab, data)));
 }
 
 /**
@@ -551,13 +588,13 @@ function wireProgramRequests(tab, term) {
   // are honoured: a read ('?') would hand the clipboard to whatever runs in the terminal.
   term.parser.registerOscHandler(OSC.clipboard, (/** @type {string} */ data) => {
     const text = clipboardWrite(data);
-    if (text !== null && state.settings.terminal.programClipboard !== false) systemClipboard().writeText(text).catch(() => {});
+    if (text !== null && !tab.replaying && state.settings.terminal.programClipboard !== false) systemClipboard().writeText(text).catch(() => {});
     return true;
   });
   // XTVERSION (CSI > 0 q): which terminal this is, so programs can use what it supports.
   term.parser.registerCsiHandler({ prefix: '>', final: 'q' }, (/** @type {number[]} */ params) => {
     if (params.length > 1 || (params[0] ?? 0) !== 0) return false;
-    send(PAGE.input, { id: tab.id, data: `\x1bP>|Termilly ${appVersion}\x1b\\` });
+    if (!tab.replaying) send(PAGE.input, { id: tab.id, data: `\x1bP>|Termilly ${appVersion}\x1b\\` });
     return true;
   });
 }
@@ -645,7 +682,7 @@ onHost(HOST.startFolder, m => {
  * What a terminal does as its shell starts (tab.start); see startOf.
  * @typedef {{ output: { lines: string[], closedAt: number, resurrected?: boolean, scroll?: number | null } | null,
  *   command: string | null, resumeSession: string | null, resumeKind?: string | null, done: boolean,
- *   typed?: { command: string, at: number } }} ShellStart
+ *   typed?: { command: string, at: number }, afterHost?: string | null, resumeFolder?: string | null }} ShellStart
  */
 
 /**
@@ -679,7 +716,7 @@ export function holdStart(tab, until) {
  * Sets what a terminal does as its shell starts (any of output, command, resumeSession): from a layout, the API, a
  * reopened terminal, a restart (snapshot.js) or a reconnect.
  * @param {Tab} tab
- * @param {{ output?: any, command?: string | null, resumeSession?: string | null, resumeKind?: string | null }} fields
+ * @param {{ output?: any, command?: string | null, resumeSession?: string | null, resumeKind?: string | null, afterHost?: string | null, resumeFolder?: string | null }} fields
  */
 export function prepareStart(tab, fields) {
   Object.assign(startOf(tab), Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== undefined)));
@@ -691,6 +728,7 @@ export function prepareStart(tab, fields) {
  */
 export function keptRunning(tab) {
   Object.assign(startOf(tab), { output: null, command: null, resumeSession: null, done: true });
+  keptAgent(tab);
 }
 
 /**
@@ -895,6 +933,7 @@ function runPendingCommand(tab) {
   }
   const resuming = start.resumeSession;
   start.command = null;
+  start.afterHost = null; // the agent its shell ended with the background host is on its way (snapshot.js)
   start.typed = { command, at: Date.now() };
   // Typed: from here on Claude Code's hooks report its session. Codex's first hook waits for a prompt, so its session
   // stays known here (for the next start) until its program exits.
@@ -1200,8 +1239,9 @@ export function bufferLines(tab, max = state.settings.terminal.scrollback) {
   return lines;
 }
 
-// A theme plugin came or went: its terminal colours with it.
+// A theme plugin came or went: its terminal colours with it. The window's background came or went behind them.
 on(EVENTS.plugins, () => applyTerminalSettings());
+on(EVENTS.backdrop, () => applyTerminalSettings());
 
 /** Applies Settings (font, cursor, scrollback, theme) to every open terminal. */
 export function applyTerminalSettings() {
