@@ -220,6 +220,7 @@ public partial class MainWindow : Window
         core.Settings.AreBrowserAcceleratorKeysEnabled = false; // let F5, Ctrl+F etc. reach the terminal
         core.Settings.IsStatusBarEnabled = false;
         core.Settings.IsZoomControlEnabled = false;
+        core.Settings.IsPinchZoomEnabled = false; // a touchpad pinch would zoom the whole window
         core.SetVirtualHostNameToFolderMapping(
             HostName, AppPaths.WebRoot, CoreWebView2HostResourceAccessKind.Deny);
         WindowBackdrop.MapPictures(core);
