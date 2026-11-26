@@ -113,9 +113,12 @@ public sealed class UnixPtyTests
         await SendAsync(pty, "trap 'echo told-$((3+4))' WINCH; stty size; echo first-$((1+1))\n");
         Assert.Contains("24 80", await ReadUntilAsync(pty, "first-2", seen));
         pty.Resize(132, 40);
-        await ReadUntilAsync(pty, "told-7", seen);
+        await Task.Delay(300);
+        // dash runs a trap only on its way to the next command; zsh and bash at once, before it.
         await SendAsync(pty, "stty size; echo second-$((2+2))\n");
-        Assert.Contains("40 132", await ReadUntilAsync(pty, "second-4", seen));
+        var output = await ReadUntilAsync(pty, "second-4", seen);
+        Assert.Contains("40 132", output);
+        Assert.Contains("told-7", output);
     }
 
     [Theory]
