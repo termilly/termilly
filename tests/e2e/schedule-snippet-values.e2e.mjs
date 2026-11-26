@@ -182,6 +182,44 @@ step('a snippet that gained a variable since fails its run and says which', asyn
   await setSnippets([{ name: SNIPPET, command: COMMAND }, OTHER]);
 });
 
+step('a schedule saved with a default left out is saved again only with it, in the form and by an agent', async () => {
+  // e2e-greet has who but not n, whose default it ran with before every value was needed.
+  const box = await app.eval(async t => {
+    (await t.import('scheduleswindow.js')).openSchedules({ scheduleId: 'e2e-greet' });
+    await t.waitFor('.sch-values-text');
+    const name = t.$('[name="name"]');
+    name.value = 'Greet ada again';
+    name.dispatchEvent(new Event('input', { bubbles: true }));
+    t.$('[data-sch="save"]').click();
+    await t.waitFor('.confirm h3');
+    const said = t.$('.confirm .dialog-sub').textContent;
+    t.$('.confirm [data-ok]').click();
+    return { said, name: (await t.import('schedules.js')).scheduleById('e2e-greet').name };
+  });
+  assert.deepEqual(box, { said: 'Fill in n with the Values button. A schedule doesn\'t use defaults.', name: 'Greet ada' });
+  const renamed = await app.eval(async t => {
+    try {
+      return await (await t.import('api.js')).callApi('schedule_edit', { schedule: 'e2e-greet', name: 'Renamed' });
+    } catch (e) {
+      return { error: e.message };
+    }
+  });
+  assert.match(renamed.error, /needs values for: n\./);
+});
+
+step('a snippet run outside a schedule still starts from its defaults', async () => {
+  const n = await app.eval(async (t, command) => {
+    const { askValues, placeholders } = await t.import('snippets.js');
+    const asked = askValues({ id: 'e2e0', name: 'Greet', command }, placeholders(command), []);
+    await t.waitFor('.snippet-run [data-var="n"]');
+    const value = t.$('.snippet-run [data-var="n"]').value;
+    t.$('.snippet-run [data-cancel]').click();
+    await asked;
+    return value;
+  }, COMMAND);
+  assert.equal(n, '3');
+});
+
 step('add_schedule takes the values as vars, and refuses a snippet without them', async () => {
   const call = args => app.eval(async (t, args) => {
     try {
@@ -205,6 +243,8 @@ step('add_schedule takes the values as vars, and refuses a snippet without them'
   // Run as a command, the values go; back to the snippet, it needs them again.
   await edit({ schedule: added.id, what: 'command', command: 'echo x' });
   assert.match((await edit({ schedule: added.id, what: 'snippet', snippet: SNIPPET })).error, /needs values for: who/);
+  // New values replace the old ones: leaving out the one with a default is leaving it without a value.
+  assert.match((await edit({ schedule: added.id, what: 'snippet', snippet: SNIPPET, vars: { who: 'x' } })).error, /needs values for: n\./);
   assert.match((await edit({ schedule: added.id, vars: { who: 'x' } })).error, /vars are for what = snippet/);
 });
 

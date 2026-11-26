@@ -107,8 +107,7 @@ function whatOf(args) {
     const snippet = allSnippets().find(sn => sn.name === String(args.snippet ?? ''));
     if (!snippet) throw new Error(`There's no snippet "${args.snippet}". list_snippets shows them.`);
     const values = valuesOf(args.vars);
-    const missing = unfilled(snippet.command, values);
-    if (missing.length) throw new Error(`The snippet needs values for: ${missing.join(', ')}. Give them in vars.`);
+    needsValues(snippet, values);
     return { what, snippet: snippet.name, values };
   }
   if (what === WHAT.agent) {
@@ -201,6 +200,26 @@ function refuseUnwatched(schedule) {
 }
 
 /**
+ * A snippet schedule saved before every value was needed (it ran with defaults) is saved again only with them all, as
+ * the form does. One whose snippet is gone can still be renamed or turned off.
+ * @param {Schedule} schedule
+ */
+function refuseMissingValues(schedule) {
+  const snippet = schedule.what === WHAT.snippet ? allSnippets().find(sn => sn.name === schedule.snippet) : undefined;
+  if (snippet) needsValues(snippet, schedule.values);
+}
+
+/**
+ * Refuses a snippet's values that leave any of its placeholders without one: a default doesn't count.
+ * @param {{ command: string }} snippet
+ * @param {Record<string, string> | undefined} values
+ */
+function needsValues(snippet, values) {
+  const missing = unfilled(snippet.command, values);
+  if (missing.length) throw new Error(`The snippet needs values for: ${missing.join(', ')}. Give them in vars.`);
+}
+
+/**
  * Changes what an agent was asked to of a schedule; what it leaves out stays.
  * @param {any} args
  */
@@ -216,6 +235,7 @@ function editSchedule(args) {
   }
   if (Object.keys(whatChanged).length || args.cwd != null) refuseUnwatched(schedule);
   if (Object.keys(whatChanged).length) Object.assign(changes, editedWhat(schedule, whatChanged));
+  else refuseMissingValues(schedule);
   if (Object.keys(whenChanged).length) changes.when = editedWhen(schedule.when, whenChanged);
   if (args.cwd != null) Object.assign(changes, { cwd: String(args.cwd), ...READ_ONLY });
   if (args.on != null) changes.on = args.on !== false;
