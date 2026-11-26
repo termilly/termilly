@@ -143,10 +143,30 @@ public sealed class UnixPtyTests
             return;
         }
         using var pty = PseudoTerminal.Start(new PtyOptions(shell, 80, 24));
-        var seen = new StringBuilder();
+        // Its output read all along, as the window does: zsh waits on a terminal nobody reads.
+        var output = new StringBuilder();
+        var reading = Task.Run(async () =>
+        {
+            var buffer = new byte[4096];
+            int read;
+            while ((read = await pty.Output.ReadAsync(buffer)) > 0)
+            {
+                lock (output)
+                {
+                    output.Append(Encoding.UTF8.GetString(buffer, 0, read));
+                }
+            }
+        });
+        bool Shows(string text)
+        {
+            lock (output)
+            {
+                return output.ToString().Contains(text, StringComparison.Ordinal);
+            }
+        }
         // The shell is up first: a Ctrl+C while it starts throws away what was typed and not read yet.
         await SendAsync(pty, "echo ready-$((5+5))\n");
-        await ReadUntilAsync(pty, "ready-10", seen);
+        Assert.True(SpinWait.SpinUntil(() => Shows("ready-10"), TimeSpan.FromSeconds(10)));
         // &&, not ;: bash (macOS's sh) goes on to the next command after an interrupted one, dash doesn't.
         await SendAsync(pty, "sleep 30 && echo slept-$((1+1))\n");
         await Task.Delay(500);
@@ -154,8 +174,8 @@ public sealed class UnixPtyTests
         // Typed a moment later: the interrupt throws away what's typed with it.
         await Task.Delay(500);
         await SendAsync(pty, "echo here-$((3+3))\n");
-        var output = await ReadUntilAsync(pty, "here-6", seen);
-        Assert.DoesNotContain("slept-2", output);
+        Assert.True(SpinWait.SpinUntil(() => Shows("here-6"), TimeSpan.FromSeconds(10)));
+        Assert.False(Shows("slept-2"));
         Assert.False(pty.Exited.IsCompleted);
     }
 
