@@ -225,8 +225,11 @@ internal sealed class TerminalHandler(
             // The background host kept this terminal's shell while the window was closed: take it back.
             var attached = background.Attach(id, keptPid, options.Columns, options.Rows, output, replay, code => exited(code, keptPid));
             page.Post(new ToPage.Attached(id));
+            // Its agent's background tasks run on too, and no hook says so again.
+            tasks.ShellStarted(id, kept: true);
             return (attached, keptPid);
         }
+        tasks.ShellStarted(id, kept: false);
         if (background is not null)
         {
             HostedSession? hosted = null;

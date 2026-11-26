@@ -10,7 +10,8 @@ namespace Termilly.Desktop.Features;
 /// so one still running when the turn ends is a task, and its rollout says when it ends. The page keeps the agent's
 /// spinner while any runs, and shows them under the terminal and in its bar. An ended task stays a minute, so the page
 /// can say how it went; one whose agent or shell ended goes with it, and so does a Claude task whose output file never
-/// shows up.
+/// shows up. The tasks are saved as they come and go: a window opened again over shells the background host kept
+/// follows their tasks on, as no hook says again that they started.
 /// </summary>
 internal sealed class BackgroundTasks : IMessageHandler, IDisposable
 {
@@ -35,6 +36,9 @@ internal sealed class BackgroundTasks : IMessageHandler, IDisposable
     private readonly Dictionary<string, List<Tracked>> _tasks = [];
     /// <summary>By terminal, Codex's commands that haven't reported their end: each a task if the turn ends first.</summary>
     private readonly Dictionary<string, List<Tracked>> _running = [];
+    private readonly ISavedTasks _saved;
+    /// <summary>By terminal, the tasks saved before the app last closed, till its shell starts: kept, or a new one.</summary>
+    private readonly Dictionary<string, List<SavedTask>> _left;
     private readonly ITimer _timer;
 
     private sealed class Tracked(string agent, string useId, string session, string taskId, string? command, string? description, DateTimeOffset started)
@@ -50,15 +54,30 @@ internal sealed class BackgroundTasks : IMessageHandler, IDisposable
         public DateTimeOffset? Ended { get; set; }
         /// <summary>When its own hook said it ended (a Codex command's, late), its exit then still to be read.</summary>
         public DateTimeOffset? Reported { get; set; }
+        /// <summary>Since when its output file is waited for: its start, or for one taken back after a restart, then.</summary>
+        public DateTimeOffset Followed { get; set; } = started;
 
         public TaskView View() => new(UseId, Command, Description, Started.ToUnixTimeMilliseconds(),
             Reading?.ExitCode is { } code ? (code == 0 ? TaskStates.Done : TaskStates.Failed) : TaskStates.Running,
             Reading?.ExitCode, Reading?.LastLine, Reading?.Path, Ended?.ToUnixTimeMilliseconds());
+
+        public SavedTask Saved(string pane) => new(pane, Agent, UseId, Session, TaskId, Command, Description,
+            Started.ToUnixTimeMilliseconds(), Reported?.ToUnixTimeMilliseconds());
+
+        /// <summary>A saved task, followed again from <paramref name="now"/>.</summary>
+        public static Tracked From(SavedTask saved, DateTimeOffset now) => new(saved.Agent, saved.UseId, saved.Session, saved.TaskId,
+            saved.Command, saved.Description, DateTimeOffset.FromUnixTimeMilliseconds(saved.Started))
+        {
+            Reported = saved.Reported is { } reported ? DateTimeOffset.FromUnixTimeMilliseconds(reported) : null,
+            Followed = now,
+        };
     }
 
-    public BackgroundTasks(PageChannel page, TerminalSessions terminals, TaskOutputs outputs, ITaskProcesses processes, TimeProvider clock)
+    public BackgroundTasks(PageChannel page, TerminalSessions terminals, TaskOutputs outputs, ITaskProcesses processes, TimeProvider clock,
+        ISavedTasks saved)
     {
-        (_page, _terminals, _claude, _codex, _processes, _clock) = (page, terminals, outputs.Claude, outputs.Codex, processes, clock);
+        (_page, _terminals, _claude, _codex, _processes, _clock, _saved) = (page, terminals, outputs.Claude, outputs.Codex, processes, clock, saved);
+        _left = saved.Load().GroupBy(t => t.Pane).ToDictionary(g => g.Key, g => g.ToList());
         _timer = clock.CreateTimer(_ => Tick(), null, Every, Every);
         terminals.Closed += Forget;
         terminals.Restarting += Forget;
@@ -110,6 +129,7 @@ internal sealed class BackgroundTasks : IMessageHandler, IDisposable
                     {
                         Post(e.Pane);
                     }
+                    Save(); // a restart before its exit shows up still counts it as over
                 }
             }
             else if (e.Event is HookEvents.Stop or HookEvents.Interrupt && _running.Remove(e.Pane, out var left))
@@ -130,7 +150,44 @@ internal sealed class BackgroundTasks : IMessageHandler, IDisposable
         }
         list.Add(task);
         Post(pane);
+        Save();
     }
+
+    /// <summary>
+    /// A terminal's shell started: one the background host kept follows the tasks saved for it, each read at once (one
+    /// that ended meanwhile shows how, a minute); a new shell's are another shell's, and go.
+    /// </summary>
+    public void ShellStarted(string pane, bool kept)
+    {
+        lock (_gate)
+        {
+            if (!_left.Remove(pane, out var saved))
+            {
+                return;
+            }
+            var now = _clock.GetUtcNow();
+            var list = _tasks.TryGetValue(pane, out var known) ? known : _tasks[pane] = [];
+            var restored = kept ? saved.Select(s => Tracked.From(s, now)).Where(t => !list.Exists(k => k.UseId == t.UseId)).ToList() : [];
+            restored.ForEach(t => Read(t, now));
+            list.AddRange(restored);
+            if (restored.Count > 0)
+            {
+                Post(pane);
+            }
+            else if (list.Count == 0)
+            {
+                _tasks.Remove(pane);
+            }
+            Save();
+        }
+    }
+
+    /// <summary>
+    /// Saves the tasks still running (an ended one is only shown a minute), and those still saved for terminals not
+    /// started yet; called under the gate.
+    /// </summary>
+    private void Save() =>
+        _saved.Save([.. _tasks.SelectMany(p => p.Value.Where(t => t.Ended is null).Select(t => t.Saved(p.Key))), .. _left.Values.SelectMany(l => l)]);
 
     private ITaskOutput OutputOf(Tracked task) => task.Agent == AgentKinds.Codex ? _codex : _claude;
 
@@ -140,28 +197,36 @@ internal sealed class BackgroundTasks : IMessageHandler, IDisposable
         lock (_gate)
         {
             var now = _clock.GetUtcNow();
+            var changed = false;
             foreach (var (pane, list) in _tasks.ToList())
             {
                 var gone = list.FindAll(t => now - t.Ended > KeepEnded || NeverStarted(t, now));
                 list.RemoveAll(gone.Contains);
                 Release(gone);
                 var removed = gone.Count > 0;
+                var running = list.Count(t => t.Ended is null);
                 var read = false;
                 foreach (var task in list.Where(t => t.Ended is null))
                 {
                     read |= Read(task, now); // every one read, not just up to the first that changed
                 }
+                // What's saved is the running ones: saved again when one went or ended.
+                changed |= removed || list.Count(t => t.Ended is null) != running;
                 if (removed || read)
                 {
                     Post(pane);
                 }
+            }
+            if (changed)
+            {
+                Save();
             }
         }
     }
 
     /// <summary>A Claude task whose output file never showed up.</summary>
     private bool NeverStarted(Tracked task, DateTimeOffset now) =>
-        task.Reading is null && OutputOf(task).ReadsWhileRunning && now - task.Started > FileWait;
+        task.Reading is null && OutputOf(task).ReadsWhileRunning && now - task.Followed > FileWait;
 
     /// <summary>Reads one task's output: whether its last line or its state changed.</summary>
     private bool Read(Tracked task, DateTimeOffset now)
@@ -250,6 +315,7 @@ internal sealed class BackgroundTasks : IMessageHandler, IDisposable
         if (shown)
         {
             _page.Post(new ToPage.AgentTasks(pane, [], Gone: true));
+            Save();
         }
     }
 
