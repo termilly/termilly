@@ -53,7 +53,8 @@ export function resumeTyped(tab, command) {
     // Typed twice and still at the prompt (a shell that doesn't mark its commands' ends): the agent didn't start.
     if (r.retried) return void gaveUp(tab);
     r.retried = true;
-    send(PAGE.input, { id: tab.id, data: `${command}\r` });
+    // The command still on the line (its Enter didn't get through) only needs the Enter.
+    send(PAGE.input, { id: tab.id, data: `${typedLine(term).endsWith(command) ? '' : command}\r` });
     resumeStep(tab.id, 'command typed again, the first one did not take');
     r.timer = window.setTimeout(check, RETRY_AFTER_MS);
   };
@@ -68,12 +69,31 @@ const SCREEN_LOOK_MS = 1000;
 const activityShown = () => state.settings.interface.showActivity !== false;
 
 /**
- * Whether the shell took the resume command: it says a command runs (its marks), or, a shell that doesn't mark them,
- * it has left its prompt.
+ * Whether the shell took the resume command: it says a command runs (a shell that marks them; a command typed and not
+ * run yet isn't), or, a shell that doesn't mark them, it has left its prompt.
  * @param {Tab} tab
  * @param {any} term
  */
-const shellTookIt = (tab, term) => !!tab.running || !atPrompt(term);
+const shellTookIt = (tab, term) => (tab.shellMarks ? !!tab.running : !atPrompt(term));
+
+/**
+ * The line the cursor is on, trimmed at its end.
+ * @param {any} term
+ */
+const typedLine = term => {
+  const buffer = term.buffer.active;
+  return (buffer.getLine(buffer.baseY + buffer.cursorY)?.translateToString(true) ?? '').trimEnd();
+};
+
+/** Whether the agents report through their hooks (Settings › Terminal › Agent integration): off, Claude's don't. */
+const hooksOn = () => state.settings.agents.integration !== false;
+
+/**
+ * Whether a resume waits for the agent's program to be seen, its screen drawn: Codex's (its first hook waits for a
+ * prompt), one started early, and one whose hooks are off.
+ * @param {NonNullable<Tab['resuming']>} r
+ */
+const waitsForScreen = r => !agentKind(r.kind).hookAtStart || r.early || !hooksOn();
 
 /**
  * With Show activity off (now, or turned off while it resumes) the host never says the agent runs, which ends a resume
@@ -86,7 +106,7 @@ const shellTookIt = (tab, term) => !!tab.running || !atPrompt(term);
  * @param {NonNullable<Tab['resuming']>} r
  */
 function watchScreen(tab, r) {
-  if (agentKind(r.kind).hookAtStart && !r.early) return;
+  if (!waitsForScreen(r)) return;
   let tookAt = 0;
   /** @type {string | null} what the screen showed at the first look after the shell took it, with no mark of its start */
   let firstSeen = null;
@@ -94,12 +114,18 @@ function watchScreen(tab, r) {
     const term = tab.view?.term;
     if (tab.resuming !== r || tab.exited) return void clearInterval(look);
     if (!term || activityShown() || settling.has(tab)) return;
-    if (!shellTookIt(tab, term)) return void (tookAt = 0);
+    if (!shellTookIt(tab, term)) {
+      tookAt = 0;
+      firstSeen = null;
+      return;
+    }
     tookAt ||= Date.now();
     const before = startScreens.get(tab) ?? (firstSeen ??= screenText(term));
-    if (screenText(term) === before && Date.now() - tookAt < SILENT_MAX_MS) return;
+    const drawn = screenText(term) !== before;
+    if (!drawn && Date.now() - tookAt < SILENT_MAX_MS) return;
     clearInterval(look);
-    settle(tab);
+    // Silent all along: its screen going quiet is all there is to wait for.
+    settle(tab, { anyScreen: !drawn });
   }, SCREEN_LOOK_MS);
 }
 
@@ -115,11 +141,15 @@ const screenText = term => {
   return Array.from({ length: term.rows }, (_, y) => buffer.getLine(buffer.baseY + y)?.translateToString(true) ?? '').join('\n');
 };
 
-/** What a resuming terminal's screen showed as its shell began the resume command. @type {WeakMap<Tab, string>} */
+/**
+ * What a resuming terminal's screen showed as its shell began the resume command: the latest try's, so a retry isn't
+ * measured against a first try that went wrong.
+ * @type {WeakMap<Tab, string>}
+ */
 const startScreens = new WeakMap();
 on(EVENTS.commandStarted, (/** @type {Tab} */ tab) => {
   const term = tab.view?.term;
-  if (tab.resuming && term && !startScreens.has(tab)) startScreens.set(tab, screenText(term));
+  if (tab.resuming && term) startScreens.set(tab, screenText(term));
 });
 
 /**
@@ -211,11 +241,12 @@ on(EVENTS.agent, tab => { if (tab.resuming && tab.agent) done(tab, true); });
 // and is typed again (resumeTyped).
 on(EVENTS.commandEnding, (/** @type {{ tab: Tab }} */ { tab }) => {
   const r = tab.resuming;
-  if (r?.command && !tab.agent && tab.running?.command.includes(r.session)) gaveUp(tab);
+  // The resume command itself, not one a key typed before it spoiled (that one goes again: resumeTyped).
+  if (r?.command && !tab.agent && tab.running?.command.trim().startsWith(r.command)) gaveUp(tab);
 });
 on(EVENTS.tab, tab => {
   // One started before the page was up has run for a while: its screen settling says it's back, hooks or not.
-  if (tab.resuming && !settling.has(tab) && runningAgent(tab) && (!agentKind(tab.resuming.kind).hookAtStart || tab.resuming.early)) settle(tab);
+  if (tab.resuming && !settling.has(tab) && runningAgent(tab) && waitsForScreen(tab.resuming)) settle(tab);
 });
 
 /** How long an agent's screen stays still before its resumed session counts as drawn, and the longest wait for it. */
@@ -225,10 +256,13 @@ const MAX_SETTLE_MS = 20_000;
 const settling = new WeakMap();
 
 /**
- * Ends the resume once the agent's screen has been still for a moment (or after MAX_SETTLE_MS).
+ * Ends the resume once the agent's screen has been still for a moment (or after MAX_SETTLE_MS), after it has changed
+ * from what it showed as the resume command began: an agent that loads silently first isn't taken for one that's back.
+ * anyScreen: it changed nothing for long already, so the quiet alone counts.
  * @param {Tab} tab
+ * @param {{ anyScreen?: boolean }} [how]
  */
-function settle(tab) {
+function settle(tab, { anyScreen = false } = {}) {
   const term = tab.view?.term;
   if (!term) {
     done(tab, true);
@@ -246,12 +280,14 @@ function settle(tab) {
     stop();
     done(tab, true);
   };
+  const before = startScreens.get(tab);
+  const drawn = () => anyScreen || before === undefined || screenText(term) !== before;
   const writes = term.onWriteParsed(() => {
     clearTimeout(quiet);
-    quiet = window.setTimeout(back, QUIET_MS);
+    if (drawn()) quiet = window.setTimeout(back, QUIET_MS);
   });
   const cap = window.setTimeout(back, MAX_SETTLE_MS);
-  quiet = window.setTimeout(back, QUIET_MS);
+  if (drawn()) quiet = window.setTimeout(back, QUIET_MS);
   settling.set(tab, stop);
 }
 
