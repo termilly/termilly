@@ -52,4 +52,47 @@ public sealed class BusyWatcherTests
         ProcessEntry[] nestedBusy = [new(10, 1, "bash"), new(11, 10, "zsh"), new(12, 11, "npm install")];
         Assert.Equal("npm install", BusyWatcher.BusyChild(nestedBusy, 10));
     }
+
+    [Fact]
+    public void A_terminal_the_page_opens_late_hears_again_what_it_runs()
+    {
+        // An early agent's shell runs its agent before the page knows the terminal: that first report is missed.
+        using var child = OperatingSystem.IsWindows()
+            ? Process.Start(new ProcessStartInfo("ping", "-n 30 127.0.0.1") { CreateNoWindow = true, UseShellExecute = false })!
+            : Process.Start("sleep", "30");
+        var reports = new System.Collections.Concurrent.ConcurrentQueue<ChildProgram?>();
+        using var watcher = new BusyWatcher(() => new Dictionary<string, int> { ["t"] = Environment.ProcessId }, (_, program) => reports.Enqueue(program));
+        try
+        {
+            Assert.True(SpinWait.SpinUntil(() => reports.Count == 1, TimeSpan.FromSeconds(5)));
+            watcher.Resend("t");
+            Assert.True(SpinWait.SpinUntil(() => reports.Count == 2, TimeSpan.FromSeconds(5)));
+            Assert.Equal(reports.First(), reports.Last());
+            Assert.NotNull(reports.Last());
+        }
+        finally
+        {
+            child.Kill();
+        }
+    }
+
+    [Fact]
+    public void A_terminal_at_its_prompt_has_nothing_sent_again()
+    {
+        // Its shell runs nothing (a process with no children stands in for it): the page assumes the prompt already.
+        using var shell = OperatingSystem.IsWindows()
+            ? Process.Start(new ProcessStartInfo("ping", "-n 30 127.0.0.1") { CreateNoWindow = true, UseShellExecute = false })!
+            : Process.Start("sleep", "30");
+        var reports = new System.Collections.Concurrent.ConcurrentQueue<ChildProgram?>();
+        using var watcher = new BusyWatcher(() => new Dictionary<string, int> { ["t"] = shell.Id }, (_, program) => reports.Enqueue(program));
+        try
+        {
+            watcher.Resend("t");
+            Assert.False(SpinWait.SpinUntil(() => !reports.IsEmpty, TimeSpan.FromSeconds(2)));
+        }
+        finally
+        {
+            shell.Kill();
+        }
+    }
 }

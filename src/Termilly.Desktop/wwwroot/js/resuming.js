@@ -8,7 +8,7 @@
 
 import { send } from './host.js';
 import { PAGE } from './protocol.js';
-import { on, emit, runningAgent, EVENTS } from './store.js';
+import { state, on, emit, runningAgent, EVENTS } from './store.js';
 import { agentKind } from './agentkinds.js';
 import { atPrompt } from './buffer.js';
 import { resumeStep } from './startuplog.js';
@@ -57,6 +57,30 @@ export function resumeTyped(tab, command) {
     r.timer = window.setTimeout(check, RETRY_AFTER_MS);
   };
   r.timer = window.setTimeout(check, RETRY_AFTER_MS);
+  if (!activityShown()) watchScreen(tab, r);
+}
+
+/** How often, with Show activity off, a resuming terminal is looked at for its agent having taken over. */
+const SCREEN_LOOK_MS = 1000;
+
+/** Whether the host reports what each terminal runs (Settings › Terminal › Activity spinner): off, it reports nothing. */
+const activityShown = () => state.settings.interface.showActivity !== false;
+
+/**
+ * With Show activity off the host never says the agent runs, which ends a resume that waits for that (Codex's, and one
+ * started early): once the shell has left its prompt, the agent's screen going quiet ends it instead.
+ * @param {Tab} tab
+ * @param {NonNullable<Tab['resuming']>} r
+ */
+function watchScreen(tab, r) {
+  if (agentKind(r.kind).hookAtStart && !r.early) return;
+  const look = window.setInterval(() => {
+    const term = tab.view?.term;
+    if (tab.resuming !== r || tab.exited) return void clearInterval(look);
+    if (!term || atPrompt(term) || settling.has(tab)) return;
+    clearInterval(look);
+    settle(tab);
+  }, SCREEN_LOOK_MS);
 }
 
 /**

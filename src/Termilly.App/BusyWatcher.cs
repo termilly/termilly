@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.ComponentModel;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -60,6 +61,8 @@ internal sealed class BusyWatcher : IDisposable
     private readonly Timer _timer;
     private readonly Dictionary<string, ChildProgram?> _reported = new();
     private readonly Dictionary<string, ChildProgram?> _pending = new();
+    /// <summary>Terminals whose state goes out again on the next look, though it didn't change.</summary>
+    private readonly ConcurrentDictionary<string, bool> _resend = new();
     private int _ticking;
 
     /// <param name="roots">The terminals to watch: id → the pseudo console's root process id.</param>
@@ -84,6 +87,36 @@ internal sealed class BusyWatcher : IDisposable
         catch (ObjectDisposedException)
         {
             // Turned off (Settings) or closing: nothing to look at.
+        }
+    }
+
+    /// <summary>
+    /// The page opened the terminal: what it runs goes out again shortly. One started before the page was up (an early
+    /// agent's shell) was reported when the page didn't know it yet, and isn't again till it changes.
+    /// </summary>
+    public void Resend(string id)
+    {
+        _resend[id] = true;
+        Nudge();
+    }
+
+    /// <summary>
+    /// Sends again what the asked-for terminals run, after this look; one at its prompt needs nothing, the page assumes
+    /// that. One whose state is changing (a new state waits for its second look, as when its shell was replaced) waits
+    /// for the next look, so what goes out is never the state it's leaving.
+    /// </summary>
+    private void ResendAsked()
+    {
+        foreach (var id in _resend.Keys)
+        {
+            if (_pending.ContainsKey(id))
+            {
+                continue;
+            }
+            if (_resend.TryRemove(id, out _) && _reported.GetValueOrDefault(id) is { } known)
+            {
+                _changed(id, known);
+            }
         }
     }
 
@@ -181,6 +214,7 @@ internal sealed class BusyWatcher : IDisposable
                     _pending[id] = busy;
                 }
             }
+            ResendAsked();
         }
         catch (Exception e) when (e is Win32Exception or InvalidOperationException or IOException)
         {

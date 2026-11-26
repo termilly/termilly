@@ -67,6 +67,8 @@ internal sealed class TerminalHandler(
         // Background tasks the page may have missed (it didn't know the terminal, or reloaded), before any report the
         // early shell kept: a "done" in those then waits for the tasks as it should.
         tasks.Resend(id);
+        // What it runs, which the page may have missed the same way (an early agent's shell runs Codex already).
+        activity.Resend(id);
         // Taken over before it leaves the early shells: a report that comes meanwhile still waits for the page with it.
         if (early.Get(id) is { } shell)
         {

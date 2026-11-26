@@ -64,6 +64,35 @@ public sealed class TaskProcessesTests
     }
 
     [Fact]
+    public void Stop_by_command_finds_it_however_its_shell_was_handed_the_quotes()
+    {
+        // The agent's shell gets the command quoted again (PowerShell's \"x\", bash's '\''x'\''): quotes don't count.
+        var (runs, hookSays) = OperatingSystem.IsWindows()
+            ? ("ping -n 64 127.0.0.1 & echo \\\"done\\\"", "ping -n 64 127.0.0.1 & echo \"done\"")
+            : ("sleep 64; echo 'done'", "sleep 64;  echo \"done\"");
+        using var task = Running(runs);
+        using var self = System.Diagnostics.Process.GetCurrentProcess();
+        var processes = new TaskProcesses([self.ProcessName]);
+        var stopped = false;
+        WaitFor(() => stopped = processes.StopCommand(Environment.ProcessId, hookSays, DateTimeOffset.Now));
+        Assert.True(stopped);
+        Assert.True(task.WaitForExit(5000));
+    }
+
+    [Theory]
+    // As the agent's shell holds it: quoted again for PowerShell, or for bash, after a line break.
+    [InlineData("echo \"done\"", "powershell -Command \"try {} catch {}\n echo \\\"done\\\"\"", true)]
+    [InlineData("echo 'a b'", "bash -c 'echo '\\''a b'\\'''", true)]
+    [InlineData("sleep 5;  echo x", "sh -c 'sleep 5; echo x'", true)]
+    // Words stay apart: a quoted space isn't nothing.
+    [InlineData("echo 'a b'", "bash -c 'echo ab'", false)]
+    [InlineData("echo ab", "bash -c 'echo a b'", false)]
+    public void A_command_is_found_in_its_shell_command_line_whatever_the_quoting(string command, string commandLine, bool found)
+    {
+        Assert.Equal(found, TaskProcesses.Bare(commandLine).Contains(TaskProcesses.Bare(command), StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Of_the_same_command_twice_Stop_ends_the_one_started_nearest_the_task()
     {
         var command = OperatingSystem.IsWindows() ? "ping -n 63 127.0.0.1" : "sleep 63; echo done";

@@ -55,3 +55,49 @@ test('resuming a session that is gone ends the spinner, with Claude\'s words lef
     await repo.dispose();
   }
 });
+
+test('with the activity spinner off, a Codex session that comes back still ends the spinner', async () => {
+  // Off, the host reports nothing of what a terminal runs: the resume can't wait for Codex's program to be seen.
+  const repo = await makeRepo({ files: { 'a.txt': 'a\n' } });
+  let app, failed = true;
+  try {
+    app = await startApp({ folder: repo.path, name: 'resume-quiet', agents: { codex: { stdout: '', prompt: { lines: ['Codex is back'], input: '› ' } } } });
+    await app.waitFor('.xterm');
+    await app.eval(async t => {
+      const { GROUPS } = await t.import('./store.js');
+      (await t.import('./preferences.js')).updateSettings(GROUPS.interface, { showActivity: false });
+    });
+    await until(() => app.eval(async t => {
+      const { state } = await t.import('./store.js');
+      return !![...state.tabs.values()][0]?.shellMarks && state.settings.interface.showActivity === false;
+    }), 'the shell\'s first prompt, the spinner off');
+    await app.eval(async (t, session) => {
+      const { state } = await t.import('./store.js');
+      const { startResuming, resumeTyped } = await t.import('./resuming.js');
+      const { send } = await t.import('./host.js');
+      const { PAGE } = await t.import('./protocol.js');
+      const tab = [...state.tabs.values()][0];
+      tab.start = { output: null, command: null, resumeSession: session, resumeKind: 'codex', done: true };
+      startResuming(tab, session, 'codex');
+      const command = `codex resume ${session}`;
+      send(PAGE.input, { id: tab.id, data: `${command}\r` });
+      resumeTyped(tab, command);
+    }, SESSION);
+    await app.waitFor('.resume-overlay');
+    // Well before the retry (15 s): Codex's screen, once quiet, ends it.
+    await app.waitFor('.resume-overlay', { gone: true, timeoutMs: 10_000 });
+    const after = await app.eval(async t => {
+      const { state } = await t.import('./store.js');
+      const tab = [...state.tabs.values()][0];
+      const buffer = tab.view.term.buffer.active;
+      const lines = Array.from({ length: buffer.length }, (_, y) => buffer.getLine(y)?.translateToString(true) ?? '');
+      return { resuming: !!tab.resuming, text: lines.join(' ') };
+    });
+    assert.equal(after.resuming, false);
+    assert.ok(after.text.includes('Codex is back'), after.text);
+    failed = false;
+  } finally {
+    await app?.stop({ failed });
+    await repo.dispose();
+  }
+});

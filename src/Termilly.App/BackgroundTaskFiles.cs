@@ -136,7 +136,7 @@ internal sealed partial class ClaudeTaskOutput : ITaskOutput
 /// under the terminal are the task's: of them, the ones an agent started (a reader of the file, such as tail -f in
 /// the terminal, isn't one) end, with everything they run.
 /// </summary>
-internal sealed class TaskProcesses : ITaskProcesses
+internal sealed partial class TaskProcesses : ITaskProcesses
 {
     /// <summary>The programs that start tasks: the agents (Claude Code's may run under node).</summary>
     private static readonly string[] AgentPrograms = [AgentKinds.Claude, AgentKinds.Codex, "node"];
@@ -193,17 +193,31 @@ internal sealed class TaskProcesses : ITaskProcesses
     public bool StopCommand(int terminalPid, string command, DateTimeOffset started)
     {
         // The hook's command may have been cut short ("…" at its end): its start is what's looked for.
-        var wanted = command.TrimEnd('…').Trim();
+        var wanted = Bare(command.TrimEnd('…'));
         if (wanted.Length == 0)
         {
             return false;
         }
         var tree = TreeOf(terminalPid);
         var candidates = tree.Below.Keys.Where(pid => !tree.Agents.Contains(pid) && tree.UnderAgent(pid)).ToList();
-        HashSet<int> Running() => [.. ProcessCommandLines.Of(candidates).Where(p => p.Value.Contains(wanted, StringComparison.Ordinal)).Select(p => p.Key)];
+        HashSet<int> Running() => [.. ProcessCommandLines.Of(candidates).Where(p => Bare(p.Value).Contains(wanted, StringComparison.Ordinal)).Select(p => p.Key)];
         // The same command may run twice (or one that contains it): the one started nearest the task is the task's.
         return Closest(tree.Topmost(Running()), started) is { } task && KillChecked([task], Running);
     }
+
+    /// <summary>Characters a shell's quoting adds or changes when the agent hands it a command.</summary>
+    private const string Quoting = "\"'\\`";
+
+    /// <summary>
+    /// A command without its quoting, its spaces and line breaks as single spaces: the agent starts its shell with the
+    /// command quoted for it (PowerShell's -Command "…\n… \"x\" …", bash -c '… '\''x'\'' …'), so its command line holds it
+    /// changed. Words stay apart: <c>echo 'a b'</c> is not <c>echo 'ab'</c>.
+    /// </summary>
+    internal static string Bare(string command) =>
+        Spacing().Replace(string.Concat(command.Where(c => !Quoting.Contains(c, StringComparison.Ordinal))), " ").Trim();
+
+    [GeneratedRegex(@"\s+")]
+    private static partial Regex Spacing();
 
     /// <summary>
     /// Of the processes, the one that started nearest the time. One alone is the task's whenever it started (a command
