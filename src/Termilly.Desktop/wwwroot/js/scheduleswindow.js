@@ -7,7 +7,7 @@ import { PAGE } from './protocol.js';
 import { send } from './host.js';
 import { state, on, emit, persist, newId, installedAgents, EVENTS } from './store.js';
 import { restoreFocus, newTab } from './panes.js';
-import { closeAll, dropdown } from './popups.js';
+import { closeAll, dropdown, showMenu } from './popups.js';
 import { modal, pickFolder, noticeDialog, CONFIRM_DIALOG } from './dialogs.js';
 import { escapeHtml, COPIED } from './ui.js';
 import { fuzzyMatch } from './fuzzy.js';
@@ -427,12 +427,48 @@ async function removeShown() {
     render();
     return;
   }
-  const id = editing.id;
-  // An agent may change what's shown while the user is asked: only the schedule asked about goes.
-  if (!(await confirmDanger(`Delete ${editing.name}?`, 'Its reports go with it.', 'Delete')) || editing?.id !== id) return;
-  removeSchedule(id);
-  select(schedules()[0]?.id ?? null);
+  await deleteSchedule(editing.id);
 }
+
+/**
+ * Deletes a schedule once the user says so: the shown one (Delete) or one in the list (its right-click menu).
+ * @param {string} id
+ */
+async function deleteSchedule(id) {
+  const schedule = scheduleById(id);
+  if (!schedule || !(await confirmDanger(`Delete ${schedule.name}?`, 'Its reports go with it.', 'Delete'))) return;
+  // An agent may have deleted it while the user was asked.
+  if (!scheduleById(id)) return;
+  const shown = editing?.id === id;
+  removeSchedule(id);
+  if (shown) select(schedules()[0]?.id ?? null);
+  else render();
+}
+
+/**
+ * Runs a schedule now; the shown one, with no changes left to save, then shows the run as its Run button does.
+ * @param {string} id
+ */
+function runSchedule(id) {
+  runNow(id);
+  if (editing?.id !== id || isDirty()) return;
+  openRunId = runsOf(id).find(r => !hasEnded(r))?.id ?? null;
+  view = VIEW.runs;
+  render();
+}
+
+/** @param {string} id a schedule in the list */
+const rowMenu = id => [
+  { label: 'Run', action: () => runSchedule(id) },
+  { label: 'Delete', danger: true, action: () => deleteSchedule(id) },
+];
+
+// The browser's menu has nothing for the Schedules window, text fields included; a schedule in the list has its own.
+box.addEventListener('contextmenu', e => {
+  e.preventDefault();
+  const row = /** @type {HTMLElement | null} */ (targetOf(e).closest('.sch-list [data-id]'));
+  if (row?.dataset.id) showMenu(rowMenu(row.dataset.id), { x: e.clientX, y: e.clientY });
+});
 
 /** Clears the shown schedule's past runs and their reports; a run going on stays. */
 async function clearShown() {
@@ -518,12 +554,8 @@ async function act(action) {
   else if (action === ACTION.close) closeSchedules();
   else if (action === ACTION.save) await save();
   else if (action === ACTION.remove) await removeShown();
-  else if (action === ACTION.run && editing) {
-    runNow(editing.id);
-    openRunId = runsOf(editing.id).find(r => !hasEnded(r))?.id ?? null;
-    view = VIEW.runs;
-    render();
-  } else if (action === ACTION.stop && openRunId) stopRun(openRunId);
+  else if (action === ACTION.run && editing) runSchedule(editing.id);
+  else if (action === ACTION.stop && openRunId) stopRun(openRunId);
   else if (action === ACTION.copy) await copyOutput();
   else if (action === ACTION.terminal) await openAsTerminal();
   else if (action === ACTION.browse) await browseFolder();
