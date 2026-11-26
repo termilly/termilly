@@ -30,6 +30,7 @@ const choose = value => app.eval(async (t, value) => {
 }, value);
 
 /** How a menu's rows look: each row's label, whether it's ticked, marked chosen, its icon showing, and its background. */
+/** Run in the page (before() installs it there as menuRows). */
 const rowsOf = t => t.$$('.context-menu .menu-row').map(r => {
   const view = r.ownerDocument.defaultView;
   const icon = r.querySelector('.menu-icon');
@@ -46,7 +47,7 @@ const rowsOf = t => t.$$('.context-menu .menu-row').map(r => {
 const workspaceList = () => app.eval(async t => {
   (await t.import('dock.js')).showWorkspaceList(t.$('#sidebar') ?? globalThis.document.body, 'below');
   await new Promise(r => setTimeout(r, 50));
-  const rows = rowsOf(t);
+  const rows = globalThis.menuRows(t);
   const probe = globalThis.document.createElement('div');
   globalThis.document.body.append(probe);
   const colour = v => { probe.style.background = `var(${v})`; return globalThis.getComputedStyle(probe).backgroundColor; };
@@ -66,7 +67,7 @@ const dropdownMenu = () => app.eval(async t => {
   /** @type {HTMLButtonElement} */ (select.nextElementSibling).click();
   await new Promise(r => setTimeout(r, 50));
   const menu = t.$('.context-menu');
-  const result = { rows: rowsOf(t), noIcons: menu.classList.contains('no-icons') };
+  const result = { rows: globalThis.menuRows(t), noIcons: menu.classList.contains('no-icons') };
   popups.closeAll();
   select.nextElementSibling?.remove();
   select.remove();
@@ -78,7 +79,7 @@ const keepRow = () => app.eval(async t => {
   const { state } = await t.import('store.js');
   const tab = [...state.tabs.values()].find(x => x.wsId === state.activeId);
   (await t.import('tabmenu.js')).openTabMenu(tab, { x: 40, y: 40 });
-  const row = rowsOf(t).find(r => r.label === 'Keep in history after closing');
+  const row = globalThis.menuRows(t).find(r => r.label === 'Keep in history after closing');
   (await t.import('popups.js')).closeAll();
   return row;
 });
@@ -87,6 +88,7 @@ before(async () => {
   app = await startApp({ name: 'menu-picks' });
   await app.waitFor('.pane .xterm');
   await app.eval(async t => (await t.import('workspaces.js')).createWorkspace({ name: 'second', stay: true }));
+  await app.eval((t, source) => { globalThis.menuRows = (0, eval)(source); }, rowsOf.toString());
 });
 
 after(async () => { await app?.stop({ failed }); });
