@@ -18,21 +18,24 @@ const step = (name, run) => test(name, async () => {
   }
 });
 
-/** Picks a choice of Agent cost in Settings, as the user does, and closes Settings. @param {string} value */
+/**
+ * Picks a choice of Agent cost in Settings, as the user does, and reads the sidebar (behind Settings) two frames
+ * later: soon enough that nothing else has drawn it again in between.
+ * @param {string} value
+ */
 const choose = value => app.eval(async (t, value) => {
-  (await t.import('settings.js')).openSettings('terminal');
+  const frame = () => new Promise(r => globalThis.requestAnimationFrame(() => r(undefined)));
   await t.waitFor(`[data-setting="agents.costDisplay"] [data-value="${value}"]`);
   t.click(`[data-setting="agents.costDisplay"] [data-value="${value}"]`);
-  await new Promise(r => setTimeout(r, 150));
-  (await t.import('settings/page.js')).closeSettings();
-  await new Promise(r => setTimeout(r, 100));
+  const { state } = await t.import('store.js');
+  for (let i = 0; i < 50 && state.settings.agents.costDisplay !== value; i++) await new Promise(r => setTimeout(r, 10));
+  await frame();
+  await frame();
+  return {
+    chip: t.$('#sidebar .cost-chip')?.textContent.trim() ?? null,
+    workspace: t.$('#sidebar .ws-cost')?.textContent.trim() ?? null,
+  };
 }, value);
-
-/** What the sidebar shows: the terminal's cost chip, and its workspace's cost. */
-const shown = () => app.eval(t => ({
-  chip: t.$('#sidebar .cost-chip')?.textContent.trim() ?? null,
-  workspace: t.$('#sidebar .ws-cost')?.textContent.trim() ?? null,
-}));
 
 before(async () => {
   app = await startApp({ name: 'agent-cost' });
@@ -44,24 +47,25 @@ before(async () => {
     const tour = await t.import('tour.js');
     if (tour.tourActive()) tour.stopTour();
   });
-  // An agent that has cost $1.84 in the first terminal, as its hooks report it.
+  // An agent in the first terminal that has cost $1.84 for 1,500 tokens, as its hooks and transcript report it.
   await app.eval(async t => {
     const { state, emit, EVENTS } = await t.import('store.js');
     const tab = [...state.tabs.values()][0];
     tab.cost = { usd: 1.84, durationMs: 1000 };
+    tab.claude = { ...tab.claude, usage: { input: 1000, cacheWrite: 0, cacheRead: 0, output: 500 } };
     emit(EVENTS.tab, tab);
   });
   await app.waitFor('#sidebar .cost-chip');
+  await app.eval(async t => (await t.import('settings.js')).openSettings('terminal'));
 });
 
 after(async () => { await app?.stop({ failed }); });
 
-step('Off takes the costs out of the sidebar at once, and Dollars brings them back', async () => {
-  assert.deepEqual(await shown(), { chip: '$1.84', workspace: '$1.84' });
-  await choose('off');
-  assert.deepEqual(await shown(), { chip: null, workspace: null });
-  await choose('tokens');
-  assert.equal((await shown()).workspace, null);
-  await choose('cost');
-  assert.deepEqual(await shown(), { chip: '$1.84', workspace: '$1.84' });
+step('the sidebar shows each choice of Agent cost at once', async () => {
+  assert.deepEqual(await choose('cost'), { chip: '$1.84', workspace: '$1.84' });
+  assert.deepEqual(await choose('off'), { chip: null, workspace: null });
+  const tokens = await choose('tokens');
+  assert.match(tokens.chip ?? '', /tok$/);
+  assert.equal(tokens.workspace, null);
+  assert.deepEqual(await choose('cost'), { chip: '$1.84', workspace: '$1.84' });
 });

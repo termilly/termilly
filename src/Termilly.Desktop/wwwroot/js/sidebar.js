@@ -244,8 +244,19 @@ const renderSoon = () => {
   cancelAnimationFrame(frame);
   frame = requestAnimationFrame(render);
 };
-// Settings too: what the rows show follows some (agent cost, the activity line).
-for (const event of [EVENTS.workspaces, EVENTS.tab, EVENTS.tags, EVENTS.focus, EVENTS.settings]) on(event, renderSoon);
+for (const event of [EVENTS.workspaces, EVENTS.tab, EVENTS.tags, EVENTS.focus]) on(event, renderSoon);
+
+/** The settings the rows show (agent cost, the activity line, background tasks, the spinner), as one value to compare. */
+const shownSettings = () => JSON.stringify([costMode(), state.settings.agents.line, state.settings.agents.tasksInSidebar, state.settings.interface.showActivity]);
+// Settings change often in the background (saves of the window's state, the cost ledger): drawn again only when one the
+// rows show did, so focus, a click under way and a menu's row stay as they are otherwise.
+let shownBefore = '';
+on(EVENTS.settings, () => {
+  const now = shownSettings();
+  if (now === shownBefore) return;
+  shownBefore = now;
+  renderSoon();
+});
 
 // ---- Rail flyout ----
 
