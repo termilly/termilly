@@ -68,16 +68,15 @@ internal sealed class EarlyShell(string command, string versionReply, int column
         get => _session;
         set
         {
-            string[] unsent;
             lock (_gate)
             {
-                _session = value;
-                unsent = [.. _unsent];
+                // The answers kept go first, before any the reader sends from now on: it waits for the gate.
+                foreach (var reply in _unsent)
+                {
+                    value?.Write(reply);
+                }
                 _unsent.Clear();
-            }
-            foreach (var reply in unsent)
-            {
-                value?.Write(reply);
+                _session = value;
             }
         }
     }
@@ -86,6 +85,7 @@ internal sealed class EarlyShell(string command, string versionReply, int column
     public void Print(string data)
     {
         string seen;
+        List<string> replies = [];
         bool taken;
         lock (_gate)
         {
@@ -100,8 +100,13 @@ internal sealed class EarlyShell(string command, string versionReply, int column
             else
             {
                 _missed.Add(data);
-                AnswerQueries(seen, old);
+                replies = AnswerQueries(seen, old);
             }
+        }
+        // Written outside the gate: a shell that doesn't read them yet mustn't hold its own output up.
+        foreach (var reply in replies)
+        {
+            Reply(reply);
         }
         TypeAtPrompt(seen);
     }
@@ -111,9 +116,10 @@ internal sealed class EarlyShell(string command, string versionReply, int column
     /// each. One that ends in what's new (past <paramref name="old"/>, the tail kept from before) is new: one wholly in
     /// the tail was answered then. Called under the gate, so output is followed in the order it came.
     /// </summary>
-    private void AnswerQueries(string seen, int old)
+    private List<string> AnswerQueries(string seen, int old)
     {
         var asked = new List<(int End, Answer Answer)>();
+        var replies = new List<string>();
         foreach (var answer in Answers)
         {
             foreach (var query in answer.Queries)
@@ -133,9 +139,10 @@ internal sealed class EarlyShell(string command, string versionReply, int column
         {
             _cursor.Follow(data[followed..(end - old)]);
             followed = end - old;
-            Reply(answer.Reply());
+            replies.Add(answer.Reply());
         }
         _cursor.Follow(data[followed..]);
+        return replies;
     }
 
     /// <summary>Answers the shell, or keeps the answer until its session is known.</summary>

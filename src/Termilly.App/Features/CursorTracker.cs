@@ -1,33 +1,44 @@
+using System.Globalization;
+using System.Text;
+
 namespace Termilly.Desktop.Features;
 
 /// <summary>
-/// Where a terminal's cursor is, followed from what its shell prints before the page draws it (EarlyShell): text and
-/// its wrapping at the terminal's width, line breaks, carriage returns, backspaces, and the cursor moves shells and
-/// their prompts use (CSI H, f, A, B, C, D, G, d). Other sequences move nothing. Enough to
-/// answer "where's the cursor" (CSI 6 n) as a shell starts, which PowerShell asks at each prompt and waits for.
+/// Where a terminal's cursor is, followed from what its shell prints before the page draws it (EarlyShell), as
+/// xterm.js would place it: text (wide characters two columns, combining marks none) and its wrapping at the terminal's
+/// width, line breaks, carriage returns, backspaces and tabs, the cursor moves shells and their prompts use (CSI H, f,
+/// A, B, C, D, G, d), its save and restore (ESC 7 and 8, CSI s and u, the alternate screen), and a scroll region homing
+/// it. Other sequences move nothing. Enough to answer "where's the cursor" (CSI 6 n) as a shell starts, which
+/// PowerShell asks at each prompt and waits for.
 /// </summary>
 internal sealed class CursorTracker(int columns, int rows)
 {
     private const char Escape = '\u001b';
     private const char Bell = '\u0007';
+    /// <summary>Where tabs stop: every 8 columns, as a terminal's start.</summary>
+    private const int TabWidth = 8;
+    /// <summary>The alternate screen's mode (CSI ? 1049 h and l), which saves and restores the cursor.</summary>
+    private const string AlternateScreen = "?1049";
 
     private int _row = 1;
+    /// <summary>The column the next character goes in; one past the last when a full line waits to wrap.</summary>
     private int _column = 1;
+    private (int Row, int Column) _saved = (1, 1);
     /// <summary>A sequence split between two chunks of output: its start, finished by the next.</summary>
     private string _pending = "";
 
-    /// <summary>Its place, as the answer to CSI 6 n gives it: CSI row ; column R.</summary>
-    public string Report => $"{Escape}[{_row};{Math.Min(_column, columns)}R"; // a full line waits in its last column to wrap
+    /// <summary>Its place, as the answer to CSI 6 n gives it: CSI row ; column R (a full line waits in its last column).</summary>
+    public string Report => $"{Escape}[{_row};{Math.Min(_column, columns)}R";
 
-    /// <summary>Follows the cursor through output, up to <paramref name="end"/> (the whole of it by default).</summary>
-    public void Follow(string output, int end = -1)
+    /// <summary>Follows the cursor through output.</summary>
+    public void Follow(string output)
     {
-        var text = _pending + output[..(end < 0 ? output.Length : end)];
+        var text = _pending + output;
         _pending = "";
-        for (var i = 0; i < text.Length;)
+        var i = 0;
+        while (i < text.Length)
         {
-            var c = text[i];
-            if (c == Escape)
+            if (text[i] == Escape)
             {
                 var length = SequenceLength(text, i);
                 if (length == 0)
@@ -35,41 +46,79 @@ internal sealed class CursorTracker(int columns, int rows)
                     _pending = text[i..]; // not finished yet: the next chunk has the rest
                     return;
                 }
-                Move(text.Substring(i, length));
+                Sequence(text.Substring(i, length));
                 i += length;
                 continue;
             }
-            Character(c);
-            i++;
+            // A broken surrogate pair counts as one character, as the page shows it.
+            if (Rune.DecodeFromUtf16(text.AsSpan(i), out var rune, out var used) != System.Buffers.OperationStatus.Done)
+            {
+                (rune, used) = (Rune.ReplacementChar, 1);
+            }
+            Character(rune);
+            i += used;
         }
     }
 
-    private void Character(char c)
+    private void Character(Rune rune)
     {
-        switch (c)
+        switch (rune.Value)
         {
             case '\r':
                 _column = 1;
                 break;
             case '\n':
+                _column = Math.Min(_column, columns); // a line break ends a wrap that was waiting
                 Down(1);
                 break;
             case '\b':
-                _column = Math.Max(1, _column - 1);
+                _column = Math.Max(1, Math.Min(_column, columns) - 1);
+                break;
+            case '\t':
+                _column = Math.Min(columns, ((Math.Min(_column, columns) - 1) / TabWidth + 1) * TabWidth + 1);
                 break;
             default:
-                if (!char.IsControl(c) && !char.IsLowSurrogate(c))
-                {
-                    if (_column > columns)
-                    {
-                        _column = 1;
-                        Down(1);
-                    }
-                    _column++;
-                }
+                Printed(Width(rune));
                 break;
         }
     }
+
+    /// <summary>A character of the width given: wrapping first when it doesn't fit what's left of the line.</summary>
+    private void Printed(int width)
+    {
+        if (width == 0)
+        {
+            return;
+        }
+        if (_column + width - 1 > columns)
+        {
+            _column = 1;
+            Down(1);
+        }
+        _column += width;
+    }
+
+    /// <summary>Columns a character takes: none for controls and combining marks, two for wide ones.</summary>
+    private static int Width(Rune rune)
+    {
+        if (Rune.IsControl(rune))
+        {
+            return 0;
+        }
+        var category = Rune.GetUnicodeCategory(rune);
+        if (category is UnicodeCategory.NonSpacingMark or UnicodeCategory.EnclosingMark or UnicodeCategory.Format)
+        {
+            return 0;
+        }
+        return Wide(rune.Value) ? 2 : 1;
+    }
+
+    /// <summary>East Asian wide and full-width characters, and emoji: two columns.</summary>
+    private static bool Wide(int c) =>
+        c is (>= 0x1100 and <= 0x115F) or (>= 0x2E80 and <= 0x303E) or (>= 0x3041 and <= 0x33FF) or (>= 0x3400 and <= 0x4DBF)
+            or (>= 0x4E00 and <= 0x9FFF) or (>= 0xA000 and <= 0xA4CF) or (>= 0xAC00 and <= 0xD7A3) or (>= 0xF900 and <= 0xFAFF)
+            or (>= 0xFE30 and <= 0xFE4F) or (>= 0xFF00 and <= 0xFF60) or (>= 0xFFE0 and <= 0xFFE6) or (>= 0x1F300 and <= 0x1F64F)
+            or (>= 0x1F900 and <= 0x1F9FF) or (>= 0x20000 and <= 0x3FFFD);
 
     private void Down(int lines) => _row = Math.Min(rows, _row + lines);
 
@@ -110,43 +159,84 @@ internal sealed class CursorTracker(int columns, int rows)
         return 2; // ESC and one character
     }
 
-    /// <summary>A CSI sequence that moves the cursor; others leave it.</summary>
-    private void Move(string sequence)
+    /// <summary>An escape sequence: a save or restore of the cursor (ESC 7, 8), or a CSI one.</summary>
+    private void Sequence(string sequence)
     {
-        if (sequence.Length < 3 || sequence[1] != '[')
+        switch (sequence)
         {
+            case "\u001b7":
+                Save();
+                return;
+            case "\u001b8":
+                Restore();
+                return;
+        }
+        if (sequence.Length >= 3 && sequence[1] == '[')
+        {
+            Control(sequence[2..^1], sequence[^1]);
+        }
+    }
+
+    private void Save() => _saved = (_row, Math.Min(_column, columns));
+
+    private void Restore() => (_row, _column) = _saved;
+
+    /// <summary>A CSI sequence: its parameters and final character.</summary>
+    private void Control(string parameters, char final)
+    {
+        if (parameters == AlternateScreen)
+        {
+            if (final == 'h')
+            {
+                Save();
+            }
+            else if (final == 'l')
+            {
+                Restore();
+            }
             return;
         }
-        var final = sequence[^1];
-        var parameters = sequence[2..^1];
         if (parameters.Length > 0 && !char.IsDigit(parameters[0]) && parameters[0] != ';')
         {
             return; // private (CSI ? …): modes, not moves
         }
         var numbers = parameters.Split(';').Select(p => int.TryParse(p, out var n) ? n : 0).ToArray();
-        int At(int index) => index < numbers.Length && numbers[index] > 0 ? numbers[index] : 1;
+        Move(final, index => index < numbers.Length && numbers[index] > 0 ? numbers[index] : 1);
+    }
+
+    private void Move(char final, Func<int, int> at)
+    {
         switch (final)
         {
             case 'H' or 'f':
-                (_row, _column) = (Math.Clamp(At(0), 1, rows), Math.Clamp(At(1), 1, columns));
+                (_row, _column) = (Math.Clamp(at(0), 1, rows), Math.Clamp(at(1), 1, columns));
                 break;
             case 'A':
-                _row = Math.Max(1, _row - At(0));
+                _row = Math.Max(1, _row - at(0));
                 break;
             case 'B':
-                Down(At(0));
+                Down(at(0));
                 break;
             case 'C':
-                _column = Math.Min(columns, _column + At(0));
+                _column = Math.Min(columns, Math.Min(_column, columns) + at(0));
                 break;
             case 'D':
-                _column = Math.Max(1, _column - At(0));
+                _column = Math.Max(1, Math.Min(_column, columns) - at(0));
                 break;
             case 'G':
-                _column = Math.Clamp(At(0), 1, columns);
+                _column = Math.Clamp(at(0), 1, columns);
                 break;
             case 'd':
-                _row = Math.Clamp(At(0), 1, rows);
+                _row = Math.Clamp(at(0), 1, rows);
+                break;
+            case 'r': // a scroll region set: the cursor goes home
+                (_row, _column) = (1, 1);
+                break;
+            case 's':
+                Save();
+                break;
+            case 'u':
+                Restore();
                 break;
         }
     }
