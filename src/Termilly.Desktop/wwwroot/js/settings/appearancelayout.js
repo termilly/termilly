@@ -24,7 +24,7 @@ const LAYOUT = {
     + row('Terminal names', 'In Minimal: on a line over each terminal, or on a bar when the mouse is near its top. Right-click either to pick what it shows.',
       seg('interface.paneNames', [[paneNames.line, 'Line'], [paneNames.hover, 'On hover']]), { keywords: 'header name bar hover line minimal' }))
     + group('Workspaces',
-      row('Colour dots', 'Each workspace’s colour, in the sidebar and on the Minimal dock.', toggle('interface.workspaceDots'), { keywords: 'workspace color colour dot square sidebar dock minimal' })
+      row('Colour dots', 'Each workspace’s colour: in the sidebar, the title bar, menus and the Minimal dock.', toggle('interface.workspaceDots'), { keywords: 'workspace color colour dot square sidebar dock minimal' })
       + row('Tree lines', 'The line in the sidebar from a workspace to its terminals.', toggle('interface.treeLines'), { keywords: 'workspace tree line vertical sidebar terminals' }))
     // Linux only (not macOS, which runs the same build): Wayland lets no app place its windows.
     + (onLinux ? group('Windows',

@@ -1,5 +1,6 @@
-// How workspaces look (Settings › Appearance › Layout, js/workspacelook.js): their colour dots in the sidebar and on the
-// Minimal dock, and the sidebar's tree lines, each turned off and on again. Run with: npm run e2e (on Linux, under Xvfb).
+// How workspaces look (Settings › Appearance › Layout, js/workspacelook.js): their colour (the sidebar's dots, the
+// title bar's, the collapsed sidebar's tiles, the swatches in menus, the Minimal dock's dot) and the sidebar's tree
+// lines, each switched off and on with its switch in Settings. Run with: npm run e2e (on Linux, under Xvfb).
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { startApp } from './harness.mjs';
@@ -18,23 +19,40 @@ const step = (name, run) => test(name, async () => {
   }
 });
 
-/** Saves interface settings. @param {Record<string, unknown>} values */
+/** Flips a switch in Settings › Appearance › Layout, as the user does, then closes Settings. @param {string} key */
+const flip = key => app.eval(async (t, key) => {
+  (await t.import('settings.js')).openSettings('appearance-layout');
+  await t.waitFor(`[data-setting="interface.${key}"]`);
+  t.click(`[data-setting="interface.${key}"]`);
+  await new Promise(r => setTimeout(r, 150));
+  (await t.import('settings/page.js')).closeSettings();
+  const { state } = await t.import('store.js');
+  return state.settings.interface[key];
+}, key);
+
+/** Saves interface settings that have no switch here (the layout). @param {Record<string, unknown>} values */
 const setInterface = values => app.eval(async (t, values) => {
   const { GROUPS } = await t.import('store.js');
   (await t.import('preferences.js')).updateSettings(GROUPS.interface, values);
-  await new Promise(r => setTimeout(r, 100));
+  await new Promise(r => setTimeout(r, 150));
 }, values);
 
-/** What shows: the sidebar's dot and tree line, and the dock's dot. */
-const looks = () => app.eval(t => {
-  const style = el => (el ? el.ownerDocument.defaultView.getComputedStyle(el) : null);
-  const dot = style(t.$('#sidebar .ws-dot'));
-  const tree = style(t.$('#sidebar .tab-tree'));
-  const dock = style(t.$('.dock-ws-dot'));
+/** Whether each place shows its workspace colour, and the sidebar its tree line. */
+const looks = () => app.eval(async t => {
+  const shows = el => !!el && el.ownerDocument.defaultView.getComputedStyle(el).display !== 'none';
+  const tree = t.$('#sidebar .tab-tree');
+  // A swatch as the Move to workspace menu draws it.
+  const { workspaceSwatch } = await t.import('workspacelist.js');
+  const probe = t.$('body').ownerDocument.createElement('div');
+  probe.innerHTML = workspaceSwatch('#ff0000');
+  t.$('body').append(probe);
+  const swatch = shows(probe.firstElementChild);
+  probe.remove();
   return {
-    sidebarDot: dot ? dot.display !== 'none' : null,
-    treeLine: tree ? tree.borderLeftColor !== 'rgba(0, 0, 0, 0)' : null,
-    dockDot: dock ? dock.display !== 'none' : null,
+    sidebarDot: shows(t.$('#sidebar .ws-dot')),
+    crumbDot: shows(t.$('.crumb-dot')),
+    swatch,
+    treeLine: tree ? tree.ownerDocument.defaultView.getComputedStyle(tree).borderLeftColor !== 'rgba(0, 0, 0, 0)' : null,
   };
 });
 
@@ -46,25 +64,51 @@ before(async () => {
 
 after(async () => { await app?.stop({ failed }); });
 
-step('by default the sidebar has its dots and tree lines', async () => {
+step('by default the colours and tree lines show', async () => {
   const shown = await looks();
-  assert.equal(shown.sidebarDot, true);
-  assert.equal(shown.treeLine, true);
+  assert.deepEqual({ sidebarDot: shown.sidebarDot, crumbDot: shown.crumbDot, swatch: shown.swatch, treeLine: shown.treeLine },
+    { sidebarDot: true, crumbDot: true, swatch: true, treeLine: true });
 });
 
-step('each setting takes off only its own', async () => {
-  await setInterface({ workspaceDots: false });
-  assert.deepEqual({ ...(await looks()), dockDot: null }, { sidebarDot: false, treeLine: true, dockDot: null });
-  await setInterface({ workspaceDots: true, treeLines: false });
-  assert.deepEqual({ ...(await looks()), dockDot: null }, { sidebarDot: true, treeLine: false, dockDot: null });
-  await setInterface({ treeLines: true });
+step('Colour dots off takes every workspace colour away, and only that', async () => {
+  assert.equal(await flip('workspaceDots'), false);
+  const shown = await looks();
+  assert.deepEqual({ sidebarDot: shown.sidebarDot, crumbDot: shown.crumbDot, swatch: shown.swatch, treeLine: shown.treeLine },
+    { sidebarDot: false, crumbDot: false, swatch: false, treeLine: true });
+  // The collapsed sidebar's tiles go plain: the muted text colour, not the workspace's.
+  await app.eval(async t => (await t.import('sidebar.js')).setSidebarOpen(false));
+  await app.waitFor('.rail-tile');
+  const tile = await app.eval(t => {
+    const el = t.$('.rail-tile');
+    const style = prop => el.ownerDocument.defaultView.getComputedStyle(prop ? el : el.ownerDocument.documentElement);
+    return { colour: style(true).getPropertyValue('--c').trim(), muted: style(false).getPropertyValue('--muted').trim() };
+  });
+  assert.equal(tile.colour, tile.muted);
+  await app.eval(async t => (await t.import('sidebar.js')).setSidebarOpen(true));
+  assert.equal(await flip('workspaceDots'), true);
+  assert.equal((await looks()).sidebarDot, true);
 });
 
-step('in Minimal the dock\'s dot goes with the setting', async () => {
+step('Tree lines off takes only the lines away', async () => {
+  assert.equal(await flip('treeLines'), false);
+  const shown = await looks();
+  assert.deepEqual({ sidebarDot: shown.sidebarDot, treeLine: shown.treeLine }, { sidebarDot: true, treeLine: false });
+  assert.equal(await flip('treeLines'), true);
+  assert.equal((await looks()).treeLine, true);
+});
+
+step("in Minimal the dock's dot beside the name goes with Colour dots", async () => {
   await setInterface({ layout: 'minimal' });
   await app.waitFor('.dock-ws-dot');
-  assert.equal((await looks()).dockDot, true);
-  await setInterface({ workspaceDots: false });
-  assert.equal((await looks()).dockDot, false);
-  await setInterface({ workspaceDots: true, layout: 'normal' });
+  const dock = () => app.eval(t => {
+    const dot = t.$('.dock-ws-dot');
+    const style = dot.ownerDocument.defaultView.getComputedStyle(dot);
+    return { shows: style.display !== 'none' };
+  });
+  assert.equal((await dock()).shows, true);
+  assert.equal(await flip('workspaceDots'), false);
+  assert.equal((await dock()).shows, false);
+  assert.equal(await flip('workspaceDots'), true);
+  assert.equal((await dock()).shows, true);
+  await setInterface({ layout: 'normal' });
 });

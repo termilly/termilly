@@ -178,7 +178,7 @@ body[data-sidebar="rail"] .side-rail { opacity: 1; pointer-events: auto; }
 .ws-row.open .ws-chev { transform: rotate(90deg); }
 .ws-dot { width: 9px; height: 9px; flex: none; border-radius: 3px; }
 /* Settings › Appearance › Layout can turn the dots off (js/workspacelook.js). */
-body.no-ws-dots .ws-dot { display: none; }
+:root.no-ws-dots .ws-dot { display: none; }
 .ws-name { overflow: hidden; text-overflow: ellipsis; }
 .ws-count { margin-left: auto; color: var(--faint); font-size: 11.5px; font-variant-numeric: tabular-nums; }
 .ws-row.active .ws-count { color: var(--accent); }
@@ -191,7 +191,7 @@ body.no-ws-dots .ws-dot { display: none; }
 :is(.rename-input, .field).invalid { border-color: var(--danger); box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 22%, transparent); }
 
 .tab-tree { margin: 2px 0 8px 17px; padding-left: 8px; border-left: 1px solid var(--border-strong); }
-body.no-tree-lines .tab-tree { border-left-color: transparent; }
+:root.no-tree-lines .tab-tree { border-left-color: transparent; }
 .tab-row {
   display: flex;
   align-items: center;
@@ -267,6 +267,8 @@ body.no-tree-lines .tab-tree { border-left-color: transparent; }
 .rail-tile:hover { transform: translateY(-1px); }
 /* One square: the open workspace gets a solid border and a stronger fill, not a second ring around it. */
 .rail-tile.active { border-color: var(--c); background: color-mix(in srgb, var(--c) 26%, transparent); }
+/* Workspace colours off (js/workspacelook.js): the tiles take the plain text colour, the open one still the strongest. */
+:root.no-ws-dots .rail-tile { --c: var(--muted) !important; }
 .rail-tile .attn { position: absolute; top: -3px; right: -3px; box-shadow: 0 0 0 2px var(--surface); }
 /* Agent news nobody has looked at: bold in the sidebar, and a ring on the rail tile. */
 .tab-row.unread .name, .ws-row.unread .ws-name { color: var(--text-strong); font-weight: 600; }

@@ -1,11 +1,11 @@
 // @ts-check
 // How workspaces look (Settings › Appearance › Layout): their colour dots (the sidebar's in Normal, the dock's in
-// Minimal) and the line that ties a workspace's terminals to it in the sidebar. Off, the page's classes hide them
-// (css/sidebar.css, css/minimal.css).
+// Minimal) and the line that ties a workspace's terminals to it in the sidebar. Off, the root element's classes hide them
+// (css/sidebar.css, css/minimal.css, css/titlebar.css, css/menus.css); detached windows take the page's root classes along.
 
 import { state, on, EVENTS } from './store.js';
 
-/** The body's classes for what's turned off. */
+/** The root element's classes for what's turned off. */
 const NO_DOTS = 'no-ws-dots';
 const NO_LINES = 'no-tree-lines';
 
@@ -13,8 +13,8 @@ const NO_LINES = 'no-tree-lines';
 export const showsWorkspaceDots = () => state.settings.interface.workspaceDots !== false;
 
 function apply() {
-  document.body.classList.toggle(NO_DOTS, !showsWorkspaceDots());
-  document.body.classList.toggle(NO_LINES, state.settings.interface.treeLines === false);
+  document.documentElement.classList.toggle(NO_DOTS, !showsWorkspaceDots());
+  document.documentElement.classList.toggle(NO_LINES, state.settings.interface.treeLines === false);
 }
 
 apply();
