@@ -14,7 +14,7 @@ import { fuzzyMatch } from './fuzzy.js';
 import { askValues, placeholders, unfilled, filled, NAME_WORDS } from './snippets.js';
 import { pickSnippet, endSnippetPick, groupsOf } from './snippetpick.js';
 import { byId, find, targetOf, TOOL_COUNT, SCHEDULES_BUTTON_ID } from './dom.js';
-import { detach, closeWindow, focusWindow, isDetached, windowName, inEachDocument } from './windows.js';
+import { detach, closeWindow, focusWindow, isDetached, windowName } from './windows.js';
 import { readReport, shownText } from './schedulereport.js';
 import { withPaths, openReportLink, LINK_CLASS } from './schedulelinks.js';
 import {
@@ -475,18 +475,10 @@ const rowMenu = id => [
 box.addEventListener('contextmenu', e => {
   const row = /** @type {HTMLElement | null} */ (targetOf(e).closest('.sch-list [data-id]'));
   const id = row?.dataset.id;
-  if (id && scheduleById(id)) showMenu(rowMenu(id), { x: e.clientX, y: e.clientY });
+  if (!id || !scheduleById(id)) return;
+  e.preventDefault();
+  showMenu(rowMenu(id), { x: e.clientX, y: e.clientY });
 });
-
-/**
- * Whether a right-click in the document is the Schedules window's: anywhere in its own window, or in the main one while
- * it's open there (its backdrop covers the rest, and its popups, dialogs and menus open over it).
- * @param {Document} doc
- */
-const schedulesOwn = doc => (doc === document ? !layer.hidden && !isDetached(WINDOW_KEY) : doc.contains(box));
-
-// The browser's menu has nothing for the Schedules window, text fields included.
-inEachDocument(doc => doc.addEventListener('contextmenu', e => { if (schedulesOwn(doc)) e.preventDefault(); }));
 
 /** Clears the shown schedule's past runs and their reports; a run going on stays. */
 async function clearShown() {

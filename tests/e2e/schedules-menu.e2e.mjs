@@ -38,17 +38,19 @@ before(async () => {
 
 after(async () => { await app?.stop({ failed }); });
 
-step('no browser menu anywhere in the window, text fields included', async () => {
+step('no browser menu anywhere in its own window; a text field there gets Termilly\'s text menu', async () => {
   const shown = await app.eval(t => {
     const own = t.$('.sch-list').ownerDocument;
-    // Its fields and lists, and its window's own edges (outside the panel).
-    return [t.$('[name="name"]'), t.$('.sch-edit'), t.$('.sch-list'), own.documentElement].map(el => {
+    // Its lists, its window's own edges (outside the panel), then a text field.
+    return [t.$('.sch-edit'), t.$('.sch-list'), own.documentElement, t.$('[name="name"]')].map(el => {
       const realm = el.ownerDocument.defaultView;
       // dispatchEvent is false once a listener took the browser's menu away.
       return el.dispatchEvent(new realm.MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
     });
   });
   assert.deepEqual(shown, [false, false, false, false]);
+  assert.deepEqual(await menuShown(), ['Cut', 'Copy', 'Paste', 'Paste as plain text', 'Select all']);
+  await app.eval(async t => (await t.import('popups.js')).closeAll());
   assert.equal(await menuShown(), null);
 });
 

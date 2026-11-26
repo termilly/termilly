@@ -4,6 +4,7 @@
 import { PAGE, HOST } from './protocol.js';
 import { send, onHost } from './host.js';
 import './macwindow.js';
+import './browsermenu.js';
 import {
   state, restore, newId, emit, saveNow, WORKSPACE_COLORS, PROFILE_SOURCES, agentChanged, markSeen, GROUPS, EVENTS, sourceOf, SPLIT,
 } from './store.js';
@@ -275,14 +276,6 @@ document.addEventListener('click', e => {
   if (button) {
     /** @type {Record<string, () => unknown>} */ (commands)[/** @type {string} */ (button.dataset.command)]?.();
   }
-});
-
-// The window's own frame (title bar and its buttons, the docked bars, the sidebar, the status bars) has no browser menu:
-// where none of Termilly's opened, a right click there does nothing. A text field keeps its menu.
-const APP_FRAME = '#titlebar, .bar-dock, #sidebar, .pane-statusbar';
-document.addEventListener('contextmenu', e => {
-  const target = targetOf(e);
-  if (target.closest(APP_FRAME) && !target.closest('input, textarea, [contenteditable="true"]')) e.preventDefault();
 });
 
 // ---- Shell menu (+ button) ----
