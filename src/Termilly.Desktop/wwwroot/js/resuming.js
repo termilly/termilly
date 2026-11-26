@@ -107,12 +107,12 @@ function watchScreen(tab, r) {
 const SILENT_MAX_MS = 10_000;
 
 /**
- * The text a terminal shows, row by row.
+ * The text of a terminal's last screen, row by row, wherever it's scrolled to.
  * @param {any} term
  */
 const screenText = term => {
   const buffer = term.buffer.active;
-  return Array.from({ length: term.rows }, (_, y) => buffer.getLine(buffer.viewportY + y)?.translateToString(true) ?? '').join('\n');
+  return Array.from({ length: term.rows }, (_, y) => buffer.getLine(buffer.baseY + y)?.translateToString(true) ?? '').join('\n');
 };
 
 /** What a resuming terminal's screen showed as its shell began the resume command. @type {WeakMap<Tab, string>} */

@@ -222,13 +222,19 @@ internal sealed class TaskProcesses : ITaskProcesses
         for (var at = text.IndexOf(part, StringComparison.Ordinal); at >= 0; at = text.IndexOf(part, at + 1, StringComparison.Ordinal))
         {
             var end = at + part.Length;
-            if (!whole || end == text.Length || !char.IsLetterOrDigit(part[^1]) || !char.IsLetterOrDigit(text[end]))
+            if (!whole || end == text.Length || !Continues(part[^1]) || !Continues(text[end]))
             {
                 return true;
             }
         }
         return false;
     }
+
+    /// <summary>What ends a shell word: a space, or a separator, redirection, closing bracket or quote.</summary>
+    private const string WordEnds = ";&|)<>\"'`";
+
+    /// <summary>Whether the character is part of a shell word (<c>60</c>, <c>60.5</c>, <c>-n</c>), not where one ends.</summary>
+    private static bool Continues(char c) => !char.IsWhiteSpace(c) && !WordEnds.Contains(c, StringComparison.Ordinal);
 
     /// <summary>
     /// Of the processes, the one that started nearest the time. One alone is the task's whenever it started (a command

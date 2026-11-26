@@ -91,6 +91,9 @@ public sealed class TaskProcessesTests
     [InlineData("echo \"a b\"", "powershell -Command \"echo \\\"a  b\\\"\"", false)]
     // A whole command ends where a word does: a longer one that starts the same isn't it.
     [InlineData("sleep 60", "sh -c 'sleep 600'", false)]
+    [InlineData("sleep 60", "sh -c 'sleep 60.5'", false)]
+    [InlineData("sleep 60", "sh -c 'sleep 60'", true)]
+    [InlineData("sleep 60", "sh -c 'sleep 60&& echo done'", true)]
     [InlineData("Start-Sleep 60", "powershell -Command \"Start-Sleep 600\"", false)]
     [InlineData("sleep 60", "sh -c 'sleep 60; echo done'", true)]
     public void A_command_is_found_in_its_shell_command_line_as_its_shell_was_handed_it(string command, string commandLine, bool found)
