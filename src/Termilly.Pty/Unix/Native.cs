@@ -88,6 +88,12 @@ internal static class Native
     [DllImport(Libc, SetLastError = true)]
     public static extern int kill(int pid, int signal);
 
+    /// <summary>access's "may this process run it" (as exec would allow).</summary>
+    public const int X_OK = 1;
+
+    [DllImport(Libc, SetLastError = true)]
+    public static extern int access([MarshalAs(UnmanagedType.LPUTF8Str)] string path, int mode);
+
     /// <summary>poll's "there's something to read".</summary>
     public const short POLLIN = 0x1;
 

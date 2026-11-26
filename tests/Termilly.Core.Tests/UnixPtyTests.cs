@@ -245,7 +245,7 @@ public sealed class UnixPtyTests
 /// <summary>macOS starts a terminal's program through bash, which takes the terminal as its controlling one.</summary>
 public sealed class ControllingTerminalTests
 {
-    private const string Script = "if [ -n \"${TERMILLY_BASH_ENV+x}\" ]; then export BASH_ENV=\"$TERMILLY_BASH_ENV\"; unset TERMILLY_BASH_ENV; fi; exec \"$@\"";
+    private const string Script = "exec \"$@\"";
     private static readonly List<string> Env = ["HOME=/Users/me", "PATH=/elsewhere"];
 
     /// <summary>Files that may be run: bash, zsh, a tool in a project; /usr/local/bin/notes is there but may not be run.</summary>
@@ -270,6 +270,17 @@ public sealed class ControllingTerminalTests
     {
         var start = Of(["zsh"], ["BASH_ENV=/Users/me/.bashenv", "HOME=/Users/me"]);
         Assert.Equal(["TERMILLY_BASH_ENV=/Users/me/.bashenv", "HOME=/Users/me"], start.Environment);
+        Assert.StartsWith("if [ -n \"${TERMILLY_BASH_ENV+x}\" ]; then export BASH_ENV=", start.Argv[2], StringComparison.Ordinal);
+        // Without one, none is made up, whatever else is set.
+        var none = Of(["zsh"], ["TERMILLY_BASH_ENV=/tmp/startup", "HOME=/Users/me"]);
+        Assert.Equal(["TERMILLY_BASH_ENV=/tmp/startup", "HOME=/Users/me"], none.Environment);
+        Assert.Equal(Script, none.Argv[2]);
+    }
+
+    [Fact]
+    public void A_program_given_from_a_relative_working_directory_starts_as_it_is()
+    {
+        Assert.Equal(["./tool"], Of(["./tool"], cwd: "project").Argv);
     }
 
     [Fact]
