@@ -177,6 +177,8 @@
 /* A swatch in the accent's own colour would vanish on it. */
 :root[data-menu-pick="solid"] .menu-row.picked .ws-swatch { box-shadow: 0 0 0 1px var(--on-accent); }
 :root[data-menu-pick="solid"] .menu-row.picked .workspace-swatch rect { stroke: var(--on-accent); stroke-width: 1px; }
+/* The keys' focus on the chosen row, whose background no longer changes: a ring in its text colour. */
+.menu-row.picked:focus-visible { box-shadow: inset 0 0 0 1px currentColor; }
 .context-menu.no-icons .menu-icon { display: none; }
 .menu-label { flex: 1; }
 .menu-hint { display: flex; gap: 3px; margin-left: 18px; color: var(--faint); }

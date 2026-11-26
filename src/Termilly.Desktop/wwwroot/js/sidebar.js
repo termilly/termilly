@@ -290,7 +290,7 @@ function openWorkspaceMenu(ws, at) {
       submenu: () => WORKSPACE_COLORS.map((color, i) => ({
         label: COLOR_NAMES[i],
         icon: `<span class="ws-swatch" style="background:${color}"></span>`,
-        hint: color === ws.color ? '<span class="menu-current">current</span>' : '',
+        picked: color === ws.color, pickHint: '<span class="menu-current">current</span>',
         action: () => setWorkspaceColor(ws, color),
       })),
     },

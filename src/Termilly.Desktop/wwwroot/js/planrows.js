@@ -124,7 +124,7 @@ export function planClicked(e, plan, options, apply, { nested = false } = {}) {
   const fit = (change, fromMenu) => apply(fitPlan({ ...plan, ...change }, [...new Set([...options.agents, ...options.reviewers])]), what, fromMenu);
   const agents = PICKS[what]?.(plan, options);
   if (agents && agents.kinds.length > 1) {
-    showMenu(agents.kinds.map(kind => ({ label: agentKind(kind).name, icon: badgeHtml({ icon: agentKind(kind).icon }), picked: kind === plan.by && what === PLAN.by,
+    showMenu(agents.kinds.map(kind => ({ label: agentKind(kind).name, icon: badgeHtml({ icon: agentKind(kind).icon }), picked: what === PLAN.by ? kind === plan.by : undefined,
       action: () => fit(agents.pick(kind), true) })), control, { nested, alone: nested, className: DROPDOWN_MENU }); // over the Schedules window too; over a card, the card stays
   } else if (agents?.kinds.length) fit(agents.pick(agents.kinds[0]), false);
   else if (CHANGES[what]) fit(CHANGES[what](plan, control), false);

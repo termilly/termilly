@@ -14,10 +14,11 @@ import { SETTING_VALUES } from './constants.js';
 
 /**
  * One of a menu's entries, or 'separator'. `checked` makes it a checkbox (on or off); `picked` makes it one of a
- * group that picks one (true on the chosen one), marked as Settings › Appearance › Layout says (MENU_PICK); `submenu`
- * opens more entries beside it. `key` picks it while its menu has the focus (a digit, shown as its hint). `more` is
- * what a right-click on it offers, in a menu of its own over this one.
- * @typedef {{ label: string, icon?: string, hint?: string, checked?: boolean, picked?: boolean, danger?: boolean, disabled?: boolean,
+ * group that picks one (true on the chosen one), marked as Settings › Appearance › Layout says (MENU_PICK). With
+ * ticks, the chosen row's tick takes its icon's place, unless it has a `pickHint`: then it keeps its icon and shows that
+ * as its hint. `submenu` opens more entries beside it. `key` picks it while its menu has the focus (a digit, shown as
+ * its hint). `more` is what a right-click on it offers, in a menu of its own over this one.
+ * @typedef {{ label: string, icon?: string, hint?: string, checked?: boolean, picked?: boolean, pickHint?: string, danger?: boolean, disabled?: boolean,
  *   title?: string, action?: () => unknown, submenu?: () => MenuEntry[], key?: string, more?: () => MenuEntry[] }} MenuItem
  * @typedef {MenuItem | typeof SEPARATOR} MenuEntry
  */
@@ -245,13 +246,17 @@ const picksWithTick = () => (document.documentElement.dataset[MENU_PICK_ATTRIBUT
 /**
  * A row's role, whether it's on (checkbox) or the one chosen (pick-one), and what its icon column shows.
  * @param {MenuItem} item
- * @returns {{ role: string, on?: boolean, icon: string, picked: boolean }}
+ * @returns {{ role: string, on?: boolean, icon: string, picked: boolean, hint: string }}
  */
 function rowKind(item) {
-  if (item.checked !== undefined) return { role: 'menuitemcheckbox', on: item.checked, icon: item.checked ? CHECK : '', picked: false };
-  if (item.picked === undefined) return { role: 'menuitem', icon: item.icon ?? '', picked: false };
-  if (picksWithTick()) return { role: 'menuitemradio', on: item.picked, icon: item.picked ? CHECK : '', picked: false };
-  return { role: 'menuitemradio', on: item.picked, icon: item.icon ?? '', picked: item.picked };
+  const hint = item.hint ?? '';
+  if (item.checked !== undefined) return { role: 'menuitemcheckbox', on: item.checked, icon: item.checked ? CHECK : '', picked: false, hint };
+  if (item.picked === undefined) return { role: 'menuitem', icon: item.icon ?? '', picked: false, hint };
+  const radio = { role: 'menuitemradio', on: item.picked };
+  if (!picksWithTick()) return { ...radio, icon: item.icon ?? '', picked: item.picked, hint };
+  // A row that keeps its icon says it's the chosen one in its hint instead.
+  if (item.pickHint !== undefined) return { ...radio, icon: item.icon ?? '', picked: false, hint: item.picked ? item.pickHint : hint };
+  return { ...radio, icon: item.picked ? CHECK : '', picked: false, hint };
 }
 
 /**
@@ -367,7 +372,7 @@ function menuRow(menu, item) {
   button.innerHTML = `
       <span class="menu-icon">${kind.icon}</span>
       <span class="menu-label"></span>
-      <span class="menu-hint">${item.submenu ? CHEVRON : item.hint ?? ''}</span>`;
+      <span class="menu-hint">${item.submenu ? CHEVRON : kind.hint}</span>`;
   /** @type {HTMLElement} */ (button.querySelector('.menu-label')).textContent = item.label;
   // Shown but greyed out and not clickable (a disabled button gets no clicks); title says why.
   if (item.disabled) button.disabled = true;

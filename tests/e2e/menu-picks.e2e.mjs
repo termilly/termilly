@@ -29,8 +29,7 @@ const choose = value => app.eval(async (t, value) => {
   return (await t.import('store.js')).state.settings.interface.menuPick;
 }, value);
 
-/** How a menu's rows look: each row's label, whether it's ticked, marked chosen, its icon showing, and its background. */
-/** Run in the page (before() installs it there as menuRows). */
+/** How a menu's rows look: label, ticked, marked chosen, icon showing, background, hint and aria-checked. Run in the page (before() installs it as menuRows). */
 const rowsOf = t => t.$$('.context-menu .menu-row').map(r => {
   const view = r.ownerDocument.defaultView;
   const icon = r.querySelector('.menu-icon');
@@ -40,6 +39,8 @@ const rowsOf = t => t.$$('.context-menu .menu-row').map(r => {
     picked: r.classList.contains('picked'),
     iconShows: view.getComputedStyle(icon).display !== 'none' && !!icon.firstElementChild,
     background: view.getComputedStyle(r).backgroundColor,
+    hint: r.querySelector('.menu-hint').textContent.trim(),
+    checked: r.getAttribute('aria-checked'),
   };
 });
 
@@ -74,6 +75,18 @@ const dropdownMenu = () => app.eval(async t => {
   return result;
 });
 
+/** A workspace's Background submenu (its rows keep their icons and say "current" in their hint with ticks), as shown. */
+const backgroundMenu = () => app.eval(async t => {
+  const { state } = await t.import('store.js');
+  const ws = state.workspaces.find(w => w.id === state.activeId);
+  const item = (await t.import('workspacebackground.js')).backgroundMenuItem(ws);
+  const popups = await t.import('popups.js');
+  popups.showMenu(item.submenu(), { x: 40, y: 40 });
+  const rows = globalThis.menuRows(t);
+  popups.closeAll();
+  return rows;
+});
+
 /** A terminal's "Keep in history after closing" row, an on/off item. */
 const keepRow = () => app.eval(async t => {
   const { state } = await t.import('store.js');
@@ -101,6 +114,11 @@ step('by default the chosen workspace has a tick, in place of its swatch, as bef
   const dropdown = await dropdownMenu();
   assert.equal(dropdown.noIcons, false);
   assert.deepEqual(dropdown.rows.map(r => r.ticked), [false, true]);
+  // A list that keeps its icons says "current" beside the chosen one, as before; now it's announced as chosen too.
+  const [same, none, gradient] = await backgroundMenu();
+  assert.deepEqual([same.hint, same.checked, same.picked], ['current', 'true', false]);
+  assert.deepEqual([none.hint, none.checked], ['', 'false']);
+  assert.deepEqual([gradient.ticked, gradient.iconShows], [false, true]);
 });
 
 step('Soft: no tick, the chosen row on the soft accent, every workspace with its swatch', async () => {
@@ -115,6 +133,9 @@ step('Soft: no tick, the chosen row on the soft accent, every workspace with its
   const dropdown = await dropdownMenu();
   assert.equal(dropdown.noIcons, true);
   assert.deepEqual(dropdown.rows.map(r => [r.picked, r.iconShows]), [[false, false], [true, false]]);
+  // The Background list marks its chosen row the same way, without "current".
+  const [same] = await backgroundMenu();
+  assert.deepEqual([same.hint, same.picked, same.background], ['', true, colours.fill]);
   // An on/off item keeps its tick.
   assert.equal((await keepRow()).ticked, true);
 });

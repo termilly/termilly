@@ -101,7 +101,7 @@ function workspaceRows(pc, actions) {
 function terminalRows(pc, wsId, actions) {
   /** @type {MenuEntry[]} */
   const rows = actions.stateOf(pc).terminals.filter(t => t.ws === wsId).map(t => ({
-    label: t.title, hint: escapeHtml(stateWord(stateThere(t))), checked: actions.inFront(pc, t.id),
+    label: t.title, hint: escapeHtml(stateWord(stateThere(t))), picked: actions.inFront(pc, t.id),
     title: `Open ${t.title} from ${pc.name} here`, action: () => openIfThere(pc.id, t.id, actions),
   }));
   const all = { label: OPEN_ALL, action: () => openAllThere(pc.id, wsId, actions) };
