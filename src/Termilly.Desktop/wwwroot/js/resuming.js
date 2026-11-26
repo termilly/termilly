@@ -78,41 +78,49 @@ const shellTookIt = (tab, term) => !!tab.running || !atPrompt(term);
 /**
  * With Show activity off (now, or turned off while it resumes) the host never says the agent runs, which ends a resume
  * that waits for that (Codex's, and one started early): once the shell has taken the command, the agent drawing its
- * screen, and that going quiet, ends it instead. Output after the command began is what counts (written before a look
- * saw it too), so an agent that loads silently isn't taken for one that's drawn; one silent for SILENT_MAX_MS ends it all
- * the same, so a shell that doesn't mark its commands can't leave it up for good.
+ * screen, and that going quiet, ends it instead. The screen's text against what it showed as the command began is
+ * what counts (a shell's own control sequences change none of it), so an agent that loads silently isn't taken for one
+ * that's drawn, and one drawn before a look still counts; one that changes nothing for SILENT_MAX_MS ends it all the
+ * same, so a shell that doesn't mark its commands can't leave it up for good.
  * @param {Tab} tab
  * @param {NonNullable<Tab['resuming']>} r
  */
 function watchScreen(tab, r) {
   if (agentKind(r.kind).hookAtStart && !r.early) return;
-  let lastWrite = 0, tookAt = 0;
-  /** @param {any} term */
-  const listen = term => term.onWriteParsed(() => { lastWrite = Date.now(); });
-  /** @type {{ dispose(): void } | null} */
-  let writes = tab.view?.term ? listen(tab.view.term) : null;
+  let tookAt = 0;
+  /** @type {string | null} what the screen showed at the first look after the shell took it, with no mark of its start */
+  let firstSeen = null;
   const look = window.setInterval(() => {
     const term = tab.view?.term;
-    if (tab.resuming !== r || tab.exited) {
-      clearInterval(look);
-      writes?.dispose();
-      return;
-    }
-    if (!term) return;
-    writes ??= listen(term);
-    if (activityShown() || settling.has(tab)) return;
+    if (tab.resuming !== r || tab.exited) return void clearInterval(look);
+    if (!term || activityShown() || settling.has(tab)) return;
     if (!shellTookIt(tab, term)) return void (tookAt = 0);
     tookAt ||= Date.now();
-    const began = tab.running?.startedAt ?? tookAt;
-    if (lastWrite <= began && Date.now() - tookAt < SILENT_MAX_MS) return;
+    const before = startScreens.get(tab) ?? (firstSeen ??= screenText(term));
+    if (screenText(term) === before && Date.now() - tookAt < SILENT_MAX_MS) return;
     clearInterval(look);
-    writes?.dispose();
     settle(tab);
   }, SCREEN_LOOK_MS);
 }
 
-/** The longest an agent's command may run without drawing anything before its resume counts as done anyway. */
+/** The longest an agent's command may change nothing on screen before its resume counts as done anyway. */
 const SILENT_MAX_MS = 10_000;
+
+/**
+ * The text a terminal shows, row by row.
+ * @param {any} term
+ */
+const screenText = term => {
+  const buffer = term.buffer.active;
+  return Array.from({ length: term.rows }, (_, y) => buffer.getLine(buffer.viewportY + y)?.translateToString(true) ?? '').join('\n');
+};
+
+/** What a resuming terminal's screen showed as its shell began the resume command. @type {WeakMap<Tab, string>} */
+const startScreens = new WeakMap();
+on(EVENTS.commandStarted, (/** @type {Tab} */ tab) => {
+  const term = tab.view?.term;
+  if (tab.resuming && term && !startScreens.has(tab)) startScreens.set(tab, screenText(term));
+});
 
 /**
  * The agent didn't come back (its session is gone, it failed to start): the terminal is the user's again, with the
