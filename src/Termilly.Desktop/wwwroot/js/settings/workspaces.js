@@ -7,7 +7,7 @@ import { state, getSetting, tabTitle } from '../store.js';
 import { targetOf } from '../dom.js';
 import { ICONS } from '../ui.js';
 import { confirmDialog } from '../dialogs.js';
-import { setSetting } from '../preferences.js';
+import { setSetting, saveNow } from '../preferences.js';
 import { row, seg, toggle, group } from './controls.js';
 import { SECTION } from './page.js';
 import { SETTING_VALUES } from '../constants.js';
@@ -35,16 +35,40 @@ async function backgroundShells() {
 let asking = false;
 
 /**
+ * What stopping the background shells asks, and what's done before the background process ends.
+ * @typedef {{ title: string, body: string, confirm: string, before?: () => void }} StopAsk
+ */
+
+/** "Stop background shells": the terminals end. */
+const STOP = { title: 'Stop background shells?', body: 'These terminals end now, with whatever runs in them.', confirm: 'Stop them' };
+
+/**
+ * Turning background shells off: the terminals start again in this window (main.js), so the setting is off, and the
+ * host told so, before the background process ends: their new shells then aren't the background process's again.
+ * @type {StopAsk}
+ */
+const TURN_OFF = {
+  title: 'Turn off background shells?',
+  body: 'These terminals start again in this window. Agents carry on with their conversation; anything else running in them stops.',
+  confirm: 'Turn off',
+  before: () => {
+    setSetting(BACKGROUND_SHELLS, false);
+    saveNow();
+  },
+};
+
+/**
  * Asks before the background shells end, naming them (nothing to ask when there are none), then ends them and the
  * background process. False when the user kept them, or it's already being asked.
- * @param {string} title
+ * @param {StopAsk} ask
  */
-async function stopShells(title) {
+async function stopShells(ask) {
   if (asking) return false;
   asking = true;
   try {
     const items = await backgroundShells();
-    if (items.length && !(await confirmDialog({ title, body: 'These terminals end now, with whatever runs in them.', confirm: 'Stop them', items }))) return false;
+    if (items.length && !(await confirmDialog({ title: ask.title, body: ask.body, confirm: ask.confirm, items }))) return false;
+    ask.before?.();
     send(PAGE.hostShutdown);
     return true;
   } finally {
@@ -71,14 +95,15 @@ const WORKSPACES = {
           seg('interface.closeAction', [[closeAction.quit, 'Quit Termilly'], [closeAction.tray, 'Keep running in the tray']])))
       + row('Ask before quitting', 'When a command runs, or an agent works or waits for you.',
         toggle('interface.confirmQuit'))),
-  // Turning background shells off ends the ones running (after asking) and the background process; kept, it stays on.
+  // Turning background shells off (after asking) ends the background process, and its terminals start again in this
+  // window; kept, it stays on.
   click(e) {
     if (!targetOf(e).closest(`.switch[data-setting="${BACKGROUND_SHELLS}"]`) || !getSetting(BACKGROUND_SHELLS)) return false;
-    stopShells('Turn off background shells?').then(stopped => { if (stopped) setSetting(BACKGROUND_SHELLS, false); });
+    stopShells(TURN_OFF);
     return true;
   },
   actions: {
-    stopHost: () => stopShells('Stop background shells?'),
+    stopHost: () => stopShells(STOP),
   },
 };
 

@@ -19,11 +19,16 @@ internal sealed class BackgroundHost : IDisposable
     public BackgroundHost(ISettingsStore settings)
     {
         _settings = settings;
-        _host = settings.Current.Session.BackgroundShells ? Task.Run(HostClient.Connect) : Task.FromResult<HostClient?>(null);
+        var keeps = settings.Current.Session.BackgroundShells;
+        _host = keeps ? Task.Run(HostClient.Connect) : Task.FromResult<HostClient?>(null);
+        PipeName = keeps ? FixedPipeName : null;
     }
 
-    /// <summary>The agent pipe's name: fixed while the background host keeps shells, else one of the window's own.</summary>
-    public string? PipeName => _settings.Current.Session.BackgroundShells ? FixedPipeName : null;
+    /// <summary>
+    /// The agent pipe's name: fixed when the background host kept shells at start, else one of the window's own. Chosen
+    /// once, as the window listens on one pipe until it closes, also after the setting changes.
+    /// </summary>
+    public string? PipeName { get; }
 
     /// <summary>
     /// The host to run a new shell in: the one connected at start, or a new one if that went away. Null when Settings

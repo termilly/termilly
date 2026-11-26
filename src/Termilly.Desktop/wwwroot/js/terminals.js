@@ -166,6 +166,10 @@ const shellOf = tab => (tab.shell ??= { typedAt: 0, promptTimer: 0, commandTimer
 /** A bell this soon after typing is the shell answering a key (Tab with nothing to complete), not news. */
 const TYPING_BELL_MS = 1500;
 
+/** Back from a full-screen program's screen to the normal one, and a soft reset (DECSTR) of the modes it set. */
+const LEAVE_ALTERNATE_SCREEN = '\x1b[?1049l';
+const SOFT_RESET = '\x1b[!p';
+
 /** Erase in Display (CSI J) of the whole screen, and of the scrollback too. */
 const ERASE_ALL = 2;
 const ERASE_SCROLLBACK = 3;
@@ -785,6 +789,18 @@ function waitForPrompt(tab) {
     if (!term || !tab.start?.command || tab.exited) return;
     if (atPrompt(term)) runPendingCommand(tab);
   }, PROMPT_SETTLE_MS);
+}
+
+/**
+ * Its shell ended with the background host, which Settings no longer keep: it starts again here at once, output kept
+ * (an agent it had resumes, snapshot.js resumeAfterHost). The old screen's modes go, as the program that set them did.
+ * @param {Tab} tab
+ */
+export function startAgainHere(tab) {
+  tab.exited = false;
+  clearActivity(tab);
+  /** @type {TabView} */ (tab.view).term.write(`${LEAVE_ALTERNATE_SCREEN}${SOFT_RESET}\r\n\x1b[90m[background shells turned off: starting again in this window]\x1b[0m\r\n`);
+  startShell(tab);
 }
 
 /** @param {Tab} tab */

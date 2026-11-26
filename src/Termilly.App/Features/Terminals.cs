@@ -239,14 +239,21 @@ internal sealed class TerminalHandler(
         return (new TerminalSession(pty, output, code => exited(code, pid)), pid);
     }
 
-    /// <summary>"Stop background shells": the host ends, and its terminals with it.</summary>
+    /// <summary>
+    /// "Stop background shells", or background shells turned off: the host ends, and its terminals with it. Their
+    /// shells' own ends, which the host may still report, aren't passed on: the page may start such a terminal again
+    /// at once (main.js), and the new shell is what it shows then.
+    /// </summary>
     private void ShutDownHost()
     {
         var hosted = terminals.Hosted();
+        foreach (var id in hosted)
+        {
+            (terminals.Forget(id) as HostedSession)?.Ended();
+        }
         _ = host.ShutDown();
         foreach (var id in hosted)
         {
-            terminals.Forget(id);
             page.Post(new ToPage.Exit(id, HostedSession.EndedCode, Ended: true));
         }
     }
