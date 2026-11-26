@@ -44,6 +44,7 @@ const rowsOf = t => t.$$('.context-menu .menu-row').map(r => {
     checked: r.getAttribute('aria-checked'),
     iconColour: view.getComputedStyle(icon).color,
     swatchStroke: (s => (s ? view.getComputedStyle(s).stroke : null))(icon.querySelector('.workspace-swatch rect')),
+    labelInset: Math.round(r.querySelector('.menu-label').getBoundingClientRect().left - r.getBoundingClientRect().left),
   };
 });
 
@@ -71,7 +72,8 @@ const dropdownMenu = () => app.eval(async t => {
   /** @type {HTMLButtonElement} */ (select.nextElementSibling).click();
   await new Promise(r => setTimeout(r, 50));
   const menu = t.$('.context-menu');
-  const result = { rows: globalThis.menuRows(t), noIcons: menu.classList.contains('no-icons') };
+  const focused = globalThis.document.activeElement?.querySelector('.menu-label')?.textContent;
+  const result = { rows: globalThis.menuRows(t), noIcons: menu.classList.contains('no-icons'), focused };
   popups.closeAll();
   select.nextElementSibling?.remove();
   select.remove();
@@ -88,6 +90,16 @@ const backgroundMenu = () => app.eval(async t => {
   const rows = globalThis.menuRows(t);
   popups.closeAll();
   return rows;
+});
+
+/** Minimal's Title bar submenu: on/off parts and a pick-one name place, none with an icon, as shown. */
+const titleBarMenu = () => app.eval(async t => {
+  const item = (await t.import('panebar.js')).paneBarItem();
+  const popups = await t.import('popups.js');
+  popups.showMenu(item.submenu(), { x: 40, y: 40 });
+  const result = { rows: globalThis.menuRows(t), noIcons: t.$('.context-menu').classList.contains('no-icons') };
+  popups.closeAll();
+  return result;
 });
 
 /** A terminal's "Keep in history after closing" row, an on/off item. */
@@ -118,6 +130,16 @@ step('by default the chosen workspace has a tick, in place of its swatch, as bef
   // No icons in it: no icon column, the tick at the end instead.
   assert.equal(dropdown.noIcons, true);
   assert.deepEqual(dropdown.rows.map(r => [r.ticked, r.tickedAtEnd, r.iconShows]), [[false, false, false], [false, true, false]]);
+  // Its labels start at the row's padding (8px), with nothing before them; it opens on the chosen one.
+  assert.deepEqual(dropdown.rows.map(r => r.labelInset), [8, 8]);
+  assert.equal(dropdown.focused, 'Beta');
+  // A menu mixing switches and a pick-one, none with an icon: every tick at the end.
+  const bar = await titleBarMenu();
+  assert.equal(bar.noIcons, true);
+  const name = bar.rows.find(r => r.label === 'Name');
+  const line = bar.rows.find(r => r.label === 'Name on a line');
+  assert.deepEqual([name.ticked, name.tickedAtEnd, name.labelInset], [false, true, 8]);
+  assert.deepEqual([line.ticked, line.tickedAtEnd, line.labelInset], [false, true, 8]);
   // A list that keeps its icons says "current" beside the chosen one, as before; now it's announced as chosen too.
   const [same, none, gradient] = await backgroundMenu();
   assert.deepEqual([same.hint, same.checked, same.picked], ['current', 'true', false]);
@@ -140,7 +162,8 @@ step('Soft: no tick, the chosen row on the soft accent, every workspace with its
   // A dropdown has no icons: its icon column goes.
   const dropdown = await dropdownMenu();
   assert.equal(dropdown.noIcons, true);
-  assert.deepEqual(dropdown.rows.map(r => [r.picked, r.iconShows]), [[false, false], [true, false]]);
+  assert.deepEqual(dropdown.rows.map(r => [r.picked, r.iconShows, r.tickedAtEnd, r.labelInset]), [[false, false, false, 8], [true, false, false, 8]]);
+  assert.equal(dropdown.focused, 'Beta');
   // The Background list marks its chosen row the same way, without "current".
   const [same] = await backgroundMenu();
   assert.deepEqual([same.hint, same.picked, same.background], ['', true, colours.fill]);
@@ -157,6 +180,15 @@ step('Solid: the chosen row on the accent itself', async () => {
   assert.equal(rows[0].iconColour, colours.onAccent);
   assert.equal(rows[0].swatchStroke, colours.onAccent);
   assert.equal((await keepRow()).ticked, true);
+  // A dropdown: no icon column; the mixed Title bar menu: its switches ticked at the end, its pick on the accent.
+  const dropdown = await dropdownMenu();
+  assert.deepEqual(dropdown.rows.map(r => [r.picked, r.tickedAtEnd, r.labelInset]), [[false, false, 8], [true, false, 8]]);
+  assert.equal(dropdown.rows[1].background, colours.accent);
+  const bar = await titleBarMenu();
+  const name = bar.rows.find(r => r.label === 'Name');
+  const line = bar.rows.find(r => r.label === 'Name on a line');
+  assert.deepEqual([name.tickedAtEnd, name.labelInset], [true, 8]);
+  assert.deepEqual([line.picked, line.tickedAtEnd, line.background, line.labelInset], [true, false, colours.accent, 8]);
 });
 
 step('Checkbox brings the ticks back', async () => {
