@@ -45,6 +45,8 @@ export function resumeTyped(tab, command) {
   const r = tab.resuming;
   if (!r) return;
   r.command = command;
+  // Whether the shell has left its prompt for it at a check.
+  let took = false;
   const check = () => {
     const term = tab.view?.term;
     // An agent that runs has taken the command: its own input line can look like a shell prompt.
@@ -52,9 +54,13 @@ export function resumeTyped(tab, command) {
     // So has a command the shell says runs (the host may not report the agent: Show activity off), unless it's one a
     // key spoiled: looked at again later, in case it ends at the prompt.
     if (shellTookIt(tab, term)) {
+      took = true;
       r.timer = window.setTimeout(check, RETRY_AFTER_MS);
       return;
     }
+    // Back at what looks like a prompt after leaving it, with no marks to say the command ended: an agent's own input
+    // line can look like one, so nothing is typed into it.
+    if (took && !tab.shellMarks) return;
     // Typed twice and still at the prompt (a shell that doesn't mark its commands' ends): the agent didn't start.
     if (r.retried) return void gaveUp(tab);
     r.retried = true;
@@ -162,7 +168,9 @@ const TAIL_CHARS = 400;
  */
 const changedSince = (term, before) => {
   const now = screenText(term);
-  return before ? !now.endsWith(before.slice(-TAIL_CHARS)) : now.length > 0;
+  // As much of the end as both have: a reflow may leave fewer characters in the rows compared.
+  const k = Math.min(TAIL_CHARS, now.length, before.length);
+  return before ? now.slice(-k) !== before.slice(-k) : now.length > 0;
 };
 
 /**
