@@ -27,7 +27,19 @@ public sealed class BackgroundTasksTests : IDisposable
     private readonly TerminalSessions _terminals = new();
     private readonly BackgroundTasks _tasks;
 
-    public BackgroundTasksTests() => _tasks = new BackgroundTasks(new PageChannel(_sink), _terminals, new TaskOutputs(_output, _codex), _processes, _clock);
+    private readonly MemorySaved _saved = new();
+
+    public BackgroundTasksTests() => _tasks = NewTasks();
+
+    /// <summary>The app's task follower, as one starting again finds it (the same saved tasks).</summary>
+    private BackgroundTasks NewTasks() => new(new PageChannel(_sink), _terminals, new TaskOutputs(_output, _codex), _processes, _clock, _saved);
+
+    private sealed class MemorySaved : ISavedTasks
+    {
+        public IReadOnlyList<SavedTask> Tasks { get; private set; } = [];
+        public IReadOnlyList<SavedTask> Load() => Tasks;
+        public void Save(IReadOnlyList<SavedTask> tasks) => Tasks = tasks;
+    }
 
     public void Dispose() => _tasks.Dispose();
 
@@ -254,6 +266,101 @@ public sealed class BackgroundTasksTests : IDisposable
         finally
         {
             Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void A_task_runs_on_in_a_kept_shell_after_the_app_starts_again()
+    {
+        _tasks.OnEvent(Event("PostToolUse", TaskId));
+        _output.Reading = new TaskReading("x.output", "tick 3", null);
+        _tasks.Dispose();
+        _sink.Sent.Clear();
+
+        using var again = NewTasks();
+        again.ShellStarted(Pane, kept: true);
+        var task = LastList().Single()!;
+        Assert.Equal(TaskStates.Running, (string?)task["state"]);
+        Assert.Equal("tick 3", (string?)task["lastLine"]);
+    }
+
+    [Fact]
+    public void A_new_shell_gets_none_of_the_tasks_saved_for_its_terminal()
+    {
+        _tasks.OnEvent(Event("PostToolUse", TaskId));
+        _output.Reading = new TaskReading("x.output", "tick 3", null);
+        _sink.Sent.Clear();
+
+        using var again = NewTasks();
+        again.ShellStarted(Pane, kept: false);
+        Assert.False(TasksSent());
+        Assert.Empty(_saved.Tasks);
+    }
+
+    [Fact]
+    public void A_saved_task_whose_file_cant_be_read_gets_the_usual_wait_then_goes()
+    {
+        _tasks.OnEvent(Event("PostToolUse", TaskId));
+        _clock.Now += TimeSpan.FromMinutes(5);
+
+        using var again = NewTasks();
+        again.ShellStarted(Pane, kept: true);
+        again.Tick();
+        Assert.Single(LastList());
+        _clock.Now += TimeSpan.FromMinutes(1);
+        again.Tick();
+        Assert.Empty(LastList());
+    }
+
+    [Fact]
+    public void An_ended_task_isnt_saved()
+    {
+        _tasks.OnEvent(Event("PostToolUse", TaskId));
+        _output.Reading = new TaskReading("x.output", "done", 0);
+        _tasks.Tick();
+        Assert.Empty(_saved.Tasks);
+    }
+
+    [Fact]
+    public void A_Codex_command_reported_ended_before_a_restart_ends_after_it()
+    {
+        _tasks.OnEvent(CodexEvent("PreToolUse"));
+        _tasks.OnEvent(CodexEvent("Stop"));
+        _tasks.OnEvent(CodexEvent("PostToolUse"));
+        _clock.Now += TimeSpan.FromMinutes(1);
+
+        using var again = NewTasks();
+        again.ShellStarted(Pane, kept: true);
+        Assert.Equal(TaskStates.Done, (string?)LastList().Single()!["state"]);
+    }
+
+    [Fact]
+    public void Tasks_saved_for_a_terminal_not_started_yet_stay_saved()
+    {
+        _tasks.OnEvent(Event("PostToolUse", TaskId));
+
+        using var again = NewTasks();
+        again.ShellStarted("p2", kept: false);
+        Assert.Equal([Pane], _saved.Tasks.Select(t => t.Pane));
+    }
+
+    [Fact]
+    public void Saved_tasks_survive_the_file_and_a_damaged_one_reads_as_none()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"termilly-tasks-{Guid.NewGuid():N}.json");
+        try
+        {
+            var file = new SavedTasksFile(path);
+            var task = new SavedTask(Pane, "claude", UseId, Session, TaskId, "sleep 60", null, 1);
+            file.Save([task]);
+            Assert.Equal([task], file.Load());
+
+            File.WriteAllText(path, "[{\"pane\": \"p1\"}, null");
+            Assert.Empty(file.Load());
+        }
+        finally
+        {
+            File.Delete(path);
         }
     }
 }

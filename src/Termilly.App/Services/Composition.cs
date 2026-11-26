@@ -72,6 +72,7 @@ internal static class Composition
         .AddSingleton(TimeProvider.System)
         .AddSingleton(new TaskOutputs(new ClaudeTaskOutput(), new CodexTaskOutput()))
         .AddSingleton<ITaskProcesses, TaskProcesses>()
+        .AddSingleton<ISavedTasks, SavedTasksFile>()
         .AddHandler<BackgroundTasks>()
         .AddStartable<EarlyAgents>()
         .AddStartable<RetiredAssistantKey>()
