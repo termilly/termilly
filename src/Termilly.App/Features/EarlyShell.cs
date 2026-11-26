@@ -6,16 +6,26 @@ namespace Termilly.Desktop.Features;
 /// <summary>
 /// A terminal's shell started before the page was up (<see cref="EarlyAgents"/>): its agent's resume command is typed
 /// at its first prompt, as the page would have, and what it prints is kept until the page opens the terminal and takes
-/// it over (<see cref="Take"/>), then goes straight to the page. Until then it answers the terminal's version query
-/// itself (the page answers it after), so the agent knows the terminal as it does when the page starts it.
+/// it over (<see cref="Take"/>), then goes straight to the page. Until then it answers the terminal's queries itself
+/// (the page answers them after): its version, so the agent knows the terminal as it does when the page starts it, and
+/// where its cursor is and what it is, which a shell waits for as it starts (PowerShell for seconds, unanswered).
 /// </summary>
 internal sealed class EarlyShell(string command, string versionReply) : IDisposable
 {
     /// <summary>The prompt marks shell integration prints (SessionLaunch): where the prompt starts, where input does.</summary>
     private const string PromptStart = "\u001b]133;A";
     private const string InputStart = "\u001b]133;B";
-    /// <summary>XTVERSION (CSI &gt; 0 q, or CSI &gt; q): which terminal this is.</summary>
-    private static readonly string[] VersionQueries = ["\u001b[>0q", "\u001b[>q"];
+
+    /// <summary>The queries answered before the page is up, each with its answer.</summary>
+    private readonly (string[] Queries, string Reply)[] _answers =
+    [
+        // XTVERSION (CSI > 0 q, or CSI > q): which terminal this is.
+        (["\u001b[>0q", "\u001b[>q"], versionReply),
+        // Where the cursor is (CSI 6 n): nothing drawn yet, the top left.
+        (["\u001b[6n"], TerminalReplies.CursorAtStart),
+        // What the terminal is (CSI c, CSI 0 c).
+        (["\u001b[c", "\u001b[0c"], TerminalReplies.DeviceAttributes),
+    ];
     /// <summary>The end of one chunk of output kept with the next, so a mark split between the two is still seen.</summary>
     private const int TailLength = 8;
 
@@ -38,9 +48,11 @@ internal sealed class EarlyShell(string command, string versionReply) : IDisposa
     public void Print(string data)
     {
         string seen;
+        string tail;
         bool taken;
         lock (_gate)
         {
+            tail = _tail;
             seen = _tail + data;
             _tail = seen[^Math.Min(TailLength, seen.Length)..];
             taken = _output is not null;
@@ -53,11 +65,32 @@ internal sealed class EarlyShell(string command, string versionReply) : IDisposa
                 _missed.Add(data);
             }
         }
-        if (!taken && VersionQueries.Any(seen.Contains))
+        if (!taken)
         {
-            Session?.Write(versionReply);
+            Answer(seen, tail.Length);
         }
         TypeAtPrompt(seen);
+    }
+
+    /// <summary>
+    /// Answers each query in the output, once for each time it's asked. One that ends in what's new (past
+    /// <paramref name="old"/>, the tail kept from before) is new: one wholly in the tail was answered then.
+    /// </summary>
+    private void Answer(string seen, int old)
+    {
+        foreach (var (queries, reply) in _answers)
+        {
+            foreach (var query in queries)
+            {
+                for (var at = seen.IndexOf(query, StringComparison.Ordinal); at >= 0; at = seen.IndexOf(query, at + 1, StringComparison.Ordinal))
+                {
+                    if (at + query.Length > old)
+                    {
+                        Session?.Write(reply);
+                    }
+                }
+            }
+        }
     }
 
     /// <summary>

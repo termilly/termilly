@@ -70,6 +70,36 @@ public sealed class EarlyShellTests
     }
 
     [Fact]
+    public void A_shell_asking_where_its_cursor_is_is_answered_at_once_until_the_page_takes_over()
+    {
+        // PowerShell asks as it starts, and waits about 11 s for an answer that doesn't come.
+        var (early, shell) = Started();
+        early.Print("\u001b[6n");
+        Assert.Equal(["\u001b[1;1R"], shell.Typed);
+        early.Print("\u001b[c");
+        Assert.Equal(["\u001b[1;1R", "\u001b[?1;2c"], shell.Typed);
+        early.Take(_ => { }, _ => { }, _ => { });
+        early.Print("\u001b[6n");
+        Assert.Equal(2, shell.Typed.Count); // the page answers now
+    }
+
+    [Fact]
+    public void A_query_is_answered_once_however_the_output_comes()
+    {
+        var (early, shell) = Started();
+        // Split between two chunks: answered when it's whole.
+        early.Print("x\u001b[");
+        early.Print("6n");
+        Assert.Equal(["\u001b[1;1R"], shell.Typed);
+        // Still in the tail kept from before: not answered again.
+        early.Print("y");
+        Assert.Single(shell.Typed);
+        // Asked twice in one chunk: answered twice.
+        early.Print("\u001b[6n..\u001b[6n");
+        Assert.Equal(3, shell.Typed.Count);
+    }
+
+    [Fact]
     public void What_it_printed_is_replayed_first_then_the_rest_goes_live()
     {
         var (early, _) = Started();
