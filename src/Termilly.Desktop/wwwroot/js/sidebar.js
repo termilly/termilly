@@ -248,11 +248,11 @@ for (const event of [EVENTS.workspaces, EVENTS.tab, EVENTS.tags, EVENTS.focus]) 
 
 /**
  * The settings the rows show, as one value to compare: agent cost, the activity line, background tasks, the spinner,
- * the git branch and listening ports (gitstatus.js), and which hosts count as production or staging (environments.js).
+ * listening ports (gitstatus.js), and which hosts count as production or staging (environments.js).
  */
 const shownSettings = () => {
   const { agents, interface: ui, terminal, safety } = state.settings;
-  return JSON.stringify([costMode(), agents.line, agents.tasksInSidebar, ui.showActivity, ui.gitStatus, terminal.ports, safety.environments]);
+  return JSON.stringify([costMode(), agents.line, agents.tasksInSidebar, ui.showActivity, terminal.ports, safety.environments]);
 };
 // Settings change often in the background (saves of the window's state, the cost ledger): drawn again only when one the
 // rows show did, so focus, a click under way and a menu's row stay as they are otherwise.

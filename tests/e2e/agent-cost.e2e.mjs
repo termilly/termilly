@@ -81,9 +81,9 @@ step('Listening ports off takes a terminal\'s port out of the sidebar at once', 
   await app.waitFor('#sidebar .port-chip', { timeoutMs: 20_000 });
   const portShown = () => app.eval(async t => {
     const frame = () => new Promise(r => globalThis.requestAnimationFrame(() => r(undefined)));
-    t.click('[data-setting="terminal.ports"]');
     const { state } = await t.import('store.js');
     const was = state.settings.terminal.ports;
+    t.click('[data-setting="terminal.ports"]');
     for (let i = 0; i < 50 && state.settings.terminal.ports === was; i++) await new Promise(r => setTimeout(r, 10));
     await frame();
     await frame();
