@@ -151,6 +151,8 @@ public sealed class UnixPtyTests
         await SendAsync(pty, "sleep 30 && echo slept-$((1+1))\n");
         await Task.Delay(500);
         await SendAsync(pty, "\x03");
+        // Typed a moment later: the interrupt throws away what's typed with it.
+        await Task.Delay(500);
         await SendAsync(pty, "echo here-$((3+3))\n");
         var output = await ReadUntilAsync(pty, "here-6", seen);
         Assert.DoesNotContain("slept-2", output);
