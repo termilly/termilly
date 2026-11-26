@@ -39,6 +39,20 @@ public sealed class UnixPtyTests
         return seen.ToString();
     }
 
+    /// <summary>
+    /// The shells the terminal is tried with: sh, and zsh where there is one (macOS's default: one started directly got no
+    /// controlling terminal there, so it never heard of a resize, nor got Ctrl+C's interrupt).
+    /// </summary>
+    public static TheoryData<string> Shells()
+    {
+        var shells = new TheoryData<string> { "/bin/sh" };
+        if (File.Exists("/bin/zsh"))
+        {
+            shells.Add("/bin/zsh -f");
+        }
+        return shells;
+    }
+
     private static async Task SendAsync(IPty pty, string text)
     {
         await pty.Input.WriteAsync(Encoding.UTF8.GetBytes(text));
@@ -85,30 +99,34 @@ public sealed class UnixPtyTests
         }
     }
 
-    [Fact]
-    public async Task Resizing_reaches_the_shell()
+    [Theory]
+    [MemberData(nameof(Shells))]
+    public async Task Resizing_reaches_the_shell(string shell)
     {
         if (!OperatingSystem.IsLinux() && !OperatingSystem.IsMacOS())
         {
             return;
         }
-        using var pty = PseudoTerminal.Start(new PtyOptions("/bin/sh", 80, 24));
+        using var pty = PseudoTerminal.Start(new PtyOptions(shell, 80, 24));
         var seen = new StringBuilder();
-        await SendAsync(pty, "stty size; echo first-$((1+1))\n");
+        // The program is told (SIGWINCH), not only the terminal's size changed: Claude Code draws again on it.
+        await SendAsync(pty, "trap 'echo told-$((3+4))' WINCH; stty size; echo first-$((1+1))\n");
         Assert.Contains("24 80", await ReadUntilAsync(pty, "first-2", seen));
         pty.Resize(132, 40);
+        await ReadUntilAsync(pty, "told-7", seen);
         await SendAsync(pty, "stty size; echo second-$((2+2))\n");
         Assert.Contains("40 132", await ReadUntilAsync(pty, "second-4", seen));
     }
 
-    [Fact]
-    public async Task The_terminal_is_the_shells_controlling_terminal()
+    [Theory]
+    [MemberData(nameof(Shells))]
+    public async Task The_terminal_is_the_shells_controlling_terminal(string shell)
     {
         if (!OperatingSystem.IsLinux() && !OperatingSystem.IsMacOS())
         {
             return;
         }
-        using var pty = PseudoTerminal.Start(new PtyOptions("/bin/sh", 80, 24));
+        using var pty = PseudoTerminal.Start(new PtyOptions(shell, 80, 24));
         var seen = new StringBuilder();
         // /dev/tty opens only in a process that has a controlling terminal (job control and sudo need one).
         await SendAsync(pty, "(exec 3</dev/tty) 2>/dev/null && echo ctty-$((4+4)) || echo no-ctty-$((4+4))\n");
@@ -116,14 +134,15 @@ public sealed class UnixPtyTests
         Assert.DoesNotContain("no-ctty-8", seen.ToString());
     }
 
-    [Fact]
-    public async Task Ctrl_c_interrupts_whats_running_not_the_shell()
+    [Theory]
+    [MemberData(nameof(Shells))]
+    public async Task Ctrl_c_interrupts_whats_running_not_the_shell(string shell)
     {
         if (!OperatingSystem.IsLinux() && !OperatingSystem.IsMacOS())
         {
             return;
         }
-        using var pty = PseudoTerminal.Start(new PtyOptions("/bin/sh", 80, 24));
+        using var pty = PseudoTerminal.Start(new PtyOptions(shell, 80, 24));
         var seen = new StringBuilder();
         // &&, not ;: bash (macOS's sh) goes on to the next command after an interrupted one, dash doesn't.
         await SendAsync(pty, "sleep 30 && echo slept-$((1+1))\n");
@@ -180,5 +199,31 @@ public sealed class UnixPtyTests
             using var program = Process.GetProcessById(pty.ProcessId);
             program.Kill(entireProcessTree: true);
         }
+    }
+}
+
+/// <summary>macOS starts a terminal's program through bash, which takes the terminal as its controlling one.</summary>
+public sealed class ControllingTerminalTests
+{
+    private static readonly string[] Path = ["PATH=/usr/bin:/bin", "HOME=/Users/me"];
+
+    private static bool Exists(string path) => path is "/bin/bash" or "/bin/zsh" or "/usr/bin/ssh";
+
+    [Fact]
+    public void On_macOS_a_program_found_starts_through_bash_with_its_arguments_as_they_were()
+    {
+        Assert.Equal(["/bin/bash", "-c", "export SHLVL=$((${SHLVL:-1}-1)); exec \"$@\"", "termilly", "zsh", "-l"],
+            ControllingTerminal.Arguments(["zsh", "-l"], Path, mac: true, Exists));
+        Assert.Equal(["/bin/bash", "-c", "export SHLVL=$((${SHLVL:-1}-1)); exec \"$@\"", "termilly", "/bin/zsh", "my arg"],
+            ControllingTerminal.Arguments(["/bin/zsh", "my arg"], Path, mac: true, Exists));
+    }
+
+    [Fact]
+    public void Elsewhere_or_for_a_program_not_there_it_starts_as_it_is()
+    {
+        Assert.Equal(["zsh", "-l"], ControllingTerminal.Arguments(["zsh", "-l"], Path, mac: false, Exists));
+        // One that can't be found fails to start as before, rather than bash saying so in the terminal.
+        Assert.Equal(["nosuch"], ControllingTerminal.Arguments(["nosuch"], Path, mac: true, Exists));
+        Assert.Equal(["zsh"], ControllingTerminal.Arguments(["zsh"], Path, mac: true, p => p == "/bin/zsh"));
     }
 }
