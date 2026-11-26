@@ -121,6 +121,9 @@ before(async () => {
   await app.eval(async t => {
     const { GROUPS } = await t.import('store.js');
     (await t.import('preferences.js')).updateSettings(GROUPS.uiState, { tourSeen: true });
+    // Already offered: ended (stopTour marks it seen too).
+    const tour = await t.import('tour.js');
+    if (tour.tourActive()) tour.stopTour();
   });
   await app.eval(async t => (await t.import('workspaces.js')).createWorkspace({ name: 'second', stay: true }));
   await app.eval((t, source) => { globalThis.menuRows = (0, eval)(source); }, rowsOf.toString());
@@ -221,10 +224,13 @@ step('with Colour dots off the workspace list has no icon column, in every style
   try {
     for (const style of ['check', 'soft', 'solid']) {
       assert.equal(await choose(style), style);
-      const { rows } = await workspaceList();
-      const chosen = rows[0];
-      assert.deepEqual([chosen.iconShows, chosen.labelInset], [false, 8], style);
+      const { rows, colours } = await workspaceList();
+      const [chosen, other] = rows;
+      assert.deepEqual([chosen.iconShows, chosen.labelInset, other.iconShows, other.labelInset], [false, 8, false, 8], style);
       assert.equal(chosen.tickedAtEnd, style === 'check', style);
+      // Soft and Solid still mark it with their background.
+      const background = { check: null, soft: colours.fill, solid: colours.accent }[style];
+      if (background) assert.equal(chosen.background, background, style);
     }
   } finally {
     await choose('check');
