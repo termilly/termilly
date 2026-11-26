@@ -240,11 +240,11 @@ step('add_schedule takes the values as vars, and refuses a snippet without them'
       return { error: e.message };
     }
   }, args);
+  // New values replace the stored ones (n: 4): leaving out the one with a default is leaving it without a value.
+  assert.match((await edit({ schedule: added.id, vars: { who: 'x' } })).error, /needs values for: n\./);
   // Run as a command, the values go; back to the snippet, it needs them again.
   await edit({ schedule: added.id, what: 'command', command: 'echo x' });
   assert.match((await edit({ schedule: added.id, what: 'snippet', snippet: SNIPPET })).error, /needs values for: who/);
-  // New values replace the old ones: leaving out the one with a default is leaving it without a value.
-  assert.match((await edit({ schedule: added.id, what: 'snippet', snippet: SNIPPET, vars: { who: 'x' } })).error, /needs values for: n\./);
   assert.match((await edit({ schedule: added.id, vars: { who: 'x' } })).error, /vars are for what = snippet/);
 });
 
