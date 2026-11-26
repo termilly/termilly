@@ -70,9 +70,23 @@ step('a name being edited in a terminal\'s header gets the text menu, not the ta
     await t.waitFor('.rename-input');
   });
   const { browserMenu, rows } = await rightClick('.rename-input');
-  await app.eval(t => t.$('.rename-input').dispatchEvent(new globalThis.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
   assert.equal(browserMenu, false);
   assert.ok(rows.includes('Paste') && rows.includes('Select all'), rows.join(', '));
+  // Picked with the mouse, the pick acts on the name still being edited: the click doesn't take its focus away.
+  const picked = await app.eval(async t => {
+    const input = t.$('.rename-input');
+    input.focus();
+    input.setSelectionRange(0, 0);
+    input.dispatchEvent(new input.ownerDocument.defaultView.MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    const row = t.$$('.context-menu .menu-row').find(b => b.querySelector('.menu-label').textContent.trim() === 'Select all');
+    t.click(`.context-menu .menu-row:nth-child(${[...row.parentElement.children].indexOf(row) + 1})`);
+    await new Promise(r => setTimeout(r, 50));
+    const still = t.$('.rename-input');
+    const result = { editing: still === input, all: still ? [still.selectionStart, still.selectionEnd] : null, length: input.value.length };
+    still?.dispatchEvent(new globalThis.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    return result;
+  });
+  assert.deepEqual(picked, { editing: true, all: [0, picked.length], length: picked.length });
 });
 
 step('a selection can be copied, but a password\'s can\'t', async () => {
@@ -81,8 +95,8 @@ step('a selection can be copied, but a password\'s can\'t', async () => {
       const el = t.$(id);
       el.focus();
       el.select();
-      el.dispatchEvent(new el.ownerDocument.defaultView.MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
-      return t.$$('.context-menu .menu-row').map(b => `${b.querySelector('.menu-label').textContent.trim()}${b.disabled ? ' (off)' : ''}`);
+      const browserMenu = el.dispatchEvent(new el.ownerDocument.defaultView.MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+      return { browserMenu, rows: t.$$('.context-menu .menu-row').map(b => `${b.querySelector('.menu-label').textContent.trim()}${b.disabled ? ' (off)' : ''}`).slice(0, 2) };
     };
     const text = rows('#e2e-text');
     (await t.import('popups.js')).closeAll();
@@ -90,8 +104,8 @@ step('a selection can be copied, but a password\'s can\'t', async () => {
     (await t.import('popups.js')).closeAll();
     return { text, secret };
   });
-  assert.deepEqual(selected.text.slice(0, 2), ['Cut', 'Copy']);
-  assert.deepEqual(selected.secret.slice(0, 2), ['Cut (off)', 'Copy (off)']);
+  assert.deepEqual(selected.text, { browserMenu: false, rows: ['Cut', 'Copy'] });
+  assert.deepEqual(selected.secret, { browserMenu: false, rows: ['Cut (off)', 'Copy (off)'] });
 });
 
 step('Select all selects the field\'s text', async () => {

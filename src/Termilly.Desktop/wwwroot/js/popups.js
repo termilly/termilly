@@ -249,6 +249,10 @@ export function showMenu(items, anchor, { side = SIDE.below, nested = false, alo
     else menu.append(menuRow(menu, item));
   }
 
+  // Picking from a menu that leaves the focus where it is doesn't take it either: a name being edited would lose it,
+  // and end, before the pick (Paste, Select all) could act on it.
+  if (keepFocus) menu.addEventListener('mousedown', e => e.preventDefault());
+
   menu.addEventListener('keydown', e => {
     const rows = [.../** @type {NodeListOf<HTMLButtonElement>} */ (menu.querySelectorAll(':scope > .menu-row:not(:disabled)'))];
     const i = rows.indexOf(/** @type {HTMLButtonElement} */ (menu.ownerDocument.activeElement));
