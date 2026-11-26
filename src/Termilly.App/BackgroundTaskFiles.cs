@@ -176,10 +176,25 @@ internal sealed class TaskProcesses : ITaskProcesses
         var all = BusyWatcher.Snapshot();
         var below = ClaudeAgentsPoller.Descendants(all, terminalPid).ToDictionary(p => p.Id);
         // The agent may be the terminal's own program, not only one its shell started.
-        var agents = below.Values.Concat(all.Where(p => p.Id == terminalPid))
+        var starters = below.Values.Concat(all.Where(p => p.Id == terminalPid))
             .Where(p => _starters.Contains(Path.GetFileNameWithoutExtension(p.Exe), StringComparer.OrdinalIgnoreCase))
             .Select(p => p.Id).ToHashSet();
+        // Only the topmost: a `node x.js` the agent runs is a task, not another agent.
+        var agents = starters.Where(pid => !HasAbove(below, pid, starters)).ToHashSet();
         return new Tree(below, agents);
+    }
+
+    /// <summary>Whether one of <paramref name="those"/> is above the process, within the terminal.</summary>
+    private static bool HasAbove(Dictionary<int, ProcessEntry> below, int pid, HashSet<int> those)
+    {
+        for (var at = pid; below.TryGetValue(at, out var process); at = process.ParentId)
+        {
+            if (those.Contains(process.ParentId))
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     public bool Stop(int terminalPid, string outputFile)
@@ -194,7 +209,7 @@ internal sealed class TaskProcesses : ITaskProcesses
     {
         // The hook's command may have been cut short ("…" at its end): its start is what's looked for.
         var cut = command.TrimEnd().EndsWith('…');
-        var wanted = command.TrimEnd('…').Trim();
+        var wanted = command.TrimEnd().TrimEnd('…').Trim().Replace("\r\n", "\n", StringComparison.Ordinal);
         if (wanted.Length == 0)
         {
             return false;
@@ -202,8 +217,20 @@ internal sealed class TaskProcesses : ITaskProcesses
         var tree = TreeOf(terminalPid);
         var candidates = tree.Below.Keys.Where(pid => !tree.Agents.Contains(pid) && tree.UnderAgent(pid)).ToList();
         HashSet<int> Running() => [.. ProcessCommandLines.Of(candidates).Where(p => Holds(p.Value, wanted, whole: !cut)).Select(p => p.Key)];
-        // The same command may run twice (or one that contains it): the one started nearest the task is the task's.
-        return Closest(tree.Topmost(Running()), started) is { } task && KillChecked([task], Running);
+        if (Running().Count > 0)
+        {
+            // The same command may run twice (or one that contains it): the one started nearest the task is the task's.
+            return Closest(tree.Topmost(Running()), started) is { } task && KillChecked([task], Running);
+        }
+        // bash -c runs the last command in its own place: its process then shows that command's words alone. Only the
+        // agent's own children count (where its shell was), and only a whole command (a cut one's end is unknown).
+        if (cut || ShellLastCommand.Of(wanted) is not { } last)
+        {
+            return false;
+        }
+        var children = candidates.Where(pid => tree.Agents.Contains(tree.Below[pid].ParentId)).ToList();
+        HashSet<int> Execed() => [.. ProcessCommandLines.Of(children).Where(p => string.Equals(p.Value.Trim(), last, StringComparison.Ordinal)).Select(p => p.Key)];
+        return Closest([.. Execed()], started) is { } execed && KillChecked([execed], Execed);
     }
 
     /// <summary>

@@ -109,6 +109,31 @@ public sealed class BusyWatcherTests
     }
 
     [Fact]
+    public void A_terminal_closed_before_its_first_state_counted_leaves_nothing_waiting()
+    {
+        // It runs something (this process, with a child) for one look, then it's gone; the page asks for it after.
+        using var program = OperatingSystem.IsWindows()
+            ? Process.Start(new ProcessStartInfo("ping", "-n 30 127.0.0.1") { CreateNoWindow = true, UseShellExecute = false })!
+            : Process.Start("sleep", "30");
+        var looks = 0;
+        var reports = new System.Collections.Concurrent.ConcurrentQueue<ChildProgram?>();
+        using var watcher = new BusyWatcher(
+            () => Interlocked.Increment(ref looks) == 1 ? new Dictionary<string, int> { ["a"] = Environment.ProcessId } : new Dictionary<string, int>(),
+            (_, p) => reports.Enqueue(p));
+        try
+        {
+            Assert.True(SpinWait.SpinUntil(() => Volatile.Read(ref looks) >= 2, TimeSpan.FromSeconds(5)));
+            watcher.Resend("a");
+            Assert.True(SpinWait.SpinUntil(() => !watcher.Waiting, TimeSpan.FromSeconds(5)));
+            Assert.Empty(reports);
+        }
+        finally
+        {
+            program.Kill();
+        }
+    }
+
+    [Fact]
     public void A_terminal_at_its_prompt_has_nothing_sent_again()
     {
         // Its shell runs nothing (a process with no children stands in for it): the page assumes the prompt already.

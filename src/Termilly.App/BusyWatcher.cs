@@ -110,11 +110,12 @@ internal sealed class BusyWatcher : IDisposable
     /// for the next look, so what goes out is never the state it's leaving.
     /// </summary>
     /// <param name="before">The last request made before this look began.</param>
-    private void ResendAsked(long before)
+    /// <param name="roots">The terminals there are: a request for one that closed is dropped.</param>
+    private void ResendAsked(long before, IReadOnlyDictionary<string, int> roots)
     {
         foreach (var (id, request) in _resend)
         {
-            if (request > before || _pending.ContainsKey(id))
+            if (request > before || (_pending.ContainsKey(id) && roots.ContainsKey(id)))
             {
                 continue;
             }
@@ -124,6 +125,9 @@ internal sealed class BusyWatcher : IDisposable
             }
         }
     }
+
+    /// <summary>Whether a state or a request is still waiting for a look (tests: nothing is left behind for good).</summary>
+    internal bool Waiting => !_resend.IsEmpty || Volatile.Read(ref _ticking) == 1 || _pending.Count > 0;
 
     public void Dispose() => _timer.Dispose();
 
@@ -192,7 +196,8 @@ internal sealed class BusyWatcher : IDisposable
             var asked = Interlocked.Read(ref _requests);
             var roots = _roots();
             var snapshot = roots.Count > 0 ? Snapshot() : [];
-            foreach (var gone in _reported.Keys.Except(roots.Keys).ToList())
+            // One that closed before its first state was confirmed is only pending.
+            foreach (var gone in _reported.Keys.Union(_pending.Keys).Except(roots.Keys).ToList())
             {
                 _reported.Remove(gone);
                 _pending.Remove(gone);
@@ -220,7 +225,7 @@ internal sealed class BusyWatcher : IDisposable
                     _pending[id] = busy;
                 }
             }
-            ResendAsked(asked);
+            ResendAsked(asked, roots);
         }
         catch (Exception e) when (e is Win32Exception or InvalidOperationException or IOException)
         {

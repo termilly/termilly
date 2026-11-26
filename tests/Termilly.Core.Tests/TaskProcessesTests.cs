@@ -110,6 +110,39 @@ public sealed class TaskProcessesTests
     }
 
     [Fact]
+    public void A_task_named_like_an_agent_under_the_agent_is_stopped()
+    {
+        // A `node x.js` the agent runs: node starts agents too, but one under the agent is its task.
+        var (program, args) = OperatingSystem.IsWindows() ? ("ping", "-n 64 127.0.0.1") : ("sleep", "64");
+        using var task = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(program, args) { CreateNoWindow = true, UseShellExecute = false })!;
+        using var self = System.Diagnostics.Process.GetCurrentProcess();
+        var processes = new TaskProcesses([self.ProcessName, program]);
+        // As the system shows it (Windows may name the program by its full path).
+        var command = ProcessCommandLines.Of([task.Id])[task.Id].Trim();
+        var stopped = false;
+        WaitFor(() => stopped = processes.StopCommand(Environment.ProcessId, command, DateTimeOffset.Now));
+        Assert.True(stopped);
+        Assert.True(task.WaitForExit(5000));
+    }
+
+    [Fact]
+    public void Stop_finds_the_last_command_bash_ran_in_its_own_place()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return; // bash -c's exec of its last command: Linux and macOS
+        }
+        // bash runs `sleep 66` in its own process, which then shows `sleep 66` alone.
+        using var task = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("bash", ["-c", "cd /tmp && sleep '66'"]) { UseShellExecute = false })!;
+        using var self = System.Diagnostics.Process.GetCurrentProcess();
+        var processes = new TaskProcesses([self.ProcessName]);
+        var stopped = false;
+        WaitFor(() => stopped = processes.StopCommand(Environment.ProcessId, "cd /tmp && sleep '66'", DateTimeOffset.Now));
+        Assert.True(stopped);
+        Assert.True(task.WaitForExit(5000));
+    }
+
+    [Fact]
     public void A_command_cut_short_is_found_by_its_start()
     {
         // The hook's "sleep 60…" may be the start of "sleep 600".
