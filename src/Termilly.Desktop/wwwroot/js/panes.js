@@ -2086,3 +2086,15 @@ export function noteOutput(tab) {
   tab.attention = true;
   emit(EVENTS.tab, tab);
 }
+
+/**
+ * An agent reported in. The first report after it starts takes back the dot its own start drew: a resumed Claude Code
+ * draws its screen for a few seconds before its hooks say it's there, longer than a new terminal's quiet start.
+ * @param {Tab} tab
+ * @param {boolean} reportedBefore whether its agent was already reporting before this report
+ */
+export function agentReported(tab, reportedBefore) {
+  if (reportedBefore || !runsClaude(tab) || !tab.attention) return;
+  tab.attention = false;
+  emit(EVENTS.tab, tab);
+}

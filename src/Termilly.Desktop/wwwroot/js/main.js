@@ -8,7 +8,7 @@ import './browsermenu.js';
 import './workspacelook.js';
 import './menulook.js';
 import {
-  state, restore, newId, emit, saveNow, WORKSPACE_COLORS, PROFILE_SOURCES, agentChanged, markSeen, GROUPS, EVENTS, sourceOf, SPLIT,
+  state, restore, newId, emit, saveNow, WORKSPACE_COLORS, PROFILE_SOURCES, agentChanged, markSeen, GROUPS, EVENTS, sourceOf, SPLIT, runsClaude,
 } from './store.js';
 import { setWindowState } from './windowshown.js';
 import { scriptsLoaded } from './startuplog.js';
@@ -16,7 +16,7 @@ import { setFocusRestorer, openPopover, closePopover } from './popups.js';
 import { setKeyHandler, scheduleFit, clearActivity, keptRunning, holdOpening, openHeld } from './terminals.js';
 import { consoleDefaults } from './consolecolors.js';
 import {
-  newTab, closeTab, focusedTab, splitFocused, moveFocus, renderAll, switchWorkspace, restoreFocus, noteOutput,
+  newTab, closeTab, focusedTab, splitFocused, moveFocus, renderAll, switchWorkspace, restoreFocus, noteOutput, agentReported,
   cycleGroupTab, moveAllToTabs, reopenWindows, setAsideTab, DIRECTION,
 } from './panes.js';
 import { initSidebar, toggleSidebar } from './sidebar.js';
@@ -559,6 +559,7 @@ onHost(HOST.agent, report => {
   // Counted for waits on the agent (js/agentturns.js): its reports, the turns its prompts start, and its last answer,
   // which a wait still gives after the agent has exited.
   recordReport(tab, { ...m, event: /** @type {Partial<Host_agent_1>} */ (m).event });
+  const reportedBefore = runsClaude(tab);
   tab.agent = m.state === AGENT_STATE.exited
     ? null
     : {
@@ -582,6 +583,7 @@ onHost(HOST.agent, report => {
   recordPrompt(tab, /** @type {Partial<Host_agent_1>} */ (m));
   // Its shell is back, and its prompt may have come before this report, while the agent's output didn't count.
   if (!tab.agent) noteOutput(tab);
+  agentReported(tab, reportedBefore);
   agentChanged(tab);
 });
 
