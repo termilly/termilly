@@ -225,13 +225,20 @@ internal sealed class TaskProcesses : ITaskProcesses
         var tree = TreeOf(terminalPid);
         var candidates = tree.Below.Keys.Where(pid => !tree.Agents.Contains(pid) && tree.UnderAgent(pid)).ToList();
         HashSet<int> Running() => [.. ProcessCommandLines.Of(candidates).Where(p => Holds(Lines(p.Value), wanted, whole: !cut)).Select(p => p.Key)];
-        if (Running().Count > 0)
+        // The same command may run twice (or one that contains it): the one started nearest the task is the task's. One
+        // started since the task first, then one bash ran in its shell's place (an older shell with the same text is
+        // another task's), and an older one only when there's nothing else.
+        var running = tree.Topmost(Running());
+        var recent = running.Where(pid => StartedSince(pid, started)).ToList();
+        if (recent.Count > 0)
         {
-            // The same command may run twice (or one that contains it): the one started nearest the task is the task's.
-            return Closest(tree.Topmost(Running()), started) is { } task && KillChecked([task], Running);
+            return Closest(recent, started) is { } task && KillChecked([task], Running);
         }
-        // Only a whole command: a cut one's last command is unknown.
-        return !cut && ShellLastCommand.Of(wanted) is { } last && StopExeced(tree, candidates, last, started);
+        if (!cut && ShellLastCommand.Of(wanted) is { } last && StopExeced(tree, candidates, last, started))
+        {
+            return true;
+        }
+        return Closest(running, started) is { } older && KillChecked([older], Running);
     }
 
     /// <summary>

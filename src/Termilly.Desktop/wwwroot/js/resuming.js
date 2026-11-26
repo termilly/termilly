@@ -47,9 +47,14 @@ export function resumeTyped(tab, command) {
   r.command = command;
   const check = () => {
     const term = tab.view?.term;
-    // An agent that runs has taken the command: its own input line can look like a shell prompt. So has a command the
-    // shell says runs (the host may not report the agent: Show activity off).
-    if (tab.resuming !== r || !term || tab.exited || shellTookIt(tab, term) || runningAgent(tab)) return;
+    // An agent that runs has taken the command: its own input line can look like a shell prompt.
+    if (tab.resuming !== r || !term || tab.exited || runningAgent(tab)) return;
+    // So has a command the shell says runs (the host may not report the agent: Show activity off), unless it's one a
+    // key spoiled: looked at again later, in case it ends at the prompt.
+    if (shellTookIt(tab, term)) {
+      r.timer = window.setTimeout(check, RETRY_AFTER_MS);
+      return;
+    }
     // Typed twice and still at the prompt (a shell that doesn't mark its commands' ends): the agent didn't start.
     if (r.retried) return void gaveUp(tab);
     r.retried = true;
@@ -77,12 +82,15 @@ const activityShown = () => state.settings.interface.showActivity !== false;
 const shellTookIt = (tab, term) => (tab.shellMarks ? !!tab.running : !atPrompt(term));
 
 /**
- * The line the cursor is on, trimmed at its end.
+ * The line the cursor is on, with the rows it wrapped from, trimmed at its end.
  * @param {any} term
  */
 const typedLine = term => {
   const buffer = term.buffer.active;
-  return (buffer.getLine(buffer.baseY + buffer.cursorY)?.translateToString(true) ?? '').trimEnd();
+  let y = buffer.baseY + buffer.cursorY;
+  let text = buffer.getLine(y)?.translateToString(true) ?? '';
+  while (y > 0 && buffer.getLine(y)?.isWrapped) text = (buffer.getLine(--y)?.translateToString(false) ?? '') + text;
+  return text.trimEnd();
 };
 
 /** Whether the agents report through their hooks (Settings › Terminal › Agent integration): off, Claude's don't. */
@@ -121,7 +129,7 @@ function watchScreen(tab, r) {
     }
     tookAt ||= Date.now();
     const before = startScreens.get(tab) ?? (firstSeen ??= screenText(term));
-    const drawn = screenText(term) !== before;
+    const drawn = changedSince(term, before);
     if (!drawn && Date.now() - tookAt < SILENT_MAX_MS) return;
     clearInterval(look);
     // Silent all along: its screen going quiet is all there is to wait for.
@@ -133,12 +141,28 @@ function watchScreen(tab, r) {
 const SILENT_MAX_MS = 10_000;
 
 /**
- * The text of a terminal's last screen, row by row, wherever it's scrolled to.
+ * The text at the end of a terminal, without its spacing: what a resize or a reflow leaves as it was, and what an
+ * agent drawing changes. Its last TAIL_ROWS rows, wherever it's scrolled to.
  * @param {any} term
  */
 const screenText = term => {
   const buffer = term.buffer.active;
-  return Array.from({ length: term.rows }, (_, y) => buffer.getLine(buffer.baseY + y)?.translateToString(true) ?? '').join('\n');
+  const from = Math.max(0, buffer.length - TAIL_ROWS);
+  return Array.from({ length: buffer.length - from }, (_, y) => buffer.getLine(from + y)?.translateToString(true) ?? '').join('').replace(/\s+/g, '');
+};
+
+/** How many rows at a terminal's end are compared, and how much of the text at its end. */
+const TAIL_ROWS = 200;
+const TAIL_CHARS = 400;
+
+/**
+ * Whether the terminal's text has changed since `before` (screenText): what was at its end isn't any more.
+ * @param {any} term
+ * @param {string} before
+ */
+const changedSince = (term, before) => {
+  const now = screenText(term);
+  return before ? !now.endsWith(before.slice(-TAIL_CHARS)) : now.length > 0;
 };
 
 /**
@@ -281,7 +305,7 @@ function settle(tab, { anyScreen = false } = {}) {
     done(tab, true);
   };
   const before = startScreens.get(tab);
-  const drawn = () => anyScreen || before === undefined || screenText(term) !== before;
+  const drawn = () => anyScreen || before === undefined || changedSince(term, before);
   const writes = term.onWriteParsed(() => {
     clearTimeout(quiet);
     if (drawn()) quiet = window.setTimeout(back, QUIET_MS);

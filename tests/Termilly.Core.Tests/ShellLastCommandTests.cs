@@ -21,6 +21,7 @@ public sealed class ShellLastCommandTests
     [InlineData("exec sleep 60 # ; sleep 90", "sleep 60")]
     [InlineData("exec sleep 60>/tmp/out", "sleep")]
     [InlineData("exec sleep 60 2>/dev/null", "sleep 60")]
+    [InlineData("exec sleep 60 9> /tmp/out", "sleep 60")]
     [InlineData("exec python3 worker.py \"a\\q\"", "python3 worker.py a\\q")]
     [InlineData("echo \"a\\\"b\"", "echo a\"b")]
     [InlineData("echo 'a # b'", "echo a # b")]

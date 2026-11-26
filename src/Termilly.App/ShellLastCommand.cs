@@ -157,7 +157,7 @@ internal static class ShellLastCommand
                     var word = raw.ToString();
                     var redirect = redirectTarget || word.TrimStart(FileNumber).StartsWith('>') || word.TrimStart(FileNumber).StartsWith('<');
                     // ">" alone redirects to the word after it.
-                    redirectTarget = word is ">" or ">>" or "<" or "2>" or "&>" or "1>" or "2>>";
+                    redirectTarget = word.TrimStart(FileNumber) is ">" or ">>" or "<" or ">&" or "<&" or ">|";
                     yield return new Word(text.ToString(), Assignment: !redirect && IsAssignment(word), redirect || redirectTarget);
                 }
                 text.Clear();
