@@ -182,6 +182,12 @@
 /* The keys' focus on the chosen row, whose background no longer changes: a ring in its text colour. */
 .menu-row.picked:focus-visible { box-shadow: inset 0 0 0 1px currentColor; }
 .context-menu.no-icons .menu-icon { display: none; }
+/* Its ticks, at the rows' end (js/popups.js menuLayout). */
+.menu-end { display: grid; flex: none; place-items: center; width: 16px; height: 16px; }
+.menu-end svg { width: 16px; height: 16px; stroke-width: 1; }
+.menu-end.tick { color: var(--accent); }
+/* There an empty hint takes no room either. */
+.context-menu.no-icons .menu-hint:empty { display: none; }
 .menu-label { flex: 1; }
 .menu-hint { display: flex; gap: 3px; margin-left: 18px; color: var(--faint); }
 .menu-hint svg { width: 12px; height: 12px; stroke-width: 1; }

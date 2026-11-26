@@ -260,12 +260,15 @@ function rowKind(item) {
 }
 
 /**
- * A menu of pick-one rows that shows no tick, and has no icons or checkboxes either, needs no icon column.
+ * A menu that picks one and has no icons at all (a dropdown) has no icon column, whatever marks the chosen row; a tick it
+ * shows (the chosen row's, with ticks, or a checkbox's) goes at the row's end.
  * @param {MenuEntry[]} items
+ * @returns {{ noIcons: boolean, ticksAtEnd: boolean }}
  */
-function needsNoIcons(items) {
+function menuLayout(items) {
   const rows = /** @type {MenuItem[]} */ (items.filter(i => i !== SEPARATOR));
-  return !picksWithTick() && rows.some(i => i.picked !== undefined) && rows.every(i => !i.icon && i.checked === undefined);
+  const noIcons = rows.some(i => i.picked !== undefined) && rows.every(i => !i.icon);
+  return { noIcons, ticksAtEnd: noIcons && (picksWithTick() || rows.some(i => i.checked !== undefined)) };
 }
 
 /**
@@ -281,12 +284,13 @@ function needsNoIcons(items) {
 export function showMenu(items, anchor, { side = SIDE.below, nested = false, alone = false, className = '', keepFocus = false, refocus, onClose } = {}) {
   const menu = document.createElement('div');
   if (alone) menu.dataset.alone = '1';
-  menu.className = `popover menu context-menu ${className}${needsNoIcons(items) ? ` ${NO_ICONS}` : ''}`;
+  const { noIcons, ticksAtEnd } = menuLayout(items);
+  menu.className = `popover menu context-menu ${className}${noIcons ? ` ${NO_ICONS}` : ''}`;
   menu.setAttribute('role', 'menu');
   menu.hidden = true;
   for (const item of items) {
     if (item === SEPARATOR) menu.insertAdjacentHTML('beforeend', '<div class="menu-separator"></div>');
-    else menu.append(menuRow(menu, item));
+    else menu.append(menuRow(menu, item, ticksAtEnd));
   }
 
   // Picking from a menu that leaves the focus where it is doesn't take it either: a name being edited would lose it,
@@ -362,17 +366,20 @@ function fitAndScroll(menu) {
  * One of a menu's rows: its icon (or tick), label and hint (or a submenu's chevron), and what choosing it does.
  * @param {HTMLElement} menu
  * @param {MenuItem} item
+ * @param {boolean} ticksAtEnd its tick goes at its end, the menu having no icon column (menuLayout)
  */
-function menuRow(menu, item) {
+function menuRow(menu, item, ticksAtEnd) {
   const button = document.createElement('button');
   const kind = rowKind(item);
   button.className = `menu-row${item.danger ? ' danger' : ''}${kind.picked ? ` ${PICKED}` : ''}`;
   button.setAttribute('role', kind.role);
   if (kind.on !== undefined) button.setAttribute('aria-checked', String(kind.on));
+  const tick = kind.icon === CHECK ? ' tick' : '';
   button.innerHTML = `
-      <span class="menu-icon${kind.icon === CHECK ? ' tick' : ''}">${kind.icon}</span>
+      <span class="menu-icon${ticksAtEnd ? '' : tick}">${ticksAtEnd ? '' : kind.icon}</span>
       <span class="menu-label"></span>
-      <span class="menu-hint">${item.submenu ? CHEVRON : kind.hint}</span>`;
+      <span class="menu-hint">${item.submenu ? CHEVRON : kind.hint}</span>
+      ${ticksAtEnd ? `<span class="menu-end${tick}">${tick ? CHECK : ''}</span>` : ''}`;
   /** @type {HTMLElement} */ (button.querySelector('.menu-label')).textContent = item.label;
   // Shown but greyed out and not clickable (a disabled button gets no clicks); title says why.
   if (item.disabled) button.disabled = true;

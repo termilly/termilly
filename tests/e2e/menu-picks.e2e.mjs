@@ -36,6 +36,7 @@ const rowsOf = t => t.$$('.context-menu .menu-row').map(r => {
   return {
     label: r.querySelector('.menu-label').textContent.trim(),
     ticked: !!icon.querySelector('svg path[d^="M4 8.5"]'),
+    tickedAtEnd: !!r.querySelector('.menu-end svg path[d^="M4 8.5"]'),
     picked: r.classList.contains('picked'),
     iconShows: view.getComputedStyle(icon).display !== 'none' && !!icon.firstElementChild,
     background: view.getComputedStyle(r).backgroundColor,
@@ -114,8 +115,9 @@ step('by default the chosen workspace has a tick, in place of its swatch, as bef
   assert.deepEqual({ ticked: chosen.ticked, picked: chosen.picked }, { ticked: true, picked: false });
   assert.deepEqual({ ticked: other.ticked, iconShows: other.iconShows }, { ticked: false, iconShows: false });
   const dropdown = await dropdownMenu();
-  assert.equal(dropdown.noIcons, false);
-  assert.deepEqual(dropdown.rows.map(r => r.ticked), [false, true]);
+  // No icons in it: no icon column, the tick at the end instead.
+  assert.equal(dropdown.noIcons, true);
+  assert.deepEqual(dropdown.rows.map(r => [r.ticked, r.tickedAtEnd, r.iconShows]), [[false, false, false], [false, true, false]]);
   // A list that keeps its icons says "current" beside the chosen one, as before; now it's announced as chosen too.
   const [same, none, gradient] = await backgroundMenu();
   assert.deepEqual([same.hint, same.checked, same.picked], ['current', 'true', false]);
