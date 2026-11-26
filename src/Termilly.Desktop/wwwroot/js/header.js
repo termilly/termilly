@@ -18,7 +18,7 @@ import { isRecording, toggleRecording, recordingFile } from './replay.js';
 import { beginRename, shownName, PANE_NAME } from './rename.js';
 import { openTagPicker } from './tagpicker.js';
 import { openTabMenu, TAG_BUTTON } from './tabmenu.js';
-import { find, setHtmlIfChanged } from './dom.js';
+import { find, setHtmlIfChanged, targetOf } from './dom.js';
 import { openPrompts, hasPrompts, PROMPTS_TITLE } from './myprompts.js';
 import { updateSwitch, openViewMenu, VIEW_BUTTON } from './compact.js';
 import { markBarParts } from './panebar.js';
@@ -101,6 +101,8 @@ function wireHeader(tab, header) {
   click(PROMPTS_BUTTON, e => openPrompts(tab, /** @type {HTMLElement} */ (e.currentTarget)));
   click(PINNED_NOTE, e => openPinned(tab, /** @type {string} */ (/** @type {HTMLElement} */ (e.currentTarget).dataset.kind)));
   header.addEventListener('contextmenu', e => {
+    // Its name being edited gets the text menu (js/browsermenu.js), not the tab's.
+    if (targetOf(e).closest('input')) return;
     e.preventDefault();
     openTabMenu(tab, { x: e.clientX, y: e.clientY });
   });

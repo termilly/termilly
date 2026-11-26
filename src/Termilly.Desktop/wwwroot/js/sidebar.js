@@ -433,6 +433,8 @@ list.addEventListener('dblclick', e => {
     /** @type {HTMLElement} */ (name.closest(WS_ROW)).dataset.ws)));
 });
 list.addEventListener('contextmenu', e => {
+  // A name being edited in its row gets the text menu (js/browsermenu.js), not the row's.
+  if (targetOf(e).closest('input')) return;
   e.preventDefault();
   const tabRow = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-tab]'));
   if (tabRow) return openTabMenu(/** @type {Tab} */ (state.tabs.get(/** @type {string} */ (tabRow.dataset.tab))),

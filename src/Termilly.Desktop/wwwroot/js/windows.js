@@ -208,15 +208,23 @@ function build(win) {
   }));
   // The host runs this when the window is closed (Alt+F4, the taskbar): the owner decides.
   Object.assign(win, { termillyClose: () => askClose(win.name) });
+  // Shown while its styles load, before the page's own listeners are in (ready): no browser menu meanwhile either.
+  doc.addEventListener('contextmenu', e => { if (!entryOf(win)?.ready) e.preventDefault(); });
   Promise.all(loaded).then(() => ready(win));
 }
+
+/**
+ * The detached element a window holds, by the window's name.
+ * @param {Window} win
+ */
+const entryOf = win => [...open.values()].find(o => NAME_PREFIX + o.key === win.name);
 
 /**
  * Its styles are in: the element moves in.
  * @param {Window} win
  */
 function ready(win) {
-  const d = [...open.values()].find(o => NAME_PREFIX + o.key === win.name);
+  const d = entryOf(win);
   if (!d) return void win.close();
   const doc = win.document;
   d.ready = true;

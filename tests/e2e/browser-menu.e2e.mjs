@@ -54,12 +54,25 @@ step('no browser menu where Termilly has none: the window, its bars, the termina
   }
 });
 
-step('a text field gets Termilly\'s text menu, with what fits the field', async () => {
-  assert.deepEqual((await rightClick('#e2e-text')).rows, ['Cut (off)', 'Copy (off)', 'Paste', 'Paste as plain text', 'Select all']);
-  assert.deepEqual((await rightClick('#e2e-empty')).rows, ['Cut (off)', 'Copy (off)', 'Paste', 'Paste as plain text', 'Select all (off)']);
-  assert.deepEqual((await rightClick('#e2e-area')).rows, ['Cut (off)', 'Copy (off)', 'Paste', 'Paste as plain text', 'Select all']);
-  assert.deepEqual((await rightClick('#e2e-read')).rows, ['Copy (off)', 'Select all']);
-  assert.deepEqual((await rightClick('#e2e-number')), { browserMenu: false, rows: [] });
+step('a text field gets Termilly\'s text menu, with what fits the field, and never the browser\'s', async () => {
+  const typed = ['Cut (off)', 'Copy (off)', 'Paste', 'Paste as plain text'];
+  assert.deepEqual(await rightClick('#e2e-text'), { browserMenu: false, rows: [...typed, 'Select all'] });
+  assert.deepEqual(await rightClick('#e2e-empty'), { browserMenu: false, rows: [...typed, 'Select all (off)'] });
+  assert.deepEqual(await rightClick('#e2e-area'), { browserMenu: false, rows: [...typed, 'Select all'] });
+  assert.deepEqual(await rightClick('#e2e-read'), { browserMenu: false, rows: ['Copy (off)', 'Select all'] });
+  assert.deepEqual(await rightClick('#e2e-number'), { browserMenu: false, rows: [] });
+});
+
+step('a name being edited in a terminal\'s header gets the text menu, not the tab\'s', async () => {
+  await app.eval(async t => {
+    const { state } = await t.import('store.js');
+    (await t.import('rename.js')).beginRename([...state.tabs.values()][0]);
+    await t.waitFor('.rename-input');
+  });
+  const { browserMenu, rows } = await rightClick('.rename-input');
+  await app.eval(t => t.$('.rename-input').dispatchEvent(new globalThis.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
+  assert.equal(browserMenu, false);
+  assert.ok(rows.includes('Paste') && rows.includes('Select all'), rows.join(', '));
 });
 
 step('a selection can be copied, but a password\'s can\'t', async () => {
