@@ -78,24 +78,41 @@ const shellTookIt = (tab, term) => !!tab.running || !atPrompt(term);
 /**
  * With Show activity off (now, or turned off while it resumes) the host never says the agent runs, which ends a resume
  * that waits for that (Codex's, and one started early): once the shell has taken the command, the agent drawing its
- * screen, and that going quiet, ends it instead. Output is waited for, so an agent that starts silently isn't taken for
- * one that's drawn.
+ * screen, and that going quiet, ends it instead. Output after the command began is what counts (written before a look
+ * saw it too), so an agent that loads silently isn't taken for one that's drawn; one silent for SILENT_MAX_MS ends it all
+ * the same, so a shell that doesn't mark its commands can't leave it up for good.
  * @param {Tab} tab
  * @param {NonNullable<Tab['resuming']>} r
  */
 function watchScreen(tab, r) {
   if (agentKind(r.kind).hookAtStart && !r.early) return;
+  let lastWrite = 0, tookAt = 0;
+  /** @param {any} term */
+  const listen = term => term.onWriteParsed(() => { lastWrite = Date.now(); });
+  /** @type {{ dispose(): void } | null} */
+  let writes = tab.view?.term ? listen(tab.view.term) : null;
   const look = window.setInterval(() => {
     const term = tab.view?.term;
-    if (tab.resuming !== r || tab.exited) return void clearInterval(look);
-    if (activityShown() || !term || !shellTookIt(tab, term) || settling.has(tab)) return;
+    if (tab.resuming !== r || tab.exited) {
+      clearInterval(look);
+      writes?.dispose();
+      return;
+    }
+    if (!term) return;
+    writes ??= listen(term);
+    if (activityShown() || settling.has(tab)) return;
+    if (!shellTookIt(tab, term)) return void (tookAt = 0);
+    tookAt ||= Date.now();
+    const began = tab.running?.startedAt ?? tookAt;
+    if (lastWrite <= began && Date.now() - tookAt < SILENT_MAX_MS) return;
     clearInterval(look);
-    const drawn = term.onWriteParsed(() => {
-      drawn.dispose();
-      if (tab.resuming === r && !settling.has(tab)) settle(tab);
-    });
+    writes?.dispose();
+    settle(tab);
   }, SCREEN_LOOK_MS);
 }
+
+/** The longest an agent's command may run without drawing anything before its resume counts as done anyway. */
+const SILENT_MAX_MS = 10_000;
 
 /**
  * The agent didn't come back (its session is gone, it failed to start): the terminal is the user's again, with the

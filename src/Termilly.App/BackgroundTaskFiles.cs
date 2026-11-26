@@ -193,6 +193,7 @@ internal sealed class TaskProcesses : ITaskProcesses
     public bool StopCommand(int terminalPid, string command, DateTimeOffset started)
     {
         // The hook's command may have been cut short ("…" at its end): its start is what's looked for.
+        var cut = command.TrimEnd().EndsWith('…');
         var wanted = command.TrimEnd('…').Trim();
         if (wanted.Length == 0)
         {
@@ -200,7 +201,7 @@ internal sealed class TaskProcesses : ITaskProcesses
         }
         var tree = TreeOf(terminalPid);
         var candidates = tree.Below.Keys.Where(pid => !tree.Agents.Contains(pid) && tree.UnderAgent(pid)).ToList();
-        HashSet<int> Running() => [.. ProcessCommandLines.Of(candidates).Where(p => Holds(p.Value, wanted)).Select(p => p.Key)];
+        HashSet<int> Running() => [.. ProcessCommandLines.Of(candidates).Where(p => Holds(p.Value, wanted, whole: !cut)).Select(p => p.Key)];
         // The same command may run twice (or one that contains it): the one started nearest the task is the task's.
         return Closest(tree.Topmost(Running()), started) is { } task && KillChecked([task], Running);
     }
@@ -208,12 +209,26 @@ internal sealed class TaskProcesses : ITaskProcesses
     /// <summary>
     /// Whether a process's command line holds the command: as it was, or as the agent quoted it for its shell
     /// (PowerShell's -Command "… \"x\" …", sh -c '… '\''x'\'' …'). Exact, so a command differing only in its spacing or
-    /// quoting is never taken for it.
+    /// quoting is never taken for it. A whole command (not cut short) ends where a word does: <c>sleep 60</c> isn't in
+    /// <c>sleep 600</c>.
     /// </summary>
-    internal static bool Holds(string commandLine, string command) =>
-        commandLine.Contains(command, StringComparison.Ordinal)
-        || commandLine.Contains(command.Replace("\"", "\\\"", StringComparison.Ordinal), StringComparison.Ordinal)
-        || commandLine.Contains(command.Replace("'", "'\\''", StringComparison.Ordinal), StringComparison.Ordinal);
+    internal static bool Holds(string commandLine, string command, bool whole = true) =>
+        new[] { command, command.Replace("\"", "\\\"", StringComparison.Ordinal), command.Replace("'", "'\\''", StringComparison.Ordinal) }
+            .Any(form => Finds(commandLine, form, whole));
+
+    /// <summary>Whether <paramref name="text"/> holds <paramref name="part"/>, ending where a word does when it's whole.</summary>
+    private static bool Finds(string text, string part, bool whole)
+    {
+        for (var at = text.IndexOf(part, StringComparison.Ordinal); at >= 0; at = text.IndexOf(part, at + 1, StringComparison.Ordinal))
+        {
+            var end = at + part.Length;
+            if (!whole || end == text.Length || !char.IsLetterOrDigit(part[^1]) || !char.IsLetterOrDigit(text[end]))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
 
     /// <summary>
     /// Of the processes, the one that started nearest the time. One alone is the task's whenever it started (a command

@@ -58,12 +58,18 @@ test('resuming a session that is gone ends the spinner, with Claude\'s words lef
   }
 });
 
-test('with the activity spinner off, a Codex session that comes back still ends the spinner', async () => {
-  // Off, the host reports nothing of what a terminal runs: the resume can't wait for Codex's program to be seen.
+/**
+ * A Codex session resuming with the activity spinner off (the host then reports nothing of what a terminal runs, so
+ * the resume can't wait for Codex's program to be seen): Codex draws its screen after `loadsMs` of silence, and the
+ * spinner ends only once it has, before the retry (15 s).
+ * @param {string} name
+ * @param {number} loadsMs
+ */
+async function quietCodexResume(name, loadsMs) {
   const repo = await makeRepo({ files: { 'a.txt': 'a\n' } });
   let app, failed = true;
   try {
-    app = await startApp({ folder: repo.path, name: 'resume-quiet', agents: { codex: { stdout: '', prompt: { lines: ['Codex is back'], input: '› ', drawAfterMs: LOADS_MS } } } });
+    app = await startApp({ folder: repo.path, name, agents: { codex: { stdout: '', prompt: { lines: ['Codex is back'], input: '› ', drawAfterMs: loadsMs } } } });
     await app.waitFor('.xterm');
     await app.eval(async t => {
       const { GROUPS } = await t.import('./store.js');
@@ -86,10 +92,10 @@ test('with the activity spinner off, a Codex session that comes back still ends 
       resumeTyped(tab, command);
     }, SESSION);
     await app.waitFor('.resume-overlay');
-    // Codex loads quietly first: the spinner stays till its screen is drawn, not ending on the quiet before it.
-    await new Promise(r => setTimeout(r, LOADS_MS - 1000));
-    assert.equal(await app.eval(t => !!t.$('.resume-overlay')), true, 'the spinner went before Codex drew its screen');
-    // Well before the retry (15 s): Codex's screen, once quiet, ends it.
+    if (loadsMs) {
+      await new Promise(r => setTimeout(r, loadsMs - 1000));
+      assert.equal(await app.eval(t => !!t.$('.resume-overlay')), true, 'the spinner went before Codex drew its screen');
+    }
     await app.waitFor('.resume-overlay', { gone: true, timeoutMs: 10_000 });
     const after = await app.eval(async t => {
       const { state } = await t.import('./store.js');
@@ -105,4 +111,8 @@ test('with the activity spinner off, a Codex session that comes back still ends 
     await app?.stop({ failed });
     await repo.dispose();
   }
-});
+}
+
+test('with the activity spinner off, a Codex session drawn at once ends the spinner', () => quietCodexResume('resume-quiet-at-once', 0));
+
+test('with the activity spinner off, a Codex session that loads silently first keeps the spinner till it draws', () => quietCodexResume('resume-quiet-loads', LOADS_MS));
