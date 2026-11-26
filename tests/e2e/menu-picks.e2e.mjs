@@ -164,6 +164,12 @@ step('Soft: no tick, the chosen row on the soft accent, every workspace with its
   assert.equal(dropdown.noIcons, true);
   assert.deepEqual(dropdown.rows.map(r => [r.picked, r.iconShows, r.tickedAtEnd, r.labelInset]), [[false, false, false, 8], [true, false, false, 8]]);
   assert.equal(dropdown.focused, 'Beta');
+  // The mixed Title bar menu: its switches ticked at the end, its pick on the soft accent.
+  const bar = await titleBarMenu();
+  const name = bar.rows.find(r => r.label === 'Name');
+  const line = bar.rows.find(r => r.label === 'Name on a line');
+  assert.deepEqual([name.ticked, name.tickedAtEnd, name.labelInset], [false, true, 8]);
+  assert.deepEqual([line.picked, line.tickedAtEnd, line.background, line.labelInset], [true, false, colours.fill, 8]);
   // The Background list marks its chosen row the same way, without "current".
   const [same] = await backgroundMenu();
   assert.deepEqual([same.hint, same.picked, same.background], ['', true, colours.fill]);
@@ -184,6 +190,7 @@ step('Solid: the chosen row on the accent itself', async () => {
   const dropdown = await dropdownMenu();
   assert.deepEqual(dropdown.rows.map(r => [r.picked, r.tickedAtEnd, r.labelInset]), [[false, false, 8], [true, false, 8]]);
   assert.equal(dropdown.rows[1].background, colours.accent);
+  assert.equal(dropdown.focused, 'Beta');
   const bar = await titleBarMenu();
   const name = bar.rows.find(r => r.label === 'Name');
   const line = bar.rows.find(r => r.label === 'Name on a line');
