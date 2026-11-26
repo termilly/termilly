@@ -244,7 +244,8 @@ const renderSoon = () => {
   cancelAnimationFrame(frame);
   frame = requestAnimationFrame(render);
 };
-for (const event of [EVENTS.workspaces, EVENTS.tab, EVENTS.tags, EVENTS.focus]) on(event, renderSoon);
+// Settings too: what the rows show follows some (agent cost, the activity line).
+for (const event of [EVENTS.workspaces, EVENTS.tab, EVENTS.tags, EVENTS.focus, EVENTS.settings]) on(event, renderSoon);
 
 // ---- Rail flyout ----
 
