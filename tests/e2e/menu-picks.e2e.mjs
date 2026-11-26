@@ -203,3 +203,24 @@ step('Checkbox brings the ticks back', async () => {
   const { rows } = await workspaceList();
   assert.deepEqual({ ticked: rows[0].ticked, picked: rows[0].picked }, { ticked: true, picked: false });
 });
+
+step('with Colour dots off the workspace list has no icon column, in every style', async () => {
+  const setDots = on => app.eval(async (t, on) => {
+    const { GROUPS } = await t.import('store.js');
+    (await t.import('preferences.js')).updateSettings(GROUPS.interface, { workspaceDots: on });
+    await new Promise(r => setTimeout(r, 150));
+  }, on);
+  await setDots(false);
+  try {
+    for (const style of ['check', 'soft', 'solid']) {
+      assert.equal(await choose(style), style);
+      const { rows } = await workspaceList();
+      const chosen = rows[0];
+      assert.deepEqual([chosen.iconShows, chosen.labelInset], [false, 8], style);
+      assert.equal(chosen.tickedAtEnd, style === 'check', style);
+    }
+  } finally {
+    await choose('check');
+    await setDots(true);
+  }
+});

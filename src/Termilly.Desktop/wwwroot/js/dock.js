@@ -15,6 +15,7 @@ import { askCloseWorkspace, CLOSE_WORKSPACE_LABEL } from './workspaceclose.js';
 import { targetOf, find, byId, nearestEdge, swallowNextClick, DOCK_SIDE, TITLEBAR_ID } from './dom.js';
 import { AGENT_STATE } from './constants.js';
 import { workspaceSwatch, stateWord } from './workspacelist.js';
+import { showsWorkspaceDots } from './workspacelook.js';
 
 /** @typedef {import('./popups.js').MenuEntry} MenuEntry */
 
@@ -248,7 +249,8 @@ export function setDockWorkspaces(rows) {
 export function showWorkspaceList(anchor, side) {
   /** @type {MenuEntry[]} */
   const items = state.workspaces.map(ws => ({
-    label: ws.name, icon: workspaceSwatch(ws.color), hint: rowHint(ws), picked: ws.id === state.activeId,
+    // Colour dots off: no swatch, so the list has no icon column (js/popups.js menuLayout).
+    label: ws.name, icon: showsWorkspaceDots() ? workspaceSwatch(ws.color) : undefined, hint: rowHint(ws), picked: ws.id === state.activeId,
     action: () => switchWorkspace(ws.id),
     // Right-click: as the sidebar's menu, which Minimal hides, closes it.
     more: () => [{ label: CLOSE_WORKSPACE_LABEL, icon: ICONS.trash, danger: true, action: () => askCloseWorkspace(ws) }],
