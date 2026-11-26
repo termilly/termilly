@@ -43,7 +43,15 @@ internal sealed class UpdateHandler(
 
     public void Start()
     {
-        settings.Saved += _ => UpdateTimer();
+        settings.Saved += saved =>
+        {
+            UpdateTimer();
+            // Whether restarting to update ends the terminals follows the setting: an update shown says so anew.
+            if (saved.Previous.Session.BackgroundShells != saved.Current.Session.BackgroundShells)
+            {
+                PostStatus();
+            }
+        };
         UpdateTimer();
         // Installers from an earlier update (it's installed by now, or was given up on).
         _ = Task.Run(download.Clear);

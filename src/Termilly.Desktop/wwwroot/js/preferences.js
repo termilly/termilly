@@ -23,10 +23,19 @@ const unsaved = new Set();
 /** The settings by group name, for changing a group the caller names. */
 const groups = () => /** @type {Record<string, Record<string, any>>} */ (/** @type {unknown} */ (state.settings));
 
-const saveUnsaved = debounce(() => {
+/** Sends the host each group changed since the last save. */
+function sendUnsaved() {
   for (const group of unsaved) send(PAGE.settingsSave, { group, values: groups()[group] });
   unsaved.clear();
-}, SAVE_DELAY);
+}
+
+const saveUnsaved = debounce(sendUnsaved, SAVE_DELAY);
+
+/** Saves the changed groups now, not a moment from now: for a change the host must have even if Termilly quits at once. */
+export function saveNow() {
+  saveUnsaved.cancel();
+  sendUnsaved();
+}
 
 /** What applies the settings to the page (settings.js's applySettings, which registers itself). */
 let apply = () => {};

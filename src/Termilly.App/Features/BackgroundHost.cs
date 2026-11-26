@@ -88,9 +88,10 @@ internal sealed class BackgroundHost : IDisposable
         {
             return;
         }
-        if (!_settings.Current.Session.BackgroundShells && connected.IsConnected)
+        if (!_settings.Current.Session.BackgroundShells)
         {
-            HostClient.StopHost(connected);
+            // Also a host this window lost its connection to: it may still run the shells (StopHost asks it).
+            HostClient.StopHost(connected.IsConnected ? connected : null);
         }
         connected.Dispose();
     }

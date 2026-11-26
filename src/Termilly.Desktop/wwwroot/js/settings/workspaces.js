@@ -7,7 +7,7 @@ import { state, getSetting, tabTitle } from '../store.js';
 import { targetOf } from '../dom.js';
 import { ICONS } from '../ui.js';
 import { confirmDialog } from '../dialogs.js';
-import { setSetting } from '../preferences.js';
+import { setSetting, saveNow } from '../preferences.js';
 import { row, seg, toggle, group } from './controls.js';
 import { SECTION } from './page.js';
 import { SETTING_VALUES } from '../constants.js';
@@ -63,7 +63,9 @@ async function stopShells() {
  */
 async function turnOff() {
   const body = 'These terminals keep running until Termilly closes. When it starts again, agents resume their conversation and the others start a new shell.';
-  if (await askAboutShells({ title: 'Turn off background shells?', body, confirm: 'Turn off' })) setSetting(BACKGROUND_SHELLS, false);
+  if (!(await askAboutShells({ title: 'Turn off background shells?', body, confirm: 'Turn off' }))) return;
+  setSetting(BACKGROUND_SHELLS, false);
+  saveNow(); // quitting at once must find it off, or the shells would stay
 }
 
 /** @type {import('./page.js').Section} */
