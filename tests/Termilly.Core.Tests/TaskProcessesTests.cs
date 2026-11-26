@@ -110,10 +110,10 @@ public sealed class TaskProcessesTests
     }
 
     [Fact]
-    public void A_task_named_like_an_agent_under_the_agent_is_stopped()
+    public void A_node_task_under_the_agent_is_stopped()
     {
         // A `node x.js` the agent runs: node starts agents too, but one under the agent is its task.
-        var (program, args) = OperatingSystem.IsWindows() ? ("ping", "-n 64 127.0.0.1") : ("sleep", "64");
+        var (program, args) = ("node", "-e setTimeout(()=>{},64000)");
         using var task = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(program, args) { CreateNoWindow = true, UseShellExecute = false })!;
         using var self = System.Diagnostics.Process.GetCurrentProcess();
         var processes = new TaskProcesses([self.ProcessName, program]);
@@ -133,13 +133,37 @@ public sealed class TaskProcessesTests
             return; // bash -c's exec of its last command: Linux and macOS
         }
         // bash runs `sleep 66` in its own process, which then shows `sleep 66` alone.
+        var started = DateTimeOffset.Now;
         using var task = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("bash", ["-c", "cd /tmp && sleep '66'"]) { UseShellExecute = false })!;
         using var self = System.Diagnostics.Process.GetCurrentProcess();
         var processes = new TaskProcesses([self.ProcessName]);
         var stopped = false;
-        WaitFor(() => stopped = processes.StopCommand(Environment.ProcessId, "cd /tmp && sleep '66'", DateTimeOffset.Now));
+        WaitFor(() => stopped = processes.StopCommand(Environment.ProcessId, "cd /tmp && sleep '66'", started));
         Assert.True(stopped);
         Assert.True(task.WaitForExit(5000));
+    }
+
+    [Fact]
+    public void An_older_process_running_the_same_last_command_is_left_alone()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return; // bash -c's exec of its last command: Linux and macOS
+        }
+        // Another task's `sleep 68`, started well before; the task asked for (cd somewhere && sleep 68) never ran.
+        using var older = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("sleep", "68") { UseShellExecute = false })!;
+        try
+        {
+            Thread.Sleep(3000);
+            using var self = System.Diagnostics.Process.GetCurrentProcess();
+            var processes = new TaskProcesses([self.ProcessName]);
+            Assert.False(processes.StopCommand(Environment.ProcessId, "cd /nowhere && sleep 68", DateTimeOffset.Now));
+            Assert.False(older.HasExited);
+        }
+        finally
+        {
+            older.Kill();
+        }
     }
 
     [Fact]

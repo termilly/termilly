@@ -139,7 +139,25 @@ internal sealed class BusyWatcher : IDisposable
     }
 
     /// <summary>Whether a state or a request is still waiting for a look (tests: nothing is left behind for good).</summary>
-    internal bool Waiting => !_resend.IsEmpty || Volatile.Read(ref _ticking) == 1 || _pending.Count > 0;
+    internal bool Waiting
+    {
+        get
+        {
+            // Read between looks, holding the look off meanwhile: _pending is the look's own.
+            if (Interlocked.CompareExchange(ref _ticking, 1, 0) == 1)
+            {
+                return true;
+            }
+            try
+            {
+                return !_resend.IsEmpty || _pending.Count > 0;
+            }
+            finally
+            {
+                Volatile.Write(ref _ticking, 0);
+            }
+        }
+    }
 
     public void Dispose() => _timer.Dispose();
 

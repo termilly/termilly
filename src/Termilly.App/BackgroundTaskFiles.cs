@@ -177,12 +177,20 @@ internal sealed class TaskProcesses : ITaskProcesses
         var below = ClaudeAgentsPoller.Descendants(all, terminalPid).ToDictionary(p => p.Id);
         // The agent may be the terminal's own program, not only one its shell started.
         var starters = below.Values.Concat(all.Where(p => p.Id == terminalPid))
-            .Where(p => _starters.Contains(Path.GetFileNameWithoutExtension(p.Exe), StringComparer.OrdinalIgnoreCase))
-            .Select(p => p.Id).ToHashSet();
-        // Only the topmost: a `node x.js` the agent runs is a task, not another agent.
-        var agents = starters.Where(pid => !HasAbove(below, pid, starters)).ToHashSet();
+            .Where(p => _starters.Contains(NameOf(p), StringComparer.OrdinalIgnoreCase))
+            .ToDictionary(p => p.Id, NameOf);
+        // A runtime (node) is an agent only with none above it: a `node x.js` the agent runs is a task. An agent by name
+        // (claude under the node that launched it) always is.
+        var agents = starters
+            .Where(s => !Runtimes.Contains(s.Value, StringComparer.OrdinalIgnoreCase) || !HasAbove(below, s.Key, [.. starters.Keys]))
+            .Select(s => s.Key).ToHashSet();
         return new Tree(below, agents);
     }
+
+    /// <summary>The programs among the starters that run agents as well as tasks.</summary>
+    private static readonly string[] Runtimes = ["node"];
+
+    private static string NameOf(ProcessEntry process) => Path.GetFileNameWithoutExtension(process.Exe);
 
     /// <summary>Whether one of <paramref name="those"/> is above the process, within the terminal.</summary>
     private static bool HasAbove(Dictionary<int, ProcessEntry> below, int pid, HashSet<int> those)
@@ -216,22 +224,47 @@ internal sealed class TaskProcesses : ITaskProcesses
         }
         var tree = TreeOf(terminalPid);
         var candidates = tree.Below.Keys.Where(pid => !tree.Agents.Contains(pid) && tree.UnderAgent(pid)).ToList();
-        HashSet<int> Running() => [.. ProcessCommandLines.Of(candidates).Where(p => Holds(p.Value, wanted, whole: !cut)).Select(p => p.Key)];
+        HashSet<int> Running() => [.. ProcessCommandLines.Of(candidates).Where(p => Holds(Lines(p.Value), wanted, whole: !cut)).Select(p => p.Key)];
         if (Running().Count > 0)
         {
             // The same command may run twice (or one that contains it): the one started nearest the task is the task's.
             return Closest(tree.Topmost(Running()), started) is { } task && KillChecked([task], Running);
         }
-        // bash -c runs the last command in its own place: its process then shows that command's words alone. Only the
-        // agent's own children count (where its shell was), and only a whole command (a cut one's end is unknown).
-        if (cut || ShellLastCommand.Of(wanted) is not { } last)
-        {
-            return false;
-        }
-        var children = candidates.Where(pid => tree.Agents.Contains(tree.Below[pid].ParentId)).ToList();
+        // Only a whole command: a cut one's last command is unknown.
+        return !cut && ShellLastCommand.Of(wanted) is { } last && StopExeced(tree, candidates, last, started);
+    }
+
+    /// <summary>
+    /// bash -c runs the last command in its own place: its process then shows that command's words alone. Only the
+    /// agent's own children count (where its shell was), started since the task (an older one running the same words is
+    /// another's).
+    /// </summary>
+    private static bool StopExeced(Tree tree, List<int> candidates, string last, DateTimeOffset started)
+    {
+        var children = candidates.Where(pid => tree.Agents.Contains(tree.Below[pid].ParentId) && StartedSince(pid, started)).ToList();
         HashSet<int> Execed() => [.. ProcessCommandLines.Of(children).Where(p => string.Equals(p.Value.Trim(), last, StringComparison.Ordinal)).Select(p => p.Key)];
         return Closest([.. Execed()], started) is { } execed && KillChecked([execed], Execed);
     }
+
+    /// <summary>How much earlier than the task's time its process may have started (the hook's clock, the agent's start).</summary>
+    private static readonly TimeSpan StartSlack = TimeSpan.FromSeconds(2);
+
+    /// <summary>Whether the process started at the task's time or after it; not one that ended or can't be read.</summary>
+    private static bool StartedSince(int pid, DateTimeOffset started)
+    {
+        using var process = Open(pid);
+        try
+        {
+            return process is not null && new DateTimeOffset(process.StartTime) >= started - StartSlack;
+        }
+        catch (Exception e) when (e is InvalidOperationException or System.ComponentModel.Win32Exception or NotSupportedException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>A command line with its line breaks as the hook writes them (\n).</summary>
+    private static string Lines(string commandLine) => commandLine.Replace("\r\n", "\n", StringComparison.Ordinal);
 
     /// <summary>
     /// Whether a process's command line holds the command: as it was, or as the agent quoted it for its shell (Windows'
