@@ -58,6 +58,13 @@ async function scenario(name, lines, body, { waiting = false, ready = '.cv-choic
     app = await startApp({ folder: repo.folder, name, agents: { codex: { stdout: '', prompt: { lines, ...prompt } } } });
     // Launch the bare command so shell integration recognizes the agent.
     await app.waitFor('.xterm');
+    // No welcome tour: offered a few seconds after a first start, its card would close a menu a scenario opens.
+    await app.eval(async t => {
+      const { GROUPS } = await t.import('store.js');
+      (await t.import('preferences.js')).updateSettings(GROUPS.uiState, { tourSeen: true });
+      const tour = await t.import('tour.js');
+      if (tour.tourActive()) tour.stopTour();
+    });
     await app.eval(async t => {
       const { state } = await t.import('store.js');
       const { typeAtPrompt } = await t.import('terminals.js');

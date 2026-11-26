@@ -69,7 +69,7 @@ public sealed class TaskProcessesTests
         // The agent's shell gets the command quoted again (PowerShell's \"x\", sh's '\''x'\''): found all the same.
         var (runs, hookSays) = OperatingSystem.IsWindows()
             ? ("ping -n 64 127.0.0.1 & echo \\\"done\\\"", "ping -n 64 127.0.0.1 & echo \"done\"")
-            : ("sleep 64; echo '\\''done'\\''", "sleep 64; echo 'done'");
+            : ("sh -c 'sleep 64; echo '\\''done'\\'''", "sleep 64; echo 'done'");
         using var task = Running(runs);
         using var self = System.Diagnostics.Process.GetCurrentProcess();
         var processes = new TaskProcesses([self.ProcessName]);
