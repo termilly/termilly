@@ -39,13 +39,16 @@ before(async () => {
 after(async () => { await app?.stop({ failed }); });
 
 step('no browser menu anywhere in the window, text fields included', async () => {
-  const shown = await app.eval(t => ['[name="name"]', '.sch-edit', '.sch-list'].map(selector => {
-    const el = t.$(selector);
-    const realm = el.ownerDocument.defaultView;
-    // dispatchEvent is false once a listener took the browser's menu away.
-    return el.dispatchEvent(new realm.MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
-  }));
-  assert.deepEqual(shown, [false, false, false]);
+  const shown = await app.eval(t => {
+    const own = t.$('.sch-list').ownerDocument;
+    // Its fields and lists, and its window's own edges (outside the panel).
+    return [t.$('[name="name"]'), t.$('.sch-edit'), t.$('.sch-list'), own.documentElement].map(el => {
+      const realm = el.ownerDocument.defaultView;
+      // dispatchEvent is false once a listener took the browser's menu away.
+      return el.dispatchEvent(new realm.MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    });
+  });
+  assert.deepEqual(shown, [false, false, false, false]);
   assert.equal(await menuShown(), null);
 });
 
@@ -55,15 +58,44 @@ step('a schedule in the list runs from its menu, the one shown staying', async (
   await app.eval(t => t.click('.context-menu .menu-row'));
   const after = await app.eval(async t => {
     const { runsOf } = await t.import('schedules.js');
-    return { runs: runsOf('s2').length, shown: t.$('.sch-list .selected')?.dataset.id };
+    // It ran, and worked: a run that failed to start leaves a record too.
+    let run;
+    for (let i = 0; i < 100 && (!(run = runsOf('s2')[0]) || run.status === 'running'); i++) await new Promise(r => setTimeout(r, 100));
+    return { runs: runsOf('s2').length, status: run?.status, shown: t.$('.sch-list .selected')?.dataset.id };
   });
-  assert.deepEqual(after, { runs: 1, shown: 's1' });
+  assert.deepEqual(after, { runs: 1, status: 'worked', shown: 's1' });
+});
+
+step('Run is off for the shown schedule while its changes are not saved', async () => {
+  const run = await app.eval(async t => {
+    const name = t.$('[name="name"]');
+    name.value = 'Nightly changed';
+    name.dispatchEvent(new Event('input', { bubbles: true }));
+    t.contextmenu('.sch-list [data-id="s1"]');
+    const rows = t.$$('.context-menu .menu-row');
+    const off = rows.find(b => b.querySelector('.menu-label').textContent.trim() === 'Run')?.disabled;
+    rows[0].ownerDocument.dispatchEvent(new globalThis.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    name.value = 'Nightly';
+    name.dispatchEvent(new Event('input', { bubbles: true }));
+    return off;
+  });
+  assert.equal(run, true);
 });
 
 step('Delete in its menu asks first, then the schedule goes', async () => {
   await app.eval(t => t.contextmenu('.sch-list [data-id="s2"]'));
   await app.eval(t => t.$$('.context-menu .menu-row').find(b => b.querySelector('.menu-label').textContent.trim() === 'Delete').click());
   await app.waitFor('.dialog-actions [data-ok]', { text: 'Delete' });
+  // Still there while it asks, and the question has no browser menu either.
+  const asking = await app.eval(async t => {
+    const dialog = t.$('.dialog-actions [data-ok]').closest('.modal-layer');
+    const realm = dialog.ownerDocument.defaultView;
+    return {
+      kept: !!(await t.import('schedules.js')).scheduleById('s2'),
+      browserMenu: dialog.dispatchEvent(new realm.MouseEvent('contextmenu', { bubbles: true, cancelable: true })),
+    };
+  });
+  assert.deepEqual(asking, { kept: true, browserMenu: false });
   await app.click('.dialog-actions [data-ok]');
   const left = await app.eval(async t => {
     for (let i = 0; i < 50 && t.$('.sch-list [data-id="s2"]'); i++) await new Promise(r => setTimeout(r, 50));

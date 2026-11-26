@@ -14,7 +14,7 @@ import { fuzzyMatch } from './fuzzy.js';
 import { askValues, placeholders, unfilled, filled, NAME_WORDS } from './snippets.js';
 import { pickSnippet, endSnippetPick, groupsOf } from './snippetpick.js';
 import { byId, find, targetOf, TOOL_COUNT, SCHEDULES_BUTTON_ID } from './dom.js';
-import { detach, closeWindow, focusWindow, isDetached, windowName } from './windows.js';
+import { detach, closeWindow, focusWindow, isDetached, windowName, inEachDocument } from './windows.js';
 import { readReport, shownText } from './schedulereport.js';
 import { withPaths, openReportLink, LINK_CLASS } from './schedulelinks.js';
 import {
@@ -427,18 +427,19 @@ async function removeShown() {
     render();
     return;
   }
-  await deleteSchedule(editing.id);
+  await deleteSchedule(editing.id, { whileShown: true });
 }
 
 /**
  * Deletes a schedule once the user says so: the shown one (Delete) or one in the list (its right-click menu).
  * @param {string} id
+ * @param {{ whileShown?: boolean }} [options] whileShown: only if it's still the one shown (Delete is about that one)
  */
-async function deleteSchedule(id) {
+async function deleteSchedule(id, { whileShown = false } = {}) {
   const schedule = scheduleById(id);
   if (!schedule || !(await confirmDanger(`Delete ${schedule.name}?`, 'Its reports go with it.', 'Delete'))) return;
-  // An agent may have deleted it while the user was asked.
-  if (!scheduleById(id)) return;
+  // An agent may have deleted it, or shown another, while the user was asked.
+  if (!scheduleById(id) || (whileShown && editing?.id !== id)) return;
   const shown = editing?.id === id;
   removeSchedule(id);
   if (shown) select(schedules()[0]?.id ?? null);
@@ -457,18 +458,32 @@ function runSchedule(id) {
   render();
 }
 
-/** @param {string} id a schedule in the list */
+/**
+ * A saved schedule's right-click menu. Run is off while the form holds its changes not saved, as the Run button is: it
+ * would run what was saved, not what's shown.
+ * @param {string} id
+ */
 const rowMenu = id => [
-  { label: 'Run', action: () => runSchedule(id) },
+  { label: 'Run', disabled: editing?.id === id && isDirty(), action: () => runSchedule(id) },
   { label: 'Delete', danger: true, action: () => deleteSchedule(id) },
 ];
 
-// The browser's menu has nothing for the Schedules window, text fields included; a schedule in the list has its own.
+// A saved schedule in the list has its own menu; a new one not saved yet has nothing to run or delete.
 box.addEventListener('contextmenu', e => {
-  e.preventDefault();
   const row = /** @type {HTMLElement | null} */ (targetOf(e).closest('.sch-list [data-id]'));
-  if (row?.dataset.id) showMenu(rowMenu(row.dataset.id), { x: e.clientX, y: e.clientY });
+  const id = row?.dataset.id;
+  if (id && scheduleById(id)) showMenu(rowMenu(id), { x: e.clientX, y: e.clientY });
 });
+
+/**
+ * Whether a right-click in the document is the Schedules window's: anywhere in its own window, or in the main one while
+ * it's open there (its backdrop covers the rest, and its popups, dialogs and menus open over it).
+ * @param {Document} doc
+ */
+const schedulesOwn = doc => (doc === document ? !layer.hidden && !isDetached(WINDOW_KEY) : doc.contains(box));
+
+// The browser's menu has nothing for the Schedules window, text fields included.
+inEachDocument(doc => doc.addEventListener('contextmenu', e => { if (schedulesOwn(doc)) e.preventDefault(); }));
 
 /** Clears the shown schedule's past runs and their reports; a run going on stays. */
 async function clearShown() {
