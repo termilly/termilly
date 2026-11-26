@@ -13,7 +13,7 @@ import {
 import { setWindowState } from './windowshown.js';
 import { scriptsLoaded } from './startuplog.js';
 import { setFocusRestorer, openPopover, closePopover } from './popups.js';
-import { setKeyHandler, scheduleFit, clearActivity, keptRunning, holdOpening, openHeld, startAgainHere } from './terminals.js';
+import { setKeyHandler, scheduleFit, clearActivity, keptRunning, holdOpening, openHeld } from './terminals.js';
 import { consoleDefaults } from './consolecolors.js';
 import {
   newTab, closeTab, focusedTab, splitFocused, moveFocus, renderAll, switchWorkspace, restoreFocus, noteOutput,
@@ -590,12 +590,6 @@ onHost(HOST.exit, m => {
   if (!tab?.view?.term) return;
   if (m.ended) resumeAfterHost(tab);
   clearActivity(tab);
-  // Background shells were turned off (Settings › Workspaces sets that before the host ends): not to be lost, it
-  // starts again in this window, as it would at Termilly's next start.
-  if (m.ended && !state.settings.session.backgroundShells) {
-    startAgainHere(tab);
-    return;
-  }
   if (handleSshExit(tab, m.code)) return; // an SSH connection that dropped: it reconnects (reconnect.js)
   if (m.code === 0) {
     closeTab(tab); // a clean `exit` closes the terminal

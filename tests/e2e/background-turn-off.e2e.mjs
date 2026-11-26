@@ -52,10 +52,12 @@ test('turning background shells off starts their terminals again here, and an ag
     await until(async () => /"backgroundShells":\s*true/.test(await readFile(path.join(dataDir, 'settings.json'), 'utf8')), 'the setting saved');
     await app.stop({ keepData: true });
 
-    // Its shell now runs in the background host, with a Claude Code session that had a turn there.
+    // Its shells now run in the background host, with a Claude Code session that had a turn there.
     app = await startApp({ folder: repo.path, name: 'background-turn-off', env, dataDir });
     await firstPrompt(app);
-    assert.equal((await hostShells(app)).length, 1, 'the terminal runs in the background host');
+    const kept = await hostShells(app);
+    const tabIds = await app.eval(async t => [...(await t.import('./store.js')).state.tabs.keys()]);
+    assert.ok(tabIds.every(id => kept.includes(id)), JSON.stringify({ kept, tabIds }));
     await app.eval(async (t, text) => {
       const { state } = await t.import('./store.js');
       const { send } = await t.import('./host.js');
@@ -81,14 +83,14 @@ test('turning background shells off starts their terminals again here, and an ag
     await new Promise(resolve => setTimeout(resolve, SETTLE_MS));
     const after = await app.eval(async t => {
       const { state } = await t.import('./store.js');
-      const tab = [...state.tabs.values()][0];
-      return { tabs: state.tabs.size, exited: !!tab?.exited, on: state.settings.session.backgroundShells };
+      const tabs = [...state.tabs.values()];
+      return { tabs: tabs.map(tab => tab.id), exited: tabs.some(tab => tab.exited), on: state.settings.session.backgroundShells };
     });
-    assert.deepEqual(after, { tabs: 1, exited: false, on: false });
+    assert.deepEqual(after, { tabs: tabIds, exited: false, on: false });
     const lines = await screen(app);
     assert.ok(lines.some(line => line.trim() === BEFORE), 'the output before is kept');
     assert.ok(!lines.some(line => line.includes('process exited')), lines.join('\n'));
-    assert.deepEqual(await hostShells(app), [], 'its new shell runs in this window');
+    assert.deepEqual(await hostShells(app), [], 'their new shells run in this window');
     assert.match(await readFile(path.join(dataDir, 'settings.json'), 'utf8'), /"backgroundShells":\s*false/);
     failed = false;
   } finally {

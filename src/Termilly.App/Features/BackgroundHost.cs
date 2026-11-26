@@ -78,12 +78,20 @@ internal sealed class BackgroundHost : IDisposable
         return _host.IsCompletedSuccessfully && _host.Result is { IsConnected: true } connected ? connected : null;
     }
 
-    /// <summary>The window is closing: the shells stay with the host.</summary>
+    /// <summary>
+    /// The window is closing: the shells stay with the host. Unless Settings stopped keeping them since it started:
+    /// then the host ends with them, and the next start resumes their agents as it does with the setting off.
+    /// </summary>
     public void Dispose()
     {
-        if (_host.IsCompletedSuccessfully)
+        if (!_host.IsCompletedSuccessfully || _host.Result is not { } connected)
         {
-            _host.Result?.Dispose();
+            return;
         }
+        if (!_settings.Current.Session.BackgroundShells && connected.IsConnected)
+        {
+            HostClient.StopHost(connected);
+        }
+        connected.Dispose();
     }
 }
