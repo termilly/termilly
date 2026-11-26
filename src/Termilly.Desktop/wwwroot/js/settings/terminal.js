@@ -1,5 +1,5 @@
 // @ts-check
-// Settings › Terminal: the default shell, scrollback, agents, production safety, logs, recordings, triggers and the
+// Settings › Terminal: the default shell, scrollback, listening ports, agents, production safety, logs, recordings, triggers and the
 // shell profiles. Notifications and sounds have their own page (notifications.js).
 
 import { sys, SYSTEM_NAME } from '../host.js';
@@ -73,6 +73,7 @@ const TERMINAL = {
     + row('Scrollback out of sight', 'Fewer lines for terminals in other workspaces, to save memory.',
       seg('session.hiddenScrollback', choices(hiddenScrollback.all, lines => (lines ? lines.toLocaleString('en-US') : 'Same'))))
     + row('Containers and pods', 'Docker containers and Kubernetes pods in the + menu.', toggle('shells.dynamicSources'))
+    + row('Listening ports', 'Ports a terminal’s programs listen on; click one to open it.', toggle('terminal.ports'), { keywords: 'port server localhost dev listening url' })
     + row('Activity spinner', 'Spins while a command runs or a program reports progress.',
       toggle('interface.showActivity'))
     + row('Agent integration', 'Claude Code and Codex report what they’re doing. New terminals only.',

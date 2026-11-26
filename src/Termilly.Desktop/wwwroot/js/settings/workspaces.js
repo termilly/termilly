@@ -1,6 +1,5 @@
 // @ts-check
-// Settings › Workspaces: background shells, what comes back at start, what Minimize and Close do, and
-// project status.
+// Settings › Workspaces: background shells, what comes back at start, and what Minimize and Close do.
 
 import { PAGE } from '../protocol.js';
 import { send, request, sys, SYSTEM_NAME } from '../host.js';
@@ -71,8 +70,7 @@ const WORKSPACES = {
         + row('Close', 'Keep running in the tray; quit from its menu or the palette.',
           seg('interface.closeAction', [[closeAction.quit, 'Quit Termilly'], [closeAction.tray, 'Keep running in the tray']])))
       + row('Ask before quitting', 'When a command runs, or an agent works or waits for you.',
-        toggle('interface.confirmQuit')))
-    + group('Project status', row('Listening ports', 'Ports a terminal’s programs listen on; click one to open it.', toggle('terminal.ports'), { keywords: 'port server localhost dev listening url' })),
+        toggle('interface.confirmQuit'))),
   // Turning background shells off ends the ones running (after asking) and the background process; kept, it stays on.
   click(e) {
     if (!targetOf(e).closest(`.switch[data-setting="${BACKGROUND_SHELLS}"]`) || !getSetting(BACKGROUND_SHELLS)) return false;
