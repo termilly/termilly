@@ -42,6 +42,7 @@ const rowsOf = t => t.$$('.context-menu .menu-row').map(r => {
     hint: r.querySelector('.menu-hint').textContent.trim(),
     checked: r.getAttribute('aria-checked'),
     iconColour: view.getComputedStyle(icon).color,
+    swatchStroke: (s => (s ? view.getComputedStyle(s).stroke : null))(icon.querySelector('.workspace-swatch rect')),
   };
 });
 
@@ -150,8 +151,9 @@ step('Solid: the chosen row on the accent itself', async () => {
   const { rows, colours } = await workspaceList();
   assert.equal(rows[0].picked, true);
   assert.equal(rows[0].background, colours.accent);
-  // Its icon takes the colour of text on the accent, not lost in it.
+  // Its icon takes the colour of text on the accent, and its swatch an edge in it, not lost in the accent.
   assert.equal(rows[0].iconColour, colours.onAccent);
+  assert.equal(rows[0].swatchStroke, colours.onAccent);
   assert.equal((await keepRow()).ticked, true);
 });
 
