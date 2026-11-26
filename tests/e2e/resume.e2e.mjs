@@ -11,6 +11,8 @@ import { until } from './gitsteps.mjs';
 
 const SESSION = '0e4444a1-30c0-4b76-9b2e-9994ffbea699';
 const GONE = `No conversation found with session ID: ${SESSION}`;
+/** How long the fake Codex loads, silent, before drawing its screen. */
+const LOADS_MS = 4000;
 
 test('resuming a session that is gone ends the spinner, with Claude\'s words left on screen', async () => {
   const repo = await makeRepo({ files: { 'a.txt': 'a\n' } });
@@ -61,7 +63,7 @@ test('with the activity spinner off, a Codex session that comes back still ends 
   const repo = await makeRepo({ files: { 'a.txt': 'a\n' } });
   let app, failed = true;
   try {
-    app = await startApp({ folder: repo.path, name: 'resume-quiet', agents: { codex: { stdout: '', prompt: { lines: ['Codex is back'], input: '› ' } } } });
+    app = await startApp({ folder: repo.path, name: 'resume-quiet', agents: { codex: { stdout: '', prompt: { lines: ['Codex is back'], input: '› ', drawAfterMs: LOADS_MS } } } });
     await app.waitFor('.xterm');
     await app.eval(async t => {
       const { GROUPS } = await t.import('./store.js');
@@ -84,6 +86,9 @@ test('with the activity spinner off, a Codex session that comes back still ends 
       resumeTyped(tab, command);
     }, SESSION);
     await app.waitFor('.resume-overlay');
+    // Codex loads quietly first: the spinner stays till its screen is drawn, not ending on the quiet before it.
+    await new Promise(r => setTimeout(r, LOADS_MS - 1000));
+    assert.equal(await app.eval(t => !!t.$('.resume-overlay')), true, 'the spinner went before Codex drew its screen');
     // Well before the retry (15 s): Codex's screen, once quiet, ends it.
     await app.waitFor('.resume-overlay', { gone: true, timeoutMs: 10_000 });
     const after = await app.eval(async t => {

@@ -66,10 +66,10 @@ public sealed class TaskProcessesTests
     [Fact]
     public void Stop_by_command_finds_it_however_its_shell_was_handed_the_quotes()
     {
-        // The agent's shell gets the command quoted again (PowerShell's \"x\", bash's '\''x'\''): quotes don't count.
+        // The agent's shell gets the command quoted again (PowerShell's \"x\", sh's '\''x'\''): found all the same.
         var (runs, hookSays) = OperatingSystem.IsWindows()
             ? ("ping -n 64 127.0.0.1 & echo \\\"done\\\"", "ping -n 64 127.0.0.1 & echo \"done\"")
-            : ("sleep 64; echo 'done'", "sleep 64;  echo \"done\"");
+            : ("sleep 64; echo '\\''done'\\''", "sleep 64; echo 'done'");
         using var task = Running(runs);
         using var self = System.Diagnostics.Process.GetCurrentProcess();
         var processes = new TaskProcesses([self.ProcessName]);
@@ -80,16 +80,18 @@ public sealed class TaskProcessesTests
     }
 
     [Theory]
-    // As the agent's shell holds it: quoted again for PowerShell, or for bash, after a line break.
+    // As the agent's shell holds it: as it was, or quoted again for PowerShell (after its line break) or for sh.
+    [InlineData("sleep 5; echo x", "sh -c 'sleep 5; echo x'", true)]
     [InlineData("echo \"done\"", "powershell -Command \"try {} catch {}\n echo \\\"done\\\"\"", true)]
     [InlineData("echo 'a b'", "bash -c 'echo '\\''a b'\\'''", true)]
-    [InlineData("sleep 5;  echo x", "sh -c 'sleep 5; echo x'", true)]
-    // Words stay apart: a quoted space isn't nothing.
+    // Exact: a different spacing or quoting is another command, inside quotes too.
     [InlineData("echo 'a b'", "bash -c 'echo ab'", false)]
     [InlineData("echo ab", "bash -c 'echo a b'", false)]
-    public void A_command_is_found_in_its_shell_command_line_whatever_the_quoting(string command, string commandLine, bool found)
+    [InlineData("echo 'a b'", "bash -c 'echo '\\''a  b'\\'''", false)]
+    [InlineData("echo \"a b\"", "powershell -Command \"echo \\\"a  b\\\"\"", false)]
+    public void A_command_is_found_in_its_shell_command_line_as_its_shell_was_handed_it(string command, string commandLine, bool found)
     {
-        Assert.Equal(found, TaskProcesses.Bare(commandLine).Contains(TaskProcesses.Bare(command), StringComparison.Ordinal));
+        Assert.Equal(found, TaskProcesses.Holds(commandLine, command));
     }
 
     [Fact]

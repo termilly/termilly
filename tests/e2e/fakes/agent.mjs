@@ -42,11 +42,16 @@ process.stdin.on('keypress', (text, key) => {
 });
 process.stdin.resume();
 setTimeout(() => finish('timeout'), script.prompt.timeoutMs ?? 60000);
-// Home and erase removes the shell's command and history, making the above-choice fallback deterministic.
-process.stdout.write('\x1b[2J\x1b[H' + script.prompt.lines.join('\r\n') + '\r\n' + (mark ?? ''));
-// A footer under the input line, as Codex draws one (a blank row, then its status), the cursor back on the input line.
-if (script.prompt.footer) process.stdout.write('\x1b7\r\n' + script.prompt.footer.join('\r\n') + '\x1b8');
-log({ event: 'ready', raw: !!process.stdin.isTTY });
+// Its screen, drawn at once or, as an agent that loads quietly first, after drawAfterMs.
+const draw = () => {
+  // Home and erase removes the shell's command and history, making the above-choice fallback deterministic.
+  process.stdout.write('\x1b[2J\x1b[H' + script.prompt.lines.join('\r\n') + '\r\n' + (mark ?? ''));
+  // A footer under the input line, as Codex draws one (a blank row, then its status), the cursor back on the input line.
+  if (script.prompt.footer) process.stdout.write('\x1b7\r\n' + script.prompt.footer.join('\r\n') + '\x1b8');
+  log({ event: 'ready', raw: !!process.stdin.isTTY });
+};
+if (script.prompt.drawAfterMs) setTimeout(draw, script.prompt.drawAfterMs);
+else draw();
 
 
 

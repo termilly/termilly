@@ -77,6 +77,38 @@ public sealed class BusyWatcherTests
     }
 
     [Fact]
+    public void A_terminal_whose_shell_was_replaced_never_hears_again_what_the_old_one_ran()
+    {
+        // The old shell ran a program (this process, with a child); the page reopens the terminal on a new shell, at
+        // its prompt (a process with no children), and asks for it again.
+        using var program = OperatingSystem.IsWindows()
+            ? Process.Start(new ProcessStartInfo("ping", "-n 30 127.0.0.1") { CreateNoWindow = true, UseShellExecute = false })!
+            : Process.Start("sleep", "30");
+        using var newShell = OperatingSystem.IsWindows()
+            ? Process.Start(new ProcessStartInfo("ping", "-n 30 127.0.0.1") { CreateNoWindow = true, UseShellExecute = false })!
+            : Process.Start("sleep", "30");
+        var root = Environment.ProcessId;
+        var reports = new System.Collections.Concurrent.ConcurrentQueue<ChildProgram?>();
+        using var watcher = new BusyWatcher(() => new Dictionary<string, int> { ["t"] = Volatile.Read(ref root) }, (_, p) => reports.Enqueue(p));
+        try
+        {
+            Assert.True(SpinWait.SpinUntil(() => reports.Count == 1, TimeSpan.FromSeconds(5)));
+            Volatile.Write(ref root, newShell.Id);
+            watcher.Resend("t");
+            // What it runs now (nothing) goes out once it has lasted; the old program never again.
+            Assert.True(SpinWait.SpinUntil(() => reports.Count == 2, TimeSpan.FromSeconds(5)));
+            Thread.Sleep(1500);
+            Assert.Equal(2, reports.Count);
+            Assert.Null(reports.Last());
+        }
+        finally
+        {
+            program.Kill();
+            newShell.Kill();
+        }
+    }
+
+    [Fact]
     public void A_terminal_at_its_prompt_has_nothing_sent_again()
     {
         // Its shell runs nothing (a process with no children stands in for it): the page assumes the prompt already.

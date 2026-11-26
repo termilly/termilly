@@ -47,8 +47,9 @@ export function resumeTyped(tab, command) {
   r.command = command;
   const check = () => {
     const term = tab.view?.term;
-    // An agent that runs has taken the command: its own input line can look like a shell prompt.
-    if (tab.resuming !== r || !term || tab.exited || !atPrompt(term) || runningAgent(tab)) return;
+    // An agent that runs has taken the command: its own input line can look like a shell prompt. So has a command the
+    // shell says runs (the host may not report the agent: Show activity off).
+    if (tab.resuming !== r || !term || tab.exited || shellTookIt(tab, term) || runningAgent(tab)) return;
     // Typed twice and still at the prompt (a shell that doesn't mark its commands' ends): the agent didn't start.
     if (r.retried) return void gaveUp(tab);
     r.retried = true;
@@ -57,7 +58,7 @@ export function resumeTyped(tab, command) {
     r.timer = window.setTimeout(check, RETRY_AFTER_MS);
   };
   r.timer = window.setTimeout(check, RETRY_AFTER_MS);
-  if (!activityShown()) watchScreen(tab, r);
+  watchScreen(tab, r);
 }
 
 /** How often, with Show activity off, a resuming terminal is looked at for its agent having taken over. */
@@ -67,8 +68,18 @@ const SCREEN_LOOK_MS = 1000;
 const activityShown = () => state.settings.interface.showActivity !== false;
 
 /**
- * With Show activity off the host never says the agent runs, which ends a resume that waits for that (Codex's, and one
- * started early): once the shell has left its prompt, the agent's screen going quiet ends it instead.
+ * Whether the shell took the resume command: it says a command runs (its marks), or, a shell that doesn't mark them,
+ * it has left its prompt.
+ * @param {Tab} tab
+ * @param {any} term
+ */
+const shellTookIt = (tab, term) => !!tab.running || !atPrompt(term);
+
+/**
+ * With Show activity off (now, or turned off while it resumes) the host never says the agent runs, which ends a resume
+ * that waits for that (Codex's, and one started early): once the shell has taken the command, the agent drawing its
+ * screen, and that going quiet, ends it instead. Output is waited for, so an agent that starts silently isn't taken for
+ * one that's drawn.
  * @param {Tab} tab
  * @param {NonNullable<Tab['resuming']>} r
  */
@@ -77,9 +88,12 @@ function watchScreen(tab, r) {
   const look = window.setInterval(() => {
     const term = tab.view?.term;
     if (tab.resuming !== r || tab.exited) return void clearInterval(look);
-    if (!term || atPrompt(term) || settling.has(tab)) return;
+    if (activityShown() || !term || !shellTookIt(tab, term) || settling.has(tab)) return;
     clearInterval(look);
-    settle(tab);
+    const drawn = term.onWriteParsed(() => {
+      drawn.dispose();
+      if (tab.resuming === r && !settling.has(tab)) settle(tab);
+    });
   }, SCREEN_LOOK_MS);
 }
 

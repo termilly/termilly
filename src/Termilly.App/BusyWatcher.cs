@@ -61,8 +61,12 @@ internal sealed class BusyWatcher : IDisposable
     private readonly Timer _timer;
     private readonly Dictionary<string, ChildProgram?> _reported = new();
     private readonly Dictionary<string, ChildProgram?> _pending = new();
-    /// <summary>Terminals whose state goes out again on the next look, though it didn't change.</summary>
-    private readonly ConcurrentDictionary<string, bool> _resend = new();
+    /// <summary>
+    /// Terminals whose state goes out again, though it didn't change, each with the number of its request: a look
+    /// answers only the requests made before it began, so what it read of the terminal is from after the request.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, long> _resend = new();
+    private long _requests;
     private int _ticking;
 
     /// <param name="roots">The terminals to watch: id → the pseudo console's root process id.</param>
@@ -96,7 +100,7 @@ internal sealed class BusyWatcher : IDisposable
     /// </summary>
     public void Resend(string id)
     {
-        _resend[id] = true;
+        _resend[id] = Interlocked.Increment(ref _requests);
         Nudge();
     }
 
@@ -105,15 +109,16 @@ internal sealed class BusyWatcher : IDisposable
     /// that. One whose state is changing (a new state waits for its second look, as when its shell was replaced) waits
     /// for the next look, so what goes out is never the state it's leaving.
     /// </summary>
-    private void ResendAsked()
+    /// <param name="before">The last request made before this look began.</param>
+    private void ResendAsked(long before)
     {
-        foreach (var id in _resend.Keys)
+        foreach (var (id, request) in _resend)
         {
-            if (_pending.ContainsKey(id))
+            if (request > before || _pending.ContainsKey(id))
             {
                 continue;
             }
-            if (_resend.TryRemove(id, out _) && _reported.GetValueOrDefault(id) is { } known)
+            if (_resend.TryRemove(new KeyValuePair<string, long>(id, request)) && _reported.GetValueOrDefault(id) is { } known)
             {
                 _changed(id, known);
             }
@@ -184,6 +189,7 @@ internal sealed class BusyWatcher : IDisposable
         }
         try
         {
+            var asked = Interlocked.Read(ref _requests);
             var roots = _roots();
             var snapshot = roots.Count > 0 ? Snapshot() : [];
             foreach (var gone in _reported.Keys.Except(roots.Keys).ToList())
@@ -214,7 +220,7 @@ internal sealed class BusyWatcher : IDisposable
                     _pending[id] = busy;
                 }
             }
-            ResendAsked();
+            ResendAsked(asked);
         }
         catch (Exception e) when (e is Win32Exception or InvalidOperationException or IOException)
         {
