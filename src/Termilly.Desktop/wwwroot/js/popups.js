@@ -5,6 +5,7 @@
 
 import { hereDoc, inEachDocument } from './windows.js';
 import { barSideOf, DOCK_SIDE } from './dom.js';
+import { SETTING_VALUES } from './constants.js';
 
 /**
  * Where a popover shows: next to an element, a rectangle, or a point.
@@ -12,10 +13,11 @@ import { barSideOf, DOCK_SIDE } from './dom.js';
  */
 
 /**
- * One of a menu's entries, or 'separator'. `checked` makes it a checkbox; `submenu` opens more entries beside it.
- * `key` picks it while its menu has the focus (a digit, shown as its hint). `more` is what a right-click on it offers,
- * in a menu of its own over this one.
- * @typedef {{ label: string, icon?: string, hint?: string, checked?: boolean, danger?: boolean, disabled?: boolean,
+ * One of a menu's entries, or 'separator'. `checked` makes it a checkbox (on or off); `picked` makes it one of a
+ * group that picks one (true on the chosen one), marked as Settings › Appearance › Layout says (MENU_PICK); `submenu`
+ * opens more entries beside it. `key` picks it while its menu has the focus (a digit, shown as its hint). `more` is
+ * what a right-click on it offers, in a menu of its own over this one.
+ * @typedef {{ label: string, icon?: string, hint?: string, checked?: boolean, picked?: boolean, danger?: boolean, disabled?: boolean,
  *   title?: string, action?: () => unknown, submenu?: () => MenuEntry[], key?: string, more?: () => MenuEntry[] }} MenuItem
  * @typedef {MenuItem | typeof SEPARATOR} MenuEntry
  */
@@ -229,6 +231,39 @@ const CHECK = '<svg viewBox="0 0 16 16"><path d="M4 8.5l2.5 2.5L12 5.5"/></svg>'
 const CHEVRON = '<svg viewBox="0 0 12 12"><path d="M4.5 3L7.5 6 4.5 9"/></svg>';
 
 /**
+ * How a pick-one group marks its chosen row (C#'s SettingValues.MenuPick): the root element's data-menu-pick, which
+ * js/menulook.js sets from the setting and detached windows copy. Not a tick, the row shows its own icon.
+ */
+export const MENU_PICK_ATTRIBUTE = 'menuPick';
+/** The class of a row that is a pick-one group's choice, and of a menu with no icons to show (its icon column goes). */
+const PICKED = 'picked';
+const NO_ICONS = 'no-icons';
+
+/** Whether pick-one rows show a tick, as checkboxes do, rather than a background. */
+const picksWithTick = () => (document.documentElement.dataset[MENU_PICK_ATTRIBUTE] ?? SETTING_VALUES.menuPick.default) === SETTING_VALUES.menuPick.check;
+
+/**
+ * A row's role, whether it's on (checkbox) or the one chosen (pick-one), and what its icon column shows.
+ * @param {MenuItem} item
+ * @returns {{ role: string, on?: boolean, icon: string, picked: boolean }}
+ */
+function rowKind(item) {
+  if (item.checked !== undefined) return { role: 'menuitemcheckbox', on: item.checked, icon: item.checked ? CHECK : '', picked: false };
+  if (item.picked === undefined) return { role: 'menuitem', icon: item.icon ?? '', picked: false };
+  if (picksWithTick()) return { role: 'menuitemradio', on: item.picked, icon: item.picked ? CHECK : '', picked: false };
+  return { role: 'menuitemradio', on: item.picked, icon: item.icon ?? '', picked: item.picked };
+}
+
+/**
+ * A menu of pick-one rows that shows no tick, and has no icons or checkboxes either, needs no icon column.
+ * @param {MenuEntry[]} items
+ */
+function needsNoIcons(items) {
+  const rows = /** @type {MenuItem[]} */ (items.filter(i => i !== SEPARATOR));
+  return !picksWithTick() && rows.some(i => i.picked !== undefined) && rows.every(i => !i.icon && i.checked === undefined);
+}
+
+/**
  * Shows a menu at `anchor`. Items: { label, icon (svg markup), hint (markup), checked, danger, action,
  * submenu: () => items }, or 'separator'. Arrow keys move, Enter/Space run, Right opens a submenu. keepFocus leaves the
  * keyboard focus where it is (a text box keeps showing its selection), and refocus says where it goes on closing. alone: picking
@@ -241,7 +276,7 @@ const CHEVRON = '<svg viewBox="0 0 12 12"><path d="M4.5 3L7.5 6 4.5 9"/></svg>';
 export function showMenu(items, anchor, { side = SIDE.below, nested = false, alone = false, className = '', keepFocus = false, refocus, onClose } = {}) {
   const menu = document.createElement('div');
   if (alone) menu.dataset.alone = '1';
-  menu.className = `popover menu context-menu ${className}`;
+  menu.className = `popover menu context-menu ${className}${needsNoIcons(items) ? ` ${NO_ICONS}` : ''}`;
   menu.setAttribute('role', 'menu');
   menu.hidden = true;
   for (const item of items) {
@@ -325,12 +360,12 @@ function fitAndScroll(menu) {
  */
 function menuRow(menu, item) {
   const button = document.createElement('button');
-  const checkable = item.checked !== undefined;
-  button.className = `menu-row${item.danger ? ' danger' : ''}`;
-  button.setAttribute('role', checkable ? 'menuitemcheckbox' : 'menuitem');
-  if (checkable) button.setAttribute('aria-checked', String(item.checked));
+  const kind = rowKind(item);
+  button.className = `menu-row${item.danger ? ' danger' : ''}${kind.picked ? ` ${PICKED}` : ''}`;
+  button.setAttribute('role', kind.role);
+  if (kind.on !== undefined) button.setAttribute('aria-checked', String(kind.on));
   button.innerHTML = `
-      <span class="menu-icon">${checkable ? (item.checked ? CHECK : '') : item.icon ?? ''}</span>
+      <span class="menu-icon">${kind.icon}</span>
       <span class="menu-label"></span>
       <span class="menu-hint">${item.submenu ? CHEVRON : item.hint ?? ''}</span>`;
   /** @type {HTMLElement} */ (button.querySelector('.menu-label')).textContent = item.label;
@@ -443,7 +478,7 @@ function openDropdown(select, button) {
     ...(i ? /** @type {MenuEntry[]} */ ([SEPARATOR]) : []),
     ...[...group.querySelectorAll('option')].map(option => ({
       label: option.textContent ?? '',
-      checked: option.value === select.value,
+      picked: option.value === select.value,
       action: () => {
         if (select.value === option.value) return;
         select.value = option.value;

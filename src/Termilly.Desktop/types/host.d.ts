@@ -103,6 +103,8 @@ interface InterfaceSettings {
   workspaceDots: boolean;
   /** The line down the sidebar that ties a workspace's terminals to it (Normal). */
   treeLines: boolean;
+  /** How menus that pick one of several mark the chosen one (). */
+  menuPick: string;
   /** The app's font; null: the system's. */
   font: string | null;
   showActivity: boolean;

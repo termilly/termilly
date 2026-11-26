@@ -6,6 +6,7 @@ import { send, onHost } from './host.js';
 import './macwindow.js';
 import './browsermenu.js';
 import './workspacelook.js';
+import './menulook.js';
 import {
   state, restore, newId, emit, saveNow, WORKSPACE_COLORS, PROFILE_SOURCES, agentChanged, markSeen, GROUPS, EVENTS, sourceOf, SPLIT,
 } from './store.js';

@@ -46,6 +46,19 @@ internal static class SettingValues
         public static readonly IReadOnlyList<string> All = [Line, Hover];
     }
 
+    /// <summary>
+    /// How a menu that picks one of several (a dropdown, the workspace list) marks the one chosen: a tick beside it, or a
+    /// soft or solid accent background on it.
+    /// </summary>
+    public static class MenuPick
+    {
+        public const string Check = "check";
+        public const string Soft = "soft";
+        public const string Solid = "solid";
+        public const string Default = Check;
+        public static readonly IReadOnlyList<string> All = [Check, Soft, Solid];
+    }
+
     public static class CursorStyle
     {
         public const string Bar = "bar";

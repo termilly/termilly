@@ -100,6 +100,8 @@ internal sealed record InterfaceSettings
     public bool WorkspaceDots { get; init; } = true;
     /// <summary>The line down the sidebar that ties a workspace's terminals to it (Normal).</summary>
     public bool TreeLines { get; init; } = true;
+    /// <summary>How menus that pick one of several mark the chosen one (<see cref="SettingValues.MenuPick"/>).</summary>
+    public string MenuPick { get; init; } = SettingValues.MenuPick.Default;
     /// <summary>The app's font; null: the system's.</summary>
     public string? Font { get; init; }
     public bool ShowActivity { get; init; } = true;
@@ -148,6 +150,7 @@ internal sealed record InterfaceSettings
             .DistinctBy(t => t.Id).Take(CustomThemeLimits.MaxThemes).ToList(),
         Layout = SettingChecks.OneOf(Layout, SettingValues.Layout.All, SettingValues.Layout.Default),
         PaneNames = SettingChecks.OneOf(PaneNames, SettingValues.PaneNames.All, SettingValues.PaneNames.Default),
+        MenuPick = SettingChecks.OneOf(MenuPick, SettingValues.MenuPick.All, SettingValues.MenuPick.Default),
         MinimizeTo = SettingChecks.OneOf(MinimizeTo, SettingValues.MinimizeTo.All, SettingValues.MinimizeTo.Default),
         CloseAction = SettingChecks.OneOf(CloseAction, SettingValues.CloseAction.All, SettingValues.CloseAction.Default),
         Font = SettingChecks.Trimmed(Font),

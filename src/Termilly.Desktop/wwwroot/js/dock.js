@@ -212,7 +212,7 @@ function setDock(change) {
 dock.addEventListener('contextmenu', e => {
   e.preventDefault();
   /** @type {MenuEntry[]} */
-  const items = EDGES.map(([side, label]) => ({ label, checked: side === sideNow(), action: () => setDock({ side }) }));
+  const items = EDGES.map(([side, label]) => ({ label, picked: side === sideNow(), action: () => setDock({ side }) }));
   items.push(SEPARATOR, { label: 'Hide when not in use', checked: hides(), action: () => setDock({ hide: !hides() }) });
   showMenu(items, { x: e.clientX, y: e.clientY });
 });
@@ -248,7 +248,7 @@ export function setDockWorkspaces(rows) {
 export function showWorkspaceList(anchor, side) {
   /** @type {MenuEntry[]} */
   const items = state.workspaces.map(ws => ({
-    label: ws.name, icon: workspaceSwatch(ws.color), hint: rowHint(ws), checked: ws.id === state.activeId,
+    label: ws.name, icon: workspaceSwatch(ws.color), hint: rowHint(ws), picked: ws.id === state.activeId,
     action: () => switchWorkspace(ws.id),
     // Right-click: as the sidebar's menu, which Minimal hides, closes it.
     more: () => [{ label: CLOSE_WORKSPACE_LABEL, icon: ICONS.trash, danger: true, action: () => askCloseWorkspace(ws) }],

@@ -497,6 +497,13 @@ export const SETTING_VALUES = Object.freeze({
     default: 'line',
     all: Object.freeze(['line', 'hover']),
   }),
+  menuPick: Object.freeze({
+    check: 'check',
+    soft: 'soft',
+    solid: 'solid',
+    default: 'check',
+    all: Object.freeze(['check', 'soft', 'solid']),
+  }),
   cursorStyle: Object.freeze({
     bar: 'bar',
     block: 'block',
