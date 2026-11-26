@@ -447,12 +447,15 @@ async function deleteSchedule(id, { whileShown = false } = {}) {
 }
 
 /**
- * Runs a schedule now; the shown one, with no changes left to save, then shows the run as its Run button does.
+ * Runs a schedule now. The shown one runs only with no changes left to save, and then shows the run as its Run button does.
  * @param {string} id
  */
 function runSchedule(id) {
+  const shown = editing?.id === id;
+  // Checked again here: the form can change while its menu stays open.
+  if (shown && isDirty()) return;
   runNow(id);
-  if (editing?.id !== id || isDirty()) return;
+  if (!shown) return;
   openRunId = runsOf(id).find(r => !hasEnded(r))?.id ?? null;
   view = VIEW.runs;
   render();
