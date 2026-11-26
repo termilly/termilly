@@ -12,37 +12,59 @@ public static class ControllingTerminal
     /// <summary>The shell that takes the terminal on its way to the program: on every Mac.</summary>
     private const string Bash = "/bin/bash";
 
+    /// <summary>Where BASH_ENV waits while bash starts.</summary>
+    private const string HeldBashEnv = "TERMILLY_BASH_ENV";
+    private const string BashEnv = "BASH_ENV=";
+
     /// <summary>
-    /// bash counts itself as a shell level (SHLVL) for what it starts: one less, so the program counts as it would
-    /// started directly. Then it becomes the program, its arguments as they were.
+    /// What bash runs: BASH_ENV given back to the program (bash, not interactive, would run that file first, and it isn't
+    /// bash's to run), then it becomes the program, by its full path, its arguments as they were. bash's exec counts
+    /// SHLVL back down itself.
     /// </summary>
-    private const string Script = "export SHLVL=$((${SHLVL:-1}-1)); exec \"$@\"";
+    private const string Script =
+        "if [ -n \"${" + HeldBashEnv + "+x}\" ]; then export BASH_ENV=\"$" + HeldBashEnv + "\"; unset " + HeldBashEnv + "; fi; exec \"$@\"";
 
     /// <summary>The name bash gives itself ($0) for the moment it runs.</summary>
     private const string Name = "termilly";
 
+    /// <summary>How a file is checked: whether it may be run.</summary>
+    public sealed record Files(Func<string, bool> Executable);
+
+    /// <summary>The program to start, its arguments and environment: through bash on macOS, or as they were.</summary>
+    public sealed record Start(List<string> Argv, List<string> Environment);
+
+    /// <summary>The system's own check: a file that's there with a permission to run it.</summary>
+    public static readonly Files System = new(path => !OperatingSystem.IsWindows() && File.Exists(path)
+        && (File.GetUnixFileMode(path) & (UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute)) != 0);
+
     /// <summary>
-    /// The program's arguments as started: through bash on macOS, when there's a bash and the program can be found (one
-    /// that can't is left to fail to start as it would, not run bash to say so); as they are elsewhere.
+    /// How the program starts: on macOS through bash when there's one and the program is found as posix_spawnp would
+    /// find it (the app's own PATH, or a path from the working directory) and may be run; as it is otherwise, so one that
+    /// can't start fails to as before rather than bash saying so in the terminal.
     /// </summary>
-    /// <param name="environment">The program's environment, NAME=value: where its PATH is.</param>
-    public static List<string> Arguments(List<string> argv, IReadOnlyList<string> environment, bool mac, Func<string, bool> exists)
+    /// <param name="searchPath">The PATH posix_spawnp searches: this process's.</param>
+    public static Start Of(List<string> argv, List<string> environment, string? workingDirectory, string? searchPath, bool mac, Files files)
     {
-        if (!mac || !exists(Bash) || !Found(argv[0], environment, exists))
+        if (!mac || !files.Executable(Bash) || Resolve(argv[0], workingDirectory, searchPath, files) is not { } program)
         {
-            return argv;
+            return new Start(argv, environment);
         }
-        return [Bash, "-c", Script, Name, .. argv];
+        // BASH_ENV held aside for bash's start, given back before the program's.
+        var held = environment.Select(v => v.StartsWith(BashEnv, StringComparison.Ordinal) ? $"{HeldBashEnv}={v[BashEnv.Length..]}" : v).ToList();
+        return new Start([Bash, "-c", Script, Name, program, .. argv.Skip(1)], held);
     }
 
-    /// <summary>Whether the program is there: a path that exists, or a name on the PATH.</summary>
-    private static bool Found(string program, IReadOnlyList<string> environment, Func<string, bool> exists)
+    /// <summary>The program's full path, found as posix_spawnp would; null when it isn't there or may not be run.</summary>
+    private static string? Resolve(string program, string? workingDirectory, string? searchPath, Files files)
     {
         if (program.Contains('/', StringComparison.Ordinal))
         {
-            return exists(program);
+            var relative = program.StartsWith("./", StringComparison.Ordinal) ? program[2..] : program;
+            var full = program.StartsWith('/') || string.IsNullOrEmpty(workingDirectory) ? program : $"{workingDirectory.TrimEnd('/')}/{relative}";
+            return files.Executable(full) ? full : null;
         }
-        var path = environment.FirstOrDefault(v => v.StartsWith("PATH=", StringComparison.Ordinal))?["PATH=".Length..] ?? "";
-        return path.Split(':', StringSplitOptions.RemoveEmptyEntries).Any(dir => exists($"{dir.TrimEnd('/')}/{program}"));
+        return (searchPath ?? "").Split(':', StringSplitOptions.RemoveEmptyEntries)
+            .Select(dir => $"{dir.TrimEnd('/')}/{program}")
+            .FirstOrDefault(files.Executable);
     }
 }

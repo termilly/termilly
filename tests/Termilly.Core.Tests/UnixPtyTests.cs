@@ -180,8 +180,12 @@ public sealed class UnixPtyTests
         Assert.True(SpinWait.SpinUntil(() => Shows("ready-10"), TimeSpan.FromSeconds(10)));
         // &&, not ;: bash (macOS's sh) goes on to the next command after an interrupted one, dash doesn't.
         await SendAsync(pty, "sleep 30 && echo slept-$((1+1))\n");
-        await Task.Delay(500);
+        // sleep is running before the Ctrl+C: what's interrupted is it, not a line not read yet.
+        bool Sleeping() => Termilly.Desktop.BusyWatcher.Snapshot()
+            .Any(p => p.ParentId == pty.ProcessId && Path.GetFileName(p.Exe) == "sleep");
+        Assert.True(SpinWait.SpinUntil(Sleeping, TimeSpan.FromSeconds(10)));
         await SendAsync(pty, "\x03");
+        Assert.True(SpinWait.SpinUntil(() => !Sleeping(), TimeSpan.FromSeconds(5)));
         // Typed a moment later: the interrupt throws away what's typed with it.
         await Task.Delay(500);
         await SendAsync(pty, "echo here-$((3+3))\n");
@@ -241,25 +245,41 @@ public sealed class UnixPtyTests
 /// <summary>macOS starts a terminal's program through bash, which takes the terminal as its controlling one.</summary>
 public sealed class ControllingTerminalTests
 {
-    private static readonly string[] Path = ["PATH=/usr/bin:/bin", "HOME=/Users/me"];
+    private const string Script = "if [ -n \"${TERMILLY_BASH_ENV+x}\" ]; then export BASH_ENV=\"$TERMILLY_BASH_ENV\"; unset TERMILLY_BASH_ENV; fi; exec \"$@\"";
+    private static readonly List<string> Env = ["HOME=/Users/me", "PATH=/elsewhere"];
 
-    private static bool Exists(string path) => path is "/bin/bash" or "/bin/zsh" or "/usr/bin/ssh";
+    /// <summary>Files that may be run: bash, zsh, a tool in a project; /usr/local/bin/notes is there but may not be run.</summary>
+    private static readonly ControllingTerminal.Files Files = new(path => path is "/bin/bash" or "/bin/zsh" or "/usr/bin/ssh" or "/project/tool");
+
+    private static ControllingTerminal.Start Of(List<string> argv, List<string>? env = null, string? cwd = null, bool mac = true) =>
+        ControllingTerminal.Of(argv, env ?? Env, cwd, "/usr/bin:/bin", mac, Files);
 
     [Fact]
-    public void On_macOS_a_program_found_starts_through_bash_with_its_arguments_as_they_were()
+    public void On_macOS_a_program_starts_through_bash_by_the_full_path_the_apps_PATH_gives()
     {
-        Assert.Equal(["/bin/bash", "-c", "export SHLVL=$((${SHLVL:-1}-1)); exec \"$@\"", "termilly", "zsh", "-l"],
-            ControllingTerminal.Arguments(["zsh", "-l"], Path, mac: true, Exists));
-        Assert.Equal(["/bin/bash", "-c", "export SHLVL=$((${SHLVL:-1}-1)); exec \"$@\"", "termilly", "/bin/zsh", "my arg"],
-            ControllingTerminal.Arguments(["/bin/zsh", "my arg"], Path, mac: true, Exists));
+        // The app's own PATH, as posix_spawnp searches it, not the terminal's (PATH=/elsewhere).
+        Assert.Equal(["/bin/bash", "-c", Script, "termilly", "/bin/zsh", "-l"], Of(["zsh", "-l"]).Argv);
+        Assert.Equal(["/bin/bash", "-c", Script, "termilly", "/usr/bin/ssh", "my host", "-p", "22"], Of(["ssh", "my host", "-p", "22"]).Argv);
+        // A path from the working directory.
+        Assert.Equal(["/bin/bash", "-c", Script, "termilly", "/project/tool"], Of(["./tool"], cwd: "/project").Argv);
+        Assert.Equal(Env, Of(["zsh"]).Environment);
     }
 
     [Fact]
-    public void Elsewhere_or_for_a_program_not_there_it_starts_as_it_is()
+    public void BASH_ENV_goes_around_bash_to_the_program()
     {
-        Assert.Equal(["zsh", "-l"], ControllingTerminal.Arguments(["zsh", "-l"], Path, mac: false, Exists));
-        // One that can't be found fails to start as before, rather than bash saying so in the terminal.
-        Assert.Equal(["nosuch"], ControllingTerminal.Arguments(["nosuch"], Path, mac: true, Exists));
-        Assert.Equal(["zsh"], ControllingTerminal.Arguments(["zsh"], Path, mac: true, p => p == "/bin/zsh"));
+        var start = Of(["zsh"], ["BASH_ENV=/Users/me/.bashenv", "HOME=/Users/me"]);
+        Assert.Equal(["TERMILLY_BASH_ENV=/Users/me/.bashenv", "HOME=/Users/me"], start.Environment);
+    }
+
+    [Fact]
+    public void Elsewhere_or_for_a_program_that_cant_start_it_starts_as_it_is()
+    {
+        Assert.Equal(["zsh", "-l"], Of(["zsh", "-l"], mac: false).Argv);
+        // Not there, or there and not to be run: it fails to start as before, rather than bash saying so in the terminal.
+        Assert.Equal(["nosuch"], Of(["nosuch"]).Argv);
+        Assert.Equal(["/usr/local/bin/notes"], Of(["/usr/local/bin/notes"]).Argv);
+        // No bash: as it is.
+        Assert.Equal(["zsh"], ControllingTerminal.Of(["zsh"], Env, null, "/bin", mac: true, new(path => path == "/bin/zsh")).Argv);
     }
 }
