@@ -88,15 +88,48 @@ public sealed class EarlyShellTests
     {
         var (early, shell) = Started();
         // Split between two chunks: answered when it's whole.
-        early.Print("x\u001b[");
-        early.Print("6n");
-        Assert.Equal(["\u001b[1;1R"], shell.Typed);
+        early.Print("x\u001b[>");
+        early.Print("0q");
+        Assert.Equal([VersionReply], shell.Typed);
         // Still in the tail kept from before: not answered again.
         early.Print("y");
         Assert.Single(shell.Typed);
         // Asked twice in one chunk: answered twice.
-        early.Print("\u001b[6n..\u001b[6n");
+        early.Print("\u001b[>0q..\u001b[>0q");
         Assert.Equal(3, shell.Typed.Count);
+    }
+
+    [Fact]
+    public void Where_the_cursor_is_is_answered_only_while_nothing_is_drawn()
+    {
+        // After a prompt and the typed command, the top left would be wrong: the page answers once it's up.
+        var (early, shell) = Started();
+        early.Print("\u001b]133;A\u0007PS /home/me> claude --resume x\r\n\u001b[6n");
+        Assert.DoesNotContain("\u001b[1;1R", shell.Typed);
+        // Nor in a later chunk.
+        early.Print("\u001b[6n");
+        Assert.DoesNotContain("\u001b[1;1R", shell.Typed);
+    }
+
+    [Fact]
+    public void Answers_go_in_the_order_asked_and_wait_for_the_session()
+    {
+        // Asked before the shell's session is known (its output came first): answered once it is.
+        var shell = new FakeShell();
+        var early = new EarlyShell(Command, VersionReply);
+        early.Print("\u001b[c\u001b[6n");
+        Assert.Empty(shell.Typed);
+        early.Session = shell;
+        Assert.Equal(["\u001b[?1;2c", "\u001b[1;1R"], shell.Typed);
+    }
+
+    [Fact]
+    public void On_Windows_the_console_host_answers_where_the_cursor_is_not_it()
+    {
+        var shell = new FakeShell();
+        var early = new EarlyShell(Command, VersionReply, answersTerminal: false) { Session = shell };
+        early.Print("\u001b[6n\u001b[c\u001b[>0q");
+        Assert.Equal([VersionReply], shell.Typed);
     }
 
     [Fact]

@@ -95,7 +95,8 @@ internal sealed class TerminalHandler(
     public bool StartEarly(PlannedStart planned)
     {
         var (id, start) = planned;
-        var shell = new EarlyShell(start.Command!, TerminalReplies.Version(AppVersion.Current));
+        // Windows' console host answers where the cursor is and what the terminal is itself.
+        var shell = new EarlyShell(start.Command!, TerminalReplies.Version(AppVersion.Current), answersTerminal: !OperatingSystem.IsWindows());
         early.Add(id, shell);
         try
         {
