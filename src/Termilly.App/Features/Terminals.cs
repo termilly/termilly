@@ -96,7 +96,8 @@ internal sealed class TerminalHandler(
     {
         var (id, start) = planned;
         // Windows' console host answers where the cursor is and what the terminal is itself.
-        var shell = new EarlyShell(start.Command!, TerminalReplies.Version(AppVersion.Current), answersTerminal: !OperatingSystem.IsWindows());
+        var shell = new EarlyShell(start.Command!, TerminalReplies.Version(AppVersion.Current), SizeOr(start.Cols, PtyOptions.DefaultColumns),
+            SizeOr(start.Rows, PtyOptions.DefaultRows), answersTerminal: !OperatingSystem.IsWindows());
         early.Add(id, shell);
         try
         {
@@ -112,6 +113,9 @@ internal sealed class TerminalHandler(
             return false;
         }
     }
+
+    /// <summary>A saved size, or the default when none was saved.</summary>
+    private static int SizeOr(int saved, int fallback) => saved > 0 ? saved : fallback;
 
     /// <summary>The page opened a terminal whose shell started before it: the shell is its own from now on.</summary>
     private void TakeOver(string id, EarlyShell shell, int cols, int rows)

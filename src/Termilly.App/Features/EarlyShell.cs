@@ -9,41 +9,40 @@ namespace Termilly.Desktop.Features;
 /// at its first prompt, as the page would have, and what it prints is kept until the page opens the terminal and takes
 /// it over (<see cref="Take"/>), then goes straight to the page. Until then it answers the terminal's queries itself
 /// (the page answers them after): its version, so the agent knows the terminal as it does when the page starts it, and
-/// where its cursor is and what it is, which a shell waits for as it starts (PowerShell for seconds, unanswered).
+/// where its cursor is (followed from the output) and what it is, which a shell waits for (PowerShell at each prompt,
+/// seconds when unanswered, then taking what's typed for the answer).
 /// </summary>
+/// <param name="columns">The terminal's size, which its cursor wraps at.</param>
 /// <param name="answersTerminal">
 /// Whether it answers where the cursor is and what the terminal is: not on Windows, whose console host answers those.
 /// </param>
-internal sealed partial class EarlyShell(string command, string versionReply, bool answersTerminal = true) : IDisposable
+internal sealed class EarlyShell(string command, string versionReply, int columns, int rows, bool answersTerminal = true) : IDisposable
 {
     /// <summary>The prompt marks shell integration prints (SessionLaunch): where the prompt starts, where input does.</summary>
     private const string PromptStart = "\u001b]133;A";
     private const string InputStart = "\u001b]133;B";
 
-    /// <summary>
-    /// A query answered before the page is up, its answer, and whether it's answered only while nothing is drawn (the
-    /// cursor's place is known then: the top left; after, the page answers once it's up).
-    /// </summary>
-    private sealed record Answer(string[] Queries, string Reply, bool BeforeDrawing = false);
+    /// <summary>Where the cursor is, from what the shell printed.</summary>
+    private readonly CursorTracker _cursor = new(columns, rows);
 
-    private readonly Answer[] _answers =
+    /// <summary>A query answered before the page is up, and its answer as things are when it's asked.</summary>
+    private sealed record Answer(string[] Queries, Func<string> Reply);
+
+    private Answer[] Answers =>
     [
         // XTVERSION (CSI > 0 q, or CSI > q): which terminal this is.
-        new(["\u001b[>0q", "\u001b[>q"], versionReply),
+        new(["\u001b[>0q", "\u001b[>q"], () => versionReply),
         .. answersTerminal
             ? new Answer[]
             {
-                // Where the cursor is (CSI 6 n): PowerShell asks as it starts, before drawing anything.
-                new(["\u001b[6n"], TerminalReplies.CursorAtStart, BeforeDrawing: true),
+                // Where the cursor is (CSI 6 n).
+                new(["\u001b[6n"], () => _cursor.Report),
                 // What the terminal is (CSI c, CSI 0 c).
-                new(["\u001b[c", "\u001b[0c"], TerminalReplies.DeviceAttributes),
+                new(["\u001b[c", "\u001b[0c"], () => TerminalReplies.DeviceAttributes),
             }
             : [],
     ];
 
-    /// <summary>An escape sequence (CSI or OSC), which draws nothing.</summary>
-    [GeneratedRegex(@"\u001b(\[[0-?]*[ -/]*[@-~]|\][^\u0007\u001b]*(\u0007|\u001b\\)?|.)")]
-    private static partial Regex EscapeSequence();
     /// <summary>The end of one chunk of output kept with the next, so a mark split between the two is still seen.</summary>
     private const int TailLength = 8;
 
@@ -59,8 +58,6 @@ internal sealed partial class EarlyShell(string command, string versionReply, bo
     /// <summary>What reached the page about the shell meanwhile (its agent's reports), told once it takes the shell over.</summary>
     private readonly List<Action> _kept = [];
 
-    /// <summary>Whether the shell has drawn anything yet (text, not escape sequences).</summary>
-    private bool _drawn;
     private IShellSession? _session;
     /// <summary>Answers to queries the shell asked before its session was known, sent once it is.</summary>
     private readonly List<string> _unsent = [];
@@ -89,11 +86,10 @@ internal sealed partial class EarlyShell(string command, string versionReply, bo
     public void Print(string data)
     {
         string seen;
-        string tail;
         bool taken;
         lock (_gate)
         {
-            tail = _tail;
+            var old = _tail.Length;
             seen = _tail + data;
             _tail = seen[^Math.Min(TailLength, seen.Length)..];
             taken = _output is not null;
@@ -104,23 +100,21 @@ internal sealed partial class EarlyShell(string command, string versionReply, bo
             else
             {
                 _missed.Add(data);
+                AnswerQueries(seen, old);
             }
-        }
-        if (!taken)
-        {
-            AnswerQueries(seen, tail.Length);
         }
         TypeAtPrompt(seen);
     }
 
     /// <summary>
-    /// Answers each query in the output, once for each time it's asked, in the order asked. One that ends in what's new
-    /// (past <paramref name="old"/>, the tail kept from before) is new: one wholly in the tail was answered then.
+    /// Answers each query in the output, once for each time it's asked, in the order asked, the cursor followed up to
+    /// each. One that ends in what's new (past <paramref name="old"/>, the tail kept from before) is new: one wholly in
+    /// the tail was answered then. Called under the gate, so output is followed in the order it came.
     /// </summary>
     private void AnswerQueries(string seen, int old)
     {
-        var asked = new List<(int At, Answer Answer)>();
-        foreach (var answer in _answers)
+        var asked = new List<(int End, Answer Answer)>();
+        foreach (var answer in Answers)
         {
             foreach (var query in answer.Queries)
             {
@@ -128,35 +122,21 @@ internal sealed partial class EarlyShell(string command, string versionReply, bo
                 {
                     if (at + query.Length > old)
                     {
-                        asked.Add((at, answer));
+                        asked.Add((at + query.Length, answer));
                     }
                 }
             }
         }
-        foreach (var (at, answer) in asked.OrderBy(a => a.At))
+        var data = seen[old..];
+        var followed = 0;
+        foreach (var (end, answer) in asked.OrderBy(a => a.End))
         {
-            if (!answer.BeforeDrawing || !DrawnBefore(seen, at, old))
-            {
-                Reply(answer.Reply);
-            }
+            _cursor.Follow(data[followed..(end - old)]);
+            followed = end - old;
+            Reply(answer.Reply());
         }
-        lock (_gate)
-        {
-            _drawn |= Draws(seen[Math.Min(old, seen.Length)..]);
-        }
+        _cursor.Follow(data[followed..]);
     }
-
-    /// <summary>Whether the shell had drawn anything before the query at <paramref name="at"/>.</summary>
-    private bool DrawnBefore(string seen, int at, int old)
-    {
-        lock (_gate)
-        {
-            return _drawn || Draws(seen[Math.Min(old, at)..at]);
-        }
-    }
-
-    /// <summary>Whether the output draws text: anything but escape sequences and spacing.</summary>
-    private static bool Draws(string output) => EscapeSequence().Replace(output, "").Any(c => !char.IsWhiteSpace(c) && !char.IsControl(c));
 
     /// <summary>Answers the shell, or keeps the answer until its session is known.</summary>
     private void Reply(string reply)

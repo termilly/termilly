@@ -23,7 +23,7 @@ public sealed class EarlyShellTests
     private static (EarlyShell Early, FakeShell Shell) Started()
     {
         var shell = new FakeShell();
-        return (new EarlyShell(Command, VersionReply) { Session = shell }, shell);
+        return (new EarlyShell(Command, VersionReply, 80, 24) { Session = shell }, shell);
     }
 
     private static void WaitFor(Func<bool> done)
@@ -100,15 +100,16 @@ public sealed class EarlyShellTests
     }
 
     [Fact]
-    public void Where_the_cursor_is_is_answered_only_while_nothing_is_drawn()
+    public void Where_the_cursor_is_is_answered_where_the_output_left_it()
     {
-        // After a prompt and the typed command, the top left would be wrong: the page answers once it's up.
+        // PowerShell asks again at its prompt: after it, not the top left. The mark draws nothing.
         var (early, shell) = Started();
-        early.Print("\u001b]133;A\u0007PS /home/me> claude --resume x\r\n\u001b[6n");
-        Assert.DoesNotContain("\u001b[1;1R", shell.Typed);
-        // Nor in a later chunk.
+        early.Print("\u001b]133;A\u0007PS /home/me> \u001b[6n");
+        Assert.Equal(["\u001b[1;14R"], shell.Typed);
+        // After the typed command and its line break, in a later chunk.
+        early.Print("claude --resume x\r\n");
         early.Print("\u001b[6n");
-        Assert.DoesNotContain("\u001b[1;1R", shell.Typed);
+        Assert.Equal("\u001b[2;1R", shell.Typed[^1]);
     }
 
     [Fact]
@@ -116,7 +117,7 @@ public sealed class EarlyShellTests
     {
         // Asked before the shell's session is known (its output came first): answered once it is.
         var shell = new FakeShell();
-        var early = new EarlyShell(Command, VersionReply);
+        var early = new EarlyShell(Command, VersionReply, 80, 24);
         early.Print("\u001b[c\u001b[6n");
         Assert.Empty(shell.Typed);
         early.Session = shell;
@@ -127,7 +128,7 @@ public sealed class EarlyShellTests
     public void On_Windows_the_console_host_answers_where_the_cursor_is_not_it()
     {
         var shell = new FakeShell();
-        var early = new EarlyShell(Command, VersionReply, answersTerminal: false) { Session = shell };
+        var early = new EarlyShell(Command, VersionReply, 80, 24, answersTerminal: false) { Session = shell };
         early.Print("\u001b[6n\u001b[c\u001b[>0q");
         Assert.Equal([VersionReply], shell.Typed);
     }

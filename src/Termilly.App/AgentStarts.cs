@@ -41,12 +41,6 @@ internal static class TerminalReplies
     /// <summary>The answer to XTVERSION (CSI &gt; 0 q): DCS &gt;| Termilly 1.10.0 ST.</summary>
     public static string Version(string version) => $"\u001bP>|{Product.Name} {version}\u001b\\";
 
-    /// <summary>
-    /// The answer to "where's the cursor" (CSI 6 n) from a terminal nobody has drawn in yet: its top left. PowerShell
-    /// asks as it starts, and waits seconds for an answer.
-    /// </summary>
-    public const string CursorAtStart = "\u001b[1;1R";
-
     /// <summary>The answer to "what are you" (CSI c, primary device attributes), as the page's xterm.js gives it.</summary>
     public const string DeviceAttributes = "\u001b[?1;2c";
 }
