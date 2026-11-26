@@ -72,6 +72,14 @@ public sealed class UnixPtyTests
         await SendAsync(pty, "echo \"[$TERMILLY_TEST $(pwd) $TERM]\"; tty -s && echo tty-$((1+1)); exit 7\n");
         var output = await ReadUntilAsync(pty, "tty-2", seen);
         Assert.Contains("[yes /usr xterm-256color]", output); // /usr: macOS's /tmp is a link to /private/tmp
+        // Read on, as the window does: macOS's bash waits, as it exits, for what it wrote last to be read.
+        var draining = Task.Run(async () =>
+        {
+            var buffer = new byte[4096];
+            while (await pty.Output.ReadAsync(buffer) > 0)
+            {
+            }
+        });
         Assert.Equal(7, await pty.Exited.WaitAsync(TimeSpan.FromSeconds(10)));
     }
 
