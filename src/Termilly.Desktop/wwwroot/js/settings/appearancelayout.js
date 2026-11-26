@@ -1,5 +1,6 @@
 // @ts-check
-// Settings › Appearance › Layout: Normal or Minimal, terminal names in Minimal, and on Linux the windowing system.
+// Settings › Appearance › Layout: Normal or Minimal, terminal names in Minimal, how workspaces look in the sidebar and dock,
+// and on Linux the windowing system.
 
 import { sys, SYSTEM_NAME } from '../host.js';
 import { ICONS } from '../ui.js';
@@ -22,6 +23,9 @@ const LAYOUT = {
       seg('interface.layout', [[layout.normal, 'Normal'], [layout.minimal, 'Minimal']]), { keywords: 'minimal compact clean dock sidebar title bar toolbar' })
     + row('Terminal names', 'In Minimal: on a line over each terminal, or on a bar when the mouse is near its top. Right-click either to pick what it shows.',
       seg('interface.paneNames', [[paneNames.line, 'Line'], [paneNames.hover, 'On hover']]), { keywords: 'header name bar hover line minimal' }))
+    + group('Workspaces',
+      row('Colour dots', 'Each workspace’s colour, in the sidebar and on the Minimal dock.', toggle('interface.workspaceDots'), { keywords: 'workspace color colour dot square sidebar dock minimal' })
+      + row('Tree lines', 'The line in the sidebar from a workspace to its terminals.', toggle('interface.treeLines'), { keywords: 'workspace tree line vertical sidebar terminals' }))
     // Linux only (not macOS, which runs the same build): Wayland lets no app place its windows.
     + (onLinux ? group('Windows',
       row('Windowing system', 'On (X11): windows open where dropped, softer text when scaled. Off (Wayland): sharp text, the desktop places windows.',

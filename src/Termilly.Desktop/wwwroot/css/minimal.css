@@ -153,6 +153,9 @@ body[data-layout="minimal"][data-pane-names="hover"] .pane:not(.bar-near) > .pan
 .dock:is([data-side="left"], [data-side="right"]) .dock-ws { justify-content: center; width: 30px; padding: 0; }
 .dock:is([data-side="left"], [data-side="right"]) :is(.dock-ws-name, .dock-chev) { display: none; }
 .dock:is([data-side="left"], [data-side="right"]) .dock-ws-dot { width: 14px; height: 14px; border-radius: 4px; }
+/* Dots off (js/workspacelook.js): gone beside the name; on a side, where it's all the button shows, plain. */
+body.no-ws-dots .dock:not([data-side="left"], [data-side="right"]) .dock-ws-dot { display: none; }
+body.no-ws-dots .dock:is([data-side="left"], [data-side="right"]) .dock-ws-dot { background: var(--muted) !important; }
 /* Another workspace works (accent) or needs you (amber). */
 .dock-badge { position: absolute; top: 2px; right: 2px; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
 .dock-badge[data-state="needs-input"] { background: var(--attention); }

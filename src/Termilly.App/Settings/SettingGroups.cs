@@ -96,6 +96,10 @@ internal sealed record InterfaceSettings
     public string Layout { get; init; } = SettingValues.Layout.Default;
     /// <summary>In Minimal, a terminal's name on a line over it or on a bar shown on hover (<see cref="SettingValues.PaneNames"/>).</summary>
     public string PaneNames { get; init; } = SettingValues.PaneNames.Default;
+    /// <summary>Each workspace's colour dot: in the sidebar (Normal) and on the dock's workspace button (Minimal).</summary>
+    public bool WorkspaceDots { get; init; } = true;
+    /// <summary>The line down the sidebar that ties a workspace's terminals to it (Normal).</summary>
+    public bool TreeLines { get; init; } = true;
     /// <summary>The app's font; null: the system's.</summary>
     public string? Font { get; init; }
     public bool ShowActivity { get; init; } = true;

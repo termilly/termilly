@@ -99,6 +99,10 @@ interface InterfaceSettings {
   layout: string;
   /** In Minimal, a terminal's name on a line over it or on a bar shown on hover (). */
   paneNames: string;
+  /** Each workspace's colour dot: in the sidebar (Normal) and on the dock's workspace button (Minimal). */
+  workspaceDots: boolean;
+  /** The line down the sidebar that ties a workspace's terminals to it (Normal). */
+  treeLines: boolean;
   /** The app's font; null: the system's. */
   font: string | null;
   showActivity: boolean;
