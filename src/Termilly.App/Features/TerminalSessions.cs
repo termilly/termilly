@@ -99,11 +99,15 @@ internal sealed class TerminalSessions : IDisposable
         }
     }
 
-    /// <summary>Takes a terminal out of this window's list without ending it (its shell went on elsewhere, or is gone).</summary>
-    public void Forget(string id)
+    /// <summary>
+    /// Takes a terminal out of this window's list without ending it (its shell went on elsewhere, or is gone), and
+    /// returns the session it had, if any.
+    /// </summary>
+    public IShellSession? Forget(string id)
     {
-        _sessions.TryRemove(id, out _);
+        _sessions.TryRemove(id, out var session);
         _pids.TryRemove(id, out _);
+        return session;
     }
 
     /// <summary>The window is closing: shells end, except those the background host keeps.</summary>

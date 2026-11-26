@@ -19,11 +19,16 @@ internal sealed class BackgroundHost : IDisposable
     public BackgroundHost(ISettingsStore settings)
     {
         _settings = settings;
-        _host = settings.Current.Session.BackgroundShells ? Task.Run(HostClient.Connect) : Task.FromResult<HostClient?>(null);
+        var keeps = settings.Current.Session.BackgroundShells;
+        _host = keeps ? Task.Run(HostClient.Connect) : Task.FromResult<HostClient?>(null);
+        PipeName = keeps ? FixedPipeName : null;
     }
 
-    /// <summary>The agent pipe's name: fixed while the background host keeps shells, else one of the window's own.</summary>
-    public string? PipeName => _settings.Current.Session.BackgroundShells ? FixedPipeName : null;
+    /// <summary>
+    /// The agent pipe's name: fixed when the background host kept shells at start, else one of the window's own. Chosen
+    /// once, as the window listens on one pipe until it closes, also after the setting changes.
+    /// </summary>
+    public string? PipeName { get; }
 
     /// <summary>
     /// The host to run a new shell in: the one connected at start, or a new one if that went away. Null when Settings
@@ -73,12 +78,21 @@ internal sealed class BackgroundHost : IDisposable
         return _host.IsCompletedSuccessfully && _host.Result is { IsConnected: true } connected ? connected : null;
     }
 
-    /// <summary>The window is closing: the shells stay with the host.</summary>
+    /// <summary>
+    /// The window is closing: the shells stay with the host. Unless Settings stopped keeping them since it started:
+    /// then the host ends with them, and the next start resumes their agents as it does with the setting off.
+    /// </summary>
     public void Dispose()
     {
-        if (_host.IsCompletedSuccessfully)
+        if (!_host.IsCompletedSuccessfully || _host.Result is not { } connected)
         {
-            _host.Result?.Dispose();
+            return;
         }
+        if (!_settings.Current.Session.BackgroundShells)
+        {
+            // Also a host this window lost its connection to: it may still run the shells (StopHost asks it).
+            HostClient.StopHost(connected.IsConnected ? connected : null);
+        }
+        connected.Dispose();
     }
 }

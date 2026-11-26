@@ -4,10 +4,11 @@
 // Run with: npm run e2e (on Linux, under Xvfb; see tests/e2e/harness.mjs).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readdir, readFile, rm } from 'node:fs/promises';
+import { readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { startApp } from './harness.mjs';
 import { until } from './gitsteps.mjs';
+import { endHost } from './background.mjs';
 
 const ASK_TERMINAL = 'printf \'\\033[c\'';
 // Split so the typed command doesn't count as its output.
@@ -33,30 +34,6 @@ const typeIn = (app, data) => app.eval(async (t, text) => {
   const { PAGE } = await t.import('./protocol.js');
   send(PAGE.input, { id: [...state.tabs.values()][0].id, data: text });
 }, data);
-
-/**
- * Ends this test's background host, and its shell with it, whichever window got as far: found by the pipe name only
- * this test gives it.
- * @param {string} pipe
- */
-async function endHost(pipe) {
-  const ids = (await readdir('/proc')).filter(name => /^\d+$/.test(name));
-  for (const id of ids) {
-    let environment;
-    try {
-      environment = await readFile(`/proc/${id}/environ`, 'utf8');
-    } catch (error) {
-      if (['ENOENT', 'EACCES', 'ESRCH'].includes(/** @type {any} */ (error).code)) continue; // gone, or not ours
-      throw error;
-    }
-    if (!environment.split('\0').includes(`TERMILLY_HOST_PIPE=${pipe}`)) continue;
-    try {
-      process.kill(Number(id), 'SIGKILL');
-    } catch (error) {
-      if (/** @type {any} */ (error).code !== 'ESRCH') throw error; // ended since
-    }
-  }
-}
 
 /** @param {any} app */
 const firstPrompt = app => until(() => app.eval(async t => {
