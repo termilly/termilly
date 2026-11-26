@@ -45,8 +45,13 @@ public sealed class CursorTrackerTests
     [InlineData("ab\u001b7\u001b[4;1Hxyz\u001b8", "\u001b[1;3R")]
     [InlineData("ab\u001b[s\u001b[4;1H\u001b[u", "\u001b[1;3R")]
     [InlineData("abc\u001b[?1049h\u001b[5;1Hfull screen\u001b[?1049l", "\u001b[1;4R")]
-    // A scroll region set puts the cursor home.
+    [InlineData("🚀", "\u001b[1;3R")]
+    // The alternate screen keeps its own saved place.
+    [InlineData("abc\u001b[?1049h\u001b[5;1H\u001b7\u001b[2;2H\u001b[?1049l", "\u001b[1;4R")]
+    // A scroll region set puts the cursor home; a line break at its bottom stays there; an inverted one is ignored.
     [InlineData("\u001b[3;3H\u001b[2;4r", "\u001b[1;1R")]
+    [InlineData("\u001b[2;4r\u001b[4;1H\n", "\u001b[4;1R")]
+    [InlineData("\u001b[3;3H\u001b[4;2r", "\u001b[3;3R")]
     // What draws nothing: colours, modes, titles, marks.
     [InlineData("\u001b[1;31mab\u001b[0m\u001b[?2004h\u001b]0;title\u0007\u001b]133;A\u001b\\", "\u001b[1;3R")]
     public void The_cursor_is_where_the_output_left_it(string output, string report)

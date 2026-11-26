@@ -23,7 +23,12 @@ internal sealed class CursorTracker(int columns, int rows)
     private int _row = 1;
     /// <summary>The column the next character goes in; one past the last when a full line waits to wrap.</summary>
     private int _column = 1;
-    private (int Row, int Column) _saved = (1, 1);
+    /// <summary>Where ESC 7 (or CSI s) saved the cursor: one place for each screen, as xterm.js keeps them.</summary>
+    private (int Row, int Column) _savedNormal = (1, 1);
+    private (int Row, int Column) _savedAlternate = (1, 1);
+    private bool _alternate;
+    /// <summary>The scroll region's last row: a line break there scrolls it rather than moving down.</summary>
+    private int _bottom; // 0: none set, the screen's bottom
     /// <summary>A sequence split between two chunks of output: its start, finished by the next.</summary>
     private string _pending = "";
 
@@ -118,9 +123,11 @@ internal sealed class CursorTracker(int columns, int rows)
         c is (>= 0x1100 and <= 0x115F) or (>= 0x2E80 and <= 0x303E) or (>= 0x3041 and <= 0x33FF) or (>= 0x3400 and <= 0x4DBF)
             or (>= 0x4E00 and <= 0x9FFF) or (>= 0xA000 and <= 0xA4CF) or (>= 0xAC00 and <= 0xD7A3) or (>= 0xF900 and <= 0xFAFF)
             or (>= 0xFE30 and <= 0xFE4F) or (>= 0xFF00 and <= 0xFF60) or (>= 0xFFE0 and <= 0xFFE6) or (>= 0x1F300 and <= 0x1F64F)
+            or (>= 0x1F680 and <= 0x1F6FF) or (>= 0x1FA70 and <= 0x1FAFF)
             or (>= 0x1F900 and <= 0x1F9FF) or (>= 0x20000 and <= 0x3FFFD);
 
-    private void Down(int lines) => _row = Math.Min(rows, _row + lines);
+    /// <summary>Down, stopping at the scroll region's bottom when within it (the region scrolls instead).</summary>
+    private void Down(int lines) => _row = Math.Min(_bottom > 0 && _row <= _bottom ? _bottom : rows, _row + lines);
 
     /// <summary>The length of the escape sequence at <paramref name="at"/>, 0 when it isn't finished.</summary>
     private static int SequenceLength(string text, int at)
@@ -177,9 +184,20 @@ internal sealed class CursorTracker(int columns, int rows)
         }
     }
 
-    private void Save() => _saved = (_row, Math.Min(_column, columns));
+    private void Save()
+    {
+        var place = (_row, Math.Min(_column, columns));
+        if (_alternate)
+        {
+            _savedAlternate = place;
+        }
+        else
+        {
+            _savedNormal = place;
+        }
+    }
 
-    private void Restore() => (_row, _column) = _saved;
+    private void Restore() => (_row, _column) = _alternate ? _savedAlternate : _savedNormal;
 
     /// <summary>A CSI sequence: its parameters and final character.</summary>
     private void Control(string parameters, char final)
@@ -188,10 +206,12 @@ internal sealed class CursorTracker(int columns, int rows)
         {
             if (final == 'h')
             {
-                Save();
+                Save(); // the normal screen's place, restored as it leaves
+                _alternate = true;
             }
             else if (final == 'l')
             {
+                _alternate = false;
                 Restore();
             }
             return;
@@ -201,6 +221,11 @@ internal sealed class CursorTracker(int columns, int rows)
             return; // private (CSI ? …): modes, not moves
         }
         var numbers = parameters.Split(';').Select(p => int.TryParse(p, out var n) ? n : 0).ToArray();
+        if (final == 'r')
+        {
+            Region(numbers);
+            return;
+        }
         Move(final, index => index < numbers.Length && numbers[index] > 0 ? numbers[index] : 1);
     }
 
@@ -229,9 +254,6 @@ internal sealed class CursorTracker(int columns, int rows)
             case 'd':
                 _row = Math.Clamp(at(0), 1, rows);
                 break;
-            case 'r': // a scroll region set: the cursor goes home
-                (_row, _column) = (1, 1);
-                break;
             case 's':
                 Save();
                 break;
@@ -239,5 +261,21 @@ internal sealed class CursorTracker(int columns, int rows)
                 Restore();
                 break;
         }
+    }
+
+    /// <summary>
+    /// A scroll region set (CSI top ; bottom r): kept, and the cursor goes home. One whose top isn't above its bottom is
+    /// ignored, as xterm.js does.
+    /// </summary>
+    private void Region(int[] numbers)
+    {
+        var top = numbers.Length > 0 && numbers[0] > 0 ? numbers[0] : 1;
+        var bottom = numbers.Length > 1 && numbers[1] > 0 ? Math.Min(numbers[1], rows) : rows;
+        if (top >= bottom)
+        {
+            return;
+        }
+        _bottom = bottom;
+        (_row, _column) = (1, 1);
     }
 }
