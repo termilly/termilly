@@ -41,6 +41,7 @@ const rowsOf = t => t.$$('.context-menu .menu-row').map(r => {
     background: view.getComputedStyle(r).backgroundColor,
     hint: r.querySelector('.menu-hint').textContent.trim(),
     checked: r.getAttribute('aria-checked'),
+    iconColour: view.getComputedStyle(icon).color,
   };
 });
 
@@ -52,7 +53,7 @@ const workspaceList = () => app.eval(async t => {
   const probe = globalThis.document.createElement('div');
   globalThis.document.body.append(probe);
   const colour = v => { probe.style.background = `var(${v})`; return globalThis.getComputedStyle(probe).backgroundColor; };
-  const colours = { fill: colour('--accent-fill'), accent: colour('--accent') };
+  const colours = { fill: colour('--accent-fill'), accent: colour('--accent'), onAccent: colour('--on-accent') };
   probe.remove();
   (await t.import('popups.js')).closeAll();
   return { rows, colours, attr: globalThis.document.documentElement.dataset.menuPick };
@@ -107,7 +108,7 @@ before(async () => {
 after(async () => { await app?.stop({ failed }); });
 
 step('by default the chosen workspace has a tick, in place of its swatch, as before', async () => {
-  const { rows } = await workspaceList();
+  const { rows, colours } = await workspaceList();
   const [chosen, other] = rows;
   assert.deepEqual({ ticked: chosen.ticked, picked: chosen.picked }, { ticked: true, picked: false });
   assert.deepEqual({ ticked: other.ticked, iconShows: other.iconShows }, { ticked: false, iconShows: false });
@@ -119,6 +120,10 @@ step('by default the chosen workspace has a tick, in place of its swatch, as bef
   assert.deepEqual([same.hint, same.checked, same.picked], ['current', 'true', false]);
   assert.deepEqual([none.hint, none.checked], ['', 'false']);
   assert.deepEqual([gradient.ticked, gradient.iconShows], [false, true]);
+  // Its icons keep their own colour; only a tick is in the accent.
+  const picture = (await backgroundMenu()).find(r => r.label === 'Picture');
+  assert.notEqual(picture.iconColour, colours.accent);
+  assert.equal(chosen.iconColour, colours.accent);
 });
 
 step('Soft: no tick, the chosen row on the soft accent, every workspace with its swatch', async () => {
@@ -145,6 +150,8 @@ step('Solid: the chosen row on the accent itself', async () => {
   const { rows, colours } = await workspaceList();
   assert.equal(rows[0].picked, true);
   assert.equal(rows[0].background, colours.accent);
+  // Its icon takes the colour of text on the accent, not lost in it.
+  assert.equal(rows[0].iconColour, colours.onAccent);
   assert.equal((await keepRow()).ticked, true);
 });
 

@@ -370,7 +370,7 @@ function menuRow(menu, item) {
   button.setAttribute('role', kind.role);
   if (kind.on !== undefined) button.setAttribute('aria-checked', String(kind.on));
   button.innerHTML = `
-      <span class="menu-icon">${kind.icon}</span>
+      <span class="menu-icon${kind.icon === CHECK ? ' tick' : ''}">${kind.icon}</span>
       <span class="menu-label"></span>
       <span class="menu-hint">${item.submenu ? CHEVRON : kind.hint}</span>`;
   /** @type {HTMLElement} */ (button.querySelector('.menu-label')).textContent = item.label;
