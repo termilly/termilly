@@ -94,6 +94,14 @@ public sealed class TaskProcessesTests
     [InlineData("sleep 60", "sh -c 'sleep 60.5'", false)]
     [InlineData("sleep 60", "sh -c 'sleep 60'", true)]
     [InlineData("sleep 60", "sh -c 'sleep 60&& echo done'", true)]
+    // Windows doubles the backslashes before a quote, and at the argument's end.
+    [InlineData("dir C:\\Windows\\", "powershell.exe -Command \"x\ndir C:\\Windows\\\\\"", true)]
+    [InlineData("Get-ChildItem \"C:\\Program Files\\\"", "powershell.exe -Command \"x\nGet-ChildItem \\\"C:\\Program Files\\\\\\\"\"", true)]
+    [InlineData("echo \\\"x\\\"", "powershell.exe -Command \"x\necho \\\\\\\"x\\\\\\\"\"", true)]
+    [InlineData("Test-Path \"C:\\Users\\\" -PathType Container", "powershell.exe -Command \"x\nTest-Path \\\"C:\\Users\\\\\\\" -PathType Container\"", true)]
+    // It starts where a word does: a longer command ending the same isn't it.
+    [InlineData("npm test", "sh -c 'pnpm test'", false)]
+    [InlineData("Sleep 75", "powershell.exe -Command \"x\nStart-Sleep 75\"", false)]
     [InlineData("Start-Sleep 60", "powershell -Command \"Start-Sleep 600\"", false)]
     [InlineData("sleep 60", "sh -c 'sleep 60; echo done'", true)]
     public void A_command_is_found_in_its_shell_command_line_as_its_shell_was_handed_it(string command, string commandLine, bool found)

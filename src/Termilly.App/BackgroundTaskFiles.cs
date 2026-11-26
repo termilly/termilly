@@ -207,22 +207,48 @@ internal sealed class TaskProcesses : ITaskProcesses
     }
 
     /// <summary>
-    /// Whether a process's command line holds the command: as it was, or as the agent quoted it for its shell
-    /// (PowerShell's -Command "… \"x\" …", sh -c '… '\''x'\'' …'). Exact, so a command differing only in its spacing or
-    /// quoting is never taken for it. A whole command (not cut short) ends where a word does: <c>sleep 60</c> isn't in
-    /// <c>sleep 600</c>.
+    /// Whether a process's command line holds the command: as it was, or as the agent quoted it for its shell (Windows'
+    /// "… \"x\" …", sh -c '… '\''x'\'' …'). Exact, so a command differing only in its spacing or quoting is never taken
+    /// for it. It starts where a word does (<c>npm test</c> isn't in <c>pnpm test</c>), and a whole command (not cut
+    /// short) ends where one does (<c>sleep 60</c> isn't in <c>sleep 600</c>).
     /// </summary>
     internal static bool Holds(string commandLine, string command, bool whole = true) =>
-        new[] { command, command.Replace("\"", "\\\"", StringComparison.Ordinal), command.Replace("'", "'\\''", StringComparison.Ordinal) }
+        new[] { command, WindowsQuoted(command, whole), command.Replace("'", "'\\''", StringComparison.Ordinal) }
             .Any(form => Finds(commandLine, form, whole));
 
-    /// <summary>Whether <paramref name="text"/> holds <paramref name="part"/>, ending where a word does when it's whole.</summary>
+    /// <summary>
+    /// The command as Windows quotes it inside a quoted argument: each " escaped, the backslashes just before it doubled,
+    /// and those at its end too when the argument's closing quote follows (a whole command, last in the argument).
+    /// </summary>
+    private static string WindowsQuoted(string command, bool atEnd)
+    {
+        var quoted = new System.Text.StringBuilder();
+        var backslashes = 0;
+        foreach (var c in command)
+        {
+            if (c == '\\')
+            {
+                backslashes++;
+                continue;
+            }
+            quoted.Append('\\', c == '"' ? (backslashes * 2) + 1 : backslashes).Append(c);
+            backslashes = 0;
+        }
+        return quoted.Append('\\', atEnd ? backslashes * 2 : backslashes).ToString();
+    }
+
+    /// <summary>
+    /// Whether <paramref name="text"/> holds <paramref name="part"/>, starting where a word does, and ending where one
+    /// does when it's whole.
+    /// </summary>
     private static bool Finds(string text, string part, bool whole)
     {
         for (var at = text.IndexOf(part, StringComparison.Ordinal); at >= 0; at = text.IndexOf(part, at + 1, StringComparison.Ordinal))
         {
             var end = at + part.Length;
-            if (!whole || end == text.Length || !Continues(part[^1]) || !Continues(text[end]))
+            var starts = at == 0 || !Continues(part[0]) || !Continues(text[at - 1]);
+            var ends = !whole || end == text.Length || !Continues(part[^1]) || !Continues(text[end]);
+            if (starts && ends)
             {
                 return true;
             }
