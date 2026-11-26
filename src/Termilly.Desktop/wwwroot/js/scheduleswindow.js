@@ -8,10 +8,10 @@ import { send } from './host.js';
 import { state, on, emit, persist, newId, installedAgents, EVENTS } from './store.js';
 import { restoreFocus, newTab } from './panes.js';
 import { closeAll, dropdown } from './popups.js';
-import { modal, pickFolder, CONFIRM_DIALOG } from './dialogs.js';
+import { modal, pickFolder, noticeDialog, CONFIRM_DIALOG } from './dialogs.js';
 import { escapeHtml, COPIED } from './ui.js';
 import { fuzzyMatch } from './fuzzy.js';
-import { askValues, placeholders, missingValues, filled, NAME_WORDS } from './snippets.js';
+import { askValues, placeholders, unfilled, filled, NAME_WORDS } from './snippets.js';
 import { pickSnippet, endSnippetPick, groupsOf } from './snippetpick.js';
 import { byId, find, targetOf, TOOL_COUNT, SCHEDULES_BUTTON_ID } from './dom.js';
 import { detach, closeWindow, focusWindow, isDetached, windowName } from './windows.js';
@@ -123,12 +123,12 @@ function fieldsOf(s) {
 }
 
 /**
- * The snippet's placeholders that have neither a value in the schedule nor a default.
+ * The snippet's placeholders without a value in the schedule: a default doesn't count.
  * @param {Schedule} s
  */
 function missingOf(s) {
   const snippet = snippetOf(s);
-  return snippet ? missingValues(snippet.command, s.values) : [];
+  return snippet ? unfilled(snippet.command, s.values) : [];
 }
 
 /** Asks for the shown snippet's values, the ones it has filled in: the Values button, or a snippet picked that needs some. */
@@ -178,7 +178,6 @@ function problemOf(s) {
   const { when } = s;
   if (s.what === WHAT.command && !s.command.trim()) return 'It needs a command.';
   if (s.what === WHAT.snippet && !s.snippet) return 'It needs a snippet.';
-  if (s.what === WHAT.snippet && missingOf(s).length) return `It needs a value for ${missingOf(s).join(', ')}.`;
   if (s.what === WHAT.agent && !s.prompt.trim()) return 'It needs a prompt.';
   if (s.where === WHERE.server && !s.profile) return 'It needs a server.';
   if (s.where === WHERE.terminal && !s.terminal.trim()) return 'It needs a terminal’s name or a #tag.';
@@ -404,6 +403,12 @@ const confirmProduction = () => modal('confirm prod-confirm', `
 async function save() {
   const s = editing;
   if (!s || problemOf(s) || !isDirty()) return;
+  // Said in a box, not under the form: Save stays on, so the values left out are named when it's pressed.
+  const missing = s.what === WHAT.snippet ? missingOf(s) : [];
+  if (missing.length) {
+    await noticeDialog({ title: 'Values missing', body: `Fill in ${missing.join(', ')} with the Values button. A schedule doesn't use defaults.` });
+    return;
+  }
   // Production is where nobody will be there to see what it types.
   if (reachesProduction(s, [...state.tabs.values()], state.profiles) && !(await confirmProduction())) return;
   if (s !== editing) return;

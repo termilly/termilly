@@ -86,6 +86,14 @@ export const ownValue = (values, name) => (hasValue(values, name) ? values[name]
 export const missingValues = (command, values) => placeholders(command).filter(p => !p.def && !hasValue(values, p.name)).map(p => p.name);
 
 /**
+ * The placeholders without a value of their own, defaults or not: a schedule runs with nobody there to check what a
+ * default would make of it.
+ * @param {string} command
+ * @param {Record<string, string> | null | undefined} values
+ */
+export const unfilled = (command, values) => placeholders(command).filter(p => !ownValue(values, p.name)?.trim()).map(p => p.name);
+
+/**
  * The values that say something: an empty field is no value, so its default (or nothing) counts.
  * @param {Record<string, string>} values
  */
@@ -93,7 +101,7 @@ export const filled = values => Object.fromEntries(Object.entries(values).filter
 
 /**
  * How the run form asks for a schedule (js/scheduleswindow.js): from the schedule's own values, with its own button,
- * and only once each placeholder without a default has one.
+ * and only once each placeholder has one typed in (a default doesn't count, nor is it filled in).
  * @typedef {{ given?: Record<string, string>, ok?: string, required?: boolean }} ValuesForm
  */
 
@@ -217,10 +225,11 @@ export function scopeLabel(snippet) {
  * @param {string | undefined} remembered
  * @param {TaskInput | undefined} input
  * @param {boolean} first
+ * @param {boolean} [defaults] filled in with the default when there's no value (a schedule's aren't)
  */
-function valueField(p, remembered, input, first) {
+function valueField(p, remembered, input, first, defaults = true) {
   const label = escapeHtml(input?.description || p.name);
-  const value = remembered ?? input?.default ?? p.def;
+  const value = remembered ?? (defaults ? input?.default ?? p.def : '');
   if (input?.options?.length) {
     return `<label class="dialog-field">${label}<select class="field" data-var="${escapeHtml(p.name)}">${input.options
       .map(o => `<option${o === value ? ' selected' : ''}>${escapeHtml(o)}</option>`).join('')}</select></label>`;
@@ -246,7 +255,7 @@ export function askValues(snippet, names, options, inputs = [], { given, ok, req
   return modal('snippet-run', `
     <h3>${escapeHtml(snippet.name)}</h3>
     <pre class="snippet-preview" data-preview></pre>
-    ${names.map((p, i) => valueField(p, ownValue(remembered, p.name), inputOf(p.name), i === 0)).join('')}
+    ${names.map((p, i) => valueField(p, ownValue(remembered, p.name), inputOf(p.name), i === 0, !required)).join('')}
     ${options.length > 1 ? `<label class="dialog-field">Run in
       <select class="field" data-where>${options.map(([v, l]) => `<option value="${escapeHtml(v)}">${escapeHtml(l)}</option>`).join('')}</select></label>` : ''}
     <div class="dialog-actions">
@@ -256,7 +265,7 @@ export function askValues(snippet, names, options, inputs = [], { given, ok, req
     const read = () => Object.fromEntries(/** @type {HTMLInputElement[]} */ ([...dialog.querySelectorAll('[data-var]')])
       .map(i => [/** @type {string} */ (i.dataset.var), i.value]));
     const okButton = /** @type {HTMLButtonElement} */ (find(dialog, '[data-ok]'));
-    const blocked = () => required && missingValues(snippet.command, filled(read())).length > 0;
+    const blocked = () => required && unfilled(snippet.command, read()).length > 0;
     const preview = () => {
       find(dialog, '[data-preview]').textContent = fill(snippet.command, read());
       okButton.disabled = blocked();

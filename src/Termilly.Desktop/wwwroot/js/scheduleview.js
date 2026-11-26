@@ -162,7 +162,7 @@ function whatHtml(s, choices) {
  */
 function valuesHtml(s, fields) {
   if (!fields.length) return '';
-  const valueOf = (/** @type {Placeholder} */ p) => ownValue(s.values, p.name) ?? (p.def ? `${p.def} (default)` : 'needs a value');
+  const valueOf = (/** @type {Placeholder} */ p) => ownValue(s.values, p.name)?.trim() || 'needs a value';
   return `<div class="sch-values">
     <span class="sch-values-text">${fields.map(p => `${escapeHtml(p.name)}: ${escapeHtml(valueOf(p))}`).join(', ')}</span>
     <button type="button" class="btn small" data-sch="values">Values</button>

@@ -65,18 +65,25 @@ step('picking a snippet with a variable asks for it, and the form keeps the valu
     t.$('[data-seg="what"][data-value="snippet"]').click();
   });
   await app.waitFor('.snippet-run [data-var="who"]');
-  // OK waits for the value without a default; the one with a default is filled in.
+  // A schedule uses no defaults: the one with a default isn't filled in, and OK waits for both.
   const asked = await app.eval(t => ({ ok: t.$('.snippet-run [data-ok]').disabled, n: t.$('.snippet-run [data-var="n"]').value, label: t.$('.snippet-run [data-ok]').textContent.trim() }));
-  assert.deepEqual(asked, { ok: true, n: '3', label: 'OK' });
-  await app.eval(t => {
-    const who = t.$('.snippet-run [data-var="who"]');
-    who.value = 'ada';
-    who.dispatchEvent(new Event('input', { bubbles: true }));
+  assert.deepEqual(asked, { ok: true, n: '', label: 'OK' });
+  const okWithWhoOnly = await app.eval(t => {
+    const type = (name, value) => {
+      const field = t.$(`.snippet-run [data-var="${name}"]`);
+      field.value = value;
+      field.dispatchEvent(new Event('input', { bubbles: true }));
+    };
+    type('who', 'ada');
+    const ok = !t.$('.snippet-run [data-ok]').disabled;
+    type('n', '5');
     t.$('.snippet-run [data-ok]').click();
+    return ok;
   });
+  assert.equal(okWithWhoOnly, false);
   await app.eval(t => t.waitFor('.sch-values-text'));
   const shown = await form();
-  assert.equal(shown.values, 'who: ada, n: 3');
+  assert.equal(shown.values, 'who: ada, n: 5');
   assert.equal(shown.problem, '');
   assert.equal(shown.canSave, true);
 });
@@ -87,8 +94,8 @@ step('cancelled, the form says what it needs; Values asks again', async () => {
     await t.waitFor('.snippet-run [data-var="who"]');
     t.$('.snippet-run [data-cancel]').click();
   });
-  assert.equal((await form()).values, 'who: ada, n: 3'); // cancelling keeps what was there
-  // Another snippet starts without values: its popup cancelled, the form can't be saved and says why.
+  assert.equal((await form()).values, 'who: ada, n: 5'); // cancelling keeps what was there
+  // Another snippet starts without values: its popup cancelled, Save says in a box which ones are missing.
   // Picked from the snippets list with its search, as in the title bar; it picks, nothing runs.
   const listed = await app.eval(async t => {
     t.$('[data-sch="pickSnippet"]').click();
@@ -113,8 +120,17 @@ step('cancelled, the form says what it needs; Values asks again', async () => {
   });
   const shown = await form();
   assert.equal(shown.values, 'name: needs a value');
-  assert.equal(shown.problem, 'It needs a value for name.');
-  assert.equal(shown.canSave, false);
+  assert.equal(shown.problem, '');
+  assert.equal(shown.canSave, true);
+  const box = await app.eval(async t => {
+    const before = (await t.import('schedules.js')).schedules().length;
+    t.$('[data-sch="save"]').click();
+    await t.waitFor('.confirm h3');
+    const said = { title: t.$('.confirm h3').textContent, body: t.$('.confirm .dialog-sub').textContent };
+    t.$('.confirm [data-ok]').click();
+    return { ...said, saved: (await t.import('schedules.js')).schedules().length !== before };
+  });
+  assert.deepEqual(box, { title: 'Values missing', body: 'Fill in name with the Values button. A schedule doesn\'t use defaults.', saved: false });
   assert.equal(await app.eval(t => t.$('[data-sch="pickSnippet"] .dropdown-label').textContent), 'Wave');
   // Opened again, the list starts on the snippet picked.
   const selected = await app.eval(async t => {
@@ -175,8 +191,10 @@ step('add_schedule takes the values as vars, and refuses a snippet without them'
     }
   }, args);
   assert.match((await call({ name: 'No vars', what: 'snippet', snippet: SNIPPET, at: '20:00' })).error, /needs values for: who/);
-  const added = await call({ name: 'With vars', what: 'snippet', snippet: SNIPPET, vars: { who: 'bob', n: '' }, at: '20:00' });
-  assert.deepEqual(added.vars, { who: 'bob' }); // an empty one runs with its default
+  // An empty value is none, and a default doesn't stand in for it.
+  assert.match((await call({ name: 'Empty n', what: 'snippet', snippet: SNIPPET, vars: { who: 'bob', n: '' }, at: '20:00' })).error, /needs values for: n\./);
+  const added = await call({ name: 'With vars', what: 'snippet', snippet: SNIPPET, vars: { who: 'bob', n: '4' }, at: '20:00' });
+  assert.deepEqual(added.vars, { who: 'bob', n: '4' });
   const edit = args => app.eval(async (t, args) => {
     try {
       return await (await t.import('api.js')).callApi('schedule_edit', args);

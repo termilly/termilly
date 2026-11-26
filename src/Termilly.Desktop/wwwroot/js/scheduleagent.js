@@ -11,7 +11,7 @@ import { schedules, scheduleById, runsOf, saveSchedule, removeSchedule, runNow, 
 import { newSchedule, describeWhen, describeAt, reachesProduction, WHAT, WHERE, WHEN, UNIT, DAY_NAMES, minutesOf } from './schedulerules.js';
 import { AGENT_KIND } from './constants.js';
 import { reviewersOf } from './schedulereview.js';
-import { allSnippets, missingValues, filled } from './snippets.js';
+import { allSnippets, unfilled, filled } from './snippets.js';
 
 /**
  * The agent an agent prompt names, among those installed: Claude Code when it names none (or the first installed without it).
@@ -107,7 +107,7 @@ function whatOf(args) {
     const snippet = allSnippets().find(sn => sn.name === String(args.snippet ?? ''));
     if (!snippet) throw new Error(`There's no snippet "${args.snippet}". list_snippets shows them.`);
     const values = valuesOf(args.vars);
-    const missing = missingValues(snippet.command, values);
+    const missing = unfilled(snippet.command, values);
     if (missing.length) throw new Error(`The snippet needs values for: ${missing.join(', ')}. Give them in vars.`);
     return { what, snippet: snippet.name, values };
   }

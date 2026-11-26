@@ -197,7 +197,7 @@ internal static partial class Mcp
     private static JsonObject ScheduleProperties(ScheduleWording w, params (string Name, string Type, string Description)[] first) => Properties([.. first,
         (ApiFields.Name, Types.String, w.Name), (ApiFields.What, Types.String, w.What), (ApiFields.Command, Types.String, "The command line, for what = command"),
         (ApiFields.Snippet, Types.String, "Snippet name from list_snippets, for what = snippet"),
-        (ApiFields.Vars, Types.Object, "Values for the snippet's variables, for what = snippet: each one without a default needs one. Given in an edit, they replace the old ones"), (ApiFields.Prompt, Types.String, "What the agent is asked, for what = agent"), (ApiFields.Agent, Types.String, w.Agent),
+        (ApiFields.Vars, Types.Object, "Values for the snippet's variables, for what = snippet: each one needs one, defaults are not used. Given in an edit, they replace the old ones"), (ApiFields.Prompt, Types.String, "What the agent is asked, for what = agent"), (ApiFields.Agent, Types.String, w.Agent),
         (ApiFields.At, Types.String, "Time of day, 24-hour: 20:00"), (ApiFields.Days, Types.String, w.Days),
         (ApiFields.Every, Types.Integer, "Repeat every this many units"), (ApiFields.Unit, Types.String, w.Unit), (ApiFields.OnStart, Types.Boolean, "Run when Termilly starts"),
         (ApiFields.Cwd, Types.String, "Folder it runs in"), (ApiFields.On, Types.Boolean, w.On)]);
