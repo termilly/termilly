@@ -41,13 +41,15 @@ const setInterface = values => app.eval(async (t, values) => {
 const looks = () => app.eval(async t => {
   const shows = el => !!el && el.ownerDocument.defaultView.getComputedStyle(el).display !== 'none';
   const tree = t.$('#sidebar .tab-tree');
-  // A swatch as the Move to workspace menu draws it.
-  const { workspaceSwatch } = await t.import('workspacelist.js');
-  const probe = t.$('body').ownerDocument.createElement('div');
-  probe.innerHTML = workspaceSwatch('#ff0000');
-  t.$('body').append(probe);
-  const swatch = shows(probe.firstElementChild);
-  probe.remove();
+  // The other workspace's swatch in a terminal's Move to workspace menu, opened as a right-click opens it.
+  const { state } = await t.import('store.js');
+  const tab = [...state.tabs.values()].find(x => x.wsId === state.activeId);
+  (await t.import('tabmenu.js')).openTabMenu(tab, { x: 40, y: 40 });
+  const move = t.$$('.context-menu .menu-row').find(r => r.querySelector('.menu-label').textContent.trim() === 'Move to workspace');
+  move.dispatchEvent(new move.ownerDocument.defaultView.MouseEvent('mouseenter'));
+  await new Promise(r => setTimeout(r, 50));
+  const swatch = shows(t.$$('.context-menu .ws-swatch').at(-1));
+  (await t.import('popups.js')).closeAll();
   return {
     sidebarDot: shows(t.$('#sidebar .ws-dot')),
     crumbDot: shows(t.$('.crumb-dot')),
@@ -60,6 +62,8 @@ before(async () => {
   app = await startApp({ name: 'workspace-look' });
   await app.waitFor('.pane .xterm');
   await app.waitFor('#sidebar .tab-tree');
+  // Another workspace, for the Move to workspace menu to offer.
+  await app.eval(async t => (await t.import('workspaces.js')).createWorkspace({ name: 'second', stay: true }));
 });
 
 after(async () => { await app?.stop({ failed }); });
