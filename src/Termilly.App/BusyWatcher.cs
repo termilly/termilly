@@ -126,6 +126,18 @@ internal sealed class BusyWatcher : IDisposable
         }
     }
 
+    /// <summary>
+    /// Forgets the terminals that closed, one that closed before its first state was confirmed (only pending) too.
+    /// </summary>
+    private void ForgetClosed(IReadOnlyDictionary<string, int> roots)
+    {
+        foreach (var gone in _reported.Keys.Union(_pending.Keys).Except(roots.Keys).ToList())
+        {
+            _reported.Remove(gone);
+            _pending.Remove(gone);
+        }
+    }
+
     /// <summary>Whether a state or a request is still waiting for a look (tests: nothing is left behind for good).</summary>
     internal bool Waiting => !_resend.IsEmpty || Volatile.Read(ref _ticking) == 1 || _pending.Count > 0;
 
@@ -196,12 +208,7 @@ internal sealed class BusyWatcher : IDisposable
             var asked = Interlocked.Read(ref _requests);
             var roots = _roots();
             var snapshot = roots.Count > 0 ? Snapshot() : [];
-            // One that closed before its first state was confirmed is only pending.
-            foreach (var gone in _reported.Keys.Union(_pending.Keys).Except(roots.Keys).ToList())
-            {
-                _reported.Remove(gone);
-                _pending.Remove(gone);
-            }
+            ForgetClosed(roots);
 
             foreach (var (id, pid) in roots)
             {
