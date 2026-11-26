@@ -70,8 +70,10 @@ const dropdownMenu = () => app.eval(async t => {
   const popups = await t.import('popups.js');
   popups.dropdown(select);
   /** @type {HTMLButtonElement} */ (select.nextElementSibling).click();
+  const opened = !!t.$('.context-menu');
   await new Promise(r => setTimeout(r, 50));
   const menu = t.$('.context-menu');
+  if (!menu) throw new Error(`The dropdown's menu ${opened ? 'opened, then closed' : 'never opened'}; focus on ${globalThis.document.activeElement?.className}`);
   const focused = globalThis.document.activeElement?.querySelector('.menu-label')?.textContent;
   const result = { rows: globalThis.menuRows(t), noIcons: menu.classList.contains('no-icons'), focused };
   popups.closeAll();
@@ -115,6 +117,11 @@ const keepRow = () => app.eval(async t => {
 before(async () => {
   app = await startApp({ name: 'menu-picks' });
   await app.waitFor('.pane .xterm');
+  // No welcome tour: its card, offered a few seconds after a first start, would close the menus being read.
+  await app.eval(async t => {
+    const { GROUPS } = await t.import('store.js');
+    (await t.import('preferences.js')).updateSettings(GROUPS.uiState, { tourSeen: true });
+  });
   await app.eval(async t => (await t.import('workspaces.js')).createWorkspace({ name: 'second', stay: true }));
   await app.eval((t, source) => { globalThis.menuRows = (0, eval)(source); }, rowsOf.toString());
 });
