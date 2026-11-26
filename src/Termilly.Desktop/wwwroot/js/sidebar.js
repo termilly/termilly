@@ -246,8 +246,14 @@ const renderSoon = () => {
 };
 for (const event of [EVENTS.workspaces, EVENTS.tab, EVENTS.tags, EVENTS.focus]) on(event, renderSoon);
 
-/** The settings the rows show (agent cost, the activity line, background tasks, the spinner), as one value to compare. */
-const shownSettings = () => JSON.stringify([costMode(), state.settings.agents.line, state.settings.agents.tasksInSidebar, state.settings.interface.showActivity]);
+/**
+ * The settings the rows show, as one value to compare: agent cost, the activity line, background tasks, the spinner,
+ * the git branch and listening ports (gitstatus.js), and which hosts count as production or staging (environments.js).
+ */
+const shownSettings = () => {
+  const { agents, interface: ui, terminal, safety } = state.settings;
+  return JSON.stringify([costMode(), agents.line, agents.tasksInSidebar, ui.showActivity, ui.gitStatus, terminal.ports, safety.environments]);
+};
 // Settings change often in the background (saves of the window's state, the cost ledger): drawn again only when one the
 // rows show did, so focus, a click under way and a menu's row stay as they are otherwise.
 let shownBefore = '';

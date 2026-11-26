@@ -1,5 +1,5 @@
 // An agent's cost in the sidebar (js/cost.js, js/sidebar.js) follows Settings › Terminal › Agent cost at once, without
-// anything else having to draw the sidebar again. Run with: npm run e2e (on Linux, under Xvfb).
+// anything else having to draw the sidebar again; so does Listening ports. Run with: npm run e2e (on Linux, under Xvfb).
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { startApp } from './harness.mjs';
@@ -65,7 +65,30 @@ step('the sidebar shows each choice of Agent cost at once', async () => {
   assert.deepEqual(await choose('cost'), { chip: '$1.84', workspace: '$1.84' });
   assert.deepEqual(await choose('off'), { chip: null, workspace: null });
   const tokens = await choose('tokens');
-  assert.match(tokens.chip ?? '', /tok$/);
+  assert.equal(tokens.chip, '1.5k tok');
   assert.equal(tokens.workspace, null);
   assert.deepEqual(await choose('cost'), { chip: '$1.84', workspace: '$1.84' });
+});
+
+step('Listening ports off takes a terminal\'s port out of the sidebar at once', async () => {
+  // A program in the terminal listening on a port, as a dev server would.
+  await app.eval(async t => {
+    const { state } = await t.import('store.js');
+    const { send } = await t.import('host.js');
+    const { PAGE } = await t.import('protocol.js');
+    send(PAGE.input, { id: [...state.tabs.values()][0].id, data: 'python3 -m http.server 47819 --bind 127.0.0.1\r' });
+  });
+  await app.waitFor('#sidebar .port-chip', { timeoutMs: 20_000 });
+  const portShown = () => app.eval(async t => {
+    const frame = () => new Promise(r => globalThis.requestAnimationFrame(() => r(undefined)));
+    t.click('[data-setting="terminal.ports"]');
+    const { state } = await t.import('store.js');
+    const was = state.settings.terminal.ports;
+    for (let i = 0; i < 50 && state.settings.terminal.ports === was; i++) await new Promise(r => setTimeout(r, 10));
+    await frame();
+    await frame();
+    return { on: state.settings.terminal.ports, chip: !!t.$('#sidebar .port-chip') };
+  });
+  assert.deepEqual(await portShown(), { on: false, chip: false });
+  assert.deepEqual(await portShown(), { on: true, chip: true });
 });
