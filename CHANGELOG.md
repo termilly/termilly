@@ -2,6 +2,19 @@
 
 What changed in each release. Termilly says in its title bar when a newer one is out.
 
+## 1.10.1 (2026-11-27)
+
+- **Background tasks:** see the commands Claude Code and Codex run in the background, with their output.
+- **Faster start:** agents resume while the application is still opening, with the last selected Workspace priority
+- **Scheduled snippets:** a schedule can run a snippet with its variables filled in.
+- **Look:** turn off workspace color dots and sidebar tree lines, and pick how dropdown menus mark the chosen item.
+
+Fixes:
+
+- Workspace sidebar could show yellow or gray representing fake agent activity for terminals.
+- Turning off background shells: It will not kill running processes until Termilly closes. Agents resume their sessions at the next start.
+- Disable default WebView context menus across the application.
+
 ## 1.10.0 (2026-11-25)
 
 - **Notification center:** a sidebar grouped by workspace.
