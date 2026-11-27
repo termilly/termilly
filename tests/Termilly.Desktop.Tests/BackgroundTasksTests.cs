@@ -65,8 +65,14 @@ public sealed class BackgroundTasksTests : IDisposable
         /// <summary>What the next Stops answer, one each, before <see cref="Finds"/> answers the rest.</summary>
         public ConcurrentQueue<Func<bool>> Answers { get; } = [];
         public int Stops { get; private set; }
+        /// <summary>What each StopCommand was told: whether an older process running its command is another task's.</summary>
+        public List<bool> OlderIsAnothers { get; } = [];
         public bool Stop(int terminalPid, string outputFile) => Stopped();
-        public bool StopCommand(int terminalPid, string command, DateTimeOffset started) => Stopped();
+        public bool StopCommand(int terminalPid, string command, DateTimeOffset started, bool olderIsAnothers = false)
+        {
+            OlderIsAnothers.Add(olderIsAnothers);
+            return Stopped();
+        }
         private bool Stopped()
         {
             Stops++;
@@ -107,8 +113,8 @@ public sealed class BackgroundTasksTests : IDisposable
 
     private static AgentEvent Event(string hookEvent, string? taskId = null) => AgentHooks.Parse(Protocol.Message(Pane, hookEvent, Payload(taskId)))!;
 
-    private static AgentEvent CodexEvent(string hookEvent) => AgentHooks.Parse(Protocol.Message(Pane, hookEvent, $$"""
-        { "session_id": "{{Session}}", "tool_name": "Bash", "tool_use_id": "{{CodexId}}", "tool_input": { "command": "npm run dev" } }
+    private static AgentEvent CodexEvent(string hookEvent, string useId = CodexId) => AgentHooks.Parse(Protocol.Message(Pane, hookEvent, $$"""
+        { "session_id": "{{Session}}", "tool_name": "Bash", "tool_use_id": "{{useId}}", "tool_input": { "command": "npm run dev" } }
         """, "codex"))!;
 
     private bool TasksSent() => _sink.Sent.Any(j => j.Contains("\"agent:tasks\"", StringComparison.Ordinal));
@@ -391,6 +397,22 @@ public sealed class BackgroundTasksTests : IDisposable
         {
             File.Delete(path);
         }
+    }
+
+    [Fact]
+    public async Task Stop_on_the_newer_of_two_tasks_with_one_command_never_takes_the_older_ones_process()
+    {
+        const string Newer = "exec-newer";
+        _terminals.Started(Pane, new FakeShell(), 42);
+        _tasks.OnEvent(CodexEvent("PreToolUse"));
+        _tasks.OnEvent(CodexEvent("Stop"));
+        _clock.Now += TimeSpan.FromMinutes(1);
+        _tasks.OnEvent(CodexEvent("PreToolUse", Newer));
+        _tasks.OnEvent(CodexEvent("Stop", Newer));
+
+        await _tasks.Stop(Pane, Newer);
+        await _tasks.Stop(Pane, CodexId);
+        Assert.Equal([true, false], _processes.OlderIsAnothers);
     }
 
     [Fact]

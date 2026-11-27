@@ -39,7 +39,11 @@ internal interface ITaskProcesses
     /// Ends the task that runs <paramref name="command"/> (Codex's: it has no output file), under an agent in the
     /// terminal, started nearest <paramref name="started"/>: false when none is found.
     /// </summary>
-    bool StopCommand(int terminalPid, string command, DateTimeOffset started);
+    /// <param name="olderIsAnothers">
+    /// Another task (an older row) runs the same command: an older process running it is that task's, never taken
+    /// for this one.
+    /// </param>
+    bool StopCommand(int terminalPid, string command, DateTimeOffset started, bool olderIsAnothers = false);
 }
 
 /// <summary>
@@ -249,7 +253,7 @@ internal sealed class TaskProcesses : ITaskProcesses
         return KillChecked(tree.Topmost(holders), () => FileHolders.Of(outputFile, tree.Below.Keys).ToHashSet());
     }
 
-    public bool StopCommand(int terminalPid, string command, DateTimeOffset started)
+    public bool StopCommand(int terminalPid, string command, DateTimeOffset started, bool olderIsAnothers = false)
     {
         // The hook's command may have been cut short ("…" at its end): its start is what's looked for.
         var cut = command.TrimEnd().EndsWith('…');
@@ -274,7 +278,9 @@ internal sealed class TaskProcesses : ITaskProcesses
         {
             return true;
         }
-        return Closest(running, started) is { } older && KillChecked([older], Running);
+        // An older one only when no other task claims it: the task's own process may just have ended (its row not yet
+        // updated), and an older row running the same command is still that row's.
+        return !olderIsAnothers && Closest(running, started) is { } older && KillChecked([older], Running);
     }
 
     /// <summary>
