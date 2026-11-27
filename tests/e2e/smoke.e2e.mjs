@@ -1,4 +1,5 @@
 // @ts-check
+// Covers: always
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { startApp } from './harness.mjs';

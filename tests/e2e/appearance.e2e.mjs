@@ -1,4 +1,5 @@
 // @ts-check
+// Covers: js/themes.js js/settings/appearance*.js js/preferences.js css/settings*.css
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { startApp } from './harness.mjs';

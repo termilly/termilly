@@ -1,6 +1,7 @@
 // Review's Git changes on a To do task (js/todopanel.js, js/todoactions.js): a task Implement worked on keeps where it was
 // worked through In progress and Review, and Git changes opens the Git window there on what changed. A task with no such
 // place has no button, and Accept lets the place go. Run with: npm run e2e (on Linux, under Xvfb).
+// Covers: js/todo*.js js/gitwindow*.js
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';

@@ -1,6 +1,7 @@
 // Opening a layout (js/layouts.js applyLayout: a .termilly.yml, or one exported from a workspace): its terminals come
 // back where they were, and a tab group shows the tab that was showing when it was saved. Run with: npm run e2e (on
 // Linux, under Xvfb).
+// Covers: js/layouts.js src/Termilly.App/Features/Layouts*.cs src/Termilly.App/WorkspaceLayout*.cs
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { startApp } from './harness.mjs';

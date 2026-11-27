@@ -2,6 +2,7 @@
 // commenting on an issue, the dot of a failed check on a commit in History, its details with Why? (the failed log),
 // Fix with an agent (a To do task, and an agent started in the repository) and Re-run failed.
 // Run with: npm run e2e (on Linux, under Xvfb; see tests/e2e/harness.mjs).
+// Covers: js/github.js js/githubtext.js js/gitissue*.js js/issueimplement.js src/Termilly.App/Features/GitHub*.cs src/Termilly.App/GitHub*.cs
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { startApp } from './harness.mjs';

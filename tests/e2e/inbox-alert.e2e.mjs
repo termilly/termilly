@@ -2,6 +2,7 @@
 // once; in Minimal a tab on the right edge has a dot per notification, and one that needs the user or failed peeks out
 // of it. Finished ones only add a dot. A click on the peek opens the center, and the tab goes while it's open.
 // Run with: npm run e2e (on Linux, under Xvfb).
+// Covers: js/inboxalert.js js/inbox.js css/panes.css
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { startApp } from './harness.mjs';

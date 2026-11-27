@@ -3,6 +3,7 @@
 // a group folds away and clears on its own; a permission is answered with Allow, a question with a reply; one column at
 // any width, and its grip survives a redraw.
 // Run with: npm run e2e (on Linux, under Xvfb).
+// Covers: js/inbox*.js css/inbox*.css
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { startApp } from './harness.mjs';

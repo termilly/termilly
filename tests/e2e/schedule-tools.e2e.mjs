@@ -1,6 +1,7 @@
 // edit_schedule and delete_schedule, as an agent's call reaches the page (js/scheduleagent.js): what's given changes and
 // the rest stays, a new kind of when starts afresh, a changed agent prompt only reads files again, and a deleted schedule
 // leaves the open Schedules window. Run with: npm run e2e (on Linux, under Xvfb).
+// Covers: js/schedule*.js src/Termilly.Agent/Api.cs src/Termilly.App/Features/Schedules.cs
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { startApp } from './harness.mjs';

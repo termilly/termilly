@@ -3,6 +3,7 @@
 // Minimal's 1px line, no frame, and a 24px name line like a terminal's whose buttons fade out but stay in reach of Tab;
 // back in Normal, its 6px gap and framed panels; a tool in a window of its own keeps its own look either way.
 // Run with: npm run e2e (on Linux, under Xvfb; see tests/e2e/harness.mjs).
+// Covers: js/minimal*.js js/preview.js js/dock*.js css/minimal.css
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { startApp } from './harness.mjs';

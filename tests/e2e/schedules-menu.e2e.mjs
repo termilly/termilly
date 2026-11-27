@@ -1,5 +1,6 @@
 // Right-clicks in the Schedules window (js/scheduleswindow.js): the browser's menu shows nowhere in it, text fields
 // included, and a schedule in the list has its own menu to run or delete it. Run with: npm run e2e (on Linux, under Xvfb).
+// Covers: js/schedule*.js js/popups.js
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { startApp } from './harness.mjs';

@@ -3,6 +3,7 @@
 // terminal's agent starts again, the next start runs it in the agent's folder at once (before the page asks), and
 // the page takes the shell over with what it printed meanwhile, typing the resume command no second time.
 // Run with: npm run e2e (on Linux, under Xvfb; see tests/e2e/harness.mjs).
+// Covers: js/resuming.js js/snapshot.js src/Termilly.App/Features/EarlyAgents.cs src/Termilly.App/EarlyShell*.cs src/Termilly.App/AgentStarts.cs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';

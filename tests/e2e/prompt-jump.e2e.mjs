@@ -1,5 +1,6 @@
 // My prompts in the compact and minimal views: a prompt picked from the list is scrolled to and marked in the view
 // (the terminal under it is hidden), not in the terminal. Run with: npm run e2e (on Linux, under Xvfb).
+// Covers: js/myprompts.js js/commands.js
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { startApp } from './harness.mjs';

@@ -1,6 +1,7 @@
 // Autocomplete at a bash prompt (js/autocomplete.js): bash marks where its prompt ends (133;B at the end of PS1,
 // SessionLaunch.cs), so a command run there comes back in grey as it's typed again, and → takes it.
 // Run with: npm run e2e (on Linux, under Xvfb).
+// Covers: js/autocomplete.js js/suggest.js src/Termilly.App/Features/History*.cs src/Termilly.Desktop/shell/termilly.bash
 import { test, before, after } from 'node:test';
 import { startApp } from './harness.mjs';
 

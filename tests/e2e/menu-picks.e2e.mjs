@@ -1,6 +1,7 @@
 // How menus that pick one mark the chosen item (Settings › Appearance › Layout › Chosen item, js/menulook.js,
 // js/popups.js): a tick by default, or a soft or solid accent background, while on/off items keep their tick.
 // Run with: npm run e2e (on Linux, under Xvfb).
+// Covers: js/popups.js js/menulook.js js/tabmenu.js js/panebar.js js/dock.js css/menus.css
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { startApp } from './harness.mjs';

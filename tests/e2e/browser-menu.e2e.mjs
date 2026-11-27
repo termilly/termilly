@@ -1,6 +1,7 @@
 // Right-clicks across the app (js/browsermenu.js): the browser's own menu shows nowhere, and a text field with no menu
 // of its own gets Termilly's text menu, with what fits the field (a read-only one can't take a paste, a password can't
 // be copied). Termilly's own menus still open. Run with: npm run e2e (on Linux, under Xvfb).
+// Covers: js/browsermenu.js js/textmenu.js js/rename.js js/popups.js css/menus.css
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { startApp } from './harness.mjs';

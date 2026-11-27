@@ -2,6 +2,7 @@
 // hides to a line and comes back at its edge, its workspace button lists the workspaces, it moves to another edge from
 // its menu, and a terminal's name shows on a line or on a bar near its top, whose right-click picks its parts.
 // Run with: npm run e2e (on Linux, under Xvfb; see tests/e2e/harness.mjs).
+// Covers: js/minimal*.js js/dock*.js js/layouts.js css/minimal.css
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { startApp } from './harness.mjs';

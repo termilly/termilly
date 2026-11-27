@@ -2,6 +2,7 @@
 // A shell kept by the background host, taken back by the next window: its missed output is drawn again, and the
 // terminal queries in it (here "what terminal are you?") aren't answered again into the live prompt.
 // Run with: npm run e2e (on Linux, under Xvfb; see tests/e2e/harness.mjs).
+// Covers: js/replay.js js/terminals.js js/snapshot.js src/Termilly.App/HostClient.cs src/Termilly.Host/**
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile, rm } from 'node:fs/promises';

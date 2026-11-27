@@ -1,5 +1,6 @@
 // The harness itself: a test app sees only what its test sets up, and a test process ended early (a timeout, Ctrl+C,
 // a cancelled run) takes its app, display and background host with it. Run with: npm run e2e (on Linux, under Xvfb).
+// Covers: js/profiles*.js src/Termilly.App/DynamicSources.cs src/Termilly.App/Features/Profiles.cs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, execFileSync } from 'node:child_process';

@@ -1,6 +1,7 @@
 // A schedule that runs a snippet with variables: the form asks for the values a picked snippet needs in a popup, keeps
 // them with the schedule and runs the snippet with them; a run whose snippet gained a variable since fails and says which;
 // add_schedule takes them as vars. Run with: npm run e2e (on Linux, under Xvfb).
+// Covers: js/schedule*.js js/snippet*.js src/Termilly.App/Features/Schedules.cs src/Termilly.App/Schedule*.cs
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { startApp } from './harness.mjs';

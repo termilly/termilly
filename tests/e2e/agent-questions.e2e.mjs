@@ -2,6 +2,7 @@
 // asks them through the API: an options question shows four choices then More and returns the pick with a note;
 // approve returns Approved or Denied; ask takes a suggestion or words; an update returns at once; × puts a question
 // away; an agent that stops waiting closes its card. Run with: npm run e2e (on Linux, under Xvfb).
+// Covers: js/agentask.js js/agentanswer.js js/questions.js js/inbox*.js src/Termilly.Agent/Mcp.Notify.cs src/Termilly.App/Features/Questions*.cs
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { startApp } from './harness.mjs';

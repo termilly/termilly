@@ -1,6 +1,7 @@
 // @ts-check
 // To do in a window of its own: the window's title bar has Close, so the list's own Detach and Close are hidden there,
 // as Notepad's are; docked in the main window they show.
+// Covers: js/todopanel.js js/todo*.js css/todo.css
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { startApp } from './harness.mjs';

@@ -1,5 +1,6 @@
 // A window of its own (Schedules, Snippets) shows one Close: the window's, at the end of its buttons. Its header's own
 // close hides while it's detached, and the window's Close still closes it. Run with: npm run e2e (on Linux, under Xvfb).
+// Covers: js/windows.js js/detached*.js src/Termilly.Desktop/DetachedWindow.cs src/Termilly.Linux/*Detached*.cs
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { startApp } from './harness.mjs';

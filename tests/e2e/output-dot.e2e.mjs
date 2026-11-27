@@ -1,6 +1,7 @@
 // The grey new-output dot of a terminal out of sight, end to end: an agent's first report takes back the dot its own
 // start drew (a resumed Claude Code draws before its hooks say it's there), and nothing else does.
 // Run with: npm run e2e (on Linux, under Xvfb; see tests/e2e/harness.mjs).
+// Covers: js/panes.js js/arrived.js
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { startApp } from './harness.mjs';

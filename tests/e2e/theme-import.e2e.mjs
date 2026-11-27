@@ -1,4 +1,5 @@
 // @ts-check
+// Covers: js/themeimport.js js/schemes.js js/themes.js src/Termilly.App/Features/Themes*.cs
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';

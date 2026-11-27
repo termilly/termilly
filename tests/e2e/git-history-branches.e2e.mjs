@@ -2,6 +2,7 @@
 // own history, worktrees in Branches (removing one keeps its work in Local history), Clean up branches with Undo,
 // and Local history putting a file back.
 // Run with: npm run e2e (on Linux, under Xvfb; see tests/e2e/harness.mjs).
+// Covers: js/githistory.js js/gitgraph.js js/branchpicker.js js/gitlist.js src/Termilly.App/Features/GitView*.cs src/Termilly.App/Git*.cs
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';

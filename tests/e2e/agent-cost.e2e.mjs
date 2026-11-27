@@ -1,5 +1,6 @@
 // An agent's cost in the sidebar (js/cost.js, js/sidebar.js) follows Settings › Terminal › Agent cost at once, without
 // anything else having to draw the sidebar again; so does Listening ports. Run with: npm run e2e (on Linux, under Xvfb).
+// Covers: js/cost.js js/claudeusage.js js/statusbar*.js js/settings/agents*.js src/Termilly.App/Features/Agents.cs src/Termilly.App/ClaudeCost*.cs
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { startApp } from './harness.mjs';

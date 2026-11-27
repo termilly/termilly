@@ -1,5 +1,6 @@
 // A schedule's Clear button in its Runs view (js/scheduleswindow.js): it asks first, then the runs that ended go with
 // their reports, while a run going on and another schedule's runs stay. Run with: npm run e2e (on Linux, under Xvfb).
+// Covers: js/schedule*.js src/Termilly.App/Features/Schedules.cs
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { startApp } from './harness.mjs';

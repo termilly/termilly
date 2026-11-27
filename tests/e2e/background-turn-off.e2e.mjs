@@ -3,6 +3,7 @@
 // until Termilly quits, which ends them with the host; at the next start an agent that had a conversation there
 // resumes it, as with the setting off, and nothing runs in a background host any more.
 // Run with: npm run e2e (on Linux, under Xvfb; see tests/e2e/harness.mjs).
+// Covers: js/snapshot.js js/resuming.js js/closing.js js/settings/session*.js src/Termilly.App/Features/BackgroundHost.cs src/Termilly.App/HostClient.cs src/Termilly.Host/**
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile, rm } from 'node:fs/promises';

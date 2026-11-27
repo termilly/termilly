@@ -5,6 +5,7 @@
 // agent's "done" waits; once the file says it exited, the row shows ✓, the chip goes and "done" comes through.
 // Codex's: a command its hooks saw start but not end before the turn ended is a task, till its rollout says it ended.
 // Run with: npm run e2e (on Linux, under Xvfb; see tests/e2e/harness.mjs).
+// Covers: js/backgroundtasks.js css/agents.css src/Termilly.App/Features/BackgroundTasks.cs src/Termilly.App/BackgroundTaskFiles.cs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';

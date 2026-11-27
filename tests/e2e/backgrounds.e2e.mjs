@@ -1,4 +1,5 @@
 // @ts-check
+// Covers: js/backgrounds.js js/workspacebackground.js js/settings/appearancebackground.js css/backgrounds*.css
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';

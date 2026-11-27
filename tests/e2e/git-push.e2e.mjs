@@ -2,6 +2,7 @@
 // a new branch's first push, the repository's own pre-push hook (what it said is one click away), and a hook that
 // refuses the push (its words in the dialog, nothing pushed). Undo this commit on a commit not pushed yet.
 // Run with: npm run e2e (on Linux, under Xvfb; see tests/e2e/harness.mjs).
+// Covers: js/gitwrite.js js/gitactions.js js/gitsafety.js src/Termilly.App/Features/GitView*.cs src/Termilly.App/GitRunner.cs
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';

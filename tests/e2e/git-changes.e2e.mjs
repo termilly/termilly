@@ -1,6 +1,7 @@
 // The Git window, end to end: opening it, Changes, staging a block of a file and single lines, discarding with Undo,
 // Restore from a file's menu with Undo, committing from the box, and the commit in History beside the graph.
 // Run with: npm run e2e (on Linux, under Xvfb; see tests/e2e/harness.mjs).
+// Covers: js/changes.js js/changetree.js js/diffrows.js js/gitdiffview.js src/Termilly.App/Features/Changes*.cs
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';

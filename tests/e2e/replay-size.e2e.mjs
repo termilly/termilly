@@ -1,6 +1,7 @@
 // Playing a recording (js/replay.js): output is drawn at the size the terminal had when it was printed, even when a
 // resize comes in the same frame, and seeking back draws it at that size again. Run with: npm run e2e (on Linux,
 // under Xvfb).
+// Covers: js/replay.js src/Termilly.App/Features/Recordings.cs
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { writeFile } from 'node:fs/promises';

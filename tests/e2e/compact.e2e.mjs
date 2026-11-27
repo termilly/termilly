@@ -1,3 +1,4 @@
+// Covers: js/compact*.js js/agentline.js js/agentturns.js css/compact*.css src/Termilly.App/Features/Compact*.cs src/Termilly.App/Compact*.cs
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';

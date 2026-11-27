@@ -3,6 +3,7 @@
 // --resume` says so and exits at once, and the spinner over the terminal goes with it (it used to spin until Esc),
 // leaving Claude's words on screen; the session isn't tried again at the next start.
 // Run with: npm run e2e (on Linux, under Xvfb; see tests/e2e/harness.mjs).
+// Covers: js/resuming.js js/resume.js js/snapshot.js js/hibernate.js
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { startApp } from './harness.mjs';

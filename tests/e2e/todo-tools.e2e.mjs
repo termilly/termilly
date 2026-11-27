@@ -1,6 +1,7 @@
 // To do's edit_task and delete_task, as an agent's call reaches the page (js/todoagent.js): a title, details and tags
 // changed with the rest kept, a task deleted with a notice whose Undo puts it back in its place, one being worked on
 // kept, and another terminal's task out of reach. Run with: npm run e2e (on Linux, under Xvfb).
+// Covers: js/todo*.js src/Termilly.Agent/Api.cs src/Termilly.App/Features/Todo*.cs
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { startApp } from './harness.mjs';

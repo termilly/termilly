@@ -3,6 +3,7 @@
 // many, a state asked again from its first page, GitHub searching for the search box's words, and an issue's text
 // drawn from its Markdown with nothing in it reaching the page as HTML.
 // Run with: npm run e2e (on Linux, under Xvfb; see tests/e2e/harness.mjs).
+// Covers: js/gitissues.js js/gitissueview.js js/github.js src/Termilly.App/Features/GitHub*.cs
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { startApp } from './harness.mjs';

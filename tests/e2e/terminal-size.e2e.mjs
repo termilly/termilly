@@ -1,6 +1,7 @@
 // A terminal drawn at another size (a phone's or another computer's, js/phone.js showAtSize) and given its own back:
 // it ends at Settings' font, fitted to its pane, whatever was still queued. Run with: npm run e2e (on Linux, under
 // Xvfb).
+// Covers: js/phone.js css/panes.css
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { startApp } from './harness.mjs';

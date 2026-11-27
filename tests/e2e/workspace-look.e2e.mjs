@@ -1,6 +1,7 @@
 // How workspaces look (Settings › Appearance › Layout, js/workspacelook.js): their colour (the sidebar's dots, the
 // title bar's, the collapsed sidebar's tiles, the swatches in menus, the Minimal dock's dot) and the sidebar's tree
 // lines, each switched off and on with its switch in Settings. Run with: npm run e2e (on Linux, under Xvfb).
+// Covers: js/workspacelook.js js/sidebar.js js/workspaces.js css/sidebar.css
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { startApp } from './harness.mjs';
