@@ -112,8 +112,11 @@ test('a workspace’s own background, from its right-click menu, wins over the w
 test('Theme gradient paints the accent, background and magenta until its colours are picked from the theme', () => withApp('background-gradient-colors', async app => {
   await app.eval(async t => (await t.import('settings.js')).openSettings('appearance-background'));
   await app.waitFor('[data-setting="background.gradientGlow"]');
-  const glowRow = '[data-setting="background.gradientGlow"]';
-  assert.equal(await app.eval((t, s) => t.$$(`${s} [data-value]`).length, glowRow), 11, 'every theme colour');
+  const glowRow = '[data-setting="background.gradientGlow"]', secondRow = '[data-setting="background.gradientSecondGlow"]';
+  const offered = row => app.eval((t, s) => t.$$(`${s} [data-value]`).map(b => b.dataset.value), row);
+  // The theme's own colours, not the terminal's; a terminal colour already set (Second glow's magenta) still shows.
+  assert.deepEqual(await offered(glowRow), ['accent', 'background', 'surface', 'text', 'muted'], "the theme's colours");
+  assert.deepEqual(await offered(secondRow), ['accent', 'background', 'surface', 'text', 'muted', 'magenta'], 'and the magenta it has');
   assert.ok(await app.eval((t, s) => t.$(s).closest('.set-row').classList.contains('needs-off'), glowRow), 'waits for Theme gradient');
 
   await app.click('[data-setting="background.themeGradient"]');
@@ -124,13 +127,13 @@ test('Theme gradient paints the accent, background and magenta until its colours
   await app.screenshot('gradient-default');
 
   await app.click(`${glowRow} [data-value="background"]`);
-  await app.click('[data-setting="background.gradientSecondGlow"] [data-value="blue"]');
-  await until(async () => /var\(--hl-number\) 85%/.test((await rootState(app)).image), 'blue at the bottom right');
+  await app.click(`${secondRow} [data-value="text"]`);
+  await until(async () => /var\(--text\) 85%/.test((await rootState(app)).image), 'the text colour at the bottom right');
   assert.match((await rootState(app)).image, /var\(--bg\) 65%, var\(--bg\)/, 'no accent left in it');
-  await until(() => app.eval(t => t.$('[data-setting="background.gradientSecondGlow"] .on')?.dataset.value === 'blue'), 'Blue shows as picked');
+  await until(() => app.eval((t, s) => t.$(`${s} .on`)?.dataset.value === 'text', secondRow), 'Text shows as picked');
   assert.ok(await app.eval((t, s) => t.$(`${s} [data-value="background"]`).classList.contains('on'), glowRow));
   const saved = await app.eval(async t => (await t.import('store.js')).state.settings.background);
   assert.equal(saved.gradientGlow, 'background');
-  assert.equal(saved.gradientSecondGlow, 'blue');
+  assert.equal(saved.gradientSecondGlow, 'text');
   await app.screenshot('gradient-picked');
 }));
