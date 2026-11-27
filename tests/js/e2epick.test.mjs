@@ -46,3 +46,10 @@ test('a changed test runs itself; changes outside the app run none', () => {
   assert.deepEqual(run('tests/e2e/layout-import.e2e.mjs'), { all: false, tests: ['layout-import.e2e.mjs'] });
   assert.deepEqual(run('docs/coding-standards.md', 'tests/js/suggest.test.mjs'), { all: false, tests: [] });
 });
+
+test('what builds the app or runs the tests runs them all, wherever it is', () => {
+  for (const file of ['scripts/bundle.mjs', 'scripts/BundlePage.targets', 'Directory.Build.props', 'Directory.Packages.props',
+    'scripts/e2e-run.mjs', 'global.json', 'Termilly.slnx']) {
+    assert.equal(run(file).all, true, file);
+  }
+});

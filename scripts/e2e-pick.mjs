@@ -8,7 +8,7 @@
 // Run: node scripts/e2e-pick.mjs [base [head]]   (the changes from base to head; with no head, to the working folder)
 // Prints the test files to run, one a line, or nothing.
 import { execFileSync } from 'node:child_process';
-import { readdirSync, readFileSync, existsSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -22,8 +22,12 @@ const SHORTHANDS = Object.freeze({ 'js/': PAGE_JS, 'css/': `${PAGE}css/` });
 /** A test that runs whenever any end-to-end test does. */
 const ALWAYS = 'always';
 const COVERS = /^\/\/ Covers:(.*)$/m;
-/** What the end-to-end tests run on: a change to any of it can break any of them. */
-const RUNS_ALL = [/^tests\/e2e\/(?!.*\.e2e\.mjs$)/, /^scripts\/e2e-pick\.mjs$/, /^package(-lock)?\.json$/];
+/**
+ * What the end-to-end tests run on: a change to any of it can break any of them. The harness, the scripts that pick and
+ * run the tests, the page's packages, and what builds the app from outside src/ (the page bundle, MSBuild's shared files).
+ */
+const RUNS_ALL = [/^tests\/e2e\/(?!.*\.e2e\.mjs$)/, /^scripts\/e2e-/, /^scripts\/(bundle\.mjs|BundlePage\.targets)$/,
+  /^package(-lock)?\.json$/, /^Directory\.[^/]+\.(props|targets)$/, /^global\.json$/, /^[^/]+\.slnx?$/, /^nuget\.config$/i];
 /** The app: what tests can cover. */
 const APP = /^src\//;
 
@@ -136,20 +140,34 @@ function readModules() {
   return modules;
 }
 
+/** Git's output, as text. @param {string[]} args */
+const git = (...args) => execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 64 * 1024 * 1024 });
+/** A list of paths from git, NUL-separated so no name is quoted or split. @param {string[]} args */
+const gitPaths = (/** @type {string} */ command, /** @type {string[]} */ ...args) => git(command, '-z', ...args).split('\0').filter(Boolean);
+
 /**
- * The files changed from base to head; with no head, since base in the working folder, new ones not yet added too.
+ * The tests from one commit to another, read from the commits themselves: what the working folder holds doesn't count.
  * @param {string} base
- * @param {string | undefined} head
+ * @param {string} head
+ * @returns {{ changed: string[], all: boolean, tests: string[] }}
  */
-function changedSince(base, head) {
-  const git = (/** @type {string[]} */ ...args) => execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
-    .split('\n').filter(Boolean);
-  if (head) return git('diff', '--name-only', base, head);
-  return [...new Set([...git('diff', '--name-only', base), ...git('ls-files', '--others', '--exclude-standard')])];
+export function pickBetween(base, head) {
+  const changed = gitPaths('diff', '--name-only', base, head);
+  const testFiles = testFilesAt(head);
+  const tests = new Map(testFiles.map(f => [path.posix.basename(f), coverageOf(git('show', `${head}:${f}`))]));
+  const moduleFiles = gitPaths('ls-tree', '-r', '--name-only', head, PAGE_JS).filter(f => f.endsWith('.js'));
+  const modules = new Map(moduleFiles.map(f => [f, git('show', `${head}:${f}`)]));
+  return { changed, ...pick({ changed, tests, importers: importersOf(modules) }) };
 }
+
+/** The test files in a commit. @param {string} head */
+export const testFilesAt = head => gitPaths('ls-tree', '--name-only', head, E2E).filter(f => f.endsWith(TEST_SUFFIX));
+
+/** The files changed since a commit in the working folder, new ones not yet added too. @param {string} base */
+const changedSince = base => [...new Set([...gitPaths('diff', '--name-only', base), ...gitPaths('ls-files', '--others', '--exclude-standard')])];
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const [base = 'HEAD', head] = process.argv.slice(2);
-  const { tests } = pick({ changed: changedSince(base, head), tests: readTests(), importers: importersOf(readModules()) });
-  for (const name of tests) if (existsSync(path.join(root, E2E, name))) console.log(`${E2E}${name}`);
+  const { tests } = head ? pickBetween(base, head) : pick({ changed: changedSince(base), tests: readTests(), importers: importersOf(readModules()) });
+  for (const name of tests) console.log(`${E2E}${name}`);
 }

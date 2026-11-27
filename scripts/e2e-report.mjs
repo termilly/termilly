@@ -51,8 +51,25 @@ const duration = seconds => (seconds >= 60 ? `${Math.floor(seconds / 60)} min ${
 /** @param {Run} run */
 export const failedCount = run => run.files.reduce((n, f) => n + f.tests.filter(t => t.failure).length, 0);
 
+/** The tests that ran, skipped ones aside. @param {Run} run */
+export const testCount = run => run.files.reduce((n, f) => n + f.tests.filter(t => !t.skipped).length, 0);
+
 /** @param {Run} run */
-export const testCount = run => run.files.reduce((n, f) => n + f.tests.length, 0);
+export const skippedCount = run => run.files.reduce((n, f) => n + f.tests.filter(t => t.skipped).length, 0);
+
+/**
+ * A test file's results with how its process ended: a process that failed, or left no results, is a failure even when
+ * the results it wrote say nothing failed (killed while writing them, or ended before any test).
+ * @param {TestResult[]} tests
+ * @param {number} exitCode
+ * @returns {TestResult[]}
+ */
+export function withExit(tests, exitCode) {
+  if (tests.some(t => t.failure)) return tests;
+  if (exitCode === 0 && tests.length) return tests;
+  const why = tests.length ? `The test process ended with code ${exitCode}, its results incomplete.` : `No results: the test process ended with code ${exitCode} before any test.`;
+  return [...tests, { name: 'the test file ran to its end', seconds: 0, failure: why, skipped: false }];
+}
 
 /** The last lines of a log. @param {string} log */
 const tail = log => log.split('\n').slice(-LOG_TAIL_LINES).join('\n');
@@ -74,8 +91,9 @@ function fileHtml(file) {
  * @param {Run} run
  */
 export function reportHtml(run) {
-  const failed = failedCount(run), total = testCount(run);
-  const verdict = failed ? `<b class="bad">${failed} of ${total} failed</b>` : `<b class="ok">All ${total} passed</b>`;
+  const failed = failedCount(run), total = testCount(run), skipped = skippedCount(run);
+  const skippedText = skipped ? `, ${skipped} skipped` : '';
+  const verdict = failed ? `<b class="bad">${failed} of ${total} failed</b>${skippedText}` : `<b class="ok">All ${total} passed</b>${skippedText}`;
   const why = run.all ? 'All tests: the change reaches code no test claims, or the tests themselves.' : 'The tests that cover what changed.';
   const changed = run.changed.map(f => `<li><code>${escapeHtml(f)}</code></li>`).join('');
   const order = [...run.files].sort((a, b) => Number(b.tests.some(t => t.failure)) - Number(a.tests.some(t => t.failure)));

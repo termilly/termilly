@@ -3,11 +3,12 @@ import { spawn, execFileSync } from 'node:child_process';
 import { createServer } from 'node:net';
 import { randomBytes } from 'node:crypto';
 import { mkdtemp, mkdir, writeFile, readFile, rm, chmod, access, copyFile } from 'node:fs/promises';
-import { readdirSync, readFileSync, existsSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { tmpdir, homedir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { run, until, terminate } from './process.mjs';
+import { lendLogin, takeLoginBack } from './login.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const fakes = path.join(root, 'tests/e2e/fakes');
@@ -197,6 +198,7 @@ export async function startApp({ folder, gh = {}, agents = {}, env = {}, name = 
         }
         await terminate(appProcess);
         await terminate(xvfb);
+        if (realAgents) await takeLoginBack(home); // before its home can go: it may hold the only login that still works
         if (failed) await Promise.all([writeFile(path.join(artifacts, 'app.log'), logs.join('')),
           writeFile(path.join(artifacts, 'xvfb.log'), xvfbLogs.join('')), writeFile(path.join(artifacts, 'data-dir.txt'), dataDir)]);
         else if (!keepData) await rm(dataDir, { recursive: true, force: true });
@@ -219,9 +221,8 @@ async function giveRealAgents(dataDir, home, folder) {
   await mkdir(own, { recursive: true });
   await Promise.all(NOT_AGENTS.map(file => copyFile(path.join(fakes, file), path.join(own, file))));
   if (process.platform !== 'win32') await Promise.all(NOT_AGENTS.map(file => chmod(path.join(own, file), 0o755)));
-  const login = path.join(homedir(), '.claude', '.credentials.json');
   await mkdir(path.join(home, '.claude'), { recursive: true });
-  if (existsSync(login)) await copyFile(login, path.join(home, '.claude', '.credentials.json'));
+  await lendLogin(home);
   const trusted = Object.fromEntries([home, folder].filter(Boolean).map(f => [path.resolve(/** @type {string} */ (f)), { hasTrustDialogAccepted: true }]));
   await writeFile(path.join(home, '.claude.json'), JSON.stringify({ hasCompletedOnboarding: true, theme: 'dark', projects: trusted }));
 }

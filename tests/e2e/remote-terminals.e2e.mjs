@@ -13,6 +13,8 @@ let there, here;
 let failed = false;
 /** What B's terminal is asked to print, typed in A's pane. */
 const MARK = 'typed-from-the-other-computer';
+/** B's terminal size, unlike any pane's here. */
+const THEIR_SIZE = Object.freeze({ cols: 97, rows: 23 });
 
 async function freePort() {
   const server = createServer();
@@ -87,7 +89,34 @@ step("A's pane shows B's terminal, and what's typed there runs there", async () 
   await until(async () => (await screenOf(here)).split(MARK).length > 2, "A shows B's command and its output");
 });
 
+/** An app's terminal size: the remote one in A, B's own in B. @param {any} app @param {boolean} remote */
+const sizeOf = (app, remote) => app.eval(async (t, remote) => {
+  const { state } = await t.import('store.js');
+  const term = [...state.tabs.values()].find(tab => (remote ? tab.virtual?.kind === 'pc' : !tab.virtual) && tab.view?.term).view.term;
+  return { cols: term.cols, rows: term.rows };
+}, remote);
+
+/** Who B says has its terminal open. */
+const viewersThere = () => there.eval(async t => {
+  const { state } = await t.import('store.js');
+  return [...state.tabs.values()].find(tab => !tab.virtual && tab.view?.term).viewers ?? [];
+});
+
 step("B's size is kept in A's pane, readable, and A's pane can be scrolled to all of it", async () => {
+  // B's terminal at a size of its own, unlike A's pane: Keep remote size draws it in A at B's size.
+  await there.eval(async (t, size) => {
+    const { state } = await t.import('store.js');
+    [...state.tabs.values()].find(tab => !tab.virtual && tab.view?.term).view.term.resize(size.cols, size.rows);
+  }, THEIR_SIZE);
+  await until(async () => {
+    const shown = await sizeOf(here, true);
+    return shown.cols === THEIR_SIZE.cols && shown.rows === THEIR_SIZE.rows;
+  }, "A's pane at B's size");
+  const own = await here.eval(async t => {
+    const { state } = await t.import('store.js');
+    return [...state.tabs.values()].find(tab => !tab.virtual && tab.view?.term).view.term.cols;
+  });
+  assert.notEqual((await sizeOf(here, true)).cols, own, "not A's own size");
   const font = await here.eval(async t => {
     const { state } = await t.import('store.js');
     return [...state.tabs.values()].find(tab => tab.virtual?.kind === 'pc').view.term.options.fontSize;
@@ -96,7 +125,8 @@ step("B's size is kept in A's pane, readable, and A's pane can be scrolled to al
   assert.equal(await here.eval(t => t.reachable('.pane-body .xterm')), true);
 });
 
-step("closing the pane here leaves B's terminal running there", async () => {
+step("closing the pane here ends its watch there, and leaves B's terminal running", async () => {
+  await until(async () => (await viewersThere()).length > 0, 'B knows A has it open');
   await here.eval(async t => {
     const { state } = await t.import('store.js');
     const { closeTab } = await t.import('panes.js');
@@ -106,6 +136,7 @@ step("closing the pane here leaves B's terminal running there", async () => {
     const { state } = await t.import('store.js');
     return ![...state.tabs.values()].some(tab => tab.virtual?.kind === 'pc');
   }), 'the pane closed here');
+  await until(async () => (await viewersThere()).length === 0, 'B knows nobody has it open now');
   assert.equal(await there.eval(async t => {
     const { state } = await t.import('store.js');
     return [...state.tabs.values()].filter(tab => tab.view?.term && !tab.exited).length;

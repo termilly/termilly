@@ -17,7 +17,9 @@ const MARK = '# termilly: e2e after each commit';
 const HOOK = `#!/bin/sh
 ${MARK} (scripts/e2e-hook.mjs). Runs in the background: the commit doesn't wait.
 mkdir -p tests/e2e/runs
-( node scripts/e2e-run.mjs >> tests/e2e/runs/hook.log 2>&1 & )
+# The commit is read now: a second commit before the run starts gets its own run, not this one.
+head=$(git rev-parse HEAD)
+( node scripts/e2e-run.mjs --head "$head" >> tests/e2e/runs/hook.log 2>&1 & )
 `;
 
 /** The repository's hooks folder (a worktree's is its main repository's). */
