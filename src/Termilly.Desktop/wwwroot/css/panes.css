@@ -238,6 +238,8 @@
 .pane-body.phone-sized.by-computer { padding: 0; }
 .pane-body.phone-sized.by-computer > .xterm { padding: 0; border: 0; border-radius: 0; box-shadow: none; }
 .pane-body:not(.phone-sized) > .size-who, .pane-body.phone-sized.by-computer > .size-who { position: absolute; right: 10px; bottom: 10px; z-index: 5; opacity: 0.92; }
+/* Scrolled across another computer's size: its label and covers stay in view (js/phone.js followScroll). */
+.pane-body.phone-sized.by-computer > :is(.size-who, .pc-paused, .pc-lost) { translate: var(--pane-scroll-x, 0) var(--pane-scroll-y, 0); }
 .pane-body.phone-sized.by-computer > .xterm::before, .pane-body.phone-sized.by-computer > .xterm::after { content: none; }
 .size-who { flex: none; display: flex; align-items: center; gap: 8px; padding: 3px 4px 3px 10px; border-radius: 999px; background: var(--accent); color: #fff; font-size: 12px; font-weight: 600; }
 .size-who:not(:has(button)) { padding-right: 10px; }

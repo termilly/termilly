@@ -236,13 +236,18 @@ export function showAtSize(tab, size, who) {
   tab.takeBack = !!tab.phoneSize && !!who?.takeBack;
   tab.fitHere = (tab.phoneSize && who?.fitHere) || null;
   view.body.classList.toggle('phone-sized', !!tab.phoneSize);
-  if (!tab.phoneSize) view.body.classList.remove(SHRUNK);
+  if (!tab.phoneSize) {
+    view.body.classList.remove(SHRUNK);
+    for (const name of [SCROLL_X, SCROLL_Y]) view.body.style.removeProperty(name); // it no longer scrolls
+  }
   view.body.classList.toggle(BY_COMPUTER, !!tab.phoneSize && !!who?.computer);
   drawWho(tab);
   if (tab.phoneSize) {
     view.term.resize(tab.phoneSize.cols, tab.phoneSize.rows);
     phoneTabs.set(view.body, tab);
-    resized.observe(view.body);
+    // Its outer size: a scrollbar coming or going (its font changing) isn't the pane resizing, or it would loop.
+    resized.observe(view.body, { box: 'border-box' });
+    followScroll(view.body);
     requestAnimationFrame(() => fitPhone(tab)); // once the new size is drawn
   } else {
     resized.unobserve(view.body);
@@ -309,7 +314,28 @@ function fitPhone(tab) {
 }
 
 /** The smallest font its size gets here: a phone's shows all of it, another computer's stays readable. @param {Tab} tab */
-const minFontOf = tab => (tab.view?.body.classList.contains(BY_COMPUTER) ? COMPUTER_MIN_FONT : PHONE_MIN_FONT);
+const minFontOf = tab => Math.min(state.settings.terminal.fontSize,
+  tab.view?.body.classList.contains(BY_COMPUTER) ? COMPUTER_MIN_FONT : PHONE_MIN_FONT);
+
+/** Panes whose scrolling the labels and covers over them follow. */
+/** @type {WeakSet<Element>} */
+const scrollFollowed = new WeakSet();
+
+/**
+ * A pane scrolled across another computer's size: its label and covers stay where they are in view (app.css moves
+ * them by how far it's scrolled), so Fit here and Resume can't be scrolled away.
+ * @param {HTMLElement} body
+ */
+function followScroll(body) {
+  if (scrollFollowed.has(body)) return;
+  scrollFollowed.add(body);
+  body.addEventListener('scroll', () => {
+    body.style.setProperty(SCROLL_X, `${body.scrollLeft}px`);
+    body.style.setProperty(SCROLL_Y, `${body.scrollTop}px`);
+  }, { passive: true });
+}
+/** How far a pane is scrolled, for app.css. */
+const SCROLL_X = '--pane-scroll-x', SCROLL_Y = '--pane-scroll-y';
 
 /**
  * How its terminal's drawn screen compares with the room in its pane, across and down: under 1 where it's too big.
