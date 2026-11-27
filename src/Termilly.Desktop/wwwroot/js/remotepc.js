@@ -224,7 +224,7 @@ function followTerminals() {
     const t = pc ? stateOf(pc).terminals.find(x => x.id === v?.pane) : null;
     if (!v || !t) continue;
     // Drawn at the size it has there: that size changed there.
-    if (tab.phoneSize && (keepsTheirs() || paused.has(tab.id))) drawAtTheirSize(tab);
+    if (tab.phoneSize && (keepsTheirs(tab) || paused.has(tab.id))) drawAtTheirSize(tab);
     const icon = t.icon || v.icon, prompts = !!t.prompts;
     if (icon === v.icon && prompts === !!v.prompts) continue;
     Object.assign(v, { icon, prompts });
@@ -250,8 +250,15 @@ const REDRAWN_MS = 250;
 /** The paused screen over a terminal. */
 const PAUSED_CLASS = 'pc-paused';
 
-/** Settings › Remote keeps the other computer's size for its terminals here. */
-const keepsTheirs = () => state.settings.phone?.pcSize === SETTING_VALUES.pcSize.keep;
+/** Its terminals here whose Fit here was clicked: they give this pane's size, whatever Settings › Remote says. */
+/** @type {Set<string>} */
+const fittedHere = new Set();
+
+/**
+ * Its terminal here keeps the other computer's size: Settings › Remote says so, and its Fit here wasn't clicked.
+ * @param {Tab} tab
+ */
+const keepsTheirs = tab => state.settings.phone?.pcSize === SETTING_VALUES.pcSize.keep && !fittedHere.has(tab.id);
 
 /**
  * The size its terminal here gives the one there: this one's, while it fits this computer, isn't paused and is on
@@ -260,7 +267,7 @@ const keepsTheirs = () => state.settings.phone?.pcSize === SETTING_VALUES.pcSize
  */
 function sizeToGive(tab) {
   const term = tab.view?.term;
-  const gives = !!term && !keepsTheirs() && !paused.has(tab.id) && onScreen(tab) && !document.hidden;
+  const gives = !!term && !keepsTheirs(tab) && !paused.has(tab.id) && onScreen(tab) && !document.hidden;
   return gives && term ? { cols: term.cols, rows: term.rows } : { cols: 0, rows: 0 };
 }
 
@@ -272,8 +279,8 @@ function sizeToGive(tab) {
 function settleSize(tab) {
   const v = tab.virtual;
   if (v?.kind !== PC_KIND || !tab.view?.term) return;
-  if (keepsTheirs() && paused.has(tab.id)) resume(tab); // it never gives its size: nothing to resume
-  if (keepsTheirs() || paused.has(tab.id)) drawAtTheirSize(tab);
+  if (keepsTheirs(tab) && paused.has(tab.id)) resume(tab); // it never gives its size: nothing to resume
+  if (keepsTheirs(tab) || paused.has(tab.id)) drawAtTheirSize(tab);
   else if (tab.phoneSize) showAtSize(tab, null);
   const size = sizeToGive(tab), key = `${size.cols} x ${size.rows}`;
   if (told.get(tab.id) === key) return;
@@ -289,11 +296,23 @@ function drawAtTheirSize(tab) {
   const t = pc ? stateOf(pc).terminals.find(x => x.id === v?.pane) : null;
   if (!pc || !t?.cols || !t.rows) return;
   // A phone (or another computer) has it there: drawn here as it's drawn there, in its phone, with who has it.
-  const who = t.sizedBy ?? { label: '', computer: true }; // its own size there: nothing to say
-  if (tab.phoneSize?.cols === t.cols && tab.phoneSize.rows === t.rows && tab.sizedBy?.label === who.label) return;
-  showAtSize(tab, { cols: t.cols, rows: t.rows }, { ...who, takeBack: false }); // taken back there, not here
+  const who = t.sizedBy ?? { label: '', computer: true }; // its own size there: nothing to say, unless it's shrunk
+  // Its own size there, not paused: Fit here, shown while that size is drawn shrunk here.
+  const offers = !who.label && !paused.has(tab.id);
+  if (tab.phoneSize?.cols === t.cols && tab.phoneSize.rows === t.rows && tab.sizedBy?.label === who.label && !!tab.fitHere === offers) return;
+  const fitHere = offers ? { text: `Drawn at ${pc.name}’s size`, run: () => fitHereNow(tab) } : undefined;
+  showAtSize(tab, { cols: t.cols, rows: t.rows }, { ...who, takeBack: false, fitHere }); // taken back there, not here
   // What it printed for that size came before it was drawn at it here: what it shows, again, once drawn.
   setTimeout(() => send(PAGE.pcRefresh, { tab: tab.id }), REDRAWN_MS);
+}
+
+/**
+ * Fit here: its terminal there takes this pane's size from now on, as with Fit local window, until it closes here.
+ * @param {Tab} tab
+ */
+function fitHereNow(tab) {
+  fittedHere.add(tab.id);
+  settleSize(tab);
 }
 
 /**
@@ -402,7 +421,7 @@ function closedHere() {
   const left = new Set();
   for (const [id, wsId] of [...watching].filter(([id]) => !state.tabs.has(id))) {
     watching.delete(id);
-    for (const kept of [paused, told]) kept.delete(id);
+    for (const kept of [paused, told, fittedHere]) kept.delete(id);
     left.add(wsId);
     send(PAGE.pcUnwatch, { tab: id });
   }

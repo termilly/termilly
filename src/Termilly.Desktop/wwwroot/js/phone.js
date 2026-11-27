@@ -174,6 +174,8 @@ onHost(HOST.phoneSize, m => {
 
 /** The label in a terminal's corner (or under its phone): who has it open, whose size it has, and Take back. */
 const WHO_CLASS = 'size-who';
+/** The label offering Fit here: shown only while the terminal is drawn shrunk (app.css). */
+const FIT_OFFER_CLASS = 'fit-offer';
 
 /**
  * The label: who gives the terminal its size (with Take back when it's another computer), else who has it open.
@@ -183,11 +185,19 @@ function drawWho(tab) {
   const body = tab.view?.body;
   if (!body) return;
   body.querySelector(`:scope > .${WHO_CLASS}`)?.remove();
-  const text = tab.phoneSize ? tab.sizedBy?.label : tab.viewers?.length ? `Open remotely on ${tab.viewers.join(', ')}` : '';
+  const offer = tab.phoneSize ? tab.fitHere : null;
+  const text = offer ? offer.text : tab.phoneSize ? tab.sizedBy?.label : tab.viewers?.length ? `Open remotely on ${tab.viewers.join(', ')}` : '';
   if (!text && !tab.takeBack) return;
   const label = document.createElement('div');
-  label.className = WHO_CLASS;
+  label.className = offer ? `${WHO_CLASS} ${FIT_OFFER_CLASS}` : WHO_CLASS;
   label.textContent = text ?? '';
+  if (offer) {
+    const button = document.createElement('button');
+    button.textContent = 'Fit here';
+    button.title = 'The remote terminal takes this pane’s size';
+    button.addEventListener('click', offer.run);
+    label.append(button);
+  }
   if (tab.takeBack) {
     const button = document.createElement('button');
     button.textContent = 'Take back';
@@ -208,10 +218,11 @@ onHost(HOST.phoneViewers, m => {
 
 /**
  * Draws a terminal at a size not its pane's (a phone's or another computer's), fitted into its pane with a label under
- * it (and Take back, which gives the terminal its own size again); no size gives it its pane's size again.
+ * it (and Take back, which gives the terminal its own size again); no size gives it its pane's size again. A remote
+ * terminal drawn at its computer's size offers Fit here while that size shows shrunk (fitHere).
  * @param {Tab} tab
  * @param {{ cols: number, rows: number } | null} size
- * @param {{ label: string, computer: boolean, takeBack?: boolean }} [who]
+ * @param {{ label: string, computer: boolean, takeBack?: boolean, fitHere?: FitHere }} [who]
  */
 export function showAtSize(tab, size, who) {
   const view = tab.view;
@@ -223,7 +234,9 @@ export function showAtSize(tab, size, who) {
   // Who it is, for the other computers showing this terminal: they draw it as it's drawn here (js/remotepc.js).
   tab.sizedBy = tab.phoneSize ? { label: who?.label ?? '', computer: !!who?.computer } : null;
   tab.takeBack = !!tab.phoneSize && !!who?.takeBack;
+  tab.fitHere = (tab.phoneSize && who?.fitHere) || null;
   view.body.classList.toggle('phone-sized', !!tab.phoneSize);
+  if (!tab.phoneSize) view.body.classList.remove(SHRUNK);
   view.body.classList.toggle(BY_COMPUTER, !!tab.phoneSize && !!who?.computer);
   drawWho(tab);
   if (tab.phoneSize) {
@@ -249,6 +262,15 @@ const BY_COMPUTER = 'by-computer';
 const TERM_SCREEN = '.xterm-screen';
 /** The smallest font a phone's terminal gets here: it shows what the phone shows, smaller than one would type in. */
 const PHONE_MIN_FONT = 4;
+/**
+ * The smallest font another computer's size gets here: still readable. A terminal that is wider there than this pane
+ * is drawn at it and the pane scrolls, rather than shrinking to dots.
+ */
+const COMPUTER_MIN_FONT = 9;
+/** How much smaller the font gets each time it still doesn't fit (cells round up at small sizes). */
+const FONT_STEP = 0.5;
+/** The pane's class while its terminal is drawn smaller than Settings' font, or doesn't fit even so. */
+const SHRUNK = 'shrunk';
 /** @type {WeakMap<Element, Tab>} */
 const phoneTabs = new WeakMap();
 const resized = new ResizeObserver(entries => {
@@ -281,14 +303,44 @@ function fitPhone(tab) {
     requestAnimationFrame(() => fitPhone(tab)); // measured at Settings' font, once drawn
     return;
   }
+  const scale = Math.min(1, ...overSize(tab, screen));
+  if (scale < 1) term.options.fontSize = Math.max(minFontOf(tab), Math.floor(full * scale / FONT_STEP) * FONT_STEP);
+  requestAnimationFrame(() => fitSmaller(tab)); // at the new font, once drawn
+}
+
+/** The smallest font its size gets here: a phone's shows all of it, another computer's stays readable. @param {Tab} tab */
+const minFontOf = tab => (tab.view?.body.classList.contains(BY_COMPUTER) ? COMPUTER_MIN_FONT : PHONE_MIN_FONT);
+
+/**
+ * How its terminal's drawn screen compares with the room in its pane, across and down: under 1 where it's too big.
+ * @param {Tab} tab
+ * @param {Element} screen
+ * @returns {[number, number]}
+ */
+function overSize(tab, screen) {
+  const view = /** @type {TabView} */ (tab.view), term = view.term;
   const inner = screen.getBoundingClientRect(), frame = phoneFrame(term.element);
   const room = view.body.classList.contains(BY_COMPUTER) ? NO_ROOM : PHONE_ROOM;
   const tall = inner.height * tallestOf(tab) / term.rows;
-  const scale = Math.min(1,
-    (view.body.clientWidth - room.width - frame.width) / inner.width,
-    (view.body.clientHeight - room.height - frame.height) / tall);
-  if (scale < 1) term.options.fontSize = Math.max(PHONE_MIN_FONT, Math.floor(full * scale * 2) / 2);
-  requestAnimationFrame(() => holdHeight(tab)); // at the new font, once drawn
+  return [(view.body.clientWidth - room.width - frame.width) / inner.width, (view.body.clientHeight - room.height - frame.height) / tall];
+}
+
+/**
+ * Smaller again while it still doesn't fit at its new font (its cells round up at small sizes, so it can come out a
+ * little wider than the scale said), down to its smallest; then whether it's drawn shrunk, for Fit here.
+ * @param {Tab} tab
+ */
+function fitSmaller(tab) {
+  const view = tab.view, term = view?.term, screen = term?.element?.querySelector(TERM_SCREEN);
+  if (!tab.phoneSize || !view || !term || !screen) return;
+  const fits = Math.min(...overSize(tab, screen)) >= 1;
+  if (!fits && term.options.fontSize - FONT_STEP >= minFontOf(tab)) {
+    term.options.fontSize -= FONT_STEP;
+    requestAnimationFrame(() => fitSmaller(tab));
+    return;
+  }
+  view.body.classList.toggle(SHRUNK, !fits || term.options.fontSize < state.settings.terminal.fontSize);
+  holdHeight(tab);
 }
 
 /** @param {Tab} tab */

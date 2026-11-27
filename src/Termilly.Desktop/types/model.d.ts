@@ -160,6 +160,12 @@ interface TabView {
  * shell is doing. A feature's state is a group of its own, made and written by that feature's module alone (others
  * read it, or call the module); a group is missing until the module first needs it.
  */
+/** A remote terminal's offer to take this pane's size (js/phone.js drawWho): its label's text and what Fit here does. */
+interface FitHere {
+  text: string;
+  run: () => void;
+}
+
 interface Tab {
   id: string;
   /** The workspace it's in. */
@@ -290,6 +296,8 @@ interface Tab {
   sizedBy?: { label: string, computer: boolean } | null;
   /** That size is another computer's: Take back shows (js/phone.js). */
   takeBack?: boolean;
+  /** A remote terminal drawn at its computer's size: what its label says while shrunk, and Fit here (js/remotepc.js). */
+  fitHere?: FitHere | null;
   /** Who has it open: the paired phones' and computers' names (js/phone.js). */
   viewers?: string[];
   /** Its agent's session (Claude Code, Codex: kind) is resuming after a restart, until it runs (js/resuming.js). */
