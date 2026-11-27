@@ -52,9 +52,11 @@ const ACTION = Object.freeze({ text: 'text', reveal: 'reveal', close: 'close', p
  */
 
 /**
- * The player's state: the read-only terminal, the events with their play times, and where playing has got to.
+ * The player's state: the read-only terminal, the events with their play times, where playing has got to, and the
+ * size the recording starts at (seeking back draws from there).
  * @typedef {{ term: any, events: CastEvent[], path: string | null, rewind: boolean, speed: number, playing: boolean,
- *   skipIdle: boolean, at: number, index: number, last: number, frame: number, times: number[], duration: number }} Player
+ *   skipIdle: boolean, at: number, index: number, last: number, frame: number, times: number[], duration: number,
+ *   cols: number, rows: number }} Player
  */
 
 /**
@@ -258,7 +260,8 @@ const clock = s => `${Math.floor(s / MINUTE_S)}:${String(Math.floor(s % MINUTE_S
 function play(cast, { name, path = null, rewind = false } = {}) {
   closePlayer();
   const { header, events } = cast;
-  const term = new Terminal({ cols: header.width || DEFAULT_COLS, rows: header.height || DEFAULT_ROWS, disableStdin: true, cursorBlink: false,
+  const cols = header.width || DEFAULT_COLS, rows = header.height || DEFAULT_ROWS;
+  const term = new Terminal({ cols, rows, disableStdin: true, cursorBlink: false,
     scrollback: PLAYER_SCROLLBACK,
     fontFamily: getComputedStyle(document.documentElement).getPropertyValue(TERM_FONT_VAR) || 'Consolas, monospace',
     fontSize: state.settings.terminal.fontSize, theme: { background: PLAYER_BACKGROUND, black: PLAYER_BACKGROUND }, allowProposedApi: true });
@@ -266,7 +269,7 @@ function play(cast, { name, path = null, rewind = false } = {}) {
   term.open($(SCREEN));
   // Its play times and duration come next, from retime().
   player = /** @type {Player} */ ({
-    term, events, path, rewind, speed: 1, playing: true, skipIdle: true, at: 0, index: 0, last: performance.now(), frame: 0,
+    term, events, path, rewind, speed: 1, playing: true, skipIdle: true, at: 0, index: 0, last: performance.now(), frame: 0, cols, rows,
   });
   $('.rp-name').textContent = header.title || name || 'Recording';
   $('.rp-sub').textContent = rewind ? 'rewind' : name ?? '';
@@ -301,7 +304,13 @@ function advance() {
   while (p.index < p.events.length && p.times[p.index] <= p.at) {
     const [, kind, data] = p.events[p.index];
     if (kind === 'o') chunk += data;
-    else if (kind === 'r' && /^\d+x\d+$/.test(data)) { if (chunk) { p.term.write(consoleDefaults(chunk)); chunk = ''; } const [c, r] = data.split('x').map(Number); p.term.resize(c, r); }
+    else if (kind === 'r' && /^\d+x\d+$/.test(data)) {
+      const [c, r] = data.split('x').map(Number);
+      // xterm parses what's written later, but resizes at once: the resize waits behind the output before it, which
+      // was printed at the old size.
+      p.term.write(chunk ? consoleDefaults(chunk) : '', () => p.term.resize(c, r));
+      chunk = '';
+    }
     p.index++;
   }
   if (chunk) p.term.write(consoleDefaults(chunk));
@@ -329,6 +338,7 @@ function seek(seconds) {
   const p = /** @type {Player} */ (player);
   p.at = Math.max(0, Math.min(p.duration, seconds));
   p.term.reset();
+  p.term.resize(p.cols, p.rows); // the size it was recorded at to start with: a later resize comes again as it plays
   p.index = 0;
   advance();
   syncBar();
