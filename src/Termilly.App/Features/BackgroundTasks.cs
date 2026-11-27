@@ -293,10 +293,11 @@ internal sealed class BackgroundTasks : IMessageHandler, IDisposable
             if (_terminals.Pids().TryGetValue(pane, out var pid))
             {
                 var started = task.Started;
-                // An older task still running the same command: an older process running it is that one's.
-                var olderIsAnothers = _tasks[pane].Any(t => t != task && t.Ended is null && t.Command == task.Command && t.Started < started);
+                // The nearest older task still running the same command: a process started nearer it is that one's.
+                var olderTaskStarted = _tasks[pane].Where(t => t != task && t.Ended is null && t.Command == task.Command && t.Started < started)
+                    .Select(t => (DateTimeOffset?)t.Started).Max();
                 stop = task.Reading?.Path is { } file ? () => _processes.Stop(pid, file)
-                    : task.Agent == AgentKinds.Codex && task.Command is { } command ? () => _processes.StopCommand(pid, command, started, olderIsAnothers)
+                    : task.Agent == AgentKinds.Codex && task.Command is { } command ? () => _processes.StopCommand(pid, command, started, olderTaskStarted)
                     : null;
             }
             var asked = _clock.GetUtcNow();

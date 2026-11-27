@@ -39,11 +39,11 @@ internal interface ITaskProcesses
     /// Ends the task that runs <paramref name="command"/> (Codex's: it has no output file), under an agent in the
     /// terminal, started nearest <paramref name="started"/>: false when none is found.
     /// </summary>
-    /// <param name="olderIsAnothers">
-    /// Another task (an older row) runs the same command: an older process running it is that task's, never taken
-    /// for this one.
+    /// <param name="olderTaskStarted">
+    /// When another, older task (a row still running) started the same command: a process started nearer that time is
+    /// that task's, never taken for this one, however close together the two started.
     /// </param>
-    bool StopCommand(int terminalPid, string command, DateTimeOffset started, bool olderIsAnothers = false);
+    bool StopCommand(int terminalPid, string command, DateTimeOffset started, DateTimeOffset? olderTaskStarted = null);
 }
 
 /// <summary>
@@ -253,7 +253,7 @@ internal sealed class TaskProcesses : ITaskProcesses
         return KillChecked(tree.Topmost(holders), () => FileHolders.Of(outputFile, tree.Below.Keys).ToHashSet());
     }
 
-    public bool StopCommand(int terminalPid, string command, DateTimeOffset started, bool olderIsAnothers = false)
+    public bool StopCommand(int terminalPid, string command, DateTimeOffset started, DateTimeOffset? olderTaskStarted = null)
     {
         // The hook's command may have been cut short ("…" at its end): its start is what's looked for.
         var cut = command.TrimEnd().EndsWith('…');
@@ -269,6 +269,12 @@ internal sealed class TaskProcesses : ITaskProcesses
         // started since the task first, then one bash ran in its shell's place (an older shell with the same text is
         // another task's), and an older one only when there's nothing else.
         var running = tree.Topmost(Running());
+        if (olderTaskStarted is { } older)
+        {
+            // Each process is the task's it started nearest: one nearer the older task is that one's (this task's own
+            // may have just ended, its row not yet updated).
+            running = [.. running.Where(pid => StartOffset(pid, started) < StartOffset(pid, older))];
+        }
         var recent = running.Where(pid => StartedSince(pid, started)).ToList();
         if (recent.Count > 0)
         {
@@ -278,9 +284,7 @@ internal sealed class TaskProcesses : ITaskProcesses
         {
             return true;
         }
-        // An older one only when no other task claims it: the task's own process may just have ended (its row not yet
-        // updated), and an older row running the same command is still that row's.
-        return !olderIsAnothers && Closest(running, started) is { } older && KillChecked([older], Running);
+        return Closest(running, started) is { } earlier && KillChecked([earlier], Running);
     }
 
     /// <summary>

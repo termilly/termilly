@@ -196,26 +196,32 @@ public sealed class TaskProcessesTests
         }
     }
 
-    [Fact]
-    public void Stop_on_a_task_that_ended_leaves_an_older_task_with_the_same_command_running()
+    [Theory]
+    [InlineData(1000)] // within the slack Stop allows a task's start
+    [InlineData(3000)]
+    public void Stop_on_a_task_that_ended_leaves_an_older_task_with_the_same_command_running(int apartMs)
     {
         // The agent ran the same command twice; the newer one ended by itself, but its row still shows it running for a
         // moment, and Stop is clicked there. The older one is another row's task: it keeps running.
         var command = OperatingSystem.IsWindows() ? "ping -n 64 127.0.0.1" : "sleep 64; echo done";
         using var olderTask = Running(command);
-        Thread.Sleep(3000); // past the slack Stop allows a task's start (StartSlack)
+        var olderStarted = new DateTimeOffset(olderTask.StartTime);
+        Thread.Sleep(apartMs);
         var ended = DateTimeOffset.Now; // when the newer task started; its process is gone already
         try
         {
             using var self = System.Diagnostics.Process.GetCurrentProcess();
             var processes = new TaskProcesses([self.ProcessName]);
-            Assert.False(processes.StopCommand(Environment.ProcessId, command, ended, olderIsAnothers: true));
+            Assert.False(processes.StopCommand(Environment.ProcessId, command, ended, olderTaskStarted: olderStarted));
             Assert.False(olderTask.HasExited);
         }
         finally
         {
-            olderTask.Kill(entireProcessTree: true);
-            olderTask.WaitForExit(5000);
+            if (!olderTask.HasExited) // Stop took it: the assertion above says so, not an error here
+            {
+                olderTask.Kill(entireProcessTree: true);
+                olderTask.WaitForExit(5000);
+            }
         }
     }
 

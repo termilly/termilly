@@ -65,12 +65,12 @@ public sealed class BackgroundTasksTests : IDisposable
         /// <summary>What the next Stops answer, one each, before <see cref="Finds"/> answers the rest.</summary>
         public ConcurrentQueue<Func<bool>> Answers { get; } = [];
         public int Stops { get; private set; }
-        /// <summary>What each StopCommand was told: whether an older process running its command is another task's.</summary>
-        public List<bool> OlderIsAnothers { get; } = [];
+        /// <summary>What each StopCommand was told: when an older task running its command started, if one does.</summary>
+        public List<DateTimeOffset?> OlderTaskStarted { get; } = [];
         public bool Stop(int terminalPid, string outputFile) => Stopped();
-        public bool StopCommand(int terminalPid, string command, DateTimeOffset started, bool olderIsAnothers = false)
+        public bool StopCommand(int terminalPid, string command, DateTimeOffset started, DateTimeOffset? olderTaskStarted = null)
         {
-            OlderIsAnothers.Add(olderIsAnothers);
+            OlderTaskStarted.Add(olderTaskStarted);
             return Stopped();
         }
         private bool Stopped()
@@ -404,6 +404,7 @@ public sealed class BackgroundTasksTests : IDisposable
     {
         const string Newer = "exec-newer";
         _terminals.Started(Pane, new FakeShell(), 42);
+        var olderStarted = _clock.Now;
         _tasks.OnEvent(CodexEvent("PreToolUse"));
         _tasks.OnEvent(CodexEvent("Stop"));
         _clock.Now += TimeSpan.FromMinutes(1);
@@ -412,7 +413,7 @@ public sealed class BackgroundTasksTests : IDisposable
 
         await _tasks.Stop(Pane, Newer);
         await _tasks.Stop(Pane, CodexId);
-        Assert.Equal([true, false], _processes.OlderIsAnothers);
+        Assert.Equal([olderStarted, null], _processes.OlderTaskStarted);
     }
 
     [Fact]
