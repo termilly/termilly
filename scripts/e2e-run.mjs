@@ -10,7 +10,8 @@
 //       E2E_REPORTS  where report pages go (default tests/e2e/runs, ignored by git)
 // Exit: 0 all passed or nothing to run, 1 a test failed, 2 the run itself failed (build, connection).
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync, copyFileSync, mkdtempSync, rmSync, renameSync, rmdirSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync, copyFileSync, mkdtempSync, rmSync, renameSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -36,6 +37,8 @@ const RUNS = 'runs.json';
 const PAGE_LOCK = '.runs.lock';
 const PAGE_LOCK_TRIES = 600;
 const PAGE_LOCK_WAIT_MS = 100;
+/** The random part of a run's id, in bytes. */
+const RUN_ID_BYTES = 4;
 /** How long a run waits on the test machine for the one before it, in seconds: past this something is stuck. */
 const MACHINE_WAIT_S = 4 * 60 * 60;
 const EXIT = Object.freeze({ passed: 0, failed: 1, broken: 2 });
@@ -66,21 +69,29 @@ function baseCommit(head) {
   return last && isAncestor(last, head) ? last : git('rev-parse', `${head}~1`);
 }
 
+/** How often a run waiting on the test machine tries the lock again, in seconds. */
+const LOCK_RETRY_S = 5;
+
 /**
- * The lock on the test machine: a folder (macOS has no flock) holding the owner's process id. A lock whose owner is
- * gone (killed, the machine restarted) is taken over; a run waits for a live one at most MACHINE_WAIT_S.
+ * The lock on the test machine: an OS file lock (flock, through perl: Linux and macOS both have it, macOS no flock
+ * command), held by a small process of its own that lives exactly as long as the run's shell. However the run ends
+ * (killed, the connection dropped), the lock goes with it, and nothing the run starts holds it on. A run waits for the
+ * one before it at most MACHINE_WAIT_S.
  */
-const LOCK_SCRIPT = `L=~/e2e-runs/lock.d; waited=0
-until mkdir "$L" 2>/dev/null; do
-  owner=$(cat "$L/pid" 2>/dev/null || true)
-  if [ -n "$owner" ] && ! kill -0 "$owner" 2>/dev/null && [ "$(cat "$L/pid" 2>/dev/null)" = "$owner" ]; then
-    echo "Taking over the lock of run $owner, which is gone." >&2; mv "$L" "$L.stale.$$" && rm -rf "$L.stale.$$" || true; continue
-  fi
-  [ ! -d "$L" ] || [ "$waited" -lt ${MACHINE_WAIT_S} ] || { echo "Waited ${MACHINE_WAIT_S} s for the run before (process $owner)." >&2; exit 5; }
-  sleep 5; waited=$((waited + 5))
-done
-echo $$ > "$L/pid"
-trap 'rm -rf "$L"' EXIT`;
+const LOCK_SCRIPT = `ready=~/e2e-runs/lock.ready.$$; rm -f "$ready"
+perl -MFcntl=:flock -e '
+  my ($file, $ready, $owner, $tries, $every) = @ARGV;
+  open(my $lock, ">>", $file) or die "lock: $!";
+  my $got = 0;
+  for (1 .. $tries) { if (flock($lock, LOCK_EX | LOCK_NB)) { $got = 1; last } sleep $every }
+  open(my $say, ">", $ready) or die "lock: $!"; print $say ($got ? "ok" : "waited"); close $say;
+  exit 1 unless $got;
+  sleep 2 while kill(0, $owner);
+' ~/e2e-runs/lock "$ready" $$ ${Math.ceil(MACHINE_WAIT_S / LOCK_RETRY_S)} ${LOCK_RETRY_S} < /dev/null > /dev/null 2>&1 &
+holder=$!
+until [ -s "$ready" ]; do kill -0 "$holder" 2>/dev/null || { echo "The lock could not be taken (perl failed)." >&2; exit 5; }; sleep 1; done
+got=$(cat "$ready"); rm -f "$ready"
+[ "$got" = ok ] || { echo "Waited ${MACHINE_WAIT_S} s for the run before." >&2; exit 5; }`;
 
 /**
  * The script the test machine runs: its copy at the commit, built, then each test file with its results kept. Each
@@ -112,7 +123,7 @@ fi
 dotnet build src/Termilly.Linux -v q -nologo > ../build.log 2>&1 || { tail -30 ../build.log >&2; exit 3; }
 rm -rf "$OUT"
 mkdir -p "$OUT"
-for f in ${files.map(f => `'${f}'`).join(' ')}; do
+for f in ${files.map(shellQuoted).join(' ')}; do
   n=$(basename "$f" .e2e.mjs); rm -rf tests/e2e/out
   code=0
   node --test --test-concurrency=1 --test-reporter=junit --test-reporter-destination="$OUT/$n.xml" --test-reporter=spec --test-reporter-destination="$OUT/$n.log" "$f" || code=$?
@@ -120,6 +131,9 @@ for f in ${files.map(f => `'${f}'`).join(' ')}; do
   if [ -d tests/e2e/out ]; then cp -r tests/e2e/out "$OUT/$n.artifacts"; fi
 done`;
 }
+
+/** A word the shell reads as it is, apostrophes and all. @param {string} text */
+const shellQuoted = text => `'${text.replaceAll("'", String.raw`'\''`)}'`;
 
 /** Every file under a folder, its path from there. @param {string} dir @returns {string[]} */
 const filesUnder = dir => (existsSync(dir) ? readdirSync(dir, { recursive: true, withFileTypes: true })
@@ -153,22 +167,51 @@ function writeWhole(file, text) {
   renameSync(part, file);
 }
 
+/** Whether a process on this computer still runs. @param {number} pid */
+function alive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return /** @type {NodeJS.ErrnoException} */ (error).code === 'EPERM'; // there, but not ours to signal
+  }
+}
+
+/**
+ * Takes the runs page's lock: a file only one run can create, holding its process id. One left by a run that's gone
+ * (killed while it wrote) is taken over. @param {string} lock @returns {boolean} whether it's this run's now
+ */
+function takePageLock(lock) {
+  try {
+    writeFileSync(lock, String(process.pid), { flag: 'wx' });
+    return true;
+  } catch (error) {
+    if (/** @type {NodeJS.ErrnoException} */ (error).code !== 'EEXIST') throw error;
+  }
+  const owner = Number.parseInt(existsSync(lock) ? readFileSync(lock, 'utf8') : '', 10);
+  const still = () => existsSync(lock) && Number.parseInt(readFileSync(lock, 'utf8'), 10) === owner;
+  if (Number.isInteger(owner) && !alive(owner) && still()) {
+    // Renamed away first: of two runs taking it over, only one's rename finds it.
+    const stale = `${lock}.${process.pid}.stale`;
+    try {
+      renameSync(lock, stale);
+      rmSync(stale, { force: true });
+    } catch { /* another run took it over first */ }
+  }
+  return false;
+}
+
 /** Runs a change to the runs page while no other run makes one. @param {() => void} change */
 function withPageLock(change) {
   const lock = path.join(reports, PAGE_LOCK);
-  for (let tries = 0; ; tries++) {
-    try {
-      mkdirSync(lock);
-      break;
-    } catch (error) {
-      if (/** @type {NodeJS.ErrnoException} */ (error).code !== 'EEXIST' || tries >= PAGE_LOCK_TRIES) throw error;
-      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, PAGE_LOCK_WAIT_MS);
-    }
+  for (let tries = 0; !takePageLock(lock); tries++) {
+    if (tries >= PAGE_LOCK_TRIES) throw new Error(`The runs page stayed locked (${lock}).`);
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, PAGE_LOCK_WAIT_MS);
   }
   try {
     change();
   } finally {
-    rmdirSync(lock);
+    rmSync(lock, { force: true });
   }
 }
 
@@ -234,7 +277,8 @@ function main() {
   }
   console.log(`Running ${files.length} test file(s) on ${host}: ${files.map(f => path.posix.basename(f, '.e2e.mjs')).join(', ')}`);
   const started = Date.now();
-  const runId = `run-${new Date().toISOString().replace(/[-:]/g, '').slice(0, 15)}-${head.slice(0, 8)}-${process.pid}`;
+  // A random part too: callers on two computers can share a process id, a commit and a second.
+  const runId = `run-${new Date().toISOString().replace(/[-:]/g, '').slice(0, 15)}-${head.slice(0, 8)}-${randomBytes(RUN_ID_BYTES).toString('hex')}`;
   let back;
   try {
     back = runThere({ head, files, release, runId });

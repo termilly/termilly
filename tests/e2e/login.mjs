@@ -3,7 +3,7 @@
 // an expired login by trading its refresh token for a new pair, and the old refresh token stops working: a test that
 // refreshed its copy has the only login that still works, so it goes back to the machine, unless the machine's own is
 // newer by then (Claude Code there refreshed it too).
-import { copyFile, readFile, rename } from 'node:fs/promises';
+import { copyFile, readFile, rename, rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
@@ -37,5 +37,10 @@ export async function takeLoginBack(testHome) {
   if (!isNewer(test, machine)) return;
   const part = `${own}.${process.pid}.part`;
   await copyFile(lent, part);
+  // Looked at again just before: Claude Code on the machine may have refreshed its own while this one was copied.
+  if (!isNewer(test, await readFile(own, 'utf8'))) {
+    await rm(part, { force: true });
+    return;
+  }
   await rename(part, own); // whole or not at all: Claude Code on the machine never reads half a login
 }
