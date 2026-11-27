@@ -54,6 +54,19 @@ internal sealed class RemotePcStore(Vault vault)
     }
 }
 
+/// <summary>Opens a live connection to a paired computer: the network, behind an interface so tests stand in for it.</summary>
+internal interface IPcConnector
+{
+    Task<WebSocket> ConnectAsync(RemotePc pc, CancellationToken cancel);
+}
+
+/// <summary>The real connection, over the computer's phone server (<see cref="PcConnection.ConnectAsync"/>).</summary>
+internal sealed class PcConnector : IPcConnector
+{
+    public async Task<WebSocket> ConnectAsync(RemotePc pc, CancellationToken cancel) =>
+        await PcConnection.ConnectAsync(pc, cancel).ConfigureAwait(false);
+}
+
 /// <summary>
 /// Reaching another Termilly over its phone server (Phone/PhoneServer.cs): pairing with the code its Settings › Remote
 /// shows, and its live connection. Its certificate is checked against its own authority only, fetched at pairing (the

@@ -13,7 +13,8 @@ namespace Termilly.Desktop.Features;
 /// what it shows, then what it prints, and typing and its size going back. The other computer decides what's allowed
 /// (Settings › Phone › Allow typing there).
 /// </summary>
-internal sealed class RemotePcsHandler(PageChannel page, RemotePcStore store, Phone.PhoneStore phones, RemotePcFiles ask) : IMessageHandler, IStartable, IDisposable
+internal sealed class RemotePcsHandler(PageChannel page, RemotePcStore store, Phone.PhoneStore phones, RemotePcFiles ask, IPcConnector connector)
+    : IMessageHandler, IStartable, IDisposable
 {
     private static readonly TimeSpan RetryAfter = TimeSpan.FromSeconds(10);
     /// <summary>How long a computer gets to answer what's asked of it.</summary>
@@ -61,10 +62,25 @@ internal sealed class RemotePcsHandler(PageChannel page, RemotePcStore store, Ph
     }
 
     /// <summary>A terminal here watching one there.</summary>
-    private sealed record Watch(string Pc, string Pane, ClientWebSocket Socket, SemaphoreSlim Gate, CancellationTokenSource Stop);
+    private sealed record Watch(string Pc, string Pane, WebSocket Socket, SemaphoreSlim Gate, CancellationTokenSource Stop);
 
     private readonly ConcurrentDictionary<string, Live> _live = new();
     private readonly ConcurrentDictionary<string, Watch> _watches = new();
+
+    /// <summary>
+    /// A terminal here whose connection there is still being made: closing it cancels that, and the last size it gave
+    /// meanwhile is the one the watch starts at (a size sent before the watch exists had nowhere to go).
+    /// </summary>
+    private sealed class Connecting(CancellationTokenSource stop, int cols, int rows)
+    {
+        public CancellationTokenSource Stop { get; } = stop;
+        public int Cols { get; set; } = cols;
+        public int Rows { get; set; } = rows;
+    }
+
+    /// <summary>Connections being made, by terminal here; with <see cref="_watches"/> changed only under <see cref="_watchLock"/>.</summary>
+    private readonly Dictionary<string, Connecting> _connecting = [];
+    private readonly Lock _watchLock = new();
     private readonly CancellationTokenSource _stop = new();
     private int _disposed;
 
@@ -79,7 +95,21 @@ internal sealed class RemotePcsHandler(PageChannel page, RemotePcStore store, Ph
         router.On<FromPage.PcManage>(ManageAsync);
         router.On<FromPage.PcPrompts>(PromptsAsync);
         router.On<FromPage.PcRefresh>(m => SendTo(m.Tab, new JsonObject { [Fields.Op] = Kinds.Refresh }));
-        router.On<FromPage.PcSize>(m => SendTo(m.Tab, new JsonObject { [Fields.Op] = Kinds.Size, [Fields.Cols] = m.Cols, [Fields.Rows] = m.Rows }));
+        router.On<FromPage.PcSize>(Resize);
+    }
+
+    /// <summary>A terminal here gives its size: to the one there, or kept for its watch while it connects.</summary>
+    private void Resize(FromPage.PcSize m)
+    {
+        lock (_watchLock)
+        {
+            if (_connecting.TryGetValue(m.Tab, out var connecting))
+            {
+                (connecting.Cols, connecting.Rows) = (m.Cols, m.Rows);
+                return;
+            }
+        }
+        SendTo(m.Tab, new JsonObject { [Fields.Op] = Kinds.Size, [Fields.Cols] = m.Cols, [Fields.Rows] = m.Rows });
     }
 
     public void Start()
@@ -274,18 +304,83 @@ internal sealed class RemotePcsHandler(PageChannel page, RemotePcStore store, Ph
             return;
         }
         var stop = CancellationTokenSource.CreateLinkedTokenSource(_stop.Token);
+        var connecting = new Connecting(stop, m.Cols, m.Rows);
+        lock (_watchLock)
+        {
+            _connecting[m.Tab] = connecting;
+        }
+        WebSocket socket;
         try
         {
-            var socket = await PcConnection.ConnectAsync(pc, stop.Token).ConfigureAwait(false);
-            var watch = new Watch(pc.Id, m.Pane, socket, new SemaphoreSlim(1, 1), stop);
-            _watches[m.Tab] = watch;
-            await PcConnection.SendAsync(socket, watch.Gate, new JsonObject { [Fields.Op] = Kinds.Watch, [Fields.Pane] = m.Pane, [Fields.Cols] = m.Cols, [Fields.Rows] = m.Rows }, stop.Token).ConfigureAwait(false);
-            _ = Task.Run(() => ReadWatchAsync(m.Tab, pc, watch));
+            socket = await connector.ConnectAsync(pc, stop.Token).ConfigureAwait(false);
         }
         catch (Exception e) when (e is WebSocketException or IOException or OperationCanceledException or System.Security.Authentication.AuthenticationException)
         {
+            if (Forget(m.Tab, connecting))
+            {
+                page.Post(new ToPage.PcLost(m.Tab, $"{pc.Name} can’t be reached now."));
+            }
             stop.Dispose();
-            page.Post(new ToPage.PcLost(m.Tab, $"{pc.Name} can’t be reached now."));
+            return;
+        }
+        if (Started(m.Tab, pc, m.Pane, socket, connecting) is { } watch)
+        {
+            await StartWatchingAsync(m.Tab, pc, watch, connecting).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// The watch of a connection just made, now that the terminal here can be told apart from one closed meanwhile:
+    /// null (the connection ended) when it was closed or opened again while connecting.
+    /// </summary>
+    private Watch? Started(string tab, RemotePc pc, string pane, WebSocket socket, Connecting connecting)
+    {
+        lock (_watchLock)
+        {
+            if (_connecting.GetValueOrDefault(tab) == connecting && !connecting.Stop.IsCancellationRequested)
+            {
+                _connecting.Remove(tab);
+                var watch = new Watch(pc.Id, pane, socket, new SemaphoreSlim(1, 1), connecting.Stop);
+                _watches[tab] = watch;
+                return watch;
+            }
+        }
+        socket.Abort();
+        socket.Dispose();
+        connecting.Stop.Dispose();
+        return null;
+    }
+
+    /// <summary>Asks the computer there to show the terminal, at the size given last, and reads what it sends.</summary>
+    private async Task StartWatchingAsync(string tab, RemotePc pc, Watch watch, Connecting connecting)
+    {
+        try
+        {
+            var ask = new JsonObject { [Fields.Op] = Kinds.Watch, [Fields.Pane] = watch.Pane, [Fields.Cols] = connecting.Cols, [Fields.Rows] = connecting.Rows };
+            await PcConnection.SendAsync(watch.Socket, watch.Gate, ask, watch.Stop.Token).ConfigureAwait(false);
+            _ = Task.Run(() => ReadWatchAsync(tab, pc, watch));
+        }
+        catch (Exception e) when (e is WebSocketException or IOException or OperationCanceledException or ObjectDisposedException)
+        {
+            if (_watches.TryGetValue(tab, out var still) && still == watch)
+            {
+                page.Post(new ToPage.PcLost(tab, $"{pc.Name} can’t be reached now."));
+                Unwatch(tab);
+            }
+        }
+    }
+
+    /// <summary>Drops a connection being made: true when it was still this terminal's (not closed meanwhile).</summary>
+    private bool Forget(string tab, Connecting connecting)
+    {
+        lock (_watchLock)
+        {
+            if (_connecting.GetValueOrDefault(tab) != connecting)
+            {
+                return false;
+            }
+            _connecting.Remove(tab);
+            return !connecting.Stop.IsCancellationRequested;
         }
     }
 
@@ -324,9 +419,22 @@ internal sealed class RemotePcsHandler(PageChannel page, RemotePcStore store, Ph
         }
     }
 
+    /// <summary>
+    /// A terminal here closes (or opens again): its watch there ends, and a connection still being made for it is
+    /// cancelled, so it doesn't start a watch for a terminal that's gone.
+    /// </summary>
     private void Unwatch(string tab)
     {
-        if (_watches.TryRemove(tab, out var watch))
+        Watch? watch;
+        lock (_watchLock)
+        {
+            if (_connecting.Remove(tab, out var connecting))
+            {
+                connecting.Stop.Cancel();
+            }
+            _watches.TryRemove(tab, out watch);
+        }
+        if (watch is not null)
         {
             watch.Stop.Cancel();
             watch.Socket.Abort();

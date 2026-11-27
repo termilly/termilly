@@ -56,6 +56,7 @@ internal static class Composition
         .AddSingleton<ClipStore>()
         .AddSingleton<PhoneClips>()
         .AddSingleton<RemotePcStore>()
+        .AddSingleton<IPcConnector, PcConnector>()
         .AddSingleton<ScheduleReports>()
         .AddSingleton(_ => new ScheduleRunner(PseudoTerminal.Start))
         .AddSingleton<PromptHistory>()
