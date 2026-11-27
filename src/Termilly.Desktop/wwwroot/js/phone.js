@@ -301,7 +301,8 @@ function phoneFrame(element) {
  */
 function fitPhone(tab) {
   const view = tab.view, term = view?.term, screen = term?.element?.querySelector(TERM_SCREEN);
-  if (!view || !term?.element || !screen) return;
+  // Given its own size back since this was queued (Take back): its font and fit are its pane's again.
+  if (!tab.phoneSize || !view || !term?.element || !screen) return;
   const full = state.settings.terminal.fontSize;
   if (term.options.fontSize !== full) {
     term.options.fontSize = full;
