@@ -67,11 +67,12 @@ function picked(base, head) {
  * @param {string} ref the commit's ref there
  */
 function remoteScript(files, realAgents, ref) {
-  // Linux and macOS alike: a lock folder (macOS has no flock), and .NET where it's installed for the user.
+  // Linux and macOS alike: a lock folder (macOS has no flock), and .NET where it's installed for the user. ~/.dotnet
+  // alone isn't an install: the .NET CLI keeps its first-run marks there wherever .NET is installed.
   return `set -e
 export PATH="$HOME/.dotnet:$HOME/.local/node/bin:$HOME/.local/bin:$PATH"
 export E2E_REAL_AGENTS=${realAgents ? 1 : 0}
-[ -d "$HOME/.dotnet" ] && export DOTNET_ROOT="$HOME/.dotnet"
+if [ -x "$HOME/.dotnet/dotnet" ]; then export DOTNET_ROOT="$HOME/.dotnet"; fi
 mkdir -p ~/e2e-runs
 until mkdir ~/e2e-runs/lock.d 2>/dev/null; do sleep 5; done
 trap 'rmdir ~/e2e-runs/lock.d' EXIT
