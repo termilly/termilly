@@ -95,6 +95,15 @@ review. When the code and this page disagree, the code is usually right and this
 - What a user sees is tested as they see it: a size, a place, a text still in its box, not only the data behind it.
 - Each test is the same on Windows, Linux and macOS.
 - A flaky test is fixed, or set aside with an issue. It is never left failing.
+- Each end-to-end test file says what it covers on a `// Covers:` line (page modules `js/…`, stylesheets `css/…`, host
+  files `src/…`, or `always`). `node scripts/e2e-pick.mjs <base>` lists the tests a change needs: a module counts for
+  every covered one that uses it, and what no test claims runs them all.
+- `node scripts/e2e-run.mjs` runs those tests on the test machine (`E2E_HOST`, a git remote and ssh name), in a copy of
+  its own, and writes a report page with each failure's error, screenshot and app log (`--all`: every test;
+  `--release`: every test, with the real agents, before each release). `node scripts/e2e-hook.mjs install` makes it run
+  after each commit by itself.
+- Screen checks (`t.box`, `t.visible`, `t.clipped`, `t.reachable`, `t.fontSize`) test what a user sees. Remote
+  terminals are tested with two apps paired on one machine (`tests/e2e/remote-terminals.e2e.mjs`).
 
 ## The checks
 
