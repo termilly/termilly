@@ -28,6 +28,54 @@ const CAST = [
   JSON.stringify([0.5, 'o', '\r\nend']),
 ].join('\n');
 
+/**
+ * A word, then a colour change split across two events, as a terminal's output often is. Seeking into the middle of
+ * the colour change leaves it half read; seeking back to the start must not let that half eat the word's first letter.
+ */
+const SPLIT = [
+  JSON.stringify({ version: 2, width: 20, height: 5, title: 'split test' }),
+  JSON.stringify([0, 'o', 'hello\r\n']),
+  JSON.stringify([1, 'o', '\u001b[31']),
+  JSON.stringify([2, 'o', 'mred\r\nend']),
+].join('\n');
+
+/** Plays a recording file in the player, as opening one from Recordings does. @param {string} name @param {string} text */
+async function playFile(name, text) {
+  const file = path.join(app.dataDir, name);
+  await writeFile(file, text);
+  await app.eval(async (t, file) => {
+    const { send } = await t.import('host.js');
+    const { PAGE } = await t.import('protocol.js');
+    send(PAGE.recLoad, { path: file });
+  }, file);
+}
+
+/** Moves the player's seek bar, as dragging it does. @param {number} value 0 to 1000 */
+const seekTo = value => app.eval((t, value) => {
+  const seek = /** @type {HTMLInputElement} */ (t.$('.rp-seek'));
+  seek.value = String(value);
+  seek.dispatchEvent(new Event('input', { bubbles: true }));
+}, value);
+
+/** The player's screen rows, as text. */
+const screenText = () => app.eval(t => t.$('.rp-screen .xterm-rows')?.textContent ?? '');
+
+test('seeking into the middle of a colour change and back to the start still shows the whole word', async () => {
+  try {
+    await playFile('split.cast', SPLIT);
+    await until(async () => /end/.test(await screenText()), 'the recording played to its end');
+    await seekTo(750); // between the two halves of the colour change
+    await new Promise(r => setTimeout(r, 300));
+    await seekTo(100); // only the word
+    await new Promise(r => setTimeout(r, 300));
+    assert.match(await screenText(), /hello/, 'the whole word, not its tail');
+  } catch (e) {
+    failed = true;
+    await app?.screenshot('replay-split').catch(() => null);
+    throw e;
+  }
+});
+
 /** The column (from 1) of the X on the player's first row, as the screen shows it. */
 const columnOfX = () => app.eval(t => {
   const row = t.$('.rp-screen .xterm-rows > div');

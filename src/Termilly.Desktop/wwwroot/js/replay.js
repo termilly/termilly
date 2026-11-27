@@ -35,6 +35,8 @@ const PLAYER_SCROLLBACK = 2000;
 const PLAYER_BACKGROUND = '#0a0a0a';
 /** The steps of the timeline's slider. */
 const SEEK_STEPS = 1000;
+/** CAN: ends an escape sequence left half read, and xterm's parser starts over. */
+const CANCEL_SEQUENCE = '\x18';
 /** The player's parts. */
 const SCREEN = '.rp-screen';
 const SEEK = '.rp-seek';
@@ -311,7 +313,7 @@ function advance() {
       const [c, r] = data.split('x').map(Number);
       // xterm parses what's written later, but resizes at once: the resize waits behind the output before it, which
       // was printed at the old size.
-      p.term.write(chunk ? consoleDefaults(chunk) : '', () => { if (p.seeks === seeks) p.term.resize(c, r); });
+      p.term.write(chunk ? consoleDefaults(chunk) : '', () => { if (player === p && p.seeks === seeks) p.term.resize(c, r); }); // not once closed, or after a seek
       chunk = '';
     }
     p.index++;
@@ -336,7 +338,8 @@ function tick() {
 /**
  * Jumps to a time: the screen is rebuilt from the start. What was written before and isn't drawn yet is drawn first
  * and then cleared away (xterm draws in order), and a resize written before is dropped, so the rebuilt screen has only
- * what's played from the start, at the size the recording starts at.
+ * what's played from the start, at the size the recording starts at. CAN first: an escape sequence left half read (a
+ * seek into the middle of one) would otherwise take the rebuilt screen's first letters as its end (reset leaves it).
  * @param {number} seconds
  */
 function seek(seconds) {
@@ -344,7 +347,7 @@ function seek(seconds) {
   p.at = Math.max(0, Math.min(p.duration, seconds));
   const seeks = ++p.seeks;
   p.seeking = true;
-  p.term.write('', () => {
+  p.term.write(CANCEL_SEQUENCE, () => {
     if (player !== p || p.seeks !== seeks) return; // closed, or another seek since
     p.term.reset();
     p.term.resize(p.cols, p.rows);
