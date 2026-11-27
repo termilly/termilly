@@ -53,10 +53,11 @@ const ACTION = Object.freeze({ text: 'text', reveal: 'reveal', close: 'close', p
 
 /**
  * The player's state: the read-only terminal, the events with their play times, where playing has got to, and the
- * size the recording starts at (seeking back draws from there).
+ * size the recording starts at (seeking back draws from there). seeks counts the seeks, so a resize written before
+ * one is dropped; seeking is true until the screen has been cleared for it.
  * @typedef {{ term: any, events: CastEvent[], path: string | null, rewind: boolean, speed: number, playing: boolean,
  *   skipIdle: boolean, at: number, index: number, last: number, frame: number, times: number[], duration: number,
- *   cols: number, rows: number }} Player
+ *   cols: number, rows: number, seeks: number, seeking: boolean }} Player
  */
 
 /**
@@ -269,7 +270,7 @@ function play(cast, { name, path = null, rewind = false } = {}) {
   term.open($(SCREEN));
   // Its play times and duration come next, from retime().
   player = /** @type {Player} */ ({
-    term, events, path, rewind, speed: 1, playing: true, skipIdle: true, at: 0, index: 0, last: performance.now(), frame: 0, cols, rows,
+    term, events, path, rewind, speed: 1, playing: true, skipIdle: true, at: 0, index: 0, last: performance.now(), frame: 0, cols, rows, seeks: 0, seeking: false,
   });
   $('.rp-name').textContent = header.title || name || 'Recording';
   $('.rp-sub').textContent = rewind ? 'rewind' : name ?? '';
@@ -300,6 +301,8 @@ function syncBar() {
 /** Writes the events up to the current time. */
 function advance() {
   const p = /** @type {Player} */ (player);
+  if (p.seeking) return; // the screen is cleared for a seek first
+  const seeks = p.seeks;
   let chunk = '';
   while (p.index < p.events.length && p.times[p.index] <= p.at) {
     const [, kind, data] = p.events[p.index];
@@ -308,7 +311,7 @@ function advance() {
       const [c, r] = data.split('x').map(Number);
       // xterm parses what's written later, but resizes at once: the resize waits behind the output before it, which
       // was printed at the old size.
-      p.term.write(chunk ? consoleDefaults(chunk) : '', () => p.term.resize(c, r));
+      p.term.write(chunk ? consoleDefaults(chunk) : '', () => { if (p.seeks === seeks) p.term.resize(c, r); });
       chunk = '';
     }
     p.index++;
@@ -331,16 +334,25 @@ function tick() {
 }
 
 /**
- * Jumps to a time: the screen is rebuilt from the start, at once.
+ * Jumps to a time: the screen is rebuilt from the start. What was written before and isn't drawn yet is drawn first
+ * and then cleared away (xterm draws in order), and a resize written before is dropped, so the rebuilt screen has only
+ * what's played from the start, at the size the recording starts at.
  * @param {number} seconds
  */
 function seek(seconds) {
   const p = /** @type {Player} */ (player);
   p.at = Math.max(0, Math.min(p.duration, seconds));
-  p.term.reset();
-  p.term.resize(p.cols, p.rows); // the size it was recorded at to start with: a later resize comes again as it plays
-  p.index = 0;
-  advance();
+  const seeks = ++p.seeks;
+  p.seeking = true;
+  p.term.write('', () => {
+    if (player !== p || p.seeks !== seeks) return; // closed, or another seek since
+    p.term.reset();
+    p.term.resize(p.cols, p.rows);
+    p.index = 0;
+    p.seeking = false;
+    advance();
+    syncBar();
+  });
   syncBar();
 }
 
