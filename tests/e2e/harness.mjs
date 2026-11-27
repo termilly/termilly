@@ -1,9 +1,10 @@
 // @ts-check
-import { spawn } from 'node:child_process';
+import { spawn, execFileSync } from 'node:child_process';
 import { createServer } from 'node:net';
 import { randomBytes } from 'node:crypto';
 import { mkdtemp, mkdir, writeFile, readFile, rm, chmod, access } from 'node:fs/promises';
-import { tmpdir, homedir, constants } from 'node:os';
+import { readdirSync, readFileSync } from 'node:fs';
+import { tmpdir, homedir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { run, until, terminate } from './process.mjs';
@@ -13,32 +14,57 @@ const fakes = path.join(root, 'tests/e2e/fakes');
 const out = path.join(root, 'tests/e2e/out');
 
 /**
- * Everything this test file started. They run detached (a process group of their own), so a test file ended early (a
- * timeout, Ctrl+C, a cancelled run) left its app and display running for days: each is ended with it now.
+ * Everything this test file started, and the data folders of its apps. They run detached (a process group of their
+ * own), and the background host in a session of its own, so a test file ended early (a timeout, Ctrl+C, a cancelled
+ * run) left its app, display and host running for days. They're ended with it now: on Linux every process that has
+ * one of its apps' data folders in its environment (the app, its display, the host and its shells all inherit it).
  */
 const started = new Set();
+const dataDirs = new Set();
 
 /** @param {import('node:child_process').ChildProcess} child */
 function track(child) {
   started.add(child);
   child.once('exit', () => started.delete(child));
+  child.once('error', () => started.delete(child)); // never started: nothing to end
   return child;
+}
+
+/** Runs one end: a process that ended meanwhile is fine. @param {() => void} end */
+function ending(end) {
+  try { end(); } catch (error) { if (/** @type {NodeJS.ErrnoException} */ (error).code !== 'ESRCH') throw error; }
+}
+
+/** The processes with one of these data folders in their environment (Linux's /proc). @param {Set<string>} dirs */
+function processesWith(dirs) {
+  const marks = [...dirs].map(dir => `TERMILLY_DATA_DIR=${dir}`);
+  return readdirSync('/proc').filter(name => /^\d+$/.test(name)).map(Number).filter(pid => {
+    if (pid === process.pid) return false;
+    try {
+      return readFileSync(`/proc/${pid}/environ`, 'utf8').split('\0').some(entry => marks.includes(entry));
+    } catch (error) {
+      if (['ENOENT', 'EACCES', 'ESRCH'].includes(/** @type {NodeJS.ErrnoException} */ (error).code ?? '')) return false; // gone, or not ours
+      throw error;
+    }
+  });
 }
 
 function endStarted() {
   for (const child of started) {
-    try {
-      if (process.platform === 'win32') child.kill('SIGKILL');
-      else process.kill(-(/** @type {number} */ (child.pid)), 'SIGKILL');
-    } catch (error) { if (/** @type {NodeJS.ErrnoException} */ (error).code !== 'ESRCH') throw error; }
+    if (!child.pid) continue;
+    const pid = child.pid;
+    if (process.platform === 'win32') ending(() => execFileSync('taskkill', ['/pid', String(pid), '/t', '/f'], { stdio: 'ignore' }));
+    else ending(() => process.kill(-pid, 'SIGKILL'));
   }
+  if (process.platform === 'linux' && dataDirs.size) for (const pid of processesWith(dataDirs)) ending(() => process.kill(pid, 'SIGKILL'));
 }
 
 process.once('exit', endStarted);
 for (const signal of /** @type {const} */ (['SIGINT', 'SIGTERM', 'SIGHUP'])) {
   process.once(signal, () => {
     endStarted();
-    process.exit(128 + constants.signals[signal]);
+    // Whoever else listens (the test runner) ends the process its own way; with nobody else, the signal does as usual.
+    if (process.listenerCount(signal) === 0) process.kill(process.pid, signal);
   });
 }
 
@@ -87,6 +113,7 @@ async function displayFor(env, logs) {
  */
 export async function startApp({ folder, gh = {}, agents = {}, env = {}, name = 'test', dataDir: reused } = {}) {
   const dataDir = reused ?? await mkdtemp(path.join(tmpdir(), 'termilly-e2e-'));
+  dataDirs.add(dataDir);
   const logs = [], xvfbLogs = [];
   const artifacts = path.join(out, `${name.replace(/[^a-zA-Z0-9_-]/g, '-')}-${path.basename(dataDir)}`);
   const scenario = path.join(dataDir, 'gh-scenario.json'), ghLog = path.join(dataDir, 'gh.jsonl');

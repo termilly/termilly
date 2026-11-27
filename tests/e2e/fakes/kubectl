@@ -1,3 +1,7 @@
 #!/bin/sh
-# No pods here: a test app sees only what its test sets up, not the test machine's cluster (DynamicSources.cs).
+# kubectl with no cluster: a test app sees only what its test sets up, not the test machine's pods (DynamicSources.cs).
+if [ "$1" = config ]; then
+  echo "error: current-context is not set" >&2
+  exit 1
+fi
 echo '{"items":[]}'
