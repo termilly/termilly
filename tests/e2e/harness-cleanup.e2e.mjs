@@ -1,5 +1,5 @@
-// The harness itself: a test process ended early (a timeout, Ctrl+C, a cancelled run) takes its app and its display
-// with it, rather than leaving them running on the test machine. Run with: npm run e2e (on Linux, under Xvfb).
+// The harness itself: a test app sees only what its test sets up, and a test process ended early (a timeout, Ctrl+C,
+// a cancelled run) takes its app and its display with it. Run with: npm run e2e (on Linux, under Xvfb).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, execFileSync } from 'node:child_process';
@@ -28,6 +28,22 @@ const childrenOf = pid => {
     return [];
   }
 };
+
+test("a test app sees none of the test machine's containers or pods", async () => {
+  const { startApp } = await import(harness);
+  const app = await startApp({ name: 'harness-isolation' });
+  let failed = true;
+  try {
+    // They're read in the background after start (DynamicSources.cs): long enough for docker and kubectl to answer.
+    await delay(3000);
+    const found = await app.eval(async t => {
+      const { state } = await t.import('store.js');
+      return state.profiles.filter(p => p.source === 'docker' || p.source === 'k8s').map(p => p.name);
+    });
+    assert.deepEqual(found, [], 'only what a test sets up');
+    failed = false;
+  } finally { await app.stop({ failed }); }
+});
 
 test('a test process ended early takes its app and its display with it', { skip: process.platform !== 'linux' }, async () => {
   const script = `import { startApp } from ${JSON.stringify(harness)};

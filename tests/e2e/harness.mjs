@@ -109,7 +109,7 @@ export async function startApp({ folder, gh = {}, agents = {}, env = {}, name = 
   try {
     await mkdir(home, { recursive: true });
     await Promise.all([writeFile(gitConfig, ''), writeFile(scenario, JSON.stringify(gh)), writeFile(agentScripts, JSON.stringify(agents))]);
-    if (process.platform !== 'win32') await Promise.all(['gh', 'claude', 'codex'].map(file => chmod(path.join(fakes, file), 0o755)));
+    if (process.platform !== 'win32') await Promise.all(['gh', 'claude', 'codex', 'docker', 'kubectl'].map(file => chmod(path.join(fakes, file), 0o755)));
     ({ display, child: xvfb } = await displayFor(appEnv, xvfbLogs));
     if (display) appEnv.DISPLAY = display;
     if (process.platform === 'linux') { appEnv.GDK_BACKEND = 'x11'; delete appEnv.WAYLAND_DISPLAY; }
