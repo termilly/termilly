@@ -41,7 +41,7 @@ internal sealed record AgentPlaces(IReadOnlyList<string> Folders, IReadOnlyList<
     private const string ScoopShims = @"scoop\shims";
     private const string BunBin = @".bun\bin";
 
-    [SupportedOSPlatform("windows")]
+    [SupportedOSPlatform(OsPlatforms.Windows)]
     private static AgentPlaces WindowsPlaces()
     {
         var profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
@@ -66,7 +66,7 @@ internal sealed record AgentPlaces(IReadOnlyList<string> Folders, IReadOnlyList<
             .Select(folder => Environment.ExpandEnvironmentVariables(folder.Trim('"')));
 
     /// <summary>The PATH saved under an environment key, unexpanded; null when it can't be read.</summary>
-    [SupportedOSPlatform("windows")]
+    [SupportedOSPlatform(OsPlatforms.Windows)]
     private static string? SavedPath(RegistryKey root, string key)
     {
         try
