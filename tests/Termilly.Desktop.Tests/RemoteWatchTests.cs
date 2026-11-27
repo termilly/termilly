@@ -52,7 +52,32 @@ public sealed class RemoteWatchTests : IDisposable
         var other = await _connector.LetThroughAsync();
 
         // The other computer is never asked to show the terminal, and the connection ends.
-        Assert.Null(await ReceiveOrEndAsync(other));
+        await AssertEndsAsync(other);
+    }
+
+    [Fact]
+    public async Task A_computer_forgotten_while_its_terminal_connects_is_never_asked_to_show_it()
+    {
+        Page(new { type = "pc:watch", id = Pc, tab = Tab, pane = "p1", cols = 0, rows = 0 });
+        await _connector.Asked.WaitAsync(Wait);
+        _handler.Forget(Pc);
+        var other = await _connector.LetThroughAsync();
+
+        await AssertEndsAsync(other);
+    }
+
+    /// <summary>The connection ends with no message sent on it: closed, not just quiet.</summary>
+    private static async Task AssertEndsAsync(WebSocket other)
+    {
+        using var wait = new CancellationTokenSource(Wait);
+        try
+        {
+            Assert.Null(await PcConnection.ReceiveAsync(other, wait.Token));
+        }
+        catch (Exception e) when (e is WebSocketException or IOException)
+        {
+            // Ended by an abort rather than a close: ended all the same.
+        }
     }
 
     [Fact]

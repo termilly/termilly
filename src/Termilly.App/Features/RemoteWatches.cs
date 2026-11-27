@@ -25,8 +25,9 @@ internal sealed class RemoteWatches(PageChannel page, RemotePcStore store, Remot
     /// A terminal here whose connection there is still being made: closing it cancels that, and the last size it gave
     /// meanwhile is the one the watch starts at (a size sent before the watch exists had nowhere to go).
     /// </summary>
-    private sealed class Connecting(CancellationTokenSource stop, int cols, int rows)
+    private sealed class Connecting(string pc, CancellationTokenSource stop, int cols, int rows)
     {
+        public string Pc { get; } = pc;
         public CancellationTokenSource Stop { get; } = stop;
         public int Cols { get; set; } = cols;
         public int Rows { get; set; } = rows;
@@ -49,10 +50,15 @@ internal sealed class RemoteWatches(PageChannel page, RemotePcStore store, Remot
         router.On<FromPage.PcSize>(Resize);
     }
 
-    /// <summary>A computer was forgotten: its terminals here stop watching.</summary>
+    /// <summary>A computer was forgotten: its terminals here stop watching, those still connecting included.</summary>
     public void Forget(string pcId)
     {
-        foreach (var (tab, _) in _watches.Where(w => w.Value.Pc == pcId))
+        List<string> tabs;
+        lock (_lock)
+        {
+            tabs = [.. _connecting.Where(c => c.Value.Pc == pcId).Select(c => c.Key), .. _watches.Where(w => w.Value.Pc == pcId).Select(w => w.Key)];
+        }
+        foreach (var tab in tabs)
         {
             Unwatch(tab);
         }
@@ -81,16 +87,14 @@ internal sealed class RemoteWatches(PageChannel page, RemotePcStore store, Remot
             page.Post(new ToPage.PcLost(m.Tab, "That computer isn’t paired any more."));
             return;
         }
-        var stop = CancellationTokenSource.CreateLinkedTokenSource(_stop.Token);
-        var connecting = new Connecting(stop, m.Cols, m.Rows);
-        lock (_lock)
+        if (Begin(m.Tab, pc.Id, m.Cols, m.Rows) is not { } connecting)
         {
-            _connecting[m.Tab] = connecting;
+            return; // quitting
         }
         WebSocket socket;
         try
         {
-            socket = await connector.ConnectAsync(pc, stop.Token).ConfigureAwait(false);
+            socket = await connector.ConnectAsync(pc, connecting.Stop.Token).ConfigureAwait(false);
         }
         catch (Exception e) when (e is WebSocketException or IOException or OperationCanceledException or System.Security.Authentication.AuthenticationException)
         {
@@ -98,53 +102,88 @@ internal sealed class RemoteWatches(PageChannel page, RemotePcStore store, Remot
             {
                 page.Post(new ToPage.PcLost(m.Tab, $"{pc.Name} can’t be reached now."));
             }
-            stop.Dispose();
+            connecting.Stop.Dispose();
             return;
         }
-        if (Started(m.Tab, pc, m.Pane, socket, connecting) is { } watch)
+        await StartWatchingAsync(m.Tab, pc, new Watch(pc.Id, m.Pane, socket, new SemaphoreSlim(1, 1), connecting.Stop), connecting).ConfigureAwait(false);
+    }
+
+    /// <summary>A connection being made for a terminal here, or null once quitting has begun (nothing starts then).</summary>
+    private Connecting? Begin(string tab, string pc, int cols, int rows)
+    {
+        lock (_lock)
         {
-            await StartWatchingAsync(m.Tab, pc, watch, connecting).ConfigureAwait(false);
+            if (_disposed != 0)
+            {
+                return null;
+            }
+            var connecting = new Connecting(pc, CancellationTokenSource.CreateLinkedTokenSource(_stop.Token), cols, rows);
+            _connecting[tab] = connecting;
+            return connecting;
         }
     }
 
     /// <summary>
-    /// The watch of a connection just made, now that the terminal here can be told apart from one closed meanwhile:
-    /// null (the connection ended) when it was closed or opened again while connecting.
+    /// Asks the computer there to show the terminal, at the size given last, then makes the watch the terminal's and
+    /// reads what it sends. The ask goes out before the watch is the terminal's, so a size given meanwhile waits for it
+    /// (the other computer ignores a size before its watch) and follows it. A terminal closed or opened again while
+    /// connecting gets nothing: its connection ends.
     /// </summary>
-    private Watch? Started(string tab, RemotePc pc, string pane, WebSocket socket, Connecting connecting)
-    {
-        lock (_lock)
-        {
-            if (_connecting.GetValueOrDefault(tab) == connecting && !connecting.Stop.IsCancellationRequested)
-            {
-                _connecting.Remove(tab);
-                var watch = new Watch(pc.Id, pane, socket, new SemaphoreSlim(1, 1), connecting.Stop);
-                _watches[tab] = watch;
-                return watch;
-            }
-        }
-        socket.Abort();
-        socket.Dispose();
-        connecting.Stop.Dispose();
-        return null;
-    }
-
-    /// <summary>Asks the computer there to show the terminal, at the size given last, and reads what it sends.</summary>
     private async Task StartWatchingAsync(string tab, RemotePc pc, Watch watch, Connecting connecting)
     {
+        (int Cols, int Rows)? asked;
+        lock (_lock)
+        {
+            asked = IsConnecting(tab, connecting) ? (connecting.Cols, connecting.Rows) : null;
+        }
         try
         {
-            var show = new JsonObject { [Fields.Op] = Kinds.Watch, [Fields.Pane] = watch.Pane, [Fields.Cols] = connecting.Cols, [Fields.Rows] = connecting.Rows };
-            await PcConnection.SendAsync(watch.Socket, watch.Gate, show, watch.Stop.Token).ConfigureAwait(false);
-            _ = Task.Run(() => ReadWatchAsync(tab, pc, watch));
+            if (asked is { } size)
+            {
+                var show = new JsonObject { [Fields.Op] = Kinds.Watch, [Fields.Pane] = watch.Pane, [Fields.Cols] = size.Cols, [Fields.Rows] = size.Rows };
+                await PcConnection.SendAsync(watch.Socket, watch.Gate, show, watch.Stop.Token).ConfigureAwait(false);
+            }
         }
         catch (Exception e) when (e is WebSocketException or IOException or OperationCanceledException or ObjectDisposedException)
         {
-            if (_watches.TryGetValue(tab, out var still) && still == watch)
+            if (Dropped(tab, connecting))
             {
                 page.Post(new ToPage.PcLost(tab, $"{pc.Name} can’t be reached now."));
-                Unwatch(tab);
             }
+            End(watch);
+            return;
+        }
+        if (asked is not { } sent || Published(tab, watch, connecting) is not { } latest)
+        {
+            End(watch);
+            return;
+        }
+        if (latest != sent)
+        {
+            SendTo(tab, new JsonObject { [Fields.Op] = Kinds.Size, [Fields.Cols] = latest.Cols, [Fields.Rows] = latest.Rows });
+        }
+        _ = Task.Run(() => ReadWatchAsync(tab, pc, watch));
+    }
+
+    /// <summary>Whether this connection is still the one being made for the terminal here. Under <see cref="_lock"/>.</summary>
+    private bool IsConnecting(string tab, Connecting connecting) =>
+        _connecting.GetValueOrDefault(tab) == connecting && !connecting.Stop.IsCancellationRequested;
+
+    /// <summary>
+    /// Makes the watch the terminal's, if its connection still is: then the size it gave last, else null (closed or
+    /// opened again meanwhile).
+    /// </summary>
+    private (int Cols, int Rows)? Published(string tab, Watch watch, Connecting connecting)
+    {
+        lock (_lock)
+        {
+            if (!IsConnecting(tab, connecting))
+            {
+                return null;
+            }
+            _connecting.Remove(tab);
+            _watches[tab] = watch;
+            return (connecting.Cols, connecting.Rows);
         }
     }
 
@@ -162,24 +201,18 @@ internal sealed class RemoteWatches(PageChannel page, RemotePcStore store, Remot
         }
     }
 
+    /// <summary>Whether this is still the terminal's watch: a reader of an older one posts nothing for it.</summary>
+    private bool IsCurrent(string tab, Watch watch) => _watches.TryGetValue(tab, out var still) && still == watch;
+
     private async Task ReadWatchAsync(string tab, RemotePc pc, Watch watch)
     {
         try
         {
             while (await PcConnection.ReceiveAsync(watch.Socket, watch.Stop.Token).ConfigureAwait(false) is { } message)
             {
-                var type = message[Fields.Type].AsText();
-                if ((type == Kinds.Screen || type == Kinds.Output) && message[Fields.Pane].AsText() == watch.Pane)
+                if (IsCurrent(tab, watch))
                 {
-                    page.Post(new ToPage.PcOutput(tab, message[Fields.Data].AsText() ?? "", type == Kinds.Screen));
-                }
-                else if (type == Phone.PhoneLive.Kinds.Released && message[Fields.Pane].AsText() == watch.Pane)
-                {
-                    page.Post(new ToPage.PcPaused(tab, message[Phone.PhoneLive.ByField].AsText()));
-                }
-                else if (type == Kinds.Answered && message[Fields.Ok].AsBool() == false)
-                {
-                    page.Post(new ToPage.PcRefused(tab, message[Fields.Error].AsText() ?? "That didn’t go through."));
+                    Show(tab, watch, message);
                 }
             }
         }
@@ -190,10 +223,28 @@ internal sealed class RemoteWatches(PageChannel page, RemotePcStore store, Remot
         {
             CrashLog.Caught(e); // a bug: written down; the terminal shows it's lost, as after any loss
         }
-        if (_watches.TryGetValue(tab, out var still) && still == watch)
+        if (Unwatch(tab, watch))
         {
             page.Post(new ToPage.PcLost(tab, $"Lost the connection to {pc.Name}."));
-            Unwatch(tab);
+        }
+    }
+
+    /// <summary>Shows here what the terminal there sent: its screen or output, a pause, or a refusal.</summary>
+    private void Show(string tab, Watch watch, JsonObject message)
+    {
+        var type = message[Fields.Type].AsText();
+        var mine = message[Fields.Pane].AsText() == watch.Pane;
+        if ((type == Kinds.Screen || type == Kinds.Output) && mine)
+        {
+            page.Post(new ToPage.PcOutput(tab, message[Fields.Data].AsText() ?? "", type == Kinds.Screen));
+        }
+        else if (type == Phone.PhoneLive.Kinds.Released && mine)
+        {
+            page.Post(new ToPage.PcPaused(tab, message[Phone.PhoneLive.ByField].AsText()));
+        }
+        else if (type == Kinds.Answered && message[Fields.Ok].AsBool() == false)
+        {
+            page.Post(new ToPage.PcRefused(tab, message[Fields.Error].AsText() ?? "That didn’t go through."));
         }
     }
 
@@ -214,11 +265,38 @@ internal sealed class RemoteWatches(PageChannel page, RemotePcStore store, Remot
         }
         if (watch is not null)
         {
-            watch.Stop.Cancel();
-            watch.Socket.Abort();
-            watch.Socket.Dispose();
-            watch.Stop.Dispose();
+            End(watch);
         }
+    }
+
+    /// <summary>Ends this watch if it's still the terminal's (not one that replaced it): true when it was.</summary>
+    private bool Unwatch(string tab, Watch watch)
+    {
+        lock (_lock)
+        {
+            if (!_watches.TryRemove(new KeyValuePair<string, Watch>(tab, watch)))
+            {
+                return false;
+            }
+        }
+        End(watch);
+        return true;
+    }
+
+    /// <summary>Closes a watch's connection.</summary>
+    private static void End(Watch watch)
+    {
+        try
+        {
+            watch.Stop.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+            // Ended already.
+        }
+        watch.Socket.Abort();
+        watch.Socket.Dispose();
+        watch.Stop.Dispose();
     }
 
     /// <summary>Prompt history for a terminal here that shows another computer's: that computer's list of its prompts.</summary>
