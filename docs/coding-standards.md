@@ -85,6 +85,17 @@ review. When the code and this page disagree, the code is usually right and this
 - Functions stay short: no function over 50 lines. Long markup goes in a function of its own, apart from what wires it
   up.
 
+## Tests
+
+- A bug fix starts with a test that fails on the bug, at the lowest layer that can show it: a unit test, an
+  end-to-end test (`tests/e2e`), or a check of what's on screen. The fix goes in once that test fails, and the test
+  stays.
+- Before changing code that has no tests, first add tests that pin down what it does today, so the change can't
+  alter it unnoticed.
+- What a user sees is tested as they see it: a size, a place, a text still in its box, not only the data behind it.
+- Each test is the same on Windows, Linux and macOS.
+- A flaky test is fixed, or set aside with an issue. It is never left failing.
+
 ## The checks
 
 - `dotnet test Termilly.slnx`: the build (analyzers and style included) and the tests, the setup program's too
