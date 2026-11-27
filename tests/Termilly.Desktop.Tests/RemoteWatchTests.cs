@@ -25,14 +25,14 @@ public sealed class RemoteWatchTests : IDisposable
 
     private readonly string _dir = Directory.CreateTempSubdirectory("termilly-remote-watch-").FullName;
     private readonly HeldConnector _connector = new();
-    private readonly RemotePcsHandler _handler;
+    private readonly RemoteWatches _handler;
     private readonly MessageRouter _router = new(PageChannel.Json);
 
     public RemoteWatchTests()
     {
         var store = new RemotePcStore(Vault.Open(_dir));
         store.Add(new RemotePc(Pc, "Laptop", "127.0.0.1", "token", ""));
-        _handler = new RemotePcsHandler(new PageChannel(new Sink()), store, null!, null!, _connector);
+        _handler = new RemoteWatches(new PageChannel(new Sink()), store, null!, _connector);
         _handler.Register(_router);
     }
 
