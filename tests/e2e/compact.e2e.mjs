@@ -216,6 +216,18 @@ test("the prompt box's text goes back into the terminal as the Full view comes o
   assert.equal((await events(app)).some(e => e.event === 'prompt'), false, 'nothing was sent');
 }, typedOptions));
 
+test('the next prompt typed right after an Enter still moves into the box when the Compact view comes on at once', () => scenario('compact-typed-after-enter', ['', '  >_ OpenAI Codex', ''], async app => {
+  await pickView(app, 'Full');
+  await inputLineShows(app, '› ');
+  await typeInTerminal(app, 'first', '› first');
+  await typeInTerminal(app, '\r', '› ');
+  await typeInTerminal(app, 'second draft', '› second draft');
+  await pickView(app, 'Compact'); // within the moment after Enter, while the screen may still show the sent prompt
+  await until(async () => await app.eval(t => t.$('.cv-input').value) === 'second draft', 'the box holds the second draft');
+  await inputLineShows(app, '› ');
+  assert.deepEqual((await events(app)).filter(e => e.event === 'prompt').map(e => e.text), ['first'], 'only the first was sent');
+}, { ...typedOptions, typed: '' }));
+
 const tall =['', '', `  ${question}`, '', ...Array.from({ length: 70 }, (_, i) => `  $ step ${i}`), ...choices, '  Press enter to confirm or esc to cancel'];
 
 /** Whether choice 3's button shows inside the feed. */

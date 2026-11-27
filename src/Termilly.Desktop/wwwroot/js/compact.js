@@ -100,8 +100,8 @@ const VIEW_HTML = `
  * @typedef {{ lines: CompactLine[], session: string | null, el: HTMLElement | null, frame: number, frameWin: Window | null, sending: Promise<void>, writes: { dispose(): void } | null,
  *   picked?: { menu: string, at: number }, ready?: boolean, drawer?: boolean, drawerFrame?: number, drawerWin?: Window,
  *   resizes?: { dispose(): void }, drawerRow?: number, drawerMenu?: boolean, started?: boolean, sendingNow?: number, sentAt?: number, asked?: number, askedBy?: object | null, waiting?: boolean,
- *   keys?: import('./compacttyped.js').TypedKeys, keysTerm?: object, suggestion?: string | null }} CompactState
- *   drawerMenu: whether a list of the agent's own opened the drawer; started: whether the agent has shown its input line since it started; sendingNow: how many prompts the prompt box is typing into the agent; asked: how many questions the agent has asked; askedBy: the report that asked the last one; keys: the keys typed into keysTerm since its last Enter; suggestion: the prompt the agent suggests, which the empty box shows
+ *   keys?: import('./compacttyped.js').TypedKeys, keysTerm?: object, suggestion?: string | null, takeLater?: number }} CompactState
+ *   drawerMenu: whether a list of the agent's own opened the drawer; started: whether the agent has shown its input line since it started; sendingNow: how many prompts the prompt box is typing into the agent; asked: how many questions the agent has asked; askedBy: the report that asked the last one; keys: the keys typed into keysTerm since its last Enter; suggestion: the prompt the agent suggests, which the empty box shows; takeLater: the timer that moves typed words into the box once an Enter has settled
  */
 
 /**
@@ -171,7 +171,11 @@ function takeTyped(tab) {
   const term = tab.view?.term;
   const c = compactOf(tab);
   // Not while the box types a prompt into the agent: that's in its input line until its Enter.
-  if (!term || c.sendingNow || !canTake(tab)) return;
+  if (!term || c.sendingNow) return;
+  if (!canTake(tab)) {
+    takeOnceSettled(tab);
+    return;
+  }
   // Read once what the terminal has been sent so far is drawn: a prompt just sent with Enter has left the line then.
   // The drawer stays shut from now, not only once the words are found: it would open on them meanwhile.
   c.sendingNow = (c.sendingNow ?? 0) + 1;
@@ -179,6 +183,21 @@ function takeTyped(tab) {
     if (moveTyped(tab, term)) doneWhenTaken(tab);
     else doneSending(tab);
   });
+}
+
+/**
+ * An Enter was just typed (the screen may still show the prompt it sent): the words typed since move into the box once
+ * that has settled, if the view still shows then. Without this they stayed in the terminal, behind an empty box.
+ * @param {Tab} tab
+ */
+function takeOnceSettled(tab) {
+  const c = compactOf(tab);
+  const left = ENTER_SETTLE_MS - (Date.now() - Math.max(c.keys?.enteredAt ?? 0, c.sentAt ?? 0));
+  if (left <= 0 || c.takeLater) return;
+  c.takeLater = window.setTimeout(() => {
+    c.takeLater = 0;
+    if (isCompact(tab)) takeTyped(tab);
+  }, left);
 }
 
 /**
