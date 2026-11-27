@@ -1,10 +1,10 @@
 // The harness itself: a test app sees only what its test sets up, and a test process ended early (a timeout, Ctrl+C,
-// a cancelled run) takes its app, display and background host with it. Run with: npm run e2e (on Linux, under Xvfb).
+// a cancelled run) takes its app, display and background host with it. Run with: npm run e2e (on Linux, under Xvfb; on macOS).
 // Covers: js/profiles*.js src/Termilly.App/DynamicSources.cs src/Termilly.App/Features/Profiles.cs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, execFileSync } from 'node:child_process';
-import { readdirSync, readFileSync } from 'node:fs';
+import { processesWith, findsByEnvironment } from './procs.mjs';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import path from 'node:path';
@@ -22,26 +22,11 @@ function alive(pid) {
   }
 }
 
-/** The processes with this data folder in their environment: everything a test app started. @param {string} dir */
-function withDataDir(dir) {
-  const mark = `TERMILLY_DATA_DIR=${dir}`;
-  return readdirSync('/proc').filter(name => /^\d+$/.test(name)).map(Number).filter(pid => {
-    try {
-      return readFileSync(`/proc/${pid}/environ`, 'utf8').split(String.fromCharCode(0)).includes(mark);
-    } catch {
-      return false; // gone, or not ours
-    }
-  });
-}
+/** Everything a test app started: the processes with its data folder in their environment. @param {string} dir */
+const withDataDir = dir => processesWith([`TERMILLY_DATA_DIR=${dir}`]);
 
-/** A process's program name. @param {number} pid */
-const programOf = pid => {
-  try {
-    return path.basename(readFileSync(`/proc/${pid}/cmdline`, 'utf8').split(String.fromCharCode(0))[0]);
-  } catch {
-    return '';
-  }
-};
+/** What a test app runs: its display (Xvfb, on Linux only), the app and the background host. */
+const EXPECTED = [...(process.platform === 'linux' ? ['Xvfb'] : []), 'termilly', 'termilly-host'];
 
 test("a test app sees none of the test machine's containers or pods", async () => {
   const { startApp } = await import(harness);
@@ -59,7 +44,7 @@ test("a test app sees none of the test machine's containers or pods", async () =
   } finally { await app.stop({ failed }); }
 });
 
-test('a test process ended early takes its app, display, background host and shells with it', { skip: process.platform !== 'linux' }, async () => {
+test('a test process ended early takes its app, display, background host and shells with it', { skip: !findsByEnvironment && 'its processes are found by their environment: Linux and macOS' }, async () => {
   // The host starts in a session of its own (setsid), out of the app's process group: it has to go too. A pipe of the
   // test's own keeps it apart from any host the machine runs.
   const script = `import { startApp } from ${JSON.stringify(harness)};
@@ -80,17 +65,17 @@ test('a test process ended early takes its app, display, background host and she
       child.stdout.on('data', data => { const ready = /ready (\S+)/.exec(String(data)); if (ready) resolve(ready[1]); });
       child.once('exit', code => reject(new Error(`the test process ended first (${code})`)));
     });
-    for (let waited = 0; waited < GONE_WITHIN_MS && !withDataDir(dataDir).map(programOf).includes('termilly-host'); waited += STEP_MS) await delay(STEP_MS);
+    for (let waited = 0; waited < GONE_WITHIN_MS && !withDataDir(dataDir).some(p => p.program === 'termilly-host'); waited += STEP_MS) await delay(STEP_MS);
     started = withDataDir(dataDir);
-    const programs = started.map(programOf);
-    assert.ok(['Xvfb', 'termilly', 'termilly-host'].every(p => programs.includes(p)), `display, app and host running (${programs.join(', ')})`);
+    const programs = started.map(p => p.program);
+    assert.ok(EXPECTED.every(p => programs.includes(p)), `display, app and host running (${programs.join(', ')})`);
 
     child.kill('SIGTERM');
-    for (let waited = 0; waited < GONE_WITHIN_MS && started.some(alive); waited += STEP_MS) await delay(STEP_MS);
-    assert.deepEqual(started.filter(alive).map(programOf), [], 'nothing it started is left running');
+    for (let waited = 0; waited < GONE_WITHIN_MS && started.some(p => alive(p.pid)); waited += STEP_MS) await delay(STEP_MS);
+    assert.deepEqual(started.filter(p => alive(p.pid)).map(p => p.program), [], 'nothing it started is left running');
   } finally {
     child.kill('SIGKILL');
-    for (const pid of started.filter(alive)) {
+    for (const { pid } of started.filter(p => alive(p.pid))) {
       try { process.kill(pid, 'SIGKILL'); } catch { /* gone already */ }
     }
   }

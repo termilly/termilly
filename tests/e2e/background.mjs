@@ -1,7 +1,6 @@
 // @ts-check
 // Shared by the background host's end-to-end tests.
-import { readdir, readFile } from 'node:fs/promises';
-import path from 'node:path';
+import { processesWith } from './procs.mjs';
 
 /** The virtual display the harness runs the app on (harness.mjs). */
 const DISPLAY_PROGRAM = 'Xvfb';
@@ -12,22 +11,8 @@ const DISPLAY_PROGRAM = 'Xvfb';
  * @returns {Promise<number[]>}
  */
 export async function processesOf(pipe) {
-  const found = [];
-  for (const id of (await readdir('/proc')).filter(name => /^\d+$/.test(name))) {
-    let environment, program;
-    try {
-      environment = await readFile(`/proc/${id}/environ`, 'utf8');
-      program = path.basename((await readFile(`/proc/${id}/cmdline`, 'utf8')).split('\0')[0]);
-    } catch (error) {
-      if (['ENOENT', 'EACCES', 'ESRCH'].includes(/** @type {any} */ (error).code)) continue; // gone, or not ours
-      throw error;
-    }
-    if (!environment.split('\0').includes(`TERMILLY_HOST_PIPE=${pipe}`)) continue;
-    // The harness's display gets the test's environment too, and stays till the harness ends it.
-    if (program === DISPLAY_PROGRAM) continue;
-    found.push(Number(id));
-  }
-  return found;
+  // The harness's display gets the test's environment too, and stays till the harness ends it.
+  return processesWith([`TERMILLY_HOST_PIPE=${pipe}`]).filter(p => p.program !== DISPLAY_PROGRAM).map(p => p.pid);
 }
 
 /**

@@ -3,12 +3,12 @@ import { spawn, execFileSync } from 'node:child_process';
 import { createServer } from 'node:net';
 import { randomBytes } from 'node:crypto';
 import { mkdtemp, mkdir, writeFile, readFile, rm, chmod, access, copyFile } from 'node:fs/promises';
-import { readdirSync, readFileSync } from 'node:fs';
 import { tmpdir, homedir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { run, until, terminate } from './process.mjs';
 import { lendLogin, takeLoginBack } from './login.mjs';
+import { processesWith } from './procs.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const fakes = path.join(root, 'tests/e2e/fakes');
@@ -18,7 +18,8 @@ const out = path.join(root, 'tests/e2e/out');
  * Everything this test file started, and the data folders of its apps. They run detached (a process group of their
  * own), and the background host in a session of its own, so a test file ended early (a timeout, Ctrl+C, a cancelled
  * run) left its app, display and host running for days. They're ended with it now: on Linux every process that has
- * one of its apps' data folders in its environment (the app, its display, the host and its shells all inherit it).
+ * one of its apps' data folders in its environment (the app, its display, the host and its shells all inherit it); on
+ * macOS the same, found with ps -E. An app's are ended when it stops, too.
  */
 const started = new Set();
 const dataDirs = new Set();
@@ -36,19 +37,6 @@ function ending(end) {
   try { end(); } catch (error) { if (/** @type {NodeJS.ErrnoException} */ (error).code !== 'ESRCH') throw error; }
 }
 
-/** The processes with one of these data folders in their environment (Linux's /proc). @param {Set<string>} dirs */
-function processesWith(dirs) {
-  const marks = [...dirs].map(dir => `TERMILLY_DATA_DIR=${dir}`);
-  return readdirSync('/proc').filter(name => /^\d+$/.test(name)).map(Number).filter(pid => {
-    if (pid === process.pid) return false;
-    try {
-      return readFileSync(`/proc/${pid}/environ`, 'utf8').split('\0').some(entry => marks.includes(entry));
-    } catch (error) {
-      if (['ENOENT', 'EACCES', 'ESRCH'].includes(/** @type {NodeJS.ErrnoException} */ (error).code ?? '')) return false; // gone, or not ours
-      throw error;
-    }
-  });
-}
 
 function endStarted() {
   for (const child of started) {
@@ -57,7 +45,12 @@ function endStarted() {
     if (process.platform === 'win32') ending(() => execFileSync('taskkill', ['/pid', String(pid), '/t', '/f'], { stdio: 'ignore' }));
     else ending(() => process.kill(-pid, 'SIGKILL'));
   }
-  if (process.platform === 'linux' && dataDirs.size) for (const pid of processesWith(dataDirs)) ending(() => process.kill(pid, 'SIGKILL'));
+  endLeftBehind(dataDirs);
+}
+
+/** Ends what an app left running on its data (its background host, shells): Linux and macOS, where they can be found. @param {Set<string>} dirs */
+function endLeftBehind(dirs) {
+  for (const { pid } of processesWith([...dirs].map(dir => `TERMILLY_DATA_DIR=${dir}`))) ending(() => process.kill(pid, 'SIGKILL'));
 }
 
 process.once('exit', endStarted);
@@ -197,6 +190,8 @@ export async function startApp({ folder, gh = {}, agents = {}, env = {}, name = 
           try { if (display) await this.screenshot('failure'); } catch (error) { logs.push(`Screenshot failed: ${error.message}\n`); }
         }
         await terminate(appProcess);
+        // Its background host and shells too, unless it starts again on this data: left, they'd keep the test running.
+        if (!keepData) endLeftBehind(new Set([dataDir]));
         await terminate(xvfb);
         if (realAgents) await takeLoginBack(home); // before its home can go: it may hold the only login that still works
         if (failed) await Promise.all([writeFile(path.join(artifacts, 'app.log'), logs.join('')),
