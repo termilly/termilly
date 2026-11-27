@@ -62,7 +62,7 @@ internal static class MacMenus
         var menu = Send(Send(Class(MenuClass), Cocoa.Alloc), "initWithTitle:", NsString(title));
         foreach (var item in items)
         {
-            AddOwned(menu, item is null ? Send(Send(Class(ItemClass), "separatorItem"), "retain") : NewItem(item));
+            AddOwned(menu, item is null ? Send(Send(Class(ItemClass), "separatorItem"), Cocoa.Retain) : NewItem(item));
         }
         var holder = NewItem(new Item(title, ""));
         Send(holder, "setSubmenu:", menu);
