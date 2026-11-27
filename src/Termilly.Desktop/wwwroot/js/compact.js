@@ -196,7 +196,7 @@ function takeOnceSettled(tab) {
   if (left <= 0 || c.takeLater) return;
   c.takeLater = window.setTimeout(() => {
     c.takeLater = 0;
-    if (isCompact(tab)) takeTyped(tab);
+    if (state.tabs.get(tab.id) === tab && isCompact(tab)) takeTyped(tab); // still open, its view still on
   }, left);
 }
 
@@ -1045,5 +1045,6 @@ on(EVENTS.tabClosed, tab => {
   tab.compact?.writes?.dispose();
   tab.compact?.resizes?.dispose();
   tab.compact?.keys?.dispose();
+  clearTimeout(tab.compact?.takeLater); // a closed terminal gets no words moved out of it
   if (tab.compact?.session) send(PAGE.compactWatch, { id: tab.id, session: null });
 });
