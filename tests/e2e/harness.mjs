@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process';
 import { createServer } from 'node:net';
 import { randomBytes } from 'node:crypto';
 import { mkdtemp, mkdir, writeFile, readFile, rm, chmod, access } from 'node:fs/promises';
-import { tmpdir, homedir } from 'node:os';
+import { tmpdir, homedir, constants } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { run, until, terminate } from './process.mjs';
@@ -11,6 +11,36 @@ import { run, until, terminate } from './process.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const fakes = path.join(root, 'tests/e2e/fakes');
 const out = path.join(root, 'tests/e2e/out');
+
+/**
+ * Everything this test file started. They run detached (a process group of their own), so a test file ended early (a
+ * timeout, Ctrl+C, a cancelled run) left its app and display running for days: each is ended with it now.
+ */
+const started = new Set();
+
+/** @param {import('node:child_process').ChildProcess} child */
+function track(child) {
+  started.add(child);
+  child.once('exit', () => started.delete(child));
+  return child;
+}
+
+function endStarted() {
+  for (const child of started) {
+    try {
+      if (process.platform === 'win32') child.kill('SIGKILL');
+      else process.kill(-(/** @type {number} */ (child.pid)), 'SIGKILL');
+    } catch (error) { if (/** @type {NodeJS.ErrnoException} */ (error).code !== 'ESRCH') throw error; }
+  }
+}
+
+process.once('exit', endStarted);
+for (const signal of /** @type {const} */ (['SIGINT', 'SIGTERM', 'SIGHUP'])) {
+  process.once(signal, () => {
+    endStarted();
+    process.exit(128 + constants.signals[signal]);
+  });
+}
 
 async function freePort() {
   const server = createServer();
@@ -21,7 +51,7 @@ async function freePort() {
 }
 
 function launch(command, args, env, logs) {
-  const child = spawn(command, args, { cwd: root, env, detached: process.platform !== 'win32', stdio: ['ignore', 'pipe', 'pipe'] });
+  const child = track(spawn(command, args, { cwd: root, env, detached: process.platform !== 'win32', stdio: ['ignore', 'pipe', 'pipe'] }));
   child.stdout.on('data', data => logs.push(String(data)));
   child.stderr.on('data', data => logs.push(String(data)));
   child.on('error', error => logs.push(error.stack));
@@ -34,10 +64,10 @@ async function displayFor(env, logs) {
   const binary = env.E2E_XVFB ?? path.join(homedir(), 'e2e-tools/root/usr/bin/Xvfb');
   const libs = env.E2E_XVFB_LIBS ?? path.join(homedir(), 'e2e-tools/root/usr/lib/x86_64-linux-gnu');
   // Xvfb chooses and reserves the display itself, avoiding collisions between concurrent test files.
-  const child = spawn(binary, ['-displayfd', '3', '-screen', '0', '1600x1000x24', '-nolisten', 'tcp'], {
+  const child = track(spawn(binary, ['-displayfd', '3', '-screen', '0', '1600x1000x24', '-nolisten', 'tcp'], {
     env: { ...env, LD_LIBRARY_PATH: [libs, env.LD_LIBRARY_PATH].filter(Boolean).join(path.delimiter) },
     detached: true, stdio: ['ignore', 'pipe', 'pipe', 'pipe'],
-  });
+  }));
   let number = '', error;
   child.stdio[3].on('data', data => { number += data; });
   child.stdout.on('data', data => logs.push(String(data)));
