@@ -51,11 +51,11 @@ public static class ControllingTerminal
         }
         if (!environment.Any(v => v.StartsWith(BashEnv, StringComparison.Ordinal)))
         {
-            return new Start([Bash, "-c", Exec, Name, program, .. argv.Skip(1)], environment);
+            return new Start([Bash, PosixShell.CommandOption, Exec, Name, program, .. argv.Skip(1)], environment);
         }
         // BASH_ENV held aside for bash's start, given back before the program's.
         var held = environment.Select(v => v.StartsWith(BashEnv, StringComparison.Ordinal) ? $"{HeldBashEnv}={v[BashEnv.Length..]}" : v).ToList();
-        return new Start([Bash, "-c", GiveBashEnvBack, Name, program, .. argv.Skip(1)], held);
+        return new Start([Bash, PosixShell.CommandOption, GiveBashEnvBack, Name, program, .. argv.Skip(1)], held);
     }
 
     /// <summary>The program's full path, found as posix_spawnp would; null when it isn't there or may not be run.</summary>

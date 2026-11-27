@@ -17,6 +17,8 @@ internal sealed class CursorTracker(int columns, int rows)
     private const char Bell = '\u0007';
     /// <summary>Where tabs stop: every 8 columns, as a terminal's start.</summary>
     private const int TabWidth = 8;
+    /// <summary>The shortest control sequence with parameters: ESC, "[" and its final character.</summary>
+    private const int ShortestControl = 3;
     /// <summary>The alternate screen's mode (CSI ? 1049 h and l), which saves and restores the cursor.</summary>
     private const string AlternateScreen = "?1049";
 
@@ -118,13 +120,28 @@ internal sealed class CursorTracker(int columns, int rows)
         return Wide(rune.Value) ? 2 : 1;
     }
 
-    /// <summary>East Asian wide and full-width characters, and emoji: two columns.</summary>
-    private static bool Wide(int c) =>
-        c is (>= 0x1100 and <= 0x115F) or (>= 0x2E80 and <= 0x303E) or (>= 0x3041 and <= 0x33FF) or (>= 0x3400 and <= 0x4DBF)
-            or (>= 0x4E00 and <= 0x9FFF) or (>= 0xA000 and <= 0xA4CF) or (>= 0xAC00 and <= 0xD7A3) or (>= 0xF900 and <= 0xFAFF)
-            or (>= 0xFE30 and <= 0xFE4F) or (>= 0xFF00 and <= 0xFF60) or (>= 0xFFE0 and <= 0xFFE6) or (>= 0x1F300 and <= 0x1F64F)
-            or (>= 0x1F680 and <= 0x1F6FF) or (>= 0x1FA70 and <= 0x1FAFF)
-            or (>= 0x1F900 and <= 0x1F9FF) or (>= 0x20000 and <= 0x3FFFD);
+    /// <summary>East Asian wide and full-width characters, and emoji, which take two columns: each range's first and last.</summary>
+    private static readonly (int First, int Last)[] WideRanges =
+    [
+        (0x1100, 0x115F), (0x2E80, 0x303E), (0x3041, 0x33FF), (0x3400, 0x4DBF),
+        (0x4E00, 0x9FFF), (0xA000, 0xA4CF), (0xAC00, 0xD7A3), (0xF900, 0xFAFF),
+        (0xFE30, 0xFE4F), (0xFF00, 0xFF60), (0xFFE0, 0xFFE6), (0x1F300, 0x1F64F),
+        (0x1F680, 0x1F6FF), (0x1FA70, 0x1FAFF),
+        (0x1F900, 0x1F9FF), (0x20000, 0x3FFFD),
+    ];
+
+    /// <summary>Whether the character takes two columns (<see cref="WideRanges"/>).</summary>
+    private static bool Wide(int c)
+    {
+        foreach (var (first, last) in WideRanges)
+        {
+            if (c >= first && c <= last)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
 
     /// <summary>Down, stopping at the scroll region's bottom when within it (the region scrolls instead).</summary>
     private void Down(int lines) => _row = Math.Min(_bottom > 0 && _row <= _bottom ? _bottom : rows, _row + lines);
@@ -178,7 +195,7 @@ internal sealed class CursorTracker(int columns, int rows)
                 Restore();
                 return;
         }
-        if (sequence.Length >= 3 && sequence[1] == '[')
+        if (sequence.Length >= ShortestControl && sequence[1] == '[')
         {
             Control(sequence[2..^1], sequence[^1]);
         }
