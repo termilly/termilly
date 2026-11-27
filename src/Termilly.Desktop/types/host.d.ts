@@ -526,7 +526,7 @@ interface PlannedStart {
   start: AgentStart;
 }
 
-/** A background task as the page shows it: what it runs and why, when it started, its state, its output's last line, its output file and, once ended, when (Unix milliseconds). */
+/** A background task as the page shows it: what it runs and why, when it started, its state, its output's last line, its output file and, once ended, when (Unix milliseconds). Stopping: Stop was clicked and its end hasn't shown yet; StopFailed: Stop just found nothing to end. Both while it runs. */
 interface TaskView {
   id: string;
   command: string | null;
@@ -537,4 +537,6 @@ interface TaskView {
   lastLine: string | null;
   outputFile: string | null;
   endedAt: number | null;
+  stopping: boolean;
+  stopFailed: boolean;
 }

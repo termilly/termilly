@@ -42,13 +42,22 @@ const ranFor = task => clock((task.endedAt ?? Date.now()) - task.startedAt);
 const hoverOf = task => [task.command, task.lastLine, task.state === TASK_STATE.failed ? `Exited with code ${task.exitCode}` : '']
   .filter(Boolean).join('\n');
 
+/** What a running task says after Stop: on its way to its end, or nothing found to end. */
+const STOPPING_TEXT = 'Stopping…';
+const STOP_FAILED_TEXT = "Couldn't stop";
+
 /**
- * Its Stop, while it runs.
+ * Its Stop, while it runs; while it stops, that it does instead (clicking again did nothing), and briefly after a Stop
+ * that found nothing to end, that it couldn't.
  * @param {Tab} tab
  * @param {TaskView} task
  */
-const stopHtml = (tab, task) => (task.state === TASK_STATE.running
-  ? `<span class="task-stop" ${STOP_ATTR}="${escapeHtml(task.id)}" ${STOP_TAB_ATTR}="${escapeHtml(tab.id)}" title="Stop" role="button"></span>` : '');
+const stopHtml = (tab, task) => {
+  if (task.state !== TASK_STATE.running) return '';
+  if (task.stopping) return `<span class="task-note">${STOPPING_TEXT}</span>`;
+  const failed = task.stopFailed ? `<span class="task-note failed">${STOP_FAILED_TEXT}</span>` : '';
+  return `${failed}<span class="task-stop" ${STOP_ATTR}="${escapeHtml(task.id)}" ${STOP_TAB_ATTR}="${escapeHtml(tab.id)}" title="Stop" role="button"></span>`;
+};
 
 /**
  * How long it has run: ticking while it runs (subagents.js ticks every .sub-time[data-since]).

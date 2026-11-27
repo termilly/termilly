@@ -60,9 +60,38 @@ public sealed class BackgroundTasksTests : IDisposable
 
     private sealed class FakeProcesses : ITaskProcesses
     {
-        public bool Stop(int terminalPid, string outputFile) => true;
-        public bool StopCommand(int terminalPid, string command, DateTimeOffset started) => true;
+        /// <summary>Whether a Stop finds the task's process.</summary>
+        public bool Finds { get; set; } = true;
+        /// <summary>What the next Stops answer, one each, before <see cref="Finds"/> answers the rest.</summary>
+        public ConcurrentQueue<Func<bool>> Answers { get; } = [];
+        public int Stops { get; private set; }
+        public bool Stop(int terminalPid, string outputFile) => Stopped();
+        public bool StopCommand(int terminalPid, string command, DateTimeOffset started) => Stopped();
+        private bool Stopped()
+        {
+            Stops++;
+            return Answers.TryDequeue(out var answer) ? answer() : Finds;
+        }
     }
+
+    private sealed class FakeShell : IShellSession
+    {
+        public int ProcessId => 42;
+        public void Write(string text) { }
+        public void Resize(int columns, int rows) { }
+        public void Dispose() { }
+    }
+
+    /// <summary>A running Claude task in a terminal whose shell is up, so Stop can look for it.</summary>
+    private void RunningTask()
+    {
+        _terminals.Started(Pane, new FakeShell(), 42);
+        _tasks.OnEvent(Event("PostToolUse", TaskId));
+        _output.Reading = new TaskReading("x.output", "tick", null);
+        _tasks.Tick();
+    }
+
+    private JsonNode Task0() => LastList().Single()!;
 
     private sealed class Clock : TimeProvider
     {
@@ -362,5 +391,90 @@ public sealed class BackgroundTasksTests : IDisposable
         {
             File.Delete(path);
         }
+    }
+
+    [Fact]
+    public async Task Stop_shows_the_task_stopping_and_a_second_Stop_does_nothing()
+    {
+        RunningTask();
+        await _tasks.Stop(Pane, UseId);
+        Assert.True((bool?)Task0()["stopping"]);
+        Assert.Equal(TaskStates.Running, (string?)Task0()["state"]);
+
+        await _tasks.Stop(Pane, UseId);
+        Assert.Equal(1, _processes.Stops);
+    }
+
+    [Fact]
+    public async Task A_stopped_task_ends_as_usual_and_stops_stopping()
+    {
+        RunningTask();
+        await _tasks.Stop(Pane, UseId);
+        _output.Reading = new TaskReading("x.output", "tick", 143);
+        _tasks.Tick();
+        Assert.False((bool?)Task0()["stopping"]);
+        Assert.Equal(TaskStates.Failed, (string?)Task0()["state"]);
+    }
+
+    [Fact]
+    public async Task Stop_comes_back_ten_seconds_on_when_no_end_shows_up()
+    {
+        RunningTask();
+        await _tasks.Stop(Pane, UseId);
+        _clock.Now += TimeSpan.FromSeconds(9);
+        _tasks.Tick();
+        Assert.True((bool?)Task0()["stopping"]);
+        _clock.Now += TimeSpan.FromSeconds(2);
+        _tasks.Tick();
+        Assert.False((bool?)Task0()["stopping"]);
+        Assert.False((bool?)Task0()["stopFailed"]);
+    }
+
+    [Fact]
+    public async Task A_Stop_that_finds_nothing_says_so_for_a_while()
+    {
+        RunningTask();
+        _processes.Finds = false;
+        await _tasks.Stop(Pane, UseId);
+        Assert.False((bool?)Task0()["stopping"]);
+        Assert.True((bool?)Task0()["stopFailed"]);
+        _clock.Now += TimeSpan.FromSeconds(6);
+        _tasks.Tick();
+        Assert.False((bool?)Task0()["stopFailed"]);
+    }
+
+    [Fact]
+    public async Task A_slow_Stop_that_fails_late_leaves_a_later_Stop_alone()
+    {
+        RunningTask();
+        using var searching = new SemaphoreSlim(0);
+        using var found = new SemaphoreSlim(0);
+        // The first Stop's search takes past the time limit, and then finds nothing.
+        _processes.Answers.Enqueue(() =>
+        {
+            searching.Release();
+            found.Wait();
+            return false;
+        });
+        var first = _tasks.Stop(Pane, UseId);
+        await searching.WaitAsync();
+        _clock.Now += TimeSpan.FromSeconds(11);
+        _tasks.Tick();
+        await _tasks.Stop(Pane, UseId);
+        found.Release();
+        await first;
+        Assert.True((bool?)Task0()["stopping"]);
+        Assert.False((bool?)Task0()["stopFailed"]);
+    }
+
+    [Fact]
+    public async Task A_Stop_in_a_terminal_whose_shell_is_gone_couldnt_stop()
+    {
+        _tasks.OnEvent(Event("PostToolUse", TaskId));
+        _output.Reading = new TaskReading("x.output", "tick", null);
+        _tasks.Tick();
+        await _tasks.Stop(Pane, UseId);
+        Assert.True((bool?)Task0()["stopFailed"]);
+        Assert.Equal(0, _processes.Stops);
     }
 }

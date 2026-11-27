@@ -23,6 +23,10 @@ internal sealed class BackgroundTasks : IMessageHandler, IDisposable
     private static readonly TimeSpan FileWait = TimeSpan.FromSeconds(30);
     /// <summary>How long a Codex command whose hook said it ended waits for its rollout to say how.</summary>
     private static readonly TimeSpan ExitWait = TimeSpan.FromSeconds(5);
+    /// <summary>How long a task shows it's stopping before Stop comes back, when no end has shown up.</summary>
+    private static readonly TimeSpan StopWait = TimeSpan.FromSeconds(10);
+    /// <summary>How long a task says Stop found nothing to end.</summary>
+    private static readonly TimeSpan StopFailedFor = TimeSpan.FromSeconds(5);
 
     private readonly PageChannel _page;
     private readonly TerminalSessions _terminals;
@@ -56,10 +60,30 @@ internal sealed class BackgroundTasks : IMessageHandler, IDisposable
         public DateTimeOffset? Reported { get; set; }
         /// <summary>Since when its output file is waited for: its start, or for one taken back after a restart, then.</summary>
         public DateTimeOffset Followed { get; set; } = started;
+        /// <summary>When Stop was clicked, while its end hasn't shown up (for <see cref="StopWait"/> at most).</summary>
+        public DateTimeOffset? StopAsked { get; set; }
+        /// <summary>When Stop found nothing to end (said for <see cref="StopFailedFor"/>).</summary>
+        public DateTimeOffset? StopFailed { get; set; }
 
         public TaskView View() => new(UseId, Command, Description, Started.ToUnixTimeMilliseconds(),
             Reading?.ExitCode is { } code ? (code == 0 ? TaskStates.Done : TaskStates.Failed) : TaskStates.Running,
-            Reading?.ExitCode, Reading?.LastLine, Reading?.Path, Ended?.ToUnixTimeMilliseconds());
+            Reading?.ExitCode, Reading?.LastLine, Reading?.Path, Ended?.ToUnixTimeMilliseconds(),
+            Stopping: Ended is null && StopAsked is not null, StopFailed: Ended is null && StopFailed is not null);
+
+        /// <summary>A stop that took too long gives Stop back, and "couldn't stop" goes after a while: whether either did.</summary>
+        public bool StopExpired(DateTimeOffset now)
+        {
+            var expired = false;
+            if (now - StopAsked > StopWait)
+            {
+                (StopAsked, expired) = (null, true);
+            }
+            if (now - StopFailed > StopFailedFor)
+            {
+                (StopFailed, expired) = (null, true);
+            }
+            return expired;
+        }
 
         public SavedTask Saved(string pane) => new(pane, Agent, UseId, Session, TaskId, Command, Description,
             Started.ToUnixTimeMilliseconds(), Reported?.ToUnixTimeMilliseconds());
@@ -209,6 +233,7 @@ internal sealed class BackgroundTasks : IMessageHandler, IDisposable
                 foreach (var task in list.Where(t => t.Ended is null))
                 {
                     read |= Read(task, now); // every one read, not just up to the first that changed
+                    read |= task.StopExpired(now);
                 }
                 // What's saved is the running ones: saved again when one went or ended.
                 changed |= removed || list.Count(t => t.Ended is null) != running;
@@ -251,26 +276,54 @@ internal sealed class BackgroundTasks : IMessageHandler, IDisposable
 
     /// <summary>
     /// The page's Stop: the task's shell and what it runs end, found by its output file (Claude's) or its command
-    /// (Codex's); its output then says so.
+    /// (Codex's); its output then says so. Meanwhile it shows it's stopping (a second Stop does nothing), and when
+    /// nothing was found to end, that it couldn't stop.
     /// </summary>
-    private void Stop(string pane, string? useId)
+    internal Task Stop(string pane, string? useId)
     {
         Tracked? task;
+        Func<bool>? stop = null;
         lock (_gate)
         {
             task = _tasks.GetValueOrDefault(pane)?.Find(t => t.UseId == useId && t.Ended is null);
+            if (task is null || task.StopAsked is not null)
+            {
+                return Task.CompletedTask;
+            }
+            if (_terminals.Pids().TryGetValue(pane, out var pid))
+            {
+                var started = task.Started;
+                stop = task.Reading?.Path is { } file ? () => _processes.Stop(pid, file)
+                    : task.Agent == AgentKinds.Codex && task.Command is { } command ? () => _processes.StopCommand(pid, command, started)
+                    : null;
+            }
+            var asked = _clock.GetUtcNow();
+            (task.StopAsked, task.StopFailed) = (asked, null);
+            Post(pane);
+            return Task.Run(() =>
+            {
+                if (stop?.Invoke() != true)
+                {
+                    StopFailed(pane, task, asked);
+                }
+            });
         }
-        if (task is null || !_terminals.Pids().TryGetValue(pane, out var pid))
+    }
+
+    /// <summary>
+    /// Stop found nothing to end: the task says so, unless it ended or went meanwhile, or a later Stop (after this one
+    /// ran out of time) is on its way.
+    /// </summary>
+    private void StopFailed(string pane, Tracked task, DateTimeOffset asked)
+    {
+        lock (_gate)
         {
-            return;
-        }
-        if (task.Reading?.Path is { } file)
-        {
-            _ = Task.Run(() => _processes.Stop(pid, file));
-        }
-        else if (task.Agent == AgentKinds.Codex && task.Command is { } command)
-        {
-            _ = Task.Run(() => _processes.StopCommand(pid, command, task.Started));
+            if (task.Ended is null && (task.StopAsked is null || task.StopAsked == asked)
+                && _tasks.GetValueOrDefault(pane)?.Contains(task) == true)
+            {
+                (task.StopAsked, task.StopFailed) = (null, _clock.GetUtcNow());
+                Post(pane);
+            }
         }
     }
 
