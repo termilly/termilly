@@ -68,6 +68,62 @@ internal static class AgentLookup
         return null;
     }
 
+    /// <summary>
+    /// <see cref="FindReal(string, string?, string?, string?)"/>, then the same in <paramref name="places"/>' folders,
+    /// then in its package folders (<see cref="FindPackaged"/>): one way of finding any agent, whatever its name.
+    /// </summary>
+    public static string? FindInstalled(string name, string? path, string? pathExt, string? skipDirectory, AgentPlaces places) =>
+        FindReal(name, path, pathExt, skipDirectory)
+        ?? FindReal(name, string.Join(Path.PathSeparator, places.Folders), pathExt, skipDirectory)
+        ?? FindPackaged(name, places.PackageRoots);
+
+    /// <summary>
+    /// How a program is named when its release keeps its platform in the name (Rust's target, as
+    /// codex-x86_64-pc-windows-msvc.exe): winget unpacks such a release as it is and its alias may never be made.
+    /// The agent's name comes first, so a helper beside it (codex-command-runner.exe) doesn't match.
+    /// </summary>
+    private const string PlatformNamed = "-*-pc-windows-*";
+
+    /// <summary>
+    /// The agent in one of the package folders under <paramref name="roots"/> (winget's): <paramref name="name"/>.exe,
+    /// or its platform-named program (<see cref="PlatformNamed"/>). Packages are looked at in name order, so the same
+    /// one is found each time.
+    /// </summary>
+    public static string? FindPackaged(string name, IReadOnlyList<string> roots)
+    {
+        foreach (var root in roots)
+        {
+            try
+            {
+                if (!Directory.Exists(root))
+                {
+                    continue;
+                }
+                foreach (var package in Directory.EnumerateDirectories(root).Order(StringComparer.OrdinalIgnoreCase))
+                {
+                    if (IsAgentFolder(package))
+                    {
+                        continue;
+                    }
+                    var exact = Path.Combine(package, name + WindowsExe);
+                    if (File.Exists(exact))
+                    {
+                        return exact;
+                    }
+                    if (Directory.EnumerateFiles(package, name + PlatformNamed + WindowsExe).Order(StringComparer.OrdinalIgnoreCase).FirstOrDefault() is { } named)
+                    {
+                        return named;
+                    }
+                }
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                continue; // a package folder being replaced (an upgrade) or locked: the next one
+            }
+        }
+        return null;
+    }
+
     /// <summary><see cref="FindReal(string, string?, string?, string?)"/> on this process's PATH.</summary>
     public static string? FindReal(string name) =>
         FindReal(name, Environment.GetEnvironmentVariable(SystemVariables.Path), Environment.GetEnvironmentVariable(SystemVariables.PathExt));

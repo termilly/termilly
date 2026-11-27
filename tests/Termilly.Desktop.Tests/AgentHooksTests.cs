@@ -617,6 +617,50 @@ public sealed class AgentHooksTests : IDisposable
     }
 
     [Fact]
+    public void An_agent_off_path_is_found_in_the_places_after_path()
+    {
+        var shim = Directory.CreateDirectory(Path.Combine(_dir, "agent")).FullName;
+        var onPath = Directory.CreateDirectory(Path.Combine(_dir, "on-path")).FullName;
+        var saved = Directory.CreateDirectory(Path.Combine(_dir, "saved-path")).FullName;
+        File.WriteAllText(Path.Combine(shim, "codex.exe"), "");
+        File.WriteAllText(Path.Combine(saved, "codex.cmd"), "");
+        var places = new agent::Termilly.Shared.AgentPlaces([saved], []);
+
+        Assert.Null(Shim.FindReal("codex", shim, ".EXE;.CMD", shim));
+        Assert.Equal(Path.Combine(saved, "codex.cmd"), Shim.FindReal("codex", shim, ".EXE;.CMD", shim, places));
+        // PATH still comes first: the agent the shell would start.
+        File.WriteAllText(Path.Combine(onPath, "codex.exe"), "");
+        Assert.Equal(Path.Combine(onPath, "codex.exe"), Shim.FindReal("codex", $"{shim};{onPath}", ".EXE;.CMD", shim, places));
+    }
+
+    [Fact]
+    public void A_winget_package_without_its_alias_is_found_by_its_platform_named_program()
+    {
+        var packages = Directory.CreateDirectory(Path.Combine(_dir, "Packages")).FullName;
+        var codex = Directory.CreateDirectory(Path.Combine(packages, "OpenAI.Codex_Microsoft.Winget.Source_8wekyb3d8bbwe")).FullName;
+        File.WriteAllText(Path.Combine(codex, "codex-command-runner.exe"), "");
+        File.WriteAllText(Path.Combine(codex, "codex-windows-sandbox-setup.exe"), "");
+        Assert.Null(agent::Termilly.Shared.AgentLookup.FindPackaged("codex", [packages])); // its helpers aren't codex
+
+        File.WriteAllText(Path.Combine(codex, "codex-x86_64-pc-windows-msvc.exe"), "");
+        Assert.Equal(Path.Combine(codex, "codex-x86_64-pc-windows-msvc.exe"), agent::Termilly.Shared.AgentLookup.FindPackaged("codex", [packages]));
+        Assert.Null(agent::Termilly.Shared.AgentLookup.FindPackaged("claude", [packages]));
+        Assert.Null(agent::Termilly.Shared.AgentLookup.FindPackaged("codex", [Path.Combine(_dir, "missing")]));
+
+        // A codex.exe of its own (a later release, or a link made by hand) is taken first.
+        File.WriteAllText(Path.Combine(codex, "codex.exe"), "");
+        Assert.Equal(Path.Combine(codex, "codex.exe"), agent::Termilly.Shared.AgentLookup.FindPackaged("codex", [packages]));
+    }
+
+    [Fact]
+    public void Saved_path_folders_have_their_variables_expanded()
+    {
+        var profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        Assert.Equal([Path.Combine(profile, ".local", "bin"), @"C:\Tools"],
+            agent::Termilly.Shared.AgentPlaces.PathFolders(@"%USERPROFILE%\.local\bin;; ""C:\Tools"" "));
+    }
+
+    [Fact]
     public void Terminals_get_the_agent_folder_first_on_their_own_path()
     {
         var vars = SessionLaunch.WithAgent(

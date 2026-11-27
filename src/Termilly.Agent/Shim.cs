@@ -21,7 +21,7 @@ internal static class Shim
     public static int Run(string agent, string[] args)
     {
         var real = FindReal(agent, Environment.GetEnvironmentVariable(SystemVariables.Path),
-            Environment.GetEnvironmentVariable(SystemVariables.PathExt), AppContext.BaseDirectory);
+            Environment.GetEnvironmentVariable(SystemVariables.PathExt), AppContext.BaseDirectory, AgentPlaces.ForThisUser());
         if (real is null)
         {
             Console.Error.WriteLine($"{agent}: {ProductName(agent)} isn't installed (no {agent} found on PATH besides Termilly's).");
@@ -80,9 +80,12 @@ internal static class Shim
         return args;
     }
 
-    /// <summary>The first real <paramref name="agent"/> on PATH: not this shim, nor another Termilly's (AgentLookup).</summary>
-    public static string? FindReal(string agent, string? path, string? pathExt, string shimDirectory) =>
-        AgentLookup.FindReal(agent, path, pathExt, shimDirectory);
+    /// <summary>
+    /// The first real <paramref name="agent"/> on PATH, not this shim nor another Termilly's, then in
+    /// <paramref name="places"/> (AgentLookup.FindInstalled): the same agent Termilly's new-terminal list offered.
+    /// </summary>
+    public static string? FindReal(string agent, string? path, string? pathExt, string shimDirectory, AgentPlaces? places = null) =>
+        AgentLookup.FindInstalled(agent, path, pathExt, shimDirectory, places ?? AgentPlaces.None);
 
     /// <summary>One of the helper's other names in its folder (termilly-hook.exe on Windows).</summary>
     private static string Beside(string name) =>

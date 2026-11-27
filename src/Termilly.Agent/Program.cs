@@ -131,7 +131,7 @@ static int SelfTest()
     var found = false;
     foreach (var (agent, product) in new[] { (AgentKinds.Claude, AgentKinds.ClaudeName), (AgentKinds.Codex, AgentKinds.CodexName) })
     {
-        var real = Shim.FindReal(agent, Environment.GetEnvironmentVariable(SystemVariables.Path), Environment.GetEnvironmentVariable(SystemVariables.PathExt), AppContext.BaseDirectory);
+        var real = Shim.FindReal(agent, Environment.GetEnvironmentVariable(SystemVariables.Path), Environment.GetEnvironmentVariable(SystemVariables.PathExt), AppContext.BaseDirectory, AgentPlaces.ForThisUser());
         found |= real is not null;
         Console.WriteLine($"{(real is null ? "-   " : "ok  ")}  {product}: {real ?? "not found on PATH"}");
     }

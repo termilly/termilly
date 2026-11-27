@@ -127,7 +127,7 @@ internal static partial class SessionProfiles
     /// </summary>
     private static SessionProfile? Agent(List<SessionProfile> shells, string id, string name, string icon)
     {
-        if (shells.Count == 0 || FindAgent(id) is null)
+        if (shells.Count == 0 || FindInstalledAgent(id) is null)
         {
             return null;
         }
@@ -140,9 +140,15 @@ internal static partial class SessionProfiles
     /// The real <paramref name="agent"/> on PATH (claude.exe, claude.cmd, codex.cmd and so on on Windows), not a
     /// Termilly's shim beside its hook helper. On Linux and macOS the PATH looked on is the one a terminal's shell has
     /// (<see cref="LoginShellPath"/>): an app started from the desktop has a shorter one, without the user's own folders.
+    /// Then <paramref name="places"/> (<see cref="AgentPlaces.ForThisUser"/>: on Windows, its PATH as it is now and
+    /// where installers put agents), so one installed since Termilly started, or that winget left without its alias,
+    /// is found too.
     /// </summary>
-    internal static string? FindAgent(string agent, string? path = null) =>
-        AgentLookup.FindReal(agent, path ?? LoginShellPath.Value, Environment.GetEnvironmentVariable(SystemVariables.PathExt));
+    internal static string? FindAgent(string agent, string? path = null, AgentPlaces? places = null) =>
+        AgentLookup.FindInstalled(agent, path ?? LoginShellPath.Value, Environment.GetEnvironmentVariable(SystemVariables.PathExt), null, places ?? AgentPlaces.None);
+
+    /// <summary><see cref="FindAgent"/> as Termilly finds agents to offer and to ask: in this user's places too.</summary>
+    internal static string? FindInstalledAgent(string agent) => FindAgent(agent, places: AgentPlaces.ForThisUser());
 
     /// <summary>The ssh client: Windows' ssh.exe, or ssh on other systems.</summary>
     internal static string SshCommand => AppPaths.Exe(SshConnections.SshProgram);

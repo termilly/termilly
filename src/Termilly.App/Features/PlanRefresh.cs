@@ -53,7 +53,7 @@ internal sealed class PlanRefreshHandler(PageChannel page, IProcessRunner runner
 
     private async Task RefreshCodexAsync()
     {
-        if (SessionProfiles.FindAgent(AgentKinds.Codex) is not { } codex)
+        if (SessionProfiles.FindInstalledAgent(AgentKinds.Codex) is not { } codex)
         {
             return;
         }
@@ -72,7 +72,7 @@ internal sealed class PlanRefreshHandler(PageChannel page, IProcessRunner runner
 
     private async Task RefreshClaudeAsync()
     {
-        if (SessionProfiles.FindAgent(AgentKinds.Claude) is not { } claude)
+        if (SessionProfiles.FindInstalledAgent(AgentKinds.Claude) is not { } claude)
         {
             return;
         }
