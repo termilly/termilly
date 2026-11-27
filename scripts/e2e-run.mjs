@@ -4,7 +4,7 @@
 // works in, one run at a time. Results come back as JUnit, screenshots and app logs; the page goes to the reports
 // folder with a page listing the runs.
 //
-// Run:  node scripts/e2e-run.mjs [--all] [--base <commit>]
+// Run:  node scripts/e2e-run.mjs [--all | --release] [--base <commit>]   (--release: all, with the real agents)
 // Env:  E2E_HOST     the test machine: a git remote and ssh name (default optiplex)
 //       E2E_REPORTS  where report pages go (default tests/e2e/runs, ignored by git)
 // Exit: 0 all passed or nothing to run, 1 a test failed, 2 the run itself failed (build, connection).
@@ -51,11 +51,16 @@ function picked(base, head) {
   return { changed, ...pick({ changed, tests, importers: importersOf(modules) }) };
 }
 
-/** The script the test machine runs: its copy at the commit, built, then each test file with its results kept. @param {string[]} files */
-function remoteScript(files) {
+/**
+ * The script the test machine runs: its copy at the commit, built, then each test file with its results kept.
+ * @param {string[]} files
+ * @param {boolean} realAgents with the real agents too (a release): the machine's own claude on PATH
+ */
+function remoteScript(files, realAgents = false) {
   // Linux and macOS alike: a lock folder (macOS has no flock), and .NET where it's installed for the user.
   return `set -e
-export PATH="$HOME/.dotnet:$HOME/.local/node/bin:$PATH"
+export PATH="$HOME/.dotnet:$HOME/.local/node/bin:$HOME/.local/bin:$PATH"
+export E2E_REAL_AGENTS=${realAgents ? 1 : 0}
 [ -d "$HOME/.dotnet" ] && export DOTNET_ROOT="$HOME/.dotnet"
 mkdir -p ~/e2e-runs
 until mkdir ~/e2e-runs/lock.d 2>/dev/null; do sleep 5; done
@@ -111,7 +116,8 @@ function main() {
   const head = git('rev-parse', 'HEAD');
   const base = args.includes('--base') ? git('rev-parse', args[args.indexOf('--base') + 1]) : baseCommit();
   const choice = picked(base, head);
-  const files = (args.includes('--all') ? [...new Set(git('ls-tree', '--name-only', head, E2E).split('\n').filter(f => f.endsWith('.e2e.mjs')))]
+  const release = args.includes('--release');
+  const files = (release || args.includes('--all') ? [...new Set(git('ls-tree', '--name-only', head, E2E).split('\n').filter(f => f.endsWith('.e2e.mjs')))]
     : choice.tests.map(t => `${E2E}${t}`));
   mkdirSync(reports, { recursive: true });
   if (!files.length) {
@@ -123,7 +129,7 @@ function main() {
   const started = Date.now();
   try {
     execFileSync('git', ['push', '-q', '-f', host, `HEAD:${RUN_REF}`], { cwd: root, stdio: 'inherit' });
-    execFileSync('ssh', [host, 'bash -s'], { input: remoteScript(files), stdio: ['pipe', 'inherit', 'inherit'] });
+    execFileSync('ssh', [host, 'bash -s'], { input: remoteScript(files, release), stdio: ['pipe', 'inherit', 'inherit'] });
   } catch (error) {
     console.error(`The run itself failed: ${/** @type {Error} */ (error).message.split('\n')[0]}`);
     return EXIT.broken;
@@ -135,7 +141,7 @@ function main() {
     const pageDir = path.join(reports, runId);
     mkdirSync(pageDir, { recursive: true });
     const run = { commit: head, subject: git('log', '-1', '--format=%s', head), branch: git('rev-parse', '--abbrev-ref', 'HEAD'), base,
-      changed: choice.changed, all: args.includes('--all') || choice.all, files: files.map(f => fileRun(back, f, pageDir, runId)),
+      changed: choice.changed, all: release || args.includes('--all') || choice.all, files: files.map(f => fileRun(back, f, pageDir, runId)),
       seconds: (Date.now() - started) / 1000, at: new Date(), machine: host };
     const page = `${runId}.html`;
     writeFileSync(path.join(reports, page), reportHtml(run));
