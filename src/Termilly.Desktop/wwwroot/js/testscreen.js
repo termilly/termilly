@@ -20,14 +20,27 @@ function boxOf(el) {
   return { x: r.left, y: r.top, width: r.width, height: r.height };
 }
 
-/** The ancestors that clip an element, nearest first, with how. @param {Element} el */
+/**
+ * The two directions, each with its own overflow: a box can hide what's past it sideways and scroll up and down.
+ * @type {readonly { start: 'x' | 'y', size: 'width' | 'height', overflow: 'overflowX' | 'overflowY',
+ *   scrolled: 'scrollLeft' | 'scrollTop', extent: 'scrollWidth' | 'scrollHeight', border: 'clientLeft' | 'clientTop' }[]}
+ */
+const AXES = Object.freeze([
+  { start: 'x', size: 'width', overflow: 'overflowX', scrolled: 'scrollLeft', extent: 'scrollWidth', border: 'clientLeft' },
+  { start: 'y', size: 'height', overflow: 'overflowY', scrolled: 'scrollTop', extent: 'scrollHeight', border: 'clientTop' },
+]);
+
+/**
+ * The ancestors that clip an element, nearest first, with each direction's overflow.
+ * @param {Element} el
+ * @returns {{ el: Element, overflow: { x: string, y: string } }[]}
+ */
 function clippers(el) {
-  /** @type {{ el: Element, scrolls: boolean }[]} */
   const found = [];
   for (let at = el.parentElement; at; at = at.parentElement) {
     const style = at.ownerDocument.defaultView?.getComputedStyle(at);
-    const overflow = [style?.overflowX ?? '', style?.overflowY ?? ''];
-    if (overflow.some(o => CLIPS_HARD.has(o) || SCROLLS.has(o))) found.push({ el: at, scrolls: overflow.some(o => SCROLLS.has(o)) });
+    const overflow = { x: style?.overflowX ?? '', y: style?.overflowY ?? '' };
+    if ([overflow.x, overflow.y].some(o => CLIPS_HARD.has(o) || SCROLLS.has(o))) found.push({ el: at, overflow });
   }
   return found;
 }
@@ -57,21 +70,30 @@ export function clipped(el) {
 }
 
 /**
- * Whether all of an element can be seen, scrolling where its ancestors scroll: nothing cut off by an ancestor that
- * doesn't scroll, and nothing before a scrolling one's start (above or left of it), where no scrolling reaches.
+ * Whether all of an element can be seen, scrolling where its ancestors scroll, each direction on its own: nothing cut
+ * off where an ancestor doesn't scroll, and where it does, nothing before its start or past how far it scrolls.
  * @param {Element} el
  */
 export function reachable(el) {
   let target = boxOf(el);
-  for (const { el: c, scrolls } of clippers(el)) {
+  for (const { el: c, overflow } of clippers(el)) {
     const area = boxOf(c);
-    if (scrolls) {
-      // Scrolled back to its start, where would the element begin? Past this, what must show is the scroll area.
-      if (target.x + c.scrollLeft < area.x - EDGE || target.y + c.scrollTop < area.y - EDGE) return false;
-      target = area;
-    } else if (!within(target, area)) {
-      return false;
+    const next = { ...target };
+    for (const axis of AXES) {
+      const kind = overflow[axis.start];
+      const start = target[axis.start], size = target[axis.size];
+      if (SCROLLS.has(kind)) {
+        // Scrolled back to its start, where would the element lie? Past this, what must show is the scroll area.
+        const fromStart = start + c[axis.scrolled];
+        const scrollEnd = area[axis.start] + c[axis.border] + c[axis.extent];
+        if (fromStart < area[axis.start] - EDGE || fromStart + size > scrollEnd + EDGE) return false;
+        next[axis.start] = area[axis.start];
+        next[axis.size] = area[axis.size];
+      } else if (CLIPS_HARD.has(kind) && (start < area[axis.start] - EDGE || start + size > area[axis.start] + area[axis.size] + EDGE)) {
+        return false;
+      }
     }
+    target = next;
   }
   return true;
 }

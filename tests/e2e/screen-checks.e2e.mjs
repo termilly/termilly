@@ -40,6 +40,8 @@ step('the helpers measure, and tell cut off from cut off but scrollable', async 
     make('hidden', 'hidden', 'width:150px;height:20px');
     make('scrolls', 'auto', 'width:150px;height:20px');
     make('before', 'auto', 'width:150px;height:20px;margin-left:-30px');
+    make('sideways', 'hidden auto', 'width:150px;height:20px');
+    make('downwards', 'hidden auto', 'width:80px;height:200px');
     const result = {
       box: t.box('#fits .inner'),
       font: t.fontSize('#fits .inner'),
@@ -47,9 +49,11 @@ step('the helpers measure, and tell cut off from cut off but scrollable', async 
       hidden: [t.clipped('#hidden .inner'), t.reachable('#hidden .inner')],
       scrolls: [t.clipped('#scrolls .inner'), t.reachable('#scrolls .inner')],
       before: [t.clipped('#before .inner'), t.reachable('#before .inner')],
+      sideways: [t.clipped('#sideways .inner'), t.reachable('#sideways .inner')],
+      downwards: [t.clipped('#downwards .inner'), t.reachable('#downwards .inner')],
       none: t.box('#nothing-here'),
     };
-    for (const id of ['fits', 'hidden', 'scrolls', 'before']) doc.getElementById(id)?.remove();
+    for (const id of ['fits', 'hidden', 'scrolls', 'before', 'sideways', 'downwards']) doc.getElementById(id)?.remove();
     return result;
   });
   assert.deepEqual(seen.box, { x: 40, y: 40, width: 80, height: 20 });
@@ -58,6 +62,8 @@ step('the helpers measure, and tell cut off from cut off but scrollable', async 
   assert.deepEqual(seen.hidden, [true, false], 'cut off where nothing scrolls');
   assert.deepEqual(seen.scrolls, [true, true], 'cut off, but scrolling shows the rest');
   assert.deepEqual(seen.before, [true, false], 'cut off before the start, where no scrolling reaches');
+  assert.deepEqual(seen.sideways, [true, false], 'it scrolls up and down only: what is cut off sideways stays out of reach');
+  assert.deepEqual(seen.downwards, [true, true], 'cut off below, where it scrolls');
   assert.equal(seen.none, null);
 });
 
