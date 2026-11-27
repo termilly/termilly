@@ -2,8 +2,8 @@
 import { spawn, execFileSync } from 'node:child_process';
 import { createServer } from 'node:net';
 import { randomBytes } from 'node:crypto';
-import { mkdtemp, mkdir, writeFile, readFile, rm, chmod, access } from 'node:fs/promises';
-import { readdirSync, readFileSync } from 'node:fs';
+import { mkdtemp, mkdir, writeFile, readFile, rm, chmod, access, copyFile } from 'node:fs/promises';
+import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir, homedir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -111,7 +111,7 @@ async function displayFor(env, logs) {
  * Starts one isolated application. Call stop({ failed: true }) from failure cleanup to retain evidence. To start it
  * again on the same data (a restart), stop the first with { keepData: true } and pass its dataDir.
  */
-export async function startApp({ folder, gh = {}, agents = {}, env = {}, name = 'test', dataDir: reused } = {}) {
+export async function startApp({ folder, gh = {}, agents = {}, env = {}, name = 'test', dataDir: reused, realAgents = false } = {}) {
   const dataDir = reused ?? await mkdtemp(path.join(tmpdir(), 'termilly-e2e-'));
   dataDirs.add(dataDir);
   const logs = [], xvfbLogs = [];
@@ -127,7 +127,7 @@ export async function startApp({ folder, gh = {}, agents = {}, env = {}, name = 
   const appEnv = { ...process.env, GIT_CONFIG_GLOBAL: gitConfig, GIT_CONFIG_NOSYSTEM: '1', ...env,
     HOME: home, XDG_CONFIG_HOME: path.join(home, '.config'), XDG_DATA_HOME: path.join(home, '.local', 'share'),
     XDG_CACHE_HOME: path.join(home, '.cache'), USERPROFILE: home,
-    PATH: `${fakes}${path.delimiter}${env.PATH ?? process.env.PATH ?? ''}`,
+    PATH: `${realAgents ? path.join(dataDir, 'fakes') : fakes}${path.delimiter}${env.PATH ?? process.env.PATH ?? ''}`,
     TERMILLY_DATA_DIR: dataDir, TERMILLY_TEST_DRIVER: String(port), TERMILLY_TEST_TOKEN: token,
     E2E_GH_SCENARIO: scenario, E2E_GH_LOG: ghLog, E2E_AGENTS: agentScripts, E2E_AGENT_LOG: agentLog,
     // What a fake agent drawing a prompt received from its terminal, key by key (compact.e2e.mjs reads it).
@@ -135,6 +135,7 @@ export async function startApp({ folder, gh = {}, agents = {}, env = {}, name = 
   const app = makeApp();
   try {
     await mkdir(home, { recursive: true });
+    if (realAgents) await giveRealAgents(dataDir, home, folder);
     await Promise.all([writeFile(gitConfig, ''), writeFile(scenario, JSON.stringify(gh)), writeFile(agentScripts, JSON.stringify(agents))]);
     if (process.platform !== 'win32') await Promise.all(['gh', 'claude', 'codex', 'docker', 'kubectl'].map(file => chmod(path.join(fakes, file), 0o755)));
     ({ display, child: xvfb } = await displayFor(appEnv, xvfbLogs));
@@ -202,6 +203,27 @@ export async function startApp({ folder, gh = {}, agents = {}, env = {}, name = 
       },
     };
   }
+}
+
+/** The fakes a test with real agents still gets: not the agents', the rest (GitHub, containers). */
+const NOT_AGENTS = ['gh', 'gh.mjs', 'docker', 'kubectl'];
+
+/**
+ * A test with the real agents (#100): the real claude and codex on PATH (the other fakes stay), logged in with a copy of
+ * this machine's login, and Claude Code's first start already done for the test's own home and folder. Its settings,
+ * sessions and history stay the test's own.
+ * @param {string} dataDir @param {string} home @param {string | undefined} folder
+ */
+async function giveRealAgents(dataDir, home, folder) {
+  const own = path.join(dataDir, 'fakes');
+  await mkdir(own, { recursive: true });
+  await Promise.all(NOT_AGENTS.map(file => copyFile(path.join(fakes, file), path.join(own, file))));
+  if (process.platform !== 'win32') await Promise.all(NOT_AGENTS.map(file => chmod(path.join(own, file), 0o755)));
+  const login = path.join(homedir(), '.claude', '.credentials.json');
+  await mkdir(path.join(home, '.claude'), { recursive: true });
+  if (existsSync(login)) await copyFile(login, path.join(home, '.claude', '.credentials.json'));
+  const trusted = Object.fromEntries([home, folder].filter(Boolean).map(f => [path.resolve(/** @type {string} */ (f)), { hasTrustDialogAccepted: true }]));
+  await writeFile(path.join(home, '.claude.json'), JSON.stringify({ hasCompletedOnboarding: true, theme: 'dark', projects: trusted }));
 }
 
 async function readCalls(file) {
