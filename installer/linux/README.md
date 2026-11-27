@@ -7,7 +7,7 @@ installer/linux/build-deb.sh
 sudo apt install ./dist/termilly_1.0.0_amd64.deb
 ```
 
-Needs the .NET 10 SDK and `dpkg-deb`. The version comes from `Directory.Build.props`. The Release workflow builds
+Needs the .NET 10 SDK, Node.js 24 with npm (the build bundles the page) and `dpkg-deb`. The version comes from `Directory.Build.props`. The Release workflow builds
 it together with the Windows setup (see "Release builds" in `installer/README.md`).
 
 ## What it installs

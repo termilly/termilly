@@ -62,6 +62,8 @@ internal static partial class Protocol
         public const string OriginalFile = "originalFile";
         /// <summary>The id an Agent call's response gives the subagent it started.</summary>
         public const string LaunchedAgentId = "agentId";
+        /// <summary>The id a background shell command's response gives its task.</summary>
+        public const string BackgroundTaskId = "backgroundTaskId";
     }
 
     /// <summary>The fields of a tool's input that are read.</summary>
@@ -133,21 +135,34 @@ internal static partial class Protocol
                 message[HookMessage.Fields.Transcript] = Text(payload, Payload.AgentTranscriptPath, MaxPath, cut: false);
             }
         }
-        var toolEvent = hookEvent is HookEvents.PreToolUse or HookEvents.PostToolUse;
-        if (toolEvent && tool is ClaudeTools.Agent or ClaudeTools.Task)
+        AddToolFields(message, payload, hookEvent, tool, agent);
+        AddSessionFields(message, payload, hookEvent);
+        return message.ToJsonString();
+    }
+
+    /// <summary>
+    /// A tool's event: what an Agent call starts, a shell command run in the background, what the tool works on now
+    /// (PreToolUse), and the files it changes or may change.
+    /// </summary>
+    private static void AddToolFields(JsonObject message, JsonObject? payload, string hookEvent, string? tool, string agent)
+    {
+        if (hookEvent is not (HookEvents.PreToolUse or HookEvents.PostToolUse))
+        {
+            return;
+        }
+        if (tool is ClaudeTools.Agent or ClaudeTools.Task)
         {
             AddAgentCall(message, payload);
+        }
+        if (tool is not null && ClaudeTools.ShellTools.Contains(tool) && ShellTask(payload, agent) is { } task)
+        {
+            message[HookMessage.Fields.ShellTask] = task;
         }
         if (hookEvent == HookEvents.PreToolUse && ActivityTarget(payload) is { } target)
         {
             message[HookMessage.Fields.Target] = target;
         }
-        if (toolEvent)
-        {
-            AddFiles(message, payload, tool);
-        }
-        AddSessionFields(message, payload, hookEvent);
-        return message.ToJsonString();
+        AddFiles(message, payload, tool);
     }
 
     /// <summary>
@@ -175,6 +190,28 @@ internal static partial class Protocol
         message[HookMessage.Fields.SubagentType] = Text(input, Input.SubagentType, MaxId);
         message[HookMessage.Fields.Background] = input?[Input.RunInBackground] is JsonValue bg && bg.TryGetValue<bool>(out var background) && background;
         message[HookMessage.Fields.LaunchedId] = Text(payload?[Payload.ToolResponse] as JsonObject, Payload.LaunchedAgentId, MaxId);
+    }
+
+    /// <summary>
+    /// A shell command run in the background: its call, its command (the start of it) and description, and once it has
+    /// started the task id it got, which names its output file. Null for one that runs in the foreground. Codex doesn't
+    /// say which run on: each of its commands is sent, and one still running when the turn ends is a task.
+    /// </summary>
+    private static JsonObject? ShellTask(JsonObject? payload, string agent)
+    {
+        var input = payload?[Payload.ToolInput] as JsonObject;
+        var background = input?[Input.RunInBackground] is JsonValue bg && bg.TryGetValue<bool>(out var flag) && flag;
+        if (!background && agent != AgentKinds.Codex)
+        {
+            return null;
+        }
+        return new JsonObject
+        {
+            [HookMessage.Fields.ToolUseId] = Text(payload, Payload.ToolUseId, MaxId),
+            [HookMessage.Fields.Command] = Text(input, Input.Command, HookMessage.MaxTaskCommand),
+            [HookMessage.Fields.Description] = Text(input, Input.Description, MaxId),
+            [HookMessage.Fields.TaskId] = Text(payload?[Payload.ToolResponse] as JsonObject, Payload.BackgroundTaskId, MaxId),
+        };
     }
 
     /// <summary>For the change preview: the file an edit tool changes, or the folders a shell command may change.</summary>

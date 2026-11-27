@@ -55,11 +55,11 @@ test('one that cannot be reached is greyed and says so', () => {
   assert.equal(row.submenu, undefined);
 });
 
-test('a workspace lists its terminals with what their agents do, the one shown here ticked, and opens them here', () => {
+test('a workspace lists its terminals with what their agents do, the one shown here picked, and opens them here', () => {
   const a = actions();
   const site = computerRows([laptop], a)[0].submenu()[0];
   const rows = site.submenu();
-  assert.deepEqual(rows.map(r => (r === SEPARATOR ? '-' : [r.label, r.hint ?? '', !!r.checked])),
+  assert.deepEqual(rows.map(r => (r === SEPARATOR ? '-' : [r.label, r.hint ?? '', !!r.picked])),
     [['Open all terminals', '', false], '-', ['claude', 'needs you', false], ['build', 'working', false], ['shell', '', true], '-', ['New terminal in w1', '', false]]);
   rows[3].action();
   assert.deepEqual(a.asked, [['open', 'pc1', 't2']]);

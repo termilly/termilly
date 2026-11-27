@@ -261,6 +261,7 @@ internal sealed class LinuxWindow
             {
                 // Rounded corners, maximize, and the page's own windows (Photino does none of them on macOS).
                 MacWindows.Hook(action => window.Invoke(action), _zoom / (double)InterfaceSettings.DefaultZoom);
+                MacMenus.Set(GtkWindow.Title);
                 ApplyBackdrop();
                 // Cmd+Q quits as Close does: asking first, after the last snapshot. Once the window has closed, it may.
                 MacQuit.Hook(() =>

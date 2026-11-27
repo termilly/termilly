@@ -1,0 +1,25 @@
+<Project>
+
+  <!--
+    The page as one file (scripts/bundle.mjs): after a build or a publish copies wwwroot, js/main.js there is the
+    whole page, so it loads in one request instead of 250-odd. Needs Node.js and `npm ci` (esbuild). A Release build
+    without them fails, so no release ships the slow page; any other build says so and keeps the files one by one.
+  -->
+  <PropertyGroup>
+    <PageBundler>$(MSBuildThisFileDirectory)bundle.mjs</PageBundler>
+    <PageBundlerReady Condition="Exists('$(MSBuildThisFileDirectory)..\node_modules\esbuild\package.json')">true</PageBundlerReady>
+    <PageBundlerMissing>The page isn't bundled: run `npm ci` in the repository (Node.js 24) so esbuild is there.</PageBundlerMissing>
+  </PropertyGroup>
+
+  <Target Name="BundlePage" AfterTargets="CopyFilesToOutputDirectory">
+    <Error Condition="'$(PageBundlerReady)' != 'true' and '$(Configuration)' == 'Release'" Text="$(PageBundlerMissing)" />
+    <Message Condition="'$(PageBundlerReady)' != 'true' and '$(Configuration)' != 'Release'" Importance="high" Text="$(PageBundlerMissing)" />
+    <Exec Condition="'$(PageBundlerReady)' == 'true'" Command="node &quot;$(PageBundler)&quot; &quot;$(OutDir)wwwroot&quot;" />
+  </Target>
+
+  <Target Name="BundlePublishedPage" AfterTargets="Publish">
+    <Error Condition="'$(PageBundlerReady)' != 'true' and '$(Configuration)' == 'Release'" Text="$(PageBundlerMissing)" />
+    <Exec Condition="'$(PageBundlerReady)' == 'true'" Command="node &quot;$(PageBundler)&quot; &quot;$(PublishDir)wwwroot&quot;" />
+  </Target>
+
+</Project>

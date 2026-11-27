@@ -228,7 +228,7 @@ toolbar.addEventListener('contextmenu', e => {
   e.preventDefault();
   const now = sideNow();
   const nowBeside = now === DOCK_SIDE.top ? besideNow() : undefined;
-  showMenu(PLACES.map(([side, beside, label]) => ({ label, checked: side === now && beside === nowBeside, action: () => dockBar(side, beside) })),
+  showMenu(PLACES.map(([side, beside, label]) => ({ label, picked: side === now && beside === nowBeside, action: () => dockBar(side, beside) })),
     { x: e.clientX, y: e.clientY });
 });
 

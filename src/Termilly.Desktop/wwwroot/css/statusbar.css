@@ -92,6 +92,8 @@ button.sb-item:hover, button.sb-item.open { background: var(--hover); color: var
 .sp-foot { display: flex; align-items: center; gap: 12px; padding: 5px 6px 5px 12px; border-top: 1px solid var(--border); color: var(--faint); font-size: 11px; }
 .sp-foot kbd { padding: 0 4px; border: 1px solid var(--border-strong); border-radius: 3px; color: var(--muted); font: 10px var(--term-font); }
 .sp-foot .spacer { flex: 1; }
+/* Picking a snippet (the Schedules window): no running, so its hints and buttons go. */
+.sp-pop:not(.sp-picking) .sp-pick, .sp-picking .sp-run { display: none; }
 .sp-foot button { height: 24px; padding: 0 9px; border-radius: 5px; color: var(--muted); }
 .sp-foot button:hover { background: var(--hover); color: var(--text); }
 .sw-group { display: flex; align-items: center; gap: 6px; border-radius: 6px; cursor: pointer; user-select: none; }

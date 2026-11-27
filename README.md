@@ -66,11 +66,12 @@ Checksums are in [SHA256SUMS](https://termilly.com/downloads/latest/SHA256SUMS).
 
 ## Build from source
 
-You need the [.NET 10 SDK](https://dotnet.microsoft.com/download) and, for the checks, Node.js 24.
+You need the [.NET 10 SDK](https://dotnet.microsoft.com/download) and Node.js 24: run `npm ci` once, the build uses it to bundle the page.
 
 **Windows** (the WebView2 runtime comes with Windows 11 and current Windows 10):
 
 ```powershell
+npm ci
 dotnet build Termilly.slnx
 dotnet run --project src/Termilly.Desktop
 ```
@@ -79,6 +80,7 @@ dotnet run --project src/Termilly.Desktop
 
 ```sh
 sudo apt install dotnet-sdk-10.0 libwebkit2gtk-4.1-0
+npm ci
 dotnet run --project src/Termilly.Linux
 ```
 
@@ -86,7 +88,6 @@ dotnet run --project src/Termilly.Linux
 
 ```sh
 dotnet test Termilly.slnx                    # on Linux: dotnet test tests/Termilly.Core.Tests
-npm ci
 npm run check                                # lint, types, JavaScript tests, generated files, sizes, copies
 ```
 

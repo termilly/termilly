@@ -88,6 +88,9 @@
 .sch-edit .snippet-command { min-height: 64px; margin-top: 8px; }
 /* The snippet's dropdown sits in the column itself, not in a field: as tall as the fields' and not squeezed by it. */
 .sch-edit > .field.dropdown { flex: none; margin-top: 8px; font-size: 12.5px; }
+/* A snippet's values as the schedule runs it, and the button that asks for them. */
+.sch-values { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+.sch-values-text { flex: 1; min-width: 0; overflow-wrap: anywhere; color: var(--muted); font-size: 12.5px; }
 .sch-head { margin: 16px 0 4px; color: var(--text-strong); font-size: 12.5px; font-weight: 600; }
 .sch-row { display: flex; gap: 10px; }
 .sch-row .dialog-field { flex: 1; min-width: 0; }

@@ -383,6 +383,13 @@ internal sealed class HostedSession : IShellSession
 
     public void Resize(int columns, int rows) => _host.Send(new HostRequest.Resize(_id, columns, rows));
 
+    /// <summary>The host is ending, and this shell with it: what it still sends isn't passed on.</summary>
+    public void Ended()
+    {
+        _killed = true;
+        _host.Forget(_id);
+    }
+
     /// <summary>The terminal was closed: the host ends its shell.</summary>
     public void Dispose()
     {

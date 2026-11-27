@@ -437,6 +437,11 @@ function syncControls() {
       /** @type {HTMLSelectElement} */ (el).value = String(value ?? (el.dataset.setting === DEFAULT_SHELL ? state.profiles[0]?.id : null) ?? '');
     }
   }
+  for (const flag of /** @type {NodeListOf<HTMLElement>} */ (body.querySelectorAll('[data-flag]'))) {
+    const on = !!getSetting(/** @type {string} */ (flag.dataset.flag));
+    flag.classList.toggle('on', on);
+    flag.setAttribute('aria-pressed', String(on));
+  }
   for (const range of /** @type {NodeListOf<HTMLInputElement>} */ (body.querySelectorAll(RANGE_SETTING))) {
     showRange(range, Number(getSetting(/** @type {string} */ (range.dataset.rangeSetting))));
   }
@@ -504,6 +509,8 @@ body.addEventListener('click', e => {
     const raw = option.dataset.value;
     return saveSetting(key, typeof getSetting(key) === 'number' ? Number(raw) : raw);
   }
+  const flag = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-flag]'));
+  if (flag) return saveSetting(/** @type {string} */ (flag.dataset.flag), !getSetting(/** @type {string} */ (flag.dataset.flag)));
   const sw = /** @type {HTMLElement | null} */ (targetOf(e).closest('.switch[data-setting]'));
   if (sw) {
     saveSetting(/** @type {string} */ (sw.dataset.setting), !getSetting(/** @type {string} */ (sw.dataset.setting)));

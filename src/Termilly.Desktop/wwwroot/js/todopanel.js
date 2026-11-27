@@ -1160,7 +1160,7 @@ function beginIssue(task, sub) {
  */
 function statusMenu(task, at) {
   showMenu(Object.values(TASK_STATUS).map(status => ({
-    label: STATUS_NAME[status], icon: STATUS_ICON[status], hint: status === statusOf(task) ? '✓' : '',
+    label: STATUS_NAME[status], icon: STATUS_ICON[status], picked: status === statusOf(task), pickHint: '✓',
     action: () => changeStatus(task, status),
   })), at);
 }

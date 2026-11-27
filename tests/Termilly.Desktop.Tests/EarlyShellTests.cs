@@ -1,0 +1,171 @@
+using Termilly.Desktop.Features;
+
+namespace Termilly.Desktop.Tests;
+
+/// <summary>A shell started before the page was up: its resume command, its answers, and the page taking it over.</summary>
+public sealed class EarlyShellTests
+{
+    private const string Command = "claude --resume 0f8e2c1a-1111-2222-3333-444455556666";
+    private const string VersionReply = "\u001bP>|Termilly 9.9.9\u001b\\";
+    private static readonly TimeSpan Wait = TimeSpan.FromSeconds(5);
+
+    /// <summary>A shell that keeps what's typed into it.</summary>
+    private sealed class FakeShell : IShellSession
+    {
+        private readonly List<string> _typed = [];
+        public int ProcessId => 1;
+        public IReadOnlyList<string> Typed { get { lock (_typed) { return [.. _typed]; } } }
+        public void Write(string text) { lock (_typed) { _typed.Add(text); } }
+        public void Resize(int columns, int rows) { }
+        public void Dispose() { }
+    }
+
+    private static (EarlyShell Early, FakeShell Shell) Started()
+    {
+        var shell = new FakeShell();
+        return (new EarlyShell(Command, VersionReply, 80, 24) { Session = shell }, shell);
+    }
+
+    private static void WaitFor(Func<bool> done)
+    {
+        var until = DateTime.UtcNow + Wait;
+        while (!done() && DateTime.UtcNow < until)
+        {
+            Thread.Sleep(10);
+        }
+    }
+
+    [Fact]
+    public void The_command_is_typed_once_at_the_first_prompt()
+    {
+        var (early, shell) = Started();
+        early.Print("Windows PowerShell\r\n");
+        Assert.Empty(shell.Typed);
+        early.Print("\u001b]133;A\u0007PS C:\\> \u001b]133;B\u0007");
+        early.Print("\u001b]133;A\u0007PS C:\\> \u001b]133;B\u0007");
+        WaitFor(() => shell.Typed.Count > 0);
+        Thread.Sleep(PromptTiming.AtPromptMs * 2);
+        Assert.Equal([$"{Command}\r"], shell.Typed);
+    }
+
+    [Fact]
+    public void A_mark_split_between_two_chunks_is_seen()
+    {
+        var (early, shell) = Started();
+        early.Print("PS> \u001b]13");
+        early.Print("3;B\u0007");
+        WaitFor(() => shell.Typed.Count > 0);
+        Assert.Equal([$"{Command}\r"], shell.Typed);
+    }
+
+    [Fact]
+    public void The_version_query_is_answered_until_the_page_takes_over()
+    {
+        var (early, shell) = Started();
+        early.Print("\u001b[>0q");
+        Assert.Contains(VersionReply, shell.Typed);
+        early.Take(_ => { }, _ => { }, _ => { });
+        early.Print("\u001b[>0q");
+        Assert.Single(shell.Typed, VersionReply);
+    }
+
+    [Fact]
+    public void A_shell_asking_where_its_cursor_is_is_answered_at_once_until_the_page_takes_over()
+    {
+        // PowerShell asks as it starts, and waits about 11 s for an answer that doesn't come.
+        var (early, shell) = Started();
+        early.Print("\u001b[6n");
+        Assert.Equal(["\u001b[1;1R"], shell.Typed);
+        early.Print("\u001b[c");
+        Assert.Equal(["\u001b[1;1R", "\u001b[?1;2c"], shell.Typed);
+        early.Take(_ => { }, _ => { }, _ => { });
+        early.Print("\u001b[6n");
+        Assert.Equal(2, shell.Typed.Count); // the page answers now
+    }
+
+    [Fact]
+    public void A_query_is_answered_once_however_the_output_comes()
+    {
+        var (early, shell) = Started();
+        // Split between two chunks: answered when it's whole.
+        early.Print("x\u001b[>");
+        early.Print("0q");
+        Assert.Equal([VersionReply], shell.Typed);
+        // Still in the tail kept from before: not answered again.
+        early.Print("y");
+        Assert.Single(shell.Typed);
+        // Asked twice in one chunk: answered twice.
+        early.Print("\u001b[>0q..\u001b[>0q");
+        Assert.Equal(3, shell.Typed.Count);
+    }
+
+    [Fact]
+    public void Where_the_cursor_is_is_answered_where_the_output_left_it()
+    {
+        // PowerShell asks again at its prompt: after it, not the top left. The mark draws nothing.
+        var (early, shell) = Started();
+        early.Print("\u001b]133;A\u0007PS /home/me> \u001b[6n");
+        Assert.Equal(["\u001b[1;14R"], shell.Typed);
+        // After the typed command and its line break, in a later chunk.
+        early.Print("claude --resume x\r\n");
+        early.Print("\u001b[6n");
+        Assert.Equal("\u001b[2;1R", shell.Typed[^1]);
+    }
+
+    [Fact]
+    public void Answers_go_in_the_order_asked_and_wait_for_the_session()
+    {
+        // Asked before the shell's session is known (its output came first): answered once it is.
+        var shell = new FakeShell();
+        var early = new EarlyShell(Command, VersionReply, 80, 24);
+        early.Print("\u001b[c\u001b[6n");
+        Assert.Empty(shell.Typed);
+        early.Session = shell;
+        Assert.Equal(["\u001b[?1;2c", "\u001b[1;1R"], shell.Typed);
+    }
+
+    [Fact]
+    public void On_Windows_the_console_host_answers_where_the_cursor_is_not_it()
+    {
+        var shell = new FakeShell();
+        var early = new EarlyShell(Command, VersionReply, 80, 24, answersTerminal: false) { Session = shell };
+        early.Print("\u001b[6n\u001b[c\u001b[>0q");
+        Assert.Equal([VersionReply], shell.Typed);
+    }
+
+    [Fact]
+    public void What_it_printed_is_replayed_first_then_the_rest_goes_live()
+    {
+        var (early, _) = Started();
+        early.Print("one ");
+        early.Print("two ");
+        var replayed = new List<string>();
+        var live = new List<string>();
+        early.Take(live.Add, replayed.Add, _ => { });
+        early.Print("three");
+        Assert.Equal(["one two "], replayed);
+        Assert.Equal(["three"], live);
+    }
+
+    [Fact]
+    public void An_agent_report_before_the_page_takes_over_is_told_after_the_replay()
+    {
+        var (early, _) = Started();
+        var heard = new List<string>();
+        Assert.True(early.Keep(() => heard.Add("SessionStart")));
+        early.Take(_ => heard.Add("live"), _ => heard.Add("replay"), _ => { });
+        Assert.False(early.Keep(() => heard.Add("late")));
+        Assert.Equal(["SessionStart"], heard);
+    }
+
+    [Fact]
+    public void An_exit_before_the_page_takes_over_is_told_after_the_replay()
+    {
+        var (early, _) = Started();
+        early.Print("No conversation found");
+        early.Exited(1);
+        var heard = new List<string>();
+        early.Take(_ => heard.Add("live"), _ => heard.Add("replay"), code => heard.Add($"exit {code}"));
+        Assert.Equal(["replay", "exit 1"], heard);
+    }
+}

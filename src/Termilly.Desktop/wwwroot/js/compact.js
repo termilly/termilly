@@ -972,7 +972,7 @@ export function updateSwitch(tab) {
  */
 export function openViewMenu(tab, anchor) {
   const shown = shownView(tab);
-  showMenu(VIEWS.map(v => ({ label: v.label, icon: v.icon, title: v.title, hint: v.view === shown ? ICONS.tick : '', action: () => setView(tab, v.view) })), anchor);
+  showMenu(VIEWS.map(v => ({ label: v.label, icon: v.icon, title: v.title, picked: v.view === shown, pickHint: ICONS.tick, action: () => setView(tab, v.view) })), anchor);
 }
 
 /**

@@ -9,15 +9,22 @@
 import { state, on, emit, EVENTS } from './store.js';
 import { focusedTab } from './panes.js';
 import { openPopover, closePopover, placeAgain, SIDE } from './popups.js';
+import { hereDoc } from './windows.js';
 import { escapeHtml, ICONS } from './ui.js';
 import { fuzzyMatch, highlightPositions } from './fuzzy.js';
 import { byId, find, field, targetOf } from './dom.js';
-import { globalSnippets, editSnippet } from './snippets.js';
+import { globalSnippets, editSnippet, THIS_COMPUTER } from './snippets.js';
 import { SOURCE, REPO_FILE, LAYOUT_FILE, taskFiles, repoOfTab, folderOfTab, loadRepo } from './reposnippets.js';
 import { runAny, RUN_MODE } from './taskrun.js';
 
 /** @typedef {import('./reposnippets.js').ListedSnippet} ListedSnippet */
 /** @typedef {{ key: string, title: string, file: string, rows: ListedSnippet[], empty?: string }} Group */
+/**
+ * Picking a snippet instead of running it (the Schedules window's): what's on offer, the one picked so far, and what
+ * takes the pick.
+ * groups is read at each redraw, so a snippet changed meanwhile shows as it is.
+ * @typedef {{ groups: () => Group[], current: string, onPick: (name: string) => void }} PickFor
+ */
 
 const EDIT_ICON = ICONS.rename;
 const NEW_TERMINAL_ICON = ICONS.terminal;
@@ -38,9 +45,10 @@ pop.innerHTML = `
   <div class="bp-search">${ICONS.search}<input type="text" spellcheck="false" autocomplete="off" placeholder="Search snippets and tasks"></div>
   <div class="sp-list" role="listbox"></div>
   <div class="sp-foot">
-    <span><kbd>Enter</kbd> run</span><span><kbd>Alt</kbd>+<kbd>Enter</kbd> type only</span><span><kbd>Ctrl</kbd>+<kbd>Enter</kbd> new terminal</span>
+    <span class="sp-run"><kbd>Enter</kbd> run</span><span class="sp-run"><kbd>Alt</kbd>+<kbd>Enter</kbd> type only</span><span class="sp-run"><kbd>Ctrl</kbd>+<kbd>Enter</kbd> new terminal</span>
+    <span class="sp-pick"><kbd>Enter</kbd> pick</span>
     <span class="spacer"></span>
-    <button data-sp="${ACT.create}">New</button><button data-sp="${ACT.manage}">Manage</button>
+    <button class="sp-run" data-sp="${ACT.create}">New</button><button class="sp-run" data-sp="${ACT.manage}">Manage</button>
   </div>`;
 
 const input = field(pop, 'input');
@@ -48,9 +56,11 @@ const listEl = find(pop, '.sp-list');
 
 /**
  * What the list shows, flat in its order, the row picked, and whether it's open.
- * @type {{ shown: ListedSnippet[], cursor: number, open: boolean }}
+ * @type {{ shown: ListedSnippet[], cursor: number, open: boolean, for: PickFor | null }}
  */
-const pick = { shown: [], cursor: 0, open: false };
+const pick = { shown: [], cursor: 0, open: false, for: null };
+/** The class of the list while it picks instead of runs: its run hints and buttons hide. */
+const PICKING = 'sp-picking';
 
 /**
  * Newest run first; those never run keep the file's order.
@@ -63,6 +73,7 @@ function byUse(rows) {
 
 /** The groups for the focused terminal: its repository's (when it's in one), this computer's, the repository's tasks. */
 function groups() {
+  if (pick.for) return pick.for.groups();
   const tab = focusedTab();
   const repo = repoOfTab(tab);
   /** @type {Group[]} */
@@ -97,7 +108,7 @@ function rowHtml(s, i, q) {
   return `<div class="sp-row${i === pick.cursor ? ' sel' : ''}" data-i="${i}" role="option" title="${escapeHtml(`${s.command}${s.description ? `\n${s.description}` : ''}`)}">
     <span class="sp-text"><span class="sp-name">${marked(s.name, q)}</span><code class="sp-cmd">${marked(s.command, q)}</code></span>
     ${meta ? `<span class="sp-meta">${escapeHtml(meta)}</span>` : ''}
-    <span class="sp-acts">${s.task || s.scope === SOURCE.shared ? '' : `<button data-sp="${ACT.edit}" title="Edit">${EDIT_ICON}</button>`}<button data-sp="${ACT.newTerminal}" title="Run in a new terminal (Ctrl+Enter)">${NEW_TERMINAL_ICON}</button></span>
+    ${pick.for ? '' : `<span class="sp-acts">${s.task || s.scope === SOURCE.shared ? '' : `<button data-sp="${ACT.edit}" title="Edit">${EDIT_ICON}</button>`}<button data-sp="${ACT.newTerminal}" title="Run in a new terminal (Ctrl+Enter)">${NEW_TERMINAL_ICON}</button></span>`}
   </div>`;
 }
 
@@ -145,8 +156,9 @@ function render() {
     for (const s of rows) html += rowHtml(s, pick.shown.push(s) - 1, q);
   }
   pick.cursor = Math.min(pick.cursor, Math.max(0, pick.shown.length - 1));
-  if (!pick.shown.length) {
-    html += q ? `<div class="sp-empty">No snippet or task matches. <b>Enter</b> saves “${escapeHtml(q)}” as a new snippet.</div>`
+  if (!pick.shown.length && pick.for) html += '<div class="sp-empty">No snippet matches.</div>';
+  else if (!pick.shown.length) {
+    html += q ?`<div class="sp-empty">No snippet or task matches. <b>Enter</b> saves “${escapeHtml(q)}” as a new snippet.</div>`
       : '<div class="sp-empty">No snippets yet. Make one with New, or use “Save the last command as a snippet” in a terminal’s menu.</div>';
   }
   listEl.innerHTML = html;
@@ -162,8 +174,10 @@ function render() {
 function run(i, mode) {
   const s = pick.shown[i];
   if (!s) return;
+  const picking = pick.for;
   closePopover(pop);
-  setTimeout(() => runAny(s, mode));
+  if (picking) picking.onPick(s.name);
+  else setTimeout(() => runAny(s, mode));
 }
 
 /** @param {{ id?: string, create?: boolean }} options */
@@ -186,7 +200,7 @@ input.addEventListener('keydown', e => {
     e.preventDefault();
     const q = input.value.trim();
     if (!pick.shown.length) {
-      if (!q) return;
+      if (!q || pick.for) return;
       closePopover(pop);
       setTimeout(() => editSnippet({ command: q }));
       return;
@@ -222,20 +236,76 @@ pop.addEventListener('mousemove', e => {
 
 on(EVENTS.snippets, render);
 
+/**
+ * Opens the list against anchor, in the window anchor is in (the Schedules window may be one of its own), to run or to
+ * pick. The row picked before is the one selected.
+ * @param {HTMLElement | { x: number, y: number }} anchor
+ * @param {PickFor | null} picking
+ * @param {Document} [doc] the window's document anchor is in
+ */
+function open(anchor, picking, doc = document) {
+  if (!pop.isConnected || pop.ownerDocument !== doc) doc.body.append(pop);
+  input.value = '';
+  // Open once it's placed: placing it closes it first when it was open, and that says it's shut.
+  const onClose = () => { pick.open = false; pick.for = null; pop.classList.remove(PICKING); };
+  // Picking, the keyboard goes back to what opened it (the Schedules form's button), not to a terminal.
+  const button = picking ? /** @type {HTMLElement} */ (anchor) : null;
+  openPopover(pop, anchor, { side: SIDE.below, dynamic: true, onClose, refocus: button ? () => { if (button.isConnected) button.focus(); } : undefined });
+  Object.assign(pick, { cursor: 0, open: true, for: picking });
+  pop.classList.toggle(PICKING, !!picking);
+  render();
+  const at = picking ? pick.shown.findIndex(s => s.name === picking.current) : -1;
+  if (at > 0) {
+    pick.cursor = at;
+    render();
+  }
+  input.focus();
+}
+
+/**
+ * Snippets as the pick list groups them: by where each is kept (this computer, or a repository and its file), the
+ * last run first.
+ * @param {ListedSnippet[]} snippets
+ * @returns {Group[]}
+ */
+export function groupsOf(snippets) {
+  /** @type {Map<string, Group>} */
+  const found = new Map();
+  for (const s of snippets) {
+    const repo = s.scope !== SOURCE.global;
+    const title = repo ? s.root?.split(/[\\/]/).filter(Boolean).pop() ?? 'Repo' : THIS_COMPUTER;
+    const file = !repo ? '' : s.scope === SOURCE.shared ? LAYOUT_FILE : REPO_FILE;
+    const key = `${repo ? s.root ?? '' : ''}\n${file}`;
+    if (!found.has(key)) found.set(key, { key, title, file, rows: [] });
+    found.get(key)?.rows.push(s);
+  }
+  return [...found.values()].map(g => ({ ...g, rows: byUse(g.rows) }));
+}
+
+/**
+ * Opens the list to pick a snippet (the Schedules window's): Enter or a click picks one, nothing runs.
+ * @param {HTMLElement} anchor
+ * @param {PickFor} picking
+ */
+export const pickSnippet = (anchor, picking) => open(anchor, picking, anchor.ownerDocument);
+
 /** Opens the list under the snippets button (or near the top of the window when it isn't shown). */
 export function openSnippetPick() {
   const button = byId(SNIPPETS_BUTTON);
-  const anchor = button.offsetParent ? button : { x: Math.max(0, (window.innerWidth - WIDTH) / 2), y: FALLBACK_TOP };
-  input.value = '';
-  // Open once it's placed: placing it closes it first when it was open, and that says it's shut.
-  openPopover(pop, anchor, { side: SIDE.below, dynamic: true, onClose: () => { pick.open = false; } });
-  Object.assign(pick, { cursor: 0, open: true });
-  render();
-  input.focus();
+  // Without the title bar's button, it opens in the window the user is in, in the middle of that one.
+  const doc = button.offsetParent ? document : hereDoc();
+  const width = (doc.defaultView ?? window).innerWidth;
+  const anchor = button.offsetParent ? button : { x: Math.max(0, (width - WIDTH) / 2), y: FALLBACK_TOP };
+  open(anchor, null, doc);
   // Read again: the repository's files may have changed while nothing watched them (a network share).
   loadRepo(folderOfTab(focusedTab()));
 }
 
 /** Opens the list, or closes it when it's open (the title bar's button). */
-export const toggleSnippetPick = () => (pick.open ? closePopover(pop) : openSnippetPick());
+export const toggleSnippetPick = () => (pick.open && !pick.for ? closePopover(pop) : openSnippetPick());
+
+/** Closes the list when it's picking for the Schedules window (that window closed). */
+export function endSnippetPick() {
+  if (pick.for) closePopover(pop);
+}
 

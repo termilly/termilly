@@ -48,7 +48,7 @@
   "logTags": [ "prod" ],
   "logProfiles": [ "ssh-db" ],
   "snippets": [ { "id": "s1", "name": "Deploy", "command": "make deploy ENV={{env}}", "description": "Ships it", "enter": false } ],
-  "agentLine": "focused",
+  "agentLine": "off",
   "costDisplay": "tokens",
   "gitStatus": false,
   "agentReadDefault": false,

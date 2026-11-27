@@ -85,9 +85,7 @@ export function activityLine(m) {
  * @param {Tab} tab
  */
 export function showsLine(tab) {
-  const mode = state.settings.agents.line ?? agentLine.default;
-  if (mode === agentLine.off || !tab.agent?.line) return false;
-  return mode === agentLine.on || tab.wsId === state.activeId;
+  return (state.settings.agents.line ?? agentLine.default) !== agentLine.off && !!tab.agent?.line;
 }
 
 /** @param {Tab} tab */

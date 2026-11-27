@@ -96,6 +96,12 @@ internal sealed record InterfaceSettings
     public string Layout { get; init; } = SettingValues.Layout.Default;
     /// <summary>In Minimal, a terminal's name on a line over it or on a bar shown on hover (<see cref="SettingValues.PaneNames"/>).</summary>
     public string PaneNames { get; init; } = SettingValues.PaneNames.Default;
+    /// <summary>Each workspace's colour dot: in the sidebar (Normal) and on the dock's workspace button (Minimal).</summary>
+    public bool WorkspaceDots { get; init; } = true;
+    /// <summary>The line down the sidebar that ties a workspace's terminals to it (Normal).</summary>
+    public bool TreeLines { get; init; } = true;
+    /// <summary>How menus that pick one of several mark the chosen one (<see cref="SettingValues.MenuPick"/>).</summary>
+    public string MenuPick { get; init; } = SettingValues.MenuPick.Default;
     /// <summary>The app's font; null: the system's.</summary>
     public string? Font { get; init; }
     public bool ShowActivity { get; init; } = true;
@@ -144,6 +150,7 @@ internal sealed record InterfaceSettings
             .DistinctBy(t => t.Id).Take(CustomThemeLimits.MaxThemes).ToList(),
         Layout = SettingChecks.OneOf(Layout, SettingValues.Layout.All, SettingValues.Layout.Default),
         PaneNames = SettingChecks.OneOf(PaneNames, SettingValues.PaneNames.All, SettingValues.PaneNames.Default),
+        MenuPick = SettingChecks.OneOf(MenuPick, SettingValues.MenuPick.All, SettingValues.MenuPick.Default),
         MinimizeTo = SettingChecks.OneOf(MinimizeTo, SettingValues.MinimizeTo.All, SettingValues.MinimizeTo.Default),
         CloseAction = SettingChecks.OneOf(CloseAction, SettingValues.CloseAction.All, SettingValues.CloseAction.Default),
         Font = SettingChecks.Trimmed(Font),
@@ -472,10 +479,16 @@ internal sealed record AgentSettings
     /// Haiku prompt at most every 15 minutes (Features/PlanRefresh.cs).
     /// </summary>
     public bool RefreshLimits { get; init; } = true;
+    /// <summary>An agent's background tasks as rows under its terminal in the sidebar (Features/BackgroundTasks.cs).</summary>
+    public bool TasksInSidebar { get; init; } = true;
+    /// <summary>An agent's background tasks as a chip in its terminal's bar, which lists them.</summary>
+    public bool TasksInBar { get; init; } = true;
 
     public AgentSettings Normalize() => this with
     {
         Limit = SettingChecks.OneOf(Limit, SettingValues.AgentLimit.All, SettingValues.AgentLimit.Default),
+        // The old "This workspace" choice is gone: it shows everywhere now.
+        Line = SettingChecks.OneOf(Line, SettingValues.AgentLine.All, SettingValues.AgentLine.Default),
     };
 }
 

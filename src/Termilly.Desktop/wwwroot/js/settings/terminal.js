@@ -1,5 +1,5 @@
 // @ts-check
-// Settings › Terminal: the default shell, scrollback, agents, production safety, logs, recordings, triggers and the
+// Settings › Terminal: the default shell, scrollback, listening ports, agents, production safety, logs, recordings, triggers and the
 // shell profiles. Notifications and sounds have their own page (notifications.js).
 
 import { sys, SYSTEM_NAME } from '../host.js';
@@ -7,7 +7,7 @@ import { state, isSshProfile, activityChanged, GROUPS } from '../store.js';
 import { escapeHtml, ICONS, profileOptionsHtml } from '../ui.js';
 import { environments } from '../environments.js';
 import { updateSettings } from '../preferences.js';
-import { row, seg, toggle, group, choices } from './controls.js';
+import { row, seg, toggle, group, choices, flags } from './controls.js';
 import { SECTION } from './page.js';
 import { triggerList, triggerActions, triggerClick, triggerChange, triggerInput } from './triggers.js';
 import { shellList, profileActions, profileClick } from './profiles.js';
@@ -73,6 +73,7 @@ const TERMINAL = {
     + row('Scrollback out of sight', 'Fewer lines for terminals in other workspaces, to save memory.',
       seg('session.hiddenScrollback', choices(hiddenScrollback.all, lines => (lines ? lines.toLocaleString('en-US') : 'Same'))))
     + row('Containers and pods', 'Docker containers and Kubernetes pods in the + menu.', toggle('shells.dynamicSources'))
+    + row('Listening ports', 'Ports a terminal’s programs listen on; click one to open it.', toggle('terminal.ports'), { keywords: 'port server localhost dev listening url' })
     + row('Activity spinner', 'Spins while a command runs or a program reports progress.',
       toggle('interface.showActivity'))
     + row('Agent integration', 'Claude Code and Codex report what they’re doing. New terminals only.',
@@ -85,7 +86,9 @@ const TERMINAL = {
     + row('Agent cost', 'What each agent has cost, in the sidebar and its status bar.',
       seg('agents.costDisplay', [[costDisplay.cost, 'Dollars'], [costDisplay.tokens, 'Tokens'], [costDisplay.off, 'Off']]), { keywords: 'agent claude cost price dollars tokens spend usage budget' })
     + row('Agent activity line', 'A dim line under an agent’s row: what it’s doing now.',
-      seg('agents.line', [[agentLine.on, 'On'], [agentLine.focused, 'This workspace'], [agentLine.off, 'Off']]), { keywords: 'agent claude activity status line sidebar' })
+      seg('agents.line', [[agentLine.on, 'On'], [agentLine.off, 'Off']]), { keywords: 'agent claude activity status line sidebar' })
+    + row('Where to show background tasks', 'The spinner and "done" still wait for them.',
+      flags([['agents.tasksInSidebar', 'Workspace'], ['agents.tasksInBar', 'Terminal bar']]), { keywords: 'background task agent command running review test server sidebar chip bar' })
     + row('Live agents', 'Above this many, idle agents in other workspaces hibernate.',
       seg('agents.limit', choices(agentLimit.all, limit => (limit ? String(limit) : 'No limit')))))
     + group('Status bar', statusBarRows())
@@ -131,7 +134,7 @@ const TERMINAL = {
   },
   input: triggerInput,
   changed(key) {
-    if (key === 'interface.showActivity') for (const tab of state.tabs.values()) activityChanged(tab, true);
+    if (key === 'interface.showActivity' || key === 'agents.tasksInSidebar') for (const tab of state.tabs.values()) activityChanged(tab, true);
   },
 };
 

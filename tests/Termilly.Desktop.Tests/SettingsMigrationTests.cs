@@ -65,7 +65,7 @@ public sealed class SettingsMigrationTests : IDisposable
         Assert.Equal((@"D:\logs", "raw", true, false, 30, "prod", "ssh-db"), (s.Logging.Folder, s.Logging.Format, s.Logging.Timestamps, s.Logging.Redact, s.Logging.KeepDays, s.Logging.Tags![0], s.Logging.Profiles![0]));
         Assert.Equal((@"D:\casts", false, true, 250), (s.Recording.Folder, s.Recording.Redact, s.Recording.Agents, s.Recording.MaxMb));
         Assert.Equal((false, false, "main", "db", "pg"), (s.Ssh.KeepAlive, s.Ssh.Reconnect, s.Ssh.Attach!["ssh-db"], s.Ssh.Connections![0].Name, s.Ssh.Forwards![0].Name));
-        Assert.Equal((false, 4, false, true, "focused", "tokens", false, false), (s.Agents.Integration, s.Agents.Limit, s.Agents.ReadDefault, s.Agents.ApiAllowInput, s.Agents.Line, s.Agents.CostDisplay, s.Agents.ClaudeUsage, s.Agents.ClaudeLimits));
+        Assert.Equal((false, 4, false, true, "off", "tokens", false, false), (s.Agents.Integration, s.Agents.Limit, s.Agents.ReadDefault, s.Agents.ApiAllowInput, s.Agents.Line, s.Agents.CostDisplay, s.Agents.ClaudeUsage, s.Agents.ClaudeLimits));
         Assert.Equal((false, "float", false, false, false, "git", "last", "session"), (s.Changes.Enabled, s.Changes.Placement, s.Changes.Links, s.Changes.Button, s.Changes.Shortcut, s.Changes.Source, s.Changes.Compare, s.Changes.Keep));
         Assert.Equal((25, false, true, 8192, "sideBySide", "follow", "diff", false), (s.Changes.Context, s.Changes.Highlight, s.Changes.Wrap, s.Changes.MaxFileKb, s.Changes.Layout, s.Changes.Follow, s.Changes.NewFile, s.Changes.ShellFiles));
         Assert.Equal("installed", s.Remote.Setup!["ssh-db"]);
@@ -148,5 +148,13 @@ public sealed class SettingsMigrationTests : IDisposable
         Assert.Equal(("git", SettingValues.ChangeContext.Default), (after.Changes.Source, after.Changes.Context));
         Assert.True(after.Notifications.JumpHotkey);
         Assert.Same(before, before.WithGroup("nothing", values));
+    }
+
+    [Fact]
+    public void The_old_this_workspace_activity_line_shows_everywhere()
+    {
+        var values = JsonElement.Parse("""{ "line": "focused" }""");
+
+        Assert.Equal(SettingValues.AgentLine.On, new AppSettings().WithGroup("agents", values).Agents.Line);
     }
 }

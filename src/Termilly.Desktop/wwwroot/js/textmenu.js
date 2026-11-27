@@ -45,24 +45,31 @@ export function copyOut(text, source) {
 /**
  * Shows the menu of a right-click in a text box.
  * @param {MouseEvent} e
- * @param {HTMLTextAreaElement} area
+ * @param {HTMLTextAreaElement | HTMLInputElement} area
  * @param {string} source who copies, as Clipboard shows it
  * @param {import('./popups.js').MenuEntry[]} own the box's own entries, if any, after a separator
+ * @param {{ readOnly?: boolean, secret?: boolean }} [kind] readOnly: nothing goes in (no Cut or Paste); secret: nothing
+ *   comes out (a password's Cut and Copy are off, as the browser has them)
  */
-export function textBoxMenu(e, area, source, own) {
+export function textBoxMenu(e, area, source, own, { readOnly = false, secret = false } = {}) {
   e.preventDefault();
-  const { selectionStart: start, selectionEnd: end } = area;
+  const start = area.selectionStart ?? 0;
+  const end = area.selectionEnd ?? 0;
   const selected = start !== end;
   const selection = area.value.slice(start, end);
   /** @param {string} text */
   const insert = text => typeInto(area, text);
   /** @param {(text: string) => string} [clean] */
   const paste = (clean = t => t) => readClipboardText().then(text => { if (text) insert(clean(text)); }).catch(() => {});
-  showMenu([
-    { label: 'Cut', icon: MENU_ICONS.cut, hint: 'Ctrl+X', disabled: !selected, action: () => { copyOut(selection, source); insert(''); } },
-    { label: COPY, icon: ICONS.copy, hint: MENU_KEYS.copy, disabled: !selected, action: () => copyOut(selection, source) },
+  /** @type {import('./popups.js').MenuEntry[]} */
+  const writes = readOnly ? [] : [
     { label: PASTE_LABEL, icon: ICONS.paste, hint: MENU_KEYS.paste, action: () => paste() },
     { label: 'Paste as plain text', icon: MENU_ICONS.pastePlain, title: 'Without the colour codes, control characters and trailing spaces a terminal adds', action: () => paste(plainText) },
+  ];
+  showMenu([
+    ...(readOnly ? [] : [{ label: 'Cut', icon: MENU_ICONS.cut, hint: 'Ctrl+X', disabled: !selected || secret, action: () => { copyOut(selection, source); insert(''); } }]),
+    { label: COPY, icon: ICONS.copy, hint: MENU_KEYS.copy, disabled: !selected || secret, action: () => copyOut(selection, source) },
+    ...writes,
     ...(own.length ? /** @type {import('./popups.js').MenuEntry[]} */ ([SEPARATOR]) : []),
     ...own,
   ], { x: e.clientX, y: e.clientY }, {

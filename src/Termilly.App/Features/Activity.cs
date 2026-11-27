@@ -28,6 +28,9 @@ internal sealed class ActivityWatcher : IStartable, IDisposable
     /// <summary>Enter may have started a command: look now, not on the next tick.</summary>
     public void Nudge() => _watcher?.Nudge();
 
+    /// <summary>The page opened a terminal: what it runs goes out again (BusyWatcher.Resend).</summary>
+    public void Resend(string id) => _watcher?.Resend(id);
+
     private void Update()
     {
         if (_settings.Current.Interface.ShowActivity && _watcher is null)

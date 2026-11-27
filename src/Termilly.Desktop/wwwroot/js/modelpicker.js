@@ -83,7 +83,7 @@ async function typeModel(tab, model, name) {
 function claudeItems(tab, state) {
   const model = tickedModel(tab, AGENT_KIND.claude).toLowerCase();
   return CLAUDE_MODELS.map(m => ({
-    label: m.label, hint: escapeHtml(m.hint), checked: model.includes(m.alias), ...state,
+    label: m.label, hint: escapeHtml(m.hint), picked: model.includes(m.alias), ...state,
     action: () => typeModel(tab, m.alias, m.label),
   }));
 }
@@ -99,7 +99,7 @@ function codexItems(tab, state, models) {
   const model = tickedModel(tab, AGENT_KIND.codex);
   if (!models.length) return [{ label: 'Codex hasn’t listed its models yet', disabled: true, title: 'Run codex once, or open this again in a moment' }];
   return models.map(m => ({
-    label: m.name, checked: m.slug === model, ...state, title: state.title || (m.description ?? ''),
+    label: m.name, picked: m.slug === model, ...state, title: state.title || (m.description ?? ''),
     action: () => typeModel(tab, m.slug, m.name),
   }));
 }

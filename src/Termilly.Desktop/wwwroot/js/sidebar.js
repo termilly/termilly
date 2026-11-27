@@ -23,6 +23,7 @@ import { openCount, hoverLines } from './todolist.js';
 import { environmentOf } from './environments.js';
 import { showsLine, isAgentWorking, stopAgent, stopAllAgents } from './agentline.js';
 import { subagentRowsHtml, runningSubagents } from './subagents.js';
+import { taskRowsHtml } from './backgroundtasks.js';
 import { costOf, costText, costTitle, workspaceCost, dollars, costMode } from './cost.js';
 import { tabProjectHtml, openPort, repoOf } from './gitstatus.js';
 import { remoteRailHtml, openRemoteMenu } from './remote.js';
@@ -123,7 +124,7 @@ function tabRowHtml(tab, ws) {
     <span class="chips">${tabProjectHtml(tab)}${tab.tags.map(t => tagChipHtml(t, { mini: true })).join('')}${tab.tags.length > 1
       ? `<span class="tag mini more-tags" data-more-tags title="Show all tags">+${tab.tags.length - 1}</span>` : ''}${activityHtml(activityOf(tab), MINI_ACTIVITY)}${tab.attention ? '<span class="attn"></span>' : ''}${costText(costOf(tab)) ? `<span class="cost-chip" title="${escapeHtml(costTitle(costOf(tab)))}">${escapeHtml(costText(costOf(tab)))}</span>` : ''}${runningSubagents(tab) ? `<span class="sub-badge" title="Subagents running">${runningSubagents(tab)} agent${runningSubagents(tab) === 1 ? '' : 's'}</span>` : ''}</span>
     ${isAgentWorking(tab) ? `<span class="agent-stop" data-stop="${escapeHtml(tab.id)}" title="Stop the agent (Esc)" role="button"></span>` : ''}
-  </button>${showsLine(tab) ? `<div class="agent-line ${escapeHtml(/** @type {AgentInfo} */ (tab.agent).state)}" data-tab="${escapeHtml(tab.id)}" title="${escapeHtml(/** @type {AgentInfo} */ (tab.agent).line)}">${escapeHtml(/** @type {AgentInfo} */ (tab.agent).line)}</div>` : ''}${subagentRowsHtml(tab)}`;
+  </button>${showsLine(tab) ? `<div class="agent-line ${escapeHtml(/** @type {AgentInfo} */ (tab.agent).state)}" data-tab="${escapeHtml(tab.id)}" title="${escapeHtml(/** @type {AgentInfo} */ (tab.agent).line)}">${escapeHtml(/** @type {AgentInfo} */ (tab.agent).line)}</div>` : ''}${subagentRowsHtml(tab)}${taskRowsHtml(tab)}`;
 }
 
 /**
@@ -245,6 +246,24 @@ const renderSoon = () => {
 };
 for (const event of [EVENTS.workspaces, EVENTS.tab, EVENTS.tags, EVENTS.focus]) on(event, renderSoon);
 
+/**
+ * The settings the rows show, as one value to compare: agent cost, the activity line, background tasks, the spinner,
+ * listening ports (gitstatus.js), and which hosts count as production or staging (environments.js).
+ */
+const shownSettings = () => {
+  const { agents, interface: ui, terminal, safety } = state.settings;
+  return JSON.stringify([costMode(), agents.line, agents.tasksInSidebar, ui.showActivity, terminal.ports, safety.environments]);
+};
+// Settings change often in the background (saves of the window's state, the cost ledger): drawn again only when one the
+// rows show did, so focus, a click under way and a menu's row stay as they are otherwise.
+let shownBefore = '';
+on(EVENTS.settings, () => {
+  const now = shownSettings();
+  if (now === shownBefore) return;
+  shownBefore = now;
+  renderSoon();
+});
+
 // ---- Rail flyout ----
 
 /** @param {HTMLElement | null} tile */
@@ -289,7 +308,7 @@ function openWorkspaceMenu(ws, at) {
       submenu: () => WORKSPACE_COLORS.map((color, i) => ({
         label: COLOR_NAMES[i],
         icon: `<span class="ws-swatch" style="background:${color}"></span>`,
-        hint: color === ws.color ? '<span class="menu-current">current</span>' : '',
+        picked: color === ws.color, pickHint: '<span class="menu-current">current</span>',
         action: () => setWorkspaceColor(ws, color),
       })),
     },
@@ -432,6 +451,8 @@ list.addEventListener('dblclick', e => {
     /** @type {HTMLElement} */ (name.closest(WS_ROW)).dataset.ws)));
 });
 list.addEventListener('contextmenu', e => {
+  // A name being edited in its row gets the text menu (js/browsermenu.js), not the row's.
+  if (targetOf(e).closest('input')) return;
   e.preventDefault();
   const tabRow = /** @type {HTMLElement | null} */ (targetOf(e).closest('[data-tab]'));
   if (tabRow) return openTabMenu(/** @type {Tab} */ (state.tabs.get(/** @type {string} */ (tabRow.dataset.tab))),
