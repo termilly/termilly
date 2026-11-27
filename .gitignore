@@ -25,6 +25,7 @@ Desktop.ini
 # JS tooling (npm run check)
 node_modules/
 tests/e2e/out/
+tests/e2e/runs/
 tests/e2e/out/
 
 # Notes, captures and local agent files kept next to the code
