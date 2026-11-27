@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.RegularExpressions;
+using Termilly.Pty.Unix;
 
 namespace Termilly.Desktop;
 
@@ -43,7 +44,7 @@ internal interface ITaskProcesses
 
 /// <summary>
 /// Claude Code's task output files: &lt;temp&gt;/claude*/&lt;project&gt;/&lt;session&gt;/tasks/&lt;task id&gt;.output, which end
-/// with "[exited with code N]" when the task does. Only the end of a file is read.
+/// with "[exited with code N]" when the task does, or "[killed]". Only the end of a file is read.
 /// </summary>
 internal sealed partial class ClaudeTaskOutput : ITaskOutput
 {
@@ -53,19 +54,39 @@ internal sealed partial class ClaudeTaskOutput : ITaskOutput
     private const string TasksFolder = "tasks";
     private const string Extension = ".output";
 
-    [GeneratedRegex(@"\[exited with code (-?\d+)\]\s*$")]
+    /// <summary>
+    /// Claude Code's temp folder on macOS: /tmp, not the system's own temp folder (TMPDIR, under /var/folders). Every
+    /// user's are there, so only this user's own (claude-&lt;uid&gt;) is looked in: another's can't be read.
+    /// </summary>
+    private const string MacTempRoot = "/tmp";
+    private const string MacFolderPrefix = "claude-";
+    /// <summary>
+    /// The exit code a killed task counts as: Claude Code writes "[killed]" instead of one, and a shell gives a process
+    /// ended by SIGKILL (9) 128 + 9.
+    /// </summary>
+    internal const int KilledExitCode = 128 + 9;
+
+    /// <summary>
+    /// How a task's output ends once it did: with its exit code, or killed (Stop's, or Claude Code's own) on a line of its
+    /// own, as output that merely ends in "[killed]" isn't the task's end.
+    /// </summary>
+    [GeneratedRegex(@"(?:\[exited with code (?<code>-?\d+)\]|(?<=^|\n)\[killed\])\s*$")]
     private static partial Regex ExitLine();
 
     private readonly Dictionary<(string, string), string> _found = [];
     private readonly string _tempRoot;
+    private readonly string _folderPattern;
 
     public ClaudeTaskOutput()
-        : this(Path.GetTempPath())
+        : this(OperatingSystem.IsMacOS() ? MacTempRoot : Path.GetTempPath(),
+            OperatingSystem.IsMacOS() ? MacFolderPrefix + UnixUser.Id : FolderPattern)
     {
     }
 
     /// <param name="tempRoot">The folder Claude Code's temp folders are in (a test's own).</param>
-    internal ClaudeTaskOutput(string tempRoot) => _tempRoot = tempRoot;
+    /// <param name="folderPattern">Which of its folders are Claude Code's.</param>
+    internal ClaudeTaskOutput(string tempRoot, string folderPattern = FolderPattern) =>
+        (_tempRoot, _folderPattern) = (tempRoot, folderPattern);
 
     public bool ReadsWhileRunning => true;
 
@@ -93,12 +114,27 @@ internal sealed partial class ClaudeTaskOutput : ITaskOutput
             var exit = ExitLine().Match(tail);
             var text = exit.Success ? tail[..exit.Index] : tail;
             var last = text.Split('\n').Select(l => l.Trim()).LastOrDefault(l => l.Length > 0);
-            return new TaskReading(path, last, exit.Success && int.TryParse(exit.Groups[1].Value, out var code) ? code : null);
+            return new TaskReading(path, last, ExitCodeOf(exit));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             return null;
         }
+    }
+
+    /// <summary>The exit code an output's end gives, a killed task's too; null while it runs.</summary>
+    private static int? ExitCodeOf(Match exit)
+    {
+        if (!exit.Success)
+        {
+            return null;
+        }
+        var code = exit.Groups["code"];
+        if (!code.Success)
+        {
+            return KilledExitCode;
+        }
+        return int.TryParse(code.Value, out var exitCode) ? exitCode : null;
     }
 
     /// <summary>The task's file in any of Claude's temp folders (per project, per session).</summary>
@@ -110,7 +146,7 @@ internal sealed partial class ClaudeTaskOutput : ITaskOutput
         }
         try
         {
-            return Directory.EnumerateDirectories(_tempRoot, FolderPattern)
+            return Directory.EnumerateDirectories(_tempRoot, _folderPattern)
                 .SelectMany(Directory.EnumerateDirectories)
                 .Select(project => Path.Combine(project, session, TasksFolder, taskId + Extension))
                 .FirstOrDefault(File.Exists);

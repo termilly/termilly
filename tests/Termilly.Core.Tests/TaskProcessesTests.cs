@@ -247,6 +247,11 @@ public sealed class TaskProcessesTests
             Assert.Equal(new TaskReading(file, "line two", null), reader.Read(Session, TaskId));
             File.WriteAllText(file, "line one\nfinished-bg\n\n[exited with code 0]\n");
             Assert.Equal(new TaskReading(file, "finished-bg", 0), reader.Read(Session, TaskId));
+            // A killed one (Stop's, or Claude Code's own) says so instead of an exit code, on a line of its own.
+            File.WriteAllText(file, "tick 7\nworker [killed]\n");
+            Assert.Equal(new TaskReading(file, "worker [killed]", null), reader.Read(Session, TaskId));
+            File.WriteAllText(file, "tick 7\ntick 8\n\n[killed]\n");
+            Assert.Equal(new TaskReading(file, "tick 8", ClaudeTaskOutput.KilledExitCode), reader.Read(Session, TaskId));
             Assert.Null(reader.Read(Session, "other"));
         }
         finally
