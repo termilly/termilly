@@ -5,7 +5,7 @@
 
 import { PAGE, HOST } from './protocol.js';
 import { send, onHost, request, platform, PLATFORM } from './host.js';
-import { state, emit, persist, tabsOf, defaultProfile, withoutPreview, EVENTS, NODE, SPLIT_EVEN } from './store.js';
+import { state, emit, persist, tabsOf, groupOf, defaultProfile, withoutPreview, EVENTS, NODE, SPLIT_EVEN } from './store.js';
 import { createWorkspace, freeName, DEFAULT_WORKSPACE_NAME, START_WITH } from './workspaces.js';
 import { createTab, closeTab, renderWorkspace, focusTab, switchWorkspace } from './panes.js';
 import { modal, CONFIRM_DIALOG } from './dialogs.js';
@@ -139,10 +139,12 @@ export function applyLayout(layout, { into = null, warnings = [] } = {}) {
       a: build(/** @type {LayoutPane[]} */ (node.panes)[0]), b: build(/** @type {LayoutPane[]} */ (node.panes)[1]) };
   };
   ws.root = build(/** @type {LayoutPane} */ (layout.layout));
-  ws.focusId = tabs[0]?.id ?? null;
+  // The first terminal on screen: in a tab group, the tab it shows (focusing another would switch the group to it).
+  const first = tabs.find(tab => (groupOf(ws, tab.id)?.active ?? tab.id) === tab.id) ?? tabs[0];
+  ws.focusId = first?.id ?? null;
   if (ws.id !== state.activeId) switchWorkspace(ws.id);
   renderWorkspace(ws);
-  if (tabs[0]) focusTab(tabs[0]);
+  if (first) focusTab(first);
   emit(EVENTS.workspaces);
   persist();
   if (warnings.length) showWarnings('Opened with a few things skipped', warnings);
