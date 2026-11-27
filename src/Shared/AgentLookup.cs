@@ -75,7 +75,7 @@ internal static class AgentLookup
     public static string? FindInstalled(string name, string? path, string? pathExt, string? skipDirectory, AgentPlaces places) =>
         FindReal(name, path, pathExt, skipDirectory)
         ?? FindReal(name, string.Join(Path.PathSeparator, places.Folders), pathExt, skipDirectory)
-        ?? FindPackaged(name, places.PackageRoots);
+        ?? FindPackaged(name, places.PackageRoots, skipDirectory);
 
     /// <summary>
     /// How a program is named when its release keeps its platform in the name (Rust's target, as
@@ -86,42 +86,61 @@ internal static class AgentLookup
 
     /// <summary>
     /// The agent in one of the package folders under <paramref name="roots"/> (winget's): <paramref name="name"/>.exe,
-    /// or its platform-named program (<see cref="PlatformNamed"/>). Packages are looked at in name order, so the same
-    /// one is found each time.
+    /// or its platform-named program (<see cref="PlatformNamed"/>). Only packages named after the agent are looked in
+    /// (OpenAI.Codex_… for codex), so another package's program of the same name isn't taken; in name order, so the
+    /// same one is found each time.
     /// </summary>
-    public static string? FindPackaged(string name, IReadOnlyList<string> roots)
+    /// <param name="skipDirectory">A folder never looked in: the shim's own.</param>
+    public static string? FindPackaged(string name, IReadOnlyList<string> roots, string? skipDirectory = null)
     {
+        var skip = skipDirectory is null ? null : Normalize(skipDirectory);
         foreach (var root in roots)
         {
-            try
+            foreach (var package in PackagesNamed(root, name))
             {
-                if (!Directory.Exists(root))
+                if (string.Equals(Normalize(package), skip, StringComparison.OrdinalIgnoreCase) || ProgramIn(package, name) is not { } found)
                 {
                     continue;
                 }
-                foreach (var package in Directory.EnumerateDirectories(root).Order(StringComparer.OrdinalIgnoreCase))
-                {
-                    if (IsAgentFolder(package))
-                    {
-                        continue;
-                    }
-                    var exact = Path.Combine(package, name + WindowsExe);
-                    if (File.Exists(exact))
-                    {
-                        return exact;
-                    }
-                    if (Directory.EnumerateFiles(package, name + PlatformNamed + WindowsExe).Order(StringComparer.OrdinalIgnoreCase).FirstOrDefault() is { } named)
-                    {
-                        return named;
-                    }
-                }
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-            {
-                continue; // a package folder being replaced (an upgrade) or locked: the next one
+                return found;
             }
         }
         return null;
+    }
+
+    /// <summary>The package folders under <paramref name="root"/> with <paramref name="name"/> in their name, in name order.</summary>
+    private static IEnumerable<string> PackagesNamed(string root, string name)
+    {
+        try
+        {
+            return Directory.Exists(root)
+                ? [.. Directory.EnumerateDirectories(root).Where(p => Path.GetFileName(p).Contains(name, StringComparison.OrdinalIgnoreCase)).Order(StringComparer.OrdinalIgnoreCase)]
+                : [];
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return [];
+        }
+    }
+
+    /// <summary>The agent's program in one package folder: <paramref name="name"/>.exe first, else its platform-named one.</summary>
+    private static string? ProgramIn(string package, string name)
+    {
+        try
+        {
+            if (IsAgentFolder(package))
+            {
+                return null;
+            }
+            var exact = Path.Combine(package, name + WindowsExe);
+            return File.Exists(exact)
+                ? exact
+                : Directory.EnumerateFiles(package, name + PlatformNamed + WindowsExe).Order(StringComparer.OrdinalIgnoreCase).FirstOrDefault();
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return null; // being replaced (an upgrade) or locked: the next package
+        }
     }
 
     /// <summary><see cref="FindReal(string, string?, string?, string?)"/> on this process's PATH.</summary>

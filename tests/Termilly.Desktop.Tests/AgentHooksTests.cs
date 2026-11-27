@@ -646,6 +646,12 @@ public sealed class AgentHooksTests : IDisposable
         Assert.Equal(Path.Combine(codex, "codex-x86_64-pc-windows-msvc.exe"), agent::Termilly.Shared.AgentLookup.FindPackaged("codex", [packages]));
         Assert.Null(agent::Termilly.Shared.AgentLookup.FindPackaged("claude", [packages]));
         Assert.Null(agent::Termilly.Shared.AgentLookup.FindPackaged("codex", [Path.Combine(_dir, "missing")]));
+        Assert.Null(agent::Termilly.Shared.AgentLookup.FindPackaged("codex", [packages], codex)); // the shim's own folder
+
+        // Another package's program of the same name isn't Codex.
+        var other = Directory.CreateDirectory(Path.Combine(packages, "Another.Tool_8wekyb3d8bbwe")).FullName;
+        File.WriteAllText(Path.Combine(other, "claude.exe"), "");
+        Assert.Null(agent::Termilly.Shared.AgentLookup.FindPackaged("claude", [packages]));
 
         // A codex.exe of its own (a later release, or a link made by hand) is taken first.
         File.WriteAllText(Path.Combine(codex, "codex.exe"), "");
