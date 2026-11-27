@@ -18,8 +18,17 @@ import { readJunit, reportHtml, indexHtml, failedCount, testCount } from './e2e-
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const host = process.env.E2E_HOST ?? 'optiplex';
-const reports = path.resolve(root, process.env.E2E_REPORTS ?? 'tests/e2e/runs');
-const RUN_REF = 'refs/e2e/run';
+/** A setting from git config (this repository's, then the user's), or null. @param {string} key */
+function configured(key) {
+  try {
+    return execFileSync('git', ['config', '--get', key], { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim() || null;
+  } catch {
+    return null; // not set
+  }
+}
+const reports = path.resolve(root, process.env.E2E_REPORTS ?? configured('termilly.e2eReports') ?? 'tests/e2e/runs');
+/** Each run's commit goes to the test machine under a ref of its own: runs close together can't swap commits. */
+const RUN_REF = 'refs/e2e/run-';
 const LAST_RUN = 'last-run.json';
 const RUNS = 'runs.json';
 const EXIT = Object.freeze({ passed: 0, failed: 1, broken: 2 });
@@ -55,8 +64,9 @@ function picked(base, head) {
  * The script the test machine runs: its copy at the commit, built, then each test file with its results kept.
  * @param {string[]} files
  * @param {boolean} realAgents with the real agents too (a release): the machine's own claude on PATH
+ * @param {string} ref the commit's ref there
  */
-function remoteScript(files, realAgents = false) {
+function remoteScript(files, realAgents, ref) {
   // Linux and macOS alike: a lock folder (macOS has no flock), and .NET where it's installed for the user.
   return `set -e
 export PATH="$HOME/.dotnet:$HOME/.local/node/bin:$HOME/.local/bin:$PATH"
@@ -67,7 +77,8 @@ until mkdir ~/e2e-runs/lock.d 2>/dev/null; do sleep 5; done
 trap 'rmdir ~/e2e-runs/lock.d' EXIT
 R=~/e2e-runs/repo; OUT=~/e2e-runs/out
 [ -d "$R/.git" ] || git clone -q ~/Development/termilly "$R"
-cd "$R" && git fetch -q ~/Development/termilly ${RUN_REF} && git reset -q --hard FETCH_HEAD && git clean -fdq -e node_modules
+cd "$R" && git fetch -q ~/Development/termilly ${ref} && git reset -q --hard FETCH_HEAD && git clean -fdq -e node_modules
+git -C ~/Development/termilly update-ref -d ${ref}
 if [ ! -d node_modules ] || ! cmp -s package-lock.json ../lock-seen; then npm ci --silent && cp package-lock.json ../lock-seen; fi
 dotnet build src/Termilly.Linux -v q -nologo > ../build.log 2>&1 || { tail -30 ../build.log >&2; exit 3; }
 rm -rf "$OUT" && mkdir -p "$OUT"
@@ -128,8 +139,8 @@ function main() {
   console.log(`Running ${files.length} test file(s) on ${host}: ${files.map(f => path.posix.basename(f, '.e2e.mjs')).join(', ')}`);
   const started = Date.now();
   try {
-    execFileSync('git', ['push', '-q', '-f', host, `HEAD:${RUN_REF}`], { cwd: root, stdio: 'inherit' });
-    execFileSync('ssh', [host, 'bash -s'], { input: remoteScript(files, release), stdio: ['pipe', 'inherit', 'inherit'] });
+    execFileSync('git', ['push', '-q', '-f', host, `${head}:${RUN_REF}${head}`], { cwd: root, stdio: 'inherit' });
+    execFileSync('ssh', [host, 'bash -s'], { input: remoteScript(files, release, `${RUN_REF}${head}`), stdio: ['pipe', 'inherit', 'inherit'] });
   } catch (error) {
     console.error(`The run itself failed: ${/** @type {Error} */ (error).message.split('\n')[0]}`);
     return EXIT.broken;
