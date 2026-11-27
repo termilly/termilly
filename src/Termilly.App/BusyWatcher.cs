@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.ComponentModel;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -60,6 +61,12 @@ internal sealed class BusyWatcher : IDisposable
     private readonly Timer _timer;
     private readonly Dictionary<string, ChildProgram?> _reported = new();
     private readonly Dictionary<string, ChildProgram?> _pending = new();
+    /// <summary>
+    /// Terminals whose state goes out again, though it didn't change, each with the number of its request: a look
+    /// answers only the requests made before it began, so what it read of the terminal is from after the request.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, long> _resend = new();
+    private long _requests;
     private int _ticking;
 
     /// <param name="roots">The terminals to watch: id → the pseudo console's root process id.</param>
@@ -84,6 +91,71 @@ internal sealed class BusyWatcher : IDisposable
         catch (ObjectDisposedException)
         {
             // Turned off (Settings) or closing: nothing to look at.
+        }
+    }
+
+    /// <summary>
+    /// The page opened the terminal: what it runs goes out again shortly. One started before the page was up (an early
+    /// agent's shell) was reported when the page didn't know it yet, and isn't again till it changes.
+    /// </summary>
+    public void Resend(string id)
+    {
+        _resend[id] = Interlocked.Increment(ref _requests);
+        Nudge();
+    }
+
+    /// <summary>
+    /// Sends again what the asked-for terminals run, after this look; one at its prompt needs nothing, the page assumes
+    /// that. One whose state is changing (a new state waits for its second look, as when its shell was replaced) waits
+    /// for the next look, so what goes out is never the state it's leaving.
+    /// </summary>
+    /// <param name="before">The last request made before this look began.</param>
+    /// <param name="roots">The terminals there are: a request for one that closed is dropped.</param>
+    private void ResendAsked(long before, IReadOnlyDictionary<string, int> roots)
+    {
+        foreach (var (id, request) in _resend)
+        {
+            if (request > before || (_pending.ContainsKey(id) && roots.ContainsKey(id)))
+            {
+                continue;
+            }
+            if (_resend.TryRemove(new KeyValuePair<string, long>(id, request)) && _reported.GetValueOrDefault(id) is { } known)
+            {
+                _changed(id, known);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Forgets the terminals that closed, one that closed before its first state was confirmed (only pending) too.
+    /// </summary>
+    private void ForgetClosed(IReadOnlyDictionary<string, int> roots)
+    {
+        foreach (var gone in _reported.Keys.Union(_pending.Keys).Except(roots.Keys).ToList())
+        {
+            _reported.Remove(gone);
+            _pending.Remove(gone);
+        }
+    }
+
+    /// <summary>Whether a state or a request is still waiting for a look (tests: nothing is left behind for good).</summary>
+    internal bool Waiting
+    {
+        get
+        {
+            // Read between looks, holding the look off meanwhile: _pending is the look's own.
+            if (Interlocked.CompareExchange(ref _ticking, 1, 0) == 1)
+            {
+                return true;
+            }
+            try
+            {
+                return !_resend.IsEmpty || _pending.Count > 0;
+            }
+            finally
+            {
+                Volatile.Write(ref _ticking, 0);
+            }
         }
     }
 
@@ -151,13 +223,10 @@ internal sealed class BusyWatcher : IDisposable
         }
         try
         {
+            var asked = Interlocked.Read(ref _requests);
             var roots = _roots();
             var snapshot = roots.Count > 0 ? Snapshot() : [];
-            foreach (var gone in _reported.Keys.Except(roots.Keys).ToList())
-            {
-                _reported.Remove(gone);
-                _pending.Remove(gone);
-            }
+            ForgetClosed(roots);
 
             foreach (var (id, pid) in roots)
             {
@@ -181,6 +250,7 @@ internal sealed class BusyWatcher : IDisposable
                     _pending[id] = busy;
                 }
             }
+            ResendAsked(asked, roots);
         }
         catch (Exception e) when (e is Win32Exception or InvalidOperationException or IOException)
         {

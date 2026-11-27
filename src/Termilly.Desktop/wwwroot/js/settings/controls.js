@@ -65,6 +65,14 @@ export const seg = (key, options, how = {}) => `
     `<button data-value="${value}">${icon ?? ''}${label}</button>`).join('')}</span>`;
 
 /**
+ * Buttons that each turn their own setting on and off, side by side like a segmented choice: where something shows,
+ * in any number of places (none: nowhere). Options: [setting key, label].
+ * @param {Array<[string, string]>} options
+ */
+export const flags = options => `
+  <span class="seg flags">${options.map(([key, label]) => `<button data-flag="${key}" aria-pressed="false">${label}</button>`).join('')}</span>`;
+
+/**
  * A choice of colours bound to a setting, each a small square with its name on hover. Options: [value, name, CSS colour].
  * @param {string} key
  * @param {Array<[string, string, string]>} options

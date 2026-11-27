@@ -1,6 +1,5 @@
 using System.Buffers.Binary;
 using System.Reflection;
-using System.Runtime.InteropServices;
 using System.Security.Principal;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -32,10 +31,7 @@ public static class HostProtocol
     /// One host per user: the user's SID (Windows) or uid (Linux) keeps two users on one PC apart.
     /// TERMILLY_HOST_PIPE names another, so a test run doesn't meet the user's own host.
     /// </summary>
-    public static string PipeName { get; } = Environment.GetEnvironmentVariable("TERMILLY_HOST_PIPE") is { Length: > 0 } test ? test : $"termilly-host-{(OperatingSystem.IsWindows() ? WindowsIdentity.GetCurrent().User?.Value ?? Environment.UserName : geteuid().ToString(System.Globalization.CultureInfo.InvariantCulture))}";
-
-    [DllImport("libc")]
-    private static extern uint geteuid();
+    public static string PipeName { get; } = Environment.GetEnvironmentVariable("TERMILLY_HOST_PIPE") is { Length: > 0 } test ? test : $"termilly-host-{(OperatingSystem.IsWindows() ? WindowsIdentity.GetCurrent().User?.Value ?? Environment.UserName : Unix.UnixUser.Id)}";
 
     public static void Write(Stream stream, HostRequest message) => WriteFrame(stream, JsonSerializer.SerializeToUtf8Bytes(message, HostJson.Options));
 

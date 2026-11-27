@@ -47,15 +47,15 @@ export function backgroundMenuItem(ws) {
   return {
     label: 'Background', icon: ICONS.picture,
     submenu: () => [
-      { label: 'Same as the window', hint: kind === KIND.window ? CURRENT : '', action: () => setWorkspaceBackground(ws, undefined) },
-      { label: 'None', hint: kind === KIND.none ? CURRENT : '', action: () => setWorkspaceBackground(ws, { kind: KIND.none }) },
+      { label: 'Same as the window', picked: kind === KIND.window, pickHint: CURRENT, action: () => setWorkspaceBackground(ws, undefined) },
+      { label: 'None', picked: kind === KIND.none, pickHint: CURRENT, action: () => setWorkspaceBackground(ws, { kind: KIND.none }) },
       ...Object.entries(GRADIENT_NAMES).map(([gradient, label]) => ({
         label,
         icon: `<span class="ws-swatch" style="background:${GRADIENTS[gradient]}"></span>`,
-        hint: kind === KIND.gradient && own?.gradient === gradient ? CURRENT : '',
+        picked: kind === KIND.gradient && own?.gradient === gradient, pickHint: CURRENT,
         action: () => setWorkspaceBackground(ws, { kind: KIND.gradient, gradient }),
       })),
-      { label: 'Picture', icon: ICONS.picture, hint: kind === KIND.picture ? CURRENT : '', action: () => pickPicture(ws) },
+      { label: 'Picture', icon: ICONS.picture, picked: kind === KIND.picture, pickHint: CURRENT, action: () => pickPicture(ws) },
     ],
   };
 }

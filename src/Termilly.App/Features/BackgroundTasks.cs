@@ -1,0 +1,402 @@
+using Termilly.Desktop.Messaging;
+using Termilly.Desktop.Services;
+
+namespace Termilly.Desktop.Features;
+
+/// <summary>
+/// The shell commands each terminal's agent runs in the background. Claude Code's (run_in_background): the hooks say
+/// when one has started and which task it is, its output file says how it goes and when it ends (there's no hook for
+/// that). Codex's: its hooks report each command before it runs and after it ends, but not the end of one left running,
+/// so one still running when the turn ends is a task, and its rollout says when it ends. The page keeps the agent's
+/// spinner while any runs, and shows them under the terminal and in its bar. An ended task stays a minute, so the page
+/// can say how it went; one whose agent or shell ended goes with it, and so does a Claude task whose output file never
+/// shows up. The tasks are saved as they come and go: a window opened again over shells the background host kept
+/// follows their tasks on, as no hook says again that they started.
+/// </summary>
+internal sealed class BackgroundTasks : IMessageHandler, IDisposable
+{
+    /// <summary>How often running tasks' files are read.</summary>
+    private static readonly TimeSpan Every = TimeSpan.FromSeconds(1);
+    /// <summary>How long an ended task stays.</summary>
+    private static readonly TimeSpan KeepEnded = TimeSpan.FromMinutes(1);
+    /// <summary>How long a task's output file may take to show up before the task counts as never started.</summary>
+    private static readonly TimeSpan FileWait = TimeSpan.FromSeconds(30);
+    /// <summary>How long a Codex command whose hook said it ended waits for its rollout to say how.</summary>
+    private static readonly TimeSpan ExitWait = TimeSpan.FromSeconds(5);
+    /// <summary>How long a task shows it's stopping before Stop comes back, when no end has shown up.</summary>
+    private static readonly TimeSpan StopWait = TimeSpan.FromSeconds(10);
+    /// <summary>How long a task says Stop found nothing to end.</summary>
+    private static readonly TimeSpan StopFailedFor = TimeSpan.FromSeconds(5);
+
+    private readonly PageChannel _page;
+    private readonly TerminalSessions _terminals;
+    private readonly ITaskOutput _claude;
+    private readonly ITaskOutput _codex;
+    private readonly ITaskProcesses _processes;
+    private readonly TimeProvider _clock;
+    /// <summary>Guards the tasks, and keeps what the page is sent in the order it changed.</summary>
+    private readonly Lock _gate = new();
+    /// <summary>By terminal, each task by its call.</summary>
+    private readonly Dictionary<string, List<Tracked>> _tasks = [];
+    /// <summary>By terminal, Codex's commands that haven't reported their end: each a task if the turn ends first.</summary>
+    private readonly Dictionary<string, List<Tracked>> _running = [];
+    private readonly ISavedTasks _saved;
+    /// <summary>By terminal, the tasks saved before the app last closed, till its shell starts: kept, or a new one.</summary>
+    private readonly Dictionary<string, List<SavedTask>> _left;
+    private readonly ITimer _timer;
+
+    private sealed class Tracked(string agent, string useId, string session, string taskId, string? command, string? description, DateTimeOffset started)
+    {
+        public string Agent { get; } = agent;
+        public string UseId { get; } = useId;
+        public string Session { get; } = session;
+        public string TaskId { get; } = taskId;
+        public string? Command { get; } = command;
+        public string? Description { get; } = description;
+        public DateTimeOffset Started { get; } = started;
+        public TaskReading? Reading { get; set; }
+        public DateTimeOffset? Ended { get; set; }
+        /// <summary>When its own hook said it ended (a Codex command's, late), its exit then still to be read.</summary>
+        public DateTimeOffset? Reported { get; set; }
+        /// <summary>Since when its output file is waited for: its start, or for one taken back after a restart, then.</summary>
+        public DateTimeOffset Followed { get; set; } = started;
+        /// <summary>When Stop was clicked, while its end hasn't shown up (for <see cref="StopWait"/> at most).</summary>
+        public DateTimeOffset? StopAsked { get; set; }
+        /// <summary>When Stop found nothing to end (said for <see cref="StopFailedFor"/>).</summary>
+        public DateTimeOffset? StopFailed { get; set; }
+
+        public TaskView View() => new(UseId, Command, Description, Started.ToUnixTimeMilliseconds(),
+            Reading?.ExitCode is { } code ? (code == 0 ? TaskStates.Done : TaskStates.Failed) : TaskStates.Running,
+            Reading?.ExitCode, Reading?.LastLine, Reading?.Path, Ended?.ToUnixTimeMilliseconds(),
+            Stopping: Ended is null && StopAsked is not null, StopFailed: Ended is null && StopFailed is not null);
+
+        /// <summary>A stop that took too long gives Stop back, and "couldn't stop" goes after a while: whether either did.</summary>
+        public bool StopExpired(DateTimeOffset now)
+        {
+            var expired = false;
+            if (now - StopAsked > StopWait)
+            {
+                (StopAsked, expired) = (null, true);
+            }
+            if (now - StopFailed > StopFailedFor)
+            {
+                (StopFailed, expired) = (null, true);
+            }
+            return expired;
+        }
+
+        public SavedTask Saved(string pane) => new(pane, Agent, UseId, Session, TaskId, Command, Description,
+            Started.ToUnixTimeMilliseconds(), Reported?.ToUnixTimeMilliseconds());
+
+        /// <summary>A saved task, followed again from <paramref name="now"/>.</summary>
+        public static Tracked From(SavedTask saved, DateTimeOffset now) => new(saved.Agent, saved.UseId, saved.Session, saved.TaskId,
+            saved.Command, saved.Description, DateTimeOffset.FromUnixTimeMilliseconds(saved.Started))
+        {
+            Reported = saved.Reported is { } reported ? DateTimeOffset.FromUnixTimeMilliseconds(reported) : null,
+            Followed = now,
+        };
+    }
+
+    public BackgroundTasks(PageChannel page, TerminalSessions terminals, TaskOutputs outputs, ITaskProcesses processes, TimeProvider clock,
+        ISavedTasks saved)
+    {
+        (_page, _terminals, _claude, _codex, _processes, _clock, _saved) = (page, terminals, outputs.Claude, outputs.Codex, processes, clock, saved);
+        _left = saved.Load().GroupBy(t => t.Pane).ToDictionary(g => g.Key, g => g.ToList());
+        _timer = clock.CreateTimer(_ => Tick(), null, Every, Every);
+        terminals.Closed += Forget;
+        terminals.Restarting += Forget;
+        terminals.ShellEnded += ShellEnded;
+    }
+
+    public void Register(MessageRouter router) => router.On<FromPage.TaskStop>(m => Stop(m.Id, m.Task));
+
+    /// <summary>
+    /// An agent hook: a background command started (its id given), a Codex command started or ended, a Codex turn
+    /// ended (what still runs is a task), or the agent gone (its tasks go with it).
+    /// </summary>
+    public void OnEvent(AgentEvent e)
+    {
+        if (e.Agent == AgentKinds.Codex)
+        {
+            OnCodexEvent(e);
+        }
+        else if (e is { Event: HookEvents.PostToolUse, Session: { } session, Task: { ToolUseId: { } useId, Id: { } taskId } task })
+        {
+            lock (_gate)
+            {
+                Started(e.Pane, new Tracked(e.Agent, useId, session, taskId, task.Command, task.Description, _clock.GetUtcNow()));
+            }
+        }
+        if (AgentHooks.StateFor(e) == AgentStates.Exited)
+        {
+            Forget(e.Pane);
+        }
+    }
+
+    private void OnCodexEvent(AgentEvent e)
+    {
+        lock (_gate)
+        {
+            if (e is { Event: HookEvents.PreToolUse, Session: { } session, Task: { ToolUseId: { } useId } task })
+            {
+                var list = _running.TryGetValue(e.Pane, out var known) ? known : _running[e.Pane] = [];
+                list.Add(new Tracked(e.Agent, useId, session, useId, task.Command, task.Description, _clock.GetUtcNow()));
+            }
+            else if (e is { Event: HookEvents.PostToolUse, Task.ToolUseId: { } ended })
+            {
+                _running.GetValueOrDefault(e.Pane)?.RemoveAll(t => t.UseId == ended);
+                // Late news of one taken for a task already: it ended. Its rollout says how; if it doesn't, it's over anyway.
+                if (_tasks.GetValueOrDefault(e.Pane)?.Find(t => t.UseId == ended && t.Ended is null) is { } promoted)
+                {
+                    promoted.Reported = _clock.GetUtcNow();
+                    if (Read(promoted, promoted.Reported.Value))
+                    {
+                        Post(e.Pane);
+                    }
+                    Save(); // a restart before its exit shows up still counts it as over
+                }
+            }
+            else if (e.Event is HookEvents.Stop or HookEvents.Interrupt && _running.Remove(e.Pane, out var left))
+            {
+                // Posted before the page hears the turn ended, so its "done" waits for them.
+                left.ForEach(t => Started(e.Pane, t));
+            }
+        }
+    }
+
+    /// <summary>A new task (one known already is left as it is); called under the gate.</summary>
+    private void Started(string pane, Tracked task)
+    {
+        var list = _tasks.TryGetValue(pane, out var known) ? known : _tasks[pane] = [];
+        if (list.Exists(t => t.UseId == task.UseId))
+        {
+            return;
+        }
+        list.Add(task);
+        Post(pane);
+        Save();
+    }
+
+    /// <summary>
+    /// A terminal's shell started: one the background host kept follows the tasks saved for it, each read at once (one
+    /// that ended meanwhile shows how, a minute); a new shell's are another shell's, and go.
+    /// </summary>
+    public void ShellStarted(string pane, bool kept)
+    {
+        lock (_gate)
+        {
+            if (!_left.Remove(pane, out var saved))
+            {
+                return;
+            }
+            var now = _clock.GetUtcNow();
+            var list = _tasks.TryGetValue(pane, out var known) ? known : _tasks[pane] = [];
+            var restored = kept ? saved.Select(s => Tracked.From(s, now)).Where(t => !list.Exists(k => k.UseId == t.UseId)).ToList() : [];
+            restored.ForEach(t => Read(t, now));
+            list.AddRange(restored);
+            if (restored.Count > 0)
+            {
+                Post(pane);
+            }
+            else if (list.Count == 0)
+            {
+                _tasks.Remove(pane);
+            }
+            Save();
+        }
+    }
+
+    /// <summary>
+    /// Saves the tasks still running (an ended one is only shown a minute), and those still saved for terminals not
+    /// started yet; called under the gate.
+    /// </summary>
+    private void Save() =>
+        _saved.Save([.. _tasks.SelectMany(p => p.Value.Where(t => t.Ended is null).Select(t => t.Saved(p.Key))), .. _left.Values.SelectMany(l => l)]);
+
+    private ITaskOutput OutputOf(Tracked task) => task.Agent == AgentKinds.Codex ? _codex : _claude;
+
+    /// <summary>Reads the running tasks' output; an ended one goes a while after.</summary>
+    public void Tick()
+    {
+        lock (_gate)
+        {
+            var now = _clock.GetUtcNow();
+            var changed = false;
+            foreach (var (pane, list) in _tasks.ToList())
+            {
+                var gone = list.FindAll(t => now - t.Ended > KeepEnded || NeverStarted(t, now));
+                list.RemoveAll(gone.Contains);
+                Release(gone);
+                var removed = gone.Count > 0;
+                var running = list.Count(t => t.Ended is null);
+                var read = false;
+                foreach (var task in list.Where(t => t.Ended is null))
+                {
+                    read |= Read(task, now); // every one read, not just up to the first that changed
+                    read |= task.StopExpired(now);
+                }
+                // What's saved is the running ones: saved again when one went or ended.
+                changed |= removed || list.Count(t => t.Ended is null) != running;
+                if (removed || read)
+                {
+                    Post(pane);
+                }
+            }
+            if (changed)
+            {
+                Save();
+            }
+        }
+    }
+
+    /// <summary>A Claude task whose output file never showed up.</summary>
+    private bool NeverStarted(Tracked task, DateTimeOffset now) =>
+        task.Reading is null && OutputOf(task).ReadsWhileRunning && now - task.Followed > FileWait;
+
+    /// <summary>Reads one task's output: whether its last line or its state changed.</summary>
+    private bool Read(Tracked task, DateTimeOffset now)
+    {
+        var reading = OutputOf(task).Read(task.Session, task.TaskId);
+        if (reading is null && now - task.Reported > ExitWait)
+        {
+            // Its hook said it ended, but its exit never showed up: it's over, and counted as done.
+            reading = new TaskReading(task.Reading?.Path, task.Reading?.LastLine, 0);
+        }
+        if (reading is null || reading == task.Reading)
+        {
+            return false;
+        }
+        task.Reading = reading;
+        if (reading.ExitCode is not null)
+        {
+            task.Ended = now;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// The page's Stop: the task's shell and what it runs end, found by its output file (Claude's) or its command
+    /// (Codex's); its output then says so. Meanwhile it shows it's stopping (a second Stop does nothing), and when
+    /// nothing was found to end, that it couldn't stop.
+    /// </summary>
+    internal Task Stop(string pane, string? useId)
+    {
+        Tracked? task;
+        Func<bool>? stop = null;
+        lock (_gate)
+        {
+            task = _tasks.GetValueOrDefault(pane)?.Find(t => t.UseId == useId && t.Ended is null);
+            if (task is null || task.StopAsked is not null)
+            {
+                return Task.CompletedTask;
+            }
+            if (_terminals.Pids().TryGetValue(pane, out var pid))
+            {
+                var started = task.Started;
+                stop = task.Reading?.Path is { } file ? () => _processes.Stop(pid, file)
+                    : task.Agent == AgentKinds.Codex && task.Command is { } command ? () => _processes.StopCommand(pid, command, started)
+                    : null;
+            }
+            var asked = _clock.GetUtcNow();
+            (task.StopAsked, task.StopFailed) = (asked, null);
+            Post(pane);
+            return Task.Run(() =>
+            {
+                if (stop?.Invoke() != true)
+                {
+                    StopFailed(pane, task, asked);
+                }
+            });
+        }
+    }
+
+    /// <summary>
+    /// Stop found nothing to end: the task says so, unless it ended or went meanwhile, or a later Stop (after this one
+    /// ran out of time) is on its way.
+    /// </summary>
+    private void StopFailed(string pane, Tracked task, DateTimeOffset asked)
+    {
+        lock (_gate)
+        {
+            if (task.Ended is null && (task.StopAsked is null || task.StopAsked == asked)
+                && _tasks.GetValueOrDefault(pane)?.Contains(task) == true)
+            {
+                (task.StopAsked, task.StopFailed) = (null, _clock.GetUtcNow());
+                Post(pane);
+            }
+        }
+    }
+
+    /// <summary>Sends the page a terminal's tasks again (it opened the terminal: one it didn't know missed them).</summary>
+    public void Resend(string pane)
+    {
+        lock (_gate)
+        {
+            if (_tasks.ContainsKey(pane))
+            {
+                Post(pane);
+            }
+        }
+    }
+
+    /// <summary>A terminal's shell ended, unless it has a new shell already: then it's an old one's late news.</summary>
+    private void ShellEnded(string pane)
+    {
+        lock (_gate)
+        {
+            // Checked under the gate: a new shell's tasks are added under it too, so they can't come in between.
+            if (!_terminals.Pids().ContainsKey(pane))
+            {
+                ForgetLocked(pane);
+            }
+        }
+    }
+
+    private void Forget(string pane)
+    {
+        lock (_gate)
+        {
+            ForgetLocked(pane);
+        }
+    }
+
+    private void ForgetLocked(string pane)
+    {
+        var pending = _running.Remove(pane, out var running) ? running : [];
+        var shown = _tasks.Remove(pane, out var tasks);
+        Release([.. pending, .. tasks ?? []]);
+        if (shown)
+        {
+            _page.Post(new ToPage.AgentTasks(pane, [], Gone: true));
+            Save();
+        }
+    }
+
+    /// <summary>The outputs these tasks were read from stop being followed, once no other task of their session is left.</summary>
+    private void Release(List<Tracked> gone)
+    {
+        foreach (var task in gone.DistinctBy(t => (t.Agent, t.Session)))
+        {
+            if (!_tasks.Values.Concat(_running.Values).Any(list => list.Exists(t => t.Agent == task.Agent && t.Session == task.Session)))
+            {
+                OutputOf(task).Forget(task.Session);
+            }
+        }
+    }
+
+    /// <summary>Sends the page a terminal's tasks; called under the gate, so what it gets is in order.</summary>
+    private void Post(string pane)
+    {
+        var list = _tasks.GetValueOrDefault(pane) ?? [];
+        if (list.Count == 0)
+        {
+            _tasks.Remove(pane);
+        }
+        _page.Post(new ToPage.AgentTasks(pane, [.. list.Select(t => t.View())]));
+    }
+
+    public void Dispose() => _timer.Dispose();
+}
+
+/// <summary>Where each agent's background tasks are read from.</summary>
+internal sealed record TaskOutputs(ITaskOutput Claude, ITaskOutput Codex);

@@ -99,6 +99,12 @@ interface InterfaceSettings {
   layout: string;
   /** In Minimal, a terminal's name on a line over it or on a bar shown on hover (). */
   paneNames: string;
+  /** Each workspace's colour dot: in the sidebar (Normal) and on the dock's workspace button (Minimal). */
+  workspaceDots: boolean;
+  /** The line down the sidebar that ties a workspace's terminals to it (Normal). */
+  treeLines: boolean;
+  /** How menus that pick one of several mark the chosen one (). */
+  menuPick: string;
   /** The app's font; null: the system's. */
   font: string | null;
   showActivity: boolean;
@@ -275,6 +281,10 @@ interface AgentSettings {
   claudeLimits: boolean;
   /** The limits asked for while Termilly is in front, so they're always there: Codex's for free, Claude's with a tiny Haiku prompt at most every 15 minutes (Features/PlanRefresh.cs). */
   refreshLimits: boolean;
+  /** An agent's background tasks as rows under its terminal in the sidebar (Features/BackgroundTasks.cs). */
+  tasksInSidebar: boolean;
+  /** An agent's background tasks as a chip in its terminal's bar, which lists them. */
+  tasksInBar: boolean;
 }
 
 /** The change preview (Changes/, js/preview.js): where it opens, what it compares, and how it shows a change. */
@@ -498,4 +508,35 @@ interface SessionProfile {
   startCommand: string | null;
   shellIcon: string | null;
   shellId: string | null;
+}
+
+/** How a terminal's agent session starts again at the next start, before the page is up (Features/EarlyAgents): the page writes one into the session snapshot (js/snapshot.js) for each terminal whose Claude Code or Codex session resumes by itself, and the host runs it as the page would have, a few seconds sooner. */
+interface AgentStart {
+  profile: string | null;
+  folder: string | null;
+  env: Record<string, string> | null;
+  command: string | null;
+  cols: number;
+  rows: number;
+}
+
+/** A terminal's id and how its agent starts again. */
+interface PlannedStart {
+  id: string;
+  start: AgentStart;
+}
+
+/** A background task as the page shows it: what it runs and why, when it started, its state, its output's last line, its output file and, once ended, when (Unix milliseconds). Stopping: Stop was clicked and its end hasn't shown yet; StopFailed: Stop just found nothing to end. Both while it runs. */
+interface TaskView {
+  id: string;
+  command: string | null;
+  description: string | null;
+  startedAt: number;
+  state: string;
+  exitCode: number | null;
+  lastLine: string | null;
+  outputFile: string | null;
+  endedAt: number | null;
+  stopping: boolean;
+  stopFailed: boolean;
 }

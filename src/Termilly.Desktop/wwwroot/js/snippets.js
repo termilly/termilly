@@ -61,7 +61,49 @@ export function placeholders(command) {
  * @param {Record<string, string> | null | undefined} values
  */
 export const fill = (command, values) =>
-  String(command).replace(PLACEHOLDER, (_, name, def) => values?.[name] ?? def ?? '');
+  String(command).replace(PLACEHOLDER, (_, name, def) => (hasValue(values, name) ? values[name] : def) ?? '');
+
+/**
+ * Whether values has one of its own for a placeholder: a name such as constructor isn't one an object brings along.
+ * @param {Record<string, string> | null | undefined} values
+ * @param {string} name
+ * @returns {values is Record<string, string>}
+ */
+const hasValue = (values, name) => !!values && Object.hasOwn(values, name);
+
+/**
+ * A placeholder's own value in values; undefined when it has none.
+ * @param {Record<string, string> | null | undefined} values
+ * @param {string} name
+ */
+export const ownValue = (values, name) => (hasValue(values, name) ? values[name] : undefined);
+
+/**
+ * The placeholders that have neither a value nor a default, by name.
+ * @param {string} command
+ * @param {Record<string, string> | null | undefined} values
+ */
+export const missingValues = (command, values) => placeholders(command).filter(p => !p.def && !hasValue(values, p.name)).map(p => p.name);
+
+/**
+ * The placeholders without a value of their own, defaults or not: a schedule runs with nobody there to check what a
+ * default would make of it.
+ * @param {string} command
+ * @param {Record<string, string> | null | undefined} values
+ */
+export const unfilled = (command, values) => placeholders(command).filter(p => !ownValue(values, p.name)?.trim()).map(p => p.name);
+
+/**
+ * The values that say something: an empty field is no value, so its default (or nothing) counts.
+ * @param {Record<string, string>} values
+ */
+export const filled = values => Object.fromEntries(Object.entries(values).filter(([, v]) => v.trim()));
+
+/**
+ * How the run form asks for a schedule (js/scheduleswindow.js): from the schedule's own values, with its own button,
+ * and only once each placeholder has one typed in (a default doesn't count, nor is it filled in).
+ * @typedef {{ given?: Record<string, string>, ok?: string, required?: boolean }} ValuesForm
+ */
 
 /** This computer's snippets, as the lists show them. */
 export const globalSnippets = () => /** @type {Snippet[]} */ ((state.settings.commands.snippets ?? []).map(s => ({ ...s, scope: SOURCE.global })));
@@ -183,10 +225,11 @@ export function scopeLabel(snippet) {
  * @param {string | undefined} remembered
  * @param {TaskInput | undefined} input
  * @param {boolean} first
+ * @param {boolean} [defaults] filled in with the default when there's no value (a schedule's aren't)
  */
-function valueField(p, remembered, input, first) {
+function valueField(p, remembered, input, first, defaults = true) {
   const label = escapeHtml(input?.description || p.name);
-  const value = remembered ?? input?.default ?? p.def;
+  const value = remembered ?? (defaults ? input?.default ?? p.def : '');
   if (input?.options?.length) {
     return `<label class="dialog-field">${label}<select class="field" data-var="${escapeHtml(p.name)}">${input.options
       .map(o => `<option${o === value ? ' selected' : ''}>${escapeHtml(o)}</option>`).join('')}</select></label>`;
@@ -201,32 +244,43 @@ function valueField(p, remembered, input, first) {
  * @param {Placeholder[]} names
  * @param {string[][]} options
  * @param {TaskInput[]} [inputs] a task's inputs, by their id
+ * @param {ValuesForm} [form] how a schedule asks instead of a run
  * @returns {Promise<{ values: Record<string, string>, where: string } | null>}
  */
-export function askValues(snippet, names, options, inputs = []) {
+export function askValues(snippet, names, options, inputs = [], { given, ok, required = false } = {}) {
   /** @type {Record<string, string>} */
-  const remembered = state.settings.data.snippetValues?.[snippet.id] ?? {};
+  const remembered = given ?? state.settings.data.snippetValues?.[snippet.id] ?? {};
   const inputOf = (/** @type {string} */ name) => inputs.find(i => i.id === name);
+  const okLabel = ok ?? (snippet.enter === false ? 'Type it' : RUN_LABEL);
   return modal('snippet-run', `
     <h3>${escapeHtml(snippet.name)}</h3>
     <pre class="snippet-preview" data-preview></pre>
-    ${names.map((p, i) => valueField(p, remembered[p.name], inputOf(p.name), i === 0)).join('')}
+    ${names.map((p, i) => valueField(p, ownValue(remembered, p.name), inputOf(p.name), i === 0, !required)).join('')}
     ${options.length > 1 ? `<label class="dialog-field">Run in
       <select class="field" data-where>${options.map(([v, l]) => `<option value="${escapeHtml(v)}">${escapeHtml(l)}</option>`).join('')}</select></label>` : ''}
     <div class="dialog-actions">
       <button class="btn" data-cancel>Cancel</button>
-      <button class="btn primary" data-ok ${names.length ? '' : 'autofocus'}>${snippet.enter === false ? 'Type it' : RUN_LABEL}</button>
+      <button class="btn primary" data-ok ${names.length ? '' : 'autofocus'}>${escapeHtml(okLabel)}</button>
     </div>`, (dialog, close) => {
     const read = () => Object.fromEntries(/** @type {HTMLInputElement[]} */ ([...dialog.querySelectorAll('[data-var]')])
       .map(i => [/** @type {string} */ (i.dataset.var), i.value]));
-    const preview = () => { find(dialog, '[data-preview]').textContent = fill(snippet.command, read()); };
+    const okButton = /** @type {HTMLButtonElement} */ (find(dialog, '[data-ok]'));
+    const blocked = () => required && unfilled(snippet.command, read()).length > 0;
+    const preview = () => {
+      find(dialog, '[data-preview]').textContent = fill(snippet.command, read());
+      okButton.disabled = blocked();
+    };
     dialog.addEventListener('input', preview);
     dialog.addEventListener('change', preview);
     preview();
     const submit = () => {
+      if (blocked()) return;
       const values = read();
-      const kept = Object.fromEntries(Object.entries(values).filter(([name]) => !inputOf(name)?.password));
-      updateSettings(GROUPS.data, { snippetValues: { ...(state.settings.data.snippetValues ?? {}), [snippet.id]: kept } });
+      // A schedule keeps its own values; a run remembers them for next time.
+      if (!given) {
+        const kept = Object.fromEntries(Object.entries(values).filter(([name]) => !inputOf(name)?.password));
+        updateSettings(GROUPS.data, { snippetValues: { ...(state.settings.data.snippetValues ?? {}), [snippet.id]: kept } });
+      }
       close({ values, where: /** @type {HTMLSelectElement | null} */ (dialog.querySelector('[data-where]'))?.value ?? TARGET.focused });
     };
     return { submit };
@@ -453,7 +507,7 @@ export async function runForApi({ name, tab, vars, beforeSend }) {
   await loadRepo(folderOfTab(tab));
   const snippet = findSnippet(name, tab);
   if (!snippet) throw new Error(`No snippet named ${name}.`);
-  const missing = placeholders(snippet.command).filter(p => !p.def && !(vars && p.name in vars)).map(p => p.name);
+  const missing = missingValues(snippet.command, vars);
   if (missing.length) throw new Error(`The snippet needs values for: ${missing.join(', ')}.`);
   const sent = await sendSnippet(snippet, vars ?? {}, [tab], beforeSend);
   if (!sent) throw new Error(`Terminal ${tab.id} is on production, and the user said no.`);

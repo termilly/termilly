@@ -11,9 +11,8 @@ namespace Termilly.Desktop.Features;
 /// </summary>
 internal sealed class TerminalHandler(
     PageChannel page, ISettingsStore settings, TerminalSessions terminals, ProfileCatalog profiles, BackgroundHost host,
-    AgentMonitor agents, ActivityWatcher activity, TmuxClients tmux) : IMessageHandler
+    AgentMonitor agents, ActivityWatcher activity, TmuxClients tmux, EarlyShells early, BackgroundTasks tasks) : IMessageHandler
 {
-
 
     public void Register(MessageRouter router)
     {
@@ -57,51 +56,117 @@ internal sealed class TerminalHandler(
         }
     }
 
+    /// <summary>
+    /// The page opens a terminal: its shell starts, or one started for it before the page was up (EarlyAgents) is
+    /// taken over as it is.
+    /// </summary>
     /// <param name="variables">A layout's own variables for this terminal, on top of the profile's.</param>
     /// <param name="fallbackCwd">Where to start when <paramref name="cwd"/> (the folder it was last in) is gone.</param>
     private void Start(string id, string? profileId, string? cwd, int cols, int rows, Dictionary<string, string>? variables, string? fallbackCwd)
     {
-        var profile = profiles.Find(profileId);
-        terminals.Starting(id, profile);
+        // Background tasks the page may have missed (it didn't know the terminal, or reloaded), before any report the
+        // early shell kept: a "done" in those then waits for the tasks as it should.
+        tasks.Resend(id);
+        // What it runs, which the page may have missed the same way (an early agent's shell runs Codex already).
+        activity.Resend(id);
+        // Taken over before it leaves the early shells: a report that comes meanwhile still waits for the page with it.
+        if (early.Get(id) is { } shell)
+        {
+            TakeOver(id, shell, cols, rows);
+            early.Take(id);
+        }
+        else
+        {
+            try
+            {
+                Launch(id, profileId, cwd, cols, rows, variables, fallbackCwd, null);
+            }
+            catch (Exception ex)
+            {
+                page.Post(new ToPage.Error(id, ex.Message));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Starts a terminal's agent session before the page is up (EarlyAgents): its shell, with the resume command typed
+    /// at its first prompt. False when it couldn't start; the page then starts the terminal as it always does.
+    /// </summary>
+    public bool StartEarly(PlannedStart planned)
+    {
+        var (id, start) = planned;
+        // Windows' console host answers where the cursor is and what the terminal is itself.
+        var shell = new EarlyShell(start.Command!, TerminalReplies.Version(AppVersion.Current), SizeOr(start.Cols, PtyOptions.DefaultColumns),
+            SizeOr(start.Rows, PtyOptions.DefaultRows), answersTerminal: !OperatingSystem.IsWindows());
+        early.Add(id, shell);
         try
         {
-            // A profile's own folder wins over the workspace's. A folder deleted since (outside Termilly) gives way to the
-            // next one, else the home folder, and the page says so above the prompt.
-            // A WSL terminal's Linux folder goes to wsl.exe (--cd), not to Windows (WslFolders).
-            var linuxFolder = profile.Source == ProfileSources.Wsl && profile.WorkingDirectory is null ? WslFolders.LinuxFolder(cwd) : null;
-            var requested = profile.WorkingDirectory ?? (linuxFolder is null ? cwd : null);
-            var (folder, missing) = AppPaths.StartFolder(requested, profile.WorkingDirectory is null ? fallbackCwd : null);
-            if (missing)
-            {
-                page.Post(new ToPage.StartFolder(id, requested, folder));
-            }
-            var environment = agents.WithAgent(WithVariables(SessionLaunch.EnvironmentFor(profile, AppVersion.Current), variables), id);
-            (var commandLine, environment) = SessionLaunch.Launch(profile, environment, settings.Current);
-            if (linuxFolder is not null)
-            {
-                commandLine = WslFolders.StartingIn(commandLine, linuxFolder);
-            }
-            void Output(string data) => Printed(id, data);
-
-            // COM ports and network consoles are byte streams, not processes in a pseudo terminal.
-            if (ByteStream(profile, Output) is { } stream)
-            {
-                terminals.Started(id, stream, 0);
-                return;
-            }
-            var took = System.Diagnostics.Stopwatch.StartNew();
-            var (session, pid) = StartShell(id, new PtyOptions(commandLine, cols, rows, folder, environment), Output, data => Replayed(id, data), (code, exitedPid) =>
-            {
-                terminals.Exited(id, exitedPid);
-                page.Post(new ToPage.Exit(id, code));
-            });
-            StartupLog.Mark($"shell {id} ({profile.Name}, {session.GetType().Name}) in {took.ElapsedMilliseconds} ms");
-            terminals.Started(id, session, pid);
+            Launch(id, start.Profile, start.Folder, start.Cols, start.Rows, start.Env, null, shell);
+            shell.TypeWithoutMarks();
+            return true;
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is IOException or InvalidOperationException or UnauthorizedAccessException or System.ComponentModel.Win32Exception)
         {
-            page.Post(new ToPage.Error(id, ex.Message));
+            StartupLog.Mark($"early start of {id} failed: {ex.Message}");
+            early.Take(id)?.Dispose();
+            terminals.Close(id);
+            return false;
         }
+    }
+
+    /// <summary>A saved size, or the default when none was saved.</summary>
+    private static int SizeOr(int saved, int fallback) => saved > 0 ? saved : fallback;
+
+    /// <summary>The page opened a terminal whose shell started before it: the shell is its own from now on.</summary>
+    private void TakeOver(string id, EarlyShell shell, int cols, int rows)
+    {
+        terminals.Resize(id, cols, rows);
+        shell.Take(data => Printed(id, data), data => Replayed(id, data), code => page.Post(new ToPage.Exit(id, code)));
+        StartupLog.Mark($"shell {id} taken over from the early start");
+    }
+
+    /// <summary>
+    /// Starts a terminal's shell. Its output goes to the page, or to <paramref name="early"/> until the page takes it
+    /// over; the page hears of a missing folder only when it asked for the start itself.
+    /// </summary>
+    private void Launch(string id, string? profileId, string? cwd, int cols, int rows, Dictionary<string, string>? variables, string? fallbackCwd, EarlyShell? early)
+    {
+        var profile = profiles.Find(profileId);
+        terminals.Starting(id, profile);
+        // A profile's own folder wins over the workspace's. A folder deleted since (outside Termilly) gives way to the
+        // next one, else the home folder, and the page says so above the prompt.
+        // A WSL terminal's Linux folder goes to wsl.exe (--cd), not to Windows (WslFolders).
+        var linuxFolder = profile.Source == ProfileSources.Wsl && profile.WorkingDirectory is null ? WslFolders.LinuxFolder(cwd) : null;
+        var requested = profile.WorkingDirectory ?? (linuxFolder is null ? cwd : null);
+        var (folder, missing) = AppPaths.StartFolder(requested, profile.WorkingDirectory is null ? fallbackCwd : null);
+        if (missing && early is null)
+        {
+            page.Post(new ToPage.StartFolder(id, requested, folder));
+        }
+        var environment = agents.WithAgent(WithVariables(SessionLaunch.EnvironmentFor(profile, AppVersion.Current), variables), id);
+        (var commandLine, environment) = SessionLaunch.Launch(profile, environment, settings.Current);
+        if (linuxFolder is not null)
+        {
+            commandLine = WslFolders.StartingIn(commandLine, linuxFolder);
+        }
+        Action<string> output = early is null ? data => Printed(id, data) : early.Print;
+        Action<int> ended = early is null ? code => page.Post(new ToPage.Exit(id, code)) : early.Exited;
+
+        // COM ports and network consoles are byte streams, not processes in a pseudo terminal.
+        if (ByteStream(profile, output) is { } stream)
+        {
+            terminals.Started(id, stream, 0);
+            return;
+        }
+        var took = System.Diagnostics.Stopwatch.StartNew();
+        var (session, pid) = StartShell(id, new PtyOptions(commandLine, cols, rows, folder, environment), output, data => Replayed(id, data), (code, exitedPid) =>
+        {
+            terminals.Exited(id, exitedPid);
+            ended(code);
+        });
+        early?.Session = session;
+        StartupLog.Mark($"shell {id} ({profile.Name}, {session.GetType().Name}{(early is null ? "" : ", early")}) in {took.ElapsedMilliseconds} ms");
+        terminals.Started(id, session, pid);
     }
 
     private void Printed(string id, string data)
@@ -160,8 +225,11 @@ internal sealed class TerminalHandler(
             // The background host kept this terminal's shell while the window was closed: take it back.
             var attached = background.Attach(id, keptPid, options.Columns, options.Rows, output, replay, code => exited(code, keptPid));
             page.Post(new ToPage.Attached(id));
+            // Its agent's background tasks run on too, and no hook says so again.
+            tasks.ShellStarted(id, kept: true);
             return (attached, keptPid);
         }
+        tasks.ShellStarted(id, kept: false);
         if (background is not null)
         {
             HostedSession? hosted = null;
@@ -174,14 +242,21 @@ internal sealed class TerminalHandler(
         return (new TerminalSession(pty, output, code => exited(code, pid)), pid);
     }
 
-    /// <summary>"Stop background shells": the host ends, and its terminals with it.</summary>
+    /// <summary>
+    /// "Stop background shells", or background shells turned off: the host ends, and its terminals with it. Their
+    /// shells' own ends, which the host may still report, aren't passed on: the page may start such a terminal again
+    /// at once (main.js), and the new shell is what it shows then.
+    /// </summary>
     private void ShutDownHost()
     {
         var hosted = terminals.Hosted();
+        foreach (var id in hosted)
+        {
+            (terminals.Forget(id) as HostedSession)?.Ended();
+        }
         _ = host.ShutDown();
         foreach (var id in hosted)
         {
-            terminals.Forget(id);
             page.Post(new ToPage.Exit(id, HostedSession.EndedCode, Ended: true));
         }
     }

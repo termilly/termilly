@@ -47,8 +47,15 @@ export const GIT_LABEL = 'Git';
 /** @typedef {import('./popups.js').MenuEntry} MenuEntry */
 /** @typedef {import('./popups.js').MenuItem} MenuItem */
 
-/** A submenu entry's swatch in a workspace's or tag's colour. */
-const swatch = (/** @type {string} */ color) => `<span class="ws-swatch" style="background:${color}"></span>`;
+/** A workspace's swatch, which Settings › Appearance › Layout can hide (js/workspacelook.js); a tag's always shows. */
+const WORKSPACE_SWATCH = 'workspace-swatch';
+
+/**
+ * A submenu entry's swatch in a workspace's or tag's colour.
+ * @param {string} color
+ * @param {string} [kind] another class for it (WORKSPACE_SWATCH)
+ */
+const swatch = (color, kind = '') => `<span class="ws-swatch ${kind}" style="background:${color}"></span>`;
 
 /**
  * @param {Tab} tab
@@ -124,7 +131,7 @@ function moveItem(tab) {
   return {
     label: 'Move to workspace', icon: ICONS.move,
     submenu: () => [
-      ...state.workspaces.filter(ws => ws.id !== tab.wsId).map(ws => ({ label: ws.name, icon: swatch(ws.color), action: () => moveTab(tab, ws.id) })),
+      ...state.workspaces.filter(ws => ws.id !== tab.wsId).map(ws => ({ label: ws.name, icon: swatch(ws.color, WORKSPACE_SWATCH), action: () => moveTab(tab, ws.id) })),
       ...(state.workspaces.length > 1 ? /** @type {MenuEntry[]} */ ([SEPARATOR]) : []),
       { label: 'New workspace', icon: ICONS.plus, action: () => openNewWorkspace({ moveTab: tab }) },
     ],

@@ -190,7 +190,7 @@ export function serialMenuItems(tab) {
     {
       label: 'Enter sends',
       submenu: () => LINE_ENDINGS.map(eol => ({
-        label: eol, checked: (tab.serial?.eol ?? savedPort(profile.name).lineEnding) === eol,
+        label: eol, picked: (tab.serial?.eol ?? savedPort(profile.name).lineEnding) === eol,
         action: () => { serialOf(tab).eol = eol; send(PAGE.serialEol, { id: tab.id, eol }); },
       })),
     },

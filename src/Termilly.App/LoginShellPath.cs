@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO;
+using Termilly.Pty.Unix;
 
 namespace Termilly.Desktop;
 
@@ -56,7 +57,7 @@ internal static class LoginShellPath
             RedirectStandardOutput = true, RedirectStandardError = true, RedirectStandardInput = true, UseShellExecute = false, CreateNoWindow = true,
         };
         start.ArgumentList.Add("-l");
-        start.ArgumentList.Add("-c");
+        start.ArgumentList.Add(PosixShell.CommandOption);
         start.ArgumentList.Add(PrintEnvironment);
         try
         {

@@ -161,7 +161,7 @@ internal static class MacWindowDrag
         {
             return;
         }
-        Send(window, "retain"); // kept until the move is over, should the window close meanwhile
+        Send(window, Cocoa.Retain); // kept until the move is over, should the window close meanwhile
         var start = SendRect(window, Cocoa.Frame);
         var from = Pointer();
         var ours = begin?.Invoke(start, from);

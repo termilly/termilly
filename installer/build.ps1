@@ -92,6 +92,11 @@ if ($Sign) { Initialize-Signing }
 
 # ---- 1. Termilly ----
 Step 'Building Termilly (Release)'
+# esbuild, which bundles the page into one file as the build copies it (scripts/BundlePage.targets).
+if (-not (Get-Command npm -ErrorAction SilentlyContinue)) { throw 'Node.js 24 with npm is needed: the build bundles the page with it.' }
+Push-Location $root
+try { npm ci --no-audit --no-fund --silent } finally { Pop-Location }
+if ($LASTEXITCODE) { throw 'npm ci failed' }
 dotnet build (Join-Path $root 'src\Termilly.Desktop\Termilly.Desktop.csproj') -c Release -nologo -v q
 if ($LASTEXITCODE) { throw 'Termilly build failed' }
 $app = Join-Path $root 'src\Termilly.Desktop\bin\Release\net10.0-windows10.0.19041.0'

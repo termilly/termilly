@@ -4,15 +4,19 @@
 import { PAGE, HOST } from './protocol.js';
 import { send, onHost } from './host.js';
 import './macwindow.js';
+import './browsermenu.js';
+import './workspacelook.js';
+import './menulook.js';
 import {
-  state, restore, newId, emit, saveNow, WORKSPACE_COLORS, PROFILE_SOURCES, agentChanged, markSeen, GROUPS, EVENTS, sourceOf, SPLIT,
+  state, restore, newId, emit, saveNow, WORKSPACE_COLORS, PROFILE_SOURCES, agentChanged, markSeen, GROUPS, EVENTS, sourceOf, SPLIT, runsClaude,
 } from './store.js';
 import { setWindowState } from './windowshown.js';
+import { scriptsLoaded } from './startuplog.js';
 import { setFocusRestorer, openPopover, closePopover } from './popups.js';
 import { setKeyHandler, scheduleFit, clearActivity, keptRunning, holdOpening, openHeld } from './terminals.js';
 import { consoleDefaults } from './consolecolors.js';
 import {
-  newTab, closeTab, focusedTab, splitFocused, moveFocus, renderAll, switchWorkspace, restoreFocus, noteOutput,
+  newTab, closeTab, focusedTab, splitFocused, moveFocus, renderAll, switchWorkspace, restoreFocus, noteOutput, agentReported,
   cycleGroupTab, moveAllToTabs, reopenWindows, setAsideTab, DIRECTION,
 } from './panes.js';
 import { initSidebar, toggleSidebar } from './sidebar.js';
@@ -274,14 +278,6 @@ document.addEventListener('click', e => {
   if (button) {
     /** @type {Record<string, () => unknown>} */ (commands)[/** @type {string} */ (button.dataset.command)]?.();
   }
-});
-
-// The window's own frame (title bar and its buttons, the docked bars, the sidebar, the status bars) has no browser menu:
-// where none of Termilly's opened, a right click there does nothing. A text field keeps its menu.
-const APP_FRAME = '#titlebar, .bar-dock, #sidebar, .pane-statusbar';
-document.addEventListener('contextmenu', e => {
-  const target = targetOf(e);
-  if (target.closest(APP_FRAME) && !target.closest('input, textarea, [contenteditable="true"]')) e.preventDefault();
 });
 
 // ---- Shell menu (+ button) ----
@@ -563,6 +559,7 @@ onHost(HOST.agent, report => {
   // Counted for waits on the agent (js/agentturns.js): its reports, the turns its prompts start, and its last answer,
   // which a wait still gives after the agent has exited.
   recordReport(tab, { ...m, event: /** @type {Partial<Host_agent_1>} */ (m).event });
+  const reportedBefore = runsClaude(tab);
   tab.agent = m.state === AGENT_STATE.exited
     ? null
     : {
@@ -584,6 +581,9 @@ onHost(HOST.agent, report => {
     };
   rememberSession(tab);
   recordPrompt(tab, /** @type {Partial<Host_agent_1>} */ (m));
+  // Its shell is back, and its prompt may have come before this report, while the agent's output didn't count.
+  if (!tab.agent) noteOutput(tab);
+  agentReported(tab, reportedBefore);
   agentChanged(tab);
 });
 
@@ -617,13 +617,14 @@ let booted = false;
  * @param {any} saved The saved workspaces, as the host read them.
  * @param {any} snapshot The terminals' saved output.
  * @param {string[]} [liveSessions] The ids of the shells the background host kept running.
+ * @param {string[]} [earlyStarted] The terminals whose agent sessions the host started before the page was up.
  */
-function boot(saved, snapshot, liveSessions = []) {
+function boot(saved, snapshot, liveSessions = [], earlyStarted = []) {
   if (booted) return;
   booted = true;
   // "Start with a fresh workspace" keeps tags, sidebar and recent folders, but not the workspaces.
   const restored = restore(state.settings.session.restore === restoreSession.off && saved ? { ...saved, workspaces: [] } : saved);
-  if (restored) applySnapshot(snapshot);
+  if (restored) applySnapshot(snapshot, earlyStarted);
   // Shells the background host kept running come back as they are: their own output replays, so nothing
   // saved is shown above it, and there's no last command to offer.
   for (const id of liveSessions) {
@@ -682,7 +683,7 @@ onHost(HOST.settings, m => {
   // The host sends liveSessions; protocol.js's Host_settings misnames it.
   loadBackdropInfo(); // the effects this system has, and where background pictures load from
   boot(m.workspaces, m.snapshot,
-    /** @type {{ liveSessions?: string[] }} */ (/** @type {unknown} */ (m)).liveSessions ?? []);
+    /** @type {{ liveSessions?: string[] }} */ (/** @type {unknown} */ (m)).liveSessions ?? [], m.earlyStarted ?? []);
   offerTourOnce();
   offerWhatsNewOnce();
 });
@@ -698,3 +699,4 @@ onHost(HOST.profiles, m => {
 });
 
 send(PAGE.settingsLoad);
+scriptsLoaded(); // every module has run by now: the page's own share of the start

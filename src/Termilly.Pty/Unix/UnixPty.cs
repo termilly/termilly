@@ -100,11 +100,13 @@ public sealed class UnixPty : IPty
         {
             FileActions(actions, slavePath, options.WorkingDirectory);
             Attributes(attr, signals);
-            var argvPtrs = Strings(argv);
-            var envPtrs = Strings(Environment(options.Environment));
+            var started = ControllingTerminal.Of(argv, Environment(options.Environment), options.WorkingDirectory,
+                System.Environment.GetEnvironmentVariable("PATH"), OperatingSystem.IsMacOS(), ControllingTerminal.System);
+            var argvPtrs = Strings(started.Argv);
+            var envPtrs = Strings(started.Environment);
             try
             {
-                return posix_spawnp(out pid, argv[0], actions, attr, argvPtrs, envPtrs);
+                return posix_spawnp(out pid, started.Argv[0], actions, attr, argvPtrs, envPtrs);
             }
             finally
             {

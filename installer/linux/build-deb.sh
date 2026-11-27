@@ -15,6 +15,9 @@ trap 'rm -rf "$work"' EXIT
 root="$work/termilly_${version}_amd64"
 
 echo "Termilly $version: publishing"
+# esbuild, which bundles the page into one file as the build publishes it (scripts/BundlePage.targets).
+command -v npm >/dev/null || { echo "Node.js 24 with npm is needed: the build bundles the page with it." >&2; exit 1; }
+(cd "$repo" && npm ci --no-audit --no-fund --silent)
 dotnet publish "$repo/src/Termilly.Linux" -c Release -r linux-x64 --self-contained false -o "$root/opt/termilly" -v quiet -nologo
 # The build-folder conveniences don't belong in a package (it installs these itself).
 rm -f "$root/opt/termilly/install-desktop.sh" "$root/opt/termilly/termilly.desktop" "$root/opt/termilly"/*.pdb

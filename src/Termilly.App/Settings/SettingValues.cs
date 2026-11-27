@@ -46,6 +46,19 @@ internal static class SettingValues
         public static readonly IReadOnlyList<string> All = [Line, Hover];
     }
 
+    /// <summary>
+    /// How a menu that picks one of several (a dropdown, the workspace list) marks the one chosen: a tick beside it, or a
+    /// soft or solid accent background on it.
+    /// </summary>
+    public static class MenuPick
+    {
+        public const string Check = "check";
+        public const string Soft = "soft";
+        public const string Solid = "solid";
+        public const string Default = Check;
+        public static readonly IReadOnlyList<string> All = [Check, Soft, Solid];
+    }
+
     public static class CursorStyle
     {
         public const string Bar = "bar";
@@ -213,13 +226,13 @@ internal static class SettingValues
         public const string Default = Always;
     }
 
-    /// <summary>The sidebar's agent activity line: everywhere, in the workspace on screen only, or nowhere.</summary>
+    /// <summary>The sidebar's agent activity line, in every workspace or nowhere.</summary>
     public static class AgentLine
     {
         public const string On = "on";
-        public const string Focused = "focused";
         public const string Off = "off";
         public const string Default = On;
+        public static readonly IReadOnlyList<string> All = [On, Off];
     }
 
     /// <summary>What an agent's use shows as: dollars, tokens, or nothing.</summary>

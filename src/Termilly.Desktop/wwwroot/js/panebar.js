@@ -67,7 +67,7 @@ function paneBarItems() {
   /** @type {MenuEntry[]} */
   const items = PARTS.map(([id, label]) => ({ label, checked: !hidden.includes(id), action: () => togglePart(id) }));
   items.push(SEPARATOR,
-    { label: 'Name on a line', checked: names === paneNames.line, action: () => updateSettings(GROUPS.interface, { paneNames: paneNames.line }) },
-    { label: 'Name on hover', checked: names === paneNames.hover, action: () => updateSettings(GROUPS.interface, { paneNames: paneNames.hover }) });
+    { label: 'Name on a line', picked: names === paneNames.line, action: () => updateSettings(GROUPS.interface, { paneNames: paneNames.line }) },
+    { label: 'Name on hover', picked: names === paneNames.hover, action: () => updateSettings(GROUPS.interface, { paneNames: paneNames.hover }) });
   return items;
 }

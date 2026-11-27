@@ -110,6 +110,12 @@ internal static partial class FromPage
         public static string Type => "page:error";
     }
 
+    /// <summary>A step of the page's start (its scripts loaded, an agent's session back), for startup.log.</summary>
+    internal sealed record StartupStep(string? Step = null) : IPageMessage
+    {
+        public static string Type => "startup:step";
+    }
+
     /// <summary>Whether Termilly may quit (<see cref="QuitAnswers"/>), after the host asked with quit:ask.</summary>
     internal sealed record QuitAnswer(string? Answer = null) : IPageMessage
     {

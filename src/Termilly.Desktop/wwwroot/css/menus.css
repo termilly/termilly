@@ -168,7 +168,26 @@
 .menu-icon { display: grid; flex: none; place-items: center; width: 16px; height: 16px; color: var(--muted); }
 /* Icons are drawn on a 16px grid (ui.js ICONS): shown at that size with a 1px stroke, they stay sharp. */
 .menu-icon svg { width: 16px; height: 16px; stroke-width: 1; }
-.menu-row[role="menuitemcheckbox"] .menu-icon { color: var(--accent); }
+/* A tick in the accent: a checkbox's, or a pick-one row's that shows one (a row keeping its icon keeps its colour). */
+.menu-row[role="menuitemcheckbox"] .menu-icon, .menu-icon.tick { color: var(--accent); }
+/* A pick-one group's choice without a tick (Settings › Appearance › Layout, js/popups.js): a soft or solid accent
+   background, which hover leaves as it is. */
+.menu-row.picked, .menu-row.picked:hover { background: var(--accent-fill); color: var(--text-strong); }
+:root[data-menu-pick="solid"] .menu-row.picked { background: var(--accent); color: var(--on-accent); }
+:root[data-menu-pick="solid"] .menu-row.picked .menu-hint { color: var(--on-accent); opacity: 0.75; }
+:root[data-menu-pick="solid"] .menu-row.picked .menu-icon { color: var(--on-accent); }
+/* A swatch in the accent's own colour would vanish on it. */
+:root[data-menu-pick="solid"] .menu-row.picked .ws-swatch { box-shadow: 0 0 0 1px var(--on-accent); }
+:root[data-menu-pick="solid"] .menu-row.picked .workspace-swatch rect { stroke: var(--on-accent); stroke-width: 1px; }
+/* The keys' focus on the chosen row, whose background no longer changes: a ring in its text colour. */
+.menu-row.picked:focus-visible { box-shadow: inset 0 0 0 1px currentColor; }
+.context-menu.no-icons .menu-icon { display: none; }
+/* Its ticks, at the rows' end (js/popups.js menuLayout). */
+.menu-end { display: grid; flex: none; place-items: center; width: 16px; height: 16px; }
+.menu-end svg { width: 16px; height: 16px; stroke-width: 1; }
+.menu-end.tick { color: var(--accent); }
+/* There an empty hint takes no room either. */
+.context-menu.no-icons .menu-hint:empty { display: none; }
 .menu-label { flex: 1; }
 .menu-hint { display: flex; gap: 3px; margin-left: 18px; color: var(--faint); }
 .menu-hint svg { width: 12px; height: 12px; stroke-width: 1; }
@@ -309,3 +328,5 @@ details[open] > summary .wn-caret { transform: rotate(90deg); }
 .switch span { position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3); transition: transform 0.15s var(--ease); }
 .switch[aria-checked="true"] { background: var(--accent); }
 .switch[aria-checked="true"] span { transform: translateX(14px); }
+/* Workspace colours off (js/workspacelook.js): a workspace's swatch in a menu goes; a tag's stays. */
+:root.no-ws-dots .workspace-swatch { display: none; }

@@ -110,6 +110,7 @@ internal sealed class DetachedWindow : Window
         core.Settings.AreBrowserAcceleratorKeysEnabled = false; // F5, Ctrl+F etc. reach the terminal
         core.Settings.IsStatusBarEnabled = false;
         core.Settings.IsZoomControlEnabled = false;
+        core.Settings.IsPinchZoomEnabled = false; // a touchpad pinch would zoom the whole window
         core.DocumentTitleChanged += (_, _) => Title = core.DocumentTitle is { Length: > 0 } title ? title : Product.Name;
         core.WindowCloseRequested += (_, _) =>
         {

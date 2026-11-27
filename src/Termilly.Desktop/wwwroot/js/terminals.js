@@ -22,10 +22,11 @@ import { clearTerminals } from './backgrounds.js';
 import { updateSettings } from './preferences.js';
 import { resumeCommand, attachFor } from './resume.js';
 import { noteRemotePrompt, noteRemoteCwd, leftRemote } from './remotecwd.js';
-import { AGENT_STATE, AGENT_SOURCE, PROFILE_ICON } from './constants.js';
+import { AGENT_STATE, AGENT_SOURCE, PROFILE_ICON, PROMPT_TIMING } from './constants.js';
 import { find, field, PATH_DRAG, CLIP_DRAG } from './dom.js';
 import { continuesOnNextRow, atPrompt } from './buffer.js';
 import { isResuming, resumeTyped, cancelResume, keptAgent, wasResumed, CANCEL_KEY } from './resuming.js';
+import { resumeStep } from './startuplog.js';
 import { agentKind, agentOfProgram } from './agentkinds.js';
 import { clipboardKey, wireClipboard, PASTE_LABEL } from './termclipboard.js';
 import { selectionKey } from './keyselect.js';
@@ -145,11 +146,10 @@ export const fontStack = family => `"${family}", Consolas, "Cascadia Mono", "Dej
 
 /**
  * How long a start command waits for a shell that marks no prompt (local shells only), and how long after the
- * shell marks where input starts (PowerShell) or where its prompt starts (bash, which marks no input).
+ * shell marks where input starts (PowerShell) or where its prompt starts (bash, which marks no input). The host types
+ * an agent started before the page was up at the same moments (EarlyShell.cs).
  */
-const WITHOUT_MARKS_MS = 5000;
-const AT_INPUT_MS = 50;
-const AT_PROMPT_MS = 400;
+const { withoutMarksMs: WITHOUT_MARKS_MS, atInputMs: AT_INPUT_MS, atPromptMs: AT_PROMPT_MS } = PROMPT_TIMING;
 
 /**
  * A terminal's shell as terminals.js follows it (tab.shell): when someone last typed, and its two timers.
@@ -342,6 +342,10 @@ export function openTerminal(tab) {
   wireOutputWatch(tab, term);
 
   const view = tab.start?.output ? writeRestoredOutput(tab) : null;
+  if (tab.resuming) {
+    resumeStep(tab.id, 'terminal opened');
+    view?.then(() => { if (tab.resuming) resumeStep(tab.id, 'saved output written'); });
+  }
   scanFrom(tab, term.buffer.normal.baseY + term.buffer.normal.cursorY); // old output isn't news for triggers
   startShell(tab);
   // The new shell clears its screen on start; once it has, scroll to where the terminal was. An agent's session that's
@@ -762,7 +766,7 @@ export function typeAtPrompt(tab, command) {
  * A folder on this PC a shell can start in (the others are on a server or in WSL), or null.
  * @param {string | null | undefined} folder
  */
-function localFolder(folder) {
+export function localFolder(folder) {
   if (!folder) return null;
   return platform === PLATFORM.linux ? (folder.startsWith('/') ? folder : null) : (/^[A-Za-z]:\\|^\\\\/.test(folder) ? folder : null);
 }
@@ -939,6 +943,7 @@ function runPendingCommand(tab) {
   // stays known here (for the next start) until its program exits.
   if (!resuming || agentKind(start.resumeKind).hookAtStart) start.resumeSession = null;
   send(PAGE.input, { id: tab.id, data: `${command}\r` });
+  if (resuming && tab.resuming) resumeStep(tab.id, 'command typed');
   if (resuming) resumeTyped(tab, command); // typed again if it didn't take
 }
 
@@ -949,6 +954,10 @@ function runPendingCommand(tab) {
  */
 function shellMark(tab, data) {
   const mark = data[0];
+  if (tab.resuming && !tab.resuming.prompted && (mark === 'A' || mark === 'B')) {
+    tab.resuming.prompted = true;
+    resumeStep(tab.id, 'shell at its prompt');
+  }
   // PowerShell marks where input starts (B); bash doesn't, so its prompt start (A) has to do.
   if (mark === 'B' && tab.start?.command) setTimeout(() => runPendingCommand(tab), AT_INPUT_MS);
   if (mark === 'A' && tab.start?.command) setTimeout(() => runPendingCommand(tab), AT_PROMPT_MS);

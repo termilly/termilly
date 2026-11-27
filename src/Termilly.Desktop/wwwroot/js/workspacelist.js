@@ -34,7 +34,7 @@ const STATE_WORDS = Object.freeze({ [AGENT_STATE.needsInput]: 'needs you', [AGEN
 export const stateWord = now => STATE_WORDS[now] ?? '';
 
 /** A workspace's colour, as a 16px swatch for its row in a list. @param {string} color */
-export const workspaceSwatch = color => `<svg viewBox="0 0 16 16"><rect x="4.5" y="4.5" width="7" height="7" rx="2" fill="${escapeHtml(cssColor(color))}" stroke="none"/></svg>`;
+export const workspaceSwatch = color => `<svg class="workspace-swatch" viewBox="0 0 16 16"><rect x="4.5" y="4.5" width="7" height="7" rx="2" fill="${escapeHtml(cssColor(color))}" stroke="none"/></svg>`;
 
 /**
  * A computer's terminal as the list says it: an agent there needing the user, or working.
@@ -101,7 +101,7 @@ function workspaceRows(pc, actions) {
 function terminalRows(pc, wsId, actions) {
   /** @type {MenuEntry[]} */
   const rows = actions.stateOf(pc).terminals.filter(t => t.ws === wsId).map(t => ({
-    label: t.title, hint: escapeHtml(stateWord(stateThere(t))), checked: actions.inFront(pc, t.id),
+    label: t.title, hint: escapeHtml(stateWord(stateThere(t))), picked: actions.inFront(pc, t.id),
     title: `Open ${t.title} from ${pc.name} here`, action: () => openIfThere(pc.id, t.id, actions),
   }));
   const all = { label: OPEN_ALL, action: () => openAllThere(pc.id, wsId, actions) };

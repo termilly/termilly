@@ -5,7 +5,7 @@
 import { PAGE } from './protocol.js';
 import { send, request, platform, PLATFORM, mac } from './host.js';
 import {
-  state, on, emit, persist, newId, activeWs, isAway, firstShown, wsById, tabsOf, tabTitle, defaultProfile, ensureTag, activityOf, leaves,
+  state, on, emit, persist, newId, activeWs, isAway, firstShown, wsById, tabsOf, tabTitle, defaultProfile, ensureTag, activityOf, leaves, runsClaude,
   replaceNode, findLeaf, detachLeaf, groupOf, firstTabOf, markSeen, findPreview, withoutPreview, EVENTS, NODE, SPLIT,
   SPLIT_EVEN, TAB_WINDOW,
 } from './store.js';
@@ -663,6 +663,12 @@ export function switchWorkspace(id) {
   const ws = wsById(id);
   if (!ws) return;
   state.activeId = id;
+  // Its terminals on screen now have had their new output seen, not just the focused one: not one set aside or in a
+  // window of its own, nor a group's tab that isn't the one it shows.
+  for (const shown of tabsOf(ws).filter(t => t.attention && !isAway(t) && (groupOf(ws, t.id)?.active ?? t.id) === t.id)) {
+    shown.attention = false;
+    emit(EVENTS.tab, shown);
+  }
   for (const [wsId, layer] of layers) layer.classList.toggle('active', wsId === id);
   emit(EVENTS.workspaces);
   persist();
@@ -2073,6 +2079,22 @@ function movePane(source, target, zone) {
  */
 export function noteOutput(tab) {
   if (tab.wsId === state.activeId || tab.attention || Date.now() < (tab.quietUntil ?? 0)) return;
+  // An agent that reports (hooks, or Claude Code's poll) redraws its screen on its own: what it has to say comes in the
+  // notification center, not from new output. One that doesn't report keeps the dot, and a shell back at its prompt
+  // after the agent exited gets it at once.
+  if (runsClaude(tab)) return;
   tab.attention = true;
+  emit(EVENTS.tab, tab);
+}
+
+/**
+ * An agent reported in. The first report after it starts takes back the dot its own start drew: a resumed Claude Code
+ * draws its screen for a few seconds before its hooks say it's there, longer than a new terminal's quiet start.
+ * @param {Tab} tab
+ * @param {boolean} reportedBefore whether its agent was already reporting before this report
+ */
+export function agentReported(tab, reportedBefore) {
+  if (reportedBefore || !runsClaude(tab) || !tab.attention) return;
+  tab.attention = false;
   emit(EVENTS.tab, tab);
 }

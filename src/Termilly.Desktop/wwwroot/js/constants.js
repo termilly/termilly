@@ -497,6 +497,13 @@ export const SETTING_VALUES = Object.freeze({
     default: 'line',
     all: Object.freeze(['line', 'hover']),
   }),
+  menuPick: Object.freeze({
+    check: 'check',
+    soft: 'soft',
+    solid: 'solid',
+    default: 'check',
+    all: Object.freeze(['check', 'soft', 'solid']),
+  }),
   cursorStyle: Object.freeze({
     bar: 'bar',
     block: 'block',
@@ -600,9 +607,9 @@ export const SETTING_VALUES = Object.freeze({
   }),
   agentLine: Object.freeze({
     on: 'on',
-    focused: 'focused',
     off: 'off',
     default: 'on',
+    all: Object.freeze(['on', 'off']),
   }),
   costDisplay: Object.freeze({
     cost: 'cost',
@@ -743,4 +750,23 @@ export const PRODUCT = Object.freeze({
   name: 'Termilly',
   docsUrl: 'https://termilly.com/docs/',
   dataDirVariable: 'TERMILLY_DATA_DIR',
+});
+
+/** C#: SnapshotFields (AgentStarts.cs). */
+export const SNAPSHOT_FIELD = Object.freeze({
+  agentStart: 'agentStart',
+});
+
+/** C#: PromptTiming (AgentStarts.cs). */
+export const PROMPT_TIMING = Object.freeze({
+  atInputMs: 50,
+  atPromptMs: 400,
+  withoutMarksMs: 5000,
+});
+
+/** C#: TaskStates (BackgroundTaskView.cs). */
+export const TASK_STATE = Object.freeze({
+  running: 'running',
+  done: 'done',
+  failed: 'failed',
 });

@@ -8,6 +8,8 @@ import { AGENT_KIND } from './constants.js';
 import { reportTextHtml } from './schedulelinks.js';
 import { reviewersFor, namesOf, fitPlan } from './todoplan.js';
 import { planRowsHtml } from './planrows.js';
+import { ownValue } from './snippets.js';
+import { CHEVRON_DOWN } from './popups.js';
 import {
   WHAT, WHERE, WHEN, UNIT, NOTIFY, MISSED, AFTER, BUSY, CLOSED, RUN, RUN_LABEL, DAY_NAMES, describeWhen, describeAt, describeTook, hasEnded,
 } from './schedulerules.js';
@@ -28,6 +30,8 @@ const SEGMENTS = Object.freeze({
   missed: [[MISSED.run, 'Run at the next start'], [MISSED.skip, 'Skip it']],
   notify: [[NOTIFY.always, 'Always'], [NOTIFY.failed, 'If it failed'], [NOTIFY.never, 'Never']],
 });
+/** The button that opens the snippets list to pick one (its data-sch). */
+export const PICK_SNIPPET = 'pickSnippet';
 /** The form's fields that belong to `when`: their name has this in front. */
 export const WHEN_FIELD = 'when.';
 export const WHEN_KIND_SEGMENT = 'whenKind';
@@ -36,8 +40,10 @@ export const ALL_DAY_FIELD = 'allDay';
 
 /**
  * What the form picks from.
- * @typedef {{ shells: SessionProfile[], servers: SessionProfile[], workspaces: { id: string, name: string }[], snippets: string[] }} Choices
+ * @typedef {{ shells: SessionProfile[], servers: SessionProfile[], workspaces: { id: string, name: string }[], snippets: string[],
+ *   fields: Placeholder[] }} Choices fields: the picked snippet's placeholders
  */
+/** @typedef {import('./snippets.js').Placeholder} Placeholder */
 
 /**
  * @param {string} name
@@ -142,10 +148,25 @@ function whatHtml(s, choices) {
   const body = s.what === WHAT.command
     ? `<textarea class="field snippet-command" name="command" rows="3" spellcheck="false" placeholder="git pull && npm test">${escapeHtml(s.command)}</textarea>`
     : choices.snippets.length
-      ? selectHtml(WHAT.snippet, choices.snippets.map(n => /** @type {const} */ ([n, n])), s.snippet || choices.snippets[0])
+      // The snippets list with its search, as the title bar's (snippetpick.js), to pick from.
+      ? `<button type="button" class="field dropdown" data-sch="${PICK_SNIPPET}"><span class="dropdown-label">${escapeHtml(s.snippet || choices.snippets[0])}</span><span class="dropdown-chevron">${CHEVRON_DOWN}</span></button>`
       : '<p class="dialog-sub">No snippets yet. Make one in the Snippets window.</p>';
   return `<h3 class="sch-head">What it runs</h3>${segmentHtml('what', s.what)}${body}
-    ${s.what === WHAT.snippet ? '<p class="dialog-sub">Its placeholders run with their defaults.</p>' : ''}`;
+    ${s.what === WHAT.snippet ? valuesHtml(s, choices.fields) : ''}`;
+}
+
+/**
+ * A snippet's values as the schedule runs it, and the button that asks for them.
+ * @param {Schedule} s
+ * @param {Placeholder[]} fields
+ */
+function valuesHtml(s, fields) {
+  if (!fields.length) return '';
+  const valueOf = (/** @type {Placeholder} */ p) => ownValue(s.values, p.name)?.trim() || 'needs a value';
+  return `<div class="sch-values">
+    <span class="sch-values-text">${fields.map(p => `${escapeHtml(p.name)}: ${escapeHtml(valueOf(p))}`).join(', ')}</span>
+    <button type="button" class="btn small" data-sch="values">Values</button>
+  </div>`;
 }
 
 /**

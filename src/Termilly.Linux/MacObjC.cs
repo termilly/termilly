@@ -36,6 +36,7 @@ internal static class MacObjC
         public const string Bounds = "bounds";
         public const string SetAutoresizingMask = "setAutoresizingMask:";
         public const string Release = "release";
+        public const string Retain = "retain";
     }
 
     /// <summary>Loads AppKit and WebKit, whose classes are looked up by name.</summary>

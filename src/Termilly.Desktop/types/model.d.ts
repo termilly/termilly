@@ -138,6 +138,8 @@ interface AgentInfo {
   folder?: string | null;
   /** Its news arrived out of sight and hasn't been looked at (store.js agentChanged). */
   unread?: boolean;
+  /** Its turn ended while background tasks ran: "done" waits for them (store.js tasksEnded). */
+  heldDone?: boolean;
   /** Which agent it is: one of AGENT_KIND (Claude Code when not said). */
   kind?: string;
 }
@@ -171,6 +173,8 @@ interface Tab {
   noHistory: boolean;
   note?: Note | null;
   tasks?: TodoTask[];
+  /** Its agent's background tasks, running and just ended (js/backgroundtasks.js). */
+  shellTasks?: TaskView[];
   /** The folder it was opened in (a layout's, the API's). */
   startCwd?: string | null;
   /** A layout's variables for its shell. */
@@ -289,7 +293,7 @@ interface Tab {
   /** Who has it open: the paired phones' and computers' names (js/phone.js). */
   viewers?: string[];
   /** Its agent's session (Claude Code, Codex: kind) is resuming after a restart, until it runs (js/resuming.js). */
-  resuming?: { session: string; kind: string; command: string | null; retried: boolean; timer: number } | null;
+  resuming?: { session: string; kind: string; command: string | null; retried: boolean; timer: number; prompted?: boolean; early?: boolean } | null;
   /** What it brings back and types as its shell starts (js/terminals.js). */
   start?: import('../wwwroot/js/terminals.js').ShellStart;
   /** js/terminals.js's timers for its shell. */
@@ -341,6 +345,8 @@ interface Schedule {
   command: string;
   /** A snippet's name: it runs as it is at the time. */
   snippet: string;
+  /** The snippet's placeholders, by name; one left out runs with its default (js/snippets.js missingValues). */
+  values?: Record<string, string>;
   /** What an agent is asked (js/agentcli.js). */
   prompt: string;
   /** An agent may change files; by default it only reads. */

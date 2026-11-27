@@ -66,6 +66,15 @@ internal static class Composition
         .AddStartable<ActivityWatcher>()
         .AddStartable<HistoryWatch>()
         .AddStartable<AgentMonitor>()
+        // After the agent hooks listen: the agents it starts report to them (EarlyAgents).
+        .AddSingleton<EarlyShells>()
+        // Agents' background commands: where each agent's are read from, and their processes for Stop.
+        .AddSingleton(TimeProvider.System)
+        .AddSingleton(new TaskOutputs(new ClaudeTaskOutput(), new CodexTaskOutput()))
+        .AddSingleton<ITaskProcesses, TaskProcesses>()
+        .AddSingleton<ISavedTasks, SavedTasksFile>()
+        .AddHandler<BackgroundTasks>()
+        .AddStartable<EarlyAgents>()
         .AddStartable<RetiredAssistantKey>()
         .AddStartable<RetiredPhonePairings>()
         // Each feature's messages.

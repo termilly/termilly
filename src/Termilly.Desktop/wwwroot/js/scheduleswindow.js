@@ -7,19 +7,20 @@ import { PAGE } from './protocol.js';
 import { send } from './host.js';
 import { state, on, emit, persist, newId, installedAgents, EVENTS } from './store.js';
 import { restoreFocus, newTab } from './panes.js';
-import { closeAll, dropdown } from './popups.js';
-import { modal, pickFolder, CONFIRM_DIALOG } from './dialogs.js';
+import { closeAll, dropdown, showMenu } from './popups.js';
+import { modal, pickFolder, noticeDialog, CONFIRM_DIALOG } from './dialogs.js';
 import { escapeHtml, COPIED } from './ui.js';
 import { fuzzyMatch } from './fuzzy.js';
-import { allSnippets, NAME_WORDS } from './snippets.js';
+import { askValues, placeholders, unfilled, filled, NAME_WORDS } from './snippets.js';
+import { pickSnippet, endSnippetPick, groupsOf } from './snippetpick.js';
 import { byId, find, targetOf, TOOL_COUNT, SCHEDULES_BUTTON_ID } from './dom.js';
 import { detach, closeWindow, focusWindow, isDetached, windowName } from './windows.js';
 import { readReport, shownText } from './schedulereport.js';
 import { withPaths, openReportLink, LINK_CLASS } from './schedulelinks.js';
 import {
-  schedules, scheduleById, runsOf, saveSchedule, removeSchedule, setScheduleOn, runNow, stopRun, runningNow, clearPastRuns,
+  schedules, scheduleById, runsOf, saveSchedule, removeSchedule, setScheduleOn, runNow, stopRun, runningNow, clearPastRuns, snippetOf, offeredSnippets,
 } from './schedules.js';
-import { formHtml, rowHtml, runsHtml, reportHtml, planOf, WHEN_FIELD, WHEN_KIND_SEGMENT, ALL_DAY_FIELD } from './scheduleview.js';
+import { formHtml, rowHtml, runsHtml, reportHtml, planOf, WHEN_FIELD, WHEN_KIND_SEGMENT, ALL_DAY_FIELD, PICK_SNIPPET } from './scheduleview.js';
 import { planClicked } from './planrows.js';
 import { newSchedule, minutesOf, nextRun, describeAt, isAllDay, hasEnded, reachesProduction, WHAT, WHERE, WHEN } from './schedulerules.js';
 
@@ -28,12 +29,15 @@ const WINDOW_KEY = 'schedules';
 /** The window's buttons (their data-sch). */
 const ACTION = Object.freeze({
   add: 'add', close: 'close', save: 'save', remove: 'delete', run: 'run', stop: 'stop', copy: 'copy', terminal: 'terminal', onOff: 'onOff', file: 'file', browse: 'browse', clear: 'clear',
+  values: 'values',
 });
 /** The two views of a schedule. */
 const VIEW = Object.freeze({ form: 'form', runs: 'runs' });
 /** How much of the main window it takes the first time. */
 const FIRST_SHARE = 0.8;
 const KEY_SAVE = 'KeyS';
+/** The form's segment for what a schedule runs (scheduleview.js SEGMENTS). */
+const WHAT_SEGMENT = 'what';
 /** Boxes that show or hide more of the form. */
 const REDRAWS = new Set(['allowChanges', 'allowAll', 'toNotepad', 'toFile']);
 /** Fields that hold numbers. */
@@ -106,8 +110,64 @@ let shownAs = '';
 function choices() {
   const shells = state.profiles.filter(p => (p.source === 'local' || p.source === 'wsl') && !p.startCommand);
   const servers = state.profiles.filter(p => p.source === 'ssh');
-  const named = [undefined, ...state.workspaces].flatMap(ws => allSnippets(ws)).map(s => s.name);
-  return { shells, servers, workspaces: state.workspaces.filter(w => !w.tmux), snippets: [...new Set(named)] };
+  return { shells, servers, workspaces: state.workspaces.filter(w => !w.tmux), snippets: offeredSnippets().map(s => s.name), fields: fieldsOf(editing) };
+}
+
+/**
+ * The placeholders of the snippet a schedule runs; none for a command or an agent prompt.
+ * @param {Schedule | null} s
+ */
+function fieldsOf(s) {
+  const snippet = s?.what === WHAT.snippet ? snippetOf(s) : undefined;
+  return snippet ? placeholders(snippet.command) : [];
+}
+
+/**
+ * The snippet's placeholders without a value in the schedule: a default doesn't count.
+ * @param {Schedule} s
+ */
+function missingOf(s) {
+  const snippet = snippetOf(s);
+  return snippet ? unfilled(snippet.command, s.values) : [];
+}
+
+/** Asks for the shown snippet's values, the ones it has filled in: the Values button, or a snippet picked that needs some. */
+async function askSnippetValues() {
+  const s = editing;
+  const snippet = s && snippetOf(s);
+  const names = snippet ? placeholders(snippet.command) : [];
+  if (!s || !snippet || !names.length) return;
+  const answer = await askValues(snippet, names, [], [], { given: s.values ?? {}, ok: 'OK', required: true });
+  // An agent may have changed what's shown while the user was asked.
+  if (!answer || s !== editing || s.what !== WHAT.snippet || s.snippet !== snippet.name) return;
+  s.values = filled(answer.values);
+  renderForm();
+}
+
+/** Opens the snippets list with its search under the form's snippet, to pick another. */
+function chooseSnippet() {
+  const s = editing;
+  if (!s) return;
+  pickSnippet(find(editEl, `[data-sch="${PICK_SNIPPET}"]`), {
+    groups: () => groupsOf(offeredSnippets()),
+    current: s.snippet,
+    onPick: name => {
+      // An agent may have changed what's shown while the list was open.
+      if (s !== editing || name === s.snippet) return;
+      s.snippet = name;
+      snippetPicked();
+      // The form was drawn again: the keyboard stays on the snippet, unless its values are being asked for.
+      if (!missingOf(s).length) /** @type {HTMLElement | null} */ (editEl.querySelector(`[data-sch="${PICK_SNIPPET}"]`))?.focus();
+    },
+  });
+}
+
+/** Another snippet picked: the old values were another snippet's, and one that needs values asks for them. */
+function snippetPicked() {
+  const s = /** @type {Schedule} */ (editing);
+  s.values = {};
+  renderForm();
+  if (missingOf(s).length) askSnippetValues();
 }
 
 /**
@@ -164,11 +224,14 @@ function renderList() {
 
 function renderForm() {
   const s = /** @type {Schedule} */ (editing);
+  // A form drawn again (an agent's edit, another schedule) takes away the button the snippets list picks for.
+  endSnippetPick();
   const list = choices();
   // The first on offer is what the form shows, so it's what's saved.
   if (s.where === WHERE.server && !list.servers.some(p => p.id === s.profile)) s.profile = list.servers[0]?.id ?? null;
   if (s.where === WHERE.fresh && !s.wsId) s.wsId = state.activeId;
   if (s.what === WHAT.snippet && !s.snippet) s.snippet = list.snippets[0] ?? '';
+  list.fields = fieldsOf(s);
   editEl.innerHTML = formHtml(s, list, problemOf(s), nextText(), { isNew, dirty: isDirty(), allDay });
   for (const select of editEl.querySelectorAll('select')) dropdown(/** @type {HTMLSelectElement} */ (select));
 }
@@ -316,6 +379,7 @@ function segmentChose(button) {
     if (s.where !== place) s.profile = null;
   }
   renderForm();
+  if (seg === WHAT_SEGMENT && value === WHAT.snippet && missingOf(s).length) askSnippetValues();
 }
 
 /** @param {HTMLElement} button */
@@ -339,10 +403,18 @@ const confirmProduction = () => modal('confirm prod-confirm', `
 async function save() {
   const s = editing;
   if (!s || problemOf(s) || !isDirty()) return;
+  // Said in a box, not under the form: Save stays on, so the values left out are named when it's pressed.
+  const missing = s.what === WHAT.snippet ? missingOf(s) : [];
+  if (missing.length) {
+    await noticeDialog({ title: 'Values missing', body: `Fill in ${missing.join(', ')} with the Values button. A schedule doesn't use defaults.` });
+    return;
+  }
   // Production is where nobody will be there to see what it types.
   if (reachesProduction(s, [...state.tabs.values()], state.profiles) && !(await confirmProduction())) return;
   if (s !== editing) return;
   s.name = s.name.trim() || (s.what === WHAT.snippet ? s.snippet : (s.what === WHAT.agent ? s.prompt : s.command).trim().split(/\s+/).slice(0, NAME_WORDS).join(' '));
+  // A snippet's values go with it when the schedule runs something else.
+  if (s.what !== WHAT.snippet) delete s.values;
   saveSchedule(s);
   select(s.id);
 }
@@ -355,12 +427,58 @@ async function removeShown() {
     render();
     return;
   }
-  const id = editing.id;
-  // An agent may change what's shown while the user is asked: only the schedule asked about goes.
-  if (!(await confirmDanger(`Delete ${editing.name}?`, 'Its reports go with it.', 'Delete')) || editing?.id !== id) return;
-  removeSchedule(id);
-  select(schedules()[0]?.id ?? null);
+  await deleteSchedule(editing.id, { whileShown: true });
 }
+
+/**
+ * Deletes a schedule once the user says so: the shown one (Delete) or one in the list (its right-click menu).
+ * @param {string} id
+ * @param {{ whileShown?: boolean }} [options] whileShown: only if it's still the one shown (Delete is about that one)
+ */
+async function deleteSchedule(id, { whileShown = false } = {}) {
+  const schedule = scheduleById(id);
+  if (!schedule || !(await confirmDanger(`Delete ${schedule.name}?`, 'Its reports go with it.', 'Delete'))) return;
+  // An agent may have deleted it, or shown another, while the user was asked.
+  if (!scheduleById(id) || (whileShown && editing?.id !== id)) return;
+  const shown = editing?.id === id;
+  removeSchedule(id);
+  if (shown) select(schedules()[0]?.id ?? null);
+  else render();
+}
+
+/**
+ * Runs a schedule now. The shown one runs only with no changes left to save, and then shows the run as its Run button does.
+ * @param {string} id
+ */
+function runSchedule(id) {
+  const shown = editing?.id === id;
+  // Checked again here: the form can change while its menu stays open.
+  if (shown && isDirty()) return;
+  runNow(id);
+  if (!shown) return;
+  openRunId = runsOf(id).find(r => !hasEnded(r))?.id ?? null;
+  view = VIEW.runs;
+  render();
+}
+
+/**
+ * A saved schedule's right-click menu. Run is off while the form holds its changes not saved, as the Run button is: it
+ * would run what was saved, not what's shown.
+ * @param {string} id
+ */
+const rowMenu = id => [
+  { label: 'Run', disabled: editing?.id === id && isDirty(), action: () => runSchedule(id) },
+  { label: 'Delete', danger: true, action: () => deleteSchedule(id) },
+];
+
+// A saved schedule in the list has its own menu; a new one not saved yet has nothing to run or delete.
+box.addEventListener('contextmenu', e => {
+  const row = /** @type {HTMLElement | null} */ (targetOf(e).closest('.sch-list [data-id]'));
+  const id = row?.dataset.id;
+  if (!id || !scheduleById(id)) return;
+  e.preventDefault();
+  showMenu(rowMenu(id), { x: e.clientX, y: e.clientY });
+});
 
 /** Clears the shown schedule's past runs and their reports; a run going on stays. */
 async function clearShown() {
@@ -446,16 +564,14 @@ async function act(action) {
   else if (action === ACTION.close) closeSchedules();
   else if (action === ACTION.save) await save();
   else if (action === ACTION.remove) await removeShown();
-  else if (action === ACTION.run && editing) {
-    runNow(editing.id);
-    openRunId = runsOf(editing.id).find(r => !hasEnded(r))?.id ?? null;
-    view = VIEW.runs;
-    render();
-  } else if (action === ACTION.stop && openRunId) stopRun(openRunId);
+  else if (action === ACTION.run && editing) runSchedule(editing.id);
+  else if (action === ACTION.stop && openRunId) stopRun(openRunId);
   else if (action === ACTION.copy) await copyOutput();
   else if (action === ACTION.terminal) await openAsTerminal();
   else if (action === ACTION.browse) await browseFolder();
   else if (action === ACTION.clear) await clearShown();
+  else if (action === ACTION.values) await askSnippetValues();
+  else if (action === PICK_SNIPPET) chooseSnippet();
   else if (action === ACTION.file) {
     const run = openRunId ? state.schedules.runs.find(r => r.id === openRunId) : null;
     if (run?.file) send(PAGE.openPath, { path: run.file });
@@ -529,6 +645,8 @@ function keepOpen(open) {
 }
 
 function closed() {
+  // The snippets list it opened goes with it, even when its window was closed from outside (Alt+F4).
+  endSnippetPick();
   keepOpen(false);
   layer.hidden = true;
   layer.style.visibility = '';
