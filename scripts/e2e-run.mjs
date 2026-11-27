@@ -53,9 +53,13 @@ function picked(base, head) {
 
 /** The script the test machine runs: its copy at the commit, built, then each test file with its results kept. @param {string[]} files */
 function remoteScript(files) {
+  // Linux and macOS alike: a lock folder (macOS has no flock), and .NET where it's installed for the user.
   return `set -e
 export PATH="$HOME/.dotnet:$HOME/.local/node/bin:$PATH"
-mkdir -p ~/e2e-runs && exec 9>~/e2e-runs/lock && flock 9
+[ -d "$HOME/.dotnet" ] && export DOTNET_ROOT="$HOME/.dotnet"
+mkdir -p ~/e2e-runs
+until mkdir ~/e2e-runs/lock.d 2>/dev/null; do sleep 5; done
+trap 'rmdir ~/e2e-runs/lock.d' EXIT
 R=~/e2e-runs/repo; OUT=~/e2e-runs/out
 [ -d "$R/.git" ] || git clone -q ~/Development/termilly "$R"
 cd "$R" && git fetch -q ~/Development/termilly ${RUN_REF} && git reset -q --hard FETCH_HEAD && git clean -fdq -e node_modules
