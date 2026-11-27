@@ -417,6 +417,22 @@ public sealed class BackgroundTasksTests : IDisposable
     }
 
     [Fact]
+    public async Task Stop_right_after_a_task_starts_finds_its_output_file_itself()
+    {
+        // The task's row shows as its hook arrives; its output file is looked for on the next tick, seconds later.
+        _terminals.Started(Pane, new FakeShell(), 42);
+        _tasks.OnEvent(Event("PostToolUse", TaskId));
+        _tasks.Tick();
+        _output.Reading = new TaskReading("x.output", null, null);
+
+        await _tasks.Stop(Pane, UseId);
+
+        Assert.Equal(1, _processes.Stops);
+        Assert.False((bool?)Task0()["stopFailed"]);
+        Assert.True((bool?)Task0()["stopping"]);
+    }
+
+    [Fact]
     public async Task Stop_shows_the_task_stopping_and_a_second_Stop_does_nothing()
     {
         RunningTask();

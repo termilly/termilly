@@ -292,6 +292,11 @@ internal sealed class BackgroundTasks : IMessageHandler, IDisposable
             }
             if (_terminals.Pids().TryGetValue(pane, out var pid))
             {
+                if (task.Reading is null)
+                {
+                    // Stopped as soon as it shows: its output file is otherwise only looked for on the next tick.
+                    Read(task, _clock.GetUtcNow());
+                }
                 var started = task.Started;
                 // The nearest older task still running the same command: a process started nearer it is that one's.
                 var olderTaskStarted = _tasks[pane].Where(t => t != task && t.Ended is null && t.Command == task.Command && t.Started < started)
