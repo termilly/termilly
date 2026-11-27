@@ -1,5 +1,6 @@
 // @ts-check
 // Only the opt-in host driver sends test:eval. Importing this module never evaluates test code.
+import * as screen from './testscreen.js';
 import { onHost, send } from './host.js';
 import { HOST, PAGE } from './protocol.js';
 import { openDocuments, hereDoc } from './windows.js';
@@ -130,6 +131,15 @@ const helpers = Object.freeze({
   text: selector => first(selector)?.textContent ?? '',
   /** @param {string} selector */
   visible: selector => all(selector).some(shown),
+  // What a user sees (js/testscreen.js): where it is, whether it's cut off or can be scrolled to, its font.
+  /** @param {string} selector */
+  box: selector => screen.box(first(selector)),
+  /** @param {string} selector */
+  clipped: selector => screen.clipped(required(selector)),
+  /** @param {string} selector */
+  reachable: selector => screen.reachable(required(selector)),
+  /** @param {string} selector */
+  fontSize: selector => screen.fontSize(required(selector)),
   click, dblclick, contextmenu, type, key: pressKey, waitFor,
   /** @param {string} path */
   import: path => bundled[path.replace(/^\.\//, '')] ?? import(new URL(path, import.meta.url).href),
