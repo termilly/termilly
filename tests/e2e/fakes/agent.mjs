@@ -4,7 +4,9 @@ import { emitKeypressEvents } from 'node:readline';
 const [agent, ...args] = process.argv.slice(2);
 if (process.env.E2E_AGENT_LOG) appendFileSync(process.env.E2E_AGENT_LOG, JSON.stringify({ agent, args, cwd: process.cwd() }) + '\n');
 const scripts = process.env.E2E_AGENTS ? JSON.parse(readFileSync(process.env.E2E_AGENTS, 'utf8')) : {};
-const script = scripts[agent] ?? {};
+// The agent typed in a terminal, not `codex app-server`, which Termilly starts on its own for the account's limits:
+// given the script, it would log Termilly's JSON on its stdin as typed keys. It finds no limits and ends.
+const script = agent === 'codex' && args[0] === 'app-server' ? {} : scripts[agent] ?? {};
 process.stdout.write(typeof script === 'string' ? script : script.stdout ?? `Fake ${agent} started\n`);
 if (script.stderr) process.stderr.write(script.stderr);
 if (!script.prompt) process.exit(script.exitCode ?? 0);

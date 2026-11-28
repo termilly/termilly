@@ -5,7 +5,9 @@
 import { test, before, after } from 'node:test';
 import { startApp } from './harness.mjs';
 
-const COMMAND = 'ls -la /tmp';
+// The test's own home (the harness gives each app one): a short listing, where /tmp on a test machine can take longer
+// to print than a check waits.
+const COMMAND = 'ls -la ~';
 const TYPED = 'ls -';
 
 let app;
