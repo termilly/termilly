@@ -74,17 +74,19 @@ step("A's pane shows B's terminal, and what's typed there runs there", async () 
     const { state } = await t.import('store.js');
     return [...state.tabs.values()].some(tab => tab.virtual?.kind === 'pc' && tab.view?.term);
   }), "B's terminal open in a pane here");
-  await here.eval(async (t, mark) => {
-    const { state } = await t.import('store.js');
-    const tab = [...state.tabs.values()].find(tab => tab.virtual?.kind === 'pc');
-    for (const key of `echo ${mark}\r`) tab.view.term.input(key, true);
-  }, MARK);
   const screenOf = app => app.eval(async (t, remote) => {
     const { state } = await t.import('store.js');
     const tab = [...state.tabs.values()].find(tab => (remote ? tab.virtual?.kind === 'pc' : !tab.virtual) && tab.view?.term);
     const buffer = tab.view.term.buffer.active;
     return Array.from({ length: buffer.length }, (_, i) => buffer.getLine(i)?.translateToString(true) ?? '').join('\n');
   }, app === here);
+  // Typed once B's screen shows here (its watch is up), as a user would.
+  await until(async () => (await screenOf(here)).trim().length > 0, "B's screen shown here");
+  await here.eval(async (t, mark) => {
+    const { state } = await t.import('store.js');
+    const tab = [...state.tabs.values()].find(tab => tab.virtual?.kind === 'pc');
+    for (const key of `echo ${mark}\r`) tab.view.term.input(key, true);
+  }, MARK);
   await until(async () => (await screenOf(there)).includes(MARK), 'B ran it in its own terminal');
   await until(async () => (await screenOf(here)).split(MARK).length > 2, "A shows B's command and its output");
 });

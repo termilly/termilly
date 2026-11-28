@@ -341,18 +341,127 @@ public sealed class SessionProfileTests : IDisposable
         Assert.Contains("633;E;%s", vars["PS0"]); // bash reports the command line itself
         Assert.Contains("133;D", vars["PROMPT_COMMAND"]);
         // Quiet where Termilly's own integration is installed (a WSL distribution set up), which reports them itself.
-        Assert.StartsWith("""$([ -n "$__termilly_loaded" ] || printf '\e]633;E;%s\a\e]133;C\a' "$(HISTTIMEFORMAT=""", vars["PS0"]);
-        Assert.Contains("""[ -n "$__termilly_loaded" ] || { """, vars["PROMPT_COMMAND"]);
+        Assert.StartsWith("""$([ -n "${__termilly_loaded-}" ] || printf '\e]633;E;%s\a\e]133;C\a' "$(HISTTIMEFORMAT=""", vars["PS0"]);
+        Assert.Contains("""[ -n "${__termilly_loaded-}" ] || { """, vars["PROMPT_COMMAND"]);
         Assert.Contains("""printf '\033]133;D;%s\007\033]133;A;shell=bash\007' "$__termilly_status"; """, vars["PROMPT_COMMAND"]);
         // The prompt's end, once, at the end of PS1, so autocomplete knows where the typed command starts.
         Assert.Contains("""[[ "$PS1" == *'\e]133;B\a'* ]] || PS1="$PS1"'\[\e]133;B\a\]'; }""", vars["PROMPT_COMMAND"]);
         // bash before 4.4 has no PS0: the first prompt sets a DEBUG trap that marks commands instead; a prompt arms it.
+        // How it marks is Old_bash_marks_each_typed_command_once below.
         Assert.Contains("-lt 404", vars["PROMPT_COMMAND"]);
-        Assert.EndsWith("__termilly_ready=1", vars["PROMPT_COMMAND"]);
+        Assert.EndsWith("""__termilly_wait $LINENO ;; esac; }""", vars["PROMPT_COMMAND"]);
 
         var wsl = new SessionProfile("wsl-ubuntu", "Ubuntu", "", "wsl", "wsl.exe -d Ubuntu", ProfileSources.Wsl);
         var (_, wslVars) = SessionLaunch.WithShellIntegration(wsl, new Dictionary<string, string> { ["WSLENV"] = "FOO/p:PS0/u" });
         Assert.Equal("FOO/p:PS0/u:PROMPT_COMMAND/u", wslVars["WSLENV"]);
+    }
+
+    /// <summary>Git for Windows' bash, which runs the bash before 4.4 fallback when told it's older.</summary>
+    private static readonly string GitBash = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Git", "bin", "bash.exe");
+
+    [Fact]
+    public async Task Bash_with_ps0_runs_the_prompt_under_set_u()
+    {
+        if (!File.Exists(GitBash))
+        {
+            return; // nothing to run it with
+        }
+        var bash = new SessionProfile("git-bash", "Git Bash", "", "bash", "bash.exe -i", ProfileSources.Local);
+        var (_, vars) = SessionLaunch.WithShellIntegration(bash, new Dictionary<string, string>());
+        // set -u turned on, and a prompt tool's part after Termilly's, which has to keep running.
+        var output = await RunBashAsync(vars["PROMPT_COMMAND"] + "; echo hook-ran", "set -u\n\necho done\n", ps0: vars["PS0"]);
+
+        Assert.DoesNotMatch(@"__termilly\w*: unbound", output);
+        Assert.Contains("hook-ran", output, StringComparison.Ordinal);
+        Assert.Contains("\u001b]633;E;echo done\u0007", output, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// What interactive Git Bash prints for <paramref name="typed"/>, with Termilly's prompt variables and the rc file
+    /// the cases share (two functions, ignoreboth).
+    /// </summary>
+    private async Task<string> RunBashAsync(string promptCommand, string typed, string? ps0 = null)
+    {
+        var rc = Path.Combine(_dir, "rc");
+        File.WriteAllText(rc, "PS1='P> '\np1() { :; }\np2() { :; }\nHISTCONTROL=ignoreboth\n");
+        var start = new System.Diagnostics.ProcessStartInfo(GitBash)
+        {
+            ArgumentList = { "--noprofile", "--rcfile", rc, "-i" },
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true,
+            Environment =
+            {
+                ["PROMPT_COMMAND"] = promptCommand,
+                ["HISTFILE"] = Path.Combine(_dir, "history"),
+            },
+        };
+        if (ps0 is not null)
+        {
+            start.Environment["PS0"] = ps0;
+        }
+        using var process = System.Diagnostics.Process.Start(start)!;
+        process.StandardInput.Write(typed + "exit\n");
+        process.StandardInput.Close();
+        var error = process.StandardError.ReadToEndAsync();
+        var output = await process.StandardOutput.ReadToEndAsync() + await error;
+        await process.WaitForExitAsync();
+        return output;
+    }
+
+    /// <summary>The prompt-tool parts the cases add to PROMPT_COMMAND around Termilly's (a placeholder for it).</summary>
+    private const string Ours = "{termilly}";
+
+    [Theory]
+    // A prompt tool's parts, after Termilly's or before it, in each form bash takes: an empty Enter marks nothing.
+    [InlineData("{termilly}; p1", "\necho a\n", "echo a")]
+    [InlineData("{termilly};  p1", "\necho a\n", "echo a")]
+    [InlineData("{termilly}; p1 && p2", "\necho a\n", "echo a")]
+    [InlineData("{termilly}\np1\np2", "\necho a\n", "echo a")]
+    [InlineData("p1 && p2; {termilly}", "\necho a\n", "echo a")]
+    // Ones bash prints back otherwise than written (spacing), or with a ';' quoted.
+    [InlineData("{termilly}; :  hi", "\necho a\n", "echo a")]
+    [InlineData(":  hi; {termilly}", "\necho a\n", "echo a")]
+    [InlineData("{termilly}; printf '%s;' x", "\necho a\n", "echo a")]
+    [InlineData("printf '%s;' x; {termilly}", "\necho a\n", "echo a")]
+    // Added while the shell runs, after Termilly's end: the prompt then doesn't wait, the next ones do.
+    [InlineData("{termilly}", "PROMPT_COMMAND=\"$PROMPT_COMMAND; p1\"\n\necho a\n", "PROMPT_COMMAND=\"$PROMPT_COMMAND; p1\"|echo a")]
+    [InlineData("{termilly}", "PROMPT_COMMAND=\"$PROMPT_COMMAND\"$'\\n'p1\n\necho a\n", "PROMPT_COMMAND=\"$PROMPT_COMMAND\"$'\\n'p1|echo a")]
+    // A part that puts another before Termilly's, at the first prompt.
+    [InlineData("{termilly}; [ -n \"$x\" ] || { x=1; PROMPT_COMMAND=\"p1; $PROMPT_COMMAND\"; }", "\n\necho a\n", "echo a")]
+    // set -e: a failed command before the prompt doesn't end the shell; set -T: PS1's $(...) isn't a command.
+    [InlineData("{termilly}", "set -e\nfalse && :\necho a\n", "set -e|false && :|echo a")]
+    [InlineData("{termilly}", "set -T\nPS1='$(echo P)> '\n\necho a\n", "set -T|PS1='$(echo P)> '|echo a")]
+    [InlineData("{termilly}; f() { :; :; }; f", "set -T\n\necho a\n", "set -T|echo a")]
+    // Typed, a command run in a subshell is marked when the trap reaches it (set -T).
+    [InlineData("{termilly}", "set -T\n(echo sub)\n", "set -T|(echo sub)")]
+    // set -u: nothing of Termilly's is unset.
+    [InlineData("{termilly}", "set -u\necho a\n", "set -u|echo a")]
+    // Typed, a command is marked even when a prompt tool runs one of the same name, typed again too.
+    [InlineData("{termilly}; p1", "p1\n", "p1")]
+    [InlineData("{termilly}; :", ":\n:\n", ":|:")]
+    [InlineData(":; {termilly}", ":\n\necho a\n", ":|echo a")]
+    // Commands kept out of the history (ignoreboth): the same again, as bash prints it back, and one after a space.
+    [InlineData("{termilly}", "echo a\necho a\n", "echo a|echo a")]
+    [InlineData("{termilly}", "echo  a\necho  a\n", "echo  a|echo a")]
+    [InlineData("{termilly}", "echo a\n echo hidden\n", "echo a|echo hidden")]
+    [InlineData("{termilly}", "echo a\n\necho b\n", "echo a|echo b")]
+    public async Task Old_bash_marks_each_typed_command_once(string promptCommand, string typed, string marked)
+    {
+        if (!File.Exists(GitBash))
+        {
+            return; // nothing to run it with
+        }
+        var bash = new SessionProfile("git-bash", "Git Bash", "", "bash", "bash.exe -i", ProfileSources.Local);
+        var (_, vars) = SessionLaunch.WithShellIntegration(bash, new Dictionary<string, string>());
+        var ours = vars["PROMPT_COMMAND"].Replace("-lt 404", "-lt 9999", StringComparison.Ordinal);
+        var output = await RunBashAsync(promptCommand.Replace(Ours, ours, StringComparison.Ordinal), typed);
+
+        var marks = System.Text.RegularExpressions.Regex.Matches(output, "\u001b\\]633;E;([^\u0007]*)\u0007")
+            .Select(m => m.Groups[1].Value).Where(m => m != "exit");
+        Assert.Equal(marked, string.Join('|', marks));
     }
 
     [Fact]

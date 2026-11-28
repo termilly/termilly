@@ -74,6 +74,8 @@ step('one block of a file is staged on its own', async () => {
 
 step('a picked line is discarded, and Undo brings it back', async () => {
   await openFile(app, 'Changes', 'a.txt');
+  // Its unstaged diff (one block left, to stage), not one still shown from before: a line picked there has no Discard.
+  await until(() => app.eval(t => t.$$('.gw-hunk-bar').length === 1 && !!t.$('.gw-hunk-bar [data-block-act="stage"]')), 'a.txt\'s unstaged diff');
   await app.click('[data-l="a8"] .pv-no');
   await app.waitFor('.gw-pick-bar', { text: '1 line picked' });
   await app.click('.gw-pick-bar [data-pick-act="discard"]');

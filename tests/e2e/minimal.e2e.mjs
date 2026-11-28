@@ -11,6 +11,9 @@ import { until, skipTour } from './gitsteps.mjs';
 /** Files every Linux has, opened in the file preview: enough tabs for its strip to overflow. */
 const PREVIEW_FILES = ['hosts', 'hostname', 'os-release', 'passwd', 'group', 'fstab', 'shells', 'profile', 'environment', 'issue', 'protocols', 'services'].map(name => `/etc/${name}`);
 
+/** Where the window's buttons sit on the strip: macOS has them at the left (js/macwindow.js), the others at the right. */
+const CONTROLS_SIDE = process.platform === 'darwin' ? 'left' : 'right';
+
 let app;
 let failed = false;
 
@@ -60,10 +63,10 @@ step('Minimal moves the toolbar into a hidden dock and the sidebar away', async 
     line: !globalThis.document.querySelector('.dock-line').hidden,
     side: globalThis.document.getElementById('dock').dataset.side,
     strip: globalThis.document.getElementById('titlebar').getBoundingClientRect().height,
-    // The window's buttons stay at the strip's right end (not in the middle, where the search box was).
-    controlsAtRight: globalThis.innerWidth - globalThis.document.querySelector('#titlebar .window-controls').getBoundingClientRect().right < 20,
+    // The window's buttons stay at the strip's end (not in the middle, where the search box was).
+    controlsAt: (b => (!b.width ? 'hidden' : globalThis.innerWidth - b.right < 24 ? 'right' : b.left < 24 ? 'left' : 'middle'))(globalThis.document.querySelector('#titlebar .window-controls').getBoundingClientRect()),
   }));
-  assert.deepEqual(shown, { toolbarInDock: true, sidebar: 'none', search: 'none', tucked: true, line: true, side: 'top', strip: 32, controlsAtRight: true });
+  assert.deepEqual(shown, { toolbarInDock: true, sidebar: 'none', search: 'none', tucked: true, line: true, side: 'top', strip: 32, controlsAt: CONTROLS_SIDE });
   await app.screenshot('02-minimal-hidden');
 });
 
@@ -86,7 +89,7 @@ step('a new version\'s notice shows on the strip, without the rest of the brand'
 
 step('switching workspaces keeps the strip, the window buttons and the dock as they were', async () => {
   const look = () => app.eval(() => ({
-    controlsAtRight: globalThis.innerWidth - globalThis.document.querySelector('#titlebar .window-controls').getBoundingClientRect().right < 20,
+    controlsAt: (b => (!b.width ? 'hidden' : globalThis.innerWidth - b.right < 24 ? 'right' : b.left < 24 ? 'left' : 'middle'))(globalThis.document.querySelector('#titlebar .window-controls').getBoundingClientRect()),
     strip: globalThis.document.getElementById('titlebar').getBoundingClientRect().height,
     sidebar: globalThis.getComputedStyle(globalThis.document.getElementById('sidebar')).display,
     toolbarInDock: !!globalThis.document.querySelector('#dock .toolbar'),
@@ -115,7 +118,7 @@ step('switching workspaces keeps the strip, the window buttons and the dock as t
   });
   await pause(800);
   const back = await look();
-  const expected = { controlsAtRight: true, strip: 32, sidebar: 'none', toolbarInDock: true, needs: false };
+  const expected = { controlsAt: CONTROLS_SIDE, strip: 32, sidebar: 'none', toolbarInDock: true, needs: false };
   assert.deepEqual({ before, second, back }, { before: expected, second: expected, back: expected });
 });
 
@@ -127,13 +130,15 @@ step('"needs you" sits before the window buttons, ends with a divider, and goes 
     emit(EVENTS.tab, waiting);
   });
   await app.waitFor('#titlebar .mini-needs:not([hidden])');
-  const place = await app.eval(() => {
+  const place = await app.eval((t, side) => {
     const needs = globalThis.document.querySelector('#titlebar .mini-needs').getBoundingClientRect();
     const controls = globalThis.document.querySelector('#titlebar .window-controls').getBoundingClientRect();
-    const divider = globalThis.getComputedStyle(globalThis.document.querySelector('#titlebar .mini-needs'), '::after').width;
-    return { rightHalf: needs.left > globalThis.innerWidth / 2, beforeControls: needs.right <= controls.left, divider };
-  });
-  assert.deepEqual(place, { rightHalf: true, beforeControls: true, divider: '1px' });
+    const after = globalThis.getComputedStyle(globalThis.document.querySelector('#titlebar .mini-needs'), '::after');
+    const divider = after.display === 'none' ? 'none' : after.width;
+    return { rightHalf: needs.left > globalThis.innerWidth / 2, clearOfControls: controls.width > 0 && (side === 'right' ? needs.right <= controls.left : needs.left >= controls.right), divider };
+  }, CONTROLS_SIDE);
+  // No divider on macOS, whose window buttons are on the other side.
+  assert.deepEqual(place, { rightHalf: true, clearOfControls: true, divider: CONTROLS_SIDE === 'right' ? '1px' : 'none' });
   await pause(300);
   await app.screenshot('02c-needs-you');
   await app.click('#titlebar .mini-needs');
@@ -213,10 +218,12 @@ step("the strip's workspace opens the same list, switches workspace, and leaves 
   await app.click('#crumb');
   await app.waitFor('.context-menu .menu-row');
   await app.eval(t => [...t.$$('.context-menu .menu-row')].find(r => r.textContent.includes('second')).click());
-  const switched = await app.eval(async t => {
+  // The strip shows the name at its next frame.
+  const switched = await until(() => app.eval(async t => {
     const { state, wsById } = await t.import('store.js');
-    return { active: wsById(state.activeId)?.name, shown: t.$('#crumb .crumb-name').textContent };
-  });
+    const now = { active: wsById(state.activeId)?.name, shown: t.$('#crumb .crumb-name').textContent };
+    return now.shown === 'second' && now;
+  }), 'the strip shows the workspace switched to');
   assert.deepEqual(switched, { active: 'second', shown: 'second' });
   // From the keyboard too, reached with the focus on it: Enter and Space. Then back to the first workspace for the
   // steps after.

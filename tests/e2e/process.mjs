@@ -39,7 +39,10 @@ export async function terminate(child) {
     try {
       if (process.platform === 'win32') child.kill(value);
       else process.kill(-child.pid, value);
-    } catch (error) { if (error.code !== 'ESRCH') throw error; }
+    } catch (error) {
+      // Gone; or, on macOS, a group whose processes have all ended but aren't reaped yet (it answers EPERM then).
+      if (error.code !== 'ESRCH' && !(error.code === 'EPERM' && process.platform === 'darwin')) throw error;
+    }
   };
   signal('SIGTERM');
   const controller = new AbortController();

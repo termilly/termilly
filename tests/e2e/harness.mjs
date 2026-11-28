@@ -179,9 +179,9 @@ export async function startApp({ folder, gh = {}, agents = {}, env = {}, name = 
       waitFor(selector, options = {}) { return this.eval(async (t, s, o) => { await t.waitFor(s, o); return true; }, selector, options); },
       /** A picture of the screen for the report: evidence only, so one that can't be taken is noted, not a failure. */
       async screenshot(name = 'screenshot') {
-        await mkdir(artifacts, { recursive: true });
         const file = path.join(artifacts, `${name.replace(/[^a-zA-Z0-9_-]/g, '-')}.png`);
         try {
+          await mkdir(artifacts, { recursive: true });
           if (process.platform === 'darwin') await run('screencapture', ['-x', file]);
           else await run('import', ['-window', 'root', file], { env: { ...appEnv, DISPLAY: display } });
           return file;
@@ -198,7 +198,8 @@ export async function startApp({ folder, gh = {}, agents = {}, env = {}, name = 
         failed ||= evaluationFailed;
         if (failed) {
           await mkdir(artifacts, { recursive: true });
-          try { if (display) await this.screenshot('failure'); } catch (error) { logs.push(`Screenshot failed: ${error.message}\n`); }
+          // macOS takes it without an X display.
+          if (display || process.platform === 'darwin') await this.screenshot('failure');
         }
         await terminate(appProcess);
         // Its background host and shells too, unless it starts again on this data: left, they'd keep the test running.

@@ -26,6 +26,7 @@ export async function until(check, what) {
 
 /** Opens the Git window from the toolbar's Git button, and waits for its list. @param {any} app */
 export async function openGit(app) {
+  await noTour(app);
   await app.click('#git-button');
   await app.waitFor('.git-win .gw-list > .cw-row, .git-win .gw-list > .gw-empty:not(:empty)');
 }
@@ -138,8 +139,23 @@ export async function noteAction(app, text) {
 
 /** Switches the Git window to a tab by its name (Changes, History, Branches, Local history, Issues). */
 export async function tab(app, name) {
-  await clickText(app, '[data-gw-tab]', name);
+  // Shown once the window knows the repository (a tab it doesn't apply to stays hidden).
+  await clickText(app, '[data-gw-tab]:not([hidden])', name);
   await app.waitFor('[data-gw-tab].on', { text: name });
+}
+
+/**
+ * No welcome tour: offered a few seconds after a first start (later on a slower machine), its card closes what a step
+ * just opened. Marked seen, so it isn't offered, and stopped if it already began.
+ * @param {any} app
+ */
+export async function noTour(app) {
+  await app.eval(async t => {
+    const { GROUPS } = await t.import('store.js');
+    (await t.import('preferences.js')).updateSettings(GROUPS.uiState, { tourSeen: true });
+    const tour = await t.import('tour.js');
+    if (tour.tourActive()) tour.stopTour();
+  });
 }
 
 /** Skips the welcome tour a first start offers: it would sit over everything, and hold the keyboard. */

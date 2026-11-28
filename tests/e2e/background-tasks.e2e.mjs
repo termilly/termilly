@@ -11,11 +11,14 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import { mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
+import { randomUUID } from 'node:crypto';
 import { startApp } from './harness.mjs';
 import { until } from './process.mjs';
 
-const SESSION = '5a7d0c11-2222-4333-8444-555566667777';
-const TASK = 'bktest001';
+// Each run's own: the app reads the first task file of this session and id in any project, and on macOS every
+// run's (and one an interrupted run left) is in the same folder.
+const SESSION = randomUUID();
+const TASK = `bk${randomUUID().slice(0, 8)}`;
 const USE_ID = 'toolu_bg1';
 const NAME = 'Codex review';
 const CODEX_ID = 'exec-dfeb0971-b21b-45f2-af47-9f7509867557';
@@ -67,8 +70,14 @@ test('a background task keeps the spinner, shows its row and chip, and holds "do
   const work = path.join(tmpdir(), `termilly-bg-${process.pid}`);
   // The app's temp folder, where it looks for Claude Code's task files.
   const temp = path.join(work, 'tmp');
-  const tasks = path.join(temp, 'claude', 'project', SESSION, 'tasks');
+  // Claude Code's task files: under the temp folder, but on macOS in /tmp/claude-<uid> (BackgroundTaskFiles.cs), the
+  // machine's real one, so in a project folder of the test's own there, removed after.
+  const project = process.platform === 'darwin'
+    ? path.join('/tmp', `claude-${process.getuid?.()}`, `termilly-e2e-${process.pid}`)
+    : path.join(temp, 'claude', 'project');
+  const tasks = path.join(project, SESSION, 'tasks');
   const output = path.join(tasks, `${TASK}.output`);
+  await mkdir(temp, { recursive: true });
   await mkdir(tasks, { recursive: true });
   await writeFile(output, 'Reading src/EarlyShell.cs\n');
   const script = await hookScript(work, [
@@ -115,6 +124,7 @@ test('a background task keeps the spinner, shows its row and chip, and holds "do
   } finally {
     await app?.stop({ failed });
     if (!failed) await rm(work, { recursive: true, force: true });
+    if (!project.startsWith(work)) await rm(project, { recursive: true, force: true });
   }
 });
 

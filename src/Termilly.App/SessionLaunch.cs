@@ -32,7 +32,7 @@ internal static class SessionLaunch
         /// What the marks run behind: nothing when Termilly's integration installed in a WSL distribution
         /// (shell/remote/termilly.sh) has loaded, since it reports them itself.
         /// </summary>
-        public const string Unless = """[ -n "$__termilly_loaded" ] ||""";
+        public const string Unless = """[ -n "${__termilly_loaded-}" ] ||""";
 
         /// <summary>
         /// The prompt's end (OSC 133;B), where the typed command starts, for autocomplete: bash has no hook after its
@@ -42,11 +42,21 @@ internal static class SessionLaunch
 
         /// <summary>
         /// bash before 4.4 (macOS's own is 3.2) has no PS0: the first prompt sets a DEBUG trap instead (unless the
-        /// user has one), which sends what PS0 would before the first command after each prompt. Each prompt sets
-        /// __termilly_ready, and the trap skips the prompt's own first command, so an empty Enter marks nothing.
+        /// user has one), which sends what PS0 would before the first command after each prompt. What PROMPT_COMMAND
+        /// runs isn't a command, and is told apart by where it runs, not by its text (bash prints commands back
+        /// reformatted): from the first prompt, PROMPT_COMMAND starts with __termilly_prompt (in an &amp;&amp; list, so
+        /// $? stays for the parts after it and set -e doesn't end the shell) and ends, on a line of its own, with
+        /// __termilly_arm, which starts the wait for a command after all of it. An empty Enter runs it all again, and
+        /// the wait ends at __termilly_prompt. The first prompt starts the wait itself, skipping what a prompt tool
+        /// added after Termilly's (one rebuilding PS1) by its line (LINENO); on lines of their own, that prompt doesn't
+        /// wait. A part added after __termilly_arm later moves it to the end (a no-op stays in its place), and that
+        /// prompt doesn't wait either; nor one whose PROMPT_COMMAND changed after the wait started, or doesn't start
+        /// with __termilly_prompt. Taken for a command, any of them would leave the prompt running. A subshell (PS1's
+        /// $(...)) marks only for a typed command (set -T), and a function (a prompt tool's) never. The mark names the command from the history, or, when it went in none
+        /// (ignorespace, ignoredups), as bash prints it.
         /// </summary>
         public const string OldBashPreexec =
-            """[ -n "$__termilly_trap" ] || { __termilly_trap=1; [ "$((BASH_VERSINFO[0] * 100 + BASH_VERSINFO[1]))" -lt 404 ] && [ -z "$(trap -p DEBUG)" ] && trap 'if [ -n "$__termilly_ready" ]; then __termilly_ready=; [ "${BASH_COMMAND#__termilly_status=}" = "$BASH_COMMAND" ] && printf "\033]633;E;%s\007\033]133;C\007" "$(HISTTIMEFORMAT= history 1 | sed "s/^ *[0-9]* *//")"; fi' DEBUG; }; __termilly_ready=1""";
+            """[ -n "${__termilly_trap-}" ] || { __termilly_trap=1; [ "$((BASH_VERSINFO[0] * 100 + BASH_VERSINFO[1]))" -lt 404 ] && [ -z "$(trap -p DEBUG)" ] && { __termilly_old=1; __termilly_ready=; __termilly_line=; __termilly_pc=; __termilly_moved=; __termilly_nl=$'\n'; __termilly_first='__termilly_prompt && :; '; __termilly_prompt() { return $?; }; __termilly_wait() { __termilly_line=${1-}; __termilly_pc=$PROMPT_COMMAND; __termilly_ready=+$(HISTTIMEFORMAT= history 1); }; __termilly_arm() { if [ -n "$__termilly_moved" ]; then __termilly_moved=; else case "$PROMPT_COMMAND" in "$__termilly_first"*) __termilly_wait ;; esac; fi; }; trap 'if [ -n "$__termilly_ready" ] && { [ "$BASH_SUBSHELL" = 0 ] || [ "+$(HISTTIMEFORMAT= history 1)" != "$__termilly_ready" ]; } && [ -z "${FUNCNAME[0]-}" ] && [ "$LINENO" != "$__termilly_line" ]; then if [ "$PROMPT_COMMAND" != "$__termilly_pc" ]; then __termilly_ready=; else case "$BASH_COMMAND" in __termilly_prompt) __termilly_ready= ;; __termilly_arm) ;; *) if [ "+$(HISTTIMEFORMAT= history 1)" = "$__termilly_ready" ]; then printf "\033]633;E;%s\007\033]133;C\007" "$BASH_COMMAND"; else printf "\033]633;E;%s\007\033]133;C\007" "$(HISTTIMEFORMAT= history 1 | sed "1s/^ *[0-9]* *//")"; fi; __termilly_ready= ;; esac; fi; fi' DEBUG; }; }; [ -z "${__termilly_old-}" ] || { case "$PROMPT_COMMAND" in "$__termilly_first"*) ;; *) PROMPT_COMMAND="$__termilly_first$PROMPT_COMMAND" ;; esac; case "$PROMPT_COMMAND" in *"$__termilly_nl"__termilly_arm) ;; *"$__termilly_nl"__termilly_arm[\;\ ]*|*"$__termilly_nl"__termilly_arm"$__termilly_nl"*) __termilly_moved=1; __termilly_t=${PROMPT_COMMAND//${__termilly_nl}__termilly_arm;/${__termilly_nl}:;}; __termilly_t=${__termilly_t//${__termilly_nl}__termilly_arm /${__termilly_nl}: }; PROMPT_COMMAND="${__termilly_t//${__termilly_nl}__termilly_arm${__termilly_nl}/${__termilly_nl}:${__termilly_nl}}$__termilly_nl"__termilly_arm ;; *"$__termilly_nl"*) PROMPT_COMMAND="$PROMPT_COMMAND$__termilly_nl"__termilly_arm ;; *) PROMPT_COMMAND="$PROMPT_COMMAND$__termilly_nl"__termilly_arm; __termilly_wait $LINENO ;; esac; }""";
     }
 
     /// <summary>cmd's prompt variable and what it shows when nobody set it (<see cref="CmdPrompt"/>).</summary>

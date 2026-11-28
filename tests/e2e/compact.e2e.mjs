@@ -9,6 +9,8 @@ import { until, clickText, skipTour } from './gitsteps.mjs';
 
 const question = 'Would you like to run the following command?';
 const choices = ['› 1. Yes, proceed (y)', "  2. Yes, and don't ask again for commands that start", '     with `git init` (p)', '  3. No, and tell Codex what to do differently (esc)'];
+/** Rows Codex's terminal has at least: its approval prompt (below) fits with room to spare. */
+const MIN_ROWS = 20;
 const approval = ['', '', `  ${question}`, '', '  Environment: local', '', '  Reason: May I allow git init to create the', '  repository metadata in this directory?', ...choices, '  Press enter to confirm or esc to cancel'];
 
 async function events(app) {
@@ -59,6 +61,19 @@ async function scenario(name, lines, body, { waiting = false, ready = '.cv-choic
     app = await startApp({ folder: repo.folder, name, agents: { codex: { stdout: '', prompt: { lines, ...prompt } } } });
     // Launch the bare command so shell integration recognizes the agent.
     await app.waitFor('.xterm');
+    // Codex's terminal gets the whole window: half of it is as short as a few rows on a smaller screen (the Mac's), and
+    // a menu scrolled out at the top reads as cut off.
+    await app.eval(async t => {
+      const { state } = await t.import('store.js');
+      const { closeTab } = await t.import('panes.js');
+      const [, ...others] = [...state.tabs.values()].filter(tab => tab.view?.term);
+      for (const tab of others) closeTab(tab);
+    });
+    await until(() => app.eval(async (t, least) => {
+      const { state } = await t.import('store.js');
+      const terminals = [...state.tabs.values()].filter(tab => tab.view?.term);
+      return terminals.length === 1 && terminals[0].view.term.rows >= least;
+    }, MIN_ROWS), `one terminal of ${MIN_ROWS} rows or more`);
     // No welcome tour: offered a few seconds after a first start, its card would close a menu a scenario opens.
     await app.eval(async t => {
       const { GROUPS } = await t.import('store.js');
@@ -112,7 +127,8 @@ test('Codex question, context, choices, shim arguments and arrow/Enter stdin', (
   assert.deepEqual(await app.eval(t => t.$$('.cv-context > div').map(e => e.textContent)), ['Environment: local', 'Reason: May I allow git init to create the', 'repository metadata in this directory?']);
   assert.deepEqual(await app.eval(t => t.$$('.cv-choice').map(e => e.dataset.choice)), ['1', '2', '3']);
   assert.match(await app.text('.cv-choice[data-choice="2"]'), /with `git init` \(p\)/);
-  const call = (await app.agentCalls()).find(c => c.agent === 'codex');
+  // The one typed in the terminal: Termilly also starts `codex app-server` on its own (for the account's limits).
+  const call = (await app.agentCalls()).find(c => c.agent === 'codex' && c.args[0] !== 'app-server');
   assert.ok(call, 'fake Codex was invoked');
   const config = call.args.find(arg => arg.startsWith('mcp_servers.termilly={'));
   assert.ok(config, 'shim supplies the Termilly MCP server');
@@ -318,12 +334,14 @@ test('a prompt box hidden while its pane got narrower fits its text when its vie
  * Right-clicks an element and returns the menu that opens, as each row's text and whether it can be picked, then closes
  * it. Read at once: a menu opened by a made-up right-click over the terminal doesn't stay open for a later look.
  */
-const rightClickMenu = (app, selector) => app.eval(async (t, s) => {
+const rightClickMenu = (app, selector, { select = false } = {}) => app.eval(async (t, s, select) => {
+  // Selected in the same go when asked: the view drawn again between two calls would lose the selection.
+  if (select) t.$(s).ownerDocument.getSelection().selectAllChildren(t.$(s));
   t.contextmenu(s);
   const rows = t.$$('.menu-row').map(row => ({ text: row.textContent.trim(), enabled: !row.disabled }));
   (await t.import('popups.js')).closeAll();
   return rows;
-}, selector);
+}, selector, select);
 
 /** Selects a view element's text as a drag would; returns what got selected. */
 const selectAllOf = (app, selector) => app.eval((t, s) => {
@@ -346,14 +364,14 @@ const selectInTerminal = (app, text) => app.eval(async (t, wanted) => {
 
 test('a right-click on selected text in the Compact and Minimal views shows the terminal\'s full menu for it', () => scenario('compact-menu', approval, async app => {
   assert.equal(await selectAllOf(app, '.cv-question'), question);
-  const compact = await rightClickMenu(app, '.cv-question');
+  const compact = await rightClickMenu(app, '.cv-question', { select: true });
   assert.ok(compact.find(row => row.text.startsWith('Copy'))?.enabled, 'Copy can be picked');
   assert.ok(compact.some(row => row.text === 'Ask an agent about this'), 'the selection\'s entries are there');
 
   await pickView(app, 'Minimal');
   await app.waitFor('.cv-question');
   assert.equal(await selectAllOf(app, '.cv-question'), question);
-  assert.deepEqual(await rightClickMenu(app, '.cv-question'), compact);
+  assert.deepEqual(await rightClickMenu(app, '.cv-question', { select: true }), compact);
 
   // The terminal's own menu for the same selected text is the same menu.
   await pickView(app, 'Full');
