@@ -3,7 +3,7 @@
 // set_schedule can do. Any agent
 // may list them; the host lets the others through only with Settings › Terminal › Let scripts and agents type on, as
 // they make something run. A schedule an agent adds runs out of sight, and an agent prompt in it only reads files: the
-// user can allow more in the Schedules window.
+// user can allow more in the Schedules window. An edit keeps what the user allowed; it can lower it, never raise it.
 
 import { state, newId, lastFolderOf, installedAgents } from './store.js';
 import { addApiMethods } from './api.js';
@@ -39,7 +39,7 @@ function describeSchedule(s) {
   return {
     id: s.id, name: s.name, on: s.on, what: s.what,
     runs: s.what === WHAT.agent ? s.prompt : s.what === WHAT.snippet ? s.snippet : s.command,
-    ...(s.what === WHAT.agent ? { agent: s.agent ?? AGENT_KIND.claude, reviewers: reviewersOf(s) } : {}),
+    ...(s.what === WHAT.agent ? { agent: s.agent ?? AGENT_KIND.claude, permissions: permissionOf(s), reviewers: reviewersOf(s) } : {}),
     ...(s.what === WHAT.snippet ? { vars: s.values ?? {} } : {}),
     when: describeWhen(s.when), next: s.on ? describeAt(s.nextAt, Date.now()) : null,
     last: last ? { status: last.status, at: new Date(last.at).toISOString(), summary: last.summary } : null,
@@ -138,8 +138,33 @@ const WHEN_KIND_FIELDS = ['at', 'every', 'on_start'];
 /** The arguments that say what a schedule runs, and when. */
 const WHAT_FIELDS = ['what', 'command', 'snippet', 'vars', 'prompt', 'agent'];
 const WHEN_FIELDS = [...WHEN_KIND_FIELDS, 'days', 'unit'];
-/** What a changed prompt, agent or folder makes of what the user allowed an agent schedule: reading files only. */
+/** What a new agent schedule is allowed: reading files only. The user allows more in the Schedules window. */
 const READ_ONLY = Object.freeze({ allowChanges: false, allowAll: false });
+
+/** What an agent schedule may do, as edit_schedule's permissions names it, from least to most. */
+const PERMISSION = Object.freeze({ readOnly: 'read_only', changeFiles: 'change_files', everything: 'everything' });
+/** @type {readonly string[]} */
+const PERMISSION_LEVELS = [PERMISSION.readOnly, PERMISSION.changeFiles, PERMISSION.everything];
+
+/**
+ * What the user allowed an agent schedule, by name.
+ * @param {{ allowChanges?: boolean, allowAll?: boolean }} s
+ */
+const permissionOf = s => (!s.allowChanges ? PERMISSION.readOnly : s.allowAll ? PERMISSION.everything : PERMISSION.changeFiles);
+
+/**
+ * What permissions asks for, only ever at or below what the user allowed: raising it is the user's alone, in the Schedules window.
+ * @param {Schedule} schedule
+ * @param {unknown} asked
+ */
+function loweredPermissions(schedule, asked) {
+  if (schedule.what !== WHAT.agent) throw new Error('permissions are for agent schedules.');
+  const level = PERMISSION_LEVELS.indexOf(String(asked));
+  if (level < 0) throw new Error('permissions is read_only, change_files or everything.');
+  const current = permissionOf(schedule);
+  if (level > PERMISSION_LEVELS.indexOf(current)) throw new Error(`${schedule.name} is ${current}: only the user allows more, in the Schedules window.`);
+  return { allowChanges: level > 0, allowAll: level > 1 };
+}
 
 /**
  * The arguments among fields that were given.
@@ -161,8 +186,8 @@ function whenArgsOf(when) {
 }
 
 /**
- * What an edit makes of a schedule's what: a changed agent prompt or agent only reads files again, as a new one does, so an
- * agent can't change what a schedule the user allowed more does.
+ * What an edit makes of a schedule's what. An agent schedule keeps what the user allowed it, with a new prompt or agent
+ * too; one that becomes an agent schedule only reads files, as a new one does.
  * @param {Schedule} schedule
  * @param {Record<string, unknown>} changed
  */
@@ -172,8 +197,10 @@ function editedWhat(schedule, changed) {
   const keeps = (changed.what ?? what) === WHAT.snippet && (changed.snippet == null || changed.snippet === snippet);
   const vars = keeps ? schedule.values : null;
   const edited = whatOf({ what, command, snippet, prompt, vars, ...changed });
+  if (edited.what !== WHAT.agent) return edited;
+  const allowed = what === WHAT.agent ? { allowChanges: schedule.allowChanges, allowAll: schedule.allowAll } : {};
   // Its agent stays as it was unless the edit names one, even one no longer installed.
-  return edited.what === WHAT.agent && !('agent' in changed) && schedule.agent ? { ...edited, agent: schedule.agent } : edited;
+  return { ...edited, ...allowed, ...(!('agent' in changed) && schedule.agent ? { agent: schedule.agent } : {}) };
 }
 
 /**
@@ -237,9 +264,10 @@ function editSchedule(args) {
   if (Object.keys(whatChanged).length) Object.assign(changes, editedWhat(schedule, whatChanged));
   else refuseMissingValues(schedule);
   if (Object.keys(whenChanged).length) changes.when = editedWhen(schedule.when, whenChanged);
-  if (args.cwd != null) Object.assign(changes, { cwd: String(args.cwd), ...READ_ONLY });
+  if (args.cwd != null) changes.cwd = String(args.cwd);
+  if (args.permissions != null) Object.assign(changes, loweredPermissions({ ...schedule, ...changes }, args.permissions));
   if (args.on != null) changes.on = args.on !== false;
-  if (!Object.keys(changes).length) throw new Error('Say what to change: name, what it runs, when, cwd or on.');
+  if (!Object.keys(changes).length) throw new Error('Say what to change: name, what it runs, when, cwd, permissions or on.');
   saveSchedule({ ...schedule, ...changes });
   return describeSchedule(/** @type {Schedule} */ (scheduleById(schedule.id)));
 }

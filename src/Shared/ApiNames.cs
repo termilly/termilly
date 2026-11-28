@@ -129,6 +129,8 @@ internal static class ApiFields
     public const string Unit = "unit";
     public const string Days = "days";
     public const string OnStart = "on_start";
+    /// <summary>What an agent schedule may do: read_only, change_files or everything. An edit only lowers it.</summary>
+    public const string Permissions = "permissions";
     /// <summary>A Notepad page: its id or name, how text is written to it (replace, append or prepend), and whether it's shown.</summary>
     public const string Page = "page";
     public const string Mode = "mode";

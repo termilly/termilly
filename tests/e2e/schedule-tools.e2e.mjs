@@ -1,5 +1,6 @@
 // edit_schedule and delete_schedule, as an agent's call reaches the page (js/scheduleagent.js): what's given changes and
-// the rest stays, a new kind of when starts afresh, a changed agent prompt only reads files again, and a deleted schedule
+// the rest stays, a new kind of when starts afresh, what the user allowed an agent schedule stays unless the edit lowers
+// it (never raises it), and a deleted schedule
 // leaves the open Schedules window. Run with: npm run e2e (on Linux, under Xvfb).
 // Covers: js/schedule*.js src/Termilly.Agent/Api.cs src/Termilly.App/Features/Schedules.cs
 import { test, before, after } from 'node:test';
@@ -63,26 +64,52 @@ step('edit_schedule changes what it is given and keeps the rest', async () => {
   assert.match((await call('schedule_edit', { schedule: 'nope', name: 'x' })).error, /no schedule nope/);
 });
 
-step('a changed agent prompt only reads files again; a new name keeps what the user allowed', async () => {
+/** What the user allowed an agent schedule, as the Schedules window saves it. @param {string} id @param {{ allowChanges: boolean, allowAll: boolean }} allowed */
+const allow = (id, allowed) => app.eval(async (t, id, allowed) => {
+  const { scheduleById, saveSchedule } = await t.import('schedules.js');
+  saveSchedule({ .../** @type {any} */ (scheduleById(id)), ...allowed });
+}, id, allowed);
+/** @param {string} id */
+const allowed = async id => { const s = await stored(id); return [s.allowChanges, s.allowAll]; };
+const EVERYTHING = { allowChanges: true, allowAll: true };
+
+step('an edit keeps what the user allowed an agent schedule: a new prompt or folder too', async () => {
   const added = await call('schedule_add', { name: 'Review', what: 'agent', prompt: 'Look at the diff', at: '09:00' });
+  assert.deepEqual(await allowed(added.id), [false, false], 'a new one only reads files');
+  await allow(added.id, EVERYTHING);
+  await call('schedule_edit', { schedule: added.id, name: 'Morning review' });
+  await call('schedule_edit', { schedule: added.id, prompt: 'Look at the diff and fix it' });
+  await call('schedule_edit', { schedule: added.id, cwd: '/somewhere/else' });
+  const s = await stored(added.id);
+  assert.deepEqual([s.prompt, s.cwd], ['Look at the diff and fix it', '/somewhere/else']);
+  assert.deepEqual(await allowed(added.id), [true, true]);
+  assert.equal((await call('schedules', {})).schedules.find(x => x.id === added.id).permissions, 'everything');
+  // A command schedule turned into an agent one starts at reading files, as a new one does.
+  const command = await call('schedule_add', { name: 'Was a command', command: 'echo hi', at: '09:00' });
   await app.eval(async (t, id) => {
     const { scheduleById, saveSchedule } = await t.import('schedules.js');
-    saveSchedule({ .../** @type {any} */ (scheduleById(id)), allowChanges: true });
-  }, added.id);
-  await call('schedule_edit', { schedule: added.id, name: 'Morning review' });
-  assert.equal((await stored(added.id)).allowChanges, true);
-  await call('schedule_edit', { schedule: added.id, prompt: 'Look at the diff and fix it' });
-  const s = await stored(added.id);
-  assert.equal(s.prompt, 'Look at the diff and fix it');
-  assert.equal(s.allowChanges, false);
-  // Another folder: what the user allowed was for this one.
-  const allow = id => app.eval(async (t, id) => {
-    const { scheduleById, saveSchedule } = await t.import('schedules.js');
-    saveSchedule({ .../** @type {any} */ (scheduleById(id)), allowChanges: true, allowAll: true });
-  }, id);
-  await allow(added.id);
-  await call('schedule_edit', { schedule: added.id, cwd: '/somewhere/else' });
-  assert.deepEqual([(await stored(added.id)).allowChanges, (await stored(added.id)).allowAll], [false, false]);
+    saveSchedule({ .../** @type {any} */ (scheduleById(id)), allowChanges: true, allowAll: true, agent: 'gone-agent' });
+  }, command.id);
+  await call('schedule_edit', { schedule: command.id, what: 'agent', prompt: 'Now a prompt' });
+  assert.deepEqual(await allowed(command.id), [false, false]);
+  assert.equal((await stored(command.id)).agent, 'gone-agent', 'the agent it had stays');
+});
+
+step('edit_schedule permissions only lowers what the user allowed', async () => {
+  const added = await call('schedule_add', { name: 'Fixer', what: 'agent', prompt: 'Fix lint', at: '09:00' });
+  await allow(added.id, EVERYTHING);
+  await call('schedule_edit', { schedule: added.id, permissions: 'change_files' });
+  assert.deepEqual(await allowed(added.id), [true, false]);
+  assert.match((await call('schedule_edit', { schedule: added.id, permissions: 'everything' })).error, /only the user allows more/);
+  await call('schedule_edit', { schedule: added.id, permissions: 'change_files' });
+  assert.deepEqual(await allowed(added.id), [true, false], 'the same level is no change');
+  await call('schedule_edit', { schedule: added.id, permissions: 'read_only' });
+  assert.deepEqual(await allowed(added.id), [false, false]);
+  assert.match((await call('schedule_edit', { schedule: added.id, permissions: 'change_files' })).error, /only the user allows more/);
+  assert.deepEqual(await allowed(added.id), [false, false]);
+  assert.match((await call('schedule_edit', { schedule: added.id, permissions: 'all' })).error, /read_only, change_files or everything/);
+  const command = await call('schedule_add', { name: 'Plain', command: 'echo hi', at: '09:00' });
+  assert.match((await call('schedule_edit', { schedule: command.id, permissions: 'read_only' })).error, /agent schedules/);
 });
 
 step('on_start: false alone keeps the time; a production schedule keeps what it runs', async () => {
