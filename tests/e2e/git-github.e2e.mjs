@@ -7,6 +7,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { startApp } from './harness.mjs';
 import { makeRepo } from './repo.mjs';
+import { realpathSync } from 'node:fs';
 import { until, openGit, tab, clickText, confirm } from './gitsteps.mjs';
 
 const RUN_ID = 11;
@@ -117,7 +118,8 @@ step('Fix with an agent adds a To do task with the log and starts the agent in t
   await app.click('[data-check-fix]');
   // The call with the task in it: Termilly also runs claude --version on its own, to see that it's installed.
   const call = await until(async () => (await app.agentCalls()).find(c => c.agent === 'claude' && c.args.some(x => x.includes('failing check'))), 'the agent started on the task');
-  assert.equal(call.cwd.replace(/\/+$/, ''), repo.path.replace(/\/+$/, ''));
+  // As the process sees it: real paths (on macOS the temp folder is under /private, through a link).
+  assert.equal(realpathSync(call.cwd), realpathSync(repo.path));
   const task = await app.eval(async t => {
     const { findTaskWhere } = await t.import('todo.js');
     const found = findTaskWhere(x => x.text.startsWith('Fix the failing check'));

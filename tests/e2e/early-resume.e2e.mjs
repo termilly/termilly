@@ -8,6 +8,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { readFile, stat, rm } from 'node:fs/promises';
+import { realpathSync } from 'node:fs';
 import { startApp } from './harness.mjs';
 import { makeRepo } from './repo.mjs';
 import { until } from './process.mjs';
@@ -52,7 +53,8 @@ test('a resumed agent starts before the page is up, and the page takes its termi
     }, READY), 'the agent on screen');
     const calls = resumeCalls(await app.agentCalls());
     assert.equal(calls.length, 1, JSON.stringify(calls));
-    assert.equal(calls[0].cwd, repo.path);
+    // As the process sees it: real paths (on macOS the temp folder is under /private, through a link).
+    assert.equal(realpathSync(calls[0].cwd), realpathSync(repo.path));
     const log = await readFile(path.join(dataDir, 'startup.log'), 'utf8');
     assert.match(log, /early start: 1 agent session/);
     assert.match(log, /taken over from the early start/);

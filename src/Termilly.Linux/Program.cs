@@ -60,7 +60,7 @@ internal static class Program
             GtkWindow.UseX11(); // before the window opens GTK
         }
         window.Run(platform, provider.GetRequiredService<WindowTheme>(), provider.GetRequiredService<PageChannel>(), provider.GetRequiredService<PageHost>(),
-            provider.GetRequiredService<QuitGate>());
+            provider.GetRequiredService<QuitGate>(), provider.Dispose);
         return 0;
     }
 

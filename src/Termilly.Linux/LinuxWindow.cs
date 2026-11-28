@@ -36,6 +36,8 @@ internal sealed class LinuxWindow
     private volatile bool _closing;
     /// <summary>The closing handler (<see cref="Closing"/>): true keeps the window open for now.</summary>
     private Func<bool>? _keepOpen;
+    /// <summary>What the app ends as it quits (Run's).</summary>
+    private Action? _ending;
     /// <summary>Linux: where the window was last, and whether it was maximized (macOS has MacPlacement).</summary>
     private readonly LinuxPlacement? _placement = OperatingSystem.IsLinux() ? new LinuxPlacement(TimeProvider.System) : null;
     // The window's state the page last heard (see PostState): it starts in front.
@@ -123,9 +125,14 @@ internal sealed class LinuxWindow
         }
     }
 
-    /// <summary>Shows the window and returns when it has closed.</summary>
-    public void Run(PhotinoPlatform platform, WindowTheme theme, PageChannel channel, PageHost host, QuitGate quit)
+    /// <summary>
+    /// Shows the window and returns when it has closed. <paramref name="ending"/> runs as the app ends: on macOS the app
+    /// quits from inside Cocoa once the window has closed, and Run never returns, so whatever the app ends on its way
+    /// out (the background host, with background shells off) is ended there.
+    /// </summary>
+    public void Run(PhotinoPlatform platform, WindowTheme theme, PageChannel channel, PageHost host, QuitGate quit, Action ending)
     {
+        _ending = ending;
         var window = _window = Create(theme, channel, host, quit);
         var icon = Path.Combine(AppContext.BaseDirectory, "icons", "hicolor", "256x256", "apps", "termilly.png");
         if (File.Exists(icon))
@@ -268,6 +275,7 @@ internal sealed class LinuxWindow
                 {
                     if (_closing)
                     {
+                        _ending?.Invoke(); // Cocoa ends the process from here: Program's own end never comes
                         return true;
                     }
                     Task.Run(() => window.Invoke(() => CloseMain(window)));

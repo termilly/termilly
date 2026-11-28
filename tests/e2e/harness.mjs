@@ -23,6 +23,8 @@ const out = path.join(root, 'tests/e2e/out');
  */
 const started = new Set();
 const dataDirs = new Set();
+/** The shell test apps start with: bash, where every platform has it. */
+const BASH = '/bin/bash';
 
 /** @param {import('node:child_process').ChildProcess} child */
 function track(child) {
@@ -118,7 +120,9 @@ export async function startApp({ folder, gh = {}, agents = {}, env = {}, name = 
   // A home of its own: the app's shells never read the real ~/.profile (which can put the real claude ahead of the
   // fakes on PATH) and Termilly's agent setup never touches the real ~/.claude or ~/.codex.
   const home = path.join(dataDir, 'home');
-  const appEnv = { ...process.env, GIT_CONFIG_GLOBAL: gitConfig, GIT_CONFIG_NOSYSTEM: '1', ...env,
+  // The same first shell on every machine (it's the login shell, $SHELL: zsh on macOS, bash on most Linux), so a test
+  // sees the same thing everywhere. A test of another shell says so in its env.
+  const appEnv = { ...process.env, SHELL: BASH, GIT_CONFIG_GLOBAL: gitConfig, GIT_CONFIG_NOSYSTEM: '1', ...env,
     HOME: home, XDG_CONFIG_HOME: path.join(home, '.config'), XDG_DATA_HOME: path.join(home, '.local', 'share'),
     XDG_CACHE_HOME: path.join(home, '.cache'), USERPROFILE: home,
     PATH: `${realAgents ? path.join(dataDir, 'fakes') : fakes}${path.delimiter}${env.PATH ?? process.env.PATH ?? ''}`,
@@ -173,11 +177,18 @@ export async function startApp({ folder, gh = {}, agents = {}, env = {}, name = 
       key(selector, key, options = {}) { return this.eval((t, s, k, o) => { t.key(s, k, o); }, selector, key, options); },
       text(selector) { return this.eval((t, s) => t.text(s), selector); },
       waitFor(selector, options = {}) { return this.eval(async (t, s, o) => { await t.waitFor(s, o); return true; }, selector, options); },
+      /** A picture of the screen for the report: evidence only, so one that can't be taken is noted, not a failure. */
       async screenshot(name = 'screenshot') {
         await mkdir(artifacts, { recursive: true });
         const file = path.join(artifacts, `${name.replace(/[^a-zA-Z0-9_-]/g, '-')}.png`);
-        await run('import', ['-window', 'root', file], { env: { ...appEnv, DISPLAY: display } });
-        return file;
+        try {
+          if (process.platform === 'darwin') await run('screencapture', ['-x', file]);
+          else await run('import', ['-window', 'root', file], { env: { ...appEnv, DISPLAY: display } });
+          return file;
+        } catch (error) {
+          logs.push(`Screenshot ${name} not taken: ${error.message}\n`);
+          return null;
+        }
       },
       ghCalls() { return readCalls(ghLog); },
       agentCalls() { return readCalls(agentLog); },

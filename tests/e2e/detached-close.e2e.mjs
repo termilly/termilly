@@ -37,7 +37,8 @@ async function oneClose(win, key) {
   await app.waitFor(win);
   await pause(500);
   assert.deepEqual(await closes(win), { detached: true, closes: 1, windowsOwn: true });
-  await app.click('.detached-controls [data-window="close"]');
+  // Its own Close: at the end of its header, or on macOS among the traffic lights at its start.
+  await app.click('.detached-window :is(.detached-controls, .mac-lights) [data-window="close"]');
   await pause(500);
   assert.equal(await detached(key), false, "the window's Close closes it");
 }
